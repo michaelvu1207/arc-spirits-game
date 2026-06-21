@@ -5,6 +5,7 @@ import type { RoomView } from '$lib/play/server/service';
 import { isStaleRoomUpdate } from '$lib/play/roomView';
 import { reconcile } from '$lib/play/reconcile';
 import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
+import { auth } from '$lib/auth/auth.svelte';
 import type { GameCommand, RoomSummary, SeatColor, SpectatorProjection } from '$lib/play/types';
 
 let room = $state<SpectatorProjection | null>(null);
@@ -80,6 +81,12 @@ async function postJson<T>(path: string, body: Record<string, unknown>): Promise
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 	// Cross-origin (Capacitor) has no session cookie — authenticate by member id.
 	if (isCrossOrigin && member?.id) headers['X-Play-Member'] = member.id;
+	// ...and no auth cookie either, so forward the access token as a Bearer header so the
+	// server can attribute the action to the player's real uid (user_id capture on mobile).
+	if (isCrossOrigin) {
+		const token = auth.session?.access_token;
+		if (token) headers['Authorization'] = `Bearer ${token}`;
+	}
 	const response = await fetch(apiUrl(path), {
 		method: 'POST',
 		headers,

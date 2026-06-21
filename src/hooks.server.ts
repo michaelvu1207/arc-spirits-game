@@ -29,20 +29,36 @@ const supabaseHandle: Handle = async ({ event, resolve }) => {
 	});
 
 	event.locals.safeGetSession = async () => {
+		// Same-origin web: identity rides the cookie. getSession() reads the (forgeable)
+		// cookie; getUser() re-validates the JWT against the Auth server, so it's the only
+		// trustworthy source of identity.
 		const {
 			data: { session }
 		} = await event.locals.supabase.auth.getSession();
-		if (!session) return { session: null, user: null };
+		if (session) {
+			const {
+				data: { user },
+				error
+			} = await event.locals.supabase.auth.getUser();
+			if (!error && user) return { session, user };
+		}
 
-		// getSession() reads the (forgeable) cookie; getUser() re-validates the JWT
-		// against the Auth server, so it's the only trustworthy source of identity.
-		const {
-			data: { user },
-			error
-		} = await event.locals.supabase.auth.getUser();
-		if (error || !user) return { session: null, user: null };
+		// Cross-origin (Capacitor native shell) has no session cookie, so the client sends
+		// the access token as a Bearer header instead. Validate it directly against the Auth
+		// server (getUser(jwt)) — same trust level as the cookie path. Returns the user so
+		// play actions are attributed to a real uid on mobile too.
+		const authz = event.request.headers.get('authorization');
+		const token =
+			authz && authz.toLowerCase().startsWith('bearer ') ? authz.slice(7).trim() : null;
+		if (token) {
+			const {
+				data: { user },
+				error
+			} = await event.locals.supabase.auth.getUser(token);
+			if (!error && user) return { session: null, user };
+		}
 
-		return { session, user };
+		return { session: null, user: null };
 	};
 
 	return resolve(event, {
@@ -74,7 +90,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
 		'Access-Control-Allow-Origin': origin,
 		'Access-Control-Allow-Credentials': 'true',
 		'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-		'Access-Control-Allow-Headers': 'Content-Type, X-Play-Member',
+		'Access-Control-Allow-Headers': 'Content-Type, X-Play-Member, Authorization',
 		Vary: 'Origin'
 	};
 }
