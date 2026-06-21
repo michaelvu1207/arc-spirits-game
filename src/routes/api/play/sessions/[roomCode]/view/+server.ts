@@ -10,12 +10,15 @@ import { loadRoomView } from '$lib/play/server/service';
 // loadRoomView runs the opportunistic deadline-enforcement / room-close hooks —
 // it is what keeps the host-independent server-authority cadence alive now that
 // the per-second SSE poll is gone.
-export const GET: RequestHandler = async ({ params, cookies, url }) => {
+export const GET: RequestHandler = async ({ params, cookies, url, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
 	// Cookie authenticates the web client; the cookieless Capacitor shell passes
 	// the member id as a query param (matches the events/commands routes).
 	const memberId = getRoomMemberCookie(cookies, roomCode) ?? url.searchParams.get('member');
-	const view = await loadRoomView(roomCode, memberId);
+	// A matchmade player may have no member cookie/id — fall back to their auth user_id
+	// so the server recognizes them as their own session member.
+	const { user } = await locals.safeGetSession();
+	const view = await loadRoomView(roomCode, memberId, user?.id ?? null);
 	return json(view, {
 		// Always revalidate — this is live game state.
 		headers: { 'Cache-Control': 'no-store' }

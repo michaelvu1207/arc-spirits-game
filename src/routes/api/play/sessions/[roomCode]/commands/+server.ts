@@ -5,10 +5,13 @@ import { getRoomMemberCookie } from '$lib/play/server/cookies';
 import { runRoomCommand } from '$lib/play/server/service';
 import type { GameCommand } from '$lib/play/types';
 
-export const POST: RequestHandler = async ({ request, params, cookies }) => {
+export const POST: RequestHandler = async ({ request, params, cookies, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
 	const memberId = getRoomMemberCookie(cookies, roomCode);
-	if (!memberId) {
+	// A matchmade player has no member cookie — fall back to their auth user_id so
+	// runRoomCommand can resolve their server-created membership by user.
+	const { user } = await locals.safeGetSession();
+	if (!memberId && !user) {
 		throw error(401, 'Join this room before sending commands.');
 	}
 
@@ -31,7 +34,8 @@ export const POST: RequestHandler = async ({ request, params, cookies }) => {
 			roomCode,
 			memberId,
 			expectedRevision,
-			command
+			command,
+			fallbackUserId: user?.id ?? null
 		})
 	);
 };

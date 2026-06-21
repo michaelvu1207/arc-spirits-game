@@ -3,8 +3,14 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
-	import { fetchOpenRooms, joinPlayRoom, createPlayRoom } from '$lib/stores/playStore.svelte';
+	import {
+		fetchOpenRooms,
+		joinPlayRoom,
+		createPlayRoom,
+		setActiveMemberId
+	} from '$lib/stores/playStore.svelte';
 	import { auth } from '$lib/auth/auth.svelte';
+	import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
 	import MenuShell from '$lib/components/play2d/MenuShell.svelte';
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 
@@ -16,6 +22,131 @@
 
 	let busy = $state(false);
 	let quickError = $state<string | null>(null);
+
+	// ── Ranked matchmaking ───────────────────────────────────────────────────────
+	type QueueResult = {
+		status: 'searching' | 'matched';
+		roomCode?: string;
+		memberId?: string;
+		queued: number;
+		needed: number;
+	};
+	const RANKED_POLL_MS = 2500;
+
+	let ranked = $state<'idle' | 'searching'>('idle');
+	let rankedError = $state<string | null>(null);
+	let rankedNeedsAuth = $state(false);
+	let queued = $state(0);
+	let needed = $state(0);
+	let searchStartedAt = $state(0);
+	let elapsed = $state(0);
+	let rankedPollTimer: ReturnType<typeof setTimeout> | null = null;
+	let rankedTickTimer: ReturnType<typeof setInterval> | null = null;
+
+	/** POST a matchmaking endpoint, forwarding the Bearer token cross-origin (Capacitor). */
+	async function postMatchmaking(path: string): Promise<QueueResult> {
+		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+		if (isCrossOrigin) {
+			const token = auth.session?.access_token;
+			if (token) headers['Authorization'] = `Bearer ${token}`;
+		}
+		const res = await fetch(apiUrl(path), {
+			method: 'POST',
+			headers,
+			credentials: isCrossOrigin ? 'include' : 'same-origin',
+			body: JSON.stringify({})
+		});
+		const payload = (await res.json().catch(() => null)) as QueueResult | { message?: string } | null;
+		if (!res.ok) {
+			if (res.status === 401) {
+				rankedNeedsAuth = true;
+				throw new Error('Sign in to play ranked.');
+			}
+			const message =
+				payload && typeof payload === 'object' && 'message' in payload && typeof payload.message === 'string'
+					? payload.message
+					: `Request failed with status ${res.status}`;
+			throw new Error(message);
+		}
+		return payload as QueueResult;
+	}
+
+	function stopRankedTimers() {
+		if (rankedPollTimer) clearTimeout(rankedPollTimer);
+		if (rankedTickTimer) clearInterval(rankedTickTimer);
+		rankedPollTimer = null;
+		rankedTickTimer = null;
+	}
+
+	async function pollRanked() {
+		if (ranked !== 'searching') return;
+		try {
+			const result = await postMatchmaking('/api/play/matchmaking/queue');
+			queued = result.queued;
+			needed = result.needed;
+			if (result.status === 'matched' && result.roomCode) {
+				stopRankedTimers();
+				ranked = 'idle';
+				// Seed our server-created membership id so the room page identifies us
+				// (cross-origin sends ?member=/X-Play-Member; same-origin also has the
+				// cookie the queue endpoint set + the user_id fallback).
+				if (result.memberId) setActiveMemberId(result.memberId);
+				playMenuSfx('game-start', { volume: 0.8 });
+				await goto(`/play/${encodeURIComponent(result.roomCode)}`);
+				return;
+			}
+			if (ranked === 'searching') rankedPollTimer = setTimeout(pollRanked, RANKED_POLL_MS);
+		} catch (e) {
+			stopRankedTimers();
+			ranked = 'idle';
+			rankedError = e instanceof Error ? e.message : 'Matchmaking failed — try again.';
+		}
+	}
+
+	async function startRanked() {
+		if (busy || ranked === 'searching') return;
+		rankedError = null;
+		rankedNeedsAuth = false;
+		playMenuSfx('ui-click');
+		try {
+			// Ensure an account/identity first (captures user_id), same as Quick Play.
+			const typed = (browser ? localStorage.getItem(NAME_KEY) : null) ?? '';
+			await auth.resolvePlayIdentity(typed);
+
+			ranked = 'searching';
+			searchStartedAt = Date.now();
+			elapsed = 0;
+			queued = 0;
+			needed = 0;
+			rankedTickTimer = setInterval(() => {
+				elapsed = Math.floor((Date.now() - searchStartedAt) / 1000);
+			}, 1000);
+			await pollRanked();
+		} catch (e) {
+			stopRankedTimers();
+			ranked = 'idle';
+			if (!rankedNeedsAuth) {
+				rankedError = e instanceof Error ? e.message : 'Could not start ranked search.';
+			}
+		}
+	}
+
+	async function cancelRanked() {
+		stopRankedTimers();
+		ranked = 'idle';
+		playMenuSfx('ui-click');
+		try {
+			await postMatchmaking('/api/play/matchmaking/leave');
+		} catch {
+			// Best-effort: the row ages out server-side even if leave fails.
+		}
+	}
+
+	function formatElapsed(secs: number): string {
+		const m = Math.floor(secs / 60);
+		const s = secs % 60;
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
 
 	/**
 	 * One-tap matchmaking: drop the player into the fullest open lobby that still has
@@ -63,6 +194,11 @@
 		return () => {
 			document.documentElement.classList.remove('immersive-play');
 			document.body.classList.remove('immersive-play');
+			// Leave the queue + stop polling if the player navigates away mid-search.
+			if (ranked === 'searching') {
+				stopRankedTimers();
+				void postMatchmaking('/api/play/matchmaking/leave').catch(() => {});
+			}
 		};
 	});
 </script>
@@ -90,10 +226,23 @@
 					type="button"
 					onclick={quickPlay}
 					onpointerenter={hover}
-					disabled={busy}
+					disabled={busy || ranked === 'searching'}
 				>
 					<span class="gem"></span>
 					<span class="lbl">{busy ? 'Finding a game…' : 'Quick Play'}</span>
+					<span class="go" aria-hidden="true">→</span>
+				</button>
+
+				<button
+					data-testid="ranked-play"
+					class="row link"
+					type="button"
+					onclick={startRanked}
+					onpointerenter={hover}
+					disabled={busy || ranked === 'searching'}
+				>
+					<span class="gem"></span>
+					<span class="lbl">Ranked</span>
 					<span class="go" aria-hidden="true">→</span>
 				</button>
 
@@ -137,6 +286,30 @@
 
 			{#if quickError}
 				<p class="quick-error" role="alert">{quickError}</p>
+			{/if}
+
+			{#if ranked === 'searching'}
+				<div class="ranked-search" role="status" aria-live="polite">
+					<div class="rs-head">
+						<span class="rs-spinner" aria-hidden="true"></span>
+						<span class="rs-title">Searching for a ranked match…</span>
+					</div>
+					<div class="rs-meta">
+						<span><b>{queued}</b>/<b>{needed || '—'}</b> in queue</span>
+						<span class="rs-elapsed">{formatElapsed(elapsed)}</span>
+					</div>
+					<button class="rs-cancel" type="button" onclick={cancelRanked} onpointerenter={hover}>
+						Cancel
+					</button>
+				</div>
+			{/if}
+
+			{#if rankedNeedsAuth}
+				<p class="quick-error" role="alert">
+					Sign in to play ranked. <a class="rs-link" href="/account">Sign in →</a>
+				</p>
+			{:else if rankedError}
+				<p class="quick-error" role="alert">{rankedError}</p>
 			{/if}
 		</div>
 	</div>
@@ -358,6 +531,92 @@
 		font-family: var(--font-body);
 		font-size: 0.84rem;
 		max-width: 460px;
+	}
+	.rs-link {
+		color: var(--brand-cyan, #24d4ff);
+		text-decoration: underline;
+	}
+
+	/* ── Ranked searching panel ───────────────────────────────── */
+	.ranked-search {
+		margin: 12px 8px 0;
+		padding: 14px 16px;
+		max-width: 460px;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		background: linear-gradient(180deg, rgba(40, 16, 52, 0.6), rgba(16, 8, 28, 0.6));
+		border: 1px solid var(--color-aether, #3a2670);
+		border-left: 3px solid var(--brand-magenta, #ff2bc7);
+		border-radius: 4px;
+	}
+	.rs-head {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.rs-spinner {
+		flex: 0 0 auto;
+		width: 14px;
+		height: 14px;
+		border: 2px solid rgba(255, 43, 199, 0.3);
+		border-top-color: var(--brand-magenta, #ff2bc7);
+		border-radius: 50%;
+		animation: rs-spin 0.9s linear infinite;
+	}
+	.rs-title {
+		font-family: var(--font-display);
+		font-size: 0.95rem;
+		letter-spacing: 0.04em;
+		color: var(--color-bone, #e9e2f5);
+	}
+	.rs-meta {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-family: var(--font-body);
+		font-size: 0.84rem;
+		color: var(--color-fog, #9a8fb8);
+	}
+	.rs-meta b {
+		color: var(--color-bone, #e9e2f5);
+		font-family: var(--font-display);
+		font-variant-numeric: tabular-nums;
+	}
+	.rs-elapsed {
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
+		color: var(--brand-cyan, #24d4ff);
+	}
+	.rs-cancel {
+		align-self: flex-start;
+		padding: 7px 18px;
+		background: transparent;
+		border: 1px solid var(--color-aether, #3a2670);
+		border-radius: 3px;
+		color: var(--color-parchment, #d8cfee);
+		font-family: var(--font-display);
+		font-size: 0.82rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition:
+			border-color 180ms ease,
+			color 180ms ease;
+	}
+	.rs-cancel:hover {
+		border-color: var(--brand-magenta, #ff2bc7);
+		color: #fff;
+	}
+	@keyframes rs-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.rs-spinner {
+			animation: none;
+		}
 	}
 
 	@keyframes gem-pulse {

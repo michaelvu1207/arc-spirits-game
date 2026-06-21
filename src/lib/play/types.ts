@@ -34,6 +34,15 @@ export const ALL_DESTINATIONS = [...SPIRIT_WORLD_ONLY, 'Arcane Abyss'] as const;
 /** First player to reach this Victory Point total wins. */
 export const VP_TO_WIN = 30;
 
+/**
+ * Target player count for a ranked matchmaking lobby. The matchmaker forms a group
+ * of exactly this many queued players before creating a ranked game.
+ *
+ * NOTE: placeholder default — the canonical ranked size is the owner's call; this is
+ * 4 until that decision lands. Single source of truth for the matchmaker + queue UI.
+ */
+export const RANKED_LOBBY_SIZE = 4;
+
 /** Seconds each player has to secretly choose a destination during navigation. Used as
  *  the default-fallback duration only; the live value is the host-configured
  *  {@link PublicGameState.navigationDurationMs} (chosen in the lobby). */

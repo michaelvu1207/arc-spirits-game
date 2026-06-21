@@ -404,6 +404,49 @@ export async function fetchRatingLeaderboard(): Promise<RatingLeaderboardRow[]> 
 	return (data as RatingLeaderboardRow[] | null) ?? [];
 }
 
+/** One row of the NEW 2D ranked leaderboard (arc_spirits_2d.player_ratings). */
+export interface Rating2DRow {
+	userId: string;
+	displayName: string;
+	mu: number;
+	sigma: number;
+	gamesPlayed: number;
+	/** Conservative skill estimate (openskill ordinal = mu - 3*sigma), for ranking + display. */
+	ordinal: number;
+}
+
+/**
+ * Fetch the 2D ranked leaderboard from arc_spirits_2d.player_ratings (anon read).
+ * Ordered by the conservative rating (ordinal = mu - 3·sigma) descending. Distinct
+ * from the TTS {@link fetchRatingLeaderboard}; the 2D ratings are user_id-keyed.
+ */
+export async function fetch2DRatingLeaderboard(): Promise<Rating2DRow[]> {
+	const { data, error: fetchError } = await supabase
+		.schema('arc_spirits_2d')
+		.from('player_ratings')
+		.select('user_id, display_name, mu, sigma, games_played');
+
+	if (fetchError) {
+		throw new Error(`Failed to fetch 2D rating leaderboard: ${fetchError.message}`);
+	}
+
+	const rows = (data as
+		| { user_id: string; display_name: string | null; mu: number; sigma: number; games_played: number }[]
+		| null) ?? [];
+
+	return rows
+		.map((r) => ({
+			userId: r.user_id,
+			displayName: r.display_name ?? 'Player',
+			mu: r.mu,
+			sigma: r.sigma,
+			gamesPlayed: r.games_played,
+			// Conservative rating (matches openskill's default ordinal: mu - 3*sigma).
+			ordinal: r.mu - 3 * r.sigma
+		}))
+		.sort((a, b) => b.ordinal - a.ordinal);
+}
+
 export async function fetchRatingLeaderboardByUsernameKey(
 	usernameKey: string
 ): Promise<RatingLeaderboardRow | null> {

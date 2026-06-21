@@ -261,6 +261,18 @@ export function hydratePlayRoom(view: RoomView) {
 	}
 }
 
+/**
+ * Seed the active member id ahead of navigating into a room — used by matchmaking,
+ * where the server created this player's membership and the client only learns its
+ * id from the queue poll. On the cross-origin (Capacitor) shell this is what makes
+ * subsequent requests carry the `?member=` / `X-Play-Member` identity; same-origin
+ * relies on the cookie the queue endpoint set, but seeding here is harmless and keeps
+ * the in-memory identity consistent until the first /view poll replaces it.
+ */
+export function setActiveMemberId(memberId: string) {
+	member = { id: memberId, role: 'player', seatColor: null, displayName: null };
+}
+
 export async function createPlayRoom(displayName: string) {
 	isLoading = true;
 	try {

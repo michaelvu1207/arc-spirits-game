@@ -22,5 +22,12 @@ export const POST: RequestHandler = async ({ request, params, cookies }) => {
 			? body.difficulty
 			: 'medium';
 
-	return json(await addBot(roomCode, memberId, { seat, guardianName, difficulty }));
+	try {
+		return json(await addBot(roomCode, memberId, { seat, guardianName, difficulty }));
+	} catch (err) {
+		const message = err instanceof Error ? err.message : 'Failed to add bot.';
+		// Ranked games reject bots — surface as a clean 400.
+		if (message.includes('Bots are not allowed in ranked games')) throw error(400, message);
+		throw err;
+	}
 };

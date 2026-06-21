@@ -3,10 +3,12 @@ import type { RequestHandler } from './$types';
 import { getRoomMemberCookie } from '$lib/play/server/cookies';
 import { runRoomCommand } from '$lib/play/server/service';
 
-export const POST: RequestHandler = async ({ request, params, cookies }) => {
+export const POST: RequestHandler = async ({ request, params, cookies, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
 	const memberId = getRoomMemberCookie(cookies, roomCode);
-	if (!memberId) {
+	// Matchmade players have no member cookie — fall back to their auth user_id.
+	const { user } = await locals.safeGetSession();
+	if (!memberId && !user) {
 		throw error(401, 'Join this room before starting the game.');
 	}
 
@@ -19,7 +21,8 @@ export const POST: RequestHandler = async ({ request, params, cookies }) => {
 			roomCode,
 			memberId,
 			expectedRevision,
-			command: { type: 'startGame' }
+			command: { type: 'startGame' },
+			fallbackUserId: user?.id ?? null
 		})
 	);
 };

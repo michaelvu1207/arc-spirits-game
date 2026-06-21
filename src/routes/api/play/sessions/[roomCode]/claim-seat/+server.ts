@@ -4,10 +4,12 @@ import { getRoomMemberCookie } from '$lib/play/server/cookies';
 import { runRoomCommand } from '$lib/play/server/service';
 import type { SeatColor } from '$lib/play/types';
 
-export const POST: RequestHandler = async ({ request, params, cookies }) => {
+export const POST: RequestHandler = async ({ request, params, cookies, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
 	const memberId = getRoomMemberCookie(cookies, roomCode);
-	if (!memberId) {
+	// Matchmade players have no member cookie — fall back to their auth user_id.
+	const { user } = await locals.safeGetSession();
+	if (!memberId && !user) {
 		throw error(401, 'Join this room before claiming a seat.');
 	}
 
@@ -25,7 +27,8 @@ export const POST: RequestHandler = async ({ request, params, cookies }) => {
 			roomCode,
 			memberId,
 			expectedRevision,
-			command: { type: 'claimSeat', seatColor }
+			command: { type: 'claimSeat', seatColor },
+			fallbackUserId: user?.id ?? null
 		})
 	);
 };

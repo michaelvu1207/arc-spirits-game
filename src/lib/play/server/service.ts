@@ -36,6 +36,7 @@ import {
 } from '../roomLifecycle';
 import { loadPlayCatalog } from './catalog';
 import { getSupabaseAdmin } from '$lib/server/supabaseAdmin';
+import { finalizeMatch } from './ranked';
 
 const HISTORY_SCHEMA = 'arc_spirits_game';
 // The live 2D engine session tables live in their own schema; everything else
@@ -51,7 +52,9 @@ const HISTORY_TABLES = {
 	REPLAY_CODES: 'replay_codes'
 } as const;
 
-type PlaySessionRow = {
+export type PlayMode = 'casual' | 'ranked';
+
+export type PlaySessionRow = {
 	id: string;
 	room_code: string;
 	game_id: string | null;
@@ -59,6 +62,7 @@ type PlaySessionRow = {
 	revision: number;
 	scenario: PublicGameState['scenario'];
 	public_state: PublicGameState | string | null;
+	mode: PlayMode;
 	created_at: string;
 	started_at: string | null;
 	ended_at: string | null;
@@ -150,6 +154,12 @@ async function getSessionByRoomCode(roomCode: string): Promise<PlaySessionRow | 
 	return (data as PlaySessionRow | null) ?? null;
 }
 
+/** The play mode ('casual' | 'ranked') of a room, or null if the room doesn't exist. */
+export async function getSessionModeByRoomCode(roomCode: string): Promise<PlayMode | null> {
+	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	return session?.mode ?? null;
+}
+
 async function getMembersForSession(sessionId: string): Promise<SessionMemberRow[]> {
 	const { data, error } = await getPlayAdmin()
 		.from(PLAY_TABLES.MEMBERS)
@@ -168,6 +178,28 @@ async function getMemberById(memberId: string): Promise<SessionMemberRow | null>
 	const { data, error } = await getPlayAdmin().from(PLAY_TABLES.MEMBERS).select('*').eq('id', memberId).maybeSingle();
 	if (error) {
 		throw kitError(500, `Failed to load session member: ${error.message}`);
+	}
+	return (data as SessionMemberRow | null) ?? null;
+}
+
+/**
+ * Resolve a session member by (session, authenticated user). Used as the fallback
+ * identity for matchmade players who arrive at /play/<roomCode> with no room-member
+ * cookie / member id but a valid auth session — their membership was created
+ * server-side by the matchmaker, keyed only by user_id.
+ */
+async function getMemberBySessionAndUser(
+	sessionId: string,
+	userId: string
+): Promise<SessionMemberRow | null> {
+	const { data, error } = await getPlayAdmin()
+		.from(PLAY_TABLES.MEMBERS)
+		.select('*')
+		.eq('session_id', sessionId)
+		.eq('user_id', userId)
+		.maybeSingle();
+	if (error) {
+		throw kitError(500, `Failed to resolve member by user: ${error.message}`);
 	}
 	return (data as SessionMemberRow | null) ?? null;
 }
@@ -316,7 +348,9 @@ async function persistSessionUpdate(params: {
 	if (session.started_at == null && nextState.status === 'active') {
 		updatePayload.started_at = now;
 	}
-	if (nextState.status === 'finished' && session.ended_at == null) {
+	// The finished-transition fires exactly once: when we first stamp ended_at.
+	const isFinishedTransition = nextState.status === 'finished' && session.ended_at == null;
+	if (isFinishedTransition) {
 		updatePayload.ended_at = now;
 	}
 
@@ -352,6 +386,17 @@ async function persistSessionUpdate(params: {
 	]);
 	if (eventInsert.error) {
 		throw kitError(500, `Failed to append room event: ${eventInsert.error.message}`);
+	}
+
+	// On the transition into `finished`, record the match result + ratings exactly
+	// once. Best-effort: finalizeMatch is idempotent and never throws, but we still
+	// guard here so a ratings failure can never break the game-state persist.
+	if (isFinishedTransition) {
+		try {
+			await finalizeMatch(data as PlaySessionRow, nextState);
+		} catch (err) {
+			console.error('[ranked] finalizeMatch threw (swallowed):', err);
+		}
 	}
 
 	return data as PlaySessionRow;
@@ -602,7 +647,8 @@ export async function closeAbandonedRooms(): Promise<void> {
 
 export async function createRoom(
 	displayName: string,
-	userId?: string | null
+	userId?: string | null,
+	mode: PlayMode = 'casual'
 ): Promise<{ roomCode: string; memberId: string }> {
 	const catalog = await loadPlayCatalog();
 	const normalizedName = normalizeDisplayName(displayName);
@@ -621,7 +667,8 @@ export async function createRoom(
 				status: state.status,
 				revision: state.revision,
 				scenario: state.scenario,
-				public_state: state
+				public_state: state,
+				mode
 			})
 			.select('*')
 			.maybeSingle();
@@ -662,6 +709,86 @@ export async function createRoom(
 	}
 
 	throw kitError(500, 'Failed to generate a unique room code.');
+}
+
+/** A ranked-match participant the matchmaker pairs into a session. */
+export interface RankedPlayer {
+	userId: string;
+	displayName: string;
+}
+
+/**
+ * Create a STARTED ranked game for an already-paired group. Reuses the normal
+ * lobby primitives: the first player hosts a ranked room (createRoom mode:'ranked'),
+ * the rest join + claim distinct seats + pick distinct guardians, then the host
+ * starts the game. Returns the room code and a memberId-by-userId map so the
+ * matchmaker can stamp each queue row's claimed_session_id.
+ *
+ * Throws on failure so the caller can roll the queue rows back to 'queued'.
+ */
+export async function createRankedSession(
+	players: RankedPlayer[]
+): Promise<{ roomCode: string; sessionId: string; memberIdByUserId: Record<string, string> }> {
+	if (players.length < 2) {
+		throw kitError(400, 'A ranked session needs at least two players.');
+	}
+	if (players.length > SEAT_COLORS.length) {
+		throw kitError(400, `A ranked session supports at most ${SEAT_COLORS.length} players.`);
+	}
+
+	const [host, ...rest] = players;
+
+	// 1) First player hosts a ranked room.
+	const created = await createRoom(host.displayName, host.userId, 'ranked');
+	const roomCode = created.roomCode;
+	const memberIdByUserId: Record<string, string> = { [host.userId]: created.memberId };
+
+	// Resolve the session id for the new room (for claimed_session_id stamping).
+	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	if (!session) throw kitError(500, 'Ranked room vanished immediately after creation.');
+
+	// 2) Seat everyone at a distinct seat with a distinct guardian.
+	for (let i = 0; i < players.length; i += 1) {
+		const seat = SEAT_COLORS[i];
+		const player = players[i];
+		const memberId =
+			i === 0
+				? created.memberId
+				: (await joinRoom(roomCode, player.displayName, player.userId)).memberId;
+		if (i !== 0) memberIdByUserId[player.userId] = memberId;
+
+		await runRoomCommand({
+			roomCode,
+			memberId,
+			expectedRevision: null,
+			command: { type: 'claimSeat', seatColor: seat }
+		});
+
+		// Distinct, unused guardian from the live pool.
+		const state = await loadRawRoomState(roomCode);
+		const used = new Set(
+			SEAT_COLORS.map((s) => state.seats[s]?.selectedGuardian).filter((g): g is string => g != null)
+		);
+		const guardian = state.guardianPool.find((name) => !used.has(name));
+		if (guardian) {
+			await runRoomCommand({
+				roomCode,
+				memberId,
+				expectedRevision: null,
+				command: { type: 'selectGuardian', guardianName: guardian }
+			});
+		}
+	}
+
+	// 3) Host starts the game now that the lobby is full.
+	await runRoomCommand({
+		roomCode,
+		memberId: created.memberId,
+		expectedRevision: null,
+		command: { type: 'startGame' }
+	});
+
+	return { roomCode, sessionId: session.id, memberIdByUserId };
 }
 
 // ── Debug spawn (dev-only) ────────────────────────────────────────────────────
@@ -1076,7 +1203,8 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 
 export async function loadRoomView(
 	roomCode: string,
-	memberId: string | null | undefined
+	memberId: string | null | undefined,
+	fallbackUserId?: string | null
 ): Promise<RoomView> {
 	let session = await getSessionByRoomCode(roomCode);
 	if (!session) {
@@ -1089,7 +1217,12 @@ export async function loadRoomView(
 	session = await maybeEnforceDeadline(session);
 
 	const rawMember = memberId ? await getMemberById(memberId) : null;
-	const member = rawMember && rawMember.session_id === session.id ? rawMember : null;
+	let member = rawMember && rawMember.session_id === session.id ? rawMember : null;
+	// Fallback: a matchmade (or just-authenticated) player may arrive with no
+	// member cookie/id but a valid auth session — resolve their membership by user_id.
+	if (!member && fallbackUserId) {
+		member = await getMemberBySessionAndUser(session.id, fallbackUserId);
+	}
 	// Stamp THIS member's liveness BEFORE the room-close check, so an actively
 	// polling member always counts as present — an `abandoned` close can never fire
 	// out from under someone who is here. (An `expired` lobby still closes regardless.)
@@ -1132,12 +1265,21 @@ export async function loadRawRoomState(roomCode: string): Promise<PublicGameStat
 
 export async function runRoomCommand(params: {
 	roomCode: string;
-	memberId: string;
+	memberId: string | null;
 	expectedRevision: number | null;
 	command: GameCommand;
+	fallbackUserId?: string | null;
 }): Promise<RoomView> {
 	const roomCode = normalizeRoomCode(params.roomCode);
-	const member = await getMemberById(params.memberId);
+	let member = params.memberId ? await getMemberById(params.memberId) : null;
+	// Fallback: resolve a matchmade/authenticated player by user_id within this room
+	// when they have no member cookie/id (or it didn't resolve to a member).
+	if (!member && params.fallbackUserId) {
+		const session = await getSessionByRoomCode(roomCode);
+		if (session) {
+			member = await getMemberBySessionAndUser(session.id, params.fallbackUserId);
+		}
+	}
 	if (!member) {
 		throw kitError(401, 'Session member not found for this room.');
 	}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import MenuShell from '$lib/components/play2d/MenuShell.svelte';
-	import ChampionsScreen from '$lib/components/play2d/screens/ChampionsScreen.svelte';
+	import Champions2DScreen from '$lib/components/play2d/screens/Champions2DScreen.svelte';
 	import { loadAssets } from '$lib/stores/assetStore.svelte';
 
 	onMount(() => {
@@ -21,5 +21,5 @@
 </svelte:head>
 
 <MenuShell>
-	<ChampionsScreen />
+	<Champions2DScreen />
 </MenuShell>

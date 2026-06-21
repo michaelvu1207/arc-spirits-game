@@ -13,7 +13,14 @@
  * commands SEQUENTIALLY (await each) to avoid compare-and-set churn.
  */
 
-import { joinRoom, loadRawRoomState, loadRoomView, runRoomCommand, type RoomView } from './service';
+import {
+	getSessionModeByRoomCode,
+	joinRoom,
+	loadRawRoomState,
+	loadRoomView,
+	runRoomCommand,
+	type RoomView
+} from './service';
 import { planBotPhaseActions, botSeatNeedsToAct, profileFor, BOT_PROFILES } from './botPolicy';
 import { loadPlayCatalog } from './catalog';
 import { SEAT_COLORS, type SeatColor, type PublicGameState } from '../types';
@@ -119,6 +126,9 @@ export async function fillBots(
 	if (hostView.member.role !== 'host') {
 		throw new Error('Only the host can add bots.');
 	}
+	if ((await getSessionModeByRoomCode(roomCode)) === 'ranked') {
+		throw new Error('Bots are not allowed in ranked games.');
+	}
 
 	const target = Math.max(1, Math.min(SEAT_COLORS.length, opts.targetSeats ?? TARGET_SEAT_COUNT));
 	const difficulty = opts.difficulty ?? 'medium';
@@ -205,6 +215,9 @@ export async function addBot(
 ): Promise<RoomView> {
 	const hostView = await loadRoomView(roomCode, hostMemberId);
 	if (hostView.member.role !== 'host') throw new Error('Only the host can add bots.');
+	if ((await getSessionModeByRoomCode(roomCode)) === 'ranked') {
+		throw new Error('Bots are not allowed in ranked games.');
+	}
 
 	const state = await loadRawRoomState(roomCode);
 	if (state.status !== 'lobby') {
