@@ -1,8 +1,8 @@
 {
-  "gauntletVersion": "gauntlet-v1",
+  "gauntletVersion": "gauntlet-v2",
   "candidate": {
     "kind": "weights",
-    "ref": "/tmp/arc-bot/league/ml/league_rediscovery/checkpoints/main-0-gen10.json",
+    "ref": "/tmp/arc-bot/league/ml/league_fair/checkpoints/main-0-gen10.json",
     "slug": "checkpoints--main-0-gen10"
   },
   "via": "in-process",
@@ -12,24 +12,24 @@
   "eloVsAnchors": {
     "aggregate": {
       "games": 2400,
-      "score": 0.9952083333333334,
-      "elo": 920
+      "score": 0.9810416666666667,
+      "elo": 684
     },
     "perAnchor": {
       "cultivator": {
         "games": 256,
-        "score": 0.99609375,
-        "elo": 893
+        "score": 1,
+        "elo": 1084
       },
       "hard": {
         "games": 240,
-        "score": 1,
-        "elo": 1073
+        "score": 0.9979166666666667,
+        "elo": 952
       },
       "insane": {
         "games": 288,
-        "score": 0.9982638888888888,
-        "elo": 984
+        "score": 0.9895833333333334,
+        "elo": 765
       },
       "medium": {
         "games": 196,
@@ -38,28 +38,28 @@
       },
       "paragon": {
         "games": 260,
-        "score": 0.9980769230769231,
-        "elo": 966
+        "score": 0.9961538461538462,
+        "elo": 895
       },
       "pvphunter": {
         "games": 220,
-        "score": 0.9704545454545455,
-        "elo": 594
+        "score": 0.8227272727272728,
+        "elo": 265
       },
       "routeexecq-shared-allseat": {
         "games": 228,
-        "score": 0.9912280701754386,
-        "elo": 783
+        "score": 0.9978070175438597,
+        "elo": 943
       },
       "rushpatient": {
         "games": 284,
-        "score": 1,
-        "elo": 1102
+        "score": 0.9964788732394366,
+        "elo": 911
       },
       "survivor": {
         "games": 220,
-        "score": 0.9977272727272727,
-        "elo": 937
+        "score": 1,
+        "elo": 1058
       },
       "traceq-damage-nearmiss": {
         "games": 208,
@@ -68,12 +68,12 @@
       }
     }
   },
-  "meanPlacement": 1.0075,
-  "winRate": 0.9875,
-  "meanVP": 17.49375,
-  "meanRounds": 27.57625,
+  "meanPlacement": 1.05125,
+  "winRate": 0.945,
+  "meanVP": 29.265,
+  "meanRounds": 20.62625,
   "finishedRate": 1,
-  "wallClockMs": 1203692,
-  "msPerGame": 1504.615,
-  "timestamp": "2026-07-02T05:46:36.988Z"
+  "wallClockMs": 1816399,
+  "msPerGame": 2270.49875,
+  "timestamp": "2026-07-02T09:27:23.471Z"
 }

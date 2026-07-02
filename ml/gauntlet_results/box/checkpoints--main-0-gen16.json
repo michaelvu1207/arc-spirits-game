@@ -1,0 +1,79 @@
+{
+  "gauntletVersion": "gauntlet-v1",
+  "candidate": {
+    "kind": "weights",
+    "ref": "/tmp/arc-bot/league/ml/league_continue/checkpoints/main-0-gen16.json",
+    "slug": "checkpoints--main-0-gen16"
+  },
+  "via": "in-process",
+  "policyObsVersion": 1,
+  "games": 800,
+  "smoke": false,
+  "eloVsAnchors": {
+    "aggregate": {
+      "games": 2400,
+      "score": 0.9683333333333334,
+      "elo": 593
+    },
+    "perAnchor": {
+      "cultivator": {
+        "games": 256,
+        "score": 0.98046875,
+        "elo": 664
+      },
+      "hard": {
+        "games": 240,
+        "score": 0.9708333333333333,
+        "elo": 597
+      },
+      "insane": {
+        "games": 288,
+        "score": 0.9895833333333334,
+        "elo": 765
+      },
+      "medium": {
+        "games": 196,
+        "score": 0.9795918367346939,
+        "elo": 652
+      },
+      "paragon": {
+        "games": 260,
+        "score": 0.9807692307692307,
+        "elo": 667
+      },
+      "pvphunter": {
+        "games": 220,
+        "score": 0.9181818181818182,
+        "elo": 416
+      },
+      "routeexecq-shared-allseat": {
+        "games": 228,
+        "score": 0.9517543859649122,
+        "elo": 511
+      },
+      "rushpatient": {
+        "games": 284,
+        "score": 0.9806338028169014,
+        "elo": 667
+      },
+      "survivor": {
+        "games": 220,
+        "score": 0.990909090909091,
+        "elo": 777
+      },
+      "traceq-damage-nearmiss": {
+        "games": 208,
+        "score": 0.9254807692307693,
+        "elo": 433
+      }
+    }
+  },
+  "meanPlacement": 1.0775,
+  "winRate": 0.9475,
+  "meanVP": 28.265,
+  "meanRounds": 17.07625,
+  "finishedRate": 1,
+  "wallClockMs": 1386377,
+  "msPerGame": 1732.97125,
+  "timestamp": "2026-07-02T08:48:15.177Z"
+}

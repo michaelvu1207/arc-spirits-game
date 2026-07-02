@@ -2,7 +2,7 @@
   "gauntletVersion": "gauntlet-v1",
   "candidate": {
     "kind": "weights",
-    "ref": "/tmp/arc-bot/league/ml/league/checkpoints/main-0-gen8.json",
+    "ref": "/tmp/arc-bot/league/ml/league_continue/checkpoints/main-0-gen8.json",
     "slug": "checkpoints--main-0-gen8"
   },
   "via": "in-process",
@@ -12,68 +12,68 @@
   "eloVsAnchors": {
     "aggregate": {
       "games": 2400,
-      "score": 0.8304166666666667,
-      "elo": 276
+      "score": 0.7704166666666666,
+      "elo": 210
     },
     "perAnchor": {
       "cultivator": {
         "games": 256,
-        "score": 0.90625,
-        "elo": 391
+        "score": 0.833984375,
+        "elo": 279
       },
       "hard": {
         "games": 240,
-        "score": 0.875,
-        "elo": 336
+        "score": 0.8125,
+        "elo": 253
       },
       "insane": {
         "games": 288,
-        "score": 0.8524305555555556,
-        "elo": 303
+        "score": 0.8142361111111112,
+        "elo": 255
       },
       "medium": {
         "games": 196,
-        "score": 0.8826530612244898,
-        "elo": 347
+        "score": 0.8698979591836735,
+        "elo": 327
       },
       "paragon": {
         "games": 260,
-        "score": 0.875,
-        "elo": 336
+        "score": 0.8,
+        "elo": 240
       },
       "pvphunter": {
         "games": 220,
-        "score": 0.6477272727272727,
-        "elo": 105
+        "score": 0.6863636363636364,
+        "elo": 135
       },
       "routeexecq-shared-allseat": {
         "games": 228,
-        "score": 0.7302631578947368,
-        "elo": 172
+        "score": 0.6337719298245614,
+        "elo": 95
       },
       "rushpatient": {
         "games": 284,
-        "score": 0.8873239436619719,
-        "elo": 356
+        "score": 0.778169014084507,
+        "elo": 217
       },
       "survivor": {
         "games": 220,
-        "score": 0.9340909090909091,
-        "elo": 455
+        "score": 0.8295454545454546,
+        "elo": 273
       },
       "traceq-damage-nearmiss": {
         "games": 208,
-        "score": 0.6658653846153846,
-        "elo": 119
+        "score": 0.6177884615384616,
+        "elo": 83
       }
     }
   },
-  "meanPlacement": 1.3775,
-  "winRate": 0.6875,
-  "meanVP": 12.12125,
-  "meanRounds": 29.865,
+  "meanPlacement": 1.5725,
+  "winRate": 0.68625,
+  "meanVP": 19.67625,
+  "meanRounds": 22.81,
   "finishedRate": 1,
-  "wallClockMs": 1398672,
-  "msPerGame": 1748.34,
-  "timestamp": "2026-07-02T06:20:32.205Z"
+  "wallClockMs": 1518512,
+  "msPerGame": 1898.14,
+  "timestamp": "2026-07-02T07:48:42.309Z"
 }
