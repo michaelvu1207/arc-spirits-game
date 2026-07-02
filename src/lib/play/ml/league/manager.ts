@@ -348,7 +348,11 @@ export function stampBaselineElos(
 
 /**
  * Initialize a league root: write config.json (defaults merged with `overrides`)
- * and a seeded state.json. Idempotent: an already-initialized root is loaded and
+ * and a seeded state.json. A PRE-PLACED <root>/config.json is honored — the
+ * template workflow (`cp configs/rediscovery.json <root>/config.json` then CLI
+ * init) seeds the roster from that file, with `overrides` applied on top of it.
+ * Precedence: defaults < config.json on disk < overrides argument.
+ * Idempotent: an already-initialized root (state.json present) is loaded and
  * returned untouched (state is never reseeded over an existing league).
  */
 export function initLeague(
@@ -359,7 +363,10 @@ export function initLeague(
 	if (existsSync(p.state)) {
 		return { ...loadLeague(root), created: false };
 	}
-	const config = mergeConfig(defaultConfig(root), overrides);
+	const fromDisk = existsSync(p.config)
+		? (JSON.parse(readFileSync(p.config, 'utf8')) as Partial<LeagueConfig>)
+		: {};
+	const config = mergeConfig(mergeConfig(defaultConfig(root), fromDisk), overrides);
 	mkdirSync(p.root, { recursive: true });
 	mkdirSync(p.checkpoints, { recursive: true });
 	if (!existsSync(p.config)) writeFileSync(p.config, JSON.stringify(config, null, '\t'));

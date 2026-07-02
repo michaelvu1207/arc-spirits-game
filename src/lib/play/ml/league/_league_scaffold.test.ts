@@ -25,6 +25,7 @@ import {
 	rmSync,
 	writeFileSync
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -487,6 +488,39 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 			}
 		},
 		120_000
+	);
+
+	(HAVE_VENV ? it : it.skip)(
+		'CLI init honors a PRE-PLACED config.json (the template workflow)',
+		() => {
+			// Regression: `cp configs/rediscovery.json <root>/config.json` + CLI init used
+			// to seed state.json from pure defaults (13-member roster, main warm-started
+			// from traceq, no minted random init) because initLeague never READ the file
+			// it was refusing to overwrite. This goes through the real CLI.
+			const root = mkdtempSync(join(tmpdir(), 'league-cli-init-'));
+			try {
+				copyFileSync(
+					resolve(process.cwd(), 'ml/league/configs/rediscovery.json'),
+					join(root, 'config.json')
+				);
+				execFileSync('node', ['scripts/run-league.mjs', 'init', '--root', root], {
+					cwd: process.cwd(),
+					encoding: 'utf8'
+				});
+				const { state } = loadLeague(root);
+				const kinds = state.members.reduce<Record<string, number>>((acc, m) => {
+					acc[m.kind] = (acc[m.kind] ?? 0) + 1;
+					return acc;
+				}, {});
+				expect(kinds).toEqual({ heuristic: 8, main: 1 }); // no frozen anchors, no exploiters
+				const main = state.members.find((m) => m.id === 'main-0')!;
+				expect(main.initFrom).toBe(join(leaguePaths(root).checkpoints, 'main-0-random-init.json'));
+				expect(existsSync(main.initFrom!)).toBe(true); // laneInit 'random' minted on the CLI path
+			} finally {
+				rmSync(root, { recursive: true, force: true });
+			}
+		},
+		180_000
 	);
 
 	(HAVE_VENV ? it : it.skip)(
