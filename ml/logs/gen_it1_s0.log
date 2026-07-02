@@ -1,0 +1,13 @@
+The following Vite config options will be overridden by SvelteKit:
+  - base
+
+ RUN  v4.1.5 /Users/maikyon/Documents/Programming/ArcSpiritsPlan2/arc-spirits-spectate
+
+[azgen] g=3/3 samples=90 plannerVP_avg=2.00 win%=0 rounds=30.0
+[azgen] DONE → ml/data_az/iter1_shard0.jsonl (90 samples, 3 games)
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  09:06:43
+   Duration  16.21s (transform 236ms, setup 0ms, import 308ms, tests 15.82s, environment 0ms)
+

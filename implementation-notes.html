@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Arc Spirits ML-Only Bot Implementation Notes</title>
+		<style>
+			body {
+				font-family:
+					Inter,
+					ui-sans-serif,
+					system-ui,
+					-apple-system,
+					BlinkMacSystemFont,
+					'Segoe UI',
+					sans-serif;
+				line-height: 1.5;
+				max-width: 920px;
+				margin: 40px auto;
+				padding: 0 20px 48px;
+				color: #172033;
+				background: #fbfbfd;
+			}
+			h1,
+			h2 {
+				line-height: 1.15;
+			}
+			code {
+				background: #eef1f6;
+				border-radius: 4px;
+				padding: 0.08rem 0.28rem;
+			}
+			li {
+				margin: 0.35rem 0;
+			}
+			.note {
+				border-left: 4px solid #5b7cfa;
+				background: #f1f4ff;
+				padding: 0.8rem 1rem;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Arc Spirits ML-Only Bot Implementation Notes</h1>
+		<p class="note">
+			Goal: implement the ML-only bot plan and make the documented testing criteria executable
+			locally, in Browser checks, and on the SimForge GPU box.
+		</p>
+
+		<h2>Design Decisions</h2>
+		<ul>
+			<li>
+				Start by making the acceptance criteria executable before deleting heuristic bot paths. This
+				gives every later architecture change a reproducible local/GPU validation gate.
+			</li>
+			<li>
+				Use the current SvelteKit repo as the implementation source, then sync selected docs and
+				runbooks to the remote <code>arc-bot</code> workspace on <code>simforge1</code>.
+			</li>
+			<li>
+				Use the Browser plugin for visible UI/dashboard acceptance, and Playwright where the flow is
+				already scriptable.
+			</li>
+			<li>
+				Add <code>arc-bot-v1</code> in <code>src/lib/play/bots/contract.ts</code> as the shared
+				observation/action-id/decision contract. Live bot profile values normalize to
+				<code>neural</code>.
+			</li>
+			<li>
+				Remove live-room dependency on strategic heuristic profiles. Missing bundled weights now
+				fall back to uniform legal action selection through the same legal action surface.
+			</li>
+		</ul>
+
+		<h2>Deviations</h2>
+		<ul>
+			<li>
+				The historical heuristic planner is not deleted yet. It is quarantined as research/baseline
+				scaffolding because multiple existing ML generation and meta tests still use it as a
+				comparison field.
+			</li>
+			<li>
+				The Browser P0 test now drives setup and round advancement through authenticated play API
+				calls, then uses real Browser contexts for reload/synchronization checks. This keeps the
+				gate focused on multiplayer state, not fragile animated hit targets.
+			</li>
+		</ul>
+
+		<h2>Tradeoffs</h2>
+		<ul>
+			<li>
+				The repo currently has many uncommitted ML changes. The implementation works with that state
+				rather than reverting it.
+			</li>
+			<li>
+				Long GPU runs are gated behind smoke/medium runs so expensive training does not hide broken
+				local or contract behavior.
+			</li>
+			<li>
+				A true external bot repository should wait until the contract and run artifacts stabilize;
+				for now the SimForge arc-bot workspace is a synced checkout, not an independent source of
+				truth.
+			</li>
+			<li>
+				ML smoke data is isolated in <code>ml/data_smoke</code> so stale historical JSONL files with
+				old observation/action dimensions cannot poison the acceptance gate.
+			</li>
+		</ul>
+
+		<h2>Verification</h2>
+		<ul>
+			<li><code>npm run check</code>: passed with 0 errors and existing warnings.</li>
+			<li><code>npm run test:bot:engine</code>: passed engine/Vitest/legal-action parity gates.</li>
+			<li><code>npm run test:bot:browser</code>: passed P0 multiplayer flow and mobile smoke.</li>
+			<li><code>npm run test:bot:ml-smoke</code>: passed generation, one-epoch train, and eval.</li>
+			<li><code>npm run test:bot:az-smoke</code>: passed local AlphaZero/meta smoke.</li>
+		</ul>
+
+		<h2>Open Questions</h2>
+		<ul>
+			<li>
+				None blocking. The final heuristic deletion must preserve enough non-strategic random or
+				uniform policy support for smoke tests.
+			</li>
+		</ul>
+
+		<h1>Full-Screen Scene + Floating HUD Refactor Notes</h1>
+		<p>
+			Implemented the iPhone-landscape gameplay refactor so the scene owns the full viewport and the
+			HUD floats above it, with shared navigation drag controls exposed by
+			<code>SpiritWorldBoard</code>.
+		</p>
+
+		<h2>Design Decisions</h2>
+		<ul>
+			<li>
+				The splat/main scene now sits under a full-screen transparent scene input layer, with
+				traits, stage, leaderboard, top controls, and the phase rail layered above it.
+			</li>
+			<li>
+				<code>SpiritWorldBoard</code> remains responsible for carousel math, focused destination,
+				card depth, and final snap/commit behavior. <code>GameBoard2D</code>
+				only decides where empty-screen pointer input is captured.
+			</li>
+			<li>
+				Empty scene drags call the same <code>beginDrag</code>, <code>moveDrag</code>, and
+				<code>endDrag</code> controller as direct card drags. Scroll snap is disabled only during
+				the active drag so micro-movement visibly tugs the carousel, then restored for the settle.
+			</li>
+			<li>
+				<code>MainStage</code> now owns the single main-scene instruction row. Navigation renders
+				<code>Choose a Destination.</code>, location actions render <code>Choose an Action.</code>,
+				and individual stage branches no longer render their own page-level instruction headers.
+			</li>
+			<li>
+				The location action screen now has a separate scrollable card body under the shared stage
+				instruction, so action cards can resize or overflow without pushing the prompt.
+			</li>
+			<li>
+				Direct card drags use pointer capture and the same no-native-pan carousel controller as
+				blank scene drags; the controller imperatively disables scroll snap before the first
+				movement frame, then restores snap for settle/commit.
+			</li>
+		</ul>
+
+		<h2>Deviations</h2>
+		<ul>
+			<li>
+				The original <code>tapScene</code> contract was removed after the product correction:
+				empty-screen single taps should not change locations. Only drag/swipe gestures manipulate
+				the carousel.
+			</li>
+			<li>
+				The active input layer is a component-local scene surface instead of document-level
+				listeners, keeping real HUD controls isolated while blank scene areas remain draggable.
+			</li>
+			<li>
+				The top phase bar and navigation timer now show status/timing copy only. Main-scene
+				instructions live exclusively in <code>MainStage</code>.
+			</li>
+		</ul>
+
+		<h2>Verification</h2>
+		<ul>
+			<li>
+				Subagent review dispatched and completed. The review identified the same required changes:
+				add a <code>MainStage</code>-owned instruction row, convert <code>.view</code> to
+				<code>auto minmax(0, 1fr)</code>, remove
+				<code>location-action-head</code>/<code>stage-head</code>, and keep blank scene drags wired
+				to the <code>SpiritWorldBoard</code> controller.
+			</li>
+			<li><code>npm run check</code>: passed with 0 errors and 30 existing warnings.</li>
+			<li><code>PUBLIC_API_BASE_URL=http://127.0.0.1:5180 npm run cap:sync</code>: passed.</li>
+			<li><code>build_run_sim</code> on iPhone 16 Pro simulator: passed.</li>
+			<li>
+				Browser navigation probe on iPhone landscape: exactly one
+				<code>main-scene-instruction</code>, source text <code>Choose a Destination.</code>, no old
+				<code>Choose your destination</code> copy, synthetic blank-scene drag <code>delta=24</code>,
+				synthetic carousel drag <code>delta=24</code>, and real lower-right blank-space drag
+				<code>delta=24</code> during movement.
+			</li>
+			<li>
+				Browser location probe on iPhone landscape: navigation instruction
+				<code>Choose a Destination.</code>, location instruction <code>Choose an Action.</code>,
+				instruction <code>yDelta=0</code> across nav-to-location, no
+				<code>.stage-head</code>/<code>.location-action-head</code>, and the interaction grid
+				visible.
+			</li>
+		</ul>
+	</body>
+</html>

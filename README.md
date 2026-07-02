@@ -1,38 +1,54 @@
-# sv
+# Arc Spirits Spectate
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit app plus the current Arc Spirits rules engine, bot simulation harness, and ML bot pipeline.
 
-## Creating a project
+The bot development architecture lives in
+[`docs/bot-development-architecture.md`](docs/bot-development-architecture.md), and the
+testing entrypoint is [`docs/bot-testing-criteria.md`](docs/bot-testing-criteria.md).
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Local Development
 
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+```bash
+npm install
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
+## Core Checks
 
-To create a production version of your app:
+```bash
+npm run check
+npm test
+npm run test:e2e
+npm run test:bot:engine
+```
 
-```sh
+## Bot/ML Smoke
+
+```bash
+npm run test:bot:az-smoke
+```
+
+See [`ml/README.md`](ml/README.md) for the training pipeline and [`ml/META_DISCOVERY.md`](ml/META_DISCOVERY.md) for the current AlphaZero-style loop.
+
+## SimForge GPU Box
+
+Remote arc bot workspace:
+
+```bash
+ssh ubuntu@216.151.21.122
+cd /data/share8/michaelvuaprilexperimentation/arc-bot
+```
+
+Use [`docs/bot-testing-criteria.md`](docs/bot-testing-criteria.md) for GPU preflight, Browser tunnel testing, smoke runs, and long-run promotion criteria.
+
+```bash
+npm run bot:gpu:preflight
+npm run bot:gpu:sync
+```
+
+## Build
+
+```bash
 npm run build
+npm run preview
 ```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.

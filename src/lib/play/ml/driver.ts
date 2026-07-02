@@ -28,8 +28,9 @@ import {
 } from '../server/botPolicy';
 import { SEAT_COLORS, type GameActor, type GameCommand, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
 import { encodeAction, encodeObs } from './encode';
-import { legalActions, legalActionsWithNext, commandMatches } from './actions';
-import { valueGuidedIndex, hybridIndex } from './neuralBot';
+import { legalActionsWithNext, commandMatches, type LegalAction } from './actions';
+import { sampleAuxTargets } from './auxTargets';
+import { valueGuidedIndex, hybridIndex, policyIndexWithProgressGuard } from './neuralBot';
 import { buildPotential, vpOf, vpReturnsToGo, BALANCED_SHAPING, type ShapingWeights } from './shaping';
 import type { NeuralPolicy } from './net';
 
@@ -43,6 +44,20 @@ export interface Sample {
 	seat: SeatColor;
 	vp: number;
 	phi: number;
+	kill: number; // 1 if this decision claims a monster-kill reward (drives the optional monster-kill bonus)
+	/** Auxiliary target for a state-level farm-value head. Optional for backwards-compatible data. */
+	farmValue?: number;
+	/** Auxiliary soft target over candidates for monster reward-pick decisions. */
+	rewardPi?: number[];
+	/** AlphaZero policy target: the MCTS visit distribution over `cands` (search-improved). Present
+	 *  only for planner/search decisions; absent for plain heuristic/neural-greedy records. */
+	pi?: number[];
+	/** Optional multiplier for policy loss. Use 0 for value-only regression/failure rows. */
+	policyWeight?: number;
+	/** Optional state-level route-mode target for Fallen PvP navigation. 1=hunt Good player, 0=return Abyss. */
+	routeMode?: number;
+	/** Optional curriculum/source label used by lane scripts to filter narrow training slices. */
+	teacherKind?: string;
 }
 
 export interface RecordGameOptions {
@@ -82,6 +97,25 @@ export interface RecordGameOptions {
 	shaping?: ShapingWeights;
 	/** Discount for return-to-go (default 0.99). */
 	gamma?: number;
+	/**
+	 * Which guardians (by name) sit in each seat. Default = the first N catalog guardians in
+	 * fixed order — which means every game has the SAME starting identities. Pass a per-game
+	 * shuffle/permutation here to expose the bots to a VARIETY of starting spirits/origins
+	 * ("a variety of spots"); unknown names are dropped and back-filled from the catalog.
+	 */
+	guardianNames?: string[];
+	/**
+	 * Command types whose candidate actions are REMOVED from the legal set for neural seats —
+	 * a hard behavioral constraint. E.g. forbidding the corruption interaction forces a
+	 * guaranteed never-corrupt (Good) line, the cleanest test of whether a non-corrupt line wins.
+	 */
+	forbidTypes?: Set<GameCommand['type']>;
+	/**
+	 * Maximum allowed status level after a candidate action. Used for Pure-only curriculum/eval
+	 * lanes; if every neural action violates the cap, the unfiltered candidate set is retained so
+	 * a bad state cannot softlock.
+	 */
+	maxStatusLevel?: number;
 }
 
 export interface RecordGameResult {
@@ -91,6 +125,8 @@ export interface RecordGameResult {
 	stalled: boolean;
 	finalVP: Record<string, number>;
 	samples: Sample[];
+	/** The terminal game state (for diagnostics/strategy tracing — final builds, status, etc.). */
+	finalState?: PublicGameState;
 }
 
 function seededBotRandom(rng: RngState): BotRandom {
@@ -130,12 +166,53 @@ const RECORDABLE_TYPES = new Set<GameCommand['type']>([
 	'discardSpirit'
 ]);
 
+function filterConstrainedActions(
+	withNext: LegalAction[],
+	seat: SeatColor,
+	forbidTypes?: Set<GameCommand['type']>,
+	maxStatusLevel?: number
+): LegalAction[] {
+	if (!forbidTypes?.size && maxStatusLevel === undefined) return withNext;
+	const filtered = withNext.filter((x) => {
+		if (forbidTypes?.has(x.cmd.type)) return false;
+		if (maxStatusLevel !== undefined && (x.next.players[seat]?.statusLevel ?? 0) > maxStatusLevel) {
+			return false;
+		}
+		return true;
+	});
+	return filtered.length > 0 ? filtered : withNext;
+}
+
 export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions): RecordGameResult {
 	const profiles = opts.profiles;
 	const maxRounds = opts.maxRounds ?? 300;
 	const n = Math.min(profiles.length, SEAT_COLORS.length, catalog.guardians.length);
 	const seats = SEAT_COLORS.slice(0, n) as SeatColor[];
-	const guardianNames = catalog.guardians.slice(0, n).map((g) => g.name);
+	// Seat guardians: honor an explicit (per-game shuffled) lineup, keeping only valid catalog
+	// names, de-duplicated (each seat needs a distinct guardian), then back-fill from the catalog
+	// so we always have n. Default (no override) = first n catalog guardians, as before.
+	const catalogNames = catalog.guardians.map((g) => g.name);
+	let guardianNames: string[];
+	if (opts.guardianNames && opts.guardianNames.length) {
+		const seen = new Set<string>();
+		guardianNames = [];
+		for (const nm of opts.guardianNames) {
+			if (catalogNames.includes(nm) && !seen.has(nm)) {
+				guardianNames.push(nm);
+				seen.add(nm);
+			}
+			if (guardianNames.length >= n) break;
+		}
+		for (const nm of catalogNames) {
+			if (guardianNames.length >= n) break;
+			if (!seen.has(nm)) {
+				guardianNames.push(nm);
+				seen.add(nm);
+			}
+		}
+	} else {
+		guardianNames = catalogNames.slice(0, n);
+	}
 
 	const hasController = !!(opts.policy || opts.chooser);
 	const neuralSet = new Set<SeatColor>(
@@ -146,6 +223,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	);
 	const shaping = opts.shaping ?? BALANCED_SHAPING;
 	const gamma = opts.gamma ?? 0.99;
+	// Optional explicit monster-kill bonus (env ARC_HUNT_BONUS, default 0 = off). Added to the
+	// per-step reward when a decision claims a monster reward — directly drives the monster/economy
+	// line the sparse ΔVP signal struggles to discover. Policy-additive shaping; ΔVP stays the core.
+	const huntBonus = process.env.ARC_HUNT_BONUS ? parseFloat(process.env.ARC_HUNT_BONUS) : 0;
 
 	let state = createLobbyState({ roomCode: 'MLSIM', guardianNames });
 	const host: GameActor = { memberId: 'host', displayName: 'host', role: 'host', seatColor: null };
@@ -183,22 +264,34 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		let progressed = false;
 		const plan = planBotPhaseActions(state, seat, catalog, botRng, profileBySeat[seat]);
 		for (const cmd of plan) {
+			if (opts.forbidTypes?.has(cmd.type)) continue;
+			if (opts.maxStatusLevel !== undefined) {
+				const probe = applyGameCommand(state, botActorFor(state, seat), cmd, catalog);
+				if (probe.ok && (probe.state.players[seat]?.statusLevel ?? 0) > opts.maxStatusLevel) continue;
+			}
 			// Record covered heuristic decisions (BC label) BEFORE applying — but only for
 			// strategic command types, since recording dry-runs many candidates (expensive).
 			if (recordSet.has(seat) && !neuralSet.has(seat) && RECORDABLE_TYPES.has(cmd.type)) {
-				const cands = legalActions(state, seat, catalog);
-				if (cands.length > 1) {
-					const mi = cands.findIndex((c) => commandMatches(c, cmd));
+				const withNextH = filterConstrainedActions(
+					legalActionsWithNext(state, seat, catalog),
+					seat,
+					opts.forbidTypes,
+					opts.maxStatusLevel
+				);
+				if (withNextH.length > 1) {
+					const mi = withNextH.findIndex((x) => commandMatches(x.cmd, cmd));
 					if (mi >= 0) {
 						const obs = encodeObs(state, seat);
 						samples.push({
 							obs,
-							cands: cands.map((c) => encodeAction(state, seat, c)),
+							cands: withNextH.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 							chosen: mi,
 							ret: 0,
 							seat,
 							vp: vpOf(state.players[seat]),
-							phi: buildPotential(state.players[seat], shaping)
+							phi: buildPotential(state.players[seat], shaping),
+							kill: cmd.type === 'resolveMonsterReward' ? 1 : 0,
+							...sampleAuxTargets(state, seat, catalog, withNextH)
 						});
 					}
 				}
@@ -220,11 +313,19 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		const key = `${seat}:${state.round}:${state.phase}`;
 		const used = actionCounter.get(key) ?? 0;
 		if (used >= MAX_ACTIONS_PER_PHASE) return applyHeuristic(seat); // unstick → forces a yield
-		const withNext = legalActionsWithNext(state, seat, catalog);
-		if (withNext.length === 0) return applyHeuristic(seat); // uncovered phase → heuristic
+		const withNextRaw = legalActionsWithNext(state, seat, catalog);
+		if (withNextRaw.length === 0) return applyHeuristic(seat); // uncovered phase → heuristic
+		// Hard behavioral constraint: drop forbidden action types (e.g. corruption) for neural
+		// seats — unless that would leave no legal move (never softlock).
+		const withNext = filterConstrainedActions(
+			withNextRaw,
+			seat,
+			opts.forbidTypes,
+			opts.maxStatusLevel
+		);
 		const cands = withNext.map((x) => x.cmd);
 		const obs = encodeObs(state, seat);
-		const feats = cands.map((c) => encodeAction(state, seat, c));
+		const feats = withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog));
 		// League opponents play their own checkpoint greedily (no exploration, no recording);
 		// the learner seat uses the configured selection + exploration and is recorded.
 		const oppPolicy = opts.opponentPolicies?.[seat];
@@ -236,10 +337,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				: opts.chooser && !oppPolicy
 					? opts.chooser(obs, feats, cands, seat, state)
 					: opts.selection === 'policy'
-						? seatPolicy.pick(obs, feats, { sample, temperature: opts.temperature, rand })
-						: opts.selection === 'value'
-							? valueGuidedIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand })
-							: hybridIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand });
+							? policyIndexWithProgressGuard(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog)
+							: opts.selection === 'value'
+								? valueGuidedIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog)
+								: hybridIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog);
 		if (cands.length > 1 && recordSet.has(seat) && !oppPolicy) {
 			samples.push({
 				obs,
@@ -248,7 +349,9 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				ret: 0,
 				seat,
 				vp: vpOf(state.players[seat]),
-				phi: buildPotential(state.players[seat], shaping)
+				phi: buildPotential(state.players[seat], shaping),
+				kill: cands[idx].type === 'resolveMonsterReward' ? 1 : 0,
+				...sampleAuxTargets(state, seat, catalog, withNext)
 			});
 		}
 		state = withNext[idx].next;
@@ -294,7 +397,8 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			seatSamples.map((s) => s.phi),
 			finalVP[seat],
 			finalBuild,
-			gamma
+			gamma,
+			seatSamples.map((s) => huntBonus * s.kill)
 		);
 		seatSamples.forEach((s, i) => (s.ret = g[i]));
 	}
@@ -305,6 +409,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		rounds: state.round,
 		stalled,
 		finalVP,
-		samples
+		samples,
+		finalState: state
 	};
 }

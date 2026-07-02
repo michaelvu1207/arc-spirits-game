@@ -188,3 +188,64 @@ discards, bag pushes/shuffles, clears the one-shot `freeNextRelicTrade`). So a n
 "mutate-and-rollback-only-on-reject" dry-run is UNSAFE — `legalActions` must keep cloning (or use a
 true snapshot/restore). The parity test only covers commands that the heuristic emits AND that
 succeed; it does not prove rejected candidates leave state pristine.
+
+---
+
+## Round 2 — the legality oracle + the 30-round cap (the big one)
+
+A CPU profile (`sim/_cpuprofile.test.ts`, `CPUPROF=1`) showed the truth: **~71% of all sim time was
+deep-cloning** the ~38 KB state; the game rules themselves were ~4%. The clones were not from
+*playing* (one move forward = `mutate`, ~free) but from *asking "is this legal / what-if?"* — the
+engine answers legality by trial-applying a candidate on a fresh clone and reading one boolean. We
+attacked the *reason* we clone.
+
+### ✅ `canApply` — a pure legality oracle (`src/lib/play/legality.ts`)
+A pure, side-effect-free predicate `canApply(state, actor, cmd, catalog): true | false | undefined`
+that decides legality by READING state, no clone. `undefined` = "defer to the clone oracle". Every
+enumerated command's reachable `failure(...)` guards were mapped (Opus-4.8 fan-out) and mirrored
+exactly; impure cases (combat / awaken-condition / augment placement acceptance) return `false` on
+their cheap pure guards and otherwise defer. Three commands (`absorbSpirit`, `attachRuneToSpirit`,
+`detachRuneFromSpirit`) have **no reducer case** → always `false` (a whole `×spirits` block of
+illegal candidates eliminated for free).
+- **Fidelity is GUARANTEED, not hoped:** `ml/_canApply.test.ts` drives games across all profiles and
+  asserts, for every enumerated candidate (~245 k/run), `canApply === undefined || === reducer.ok`.
+  It can only ever DEFER, never disagree — so the legal set stays a faithful, complete oracle of the
+  real action set (the binding directive). **Decided 99.7% of candidates clone-free, 0 mismatches.**
+- Wired into three paths, each verified **byte-identical** (gen JSONL SHA + parity):
+  `legalActions` (cmd-only → zero clones), `botPolicy.isLegal` (the bot's own probes), and the bot's
+  planning sequence (`advanceWorking`: mutate-in-place when `canApply` PROVES legal — provably can't
+  mutate-then-fail — else skip/clone). `cloneState` self-time fell 58.5% → ~3%.
+
+### ✅ Cheaper combat-evaluation clone (`cloneForCombatSim`)
+`computeKillProbability` / `firepowerKillProbability` / `expectedAttack` cloned the whole state to run
+`resetCombatFlags` + the `inCombat` trigger. Those write only to PLAYERS (acting + colocated; the
+trigger's log is a throwaway param, not `state.log`). Switched to `{ ...state, players: clone }` —
+shares bags (44% of the bytes, only read in combat). Verified byte-identical (gen SHA + full combat
+suite). `structuredClone` self-time 42.5% → ~30%.
+
+### ✅ 30-round cap (`MAX_ROUNDS = 30`, `phases.ts tryAdvanceFromCleanup`)
+Round 30 is the last round; if its cleanup closes with no VP-target winner, the game ends and the
+most Victory Points wins (ties → seat order). One guard before `state.round += 1`, after the existing
+end-conditions. Independent of the analytics `CURVE_POINTS`/`ROUND_NORM = 36`. Effects:
+- Games now **finish 100%** (was ~63% at `maxRounds=90`) and end by round 30 → ~2-3× fewer decisions.
+- **Makes the economy / VP-accumulation line viable** — you win by LEADING on VP at the cap, not only
+  by racing to 30 VP (which the economy line couldn't reach under prior rules). All 778 tests pass.
+
+### 📊 Measured result (single-core, M4, heur data-gen path)
+| stage | 24-game gen | games/s |
+|---|---|---|
+| start of investigation | ~17–29 s | ~1 |
+| `canApply` (legalActions + isLegal) | ~11 s | ~2.2 |
+| + bot planning `advanceWorking` mutate | ~4.5 s | ~5 |
+| + 30-round cap | ~2.0 s | ~12 |
+| + `cloneForCombatSim` | **~1.8–2.0 s** | **~12–13** |
+
+**~12–15× single-core**, every step byte-identical / fidelity-gated. Parallel via `ml/run_gen.sh`:
+180 games / 6.9 s ≈ 26 games/s across ~5.4 cores (per-shard vitest startup depresses short runs;
+steady-state for long runs approaches single-core × cores).
+
+### Remaining bottleneck (diminishing returns / rising risk)
+Profile now: bot decision LOGIC `planMediumPhaseActions` ~32% (intrinsic compute, not cloning) and
+the players-only combat clone ~30%. Going further means a pure combat-buff calculator (a `canApply`
+for combat — large, differential-testable) or accepting the heuristic-bot cost (irrelevant once
+neural self-play, which uses a fast forward pass, replaces the heuristic field). Deferred.

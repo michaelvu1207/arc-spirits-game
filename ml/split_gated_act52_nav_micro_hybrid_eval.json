@@ -1,0 +1,47 @@
+{
+  "games": 6,
+  "iterations": 16,
+  "valueWeight": 1,
+  "control": "full",
+  "fullSelection": "hybrid",
+  "fullLookaheadDepth": 2,
+  "fullLookaheadBeam": 8,
+  "fullLookaheadRootBeam": 24,
+  "fullTargetTemperature": 0.25,
+  "weights": "ml/meta_runs/act52-full-g6-20260627T181633Z/best_policy.json",
+  "microWeights": "ml/weights/act52-abyss-micro-policyonly.json",
+  "microPolicyGate": "abyss-round",
+  "forbidTypes": [],
+  "planner_win_pct": 16.7,
+  "planner_VP_avg": 10,
+  "planner_status_avg": 1,
+  "planner_rounds_avg": 27.8,
+  "planner_reach30_pct": 0,
+  "planner_monster_kills_per_game": 3.33,
+  "planner_monster_combats_per_game": 4.17,
+  "planner_abyss_navs_per_game": 3.33,
+  "field_bestVP_avg": 16.83,
+  "field_wins_by_profile": {
+    "pvphunter": 5
+  },
+  "decision_types": {
+    "replaceSpirit": 253,
+    "lockNavigation": 167,
+    "endLocationActions": 154,
+    "discardSpirit": 100,
+    "resolveLocationInteraction": 98,
+    "commitCleanup": 70,
+    "spawnHandSpirit": 59,
+    "takeSpirit": 43,
+    "startCombat": 25,
+    "resolveMonsterReward": 20,
+    "discardHandDraws": 7,
+    "placeAugmentOnSpirit": 6
+  },
+  "field": [
+    "godly",
+    "medium",
+    "cultivator",
+    "pvphunter"
+  ]
+}

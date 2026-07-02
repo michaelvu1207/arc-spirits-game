@@ -5,8 +5,7 @@
  * Each bot becomes a real auth.users account (human-looking display name, is_bot metadata)
  * plus a seeded arc_spirits_2d.player_ratings row with a believable floating rating, so the
  * bots populate the leaderboard and affect OpenSkill ratings exactly like humans. The
- * `bot_profile` difficulty tier drives both the seeded mu (weaker tier ⇒ lower rating) and,
- * at match time, the bot engine's play strength.
+ * `bot_profile` stores the shared ML policy key used by the bot engine at match time.
  *
  * IDEMPOTENT: a bot whose email already exists is skipped (auth account) and its rating row
  * is upserted on user_id, so re-running never duplicates accounts.
@@ -23,64 +22,59 @@ import { rating, ordinal } from 'openskill';
 
 const PLAY_SCHEMA = 'arc_spirits_2d';
 const RATING_VERSION = 1; // must match RATING_VERSION in src/lib/play/server/ranked.ts
+const BOT_PROFILE = 'neural';
 
 /** The bot email for a roster slug (idempotency key). Mirrors botRoster.botEmail. */
 const botEmail = (slug) => `bot+${slug}@arcspirits.bot`;
 
 // Mirror of BOT_ROSTER in src/lib/play/server/botRoster.ts (keep in sync).
 const BOT_ROSTER = [
-	{ displayName: 'Mia', slug: 'mia', botProfile: 'medium' },
-	{ displayName: 'Leo', slug: 'leo', botProfile: 'medium' },
-	{ displayName: 'Ava', slug: 'ava', botProfile: 'medium' },
-	{ displayName: 'Noah', slug: 'noah', botProfile: 'medium' },
-	{ displayName: 'Ella', slug: 'ella', botProfile: 'medium' },
-	{ displayName: 'Finn', slug: 'finn', botProfile: 'medium' },
-	{ displayName: 'Ruby', slug: 'ruby', botProfile: 'medium' },
-	{ displayName: 'Owen', slug: 'owen', botProfile: 'medium' },
-	{ displayName: 'Iris', slug: 'iris', botProfile: 'medium' },
-	{ displayName: 'Jack', slug: 'jack', botProfile: 'medium' },
-	{ displayName: 'Nora', slug: 'nora', botProfile: 'hard' },
-	{ displayName: 'Theo', slug: 'theo', botProfile: 'hard' },
-	{ displayName: 'Hazel', slug: 'hazel', botProfile: 'hard' },
-	{ displayName: 'Milo', slug: 'milo', botProfile: 'hard' },
-	{ displayName: 'Clara', slug: 'clara', botProfile: 'hard' },
-	{ displayName: 'Wyatt', slug: 'wyatt', botProfile: 'hard' },
-	{ displayName: 'Lena', slug: 'lena', botProfile: 'hard' },
-	{ displayName: 'Caleb', slug: 'caleb', botProfile: 'hard' },
-	{ displayName: 'Faye', slug: 'faye', botProfile: 'extrahard' },
-	{ displayName: 'Reid', slug: 'reid', botProfile: 'extrahard' },
-	{ displayName: 'Tessa', slug: 'tessa', botProfile: 'extrahard' },
-	{ displayName: 'Dax', slug: 'dax', botProfile: 'extrahard' },
-	{ displayName: 'Vera', slug: 'vera', botProfile: 'extrahard' },
-	{ displayName: 'Cole', slug: 'cole', botProfile: 'extrahard' },
-	{ displayName: 'Mara', slug: 'mara', botProfile: 'insane' },
-	{ displayName: 'Silas', slug: 'silas', botProfile: 'insane' },
-	{ displayName: 'Juno', slug: 'juno', botProfile: 'insane' },
-	{ displayName: 'Ezra', slug: 'ezra', botProfile: 'insane' },
-	{ displayName: 'Wren', slug: 'wren', botProfile: 'godly' },
-	{ displayName: 'Kai', slug: 'kai', botProfile: 'godly' }
+	{ displayName: 'Mia', slug: 'mia', botProfile: BOT_PROFILE },
+	{ displayName: 'Leo', slug: 'leo', botProfile: BOT_PROFILE },
+	{ displayName: 'Ava', slug: 'ava', botProfile: BOT_PROFILE },
+	{ displayName: 'Noah', slug: 'noah', botProfile: BOT_PROFILE },
+	{ displayName: 'Ella', slug: 'ella', botProfile: BOT_PROFILE },
+	{ displayName: 'Finn', slug: 'finn', botProfile: BOT_PROFILE },
+	{ displayName: 'Ruby', slug: 'ruby', botProfile: BOT_PROFILE },
+	{ displayName: 'Owen', slug: 'owen', botProfile: BOT_PROFILE },
+	{ displayName: 'Iris', slug: 'iris', botProfile: BOT_PROFILE },
+	{ displayName: 'Jack', slug: 'jack', botProfile: BOT_PROFILE },
+	{ displayName: 'Nora', slug: 'nora', botProfile: BOT_PROFILE },
+	{ displayName: 'Theo', slug: 'theo', botProfile: BOT_PROFILE },
+	{ displayName: 'Hazel', slug: 'hazel', botProfile: BOT_PROFILE },
+	{ displayName: 'Milo', slug: 'milo', botProfile: BOT_PROFILE },
+	{ displayName: 'Clara', slug: 'clara', botProfile: BOT_PROFILE },
+	{ displayName: 'Wyatt', slug: 'wyatt', botProfile: BOT_PROFILE },
+	{ displayName: 'Lena', slug: 'lena', botProfile: BOT_PROFILE },
+	{ displayName: 'Caleb', slug: 'caleb', botProfile: BOT_PROFILE },
+	{ displayName: 'Faye', slug: 'faye', botProfile: BOT_PROFILE },
+	{ displayName: 'Reid', slug: 'reid', botProfile: BOT_PROFILE },
+	{ displayName: 'Tessa', slug: 'tessa', botProfile: BOT_PROFILE },
+	{ displayName: 'Dax', slug: 'dax', botProfile: BOT_PROFILE },
+	{ displayName: 'Vera', slug: 'vera', botProfile: BOT_PROFILE },
+	{ displayName: 'Cole', slug: 'cole', botProfile: BOT_PROFILE },
+	{ displayName: 'Mara', slug: 'mara', botProfile: BOT_PROFILE },
+	{ displayName: 'Silas', slug: 'silas', botProfile: BOT_PROFILE },
+	{ displayName: 'Juno', slug: 'juno', botProfile: BOT_PROFILE },
+	{ displayName: 'Ezra', slug: 'ezra', botProfile: BOT_PROFILE },
+	{ displayName: 'Wren', slug: 'wren', botProfile: BOT_PROFILE },
+	{ displayName: 'Kai', slug: 'kai', botProfile: BOT_PROFILE }
 ];
 
 /**
- * Floating seed rating per difficulty tier. Weaker tiers get a lower mu (and thus a lower
- * ordinal = mu - 3*sigma), so the leaderboard spread looks earned and a fresh human (default
- * ordinal 0) lands mid-pack. Sigma shrinks with tier confidence; games_played gives the bot a
- * plausible history. A small per-bot jitter keeps identical-tier bots from stacking on one row.
+ * Floating seed rating per bot policy. A small per-bot jitter keeps seeded bot accounts
+ * from stacking on one leaderboard row while their actual play policy remains identical.
  */
-const TIER_SEED = {
-	medium: { mu: 22, sigma: 5.5, games: 25 },
-	hard: { mu: 27, sigma: 4.5, games: 45 },
-	extrahard: { mu: 31, sigma: 4.0, games: 70 },
-	insane: { mu: 35, sigma: 3.5, games: 110 },
-	godly: { mu: 39, sigma: 3.0, games: 160 }
+const POLICY_SEED = {
+	neural: { mu: 25, sigma: 5.0, games: 25 }
 };
 
 function seededRatingFor(slug, botProfile) {
-	const tier = TIER_SEED[botProfile] ?? TIER_SEED.medium;
+	const tier = POLICY_SEED[botProfile] ?? POLICY_SEED.neural;
 	// Deterministic jitter in [-1.5, 1.5) from the slug, so re-runs are stable.
 	let h = 0;
 	for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-	const jitter = ((h % 3000) / 1000) - 1.5;
+	const jitter = (h % 3000) / 1000 - 1.5;
 	const mu = tier.mu + jitter;
 	const r = rating({ mu, sigma: tier.sigma });
 	return { mu: r.mu, sigma: r.sigma, ordinal: ordinal(r), games: tier.games };
@@ -162,7 +156,7 @@ async function main() {
 			last_game_at: null,
 			rating_version: RATING_VERSION,
 			// Non-null only for bots; marks this rating row as a backfill-eligible bot account
-			// and carries its difficulty tier (read by matchmaking's ensureBotPresence).
+			// and carries its shared policy key (read by matchmaking's ensureBotPresence).
 			bot_profile: bot.botProfile,
 			updated_at: nowIso
 		});

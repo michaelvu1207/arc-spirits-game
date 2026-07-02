@@ -1,7 +1,8 @@
 /**
- * Server-side driver for the dev "fill the empty seats with random-action bots"
- * feature. A human hosts a live game; bots take the remaining seats and, each
- * phase, take RANDOM LEGAL actions and become ready so the round loop advances.
+ * Server-side driver for live room bots. A human hosts a live game; bots take
+ * the remaining seats and, each phase, choose legal actions through the shared
+ * bot contract. The trained ML policy is the normal path; uniform legal action
+ * selection is only a no-weights safety fallback.
  *
  * EPHEMERAL by design: this module never calls `commitRound` and never writes
  * history snapshots — it only drives the in-memory phase machine via the normal
@@ -23,15 +24,24 @@ import {
 	runRoomCommand,
 	type RoomView
 } from './service';
-import { planBotPhaseActions, botSeatNeedsToAct, profileFor, BOT_PROFILES } from './botPolicy';
+import { botSeatNeedsToAct } from './botPolicy';
 import { loadPlayCatalog } from './catalog';
 import { SEAT_COLORS, type SeatColor, type PublicGameState } from '../types';
 import { BOT_NAME_PREFIX } from '../roomLifecycle';
-import { getNeuralPolicy, planNeuralPhaseActions } from '../ml/neuralBot';
+import {
+	DEFAULT_BOT_PROFILE_KEY,
+	ML_BOT_PROFILE_KEY,
+	normalizeBotProfileKey
+} from '../bots/contract';
+import {
+	getNeuralPolicy,
+	planNeuralPhaseActions,
+	planUniformLegalPhaseActions
+} from '../ml/neuralBot';
 
-/** Bot-profile key for the trained ML bot. Detected like any other profile (DB bot_profile
- *  column); driven by the neural net instead of the heuristic planner. */
-export const NEURAL_PROFILE_KEY = 'neural';
+/** Backward-compatible export for older callers/tests. New code should import
+ *  ML_BOT_PROFILE_KEY from bots/contract. */
+export const NEURAL_PROFILE_KEY = ML_BOT_PROFILE_KEY;
 
 /** Display-name prefix that marks a session member as a bot. Single source of truth
  *  lives in the pure room-lifecycle policy (it excludes bots from room presence);
@@ -52,31 +62,30 @@ export function isBotDisplayName(displayName: string | null | undefined): boolea
  * `bot_profile`), never the display name, so this is purely cosmetic. `seat`/`difficulty`
  * are kept in the signature for callers but no longer affect the name.
  */
-export function botDisplayNameFor(_seat: SeatColor, _difficulty: string = 'medium'): string {
+export function botDisplayNameFor(
+	_seat: SeatColor,
+	_difficulty: string = DEFAULT_BOT_PROFILE_KEY
+): string {
 	return 'Nameless Spirit';
 }
 
-/** Coerce a difficulty string to a known {@link BOT_PROFILES} key, defaulting to the designed-
- *  ladder baseline 'medium' (the legacy random-legal bot is no longer offered as an option). */
+/** Coerce a legacy difficulty string to the live bot contract key. */
 function normalizeDifficulty(difficulty: string | null | undefined): string {
-	if (typeof difficulty !== 'string') return 'medium';
-	const key = difficulty.toLowerCase();
-	if (key === NEURAL_PROFILE_KEY) return NEURAL_PROFILE_KEY; // ML bot — not in BOT_PROFILES
-	return key in BOT_PROFILES ? key : 'medium';
+	return normalizeBotProfileKey(difficulty);
 }
 
 /**
  * Parse the difficulty/strategy word out of a bot's display name (the word
  * between the "🤖 " prefix and the seat color), normalized to a known
- * {@link BOT_PROFILES} key. Defaults to the designed baseline 'medium' when absent/unknown
- * (a word-less "🤖 Blue" plays as Medium, never the retired dumb random-legal bot).
+ * live bot contract key. Legacy heuristic names are intentionally normalized to
+ * the ML policy so old display names cannot re-enable strategic heuristics.
  */
 export function difficultyFromBotName(displayName: string | null | undefined): string {
-	if (!isBotDisplayName(displayName)) return 'medium';
+	if (!isBotDisplayName(displayName)) return DEFAULT_BOT_PROFILE_KEY;
 	const rest = (displayName as string).slice(BOT_NAME_PREFIX.length).trim();
 	const parts = rest.split(/\s+/);
-	// "Blue" → no word → Medium baseline; "Medium Blue" → "Medium".
-	if (parts.length < 2) return 'medium';
+	// "Blue" -> no word; "Medium Blue" -> legacy word. Both normalize to neural.
+	if (parts.length < 2) return DEFAULT_BOT_PROFILE_KEY;
 	return normalizeDifficulty(parts[0]);
 }
 
@@ -129,8 +138,19 @@ function takenGuardians(state: PublicGameState): Set<string> {
 export interface FillBotsOptions {
 	/** How many occupied seats to target (default 4). Clamped to [1, 6]. */
 	targetSeats?: number;
-	/** Strategy/difficulty for the bots minted, e.g. 'medium' (default 'medium'). */
+	/** Bot policy key for the bots minted (default 'neural'). */
 	difficulty?: string;
+	/** Shuffle the guardian pool before assigning bot guardians. */
+	shuffleGuardians?: boolean;
+}
+
+function shuffled<T>(items: T[]): T[] {
+	const next = [...items];
+	for (let i = next.length - 1; i > 0; i -= 1) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[next[i], next[j]] = [next[j], next[i]];
+	}
+	return next;
 }
 
 /**
@@ -156,14 +176,14 @@ export async function fillBots(
 	}
 
 	const target = Math.max(1, Math.min(SEAT_COLORS.length, opts.targetSeats ?? TARGET_SEAT_COUNT));
-	const difficulty = opts.difficulty ?? 'medium';
+	const difficulty = opts.difficulty ?? DEFAULT_BOT_PROFILE_KEY;
 
 	let state = await loadRawRoomState(roomCode);
 	if (state.status !== 'lobby') {
 		throw new Error('Bots can only be added while the room is in the lobby.');
 	}
 
-	const guardianPool = [...state.guardianPool];
+	const guardianPool = opts.shuffleGuardians ? shuffled(state.guardianPool) : [...state.guardianPool];
 
 	for (const seat of SEAT_COLORS) {
 		const occupied = SEAT_COLORS.filter(
@@ -174,10 +194,15 @@ export async function fillBots(
 
 		// 1) Mint a spectator member for this bot (no cookie — server holds the id). The
 		//    is_bot flag + bot_profile drive detection/strategy off the DB, not the 🤖 name.
-		const { memberId: botMemberId } = await joinRoom(roomCode, botDisplayNameFor(seat, difficulty), null, {
-			isBot: true,
-			botProfile: normalizeDifficulty(difficulty)
-		});
+		const { memberId: botMemberId } = await joinRoom(
+			roomCode,
+			botDisplayNameFor(seat, difficulty),
+			null,
+			{
+				isBot: true,
+				botProfile: normalizeDifficulty(difficulty)
+			}
+		);
 
 		// 2) Claim the seat as the bot.
 		await runRoomCommand({
@@ -223,7 +248,7 @@ async function seatOneBot(
 	roomCode: string,
 	seat: SeatColor,
 	guardianName?: string,
-	difficulty: string = 'medium',
+	difficulty: string = DEFAULT_BOT_PROFILE_KEY,
 	opts?: { userId?: string | null; displayName?: string }
 ): Promise<string> {
 	const profile = normalizeDifficulty(difficulty);
@@ -269,7 +294,7 @@ export async function seatBotPlayer(
 	seat: SeatColor,
 	args: { userId: string; displayName: string; botProfile?: string; guardianName?: string }
 ): Promise<string> {
-	return seatOneBot(roomCode, seat, args.guardianName, args.botProfile ?? 'medium', {
+	return seatOneBot(roomCode, seat, args.guardianName, args.botProfile ?? DEFAULT_BOT_PROFILE_KEY, {
 		userId: args.userId,
 		displayName: args.displayName
 	});
@@ -295,7 +320,7 @@ export async function addBot(
 	if (open.length === 0) throw new Error('Every seat is already filled.');
 	const seat = opts.seat && open.includes(opts.seat) ? opts.seat : open[0];
 
-	await seatOneBot(roomCode, seat, opts.guardianName, opts.difficulty ?? 'medium');
+	await seatOneBot(roomCode, seat, opts.guardianName, opts.difficulty ?? DEFAULT_BOT_PROFILE_KEY);
 	return loadRoomView(roomCode, hostMemberId);
 }
 
@@ -383,8 +408,9 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 	const sessionId = await getSessionIdByRoomCode(roomCode);
 	const botMembers = sessionId ? await loadBotMembers(sessionId) : new Map<string, string | null>();
 
-	// Trained ML policy, loaded once per tick. Null when no weights are bundled ⇒ a
-	// 'neural' bot transparently falls back to the heuristic planner below.
+	// Trained ML policy, loaded once per tick. Null when no weights are bundled; in that
+	// case the live bot uses the same legal-action contract with uniform selection, not
+	// the retired strategic heuristic profiles.
 	const neuralPolicy = await getNeuralPolicy();
 
 	let commandsIssued = 0;
@@ -396,14 +422,13 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 
 		// Strategy comes from the member's bot_profile column; fall back to parsing the
 		// legacy 🤖-display-name when a bot row predates the column (bot_profile null).
-		const profileKey =
-			botMembers.get(botMemberId) ?? difficultyFromBotName(state.seats[seat]?.displayName);
-		// The ML bot (bot_profile='neural') is driven by the trained net when weights are
-		// present; otherwise — and for every other profile — use the heuristic planner.
+		const profileKey = normalizeDifficulty(
+			botMembers.get(botMemberId) ?? difficultyFromBotName(state.seats[seat]?.displayName)
+		);
 		const commands =
 			profileKey === NEURAL_PROFILE_KEY && neuralPolicy
 				? planNeuralPhaseActions(state, seat, catalog, neuralPolicy)
-				: planBotPhaseActions(state, seat, catalog, undefined, profileFor(profileKey));
+				: planUniformLegalPhaseActions(state, seat, catalog);
 		for (const command of commands) {
 			// Each command is its own load+CAS write. A planned command can be REJECTED at
 			// execution time even though it passed the planner's trial-apply — e.g. the

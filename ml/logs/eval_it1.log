@@ -1,0 +1,5 @@
+[azeval] planner vs [pvphunter,medium,cultivator,survivor], 4 games, 32 iters, valueW=0.5
+[azeval] PLANNER win%=0 VP=0 status=0 (0=Pure,3=Fallen) rounds=27.5
+[azeval] FIELD best-opponent VP=16.75  field wins: {"medium":1,"pvphunter":2,"cultivator":1}
+[azeval] VERDICT: not yet
+[azeval] DONE → ml/azeval_result.json

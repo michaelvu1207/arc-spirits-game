@@ -1,0 +1,325 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST="${ARC_BOT_GPU_HOST:-ubuntu@216.151.21.122}"
+REMOTE_DIR="${ARC_BOT_REMOTE_DIR:-/data/share8/michaelvuaprilexperimentation/arc-bot}"
+RUN_ID="${RUN_ID:-scalingq-fullcontrol-$(date -u +%Y%m%dT%H%M%SZ)}"
+GPU="${GPU:-7}"
+MIN_FREE_MB="${MIN_FREE_MB:-1024}"
+
+WEIGHTS="${WEIGHTS:-ml/meta_runs/aux-head-act52-medium-20260627T222453Z/best_policy.json}"
+NAV_WEIGHTS="${NAV_WEIGHTS:-ml/meta_runs/routeq-nav-specialist-20260628T0305Z/best_policy.json}"
+NAV_GATE="${NAV_GATE:-unsafe-firepower-build-option}"
+SCALE_NAV_WEIGHTS="${SCALE_NAV_WEIGHTS-ml/meta_runs/scaleq-nav-20260628T0650Z/best_policy.json}"
+SCALE_NAV_GATE="${SCALE_NAV_GATE:-route-option-scaling}"
+MICRO_WEIGHTS="${MICRO_WEIGHTS-ml/meta_runs/routeexecq-fullcontrol-micro-20260628T0600Z/best_policy.json}"
+MICRO_GATE="${MICRO_GATE:-location-interactions}"
+PROFILES="${PROFILES:-pvphunter,medium,cultivator,survivor}"
+PLANNER_PROFILE="${PLANNER_PROFILE:-cultivator}"
+SOURCE_SEED_BASE="${SOURCE_SEED_BASE:-6500000}"
+
+GAMES="${GAMES:-64}"
+MAX_WINDOWS="${MAX_WINDOWS:-256}"
+MAX_ROUNDS="${MAX_ROUNDS:-30}"
+HORIZONS="${HORIZONS:-6,12}"
+SELECT_HORIZON="${SELECT_HORIZON:-12}"
+LABEL_HORIZON="${LABEL_HORIZON:-12}"
+LABEL_SCORE_THRESHOLD="${LABEL_SCORE_THRESHOLD:-0.5}"
+LABEL_VP_THRESHOLD="${LABEL_VP_THRESHOLD:-1}"
+LABEL_STATUS_TOLERANCE="${LABEL_STATUS_TOLERANCE:-0}"
+POSITIVE_ONLY_DATA="${POSITIVE_ONLY_DATA:-1}"
+ROLLOUT_POLICY="${ROLLOUT_POLICY:-breakpoint-oracle}"
+
+MIN_PLAYER_VP="${MIN_PLAYER_VP:-9}"
+MAX_PLAYER_VP="${MAX_PLAYER_VP:-24}"
+MIN_ROUND="${MIN_ROUND:-4}"
+MAX_ROUND="${MAX_ROUND:-}"
+DESTINATIONS="${DESTINATIONS:-}"
+MIN_MONSTER_HP="${MIN_MONSTER_HP:-4}"
+MAX_MONSTER_HP="${MAX_MONSTER_HP:-4}"
+MIN_CLEAN_KILL_PROB="${MIN_CLEAN_KILL_PROB:-0}"
+MAX_CLEAN_KILL_PROB="${MAX_CLEAN_KILL_PROB:-}"
+MIN_FIREPOWER_KILL_PROB="${MIN_FIREPOWER_KILL_PROB:-0}"
+MAX_FIREPOWER_KILL_PROB="${MAX_FIREPOWER_KILL_PROB:-}"
+
+SCORE_REACH30_BONUS="${SCORE_REACH30_BONUS:-12}"
+SCORE_VP_WEIGHT="${SCORE_VP_WEIGHT:-1}"
+SCORE_KILL_WEIGHT="${SCORE_KILL_WEIGHT:-0.5}"
+SCORE_CLEAN_OPPORTUNITY_WEIGHT="${SCORE_CLEAN_OPPORTUNITY_WEIGHT:-2}"
+SCORE_EXPECTED_ATTACK_WEIGHT="${SCORE_EXPECTED_ATTACK_WEIGHT:-1.2}"
+SCORE_ATTACK_DICE_WEIGHT="${SCORE_ATTACK_DICE_WEIGHT:-0.8}"
+SCORE_SPIRIT_ANIMAL_WEIGHT="${SCORE_SPIRIT_ANIMAL_WEIGHT:-0.8}"
+SCORE_CULTIVATOR_WEIGHT="${SCORE_CULTIVATOR_WEIGHT:-0.2}"
+SCORE_BARRIER_WEIGHT="${SCORE_BARRIER_WEIGHT:-0.3}"
+SCORE_STATUS_PENALTY="${SCORE_STATUS_PENALTY:-2}"
+
+FORBID_TYPES="${FORBID_TYPES:-initiatePvp}"
+MAX_STATUS_LEVEL="${MAX_STATUS_LEVEL:-0}"
+PRESERVE_ROUTE_FIREPOWER="${PRESERVE_ROUTE_FIREPOWER:-1}"
+PRESERVE_ROUTE_SURVIVAL="${PRESERVE_ROUTE_SURVIVAL:-1}"
+ITERS="${ITERS:-32}"
+PLANNER_HORIZON="${PLANNER_HORIZON:-16}"
+VALUEW="${VALUEW:-1}"
+TIMEOUT="${TIMEOUT:-90m}"
+PROGRESS_EVERY="${PROGRESS_EVERY:-4}"
+
+RUN_IMITATION="${RUN_IMITATION:-1}"
+IMITATION_EPOCHS="${IMITATION_EPOCHS:-160}"
+MIN_IMITATION_SAMPLES="${MIN_IMITATION_SAMPLES:-12}"
+
+TRAIN="${TRAIN:-1}"
+MIN_TRAIN_SAMPLES="${MIN_TRAIN_SAMPLES:-12}"
+TRAIN_INIT_WEIGHTS="${TRAIN_INIT_WEIGHTS:-$WEIGHTS}"
+TRAIN_EPOCHS="${TRAIN_EPOCHS:-16}"
+TRAIN_BATCH="${TRAIN_BATCH:-64}"
+TRAIN_LR="${TRAIN_LR:-0.0003}"
+TRAIN_VALUE_COEF="${TRAIN_VALUE_COEF:-0.25}"
+
+set +e
+ssh -o BatchMode=yes -o ConnectTimeout=8 "$HOST" \
+  REMOTE_DIR="$REMOTE_DIR" \
+  RUN_ID="$RUN_ID" \
+  GPU="$GPU" \
+  MIN_FREE_MB="$MIN_FREE_MB" \
+  WEIGHTS="$WEIGHTS" \
+  NAV_WEIGHTS="$NAV_WEIGHTS" \
+  NAV_GATE="$NAV_GATE" \
+  SCALE_NAV_WEIGHTS="$SCALE_NAV_WEIGHTS" \
+  SCALE_NAV_GATE="$SCALE_NAV_GATE" \
+  MICRO_WEIGHTS="$MICRO_WEIGHTS" \
+  MICRO_GATE="$MICRO_GATE" \
+  PROFILES="$PROFILES" \
+  PLANNER_PROFILE="$PLANNER_PROFILE" \
+  SOURCE_SEED_BASE="$SOURCE_SEED_BASE" \
+  GAMES="$GAMES" \
+  MAX_WINDOWS="$MAX_WINDOWS" \
+  MAX_ROUNDS="$MAX_ROUNDS" \
+  HORIZONS="$HORIZONS" \
+  SELECT_HORIZON="$SELECT_HORIZON" \
+  LABEL_HORIZON="$LABEL_HORIZON" \
+  LABEL_SCORE_THRESHOLD="$LABEL_SCORE_THRESHOLD" \
+  LABEL_VP_THRESHOLD="$LABEL_VP_THRESHOLD" \
+  LABEL_STATUS_TOLERANCE="$LABEL_STATUS_TOLERANCE" \
+  POSITIVE_ONLY_DATA="$POSITIVE_ONLY_DATA" \
+  ROLLOUT_POLICY="$ROLLOUT_POLICY" \
+  MIN_PLAYER_VP="$MIN_PLAYER_VP" \
+  MAX_PLAYER_VP="$MAX_PLAYER_VP" \
+  MIN_ROUND="$MIN_ROUND" \
+  MAX_ROUND="$MAX_ROUND" \
+  DESTINATIONS="$DESTINATIONS" \
+  MIN_MONSTER_HP="$MIN_MONSTER_HP" \
+  MAX_MONSTER_HP="$MAX_MONSTER_HP" \
+  MIN_CLEAN_KILL_PROB="$MIN_CLEAN_KILL_PROB" \
+  MAX_CLEAN_KILL_PROB="$MAX_CLEAN_KILL_PROB" \
+  MIN_FIREPOWER_KILL_PROB="$MIN_FIREPOWER_KILL_PROB" \
+  MAX_FIREPOWER_KILL_PROB="$MAX_FIREPOWER_KILL_PROB" \
+  SCORE_REACH30_BONUS="$SCORE_REACH30_BONUS" \
+  SCORE_VP_WEIGHT="$SCORE_VP_WEIGHT" \
+  SCORE_KILL_WEIGHT="$SCORE_KILL_WEIGHT" \
+  SCORE_CLEAN_OPPORTUNITY_WEIGHT="$SCORE_CLEAN_OPPORTUNITY_WEIGHT" \
+  SCORE_EXPECTED_ATTACK_WEIGHT="$SCORE_EXPECTED_ATTACK_WEIGHT" \
+  SCORE_ATTACK_DICE_WEIGHT="$SCORE_ATTACK_DICE_WEIGHT" \
+  SCORE_SPIRIT_ANIMAL_WEIGHT="$SCORE_SPIRIT_ANIMAL_WEIGHT" \
+  SCORE_CULTIVATOR_WEIGHT="$SCORE_CULTIVATOR_WEIGHT" \
+  SCORE_BARRIER_WEIGHT="$SCORE_BARRIER_WEIGHT" \
+  SCORE_STATUS_PENALTY="$SCORE_STATUS_PENALTY" \
+  FORBID_TYPES="$FORBID_TYPES" \
+  MAX_STATUS_LEVEL="$MAX_STATUS_LEVEL" \
+  PRESERVE_ROUTE_FIREPOWER="$PRESERVE_ROUTE_FIREPOWER" \
+  PRESERVE_ROUTE_SURVIVAL="$PRESERVE_ROUTE_SURVIVAL" \
+  ITERS="$ITERS" \
+  PLANNER_HORIZON="$PLANNER_HORIZON" \
+  VALUEW="$VALUEW" \
+  TIMEOUT="$TIMEOUT" \
+  PROGRESS_EVERY="$PROGRESS_EVERY" \
+  RUN_IMITATION="$RUN_IMITATION" \
+  IMITATION_EPOCHS="$IMITATION_EPOCHS" \
+  MIN_IMITATION_SAMPLES="$MIN_IMITATION_SAMPLES" \
+  TRAIN="$TRAIN" \
+  MIN_TRAIN_SAMPLES="$MIN_TRAIN_SAMPLES" \
+  TRAIN_INIT_WEIGHTS="$TRAIN_INIT_WEIGHTS" \
+  TRAIN_EPOCHS="$TRAIN_EPOCHS" \
+  TRAIN_BATCH="$TRAIN_BATCH" \
+  TRAIN_LR="$TRAIN_LR" \
+  TRAIN_VALUE_COEF="$TRAIN_VALUE_COEF" \
+  bash -s <<'REMOTE'
+set -euo pipefail
+
+cd "$REMOTE_DIR"
+if test -s "$HOME/.nvm/nvm.sh"; then
+  # shellcheck disable=SC1090
+  source "$HOME/.nvm/nvm.sh"
+  nvm use 22 >/dev/null
+fi
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+  free_mb="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i "$GPU" | head -n 1 | tr -dc '0-9')"
+  used_mb="$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$GPU" | head -n 1 | tr -dc '0-9')"
+  echo "gpu=$GPU free_mb=${free_mb:-unknown} used_mb=${used_mb:-unknown} min_free_mb=$MIN_FREE_MB"
+  if [[ -n "${free_mb:-}" && "$free_mb" -lt "$MIN_FREE_MB" ]]; then
+    echo "refusing scalingq run: GPU $GPU has ${free_mb}MB free, below MIN_FREE_MB=$MIN_FREE_MB" >&2
+    exit 2
+  fi
+fi
+
+OUT_DIR="ml/meta_runs/$RUN_ID"
+DATA_DIR="$OUT_DIR/data"
+mkdir -p "$DATA_DIR" "$OUT_DIR/logs"
+
+cat > "$OUT_DIR/config.json" <<JSON
+{
+  "run_id": "$RUN_ID",
+  "mode": "scalingq-full-control",
+  "gpu": "$GPU",
+  "min_free_mb": $MIN_FREE_MB,
+  "weights": "$WEIGHTS",
+  "nav_weights": "$NAV_WEIGHTS",
+  "nav_gate": "$NAV_GATE",
+  "scale_nav_weights": "$SCALE_NAV_WEIGHTS",
+  "scale_nav_gate": "$SCALE_NAV_GATE",
+  "micro_weights": "$MICRO_WEIGHTS",
+  "micro_gate": "$MICRO_GATE",
+  "profiles": "$PROFILES",
+  "planner_profile": "$PLANNER_PROFILE",
+  "source_seed_base": $SOURCE_SEED_BASE,
+  "games": $GAMES,
+  "max_windows": $MAX_WINDOWS,
+  "max_rounds": $MAX_ROUNDS,
+  "horizons": "$HORIZONS",
+  "select_horizon": $SELECT_HORIZON,
+  "label_horizon": $LABEL_HORIZON,
+  "label_score_threshold": $LABEL_SCORE_THRESHOLD,
+  "label_vp_threshold": $LABEL_VP_THRESHOLD,
+  "label_status_tolerance": $LABEL_STATUS_TOLERANCE,
+  "positive_only_data": $POSITIVE_ONLY_DATA,
+  "rollout_policy": "$ROLLOUT_POLICY",
+  "min_player_vp": $MIN_PLAYER_VP,
+  "max_player_vp": "${MAX_PLAYER_VP}",
+  "min_round": $MIN_ROUND,
+  "max_round": "${MAX_ROUND}",
+  "destinations": "$DESTINATIONS",
+  "min_monster_hp": $MIN_MONSTER_HP,
+  "max_monster_hp": "${MAX_MONSTER_HP}",
+  "min_clean_kill_prob": $MIN_CLEAN_KILL_PROB,
+  "max_clean_kill_prob": "${MAX_CLEAN_KILL_PROB}",
+  "min_firepower_kill_prob": $MIN_FIREPOWER_KILL_PROB,
+  "max_firepower_kill_prob": "${MAX_FIREPOWER_KILL_PROB}",
+  "preserve_route_firepower": "$PRESERVE_ROUTE_FIREPOWER",
+  "preserve_route_survival": "$PRESERVE_ROUTE_SURVIVAL",
+  "train": "$TRAIN",
+  "train_init_weights": "$TRAIN_INIT_WEIGHTS",
+  "min_train_samples": $MIN_TRAIN_SAMPLES
+}
+JSON
+
+timeout "$TIMEOUT" env \
+  CUDA_VISIBLE_DEVICES="$GPU" \
+  SCALEQ=1 \
+  SCALEQ_SOURCE=full-control \
+  SCALEQ_ROLLOUT_POLICY="$ROLLOUT_POLICY" \
+  SCALEQ_GAMES="$GAMES" \
+  SCALEQ_MAX_WINDOWS="$MAX_WINDOWS" \
+  SCALEQ_MAXROUNDS="$MAX_ROUNDS" \
+  SCALEQ_HORIZONS="$HORIZONS" \
+  SCALEQ_SELECT_HORIZON="$SELECT_HORIZON" \
+  SCALEQ_LABEL_HORIZON="$LABEL_HORIZON" \
+  SCALEQ_LABEL_SCORE_THRESHOLD="$LABEL_SCORE_THRESHOLD" \
+  SCALEQ_LABEL_VP_THRESHOLD="$LABEL_VP_THRESHOLD" \
+  SCALEQ_LABEL_STATUS_TOLERANCE="$LABEL_STATUS_TOLERANCE" \
+  SCALEQ_POSITIVE_ONLY_DATA="$POSITIVE_ONLY_DATA" \
+  SCALEQ_MIN_PLAYER_VP="$MIN_PLAYER_VP" \
+  SCALEQ_MAX_PLAYER_VP="$MAX_PLAYER_VP" \
+  SCALEQ_MIN_ROUND="$MIN_ROUND" \
+  SCALEQ_MAX_ROUND="$MAX_ROUND" \
+  SCALEQ_DESTINATIONS="$DESTINATIONS" \
+  SCALEQ_MIN_MONSTER_HP="$MIN_MONSTER_HP" \
+  SCALEQ_MAX_MONSTER_HP="$MAX_MONSTER_HP" \
+  SCALEQ_MIN_CLEAN_KILL_PROB="$MIN_CLEAN_KILL_PROB" \
+  SCALEQ_MAX_CLEAN_KILL_PROB="$MAX_CLEAN_KILL_PROB" \
+  SCALEQ_MIN_FIREPOWER_KILL_PROB="$MIN_FIREPOWER_KILL_PROB" \
+  SCALEQ_MAX_FIREPOWER_KILL_PROB="$MAX_FIREPOWER_KILL_PROB" \
+  SCALEQ_SCORE_REACH30_BONUS="$SCORE_REACH30_BONUS" \
+  SCALEQ_SCORE_VP_WEIGHT="$SCORE_VP_WEIGHT" \
+  SCALEQ_SCORE_KILL_WEIGHT="$SCORE_KILL_WEIGHT" \
+  SCALEQ_SCORE_CLEAN_OPPORTUNITY_WEIGHT="$SCORE_CLEAN_OPPORTUNITY_WEIGHT" \
+  SCALEQ_SCORE_EXPECTED_ATTACK_WEIGHT="$SCORE_EXPECTED_ATTACK_WEIGHT" \
+  SCALEQ_SCORE_ATTACK_DICE_WEIGHT="$SCORE_ATTACK_DICE_WEIGHT" \
+  SCALEQ_SCORE_SPIRIT_ANIMAL_WEIGHT="$SCORE_SPIRIT_ANIMAL_WEIGHT" \
+  SCALEQ_SCORE_CULTIVATOR_WEIGHT="$SCORE_CULTIVATOR_WEIGHT" \
+  SCALEQ_SCORE_BARRIER_WEIGHT="$SCORE_BARRIER_WEIGHT" \
+  SCALEQ_SCORE_STATUS_PENALTY="$SCORE_STATUS_PENALTY" \
+  SCALEQ_FORBID_TYPES="$FORBID_TYPES" \
+  SCALEQ_MAX_STATUS_LEVEL="$MAX_STATUS_LEVEL" \
+  SCALEQ_WEIGHTS="$WEIGHTS" \
+  SCALEQ_NAV_WEIGHTS="$NAV_WEIGHTS" \
+  SCALEQ_NAV_GATE="$NAV_GATE" \
+  SCALEQ_SCALE_NAV_WEIGHTS="$SCALE_NAV_WEIGHTS" \
+  SCALEQ_SCALE_NAV_GATE="$SCALE_NAV_GATE" \
+  SCALEQ_MICRO_WEIGHTS="$MICRO_WEIGHTS" \
+  SCALEQ_MICRO_GATE="$MICRO_GATE" \
+  SCALEQ_PROFILES="$PROFILES" \
+  SCALEQ_PLANNER_PROFILE="$PLANNER_PROFILE" \
+  SCALEQ_SOURCE_SEED_BASE="$SOURCE_SEED_BASE" \
+  SCALEQ_PRESERVE_ROUTE_FIREPOWER="$PRESERVE_ROUTE_FIREPOWER" \
+  SCALEQ_PRESERVE_ROUTE_SURVIVAL="$PRESERVE_ROUTE_SURVIVAL" \
+  SCALEQ_ITERS="$ITERS" \
+  SCALEQ_PLANNER_HORIZON="$PLANNER_HORIZON" \
+  SCALEQ_VALUEW="$VALUEW" \
+  SCALEQ_PROGRESS_EVERY="$PROGRESS_EVERY" \
+  SCALEQ_OUT="$OUT_DIR/scalingq.json" \
+  SCALEQ_SUMMARY="$OUT_DIR/summary.json" \
+  SCALEQ_DATA_OUT="$DATA_DIR/scalingq.jsonl" \
+  npx vitest run src/lib/play/ml/_scalingnavigationcounterfactual.test.ts --disable-console-intercept \
+  2>&1 | tee "$OUT_DIR/logs/scalingq.log"
+
+sample_count="$(wc -l < "$DATA_DIR/scalingq.jsonl" | tr -d ' ')"
+echo "scalingq_samples=$sample_count" | tee "$OUT_DIR/logs/samples.log"
+
+if [[ "$RUN_IMITATION" == "1" && "$sample_count" -ge "$MIN_IMITATION_SAMPLES" ]]; then
+  set +e
+  CUDA_VISIBLE_DEVICES="$GPU" ml/.venv/bin/python ml/route_imitation.py \
+    --data "$DATA_DIR" \
+    --out "$OUT_DIR/route_imitation_summary.json" \
+    --epochs "$IMITATION_EPOCHS" \
+    --batch-size "$TRAIN_BATCH" \
+    2>&1 | tee "$OUT_DIR/logs/route_imitation.log"
+  imitation_status="${PIPESTATUS[0]}"
+  set -e
+  if [[ "$imitation_status" -ne 0 ]]; then
+    echo "route imitation diagnostic exited $imitation_status; continuing to TRAIN=$TRAIN" | tee -a "$OUT_DIR/logs/route_imitation.log"
+  fi
+elif [[ "$RUN_IMITATION" == "1" ]]; then
+  echo "skip route imitation: samples=$sample_count < MIN_IMITATION_SAMPLES=$MIN_IMITATION_SAMPLES" | tee "$OUT_DIR/logs/route_imitation.log"
+fi
+
+if [[ "$TRAIN" == "1" ]]; then
+  if [[ "$sample_count" -lt "$MIN_TRAIN_SAMPLES" ]]; then
+    echo "refusing train: samples=$sample_count < MIN_TRAIN_SAMPLES=$MIN_TRAIN_SAMPLES" >&2
+    exit 3
+  fi
+  CUDA_VISIBLE_DEVICES="$GPU" ml/.venv/bin/python ml/train.py \
+    --data "$DATA_DIR" \
+    --out "$OUT_DIR/best_policy.json" \
+    --mode alphazero \
+    --init-from "$TRAIN_INIT_WEIGHTS" \
+    --epochs "$TRAIN_EPOCHS" \
+    --batch-size "$TRAIN_BATCH" \
+    --lr "$TRAIN_LR" \
+    --value-coef "$TRAIN_VALUE_COEF" \
+    2>&1 | tee "$OUT_DIR/logs/train.log"
+fi
+
+echo "DONE: $OUT_DIR/summary.json"
+REMOTE
+status=$?
+set -e
+
+LOCAL_OUT_DIR="ml/meta_runs/$RUN_ID"
+mkdir -p "$LOCAL_OUT_DIR"
+rsync_status=0
+rsync -az "$HOST:$REMOTE_DIR/ml/meta_runs/$RUN_ID/" "$LOCAL_OUT_DIR/" || rsync_status=$?
+echo "$LOCAL_OUT_DIR"
+if [[ "$status" -ne 0 ]]; then
+  exit "$status"
+fi
+exit "$rsync_status"

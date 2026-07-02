@@ -1,0 +1,9 @@
+{
+  "obs_dim": 55,
+  "act_dim": 52,
+  "samples": 4,
+  "games": 1,
+  "mode": "farm-counterfactual",
+  "label_horizon": 6,
+  "label_vp_threshold": 0.5
+}

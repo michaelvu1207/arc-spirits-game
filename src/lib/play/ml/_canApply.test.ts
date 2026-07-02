@@ -16,7 +16,7 @@ import { createRng, nextInt, type RngState } from '../rng';
 import { botActorFor, botSeatNeedsToAct, planBotPhaseActions, profileFor, type BotRandom } from '../server/botPolicy';
 import { SEAT_COLORS, type GameActor, type PublicGameState, type SeatColor } from '../types';
 import { enumerateCandidates } from './actions';
-import { canApply } from './canApply';
+import { canApply } from '../legality';
 import { hasCatalog, loadPlayCatalogSync } from '../sim/_catalogSync';
 
 function botRandom(rng: RngState): BotRandom {

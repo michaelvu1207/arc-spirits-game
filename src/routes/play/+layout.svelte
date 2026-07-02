@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { onMount } from 'svelte';
 	import SplatBackground from '$lib/components/play2d/SplatBackground.svelte';
 	import { getGraphicsSettings } from '$lib/stores/graphicsSettings.svelte';
 
@@ -10,25 +9,6 @@
 
 	// The Arcane Abyss world that sits behind every /play screen.
 	const SPLAT_SRC = '/splats/abyssal-portal.spz';
-
-	// On native (Capacitor) actually LOCK the device to landscape so phones can't
-	// play in portrait at all. On the web the CSS rotate-gate below is the guarantee;
-	// this is a best-effort enhancement and is a no-op (silently caught) off-native.
-	onMount(() => {
-		let unlock: (() => void) | null = null;
-		(async () => {
-			try {
-				const { Capacitor } = await import('@capacitor/core');
-				if (!Capacitor.isNativePlatform()) return;
-				const { ScreenOrientation } = await import('@capacitor/screen-orientation');
-				await ScreenOrientation.lock({ orientation: 'landscape' });
-				unlock = () => void ScreenOrientation.unlock().catch(() => {});
-			} catch {
-				// Plugin missing / web / unsupported — the CSS gate still covers us.
-			}
-		})();
-		return () => unlock?.();
-	});
 </script>
 
 <!--

@@ -1,17 +1,18 @@
 {
   "seats": 4,
-  "gamesPer": 4,
+  "gamesPer": 2,
+  "forbidTypes": [],
   "results": [
     {
-      "opponent": "medium",
-      "games": 4,
+      "opponent": "mixed",
+      "games": 2,
       "winRate": 0,
       "avgPlace": 4,
       "avgVP": 0,
-      "avgOppVP": 9,
-      "avgRounds": 71,
+      "avgOppVP": 9.5,
+      "avgRounds": 30,
       "vpPerTurn": 0,
-      "finishedRate": 0
+      "finishedRate": 1
     }
   ]
 }

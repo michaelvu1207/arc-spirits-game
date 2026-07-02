@@ -7,6 +7,8 @@
 	import { auth } from '$lib/auth/auth.svelte';
 
 	let { data, children } = $props();
+	const capacitorBuild = import.meta.env.VITE_BUILD_TARGET === 'capacitor';
+	const playSurface = $derived($page.url.pathname === '/' || $page.url.pathname.startsWith('/play'));
 
 	// Push the freshest SSR→CSR auth state into the shared auth store (reactive on
 	// every layout re-load, i.e. every `invalidate('supabase:auth')`).
@@ -18,6 +20,7 @@
 	// second tab) so all tabs converge.
 	$effect(() => {
 		const { data: sub } = data.supabase.auth.onAuthStateChange((event, newSession) => {
+			if (capacitorBuild) return;
 			// Re-sync on a token change (refresh) OR an explicit identity event from any
 			// tab (sign in/out elsewhere, email/name change → USER_UPDATED). INITIAL_SESSION
 			// (fired on every re-subscribe) is intentionally excluded to avoid a loop.
@@ -38,7 +41,9 @@
 	// silence it whenever we're on a main-website (non-/play) route. The main site
 	// has no music of its own (the site soundtrack was removed).
 	$effect(() => {
-		if (!$page.url.pathname.startsWith('/play')) stopMenu();
+		if (!playSurface) {
+			stopMenu();
+		}
 	});
 
 	// ── Social embeds (Open Graph + Twitter/X cards) ─────────────────────────────
@@ -82,7 +87,9 @@
 </svelte:head>
 
 <div class="app haunted-bg">
-	<TopBar />
+	{#if !playSurface}
+		<TopBar />
+	{/if}
 	<div class="flex-1">
 		{@render children()}
 	</div>

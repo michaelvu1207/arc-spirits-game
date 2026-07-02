@@ -1,0 +1,57 @@
+{
+  "mode": "farm-counterfactual",
+  "config": {
+    "games": 1,
+    "seats": 4,
+    "maxRounds": 30,
+    "branchRolloutsCapAtMaxRounds": true,
+    "maxWindows": 4,
+    "killThreshold": 0.5,
+    "minOpportunityVp": 1,
+    "selectHorizon": 6,
+    "horizons": [
+      3,
+      6
+    ],
+    "labelHorizon": 6,
+    "labelVpThreshold": 0.5,
+    "dataOut": "ml/data_farmq_smoke/farmq.jsonl",
+    "profiles": [
+      "paragon",
+      "farmer",
+      "farmer2",
+      "hard"
+    ],
+    "forbidTypes": []
+  },
+  "scannedFarmable": 4,
+  "windows": 4,
+  "skippedNoAbyss": 0,
+  "skippedNoNonAbyss": 0,
+  "roundCappedBranches": 0,
+  "roundCappedWindows": 0,
+  "labelRoundCappedWindows": 0,
+  "farmNowCorrect": 4,
+  "farmNowPct": 100,
+  "avgFarmQDeltaVp": 3,
+  "avgFarmQDeltaStatus": 0,
+  "avgFarmQDeltaRewardVp": 0,
+  "avgFarmQDeltaPvpVp": 0,
+  "avgFarmQDeltaMonsterLivesConsumed": 1,
+  "avgFarmQDeltaRaceMargin": 3,
+  "avgFarmQDeltaReach30": 0,
+  "avgFarmQDeltaPvpExposure": 0,
+  "byHorizon": {
+    "3": {
+      "avgFarmQDeltaVp": 3,
+      "farmNowPct": 100
+    },
+    "6": {
+      "avgFarmQDeltaVp": 3,
+      "farmNowPct": 100
+    }
+  },
+  "bestNonAbyssDestinations": {
+    "Floral Patch": 4
+  }
+}

@@ -38,7 +38,9 @@
 	const seconds = $derived(Math.ceil(remainingMs / 1000));
 	const clock = $derived(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
 	const pct = $derived(
-		deadline == null ? 0 : Math.max(0, Math.min(100, (remainingMs / (NAVIGATION_SECONDS * 1000)) * 100))
+		deadline == null
+			? 0
+			: Math.max(0, Math.min(100, (remainingMs / (NAVIGATION_SECONDS * 1000)) * 100))
 	);
 
 	$effect(() => {
@@ -51,7 +53,7 @@
 
 {#if deadline != null}
 	<div class="nav-timer" data-testid="nav-timer" class:urgent={seconds <= 10}>
-		<span class="label">Choose your destination</span>
+		<span class="label">Time remaining</span>
 		<div class="bar"><div class="fill" style="width: {pct}%"></div></div>
 		<span class="secs" data-testid="nav-timer-secs">{clock}</span>
 	</div>

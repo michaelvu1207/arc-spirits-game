@@ -1,0 +1,45 @@
+{
+  "games": 6,
+  "iterations": 16,
+  "valueWeight": 1,
+  "control": "full",
+  "fullSelection": "policy",
+  "fullLookaheadDepth": 2,
+  "fullLookaheadBeam": 8,
+  "fullLookaheadRootBeam": 24,
+  "fullTargetTemperature": 0.25,
+  "weights": "ml/meta_runs/act52-full-g6-20260627T181633Z/best_policy.json",
+  "microWeights": "ml/weights/abyss-curriculum-smoke.json",
+  "forbidTypes": [],
+  "planner_win_pct": 0,
+  "planner_VP_avg": 3,
+  "planner_status_avg": 1,
+  "planner_rounds_avg": 24.7,
+  "planner_reach30_pct": 0,
+  "planner_monster_kills_per_game": 1,
+  "planner_monster_combats_per_game": 6.33,
+  "planner_abyss_navs_per_game": 6.33,
+  "field_bestVP_avg": 28.5,
+  "field_wins_by_profile": {
+    "pvphunter": 6
+  },
+  "decision_types": {
+    "lockNavigation": 148,
+    "replaceSpirit": 133,
+    "endLocationActions": 128,
+    "resolveLocationInteraction": 52,
+    "startCombat": 38,
+    "discardSpirit": 30,
+    "takeSpirit": 21,
+    "spawnHandSpirit": 15,
+    "commitCleanup": 11,
+    "resolveMonsterReward": 6,
+    "placeAugmentOnSpirit": 2
+  },
+  "field": [
+    "godly",
+    "medium",
+    "cultivator",
+    "pvphunter"
+  ]
+}

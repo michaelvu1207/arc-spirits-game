@@ -1,0 +1,22 @@
+[
+  {
+    "name": "pure-damage-navbuild-24vp",
+    "weights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/best_policy.full.json",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "pure-farm-build",
+    "maxStatusLevel": 0,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true
+  },
+  {
+    "name": "pure-routefinish-17vp",
+    "weights": "ml/meta_runs/route-samples-damage-navbuild-unsafe-20260629T193536Z/route_finish_policy.json",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "pure-farm-build",
+    "maxStatusLevel": 0,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true
+  }
+]

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getRoomMemberCookie } from '$lib/play/server/cookies';
+import { getRoomMemberId } from '$lib/play/server/cookies';
 import { loadRoomView } from '$lib/play/server/service';
 
 // Lightweight "fetch my current room view" endpoint. The realtime broadcast
@@ -10,11 +10,11 @@ import { loadRoomView } from '$lib/play/server/service';
 // loadRoomView runs the opportunistic deadline-enforcement / room-close hooks —
 // it is what keeps the host-independent server-authority cadence alive now that
 // the per-second SSE poll is gone.
-export const GET: RequestHandler = async ({ params, cookies, url, locals }) => {
+export const GET: RequestHandler = async ({ request, params, cookies, url, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
 	// Cookie authenticates the web client; the cookieless Capacitor shell passes
-	// the member id as a query param (matches the events/commands routes).
-	const memberId = getRoomMemberCookie(cookies, roomCode) ?? url.searchParams.get('member');
+	// the member id as a header/query param.
+	const memberId = getRoomMemberId(cookies, roomCode, request) ?? url.searchParams.get('member');
 	// A matchmade player may have no member cookie/id — fall back to their auth user_id
 	// so the server recognizes them as their own session member.
 	const { user } = await locals.safeGetSession();

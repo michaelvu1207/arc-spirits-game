@@ -1,0 +1,68 @@
+{
+  "mode": "survival-counterfactual",
+  "config": {
+    "games": 4,
+    "seats": 4,
+    "maxRounds": 30,
+    "maxWindows": 24,
+    "firepowerThreshold": 0.5,
+    "cleanThreshold": 0.5,
+    "selectHorizon": 6,
+    "horizons": [
+      3,
+      6,
+      10
+    ],
+    "labelHorizon": 10,
+    "labelVpThreshold": 0.5,
+    "labelCleanOpportunityGain": 1,
+    "dataOut": "ml/data_contract_audit/survivalq.jsonl",
+    "profiles": [
+      "paragon",
+      "farmer",
+      "farmer2",
+      "hard"
+    ],
+    "forbidTypes": [
+      "initiatePvp"
+    ],
+    "maxStatusLevel": 0
+  },
+  "scannedUnsafeFirepower": 24,
+  "windows": 24,
+  "skippedNoAbyss": 0,
+  "skippedNoNonAbyss": 0,
+  "buildNowCorrect": 12,
+  "buildNowPct": 50,
+  "avgBuildQDeltaVp": 1.33,
+  "avgBuildQDeltaStatus": 0,
+  "avgBuildQDeltaCleanCombatOpportunities": 0.5,
+  "avgSurvivalDeficit": 1.79,
+  "avgMaxBarrierDeficit": 0,
+  "byHorizon": {
+    "3": {
+      "avgBuildQDeltaVp": 1.33,
+      "avgBuildQDeltaCleanCombatOpportunities": 0.5,
+      "buildNowPct": 50
+    },
+    "6": {
+      "avgBuildQDeltaVp": 1.33,
+      "avgBuildQDeltaCleanCombatOpportunities": 0.5,
+      "buildNowPct": 50
+    },
+    "10": {
+      "avgBuildQDeltaVp": 1.33,
+      "avgBuildQDeltaCleanCombatOpportunities": 0.5,
+      "buildNowPct": 50
+    }
+  },
+  "bestBuildDestinations": {
+    "Lantern Canyon": 11,
+    "Floral Patch": 12,
+    "Cyber City": 1
+  },
+  "heuristicBuildDestinations": {
+    "Floral Patch": 11,
+    "Tidal Cove": 13
+  }
+}

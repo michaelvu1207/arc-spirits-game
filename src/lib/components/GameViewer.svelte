@@ -553,8 +553,8 @@
 					<span class="section-eyebrow">Dice Pool</span>
 				</header>
 				<div class="pane-body dice-body">
-					{#if playerDicePool().length === 0}
-						<div class="dice-empty">No dice configured.</div>
+						{#if playerDicePool().length === 0}
+							<div class="dice-empty">No attack dice</div>
 					{:else}
 						<div class="dice-row">
 							{#each playerDicePool() as die (die.diceId)}

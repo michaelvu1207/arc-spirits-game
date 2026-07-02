@@ -20,7 +20,7 @@ import type {
 	PublicGameState,
 	SeatColor
 } from './types';
-import { VP_TO_WIN, ALL_DESTINATIONS, RUNE_CARRY_LIMIT, STATUS_LADDER, isEvilAlignment } from './types';
+import { VP_TO_WIN, MAX_ROUNDS, ALL_DESTINATIONS, RUNE_CARRY_LIMIT, STATUS_LADDER, isEvilAlignment } from './types';
 import { nextInt } from './rng';
 import { buildEffectContext } from './effects/context';
 import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effects/awaken';
@@ -390,6 +390,16 @@ export function tryAdvanceFromCleanup(state: PublicGameState): void {
 	// End condition: once every player has Fallen (the deepest corruption), the game
 	// ends — the player with the most Victory Points wins (ties broken by seat order).
 	if (allPlayersFallen(state)) {
+		state.winnerSeat = highestVpSeat(state);
+		state.status = 'finished';
+		return;
+	}
+
+	// Hard round cap: round MAX_ROUNDS is the last round. If its cleanup closes with no VP-target
+	// winner and not all Fallen, end now — the player with the most Victory Points wins (ties → seat
+	// order). Runs only after allActiveSeatsReady, so round 30 is fully played (all cleanup VP claims
+	// and the vpHistory snapshot above have landed) before the winner is read. `>=` is defensive.
+	if (state.round >= MAX_ROUNDS) {
 		state.winnerSeat = highestVpSeat(state);
 		state.status = 'finished';
 		return;

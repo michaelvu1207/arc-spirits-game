@@ -29,7 +29,13 @@ import {
 	DEFAULT_NAVIGATION_DURATION_MS
 } from './types';
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
-import { bagForSpiritCost, deckCopiesForCost, shuffleBag, SPIRIT_WORLD_BAG, ARCANE_ABYSS_BAG } from './bags';
+import {
+	bagForSpiritCost,
+	deckCopiesForCost,
+	shuffleBag,
+	SPIRIT_WORLD_BAG,
+	ARCANE_ABYSS_BAG
+} from './bags';
 import {
 	initRoundLoop,
 	tryAdvanceFromLocation,
@@ -44,8 +50,13 @@ import { fightMonster, resolveEncounterCombat } from './combat';
 import { applyTrigger, applyCultivate, awakenedClassCounts } from './effects/apply';
 import { runAction, GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 import { augmentCapacityForSpirit, isSpiritAugmentClass } from './augments';
-import { buildAbilityInteractions } from './abilityInteractions';
-import { buildLocationInteractions, matchRewardCost, relicOptions, type ResolvedRune, type GainEffect } from './locationInteractions';
+import {
+	buildLocationInteractions,
+	matchRewardCost,
+	relicOptions,
+	type ResolvedRune,
+	type GainEffect
+} from './locationInteractions';
 import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
 import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
@@ -141,7 +152,8 @@ function createSeatRecord(guardianPool: string[]): Record<SeatColor, LobbySeatSt
 			seatColor,
 			memberId: null,
 			displayName: null,
-			selectedGuardian: guardianPool.length === 0 ? null : null
+			selectedGuardian: guardianPool.length === 0 ? null : null,
+			isBot: false
 		};
 	}
 	return seats;
@@ -268,7 +280,10 @@ function syncBarrierFromBrokenBarrier(player: PrivatePlayerState) {
 	player.barrier = Math.max(0, player.maxBarrier - player.brokenBarrier);
 }
 
-function buildInitialSpiritBag(catalog: PlayCatalog, sourceBag: SpiritSourceBag): RuntimeBagEntry[] {
+function buildInitialSpiritBag(
+	catalog: PlayCatalog,
+	sourceBag: SpiritSourceBag
+): RuntimeBagEntry[] {
 	// Partition by cost exactly like TTS's two filterSpiritsByCost(regular, …) calls:
 	// cost 1–5 → Spirit World Bag, 7–9 → Arcane Abyss Bag, anything else (cost-6
 	// boundary, cost-15 spirits) → no regular draw bag at all.
@@ -289,7 +304,11 @@ function buildInitialSpiritBag(catalog: PlayCatalog, sourceBag: SpiritSourceBag)
 }
 
 /** Opening hand: each player begins with four Spirit World spirits, awakened. */
-function drawStartingSpirits(state: PublicGameState, catalog: PlayCatalog, player: PrivatePlayerState): void {
+function drawStartingSpirits(
+	state: PublicGameState,
+	catalog: PlayCatalog,
+	player: PrivatePlayerState
+): void {
 	const bag = state.bags.hexSpirits;
 	for (let slotIndex = 1; slotIndex <= 4; slotIndex += 1) {
 		const entry = bag.contents.shift();
@@ -675,8 +694,7 @@ function autoResolveCorruptionDiscard(state: PublicGameState, player: PrivatePla
 			(attachment) => attachment.spiritSlotIndex !== victim.slotIndex
 		);
 		const sourceBag =
-			bagForSpiritCost(victim.cost) ??
-			(victim.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
+			bagForSpiritCost(victim.cost) ?? (victim.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
 		const runtimeBag = runtimeBagForSource(state, sourceBag);
 		runtimeBag.contents.push({
 			name: victim.name,
@@ -845,7 +863,11 @@ function occupiedSeatForMember(state: PublicGameState, memberId: string): SeatCo
 	return null;
 }
 
-function selectedGuardianTaken(state: PublicGameState, guardianName: string, excludeSeat: SeatColor | null) {
+function selectedGuardianTaken(
+	state: PublicGameState,
+	guardianName: string,
+	excludeSeat: SeatColor | null
+) {
 	return SEAT_COLORS.some((seatColor) => {
 		if (seatColor === excludeSeat) return false;
 		return state.seats[seatColor].selectedGuardian === guardianName;
@@ -933,7 +955,9 @@ export function applyGameCommand(
 	// parity-tested against the cloning path across thousands of random rollouts (sim/_parity.test.ts).
 	// Callers that must preserve the input state — dry-runs, bot search (`legalActions`,
 	// `planBotPhaseActions`), the live server — MUST omit it (default = safe deep clone).
-	const state = opts?.mutate ? ensureStateShape(currentState) : ensureStateShape(cloneState(currentState));
+	const state = opts?.mutate
+		? ensureStateShape(currentState)
+		: ensureStateShape(cloneState(currentState));
 
 	switch (command.type) {
 		case 'claimSeat': {
@@ -1016,14 +1040,20 @@ export function applyGameCommand(
 
 		case 'setNavigationTimer': {
 			if (state.status !== 'lobby') {
-				return failure('settings_locked', 'The navigation timer can only be changed before the game starts.');
+				return failure(
+					'settings_locked',
+					'The navigation timer can only be changed before the game starts.'
+				);
 			}
 			if (actor.role !== 'host') {
 				return failure('host_required', 'Only the host can change the navigation timer.');
 			}
 			const ms = command.durationMs;
 			if (ms !== null && (!Number.isFinite(ms) || ms <= 0)) {
-				return failure('invalid_timer', 'Navigation timer must be a positive duration, or null for no limit.');
+				return failure(
+					'invalid_timer',
+					'Navigation timer must be a positive duration, or null for no limit.'
+				);
 			}
 			state.navigationDurationMs = ms;
 			return success(state);
@@ -1072,8 +1102,14 @@ export function applyGameCommand(
 			// and every subsequent draw are randomized — not dealt in alphabetical
 			// (catalog) order. Shuffle in place via the seeded RNG BEFORE dealing
 			// opening hands / stocking the market so the whole game stays replayable.
-			const spiritWorldBagContents = shuffleBag(buildInitialSpiritBag(catalog, SPIRIT_WORLD_BAG), state.rng);
-			const arcaneAbyssBagContents = shuffleBag(buildInitialSpiritBag(catalog, ARCANE_ABYSS_BAG), state.rng);
+			const spiritWorldBagContents = shuffleBag(
+				buildInitialSpiritBag(catalog, SPIRIT_WORLD_BAG),
+				state.rng
+			);
+			const arcaneAbyssBagContents = shuffleBag(
+				buildInitialSpiritBag(catalog, ARCANE_ABYSS_BAG),
+				state.rng
+			);
 			state.bags.hexSpirits = {
 				count: spiritWorldBagContents.length,
 				contents: spiritWorldBagContents
@@ -1147,7 +1183,9 @@ export function applyGameCommand(
 				isFaceDown: pendingDraw.sourceBag === ARCANE_ABYSS_BAG
 			});
 			activePlayer.player.spirits.sort((a, b) => a.slotIndex - b.slotIndex);
-			activePlayer.player.handDraws = activePlayer.player.handDraws.filter((entry) => entry.guid !== command.guid);
+			activePlayer.player.handDraws = activePlayer.player.handDraws.filter(
+				(entry) => entry.guid !== command.guid
+			);
 			activePlayer.player.pendingDraw = {
 				...pendingDraw,
 				summonedCount: pendingDraw.summonedCount + 1
@@ -1173,7 +1211,8 @@ export function applyGameCommand(
 			}
 
 			if (
-				activePlayer.player.pendingDraw.summonedCount >= activePlayer.player.pendingDraw.summonLimit ||
+				activePlayer.player.pendingDraw.summonedCount >=
+					activePlayer.player.pendingDraw.summonLimit ||
 				activePlayer.player.handDraws.length === 0
 			) {
 				returnHandDrawsToBags(state, activePlayer.player);
@@ -1258,7 +1297,11 @@ export function applyGameCommand(
 			}
 			// One-shot: consumed until the next summon re-arms it.
 			player.redrawAvailable = false;
-			player.lastAction = { key: 'redraw', label: 'Soul Weaver Redraw', log: ['Returned the draw and drew again.'] };
+			player.lastAction = {
+				key: 'redraw',
+				label: 'Soul Weaver Redraw',
+				log: ['Returned the draw and drew again.']
+			};
 			return success(state);
 		}
 
@@ -1284,7 +1327,9 @@ export function applyGameCommand(
 			}
 
 			const slotIndex =
-				command.type === 'replaceSpirit' ? command.slotIndex : command.slotIndex ?? firstOpenSpiritSlot(activePlayer.player);
+				command.type === 'replaceSpirit'
+					? command.slotIndex
+					: (command.slotIndex ?? firstOpenSpiritSlot(activePlayer.player));
 
 			if (!slotIndex || slotIndex < 1 || slotIndex > 7) {
 				return failure('slot_missing', 'No open spirit slot is available.');
@@ -1330,8 +1375,15 @@ export function applyGameCommand(
 			if (!activePlayer) {
 				return failure('seat_required', 'Only seated players can select a destination.');
 			}
-			if (!SPIRIT_WORLD_LOCATIONS.includes(command.destination as (typeof SPIRIT_WORLD_LOCATIONS)[number])) {
-				return failure('destination_invalid', `${command.destination} is not a valid Spirit World location.`);
+			if (
+				!SPIRIT_WORLD_LOCATIONS.includes(
+					command.destination as (typeof SPIRIT_WORLD_LOCATIONS)[number]
+				)
+			) {
+				return failure(
+					'destination_invalid',
+					`${command.destination} is not a valid Spirit World location.`
+				);
 			}
 
 			activePlayer.player.navigationDestination = command.destination;
@@ -1440,17 +1492,22 @@ export function applyGameCommand(
 			}
 
 			const activePlayer = activePlayerForActor(state, actor);
-			if (!activePlayer) return failure('seat_required', 'Only seated players can move mat objects.');
+			if (!activePlayer)
+				return failure('seat_required', 'Only seated players can move mat objects.');
 
 			if (command.objectType === 'die') {
-				const target = activePlayer.player.spawnedDice.find((entry) => entry.instanceId === command.instanceId);
+				const target = activePlayer.player.spawnedDice.find(
+					(entry) => entry.instanceId === command.instanceId
+				);
 				if (!target) return failure('object_missing', 'That die no longer exists.');
 				target.localX = command.localX;
 				target.localZ = command.localZ;
 				return success(state);
 			}
 
-			const target = activePlayer.player.spawnedItems.find((entry) => entry.instanceId === command.instanceId);
+			const target = activePlayer.player.spawnedItems.find(
+				(entry) => entry.instanceId === command.instanceId
+			);
 			if (!target) return failure('object_missing', 'That item no longer exists.');
 			target.localX = command.localX;
 			target.localZ = command.localZ;
@@ -1467,24 +1524,33 @@ export function applyGameCommand(
 				activePlayer.player.maxBarrier,
 				activePlayer.player.barrier
 			);
-			activePlayer.player.brokenBarrier = activePlayer.player.maxBarrier - activePlayer.player.barrier;
+			activePlayer.player.brokenBarrier =
+				activePlayer.player.maxBarrier - activePlayer.player.barrier;
 			return success(state);
 		}
 
 		case 'adjustBrokenBarrier': {
 			const activePlayer = activePlayerForActor(state, actor);
-			if (!activePlayer) return failure('seat_required', 'Only seated players can adjust broken barrier.');
+			if (!activePlayer)
+				return failure('seat_required', 'Only seated players can adjust broken barrier.');
 			// Broken barrier is a side of the existing pool: bump it (clamped to capacity) and
 			// re-derive the intact side, keeping brokenBarrier === maxBarrier − barrier.
-			activePlayer.player.brokenBarrier = Math.max(0, activePlayer.player.brokenBarrier + command.amount);
+			activePlayer.player.brokenBarrier = Math.max(
+				0,
+				activePlayer.player.brokenBarrier + command.amount
+			);
 			syncBarrierFromBrokenBarrier(activePlayer.player);
 			return success(state);
 		}
 
 		case 'adjustMaxBarrier': {
 			const activePlayer = activePlayerForActor(state, actor);
-			if (!activePlayer) return failure('seat_required', 'Only seated players can adjust max barrier.');
-			activePlayer.player.maxBarrier = Math.max(0, Math.min(10, activePlayer.player.maxBarrier + command.amount));
+			if (!activePlayer)
+				return failure('seat_required', 'Only seated players can adjust max barrier.');
+			activePlayer.player.maxBarrier = Math.max(
+				0,
+				Math.min(10, activePlayer.player.maxBarrier + command.amount)
+			);
 			syncBarrierFromBrokenBarrier(activePlayer.player);
 			return success(state);
 		}
@@ -1506,9 +1572,9 @@ export function applyGameCommand(
 				// DOWNWARD move (purification) owes nothing.
 				if (activePlayer.player.statusLevel > oldStatus) {
 					activePlayer.player.barrier = activePlayer.player.maxBarrier;
-						activePlayer.player.brokenBarrier = 0;
-						activePlayer.player.corruptionCount = (activePlayer.player.corruptionCount ?? 0) + 1;
-						setCorruptionDiscardObligation(activePlayer.player);
+					activePlayer.player.brokenBarrier = 0;
+					activePlayer.player.corruptionCount = (activePlayer.player.corruptionCount ?? 0) + 1;
+					setCorruptionDiscardObligation(activePlayer.player);
 				}
 				applyStatusChange(
 					state,
@@ -1524,8 +1590,12 @@ export function applyGameCommand(
 
 		case 'adjustVictoryPoints': {
 			const activePlayer = activePlayerForActor(state, actor);
-			if (!activePlayer) return failure('seat_required', 'Only seated players can adjust victory points.');
-			activePlayer.player.victoryPoints = Math.max(0, activePlayer.player.victoryPoints + command.amount);
+			if (!activePlayer)
+				return failure('seat_required', 'Only seated players can adjust victory points.');
+			activePlayer.player.victoryPoints = Math.max(
+				0,
+				activePlayer.player.victoryPoints + command.amount
+			);
 			return success(state);
 		}
 
@@ -1539,7 +1609,9 @@ export function applyGameCommand(
 				return failure('seat_required', 'Only seated players can flip spirits.');
 			}
 
-			const spirit = activePlayer.player.spirits.find((entry) => entry.slotIndex === command.slotIndex);
+			const spirit = activePlayer.player.spirits.find(
+				(entry) => entry.slotIndex === command.slotIndex
+			);
 			if (!spirit) {
 				return failure('spirit_missing', 'No spirit exists in that slot.');
 			}
@@ -1572,8 +1644,7 @@ export function applyGameCommand(
 			// Return the card to the bag it came from (face-down ⇒ Arcane Abyss,
 			// otherwise by cost) and reshuffle so it isn't predictably drawn next.
 			const sourceBag =
-				bagForSpiritCost(spirit.cost) ??
-				(spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
+				bagForSpiritCost(spirit.cost) ?? (spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
 			const runtimeBag = runtimeBagForSource(state, sourceBag);
 			runtimeBag.contents.push({
 				name: spirit.name,
@@ -1593,7 +1664,8 @@ export function applyGameCommand(
 				obligation.count -= 1;
 				// Clear when the debt is paid OR you've nothing left to give — you can't
 				// sacrifice more spirits than you hold, so an empty tableau discharges it.
-				if (obligation.count <= 0 || player.spirits.length === 0) player.pendingCorruptionDiscard = null;
+				if (obligation.count <= 0 || player.spirits.length === 0)
+					player.pendingCorruptionDiscard = null;
 			}
 			return success(state);
 		}
@@ -1706,7 +1778,10 @@ export function applyGameCommand(
 			}
 			for (const seatColor of state.activeSeats) {
 				if (!state.players[seatColor]?.navigationDestination) {
-					return failure('destination_missing', `Seat ${seatColor} has not selected a destination.`);
+					return failure(
+						'destination_missing',
+						`Seat ${seatColor} has not selected a destination.`
+					);
 				}
 			}
 			for (const seatColor of state.activeSeats) {
@@ -1771,7 +1846,10 @@ export function applyGameCommand(
 			// already restored your barrier instantly — this is the cost.) The deadline drain auto-resolves
 			// it for idle players so the round never deadlocks.
 			if (active.player.pendingCorruptionDiscard) {
-				return failure('corruption_pending', 'Discard your corrupted spirit(s) before ending your turn.');
+				return failure(
+					'corruption_pending',
+					'Discard your corrupted spirit(s) before ending your turn.'
+				);
 			}
 			// Defeating the Abyss monster opens a reward pick — claim it before passing.
 			if (active.player.pendingReward) {
@@ -1875,9 +1953,7 @@ export function applyGameCommand(
 			}
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can discard runes.');
-			const slot = active.player.mats.find(
-				(r) => r.slotIndex === command.slotIndex && r.hasRune
-			);
+			const slot = active.player.mats.find((r) => r.slotIndex === command.slotIndex && r.hasRune);
 			if (!slot) return failure('rune_missing', 'No rune in that slot to discard.');
 			slot.hasRune = false;
 			// A discarded rune/relic may have been a Faerie's only awaken candidate —
@@ -1912,7 +1988,8 @@ export function applyGameCommand(
 			// Validate every swap BEFORE mutating, so a bad entry rejects the whole action.
 			const seenTargets = new Set<SeatColor>();
 			for (const sw of swaps) {
-				if (sw.targetSeat === active.seatColor) return failure('self_swap', 'Cannot swap with yourself.');
+				if (sw.targetSeat === active.seatColor)
+					return failure('self_swap', 'Cannot swap with yourself.');
 				if (seenTargets.has(sw.targetSeat)) {
 					return failure('dup_target', 'At most one die swap per player.');
 				}
@@ -1928,7 +2005,7 @@ export function applyGameCommand(
 					return failure('die_missing', 'One of your chosen dice is unavailable.');
 				}
 				if (!target.attackDice.some((d) => d.instanceId === sw.theirInstanceId)) {
-					return failure('die_missing', "A chosen opponent die is unavailable.");
+					return failure('die_missing', 'A chosen opponent die is unavailable.');
 				}
 			}
 			const log: string[] = [];
@@ -1950,7 +2027,8 @@ export function applyGameCommand(
 
 		case 'forceAdvancePhase': {
 			if (state.status !== 'active') return failure('inactive', 'The game has not started yet.');
-			if (actor.role !== 'host') return failure('host_required', 'Only the host can force the phase forward.');
+			if (actor.role !== 'host')
+				return failure('host_required', 'Only the host can force the phase forward.');
 			// A forced advance bypasses the per-seat pass guard, so any in-progress
 			// reward draw would otherwise be abandoned mid-resolution — leaking the
 			// drawn spirits out of their bag. drainPendingBeforeAdvance returns them
@@ -1963,7 +2041,9 @@ export function applyGameCommand(
 		case 'dismissManualPrompt': {
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can dismiss prompts.');
-			active.player.manualPrompts = active.player.manualPrompts.filter((entry) => entry.id !== command.id);
+			active.player.manualPrompts = active.player.manualPrompts.filter(
+				(entry) => entry.id !== command.id
+			);
 			return success(state);
 		}
 
@@ -1971,7 +2051,9 @@ export function applyGameCommand(
 			if (state.status !== 'active') return failure('inactive', 'The game has not started yet.');
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can resolve decisions.');
-			const decision = active.player.pendingDecisions.find((entry) => entry.id === command.decisionId);
+			const decision = active.player.pendingDecisions.find(
+				(entry) => entry.id === command.decisionId
+			);
 			if (!decision) return failure('decision_missing', 'No such decision is pending.');
 
 			const log: string[] = [];
@@ -2111,7 +2193,10 @@ export function applyGameCommand(
 			// Only an UNSCRIPTED text condition is confirmable by hand. Free/rune-cost/
 			// scripted-text spirits resolve deterministically via awakenSpirit.
 			if (!needsManualAwaken(ctx, { spirit })) {
-				return failure('not_manual_awaken', `${spirit.name} is resolved automatically — use awakenSpirit.`);
+				return failure(
+					'not_manual_awaken',
+					`${spirit.name} is resolved automatically — use awakenSpirit.`
+				);
 			}
 
 			spirit.isFaceDown = false;
@@ -2268,7 +2353,10 @@ export function applyGameCommand(
 			const rowAllowance = 1 + (player.extraActions?.locationInteraction ?? 0);
 			const rowUsed = player.actionsUsedThisRound.filter((a) => a === usedKey).length;
 			if (rowUsed >= rowAllowance) {
-				return failure('action_used', 'You already resolved that interaction the maximum times this round.');
+				return failure(
+					'action_used',
+					'You already resolved that interaction the maximum times this round.'
+				);
 			}
 
 			const log: string[] = [];
@@ -2445,7 +2533,8 @@ export function applyGameCommand(
 
 		case 'startCombat': {
 			if (state.status !== 'active') return failure('inactive', 'The game has not started yet.');
-			if (state.phase !== 'location') return failure('wrong_phase', 'Combat happens during the Location phase.');
+			if (state.phase !== 'location')
+				return failure('wrong_phase', 'Combat happens during the Location phase.');
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can fight.');
 			if (active.player.navigationDestination !== 'Arcane Abyss') {
@@ -2471,7 +2560,9 @@ export function applyGameCommand(
 				kind: 'monster',
 				step: 'resolved',
 				killed: result.killed,
-				sides: [{ seat: active.seatColor, initiative: 0, rolled: true, damageDealt: result.playerDamage }],
+				sides: [
+					{ seat: active.seatColor, initiative: 0, rolled: true, damageDealt: result.playerDamage }
+				],
 				// The monster AS FOUGHT (a kill has already advanced state.monster to the
 				// next rung), so the combat card shows what was actually battled.
 				monster: result.fought ?? null,
@@ -2542,7 +2633,8 @@ export function applyGameCommand(
 		// ── Encounter / PvP (P2) ──────────────────────────────────────────
 		case 'passEncounter': {
 			if (state.status !== 'active') return failure('inactive', 'The game has not started yet.');
-			if (state.phase !== 'encounter') return failure('wrong_phase', 'There is no encounter to resolve.');
+			if (state.phase !== 'encounter')
+				return failure('wrong_phase', 'There is no encounter to resolve.');
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can act.');
 			active.player.phaseReady = true;
@@ -2561,7 +2653,8 @@ export function applyGameCommand(
 
 		case 'initiatePvp': {
 			if (state.status !== 'active') return failure('inactive', 'The game has not started yet.');
-			if (state.phase !== 'encounter') return failure('wrong_phase', 'PvP only happens in the Encounter phase.');
+			if (state.phase !== 'encounter')
+				return failure('wrong_phase', 'PvP only happens in the Encounter phase.');
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can initiate combat.');
 			if (!isEvilAlignment(active.player.statusLevel)) {
@@ -2702,10 +2795,7 @@ export function buildSessionProjection(
 			lastAction: isOwner ? player.lastAction : null,
 			// Augments-to-place are the owner's private staging pouch; placed augments
 			// live in spiritAugmentAttachments and stay visible to everyone.
-			unplacedAugments: isOwner ? (player.unplacedAugments ?? []) : [],
-			// Unified Awakening-phase ability UX — owner-only, derived from the fields
-			// above so AwakeningSheet can render every interaction from one list.
-			abilityInteractions: isOwner ? buildAbilityInteractions(player) : []
+			unplacedAugments: isOwner ? (player.unplacedAugments ?? []) : []
 		};
 	}
 

@@ -1,0 +1,39 @@
+[
+  {
+    "name": "nonfallen-evade-goodbuilder-trained-target",
+    "weights": "ml/meta_runs/allseat-goodbuilder-medium-20260630Tgoal/allseat_goodbuilder_policy.json",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "good-nonfallen-farm-target-evade",
+    "maxStatusLevel": 2,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true,
+    "goodTargetActionDiscipline": true
+  },
+  {
+    "name": "nonfallen-evade-farmer-target",
+    "weights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/best_policy.full.json",
+    "microWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/best_policy.full.json",
+    "microPolicyGate": "good-builder-farmer-oracle",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "good-nonfallen-farm-target-evade",
+    "maxStatusLevel": 2,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true,
+    "goodTargetActionDiscipline": true
+  },
+  {
+    "name": "nonfallen-evade-support-target",
+    "weights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/best_policy.full.json",
+    "microWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/best_policy.full.json",
+    "microPolicyGate": "good-builder-support-oracle",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "good-nonfallen-farm-target-evade",
+    "maxStatusLevel": 2,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true,
+    "goodTargetActionDiscipline": true
+  }
+]

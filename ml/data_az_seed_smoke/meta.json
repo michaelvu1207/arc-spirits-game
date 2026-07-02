@@ -1,0 +1,30 @@
+{
+  "obs_dim": 55,
+  "act_dim": 47,
+  "samples": 30,
+  "games": 1,
+  "mode": "alphazero",
+  "iter": 0,
+  "iterations": 2,
+  "seed0": 123456,
+  "valueWeight": 0.5,
+  "plannerSeatMode": "one",
+  "recordSeatMode": "one",
+  "policyPool": [],
+  "policyPoolMix": 1,
+  "policyPoolGames": 0,
+  "control": "navigation",
+  "fullSelection": "value",
+  "fullLookaheadDepth": 2,
+  "fullLookaheadBeam": 8,
+  "fullLookaheadRootBeam": 24,
+  "fullTargetTemperature": 0.25,
+  "forbidTypes": [],
+  "decisionTypes": {
+    "lockNavigation": 30
+  },
+  "plannerSeatGames": 1,
+  "plannerVP_avg": 0,
+  "planner_status_avg": 0,
+  "planner_win_share_pct": 0
+}

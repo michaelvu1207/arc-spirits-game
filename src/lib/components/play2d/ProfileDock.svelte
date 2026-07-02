@@ -2,7 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth/auth.svelte';
 	import { fetchMy2DRating, type Rating2DRow } from '$lib/supabase';
+	import { getCosmeticsState } from '$lib/stores/cosmetics.svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
+	import RankEmblem from './RankEmblem.svelte';
 	import StatCell from './screens/StatCell.svelte';
 	import MatchHistoryOverlay from './MatchHistoryOverlay.svelte';
 
@@ -19,6 +21,7 @@
 	let rating = $state<Rating2DRow | null>(null);
 	let ratingLoaded = $state(false);
 
+	const cosmetics = getCosmeticsState();
 	const displayName = $derived(auth.displayName ?? 'Nameless Spirit');
 	const initial = $derived((auth.displayName ?? '?').slice(0, 1).toUpperCase());
 	const userId = $derived(auth.user?.id ?? null);
@@ -106,6 +109,11 @@
 		click();
 		goto('/play/records');
 	}
+
+	function goShop() {
+		click();
+		goto('/play/shop');
+	}
 </script>
 
 <svelte:window
@@ -159,6 +167,13 @@
 				</header>
 
 				<div class="stats">
+					<div class="wallet-stat">
+						<RankEmblem rankId={cosmetics.rank.id} label="{cosmetics.rank.name} rank" />
+						<div>
+							<span>{cosmetics.rank.name}</span>
+							<small>{cosmetics.progression.credits} Credits</small>
+						</div>
+					</div>
 					{#if !ratingLoaded}
 						<p class="stats-muted">Reading the aether…</p>
 					{:else if rating}
@@ -171,6 +186,11 @@
 				</div>
 
 				<nav class="actions" aria-label="Profile actions">
+					<button class="act" type="button" onclick={goShop} onpointerenter={hover}>
+						<span class="gem" aria-hidden="true"></span>
+						<span class="lbl">Abyss Market</span>
+						<span class="go" aria-hidden="true">→</span>
+					</button>
 					<button class="act" type="button" onclick={openHistory} onpointerenter={hover}>
 						<span class="gem" aria-hidden="true"></span>
 						<span class="lbl">Past Games</span>
@@ -481,6 +501,29 @@
 		gap: 22px;
 		padding: 16px 18px;
 		border-bottom: 1px solid var(--color-mist);
+	}
+	.wallet-stat {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 84px;
+	}
+	.wallet-stat span {
+		display: block;
+		font-family: var(--font-display);
+		font-size: 0.88rem;
+		line-height: 1;
+		color: var(--color-bone);
+		text-transform: uppercase;
+	}
+	.wallet-stat small {
+		display: block;
+		margin-top: 3px;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		color: var(--color-fog);
+		text-transform: uppercase;
+		white-space: nowrap;
 	}
 	.s-div {
 		width: 1px;

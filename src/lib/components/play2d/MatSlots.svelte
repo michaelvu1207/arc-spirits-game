@@ -45,22 +45,24 @@
 <style>
 	.rune-col {
 		/* ~1/3 the width of the 7-hex card to the right; full height (matches it). */
-		width: 4.3rem;
+		width: var(--rune-col-width, 4.3rem);
 		height: 100%;
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--rune-gap, 0.4rem);
 	}
 	/* Row layout: a horizontal strip of fixed-size square slots (used above the trait list). */
 	.rune-col.row {
 		flex-direction: row;
+		justify-content: center;
+		align-items: center;
 		width: 100%;
 		height: auto;
 	}
 	.rune-col.row .slot {
 		flex: 0 0 auto;
-		width: 3rem;
-		height: 3rem;
+		width: var(--rune-row-slot-size, 3rem);
+		height: var(--rune-row-slot-size, 3rem);
 	}
 	.slot {
 		flex: 1 1 0;
@@ -83,9 +85,12 @@
 		animation: overflow-pulse 1.8s ease-in-out infinite;
 	}
 	.slot img {
-		max-width: 80%;
-		max-height: 80%;
+		display: block;
+		width: 80%;
+		height: 80%;
+		margin: auto;
 		object-fit: contain;
+		object-position: center;
 	}
 	@keyframes overflow-pulse {
 		0%, 100% { box-shadow: inset 0 0 0 1px var(--brand-coral, #ff704d), 0 0 8px rgba(255, 112, 77, 0.35); }
@@ -99,15 +104,15 @@
 
 	@media (max-width: 600px) {
 		.rune-col {
-			width: 3.2rem;
-			gap: 0.3rem;
+			width: var(--rune-col-width, 3.2rem);
+			gap: var(--rune-gap, 0.3rem);
 		}
 		.rune-col.row {
 			width: 100%;
 		}
 		.rune-col.row .slot {
-			width: 2.5rem;
-			height: 2.5rem;
+			width: var(--rune-row-slot-size, 2.5rem);
+			height: var(--rune-row-slot-size, 2.5rem);
 		}
 		.slot {
 			border-radius: 6px;

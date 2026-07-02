@@ -1,13 +1,13 @@
 import { error, json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
-import { getRoomMemberCookie } from '$lib/play/server/cookies';
+import { getRoomMemberId } from '$lib/play/server/cookies';
 import { runRoomCommand } from '$lib/play/server/service';
 import type { GameCommand } from '$lib/play/types';
 
 export const POST: RequestHandler = async ({ request, params, cookies, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
-	const memberId = getRoomMemberCookie(cookies, roomCode);
+	const memberId = getRoomMemberId(cookies, roomCode, request);
 	// A matchmade player has no member cookie — fall back to their auth user_id so
 	// runRoomCommand can resolve their server-created membership by user.
 	const { user } = await locals.safeGetSession();

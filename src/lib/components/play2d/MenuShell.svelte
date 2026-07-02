@@ -13,7 +13,7 @@
 	interface Props {
 		/** The menu music. Defaults to the Arcane Abyss theme. */
 		audioSrc?: string;
-		/** Show the "◈ Arc Spirits" brand in the top-left. */
+		/** @deprecated Shell brand chrome has been removed; kept only for old callers. */
 		showBrand?: boolean;
 		/** The screen's content, laid out over the abyss. */
 		children?: Snippet;
@@ -21,49 +21,18 @@
 
 	let {
 		audioSrc = '/music/worlds/abyssal-portal.mp3',
-		showBrand = true,
 		children
 	}: Props = $props();
 
 	const audio = getMenuAudio();
 
-	/** Whether the Fullscreen API exists on this device (iPhone Safari lacks it). */
-	let fullscreenSupported = $state(false);
-	/** Live fullscreen state, mirrored from the `fullscreenchange` event. */
-	let isFullscreen = $state(false);
 	/** Graphics-settings popover (splat quality) open state. */
 	let settingsOpen = $state(false);
 
 	onMount(() => {
 		armMenuAudio(audioSrc);
 		primeMenuSfx(['ui-hover', 'ui-click', 'ui-back', 'game-start']);
-
-		// Feature-detect: hide the control entirely where requestFullscreen is absent.
-		fullscreenSupported = typeof document.documentElement.requestFullscreen === 'function';
-		if (!fullscreenSupported) return;
-
-		const syncFullscreen = () => {
-			isFullscreen = document.fullscreenElement !== null;
-		};
-		syncFullscreen();
-		document.addEventListener('fullscreenchange', syncFullscreen);
-		return () => {
-			document.removeEventListener('fullscreenchange', syncFullscreen);
-		};
 	});
-
-	async function toggleFullscreen() {
-		playMenuSfx('ui-click');
-		try {
-			if (document.fullscreenElement === null) {
-				await document.documentElement.requestFullscreen?.();
-			} else {
-				await document.exitFullscreen?.();
-			}
-		} catch {
-			// Some browsers reject fullscreen outside a user gesture or in iframes; ignore.
-		}
-	}
 </script>
 
 <div class="menu-shell">
@@ -76,54 +45,7 @@
 	<div class="aurora"></div>
 	<div class="grain"></div>
 
-	<!-- Persistent chrome. The brand sits in `.topbar`, which the immersive play
-	     routes hide globally (the landing renders its own wordmark); the controls
-	     live in a separate cluster so they stay reachable on those routes. -->
-	<header class="topbar">
-		{#if showBrand}
-			<a class="brand" href="/">
-				<span class="lantern">◈</span>
-				<span class="word">Arc Spirits</span>
-			</a>
-		{:else}
-			<span></span>
-		{/if}
-	</header>
 	<div class="menu-controls">
-		{#if fullscreenSupported}
-			<button
-				class="ctrl"
-				type="button"
-				onpointerenter={() => playMenuSfx('ui-hover', { volume: 0.45 })}
-				onclick={toggleFullscreen}
-				aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-				title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-			>
-				{#if isFullscreen}
-					<svg viewBox="0 0 24 24" aria-hidden="true"
-						><path
-							d="M9 4v3a2 2 0 01-2 2H4m16 0h-3a2 2 0 01-2-2V4M4 15h3a2 2 0 012 2v3m11-5h-3a2 2 0 00-2 2v3"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.7"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/></svg
-					>
-				{:else}
-					<svg viewBox="0 0 24 24" aria-hidden="true"
-						><path
-							d="M4 9V6a2 2 0 012-2h3m6 0h3a2 2 0 012 2v3M4 15v3a2 2 0 002 2h3m6 0h3a2 2 0 002-2v-3"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.7"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/></svg
-					>
-				{/if}
-			</button>
-		{/if}
 		<button
 			class="ctrl mute"
 			type="button"
@@ -274,52 +196,7 @@
 		}
 	}
 
-	/* ── Topbar ─────────────────────────────────────────────── */
-	.topbar {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		z-index: 5;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 22px 30px;
-		padding-top: calc(22px + env(safe-area-inset-top));
-		padding-left: calc(30px + env(safe-area-inset-left));
-		padding-right: calc(30px + env(safe-area-inset-right));
-	}
-
-	@media (max-width: 600px) {
-		.topbar {
-			padding: 14px 16px;
-			padding-top: calc(14px + env(safe-area-inset-top));
-			padding-left: calc(16px + env(safe-area-inset-left));
-			padding-right: calc(16px + env(safe-area-inset-right));
-		}
-	}
-
-	.brand {
-		display: inline-flex;
-		align-items: center;
-		gap: 12px;
-		text-decoration: none;
-		color: var(--color-bone, #f5f0ff);
-	}
-	.brand .lantern {
-		font-size: 1.1rem;
-		color: var(--brand-magenta, #ff2bc7);
-		filter: drop-shadow(0 0 8px rgba(255, 43, 199, 0.8));
-	}
-	.brand .word {
-		font-family: var(--font-display);
-		font-size: 1.05rem;
-		letter-spacing: 0.28em;
-		text-transform: uppercase;
-	}
-
-	/* Control cluster — pinned top-right INDEPENDENTLY of `.topbar` so it survives the
-	   immersive routes' global `.topbar` hide (which is there to drop the duplicate brand). */
+	/* Control cluster — pinned top-right as the only persistent shell chrome. */
 	.menu-controls {
 		position: absolute;
 		top: 0;
@@ -331,6 +208,9 @@
 		padding: 22px 30px;
 		padding-top: calc(22px + env(safe-area-inset-top));
 		padding-right: calc(30px + env(safe-area-inset-right));
+	}
+	:global(body.guardian-picker-open) .menu-controls {
+		display: none;
 	}
 
 	@media (max-width: 600px) {

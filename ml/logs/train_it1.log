@@ -1,0 +1,8 @@
+Device: mps  mode=alphazero
+Loaded 180 samples from 2 file(s) (180 with MCTS pi targets)
+Baseline return (mean ret): 0.0400
+obs_dim=55, act_dim=47
+Epoch 1/2 | policy_loss=1.6095 | value_loss=0.0021 | top1_acc=0.211
+Epoch 2/2 | policy_loss=1.6091 | value_loss=0.0025 | top1_acc=0.178
+
+Weights exported to: ml/weights/policy.json

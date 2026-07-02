@@ -1,0 +1,62 @@
+{
+  "mode": "pvp-pivot-curriculum",
+  "obs_dim": 62,
+  "act_dim": 52,
+  "outFile": "ml/data_pvp_predictive_smoke/pvp_pivot_curriculum.jsonl",
+  "config": {
+    "profiles": [
+      "pvphunter",
+      "medium",
+      "cultivator",
+      "survivor"
+    ],
+    "recordProfile": "pvphunter",
+    "maxRounds": 30,
+    "minDescendRound": 6,
+    "pivotMinRound": 10,
+    "pivotMinVp": 18,
+    "pivotMonsterHp": 4,
+    "preserveFarmVp": 2,
+    "farmThreshold": 0.5,
+    "predictiveHunt": true,
+    "cursedTarget": 2,
+    "sharpshooterTarget": 2,
+    "targetTemperature": 0.25,
+    "policyWeight": 4
+  },
+  "totalSamples": 72,
+  "totalSeatGames": 8,
+  "row": {
+    "games": 2,
+    "seatGames": 8,
+    "samples": 72,
+    "samplesPerSeatGame": 9,
+    "classSamples": 4,
+    "cheapFarmNavSamples": 7,
+    "buildNavSamples": 15,
+    "descendNavSamples": 7,
+    "descendCombatSamples": 7,
+    "huntNavSamples": 0,
+    "predictiveHuntNavSamples": 18,
+    "pvpAttackSamples": 14,
+    "teacherActionsPerSeatGame": 9,
+    "legalPvpWindowsPerSeatGame": 1.75,
+    "pvpAttacksPerSeatGame": 1.75,
+    "pvpVpPerSeatGame": 5.25,
+    "avgVP": 12.25,
+    "avgStatus": 0.88,
+    "maxStatus": 3,
+    "avgRounds": 24,
+    "avgFirstFallenRound": 14.5,
+    "avgFirstPvpRound": 17,
+    "decisionTypes": {
+      "pvp-predictive-hunt-nav:lockNavigation": 18,
+      "pvp-build-nav:lockNavigation": 15,
+      "pvp-attack:initiatePvp": 14,
+      "pvp-cheap-farm-nav:lockNavigation": 7,
+      "pvp-descend-nav:lockNavigation": 7,
+      "pvp-descend-combat:startCombat": 7,
+      "pvp-class:takeSpirit": 4
+    }
+  }
+}

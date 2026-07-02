@@ -11,7 +11,7 @@
  */
 import { describe, it } from 'vitest';
 import { profileFor } from '../server/botPolicy';
-import { SEAT_COLORS, type SeatColor } from '../types';
+import { SEAT_COLORS, type GameCommand, type SeatColor } from '../types';
 import { playRecordingGame } from './driver';
 import { loadOrSnapshotCatalog, loadWeightsIfPresent, mlPath } from './nodeIo';
 import { writeFileSync } from 'node:fs';
@@ -28,9 +28,17 @@ describe('ml eval', () => {
 			const seats = parseInt(process.env.EVAL_SEATS ?? '4', 10);
 			const maxRounds = parseInt(process.env.EVAL_MAXROUNDS ?? '120', 10);
 			const opponents = (process.env.EVAL_OPPONENTS ?? 'pvphunter,medium,mixed').split(',');
+			const forbidTypes = process.env.EVAL_FORBID
+				? new Set(process.env.EVAL_FORBID.split(',').map((s) => s.trim()).filter(Boolean) as GameCommand['type'][])
+				: undefined;
+			const maxStatusLevel = process.env.EVAL_MAX_STATUS_LEVEL
+				? parseInt(process.env.EVAL_MAX_STATUS_LEVEL, 10)
+				: undefined;
 			const catalog = await loadOrSnapshotCatalog();
-			const policy = loadWeightsIfPresent();
-			if (!policy) throw new Error('EVAL: no ml/weights/policy.json found');
+			const weightsPath = process.env.EVAL_WEIGHTS;
+			const policy = weightsPath ? loadWeightsIfPresent(weightsPath) : loadWeightsIfPresent();
+			if (!policy)
+				throw new Error(`EVAL: no weights found at ${weightsPath ?? 'ml/weights/policy.json'}`);
 			const seatList = SEAT_COLORS.slice(0, seats) as SeatColor[];
 
 			const results: Record<string, unknown>[] = [];
@@ -53,7 +61,9 @@ describe('ml eval', () => {
 						policy,
 						selection: (process.env.EVAL_SELECTION as 'hybrid' | 'value' | 'policy') ?? 'hybrid',
 						neuralSeats: [neuralSeat],
-						recordSeats: [] // eval only — no data recording
+						recordSeats: [], // eval only — no data recording
+						forbidTypes,
+						maxStatusLevel
 					});
 					const myVP = r.finalVP[neuralSeat] ?? 0;
 					const others = seatList.filter((s) => s !== neuralSeat).map((s) => r.finalVP[s] ?? 0);
@@ -82,10 +92,13 @@ describe('ml eval', () => {
 				// eslint-disable-next-line no-console
 				console.log(
 					`[eval] neural vs ${opp}: win=${(100 * res.winRate).toFixed(1)}% (fair=25%) avgPlace=${res.avgPlace.toFixed(2)} ` +
-						`avgVP=${res.avgVP.toFixed(1)} oppVP=${res.avgOppVP.toFixed(1)} finished=${(100 * res.finishedRate).toFixed(0)}%`
+						`avgVP=${res.avgVP.toFixed(1)} oppVP=${res.avgOppVP.toFixed(1)} avgRounds=${res.avgRounds.toFixed(1)} finished=${(100 * res.finishedRate).toFixed(0)}%`
 				);
 			}
-			writeFileSync(mlPath('eval_result.json'), JSON.stringify({ seats, gamesPer, results }, null, 2));
+			writeFileSync(
+				mlPath('eval_result.json'),
+				JSON.stringify({ seats, gamesPer, forbidTypes: [...(forbidTypes ?? [])], maxStatusLevel, results }, null, 2)
+			);
 			// eslint-disable-next-line no-console
 			console.log('[eval] DONE → ml/eval_result.json');
 		},

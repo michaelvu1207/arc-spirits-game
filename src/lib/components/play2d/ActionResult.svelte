@@ -32,13 +32,12 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.9rem;
-		max-width: 30rem;
-		padding: 1.5rem 1.75rem;
-		border: 1px solid var(--brand-violet, #5a2bff);
-		border-top: 3px solid var(--brand-magenta, #ff2bc7);
-		border-radius: 10px;
-		background: linear-gradient(180deg, rgba(18, 10, 38, 0.8), rgba(8, 5, 16, 0.95));
+		justify-content: center;
+		gap: clamp(0.75rem, 2vh, 1.05rem);
+		width: min(42rem, 100%);
+		max-width: 100%;
+		padding: clamp(0.35rem, 1.5vh, 1rem);
+		text-align: center;
 	}
 	.eyebrow {
 		font-family: var(--font-display);
@@ -46,6 +45,9 @@
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
 		color: var(--brand-amber, #ffba3d);
+		text-shadow:
+			0 0 14px color-mix(in srgb, var(--brand-amber, #ffba3d) 46%, transparent),
+			0 2px 12px rgba(0, 0, 0, 0.55);
 	}
 	.log {
 		list-style: none;
@@ -53,12 +55,15 @@
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 0.35rem;
 		text-align: center;
 	}
 	.log li {
-		font-size: 0.92rem;
-		color: var(--color-parchment, #e7e0cf);
+		font-size: clamp(0.98rem, 1.7vw, 1.25rem);
+		line-height: 1.35;
+		color: #fff;
+		text-wrap: balance;
+		text-shadow: 0 2px 12px rgba(0, 0, 0, 0.58);
 	}
 	.log li.muted {
 		color: var(--color-fog, #8d8aa1);

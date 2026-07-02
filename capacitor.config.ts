@@ -1,5 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+const devServerUrl = process.env.CAP_SERVER_URL;
+
 /**
  * Capacitor native shell config. The web app stays SSR on Vercel; the native
  * app bundles a STATIC build of the client (see `npm run build:app`, which sets
@@ -22,7 +24,15 @@ const config: CapacitorConfig = {
 			style: 'DARK',
 			backgroundColor: '#050310'
 		}
-	}
+	},
+	...(devServerUrl
+		? {
+				server: {
+					url: devServerUrl,
+					cleartext: devServerUrl.startsWith('http://')
+				}
+			}
+		: {})
 };
 
 export default config;

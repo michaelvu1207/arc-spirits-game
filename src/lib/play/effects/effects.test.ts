@@ -14,6 +14,7 @@ function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerS
 		navigationDestination: null,
 		brokenBarrier: 0,
 		victoryPoints: 0,
+		vpHistory: [],
 		barrier: 4,
 		maxBarrier: 4,
 		statusLevel: 0,
@@ -122,7 +123,10 @@ describe('Rest effects', () => {
 		// The hard cap is 10: starting near it, a big grant tops out at 10.
 		const q = makePlayer({
 			maxBarrier: 2,
-			attackDice: Array.from({ length: 8 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as const })),
+			attackDice: Array.from({ length: 8 }, (_, i) => ({
+				instanceId: `d${i}`,
+				tier: 'basic' as const
+			})),
 			spirits: [spirit(1, 'A', { Fighter: 5 }, {})]
 		});
 		applyTrigger(makeState(q), 'Red', 'onRest', []);
@@ -196,7 +200,10 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 		const noCultivator = makePlayer({
 			maxBarrier: 4,
 			barrier: 4,
-			spirits: [spirit(1, 'A', { Fighter: 2 }, { 'Floral Patch': 1 }), spirit(2, 'B', { Healer: 1 }, {})]
+			spirits: [
+				spirit(1, 'A', { Fighter: 2 }, { 'Floral Patch': 1 }),
+				spirit(2, 'B', { Healer: 1 }, {})
+			]
 		});
 		applyCultivate(makeState(noCultivator), 'Red', []);
 		expect(noCultivator.maxBarrier).toBe(4); // unchanged — no potential
@@ -441,7 +448,10 @@ describe('Captain (onCultivate)', () => {
 
 describe('Adaptive Fighter (onMonsterKill)', () => {
 	it('gains 1 potential when overkilling by ≥2 on a kill', () => {
-		const p = makePlayer({ maxBarrier: 4, spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})] });
+		const p = makePlayer({
+			maxBarrier: 4,
+			spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})]
+		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
 			combat: { dealt: 7, overkill: 3, killed: true }
 		});
@@ -450,7 +460,10 @@ describe('Adaptive Fighter (onMonsterKill)', () => {
 	});
 
 	it('does NOT gain potential when overkill is below 2', () => {
-		const p = makePlayer({ maxBarrier: 4, spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})] });
+		const p = makePlayer({
+			maxBarrier: 4,
+			spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})]
+		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
 			combat: { dealt: 5, overkill: 1, killed: true }
 		});
@@ -458,7 +471,10 @@ describe('Adaptive Fighter (onMonsterKill)', () => {
 	});
 
 	it('gains 1 Enchanted attack die when it does NOT kill', () => {
-		const p = makePlayer({ maxBarrier: 10, spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})] });
+		const p = makePlayer({
+			maxBarrier: 10,
+			spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})]
+		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
 			combat: { dealt: 2, overkill: 0, killed: false }
 		});
@@ -531,7 +547,10 @@ describe('Fairy (awakening)', () => {
 
 describe('Dragon Warrior (awakening)', () => {
 	it('gains 3 Arcane attack dice on the awakening trigger', () => {
-		const p = makePlayer({ maxBarrier: 10, spirits: [spirit(1, 'A', { 'Dragon Warrior': 1 }, {})] });
+		const p = makePlayer({
+			maxBarrier: 10,
+			spirits: [spirit(1, 'A', { 'Dragon Warrior': 1 }, {})]
+		});
 		applyTrigger(makeState(p), 'Red', 'awakening', []);
 		expect(p.attackDice).toHaveLength(3);
 		expect(p.attackDice.every((d) => d.tier === 'arcane')).toBe(true);
@@ -672,12 +691,18 @@ describe('The Corruptor (inCombat; Awakening grant is a Cleanup claim)', () => {
 
 describe('Awakening-Phase win-cons no longer auto-apply on the trigger', () => {
 	it('Golden Ruler grants no VP and discards nothing on the trigger', () => {
-		const good = makePlayer({ statusLevel: 0, spirits: [spirit(1, 'A', { 'Golden Ruler': 1 }, {})] });
+		const good = makePlayer({
+			statusLevel: 0,
+			spirits: [spirit(1, 'A', { 'Golden Ruler': 1 }, {})]
+		});
 		applyTrigger(makeState(good), 'Red', 'awakeningPhase', []);
 		expect(good.victoryPoints).toBe(0);
 		expect(good.spirits).toHaveLength(1);
 
-		const evil = makePlayer({ statusLevel: 3, spirits: [spirit(1, 'A', { 'Golden Ruler': 1 }, {})] });
+		const evil = makePlayer({
+			statusLevel: 3,
+			spirits: [spirit(1, 'A', { 'Golden Ruler': 1 }, {})]
+		});
 		applyTrigger(makeState(evil), 'Red', 'awakeningPhase', []);
 		expect(evil.victoryPoints).toBe(0);
 		expect(evil.spirits).toHaveLength(1); // the Evil discard happens on claim, not the trigger

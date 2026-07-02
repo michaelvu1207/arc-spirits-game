@@ -1,25 +1,19 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getRoomMemberCookie } from '$lib/play/server/cookies';
+import { getRoomMemberId } from '$lib/play/server/cookies';
 import { fillBots } from '$lib/play/server/botSim';
-import { BOT_PROFILES } from '$lib/play/server/botPolicy';
+import { normalizeBotProfileKey } from '$lib/play/bots/contract';
 
 export const POST: RequestHandler = async ({ request, params, cookies }) => {
 	const roomCode = String(params.roomCode ?? '');
-	const memberId = getRoomMemberCookie(cookies, roomCode);
+	const memberId = getRoomMemberId(cookies, roomCode, request);
 	if (!memberId) {
 		throw error(401, 'Join this room before adding bots.');
 	}
 
 	const body = await request.json().catch(() => ({}));
-	const targetSeats =
-		typeof body?.targetSeats === 'number' ? body.targetSeats : undefined;
-	// Only honor a known strategy key; anything else falls back to the designed baseline 'medium'
-	// (the legacy random-legal bot is no longer an offered option).
-	const difficulty =
-		typeof body?.difficulty === 'string' && body.difficulty in BOT_PROFILES
-			? body.difficulty
-			: 'medium';
+	const targetSeats = typeof body?.targetSeats === 'number' ? body.targetSeats : undefined;
+	const difficulty = normalizeBotProfileKey(body?.difficulty);
 
 	try {
 		return json(await fillBots(roomCode, memberId, { targetSeats, difficulty }));

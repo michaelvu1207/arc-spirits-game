@@ -12,6 +12,7 @@
 	import type { GameLocationAsset, IconPoolEntry } from '$lib/types';
 	import LocationCard from './LocationCard.svelte';
 	import RewardArc from './RewardArc.svelte';
+	import type { NavigationSceneControls } from './navigationSceneControls';
 
 	interface Props {
 		room: SpectatorProjection;
@@ -21,6 +22,7 @@
 		focusedDestination?: NavigationDestination | null;
 		onHover?: (destination: NavigationDestination | null) => void;
 		onSelect?: (destination: NavigationDestination) => void;
+		onSceneControls?: (controls: NavigationSceneControls | null) => void;
 		monster: MonsterState | null;
 		gameLocations?: Map<string, GameLocationAsset>;
 		iconPool?: Map<string, IconPoolEntry>;
@@ -34,6 +36,7 @@
 		focusedDestination = null,
 		onHover,
 		onSelect,
+		onSceneControls,
 		monster,
 		gameLocations = new Map(),
 		iconPool = new Map()
@@ -93,14 +96,24 @@
 	}
 
 	// ── Mobile carousel ──────────────────────────────────────────────────────
-	// Phones get one location at a time in a horizontal swipe carousel instead of
-	// the compass (which is unreadable at 360px). Same LocationCards, handlers and
-	// accents; swiping to a card drives the splat world behind it via onHover.
-	const DESTINATIONS: NavigationDestination[] = [...s, ABYSS];
+	// Phones get one location at a time in a horizontal, swipe-first carousel instead
+	// of the compass (which is unreadable at 360px). rAF updates scale/opacity while
+	// the splat preview follows the centred card, without snapping the strip on release.
+	const DESTINATIONS: NavigationDestination[] = [s[0], s[1], ABYSS, s[2], s[3]];
 
+	let boardEl = $state<HTMLDivElement | null>(null);
 	let carouselEl = $state<HTMLDivElement | null>(null);
 	let currentIndex = $state(0);
-	let didInitScroll = false;
+	let didInitCarousel = false;
+	let carouselPointerStart: { x: number; y: number; scrollLeft: number } | null = null;
+	let carouselDragged = false;
+	let carouselSelectBlocked = $state(false);
+	let carouselSelectBlockTimer: number | null = null;
+	let carouselPointerId: number | null = null;
+	let carouselVelocity = 0;
+	let carouselLastSample: { x: number; t: number } | null = null;
+	let carouselMomentumRaf = 0;
+	let carouselLastMomentumT = 0;
 	let scrollRaf = 0;
 
 	// Measure the REAL board area (not the viewport). Whether we show the round
@@ -113,7 +126,11 @@
 	let boardH = $state(0);
 	let viewMode = $state<NavViewMode>('cards');
 	$effect(() => {
-		const next = decideNavMode(boardW, boardH, untrack(() => viewMode));
+		const next = decideNavMode(
+			boardW,
+			boardH,
+			untrack(() => viewMode)
+		);
 		if (next !== viewMode) viewMode = next;
 	});
 	const useCards = $derived(viewMode === 'cards');
@@ -122,112 +139,387 @@
 	// Thickness of the rim band that holds the engraved realm names.
 	const ringThickness = $derived(compassSize * 0.085);
 
-	// Portrait → vertical reel (slot-machine, scroll up/down); landscape → the
-	// horizontal swipe. Keyed off the board's own shape so it matches the layout.
-	const carouselVertical = $derived(boardH >= boardW);
-
-	// One card-slot's size along the scroll axis (measured; leading/trailing spacers
-	// are sized so card i centres at scrollPos = i * span).
-	function slideSpan(el: HTMLDivElement): number {
-		const s = el.querySelector('.nav-slide') as HTMLElement | null;
-		if (s) return carouselVertical ? s.offsetHeight : s.offsetWidth;
-		return carouselVertical ? el.clientHeight : el.clientWidth;
+	function clampIndex(i: number) {
+		return Math.max(0, Math.min(DESTINATIONS.length - 1, i));
 	}
 
 	// Coverflow depth: for each card write a signed distance --d and abs --ad (in card
-	// units from the reel centre) plus a z-index, so the centred card renders large +
-	// solid and the others recede smaller, translucent and tilted. Also tracks focus.
+	// units from the viewport centre), so the centred card renders large + solid and
+	// neighbours recede subtly. The best-centred slide becomes currentIndex.
 	function updateDepth() {
 		const el = carouselEl;
 		if (!el) return;
 		const slides = el.querySelectorAll<HTMLElement>('.nav-slide');
 		if (!slides.length) return;
-		const r = el.getBoundingClientRect();
-		const centre = carouselVertical ? r.top + r.height / 2 : r.left + r.width / 2;
-		const span = slideSpan(el) || 1;
-		let best = 0;
+		const reel = el.getBoundingClientRect();
+		const centre = reel.left + reel.width / 2;
+		let best = currentIndex;
 		let bestAbs = Infinity;
 		slides.forEach((node, i) => {
-			const sr = node.getBoundingClientRect();
-			const c = carouselVertical ? sr.top + sr.height / 2 : sr.left + sr.width / 2;
-			const d = (c - centre) / span;
+			const rect = node.getBoundingClientRect();
+			const span = rect.width || 1;
+			const d = (rect.left + rect.width / 2 - centre) / span;
 			const ad = Math.abs(d);
+			const clamped = Math.min(ad, 1);
+			const turn = Math.max(-1.15, Math.min(1.15, d));
+			const eased = clamped * clamped;
 			node.style.setProperty('--d', d.toFixed(3));
 			node.style.setProperty('--ad', ad.toFixed(3));
+			node.style.setProperty('--rotate', `${(-turn * 28).toFixed(2)}deg`);
+			node.style.setProperty('--z', `${(-eased * 260).toFixed(1)}px`);
+			node.style.setProperty('--y', `${(eased * 12).toFixed(1)}px`);
+			node.style.setProperty('--scale', (1 - eased * 0.08).toFixed(3));
+			node.style.setProperty('--fade', (1 - eased * 0.38).toFixed(3));
+			node.style.setProperty(
+				'--edge-left',
+				d < -0.08 ? (0.22 + clamped * 0.5).toFixed(3) : '0'
+			);
+			node.style.setProperty(
+				'--edge-right',
+				d > 0.08 ? (0.22 + clamped * 0.5).toFixed(3) : '0'
+			);
 			node.style.zIndex = String(100 - Math.round(ad * 10));
 			if (ad < bestAbs) {
 				bestAbs = ad;
 				best = i;
 			}
 		});
-		if (best !== currentIndex && best >= 0 && best < DESTINATIONS.length) {
-			currentIndex = best;
-			// Keep the splat world + highlight in sync with the centred card.
-			if (selectable) onHover?.(DESTINATIONS[best]);
-		}
+		if (best !== currentIndex) currentIndex = best;
+		if (selectable) onHover?.(DESTINATIONS[best]);
 	}
 
-	function scrollCardIntoView(i: number, smooth: boolean) {
+	function scrollCarouselToIndex(i: number, smooth = true) {
 		const el = carouselEl;
 		if (!el) return;
-		const offset = i * slideSpan(el);
-		const opts: ScrollToOptions = smooth ? { behavior: 'smooth' } : {};
-		el.scrollTo(carouselVertical ? { top: offset, ...opts } : { left: offset, ...opts });
+		const next = clampIndex(i);
+		const slide = el.querySelectorAll<HTMLElement>('.nav-slide')[next];
+		if (!slide) return;
+		currentIndex = next;
+		if (selectable) onHover?.(DESTINATIONS[next]);
+		el.scrollTo({
+			left: slide.offsetLeft - (el.clientWidth - slide.clientWidth) / 2,
+			behavior: smooth ? 'smooth' : 'auto'
+		});
+		requestAnimationFrame(updateDepth);
 	}
 
-	// Centre the locked/focused card on first layout, then paint the depth.
-	$effect(() => {
-		if (!useCards || !carouselEl || didInitScroll) return;
-		didInitScroll = true;
-		const target = selectedDestination ?? focusedDestination;
-		const initial = target ? Math.max(0, DESTINATIONS.indexOf(target)) : 0;
-		currentIndex = initial;
-		scrollCardIntoView(initial, false);
-		if (selectable) onHover?.(DESTINATIONS[initial]);
-		requestAnimationFrame(updateDepth);
-	});
+	function cancelCarouselMomentum() {
+		if (carouselMomentumRaf) {
+			cancelAnimationFrame(carouselMomentumRaf);
+			carouselMomentumRaf = 0;
+		}
+		carouselVelocity = 0;
+		carouselLastMomentumT = 0;
+	}
 
-	// Re-centre + repaint depth when the axis flips (rotation) or the cell resizes,
-	// so the same card stays focused. currentIndex read untracked.
-	$effect(() => {
-		void carouselVertical;
-		void boardW;
-		void boardH;
-		if (!useCards || !carouselEl || !didInitScroll) return;
-		untrack(() => {
-			scrollCardIntoView(currentIndex, false);
-			requestAnimationFrame(updateDepth);
-		});
-	});
+	function startCarouselMomentum() {
+		const el = carouselEl;
+		if (!el) return;
+		const prefersReduced =
+			typeof window !== 'undefined' &&
+			window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+		if (prefersReduced || Math.abs(carouselVelocity) < 0.08) {
+			carouselVelocity = 0;
+			paintCarouselDepthSoon();
+			return;
+		}
+		const maxVelocity = 2.4; // px/ms; fast enough to cross cards, capped against wild flings.
+		carouselVelocity = Math.max(-maxVelocity, Math.min(maxVelocity, carouselVelocity));
+		carouselLastMomentumT = performance.now();
+		const step = (t: number) => {
+			const node = carouselEl;
+			if (!node) {
+				cancelCarouselMomentum();
+				return;
+			}
+			const dt = Math.min(32, Math.max(0, t - carouselLastMomentumT));
+			carouselLastMomentumT = t;
+			const prev = node.scrollLeft;
+			node.scrollLeft += carouselVelocity * dt;
+			const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+			const atEdge = prev <= 0 || prev >= maxScrollLeft - 1;
+			const hitEdge =
+				dt > 0.5 && atEdge && node.scrollLeft === prev && Math.abs(carouselVelocity) > 0.01;
+			paintCarouselDepthSoon();
+			carouselVelocity *= Math.exp(-dt * 0.0065);
+			if (hitEdge || Math.abs(carouselVelocity) < 0.025) {
+				cancelCarouselMomentum();
+				paintCarouselDepthSoon();
+				return;
+			}
+			carouselMomentumRaf = requestAnimationFrame(step);
+		};
+		blockCarouselSelection(760);
+		carouselMomentumRaf = requestAnimationFrame(step);
+	}
 
-	function onCarouselScroll() {
-		if (scrollRaf || !carouselEl) return;
+	function paintCarouselDepthSoon() {
+		if (scrollRaf) return;
 		scrollRaf = requestAnimationFrame(() => {
 			scrollRaf = 0;
 			updateDepth();
 		});
 	}
 
-	function scrollToIndex(i: number) {
-		scrollCardIntoView(i, true);
+	// Centre the locked/focused card on first layout, then paint the depth.
+	$effect(() => {
+		if (!useCards || !carouselEl || didInitCarousel) return;
+		didInitCarousel = true;
+		const target = selectedDestination ?? focusedDestination;
+		const initial = target ? Math.max(0, DESTINATIONS.indexOf(target)) : 0;
+		currentIndex = clampIndex(initial);
+		requestAnimationFrame(() => {
+			scrollCarouselToIndex(currentIndex, false);
+			updateDepth();
+		});
+	});
+
+	// Repaint depth when the cell resizes so the same card stays focused.
+	$effect(() => {
+		void boardW;
+		void boardH;
+		if (!useCards || !carouselEl || !didInitCarousel) return;
+		untrack(() => {
+			requestAnimationFrame(() => {
+				scrollCarouselToIndex(currentIndex, false);
+				updateDepth();
+			});
+		});
+	});
+
+	function onCarouselScroll() {
+		if (
+			carouselPointerStart &&
+			carouselEl &&
+			Math.abs(carouselEl.scrollLeft - carouselPointerStart.scrollLeft) > 4
+		) {
+			blockCarouselSelection();
+		}
+		paintCarouselDepthSoon();
+	}
+
+	function blockCarouselSelection(ms = 420) {
+		carouselDragged = true;
+		carouselSelectBlocked = true;
+		if (carouselSelectBlockTimer) window.clearTimeout(carouselSelectBlockTimer);
+		carouselSelectBlockTimer = window.setTimeout(() => {
+			carouselDragged = false;
+			carouselSelectBlocked = false;
+			carouselSelectBlockTimer = null;
+		}, ms);
+	}
+
+	function setCarouselDragging(active: boolean) {
+		const el = carouselEl;
+		if (!el) return;
+		el.style.scrollBehavior = active ? 'auto' : '';
+	}
+
+	function startCarouselDragGuard(x: number, y: number) {
+		if (!useCards) return;
+		cancelCarouselMomentum();
+		setCarouselDragging(true);
+		carouselPointerStart = {
+			x,
+			y,
+			scrollLeft: carouselEl?.scrollLeft ?? 0
+		};
+		carouselLastSample = { x, t: performance.now() };
+		carouselVelocity = 0;
+		carouselDragged = false;
+	}
+
+	function updateCarouselDragGuard(x: number, y: number) {
+		if (!carouselPointerStart) return;
+		const now = performance.now();
+		if (carouselLastSample) {
+			const dt = now - carouselLastSample.t;
+			if (dt > 0) {
+				const instant = -(x - carouselLastSample.x) / dt;
+				carouselVelocity = carouselVelocity * 0.58 + instant * 0.42;
+			}
+		}
+		carouselLastSample = { x, t: now };
+		const dx = x - carouselPointerStart.x;
+		const dy = y - carouselPointerStart.y;
+		const distance = Math.hypot(dx, dy);
+		const mostlyHorizontal = Math.abs(dx) >= Math.abs(dy) * 0.55;
+		if (mostlyHorizontal) {
+			const el = carouselEl;
+			if (el) {
+				el.scrollLeft = carouselPointerStart.scrollLeft - dx;
+				paintCarouselDepthSoon();
+			}
+		}
+		if (distance > 2 && mostlyHorizontal) blockCarouselSelection();
+	}
+
+	function endCarouselDragGuard(x?: number, y?: number) {
+		const start = carouselPointerStart;
+		let dx = 0;
+		let dy = 0;
+		if (carouselPointerStart && x !== undefined && y !== undefined) {
+			updateCarouselDragGuard(x, y);
+		}
+		carouselPointerStart = null;
+		carouselLastSample = null;
+		setCarouselDragging(false);
+		if (start && x !== undefined && y !== undefined) {
+			dx = x - start.x;
+			dy = y - start.y;
+		}
+		if (
+			carouselDragged ||
+			(start && Math.hypot(dx, dy) > 2 && Math.abs(dx) >= Math.abs(dy) * 0.55)
+		) {
+			blockCarouselSelection(760);
+			paintCarouselDepthSoon();
+			startCarouselMomentum();
+			return;
+		}
+		if (carouselSelectBlockTimer) window.clearTimeout(carouselSelectBlockTimer);
+		carouselSelectBlockTimer = window.setTimeout(() => {
+			carouselDragged = false;
+			carouselSelectBlocked = false;
+			carouselSelectBlockTimer = null;
+		}, 80);
+	}
+
+	function handleCarouselPointerDown(event: PointerEvent) {
+		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		carouselPointerId = event.pointerId;
+		try {
+			(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+		} catch {
+			// WebKit can reject capture on detached/rebuilt targets; move/up still use the guard.
+		}
+		startCarouselDragGuard(event.clientX, event.clientY);
+	}
+
+	function handleCarouselPointerMove(event: PointerEvent) {
+		if (carouselPointerId !== null && event.pointerId !== carouselPointerId) return;
+		updateCarouselDragGuard(event.clientX, event.clientY);
+		if (carouselPointerStart) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	}
+
+	function handleCarouselPointerEnd(event: PointerEvent) {
+		if (carouselPointerId !== null && event.pointerId !== carouselPointerId) return;
+		endCarouselDragGuard(event.clientX, event.clientY);
+		try {
+			(event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+		} catch {
+			// Matching the guarded capture path above.
+		}
+		carouselPointerId = null;
+		if (carouselDragged || carouselSelectBlocked) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	}
+
+	function handleCarouselTouchStart(event: TouchEvent) {
+		const touch = event.touches[0];
+		if (!touch) return;
+		startCarouselDragGuard(touch.clientX, touch.clientY);
+	}
+
+	function handleCarouselTouchMove(event: TouchEvent) {
+		const touch = event.touches[0];
+		if (!touch) return;
+		updateCarouselDragGuard(touch.clientX, touch.clientY);
+		if (carouselPointerStart) event.preventDefault();
+	}
+
+	function handleCarouselTouchEnd(event: TouchEvent) {
+		const touch = event.changedTouches[0];
+		endCarouselDragGuard(touch?.clientX, touch?.clientY);
+	}
+
+	function handleCarouselTouchCancel() {
+		endCarouselDragGuard();
+		carouselPointerId = null;
+	}
+
+	function handleCarouselClickCapture(event: MouseEvent) {
+		if (!carouselDragged && !carouselSelectBlocked) return;
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
+	function carouselSurfaceGestures(node: HTMLElement) {
+		const hasPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
+		node.addEventListener('pointerdown', handleCarouselPointerDown);
+		node.addEventListener('pointermove', handleCarouselPointerMove);
+		node.addEventListener('pointerup', handleCarouselPointerEnd);
+		node.addEventListener('pointercancel', handleCarouselPointerEnd);
+		if (!hasPointerEvents) {
+			node.addEventListener('touchstart', handleCarouselTouchStart);
+			node.addEventListener('touchmove', handleCarouselTouchMove, { passive: false });
+			node.addEventListener('touchend', handleCarouselTouchEnd);
+			node.addEventListener('touchcancel', handleCarouselTouchCancel);
+		}
+		node.addEventListener('click', handleCarouselClickCapture, { capture: true });
+		return {
+			destroy() {
+				cancelCarouselMomentum();
+				node.removeEventListener('pointerdown', handleCarouselPointerDown);
+				node.removeEventListener('pointermove', handleCarouselPointerMove);
+				node.removeEventListener('pointerup', handleCarouselPointerEnd);
+				node.removeEventListener('pointercancel', handleCarouselPointerEnd);
+				if (!hasPointerEvents) {
+					node.removeEventListener('touchstart', handleCarouselTouchStart);
+					node.removeEventListener('touchmove', handleCarouselTouchMove);
+					node.removeEventListener('touchend', handleCarouselTouchEnd);
+					node.removeEventListener('touchcancel', handleCarouselTouchCancel);
+				}
+				node.removeEventListener('click', handleCarouselClickCapture, { capture: true });
+			}
+		};
+	}
+
+	$effect(() => {
+		if (!useCards) {
+			cancelCarouselMomentum();
+			onSceneControls?.(null);
+			return;
+		}
+		const controls: NavigationSceneControls = {
+			beginDrag: startCarouselDragGuard,
+			moveDrag: updateCarouselDragGuard,
+			endDrag: endCarouselDragGuard
+		};
+		onSceneControls?.(controls);
+		return () => onSceneControls?.(null);
+	});
+
+	function selectCarouselDestination(destination: NavigationDestination) {
+		if (carouselDragged || carouselSelectBlocked) return;
+		onSelect?.(destination);
 	}
 </script>
 
-<div class="board" bind:clientWidth={boardW} bind:clientHeight={boardH}>
+<div
+	class="board"
+	bind:this={boardEl}
+	bind:clientWidth={boardW}
+	bind:clientHeight={boardH}
+	use:carouselSurfaceGestures
+>
 	{#if useCards}
-		<!-- Mobile: one location per view. Portrait → vertical reel (up/down);
-		     landscape → horizontal swipe. Dots jump between them. -->
-		<div class="nav-carousel-wrap" class:vertical={carouselVertical}>
+		<!-- Mobile: one readable location at a time, with native horizontal free-drag. -->
+		<div class="nav-carousel-wrap" role="group" aria-label="Location selector">
+			<!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
 			<div
 				class="nav-carousel"
-				class:vertical={carouselVertical}
 				bind:this={carouselEl}
 				onscroll={onCarouselScroll}
 				data-testid="nav-carousel"
 			>
-				<div class="nav-spacer" aria-hidden="true"></div>
-				{#each DESTINATIONS as dest (dest)}
-					<div class="nav-slide">
+				{#each DESTINATIONS as dest, i (dest)}
+					<div class="nav-slide" class:active={i === currentIndex}>
 						<div
 							class="nav-card"
 							class:selected={selectedDestination === dest}
@@ -240,32 +532,16 @@
 								{iconPool}
 								occupants={occupantsOf(dest)}
 								{seatNames}
-								{selectable}
+								selectable={selectable && !carouselSelectBlocked}
 								focused={focusedDestination === dest}
 								selected={selectedDestination === dest}
 								monster={dest === ABYSS ? monster : null}
 								{mySeat}
 								{onHover}
-								{onSelect}
+								onSelect={selectCarouselDestination}
 							/>
 						</div>
 					</div>
-				{/each}
-				<div class="nav-spacer" aria-hidden="true"></div>
-			</div>
-			<div class="nav-dots" role="tablist" aria-label="Locations">
-				{#each DESTINATIONS as dest, i (dest)}
-					<button
-						type="button"
-						class="nav-dot"
-						class:active={i === currentIndex}
-						role="tab"
-						aria-selected={i === currentIndex}
-						aria-label={dest}
-						onclick={() => scrollToIndex(i)}
-					>
-						<span class="dot-mark" style="--accent: {LOCATION_ACCENT[dest] ?? '#fff'}"></span>
-					</button>
 				{/each}
 			</div>
 		</div>
@@ -344,168 +620,184 @@
 		flex: 1 1 auto;
 		height: 100%;
 		min-height: 0;
+		box-sizing: border-box;
+		touch-action: none;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
 	}
 
-	/* ── Mobile carousel: one location per view, swipe left/right ───────────── */
+	/* ── Mobile carousel: horizontal swipe pager ───────────────────────────── */
 	.nav-carousel-wrap {
-		display: flex;
-		flex-direction: column;
+		--slide-w: min(78%, 360px);
+		position: relative;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
 		align-items: center;
-		gap: 14px;
 		width: 100%;
-		/* MainStage centers this view with place-items:center, so the board is
-		   content-sized — and a horizontal flex-scroller with no definite height
-		   collapses to 0 (the compass avoided this via aspect-ratio). Give the
-		   carousel an explicit height (the map-layer band is ~74dvh on a phone) so
-		   the cards actually render. */
-		height: 64dvh;
+		height: min(68dvh, 100%);
 		max-height: 100%;
+		min-height: 0;
+		perspective: 560px;
+		perspective-origin: 50% 45%;
 	}
 	.nav-carousel {
+		position: relative;
 		display: flex;
-		flex: 1 1 auto;
+		grid-row: 1;
+		gap: 12px;
+		align-items: stretch;
 		min-height: 0;
+		height: 100%;
 		width: 100%;
+		padding-inline: calc((100% - var(--slide-w)) / 2);
+		box-sizing: border-box;
 		overflow-x: auto;
 		overflow-y: hidden;
-		scroll-snap-type: x mandatory;
+		scroll-padding-inline: calc((100% - var(--slide-w)) / 2);
 		-webkit-overflow-scrolling: touch;
+		touch-action: none;
 		overscroll-behavior-x: contain;
+		user-select: none;
 		scrollbar-width: none;
+		transform-style: preserve-3d;
 	}
 	.nav-carousel::-webkit-scrollbar {
 		display: none;
 	}
 	.nav-slide {
-		/* ~3 cards in view: the focused one centred, flanked by peeks of its
-		   neighbours so the player can tell there's more to scroll through. */
-		flex: 0 0 44%;
+		--d: 0;
+		--ad: 0;
+		--rotate: 0deg;
+		--z: 0px;
+		--y: 0px;
+		--scale: 1;
+		--fade: 1;
+		--edge-left: 0;
+		--edge-right: 0;
+		flex: 0 0 var(--slide-w);
 		min-width: 0;
 		min-height: 0;
-		scroll-snap-align: center;
-		scroll-snap-stop: always;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 5px 12px;
+		padding: 4px 0;
 		box-sizing: border-box;
-		/* 3D context for each card's coverflow tilt. */
-		perspective: 1100px;
+		pointer-events: auto;
+		transform-style: preserve-3d;
 	}
-	/* Leading/trailing space so the FIRST and LAST cards can reach the centre too
-	   (half the empty band: (100% − slide)/2). */
-	.nav-spacer {
-		flex: 0 0 28%;
+	.nav-slide.active {
+		pointer-events: auto;
 	}
-	/* Each card is a real surface that is scaled / faded / tilted by its distance
-	   from the reel centre — --d (signed) and --ad (absolute), set per-card in JS on
-	   the parent .nav-slide. Centre = large, solid, glowing; neighbours recede into
-	   the void, smaller and translucent. */
+	/* Cards recede into perspective as they leave centre; rotation is secondary to
+	   depth so the card reads as moving backward, not just being squeezed sideways. */
 	.nav-card {
-		--d: 0;
-		--ad: 0;
+		position: relative;
 		width: 100%;
-		max-width: 420px;
-		max-height: 100%;
-		overflow-y: auto;
+		height: 100%;
+		min-height: 0;
+		overflow: visible;
 		box-sizing: border-box;
-		padding: 18px 16px;
-		border-radius: 18px;
-		background: linear-gradient(180deg, rgba(20, 14, 34, 0.92), rgba(10, 7, 20, 0.96));
-		border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 12px 13px;
+		border-radius: 12px;
+		background:
+			linear-gradient(180deg, rgba(18, 13, 32, 0.78), rgba(7, 4, 15, 0.62)),
+			color-mix(in srgb, var(--accent) 8%, rgba(5, 3, 14, 0.18));
+		border: 1px solid color-mix(in srgb, var(--accent) 34%, rgba(255, 255, 255, 0.16));
+		-webkit-backdrop-filter: blur(5px) saturate(1.08);
+		backdrop-filter: blur(5px) saturate(1.08);
 		transform-origin: center center;
-		/* Horizontal reel (landscape): pull toward centre, tilt on Y. */
-		transform: translateX(calc(var(--d) * -6%))
-			scale(max(0.6, calc(1.02 - var(--ad) * 0.24)))
-			rotateY(calc(var(--d) * 9deg));
-		opacity: max(0.16, calc(1 - var(--ad) * 0.52));
-		filter: blur(calc(min(var(--ad) * 1.4, 4) * 1px));
+		transform: translateX(calc(var(--d) * -8%)) translateY(var(--y)) translateZ(var(--z))
+			rotateY(var(--rotate)) scale(var(--scale));
+		opacity: var(--fade);
 		box-shadow:
-			0 14px 40px rgba(0, 0, 0, 0.55),
-			0 0 calc(max(0px, (1 - var(--ad)) * 34px))
-				color-mix(in srgb, var(--accent) 48%, transparent);
-		will-change: transform, opacity, filter;
+			0 18px 42px rgba(0, 0, 0, 0.42),
+			inset 0 1px 0 rgba(255, 255, 255, 0.18),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.34);
+		backface-visibility: hidden;
+		will-change: transform, opacity;
+		transition:
+			border-color 160ms cubic-bezier(0.25, 1, 0.5, 1),
+			background 160ms cubic-bezier(0.25, 1, 0.5, 1),
+			box-shadow 160ms cubic-bezier(0.25, 1, 0.5, 1);
+	}
+	.nav-card::before,
+	.nav-card::after {
+		content: '';
+		position: absolute;
+		top: 10px;
+		bottom: 10px;
+		width: 12px;
+		border-radius: 8px;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.32)),
+			color-mix(in srgb, var(--accent) 22%, rgba(8, 5, 18, 0.84));
+		pointer-events: none;
+		transform-style: preserve-3d;
+	}
+	.nav-card::before {
+		left: -6px;
+		opacity: var(--edge-left);
+		transform: rotateY(-88deg);
+		transform-origin: right center;
+	}
+	.nav-card::after {
+		right: -6px;
+		opacity: var(--edge-right);
+		transform: rotateY(88deg);
+		transform-origin: left center;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.nav-card {
-			filter: none;
+			transform: none;
+			opacity: 1;
 		}
 	}
 	.nav-card.focused {
-		border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+		border-color: color-mix(in srgb, var(--accent) 46%, rgba(255, 255, 255, 0.18));
 	}
 	.nav-card.selected {
 		border-color: var(--accent);
 	}
 	.nav-card :global(.loc) {
+		position: relative;
+		z-index: 1;
 		width: 100%;
-	}
-	.nav-dots {
-		display: flex;
-		gap: 4px;
+		min-height: 0;
+		height: 100%;
 		justify-content: center;
-		align-items: center;
+		gap: 0.34rem;
+		padding: 0.25rem 0.2rem;
 	}
-	.nav-dot {
-		display: grid;
-		place-items: center;
-		width: 44px;
-		height: 44px;
-		padding: 0;
-		border: none;
-		background: none;
-		cursor: pointer;
-		touch-action: manipulation;
-		-webkit-tap-highlight-color: transparent;
+	.nav-card :global(.name) {
+		font-size: clamp(1.12rem, 4.5vh, 1.56rem);
+		line-height: 1;
 	}
-	.nav-dot:focus-visible {
-		outline: 2px solid #fff;
-		outline-offset: 2px;
-		border-radius: 10px;
+	.nav-card :global(.rows) {
+		margin-top: 0.08rem;
 	}
-	.dot-mark {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.28);
-		transition:
-			background 160ms ease,
-			transform 160ms ease;
+	.nav-card :global(.row) {
+		gap: 7px;
+		padding: 5px 6px;
 	}
-	.nav-dot.active .dot-mark {
-		background: var(--accent);
-		transform: scale(1.6);
+	.nav-card :global(.icons) {
+		gap: 6px;
+	}
+	.nav-card :global(.ico) {
+		width: 32px;
+		height: 32px;
+	}
+	.nav-card :global(.ico img) {
+		width: 100%;
+		height: 100%;
+	}
+	.nav-card :global(.arrow) {
+		font-size: 1.16rem;
+		margin: 0 -6px;
 	}
 
-	/* ── Vertical reel (portrait): cards stack and snap up/down like a slot
-	   machine; the dots move to a column on the right. ─────────────────────── */
-	.nav-carousel-wrap.vertical {
-		flex-direction: row;
-		align-items: stretch;
-		gap: 8px;
-	}
-	.nav-carousel.vertical {
-		flex-direction: column;
-		width: auto;
-		min-width: 0;
-		overflow-x: hidden;
-		overflow-y: auto;
-		scroll-snap-type: y mandatory;
-		overscroll-behavior-y: contain;
-	}
-	/* In a column flex, flex-basis:100% is full HEIGHT — each card fills the reel
-	   window and snaps. (.nav-slide's flex:0 0 100% already does the right thing.) */
-	.nav-carousel-wrap.vertical .nav-dots {
-		flex-direction: column;
-		justify-content: center;
-		flex: 0 0 auto;
-	}
-	/* Vertical reel: cards fly in from below/above, tilting on X. */
-	.nav-carousel.vertical .nav-card {
-		transform: translateY(calc(var(--d) * -6%))
-			scale(max(0.6, calc(1.02 - var(--ad) * 0.24)))
-			rotateX(calc(var(--d) * -9deg));
-	}
 	.compass {
 		position: relative;
 		/* Portrait-safe: never let the iOS toolbar squeeze the square below the

@@ -13,6 +13,7 @@
  */
 
 import { applyGameCommand, applyDeadlineAdvance } from '../runtime';
+import { canApply } from '../legality';
 import { createRng, nextInt, type RngState } from '../rng';
 import { getLocationConfig } from '../locations';
 import { augmentCapacityForSpirit } from '../augments';
@@ -82,12 +83,42 @@ function isLegal(
 	command: GameCommand,
 	catalog: PlayCatalog
 ): boolean {
-	// No structuredClone wrapper: applyGameCommand (default path, no `mutate`) already deep-clones
-	// `state` internally, so it never mutates the input — and isLegal only reads `.ok`, discarding
-	// the result state. Wrapping in structuredClone produced a full extra deep copy that was then
-	// cloned again and thrown away (~61% overhead per probe). Parity-gated (sim/_parity.test.ts).
-	const result = applyGameCommand(state, botActorFor(state, seat), command, catalog);
-	return result.ok;
+	// Fast path: the pure legality oracle decides ~99.7% of probes with NO clone (differential-tested
+	// vs the reducer in ml/_canApply.test.ts — it can only DEFER, never disagree). Only `undefined`
+	// (the genuinely impure cases: combat / awaken-condition / augment-placement acceptance) falls
+	// back to the cloning reducer, which isLegal reads only for `.ok` (the result state is discarded).
+	const actor = botActorFor(state, seat);
+	const verdict = canApply(state, actor, command, catalog);
+	return verdict !== undefined ? verdict : applyGameCommand(state, actor, command, catalog).ok;
+}
+
+/**
+ * Advance an OWNED working state by `command`, clone-free whenever the pure oracle can decide it.
+ * Returns the advanced state (the SAME object when mutated) or `null` if the command is illegal.
+ *
+ * Safety: we only ever apply IN PLACE (`mutate: true`) when `canApply` PROVES the command legal —
+ * a proven-legal command cannot mutate-then-reject, so `working` is never left half-mutated.
+ * Provably-illegal commands are skipped without touching `working`; `undefined` (the rare impure
+ * cases) defers to the cloning reducer, which leaves `working` pristine on rejection. The result is
+ * byte-identical to the all-cloning path (same commands, same evolved state) — gated by the gen
+ * determinism hash + sim/_parity.test.ts. `working` MUST be a state the caller owns (e.g. a clone),
+ * never the caller's live input.
+ */
+function advanceWorking(
+	working: PublicGameState,
+	seat: SeatColor,
+	command: GameCommand,
+	catalog: PlayCatalog
+): PublicGameState | null {
+	const actor = botActorFor(working, seat);
+	const verdict = canApply(working, actor, command, catalog);
+	if (verdict === false) return null;
+	if (verdict === true) {
+		const r = applyGameCommand(working, actor, command, catalog, { mutate: true });
+		return r.ok ? r.state : null; // r.ok always true when canApply===true (differential-tested)
+	}
+	const r = applyGameCommand(working, actor, command, catalog); // undefined → clone oracle (pristine on reject)
+	return r.ok ? r.state : null;
 }
 
 /**
@@ -1066,6 +1097,14 @@ BOT_PROFILES['fast'] = {
 };
 BOT_PROFILES['mctsdeep'] = { ...BOT_PROFILES['cullean'], ismctsIterations: 128, ismctsHorizon: 40, ismctsC: 1.3 };
 
+// CONTINUOUS FARMERS (experiment): fight EVERY round it's survivable (P(kill)>0 ⇒ survivable, see
+// killThreshold doc) instead of over-building to barrier 10 first. Lower kill-threshold + lower
+// maxBarrierTarget = far more fights → capture the ~8-rung × ~lives kills that the 0.7-threshold
+// profiles leave on the table. Tests the owner's "8 monsters × ~3 kills each = more than enough points".
+BOT_PROFILES['farmer'] = { ...BOT_PROFILES.hard, killThreshold: 0.2, builtOutThreshold: 0.1, maxBarrierTarget: 8 };
+BOT_PROFILES['farmer2'] = { ...BOT_PROFILES.hard, killThreshold: 0.4, builtOutThreshold: 0.2, maxBarrierTarget: 8 };
+BOT_PROFILES['farmer3'] = { ...BOT_PROFILES.hard, killThreshold: 0.05, builtOutThreshold: 0.05, maxBarrierTarget: 6 };
+
 /** Map a name (parsed from a bot's display name, or a tuner key) to a profile. */
 export function profileFor(name: string | null | undefined): BotProfile {
 	if (!name) return RANDOM_PROFILE;
@@ -1107,6 +1146,19 @@ function diceSumPMF(dice: readonly AttackDie[]): Map<number, number> {
  * real combat bonus/multiplier, convolve the dice faces, and sum the mass at/above HP.
  * Pure; no RNG.
  */
+/**
+ * Cheaper clone for combat EVALUATION sims (computeKillProbability / firepower / expectedAttack):
+ * deep-clone the PLAYERS — where resetCombatFlags + the `inCombat` trigger write (acting seat and,
+ * for board-wide classes, colocated seats) — but SHARE the rest of the state by reference. Combat
+ * evaluation only READS bags / monster / market / combats (it never mutates them), and the trigger's
+ * log goes to a throwaway array param, not `state.log`. Skipping the bag clone (~44% of the state's
+ * bytes) is the win. Faithfulness is gated by the gen determinism hash + the full combat suite — if
+ * any `inCombat` path mutated shared state, those would diverge.
+ */
+function cloneForCombatSim(state: PublicGameState): PublicGameState {
+	return { ...state, players: structuredClone(state.players) };
+}
+
 export function computeKillProbability(
 	state: PublicGameState,
 	seat: SeatColor,
@@ -1115,7 +1167,7 @@ export function computeKillProbability(
 ): number {
 	const monster = state.monster;
 	if (!monster) return 0;
-	const sim = structuredClone(state);
+	const sim = cloneForCombatSim(state);
 	const player = sim.players[seat];
 	if (!player) return 0;
 
@@ -1161,7 +1213,7 @@ export function firepowerKillProbability(
 ): number {
 	const monster = state.monster;
 	if (!monster) return 0;
-	const sim = structuredClone(state);
+	const sim = cloneForCombatSim(state);
 	const player = sim.players[seat];
 	if (!player) return 0;
 	resetCombatFlags(player);
@@ -1580,7 +1632,7 @@ function isBuiltOut(player: BotPlayer | undefined, profile: BotProfile): boolean
 /** Expected attack damage = Σ per-die face averages + flat combat bonus, × multiplier
  *  (firing the inCombat trigger on a clone so Spirit-Animal/Sharpshooter bonuses count). */
 function expectedAttack(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): number {
-	const sim = structuredClone(state);
+	const sim = cloneForCombatSim(state);
 	const player = sim.players[seat];
 	if (!player) return 0;
 	resetCombatFlags(player);
@@ -1684,9 +1736,9 @@ export function planMediumPhaseActions(
 	let working = structuredClone(state);
 
 	const tryEmit = (command: GameCommand): boolean => {
-		const result = applyGameCommand(working, botActorFor(working, seat), command, catalog);
-		if (!result.ok) return false;
-		working = result.state;
+		const next = advanceWorking(working, seat, command, catalog);
+		if (next === null) return false;
+		working = next;
 		commands.push(command);
 		return true;
 	};
@@ -2335,7 +2387,7 @@ function newIsmctsNode(): IsmctsNode {
 }
 
 /** Legal navigation destinations from the current state (trial-applied → legal-only). */
-function legalDestinations(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): NavigationDestination[] {
+export function legalDestinations(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): NavigationDestination[] {
 	return (ALL_DESTINATIONS as readonly NavigationDestination[]).filter((d) =>
 		isLegal(state, seat, { type: 'lockNavigation', destination: d }, catalog)
 	);
@@ -2347,7 +2399,7 @@ function legalDestinations(state: PublicGameState, seat: SeatColor, catalog: Pla
  * Mutates by reassignment; returns the advanced state. The engine RNG (`s.rng`) drives the
  * determinization's bag/dice; `botRng` only breaks heuristic ties.
  */
-function advanceAfterNav(
+export function advanceAfterNav(
 	s: PublicGameState,
 	seat: SeatColor,
 	catalog: PlayCatalog,
@@ -2567,9 +2619,9 @@ export function planBotPhaseActions(
 	let working = structuredClone(state);
 
 	const tryEmit = (command: GameCommand): boolean => {
-		const result = applyGameCommand(working, botActorFor(working, seat), command, catalog);
-		if (!result.ok) return false;
-		working = result.state;
+		const next = advanceWorking(working, seat, command, catalog);
+		if (next === null) return false;
+		working = next;
 		commands.push(command);
 		return true;
 	};

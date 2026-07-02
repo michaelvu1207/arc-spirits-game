@@ -13,6 +13,10 @@ for k in $(seq 0 $((SHARDS-1))); do
   GEN=1 GEN_MODE="$MODE" GEN_GAMES="$PER" GEN_SEATS="${GEN_SEATS:-4}" \
     GEN_MAXROUNDS="${GEN_MAXROUNDS:-90}" GEN_SEED0="$SEED0" GEN_OUT="$OUT" \
     GEN_SAMPLE="${GEN_SAMPLE:-}" GEN_ITER="${GEN_ITER:-0}" \
+    GEN_FIELD="${GEN_FIELD:-pvphunter,pvphunter,medium,aggressive,cultivator,survivor,fighter,hard}" \
+    GEN_RECORD_PROFILE="${GEN_RECORD_PROFILE:-pvphunter}" \
+    GEN_FORBID="${GEN_FORBID:-}" GEN_MAX_STATUS_LEVEL="${GEN_MAX_STATUS_LEVEL:-}" \
+    GEN_SELECTION="${GEN_SELECTION:-value}" GEN_SHAPING="${GEN_SHAPING:-}" GEN_GAMMA="${GEN_GAMMA:-}" \
     npx vitest run src/lib/play/ml/_gen.test.ts --disable-console-intercept \
     > "/tmp/gen_${PREFIX}_${k}.log" 2>&1 &
   pids+=($!)
@@ -21,6 +25,6 @@ echo "launched ${SHARDS} shards: ${pids[*]}"
 for p in "${pids[@]}"; do wait "$p"; done
 # Merge per-shard sample counts; write a single meta.json (dims are fixed by the encoder).
 TOTAL=$(cat "$ROOT"/ml/data/${PREFIX}_*.jsonl 2>/dev/null | wc -l | tr -d ' ')
-node -e "require('fs').writeFileSync('ml/data/meta.json', JSON.stringify({obs_dim:48,act_dim:40,samples:$TOTAL,prefix:'$PREFIX',mode:'$MODE'},null,2))"
+node -e "require('fs').writeFileSync('ml/data/meta.json', JSON.stringify({obs_dim:62,act_dim:52,samples:$TOTAL,prefix:'$PREFIX',mode:'$MODE'},null,2))"
 echo "ALL_SHARDS_DONE total_samples=$TOTAL"
 grep -h "\[gen\] DONE" /tmp/gen_${PREFIX}_*.log

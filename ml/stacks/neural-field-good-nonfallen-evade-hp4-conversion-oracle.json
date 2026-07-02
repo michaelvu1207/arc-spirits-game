@@ -1,0 +1,41 @@
+[
+  {
+    "name": "nonfallen-evade-goodbuilder-hp4-conversion-oracle-a",
+    "weights": "ml/meta_runs/allseat-goodbuilder-medium-20260630Tgoal/allseat_goodbuilder_policy.json",
+    "microWeights": "ml/meta_runs/allseat-goodbuilder-medium-20260630Tgoal/allseat_goodbuilder_policy.json",
+    "microPolicyGate": "good-builder-hp4-conversion-oracle",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "good-nonfallen-farm-target-evade",
+    "maxStatusLevel": 2,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true,
+    "goodTargetActionDiscipline": true
+  },
+  {
+    "name": "nonfallen-evade-goodbuilder-hp4-conversion-oracle-b",
+    "weights": "ml/meta_runs/allseat-goodbuilder-medium-20260630Tgoal/allseat_goodbuilder_policy.json",
+    "microWeights": "ml/meta_runs/allseat-goodbuilder-medium-20260630Tgoal/allseat_goodbuilder_policy.json",
+    "microPolicyGate": "good-builder-hp4-conversion-oracle",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "good-nonfallen-farm-target-evade",
+    "maxStatusLevel": 2,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true,
+    "goodTargetActionDiscipline": true
+  },
+  {
+    "name": "nonfallen-evade-goodbuilder-hp4-conversion-oracle-c",
+    "weights": "ml/meta_runs/allseat-goodbuilder-medium-20260630Tgoal/allseat_goodbuilder_policy.json",
+    "microWeights": "ml/meta_runs/allseat-goodbuilder-medium-20260630Tgoal/allseat_goodbuilder_policy.json",
+    "microPolicyGate": "good-builder-hp4-conversion-oracle",
+    "navWeights": "ml/meta_runs/damage-contract-bootstrap-20260629T190011Z/nav_build_policy.json",
+    "navigationPolicyGate": "good-nonfallen-farm-target-evade",
+    "maxStatusLevel": 2,
+    "forbidTypes": ["initiatePvp"],
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true,
+    "goodTargetActionDiscipline": true
+  }
+]

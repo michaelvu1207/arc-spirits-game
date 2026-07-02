@@ -3,12 +3,11 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
-	import { setActiveMemberId } from '$lib/stores/playStore.svelte';
+	import { createSoloPlayRoom, setActiveMemberId } from '$lib/stores/playStore.svelte';
 	import { auth } from '$lib/auth/auth.svelte';
 	import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
 	import MenuShell from '$lib/components/play2d/MenuShell.svelte';
 	import ProfileDock from '$lib/components/play2d/ProfileDock.svelte';
-	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 
 	const hover = () => playMenuSfx('ui-hover', { volume: 0.45 });
 
@@ -41,6 +40,9 @@
 	let elapsed = $state(0);
 	let rankedPollTimer: ReturnType<typeof setTimeout> | null = null;
 	let rankedTickTimer: ReturnType<typeof setInterval> | null = null;
+	let mounted = $state(false);
+	let soloStarting = $state(false);
+	let soloError = $state<string | null>(null);
 
 	/** POST a matchmaking endpoint, forwarding the Bearer token cross-origin (Capacitor). */
 	async function postMatchmaking(path: string): Promise<QueueResult> {
@@ -55,14 +57,20 @@
 			credentials: isCrossOrigin ? 'include' : 'same-origin',
 			body: JSON.stringify({})
 		});
-		const payload = (await res.json().catch(() => null)) as QueueResult | { message?: string } | null;
+		const payload = (await res.json().catch(() => null)) as
+			| QueueResult
+			| { message?: string }
+			| null;
 		if (!res.ok) {
 			if (res.status === 401) {
 				rankedNeedsAuth = true;
 				throw new Error('Sign in to play ranked.');
 			}
 			const message =
-				payload && typeof payload === 'object' && 'message' in payload && typeof payload.message === 'string'
+				payload &&
+				typeof payload === 'object' &&
+				'message' in payload &&
+				typeof payload.message === 'string'
 					? payload.message
 					: `Request failed with status ${res.status}`;
 			throw new Error(message);
@@ -90,7 +98,7 @@
 				// Seed our server-created membership id so the room page identifies us
 				// (cross-origin sends ?member=/X-Play-Member; same-origin also has the
 				// cookie the queue endpoint set + the user_id fallback).
-				if (result.memberId) setActiveMemberId(result.memberId);
+				if (result.memberId) setActiveMemberId(result.memberId, result.roomCode);
 				playMenuSfx('game-start', { volume: 0.8 });
 				await goto(`/play/${encodeURIComponent(result.roomCode)}`);
 				return;
@@ -134,6 +142,24 @@
 		}
 	}
 
+	async function startSolo() {
+		if (soloStarting) return;
+		soloStarting = true;
+		soloError = null;
+		playMenuSfx('ui-click');
+		try {
+			const typed = (browser ? localStorage.getItem(NAME_KEY) : null) ?? '';
+			const displayName = await auth.resolvePlayIdentity(typed);
+			const view = await createSoloPlayRoom(displayName);
+			playMenuSfx('game-start', { volume: 0.8 });
+			await goto(`/play/${encodeURIComponent(view.projection.roomCode)}`);
+		} catch (e) {
+			soloError = e instanceof Error ? e.message : 'Could not start solo play.';
+		} finally {
+			soloStarting = false;
+		}
+	}
+
 	/** Leave the queue (best-effort) and stop searching, staying on the ranked view. */
 	async function leaveQueue() {
 		stopRankedTimers();
@@ -167,6 +193,7 @@
 	}
 
 	onMount(() => {
+		mounted = true;
 		// Immersive full-screen: hide global chrome + lock scroll while on the menu.
 		document.documentElement.classList.add('immersive-play');
 		document.body.classList.add('immersive-play');
@@ -186,10 +213,8 @@
 	<title>Play Arc Spirits | Fight for the Arcane Abyss</title>
 </svelte:head>
 
-<InstallPrompt />
-
 <MenuShell>
-	<div class="home">
+	<div class="home" data-testid="play-home" data-hydrated={mounted ? 'true' : 'false'}>
 		<div class="logo reveal" style="--d: 0.04s">
 			<span class="kicker"><span class="kn">01</span><span class="kl"></span> Beta preview</span>
 			<span class="l l1 brand-flame-text">Arc</span>
@@ -201,8 +226,22 @@
 			{#if view === 'menu'}
 				<nav class="menu" aria-label="Main menu">
 					<button
-						data-testid="quick-play"
+						data-testid="solo-play"
 						class="row primary"
+						type="button"
+						onclick={startSolo}
+						onpointerenter={hover}
+						disabled={soloStarting}
+						aria-busy={soloStarting}
+					>
+						<span class="gem"></span>
+						<span class="lbl">{soloStarting ? 'Starting…' : 'Solo Play'}</span>
+						<span class="go" aria-hidden="true">→</span>
+					</button>
+
+					<button
+						data-testid="quick-play"
+						class="row link"
 						type="button"
 						onclick={startRanked}
 						onpointerenter={hover}
@@ -211,6 +250,10 @@
 						<span class="lbl">Quick Play</span>
 						<span class="go" aria-hidden="true">→</span>
 					</button>
+
+					{#if soloError}
+						<p class="menu-error" data-testid="solo-play-error">{soloError}</p>
+					{/if}
 
 					<a
 						data-testid="play-open"
@@ -230,7 +273,17 @@
 						onpointerenter={hover}
 						onclick={() => playMenuSfx('ui-click')}
 					>
-						<span class="gem"></span><span class="lbl">Hall of Guardians</span><span class="go">→</span>
+						<span class="gem"></span><span class="lbl">Hall of Guardians</span><span class="go"
+							>→</span
+						>
+					</a>
+					<a
+						class="row link"
+						href="/play/shop"
+						onpointerenter={hover}
+						onclick={() => playMenuSfx('ui-click')}
+					>
+						<span class="gem"></span><span class="lbl">Abyss Market</span><span class="go">→</span>
 					</a>
 					<a
 						class="row link"
@@ -522,6 +575,16 @@
 	.row:disabled {
 		opacity: 0.6;
 		cursor: progress;
+	}
+	.menu-error {
+		margin: 4px 8px 6px 38px;
+		padding: 8px 10px;
+		border-left: 3px solid var(--color-blood, #c41a3d);
+		background: rgba(196, 26, 61, 0.16);
+		color: var(--color-bone, #e9e2f5);
+		font-family: var(--font-body);
+		font-size: 0.82rem;
+		line-height: 1.35;
 	}
 
 	/* ── Ranked matchmaking view (replaces the menu) ──────────── */

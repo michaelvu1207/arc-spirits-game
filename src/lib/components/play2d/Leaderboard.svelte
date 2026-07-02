@@ -60,7 +60,11 @@
 	const monsterRewards = $derived(
 		monster
 			? buildMonsterRewards(monster.rewardTrack)
-					.map((opt) => ({ index: opt.index, label: opt.label, url: iconPoolUrl(assets.iconPool, opt.token) }))
+					.map((opt) => ({
+						index: opt.index,
+						label: opt.label,
+						url: iconPoolUrl(assets.iconPool, opt.token)
+					}))
 					.filter((r) => r.url)
 			: []
 	);
@@ -81,7 +85,10 @@
 						<span class="chip-g" aria-hidden="true">⚔️</span>{monster.damage}
 					</span>
 					<span class="chip hp" title="Health — damage to defeat it once">
-						{#if barrierIcon}<img class="chip-ic" src={barrierIcon} alt="" />{:else}<span class="chip-g" aria-hidden="true">❤</span>{/if}{monster.maxHp}
+						{#if barrierIcon}<img class="chip-ic" src={barrierIcon} alt="" />{:else}<span
+								class="chip-g"
+								aria-hidden="true">❤</span
+							>{/if}{monster.maxHp}
 					</span>
 				</span>
 				{#if monsterRewards.length > 0}
@@ -89,7 +96,9 @@
 						<span class="bounty-label">Bounty</span>
 						<span class="bounty-icons">
 							{#each monsterRewards as r (r.index)}
-								<span class="bounty-ic"><img src={r.url} alt={r.label} title={r.label} loading="lazy" /></span>
+								<span class="bounty-ic"
+									><img src={r.url} alt={r.label} title={r.label} loading="lazy" /></span
+								>
 							{/each}
 						</span>
 					</span>
@@ -98,11 +107,15 @@
 
 			<span
 				class="boss-av"
-				title="{monster.livesRemaining} of {monster.livesTotal} {monster.livesTotal === 1 ? 'kill' : 'kills'} left to defeat it"
+				title="{monster.livesRemaining} of {monster.livesTotal} {monster.livesTotal === 1
+					? 'kill'
+					: 'kills'} left to defeat it"
 			>
 				<span class="sigil" aria-hidden="true"></span>
 				{#if monster.livesRemaining > 0}
-					<span class="lives" aria-label="{monster.livesRemaining} kills remaining">×{monster.livesRemaining}</span>
+					<span class="lives" aria-label="{monster.livesRemaining} kills remaining"
+						>×{monster.livesRemaining}</span
+					>
 				{/if}
 			</span>
 		</div>
@@ -118,21 +131,38 @@
 			onclick={() => onSelectSeat?.(row.seat)}
 		>
 			<span class="meta">
-				{#if row.seat !== mySeat}<span class="name" style="color: {seatAccent(row.seat)}" title={row.name}>{row.name}</span>{/if}
+				{#if row.seat !== mySeat}<span
+						class="name"
+						style="color: {seatAccent(row.seat)}"
+						title={row.name}>{row.name}</span
+					>{/if}
 				<span class="meta-row">
-					<span class="pts" data-testid="lb-vp-{row.seat}">
-						{#if vpIcon}<img class="vp-ic" src={vpIcon} alt="VP" />{/if}<span class="pts-num"
-							>{row.vp}</span
-						>
+					<span class="pts" class:self-score={row.seat === mySeat} data-testid="lb-vp-{row.seat}">
+						{#if row.seat === mySeat}
+							<span class="pts-num">{row.vp}</span>
+							{#if vpIcon}<img class="vp-ic vp-ic-self" src={vpIcon} alt="VP" />{/if}
+						{:else}
+							{#if vpIcon}<img class="vp-ic" src={vpIcon} alt="VP" />{/if}<span class="pts-num"
+								>{row.vp}</span
+							>
+						{/if}
 					</span>
 					{#if row.atk > 0}
-						<span class="atk" data-testid="lb-atk-{row.seat}" title="Avg attack: {row.atk.toFixed(1)}">
-							<span class="atk-glyph" aria-hidden="true">⚔️</span><span class="atk-num">{row.atk.toFixed(1)}</span>
+						<span
+							class="atk"
+							data-testid="lb-atk-{row.seat}"
+							title="Avg attack: {row.atk.toFixed(1)}"
+						>
+							<span class="atk-glyph" aria-hidden="true">⚔️</span><span class="atk-num"
+								>{row.atk.toFixed(1)}</span
+							>
 						</span>
 					{/if}
 					{#if row.init > 0}
 						<span class="init" data-testid="lb-init-{row.seat}" title="Initiative: {row.init}">
-							<span class="init-glyph" aria-hidden="true">⚡</span><span class="init-num">{row.init}</span>
+							<span class="init-glyph" aria-hidden="true">⚡</span><span class="init-num"
+								>{row.init}</span
+							>
 						</span>
 					{/if}
 				</span>
@@ -171,7 +201,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 40px;
+		gap: var(--lb-gap, 40px);
 		/* Rows are scout buttons — stay clickable even if the float lets clicks pass. */
 		pointer-events: auto;
 	}
@@ -179,8 +209,7 @@
 	/* ── The Arcane Abyss monster — pinned at the apex of the standings in the SAME row
 	   grammar as the players (meta-left, sigil-right, threaded on the spine), so it reads as
 	   the thing everyone is racing against rather than a bolted-on banner. Its identity is the
-	   hexagonal abyssal sigil (see .sigil); a faint always-on aura sets the row apart without a
-	   hard card. */
+	   hexagonal abyssal sigil (see .sigil), without card chrome behind the row. */
 	.boss {
 		--mon: #a855f7;
 		align-self: flex-end;
@@ -192,17 +221,6 @@
 		justify-content: flex-end;
 		gap: 8px;
 		padding: 2px 0;
-	}
-	.boss::before {
-		content: '';
-		position: absolute;
-		inset: -6px -6px -6px -18px;
-		z-index: -1;
-		border-radius: 999px;
-		background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mon) 24%, transparent) 80%);
-		box-shadow:
-			inset 0 0 0 1px color-mix(in srgb, var(--mon) 32%, transparent),
-			0 0 14px color-mix(in srgb, var(--mon) 20%, transparent);
 	}
 	.boss-name {
 		font-family: var(--font-display);
@@ -222,7 +240,7 @@
 		padding: 1px 7px;
 		border-radius: 999px;
 		font-family: var(--font-display);
-		font-size: 0.82rem;
+		font-size: var(--lb-chip-size, 0.82rem);
 		line-height: 1.3;
 		font-variant-numeric: tabular-nums;
 		background: rgba(0, 0, 0, 0.34);
@@ -260,8 +278,8 @@
 		gap: 4px;
 	}
 	.bounty-ic {
-		width: 21px;
-		height: 21px;
+		width: var(--lb-bounty-size, 21px);
+		height: var(--lb-bounty-size, 21px);
 		display: grid;
 		place-items: center;
 	}
@@ -277,8 +295,8 @@
 	.boss-av {
 		position: relative;
 		flex: 0 0 auto;
-		width: 56px;
-		height: 56px;
+		width: var(--lb-boss-avatar, 56px);
+		height: var(--lb-boss-avatar, 56px);
 		margin-right: 2px; /* centre the sigil on the spine lane (≈30px from the right) */
 		display: grid;
 		place-items: center;
@@ -287,7 +305,12 @@
 		position: absolute;
 		inset: 0;
 		clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-		background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--mon) 70%, #fff) 0%, #1a0b2e 48%, #07040f 100%);
+		background: radial-gradient(
+			circle at 50% 42%,
+			color-mix(in srgb, var(--mon) 70%, #fff) 0%,
+			#1a0b2e 48%,
+			#07040f 100%
+		);
 		box-shadow:
 			0 0 0 2px color-mix(in srgb, var(--mon) 72%, transparent),
 			0 0 13px color-mix(in srgb, var(--mon) 45%, transparent),
@@ -319,7 +342,12 @@
 		height: 21px;
 		border-radius: 50%;
 		transform: translate(-50%, -50%);
-		background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--mon) 80%, #fff) 42%, color-mix(in srgb, var(--mon) 92%, #000) 100%);
+		background: radial-gradient(
+			circle,
+			#fff 0%,
+			color-mix(in srgb, var(--mon) 80%, #fff) 42%,
+			color-mix(in srgb, var(--mon) 92%, #000) 100%
+		);
 		box-shadow: 0 0 10px color-mix(in srgb, var(--mon) 85%, transparent);
 		animation: abyss-blink 2.6s ease-in-out infinite;
 	}
@@ -399,7 +427,7 @@
 		color: inherit;
 		cursor: pointer;
 		border-radius: 999px;
-		min-height: 44px;
+		min-height: var(--lb-row-min-h, 44px);
 		touch-action: manipulation;
 		-webkit-tap-highlight-color: transparent;
 		user-select: none;
@@ -451,11 +479,11 @@
 		justify-content: flex-end;
 		flex-wrap: wrap;
 		gap: 3px;
-		max-width: 9rem;
+		max-width: var(--lb-potential-w, 9rem);
 	}
 	.pot {
-		width: 14px;
-		height: 14px;
+		width: var(--lb-pip-size, 14px);
+		height: var(--lb-pip-size, 14px);
 		object-fit: contain;
 	}
 	.pot.arcane {
@@ -470,10 +498,10 @@
 	}
 	.name {
 		font-family: var(--font-display);
-		font-size: 0.82rem;
+		font-size: var(--lb-name-size, 0.82rem);
 		letter-spacing: 0.04em;
 		color: var(--color-parchment, #e7e0cf);
-		max-width: 8rem;
+		max-width: var(--lb-name-w, 8rem);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -483,7 +511,7 @@
 		align-items: center;
 		gap: 4px;
 		font-family: var(--font-display);
-		font-size: 1.1rem;
+		font-size: var(--lb-pts-size, 1.1rem);
 		color: var(--brand-amber, #ffba3d);
 		font-variant-numeric: tabular-nums;
 		line-height: 1;
@@ -493,6 +521,14 @@
 		height: 1.05em;
 		object-fit: contain;
 	}
+	.vp-ic-self {
+		width: 0.82em;
+		height: 0.82em;
+		opacity: 0.78;
+	}
+	.self-score {
+		gap: 5px;
+	}
 	/* Attack chip — the resting average roll damage (dice + Spirit Animal), shown to
 	   the left of the initiative chip. Coral, distinct from amber VP / cyan initiative. */
 	.atk {
@@ -500,7 +536,7 @@
 		align-items: center;
 		gap: 1px;
 		font-family: var(--font-display);
-		font-size: 0.9rem;
+		font-size: var(--lb-chip-size, 0.9rem);
 		line-height: 1;
 		color: var(--brand-coral, #ff7a59);
 		font-variant-numeric: tabular-nums;
@@ -515,7 +551,7 @@
 		align-items: center;
 		gap: 1px;
 		font-family: var(--font-display);
-		font-size: 0.9rem;
+		font-size: var(--lb-chip-size, 0.9rem);
 		line-height: 1;
 		color: var(--brand-cyan, #5cdfff);
 		font-variant-numeric: tabular-nums;
@@ -529,8 +565,8 @@
 		position: relative;
 		z-index: 1;
 		flex: 0 0 auto;
-		width: 46px;
-		height: 46px;
+		width: var(--lb-avatar, 46px);
+		height: var(--lb-avatar, 46px);
 		margin-right: 7px; /* centre the avatar on the spine lane (≈30px from the right) */
 		border-radius: 50%;
 		overflow: hidden;
@@ -567,61 +603,40 @@
 
 	/* The current player reads larger, with a bright ring and points-only pill. */
 	.lb-row.me .av {
-		width: 60px;
-		height: 60px;
+		width: var(--lb-me-avatar, 60px);
+		height: var(--lb-me-avatar, 60px);
 		margin-right: 0; /* the 60px avatar already centres on the lane */
 		box-shadow:
 			0 0 0 3px var(--ring),
 			0 0 16px color-mix(in srgb, var(--ring) 50%, transparent);
 	}
 	.lb-row.me .pts {
-		font-size: 1.5rem;
+		font-size: var(--lb-me-pts-size, 1.5rem);
 		color: #fff;
 	}
 
 	@media (max-width: 600px) {
 		.leaderboard {
-			gap: 24px;
+			--lb-gap: 24px;
+			--lb-avatar: 38px;
+			--lb-me-avatar: 46px;
+			--lb-boss-avatar: 46px;
+			--lb-name-size: 0.8rem;
+			--lb-name-w: 5.5rem;
+			--lb-pts-size: 0.95rem;
+			--lb-me-pts-size: 1.1rem;
+			--lb-pip-size: 11px;
+			--lb-potential-w: 6rem;
+			--lb-bounty-size: 18px;
 		}
 		.av {
-			width: 38px;
-			height: 38px;
 			margin-right: 4px;
 		}
-		.lb-row.me .av {
-			width: 46px;
-			height: 46px;
-		}
-		.name {
-			font-size: 0.8rem;
-			max-width: 5.5rem;
-		}
-		.pts {
-			font-size: 0.95rem;
-		}
-		.lb-row.me .pts {
-			font-size: 1.1rem;
-		}
-		.pot {
-			width: 11px;
-			height: 11px;
-		}
-		.potential {
-			max-width: 6rem;
-		}
 		.boss-name {
-			font-size: 0.82rem;
-		}
-		.boss-av {
-			width: 46px;
-			height: 46px;
+			font-size: var(--lb-chip-size, 0.82rem);
 		}
 		.sigil::after {
 			height: 17px;
-		}
-		.bounty-ic {
-			width: 18px;
-			height: 18px;
 		}
 	}
 </style>

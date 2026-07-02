@@ -11,12 +11,7 @@ import { applyTrigger } from '../apply';
 import { buildEffectContext } from '../context';
 import type { EffectTrigger } from '../registry';
 import { createRng } from '../../rng';
-import type {
-	PlaySpirit,
-	PrivatePlayerState,
-	PublicGameState,
-	SeatColor
-} from '../../types';
+import type { PlaySpirit, PrivatePlayerState, PublicGameState, SeatColor } from '../../types';
 
 /** A fully-defaulted player; override any field via `overrides`. */
 export function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerState {
@@ -27,6 +22,7 @@ export function makePlayer(overrides: Partial<PrivatePlayerState> = {}): Private
 		navigationDestination: null,
 		brokenBarrier: 0,
 		victoryPoints: 0,
+		vpHistory: [],
 		barrier: 4,
 		maxBarrier: 4,
 		statusLevel: 0,
@@ -136,7 +132,11 @@ export function fire(
 /** Build a bare EffectContext for unit-testing a single handler in isolation. */
 export function ctxFor(
 	player: PrivatePlayerState,
-	opts: { trigger?: EffectTrigger; command?: unknown; extra?: Partial<Record<SeatColor, PrivatePlayerState>> } = {}
+	opts: {
+		trigger?: EffectTrigger;
+		command?: unknown;
+		extra?: Partial<Record<SeatColor, PrivatePlayerState>>;
+	} = {}
 ) {
 	const state = makeState(player, opts.extra ?? {});
 	return buildEffectContext({

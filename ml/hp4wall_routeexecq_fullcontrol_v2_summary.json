@@ -1,0 +1,122 @@
+{
+  "mode": "route-execution-counterfactual",
+  "config": {
+    "games": 8,
+    "seats": 4,
+    "maxRounds": 30,
+    "maxWindows": 16,
+    "cleanThreshold": 0.5,
+    "firepowerThreshold": 0.5,
+    "selectHorizon": 12,
+    "horizons": [
+      6,
+      12
+    ],
+    "labelHorizon": 12,
+    "labelScoreThreshold": 0.25,
+    "labelVpThreshold": 0,
+    "labelStatusTolerance": 0,
+    "positiveOnlyData": false,
+    "windowFilters": {
+      "minPlayerVp": 9,
+      "maxPlayerVp": 24,
+      "minRound": 0,
+      "minMonsterHp": 4,
+      "maxMonsterHp": 4,
+      "minCleanKillProb": 0,
+      "minFirepowerKillProb": 0,
+      "minExpectedAttack": 0,
+      "minAttackDice": 0,
+      "minSpiritAnimal": 0,
+      "minCultivator": 0,
+      "minMaxBarrier": 0
+    },
+    "scoreWeights": {
+      "vp": 1,
+      "cleanOpportunity": 2,
+      "firepowerOpportunity": 0.25,
+      "expectedAttack": 0.8,
+      "attackDice": 0.4,
+      "spiritAnimal": 0.5,
+      "cultivator": 0,
+      "barrier": 0.2,
+      "currentBarrier": 0,
+      "kill": 0,
+      "reach30Bonus": 0,
+      "statusPenalty": 2
+    },
+    "dataOut": "ml/data_hp4_wall_fullcontrol/routeexec/routeexecq.jsonl",
+    "source": "full-control",
+    "profiles": [
+      "paragon",
+      "farmer",
+      "farmer2",
+      "hard"
+    ],
+    "forbidTypes": [
+      "initiatePvp"
+    ],
+    "maxStatusLevel": 0,
+    "plannerWeights": "ml/meta_runs/aux-head-act52-medium-20260627T222453Z/best_policy.json",
+    "navWeights": "ml/meta_runs/routeq-nav-specialist-20260628T0305Z/best_policy.json",
+    "scaleNavWeights": "ml/meta_runs/scaleq-nav-20260628T0650Z/best_policy.json",
+    "microWeights": "ml/meta_runs/routeexecq-fullcontrol-micro-20260628T0600Z/best_policy.json",
+    "microPolicyGate": "location-interactions",
+    "navigationPolicyGate": "unsafe-firepower-build-option",
+    "scalingNavigationPolicyGate": "route-option-scaling",
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true,
+    "plannerIterations": 32,
+    "plannerHorizon": 16,
+    "plannerValueWeight": 1,
+    "progressEvery": 1
+  },
+  "scannedLocationWindows": 84,
+  "windows": 16,
+  "skippedWindowFilter": 68,
+  "skippedSingleAction": 0,
+  "dataSamples": 16,
+  "sourceWasBest": 16,
+  "sourceWasBestPct": 100,
+  "routeExecCorrections": 0,
+  "routeExecCorrectionPct": 0,
+  "avgRouteExecQDeltaScore": 0,
+  "avgRouteExecQDeltaVp": 0,
+  "avgRouteExecQDeltaStatus": 0,
+  "avgRouteExecQDeltaReach30": 0,
+  "avgWindowPlayerVp": 24,
+  "avgWindowPlayerExpectedAttack": 4.29,
+  "avgWindowPlayerMaxBarrier": 4,
+  "avgWindowPlayerAttackDice": 1.38,
+  "avgWindowPlayerSpiritAnimal": 3.38,
+  "avgWindowPlayerCultivator": 0,
+  "avgWindowMonsterHp": 4,
+  "avgWindowCleanKillProb": 0,
+  "avgWindowFirepowerKillProb": 0.79,
+  "avgBestScoreDelta": 0,
+  "avgBestVpDelta": 0,
+  "avgBestStatusDelta": 0,
+  "avgBestReach30Delta": 0,
+  "avgBestCleanOpportunityDelta": 0,
+  "avgBestFirepowerOpportunityDelta": 0,
+  "avgBestExpectedAttackDelta": 0,
+  "avgBestBarrierDelta": 0,
+  "avgBestSpiritAnimalDelta": 0,
+  "destinations": {
+    "Lantern Canyon": 16
+  },
+  "bestActions": {
+    "Lantern Canyon:row0:trade:anyBasic->CursedSpirit": 8,
+    "Lantern Canyon:row1:gain:free->cultivate+restoreBarrier": 8
+  },
+  "sourceActions": {
+    "Lantern Canyon:row0:trade:anyBasic->CursedSpirit": 8,
+    "Lantern Canyon:row1:gain:free->cultivate+restoreBarrier": 8
+  },
+  "correctionBestActions": {},
+  "correctionSourceActions": {},
+  "heuristicActions": {
+    "Lantern Canyon:row0:trade:anyBasic->CursedSpirit": 8,
+    "Lantern Canyon:row1:gain:free->cultivate+restoreBarrier": 8
+  }
+}

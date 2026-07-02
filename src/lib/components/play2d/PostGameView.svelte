@@ -2,12 +2,15 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth/auth.svelte';
 	import { fetchMyMatchHistory } from '$lib/supabase';
+	import { claimMatchAward, getCosmeticsState } from '$lib/stores/cosmetics.svelte';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
+	import type { MatchAward, RankDefinition } from '$lib/cosmetics/progression';
 	import type { PrivatePlayerState, SeatColor, SpectatorProjection } from '$lib/play/types';
 	import type { ClassTrait } from '$lib/types';
 	import { expectedAttack } from '$lib/play/combat';
 	import { augmentContributions } from '$lib/play/augments';
 	import { seatAccent, storageUrl, spiritBackImageUrl, iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
+	import RankEmblem from './RankEmblem.svelte';
 
 	interface Props {
 		room: SpectatorProjection;
@@ -19,6 +22,7 @@
 
 	let { room, mySeat, assets, spiritImages }: Props = $props();
 
+	const cosmetics = getCosmeticsState();
 	// Reuse the in-game leaderboard's resource icons (VP + barrier) so the standings
 	// stats read identically to the live board.
 	const vpIcon = $derived(iconPoolUrl(assets.iconPool, RESOURCE_ICON_IDS.vp));
@@ -166,6 +170,25 @@
 	// Spotlight subject: the local player; for spectators, fall back to the winner.
 	const me = $derived(standings.find((s) => s.isMe) ?? winner ?? standings[0] ?? null);
 	const myWon = $derived((me?.placement ?? 0) === 1);
+	let payout = $state<MatchAward | null>(null);
+	let promotedTo = $state<RankDefinition | null>(null);
+	let payoutChecked = $state(false);
+
+	$effect(() => {
+		if (payoutChecked || room.status !== 'finished' || !mySeat || !me) return;
+		payoutChecked = true;
+		const result = claimMatchAward({
+			matchId: `${room.roomCode}:${mySeat}`,
+			victoryPoints: me.vp,
+			placement: me.placement,
+			won: myWon,
+			round: room.round
+		});
+		if (result.claimed) {
+			payout = result.award;
+			if (result.currentRank.id !== result.previousRank.id) promotedTo = result.currentRank;
+		}
+	});
 
 	function ordinal(n: number): string {
 		const v = n % 100;
@@ -237,9 +260,9 @@
 </script>
 
 <section class="postgame" data-testid="postgame">
-	<div class="pg-grid">
+	<div class="pg-grid" data-testid="postgame-grid">
 		<!-- ── Left: the scoreboard ──────────────────────────────────────────── -->
-		<div class="board">
+		<div class="board" data-testid="postgame-board">
 			<div class="board-head">
 				<span class="board-eyebrow">Final Standings</span>
 				<h1 class="board-title">Scoreboard</h1>
@@ -297,7 +320,7 @@
 
 		<!-- ── Right: the victory emblem ─────────────────────────────────────── -->
 		{#if me}
-			<aside class="spotlight" style="--accent: {me.accent}; --place: {placeAccent(me.placement)}" aria-label="Your result">
+			<aside class="spotlight" style="--accent: {me.accent}; --place: {placeAccent(me.placement)}" aria-label="Your result" data-testid="postgame-spotlight">
 				<span class="spot-eyebrow">{myWon ? 'Champion' : 'Your Result'}</span>
 
 				<!-- The player's icon, hex-cut, set inside the placement hexagon. -->
@@ -314,6 +337,18 @@
 				<h2 class="hero-name" title={me.name}>{me.name}</h2>
 				<span class="hero-verdict">{myWon ? 'Victory' : `Finished ${ordinal(me.placement)}`}</span>
 				<span class="hero-status" style="--sc: {me.statusColor}">{me.statusLabel}</span>
+
+				<div class="ladder" style="--rank-accent: {cosmetics.rank.accent}">
+					<RankEmblem rankId={cosmetics.rank.id} size="lg" label="{cosmetics.rank.name} rank" />
+					<span class="ladder-name">{promotedTo ? `Promoted to ${promotedTo.name}` : cosmetics.rank.name}</span>
+					<span class="ladder-xp">{cosmetics.progression.rankXp} ladder XP</span>
+				</div>
+
+				<div class="payout" aria-live="polite">
+					<img src="/cosmetics/abyss-credit.png" alt="" />
+					<span>{payout ? `+${payout.credits}` : cosmetics.progression.credits}</span>
+					<small>{payout ? `+${payout.rankXp} XP` : 'Wallet'}</small>
+				</div>
 
 				{#if rank.kind === 'ranked'}
 					<span class="hero-rank" class:up={rank.delta >= 0} class:down={rank.delta < 0}>
@@ -619,6 +654,61 @@
 		border-radius: 999px;
 		border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent);
 		background: color-mix(in srgb, var(--sc) 12%, transparent);
+	}
+	.ladder {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+		margin-top: 0.35rem;
+	}
+	.ladder :global(.rank-emblem.large) {
+		width: clamp(92px, 12vw, 150px);
+		height: clamp(92px, 12vw, 150px);
+	}
+	.ladder-name {
+		font-family: var(--font-display);
+		font-size: 0.95rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: color-mix(in srgb, var(--rank-accent) 54%, #fff);
+	}
+	.ladder-xp {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--color-fog);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+	.payout {
+		display: inline-grid;
+		grid-template-columns: auto auto;
+		grid-template-rows: auto auto;
+		align-items: center;
+		column-gap: 7px;
+		margin-top: 0.2rem;
+		padding: 7px 13px;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 186, 61, 0.48);
+		background: rgba(255, 186, 61, 0.1);
+	}
+	.payout img {
+		grid-row: 1 / 3;
+		width: 30px;
+		height: 30px;
+		object-fit: contain;
+	}
+	.payout span {
+		font-family: var(--font-display);
+		font-size: 1.15rem;
+		line-height: 1;
+		color: var(--brand-amber);
+	}
+	.payout small {
+		font-family: var(--font-mono);
+		font-size: 0.64rem;
+		color: var(--color-fog);
+		text-transform: uppercase;
 	}
 	.hero-rank {
 		margin-top: 0.35rem;

@@ -19,6 +19,7 @@
  */
 
 import { VP_TO_WIN, type PrivatePlayerState } from '../types';
+import { awakenedClassCounts } from '../effects/apply';
 
 /** Auxiliary build-progress proxies (NOT VP — VP is the direct reward). */
 export interface ShapingWeights {
@@ -26,17 +27,47 @@ export interface ShapingWeights {
 	maxBarrier: number;
 	awakened: number;
 	status: number;
+	/** Reward INTERMEDIATE progress toward the non-corrupt win engines — holding Cultivators
+	 *  (toward the maxBarrier breakpoint) and VP-classes (World Ender/Golden Ruler). This gives a
+	 *  DENSE gradient to ASSEMBLE multi-spirit setups whose final payoff (maxBarrier / +1-VP-round)
+	 *  is otherwise invisible to a 1-step scorer until the breakpoint. Optional (defaults to 0). */
+	classProgress?: number;
 }
 
 /** Balanced default: modest build guidance toward dice + barrier (the economy core). */
 export const BALANCED_SHAPING: ShapingWeights = { dice: 0.15, maxBarrier: 0.15, awakened: 0.1, status: 0.05 };
 
-/** Population playstyle presets — same VP objective, different build guidance → diverse VP routes. */
+/**
+ * Population playstyle presets — same VP objective, different build guidance → diverse VP routes.
+ *
+ * The `status` weight is the corruption lever: statusLevel/3 rises as a player descends the
+ * corruption ladder toward Fallen, which is the gateway to the +3-VP Evil group-attack. A
+ * POSITIVE status weight (pvp) nudges discovery toward corrupting; ZERO leaves it neutral; a
+ * NEGATIVE weight (pure) actively steers discovery AWAY from corruption so the learner must find
+ * a Good economy / monster-hunting line to earn VP. Because Φ enters the return only as a
+ * telescoping potential delta (Ng et al. 1999), none of these change the true VP optimum — they
+ * only change WHICH VP route gets discovered, which is exactly the diversity lever.
+ */
 export const SHAPING_PRESETS: Record<string, ShapingWeights> = {
 	balanced: BALANCED_SHAPING,
-	economy: { dice: 0.25, maxBarrier: 0.25, awakened: 0.15, status: 0 },
+	economy: { dice: 0.05, maxBarrier: 0.13, awakened: 0.04, status: 0 }, // barrier-leaning economy: build the maxBarrier needed to survive/kill monsters (VP still dominates via monster-kill bonus)
 	pvp: { dice: 0.05, maxBarrier: 0.05, awakened: 0.05, status: 0.2 },
-	lean: { dice: 0.05, maxBarrier: 0.05, awakened: 0.05, status: 0.02 } // mostly raw VP
+	lean: { dice: 0.05, maxBarrier: 0.05, awakened: 0.05, status: 0.02 }, // mostly raw VP
+	// --- diversity archetypes (all status<=0: no corruption nudge) ---
+	// CALIBRATION: build weights are kept TINY (total Φ ≲ 0.08) so they are a faint nudge, NOT a
+	// competing objective. A single monster kill is worth 2-10 VP = 0.067-0.333 normalized reward
+	// (ΔVP/30); earlier presets summed to ~0.65 build potential, which OUT-REWARDED scoring and made
+	// bots build-without-scoring (0 VP). Now VP dominates; build shaping only breaks ties toward the
+	// survivable build (barrier/dice) that lets a bot actually win monster fights.
+	pure: { dice: 0.06, maxBarrier: 0.12, awakened: 0.04, status: -0.05 }, // never-corrupt Good scaler — barrier to SURVIVE monster combat
+	hunter: { dice: 0.12, maxBarrier: 0.1, awakened: 0.04, status: 0 }, // dice (damage) + barrier (survival) — kill monsters
+	explorer: { dice: 0, maxBarrier: 0, awakened: 0, status: 0 }, // pure VP → discover via raw VP under high temperature
+	// --- wave-6 STRONG-build archetypes (force the multi-round economy setup that weak shaping never reached) ---
+	// Rationale: maxBarrier/awakened are MULTI-ROUND investments with no immediate VP; weak shaping
+	// (~0.1) never overcame the noise, so bots stayed at base barrier 4 / scored 0. Crank them so the
+	// return-to-go (γ→1) credits the setup steps. With effect-aware encoding the net can now SEE+pick them.
+	banker: { dice: 0.05, maxBarrier: 0.35, awakened: 0.15, status: 0, classProgress: 0.4 }, // assemble Cultivators → maxBarrier → kill monsters
+	ascend: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: 0, classProgress: 0.4 } // assemble + awaken VP-class spirits (World Ender +1/round)
 };
 
 export function shapingFor(name: string | undefined): ShapingWeights {
@@ -55,7 +86,10 @@ export function buildPotential(p: PrivatePlayerState | undefined, w: ShapingWeig
 	const barrier = Math.min(1, (p.maxBarrier ?? 0) / 10);
 	const awakened = Math.min(1, (p.spirits?.filter((s) => !s.isFaceDown).length ?? 0) / 7);
 	const status = Math.min(1, (p.statusLevel ?? 0) / 3);
-	return w.dice * dice + w.maxBarrier * barrier + w.awakened * awakened + w.status * status;
+	const cc = awakenedClassCounts(p);
+	const cultProg = Math.min(1, (cc['Cultivator'] ?? 0) / 5); // progress toward the 5-Cultivator maxBarrier breakpoint
+	const vpClass = Math.min(1, ((cc['World Ender'] ?? 0) + (cc['Golden Ruler'] ?? 0)) / 3); // +1 VP/round classes
+	return w.dice * dice + w.maxBarrier * barrier + w.awakened * awakened + w.status * status + (w.classProgress ?? 0) * (cultProg + vpClass);
 }
 
 /**
@@ -70,7 +104,8 @@ export function vpReturnsToGo(
 	build: number[],
 	finalVp: number,
 	finalBuild: number,
-	gamma = 0.97
+	gamma = 0.97,
+	bonus: number[] = []
 ): number[] {
 	const n = vp.length;
 	const g = new Array<number>(n).fill(0);
@@ -78,7 +113,10 @@ export function vpReturnsToGo(
 	for (let i = n - 1; i >= 0; i--) {
 		const nextVp = i < n - 1 ? vp[i + 1] : finalVp;
 		const nextBuild = i < n - 1 ? build[i + 1] : finalBuild;
-		const r = (nextVp - vp[i]) / VP_TO_WIN + (nextBuild - build[i]);
+		// Core = normalized ΔVP + potential-based build shaping. `bonus` is an additive per-step
+		// event reward (e.g. monster-kill bonus) — amplifies the sparse monster-VP signal and, via
+		// the backward return-to-go, credits the whole setup sequence that led to the kill.
+		const r = (nextVp - vp[i]) / VP_TO_WIN + (nextBuild - build[i]) + (bonus[i] ?? 0);
 		running = r + gamma * running;
 		g[i] = running;
 	}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { browser, dev } from '$app/environment';
-	import { sendPlayCommand, applyOptimistic } from '$lib/stores/playStore.svelte';
+	import { sendPlayCommand, applyOptimistic, getPlayState } from '$lib/stores/playStore.svelte';
 	import { getAssetState } from '$lib/stores/assetStore.svelte';
 	import type {
 		AwakenDiscardRef,
@@ -27,9 +27,11 @@
 	import RoundBanner from './RoundBanner.svelte';
 	import PhaseBar from './PhaseBar.svelte';
 	import InfoLegend from './InfoLegend.svelte';
+	import type { InfoContextKey } from './InfoLegend.svelte';
 	import Leaderboard from './Leaderboard.svelte';
 	import TraitTracker from './TraitTracker.svelte';
 	import MatSlots from './MatSlots.svelte';
+	import type { NavigationSceneControls } from './navigationSceneControls';
 	import MainStage, { type ActiveAction } from './MainStage.svelte';
 	import CompositionStage from './CompositionStage.svelte';
 	import DestinationReveal from './DestinationReveal.svelte';
@@ -42,6 +44,7 @@
 	import DebugPanel from './DebugPanel.svelte';
 	import SummonFxLayer from './SummonFxLayer.svelte';
 	import PostGameView from './PostGameView.svelte';
+	import GameChat from './GameChat.svelte';
 	import {
 		setMusic,
 		stopMusic,
@@ -51,6 +54,7 @@
 	} from '$lib/stores/gameAudio.svelte';
 
 	const audioState = getGameAudio();
+	const playState = getPlayState();
 
 	interface Member {
 		id: string | null;
@@ -66,11 +70,17 @@
 	}
 
 	let { room, member, assets }: Props = $props();
+	const e2eMode = browser && new URLSearchParams(window.location.search).has('e2e');
+	const forceStartCutscene =
+		browser && new URLSearchParams(window.location.search).has('showStartCutscene');
+	const forceDestinationReveal =
+		browser && new URLSearchParams(window.location.search).has('showDestinationReveal');
 
 	let pendingAction = $state<string | null>(null);
 	let actionError = $state<string | null>(null);
 	let settingsOpen = $state(false);
 	let infoOpen = $state(false);
+	let chatOpen = $state(false);
 	let bagOpen = $state(false);
 	/** Which action sub-view the central stage is showing (null = the action grid). */
 	let activeAction = $state<ActiveAction>(null);
@@ -91,6 +101,7 @@
 	// is no back button. The pending action state lives here and MainStage is stateless,
 	// so the stage is restored exactly when viewedSeat clears.
 	let viewedSeat = $state<SeatColor | null>(null);
+	const viewingProfile = $derived(viewedSeat !== null);
 	// While viewing, the LEFT trait list reflects the viewed player; otherwise it's mine.
 	const traitPlayer = $derived(viewedSeat ? (room.players[viewedSeat] ?? null) : myPlayer);
 	function scoutSeat(seat: SeatColor) {
@@ -174,7 +185,7 @@
 	// just the radial-gradient base background. prefersReducedData() returns false
 	// conservatively where the Network Information API is unavailable (Safari/Firefox).
 	// Reactive so toggling the in-game setting starts/stops the renderer live.
-	const showSplat = $derived(graphics.splatEnabled && !prefersReducedData());
+	const showSplat = $derived(!e2eMode && graphics.splatEnabled && !prefersReducedData());
 
 	// Each destination maps to a Gaussian-splat world (static .spz under /splats);
 	// the map + defaults are the single source of truth in locations.ts (splatFor).
@@ -378,8 +389,9 @@
 	$effect(() => {
 		if (!mySeat || room.status !== 'active') return;
 		const gid = room.gameId;
-		if (!gid || cutsceneShownFor === gid) return;
+		if (!gid || (cutsceneShownFor === gid && !forceStartCutscene)) return;
 		if (
+			(!e2eMode || forceStartCutscene) &&
 			room.round === 1 &&
 			room.phase === 'navigation' &&
 			!room.revealedDestinations &&
@@ -419,7 +431,7 @@
 			// structuredClone throws DataCloneError on it. locationOccupancy is plain
 			// JSON-safe data (seat→destination map), so a JSON round-trip is a safe freeze.
 			revealOccupancy = JSON.parse(JSON.stringify(room.locationOccupancy ?? {}));
-			revealSeq = 'reveal';
+			revealSeq = e2eMode ? 'idle' : 'reveal';
 		}
 		prevReveal = room.revealedDestinations;
 		const vp = myPlayer?.victoryPoints ?? 0;
@@ -522,6 +534,89 @@
 		flyMode = !flyMode;
 	}
 
+	// ── Full-screen scene input ──────────────────────────────────────────────
+	// Empty gameplay space now manipulates the navigation carousel. HUD controls sit
+	// above this surface and keep normal pointer behavior, while transparent HUD gaps
+	// fall through to this shared input layer.
+	let navSceneControls = $state<NavigationSceneControls | null>(null);
+	let scenePointerId: number | null = null;
+	const sceneInputActive = $derived(
+		navView === 'browse' &&
+			navOpen &&
+			!!navSceneControls &&
+			!flyMode &&
+			!settingsOpen &&
+			!infoOpen &&
+			!bagOpen &&
+			!showStartCutscene
+	);
+
+	function resetScenePointer() {
+		scenePointerId = null;
+	}
+
+	function beginScenePointer(event: PointerEvent) {
+		if (!sceneInputActive || !navSceneControls) return;
+		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		scenePointerId = event.pointerId;
+		try {
+			(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+		} catch {
+			// Some WebKit paths reject capture from an ancestor; move/up still arrive via capture listeners.
+		}
+		navSceneControls.beginDrag(event.clientX, event.clientY);
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
+	function moveScenePointer(event: PointerEvent) {
+		if (scenePointerId !== event.pointerId || !navSceneControls) return;
+		navSceneControls.moveDrag(event.clientX, event.clientY);
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
+	function endScenePointer(event: PointerEvent) {
+		if (scenePointerId !== event.pointerId) return;
+		navSceneControls?.endDrag(event.clientX, event.clientY);
+		try {
+			(event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+		} catch {
+			// Matching the guarded capture path above.
+		}
+		resetScenePointer();
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
+	function cancelScenePointer(event: PointerEvent) {
+		if (scenePointerId !== event.pointerId) return;
+		navSceneControls?.endDrag();
+		try {
+			(event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+		} catch {
+			// Matching the guarded capture path above.
+		}
+		resetScenePointer();
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
+	function sceneInputSurface(node: HTMLElement) {
+		node.addEventListener('pointerdown', beginScenePointer);
+		node.addEventListener('pointermove', moveScenePointer);
+		node.addEventListener('pointerup', endScenePointer);
+		node.addEventListener('pointercancel', cancelScenePointer);
+		return {
+			destroy() {
+				node.removeEventListener('pointerdown', beginScenePointer);
+				node.removeEventListener('pointermove', moveScenePointer);
+				node.removeEventListener('pointerup', endScenePointer);
+				node.removeEventListener('pointercancel', cancelScenePointer);
+			}
+		};
+	}
+
 	// ── Mobile pager ──────────────────────────────────────────────────────────
 	// On a vertical phone the three columns (trait list · stage · leaderboard)
 	// become full-width horizontal swipe pages under the pinned nav bar. Desktop
@@ -570,7 +665,6 @@
 		if (!isMobile || !pagerEl) return;
 		pagerEl.scrollTo({ left: i * pagerEl.clientWidth, behavior: 'smooth' });
 	}
-
 
 	async function runAction(label: string, work: () => Promise<unknown>) {
 		pendingAction = label;
@@ -624,7 +718,11 @@
 	// summon (which drives its own DrawTray view via pendingDraw — that branch
 	// takes UI precedence) or runes/potential/cultivate/rest (shown on the result
 	// card). We set `reward` either way; the pendingDraw branch wins when present.
-	async function resolveInteraction(rowIndex: number, choices: number[], costChoices: number[] = []) {
+	async function resolveInteraction(
+		rowIndex: number,
+		choices: number[],
+		costChoices: number[] = []
+	) {
 		if (busy) return;
 		// The interaction card flips IN PLACE to show its result (no full-stage result
 		// card) — we stay on the action grid to reduce friction. A summon row still
@@ -773,6 +871,52 @@
 		(myPlayer?.mats ?? []).filter((r) => r.hasRune).length > RUNE_CARRY_LIMIT
 	);
 
+	const infoContext = $derived.by<InfoContextKey>(() => {
+		if (room.status === 'finished') return 'postgame';
+		if (bagOpen) return 'bags';
+		if (settingsOpen) return 'settings';
+		if (isMobile && activePage === TRAITS_PAGE) return 'traits';
+		if (isMobile && activePage === LEADER_PAGE) return 'players';
+		if (!mySeat) return 'spectator';
+		if (viewedSeat) return 'composition';
+		if (navView === 'reveal') return 'destinationReveal';
+		if (navView === 'enter') return 'realmEntry';
+		if (navOpen) return myConfirmedDestination ? 'destinationLocked' : 'navigation';
+
+		const pendingCorruptionDiscard = (myPlayer?.pendingCorruptionDiscard?.count ?? 0) > 0;
+		const pendingAugments = (myPlayer?.unplacedAugments?.length ?? 0) > 0;
+		const pendingDecisions = (myPlayer?.pendingDecisions?.length ?? 0) > 0;
+		if (activeAction !== 'combat' && pendingCorruptionDiscard) return 'corruptionDiscard';
+		if (activeAction !== 'combat' && pendingAugments) return 'augmentPlacement';
+		if (
+			activeAction !== 'combat' &&
+			(room.phase === 'location' || room.phase === 'encounter') &&
+			pendingDecisions
+		) {
+			return 'abilityDecision';
+		}
+
+		if (room.phase === 'encounter') return myPlayer?.phaseReady ? 'waiting' : 'encounter';
+		if (room.phase === 'location') {
+			if (myPlayer?.pendingDraw) return 'draw';
+			if (activeAction === 'combat') return myPlayer?.pendingReward ? 'reward' : 'combat';
+			if (myPlayer?.pendingReward) return 'reward';
+			if (activeAction === 'rest' || activeAction === 'cultivate' || activeAction === 'reward') {
+				return 'actionResult';
+			}
+			if (myPlayer?.phaseReady) return 'waiting';
+			if (myPlayer?.navigationDestination === 'Arcane Abyss') return 'abyssActions';
+			return 'locationActions';
+		}
+		if (room.phase === 'benefits') return myPlayer?.phaseReady ? 'waiting' : 'benefits';
+		if (room.phase === 'awakening') return myPlayer?.phaseReady ? 'waiting' : 'awakening';
+		if (room.phase === 'cleanup') {
+			if (runeOverflow) return 'runeCleanup';
+			return myPlayer?.phaseReady ? 'waiting' : 'cleanup';
+		}
+		return 'overview';
+	});
+
 	// ── "Pass turn" — the single per-phase "I'm done" control ───────────────
 	// An Evil player being offered the encounter Attack/Hold decision (co-located Good
 	// targets, not yet voted). They decline via MainStage's "Hold", so we suppress the
@@ -794,6 +938,7 @@
 	);
 	const canPassTurn = $derived(
 		!!mySeat &&
+			!viewingProfile &&
 			room.status === 'active' &&
 			!myPlayer?.phaseReady &&
 			!myPlayer?.pendingDraw &&
@@ -820,6 +965,22 @@
 		else if (room.phase === 'cleanup') send('cleanup', { type: 'commitCleanup' });
 		else if (room.phase === 'encounter') send('pass', { type: 'passEncounter' });
 	}
+	const PHASE_RAIL_STEPS = [
+		{ key: 'navigation', label: 'Navigation', phases: ['navigation'] },
+		{ key: 'encounter', label: 'Encounter', phases: ['encounter'] },
+		{ key: 'location', label: 'Location', phases: ['location'] },
+		{ key: 'cleanup', label: 'Cleanup', phases: ['benefits', 'awakening', 'cleanup'] }
+	] as const;
+	const railPhaseIndex = $derived.by(() =>
+		Math.max(
+			0,
+			PHASE_RAIL_STEPS.findIndex((step) => (step.phases as readonly string[]).includes(room.phase))
+		)
+	);
+	const railPhaseLabel = $derived(PHASE_RAIL_STEPS[railPhaseIndex]?.label ?? 'Navigation');
+	const railProgressPct = $derived(
+		PHASE_RAIL_STEPS.length <= 1 ? 100 : (railPhaseIndex / (PHASE_RAIL_STEPS.length - 1)) * 100
+	);
 	// Phase-aware label for the single "I'm done" footer control.
 	const passLabel = $derived(
 		room.phase === 'benefits'
@@ -843,7 +1004,7 @@
 	);
 	// If the local player reaches one of the three post-location steps with nothing to
 	// do in it, commit it for them automatically — no empty "Continue" clicks. The step
-	// still STOPS (showing the sheet) the moment it has a real decision (a reward to
+	// still STOPS in the main scene the moment it has a real decision (a reward to
 	// claim, a spirit to awaken, a rune to trim, …). Re-armed per phase so each of
 	// benefits/awakening/cleanup can auto-pass at most once.
 	let autoPassedPhase = $state<string | null>(null);
@@ -853,12 +1014,14 @@
 			autoPassedPhase = null; // re-arm for the next round's sequence
 			return;
 		}
+		if (e2eMode) return;
 		if (autoPassedPhase === phase || busy) return;
 		// canPassTurn already covers: seated · active · !ready · !pendingDraw/reward ·
 		// !pendingAwakenReward · no open action · rune/corruption gates.
 		if (!canPassTurn) return;
 		if ((myPlayer?.unplacedAugments?.length ?? 0) > 0) return; // an augment is waiting to be placed
 		if (phase === 'awakening') {
+			if ((myPlayer?.awakenOffers?.length ?? 0) > 0) return; // the main stage is showing awaken offers
 			if (cleanupAwakenSlots.length > 0) return; // there's still something to awaken
 			if ((myPlayer?.manualPrompts?.length ?? 0) > 0) return; // a hand-resolved effect is waiting
 			if ((myPlayer?.pendingDecisions?.length ?? 0) > 0) return; // a decision card is waiting
@@ -931,7 +1094,7 @@
 
 <svelte:window onkeydown={onSplatFlyKey} />
 
-<div class="tft">
+<div class="tft" class:scene-capture={sceneInputActive}>
 	<!-- ── Splat world: blurred, vignetted live background behind everything ── -->
 	<!-- Skipped on metered/slow/Data-Saver connections; board remains fully playable
 	     with the radial-gradient base background defined on .tft in this file. -->
@@ -957,10 +1120,17 @@
 		</div>
 	{/if}
 
-	<!-- ── Bounded frame: a slim nav bar pinned above a 3-region body. On desktop
-	     the body is a [trait · stage · players] grid; on a phone it's a horizontal
-	     swipe pager of the same three columns. The stage cell strictly clips so its
-	     content can NEVER spill outside the frame. ── -->
+	<div
+		class="scene-input"
+		class:active={sceneInputActive}
+		aria-hidden="true"
+		data-testid="scene-input"
+		use:sceneInputSurface
+	></div>
+
+	<!-- ── Floating HUD stack: the splat owns the full viewport, while traits, stage,
+	     leaderboard, controls and the phase rail float above it. Transparent HUD gaps
+	     fall through to the full-screen scene input during navigation. ── -->
 	<div class="shell">
 		<!-- ── Nav bar: round/phase/timer (centered) + game controls (right) ── -->
 		<header class="nav-bar">
@@ -1004,6 +1174,32 @@
 							stroke-linecap="round"
 						/>
 					</svg>
+				</button>
+				<button
+					type="button"
+					class="ghost-btn icon-btn chat-toggle"
+					data-testid="toggle-chat"
+					aria-label="Room chat"
+					title="Room chat"
+					onclick={() => (chatOpen = true)}
+				>
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path
+							d="M5 6.5h14v8H9l-4 3.5V6.5z"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linejoin="round"
+						/>
+						<path
+							d="M8 10h8M8 12.8h5"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+						/>
+					</svg>
+					{#if playState.chatUnread > 0}
+						<span class="chat-badge" data-testid="chat-unread">{Math.min(playState.chatUnread, 9)}</span>
+					{/if}
 				</button>
 				<div class="settings-wrap">
 					<button
@@ -1086,9 +1282,24 @@
 			</div>
 		</header>
 
+		<GameChat variant="drawer" open={chatOpen} onClose={() => (chatOpen = false)} />
+
+		<div class="phase-rail" aria-label="Round {room.round}, {railPhaseLabel}">
+			<div class="phase-rail-inner">
+				<span class="rail-round">Round {room.round}</span>
+				<div class="rail-track" aria-hidden="true">
+					<span class="rail-fill" style="height: {railProgressPct}%"></span>
+					{#each PHASE_RAIL_STEPS as step, i (step.key)}
+						<span class="rail-node" class:active={i === railPhaseIndex}></span>
+					{/each}
+				</div>
+				<span class="rail-phase">{railPhaseLabel}</span>
+			</div>
+		</div>
+
 		<!-- Icon guide — a full-screen reference of the game's icons and action types. -->
 		{#if infoOpen}
-			<InfoLegend {assets} onClose={() => (infoOpen = false)} />
+			<InfoLegend {assets} context={infoContext} onClose={() => (infoOpen = false)} />
 		{/if}
 
 		<!-- ── Pager: trait list · stage · players. Grid on desktop, swipe on phone. ── -->
@@ -1160,6 +1371,7 @@
 							onPlaceAugment={placeAugment}
 							onDiscardAugments={discardAugments}
 							onDiscardSpirit={discardSpirit}
+							onSceneControls={(controls) => (navSceneControls = controls)}
 							{busy}
 						/>
 					{/if}
@@ -1176,7 +1388,7 @@
 						>
 							{passLabel}
 						</button>
-					{:else if mySeat && room.status === 'active' && myPlayer?.phaseReady && room.phase !== 'navigation'}
+					{:else if !viewingProfile && mySeat && room.status === 'active' && myPlayer?.phaseReady && room.phase !== 'navigation'}
 						<span class="pass-waiting" data-testid="pass-waiting">Ready ✓ — waiting…</span>
 					{/if}
 				</div>
@@ -1257,12 +1469,12 @@
 	<!-- ── Destination reveal: who went where. Its own beat, right after the
 	     confirmation panel; rendered from a frozen occupancy snapshot so it can't
 	     blank, and on close it hands off to the realm-enter zoom. ── -->
-	{#if revealSeq === 'reveal'}
+	{#if revealSeq === 'reveal' || forceDestinationReveal}
 		<DestinationReveal
 			{room}
 			{assets}
-			occupancy={revealOccupancy}
-			autoCloseMs={4500}
+			occupancy={forceDestinationReveal ? room.locationOccupancy : revealOccupancy}
+			autoCloseMs={forceDestinationReveal ? 0 : 4500}
 			onClose={closeReveal}
 		/>
 	{/if}
@@ -1274,6 +1486,7 @@
 			guardianName={myGuardianName}
 			guardianIcon={myGuardianIcon}
 			accent={mySeat ? seatAccent(mySeat) : '#ff2bc7'}
+			durationMs={forceStartCutscene ? 60_000 : undefined}
 			onDone={() => (showStartCutscene = false)}
 		/>
 	{/if}
@@ -1307,25 +1520,32 @@
 		position: absolute;
 		inset: 0;
 		overflow: hidden;
+		overscroll-behavior: none;
 		background: radial-gradient(circle at 50% 0%, #160a2e 0%, var(--color-void, #0c0518) 70%);
 
-		/* ── Frame track widths ──────────────────────────────────────────────
-		   The left trait column and right players column are fixed grid tracks
-		   sized to roughly match the old floats; the stage takes the rest. */
-		--left-w: max-content; /* left column hugs its content — trait list only as wide as the longest trait */
-		--right-w: 179px; /* leaderboard (280px base, slimmed ~36% to give the navigator more space) */
+		--hud-safe-l: env(safe-area-inset-left, 0px);
+		--hud-safe-r: env(safe-area-inset-right, 0px);
+		--hud-safe-t: env(safe-area-inset-top, 0px);
+		--hud-safe-b: env(safe-area-inset-bottom, 0px);
+		--hud-pad-x: clamp(8px, 1.4vw, 14px);
+		--hud-pad-y: clamp(6px, 1.2vh, 10px);
+		--hud-gap: clamp(6px, 1.2vw, 12px);
+		--hud-left-w: max-content;
+		--hud-right-w: 179px;
+		--hud-rail-content-w: 44px;
+		--left-w: var(--hud-left-w);
+		--right-w: var(--hud-right-w);
 	}
 
-	/* ── Bounded frame ─────────────────────────────────────────────────────
-	   A flex column filling .tft: a slim nav bar pinned on top, the pager body
-	   filling the rest. Sits above the splat (z 1) so the live world reads
-	   through the transparent columns/stage. */
+	/* ── Floating HUD frame ─────────────────────────────────────────────────
+	   The splat scene owns the viewport; this shell is only the overlaid HUD stack. */
 	.shell {
 		position: absolute;
 		inset: 0;
-		z-index: 1;
-		display: flex;
-		flex-direction: column;
+		z-index: 2;
+		display: block;
+		pointer-events: none;
+		overscroll-behavior: none;
 	}
 
 	/* Splat background sits behind the frame (and the live world reads through). */
@@ -1334,6 +1554,21 @@
 		inset: 0;
 		z-index: 0;
 		pointer-events: none;
+	}
+	.scene-input {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		pointer-events: none;
+		touch-action: none;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.scene-input.active {
+		pointer-events: auto;
+		cursor: grab;
+	}
+	.scene-input.active:active {
+		cursor: grabbing;
 	}
 	/* Fly mode (authoring): bring the splat above the frame and make it
 	   interactive so it can capture the pointer for mouse-look. */
@@ -1473,8 +1708,8 @@
 	/* ── Nav bar: slim bounded bar across the top. RoundBanner centered, game
 	   controls (bags + settings) to the right. ── */
 	.nav-bar {
-		flex: 0 0 auto;
-		position: relative;
+		position: absolute;
+		inset: 0 0 auto;
 		z-index: 20;
 		display: flex;
 		/* Top-align so the banner pill hangs flush from the very top edge (no gap). */
@@ -1482,6 +1717,7 @@
 		gap: 0.75rem;
 		min-height: 52px;
 		padding: 0 0.75rem 0.45rem;
+		pointer-events: none;
 		/* Ethereal: only the faintest top-edge wash so the bar fades into the board
 		   rather than sitting on a heavy dark slab. */
 		background: linear-gradient(180deg, rgba(10, 7, 20, 0.28), transparent);
@@ -1554,69 +1790,93 @@
 		align-items: center;
 		gap: 0.75rem;
 		z-index: 21;
+		pointer-events: auto;
+	}
+	.shell :global(.legend-backdrop) {
+		pointer-events: auto;
 	}
 
-	/* ── Pager: the 3-region body. Desktop grid; phone swipe (media query below). ── */
+	/* ── HUD body: floating trait list · stage · players over the full scene. ── */
 	.pager {
-		flex: 1 1 auto;
+		position: absolute;
+		inset: 0;
+		z-index: 2;
 		min-height: 0;
 		display: grid;
 		grid-template-columns: var(--left-w, 336px) minmax(0, 1fr) var(--right-w, 280px);
 		gap: 12px;
 		/* Extra horizontal inset gives the columns' glow/aura bleed somewhere to land before
 		   the frame's overflow:hidden clips it. */
-		padding: 8px 18px;
+		padding: 60px 18px 8px;
 		align-items: stretch;
+		box-sizing: border-box;
+		overflow: hidden;
+		overscroll-behavior: none;
+		pointer-events: none;
 	}
-	/* Left/right are scrollable columns over the live world (no panel chrome). They scroll
-	   vertically, but overflow-y:auto would also clip horizontally — cutting the leaderboard
-	   sigil's glow and the row auras at the column edge. overflow-x:clip + a clip-margin keeps
-	   the vertical scroll while letting those decorations bleed a little past the edge. */
-	.trait-col,
+	/* Right HUD scrolls vertically over the live world (no panel chrome). The trait
+	   column does NOT scroll as a whole: its rune/relic row stays pinned and only the
+	   TraitTracker beneath it owns vertical scrolling. */
 	.players-col {
 		min-height: 0;
 		overflow-y: auto;
 		overflow-x: clip;
 		overflow-clip-margin: 22px;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-y;
 		scrollbar-width: none;
+		pointer-events: none;
 	}
-	.trait-col::-webkit-scrollbar,
 	.players-col::-webkit-scrollbar {
 		width: 0;
 		height: 0;
 	}
 	.trait-col {
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		/* Hug the content to the left so the trait list (and slot row) size to their own
 		   width instead of stretching across the column. */
 		align-items: flex-start;
+		overflow: visible;
+		pointer-events: none;
 	}
 	/* Rune slots + trait list, centred vertically on the left as one group.
 	   margin-block:auto centres them when there's spare height yet collapses to 0
-	   so the column still scrolls from the top if the group outgrows the viewport. */
+	   so the trait list scrolls from the top if the group outgrows the viewport. */
 	.trait-center {
 		margin-block: auto;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
 		min-height: 0;
+		max-height: 100%;
+		overflow: hidden;
 	}
 	/* Rune/relic carry slots as a row directly above the trait list. */
 	.rune-row {
 		flex: 0 0 auto;
+		pointer-events: auto;
 	}
-	/* Trait list sizes to its content (so the group can centre); the column scrolls
-	   if it ever overflows. */
+	/* Trait list sizes to its content (so the group can centre), but this host is
+	   the scroll boundary for the list. The rune/relic row above it never moves. */
 	.trait-host {
-		flex: 0 0 auto;
+		flex: 1 1 auto;
 		min-height: 0;
 		display: flex;
+		overflow: hidden;
+		pointer-events: none;
+		overscroll-behavior: contain;
 	}
 	.trait-host :global(.traits) {
 		/* Only as wide as the longest trait row; rows then stretch to that shared width. */
 		width: max-content;
 		max-width: 100%;
+		pointer-events: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-y;
 	}
 
 	/* Leaderboard: vertically centred on the right side of the board. The column is
@@ -1629,6 +1889,7 @@
 	}
 	.players-col > :global(.leaderboard) {
 		margin-block: auto;
+		pointer-events: auto;
 	}
 
 	/* ── Stage cell: the center region. Strictly clips so its content can NEVER
@@ -1637,19 +1898,36 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
+		overscroll-behavior: none;
+		touch-action: none;
 		display: flex;
 		flex-direction: column;
+		pointer-events: none;
 	}
 	.stage-main {
 		flex: 1 1 auto;
 		min-height: 0;
 		overflow: hidden;
+		overscroll-behavior: none;
+		touch-action: none;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		pointer-events: none;
 	}
 	.stage-main :global(.board) {
 		width: 100%;
+		pointer-events: auto;
+	}
+	.stage-main :global(button),
+	.stage-main :global(a),
+	.stage-main :global(input),
+	.stage-main :global(select),
+	.stage-main :global(textarea),
+	.stage-main :global([role='button']),
+	.stage-main :global([role='tab']),
+	.stage-main :global(.stage-card) {
+		pointer-events: auto;
 	}
 	/* Pass-turn footer — never stretches; sits centered under the stage. */
 	.stage-foot {
@@ -1659,10 +1937,17 @@
 		justify-content: center;
 		min-height: 0;
 		padding-top: 6px;
+		pointer-events: none;
+	}
+	.stage-foot > * {
+		pointer-events: auto;
 	}
 
 	/* ── Page dots (mobile only). Desktop hides them. ── */
 	.page-dots {
+		display: none;
+	}
+	.phase-rail {
 		display: none;
 	}
 	/* Ghost button — white hairline outline over faint glass, matching the
@@ -1700,6 +1985,28 @@
 		width: 36px;
 		height: 32px;
 		padding: 0;
+	}
+	.chat-toggle {
+		position: relative;
+	}
+	.chat-badge {
+		position: absolute;
+		top: -5px;
+		right: -5px;
+		display: grid;
+		place-items: center;
+		min-width: 17px;
+		height: 17px;
+		padding: 0 4px;
+		border-radius: 999px;
+		border: 1px solid rgba(5, 3, 16, 0.9);
+		background: var(--brand-magenta, #ff2bc7);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 0.62rem;
+		line-height: 1;
+		font-variant-numeric: tabular-nums;
+		box-shadow: 0 0 14px rgba(255, 43, 199, 0.5);
 	}
 	.icon-btn svg {
 		width: 18px;
@@ -1866,9 +2173,14 @@
 		}
 		.trait-col,
 		.players-col {
-			overflow-y: auto;
 			-webkit-overflow-scrolling: touch;
 			padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+		}
+		.players-col {
+			overflow-y: auto;
+		}
+		.trait-col {
+			overflow: visible;
 		}
 		/* On a phone the trait page is full-width — keep the cards full-width too rather
 		   than shrink-wrapped (the desktop behaviour). */
@@ -1951,6 +2263,256 @@
 		.settings-item {
 			padding: 12px 14px;
 			min-height: 44px;
+		}
+		/* Active gameplay no longer pages between traits/stage/leaderboard; portrait
+		   remains rotate-gated, and landscape keeps all HUD regions visible. */
+		.pager {
+			display: grid;
+			grid-template-columns: var(--left-w, 336px) minmax(0, 1fr) var(--right-w, 280px);
+			gap: var(--hud-gap, 8px);
+			padding: 60px 12px calc(8px + env(safe-area-inset-bottom));
+			overflow: hidden;
+			scroll-snap-type: none;
+		}
+		.trait-col,
+		.stage-cell,
+		.players-col {
+			flex: initial;
+			scroll-snap-align: none;
+			scroll-snap-stop: normal;
+		}
+		.trait-col {
+			align-items: flex-start;
+		}
+		.trait-host :global(.traits) {
+			width: max-content;
+			max-width: 100%;
+		}
+		.page-dots {
+			display: none;
+		}
+	}
+
+	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+		.tft {
+			--hud-pad-x: 7.5px;
+			--hud-pad-y: 4.5px;
+			--hud-gap: 4.5px;
+			--hud-left-w: clamp(142px, 20vw, 180px);
+			--hud-right-w: clamp(112px, 16vw, 148px);
+			--hud-rail-content-w: 42px;
+			--rune-row-slot-size: 1.75rem;
+			--rune-gap: 0.22rem;
+			--trait-icon: 34px;
+			--trait-count-size: 17px;
+			--trait-count-font: 0.72rem;
+			--trait-row-pad: 6px 7px;
+			--trait-gap: 0.5rem;
+			--trait-name-size: 0.88rem;
+			--trait-state-size: 0.86rem;
+			--trait-pip-size: 16px;
+			--trait-pip-font: 0.68rem;
+			--trait-section-gap: 0.5rem;
+			--lb-gap: 18px;
+			--lb-row-min-h: 34px;
+			--lb-avatar: 32px;
+			--lb-me-avatar: 38px;
+			--lb-boss-avatar: 38px;
+			--lb-name-size: 0.68rem;
+			--lb-name-w: 4.9rem;
+			--lb-pts-size: 0.82rem;
+			--lb-me-pts-size: 0.96rem;
+			--lb-chip-size: 0.68rem;
+			--lb-pip-size: 9px;
+			--lb-potential-w: 5rem;
+			--lb-bounty-size: 15px;
+			--stage-view-gap: 0.55rem;
+			--stage-title-size: clamp(1.35rem, 4.4vh, 1.85rem);
+			--stage-instruction-height: calc(var(--rune-row-slot-size) + 2px);
+			--stage-instruction-top: calc(
+				(var(--hud-pad-y) * 0.5) + (var(--rune-row-slot-size) * 0.75) +
+					(var(--trait-section-gap) * 0.5) + 0.5rem
+			);
+			--stage-card-gap: 0.5rem;
+			--stage-card-max: 11rem;
+			--stage-card-width: clamp(7.8rem, 21vw, 10.8rem);
+			--stage-card-min-h: 8.2rem;
+			--stage-card-pad: 0.75rem 0.65rem;
+			--stage-card-inner-gap: 0.32rem;
+			--stage-card-glyph: 1.65rem;
+			--stage-card-title: 0.8rem;
+			--stage-card-subtitle: 0.68rem;
+			--int-grid-gap: 0.55rem;
+			--int-card-max: 12.25rem;
+			--int-card-radius: 12px;
+		}
+		.shell {
+			box-sizing: border-box;
+			padding: 0;
+		}
+		.nav-bar {
+			position: absolute;
+			inset: 0 0 0 auto;
+			width: calc(var(--hud-safe-r) + var(--hud-rail-content-w));
+			min-height: 0;
+			padding: 0;
+			background: none;
+			pointer-events: none;
+			z-index: 24;
+		}
+		.nav-center {
+			display: none;
+		}
+		.nav-controls {
+			position: absolute;
+			top: var(--hud-pad-y);
+			left: auto;
+			right: calc(var(--hud-safe-r) + var(--hud-rail-content-w) + var(--hud-gap));
+			bottom: auto;
+			transform: none;
+			flex-direction: row;
+			gap: 0.3rem;
+			pointer-events: auto;
+			z-index: 26;
+		}
+		.icon-btn {
+			width: 30px;
+			height: 30px;
+			border-radius: 8px;
+			background: rgba(10, 7, 20, 0.3);
+		}
+		.phase-rail {
+			position: absolute;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 23;
+			width: calc(var(--hud-safe-r) + var(--hud-rail-content-w));
+			display: block;
+			box-sizing: border-box;
+			border-left: 1px solid rgba(255, 255, 255, 0.14);
+			background: linear-gradient(180deg, rgba(10, 7, 20, 0.72), rgba(8, 5, 16, 0.42));
+			backdrop-filter: blur(8px);
+			-webkit-backdrop-filter: blur(8px);
+			box-shadow: -16px 0 42px -30px rgba(0, 0, 0, 0.78);
+			pointer-events: none;
+		}
+		.phase-rail-inner {
+			width: var(--hud-rail-content-w);
+			height: 100%;
+			display: grid;
+			grid-template-rows: minmax(54px, 0.8fr) minmax(74px, 1.6fr) minmax(64px, 0.9fr);
+			justify-items: center;
+			align-items: center;
+			box-sizing: border-box;
+			padding-block: max(6px, var(--hud-safe-t)) max(6px, var(--hud-safe-b));
+		}
+		.rail-round,
+		.rail-phase {
+			font-family: var(--font-display);
+			font-size: 0.62rem;
+			letter-spacing: 0.16em;
+			text-transform: uppercase;
+			color: rgba(255, 255, 255, 0.72);
+			writing-mode: vertical-rl;
+			text-orientation: mixed;
+			line-height: 1;
+			white-space: nowrap;
+			text-shadow: 0 0 12px rgba(255, 255, 255, 0.12);
+		}
+		.rail-round {
+			color: rgba(255, 255, 255, 0.85);
+		}
+		.rail-track {
+			position: relative;
+			width: 2px;
+			height: 100%;
+			min-height: 82px;
+			border-radius: 999px;
+			background: rgba(255, 255, 255, 0.14);
+			overflow: visible;
+		}
+		.rail-fill {
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			min-height: 8px;
+			border-radius: inherit;
+			background: linear-gradient(180deg, #fff, var(--brand-cyan, #5cdfff));
+			box-shadow: 0 0 12px rgba(92, 223, 255, 0.55);
+		}
+		.rail-node {
+			position: absolute;
+			left: 50%;
+			width: 7px;
+			height: 7px;
+			border: 1px solid rgba(255, 255, 255, 0.42);
+			background: rgba(8, 5, 16, 0.86);
+			transform: translate(-50%, -50%) rotate(45deg);
+		}
+		.rail-node:nth-child(2) {
+			top: 0%;
+		}
+		.rail-node:nth-child(3) {
+			top: 33.333%;
+		}
+		.rail-node:nth-child(4) {
+			top: 66.667%;
+		}
+		.rail-node:nth-child(5) {
+			top: 100%;
+		}
+		.rail-node.active {
+			background: #fff;
+			border-color: transparent;
+			box-shadow: 0 0 12px rgba(255, 255, 255, 0.75);
+		}
+		.pager {
+			grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
+			gap: var(--hud-gap);
+			padding: var(--hud-pad-y) calc(var(--hud-safe-r) + var(--hud-rail-content-w) + var(--hud-gap))
+				calc(var(--hud-pad-y) + var(--hud-safe-b)) var(--hud-pad-x);
+			overflow: hidden;
+		}
+		.stage-cell {
+			padding: 0;
+		}
+		.stage-main {
+			overflow: hidden;
+			overscroll-behavior: none;
+			touch-action: none;
+		}
+		.trait-col {
+			min-width: 0;
+			overflow-clip-margin: 0 22px 22px 0;
+		}
+		.trait-host :global(.traits) {
+			padding: 0.375rem 0.5rem 0.5rem 0;
+		}
+		.trait-host :global(.state-label) {
+			padding-left: 4px;
+		}
+		.players-col {
+			min-width: 0;
+			padding-right: 2px;
+		}
+		.stage-foot {
+			padding-top: 2px;
+		}
+		.pass-btn {
+			min-height: 34px;
+			padding: 5px 20px;
+			border-radius: 10px;
+			font-size: 0.74rem;
+			animation: none;
+		}
+		.error {
+			top: 50px;
+			max-width: min(
+				680px,
+				calc(100vw - 48px - env(safe-area-inset-left) - env(safe-area-inset-right))
+			);
 		}
 	}
 </style>

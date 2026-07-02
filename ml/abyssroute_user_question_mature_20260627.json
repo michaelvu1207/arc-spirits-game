@@ -1,0 +1,40 @@
+[
+  {
+    "diceCount": 10,
+    "diceTier": "arcane",
+    "startingMaxBarrier": 20,
+    "spiritAnimalCount": 2,
+    "games": 4,
+    "seatGames": 16,
+    "avgVP": 31.19,
+    "avgStatus": 1.75,
+    "avgRounds": 10,
+    "finishedPct": 100,
+    "abyssLocksPerSeatGame": 10,
+    "combatsPerSeatGame": 10.06,
+    "killsPerSeatGame": 8.25,
+    "rewardsPerSeatGame": 8.25,
+    "rewardVpPerSeatGame": 31.19,
+    "actualVpFromRewardCommandsPerSeatGame": 31.19,
+    "decisionTypes": {
+      "lockNavigation": 160,
+      "startCombat": 161,
+      "resolveMonsterReward": 132,
+      "endLocationActions": 134,
+      "commitBenefits": 150,
+      "commitAwakening": 160,
+      "discardSpirit": 70,
+      "discardRune": 20,
+      "commitCleanup": 135,
+      "spawnHandSpirit": 38,
+      "awakenSpirit": 5
+    },
+    "rewardLabels": {
+      "2 Victory Points": 121,
+      "1 Victory Point": 49,
+      "Arcane Abyss Summon": 38,
+      "3 Victory Points": 36,
+      "5 Victory Points": 20
+    }
+  }
+]

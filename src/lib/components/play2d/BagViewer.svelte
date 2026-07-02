@@ -221,6 +221,9 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-y;
 		padding: 1rem 1.1rem 1.3rem;
 		border-top: 1px solid var(--brand-teal, #2fc7c7);
 	}

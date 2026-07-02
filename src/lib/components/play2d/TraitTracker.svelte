@@ -31,7 +31,9 @@
 	}
 	// Special classes (the "special" and "human" class_types) are always single-breakpoint.
 	function isSpecialClass(asset: ClassTrait | undefined): boolean {
-		return asset?.is_special === true || asset?.class_type === 'special' || asset?.class_type === 'human';
+		return (
+			asset?.is_special === true || asset?.class_type === 'special' || asset?.class_type === 'human'
+		);
 	}
 
 	// Gray → gold ramp for common classes based on how many breakpoints are met.
@@ -193,9 +195,8 @@
 	let tipEl = $state<HTMLDivElement | null>(null);
 	let tipPos = $state({ left: 0, top: 0 });
 	let placed = $state(false);
-	// Touch devices expand an inline accordion under the row instead of the
-	// floating hover tooltip. `isCoarse` switches the row's interaction model.
-	let expandedKey = $state<string | null>(null);
+	// Touch devices use the same floating detail surface as desktop, opened by tap
+	// instead of hover. Keeping details out of the list prevents the HUD from resizing.
 	let isCoarse = $state(false);
 	$effect(() => {
 		if (typeof window === 'undefined') return;
@@ -216,21 +217,18 @@
 		anchor = null;
 		placed = false;
 	}
-	// Touch: tap toggles an inline detail dropdown under the row. Accordion —
-	// opening one row closes any other. Fine pointers use hover instead.
+	// Touch: tap toggles the floating detail card. Fine pointers use hover instead.
 	function handleTap(event: MouseEvent | PointerEvent, row: TraitRow) {
 		if (!isCoarse) return; // fine-pointer handled by onpointerenter/leave
 		event.stopPropagation();
-		expandedKey = expandedKey === row.key ? null : row.key;
+		if (detail?.key === row.key) hideTip();
+		else showTip(event, row);
 	}
-	// Keyboard Enter/Space: toggle the inline dropdown on touch, or the floating
-	// detail on desktop.
+	// Keyboard Enter/Space: toggle the floating detail on every pointer mode.
 	function handleKey(event: KeyboardEvent, row: TraitRow) {
 		if (event.key !== 'Enter' && event.key !== ' ') return;
 		event.preventDefault();
-		if (isCoarse) {
-			expandedKey = expandedKey === row.key ? null : row.key;
-		} else if (detail?.key === row.key) {
+		if (detail?.key === row.key) {
 			hideTip();
 		} else {
 			showTip(event as unknown as MouseEvent, row);
@@ -259,6 +257,13 @@
 			left = anchor.left - tw - gap; // flip to the left if it would overflow
 		}
 		let top = anchor.top + anchor.height / 2 - th / 2; // vertically center on the row
+		if (isCoarse && window.innerWidth > window.innerHeight) {
+			// On phone landscape, keep the card over the stage side of the HUD and
+			// aligned with the tapped row instead of growing the trait list inline.
+			left = Math.max(anchor.right + gap, margin);
+			if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
+			top = anchor.top;
+		}
 		top = Math.max(margin, Math.min(top, window.innerHeight - th - margin));
 		tipPos = { left, top };
 		placed = true;
@@ -266,7 +271,7 @@
 </script>
 
 {#snippet traitRow(row: TraitRow, showPips: boolean)}
-	{@const expanded = isCoarse && expandedKey === row.key}
+	{@const expanded = isCoarse && detail?.key === row.key}
 	<div
 		class="trait"
 		class:expanded
@@ -303,7 +308,9 @@
 		<div class="body">
 			<span class="name">{row.name}</span>
 			{#if row.dormant && row.projected != null}
-				<span class="projected" title="Reaches {row.projected} once awakened">→ {row.projected}</span>
+				<span class="projected" title="Reaches {row.projected} once awakened"
+					>→ {row.projected}</span
+				>
 			{:else if showPips && row.thresholds.length > 0}
 				<div class="pips">
 					{#each row.thresholds as t (t)}
@@ -312,34 +319,11 @@
 				</div>
 			{/if}
 		</div>
-		<!-- Touch affordance: a chevron that rotates when the inline detail is open. -->
+		<!-- Touch affordance: a chevron that rotates when the floating detail is open. -->
 		{#if isCoarse}
 			<span class="chev" aria-hidden="true">▸</span>
 		{/if}
 	</div>
-
-	<!-- Inline detail dropdown (touch only). Same content as the desktop hover
-	     tooltip, expanded directly under the row instead of a floating card. -->
-	{#if expanded}
-		<div class="trait-detail" style="--c: {row.color}">
-			{#if row.description}
-				<p class="td-desc">{row.description}</p>
-			{/if}
-			{#if row.detailBps.length > 0}
-				<div class="td-bps">
-					{#each row.detailBps as bp (bp.key)}
-						<div class="td-bp-row">
-							<span class="bp-count {bp.colorClass}">{bp.count}</span>
-							{#if bp.desc}<div class="td-bp-desc">{bp.desc}</div>{/if}
-						</div>
-					{/each}
-				</div>
-			{/if}
-			{#if row.footer}
-				<p class="td-footer">{row.footer}</p>
-			{/if}
-		</div>
-	{/if}
 {/snippet}
 
 {#snippet section(rows: TraitRow[], showPips: boolean)}
@@ -376,10 +360,20 @@
 	{/if}
 </aside>
 
-{#if detail && !isCoarse}
+{#if detail}
+	{#if isCoarse}
+		<button
+			type="button"
+			class="tip-backdrop"
+			aria-label="Close trait details"
+			use:portal
+			onclick={hideTip}
+		></button>
+	{/if}
 	<div
 		class="tip"
 		class:placed
+		class:touch={isCoarse}
 		use:portal
 		bind:this={tipEl}
 		style="left: {tipPos.left}px; top: {tipPos.top}px;"
@@ -397,6 +391,11 @@
 				<span class="tip-name">{detail.name}</span>
 				<span class="tip-kind">{detail.kindLabel}</span>
 			</div>
+			{#if isCoarse}
+				<button type="button" class="tip-close" aria-label="Close trait details" onclick={hideTip}
+					>×</button
+				>
+			{/if}
 		</header>
 
 		{#if detail.description}
@@ -432,7 +431,7 @@
 		overflow-y: auto;
 		scrollbar-width: none; /* hide the styled magenta scrollbar (parity with the leaderboard) */
 		padding: 0.5rem 0.75rem 0.75rem;
-		gap: 0.85rem;
+		gap: var(--trait-section-gap, 0.85rem);
 	}
 	.traits::-webkit-scrollbar {
 		width: 0;
@@ -442,11 +441,11 @@
 	.state {
 		display: flex;
 		flex-direction: column;
-		gap: 0.85rem;
+		gap: var(--trait-section-gap, 0.85rem);
 	}
 	.state-label {
 		font-family: var(--font-display);
-		font-size: 1.18rem;
+		font-size: var(--trait-state-size, 1.18rem);
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
 		color: #fff;
@@ -455,7 +454,7 @@
 	}
 	.state.unawakened {
 		margin-top: 0.35rem;
-		padding-top: 0.85rem;
+		padding-top: var(--trait-section-gap, 0.85rem);
 		border-top: 1px dashed rgba(255, 255, 255, 0.16);
 		opacity: 0.74;
 	}
@@ -472,12 +471,12 @@
 	.group {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--trait-list-gap, 6px);
 	}
 	.list {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--trait-list-gap, 6px);
 	}
 	.empty {
 		color: var(--color-whisper, #6a6680);
@@ -487,8 +486,8 @@
 	.trait {
 		display: flex;
 		align-items: center;
-		gap: 0.82rem;
-		padding: 8px 9px;
+		gap: var(--trait-gap, 0.82rem);
+		padding: var(--trait-row-pad, 8px 9px);
 		border-radius: 6px;
 		background: color-mix(in srgb, var(--c) 14%, transparent);
 		border-left: 4px solid var(--c);
@@ -502,8 +501,8 @@
 	}
 	.emblem {
 		position: relative;
-		width: 45px;
-		height: 45px;
+		width: var(--trait-icon, 45px);
+		height: var(--trait-icon, 45px);
 		flex-shrink: 0;
 		display: grid;
 		place-items: center;
@@ -512,8 +511,8 @@
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 50%, transparent);
 	}
 	.emblem img {
-		width: 33px;
-		height: 33px;
+		width: calc(var(--trait-icon, 45px) * 0.73);
+		height: calc(var(--trait-icon, 45px) * 0.73);
 		object-fit: contain;
 		/* Class icons read as a flat white silhouette. */
 		filter: brightness(0) invert(1);
@@ -526,14 +525,14 @@
 		position: absolute;
 		right: -6px;
 		bottom: -6px;
-		min-width: 22px;
-		height: 22px;
+		min-width: var(--trait-count-size, 22px);
+		height: var(--trait-count-size, 22px);
 		padding: 0 4px;
 		border-radius: 12px;
 		background: var(--c);
 		color: var(--color-void, #0c0518);
 		font-family: var(--font-display);
-		font-size: 0.93rem;
+		font-size: var(--trait-count-font, 0.93rem);
 		display: grid;
 		place-items: center;
 		font-variant-numeric: tabular-nums;
@@ -546,7 +545,7 @@
 	}
 	.name {
 		font-family: var(--font-display);
-		font-size: 1.17rem;
+		font-size: var(--trait-name-size, 1.17rem);
 		letter-spacing: 0.03em;
 		text-transform: uppercase;
 		color: #fff;
@@ -566,9 +565,9 @@
 		gap: 4px;
 	}
 	.pip {
-		font-size: 0.84rem;
-		min-width: 20px;
-		height: 20px;
+		font-size: var(--trait-pip-font, 0.84rem);
+		min-width: var(--trait-pip-size, 20px);
+		height: var(--trait-pip-size, 20px);
 		padding: 0 3px;
 		display: grid;
 		place-items: center;
@@ -583,6 +582,16 @@
 	}
 
 	/* ── Detail popup (portaled to <body>) ───────────────────────────────── */
+	.tip-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 999;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		touch-action: none;
+		-webkit-tap-highlight-color: transparent;
+	}
 	.tip {
 		position: fixed;
 		z-index: 1000;
@@ -598,6 +607,13 @@
 		pointer-events: none;
 		opacity: 0;
 		transition: opacity 90ms ease;
+	}
+	.tip.touch {
+		width: min(420px, calc(100vw - 200px));
+		max-height: calc(100dvh - 16px);
+		pointer-events: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
 	}
 	.tip.placed {
 		opacity: 1;
@@ -634,6 +650,7 @@
 		flex-direction: column;
 		gap: 2px;
 		min-width: 0;
+		flex: 1 1 auto;
 	}
 	.tip-name {
 		font-family: var(--font-display);
@@ -648,6 +665,24 @@
 		letter-spacing: 0.2em;
 		text-transform: uppercase;
 		color: var(--c);
+	}
+	.tip-close {
+		flex: 0 0 auto;
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		margin-left: auto;
+		border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.06);
+		color: #fff;
+		font: inherit;
+		font-family: var(--font-display);
+		font-size: 1.05rem;
+		line-height: 1;
+		cursor: pointer;
+		touch-action: manipulation;
 	}
 	.tip-desc {
 		font-size: 0.9rem;
@@ -728,7 +763,7 @@
 		}
 	}
 
-	/* ── Chevron + inline detail dropdown (touch only) ──────────────────────── */
+	/* ── Touch affordance for the floating detail card ─────────────────────── */
 	.chev {
 		margin-left: auto;
 		flex-shrink: 0;
@@ -736,67 +771,17 @@
 		color: var(--c);
 		font-size: 0.9rem;
 		opacity: 0.65;
-		transition: transform 160ms ease, opacity 160ms ease;
+		transition:
+			transform 160ms ease,
+			opacity 160ms ease;
 	}
 	.trait.expanded .chev {
 		transform: rotate(90deg);
 		opacity: 1;
 	}
-	/* The row reads as the head of an open panel when expanded. */
+	/* The row reads as selected while its floating detail card is open. */
 	.trait.expanded {
 		background: color-mix(in srgb, var(--c) 22%, transparent);
-		border-bottom-left-radius: 0;
-		border-bottom-right-radius: 0;
-	}
-	.trait-detail {
-		margin: -4px 0 2px;
-		padding: 10px 12px 11px;
-		border-radius: 0 0 6px 6px;
-		background: rgba(10, 6, 20, 0.55);
-		border-left: 4px solid var(--c);
-		animation: td-open 150ms ease;
-	}
-	@keyframes td-open {
-		from {
-			opacity: 0;
-			transform: translateY(-4px);
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.trait-detail {
-			animation: none;
-		}
-	}
-	.td-desc {
-		font-size: clamp(0.85rem, 3vw, 0.96rem);
-		line-height: 1.5;
-		color: var(--color-parchment, #d8d2e8);
-		margin: 0 0 9px;
-	}
-	.td-bps {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		margin-bottom: 7px;
-	}
-	.td-bp-row {
-		display: grid;
-		grid-template-columns: 30px 1fr;
-		gap: 10px;
-		align-items: flex-start;
-	}
-	.td-bp-desc {
-		font-size: clamp(0.8rem, 2.8vw, 0.88rem);
-		line-height: 1.5;
-		color: var(--color-bone, #efeaf7);
-		padding-top: 4px;
-	}
-	.td-footer {
-		font-style: italic;
-		font-size: clamp(0.8rem, 2.6vw, 0.82rem);
-		line-height: 1.45;
-		color: var(--color-fog, #9a93b0);
-		margin: 0;
 	}
 
 	/* Raise clamp() minimums so text is readable at 360px. */
@@ -810,12 +795,18 @@
 		.projected {
 			font-size: clamp(0.8rem, 2.8vw, 0.92rem);
 		}
-		/* Tooltip on mobile: make it pointer-events enabled so the user can
-		   scroll it; position it at the bottom of the viewport instead. */
-		.tip {
-			width: min(320px, calc(100vw - 16px));
-			max-height: 55vh;
-			pointer-events: auto;
+		.tip.touch {
+			width: min(420px, calc(100vw - 190px));
+		}
+	}
+	@media (pointer: coarse) and (orientation: portrait) {
+		.tip.touch {
+			left: 8px !important;
+			top: auto !important;
+			right: 8px;
+			bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+			width: auto;
+			max-height: min(58vh, 420px);
 		}
 	}
 </style>

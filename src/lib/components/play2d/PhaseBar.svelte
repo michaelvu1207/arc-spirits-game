@@ -13,12 +13,20 @@
 		onNavExpire?: () => void;
 	}
 
-	let { phase, round, revealedDestinations, navigationDeadline = null, onNavExpire }: Props = $props();
+	let {
+		phase,
+		round,
+		revealedDestinations,
+		navigationDeadline = null,
+		onNavExpire
+	}: Props = $props();
 
-	const showTimer = $derived(phase === 'navigation' && !revealedDestinations && navigationDeadline != null);
+	const showTimer = $derived(
+		phase === 'navigation' && !revealedDestinations && navigationDeadline != null
+	);
 
 	// The nav bar shows the post-location resolution (benefits → awakening → cleanup) as
-	// ONE collapsed node — the granular steps live in the in-stage AwakeningSheet stepper.
+	// ONE collapsed node; MainStage owns the per-phase instruction and action content.
 	type DisplayStep = { key: string; label: string; phases: GamePhase[] };
 	const DISPLAY_STEPS: DisplayStep[] = [
 		{ key: 'navigation', label: 'Navigation', phases: ['navigation'] },
@@ -31,18 +39,17 @@
 	// A display step is "done" once the current phase is past its last engine phase.
 	const lastIndexOf = (s: DisplayStep) => Math.max(...s.phases.map((p) => GAME_PHASES.indexOf(p)));
 
-	// Small instruction shown in the second row of the bar. During navigation the
-	// NavTimer renders its own "Choose your destination" label + countdown; every
-	// other phase shows a static instruction here so the bar's layout never jumps.
-	const PHASE_INSTRUCTION: Record<GamePhase, string> = {
-		navigation: 'Choose your destination',
-		encounter: 'Revealing destinations',
-		location: 'Resolve your location',
-		benefits: 'Collect your benefits',
-		awakening: 'Awaken your spirits',
-		cleanup: 'Cleaning up the round'
+	// Small status shown in the second row of the bar. MainStage owns instruction copy;
+	// this bar stays as phase/timer chrome so it never competes with the scene prompt.
+	const PHASE_STATUS: Record<GamePhase, string> = {
+		navigation: 'Navigation open',
+		encounter: 'Encounter step',
+		location: 'Location step',
+		benefits: 'Benefits step',
+		awakening: 'Awakening step',
+		cleanup: 'Cleanup step'
 	};
-	const instruction = $derived(PHASE_INSTRUCTION[phase] ?? '');
+	const phaseStatus = $derived(PHASE_STATUS[phase] ?? '');
 </script>
 
 <div class="phase-bar" data-testid="phase-bar" data-phase={phase} data-round={round}>
@@ -63,13 +70,13 @@
 				</li>
 			{/each}
 		</ol>
-		<!-- Instruction row — always present so the bar keeps one consistent layout:
-		     the live countdown during navigation, a static instruction otherwise. -->
+		<!-- Status row — always present so the bar keeps one consistent layout:
+		     the live countdown during navigation, a static status otherwise. -->
 		<div class="instruction-row">
 			{#if showTimer}
 				<NavTimer deadline={navigationDeadline} onExpire={onNavExpire} />
 			{:else}
-				<span class="instruction" data-testid="phase-instruction">{instruction}</span>
+				<span class="instruction" data-testid="phase-instruction">{phaseStatus}</span>
 			{/if}
 		</div>
 	</div>
@@ -136,7 +143,7 @@
 		min-height: 1.05rem;
 		min-width: 0;
 	}
-	/* Static per-phase instruction — matches the NavTimer's label treatment. */
+	/* Static per-phase status — matches the NavTimer's label treatment. */
 	.instruction {
 		font-family: var(--font-display);
 		font-size: 0.85rem;

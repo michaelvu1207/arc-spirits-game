@@ -222,6 +222,9 @@
 		gap: 14px;
 		min-height: 0;
 		overflow-y: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-y;
 		padding: 2px;
 		scrollbar-width: thin;
 	}
@@ -393,6 +396,98 @@
 		.grid {
 			grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
 			gap: 8px;
+		}
+	}
+
+	@media (orientation: landscape) and (max-height: 520px) {
+		.picker {
+			place-items: stretch;
+			padding:
+				calc(12px + env(safe-area-inset-top))
+				max(72px, calc(18px + env(safe-area-inset-right)))
+				calc(12px + env(safe-area-inset-bottom))
+				max(44px, calc(18px + env(safe-area-inset-left)));
+		}
+		.backdrop {
+			background: rgba(4, 2, 12, 0.64);
+			backdrop-filter: blur(10px);
+		}
+		.panel {
+			width: 100%;
+			height: 100%;
+			max-height: none;
+			box-sizing: border-box;
+			display: grid;
+			grid-template-rows: auto minmax(0, 1fr);
+			gap: 12px;
+			padding: 18px 20px 16px;
+			border-radius: 18px;
+			background: linear-gradient(180deg, rgba(18, 10, 36, 0.82), rgba(6, 4, 16, 0.88));
+			-webkit-backdrop-filter: blur(18px);
+			backdrop-filter: blur(18px);
+		}
+		.phead {
+			align-items: center;
+			gap: 14px;
+		}
+		.peyebrow {
+			font-size: 0.62rem;
+			letter-spacing: 0.26em;
+		}
+		.phead h2 {
+			margin-top: 3px;
+			font-size: clamp(1.25rem, 7vh, 1.8rem);
+			line-height: 0.95;
+		}
+		.phead p {
+			margin-top: 3px;
+			font-size: 0.78rem;
+			line-height: 1.25;
+		}
+		.close {
+			width: 42px;
+			height: 42px;
+			background: rgba(255, 255, 255, 0.05);
+		}
+		.grid {
+			grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+			grid-auto-rows: minmax(104px, 1fr);
+			gap: 10px;
+			overflow-y: auto;
+			padding: 1px 3px 3px 1px;
+		}
+		.tile {
+			min-height: 104px;
+			display: grid;
+			grid-template-rows: minmax(62px, 1fr) auto;
+			border-radius: 12px;
+			background: rgba(10, 7, 22, 0.58);
+		}
+		.art {
+			aspect-ratio: auto;
+			min-height: 0;
+		}
+		.art img {
+			padding: 7%;
+		}
+		.meta {
+			min-height: 34px;
+			padding: 7px 9px 8px;
+			align-items: center;
+		}
+		.gname {
+			font-size: 0.72rem;
+			letter-spacing: 0.04em;
+		}
+		.state {
+			font-size: 0.6rem;
+			letter-spacing: 0.1em;
+		}
+		.tick {
+			top: 6px;
+			right: 6px;
+			width: 22px;
+			height: 22px;
 		}
 	}
 </style>

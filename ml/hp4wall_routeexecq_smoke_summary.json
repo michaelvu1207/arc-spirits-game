@@ -1,0 +1,116 @@
+{
+  "mode": "route-execution-counterfactual",
+  "config": {
+    "games": 2,
+    "seats": 4,
+    "maxRounds": 30,
+    "maxWindows": 4,
+    "cleanThreshold": 0.5,
+    "firepowerThreshold": 0.5,
+    "selectHorizon": 12,
+    "horizons": [
+      6,
+      12
+    ],
+    "labelHorizon": 12,
+    "labelScoreThreshold": 0.25,
+    "labelVpThreshold": 0,
+    "labelStatusTolerance": 0,
+    "positiveOnlyData": false,
+    "windowFilters": {
+      "minPlayerVp": 9,
+      "maxPlayerVp": 24,
+      "minRound": 0,
+      "minMonsterHp": 4,
+      "maxMonsterHp": 4,
+      "minCleanKillProb": 0,
+      "minFirepowerKillProb": 0,
+      "minExpectedAttack": 0,
+      "minAttackDice": 0,
+      "minSpiritAnimal": 0,
+      "minCultivator": 0,
+      "minMaxBarrier": 0
+    },
+    "scoreWeights": {
+      "vp": 1,
+      "cleanOpportunity": 2,
+      "firepowerOpportunity": 0.25,
+      "expectedAttack": 0.8,
+      "attackDice": 0.4,
+      "spiritAnimal": 0.5,
+      "cultivator": 0,
+      "barrier": 0.2,
+      "currentBarrier": 0,
+      "kill": 0,
+      "reach30Bonus": 0,
+      "statusPenalty": 2
+    },
+    "dataOut": "ml/data_hp4_wall_smoke/routeexec/routeexecq.jsonl",
+    "source": "heuristic",
+    "rolloutPolicy": "policy",
+    "profiles": [
+      "paragon",
+      "farmer",
+      "farmer2",
+      "hard"
+    ],
+    "forbidTypes": [
+      "initiatePvp"
+    ],
+    "maxStatusLevel": 0,
+    "microPolicyGate": "all",
+    "navigationPolicyGate": "all",
+    "scalingNavigationPolicyGate": "route-option-scaling",
+    "preserveRouteFirepower": false,
+    "preserveRouteSurvival": false,
+    "plannerIterations": 32,
+    "plannerHorizon": 16,
+    "plannerValueWeight": 1,
+    "progressEvery": 0
+  },
+  "scannedLocationWindows": 96,
+  "windows": 4,
+  "skippedWindowFilter": 92,
+  "skippedSingleAction": 0,
+  "dataSamples": 4,
+  "sourceWasBest": 4,
+  "sourceWasBestPct": 100,
+  "routeExecCorrections": 0,
+  "routeExecCorrectionPct": 0,
+  "avgRouteExecQDeltaScore": 0,
+  "avgRouteExecQDeltaVp": 0,
+  "avgRouteExecQDeltaStatus": 0,
+  "avgRouteExecQDeltaReach30": 0,
+  "avgWindowPlayerVp": 12,
+  "avgWindowPlayerExpectedAttack": 12.75,
+  "avgWindowPlayerMaxBarrier": 9,
+  "avgWindowPlayerAttackDice": 10,
+  "avgWindowPlayerSpiritAnimal": 2.75,
+  "avgWindowPlayerCultivator": 0,
+  "avgWindowMonsterHp": 4,
+  "avgWindowCleanKillProb": 0,
+  "avgWindowFirepowerKillProb": 1,
+  "avgBestScoreDelta": 0,
+  "avgBestVpDelta": 0,
+  "avgBestStatusDelta": 0,
+  "avgBestReach30Delta": 0,
+  "avgBestCleanOpportunityDelta": 0,
+  "avgBestFirepowerOpportunityDelta": 0,
+  "avgBestExpectedAttackDelta": 0,
+  "avgBestBarrierDelta": 0,
+  "avgBestSpiritAnimalDelta": 0,
+  "destinations": {
+    "Tidal Cove": 4
+  },
+  "bestActions": {
+    "Tidal Cove:row0:gain:free->spiritWorldSummon": 4
+  },
+  "sourceActions": {
+    "Tidal Cove:row0:gain:free->spiritWorldSummon": 4
+  },
+  "correctionBestActions": {},
+  "correctionSourceActions": {},
+  "heuristicActions": {
+    "Tidal Cove:row0:gain:free->spiritWorldSummon": 4
+  }
+}

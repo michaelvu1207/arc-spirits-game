@@ -835,6 +835,100 @@
 		}
 	}
 
+	@media (orientation: landscape) and (max-height: 520px) {
+		.host-bar {
+			display: grid;
+			grid-template-columns: minmax(170px, 260px) auto;
+			align-items: end;
+			gap: 12px;
+			margin-bottom: 16px;
+			padding-bottom: 14px;
+		}
+		.name-field {
+			min-width: 0;
+		}
+		.name-lbl {
+			font-size: 0.66rem;
+			letter-spacing: 0.22em;
+		}
+		.name-field :global(.input-bare) {
+			min-width: 0;
+			width: 100%;
+			font-size: 0.95rem;
+		}
+		.name-hint {
+			font-size: 0.68rem;
+		}
+		.create-btn {
+			min-height: 44px;
+			padding: 10px 18px;
+			border-radius: 9px;
+			font-size: 0.74rem;
+			justify-content: center;
+		}
+		.action-error {
+			margin-bottom: 12px;
+			padding: 9px 12px;
+			font-size: 0.78rem;
+		}
+		.debug-bar {
+			margin-bottom: 12px;
+			padding: 8px 10px;
+		}
+		.group {
+			margin-bottom: 22px;
+		}
+		.group-head {
+			gap: 10px;
+			margin-bottom: 10px;
+		}
+		.group-title {
+			font-size: 1.25rem;
+		}
+		.group-count {
+			min-width: 1.3rem;
+			height: 1.3rem;
+			font-size: 0.76rem;
+		}
+		.room-grid {
+			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+			gap: 10px;
+		}
+		.room-card {
+			min-height: 108px;
+			gap: 6px;
+			padding: 13px 14px;
+			border-radius: 10px;
+		}
+		.status-pill {
+			padding: 3px 7px;
+			font-size: 0.66rem;
+			letter-spacing: 0.15em;
+		}
+		.room-code {
+			font-size: 0.78rem;
+			letter-spacing: 0.14em;
+		}
+		.room-host {
+			font-size: 1.08rem;
+		}
+		.room-meta,
+		.seats {
+			font-size: 0.72rem;
+		}
+		.room-foot {
+			margin-top: 2px;
+			padding-top: 8px;
+		}
+		.room-cta {
+			font-size: 0.72rem;
+			letter-spacing: 0.1em;
+		}
+		.browser-foot {
+			margin-top: 16px;
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.room-card,
 		.room-card::after,

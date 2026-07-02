@@ -21,8 +21,7 @@
 	}: Props = $props();
 
 	// Collapse the post-location resolution (benefits → awakening → cleanup) into ONE
-	// "Cleanup" node, matching the desktop PhaseBar — the granular steps live in the
-	// in-stage AwakeningSheet stepper.
+	// "Cleanup" node, matching the desktop PhaseBar. MainStage owns the action prompt.
 	const DISPLAY_STEPS: { key: string; label: string; phases: GamePhase[] }[] = [
 		{ key: 'navigation', label: 'Navigation', phases: ['navigation'] },
 		{ key: 'encounter', label: 'Encounter', phases: ['encounter'] },

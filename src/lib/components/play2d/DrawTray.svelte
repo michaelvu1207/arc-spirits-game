@@ -201,6 +201,12 @@
 		align-items: center;
 		gap: 1.1rem;
 		width: 100%;
+		max-height: 100%;
+		min-height: 0;
+		box-sizing: border-box;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
 	}
 	.head {
 		display: flex;
@@ -233,7 +239,7 @@
 		justify-content: center;
 		align-items: center;
 		width: 100%;
-		max-width: min(1100px, calc(100vw - 700px));
+		max-width: min(1100px, 100%);
 		margin: 0 auto;
 		padding: 2.5rem 0;
 		perspective: 1200px;
@@ -534,6 +540,46 @@
 			padding: 10px 22px;
 			touch-action: manipulation;
 			user-select: none;
+		}
+	}
+
+	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+		.tray {
+			gap: 0.45rem;
+			padding-bottom: 0.25rem;
+		}
+		.head {
+			gap: 0.08rem;
+		}
+		.title {
+			font-size: 1rem;
+			line-height: 1;
+		}
+		.sub {
+			font-size: 0.68rem;
+			line-height: 1.05;
+		}
+		.cards {
+			flex-wrap: nowrap;
+			gap: 0.65rem;
+			padding: 0.75rem 0.25rem;
+		}
+		.card {
+			flex: 1 1 0;
+			max-width: 9.75rem;
+		}
+		.tray-actions {
+			gap: 0.45rem;
+		}
+		.discard,
+		.redraw {
+			min-height: 34px;
+			padding: 7px 16px;
+			font-size: 0.68rem;
+			letter-spacing: 0.09em;
+		}
+		.redraw-src {
+			font-size: 0.58rem;
 		}
 	}
 

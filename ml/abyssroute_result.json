@@ -1,0 +1,106 @@
+[
+  {
+    "diceCount": 0,
+    "diceTier": "arcane",
+    "startingMaxBarrier": "catalog-default",
+    "spiritAnimalCount": 0,
+    "games": 8,
+    "seatGames": 32,
+    "avgVP": 3.47,
+    "avgStatus": 3,
+    "avgRounds": 6,
+    "finishedPct": 100,
+    "abyssLocksPerSeatGame": 6,
+    "combatsPerSeatGame": 6.31,
+    "killsPerSeatGame": 1.16,
+    "rewardsPerSeatGame": 1.16,
+    "rewardVpPerSeatGame": 3.47,
+    "actualVpFromRewardCommandsPerSeatGame": 3.47,
+    "decisionTypes": {
+      "lockNavigation": 192,
+      "startCombat": 202,
+      "endLocationActions": 128,
+      "resolveMonsterReward": 37,
+      "commitBenefits": 168,
+      "commitAwakening": 192,
+      "discardSpirit": 64,
+      "discardRune": 39,
+      "commitCleanup": 135
+    },
+    "rewardLabels": {
+      "2 Victory Points": 37,
+      "1 Victory Point": 37
+    }
+  },
+  {
+    "diceCount": 1,
+    "diceTier": "arcane",
+    "startingMaxBarrier": "catalog-default",
+    "spiritAnimalCount": 0,
+    "games": 8,
+    "seatGames": 32,
+    "avgVP": 6.72,
+    "avgStatus": 3,
+    "avgRounds": 5.1,
+    "finishedPct": 100,
+    "abyssLocksPerSeatGame": 5.13,
+    "combatsPerSeatGame": 5.31,
+    "killsPerSeatGame": 2.25,
+    "rewardsPerSeatGame": 2.25,
+    "rewardVpPerSeatGame": 6.72,
+    "actualVpFromRewardCommandsPerSeatGame": 6.72,
+    "decisionTypes": {
+      "lockNavigation": 164,
+      "startCombat": 170,
+      "resolveMonsterReward": 72,
+      "endLocationActions": 99,
+      "commitBenefits": 135,
+      "commitAwakening": 164,
+      "discardSpirit": 65,
+      "discardRune": 44,
+      "commitCleanup": 104,
+      "spawnHandSpirit": 1
+    },
+    "rewardLabels": {
+      "2 Victory Points": 72,
+      "1 Victory Point": 71,
+      "Arcane Abyss Summon": 1
+    }
+  },
+  {
+    "diceCount": 2,
+    "diceTier": "arcane",
+    "startingMaxBarrier": "catalog-default",
+    "spiritAnimalCount": 0,
+    "games": 8,
+    "seatGames": 32,
+    "avgVP": 7.38,
+    "avgStatus": 3,
+    "avgRounds": 5.4,
+    "finishedPct": 100,
+    "abyssLocksPerSeatGame": 5.38,
+    "combatsPerSeatGame": 5.84,
+    "killsPerSeatGame": 2.5,
+    "rewardsPerSeatGame": 2.5,
+    "rewardVpPerSeatGame": 7.38,
+    "actualVpFromRewardCommandsPerSeatGame": 7.38,
+    "decisionTypes": {
+      "lockNavigation": 172,
+      "startCombat": 187,
+      "resolveMonsterReward": 80,
+      "endLocationActions": 105,
+      "commitBenefits": 146,
+      "commitAwakening": 172,
+      "discardSpirit": 64,
+      "discardRune": 43,
+      "commitCleanup": 114,
+      "spawnHandSpirit": 4,
+      "awakenSpirit": 2
+    },
+    "rewardLabels": {
+      "2 Victory Points": 80,
+      "1 Victory Point": 76,
+      "Arcane Abyss Summon": 4
+    }
+  }
+]

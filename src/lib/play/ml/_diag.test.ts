@@ -45,9 +45,9 @@ describe('ml diag', () => {
 						if (sel === 'policy') {
 							idx = policy.pick(obs, feats, { sample: false });
 						} else if (sel === 'value') {
-							idx = valueGuidedIndex(policy, st, seat, legalActionsWithNext(st, seat, catalog));
+							idx = valueGuidedIndex(policy, st, seat, legalActionsWithNext(st, seat, catalog), undefined, catalog);
 						} else {
-							idx = hybridIndex(policy, st, seat, legalActionsWithNext(st, seat, catalog));
+							idx = hybridIndex(policy, st, seat, legalActionsWithNext(st, seat, catalog), undefined, catalog);
 						}
 						const cmd = cands[idx];
 						typeCount[cmd.type] = (typeCount[cmd.type] ?? 0) + 1;

@@ -1,0 +1,11 @@
+{
+  "obs_dim": 55,
+  "act_dim": 52,
+  "samples": 32439,
+  "iter": 2,
+  "mode": "alphazero",
+  "plannerSeatMode": "all",
+  "recordSeatMode": "all",
+  "policyPool": "",
+  "policyPoolMix": 1
+}

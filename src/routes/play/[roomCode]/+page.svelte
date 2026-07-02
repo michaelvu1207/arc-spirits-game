@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onDestroy, onMount } from 'svelte';
 	import GameBoard2D from '$lib/components/play2d/GameBoard2D.svelte';
 	import AssetLoadingScreen from '$lib/components/play2d/AssetLoadingScreen.svelte';
 	import MenuShell from '$lib/components/play2d/MenuShell.svelte';
 	import GuardianPicker from '$lib/components/play2d/GuardianPicker.svelte';
+	import GameChat from '$lib/components/play2d/GameChat.svelte';
 	import ConnectionStatus from '$lib/components/ConnectionStatus.svelte';
 	import { seatAccent } from '$lib/components/play2d/helpers';
 	import { requestWakeLock, releaseWakeLock } from '$lib/play/wakeLock';
@@ -20,6 +22,8 @@
 		claimSeat,
 		getPlayState,
 		hydratePlayRoom,
+		loadPlayRoom,
+		postPlayJson,
 		sendPlayCommand,
 		startPlayGame
 	} from '$lib/stores/playStore.svelte';
@@ -28,7 +32,7 @@
 	import { SEAT_COLORS, NAVIGATION_TIMER_OPTIONS } from '$lib/play/types';
 
 	interface Props {
-		data: { initialView: RoomView };
+		data: { initialView?: RoomView | null };
 	}
 	let { data }: Props = $props();
 
@@ -37,15 +41,16 @@
 
 	let pendingAction = $state<string | null>(null);
 	let actionError = $state<string | null>(null);
+	let routeError = $state<string | null>(null);
 
-	const room = $derived(playState.room ?? data.initialView.projection);
-	const member = $derived(playState.member ?? data.initialView.member);
-	const isLobby = $derived(room.status === 'lobby');
+	const room = $derived(playState.room ?? data.initialView?.projection ?? null);
+	const member = $derived(playState.member ?? data.initialView?.member ?? null);
+	const isLobby = $derived(room?.status === 'lobby');
 	// Terminal state: the room was reaped server-side — a lobby that aged out
 	// (≥30 min unstarted) or was abandoned, or a live game everyone left. Show a
 	// closed card and bounce back to the browser.
-	const isClosed = $derived(room.status === 'closed');
-	const isHost = $derived(member.role === 'host');
+	const isClosed = $derived(room?.status === 'closed');
+	const isHost = $derived(member?.role === 'host');
 
 	$effect(() => {
 		if (!isLobby) stopMenu();
@@ -63,21 +68,27 @@
 	// Keep the screen awake during an active match so the device doesn't sleep
 	// mid-turn (and silently drop the player). Released when the game ends/unmounts.
 	$effect(() => {
-		if (room.status === 'active') {
+		if (room?.status === 'active') {
 			requestWakeLock();
 			return () => void releaseWakeLock();
 		}
 	});
 
-	// Bots carry this display-name prefix (see botSim.ts).
+	// Legacy bots carried this display-name prefix. New live bots are identified by
+	// the server-projected seat.isBot flag so human-looking bot names still get host controls.
 	const BOT_PREFIX = '🤖 ';
-	const isBot = (name?: string | null) => !!name && name.startsWith(BOT_PREFIX);
-	const botLabel = (name: string) => name.replace(BOT_PREFIX, '').trim();
+	const isLegacyBotName = (name?: string | null) => !!name && name.startsWith(BOT_PREFIX);
+	const isBotSeat = (seat: { displayName: string | null; isBot?: boolean }) =>
+		seat.isBot === true || isLegacyBotName(seat.displayName);
+	const botLabel = (name: string) =>
+		name.startsWith(BOT_PREFIX) ? name.replace(BOT_PREFIX, '').trim() : name;
 
 	// ── Party derivations ────────────────────────────────────────────────────
-	const mySeat = $derived(SEAT_COLORS.find((s) => room.seats[s]?.memberId === member.id) ?? null);
-	const occupiedSeats = $derived(SEAT_COLORS.filter((s) => room.seats[s]?.memberId));
-	const openSeats = $derived(SEAT_COLORS.filter((s) => !room.seats[s]?.memberId));
+	const mySeat = $derived(
+		room && member ? (SEAT_COLORS.find((s) => room.seats[s]?.memberId === member.id) ?? null) : null
+	);
+	const occupiedSeats = $derived(room ? SEAT_COLORS.filter((s) => room.seats[s]?.memberId) : []);
+	const openSeats = $derived(room ? SEAT_COLORS.filter((s) => !room.seats[s]?.memberId) : []);
 	const canStart = $derived(occupiedSeats.length > 0);
 
 	function guardianArt(name: string): string | null {
@@ -87,6 +98,7 @@
 	}
 	function takenByOthers(exceptSeat: SeatColor | null): Set<string> {
 		const set = new Set<string>();
+		if (!room) return set;
 		for (const s of SEAT_COLORS) {
 			if (s === exceptSeat) continue;
 			const g = room.seats[s]?.selectedGuardian;
@@ -98,6 +110,11 @@
 	// ── Character picker ─────────────────────────────────────────────────────
 	let pickerSeat = $state<SeatColor | null>(null);
 	let pickerIsBot = $state(false);
+	$effect(() => {
+		if (!browser) return;
+		document.body.classList.toggle('guardian-picker-open', pickerSeat !== null);
+		return () => document.body.classList.remove('guardian-picker-open');
+	});
 	function openMyPicker() {
 		if (mySeat) {
 			pickerSeat = mySeat;
@@ -125,7 +142,11 @@
 	let inviteOpen = $state(false);
 	let copied = $state(false);
 	const inviteUrl = $derived(
-		browser ? `${location.origin}/play/${room.roomCode}` : `/play/${room.roomCode}`
+		room
+			? browser
+				? `${location.origin}/play/${room.roomCode}`
+				: `/play/${room.roomCode}`
+			: ''
 	);
 	async function copyInvite() {
 		try {
@@ -137,13 +158,106 @@
 		}
 	}
 
+	const IMMERSIVE_SCROLL_ISLAND_SELECTOR = [
+		'.trait-host .traits',
+		'.players-col',
+		'.int-scroll',
+		'.legend-body',
+		'.tip.touch',
+		'.panel',
+		'.grid',
+		'.body'
+	].join(',');
+
+	function installImmersiveInputGuard() {
+		let lastTouchY = 0;
+		const isImmersive = () => document.documentElement.classList.contains('immersive-play');
+		const isEditable = (target: EventTarget | null) => {
+			if (!(target instanceof HTMLElement)) return false;
+			return !!target.closest('input, textarea, select, [contenteditable="true"]');
+		};
+		const scrollIslandFor = (target: EventTarget | null): HTMLElement | null => {
+			let el = target instanceof Element ? target : null;
+			while (el && el !== document.documentElement) {
+				if (el instanceof HTMLElement && el.matches(IMMERSIVE_SCROLL_ISLAND_SELECTOR)) {
+					if (el.scrollHeight > el.clientHeight + 1) return el;
+				}
+				el = el.parentElement;
+			}
+			return null;
+		};
+		const canScrollY = (el: HTMLElement, fingerDeltaY: number) => {
+			if (Math.abs(fingerDeltaY) < 0.5) return true;
+			if (fingerDeltaY > 0) return el.scrollTop > 0;
+			return el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+		};
+		const prevent = (event: Event) => {
+			if (isImmersive()) event.preventDefault();
+		};
+		const onTouchStart = (event: TouchEvent) => {
+			if (!isImmersive()) return;
+			if (event.touches.length > 1) {
+				event.preventDefault();
+				return;
+			}
+			lastTouchY = event.touches[0]?.clientY ?? 0;
+		};
+		const onTouchMove = (event: TouchEvent) => {
+			if (!isImmersive()) return;
+			if (event.touches.length > 1) {
+				event.preventDefault();
+				return;
+			}
+			if (isEditable(event.target)) return;
+			const currentY = event.touches[0]?.clientY ?? lastTouchY;
+			const deltaY = currentY - lastTouchY;
+			lastTouchY = currentY;
+			const island = scrollIslandFor(event.target);
+			if (island && canScrollY(island, deltaY)) return;
+			event.preventDefault();
+		};
+		const onWheel = (event: WheelEvent) => {
+			if (isImmersive() && event.ctrlKey) event.preventDefault();
+		};
+
+		document.addEventListener('touchstart', onTouchStart, { passive: false });
+		document.addEventListener('touchmove', onTouchMove, { passive: false });
+		document.addEventListener('gesturestart', prevent, { passive: false });
+		document.addEventListener('gesturechange', prevent, { passive: false });
+		document.addEventListener('gestureend', prevent, { passive: false });
+		window.addEventListener('wheel', onWheel, { passive: false });
+
+		return () => {
+			document.removeEventListener('touchstart', onTouchStart);
+			document.removeEventListener('touchmove', onTouchMove);
+			document.removeEventListener('gesturestart', prevent);
+			document.removeEventListener('gesturechange', prevent);
+			document.removeEventListener('gestureend', prevent);
+			window.removeEventListener('wheel', onWheel);
+		};
+	}
+
 	onMount(() => {
-		hydratePlayRoom(data.initialView);
+		const isE2E = new URLSearchParams(location.search).has('e2e');
+
+		const initialView = data.initialView;
+		if (initialView) {
+			hydratePlayRoom(initialView);
+		} else {
+			const roomCode = String(page.params.roomCode ?? '').trim().toUpperCase();
+			if (!roomCode) {
+				routeError = 'Missing room code.';
+			} else {
+				void loadPlayRoom(roomCode).catch((err) => {
+					routeError = err instanceof Error ? err.message : 'Failed to load room.';
+				});
+			}
+		}
 
 		const preloadAbort = new AbortController();
 		// E2E: `?e2e` skips the ~240-image board-art preload (which otherwise saturates
 		// the network and gates the board) and renders with placeholder art instead.
-		if (browser && new URLSearchParams(location.search).has('e2e')) {
+		if (isE2E) {
 			void loadAssetDataSkipImages();
 		} else {
 			void preloadAssetImages(preloadAbort.signal);
@@ -151,19 +265,25 @@
 
 		let botTimer: ReturnType<typeof setInterval> | null = null;
 		let backupBotTimer: ReturnType<typeof setInterval> | null = null;
+		let removeImmersiveInputGuard: (() => void) | null = null;
 		if (browser) {
 			document.documentElement.classList.add('immersive-play');
 			document.body.classList.add('immersive-play');
-			const tickBots = () =>
-				void fetch(`/api/play/sessions/${room.roomCode}/bots/tick`, { method: 'POST' }).catch(
+			window.scrollTo(0, 0);
+			removeImmersiveInputGuard = installImmersiveInputGuard();
+			const tickBots = () => {
+				const roomCode = room?.roomCode;
+				if (!roomCode) return;
+				void postPlayJson(`/api/play/sessions/${encodeURIComponent(roomCode)}/bots/tick`, {}).catch(
 					() => {}
 				);
+			};
 			botTimer = setInterval(() => {
 				// Drive any bot seats while we host an active game. We DON'T gate on a
 				// name check: ranked matchmaking backfills human-named bots (no 🤖), so a
 				// name-based `hasBots` misses them and they'd freeze. The server's tickBots
 				// is authoritative and a cheap no-op when the session has no bot members.
-				if (!isHost || room.status !== 'active') return;
+				if (!isHost || room?.status !== 'active') return;
 				tickBots();
 			}, 1300);
 
@@ -177,7 +297,7 @@
 			// by presence rules; this backup only matters when other humans remain.
 			const backupPeriod = 4000 + Math.floor(Math.random() * 1000); // 4–5s with jitter
 			backupBotTimer = setInterval(() => {
-				if (isHost || mySeat === null || room.status !== 'active') return;
+				if (isHost || mySeat === null || room?.status !== 'active') return;
 				tickBots();
 			}, backupPeriod);
 		}
@@ -188,6 +308,7 @@
 			if (botTimer) clearInterval(botTimer);
 			if (backupBotTimer) clearInterval(backupBotTimer);
 			if (browser) {
+				removeImmersiveInputGuard?.();
 				document.documentElement.classList.remove('immersive-play');
 				document.body.classList.remove('immersive-play');
 			}
@@ -198,58 +319,52 @@
 		if (!browser) playState.disconnect();
 	});
 
-	async function runAction(label: string, work: () => Promise<unknown>) {
+	async function runAction(label: string, work: () => Promise<unknown>): Promise<boolean> {
 		pendingAction = label;
 		actionError = null;
 		try {
 			await work();
+			return true;
 		} catch (err) {
 			actionError = err instanceof Error ? err.message : 'Action failed.';
+			return false;
 		} finally {
 			pendingAction = null;
 		}
 	}
 
 	async function postBots(path: string, body?: unknown) {
-		const res = await fetch(`/api/play/sessions/${room.roomCode}/bots/${path}`, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(body ?? {})
+		if (!room) throw new Error('No room is loaded.');
+		await postPlayJson(`/api/play/sessions/${encodeURIComponent(room.roomCode)}/bots/${path}`, {
+			...((body && typeof body === 'object' ? body : {}) as Record<string, unknown>)
 		});
-		if (!res.ok) {
-			const m = (await res.json().catch(() => null))?.message;
-			throw new Error(typeof m === 'string' ? m : 'Request failed.');
-		}
 	}
 
 	async function takeSeat() {
 		const seat = openSeats[0];
 		if (!seat) return;
-		await runAction('claim', () => claimSeat(seat));
+		const seated = await runAction('claim', () => claimSeat(seat));
+		if (!seated) return;
 		// Seated — open the character picker straight away.
 		pickerSeat = seat;
 		pickerIsBot = false;
 	}
-	// Strategy/difficulty for newly added bots. Every value is a real BOT_PROFILES key (validated
-	// server-side via profileFor); the strategy rides in the bot's display name. Trimmed to the THREE
-	// strongest PLAYABLE bots (fast heuristics — no rollout-search lag in live, host-run play), ordered
-	// by head-to-head ELO: PvP Hunter (multiplayer champion, ELO 1930), then the two top economy racers.
-	// (Slow search/ISMCTS tiers were dropped — they stutter live play; full roster still in BOT_PROFILES.)
-	let botDifficulty = $state('fast');
+	// Live bots use the shared arc-bot-v1 contract. The only public policy key is the
+	// trained ML policy; old heuristic difficulty names normalize to this server-side.
+	let botDifficulty = $state('neural');
 	const BOT_DIFFICULTIES: { value: string; label: string }[] = [
-		{ value: 'pvphunter', label: 'PvP Hunter (hardest · evil)' },
-		{ value: 'fast', label: 'Fast (economy · EA-tuned)' },
-		{ value: 'culrush', label: 'Culrush (economy)' }
+		{ value: 'neural', label: 'ML policy' }
 	];
 	const addBotAction = () =>
 		runAction('add-bot', () => postBots('add', { difficulty: botDifficulty }));
 	// Navigation timer (host-only, lobby-only). The <select> works in strings, so "none"
 	// is the sentinel for the no-limit (null) preset.
+	const navTimerDuration = $derived(room?.navigationDurationMs ?? null);
 	const navTimerValue = $derived(
-		room.navigationDurationMs == null ? 'none' : String(room.navigationDurationMs)
+		navTimerDuration == null ? 'none' : String(navTimerDuration)
 	);
 	const navTimerLabel = $derived(
-		NAVIGATION_TIMER_OPTIONS.find((o) => o.ms === room.navigationDurationMs)?.label ?? 'Custom'
+		NAVIGATION_TIMER_OPTIONS.find((o) => o.ms === navTimerDuration)?.label ?? 'Custom'
 	);
 	const setNavTimer = (value: string) =>
 		runAction('nav-timer', () =>
@@ -300,7 +415,7 @@
 
 	async function leaveRoom() {
 		// Give up my seat (if I hold one) so it frees up, then exit to the play home.
-		if (member.seatColor) {
+		if (member?.seatColor) {
 			try {
 				await sendPlayCommand({ type: 'releaseSeat' });
 			} catch {
@@ -312,11 +427,30 @@
 </script>
 
 <svelte:head>
-	<title>{room.roomCode} | Arc Spirits Play</title>
+	<title>{room?.roomCode ?? 'Room'} | Arc Spirits Play</title>
 </svelte:head>
 
-<div class:immersive-route={!isLobby && !isClosed} class="play-room">
-	{#if isClosed}
+<div class:immersive-route={!!room && !isLobby && !isClosed} class="play-room">
+	{#if routeError}
+		<MenuShell>
+			<div class="closed">
+				<span class="kicker"><span class="kn">RM</span><span class="kl"></span> Error</span>
+				<h1 class="closed-title brand-flame-text">Room unavailable</h1>
+				<p class="closed-sub">{routeError}</p>
+				<button type="button" class="closed-btn" onclick={() => goto('/play')}>
+					<span class="arrow" aria-hidden="true">←</span> Back to Servers
+				</button>
+			</div>
+		</MenuShell>
+	{:else if !room || !member}
+		<MenuShell>
+			<div class="closed">
+				<span class="kicker"><span class="kn">RM</span><span class="kl"></span> Loading</span>
+				<h1 class="closed-title brand-flame-text">Opening room</h1>
+				<p class="closed-sub">Loading the live room state.</p>
+			</div>
+		</MenuShell>
+	{:else if isClosed}
 		<MenuShell>
 			<div class="closed">
 				<span class="kicker"
@@ -368,7 +502,7 @@
 				<ul class="party reveal" style="--d: 0.12s">
 					{#each occupiedSeats as seat (seat)}
 						{@const s = room.seats[seat]}
-						{@const bot = isBot(s.displayName)}
+						{@const bot = isBotSeat(s)}
 						{@const mine = s.memberId === member.id}
 						{@const art = s.selectedGuardian ? guardianArt(s.selectedGuardian) : null}
 						<li class="row" class:mine style="--seat: {seatAccent(seat)}">
@@ -527,6 +661,10 @@
 						</div>
 					</div>
 				{/if}
+
+				<div class="reveal" style="--d: 0.26s">
+					<GameChat variant="panel" />
+				</div>
 			</div>
 
 			<GuardianPicker
@@ -545,7 +683,7 @@
 		</MenuShell>
 	{:else}
 		<div class="game-viewport">
-			{#if !assetState.imagesReady}
+			{#if !assetState.isLoaded}
 				<AssetLoadingScreen progress={assetState.imageProgress} dataReady={assetState.isLoaded} />
 			{:else}
 				<GameBoard2D {room} {member} assets={assetState} />
@@ -565,15 +703,32 @@
 	:global(body.immersive-play) {
 		height: 100%;
 		overflow: hidden;
+		overscroll-behavior: none;
+	}
+	:global(body.immersive-play) {
+		position: fixed;
+		inset: 0;
+		width: 100%;
+		max-width: 100%;
+		height: 100vh;
+		height: 100dvh;
+		margin: 0;
+		touch-action: none;
 	}
 	:global(body.immersive-play .topbar) {
 		display: none !important;
 	}
 	:global(body.immersive-play .app),
 	:global(body.immersive-play .app > .flex-1) {
+		position: fixed;
+		inset: 0;
+		width: 100%;
 		height: 100vh; /* fallback */
 		height: 100dvh;
+		min-height: 0;
 		overflow: hidden;
+		overscroll-behavior: none;
+		touch-action: none;
 	}
 
 	.play-room {
@@ -591,12 +746,16 @@
 		margin: 0;
 		padding: 0;
 		overflow: hidden;
+		overscroll-behavior: none;
+		touch-action: none;
 	}
 	.game-viewport {
 		position: relative;
 		width: 100%;
 		height: 100%;
 		overflow: hidden;
+		overscroll-behavior: none;
+		touch-action: none;
 		background: var(--color-void);
 	}
 
@@ -1121,6 +1280,191 @@
 		}
 		.start {
 			margin-left: 0;
+		}
+	}
+
+	@media (orientation: landscape) and (max-height: 520px) {
+		.play-room {
+			max-width: none;
+			padding: 0;
+		}
+		.lobby {
+			box-sizing: border-box;
+			height: 100%;
+			max-width: none;
+			display: grid;
+			grid-template-columns: minmax(210px, 0.68fr) minmax(360px, 1fr);
+			grid-template-rows: auto 1fr auto;
+			align-items: stretch;
+			gap: 12px 18px;
+			padding:
+				calc(72px + env(safe-area-inset-top))
+				max(86px, calc(28px + env(safe-area-inset-right)))
+				calc(24px + env(safe-area-inset-bottom))
+				max(54px, calc(28px + env(safe-area-inset-left)));
+		}
+		.leave-btn {
+			top: calc(24px + env(safe-area-inset-top));
+			left: max(54px, calc(28px + env(safe-area-inset-left)));
+			min-height: 36px;
+			padding: 7px 13px;
+			font-size: 0.66rem;
+		}
+		.lhead {
+			grid-column: 1;
+			grid-row: 1;
+			min-width: 0;
+			display: block;
+		}
+		.kicker {
+			gap: 8px;
+			font-size: 0.56rem;
+			letter-spacing: 0.22em;
+		}
+		.kicker .kl {
+			width: 14px;
+		}
+		.code {
+			margin-top: 5px;
+			font-size: clamp(2rem, 14vh, 3rem);
+			letter-spacing: 0.07em;
+		}
+		.pill {
+			position: absolute;
+			top: calc(72px + env(safe-area-inset-top));
+			right: max(86px, calc(28px + env(safe-area-inset-right)));
+			padding: 5px 10px;
+			font-size: 0.58rem;
+		}
+		.error {
+			grid-column: 1 / -1;
+			padding: 9px 12px;
+			font-size: 0.78rem;
+		}
+		.party {
+			grid-column: 2;
+			grid-row: 1 / span 2;
+			align-self: stretch;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			align-content: start;
+			border-radius: 12px;
+			overflow: auto;
+			min-height: 0;
+		}
+		.row {
+			min-width: 0;
+			gap: 9px;
+			padding: 9px 10px;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+		}
+		.row:nth-child(odd) {
+			border-right: 1px solid rgba(255, 255, 255, 0.05);
+		}
+		.row:last-child {
+			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+		}
+		.seatdot {
+			width: 7px;
+			height: 7px;
+		}
+		.ava {
+			width: 34px;
+			height: 34px;
+			border-radius: 9px;
+		}
+		.nm {
+			font-size: 0.82rem;
+			gap: 6px;
+		}
+		.ch {
+			font-size: 0.68rem;
+		}
+		.rowacts {
+			gap: 5px;
+		}
+		.mini {
+			min-height: 34px;
+			padding: 6px 9px;
+			font-size: 0.56rem;
+			letter-spacing: 0.09em;
+			border-radius: 7px;
+		}
+		.bar {
+			grid-column: 1 / -1;
+			grid-row: 3;
+			display: grid;
+			grid-template-columns: repeat(4, minmax(100px, 1fr)) minmax(138px, 0.9fr);
+			align-items: stretch;
+			gap: 9px;
+			margin-top: 0;
+		}
+		.setting {
+			min-width: 0;
+			display: grid;
+			grid-template-columns: auto minmax(74px, 1fr);
+			align-items: center;
+			gap: 7px;
+		}
+		.setting-label {
+			font-size: 0.56rem;
+			letter-spacing: 0.1em;
+		}
+		.setting-chip,
+		.ghost,
+		.botdiff,
+		.primary,
+		.start {
+			min-height: 44px;
+			box-sizing: border-box;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			padding: 9px 12px;
+			font-size: 0.64rem;
+			letter-spacing: 0.1em;
+			border-radius: 8px;
+			white-space: nowrap;
+		}
+		.start {
+			margin-left: 0;
+			gap: 8px;
+			padding-inline: 14px;
+		}
+		.start svg {
+			width: 16px;
+			height: 16px;
+		}
+		.invite {
+			grid-column: 1 / -1;
+			grid-row: 2;
+			align-self: end;
+			padding: 10px 12px;
+			border-radius: 10px;
+		}
+		.ieyebrow {
+			font-size: 0.54rem;
+		}
+		.irow input {
+			min-height: 40px;
+			padding: 8px 10px;
+			font-size: 0.72rem;
+		}
+		.closed {
+			max-width: none;
+			min-height: 100%;
+			padding:
+				calc(62px + env(safe-area-inset-top))
+				max(78px, calc(24px + env(safe-area-inset-right)))
+				calc(28px + env(safe-area-inset-bottom))
+				max(48px, calc(24px + env(safe-area-inset-left)));
+		}
+		.closed-title {
+			font-size: clamp(1.8rem, 12vh, 2.7rem);
+		}
+		.closed-sub {
+			font-size: 0.86rem;
+			line-height: 1.35;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

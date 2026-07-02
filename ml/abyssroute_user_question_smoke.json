@@ -1,0 +1,101 @@
+[
+  {
+    "diceCount": 0,
+    "diceTier": "arcane",
+    "startingMaxBarrier": "catalog-default",
+    "spiritAnimalCount": 0,
+    "games": 4,
+    "seatGames": 16,
+    "avgVP": 3.38,
+    "avgStatus": 3,
+    "avgRounds": 6,
+    "finishedPct": 100,
+    "abyssLocksPerSeatGame": 6,
+    "combatsPerSeatGame": 6.38,
+    "killsPerSeatGame": 1.13,
+    "rewardsPerSeatGame": 1.13,
+    "rewardVpPerSeatGame": 3.38,
+    "actualVpFromRewardCommandsPerSeatGame": 3.38,
+    "decisionTypes": {
+      "lockNavigation": 96,
+      "startCombat": 102,
+      "endLocationActions": 64,
+      "resolveMonsterReward": 18,
+      "commitBenefits": 85,
+      "commitAwakening": 96,
+      "discardSpirit": 32,
+      "discardRune": 19,
+      "commitCleanup": 67
+    },
+    "rewardLabels": {
+      "2 Victory Points": 18,
+      "1 Victory Point": 18
+    }
+  },
+  {
+    "diceCount": 0,
+    "diceTier": "arcane",
+    "startingMaxBarrier": "catalog-default",
+    "spiritAnimalCount": 1,
+    "games": 4,
+    "seatGames": 16,
+    "avgVP": 4.69,
+    "avgStatus": 3,
+    "avgRounds": 6,
+    "finishedPct": 100,
+    "abyssLocksPerSeatGame": 6,
+    "combatsPerSeatGame": 6.31,
+    "killsPerSeatGame": 1.56,
+    "rewardsPerSeatGame": 1.56,
+    "rewardVpPerSeatGame": 4.69,
+    "actualVpFromRewardCommandsPerSeatGame": 4.69,
+    "decisionTypes": {
+      "lockNavigation": 96,
+      "startCombat": 101,
+      "resolveMonsterReward": 25,
+      "endLocationActions": 61,
+      "commitBenefits": 86,
+      "commitAwakening": 96,
+      "discardSpirit": 32,
+      "discardRune": 24,
+      "commitCleanup": 64
+    },
+    "rewardLabels": {
+      "2 Victory Points": 25,
+      "1 Victory Point": 25
+    }
+  },
+  {
+    "diceCount": 0,
+    "diceTier": "arcane",
+    "startingMaxBarrier": "catalog-default",
+    "spiritAnimalCount": 2,
+    "games": 4,
+    "seatGames": 16,
+    "avgVP": 3.56,
+    "avgStatus": 3,
+    "avgRounds": 6,
+    "finishedPct": 100,
+    "abyssLocksPerSeatGame": 6,
+    "combatsPerSeatGame": 6,
+    "killsPerSeatGame": 1.19,
+    "rewardsPerSeatGame": 1.19,
+    "rewardVpPerSeatGame": 3.56,
+    "actualVpFromRewardCommandsPerSeatGame": 3.56,
+    "decisionTypes": {
+      "lockNavigation": 96,
+      "startCombat": 96,
+      "resolveMonsterReward": 19,
+      "endLocationActions": 64,
+      "commitBenefits": 86,
+      "commitAwakening": 96,
+      "discardSpirit": 32,
+      "discardRune": 21,
+      "commitCleanup": 64
+    },
+    "rewardLabels": {
+      "2 Victory Points": 19,
+      "1 Victory Point": 19
+    }
+  }
+]

@@ -1,6 +1,11 @@
 <script lang="ts">
 	import type { PlayerProjection } from '$lib/play/types';
-	import type { GameLocationAsset, IconPoolEntry, MatSlotSnapshot, RewardIconToken } from '$lib/types';
+	import type {
+		GameLocationAsset,
+		IconPoolEntry,
+		MatSlotSnapshot,
+		RewardIconToken
+	} from '$lib/types';
 	import {
 		buildLocationInteractions,
 		canAfford,
@@ -39,7 +44,10 @@
 	// than one eligible item to discard — each is the player's choice. `slots` are the
 	// held mats (with their array index into player.mats) that could pay cost slot `ci`.
 	type CostChooser = { ci: number; slots: { arrayIndex: number; slot: MatSlotSnapshot }[] };
-	function costChooserFor(interaction: LocationInteraction, ci: number): CostChooser['slots'] | null {
+	function costChooserFor(
+		interaction: LocationInteraction,
+		ci: number
+	): CostChooser['slots'] | null {
 		const mats = player?.mats ?? [];
 		const req = interaction.cost[ci];
 		if (!req || !isWildcardCost(req)) return null;
@@ -104,6 +112,20 @@
 		return soloRow ? 'solo' : 'base';
 	}
 
+	// A card is "dense" when it carries many reward icons / chooser options. Dense
+	// cards shrink their icons + chrome (see .int-card.dense CSS) so every option
+	// stays visible inside the fixed-size card instead of overflowing and being
+	// clipped (the card is overflow:hidden) — this is the "lots of choices" case.
+	function iconSlotCount(interaction: LocationInteraction): number {
+		let n = interaction.costTokens.length;
+		for (const t of interaction.gainTokens) n += isOr(t) ? t.icon_ids.length : 1;
+		return n;
+	}
+	function isDense(interaction: LocationInteraction): boolean {
+		if (iconSlotCount(interaction) >= 4) return true;
+		return interaction.gainTokens.some((t) => isOr(t) && t.icon_ids.length >= 3);
+	}
+
 	function orSlotOf(interaction: LocationInteraction, tokenIndex: number): number {
 		let slot = 0;
 		for (let i = 0; i < tokenIndex; i += 1) if (isOr(interaction.gainTokens[i])) slot += 1;
@@ -146,7 +168,8 @@
 				if (chosen?.type === 'relic') grantsRelic = true;
 			}
 		}
-		const modInjectorFree = (awakenedClassCounts(player)['Mod Injector'] ?? 0) >= 1 && grantsAugment;
+		const modInjectorFree =
+			(awakenedClassCounts(player)['Mod Injector'] ?? 0) >= 1 && grantsAugment;
 		const undercoverFree = !!player.freeNextRelicTrade && grantsRelic;
 		return modInjectorFree || undercoverFree;
 	}
@@ -195,178 +218,188 @@
 {:else}
 	<div class="int-scroll">
 		<div class="int-grid" data-testid="interaction-grid">
-		{#each interactions as interaction (interaction.rowIndex)}
-			{#each Array(rowAllowance) as _, inst (inst)}
-			{@const isUsed = instUsed(interaction, inst)}
-			{@const cantAfford = !affordable(interaction)}
-			{@const isTrade = interaction.kind === 'trade'}
-			{@const soloGain = interaction.gainTokens.length === 1}
-			{@const soloCost = interaction.costTokens.length === 1}
-			<div
-				class="int-card"
-				class:disabled={instDisabled(interaction, inst)}
-				class:flipped={isUsed}
-				class:trade={isTrade}
-				style="--accent: {accent}"
-				role="button"
-				tabindex={instDisabled(interaction, inst) ? -1 : 0}
-				data-testid={rowAllowance > 1
-					? `interaction-${interaction.rowIndex}-${inst}`
-					: `interaction-${interaction.rowIndex}`}
-				onclick={() => resolve(interaction, inst)}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						e.preventDefault();
-						resolve(interaction, inst);
-					}
-				}}
-			>
-				<div class="flipper" class:flipped={isUsed}>
-					<!-- Front: the interaction -->
-					<div class="face front">
-						<div class="flow">
-							{#if isTrade}
-								<div class="row cost">
-									{#each interaction.costTokens as token, ci (ci)}
-										{@const costOpts = costChooserFor(interaction, ci)}
-										{#if costOpts}
-											{@const pickedIdx = chosenCostIndex(
-												interaction.rowIndex,
-												ci,
-												costOpts[0].arrayIndex
-											)}
-											<span class="chooser" role="group" aria-label="Choose which one to discard">
-												<span class="chooser-label">
-													<span class="tap-dot" aria-hidden="true"></span>Discard one
+			{#each interactions as interaction (interaction.rowIndex)}
+				{#each Array(rowAllowance) as _, inst (inst)}
+					{@const isUsed = instUsed(interaction, inst)}
+					{@const cantAfford = !affordable(interaction)}
+					{@const isTrade = interaction.kind === 'trade'}
+					{@const soloGain = interaction.gainTokens.length === 1}
+					{@const soloCost = interaction.costTokens.length === 1}
+					<div
+						class="int-card"
+						class:disabled={instDisabled(interaction, inst)}
+						class:flipped={isUsed}
+						class:trade={isTrade}
+						class:dense={isDense(interaction)}
+						style="--accent: {accent}"
+						role="button"
+						tabindex={instDisabled(interaction, inst) ? -1 : 0}
+						data-testid={rowAllowance > 1
+							? `interaction-${interaction.rowIndex}-${inst}`
+							: `interaction-${interaction.rowIndex}`}
+						onclick={() => resolve(interaction, inst)}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								resolve(interaction, inst);
+							}
+						}}
+					>
+						<div class="flipper" class:flipped={isUsed}>
+							<!-- Front: the interaction -->
+							<div class="face front">
+								<div class="flow">
+									{#if isTrade}
+										<div class="row cost">
+											{#each interaction.costTokens as token, ci (ci)}
+												{@const costOpts = costChooserFor(interaction, ci)}
+												{#if costOpts}
+													{@const pickedIdx = chosenCostIndex(
+														interaction.rowIndex,
+														ci,
+														costOpts[0].arrayIndex
+													)}
+													<span
+														class="chooser"
+														role="group"
+														aria-label="Choose which one to discard"
+													>
+														<span class="chooser-label">
+															<span class="tap-dot" aria-hidden="true"></span>Discard one
+														</span>
+														<span class="chooser-opts">
+															{#each costOpts as opt, oi (opt.arrayIndex)}
+																<button
+																	type="button"
+																	class="opt"
+																	class:selected={pickedIdx === opt.arrayIndex}
+																	aria-pressed={pickedIdx === opt.arrayIndex}
+																	title="Tap to discard {opt.slot.name ?? 'this'}"
+																	onclick={(e) => {
+																		e.stopPropagation();
+																		selectCost(interaction.rowIndex, ci, opt.arrayIndex);
+																	}}
+																>
+																	{@render icon(slotIconUrl(opt.slot), 'base')}
+																</button>
+															{/each}
+														</span>
+													</span>
+												{:else if !isOr(token)}
+													{@render icon(iconUrl(token), iconSize(token, soloCost))}
+												{/if}
+											{/each}
+										</div>
+										<span class="arrow" aria-hidden="true">
+											<svg viewBox="0 0 24 28" width="22" height="26">
+												<path
+													d="M12 2 V20 M5 14 L12 22 L19 14"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2.4"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												/>
+											</svg>
+										</span>
+									{/if}
+
+									<div class="row gain">
+										{#each interaction.gainTokens as token, ti (ti)}
+											{#if isOr(token)}
+												{@const slot = orSlotOf(interaction, ti)}
+												{@const picked = selectedOption(interaction.rowIndex, slot)}
+												<span class="chooser" role="group" aria-label="Choose one of these rewards">
+													<span class="chooser-label">
+														<span class="tap-dot" aria-hidden="true"></span>Choose one
+													</span>
+													<span class="chooser-opts">
+														{#each token.icon_ids as optId, oi (optId + oi)}
+															<button
+																type="button"
+																class="opt"
+																class:selected={picked === oi}
+																aria-pressed={picked === oi}
+																title="Tap to choose this reward"
+																onclick={(e) => {
+																	e.stopPropagation();
+																	selectOption(interaction.rowIndex, slot, oi);
+																}}
+															>
+																{@render icon(iconUrl(optId), 'base')}
+															</button>
+														{/each}
+													</span>
 												</span>
-												<span class="chooser-opts">
-													{#each costOpts as opt, oi (opt.arrayIndex)}
-														{#if oi > 0}<span class="or-sep" aria-hidden="true">or</span>{/if}
-														<button
-															type="button"
-															class="opt"
-															class:selected={pickedIdx === opt.arrayIndex}
-															aria-pressed={pickedIdx === opt.arrayIndex}
-															title="Tap to discard {opt.slot.name ?? 'this'}"
-															onclick={(e) => {
-																e.stopPropagation();
-																selectCost(interaction.rowIndex, ci, opt.arrayIndex);
-															}}
-														>
-															{@render icon(slotIconUrl(opt.slot), 'base')}
-														</button>
-													{/each}
-												</span>
-											</span>
-										{:else if !isOr(token)}
-											{@render icon(iconUrl(token), iconSize(token, soloCost))}
-										{/if}
+											{:else}
+												{@render icon(iconUrl(token), iconSize(token, soloGain))}
+											{/if}
+										{/each}
+									</div>
+								</div>
+
+								<span class="cta" class:locked={cantAfford}>
+									{#if cantAfford}
+										<span class="lock" aria-hidden="true"></span>Can't afford
+									{:else if isTrade}
+										Pay · Take
+									{:else}
+										Take
+									{/if}
+								</span>
+							</div>
+
+							<!-- Back: the result (shown once resolved; the card reads as disabled) -->
+							<div class="face back">
+								<div class="type result">
+									<span class="check" aria-hidden="true"></span>
+									<span class="type-label">{isTrade ? 'Trade' : 'Gain'} complete</span>
+								</div>
+								<div class="result-body">
+									{#each resultLines(interaction, inst) as line, li (li)}
+										<p>{line}</p>
 									{/each}
 								</div>
-								<span class="arrow" aria-hidden="true">
-									<svg viewBox="0 0 24 28" width="22" height="26">
-										<path d="M12 2 V20 M5 14 L12 22 L19 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
-									</svg>
-								</span>
-							{/if}
-
-							<div class="row gain">
-								{#each interaction.gainTokens as token, ti (ti)}
-									{#if isOr(token)}
-										{@const slot = orSlotOf(interaction, ti)}
-										{@const picked = selectedOption(interaction.rowIndex, slot)}
-										<span class="chooser" role="group" aria-label="Choose one of these rewards">
-											<span class="chooser-label">
-												<span class="tap-dot" aria-hidden="true"></span>Choose one
-											</span>
-											<span class="chooser-opts">
-												{#each token.icon_ids as optId, oi (optId + oi)}
-													{#if oi > 0}<span class="or-sep" aria-hidden="true">or</span>{/if}
-													<button
-														type="button"
-														class="opt"
-														class:selected={picked === oi}
-														aria-pressed={picked === oi}
-														title="Tap to choose this reward"
-														onclick={(e) => {
-															e.stopPropagation();
-															selectOption(interaction.rowIndex, slot, oi);
-														}}
-													>
-														{@render icon(iconUrl(optId), 'base')}
-													</button>
-												{/each}
-											</span>
-										</span>
-									{:else}
-										{@render icon(iconUrl(token), iconSize(token, soloGain))}
-									{/if}
-								{/each}
 							</div>
 						</div>
-
-						<span class="cta" class:locked={cantAfford}>
-							{#if cantAfford}
-								<span class="lock" aria-hidden="true"></span>Can't afford
-							{:else if isTrade}
-								Pay · Take
-							{:else}
-								Take
-							{/if}
-						</span>
 					</div>
-
-					<!-- Back: the result (shown once resolved; the card reads as disabled) -->
-					<div class="face back">
-						<div class="type result">
-							<span class="check" aria-hidden="true"></span>
-							<span class="type-label">{isTrade ? 'Trade' : 'Gain'} complete</span>
-						</div>
-						<div class="result-body">
-							{#each resultLines(interaction, inst) as line, li (li)}
-								<p>{line}</p>
-							{/each}
-						</div>
-					</div>
-				</div>
-			</div>
-		{/each}
-		{/each}
+				{/each}
+			{/each}
 		</div>
 	</div>
 {/if}
 
 <style>
-	/* Keep the whole card set inside the visible stage. The location phase gives .view a
-	   definite height, so this region flexes to fill exactly the space left after the
-	   action heading and scrolls only when the cards genuinely exceed it — no viewport
-	   guesswork, robust to heading wrap / safe-area insets / the in-flow pass-turn footer.
-	   Cards top-align so the scroll top stays reachable; the padding leaves room for the
-	   desktop hover-lift so it isn't clipped when nothing scrolls. */
-	.int-scroll {
-		width: 100%;
-		/* Size to the cards (don't greedily fill the stage) so the header + card row
-		   centre together vertically via .view's justify-content. Still shrinks +
-		   scrolls (min-height:0 + overflow-y) if the cards ever outgrow the stage. */
-		flex: 0 1 auto;
-		min-height: 0;
-		overflow-y: auto;
-		overflow-x: hidden;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 1rem 0.25rem;
-		scrollbar-width: thin;
-	}
+		/* Keep the whole card set inside the visible stage. The parent location action view
+		   gives this region a stable content track under the instruction header, so the header
+		   stays put while the cards center or scroll inside the remaining space. */
+		.int-scroll {
+			width: 100%;
+			flex: 1 1 auto;
+			min-height: 0;
+			max-height: 100%;
+			overflow-y: auto;
+			overflow-x: hidden;
+			overscroll-behavior: contain;
+			-webkit-overflow-scrolling: touch;
+			touch-action: pan-y;
+			display: flex;
+			justify-content: center;
+			align-items: flex-start;
+			padding: 1rem 0.25rem;
+			box-sizing: border-box;
+			scrollbar-width: thin;
+		}
 	.int-grid {
 		display: flex;
 		flex-wrap: nowrap;
-		gap: 1rem;
+		gap: var(--int-grid-gap, 1rem);
 		justify-content: center;
 		align-items: stretch;
-		/* Stay clear of the side floats (trait list + leaderboard) at any width. */
+		/* The GameBoard stage track already excludes the trait list, leaderboard, and
+		   rail. Size to that container instead of guessing with viewport math. */
 		width: 100%;
-		max-width: min(1100px, calc(100vw - 700px));
+		max-width: min(1100px, 100%);
 		margin: 0 auto;
 		/* Perspective lives here so the cards' content can flip without putting the
 		   frosted glass (backdrop-filter) inside a 3D subtree — where it wouldn't render. */
@@ -380,9 +413,10 @@
 		display: flex;
 		flex: 1 1 0;
 		min-width: 0;
-		max-width: 17rem;
+		min-height: 0;
+		max-width: var(--int-card-max, 17rem);
 		overflow: hidden;
-		border-radius: 18px;
+		border-radius: var(--int-card-radius, 18px);
 		border: 1px solid rgba(255, 255, 255, 0.14);
 		background: rgba(15, 10, 28, 0.26);
 		-webkit-backdrop-filter: blur(40px) saturate(1.4);
@@ -391,7 +425,12 @@
 			0 16px 44px rgba(0, 0, 0, 0.45),
 			inset 0 1px 0 rgba(255, 255, 255, 0.18);
 		cursor: pointer;
-		transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), border-color 200ms ease, box-shadow 200ms ease, background 200ms ease, opacity 200ms ease;
+		transition:
+			transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+			border-color 200ms ease,
+			box-shadow 200ms ease,
+			background 200ms ease,
+			opacity 200ms ease;
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.int-card:not(.disabled):hover {
@@ -399,7 +438,6 @@
 			border-color: color-mix(in srgb, var(--accent) 55%, rgba(255, 255, 255, 0.25));
 			box-shadow:
 				0 22px 54px rgba(0, 0, 0, 0.55),
-				0 0 30px color-mix(in srgb, var(--accent) 26%, transparent),
 				inset 0 1px 0 rgba(255, 255, 255, 0.22);
 		}
 	}
@@ -441,7 +479,7 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: 0.75rem;
 		min-height: 16rem;
 		padding: 1.4rem 1.15rem 1.2rem;
 		text-align: center;
@@ -454,7 +492,7 @@
 		gap: 0.9rem;
 	}
 
-	/* ── Type label — gradient eyebrow (gain = ember, trade = teal) ─────────── */
+	/* ── Type label ────────────────────────────────────────────────────────── */
 	.type {
 		display: inline-flex;
 		align-items: center;
@@ -467,16 +505,13 @@
 		letter-spacing: 0.3em;
 		text-transform: uppercase;
 		padding-left: 0.06em;
-		background: var(--gradient-ember, linear-gradient(135deg, #ff704d, #ffd56a));
-		-webkit-background-clip: text;
-		background-clip: text;
-		-webkit-text-fill-color: transparent;
-		color: transparent;
+		color: color-mix(in srgb, var(--accent) 68%, var(--brand-amber, #ffba3d));
+	}
+	.int-card.trade .type-label {
+		color: var(--brand-teal, #20e0c1);
 	}
 	/* Result heading is calm/muted — the card is done. */
 	.type.result .type-label {
-		background: none;
-		-webkit-text-fill-color: initial;
 		color: var(--color-parchment, #d8d2e8);
 	}
 	.check {
@@ -504,17 +539,23 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.4rem;
+		gap: 0.28rem;
 		flex: 1;
 		justify-content: center;
 		width: 100%;
 	}
 	.row {
 		display: inline-flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		align-items: center;
 		justify-content: center;
-		gap: 0.6rem;
+		align-self: center;
+		flex: 0 1 auto;
+		gap: 0.45rem;
+		width: fit-content;
+		min-width: 0;
+		max-width: 100%;
+		margin-inline: auto;
 	}
 	.arrow {
 		display: grid;
@@ -524,8 +565,15 @@
 		animation: arrow-bob 1.8s ease-in-out infinite;
 	}
 	@keyframes arrow-bob {
-		0%, 100% { transform: translateY(-1px); opacity: 0.8; }
-		50% { transform: translateY(3px); opacity: 1; }
+		0%,
+		100% {
+			transform: translateY(-1px);
+			opacity: 0.8;
+		}
+		50% {
+			transform: translateY(3px);
+			opacity: 1;
+		}
 	}
 
 	/* ── Icons — uniform sized boxes, art floats on a soft shadow ──────────── */
@@ -534,6 +582,7 @@
 		place-items: center;
 		width: var(--icon);
 		height: var(--icon);
+		flex: 0 0 var(--icon);
 	}
 	.ico.base {
 		--icon: 3rem;
@@ -550,7 +599,9 @@
 		height: 100%;
 		object-fit: contain;
 		filter: drop-shadow(0 3px 9px rgba(0, 0, 0, 0.6));
-		transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), filter 200ms ease;
+		transition:
+			transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+			filter 200ms ease;
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.int-card:not(.disabled):hover .ico img {
@@ -559,27 +610,30 @@
 		}
 	}
 
-	/* ── "Or" chooser — an explicit "pick one of these" control. The label + the
-	   "or" divider spell out that it's an either/or choice, each option reads as a
-	   real tappable target (outlined when idle, accent-filled + ticked when chosen)
-	   rather than a faint ghost, and the dashed accent frame sets the whole group
-	   apart from the static reward icons beside it. ──────────────────────────── */
+	/* ── Choice strip — lightweight label with only the icons as tap targets. ── */
 	.chooser {
+		--choice-size: 3.45rem;
 		display: inline-flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.45rem;
-		padding: 0.5rem 0.55rem 0.45rem;
-		border-radius: 16px;
+		flex: 0 1 auto;
+		min-width: 0;
+		gap: 0.22rem;
+		max-width: 100%;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: none;
+		box-shadow: none;
 	}
 	.chooser-label {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.34rem;
+		gap: 0.25rem;
 		font-family: var(--font-display);
-		font-size: 0.8rem;
+		font-size: 0.72rem;
 		font-weight: 700;
-		letter-spacing: 0.18em;
+		letter-spacing: 0.16em;
 		text-transform: uppercase;
 		color: color-mix(in srgb, var(--accent) 55%, #fff 45%);
 	}
@@ -592,49 +646,65 @@
 		animation: tap-pulse 1.6s ease-in-out infinite;
 	}
 	@keyframes tap-pulse {
-		0%, 100% { transform: scale(0.8); opacity: 0.55; }
-		50% { transform: scale(1.15); opacity: 1; }
+		0%,
+		100% {
+			transform: scale(0.8);
+			opacity: 0.55;
+		}
+		50% {
+			transform: scale(1.15);
+			opacity: 1;
+		}
 	}
 	.chooser-opts {
 		display: inline-flex;
+		flex-wrap: nowrap;
 		align-items: center;
-		gap: 0.4rem;
-	}
-	.or-sep {
-		font-family: var(--font-display);
-		font-size: 0.8rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--color-fog, #8d8aa1);
+		justify-content: center;
+		flex: 0 1 auto;
+		min-width: 0;
+		gap: 0.28rem;
+		max-width: 100%;
 	}
 	.opt {
 		position: relative;
 		display: grid;
 		place-items: center;
-		padding: 0.3rem;
-		border: 1px solid rgba(255, 255, 255, 0.22);
-		border-radius: 12px;
-		background: rgba(255, 255, 255, 0.04);
+		width: var(--choice-size);
+		height: var(--choice-size);
+		min-width: var(--choice-size);
+		min-height: var(--choice-size);
+		flex: 0 0 var(--choice-size);
+		padding: 0.18rem;
+		border: 1px solid transparent;
+		border-radius: 10px;
+		background: transparent;
 		cursor: pointer;
-		opacity: 0.82;
-		transition: opacity 140ms ease, transform 140ms ease, background 140ms ease,
-			border-color 140ms ease, box-shadow 140ms ease;
+		opacity: 0.86;
+		transition:
+			opacity 140ms ease,
+			transform 140ms ease,
+			filter 140ms ease,
+			background 140ms ease,
+			border-color 140ms ease,
+			box-shadow 140ms ease;
+	}
+	.chooser-opts:has(.opt.selected) .opt:not(.selected) {
+		opacity: 0.34;
+		filter: grayscale(0.7) saturate(0.65);
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.opt:hover {
 			opacity: 1;
-			transform: translateY(-2px);
-			border-color: color-mix(in srgb, var(--accent) 55%, rgba(255, 255, 255, 0.3));
+			transform: translateY(-2px) scale(1.04);
 		}
 	}
 	.opt.selected {
 		opacity: 1;
-		border-color: color-mix(in srgb, var(--accent) 80%, transparent);
-		background: color-mix(in srgb, var(--accent) 30%, transparent);
-		box-shadow:
-			0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
-			0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+		filter: none;
+		border-color: transparent;
+		background: transparent;
+		box-shadow: none;
 	}
 	/* A check badge on the chosen option makes "this is the one you'll get" unmistakable. */
 	.opt.selected::after {
@@ -649,6 +719,45 @@
 			url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 13l4 4L19 7' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
 			center / 10px no-repeat;
 		box-shadow: 0 0 0 2px rgba(15, 10, 28, 0.9);
+	}
+
+	/* ── Dense card — many reward icons / chooser options. Shrink the icons, chrome
+	   and spacing so every option stays visible inside the fixed-size card rather
+	   than overflowing (and being clipped) or pushing the CTA off the bottom. ── */
+	.int-card.dense .face {
+		min-height: 13rem;
+		padding: 0.9rem 0.75rem 0.85rem;
+		gap: 0.45rem;
+	}
+	.int-card.dense .flow {
+		gap: 0.18rem;
+	}
+	.int-card.dense .row {
+		gap: 0.24rem;
+	}
+	.int-card.dense .ico.base {
+		--icon: 2.2rem;
+	}
+	.int-card.dense .ico.solo {
+		--icon: 3.2rem;
+	}
+	.int-card.dense .ico.act {
+		--icon: 5rem;
+	}
+	.int-card.dense .chooser {
+		--choice-size: 2.5rem;
+		gap: 0.16rem;
+		padding: 0;
+	}
+	.int-card.dense .chooser-opts {
+		gap: 0.18rem;
+	}
+	.int-card.dense .opt {
+		padding: 0.14rem;
+		border-radius: 10px;
+	}
+	.int-card.dense .arrow {
+		transform: scale(0.8);
 	}
 
 	/* ── Result body ───────────────────────────────────────────────────────── */
@@ -677,19 +786,22 @@
 		padding: 0.52rem 1.1rem;
 		border-radius: 999px;
 		color: var(--color-void, #0c0518);
-		background: var(--gradient-ember, linear-gradient(135deg, #ff704d, #ffd56a));
-		box-shadow: 0 4px 14px color-mix(in srgb, var(--brand-amber, #ffba3d) 35%, transparent);
-		transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+		background: color-mix(in srgb, var(--accent) 72%, var(--brand-amber, #ffba3d));
+		box-shadow: none;
+		transition:
+			transform 160ms ease,
+			box-shadow 160ms ease,
+			filter 160ms ease;
 	}
 	.int-card.trade .cta {
-		background: linear-gradient(135deg, var(--brand-teal, #20e0c1), var(--brand-cyan, #24d4ff));
-		box-shadow: 0 4px 14px color-mix(in srgb, var(--brand-teal, #20e0c1) 35%, transparent);
+		background: var(--brand-teal, #20e0c1);
+		box-shadow: none;
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.int-card:not(.disabled):hover .cta {
 			transform: translateY(-2px);
 			filter: brightness(1.08);
-			box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 45%, transparent);
+			box-shadow: none;
 		}
 	}
 	.cta.locked {
@@ -766,10 +878,10 @@
 		.int-card.flipped {
 			background: rgba(10, 7, 20, 0.82);
 		}
-		.face {
-			min-height: 9rem;
-			padding: 0.9rem 0.75rem;
-			gap: 0.7rem;
+			.face {
+				min-height: 9rem;
+				padding: 0.75rem 0.6rem;
+				gap: 0.5rem;
 		}
 		/* Shrink the headline icons so a 2-column, multi-row grid fits the phone stage
 		   without overflowing under the pass-turn bar. */
@@ -785,10 +897,10 @@
 		.cta {
 			min-height: 44px;
 		}
-		.opt {
-			min-width: 44px;
-			min-height: 44px;
-		}
+			.chooser {
+				--choice-size: 40px;
+				padding: 0;
+			}
 	}
 
 	/* On reduced-motion devices, drop backdrop-filter entirely on these large card
@@ -802,6 +914,83 @@
 		}
 		.int-card.flipped {
 			background: rgba(10, 7, 20, 0.94);
+		}
+	}
+
+	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+		.int-scroll {
+			padding: 0.45rem 0.15rem;
+		}
+		.int-grid {
+			gap: 0.55rem;
+			max-width: 100%;
+		}
+		.int-card {
+			max-width: 12.25rem;
+			border-radius: 12px;
+			background: rgba(15, 10, 28, 0.66);
+			-webkit-backdrop-filter: blur(10px);
+			backdrop-filter: blur(10px);
+			box-shadow:
+				0 8px 22px rgba(0, 0, 0, 0.42),
+				inset 0 1px 0 rgba(255, 255, 255, 0.14);
+		}
+			.face {
+				min-height: clamp(7.5rem, 36vh, 10rem);
+				padding: 0.72rem 0.62rem;
+				gap: 0.32rem;
+		}
+		.face.back {
+			gap: 0.45rem;
+		}
+		.type-label {
+			font-size: 0.66rem;
+			letter-spacing: 0.18em;
+		}
+			.flow {
+				gap: 0.12rem;
+			}
+			.row {
+				gap: 0.2rem;
+		}
+		.ico.base {
+			--icon: clamp(1.75rem, 8vh, 2.1rem);
+		}
+		.ico.solo {
+			--icon: clamp(2.35rem, 11vh, 3rem);
+		}
+		.ico.act {
+			--icon: clamp(3.15rem, 14vh, 4.1rem);
+		}
+			.chooser {
+				--choice-size: 32px;
+				gap: 0.12rem;
+				padding: 0;
+			}
+			.chooser-label {
+				font-size: 0.58rem;
+				letter-spacing: 0.1em;
+			}
+			.chooser-opts {
+				gap: 0.16rem;
+			}
+			.opt {
+				padding: 0.12rem;
+				border-radius: 8px;
+			}
+		.cta {
+			min-height: 34px;
+			padding: 0.36rem 0.75rem;
+			font-size: 0.64rem;
+			letter-spacing: 0.12em;
+		}
+		.result-body p {
+			font-size: 0.76rem;
+			line-height: 1.25;
+		}
+		.empty {
+			padding: 1rem;
+			font-size: 0.78rem;
 		}
 	}
 </style>

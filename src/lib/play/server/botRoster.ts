@@ -3,7 +3,7 @@
  * by the seed script (scripts/seed-bots.ts) and Phase 2 matchmaking backfill.
  *
  * Each bot is a REAL account (seeded into auth.users by the seed script) with a human-
- * looking display name and a `bot_profile` difficulty key from BOT_PROFILES (botPolicy.ts).
+ * looking display name and a `bot_profile` policy key from the shared bot contract.
  * They sit on the leaderboard and affect OpenSkill ratings exactly like humans; only the
  * `is_bot` column + the bot engine driving their turns distinguishes them.
  *
@@ -12,15 +12,16 @@
  * (bot+<slug>@arcspirits.bot) used for idempotent seeding.
  */
 
-/** A difficulty/strategy key that MUST exist in BOT_PROFILES (botPolicy.ts). */
-export type BotProfileKey = 'medium' | 'hard' | 'extrahard' | 'insane' | 'godly';
+import { DEFAULT_BOT_PROFILE_KEY, type BotProfileKey } from '../bots/contract';
+
+const ROSTER_BOT_PROFILE = DEFAULT_BOT_PROFILE_KEY;
 
 export interface BotRosterEntry {
 	/** Human-looking display name shown in lobbies, the leaderboard, and match results. */
 	displayName: string;
 	/** Stable slug → bot email (bot+<slug>@arcspirits.bot). Lowercase, unique. */
 	slug: string;
-	/** BOT_PROFILES key driving this bot's play; also stored on player_ratings/auth metadata. */
+	/** Bot contract policy key driving this bot's play; also stored on player_ratings/auth metadata. */
 	botProfile: BotProfileKey;
 }
 
@@ -87,40 +88,38 @@ export function botsOnlineAt<T>(
 }
 
 /**
- * ~30 persistent bots spread across difficulty tiers — weaker tiers are the majority (so
- * the rating pool skews low-to-mid and a new human lands mid-pack), with a few strong ones
- * up top. Difficulty correlates with the seeded mu in the seed script, so the leaderboard
- * spread looks believably earned.
+ * Persistent bot accounts. Ratings can still spread over time, but every account uses
+ * the same ML contract key so live bot development does not fragment across hand-tuned tiers.
  */
 export const BOT_ROSTER: readonly BotRosterEntry[] = [
-	{ displayName: 'Nameless Spirit', slug: 'mia', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'leo', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'ava', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'noah', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'ella', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'finn', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'ruby', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'owen', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'iris', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'jack', botProfile: 'medium' },
-	{ displayName: 'Nameless Spirit', slug: 'nora', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'theo', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'hazel', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'milo', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'clara', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'wyatt', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'lena', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'caleb', botProfile: 'hard' },
-	{ displayName: 'Nameless Spirit', slug: 'faye', botProfile: 'extrahard' },
-	{ displayName: 'Nameless Spirit', slug: 'reid', botProfile: 'extrahard' },
-	{ displayName: 'Nameless Spirit', slug: 'tessa', botProfile: 'extrahard' },
-	{ displayName: 'Nameless Spirit', slug: 'dax', botProfile: 'extrahard' },
-	{ displayName: 'Nameless Spirit', slug: 'vera', botProfile: 'extrahard' },
-	{ displayName: 'Nameless Spirit', slug: 'cole', botProfile: 'extrahard' },
-	{ displayName: 'Nameless Spirit', slug: 'mara', botProfile: 'insane' },
-	{ displayName: 'Nameless Spirit', slug: 'silas', botProfile: 'insane' },
-	{ displayName: 'Nameless Spirit', slug: 'juno', botProfile: 'insane' },
-	{ displayName: 'Nameless Spirit', slug: 'ezra', botProfile: 'insane' },
-	{ displayName: 'Nameless Spirit', slug: 'wren', botProfile: 'godly' },
-	{ displayName: 'Nameless Spirit', slug: 'kai', botProfile: 'godly' }
+	{ displayName: 'Nameless Spirit', slug: 'mia', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'leo', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'ava', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'noah', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'ella', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'finn', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'ruby', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'owen', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'iris', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'jack', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'nora', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'theo', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'hazel', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'milo', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'clara', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'wyatt', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'lena', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'caleb', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'faye', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'reid', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'tessa', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'dax', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'vera', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'cole', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'mara', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'silas', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'juno', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'ezra', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'wren', botProfile: ROSTER_BOT_PROFILE },
+	{ displayName: 'Nameless Spirit', slug: 'kai', botProfile: ROSTER_BOT_PROFILE }
 ];

@@ -21,6 +21,7 @@ import type {
 	PlayCatalogSpirit,
 	PrivatePlayerState,
 	PublicGameState,
+	RoomChatMessage,
 	RoomSummary,
 	SeatColor,
 	SpectatorProjection
@@ -34,6 +35,7 @@ import {
 	type RoomCloseReason,
 	type RoomLiveness
 } from '../roomLifecycle';
+import { DEFAULT_BOT_PROFILE_KEY } from '../bots/contract';
 import { loadPlayCatalog } from './catalog';
 import { getSupabaseAdmin } from '$lib/server/supabaseAdmin';
 import { finalizeMatch } from './ranked';
@@ -45,7 +47,8 @@ const PLAY_SCHEMA = 'arc_spirits_2d';
 const PLAY_TABLES = {
 	SESSIONS: 'play_game_sessions',
 	MEMBERS: 'play_session_members',
-	EVENTS: 'play_game_session_events'
+	EVENTS: 'play_game_session_events',
+	MESSAGES: 'play_session_messages'
 } as const;
 const HISTORY_TABLES = {
 	SNAPSHOTS: 'game_state_snapshots',
@@ -83,6 +86,18 @@ type SessionMemberRow = {
 	user_id: string | null;
 	is_bot: boolean;
 	bot_profile: string | null;
+};
+
+type SessionMessageRow = {
+	id: string;
+	session_id: string;
+	member_id: string | null;
+	author_display_name: string;
+	author_role: MemberRole;
+	seat_color: SeatColor | null;
+	kind: RoomChatMessage['kind'];
+	body: string;
+	created_at: string;
 };
 
 export interface RoomView {
@@ -140,7 +155,10 @@ function createRoomCode(): string {
 }
 
 function asState(row: PlaySessionRow): PublicGameState {
-	return parseJsonValue(row.public_state, createLobbyState({ roomCode: row.room_code, guardianNames: [] }));
+	return parseJsonValue(
+		row.public_state,
+		createLobbyState({ roomCode: row.room_code, guardianNames: [] })
+	);
 }
 
 async function getSessionByRoomCode(roomCode: string): Promise<PlaySessionRow | null> {
@@ -171,7 +189,7 @@ export async function getSessionIdByRoomCode(roomCode: string): Promise<string |
 }
 
 /**
- * The bot members of a session, keyed by member id → {@link BOT_PROFILES} strategy key
+ * The bot members of a session, keyed by member id → shared bot contract policy key
  * (the `bot_profile` column, or null). The authoritative source of bot-ness for the live
  * driving path: `PublicGameState.seats` only carries memberId + displayName, so botSim
  * loads this map to tell which seated members are bots and which strategy drives each —
@@ -195,6 +213,18 @@ export async function loadBotMembers(sessionId: string): Promise<Map<string, str
 	return out;
 }
 
+async function attachBotSeatFlags(
+	sessionId: string,
+	projection: SpectatorProjection
+): Promise<SpectatorProjection> {
+	const botMembers = await loadBotMembers(sessionId);
+	for (const seat of SEAT_COLORS) {
+		const memberId = projection.seats[seat]?.memberId;
+		projection.seats[seat].isBot = memberId != null && botMembers.has(memberId);
+	}
+	return projection;
+}
+
 async function getMembersForSession(sessionId: string): Promise<SessionMemberRow[]> {
 	const { data, error } = await getPlayAdmin()
 		.from(PLAY_TABLES.MEMBERS)
@@ -210,7 +240,11 @@ async function getMembersForSession(sessionId: string): Promise<SessionMemberRow
 }
 
 async function getMemberById(memberId: string): Promise<SessionMemberRow | null> {
-	const { data, error } = await getPlayAdmin().from(PLAY_TABLES.MEMBERS).select('*').eq('id', memberId).maybeSingle();
+	const { data, error } = await getPlayAdmin()
+		.from(PLAY_TABLES.MEMBERS)
+		.select('*')
+		.eq('id', memberId)
+		.maybeSingle();
 	if (error) {
 		throw kitError(500, `Failed to load session member: ${error.message}`);
 	}
@@ -239,7 +273,23 @@ async function getMemberBySessionAndUser(
 	return (data as SessionMemberRow | null) ?? null;
 }
 
-function viewerForMember(state: PublicGameState, member: SessionMemberRow | null): SpectatorProjection['viewer'] {
+async function resolveMemberForSession(
+	session: PlaySessionRow,
+	memberId: string | null | undefined,
+	fallbackUserId?: string | null
+): Promise<SessionMemberRow | null> {
+	const rawMember = memberId ? await getMemberById(memberId) : null;
+	let member = rawMember && rawMember.session_id === session.id ? rawMember : null;
+	if (!member && fallbackUserId) {
+		member = await getMemberBySessionAndUser(session.id, fallbackUserId);
+	}
+	return member;
+}
+
+function viewerForMember(
+	state: PublicGameState,
+	member: SessionMemberRow | null
+): SpectatorProjection['viewer'] {
 	if (!member) {
 		return {
 			role: 'spectator',
@@ -249,7 +299,9 @@ function viewerForMember(state: PublicGameState, member: SessionMemberRow | null
 	}
 
 	const seatColor =
-		SEAT_COLORS.find((candidate) => state.seats[candidate].memberId === member.id) ?? member.seat_color ?? null;
+		SEAT_COLORS.find((candidate) => state.seats[candidate].memberId === member.id) ??
+		member.seat_color ??
+		null;
 
 	return {
 		role: member.role,
@@ -287,7 +339,7 @@ async function syncMemberMirrors(sessionId: string, state: PublicGameState) {
 			const occupiedSeat =
 				SEAT_COLORS.find((seatColor) => state.seats[seatColor].memberId === member.id) ?? null;
 			const selectedGuardian = occupiedSeat
-				? state.seats[occupiedSeat].selectedGuardian ?? null
+				? (state.seats[occupiedSeat].selectedGuardian ?? null)
 				: null;
 			const role: MemberRole =
 				member.role === 'host' ? 'host' : occupiedSeat ? 'player' : 'spectator';
@@ -480,7 +532,8 @@ function stampPhaseDeadline(state: PublicGameState): void {
  *  only; navigationFullDeadline (stamped above) remembers the un-shortened deadline. */
 const NAV_GRACE_MS = 5000;
 function applyNavLockDeadline(state: PublicGameState): void {
-	if (state.status !== 'active' || state.phase !== 'navigation' || state.revealedDestinations) return;
+	if (state.status !== 'active' || state.phase !== 'navigation' || state.revealedDestinations)
+		return;
 	const seats = state.activeSeats;
 	const allLocked = seats.length > 0 && seats.every((s) => state.navigation[s]?.locked === true);
 	// `full` is null under a "no limit" timer (no time deadline while picking).
@@ -761,7 +814,7 @@ export interface RankedPlayer {
 	displayName: string;
 	/** True for backfilled bot accounts; their seat is driven by the bot engine. */
 	isBot?: boolean;
-	/** BOT_PROFILES strategy key for a bot (ignored for humans). */
+	/** Shared bot contract policy key for a bot (ignored for humans). */
 	botProfile?: string | null;
 }
 
@@ -818,9 +871,11 @@ export async function createRankedSession(
 							roomCode,
 							player.displayName,
 							player.userId,
-							player.isBot ? { isBot: true, botProfile: player.botProfile ?? 'medium' } : undefined
+							player.isBot
+								? { isBot: true, botProfile: player.botProfile ?? DEFAULT_BOT_PROFILE_KEY }
+								: undefined
 						)
-				  ).memberId;
+					).memberId;
 		if (i !== 0) memberIdByUserId[player.userId] = memberId;
 
 		await runRoomCommand({
@@ -861,6 +916,7 @@ export async function createRankedSession(
 // Seed a solo, already-started game parked in the Awakening phase (folded into
 // Cleanup) with a face-down spirit of the requested class plus everything needed
 // to awaken it — so the ability UX can be tested without playing a whole game.
+const DEBUG_AWAKENING_DEADLINE_MS = 10 * 60 * 1000;
 
 /** Pick the best catalog spirit carrying `className` to test: prefer a rune-cost
  *  awaken (exercises the cost UX), then a free flip, then a text condition. */
@@ -1043,7 +1099,12 @@ export async function createDebugRoom(
 
 	const memberInsert = await getPlayAdmin()
 		.from(PLAY_TABLES.MEMBERS)
-		.insert({ session_id: sessionId, display_name: normalizedName, role: 'host', private_state: {} })
+		.insert({
+			session_id: sessionId,
+			display_name: normalizedName,
+			role: 'host',
+			private_state: {}
+		})
 		.select('*')
 		.single();
 	if (memberInsert.error) {
@@ -1064,7 +1125,8 @@ export async function createDebugRoom(
 		{ type: 'startGame' }
 	] as GameCommand[]) {
 		const result = applyGameCommand(state, host, command, catalog);
-		if (!result.ok) throw kitError(500, `Debug seed failed at ${command.type}: ${result.error.message}`);
+		if (!result.ok)
+			throw kitError(500, `Debug seed failed at ${command.type}: ${result.error.message}`);
 		state = result.state;
 	}
 
@@ -1074,7 +1136,11 @@ export async function createDebugRoom(
 	if (!player) throw kitError(500, 'Debug seed produced no player.');
 	const usedSlots = new Set(player.spirits.map((s) => s.slotIndex));
 	const nextSlot = (): number | null => {
-		for (let i = 1; i <= 7; i += 1) if (!usedSlots.has(i)) { usedSlots.add(i); return i; }
+		for (let i = 1; i <= 7; i += 1)
+			if (!usedSlots.has(i)) {
+				usedSlots.add(i);
+				return i;
+			}
 		return null;
 	};
 	// Always seed the test spirit FACE-DOWN so the awaken is tested through its real
@@ -1105,7 +1171,7 @@ export async function createDebugRoom(
 	enterBenefits(state, catalog);
 	enterAwakening(state, catalog);
 	state.revision += 1;
-	state.phaseDeadline = Date.now() + phaseDurationMs(state.phase);
+	state.phaseDeadline = Date.now() + DEBUG_AWAKENING_DEADLINE_MS;
 
 	const now = new Date().toISOString();
 	const { error: updateError } = await getPlayAdmin()
@@ -1307,7 +1373,10 @@ export async function loadRoomView(
 	session = await maybeCloseRoom(session);
 
 	const state = asState(session);
-	const projection = buildSessionProjection(state, viewerForMember(state, member));
+	const projection = await attachBotSeatFlags(
+		session.id,
+		buildSessionProjection(state, viewerForMember(state, member))
+	);
 	return {
 		projection,
 		member: {
@@ -1317,6 +1386,282 @@ export async function loadRoomView(
 			displayName: projection.viewer.displayName
 		}
 	};
+}
+
+function normalizeChatBody(body: unknown): string {
+	if (typeof body !== 'string') {
+		throw kitError(400, 'Message body is required.');
+	}
+	const normalized = body.replace(/\s+/g, ' ').trim();
+	if (!normalized) {
+		throw kitError(400, 'Message cannot be empty.');
+	}
+	if (normalized.length > 500) {
+		throw kitError(400, 'Message must be 500 characters or fewer.');
+	}
+	return normalized;
+}
+
+function chatMessageFromRow(row: SessionMessageRow, roomCode: string): RoomChatMessage {
+	return {
+		id: row.id,
+		roomCode,
+		memberId: row.member_id,
+		authorDisplayName: row.author_display_name,
+		authorRole: row.author_role,
+		seatColor: row.seat_color,
+		kind: row.kind,
+		body: row.body,
+		createdAt: row.created_at
+	};
+}
+
+type ChatEventPayload = {
+	chatMessage?: {
+		memberId: string | null;
+		authorDisplayName: string;
+		authorRole: MemberRole;
+		seatColor: SeatColor | null;
+		kind: RoomChatMessage['kind'];
+		body: string;
+	};
+};
+
+type SessionChatEventRow = {
+	id: string;
+	actor_member_id: string | null;
+	command_payload: ChatEventPayload | string | null;
+	created_at: string;
+};
+
+function isMissingChatTable(error: { code?: string; message?: string } | null | undefined): boolean {
+	const message = error?.message ?? '';
+	return (
+		error?.code === '42P01' ||
+		error?.code === 'PGRST205' ||
+		message.includes('play_session_messages') ||
+		message.includes('schema cache')
+	);
+}
+
+function chatEventPayload(row: SessionChatEventRow): ChatEventPayload['chatMessage'] | null {
+	const payload =
+		typeof row.command_payload === 'string'
+			? parseJsonValue<ChatEventPayload | null>(row.command_payload, null)
+			: row.command_payload;
+	return payload?.chatMessage ?? null;
+}
+
+function chatMessageFromEventRow(row: SessionChatEventRow, roomCode: string): RoomChatMessage | null {
+	const payload = chatEventPayload(row);
+	if (!payload) return null;
+	return {
+		id: row.id,
+		roomCode,
+		memberId: payload.memberId ?? row.actor_member_id ?? null,
+		authorDisplayName: payload.authorDisplayName,
+		authorRole: payload.authorRole,
+		seatColor: payload.seatColor,
+		kind: payload.kind,
+		body: payload.body,
+		createdAt: row.created_at
+	};
+}
+
+async function listRoomChatMessagesFromEvents(
+	session: PlaySessionRow,
+	after: string | null | undefined,
+	limit: number
+): Promise<RoomChatMessage[]> {
+	let afterCreatedAt: string | null = null;
+	if (after) {
+		const anchor = await getPlayAdmin()
+			.from(PLAY_TABLES.EVENTS)
+			.select('created_at')
+			.eq('session_id', session.id)
+			.eq('id', after)
+			.eq('command_type', 'chatMessage')
+			.maybeSingle();
+		if (anchor.error) {
+			throw kitError(500, `Failed to load chat cursor: ${anchor.error.message}`);
+		}
+		afterCreatedAt = (anchor.data as { created_at?: string } | null)?.created_at ?? null;
+	}
+
+	const query = getPlayAdmin()
+		.from(PLAY_TABLES.EVENTS)
+		.select('id, actor_member_id, command_payload, created_at')
+		.eq('session_id', session.id)
+		.eq('command_type', 'chatMessage')
+		.limit(limit);
+
+	if (afterCreatedAt) {
+		const { data, error } = await query.gt('created_at', afterCreatedAt).order('created_at', {
+			ascending: true
+		});
+		if (error) {
+			throw kitError(500, `Failed to load chat messages: ${error.message}`);
+		}
+		return ((data as SessionChatEventRow[] | null) ?? [])
+			.map((row) => chatMessageFromEventRow(row, session.room_code))
+			.filter((message): message is RoomChatMessage => message != null);
+	}
+
+	const { data, error } = await query.order('created_at', { ascending: false });
+	if (error) {
+		throw kitError(500, `Failed to load chat messages: ${error.message}`);
+	}
+	return ((data as SessionChatEventRow[] | null) ?? [])
+		.reverse()
+		.map((row) => chatMessageFromEventRow(row, session.room_code))
+		.filter((message): message is RoomChatMessage => message != null);
+}
+
+export async function listRoomChatMessages(params: {
+	roomCode: string;
+	memberId?: string | null;
+	fallbackUserId?: string | null;
+	after?: string | null;
+	limit?: number | null;
+}): Promise<RoomChatMessage[]> {
+	const session = await getSessionByRoomCode(params.roomCode);
+	if (!session) {
+		throw kitError(404, 'Room not found.');
+	}
+
+	const member = await resolveMemberForSession(session, params.memberId, params.fallbackUserId);
+	if (member) {
+		void updateLastSeen(member.id).catch(() => {});
+	}
+
+	const limit = Math.max(1, Math.min(params.limit ?? 100, 100));
+	let afterCreatedAt: string | null = null;
+	if (params.after) {
+		const anchor = await getPlayAdmin()
+			.from(PLAY_TABLES.MESSAGES)
+			.select('created_at')
+			.eq('session_id', session.id)
+			.eq('id', params.after)
+			.maybeSingle();
+		if (anchor.error) {
+			if (isMissingChatTable(anchor.error)) {
+				return listRoomChatMessagesFromEvents(session, params.after, limit);
+			}
+			throw kitError(500, `Failed to load chat cursor: ${anchor.error.message}`);
+		}
+		afterCreatedAt = (anchor.data as { created_at?: string } | null)?.created_at ?? null;
+	}
+
+	const query = getPlayAdmin()
+		.from(PLAY_TABLES.MESSAGES)
+		.select('*')
+		.eq('session_id', session.id)
+		.limit(limit);
+
+	if (afterCreatedAt) {
+		const { data, error } = await query.gt('created_at', afterCreatedAt).order('created_at', {
+			ascending: true
+		});
+		if (error) {
+			if (isMissingChatTable(error)) {
+				return listRoomChatMessagesFromEvents(session, params.after, limit);
+			}
+			throw kitError(500, `Failed to load chat messages: ${error.message}`);
+		}
+		return ((data as SessionMessageRow[] | null) ?? []).map((row) =>
+			chatMessageFromRow(row, session.room_code)
+		);
+	}
+
+	const { data, error } = await query.order('created_at', { ascending: false });
+	if (error) {
+		if (isMissingChatTable(error)) {
+			return listRoomChatMessagesFromEvents(session, params.after, limit);
+		}
+		throw kitError(500, `Failed to load chat messages: ${error.message}`);
+	}
+	return ((data as SessionMessageRow[] | null) ?? [])
+		.reverse()
+		.map((row) => chatMessageFromRow(row, session.room_code));
+}
+
+export async function createRoomChatMessage(params: {
+	roomCode: string;
+	memberId?: string | null;
+	fallbackUserId?: string | null;
+	body: unknown;
+}): Promise<RoomChatMessage> {
+	let session = await getSessionByRoomCode(params.roomCode);
+	if (!session) {
+		throw kitError(404, 'Room not found.');
+	}
+	session = await maybeCloseRoom(session);
+	if (session.status === 'closed') {
+		throw kitError(410, 'This room has closed.');
+	}
+
+	const member = await resolveMemberForSession(session, params.memberId, params.fallbackUserId);
+	if (!member) {
+		throw kitError(401, 'Join this room before sending chat messages.');
+	}
+
+	const body = normalizeChatBody(params.body);
+	const state = asState(session);
+	const seatColor =
+		SEAT_COLORS.find((seat) => state.seats[seat].memberId === member.id) ??
+		member.seat_color ??
+		null;
+	const authorRole: MemberRole = member.role === 'host' ? 'host' : seatColor ? 'player' : 'spectator';
+
+	const { data, error } = await getPlayAdmin()
+		.from(PLAY_TABLES.MESSAGES)
+		.insert({
+			session_id: session.id,
+			member_id: member.id,
+			author_display_name: member.display_name,
+			author_role: authorRole,
+			seat_color: seatColor,
+			kind: 'user',
+			body
+		})
+		.select('*')
+		.single();
+
+	if (error) {
+		if (isMissingChatTable(error)) {
+			const fallback = await getPlayAdmin()
+				.from(PLAY_TABLES.EVENTS)
+				.insert({
+					session_id: session.id,
+					revision: session.revision,
+					actor_member_id: member.id,
+					command_type: 'chatMessage',
+					command_payload: {
+						chatMessage: {
+							memberId: member.id,
+							authorDisplayName: member.display_name,
+							authorRole,
+							seatColor,
+							kind: 'user',
+							body
+						}
+					}
+				})
+				.select('id, actor_member_id, command_payload, created_at')
+				.single();
+			if (fallback.error) {
+				throw kitError(500, `Failed to send chat message: ${fallback.error.message}`);
+			}
+			void updateLastSeen(member.id).catch(() => {});
+			const message = chatMessageFromEventRow(fallback.data as SessionChatEventRow, session.room_code);
+			if (!message) throw kitError(500, 'Failed to read chat message.');
+			return message;
+		}
+		throw kitError(500, `Failed to send chat message: ${error.message}`);
+	}
+
+	void updateLastSeen(member.id).catch(() => {});
+	return chatMessageFromRow(data as SessionMessageRow, session.room_code);
 }
 
 /**
@@ -1436,11 +1781,14 @@ export async function runRoomCommand(params: {
 			SEAT_COLORS.find((seat) => commandResult.state.seats[seat].memberId === member.id) ?? null;
 		const updatedRole: MemberRole =
 			member.role === 'host' ? 'host' : occupiedSeat ? 'player' : 'spectator';
-		const projection = buildSessionProjection(commandResult.state, {
-			role: updatedRole,
-			seatColor: occupiedSeat ?? member.seat_color ?? null,
-			displayName: member.display_name
-		});
+		const projection = await attachBotSeatFlags(
+			session.id,
+			buildSessionProjection(commandResult.state, {
+				role: updatedRole,
+				seatColor: occupiedSeat ?? member.seat_color ?? null,
+				displayName: member.display_name
+			})
+		);
 
 		return {
 			projection,

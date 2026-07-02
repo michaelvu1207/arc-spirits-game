@@ -1,0 +1,41 @@
+{
+  "obs_dim": 55,
+  "act_dim": 52,
+  "samples": 169,
+  "games": 1,
+  "seatGames": 4,
+  "mode": "abyss-curriculum",
+  "skipRecordTypes": [],
+  "rows": [
+    {
+      "diceCount": 6,
+      "diceTier": "arcane",
+      "maxBarrier": 12,
+      "spiritAnimalCount": 2,
+      "games": 1,
+      "seatGames": 4,
+      "avgVP": 23,
+      "avgStatus": 3,
+      "avgRounds": 10,
+      "samples": 169,
+      "samplesPerSeatGame": 42.25,
+      "combatsPerSeatGame": 10,
+      "killsPerSeatGame": 7,
+      "rewardsPerSeatGame": 7,
+      "rewardVpPerSeatGame": 23,
+      "decisionTypes": {
+        "lockNavigation": 40,
+        "startCombat": 40,
+        "resolveMonsterReward": 28,
+        "endLocationActions": 32,
+        "commitBenefits": 36,
+        "commitAwakening": 40,
+        "discardSpirit": 16,
+        "discardRune": 5,
+        "commitCleanup": 32,
+        "spawnHandSpirit": 8,
+        "awakenSpirit": 1
+      }
+    }
+  ]
+}

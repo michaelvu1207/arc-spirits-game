@@ -6,7 +6,13 @@ import { isStaleRoomUpdate } from '$lib/play/roomView';
 import { reconcile } from '$lib/play/reconcile';
 import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
 import { auth } from '$lib/auth/auth.svelte';
-import type { GameCommand, RoomSummary, SeatColor, SpectatorProjection } from '$lib/play/types';
+import type {
+	GameCommand,
+	RoomChatMessage,
+	RoomSummary,
+	SeatColor,
+	SpectatorProjection
+} from '$lib/play/types';
 
 let room = $state<SpectatorProjection | null>(null);
 let member = $state<RoomView['member'] | null>(null);
@@ -14,6 +20,12 @@ let isLoading = $state(false);
 let error = $state<string | null>(null);
 let isConnected = $state(false);
 let isReconnecting = $state(false);
+let chatMessages = $state<RoomChatMessage[]>([]);
+let chatUnread = $state(0);
+let chatError = $state<string | null>(null);
+let chatLoading = $state(false);
+let chatOpen = $state(false);
+let chatRoomCode = $state<string | null>(null);
 
 // Live transport: a Supabase Realtime broadcast channel (push) backed by a slow
 // safety/enforcement poll. The DB trigger broadcasts a tiny `{revision}` signal on
@@ -21,6 +33,7 @@ let isReconnecting = $state(false);
 // projection from `/view`. Replaces the old per-second SSE poll + 30s function cap.
 let channel: RealtimeChannel | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let chatPollTimer: ReturnType<typeof setInterval> | null = null;
 let watchdogTimer: ReturnType<typeof setInterval> | null = null;
 let refreshDebounce: ReturnType<typeof setTimeout> | null = null;
 let refreshing = false;
@@ -33,6 +46,7 @@ let lifecycleBound = false;
 // if a broadcast is ever dropped AND the heartbeat that keeps server-side deadline
 // enforcement / room-close running now that the 1s SSE poll is gone.
 const POLL_MS = 3_000;
+const CHAT_POLL_MS = 2_000;
 // Only surface the "Connection lost / Reconnecting" banner once our state is THIS
 // stale. A normal blip (a dropped poll, a backgrounded tab, a websocket rejoin)
 // recovers well within this window — so the banner never flaps on a healthy line.
@@ -40,6 +54,61 @@ const STALE_MS = 12_000;
 const WATCHDOG_TICK_MS = 3_000;
 // Coalesce a burst of broadcasts (e.g. several rapid commits) into one fetch.
 const REFRESH_DEBOUNCE_MS = 80;
+const MEMBER_STORAGE_PREFIX = 'arc-play-member:';
+
+function normalizeRoomCode(roomCode: string): string {
+	return roomCode.trim().toUpperCase();
+}
+
+function memberStorageKey(roomCode: string): string {
+	return `${MEMBER_STORAGE_PREFIX}${normalizeRoomCode(roomCode)}`;
+}
+
+function storedMemberId(roomCode: string | null | undefined): string | null {
+	if (!browser || !roomCode) return null;
+	try {
+		return localStorage.getItem(memberStorageKey(roomCode));
+	} catch {
+		return null;
+	}
+}
+
+function persistMemberId(roomCode: string, memberId: string) {
+	if (!browser) return;
+	try {
+		localStorage.setItem(memberStorageKey(roomCode), memberId);
+	} catch {
+		// Private browsing / storage denial: in-memory member state still works.
+	}
+}
+
+function memberIdForRoom(roomCode: string | null | undefined): string | null {
+	if (!roomCode) return member?.id ?? null;
+	const normalized = normalizeRoomCode(roomCode);
+	if (!room || normalizeRoomCode(room.roomCode) === normalized) return member?.id ?? storedMemberId(roomCode);
+	return storedMemberId(roomCode);
+}
+
+function ensureChatRoom(roomCode: string) {
+	const normalized = normalizeRoomCode(roomCode);
+	if (chatRoomCode === normalized) return;
+	chatRoomCode = normalized;
+	chatMessages = [];
+	chatUnread = 0;
+	chatError = null;
+	chatLoading = false;
+	chatOpen = false;
+}
+
+function roomCodeFromPath(path: string): string | null {
+	const match = path.match(/\/api\/play\/sessions\/([^/]+)/);
+	if (!match) return null;
+	try {
+		return decodeURIComponent(match[1] ?? '');
+	} catch {
+		return match[1] ?? null;
+	}
+}
 
 function setRoomView(view: RoomView) {
 	// Ignore stale updates FOR THE SAME ROOM. Play is simultaneous: a player's own
@@ -51,8 +120,10 @@ function setRoomView(view: RoomView) {
 	if (isStaleRoomUpdate(room, view.projection)) {
 		// Still refresh our own identity (seat/role) if it changed.
 		member = view.member;
+		if (view.member?.id) persistMemberId(view.projection.roomCode, view.member.id);
 		return;
 	}
+	ensureChatRoom(view.projection.roomCode);
 	// Same room → reconcile the fresh projection INTO the existing reactive object
 	// so only the leaves that actually changed invalidate (a phase tick no longer
 	// re-renders the trait tracker, board, every player panel, …). A different room
@@ -63,6 +134,7 @@ function setRoomView(view: RoomView) {
 		room = view.projection;
 	}
 	member = view.member;
+	if (view.member?.id) persistMemberId(view.projection.roomCode, view.member.id);
 	error = null;
 }
 
@@ -77,10 +149,13 @@ export function applyOptimistic(mutate: (room: SpectatorProjection) => void) {
 	if (room) mutate(room);
 }
 
-async function postJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
+export async function postPlayJson<T>(path: string, body: Record<string, unknown>): Promise<T> {
 	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 	// Cross-origin (Capacitor) has no session cookie — authenticate by member id.
-	if (isCrossOrigin && member?.id) headers['X-Play-Member'] = member.id;
+	if (isCrossOrigin) {
+		const memberId = memberIdForRoom(roomCodeFromPath(path) ?? room?.roomCode);
+		if (memberId) headers['X-Play-Member'] = memberId;
+	}
 	// ...and no auth cookie either, so forward the access token as a Bearer header so the
 	// server can attribute the action to the player's real uid (user_id capture on mobile).
 	if (isCrossOrigin) {
@@ -114,6 +189,10 @@ function clearTimers() {
 		clearInterval(pollTimer);
 		pollTimer = null;
 	}
+	if (chatPollTimer) {
+		clearInterval(chatPollTimer);
+		chatPollTimer = null;
+	}
 	if (watchdogTimer) {
 		clearInterval(watchdogTimer);
 		watchdogTimer = null;
@@ -127,8 +206,18 @@ function clearTimers() {
 /** The `/view` URL, carrying the member id explicitly when cross-origin (the
  *  Capacitor shell has no same-origin session cookie). */
 function viewUrl(roomCode: string): string {
-	const query = isCrossOrigin && member?.id ? `?member=${encodeURIComponent(member.id)}` : '';
+	const memberId = memberIdForRoom(roomCode);
+	const query = isCrossOrigin && memberId ? `?member=${encodeURIComponent(memberId)}` : '';
 	return apiUrl(`/api/play/sessions/${encodeURIComponent(roomCode)}/view${query}`);
+}
+
+function chatUrl(roomCode: string, after?: string | null): string {
+	const params = new URLSearchParams();
+	const memberId = memberIdForRoom(roomCode);
+	if (isCrossOrigin && memberId) params.set('member', memberId);
+	if (after) params.set('after', after);
+	const query = params.toString();
+	return apiUrl(`/api/play/sessions/${encodeURIComponent(roomCode)}/chat${query ? `?${query}` : ''}`);
 }
 
 /** Fetch our own owner-gated projection and apply it. Concurrency-coalesced: a
@@ -243,6 +332,7 @@ function connect() {
 	if (!browser || !room?.roomCode) return;
 	bindLifecycle();
 	clearTimers();
+	ensureChatRoom(room.roomCode);
 	// We just hydrated authoritative server state, so we ARE connected — start the
 	// clock fresh so the watchdog doesn't false-trip before the first poll lands.
 	isReconnecting = false;
@@ -250,7 +340,9 @@ function connect() {
 	lastOkAt = Date.now();
 	openChannel();
 	void refresh();
+	void loadRoomChat(room.roomCode, { countUnread: false });
 	pollTimer = setInterval(() => void refresh(), POLL_MS);
+	chatPollTimer = setInterval(() => void loadRoomChat(room?.roomCode ?? null), CHAT_POLL_MS);
 	startWatchdog();
 }
 
@@ -258,6 +350,26 @@ export function hydratePlayRoom(view: RoomView) {
 	setRoomView(view);
 	if (browser) {
 		connect();
+	}
+}
+
+export async function loadPlayRoom(roomCode: string) {
+	isLoading = true;
+	try {
+		const res = await fetch(viewUrl(roomCode), {
+			headers: { Accept: 'application/json' },
+			credentials: isCrossOrigin ? 'include' : 'same-origin'
+		});
+		if (!res.ok) throw new Error(`Failed to load room (status ${res.status})`);
+		const view = (await res.json()) as RoomView;
+		setRoomView(view);
+		if (browser) connect();
+		return view;
+	} catch (err) {
+		error = err instanceof Error ? err.message : 'Failed to load room.';
+		throw err;
+	} finally {
+		isLoading = false;
 	}
 }
 
@@ -269,14 +381,15 @@ export function hydratePlayRoom(view: RoomView) {
  * relies on the cookie the queue endpoint set, but seeding here is harmless and keeps
  * the in-memory identity consistent until the first /view poll replaces it.
  */
-export function setActiveMemberId(memberId: string) {
+export function setActiveMemberId(memberId: string, roomCode?: string) {
 	member = { id: memberId, role: 'player', seatColor: null, displayName: null };
+	if (roomCode) persistMemberId(roomCode, memberId);
 }
 
 export async function createPlayRoom(displayName: string) {
 	isLoading = true;
 	try {
-		const view = await postJson<RoomView>('/api/play/sessions', { displayName });
+		const view = await postPlayJson<RoomView>('/api/play/sessions', { displayName });
 		setRoomView(view);
 		if (browser) connect();
 		return view;
@@ -288,12 +401,27 @@ export async function createPlayRoom(displayName: string) {
 	}
 }
 
+export async function createSoloPlayRoom(displayName: string) {
+	isLoading = true;
+	try {
+		const view = await postPlayJson<RoomView>('/api/play/solo', { displayName });
+		setRoomView(view);
+		if (browser) connect();
+		return view;
+	} catch (err) {
+		error = err instanceof Error ? err.message : 'Failed to start solo game.';
+		throw err;
+	} finally {
+		isLoading = false;
+	}
+}
+
 /** Dev-only: spawn a seeded solo game parked in the Awakening phase to test a
  *  class's ability UX. Returns the room view so the caller can navigate in. */
 export async function createDebugPlayRoom(className: string, displayName = 'Debug Player') {
 	isLoading = true;
 	try {
-		const view = await postJson<RoomView>('/api/play/debug', { className, displayName });
+		const view = await postPlayJson<RoomView>('/api/play/debug', { className, displayName });
 		setRoomView(view);
 		if (browser) connect();
 		return view;
@@ -308,7 +436,7 @@ export async function createDebugPlayRoom(className: string, displayName = 'Debu
 export async function joinPlayRoom(roomCode: string, displayName: string) {
 	isLoading = true;
 	try {
-		const view = await postJson<RoomView>(
+		const view = await postPlayJson<RoomView>(
 			`/api/play/sessions/${encodeURIComponent(roomCode)}/join`,
 			{ displayName }
 		);
@@ -336,9 +464,83 @@ export async function fetchOpenRooms(): Promise<RoomSummary[]> {
 	return payload?.rooms ?? [];
 }
 
+function mergeChatMessages(
+	nextMessages: RoomChatMessage[],
+	opts: { countUnread?: boolean } = {}
+) {
+	if (nextMessages.length === 0) return;
+	const previousIds = new Set(chatMessages.map((message) => message.id));
+	const byId = new Map(chatMessages.map((message) => [message.id, message]));
+	for (const message of nextMessages) {
+		byId.set(message.id, message);
+	}
+	const freshMessages = nextMessages.filter((message) => !previousIds.has(message.id));
+	chatMessages = Array.from(byId.values()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+	if (opts.countUnread !== false && !chatOpen) {
+		const myMemberId = member?.id ?? null;
+		chatUnread += freshMessages.filter((message) => message.memberId !== myMemberId).length;
+	}
+}
+
+export function setRoomChatOpen(open: boolean) {
+	chatOpen = open;
+	if (open) chatUnread = 0;
+}
+
+export async function loadRoomChat(
+	roomCode: string | null | undefined = room?.roomCode,
+	opts: { countUnread?: boolean } = {}
+) {
+	if (!browser || !roomCode) return [];
+	ensureChatRoom(roomCode);
+	const after = chatMessages.at(-1)?.id ?? null;
+	const headers: Record<string, string> = { Accept: 'application/json' };
+	if (isCrossOrigin) {
+		const token = auth.session?.access_token;
+		if (token) headers['Authorization'] = `Bearer ${token}`;
+	}
+	chatLoading = chatMessages.length === 0;
+	try {
+		const response = await fetch(chatUrl(roomCode, after), {
+			headers,
+			credentials: isCrossOrigin ? 'include' : 'same-origin'
+		});
+		const payload = (await response.json().catch(() => null)) as
+			| { messages?: RoomChatMessage[]; message?: string }
+			| null;
+		if (!response.ok) {
+			const message =
+				payload && typeof payload.message === 'string'
+					? payload.message
+					: `Failed to load chat (status ${response.status})`;
+			throw new Error(message);
+		}
+		const messages = payload?.messages ?? [];
+		mergeChatMessages(messages, opts);
+		chatError = null;
+		return messages;
+	} catch (err) {
+		chatError = err instanceof Error ? err.message : 'Failed to load chat.';
+		return [];
+	} finally {
+		chatLoading = false;
+	}
+}
+
+export async function sendRoomChat(body: string) {
+	if (!room) throw new Error('No room is loaded.');
+	const payload = await postPlayJson<{ message: RoomChatMessage }>(
+		`/api/play/sessions/${encodeURIComponent(room.roomCode)}/chat`,
+		{ body }
+	);
+	mergeChatMessages([payload.message], { countUnread: false });
+	chatError = null;
+	return payload.message;
+}
+
 export async function claimSeat(seatColor: SeatColor) {
 	if (!room) throw new Error('No room is loaded.');
-	const view = await postJson<RoomView>(
+	const view = await postPlayJson<RoomView>(
 		`/api/play/sessions/${encodeURIComponent(room.roomCode)}/claim-seat`,
 		{ seatColor, expectedRevision: room.revision }
 	);
@@ -348,7 +550,7 @@ export async function claimSeat(seatColor: SeatColor) {
 
 export async function startPlayGame() {
 	if (!room) throw new Error('No room is loaded.');
-	const view = await postJson<RoomView>(
+	const view = await postPlayJson<RoomView>(
 		`/api/play/sessions/${encodeURIComponent(room.roomCode)}/start`,
 		{ expectedRevision: room.revision }
 	);
@@ -358,7 +560,7 @@ export async function startPlayGame() {
 
 export async function sendPlayCommand(command: GameCommand) {
 	if (!room) throw new Error('No room is loaded.');
-	const view = await postJson<RoomView>(
+	const view = await postPlayJson<RoomView>(
 		`/api/play/sessions/${encodeURIComponent(room.roomCode)}/commands`,
 		{
 			expectedRevision: room.revision,
@@ -389,7 +591,25 @@ export function getPlayState() {
 		get isReconnecting() {
 			return isReconnecting;
 		},
+		get chatMessages() {
+			return chatMessages;
+		},
+		get chatUnread() {
+			return chatUnread;
+		},
+		get chatError() {
+			return chatError;
+		},
+		get chatLoading() {
+			return chatLoading;
+		},
+		get chatOpen() {
+			return chatOpen;
+		},
 		connect,
-		disconnect
+		disconnect,
+		loadRoomChat,
+		sendRoomChat,
+		setRoomChatOpen
 	};
 }

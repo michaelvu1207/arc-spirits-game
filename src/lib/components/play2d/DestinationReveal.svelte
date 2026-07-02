@@ -57,13 +57,13 @@
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="scrim" role="dialog" aria-label="Destinations revealed" data-testid="destination-reveal">
 	<button type="button" class="backdrop" aria-label="Dismiss" onclick={() => onClose()}></button>
-	<div class="panel">
+	<div class="panel" data-testid="destination-reveal-panel">
 		<header class="head">
 			<span class="eyebrow">Navigation</span>
 			<h2 class="title">Destinations Revealed</h2>
 		</header>
 
-		<div class="grid">
+		<div class="grid" data-testid="destination-reveal-grid">
 			{#each columns as col, i (col.dest)}
 				<section class="dest" style="--accent: {col.accent}; --i: {i}">
 					<span class="dest-name">{col.dest}</span>
@@ -215,24 +215,102 @@
 		font-style: italic;
 		color: var(--color-whisper, #6a5d8a);
 	}
-	/* Vertical (portrait) aspect ratio: stack the destination cards in a single
-	   column instead of 5 cramped side-by-side columns, and let the overlay scroll
-	   from the top if the stack runs taller than the screen. */
-	@media (orientation: portrait) {
+	/* Phone: use a plain list instead of big reveal cards. The destination reveal
+	   happens during a busy board state, so legibility beats spectacle here. */
+	@media (max-width: 760px), (max-height: 620px) {
 		.scrim {
-			place-items: start center;
+			place-items: center;
 			overflow-y: auto;
-			padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+			padding: calc(0.85rem + env(safe-area-inset-top, 0px)) 1rem
+				calc(0.85rem + env(safe-area-inset-bottom, 0px));
+			background: rgba(5, 3, 16, 0.86);
+			backdrop-filter: blur(4px);
+			-webkit-backdrop-filter: blur(4px);
 		}
-		.grid {
-			grid-template-columns: 1fr;
-			gap: 0.6rem;
+		.panel {
+			width: min(34rem, 100%);
+			gap: 0.75rem;
+			pointer-events: none;
 		}
-		.dest {
-			min-height: auto;
+		.head {
+			gap: 0.15rem;
+		}
+		.eyebrow,
+		.title,
+		.dest-name,
+		.tname,
+		.empty {
+			color: #fff;
+			text-shadow: none;
+		}
+		.eyebrow {
+			font-size: 0.68rem;
+			letter-spacing: 0.28em;
+			opacity: 1;
 		}
 		.title {
-			font-size: 1.8rem;
+			font-size: clamp(1.15rem, 7vw, 1.75rem);
+			letter-spacing: 0.08em;
+		}
+		.grid {
+			display: flex;
+			flex-direction: column;
+			gap: 0;
+			width: 100%;
+			border-top: 1px solid rgba(255, 255, 255, 0.28);
+			border-bottom: 1px solid rgba(255, 255, 255, 0.28);
+		}
+		.dest {
+			display: grid;
+			grid-template-columns: minmax(7.5rem, 0.9fr) minmax(0, 1.1fr);
+			align-items: center;
+			gap: 0.75rem;
+			min-height: auto;
+			padding: 0.65rem 0;
+			border: 0;
+			border-radius: 0;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+			background: transparent;
+			box-shadow: none;
+			animation: none;
+		}
+		.dest:last-child {
+			border-bottom: 0;
+		}
+		.dest-name {
+			font-size: 0.82rem;
+			letter-spacing: 0.1em;
+			text-align: left;
+			line-height: 1.15;
+		}
+		.travelers {
+			display: flex;
+			flex-direction: row;
+			flex-wrap: wrap;
+			justify-content: flex-end;
+			align-items: center;
+			gap: 0.25rem 0.45rem;
+			min-width: 0;
+		}
+		.traveler {
+			display: inline-flex;
+			min-width: 0;
+			gap: 0;
+		}
+		.avatar {
+			display: none;
+		}
+		.tname {
+			max-width: 9rem;
+			font-size: 0.78rem;
+			letter-spacing: 0.04em;
+			line-height: 1.2;
+			opacity: 1;
+		}
+		.empty {
+			font-size: 0.72rem;
+			font-style: normal;
+			opacity: 1;
 		}
 	}
 	@keyframes scrim-in {

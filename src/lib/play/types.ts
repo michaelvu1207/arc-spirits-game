@@ -35,6 +35,15 @@ export const ALL_DESTINATIONS = [...SPIRIT_WORLD_ONLY, 'Arcane Abyss'] as const;
 export const VP_TO_WIN = 30;
 
 /**
+ * Hard round cap — round 30 is the last round (≈99% of real games end before then). If cleanup
+ * closes on round {@link MAX_ROUNDS} with no VP-target winner, the game ends and the player with
+ * the most Victory Points wins (ties → seat order). This bounds episode length for ML training and
+ * makes the economy / VP-accumulation line viable: you win by LEADING on VP at the cap, not only by
+ * racing to {@link VP_TO_WIN}. (Distinct from the analytics CURVE_POINTS/ROUND_NORM=36 constants.)
+ */
+export const MAX_ROUNDS = 30;
+
+/**
  * Target player count for a ranked matchmaking lobby. The matchmaker forms a group
  * of exactly this many queued players before creating a ranked game.
  *
@@ -134,6 +143,20 @@ export interface RoomSummary {
 	startedAt: string | null;
 }
 export type MemberRole = 'host' | 'player' | 'spectator';
+export type RoomChatKind = 'user' | 'system';
+
+export interface RoomChatMessage {
+	id: string;
+	roomCode: string;
+	memberId: string | null;
+	authorDisplayName: string;
+	authorRole: MemberRole;
+	seatColor: SeatColor | null;
+	kind: RoomChatKind;
+	body: string;
+	createdAt: string;
+}
+
 export type SpiritSourceBag = 'Spirit World Bag' | 'Arcane Abyss Bag';
 export type DiceType = 'attack' | 'special' | 'defense';
 export type MatItemKind = 'rune' | 'augment' | 'relic';
@@ -380,33 +403,6 @@ export interface AwakenLockedOffer {
 	requirement: string;
 }
 
-/**
- * One unit of Awakening-phase ability UX, UNIFIED across every interaction channel
- * the player resolves during Cleanup. The old surfaces (awaken offers, locked hints,
- * decision cards, augment placement, corruption discard, reward claim, manual prompts)
- * each rendered in their own component with their own layout; this single discriminated
- * union lets ONE screen ({@link PlayerProjection.abilityInteractions} → AwakeningSheet)
- * render them all consistently, dispatching the SAME existing command per kind:
- *   - `awaken`            → `awakenSpirit` (with optional discard refs)
- *   - `choice`            → `resolveDecision`
- *   - `augment`           → `placeAugmentOnSpirit`
- *   - `corruptionDiscard` → `discardSpirit`
- *   - `reward`            → `resolveAwakenReward`
- *   - `manual`            → `manualAwaken` / `dismissManualPrompt`
- *   - `awakenLocked`      → passive hint (non-interactive)
- *
- * Built purely from the owner-only player fields by {@link buildAbilityInteractions};
- * the underlying state fields/commands are unchanged, so this is an additive view.
- */
-export type AbilityInteraction =
-	| { kind: 'corruptionDiscard'; count: number; reason?: string }
-	| { kind: 'reward'; grants: AwakenGrant[] }
-	| { kind: 'choice'; id: string; source: string; prompt: string; options: { id: string; label: string }[] }
-	| { kind: 'augment'; augments: PendingAugment[] }
-	| { kind: 'awaken'; slotIndex: number; spiritName: string; requirement: string; discardCount: number; options: AwakenDiscardOption[] }
-	| { kind: 'awakenLocked'; slotIndex: number; spiritName: string; requirement: string }
-	| { kind: 'manual'; id: string; source: string; text: string };
-
 /** The monster currently invading the Arcane Abyss. */
 export interface MonsterState {
 	id: string;
@@ -600,6 +596,7 @@ export interface LobbySeatState {
 	memberId: string | null;
 	displayName: string | null;
 	selectedGuardian: string | null;
+	isBot?: boolean;
 }
 
 export interface MarketSlotState {
@@ -902,10 +899,6 @@ export interface PublicGameState {
 export interface PlayerProjection extends Omit<PrivatePlayerState, 'displayName'> {
 	displayName: string | null;
 	handDraws: HandDrawSnapshot[];
-	/** Unified Awakening-phase ability UX, owner-only (empty for other viewers). Derived
-	 *  from the owner's interaction fields by {@link buildAbilityInteractions}; rendered as
-	 *  one screen by AwakeningSheet. */
-	abilityInteractions: AbilityInteraction[];
 }
 
 /** A spirit remaining in a draw bag, grouped by id (count = copies left). */
@@ -1115,7 +1108,13 @@ export type GameCommand =
 	| { type: 'clearSpawnedDice' }
 	| { type: 'spawnMatItem'; runeId: string }
 	| { type: 'clearSpawnedItems' }
-	| { type: 'moveMatObject'; objectType: 'die' | 'item'; instanceId: string; localX: number; localZ: number }
+	| {
+			type: 'moveMatObject';
+			objectType: 'die' | 'item';
+			instanceId: string;
+			localX: number;
+			localZ: number;
+	  }
 	| { type: 'adjustMaxBarrier'; amount: number }
 	| { type: 'takeSpirit'; marketIndex: number; slotIndex?: number }
 	| { type: 'replaceSpirit'; marketIndex: number; slotIndex: number }

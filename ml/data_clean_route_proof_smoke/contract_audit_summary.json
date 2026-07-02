@@ -1,0 +1,32 @@
+{
+  "files": [
+    "ml/data_clean_route_proof_smoke/farmq.jsonl"
+  ],
+  "rows": 12,
+  "obsDim": 55,
+  "actDim": 52,
+  "keyMode": "obs-cands",
+  "badObsDim": 0,
+  "badActDim": 0,
+  "uniqueKeys": 12,
+  "uniqueObs": 12,
+  "labelCounts": {
+    "lockNavigation:Arcane Abyss": 10,
+    "lockNavigation:Floral Patch": 2
+  },
+  "exactConflictCount": 0,
+  "exactConflicts": [],
+  "obsOnlyExactConflictCount": 0,
+  "obsOnlyExactConflicts": [],
+  "nearThreshold": 0.005,
+  "nearConflictCount": 0,
+  "nearConflicts": [],
+  "minDifferentLabelDistance": 0.103792,
+  "nearestDifferentLabel": {
+    "a": 7,
+    "b": 9,
+    "distance": 0.103792,
+    "labelA": "lockNavigation:Arcane Abyss",
+    "labelB": "lockNavigation:Floral Patch"
+  }
+}

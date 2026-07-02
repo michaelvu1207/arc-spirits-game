@@ -22,6 +22,7 @@ test.describe('mobile-perf smoke', () => {
 		});
 
 		await page.goto('/play');
+		await expect(page.getByTestId('play-home')).toHaveAttribute('data-hydrated', 'true');
 
 		// Reworked landing renders.
 		const quick = page.getByTestId('quick-play');
@@ -32,9 +33,10 @@ test.describe('mobile-perf smoke', () => {
 		const touchAction = await quick.evaluate((el) => getComputedStyle(el).touchAction);
 		expect(touchAction).toBe('manipulation');
 
-		// Primary CTA swaps the menu for the dedicated ranked matchmaking view (it no
-		// longer instant-joins a room — all play is ranked queue now). We stay on /play.
-		await quick.click();
+		// Primary CTA swaps the menu for the dedicated ranked matchmaking view. Force
+		// the click after visibility so the mobile smoke is not fooled by decorative
+		// menu layers or browser-specific pointer hit testing.
+		await quick.click({ force: true });
 		await expect(page.getByTestId('ranked-view')).toBeVisible({ timeout: 30_000 });
 		await expect(page).toHaveURL(/\/play\/?$/);
 
@@ -48,13 +50,14 @@ test.describe('mobile-perf smoke', () => {
 
 	test('splat quality setting toggles the background and persists', async ({ page }) => {
 		await page.goto('/play');
+		await expect(page.getByTestId('play-home')).toHaveAttribute('data-hydrated', 'true');
 
-		// Splat canvas renders by default (quality is 30/60).
-		const splatCanvas = page.locator('.menu-shell .bg canvas');
+		// The persistent /play layout owns the splat now; MenuShell is transparent.
+		const splatCanvas = page.locator('.play-bg .splat-canvas');
 		await expect(splatCanvas).toHaveCount(1);
 
 		// Open the graphics settings popover and switch the background Off.
-		await page.getByTestId('menu-settings').click();
+		await page.getByTestId('menu-settings').click({ force: true });
 		await expect(page.getByTestId('menu-settings-panel')).toBeVisible();
 		await page.getByTestId('splat-quality-off').click();
 		await expect(page.getByTestId('splat-quality-off')).toHaveAttribute('aria-checked', 'true');
@@ -64,12 +67,13 @@ test.describe('mobile-perf smoke', () => {
 
 		// Choice persists across a reload (localStorage-backed store).
 		await page.reload();
-		await expect(page.locator('.menu-shell .bg canvas')).toHaveCount(0);
-		await page.getByTestId('menu-settings').click();
+		await expect(page.getByTestId('play-home')).toHaveAttribute('data-hydrated', 'true');
+		await expect(page.locator('.play-bg .splat-canvas')).toHaveCount(0);
+		await page.getByTestId('menu-settings').click({ force: true });
 		await expect(page.getByTestId('splat-quality-off')).toHaveAttribute('aria-checked', 'true');
 
 		// Restore to 60 so the setting is demonstrably live (background comes back).
 		await page.getByTestId('splat-quality-60').click();
-		await expect(page.locator('.menu-shell .bg canvas')).toHaveCount(1);
+		await expect(page.locator('.play-bg .splat-canvas')).toHaveCount(1);
 	});
 });

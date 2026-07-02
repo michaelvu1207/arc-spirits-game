@@ -2,6 +2,7 @@ import type { Cookies } from '@sveltejs/kit';
 
 const ROOM_COOKIE_PREFIX = 'arc_spirits_play_member_';
 const LAST_ROOM_COOKIE = 'arc_spirits_play_last_room';
+const MEMBER_HEADER = 'x-play-member';
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 function normalizeRoomCode(roomCode: string): string {
@@ -22,6 +23,19 @@ const baseOptions = {
 
 export function getRoomMemberCookie(cookies: Cookies, roomCode: string): string | null {
 	return cookies.get(cookieName(roomCode)) ?? null;
+}
+
+export function getRoomMemberHeader(request: Request): string | null {
+	const value = request.headers.get(MEMBER_HEADER)?.trim();
+	return value || null;
+}
+
+export function getRoomMemberId(
+	cookies: Cookies,
+	roomCode: string,
+	request?: Request
+): string | null {
+	return getRoomMemberCookie(cookies, roomCode) ?? (request ? getRoomMemberHeader(request) : null);
 }
 
 export function setRoomMemberCookie(cookies: Cookies, roomCode: string, memberId: string) {

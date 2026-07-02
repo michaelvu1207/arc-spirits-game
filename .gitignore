@@ -43,3 +43,8 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+
+# Arc Spirits AlphaZero run artifacts
+ml/meta_runs/
+ml/data_smoke/
+ml/weights/policy-smoke.json

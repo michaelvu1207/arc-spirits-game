@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { botOrdinal, pickNearestBots, type BotCandidate } from './matchmaking';
 
-function bot(user_id: string, mu: number, sigma: number, bot_profile = 'medium'): BotCandidate {
+function bot(user_id: string, mu: number, sigma: number, bot_profile = 'neural'): BotCandidate {
 	return { user_id, display_name: user_id, mu, sigma, bot_profile };
 }
 
@@ -15,12 +15,7 @@ describe('botOrdinal', () => {
 describe('pickNearestBots', () => {
 	test('orders candidates by ordinal proximity to the human, nearest first', () => {
 		// ordinals: a=0, b=10, c=20, d=-5
-		const candidates = [
-			bot('a', 0, 0),
-			bot('b', 10, 0),
-			bot('c', 20, 0),
-			bot('d', -5, 0)
-		];
+		const candidates = [bot('a', 0, 0), bot('b', 10, 0), bot('c', 20, 0), bot('d', -5, 0)];
 		const picked = pickNearestBots(candidates, 6, 5).map((c) => c.user_id);
 		// distances from 6: a=6, b=4, c=14, d=11 → b, a, d, c
 		expect(picked).toEqual(['b', 'a', 'd', 'c']);

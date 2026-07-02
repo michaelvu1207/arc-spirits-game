@@ -1,0 +1,50 @@
+{
+  "games": 12,
+  "iterations": 16,
+  "valueWeight": 1,
+  "control": "full",
+  "fullSelection": "value",
+  "fullLookaheadDepth": 2,
+  "fullLookaheadBeam": 8,
+  "fullLookaheadRootBeam": 24,
+  "fullTargetTemperature": 0.25,
+  "weights": "ml/meta_runs/act52-full-g6-20260627T181633Z/best_policy.json",
+  "microWeights": "ml/weights/act52-abyss-micro-policyonly.json",
+  "microPolicyGate": "abyss-reward-actions",
+  "forbidTypes": [],
+  "planner_win_pct": 50,
+  "planner_VP_avg": 20.92,
+  "planner_status_avg": 2.67,
+  "planner_rounds_avg": 26.5,
+  "planner_reach30_pct": 33.3,
+  "planner_monster_kills_per_game": 4.83,
+  "planner_monster_combats_per_game": 6.92,
+  "planner_abyss_navs_per_game": 9.08,
+  "field_bestVP_avg": 19.67,
+  "field_wins_by_profile": {
+    "pvphunter": 5,
+    "godly": 1
+  },
+  "decision_types": {
+    "replaceSpirit": 492,
+    "lockNavigation": 318,
+    "endLocationActions": 260,
+    "commitCleanup": 249,
+    "takeSpirit": 146,
+    "resolveLocationInteraction": 122,
+    "startCombat": 83,
+    "discardSpirit": 61,
+    "resolveMonsterReward": 58,
+    "spawnHandSpirit": 56,
+    "initiatePvp": 38,
+    "discardHandDraws": 29,
+    "redrawHandDraws": 7,
+    "placeAugmentOnSpirit": 3
+  },
+  "field": [
+    "godly",
+    "medium",
+    "cultivator",
+    "pvphunter"
+  ]
+}

@@ -17,11 +17,23 @@
 
 import { describe, it } from 'vitest';
 import { profileFor, type BotProfile } from '../server/botPolicy';
-import { SEAT_COLORS, type SeatColor } from '../types';
+import { SEAT_COLORS, type GameCommand, type SeatColor } from '../types';
 import { playRecordingGame } from './driver';
 import { shapingFor } from './shaping';
 import { appendSamples, loadOrSnapshotCatalog, loadWeightsIfPresent, mlPath, writeMeta } from './nodeIo';
+import { createRng, nextInt } from '../rng';
 import { existsSync, rmSync } from 'node:fs';
+
+/** Seeded Fisher-Yates — per-game guardian shuffle for varied starting identities. */
+function shuffledGuardians(all: string[], take: number, seed: number): string[] {
+	const a = [...all];
+	const rng = createRng((seed ^ 0x6d2b79f5) >>> 0);
+	for (let i = a.length - 1; i > 0; i--) {
+		const j = nextInt(rng, i + 1);
+		[a[i], a[j]] = [a[j], a[i]];
+	}
+	return a.slice(0, take);
+}
 
 const RUN = process.env.GEN === '1';
 
@@ -31,7 +43,10 @@ const RUN = process.env.GEN === '1';
 // hunter needs. Search-heavy tiers (godly/insane/mythic) are excluded from data-gen: they're
 // ~10-50x slower per game and, being economy-line, don't win anyway. AVOID an all-hunter
 // field (a predator needs prey, or games stall).
-const FIELD = ['pvphunter', 'pvphunter', 'medium', 'aggressive', 'cultivator', 'survivor', 'fighter', 'hard'];
+const FIELD = (process.env.GEN_FIELD ?? 'pvphunter,pvphunter,medium,aggressive,cultivator,survivor,fighter,hard')
+	.split(',')
+	.map((s) => s.trim())
+	.filter(Boolean);
 
 function env(name: string, dflt: string): string {
 	return process.env[name] ?? dflt;
@@ -55,7 +70,22 @@ describe('ml data generation', () => {
 			const policy = mode === 'neural' ? loadWeightsIfPresent() : null;
 			if (mode === 'neural' && !policy) throw new Error('GEN_MODE=neural but no ml/weights/policy.json found');
 
-			if (!append && existsSync(out)) rmSync(out);
+			// Diversity levers: vary starting identities (guardians/origins) per game, and
+				// optionally forbid action types (e.g. GEN_FORBID=initiatePvp → no PvP-VP, forcing a
+				// monster/economy line). GEN_GUARDIANS fixes a lane's lineup for origin specialization.
+				const allGuardians = catalog.guardians.map((g) => g.name);
+				const fixedGuardians = process.env.GEN_GUARDIANS
+					? process.env.GEN_GUARDIANS.split(',').map((s) => s.trim()).filter(Boolean)
+					: null;
+				const shuffleGuardians = (process.env.GEN_SHUFFLE_GUARDIANS ?? '1') === '1';
+				const forbidTypes = process.env.GEN_FORBID
+					? new Set(process.env.GEN_FORBID.split(',').map((s) => s.trim()).filter(Boolean) as GameCommand['type'][])
+					: undefined;
+				const maxStatusLevel = process.env.GEN_MAX_STATUS_LEVEL
+					? parseInt(process.env.GEN_MAX_STATUS_LEVEL, 10)
+					: undefined;
+
+				if (!append && existsSync(out)) rmSync(out);
 
 			const seatList = SEAT_COLORS.slice(0, seats) as SeatColor[];
 			let totalSamples = 0;
@@ -93,7 +123,10 @@ describe('ml data generation', () => {
 					sample,
 					temperature: process.env.GEN_TEMP ? parseFloat(process.env.GEN_TEMP) : undefined,
 					shaping: shapingFor(process.env.GEN_SHAPING),
-					gamma: process.env.GEN_GAMMA ? parseFloat(process.env.GEN_GAMMA) : undefined
+					gamma: process.env.GEN_GAMMA ? parseFloat(process.env.GEN_GAMMA) : undefined,
+						guardianNames: fixedGuardians ?? (shuffleGuardians ? shuffledGuardians(allGuardians, seats, seed0 + g) : undefined),
+						forbidTypes,
+						maxStatusLevel
 				});
 
 				appendSamples(out, r.samples, iter);
@@ -117,7 +150,9 @@ describe('ml data generation', () => {
 				finishedRate: finished / games,
 				decisiveRate: wins / games,
 				neuralWinRate: mode === 'neural' ? neuralWins / games : null,
-				out
+				out,
+				forbidTypes: [...(forbidTypes ?? [])],
+				maxStatusLevel
 			});
 
 			const dt = ((Date.now() - t0) / 1000).toFixed(1);

@@ -84,7 +84,7 @@
 		return null;
 	}
 	// Every attack die as its OWN icon (no ×N grouping), sorted weakest → strongest.
-	// The pool is engine-capped at MAX_ATTACK_DICE (10). Drives the Dice Pool row.
+	// The pool is engine-capped at 10. Drives the compact dice grid in the bottom bar.
 	const diceList = $derived.by(() => {
 		const rank = (t: DiceTier) => DICE_TIER_ORDER.indexOf(t);
 		return attackDice
@@ -96,6 +96,9 @@
 			}))
 			.sort((a, b) => rank(a.tier) - rank(b.tier));
 	});
+	const diceSlots = $derived(
+		Array.from({ length: MAX_ATTACK_DICE }, (_, i) => diceList[i] ?? null)
+	);
 
 	// ── Spirit inspection ───────────────────────────────────────────────────────
 	// Clicking a hex opens that spirit's detail card. Re-clicking the same hex (or
@@ -191,8 +194,8 @@
 	});
 	// My unplaced augments — the draggable "to place" pouch (own seat only).
 	const myAugments = $derived(isMe ? (player?.unplacedAugments ?? []) : []);
-	// Augment PLACEMENT is handled by the dedicated AugmentPlacement panel (pick an
-	// augment icon → click a spirit); this scout view only shows placed-augment badges.
+	// Augment placement is handled in the main scene; this scout view only shows
+	// placed-augment badges.
 </script>
 
 <div class="composition" style="--accent: {accent}" data-testid="composition-stage" data-seat={viewedSeat}>
@@ -200,7 +203,7 @@
 		{#if isMe && myAugments.length > 0}
 			<div class="augment-tray" data-testid="augment-tray">
 				<span class="aug-tray-label">
-					{myAugments.length} Spirit Augment{myAugments.length === 1 ? '' : 's'} to place — use the placement panel.
+					{myAugments.length} Spirit Augment{myAugments.length === 1 ? '' : 's'} to place — use the main scene.
 				</span>
 			</div>
 		{/if}
@@ -295,22 +298,26 @@
 				data-testid="scout-dice-pool"
 				title="Attack dice and the average total damage of a roll"
 			>
-				<span class="dp-title">Dice Pool</span>
-				<span class="dp-sub" data-testid="scout-dice-count">{diceList.length} of {MAX_ATTACK_DICE} dice</span>
 				<div class="dp-row" data-testid="scout-combat-stats">
-					{#if diceList.length === 0}
-						<span class="dp-empty">No attack dice</span>
-					{:else}
-						{#each diceList as d (d.instanceId)}
-							<span class="dp-die" data-testid={`scout-die-${d.tier}`} title={`${d.label} Attack`}>
-								{#if d.imageUrl}
-									<img src={d.imageUrl} alt={`${d.label} die`} loading="lazy" decoding="async" />
-								{:else}
-									<span class="dp-die-fb">{d.label.slice(0, 1)}</span>
+					<div class="dp-dice-grid" aria-label="Attack dice">
+						{#each diceSlots as d, i (d?.instanceId ?? `empty-${i}`)}
+							<span
+								class="dp-die"
+								class:empty={!d}
+								data-testid={d ? `scout-die-${d.tier}` : undefined}
+								title={d ? `${d.label} Attack` : 'Empty attack die slot'}
+								aria-hidden={!d}
+							>
+								{#if d}
+									{#if d.imageUrl}
+										<img src={d.imageUrl} alt={`${d.label} die`} loading="lazy" decoding="async" />
+									{:else}
+										<span class="dp-die-fb">{d.label.slice(0, 1)}</span>
+									{/if}
 								{/if}
 							</span>
 						{/each}
-					{/if}
+					</div>
 					<span class="dp-avg">
 						<span class="dp-avg-val" data-testid="scout-avg-attack">{avgAttack.toFixed(1)}</span>
 						<span class="dp-avg-label">avg attack</span>
@@ -353,18 +360,18 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 0.12rem;
-		padding: 0.1rem 0.75rem;
+		padding: 0.1rem 0.62rem;
 	}
 	.dp-stat-val {
 		font-family: var(--font-display);
-		font-size: 1.5rem;
+		font-size: clamp(1.1rem, 3.6vh, 1.5rem);
 		font-weight: 700;
 		line-height: 1;
 		color: #fff;
 		text-transform: uppercase;
 	}
 	.dp-stat-label {
-		font-size: 0.8rem;
+		font-size: clamp(0.58rem, 1.9vh, 0.8rem);
 		letter-spacing: 0.09em;
 		text-transform: uppercase;
 		color: var(--color-fog, #9a93b0);
@@ -381,65 +388,62 @@
 		flex: 0 0 auto;
 		max-width: 100%;
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		align-items: center;
-		gap: 0.45rem;
+		justify-content: center;
 		font-variant-numeric: tabular-nums;
-	}
-	.dp-title {
-		align-self: stretch;
-		text-align: center;
-		font-family: var(--font-display);
-		font-size: 0.95rem;
-		letter-spacing: 0.2em;
-		text-transform: uppercase;
-		line-height: 1;
-		color: #fff;
-	}
-	.dp-sub {
-		align-self: stretch;
-		text-align: center;
-		font-size: 0.8rem;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		line-height: 1;
-		color: var(--color-fog, #9a93b0);
-		font-variant-numeric: tabular-nums;
-		padding-bottom: 0.4rem;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.28);
 	}
 	.dp-row {
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		align-items: center;
 		justify-content: center;
+		max-width: 100%;
+		overflow: hidden;
 	}
 	/* Thin white divider between every die and before the average readout. */
 	.dp-row > * + * {
 		border-left: 1px solid rgba(255, 255, 255, 0.28);
 	}
-	.dp-die {
-		display: inline-flex;
+	.dp-dice-grid {
+		--dp-die-size: clamp(1.35rem, 5.4vh, 2rem);
+		display: grid;
+		grid-template-rows: repeat(2, var(--dp-die-size));
+		grid-template-columns: repeat(5, var(--dp-die-size));
+		gap: 0.08rem 0.16rem;
 		align-items: center;
 		justify-content: center;
-		padding: 0.1rem 0.45rem;
+		padding: 0.08rem 0.5rem 0.08rem 0;
+		min-width: calc((var(--dp-die-size) * 5) + (0.16rem * 4));
+	}
+	.dp-die {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 0;
+		min-height: 0;
+	}
+	.dp-die.empty {
+		border-radius: 6px;
+		background: rgba(8, 5, 16, 0.42);
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 	}
 	.dp-die img {
-		width: 2rem;
-		height: 2rem;
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
 		display: block;
 	}
 	.dp-die-fb {
-		width: 2rem;
-		height: 2rem;
+		width: 100%;
+		height: 100%;
 		display: grid;
 		place-items: center;
 		border-radius: 6px;
 		background: rgba(0, 0, 0, 0.35);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
 		font-family: var(--font-display);
-		font-size: 1rem;
+		font-size: clamp(0.72rem, 2.4vh, 1rem);
 		color: #fff;
 	}
 	.dp-avg {
@@ -447,24 +451,19 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 0.12rem;
-		padding: 0.1rem 0.75rem;
+		padding: 0.1rem 0.62rem;
 	}
 	.dp-avg-val {
 		font-family: var(--font-display);
-		font-size: 1.5rem;
+		font-size: clamp(1.1rem, 3.6vh, 1.5rem);
 		font-weight: 700;
 		line-height: 1;
 		color: #fff;
 	}
 	.dp-avg-label {
-		font-size: 0.8rem;
+		font-size: clamp(0.58rem, 1.9vh, 0.8rem);
 		letter-spacing: 0.09em;
 		text-transform: uppercase;
-		color: var(--color-fog, #9a93b0);
-	}
-	.dp-empty {
-		padding: 0.35rem 0.7rem;
-		font-size: 0.85rem;
 		color: var(--color-fog, #9a93b0);
 	}
 
@@ -500,7 +499,7 @@
 	   rather than shoving the board off-screen. ─────────────────────────────── */
 	.info-slot {
 		flex: 0 0 auto;
-		width: min(480px, 96%);
+		width: min(560px, 98%);
 		max-height: 40%;
 		min-height: 0;
 		display: flex;
@@ -761,7 +760,7 @@
 	@media (min-width: 1200px) and (orientation: landscape) {
 		.composition {
 			width: 100%;
-			max-width: min(1040px, calc(100vw - 680px));
+			max-width: min(1040px, 100%);
 			margin: 0 auto;
 		}
 	}

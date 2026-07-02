@@ -20,7 +20,15 @@ import type {
 
 /** A face-up spirit carrying the given class trait counts. */
 function spirit(slotIndex: number, classes: Record<string, number>): PlaySpirit {
-	return { slotIndex, id: `s${slotIndex}`, name: `S${slotIndex}`, cost: 2, classes, origins: {}, isFaceDown: false };
+	return {
+		slotIndex,
+		id: `s${slotIndex}`,
+		name: `S${slotIndex}`,
+		cost: 2,
+		classes,
+		origins: {},
+		isFaceDown: false
+	};
 }
 
 function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerState {
@@ -31,6 +39,7 @@ function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerS
 		navigationDestination: 'Arcane Abyss',
 		brokenBarrier: 0,
 		victoryPoints: 0,
+		vpHistory: [],
 		barrier: 4,
 		maxBarrier: 4,
 		statusLevel: 0,
@@ -84,7 +93,11 @@ function dice(tier: AttackDie['tier'], count: number): AttackDie[] {
 	return Array.from({ length: count }, (_, i) => ({ instanceId: `d${i}`, tier }));
 }
 
-function makeState(player: PrivatePlayerState, monster: MonsterState | null, seed = 1): PublicGameState {
+function makeState(
+	player: PrivatePlayerState,
+	monster: MonsterState | null,
+	seed = 1
+): PublicGameState {
 	const seat: SeatColor = 'Red';
 	return {
 		rng: createRng(seed),
@@ -168,7 +181,13 @@ describe('takeDamage', () => {
 	});
 
 	it('corrupting with NO spirits skips the discard obligation (nothing to sacrifice)', () => {
-		const p = makePlayer({ barrier: 3, maxBarrier: 4, statusLevel: 0, statusToken: 'Pure', spirits: [] });
+		const p = makePlayer({
+			barrier: 3,
+			maxBarrier: 4,
+			statusLevel: 0,
+			statusToken: 'Pure',
+			spirits: []
+		});
 		const r = takeDamage(p, 5);
 		expect(r.corrupted).toBe(true);
 		expect(p.corruptionCount).toBe(1);
@@ -203,7 +222,13 @@ describe('takeDamage', () => {
 			origins: {},
 			isFaceDown: false
 		}));
-		const p = makePlayer({ barrier: 0, maxBarrier: 4, statusLevel: 3, statusToken: 'Fallen', spirits });
+		const p = makePlayer({
+			barrier: 0,
+			maxBarrier: 4,
+			statusLevel: 3,
+			statusToken: 'Fallen',
+			spirits
+		});
 		const r = takeDamage(p, 1);
 		expect(r.corrupted).toBe(true);
 		expect(p.statusLevel).toBe(3); // can't drop past the last status
@@ -229,7 +254,14 @@ describe('takeDamage', () => {
 			origins: {},
 			isFaceDown: false
 		}));
-		const p = makePlayer({ barrier: 0, maxBarrier: 4, statusLevel: 1, statusToken: 'Tainted', spirits, corruptionCount: 1 });
+		const p = makePlayer({
+			barrier: 0,
+			maxBarrier: 4,
+			statusLevel: 1,
+			statusToken: 'Tainted',
+			spirits,
+			corruptionCount: 1
+		});
 		const r = takeDamage(p, 1);
 		expect(r.corrupted).toBe(true);
 		expect(r.discarded).toBe(0); // no auto-trim
@@ -249,7 +281,13 @@ describe('takeDamage', () => {
 			origins: {},
 			isFaceDown: false
 		}));
-		const p = makePlayer({ barrier: 0, maxBarrier: 4, statusLevel: 1, statusToken: 'Tainted', spirits });
+		const p = makePlayer({
+			barrier: 0,
+			maxBarrier: 4,
+			statusLevel: 1,
+			statusToken: 'Tainted',
+			spirits
+		});
 		const r = takeDamage(p, 1);
 		expect(r.corrupted).toBe(true);
 		expect(p.statusLevel).toBe(2);
@@ -270,7 +308,13 @@ describe('takeDamage', () => {
 			origins: {},
 			isFaceDown: false
 		}));
-		const p = makePlayer({ barrier: 0, maxBarrier: 4, statusLevel: 0, statusToken: 'Pure', spirits });
+		const p = makePlayer({
+			barrier: 0,
+			maxBarrier: 4,
+			statusLevel: 0,
+			statusToken: 'Pure',
+			spirits
+		});
 		// 1st corruption: heals to full, corruptionCount 1, owes 1.
 		takeDamage(p, 1);
 		expect(p.statusLevel).toBe(1);
@@ -341,7 +385,14 @@ describe('fightMonster', () => {
 	it('a kill consumes one life and resets HP — it does NOT advance the rung mid-fight', () => {
 		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) }); // guarantees >= 1 damage
 		// maxHp 1 so one combat's roll kills against the monster's FULL health (HP never persists).
-		const monster = makeMonster({ hp: 1, maxHp: 1, damage: 1, livesRemaining: 1, livesTotal: 1, ladderIndex: 0 });
+		const monster = makeMonster({
+			hp: 1,
+			maxHp: 1,
+			damage: 1,
+			livesRemaining: 1,
+			livesTotal: 1,
+			ladderIndex: 0
+		});
 		const state = makeState(p, monster, 5);
 		const result = fightMonster(state, 'Red');
 		expect(result!.killed).toBe(true);
@@ -356,7 +407,15 @@ describe('fightMonster', () => {
 
 	it('a multi-life monster survives a kill: same rung, one fewer life, HP reset', () => {
 		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) });
-		const monster = makeMonster({ id: 'm1', hp: 1, maxHp: 1, damage: 1, livesRemaining: 2, livesTotal: 2, ladderIndex: 0 });
+		const monster = makeMonster({
+			id: 'm1',
+			hp: 1,
+			maxHp: 1,
+			damage: 1,
+			livesRemaining: 2,
+			livesTotal: 2,
+			ladderIndex: 0
+		});
 		const state = makeState(p, monster, 5);
 		const result = fightMonster(state, 'Red');
 		expect(result!.killed).toBe(true);
@@ -368,7 +427,14 @@ describe('fightMonster', () => {
 
 	it('excess kills never carry over: livesRemaining floors at 0', () => {
 		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) });
-		const monster = makeMonster({ id: 'm1', hp: 1, maxHp: 1, livesRemaining: 0, livesTotal: 2, ladderIndex: 0 });
+		const monster = makeMonster({
+			id: 'm1',
+			hp: 1,
+			maxHp: 1,
+			livesRemaining: 0,
+			livesTotal: 2,
+			ladderIndex: 0
+		});
 		const state = makeState(p, monster, 5);
 		fightMonster(state, 'Red');
 		expect(state.monster?.id).toBe('m1'); // does not advance mid-fight
@@ -377,14 +443,42 @@ describe('fightMonster', () => {
 
 	const LADDER = {
 		monsters: [
-			{ id: 'm1', name: 'Weak', damage: 1, barrier: 5, rewardTrack: [], dicePool: [], chooseAmount: 2, stage: 1, order: 0 },
-			{ id: 'm2', name: 'Strong', damage: 9, barrier: 14, rewardTrack: ['r'], dicePool: [], chooseAmount: 2, stage: 1, order: 1 }
+			{
+				id: 'm1',
+				name: 'Weak',
+				damage: 1,
+				barrier: 5,
+				rewardTrack: [],
+				dicePool: [],
+				chooseAmount: 2,
+				stage: 1,
+				order: 0
+			},
+			{
+				id: 'm2',
+				name: 'Strong',
+				damage: 9,
+				barrier: 14,
+				rewardTrack: ['r'],
+				dicePool: [],
+				chooseAmount: 2,
+				stage: 1,
+				order: 1
+			}
 		]
 	} as unknown as PlayCatalog;
 
 	it('advanceMonsterIfDefeated: a spent monster climbs to the next, stronger rung at full HP', () => {
 		const p = makePlayer({});
-		const monster = makeMonster({ id: 'm1', hp: 5, maxHp: 5, livesRemaining: 0, livesTotal: 1, ladderIndex: 0, ladderMax: 2 });
+		const monster = makeMonster({
+			id: 'm1',
+			hp: 5,
+			maxHp: 5,
+			livesRemaining: 0,
+			livesTotal: 1,
+			ladderIndex: 0,
+			ladderMax: 2
+		});
 		const state = makeState(p, monster, 5); // makeState seats one player → 1 kill to defeat
 		advanceMonsterIfDefeated(state, LADDER);
 		expect(state.monster?.id).toBe('m2');
@@ -398,7 +492,13 @@ describe('fightMonster', () => {
 
 	it('advanceMonsterIfDefeated: no-op while the monster still has lives left', () => {
 		const p = makePlayer({});
-		const monster = makeMonster({ id: 'm1', livesRemaining: 1, livesTotal: 2, ladderIndex: 0, ladderMax: 2 });
+		const monster = makeMonster({
+			id: 'm1',
+			livesRemaining: 1,
+			livesTotal: 2,
+			ladderIndex: 0,
+			ladderMax: 2
+		});
 		const state = makeState(p, monster, 5);
 		advanceMonsterIfDefeated(state, LADDER);
 		expect(state.monster?.id).toBe('m1'); // unchanged — still has a life
@@ -453,7 +553,11 @@ describe('fightMonster', () => {
 
 describe('Spirit Animal (inCombat)', () => {
 	it('scales damage AND initiative by the Spirit Animal trait count', () => {
-		const p = makePlayer({ barrier: 4, attackDice: [], spirits: [spirit(1, { 'Spirit Animal': 3 })] });
+		const p = makePlayer({
+			barrier: 4,
+			attackDice: [],
+			spirits: [spirit(1, { 'Spirit Animal': 3 })]
+		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.playerDamage).toBe(3); // +1 dmg per trait × 3
@@ -461,7 +565,11 @@ describe('Spirit Animal (inCombat)', () => {
 	});
 
 	it('scales to a single trait', () => {
-		const p = makePlayer({ barrier: 4, attackDice: [], spirits: [spirit(1, { 'Spirit Animal': 1 })] });
+		const p = makePlayer({
+			barrier: 4,
+			attackDice: [],
+			spirits: [spirit(1, { 'Spirit Animal': 1 })]
+		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.playerDamage).toBe(1);
@@ -471,7 +579,12 @@ describe('Spirit Animal (inCombat)', () => {
 
 describe('Golem of Wishes (inCombat)', () => {
 	it('deflects 4 damage so a 4-damage hit is fully absorbed', () => {
-		const p = makePlayer({ barrier: 4, maxBarrier: 4, attackDice: [], spirits: [spirit(1, { 'Golem of Wishes': 1 })] });
+		const p = makePlayer({
+			barrier: 4,
+			maxBarrier: 4,
+			attackDice: [],
+			spirits: [spirit(1, { 'Golem of Wishes': 1 })]
+		});
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 4 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.barrierLost).toBe(0); // 4 − 4 deflect = 0
@@ -483,7 +596,12 @@ describe('Golem of Wishes (inCombat)', () => {
 describe('Blood Hunter (inCombat)', () => {
 	it('deals +1 damage per Arcane Blood, capped at 4', () => {
 		// Arcane blood = maxTokens − barrier ⇒ 10 − 4 = 6.
-		const p = makePlayer({ barrier: 4, maxBarrier: 10, attackDice: [], spirits: [spirit(1, { 'Blood Hunter': 1 })] });
+		const p = makePlayer({
+			barrier: 4,
+			maxBarrier: 10,
+			attackDice: [],
+			spirits: [spirit(1, { 'Blood Hunter': 1 })]
+		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.playerDamage).toBe(4); // min(6, 4)
@@ -491,7 +609,12 @@ describe('Blood Hunter (inCombat)', () => {
 
 	it('scales below the cap', () => {
 		// Arcane blood = maxTokens − barrier ⇒ 6 − 4 = 2.
-		const p = makePlayer({ barrier: 4, maxBarrier: 6, attackDice: [], spirits: [spirit(1, { 'Blood Hunter': 1 })] });
+		const p = makePlayer({
+			barrier: 4,
+			maxBarrier: 6,
+			attackDice: [],
+			spirits: [spirit(1, { 'Blood Hunter': 1 })]
+		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.playerDamage).toBe(2); // min(2, 4)
@@ -500,7 +623,12 @@ describe('Blood Hunter (inCombat)', () => {
 
 describe('Aquamaiden (onTakeDamage)', () => {
 	it('takes 3 less damage when hit', () => {
-		const p = makePlayer({ barrier: 4, maxBarrier: 4, attackDice: [], spirits: [spirit(1, { Aquamaiden: 1 })] });
+		const p = makePlayer({
+			barrier: 4,
+			maxBarrier: 4,
+			attackDice: [],
+			spirits: [spirit(1, { Aquamaiden: 1 })]
+		});
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 4 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.barrierLost).toBe(1); // 4 − 3 reduction = 1
@@ -518,7 +646,10 @@ describe('rollAttack (damage multiplier + advantage)', () => {
 	});
 
 	it('attackRollAdvantage (Dark Fighter) rolls twice and keeps the higher total', () => {
-		const dice = Array.from({ length: 4 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as const }));
+		const dice = Array.from({ length: 4 }, (_, i) => ({
+			instanceId: `d${i}`,
+			tier: 'basic' as const
+		}));
 		let advSum = 0;
 		let oneSum = 0;
 		// Same seed per trial for both players; advantage = max(roll, roll) ⇒ ≥ single roll
@@ -534,7 +665,11 @@ describe('rollAttack (damage multiplier + advantage)', () => {
 });
 
 describe('Disruptor (onTakeDamage, HANDLER)', () => {
-	function twoSeatState(red: PrivatePlayerState, blue: PrivatePlayerState, seed = 1): PublicGameState {
+	function twoSeatState(
+		red: PrivatePlayerState,
+		blue: PrivatePlayerState,
+		seed = 1
+	): PublicGameState {
 		return {
 			rng: createRng(seed),
 			monster: null,
@@ -544,7 +679,13 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 	}
 
 	it('halves incoming damage (rounding up) when the opponent has higher initiative', () => {
-		const defender = makePlayer({ playerColor: 'Blue', barrier: 10, maxBarrier: 10, initiative: 1, spirits: [spirit(1, { Disruptor: 1 })] });
+		const defender = makePlayer({
+			playerColor: 'Blue',
+			barrier: 10,
+			maxBarrier: 10,
+			initiative: 1,
+			spirits: [spirit(1, { Disruptor: 1 })]
+		});
 		const attacker = makePlayer({ playerColor: 'Red', initiative: 5 });
 		const state = twoSeatState(attacker, defender);
 		const r = takeDamage(defender, 5, { state, seat: 'Blue', opponent: 'Red' });
@@ -553,7 +694,13 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 	});
 
 	it('does NOT halve when the opponent has lower (or equal) initiative', () => {
-		const defender = makePlayer({ playerColor: 'Blue', barrier: 10, maxBarrier: 10, initiative: 5, spirits: [spirit(1, { Disruptor: 1 })] });
+		const defender = makePlayer({
+			playerColor: 'Blue',
+			barrier: 10,
+			maxBarrier: 10,
+			initiative: 5,
+			spirits: [spirit(1, { Disruptor: 1 })]
+		});
 		const attacker = makePlayer({ playerColor: 'Red', initiative: 1 });
 		const state = twoSeatState(attacker, defender);
 		const r = takeDamage(defender, 5, { state, seat: 'Blue', opponent: 'Red' });
@@ -567,7 +714,11 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 
 describe('per-combat flags reset between combats', () => {
 	it('Spirit Animal combat bonus is re-applied each combat, never accumulated', () => {
-		const p = makePlayer({ barrier: 4, attackDice: [], spirits: [spirit(1, { 'Spirit Animal': 1 })] });
+		const p = makePlayer({
+			barrier: 4,
+			attackDice: [],
+			spirits: [spirit(1, { 'Spirit Animal': 1 })]
+		});
 		const monster = makeMonster({ hp: 100, maxHp: 100, damage: 0 });
 		const state = makeState(p, monster, 1);
 
@@ -581,7 +732,12 @@ describe('per-combat flags reset between combats', () => {
 	});
 
 	it('Golem deflect does not leak into a later combat without Golem', () => {
-		const p = makePlayer({ barrier: 6, maxBarrier: 6, attackDice: [], spirits: [spirit(1, { 'Golem of Wishes': 1 })] });
+		const p = makePlayer({
+			barrier: 6,
+			maxBarrier: 6,
+			attackDice: [],
+			spirits: [spirit(1, { 'Golem of Wishes': 1 })]
+		});
 		const monster = makeMonster({ hp: 100, maxHp: 100, damage: 4 });
 		const state = makeState(p, monster, 1);
 

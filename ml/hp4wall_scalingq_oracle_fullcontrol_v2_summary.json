@@ -1,0 +1,65 @@
+{
+  "mode": "scaling-navigation-counterfactual",
+  "config": {
+    "games": 8,
+    "seats": 4,
+    "maxWindows": 16,
+    "horizons": [
+      6,
+      12
+    ],
+    "labelHorizon": 12,
+    "labelScoreThreshold": 0.5,
+    "minPlayerVp": 9,
+    "maxPlayerVp": 24,
+    "minRound": 4,
+    "minMonsterHp": 4,
+    "maxMonsterHp": 4,
+    "minCleanKillProb": 0,
+    "minFirepowerKillProb": 0,
+    "scoreReach30Bonus": 12,
+    "source": "full-control",
+    "rolloutPolicy": "breakpoint-oracle",
+    "plannerWeights": "ml/meta_runs/aux-head-act52-medium-20260627T222453Z/best_policy.json",
+    "navWeights": "ml/meta_runs/routeq-nav-specialist-20260628T0305Z/best_policy.json",
+    "scaleNavWeights": "ml/meta_runs/scaleq-nav-20260628T0650Z/best_policy.json",
+    "microWeights": "ml/meta_runs/routeexecq-fullcontrol-micro-20260628T0600Z/best_policy.json",
+    "microPolicyGate": "location-interactions",
+    "navigationPolicyGate": "unsafe-firepower-build-option",
+    "scalingNavigationPolicyGate": "route-option-scaling",
+    "preserveRouteFirepower": true,
+    "preserveRouteSurvival": true
+  },
+  "scanned": 29,
+  "windows": 16,
+  "filtered": 13,
+  "skippedSingleAction": 0,
+  "dataSamples": 16,
+  "scalingCorrections": 2,
+  "scalingCorrectionPct": 12.5,
+  "sourceWasBestPct": 75,
+  "avgScalingQDeltaScore": 0.3,
+  "avgScalingQDeltaVp": 0.25,
+  "avgScalingQDeltaReach30": 0,
+  "avgWindowPlayerVp": 21,
+  "avgWindowPlayerExpectedAttack": 3.33,
+  "avgWindowPlayerMaxBarrier": 10,
+  "avgWindowPlayerAttackDice": 2,
+  "avgWindowPlayerSpiritAnimal": 2,
+  "avgWindowPlayerCultivator": 0,
+  "avgWindowMonsterHp": 4,
+  "avgWindowCleanKillProb": 0,
+  "avgWindowFirepowerKillProb": 0.44,
+  "sourceDestinations": {
+    "Tidal Cove": 16
+  },
+  "bestDestinations": {
+    "Tidal Cove": 12,
+    "Cyber City": 3,
+    "Lantern Canyon": 1
+  },
+  "correctionBestDestinations": {
+    "Cyber City": 1,
+    "Lantern Canyon": 1
+  }
+}

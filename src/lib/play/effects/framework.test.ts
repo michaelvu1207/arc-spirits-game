@@ -34,6 +34,7 @@ function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerS
 		navigationDestination: null,
 		brokenBarrier: 0,
 		victoryPoints: 0,
+		vpHistory: [],
 		barrier: 4,
 		maxBarrier: 4,
 		statusLevel: 0,
@@ -92,7 +93,10 @@ function spirit(
 	return { slotIndex, id: `s${slotIndex}`, name, cost: 2, classes, origins, isFaceDown };
 }
 
-function makeState(players: Partial<Record<SeatColor, PrivatePlayerState>>, seed = 1): PublicGameState {
+function makeState(
+	players: Partial<Record<SeatColor, PrivatePlayerState>>,
+	seed = 1
+): PublicGameState {
 	return {
 		rng: createRng(seed),
 		players,
@@ -132,7 +136,13 @@ describe('selectBreakpoint return shape', () => {
 	});
 
 	it('numeric path picks the highest threshold ≤ count (Fighter 5 path)', () => {
-		const sel = selectBreakpoint([{ count: 2, actions: [] }, { count: 5, actions: [] }], 5);
+		const sel = selectBreakpoint(
+			[
+				{ count: 2, actions: [] },
+				{ count: 5, actions: [] }
+			],
+			5
+		);
 		expect(sel!.bp.count).toBe(5);
 		expect(sel!.multiplier).toBe(1);
 	});
@@ -148,7 +158,13 @@ describe('selectBreakpoint return shape', () => {
 	});
 
 	it("a numeric breakpoint wins over '1+' when both qualify", () => {
-		const sel = selectBreakpoint([{ count: '1+', actions: [] }, { count: 2, actions: [] }], 3);
+		const sel = selectBreakpoint(
+			[
+				{ count: '1+', actions: [] },
+				{ count: 2, actions: [] }
+			],
+			3
+		);
 		expect(sel!.bp.count).toBe(2);
 		expect(sel!.multiplier).toBe(1);
 	});
@@ -164,14 +180,20 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 
 	it('gainInitiative adds to initiative', () => {
 		withSynthClass('SynthInit', [
-			{ trigger: 'onRest', breakpoints: [{ count: 1, actions: [{ kind: 'gainInitiative', amount: 2 }] }] }
+			{
+				trigger: 'onRest',
+				breakpoints: [{ count: 1, actions: [{ kind: 'gainInitiative', amount: 2 }] }]
+			}
 		]);
 		expect(fireRest('SynthInit', 1).initiative).toBe(2);
 	});
 
 	it('reduceIncomingDamage raises damageReduction, then is consumed by takeDamage', () => {
 		withSynthClass('SynthDR', [
-			{ trigger: 'onRest', breakpoints: [{ count: 1, actions: [{ kind: 'reduceIncomingDamage', amount: 2 }] }] }
+			{
+				trigger: 'onRest',
+				breakpoints: [{ count: 1, actions: [{ kind: 'reduceIncomingDamage', amount: 2 }] }]
+			}
 		]);
 		const p = fireRest('SynthDR', 1, { barrier: 4, maxBarrier: 4 });
 		expect(p.damageReduction).toBe(2);
@@ -195,7 +217,10 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 
 	it('combatBonus raises combatDamageBonus, then adds in rollAttack', () => {
 		withSynthClass('SynthBonus', [
-			{ trigger: 'onRest', breakpoints: [{ count: 1, actions: [{ kind: 'combatBonus', amount: 4 }] }] }
+			{
+				trigger: 'onRest',
+				breakpoints: [{ count: 1, actions: [{ kind: 'combatBonus', amount: 4 }] }]
+			}
 		]);
 		const p = fireRest('SynthBonus', 1);
 		expect(p.combatDamageBonus).toBe(4);
@@ -207,7 +232,10 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 		// P4: per-combat flags reset at the start of each fight, so the bonus must
 		// be granted by an `inCombat` class effect (not pre-set on the player).
 		withSynthClass('SynthInCombatBonus', [
-			{ trigger: 'inCombat', breakpoints: [{ count: 1, actions: [{ kind: 'combatBonus', amount: 6 }] }] }
+			{
+				trigger: 'inCombat',
+				breakpoints: [{ count: 1, actions: [{ kind: 'combatBonus', amount: 6 }] }]
+			}
 		]);
 		const monster: MonsterState = {
 			id: 'm',
@@ -260,7 +288,10 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 
 	it('purifyArcaneBlood heals arcane blood (clamped at full health)', () => {
 		withSynthClass('SynthPurify', [
-			{ trigger: 'onRest', breakpoints: [{ count: 1, actions: [{ kind: 'purifyArcaneBlood', amount: 5 }] }] }
+			{
+				trigger: 'onRest',
+				breakpoints: [{ count: 1, actions: [{ kind: 'purifyArcaneBlood', amount: 5 }] }]
+			}
 		]);
 		// Start corrupted (arcane blood 2: maxTokens 6 − barrier 4); purify ≥2 ⇒ 0.
 		const p = fireRest('SynthPurify', 1, { maxBarrier: 6, barrier: 4 });
@@ -271,7 +302,9 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 		withSynthClass('SynthExtra', [
 			{
 				trigger: 'onRest',
-				breakpoints: [{ count: 1, actions: [{ kind: 'extraAction', actionKey: 'rest', amount: 1 }] }]
+				breakpoints: [
+					{ count: 1, actions: [{ kind: 'extraAction', actionKey: 'rest', amount: 1 }] }
+				]
 			}
 		]);
 		const p = fireRest('SynthExtra', 1);
@@ -280,7 +313,10 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 
 	it('manual still surfaces a prompt', () => {
 		withSynthClass('SynthManual', [
-			{ trigger: 'onRest', breakpoints: [{ count: 1, actions: [{ kind: 'manual', prompt: 'Resolve by hand.' }] }] }
+			{
+				trigger: 'onRest',
+				breakpoints: [{ count: 1, actions: [{ kind: 'manual', prompt: 'Resolve by hand.' }] }]
+			}
 		]);
 		const p = fireRest('SynthManual', 1);
 		expect(p.manualPrompts).toHaveLength(1);
@@ -291,7 +327,10 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 describe("'1+' per-trait scaling", () => {
 	it('scales numeric amounts by traitCount', () => {
 		withSynthClass('SynthScale', [
-			{ trigger: 'onRest', breakpoints: [{ count: '1+', actions: [{ kind: 'gainVP', amount: 2 }] }] }
+			{
+				trigger: 'onRest',
+				breakpoints: [{ count: '1+', actions: [{ kind: 'gainVP', amount: 2 }] }]
+			}
 		]);
 		// 3 traits × 2 VP = 6.
 		expect(fireRest('SynthScale', 3).victoryPoints).toBe(6);
@@ -299,7 +338,10 @@ describe("'1+' per-trait scaling", () => {
 
 	it('does not apply at zero traits (no awakened spirit)', () => {
 		withSynthClass('SynthScale0', [
-			{ trigger: 'onRest', breakpoints: [{ count: '1+', actions: [{ kind: 'gainVP', amount: 2 }] }] }
+			{
+				trigger: 'onRest',
+				breakpoints: [{ count: '1+', actions: [{ kind: 'gainVP', amount: 2 }] }]
+			}
 		]);
 		const p = makePlayer({ spirits: [spirit(1, 'A', { SynthScale0: 1 }, {}, true)] }); // face-down
 		applyTrigger(makeState({ Red: p }), 'Red', 'onRest', []);
@@ -361,7 +403,11 @@ describe('conditional action', () => {
 					{
 						count: 1,
 						actions: [
-							{ kind: 'conditional', when: { kind: 'isEvil' }, then: [{ kind: 'gainVP', amount: 9 }] }
+							{
+								kind: 'conditional',
+								when: { kind: 'isEvil' },
+								then: [{ kind: 'gainVP', amount: 9 }]
+							}
 						]
 					}
 				]
@@ -395,13 +441,21 @@ describe('colocatedPlayers helper', () => {
 					{
 						count: 1,
 						actions: [
-							{ kind: 'conditional', when: { kind: 'hasColocated' }, then: [{ kind: 'gainVP', amount: 4 }] }
+							{
+								kind: 'conditional',
+								when: { kind: 'hasColocated' },
+								then: [{ kind: 'gainVP', amount: 4 }]
+							}
 						]
 					}
 				]
 			}
 		]);
-		const red = makePlayer({ playerColor: 'Red', navigationDestination: 'Tidal Cove', spirits: [spirit(1, 'A', { SynthColo: 1 })] });
+		const red = makePlayer({
+			playerColor: 'Red',
+			navigationDestination: 'Tidal Cove',
+			spirits: [spirit(1, 'A', { SynthColo: 1 })]
+		});
 		const blue = makePlayer({ playerColor: 'Blue', navigationDestination: 'Tidal Cove' });
 		applyTrigger(makeState({ Red: red, Blue: blue }), 'Red', 'onRest', []);
 		expect(red.victoryPoints).toBe(4);
@@ -423,14 +477,21 @@ const SMOKE_CATALOG: PlayCatalog = {
 	mats: [],
 	classes: [],
 	dice: [{ id: 'basic_attack', name: 'Basic Attack', diceType: 'attack' }],
-	spirits: [{ id: 'spirit-fighter', name: 'Duelist', cost: 2, classes: { Fighter: 4 }, origins: {} }],
+	spirits: [
+		{ id: 'spirit-fighter', name: 'Duelist', cost: 2, classes: { Fighter: 4 }, origins: {} }
+	],
 	monsters: [],
 	locations: [{ name: 'Floral Patch', originId: null, rewardRows: FLORAL_PATCH_ROWS }]
 };
 
 function startedLocationGame(): PublicGameState {
 	let state = createLobbyState({ roomCode: 'SMOKE1', guardianNames: ['Myrtle'] });
-	const claim = applyGameCommand(state, HOST, { type: 'claimSeat', seatColor: 'Red' }, SMOKE_CATALOG);
+	const claim = applyGameCommand(
+		state,
+		HOST,
+		{ type: 'claimSeat', seatColor: 'Red' },
+		SMOKE_CATALOG
+	);
 	if (!claim.ok) throw new Error(claim.error.message);
 	state = claim.state;
 	const guardian = applyGameCommand(
@@ -441,7 +502,12 @@ function startedLocationGame(): PublicGameState {
 	);
 	if (!guardian.ok) throw new Error(guardian.error.message);
 	state = guardian.state;
-	const started = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, SMOKE_CATALOG);
+	const started = applyGameCommand(
+		state,
+		{ ...HOST, seatColor: 'Red' },
+		{ type: 'startGame' },
+		SMOKE_CATALOG
+	);
 	if (!started.ok) throw new Error(started.error.message);
 	// Lock RED onto Floral Patch (free Rest at row 0) so the later force-advance reveal
 	// stands RED there rather than at a random destination.
@@ -466,7 +532,12 @@ describe('full-runtime smoke (startGame → rest)', () => {
 		// Drive the phase machine to the Location phase.
 		let s: PublicGameState = state;
 		for (let i = 0; i < 4 && s.phase !== 'location'; i += 1) {
-			const adv = applyGameCommand(s, { ...HOST, seatColor: 'Red' }, { type: 'forceAdvancePhase' }, SMOKE_CATALOG);
+			const adv = applyGameCommand(
+				s,
+				{ ...HOST, seatColor: 'Red' },
+				{ type: 'forceAdvancePhase' },
+				SMOKE_CATALOG
+			);
 			if (!adv.ok) throw new Error(adv.error.message);
 			s = adv.state;
 		}
@@ -476,7 +547,9 @@ describe('full-runtime smoke (startGame → rest)', () => {
 		s.players.Red!.spirits = [spirit(1, 'Duelist', { Fighter: 5 })];
 		s.players.Red!.maxBarrier = 10;
 		s.players.Red!.attackDice = [];
-		s.players.Red!.actionsUsedThisRound = s.players.Red!.actionsUsedThisRound.filter((a) => a !== 'row:0');
+		s.players.Red!.actionsUsedThisRound = s.players.Red!.actionsUsedThisRound.filter(
+			(a) => a !== 'row:0'
+		);
 
 		// Floral Patch row 0 is a free Rest — resolving it fires the onRest trigger.
 		const rested = applyGameCommand(

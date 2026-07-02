@@ -1,0 +1,59 @@
+{
+  "mode": "survival-counterfactual",
+  "config": {
+    "games": 1,
+    "seats": 4,
+    "maxRounds": 30,
+    "maxWindows": 4,
+    "firepowerThreshold": 0.5,
+    "cleanThreshold": 0.5,
+    "selectHorizon": 6,
+    "horizons": [
+      3,
+      6
+    ],
+    "labelHorizon": 6,
+    "labelVpThreshold": 0.5,
+    "labelCleanOpportunityGain": 1,
+    "profiles": [
+      "paragon",
+      "farmer",
+      "farmer2",
+      "hard"
+    ],
+    "forbidTypes": [
+      "initiatePvp"
+    ],
+    "maxStatusLevel": 0
+  },
+  "scannedUnsafeFirepower": 4,
+  "windows": 4,
+  "skippedNoAbyss": 0,
+  "skippedNoNonAbyss": 0,
+  "buildNowCorrect": 4,
+  "buildNowPct": 100,
+  "avgBuildQDeltaVp": 3,
+  "avgBuildQDeltaStatus": 0,
+  "avgBuildQDeltaCleanCombatOpportunities": 1,
+  "avgSurvivalDeficit": 1,
+  "avgMaxBarrierDeficit": 0,
+  "byHorizon": {
+    "3": {
+      "avgBuildQDeltaVp": 3,
+      "avgBuildQDeltaCleanCombatOpportunities": 1,
+      "buildNowPct": 100
+    },
+    "6": {
+      "avgBuildQDeltaVp": 3,
+      "avgBuildQDeltaCleanCombatOpportunities": 1,
+      "buildNowPct": 100
+    }
+  },
+  "bestBuildDestinations": {
+    "Lantern Canyon": 4
+  },
+  "heuristicBuildDestinations": {
+    "Floral Patch": 1,
+    "Tidal Cove": 3
+  }
+}

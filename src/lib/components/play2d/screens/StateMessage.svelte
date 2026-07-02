@@ -93,4 +93,26 @@
 			animation: none;
 		}
 	}
+
+	@media (orientation: landscape) and (max-height: 520px) {
+		.state {
+			gap: 8px;
+			padding: clamp(18px, 6vh, 28px) 18px;
+		}
+		.state.compact {
+			padding: 16px 12px;
+		}
+		.spin-ring {
+			width: 26px;
+			height: 26px;
+			margin-bottom: 0;
+		}
+		h3 {
+			font-size: 1.25rem;
+		}
+		p {
+			font-size: 0.78rem;
+			line-height: 1.35;
+		}
+	}
 </style>

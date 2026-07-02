@@ -19,17 +19,92 @@
 
 import { applyGameCommand } from '../runtime';
 import { botActorFor } from '../server/botPolicy';
-import { canApply } from './canApply';
-import { ALL_DESTINATIONS, type GameActor, type GameCommand, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
+import { canApply } from '../legality';
+import { buildMonsterRewards, type MonsterRewardOption } from '../monsterRewards';
+import { ALL_DESTINATIONS, type GameActor, type GameCommand, type PendingRewardState, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
 
 const MAX_LOCATION_ROWS = 10;
 /** How many distinct "or"-option choices to expand per location reward row. */
 const MAX_ROW_CHOICES = 3;
+const MAX_MONSTER_REWARD_OPTIONS = 8;
+const MAX_MONSTER_REWARD_PICK_SIZE = 3;
+const MAX_MONSTER_REWARD_CHOICE_VARIANTS = 6;
+const MAX_MONSTER_REWARD_COMMANDS = 160;
 
 /** A legal candidate command paired with the state it produces (from the dry-run). */
 export interface LegalAction {
 	cmd: GameCommand;
 	next: PublicGameState;
+}
+
+function rewardChoiceVariants(option: MonsterRewardOption): number[] {
+	if (option.effect.type !== 'chooseRune') return [0];
+	return Array.from(
+		{ length: Math.min(option.effect.options.length, MAX_MONSTER_REWARD_CHOICE_VARIANTS) },
+		(_, i) => i
+	);
+}
+
+function emitChoiceProducts(
+	picks: MonsterRewardOption[],
+	emit: (choices: number[]) => void,
+	index = 0,
+	choices: number[] = []
+): void {
+	if (index >= picks.length) {
+		emit(choices);
+		return;
+	}
+	const opt = picks[index];
+	const variants = rewardChoiceVariants(opt);
+	if (opt.effect.type !== 'chooseRune') {
+		emitChoiceProducts(picks, emit, index + 1, choices);
+		return;
+	}
+	for (const choice of variants) {
+		emitChoiceProducts(picks, emit, index + 1, [...choices, choice]);
+	}
+}
+
+function emitMonsterRewardCommands(
+	pending: PendingRewardState,
+	emit: (cmd: GameCommand) => void
+): void {
+	const options = buildMonsterRewards(pending.rewardTrack);
+	const maxPick = Math.min(pending.chooseAmount, options.length);
+	if (maxPick <= 0) return;
+	if (options.length > MAX_MONSTER_REWARD_OPTIONS || maxPick > MAX_MONSTER_REWARD_PICK_SIZE) {
+		const first = options.slice(0, maxPick).map((opt) => opt.index);
+		emit({ type: 'resolveMonsterReward', picks: first });
+		const last = options.slice(-maxPick).map((opt) => opt.index);
+		if (last.join(',') !== first.join(',')) emit({ type: 'resolveMonsterReward', picks: last });
+		return;
+	}
+
+	let emitted = 0;
+	const walk = (start: number, picks: MonsterRewardOption[], targetSize: number): void => {
+		if (emitted >= MAX_MONSTER_REWARD_COMMANDS) return;
+		if (picks.length === targetSize) {
+			emitChoiceProducts(picks, (choices) => {
+				if (emitted >= MAX_MONSTER_REWARD_COMMANDS) return;
+				const cmd: GameCommand = {
+					type: 'resolveMonsterReward',
+					picks: picks.map((opt) => opt.index)
+				};
+				if (choices.length > 0) cmd.choices = choices;
+				emit(cmd);
+				emitted++;
+			});
+			return;
+		}
+		for (let i = start; i < options.length; i++) {
+			walk(i + 1, [...picks, options[i]], targetSize);
+		}
+	};
+
+	for (let size = 1; size <= maxPick && emitted < MAX_MONSTER_REWARD_COMMANDS; size++) {
+		walk(0, [], size);
+	}
 }
 
 /**
@@ -81,13 +156,7 @@ export function enumerateCandidates(
 			tryAdd({ type: 'discardHandDraws' });
 			// Monster combat + reward claim.
 			tryAdd({ type: 'startCombat' });
-			if (me?.pendingReward) {
-				const track = me.pendingReward.rewardTrack ?? [];
-				const k = Math.min(me.pendingReward.chooseAmount, track.length);
-				// Default: first k. Plus a couple of alternative pick-sets so reward choice is learnable.
-				tryAdd({ type: 'resolveMonsterReward', picks: Array.from({ length: k }, (_, i) => i) });
-				if (track.length > k) tryAdd({ type: 'resolveMonsterReward', picks: Array.from({ length: k }, (_, i) => track.length - 1 - i) });
-			}
+			if (me?.pendingReward) emitMonsterRewardCommands(me.pendingReward, tryAdd);
 			// Market: buy/replace spirits from filled slots.
 			for (let i = 0; i < (state.market?.length ?? 0); i++) {
 				if (!state.market[i]?.spiritId) continue;

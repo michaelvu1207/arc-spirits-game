@@ -21,6 +21,14 @@ export interface PolicyWeights {
 	act_dim: number;
 	trunk: LinearLayer[];
 	value: LinearLayer[];
+	farm_value?: LinearLayer[];
+	reward_pick?: LinearLayer[];
+	route_mode?: LinearLayer[];
+}
+
+export interface PolicyLoadOptions {
+	expectedObsDim?: number;
+	expectedActDim?: number;
 }
 
 function linear(x: number[], layer: LinearLayer): number[] {
@@ -72,6 +80,35 @@ export class NeuralPolicy {
 		return mlp(obs, this.w.value)[0];
 	}
 
+	/** Optional auxiliary clean-farm opportunity prediction. Missing on older checkpoints. */
+	farmValue(obs: number[]): number {
+		return this.w.farm_value ? mlp(obs, this.w.farm_value)[0] : 0;
+	}
+
+	/** Optional Fallen route-mode probability. Missing on older checkpoints. */
+	routeMode(obs: number[]): number | null {
+		if (!this.w.route_mode) return null;
+		const raw = mlp(obs, this.w.route_mode)[0];
+		return 1 / (1 + Math.exp(-raw));
+	}
+
+	/** Optional auxiliary reward-pick logits over candidates. Missing on older checkpoints. */
+	rewardPickScores(obs: number[], cands: number[][]): number[] | null {
+		if (!this.w.reward_pick) return null;
+		return cands.map((cand) => mlp(obs.concat(cand), this.w.reward_pick!)[0]);
+	}
+
+	rewardPickProbs(obs: number[], cands: number[][], temperature = 1): number[] | null {
+		const logits = this.rewardPickScores(obs, cands);
+		if (!logits) return null;
+		const t = Math.max(1e-6, temperature);
+		let max = -Infinity;
+		for (const l of logits) if (l > max) max = l;
+		const exps = logits.map((l) => Math.exp((l - max) / t));
+		const sum = exps.reduce((a, b) => a + b, 0) || 1;
+		return exps.map((e) => e / sum);
+	}
+
 	/** Softmax probabilities over candidates (numerically stable). */
 	probs(obs: number[], cands: number[][], temperature = 1): number[] {
 		const logits = this.scoreCandidates(obs, cands);
@@ -111,14 +148,60 @@ export class NeuralPolicy {
 	}
 }
 
-/** Parse + lightly validate an exported weights blob. */
-export function loadPolicyWeights(json: unknown): NeuralPolicy {
+function validateLinear(layer: LinearLayer | undefined, name: string): void {
+	if (!layer || !Array.isArray(layer.W) || !Array.isArray(layer.b) || layer.W.length !== layer.b.length) {
+		throw new Error(`Invalid policy weights: ${name} layer has inconsistent W/b`);
+	}
+	const width = layer.W[0]?.length;
+	if (typeof width !== 'number') {
+		throw new Error(`Invalid policy weights: ${name} layer has no input width`);
+	}
+	for (const row of layer.W) {
+		if (!Array.isArray(row) || row.length !== width) {
+			throw new Error(`Invalid policy weights: ${name} layer has ragged rows`);
+		}
+	}
+}
+
+/** Parse + validate an exported weights blob. */
+export function loadPolicyWeights(json: unknown, opts: PolicyLoadOptions = {}): NeuralPolicy {
 	const w = json as PolicyWeights;
 	if (!w || !Array.isArray(w.trunk) || !Array.isArray(w.value)) {
 		throw new Error('Invalid policy weights: missing trunk/value layers');
 	}
 	if (w.trunk[w.trunk.length - 1]?.W.length !== 1) {
 		throw new Error('Invalid policy weights: trunk must end in a single logit');
+	}
+	for (let i = 0; i < w.trunk.length; i++) validateLinear(w.trunk[i], `trunk[${i}]`);
+	for (let i = 0; i < w.value.length; i++) validateLinear(w.value[i], `value[${i}]`);
+	if (w.farm_value) for (let i = 0; i < w.farm_value.length; i++) validateLinear(w.farm_value[i], `farm_value[${i}]`);
+	if (w.reward_pick) for (let i = 0; i < w.reward_pick.length; i++) validateLinear(w.reward_pick[i], `reward_pick[${i}]`);
+	if (w.route_mode) for (let i = 0; i < w.route_mode.length; i++) validateLinear(w.route_mode[i], `route_mode[${i}]`);
+	if (opts.expectedObsDim !== undefined && w.obs_dim !== opts.expectedObsDim) {
+		throw new Error(`Invalid policy weights: obs_dim ${w.obs_dim} does not match encoder ${opts.expectedObsDim}`);
+	}
+	if (opts.expectedActDim !== undefined && w.act_dim !== opts.expectedActDim) {
+		throw new Error(`Invalid policy weights: act_dim ${w.act_dim} does not match encoder ${opts.expectedActDim}`);
+	}
+	const trunkInput = w.trunk[0]?.W[0]?.length;
+	const valueInput = w.value[0]?.W[0]?.length;
+	if (trunkInput !== w.obs_dim + w.act_dim) {
+		throw new Error(`Invalid policy weights: trunk input ${trunkInput} does not match obs_dim + act_dim`);
+	}
+	if (valueInput !== w.obs_dim) {
+		throw new Error(`Invalid policy weights: value input ${valueInput} does not match obs_dim`);
+	}
+	const farmInput = w.farm_value?.[0]?.W[0]?.length;
+	if (farmInput !== undefined && farmInput !== w.obs_dim) {
+		throw new Error(`Invalid policy weights: farm_value input ${farmInput} does not match obs_dim`);
+	}
+	const rewardPickInput = w.reward_pick?.[0]?.W[0]?.length;
+	if (rewardPickInput !== undefined && rewardPickInput !== w.obs_dim + w.act_dim) {
+		throw new Error(`Invalid policy weights: reward_pick input ${rewardPickInput} does not match obs_dim + act_dim`);
+	}
+	const routeModeInput = w.route_mode?.[0]?.W[0]?.length;
+	if (routeModeInput !== undefined && routeModeInput !== w.obs_dim) {
+		throw new Error(`Invalid policy weights: route_mode input ${routeModeInput} does not match obs_dim`);
 	}
 	return new NeuralPolicy(w);
 }

@@ -56,6 +56,7 @@ function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerS
 		navigationDestination: null,
 		brokenBarrier: 0,
 		victoryPoints: 0,
+		vpHistory: [],
 		barrier: 4,
 		maxBarrier: 4,
 		statusLevel: 0,
@@ -148,7 +149,11 @@ function makeState(player: PrivatePlayerState, seed = 1): PublicGameState {
 }
 
 /** A catalog whose only spirit carries the given normalized awaken condition. */
-function catalogWith(spiritId: string, awaken: NormalizedAwaken | undefined, extra: Partial<PlayCatalogSpirit> = {}): PlayCatalog {
+function catalogWith(
+	spiritId: string,
+	awaken: NormalizedAwaken | undefined,
+	extra: Partial<PlayCatalogSpirit> = {}
+): PlayCatalog {
 	const entry: PlayCatalogSpirit = {
 		id: spiritId,
 		name: spiritId,
@@ -161,7 +166,10 @@ function catalogWith(spiritId: string, awaken: NormalizedAwaken | undefined, ext
 	return { guardians: [], spirits: [entry], mats: [], classes: [], dice: [], monsters: [] };
 }
 
-function ctxFor(player: PrivatePlayerState, catalog: PlayCatalog): ReturnType<typeof buildEffectContext> {
+function ctxFor(
+	player: PrivatePlayerState,
+	catalog: PlayCatalog
+): ReturnType<typeof buildEffectContext> {
 	return buildEffectContext({
 		state: makeState(player),
 		seat: 'Red',
@@ -211,7 +219,9 @@ describe('checkAwakenCondition', () => {
 			mats: [{ runeId: FIRE_RUNE, name: 'Fire', kind: 'rune', count: 3, wildcard: false }]
 		};
 		expect(
-			checkAwakenCondition(ctxFor(player, catalogWith('fire3', awaken)), { spirit: player.spirits[0] }).ok
+			checkAwakenCondition(ctxFor(player, catalogWith('fire3', awaken)), {
+				spirit: player.spirits[0]
+			}).ok
 		).toBe(true);
 	});
 
@@ -347,11 +357,15 @@ describe('payAwakenCondition', () => {
 			kind: 'rune_cost',
 			mats: [{ runeId: FIRE_RUNE, name: 'Fire', kind: 'rune', count: 3, wildcard: false }]
 		};
-		const pay = payAwakenCondition(ctxFor(player, catalogWith('fire3', awaken)), { spirit: player.spirits[0] });
+		const pay = payAwakenCondition(ctxFor(player, catalogWith('fire3', awaken)), {
+			spirit: player.spirits[0]
+		});
 		expect(pay.ok).toBe(true);
 		expect(pay.discarded).toHaveLength(3);
 		// The three Fire runes are spent; the unrelated rune is still held.
-		expect(player.mats.filter((r) => r.id === FIRE_RUNE).every((r) => r.hasRune === false)).toBe(true);
+		expect(player.mats.filter((r) => r.id === FIRE_RUNE).every((r) => r.hasRune === false)).toBe(
+			true
+		);
 		expect(player.mats.find((r) => r.id === 'unrelated')!.hasRune).toBe(true);
 	});
 
@@ -371,7 +385,9 @@ describe('payAwakenCondition', () => {
 				{ runeId: ANY_RELIC, name: 'Any Relic', kind: 'relic', count: 1, wildcard: true }
 			]
 		};
-		const pay = payAwakenCondition(ctxFor(player, catalogWith('water', awaken)), { spirit: player.spirits[0] });
+		const pay = payAwakenCondition(ctxFor(player, catalogWith('water', awaken)), {
+			spirit: player.spirits[0]
+		});
 		expect(pay.ok).toBe(true);
 		// All three runes consumed (2 Water named + 1 wildcard = the misc relic).
 		expect(player.mats.every((r) => r.hasRune === false)).toBe(true);
@@ -383,7 +399,10 @@ describe('payAwakenCondition', () => {
 		const player = makePlayer({
 			spirits: [spirit(1, 'w', 'W')],
 			// The misc rune is an ORIGIN rune so it can satisfy the Any-Rune wildcard.
-			mats: [rune(1, { id: WATER_RUNE, originId: 'water-origin' }), rune(2, { name: 'misc', id: 'misc', originId: 'misc-origin' })]
+			mats: [
+				rune(1, { id: WATER_RUNE, originId: 'water-origin' }),
+				rune(2, { name: 'misc', id: 'misc', originId: 'misc-origin' })
+			]
 		});
 		const awaken: NormalizedAwaken = {
 			kind: 'rune_cost',
@@ -392,7 +411,9 @@ describe('payAwakenCondition', () => {
 				{ runeId: ANY_RUNE, name: 'Any Rune', kind: 'rune', count: 1, wildcard: true }
 			]
 		};
-		const pay = payAwakenCondition(ctxFor(player, catalogWith('w', awaken)), { spirit: player.spirits[0] });
+		const pay = payAwakenCondition(ctxFor(player, catalogWith('w', awaken)), {
+			spirit: player.spirits[0]
+		});
 		expect(pay.ok).toBe(true);
 		expect(player.mats.every((r) => r.hasRune === false)).toBe(true);
 	});
@@ -406,22 +427,33 @@ describe('payAwakenCondition', () => {
 			spirits: [spirit(1, 'f', 'F')],
 			mats: [rune(1, { id: FIRE_RUNE }), rune(2, { id: FIRE_RUNE }), rune(3, { id: FIRE_RUNE })]
 		});
-		expect(payAwakenCondition(ctxFor(withThree, catalogWith('f', awaken)), { spirit: withThree.spirits[0] }).ok).toBe(true);
+		expect(
+			payAwakenCondition(ctxFor(withThree, catalogWith('f', awaken)), {
+				spirit: withThree.spirits[0]
+			}).ok
+		).toBe(true);
 
 		const withTwo = makePlayer({
 			spirits: [spirit(1, 'f', 'F')],
 			mats: [rune(1, { id: FIRE_RUNE }), rune(2, { id: FIRE_RUNE })]
 		});
-		const failed = payAwakenCondition(ctxFor(withTwo, catalogWith('f', awaken)), { spirit: withTwo.spirits[0] });
+		const failed = payAwakenCondition(ctxFor(withTwo, catalogWith('f', awaken)), {
+			spirit: withTwo.spirits[0]
+		});
 		expect(failed.ok).toBe(false);
 		// Nothing discarded on a failed pay.
 		expect(withTwo.mats.every((r) => r.hasRune === true)).toBe(true);
 	});
 
 	it('text conditions cannot be paid (manual path)', () => {
-		const player = makePlayer({ spirits: [spirit(1, 't', 'T')], mats: [rune(1, { id: FIRE_RUNE })] });
+		const player = makePlayer({
+			spirits: [spirit(1, 't', 'T')],
+			mats: [rune(1, { id: FIRE_RUNE })]
+		});
 		const awaken: NormalizedAwaken = { kind: 'text', text: 'do something' };
-		const pay = payAwakenCondition(ctxFor(player, catalogWith('t', awaken)), { spirit: player.spirits[0] });
+		const pay = payAwakenCondition(ctxFor(player, catalogWith('t', awaken)), {
+			spirit: player.spirits[0]
+		});
 		expect(pay.ok).toBe(false);
 	});
 
@@ -438,7 +470,9 @@ describe('payAwakenCondition', () => {
 			kind: 'rune_cost',
 			mats: [{ runeId: ANY_RUNE, name: 'Any Rune', kind: 'rune', count: 1, wildcard: true }]
 		};
-		payAwakenCondition(ctxFor(player, catalogWith('w', awaken)), { spirit: player.spirits[0] }, ['g2']);
+		payAwakenCondition(ctxFor(player, catalogWith('w', awaken)), { spirit: player.spirits[0] }, [
+			'g2'
+		]);
 		// The g2 copy is spent; g1 is preserved.
 		expect(player.mats.find((r) => r.guid === 'g2')!.hasRune).toBe(false);
 		expect(player.mats.find((r) => r.guid === 'g1')!.hasRune).toBe(true);
@@ -448,21 +482,32 @@ describe('payAwakenCondition', () => {
 describe('canAutoAwaken', () => {
 	it('is true for free + payable, false for unpayable + text', () => {
 		const free = makePlayer({ spirits: [spirit(1, 'free', 'Free')] });
-		expect(canAutoAwaken(ctxFor(free, catalogWith('free', undefined)), { spirit: free.spirits[0] })).toBe(true);
+		expect(
+			canAutoAwaken(ctxFor(free, catalogWith('free', undefined)), { spirit: free.spirits[0] })
+		).toBe(true);
 
-		const payable = makePlayer({ spirits: [spirit(1, 'f', 'F')], mats: [rune(1, { id: FIRE_RUNE })] });
+		const payable = makePlayer({
+			spirits: [spirit(1, 'f', 'F')],
+			mats: [rune(1, { id: FIRE_RUNE })]
+		});
 		const payAwaken: NormalizedAwaken = {
 			kind: 'rune_cost',
 			mats: [{ runeId: FIRE_RUNE, name: 'Fire', kind: 'rune', count: 1, wildcard: false }]
 		};
-		expect(canAutoAwaken(ctxFor(payable, catalogWith('f', payAwaken)), { spirit: payable.spirits[0] })).toBe(true);
+		expect(
+			canAutoAwaken(ctxFor(payable, catalogWith('f', payAwaken)), { spirit: payable.spirits[0] })
+		).toBe(true);
 
 		const broke = makePlayer({ spirits: [spirit(1, 'f', 'F')], mats: [] });
-		expect(canAutoAwaken(ctxFor(broke, catalogWith('f', payAwaken)), { spirit: broke.spirits[0] })).toBe(false);
+		expect(
+			canAutoAwaken(ctxFor(broke, catalogWith('f', payAwaken)), { spirit: broke.spirits[0] })
+		).toBe(false);
 
 		const txt = makePlayer({ spirits: [spirit(1, 't', 'T')] });
 		const textAwaken: NormalizedAwaken = { kind: 'text', text: 'x' };
-		expect(canAutoAwaken(ctxFor(txt, catalogWith('t', textAwaken)), { spirit: txt.spirits[0] })).toBe(false);
+		expect(
+			canAutoAwaken(ctxFor(txt, catalogWith('t', textAwaken)), { spirit: txt.spirits[0] })
+		).toBe(false);
 	});
 });
 
@@ -510,7 +555,11 @@ describe('enterAwakening awakenEligible', () => {
 
 	it('without a catalog, offers every face-down slot (pre-P2 fallback)', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, 'a', 'A'), spirit(2, 'b', 'B'), { ...spirit(3, 'c', 'C'), isFaceDown: false }]
+			spirits: [
+				spirit(1, 'a', 'A'),
+				spirit(2, 'b', 'B'),
+				{ ...spirit(3, 'c', 'C'), isFaceDown: false }
+			]
 		});
 		const state = makeState(player);
 		state.phase = 'location';
@@ -533,7 +582,10 @@ afterEach(() => {
 	for (const name of SYNTHETIC.splice(0)) delete CLASS_EFFECTS[name];
 });
 
-function awakenCatalog(awaken: NormalizedAwaken | undefined, classes: Record<string, number> = {}): PlayCatalog {
+function awakenCatalog(
+	awaken: NormalizedAwaken | undefined,
+	classes: Record<string, number> = {}
+): PlayCatalog {
 	return {
 		guardians: [{ id: 'g-myrtle', name: 'Myrtle', originId: null }],
 		mats: [],
@@ -557,7 +609,12 @@ function startedGame(catalog: PlayCatalog): PublicGameState {
 	);
 	if (!guardian.ok) throw new Error(guardian.error.message);
 	state = guardian.state;
-	const started = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, catalog);
+	const started = applyGameCommand(
+		state,
+		{ ...HOST, seatColor: 'Red' },
+		{ type: 'startGame' },
+		catalog
+	);
 	if (!started.ok) throw new Error(started.error.message);
 	// These suites exercise the awaken command path, which is gated to the Awakening
 	// phase; park the started game there. (Tests that need another phase set it after.)
@@ -577,7 +634,12 @@ describe('runtime awakenSpirit gate', () => {
 		red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
 		red.mats = [rune(1, { id: FIRE_RUNE })]; // only one of two
 
-		const result = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const result = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error('expected failure');
 		expect(result.error.code).toBe('awaken_unmet');
@@ -594,9 +656,18 @@ describe('runtime awakenSpirit gate', () => {
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
-		red.mats = [rune(1, { id: FIRE_RUNE }), rune(2, { id: FIRE_RUNE }), rune(3, { id: 'keep', name: 'Keep' })];
+		red.mats = [
+			rune(1, { id: FIRE_RUNE }),
+			rune(2, { id: FIRE_RUNE }),
+			rune(3, { id: 'keep', name: 'Keep' })
+		];
 
-		const result = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const result = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error(result.error.message);
 		const out = result.state.players.Red!;
@@ -623,7 +694,12 @@ describe('runtime awakenSpirit gate', () => {
 			rune(3, { id: 'unrelated', name: 'Trinket' })
 		];
 
-		const result = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const result = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error(result.error.message);
 		const out = result.state.players.Red!;
@@ -642,17 +718,30 @@ describe('runtime awakenSpirit gate', () => {
 		red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
 		red.mats = [rune(1, { id: FIRE_RUNE }), rune(2, { id: FIRE_RUNE })];
 
-		const failed = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const failed = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(failed.ok).toBe(false);
 
 		red.mats = [rune(1, { id: FIRE_RUNE }), rune(2, { id: FIRE_RUNE }), rune(3, { id: FIRE_RUNE })];
-		const ok = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const ok = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(ok.ok).toBe(true);
 	});
 
 	it("fires the 'awakening' trigger on success (onAwaken CLASS_EFFECTS resolve)", () => {
 		withSynthClass('SynthAwaken', [
-			{ trigger: 'awakening', breakpoints: [{ count: 1, actions: [{ kind: 'gainAttackDice', tier: 'basic', amount: 2 }] }] }
+			{
+				trigger: 'awakening',
+				breakpoints: [{ count: 1, actions: [{ kind: 'gainAttackDice', tier: 'basic', amount: 2 }] }]
+			}
 		]);
 		// Free flip; the awakened spirit carries the SynthAwaken class so its
 		// onAwaken effect should fire once it becomes face-up.
@@ -663,7 +752,12 @@ describe('runtime awakenSpirit gate', () => {
 		red.maxBarrier = 10;
 		red.attackDice = [];
 
-		const result = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const result = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error(result.error.message);
 		const out = result.state.players.Red!;
@@ -686,7 +780,12 @@ describe('runtime awakenSpirit gate', () => {
 		red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
 		red.manualPrompts = [];
 
-		const result = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const result = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error(result.error.message);
 		const out = result.state.players.Red!;
@@ -735,7 +834,9 @@ function textCatalog(spiritId: string, name: string, text: string): PlayCatalog 
 		classes: [],
 		dice: [],
 		monsters: [],
-		spirits: [{ id: spiritId, name, cost: 2, classes: {}, origins: {}, awaken: { kind: 'text', text } }]
+		spirits: [
+			{ id: spiritId, name, cost: 2, classes: {}, origins: {}, awaken: { kind: 'text', text } }
+		]
 	};
 }
 
@@ -794,7 +895,11 @@ describe('AWAKEN_HANDLERS discard choice (let-me-choose)', () => {
 		const handler = AWAKEN_HANDLERS[IDS.tidalFairy];
 		const payCtx = {
 			...handlerCtx(player, sp),
-			command: { type: 'awakenSpirit', slotIndex: 1, discardRefs: [{ kind: 'rune', slotIndex: 99 }] }
+			command: {
+				type: 'awakenSpirit',
+				slotIndex: 1,
+				discardRefs: [{ kind: 'rune', slotIndex: 99 }]
+			}
 		};
 		handler.pay(payCtx);
 		// Bad ref ⇒ auto-pick the only valid candidate (the Fairy Relic) instead.
@@ -814,7 +919,9 @@ describe('AWAKEN_HANDLERS discard choice (let-me-choose)', () => {
 			classes: [],
 			dice: [],
 			monsters: [],
-			spirits: [{ id: 'rc-spirit', name: 'Rune Cost Spirit', cost: 2, classes: {}, origins: {}, awaken }]
+			spirits: [
+				{ id: 'rc-spirit', name: 'Rune Cost Spirit', cost: 2, classes: {}, origins: {}, awaken }
+			]
 		};
 		const ctx = buildEffectContext({
 			state: makeState(player),
@@ -892,7 +999,11 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		const handler = AWAKEN_HANDLERS[IDS.arcaneSynthesizer];
 		const ctx = handlerCtx(player, sp);
 		// Only the two cost 7-9 spirits (excluding self) are candidates.
-		expect(handler.discardChoice!(ctx)!.options.map((o) => o.label).sort()).toEqual(['Abyss 1', 'Abyss 2']);
+		expect(
+			handler.discardChoice!(ctx)!
+				.options.map((o) => o.label)
+				.sort()
+		).toEqual(['Abyss 1', 'Abyss 2']);
 		expect(handler.check(ctx).ok).toBe(true);
 		handler.pay(ctx);
 		// The two abyss spirits are gone; the Synthesizer + the World spirit remain.
@@ -954,13 +1065,22 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 	});
 
 	it('awakenSpirit command flips a scripted text spirit and pays the cost (Blood Hound)', () => {
-		const catalog = textCatalog(IDS.bloodHound, 'Blood Hound', 'Discard 1 relic with 2 or less barriers.');
+		const catalog = textCatalog(
+			IDS.bloodHound,
+			'Blood Hound',
+			'Discard 1 relic with 2 or less barriers.'
+		);
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, IDS.bloodHound, 'Blood Hound')];
 		red.mats = [relic(1, 'Teapot'), relic(2, 'Keepsake')];
 
-		const res = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(res.ok).toBe(true);
 		if (!res.ok) throw new Error(res.error.message);
 		const out = res.state.players.Red!;
@@ -971,13 +1091,22 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 	});
 
 	it('awakenSpirit on an unsatisfiable scripted text spirit hard-blocks (no manual prompt)', () => {
-		const catalog = textCatalog(IDS.bloodHound, 'Blood Hound', 'Discard 1 relic with 2 or less barriers.');
+		const catalog = textCatalog(
+			IDS.bloodHound,
+			'Blood Hound',
+			'Discard 1 relic with 2 or less barriers.'
+		);
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, IDS.bloodHound, 'Blood Hound')];
 		red.mats = []; // no relic to discard → unsatisfiable
 
-		const res = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(res.ok).toBe(false);
 		if (res.ok) throw new Error('expected hard block');
 		expect(res.error.code).toBe('awaken_unmet');
@@ -1024,7 +1153,12 @@ describe('AWAKEN_HANDLERS alignment + cultivate (Contessa)', () => {
 
 	it('Arcane Huntress: cultivating while Fallen with ≥10 potential sets the flag', () => {
 		const huntress = spirit(1, IDS.arcaneHuntress, 'Arcane Huntress');
-		const actor = makePlayer({ playerColor: 'Red', statusLevel: 3, maxBarrier: 10, spirits: [huntress] });
+		const actor = makePlayer({
+			playerColor: 'Red',
+			statusLevel: 3,
+			maxBarrier: 10,
+			spirits: [huntress]
+		});
 		const state = {
 			rng: createRng(1),
 			players: { Red: actor },
@@ -1038,7 +1172,12 @@ describe('AWAKEN_HANDLERS alignment + cultivate (Contessa)', () => {
 	it('Arcane Huntress: NOT Fallen, or <10 potential, does NOT set the flag', () => {
 		const mk = (statusLevel: number, maxBarrier: number) => {
 			const huntress = spirit(1, IDS.arcaneHuntress, 'Arcane Huntress');
-			const actor = makePlayer({ playerColor: 'Red', statusLevel, maxBarrier, spirits: [huntress] });
+			const actor = makePlayer({
+				playerColor: 'Red',
+				statusLevel,
+				maxBarrier,
+				spirits: [huntress]
+			});
 			const state = {
 				rng: createRng(1),
 				players: { Red: actor },
@@ -1096,11 +1235,21 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 			['Blue', 'Nyra', 'm-blue']
 		] as const) {
 			// Distinct member ids per seat — one member can only hold one seat.
-			const actor: GameActor = { memberId: member, displayName: member, role: 'player', seatColor: null };
+			const actor: GameActor = {
+				memberId: member,
+				displayName: member,
+				role: 'player',
+				seatColor: null
+			};
 			const claim = applyGameCommand(state, actor, { type: 'claimSeat', seatColor: seat }, catalog);
 			if (!claim.ok) throw new Error(claim.error.message);
 			state = claim.state;
-			const g = applyGameCommand(state, { ...actor, seatColor: seat }, { type: 'selectGuardian', guardianName: guardian }, catalog);
+			const g = applyGameCommand(
+				state,
+				{ ...actor, seatColor: seat },
+				{ type: 'selectGuardian', guardianName: guardian },
+				catalog
+			);
 			if (!g.ok) throw new Error(g.error.message);
 			state = g.state;
 		}
@@ -1110,7 +1259,11 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 	}
 
 	/** Drive both seats into the encounter phase, co-located, attacker Evil. */
-	function intoEncounter(state: PublicGameState, catalog: PlayCatalog, attackerEvil = true): PublicGameState {
+	function intoEncounter(
+		state: PublicGameState,
+		catalog: PlayCatalog,
+		attackerEvil = true
+	): PublicGameState {
 		const red = state.players.Red!;
 		const blue = state.players.Blue!;
 		red.statusLevel = attackerEvil ? 3 : 0; // Fallen attacker
@@ -1118,7 +1271,12 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 		// Lock both to the same non-Abyss location so the encounter opens with an aggressor.
 		let s = state;
 		for (const seat of ['Red', 'Blue'] as const) {
-			const r = applyGameCommand(s, { ...HOST, seatColor: seat }, { type: 'lockNavigation', destination: 'Cyber City' }, catalog);
+			const r = applyGameCommand(
+				s,
+				{ ...HOST, seatColor: seat },
+				{ type: 'lockNavigation', destination: 'Cyber City' },
+				catalog
+			);
 			if (!r.ok) throw new Error(r.error.message);
 			s = r.state;
 		}
@@ -1130,7 +1288,10 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 	}
 
 	const pvpCatalog: PlayCatalog = {
-		guardians: [{ id: 'g-a', name: 'Myrtle', originId: null }, { id: 'g-b', name: 'Nyra', originId: null }],
+		guardians: [
+			{ id: 'g-a', name: 'Myrtle', originId: null },
+			{ id: 'g-b', name: 'Nyra', originId: null }
+		],
 		mats: [],
 		classes: [],
 		dice: [{ id: 'basic_attack', name: 'Basic Attack', diceType: 'attack' }],
@@ -1145,10 +1306,18 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 		// Give the attacker a big arcane dice pool so the roll exceeds 3 deterministically.
 		const red = state.players.Red!;
 		red.maxBarrier = 10;
-		red.attackDice = Array.from({ length: 10 }, (_, i) => ({ instanceId: `d${i}`, tier: 'arcane' as const }));
+		red.attackDice = Array.from({ length: 10 }, (_, i) => ({
+			instanceId: `d${i}`,
+			tier: 'arcane' as const
+		}));
 		red.spirits = [spirit(1, IDS.hollowEyes, 'Hollow Eyes')];
 
-		const res = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'initiatePvp' }, pvpCatalog);
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'initiatePvp' },
+			pvpCatalog
+		);
 		expect(res.ok).toBe(true);
 		if (!res.ok) throw new Error(res.error.message);
 		const outRed = res.state.players.Red!;
@@ -1165,9 +1334,17 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 			state = intoEncounter(state, pvpCatalog);
 			const red = state.players.Red!;
 			red.maxBarrier = 10;
-			red.attackDice = Array.from({ length: 6 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as const }));
+			red.attackDice = Array.from({ length: 6 }, (_, i) => ({
+				instanceId: `d${i}`,
+				tier: 'basic' as const
+			}));
 			red.spirits = [spirit(1, IDS.hollowEyes, 'Hollow Eyes')];
-			const res = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'initiatePvp' }, pvpCatalog);
+			const res = applyGameCommand(
+				state,
+				{ ...HOST, seatColor: 'Red' },
+				{ type: 'initiatePvp' },
+				pvpCatalog
+			);
 			if (!res.ok) throw new Error(res.error.message);
 			return res.state.players.Red!.awakenProgress[AWAKEN_PROGRESS_KEYS.hollowEyes] ?? false;
 		};
@@ -1187,7 +1364,12 @@ describe('manualAwaken command', () => {
 		red.spirits = [spirit(1, UNSCRIPTED, 'Mystery')];
 
 		// awakenSpirit on it raises a manual prompt + leaves it face-down.
-		const auto = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		const auto = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1 },
+			catalog
+		);
 		expect(auto.ok).toBe(true);
 		if (!auto.ok) throw new Error(auto.error.message);
 		const afterAuto = auto.state.players.Red!;
@@ -1195,7 +1377,12 @@ describe('manualAwaken command', () => {
 		expect(afterAuto.manualPrompts.filter((p) => p.source === 'awaken')).toHaveLength(1);
 
 		// manualAwaken confirms it: flip + clear the prompt.
-		const confirm = applyGameCommand(auto.state, { ...HOST, seatColor: 'Red' }, { type: 'manualAwaken', slotIndex: 1 }, catalog);
+		const confirm = applyGameCommand(
+			auto.state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'manualAwaken', slotIndex: 1 },
+			catalog
+		);
 		expect(confirm.ok).toBe(true);
 		if (!confirm.ok) throw new Error(confirm.error.message);
 		const out = confirm.state.players.Red!;
@@ -1208,8 +1395,16 @@ describe('manualAwaken command', () => {
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, IDS.spaceInvader, 'Space Invader')];
-		red.attackDice = Array.from({ length: 4 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as const }));
-		const res = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'manualAwaken', slotIndex: 1 }, catalog);
+		red.attackDice = Array.from({ length: 4 }, (_, i) => ({
+			instanceId: `d${i}`,
+			tier: 'basic' as const
+		}));
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'manualAwaken', slotIndex: 1 },
+			catalog
+		);
 		expect(res.ok).toBe(false);
 		if (res.ok) throw new Error('expected rejection');
 		expect(res.error.code).toBe('not_manual_awaken');
@@ -1236,7 +1431,10 @@ function checkCtx(player: PrivatePlayerState, spiritId: string, awaken: Normaliz
 }
 
 describe('Phase 6 interaction classes emit one manual prompt with DB text', () => {
-	function startedClassGame(classCounts: Record<string, number>, awaken: NormalizedAwaken | undefined = undefined): {
+	function startedClassGame(
+		classCounts: Record<string, number>,
+		awaken: NormalizedAwaken | undefined = undefined
+	): {
 		state: PublicGameState;
 		catalog: PlayCatalog;
 	} {
@@ -1255,7 +1453,12 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		// Drive to the location phase so endLocationActions is legal.
 		state.phase = 'location';
 		red.phaseReady = false;
-		const res = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'endLocationActions' }, catalog);
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'endLocationActions' },
+			catalog
+		);
 		expect(res.ok).toBe(true);
 		if (!res.ok) throw new Error(res.error.message);
 		// Rune Mage is now a real onLocationInteraction trade handler — it grants
@@ -1268,7 +1471,11 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 	it('Infiltrator: infiltratorSwap exchanges a die with a co-located player (no prompt)', () => {
 		const { state, catalog } = startedClassGame({ Infiltrator: 1 });
 		const red = state.players.Red!;
-		const blue = makePlayer({ playerColor: 'Blue', statusLevel: 0, navigationDestination: 'Cyber City' });
+		const blue = makePlayer({
+			playerColor: 'Blue',
+			statusLevel: 0,
+			navigationDestination: 'Cyber City'
+		});
 		state.players.Blue = blue;
 		state.activeSeats = ['Red', 'Blue'];
 		red.navigationDestination = 'Cyber City';
@@ -1278,7 +1485,10 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		const res = applyGameCommand(
 			state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'infiltratorSwap', swaps: [{ targetSeat: 'Blue', myInstanceId: 'r0', theirInstanceId: 'b0' }] },
+			{
+				type: 'infiltratorSwap',
+				swaps: [{ targetSeat: 'Blue', myInstanceId: 'r0', theirInstanceId: 'b0' }]
+			},
 			catalog
 		);
 		expect(res.ok).toBe(true);
@@ -1287,12 +1497,17 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		expect(res.state.players.Red!.attackDice.map((d) => d.tier)).toEqual(['arcane']);
 		expect(res.state.players.Blue!.attackDice.map((d) => d.tier)).toEqual(['basic']);
 		// Built-in action — no manual prompt.
-		expect(res.state.players.Red!.manualPrompts.filter((p) => p.source === 'class')).toHaveLength(0);
+		expect(res.state.players.Red!.manualPrompts.filter((p) => p.source === 'class')).toHaveLength(
+			0
+		);
 		// Once per round — a second swap is rejected.
 		const again = applyGameCommand(
 			res.state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'infiltratorSwap', swaps: [{ targetSeat: 'Blue', myInstanceId: 'b0', theirInstanceId: 'r0' }] },
+			{
+				type: 'infiltratorSwap',
+				swaps: [{ targetSeat: 'Blue', myInstanceId: 'b0', theirInstanceId: 'r0' }]
+			},
 			catalog
 		);
 		expect(again.ok).toBe(false);
@@ -1306,15 +1521,42 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		// Re-grant Ironmane's combat allowance (onNavigate would; set it directly here).
 		red.extraActions = { combat: 1 };
 		state.phase = 'location';
-		state.monster = { id: 'm', name: 'Maw', hp: 100, maxHp: 100, damage: 0, rewardTrack: [], chooseAmount: 1, livesRemaining: 1, livesTotal: 1, ladderIndex: 0, ladderMax: 3 };
-		const first = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'startCombat' }, catalog);
+		state.monster = {
+			id: 'm',
+			name: 'Maw',
+			hp: 100,
+			maxHp: 100,
+			damage: 0,
+			rewardTrack: [],
+			chooseAmount: 1,
+			livesRemaining: 1,
+			livesTotal: 1,
+			ladderIndex: 0,
+			ladderMax: 3
+		};
+		const first = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'startCombat' },
+			catalog
+		);
 		expect(first.ok).toBe(true);
 		if (!first.ok) throw new Error(first.error.message);
-		const second = applyGameCommand(first.state, { ...HOST, seatColor: 'Red' }, { type: 'startCombat' }, catalog);
+		const second = applyGameCommand(
+			first.state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'startCombat' },
+			catalog
+		);
 		expect(second.ok).toBe(true); // second combat allowed by the extra allowance
 		if (!second.ok) throw new Error(second.error.message);
 		// A third is blocked (allowance exhausted: base 1 + 1 extra = 2).
-		const third = applyGameCommand(second.state, { ...HOST, seatColor: 'Red' }, { type: 'startCombat' }, catalog);
+		const third = applyGameCommand(
+			second.state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'startCombat' },
+			catalog
+		);
 		expect(third.ok).toBe(false);
 	});
 });
@@ -1356,13 +1598,42 @@ describe('Phase 6 coverage closure', () => {
 	it('every class in the game is encoded, handled, or allowlisted (no silent no-op)', () => {
 		// The full 37-class roster from the `classes` table (English names).
 		const ALL_CLASSES = [
-			'Abyss Summoner', 'Adaptive Fighter', 'Ancient Magus', 'Aquamaiden', 'Arc Mage',
-			'Arcane Advisor', 'Blood Hunter', 'Captain', 'Child Prodigy', 'Cursed Spirit',
-			'Dark Assassin', 'Dark Fighter', 'Deep Sea Hunter', 'Disruptor', 'Dragon Warrior',
-			'Elementalist', 'Cultivator', 'Fairy', 'Fairy Droid', 'Fighter', 'Firekeeper',
-			'Golden Ruler', 'Golem of Wishes', 'Healer', 'Infiltrator', 'Ironmane', 'Mod Injector',
-			'Purifier', 'Rune Mage', 'Sharpshooter', 'Soul Weaver',
-			'Spirit Animal', 'Strategist', 'The Corruptor', 'Undercover', 'World Ender',
+			'Abyss Summoner',
+			'Adaptive Fighter',
+			'Ancient Magus',
+			'Aquamaiden',
+			'Arc Mage',
+			'Arcane Advisor',
+			'Blood Hunter',
+			'Captain',
+			'Child Prodigy',
+			'Cursed Spirit',
+			'Dark Assassin',
+			'Dark Fighter',
+			'Deep Sea Hunter',
+			'Disruptor',
+			'Dragon Warrior',
+			'Elementalist',
+			'Cultivator',
+			'Fairy',
+			'Fairy Droid',
+			'Fighter',
+			'Firekeeper',
+			'Golden Ruler',
+			'Golem of Wishes',
+			'Healer',
+			'Infiltrator',
+			'Ironmane',
+			'Mod Injector',
+			'Purifier',
+			'Rune Mage',
+			'Sharpshooter',
+			'Soul Weaver',
+			'Spirit Animal',
+			'Strategist',
+			'The Corruptor',
+			'Undercover',
+			'World Ender',
 			'World Guardian'
 		];
 		// Classes handled by a dedicated ENGINE/runtime path rather than the effect

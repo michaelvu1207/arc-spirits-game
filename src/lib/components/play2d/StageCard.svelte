@@ -48,10 +48,10 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 0.5rem;
-		width: clamp(12rem, 16vw, 15rem);
-		min-height: 14rem;
-		padding: 1.3rem 1.2rem;
+		gap: var(--stage-card-inner-gap, 0.5rem);
+		width: var(--stage-card-width, clamp(12rem, 16vw, 15rem));
+		min-height: var(--stage-card-min-h, 14rem);
+		padding: var(--stage-card-pad, 1.3rem 1.2rem);
 		text-align: center;
 		border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
 		border-top: 3px solid var(--accent);
@@ -83,19 +83,19 @@
 		cursor: not-allowed;
 	}
 	.glyph {
-		font-size: 2.5rem;
+		font-size: var(--stage-card-glyph, 2.5rem);
 		line-height: 1;
 		color: var(--accent);
 	}
 	.title {
 		font-family: var(--font-display);
-		font-size: 1.05rem;
+		font-size: var(--stage-card-title, 1.05rem);
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 		color: #fff;
 	}
 	.subtitle {
-		font-size: 0.85rem;
+		font-size: var(--stage-card-subtitle, 0.85rem);
 		line-height: 1.3;
 		color: var(--color-fog, #8d8aa1);
 	}
@@ -110,8 +110,27 @@
 	/* ── Mobile: ensure minimum tap height and prevent overflow at 360px ────── */
 	@media (max-width: 600px) {
 		.stage-card {
-			width: clamp(9rem, 42vw, 15rem);
-			min-height: 44px;
+			--stage-card-width: clamp(9rem, 42vw, 15rem);
+			--stage-card-min-h: 44px;
+		}
+	}
+
+	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+		.stage-card {
+			--stage-card-width: clamp(8rem, 22vw, 11.5rem);
+			--stage-card-min-h: clamp(6.75rem, 33vh, 8.5rem);
+			--stage-card-inner-gap: 0.34rem;
+			--stage-card-pad: 0.8rem 0.7rem;
+		}
+		.glyph {
+			font-size: var(--stage-card-glyph, clamp(1.35rem, 6vh, 1.75rem));
+		}
+		.title {
+			font-size: var(--stage-card-title, 0.82rem);
+		}
+		.subtitle {
+			font-size: var(--stage-card-subtitle, 0.7rem);
+			line-height: 1.22;
 		}
 	}
 </style>

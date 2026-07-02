@@ -1,0 +1,8 @@
+{
+  "obs_dim": 55,
+  "act_dim": 52,
+  "samples": 37351,
+  "mode": "act52-plus-abyss-micro-curriculum",
+  "base": "ml/meta_runs/act52-full-g6-20260627T181633Z/data",
+  "curriculum": "ml/data_abyss_curriculum_micro/abyss_curriculum.jsonl"
+}

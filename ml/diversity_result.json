@@ -1,0 +1,16 @@
+[
+  {
+    "name": "policy",
+    "params": 0,
+    "winPct": 0,
+    "reach30Pct": 0,
+    "avgVP": 0,
+    "avgStatus": 0,
+    "avgBarrier": 4,
+    "avgDice": 0,
+    "avgSpirits": 1,
+    "avgRounds": 30,
+    "fieldBestVP": 12,
+    "line": "Good-lean"
+  }
+]

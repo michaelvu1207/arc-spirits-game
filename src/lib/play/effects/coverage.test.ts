@@ -53,6 +53,7 @@ function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerS
 		navigationDestination: null,
 		brokenBarrier: 0,
 		victoryPoints: 0,
+		vpHistory: [],
 		barrier: 4,
 		maxBarrier: 4,
 		statusLevel: 0,
@@ -128,8 +129,19 @@ function heldRune(slotIndex: number, runeId: string): MatSlotSnapshot {
 }
 
 /** A catalog whose single spirit carries the given normalized awaken condition. */
-function catalogWith(spiritId: string, name: string, awaken: NormalizedAwaken | undefined): PlayCatalog {
-	const entry: PlayCatalogSpirit = { id: spiritId, name, cost: 2, classes: {}, origins: {}, awaken };
+function catalogWith(
+	spiritId: string,
+	name: string,
+	awaken: NormalizedAwaken | undefined
+): PlayCatalog {
+	const entry: PlayCatalogSpirit = {
+		id: spiritId,
+		name,
+		cost: 2,
+		classes: {},
+		origins: {},
+		awaken
+	};
 	return { guardians: [], spirits: [entry], mats: [], classes: [], dice: [], monsters: [] };
 }
 
@@ -241,7 +253,9 @@ describe('Phase 7 — awaken coverage (every spirit is handled)', () => {
 			else if (MANUAL_AWAKEN.has(s.id)) manualText += 1;
 		}
 		expect(scriptedText + manualText).toBe(TEXT_SPIRITS.length);
-		expect(FREE_SPIRITS.length + RUNE_COST_SPIRITS.length + TEXT_SPIRITS.length).toBe(ALL_SPIRITS.length);
+		expect(FREE_SPIRITS.length + RUNE_COST_SPIRITS.length + TEXT_SPIRITS.length).toBe(
+			ALL_SPIRITS.length
+		);
 		expect(ALL_SPIRITS.length).toBe(61);
 	});
 
@@ -326,14 +340,18 @@ describe('Phase 7 — allowlists contain no stale/typo entries', () => {
 	it('every MANUAL_CLASSES name is a real class in the fixture', () => {
 		const classNameSet = new Set(ALL_CLASS_NAMES);
 		const stale = [...MANUAL_CLASSES].filter((name) => !classNameSet.has(name));
-		expect(stale, `MANUAL_CLASSES has names not in the class table: ${stale.join(', ')}`).toEqual([]);
+		expect(stale, `MANUAL_CLASSES has names not in the class table: ${stale.join(', ')}`).toEqual(
+			[]
+		);
 	});
 
 	it('every MANUAL_CLASSES name also has a CLASS_EFFECTS manual entry (emits a prompt)', () => {
 		for (const name of MANUAL_CLASSES) {
 			const effects = CLASS_EFFECTS[name];
 			expect(effects, `${name} must have a CLASS_EFFECTS entry`).toBeDefined();
-			const hasManual = effects.some((e) => e.breakpoints.some((bp) => bp.actions.some((a) => a.kind === 'manual')));
+			const hasManual = effects.some((e) =>
+				e.breakpoints.some((bp) => bp.actions.some((a) => a.kind === 'manual'))
+			);
 			expect(hasManual, `${name} (MANUAL_CLASSES) must emit a manual prompt, not no-op`).toBe(true);
 		}
 	});
@@ -341,13 +359,17 @@ describe('Phase 7 — allowlists contain no stale/typo entries', () => {
 	it('every MANUAL_AWAKEN id is a real text spirit in the fixture', () => {
 		const textSpiritIds = new Set(TEXT_SPIRITS.map((s) => s.id));
 		const stale = [...MANUAL_AWAKEN].filter((id) => !textSpiritIds.has(id));
-		expect(stale, `MANUAL_AWAKEN has ids that are not text spirits: ${stale.join(', ')}`).toEqual([]);
+		expect(stale, `MANUAL_AWAKEN has ids that are not text spirits: ${stale.join(', ')}`).toEqual(
+			[]
+		);
 	});
 
 	it('every AWAKEN_HANDLERS id is a real text spirit in the fixture', () => {
 		const textSpiritIds = new Set(TEXT_SPIRITS.map((s) => s.id));
 		const stale = Object.keys(AWAKEN_HANDLERS).filter((id) => !textSpiritIds.has(id));
-		expect(stale, `AWAKEN_HANDLERS has ids that are not text spirits: ${stale.join(', ')}`).toEqual([]);
+		expect(stale, `AWAKEN_HANDLERS has ids that are not text spirits: ${stale.join(', ')}`).toEqual(
+			[]
+		);
 	});
 
 	it('AWAKEN_HANDLERS and MANUAL_AWAKEN are disjoint', () => {

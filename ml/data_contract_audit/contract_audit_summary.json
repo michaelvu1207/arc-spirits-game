@@ -1,0 +1,33 @@
+{
+  "files": [
+    "ml/data_contract_audit/survivalq.jsonl"
+  ],
+  "rows": 24,
+  "obsDim": 55,
+  "actDim": 52,
+  "keyMode": "obs-cands",
+  "badObsDim": 0,
+  "badActDim": 0,
+  "uniqueKeys": 24,
+  "uniqueObs": 24,
+  "labelCounts": {
+    "lockNavigation:Lantern Canyon": 11,
+    "lockNavigation:Arcane Abyss": 12,
+    "lockNavigation:Cyber City": 1
+  },
+  "exactConflictCount": 0,
+  "exactConflicts": [],
+  "obsOnlyExactConflictCount": 0,
+  "obsOnlyExactConflicts": [],
+  "nearThreshold": 0.005,
+  "nearConflictCount": 0,
+  "nearConflicts": [],
+  "minDifferentLabelDistance": 0.0278,
+  "nearestDifferentLabel": {
+    "a": 7,
+    "b": 8,
+    "distance": 0.0278,
+    "labelA": "lockNavigation:Lantern Canyon",
+    "labelB": "lockNavigation:Arcane Abyss"
+  }
+}

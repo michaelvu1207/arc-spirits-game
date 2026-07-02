@@ -1,0 +1,64 @@
+{
+  "mode": "scaling-navigation-counterfactual",
+  "config": {
+    "games": 1,
+    "seats": 4,
+    "maxWindows": 4,
+    "horizons": [
+      3,
+      6
+    ],
+    "labelHorizon": 6,
+    "labelScoreThreshold": 0.5,
+    "positiveOnlyData": false,
+    "minPlayerVp": 0,
+    "minRound": 0,
+    "minMonsterHp": 0,
+    "minCleanKillProb": 0,
+    "minFirepowerKillProb": 0,
+    "scoreReach30Bonus": 12,
+    "source": "heuristic",
+    "sourceSeedBase": 6500000,
+    "plannerProfile": "cultivator",
+    "rolloutPolicy": "policy",
+    "microPolicyGate": "all",
+    "navigationPolicyGate": "all",
+    "scalingNavigationPolicyGate": "route-option-scaling",
+    "preserveRouteFirepower": false,
+    "preserveRouteSurvival": false
+  },
+  "scanned": 4,
+  "windows": 4,
+  "sourceGames": 0,
+  "sourceVpAvg": 0,
+  "sourceMaxVp": 0,
+  "sourceReach30Pct": 0,
+  "filtered": 0,
+  "skippedSingleAction": 0,
+  "dataSamples": 4,
+  "scalingCorrections": 3,
+  "scalingCorrectionPct": 75,
+  "sourceWasBestPct": 25,
+  "avgScalingQDeltaScore": 6,
+  "avgScalingQDeltaVp": 1.5,
+  "avgScalingQDeltaReach30": 0,
+  "avgWindowPlayerVp": 0,
+  "avgWindowPlayerExpectedAttack": 0.5,
+  "avgWindowPlayerMaxBarrier": 4,
+  "avgWindowPlayerAttackDice": 0,
+  "avgWindowPlayerSpiritAnimal": 0.5,
+  "avgWindowPlayerCultivator": 0.75,
+  "avgWindowMonsterHp": 1,
+  "avgWindowCleanKillProb": 0.5,
+  "avgWindowFirepowerKillProb": 0.5,
+  "sourceDestinations": {
+    "Tidal Cove": 4
+  },
+  "bestDestinations": {
+    "Arcane Abyss": 3,
+    "Tidal Cove": 1
+  },
+  "correctionBestDestinations": {
+    "Arcane Abyss": 3
+  }
+}

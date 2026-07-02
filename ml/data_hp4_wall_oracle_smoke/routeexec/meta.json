@@ -1,0 +1,41 @@
+{
+  "obs_dim": 55,
+  "act_dim": 52,
+  "samples": 4,
+  "games": 2,
+  "mode": "route-execution-counterfactual",
+  "source": "heuristic",
+  "rollout_policy": "breakpoint-oracle",
+  "micro_policy_gate": "all",
+  "navigation_policy_gate": "all",
+  "scaling_navigation_policy_gate": "route-option-scaling",
+  "preserve_route_firepower": false,
+  "preserve_route_survival": false,
+  "positive_only_data": false,
+  "label_score_threshold": 0.25,
+  "label_vp_threshold": 0,
+  "label_status_tolerance": 0,
+  "window_filters": {
+    "min_player_vp": 9,
+    "max_player_vp": 24,
+    "min_round": 0,
+    "min_monster_hp": 4,
+    "max_monster_hp": 4,
+    "min_clean_kill_prob": 0,
+    "min_firepower_kill_prob": 0
+  },
+  "score_weights": {
+    "vp": 1,
+    "clean_opportunity": 2,
+    "firepower_opportunity": 0.25,
+    "expected_attack": 0.8,
+    "attack_dice": 0.4,
+    "spirit_animal": 0.5,
+    "cultivator": 0,
+    "barrier": 0.2,
+    "current_barrier": 0,
+    "kill": 0,
+    "reach30_bonus": 0,
+    "status_penalty": 2
+  }
+}

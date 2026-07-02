@@ -1,0 +1,16 @@
+{
+  "obs_dim": 55,
+  "act_dim": 47,
+  "samples": 662,
+  "games": 2,
+  "mode": "heur",
+  "iter": 0,
+  "finishedRate": 1,
+  "decisiveRate": 1,
+  "neuralWinRate": null,
+  "out": "ml/data_smoke_pure/pure_heur.jsonl",
+  "forbidTypes": [
+    "initiatePvp"
+  ],
+  "maxStatusLevel": 0
+}
