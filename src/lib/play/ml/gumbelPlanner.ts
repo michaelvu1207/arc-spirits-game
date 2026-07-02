@@ -44,7 +44,7 @@ import {
 	type BotRandom
 } from '../server/botPolicy';
 import type { PlayCatalog, PublicGameState, SeatColor } from '../types';
-import type { LegalAction } from './actions';
+import { legalActionsWithNext, type LegalAction } from './actions';
 import { encodeObs, encodeAction } from './encode';
 import type { NeuralPolicy } from './net';
 
@@ -62,6 +62,16 @@ export interface GumbelPlanOptions {
 	cScale?: number;
 	/** Heuristic profile that plays ALL seats inside rollouts. */
 	rolloutProfile?: BotProfile;
+	/**
+	 * Self-model rollouts: when set, EVERY seat inside a rollout picks via this
+	 * callback (typically a hybridIndex closure over the champion net) instead
+	 * of the heuristic profile. Injected as a callback — not imported — to keep
+	 * gumbelPlanner ↔ neuralBot acyclic. ~10-30× slower per sim than the
+	 * heuristic, but the leaf states then reflect champion-quality play (the
+	 * medium-heuristic rollouts never execute the PvP line, which biases Q
+	 * against exactly the moves that win).
+	 */
+	rolloutChoose?: (s: PublicGameState, seat: SeatColor, withNext: LegalAction[]) => number;
 	/** Base seed for reproducible determinizations. */
 	seed?: number;
 	/**
@@ -123,14 +133,16 @@ function determinize(state: PublicGameState, seat: SeatColor, simSeed: number): 
 	return s;
 }
 
-/** Advance a determinized state with every seat played by `profile` until
- *  game end / stopRound. Same drain shape as advanceAfterNav (botPolicy.ts). */
+/** Advance a determinized state with every seat played by `profile` (or the
+ *  self-model `choose` callback) until game end / stopRound. Same drain shape
+ *  as advanceAfterNav (botPolicy.ts). */
 function rollout(
 	s: PublicGameState,
 	catalog: PlayCatalog,
 	profile: BotProfile,
 	botRng: BotRandom,
-	stopRound: number
+	stopRound: number,
+	choose?: GumbelPlanOptions['rolloutChoose']
 ): PublicGameState {
 	let ticks = 0;
 	while (s.status === 'active' && s.round <= stopRound) {
@@ -138,13 +150,31 @@ function rollout(
 		let progressed = false;
 		for (const st of s.activeSeats) {
 			if (!botSeatNeedsToAct(s, st)) continue;
-			const cmds = planBotPhaseActions(s, st, catalog, botRng, profile);
-			for (const c of cmds) {
-				const r = applyGameCommand(s, botActorFor(s, st), c, catalog, { mutate: true });
-				if (!r.ok) break;
-				s = r.state;
-				progressed = true;
-				if (s.status !== 'active') break;
+			if (choose) {
+				// Self-model: one decision at a time (each pick changes the state).
+				let guard = 0;
+				while (botSeatNeedsToAct(s, st) && guard < 40) {
+					guard += 1;
+					const withNext = legalActionsWithNext(s, st, catalog);
+					if (withNext.length === 0) break;
+					const idx = withNext.length === 1 ? 0 : choose(s, st, withNext);
+					const r = applyGameCommand(s, botActorFor(s, st), withNext[idx].cmd, catalog, {
+						mutate: true
+					});
+					if (!r.ok) break;
+					s = r.state;
+					progressed = true;
+					if (s.status !== 'active') break;
+				}
+			} else {
+				const cmds = planBotPhaseActions(s, st, catalog, botRng, profile);
+				for (const c of cmds) {
+					const r = applyGameCommand(s, botActorFor(s, st), c, catalog, { mutate: true });
+					if (!r.ok) break;
+					s = r.state;
+					progressed = true;
+					if (s.status !== 'active') break;
+				}
 			}
 			if (s.status !== 'active') break;
 		}
@@ -221,7 +251,7 @@ export function planDecisionGumbel(
 			int: (mm: number) => nextInt(s.rng, mm),
 			chance: () => nextInt(s.rng, 2) === 0
 		};
-		s = rollout(s, catalog, profile, botRng, state.round + horizon);
+		s = rollout(s, catalog, profile, botRng, state.round + horizon, opts.rolloutChoose);
 		const vNet = clamp01(policy.value(encodeObs(s, seat)));
 		const value =
 			valueWeight >= 1 || s.status !== 'active'

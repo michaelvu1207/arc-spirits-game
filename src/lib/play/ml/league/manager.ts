@@ -893,6 +893,8 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			const plan = buildMatchup(config, trained, evalField, r, gen, v2Eval);
 			plan.config.recordSeats = [];
 			plan.config.sample = false;
+			// Eval measures the RAW net (what ships/promotes) — never the searched agent.
+			plan.config.search = undefined;
 			const seed0 =
 				config.seedBase + 500_000_000 + gen * 1_000_000 + laneIdx * 100_000 + r * 1000;
 			const res = await runActorPool({

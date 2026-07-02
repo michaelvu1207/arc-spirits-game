@@ -80,6 +80,12 @@ describe('gauntlet-v1', () => {
 			// candidate kind ("<weights>+search<sims>"), same frozen measure. Seeded from
 			// the game seed + decision cursor, so runs are exactly reproducible.
 			const searchSims = parseInt(process.env.GAUNTLET_SEARCH ?? '0', 10);
+			// Ablation knobs: nav-node sampling temperature (0 = argmax — mixing is a
+			// pure noise-cost vs FROZEN anchors; its payoff is anti-exploitability vs
+			// adaptive opponents, which this gauntlet cannot measure) and rollout policy
+			// ('policy' = self-model hybridIndex rollouts instead of the medium heuristic).
+			const searchNavTemp = parseFloat(process.env.GAUNTLET_SEARCH_TEMP ?? '0.8');
+			const searchRollout = process.env.GAUNTLET_SEARCH_ROLLOUT ?? 'heuristic';
 			const policyObsVersion = parseInt(process.env.GAUNTLET_POLICY_OBS_VERSION ?? '1', 10);
 			if (policyObsVersion !== 1 && policyObsVersion !== 2) {
 				throw new Error(`gauntlet: GAUNTLET_POLICY_OBS_VERSION must be 1 or 2`);
@@ -152,8 +158,9 @@ describe('gauntlet-v1', () => {
 
 			if (searchSims > 0) {
 				if (!candidatePolicy) throw new Error('gauntlet: GAUNTLET_SEARCH needs a weights/socket candidate');
-				candidateRef = `${candidateRef}+search${searchSims}`;
-				slug = `${slug}--search${searchSims}`;
+				const variant = `search${searchSims}-t${searchNavTemp}-${searchRollout}`;
+				candidateRef = `${candidateRef}+${variant}`;
+				slug = `${slug}--${variant.replace(/[^a-z0-9._-]+/g, '-')}`;
 			}
 
 			const seats = SEAT_COLORS.slice(0, GAUNTLET_SEATS) as SeatColor[];
@@ -244,7 +251,13 @@ describe('gauntlet-v1', () => {
 											horizonRounds: 6,
 											valueWeight: 0.5,
 											seed: (g.seed * 2654435761 + st.round * 7919 + decisionN * 104729) >>> 0,
-											temperature: st.phase === 'navigation' ? 0.8 : 0
+											temperature: st.phase === 'navigation' ? searchNavTemp : 0,
+											...(searchRollout === 'policy'
+												? {
+														rolloutChoose: (rs, rSeat, rWithNext) =>
+															hybridIndex(candidatePolicy!, rs, rSeat, rWithNext, { sample: false }, catalog)
+													}
+												: {})
 										});
 										if (res) return res.index;
 									}
