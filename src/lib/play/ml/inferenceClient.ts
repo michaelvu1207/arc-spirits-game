@@ -276,9 +276,18 @@ export class RemotePolicy {
 	private readonly wire: 'binary' | 'json';
 	private readonly zeroCand: number[];
 	private nextId = 0;
-	// Per-decision memo: the driver calls probs(obs, …) then value(obs) with the SAME obs
-	// array, so fetching logits+value together halves the roundtrips on recorded decisions.
+	/** Scoring roundtrips issued (handshake excluded) — memo-hit verification hook. */
+	scoringRequests = 0;
+	// Per-decision memo. Within ONE decision the policy is asked twice about the same
+	// state: selection's pick() (via neuralBot, which RE-ENCODES the candidate features —
+	// same content, different array identity) and then the driver's probs()+value() for
+	// logpOld/vPred. Keying the cached logits+value on obs REFERENCE + candidate CONTENT
+	// collapses those two roundtrips into one; a content compare (~C×52 floats) is noise
+	// next to a socket RTT. Progress-guard-filtered picks have a different candidate
+	// subset and correctly miss.
 	private lastObs: number[] | null = null;
+	private lastCands: number[][] | null = null;
+	private lastLogits: number[] | null = null;
 	private lastValue = 0;
 
 	/**
@@ -328,6 +337,7 @@ export class RemotePolicy {
 
 	/** One B=1 scoring roundtrip for this decision's obs + candidate set. */
 	private score(obs: number[], cands: number[][], wantBits: number): ScoreResponse {
+		this.scoringRequests += 1;
 		if (this.wire === 'json') {
 			const want = SECTION_ORDER.filter((_, bit) => wantBits & (1 << bit));
 			return this.requestJson({ obs: [obs], cands: [cands], want });
@@ -341,11 +351,55 @@ export class RemotePolicy {
 		return resp;
 	}
 
+	private static rowEqual(a: number[], b: number[]): boolean {
+		if (a === b) return true;
+		if (a.length !== b.length) return false;
+		for (let j = 0; j < a.length; j++) if (a[j] !== b[j]) return false;
+		return true;
+	}
+
+	private static candsEqual(a: number[][], b: number[][]): boolean {
+		if (a === b) return true;
+		if (a.length !== b.length) return false;
+		for (let i = 0; i < a.length; i++) if (!RemotePolicy.rowEqual(a[i], b[i])) return false;
+		return true;
+	}
+
+	/**
+	 * Per-candidate logits depend only on (obs, candidate) — batch mates are masked out —
+	 * so any content-SUBSET of the cached candidate set (e.g. neuralBot's progress-filtered
+	 * pick after the driver prefetched the full set) reuses the cached response row-by-row.
+	 */
+	private deriveFromCache(cands: number[][]): number[] | null {
+		const cached = this.lastCands!;
+		const logits = this.lastLogits!;
+		const out = new Array<number>(cands.length);
+		for (let i = 0; i < cands.length; i++) {
+			let found = -1;
+			for (let k = 0; k < cached.length; k++) {
+				if (RemotePolicy.rowEqual(cands[i], cached[k])) {
+					found = k;
+					break;
+				}
+			}
+			if (found < 0) return null;
+			out[i] = logits[found];
+		}
+		return out;
+	}
+
 	scoreCandidates(obs: number[], cands: number[][]): number[] {
+		if (obs === this.lastObs && this.lastLogits && this.lastCands) {
+			if (RemotePolicy.candsEqual(cands, this.lastCands)) return this.lastLogits;
+			const derived = this.deriveFromCache(cands);
+			if (derived) return derived; // cache keeps the superset — don't overwrite
+		}
 		const resp = this.score(obs, cands, WANT.logits | WANT.value);
 		this.lastObs = obs;
+		this.lastCands = cands;
+		this.lastLogits = resp.logits![0];
 		this.lastValue = resp.value![0];
-		return resp.logits![0];
+		return this.lastLogits;
 	}
 
 	value(obs: number[]): number {

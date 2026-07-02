@@ -54,6 +54,11 @@ are for plumbing checks only — never quote them as gauntlet scores.
 GAUNTLET=1 GAUNTLET_WEIGHTS=path/to/policy.json \
   npx vitest run src/lib/play/ml/gauntlet/_gauntlet.test.ts --disable-console-intercept
 
+# a SERVED candidate (ml/infer_server.py socket) — e.g. an arc-entity-scorer-v2
+# checkpoint scored DIRECTLY, no distilled proxy; anchors stay in-process v1
+GAUNTLET=1 GAUNTLET_INFER_SOCKET=/tmp/arc-infer.sock GAUNTLET_POLICY_OBS_VERSION=2 \
+  npx vitest run src/lib/play/ml/gauntlet/_gauntlet.test.ts --disable-console-intercept
+
 # a heuristic candidate (any BOT_PROFILES name)
 GAUNTLET=1 GAUNTLET_PROFILE=pvphunter \
   npx vitest run src/lib/play/ml/gauntlet/_gauntlet.test.ts --disable-console-intercept
@@ -74,3 +79,16 @@ Results land in `ml/gauntlet_results/<candidate-slug>.json`
 
 Append full-800 runs only. Keep the JSON files; this table is the human-readable
 ledger.
+
+## Changelog (transport/runner only — the frozen measure has never changed)
+
+- **2026-07-02 — socket candidates.** The runner accepts
+  `GAUNTLET_INFER_SOCKET=<path>` (+ `GAUNTLET_POLICY_OBS_VERSION=2` for
+  arc-entity-scorer-v2 checkpoints): the candidate plays through `RemotePolicy`
+  exactly as the actor pool does, so served v2 nets are scored DIRECTLY instead of
+  via a distilled v1 proxy. Seeds, anchors, rules, and scoring are untouched — this
+  is a transport addition, not a measure change, hence no version bump. Result JSON
+  gains `via: 'socket' | 'in-process'` and `policyObsVersion`, and socket runs record
+  the SERVER-reported checkpoint path as `candidate.ref` — never compare a
+  `via: 'socket'` score with a distilled-proxy score of "the same" checkpoint without
+  labeling both.

@@ -496,6 +496,13 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				? withFixedObs(seatPolicy, flatV2!)
 				: seatPolicy;
 		const sample = oppPolicy ? false : opts.sample;
+		const willRecord = cands.length > 1 && recordSet.has(seat) && !oppPolicy;
+		// PPO behavior probs are fetched BEFORE selection: for a RemotePolicy this makes
+		// the FULL candidate set the cached response, so selection's (possibly progress-
+		// filtered) pick derives its logits from the same reply — one socket roundtrip per
+		// decision instead of two. Pure-function nets are order-indifferent.
+		const behaviorProbs =
+			willRecord && opts.policy && !opts.chooser ? opts.policy.probs(policyObs, feats) : null;
 		const idx =
 			cands.length === 1
 				? 0
@@ -527,17 +534,16 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 									{ sample, temperature: opts.temperature, rand },
 									catalog
 								);
-		if (cands.length > 1 && recordSet.has(seat) && !oppPolicy) {
+		if (willRecord) {
 			// PPO behavior stats, only when a real softmax policy made this decision (not a
 			// custom chooser). logpOld is the temp-1 softmax — the distribution the trainer's
 			// log_softmax reproduces — regardless of the exploration temperature used to act.
 			// At policyObsVersion 2 these come from the v2 net on the v2 obs: on-policy v2 data.
 			let ppo: { logpOld: number; vPred: number } | undefined;
-			if (opts.policy && !opts.chooser) {
-				const p = opts.policy.probs(policyObs, feats);
+			if (behaviorProbs) {
 				ppo = {
-					logpOld: Math.log(Math.max(p[idx], 1e-12)),
-					vPred: opts.policy.value(policyObs)
+					logpOld: Math.log(Math.max(behaviorProbs[idx], 1e-12)),
+					vPred: opts.policy!.value(policyObs)
 				};
 			}
 			samples.push({

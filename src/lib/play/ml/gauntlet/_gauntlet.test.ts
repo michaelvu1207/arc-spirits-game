@@ -9,6 +9,13 @@
  *   # a heuristic candidate (any BOT_PROFILES name):
  *   GAUNTLET=1 GAUNTLET_PROFILE=pvphunter npx vitest run ... --disable-console-intercept
  *
+ *   # a SERVED candidate (ml/infer_server.py socket) — scores the checkpoint the server
+ *   # holds directly, no distilled proxy. Add GAUNTLET_POLICY_OBS_VERSION=2 for an
+ *   # arc-entity-scorer-v2 checkpoint (candidate plays on flattenObsV2 through
+ *   # RemotePolicy exactly as the actor pool does; anchors stay in-process v1):
+ *   GAUNTLET=1 GAUNTLET_INFER_SOCKET=/tmp/arc-infer.sock GAUNTLET_POLICY_OBS_VERSION=2 \
+ *     npx vitest run ... --disable-console-intercept
+ *
  *   # smoke run (truncates the frozen schedule; multiples of 4 keep seed pairs intact):
  *   GAUNTLET=1 GAUNTLET_GAMES=8 GAUNTLET_WEIGHTS=... npx vitest run ...
  *
@@ -23,6 +30,9 @@ import { dirname, resolve } from 'node:path';
 import { BOT_PROFILES, profileFor } from '../../server/botPolicy';
 import { SEAT_COLORS, type SeatColor } from '../../types';
 import { playRecordingGame } from '../driver';
+import { OBS_DIM } from '../encode';
+import { obsV2Meta } from '../encodeV2';
+import { asNeuralPolicy, RemotePolicy } from '../inferenceClient';
 import { loadOrSnapshotCatalog, loadPolicyForEval, mlPath } from '../nodeIo';
 import type { NeuralPolicy } from '../net';
 import {
@@ -39,7 +49,10 @@ import {
 const RUN = process.env.GAUNTLET === '1';
 
 function slugify(s: string): string {
-	return s.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+	return s
+		.toLowerCase()
+		.replace(/[^a-z0-9._-]+/g, '-')
+		.replace(/^-+|-+$/g, '');
 }
 
 interface PairTally {
@@ -53,21 +66,56 @@ describe('gauntlet-v1', () => {
 		async () => {
 			const weightsPath = process.env.GAUNTLET_WEIGHTS;
 			const profileName = process.env.GAUNTLET_PROFILE;
-			if (!!weightsPath === !!profileName) {
-				throw new Error('gauntlet: set exactly one of GAUNTLET_WEIGHTS or GAUNTLET_PROFILE');
+			const inferSocket = process.env.GAUNTLET_INFER_SOCKET;
+			if ([weightsPath, profileName, inferSocket].filter(Boolean).length !== 1) {
+				throw new Error(
+					'gauntlet: set exactly one of GAUNTLET_WEIGHTS, GAUNTLET_PROFILE or GAUNTLET_INFER_SOCKET'
+				);
+			}
+			const policyObsVersion = parseInt(process.env.GAUNTLET_POLICY_OBS_VERSION ?? '1', 10);
+			if (policyObsVersion !== 1 && policyObsVersion !== 2) {
+				throw new Error(`gauntlet: GAUNTLET_POLICY_OBS_VERSION must be 1 or 2`);
+			}
+			if (policyObsVersion === 2 && !inferSocket) {
+				throw new Error('gauntlet: GAUNTLET_POLICY_OBS_VERSION=2 requires GAUNTLET_INFER_SOCKET');
 			}
 			const totalGames = parseInt(process.env.GAUNTLET_GAMES ?? String(TOTAL_GAMES), 10);
 
+			const catalog = await loadOrSnapshotCatalog();
+
 			// ── Candidate ────────────────────────────────────────────────────────────
 			let candidatePolicy: NeuralPolicy | null = null;
+			let remote: RemotePolicy | null = null;
 			let candidateRef: string;
 			let slug: string;
 			if (weightsPath) {
 				candidatePolicy = loadPolicyForEval(resolve(process.cwd(), weightsPath));
 				candidateRef = weightsPath;
 				slug = slugify(
-					weightsPath.replace(/\.json$/, '').split('/').filter(Boolean).slice(-2).join('--')
+					weightsPath
+						.replace(/\.json$/, '')
+						.split('/')
+						.filter(Boolean)
+						.slice(-2)
+						.join('--')
 				);
+			} else if (inferSocket) {
+				// Served candidate: plays through RemotePolicy exactly as the actor pool does.
+				// candidateRef is the SERVER-REPORTED checkpoint path (info handshake), so a
+				// direct-socket score can never be confused with a distilled-proxy score.
+				remote = new RemotePolicy(inferSocket, {
+					expectObsDim: policyObsVersion === 2 ? obsV2Meta(catalog).flatLength : OBS_DIM
+				});
+				candidatePolicy = asNeuralPolicy(remote);
+				candidateRef = remote.info.weights;
+				slug = `socket--${slugify(
+					candidateRef
+						.replace(/\.(json|pt)$/, '')
+						.split('/')
+						.filter(Boolean)
+						.slice(-2)
+						.join('--')
+				)}`;
 			} else {
 				// profileFor silently falls back to RANDOM_PROFILE for unknown names — the
 				// gauntlet must never score the wrong bot, so gate on the real table.
@@ -90,139 +138,161 @@ describe('gauntlet-v1', () => {
 				anchorPolicies.set(c.name, loadPolicyForEval(abs)); // throws on dim mismatch
 			}
 			for (const name of HEURISTIC_ANCHORS) {
-				if (!BOT_PROFILES[name]) throw new Error(`gauntlet: anchor profile '${name}' not in BOT_PROFILES`);
+				if (!BOT_PROFILES[name])
+					throw new Error(`gauntlet: anchor profile '${name}' not in BOT_PROFILES`);
 			}
 
-			const catalog = await loadOrSnapshotCatalog();
 			const seats = SEAT_COLORS.slice(0, GAUNTLET_SEATS) as SeatColor[];
 			const schedule = buildSchedule(totalGames);
 
-			// ── Play ─────────────────────────────────────────────────────────────────
-			const perAnchor = new Map<string, PairTally>();
-			const agg: PairTally = { games: 0, scoreSum: 0 };
-			let wins = 0;
-			let sumPlace = 0;
-			let sumVP = 0;
-			let sumRounds = 0;
-			let finished = 0;
-			const t0 = Date.now();
+			try {
+				// ── Play ─────────────────────────────────────────────────────────────────
+				const perAnchor = new Map<string, PairTally>();
+				const agg: PairTally = { games: 0, scoreSum: 0 };
+				let wins = 0;
+				let sumPlace = 0;
+				let sumVP = 0;
+				let sumRounds = 0;
+				let finished = 0;
+				const t0 = Date.now();
 
-			for (const g of schedule) {
-				const candidateSeat = seats[g.candidateSeatIdx];
-				const otherSeats = seats.filter((s) => s !== candidateSeat);
-				// anchors[j] → the ((j + rotation) % 3)-th non-candidate seat (manifest scheme)
-				const anchorBySeat = new Map<SeatColor, string>();
-				g.anchors.forEach((name, j) => {
-					anchorBySeat.set(otherSeats[(j + g.rotation) % otherSeats.length], name);
-				});
+				for (const g of schedule) {
+					const candidateSeat = seats[g.candidateSeatIdx];
+					const otherSeats = seats.filter((s) => s !== candidateSeat);
+					// anchors[j] → the ((j + rotation) % 3)-th non-candidate seat (manifest scheme)
+					const anchorBySeat = new Map<SeatColor, string>();
+					g.anchors.forEach((name, j) => {
+						anchorBySeat.set(otherSeats[(j + g.rotation) % otherSeats.length], name);
+					});
 
-				const neuralSeats: SeatColor[] = [];
-				const opponentPolicies: Partial<Record<SeatColor, NeuralPolicy>> = {};
-				const profiles = seats.map((seat) => {
-					if (seat === candidateSeat) {
-						if (candidatePolicy) {
-							neuralSeats.push(seat);
-							return profileFor('medium'); // unstick fallback only, as in _elo
+					const neuralSeats: SeatColor[] = [];
+					const opponentPolicies: Partial<Record<SeatColor, NeuralPolicy>> = {};
+					const profiles = seats.map((seat) => {
+						if (seat === candidateSeat) {
+							if (candidatePolicy) {
+								neuralSeats.push(seat);
+								return profileFor('medium'); // unstick fallback only, as in _elo
+							}
+							return BOT_PROFILES[candidateRef];
 						}
-						return BOT_PROFILES[candidateRef];
-					}
-					const anchor = anchorBySeat.get(seat)!;
-					const pol = anchorPolicies.get(anchor);
-					if (pol) {
-						neuralSeats.push(seat);
-						opponentPolicies[seat] = pol;
-						return profileFor('medium');
-					}
-					return profileFor(anchor);
-				});
+						const anchor = anchorBySeat.get(seat)!;
+						const pol = anchorPolicies.get(anchor);
+						if (pol) {
+							neuralSeats.push(seat);
+							opponentPolicies[seat] = pol;
+							return profileFor('medium');
+						}
+						return profileFor(anchor);
+					});
 
-				// `policy` must be non-null whenever any seat is neural (driver gate); anchor
-				// seats always resolve through opponentPolicies, so passing an anchor policy
-				// for a heuristic candidate is inert.
-				const policy = candidatePolicy ?? (neuralSeats.length ? [...anchorPolicies.values()][0] : undefined);
-				const r = playRecordingGame(catalog, {
-					seed: g.seed,
-					profiles,
-					maxRounds: GAUNTLET_MAX_ROUNDS,
-					policy,
-					selection: 'hybrid',
-					neuralSeats,
-					opponentPolicies,
-					recordSeats: []
-				});
+					// `policy` must be non-null whenever any seat is neural (driver gate); anchor
+					// seats always resolve through opponentPolicies, so passing an anchor policy
+					// for a heuristic candidate is inert.
+					const policy =
+						candidatePolicy ?? (neuralSeats.length ? [...anchorPolicies.values()][0] : undefined);
+					const r = playRecordingGame(catalog, {
+						seed: g.seed,
+						profiles,
+						maxRounds: GAUNTLET_MAX_ROUNDS,
+						policy,
+						selection: 'hybrid',
+						neuralSeats,
+						opponentPolicies,
+						recordSeats: [],
+						// Socket candidates may play on flat v2 obs; anchors stay in-process v1
+						// (the driver wraps only the learner policy, never opponentPolicies).
+						policyObsVersion: policyObsVersion === 2 ? 2 : undefined
+					});
 
-				const candVP = r.finalVP[candidateSeat] ?? 0;
-				const otherVPs = otherSeats.map((s) => r.finalVP[s] ?? 0);
-				sumPlace += 1 + otherVPs.filter((v) => v > candVP).length;
-				sumVP += candVP;
-				sumRounds += r.rounds;
-				if (r.winnerSeat === candidateSeat) wins += 1;
-				if (r.finished) finished += 1;
-				for (const [seat, anchor] of anchorBySeat) {
-					const oppVP = r.finalVP[seat] ?? 0;
-					const score = candVP > oppVP ? 1 : candVP === oppVP ? 0.5 : 0;
-					const t = perAnchor.get(anchor) ?? { games: 0, scoreSum: 0 };
-					t.games += 1;
-					t.scoreSum += score;
-					perAnchor.set(anchor, t);
-					agg.games += 1;
-					agg.scoreSum += score;
+					const candVP = r.finalVP[candidateSeat] ?? 0;
+					const otherVPs = otherSeats.map((s) => r.finalVP[s] ?? 0);
+					sumPlace += 1 + otherVPs.filter((v) => v > candVP).length;
+					sumVP += candVP;
+					sumRounds += r.rounds;
+					if (r.winnerSeat === candidateSeat) wins += 1;
+					if (r.finished) finished += 1;
+					for (const [seat, anchor] of anchorBySeat) {
+						const oppVP = r.finalVP[seat] ?? 0;
+						const score = candVP > oppVP ? 1 : candVP === oppVP ? 0.5 : 0;
+						const t = perAnchor.get(anchor) ?? { games: 0, scoreSum: 0 };
+						t.games += 1;
+						t.scoreSum += score;
+						perAnchor.set(anchor, t);
+						agg.games += 1;
+						agg.scoreSum += score;
+					}
+					if ((g.game + 1) % 20 === 0 || g.game === schedule.length - 1) {
+						// eslint-disable-next-line no-console
+						console.log(
+							`[gauntlet] ${g.game + 1}/${schedule.length} games, ${((Date.now() - t0) / (g.game + 1) / 1000).toFixed(1)}s/game`
+						);
+					}
 				}
-				if ((g.game + 1) % 20 === 0 || g.game === schedule.length - 1) {
+
+				// ── Score + write ────────────────────────────────────────────────────────
+				const n = schedule.length;
+				const wallClockMs = Date.now() - t0;
+				const perAnchorOut: Record<string, { games: number; score: number; elo: number }> = {};
+				for (const [name, t] of [...perAnchor.entries()].sort()) {
+					perAnchorOut[name] = {
+						games: t.games,
+						score: t.scoreSum / t.games,
+						elo: eloFromScore(t.scoreSum, t.games)
+					};
+				}
+				const result = {
+					gauntletVersion: GAUNTLET_VERSION,
+					candidate: {
+						kind: weightsPath ? 'weights' : inferSocket ? 'socket' : 'profile',
+						ref: candidateRef, // socket runs: the SERVER-reported checkpoint path
+						slug
+					},
+					// Transport provenance — a direct-socket v2 score must never be confused
+					// with a distilled-proxy score of "the same" checkpoint.
+					via: inferSocket ? 'socket' : 'in-process',
+					policyObsVersion,
+					games: n,
+					smoke: n < TOTAL_GAMES,
+					eloVsAnchors: {
+						aggregate: {
+							games: agg.games,
+							score: agg.scoreSum / agg.games,
+							elo: eloFromScore(agg.scoreSum, agg.games)
+						},
+						perAnchor: perAnchorOut
+					},
+					meanPlacement: sumPlace / n,
+					winRate: wins / n,
+					meanVP: sumVP / n,
+					meanRounds: sumRounds / n,
+					finishedRate: finished / n,
+					wallClockMs,
+					msPerGame: wallClockMs / n,
+					timestamp: new Date().toISOString()
+				};
+				const out = process.env.GAUNTLET_OUT
+					? resolve(process.cwd(), process.env.GAUNTLET_OUT)
+					: mlPath('gauntlet_results', `${slug}.json`);
+				mkdirSync(dirname(out), { recursive: true });
+				writeFileSync(out, JSON.stringify(result, null, 2));
+
+				// eslint-disable-next-line no-console
+				console.log(
+					`[gauntlet] ${candidateRef}: elo=${result.eloVsAnchors.aggregate.elo} ` +
+						`place=${result.meanPlacement.toFixed(2)} win=${(100 * result.winRate).toFixed(1)}% ` +
+						`vp=${result.meanVP.toFixed(1)} games=${n}${result.smoke ? ' (SMOKE — not a gauntlet score)' : ''}`
+				);
+				for (const [name, s] of Object.entries(perAnchorOut)) {
 					// eslint-disable-next-line no-console
 					console.log(
-						`[gauntlet] ${g.game + 1}/${schedule.length} games, ${((Date.now() - t0) / (g.game + 1) / 1000).toFixed(1)}s/game`
+						`[gauntlet]   vs ${name.padEnd(16)} score=${s.score.toFixed(3)} elo=${String(s.elo).padStart(5)} n=${s.games}`
 					);
 				}
-			}
-
-			// ── Score + write ────────────────────────────────────────────────────────
-			const n = schedule.length;
-			const wallClockMs = Date.now() - t0;
-			const perAnchorOut: Record<string, { games: number; score: number; elo: number }> = {};
-			for (const [name, t] of [...perAnchor.entries()].sort()) {
-				perAnchorOut[name] = {
-					games: t.games,
-					score: t.scoreSum / t.games,
-					elo: eloFromScore(t.scoreSum, t.games)
-				};
-			}
-			const result = {
-				gauntletVersion: GAUNTLET_VERSION,
-				candidate: { kind: weightsPath ? 'weights' : 'profile', ref: candidateRef, slug },
-				games: n,
-				smoke: n < TOTAL_GAMES,
-				eloVsAnchors: {
-					aggregate: { games: agg.games, score: agg.scoreSum / agg.games, elo: eloFromScore(agg.scoreSum, agg.games) },
-					perAnchor: perAnchorOut
-				},
-				meanPlacement: sumPlace / n,
-				winRate: wins / n,
-				meanVP: sumVP / n,
-				meanRounds: sumRounds / n,
-				finishedRate: finished / n,
-				wallClockMs,
-				msPerGame: wallClockMs / n,
-				timestamp: new Date().toISOString()
-			};
-			const out = process.env.GAUNTLET_OUT
-				? resolve(process.cwd(), process.env.GAUNTLET_OUT)
-				: mlPath('gauntlet_results', `${slug}.json`);
-			mkdirSync(dirname(out), { recursive: true });
-			writeFileSync(out, JSON.stringify(result, null, 2));
-
-			// eslint-disable-next-line no-console
-			console.log(
-				`[gauntlet] ${candidateRef}: elo=${result.eloVsAnchors.aggregate.elo} ` +
-					`place=${result.meanPlacement.toFixed(2)} win=${(100 * result.winRate).toFixed(1)}% ` +
-					`vp=${result.meanVP.toFixed(1)} games=${n}${result.smoke ? ' (SMOKE — not a gauntlet score)' : ''}`
-			);
-			for (const [name, s] of Object.entries(perAnchorOut)) {
 				// eslint-disable-next-line no-console
-				console.log(`[gauntlet]   vs ${name.padEnd(16)} score=${s.score.toFixed(3)} elo=${String(s.elo).padStart(5)} n=${s.games}`);
+				console.log(`[gauntlet] DONE → ${out}`);
+			} finally {
+				remote?.close();
 			}
-			// eslint-disable-next-line no-console
-			console.log(`[gauntlet] DONE → ${out}`);
 		},
 		24 * 60 * 60 * 1000
 	);
