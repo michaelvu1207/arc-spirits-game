@@ -122,6 +122,13 @@ export interface LeagueConfig {
 	seedBase: number;
 	/** Actor-pool worker threads (default: cpus−1). */
 	workers?: number;
+	/**
+	 * Matchup pools run concurrently during data generation (each into its own
+	 * m-<i>/ shard subdir; trainers rglob recursively). Default:
+	 * floor(workers / matchupGames) — the whole worker budget in flight without
+	 * oversubscribing cores.
+	 */
+	matchupConcurrency?: number;
 	selection: 'hybrid' | 'value' | 'policy';
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;

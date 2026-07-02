@@ -58,7 +58,7 @@ import {
 	rmSync,
 	writeFileSync
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpus, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { createRng, nextInt } from '../../rng';
@@ -765,34 +765,70 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		const rand = (): number => nextInt(rng, 1_000_000_000) / 1_000_000_000;
 
 		// ── 1+2: PFSP lineups → actor-pool game generation ──────────────────
+		// Matchup pools run CONCURRENTLY (bounded): each writes its own m-<i>/
+		// subdir (trainers rglob *.jsonl recursively), because a shared laneDir in
+		// append mode would race per-workerIndex shard files across pools. Plans
+		// are built up-front so the PFSP RNG draw order — and therefore the lineup
+		// sequence — is identical to the old sequential loop.
 		const matchups = Math.ceil(config.gamesPerGen / config.matchupGames);
 		const opponentsFaced: Record<string, number> = {};
-		let poolWallMs = 0;
-		let games = 0;
-		let samples = 0;
-		for (let m = 0; m < matchups; m++) {
+		for (const f of readdirSync(laneDir)) {
+			if (/^m-\d+$/.test(f)) rmSync(join(laneDir, f), { recursive: true, force: true });
+		}
+		const plans = Array.from({ length: matchups }, (_, m) => {
 			const opps = sampleOpponents(learner, state.members, config.seats - 1, config.pfsp, rand);
 			const plan = buildMatchup(config, learner, opps, m, gen, v2Arg);
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
 			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
 			const seeds = Array.from({ length: count }, (_, i) => seed0 + i);
-			const res = await runActorPool({
-				seeds,
-				outDir: laneDir,
-				config: plan.config,
-				workers: config.workers,
-				append: m > 0
-			});
-			poolWallMs += res.wallMs;
+			return { m, plan, seeds };
+		});
+		const totalWorkers = config.workers ?? Math.max(1, cpus().length - 1);
+		const concurrency = Math.max(
+			1,
+			Math.min(
+				config.matchupConcurrency ?? Math.floor(totalWorkers / Math.max(1, config.matchupGames)),
+				matchups
+			)
+		);
+		const results: Awaited<ReturnType<typeof runActorPool>>[] = new Array(plans.length);
+		const tPool = performance.now();
+		let nextPlan = 0;
+		await Promise.all(
+			Array.from({ length: concurrency }, async () => {
+				while (nextPlan < plans.length) {
+					const job = plans[nextPlan++];
+					// Workers per pool = the budget share of this concurrency slot (the
+					// pool itself clamps to seeds.length). Deliberately NOT matchupGames:
+					// with matchupGames > workers-per-pool each worker plays several
+					// games, amortizing the per-worker-thread engine import (~seconds —
+					// it dominates when every worker plays a single ~0.2s game).
+					results[job.m] = await runActorPool({
+						seeds: job.seeds,
+						outDir: join(laneDir, `m-${job.m}`),
+						config: job.plan.config,
+						workers: Math.max(1, Math.ceil(totalWorkers / concurrency))
+					});
+				}
+			})
+		);
+		const poolWallMs = performance.now() - tPool;
+		let games = 0;
+		let samples = 0;
+		for (const job of plans) {
+			const res = results[job.m];
 			games += res.games;
 			samples += res.samples;
-			foldSummaries(learner, plan, res.summaries, opponentsFaced);
+			foldSummaries(learner, job.plan, res.summaries, opponentsFaced);
 		}
-		// The pool wrote meta.json for its LAST run (dims, obs_version, and the obs_v2
-		// block v2 training needs) — MERGE our lane totals in rather than clobbering it.
+		// Each pool wrote meta.json in its OWN m-<i>/ dir (dims, obs_version, and
+		// the obs_v2 block v2 training needs) — merge lane totals into a root-level
+		// meta.json from the first matchup's copy (load_dims_from_meta reads the
+		// data root, not the shard subdirs).
 		const metaPath = join(laneDir, 'meta.json');
-		const poolMeta = existsSync(metaPath)
-			? (JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>)
+		const firstMeta = join(laneDir, 'm-0', 'meta.json');
+		const poolMeta = existsSync(firstMeta)
+			? (JSON.parse(readFileSync(firstMeta, 'utf8')) as Record<string, unknown>)
 			: {};
 		writeFileSync(
 			metaPath,
