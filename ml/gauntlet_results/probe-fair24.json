@@ -1,0 +1,107 @@
+{
+  "champion": "ml/league_fair/checkpoints/main-0-gen24.json",
+  "exploiterCkpt": "/tmp/exploit-probe-syuwhmp2/checkpoints/league_exploiter-0-gen16.json",
+  "budgetGens": 16,
+  "budgetSeconds": null,
+  "gamesPerGen": 64,
+  "trainWallSeconds": 286.3,
+  "training": {
+    "games": 3648,
+    "better": 248,
+    "worse": 3183,
+    "pairwisePct": 9.77
+  },
+  "evalByGen": [
+    {
+      "gen": 1,
+      "eloEstimate": -550,
+      "pairwisePct": 2.8
+    },
+    {
+      "gen": 2,
+      "eloEstimate": -745,
+      "pairwisePct": 0
+    },
+    {
+      "gen": 3,
+      "eloEstimate": -745,
+      "pairwisePct": 0
+    },
+    {
+      "gen": 4,
+      "eloEstimate": -745,
+      "pairwisePct": 0
+    },
+    {
+      "gen": 5,
+      "eloEstimate": -550,
+      "pairwisePct": 2.8
+    },
+    {
+      "gen": 6,
+      "eloEstimate": -745,
+      "pairwisePct": 0
+    },
+    {
+      "gen": 7,
+      "eloEstimate": -550,
+      "pairwisePct": 2.8
+    },
+    {
+      "gen": 8,
+      "eloEstimate": -550,
+      "pairwisePct": 2.8
+    },
+    {
+      "gen": 9,
+      "eloEstimate": -497,
+      "pairwisePct": 4.2
+    },
+    {
+      "gen": 10,
+      "eloEstimate": -745,
+      "pairwisePct": 0
+    },
+    {
+      "gen": 11,
+      "eloEstimate": -550,
+      "pairwisePct": 2.8
+    },
+    {
+      "gen": 12,
+      "eloEstimate": -745,
+      "pairwisePct": 0
+    },
+    {
+      "gen": 13,
+      "eloEstimate": -550,
+      "pairwisePct": 2.8
+    },
+    {
+      "gen": 14,
+      "eloEstimate": -745,
+      "pairwisePct": 0
+    },
+    {
+      "gen": 15,
+      "eloEstimate": -550,
+      "pairwisePct": 2.8
+    },
+    {
+      "gen": 16,
+      "eloEstimate": -623,
+      "pairwisePct": 1.4
+    }
+  ],
+  "directMatch": {
+    "games": 200,
+    "encounters": 600,
+    "scoreSum": 13.0,
+    "pairwisePct": 2.17,
+    "eloVsChampion": -655
+  },
+  "leagueRoot": null,
+  "eloGainEstimate": -655,
+  "thresholdElo": 50.0,
+  "verdict": "PASS"
+}
