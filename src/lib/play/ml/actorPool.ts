@@ -16,12 +16,13 @@
  * land in different shards under different worker counts, but per-seed outcomes match.
  */
 import { Worker } from 'node:worker_threads';
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { cpus } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { ACT_DIM, OBS_DIM } from './encode';
 import type { ActorGameConfig, ActorWorkerMessage, GameSummary } from './poolTypes';
 
 export interface ActorPoolOptions {
@@ -78,7 +79,16 @@ jiti.import(workerData.__workerFile).catch((err) => {
 
 export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolResult> {
 	if (opts.seeds.length === 0) {
-		return { workers: 0, games: 0, samples: 0, wallMs: 0, gamesPerSec: 0, summaries: [], shardFiles: [], gameFiles: [] };
+		return {
+			workers: 0,
+			games: 0,
+			samples: 0,
+			wallMs: 0,
+			gamesPerSec: 0,
+			summaries: [],
+			shardFiles: [],
+			gameFiles: []
+		};
 	}
 	const nWorkers = Math.max(1, Math.min(opts.workers ?? cpus().length - 1, opts.seeds.length));
 	const outDir = resolve(opts.outDir);
@@ -141,7 +151,10 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 					worker.on('error', rejectWorker);
 					worker.on('exit', (code) => {
 						if (done) resolveWorker();
-						else rejectWorker(new Error(`actorPool worker ${workerIndex} exited (code ${code}) before finishing`));
+						else
+							rejectWorker(
+								new Error(`actorPool worker ${workerIndex} exited (code ${code}) before finishing`)
+							);
 					});
 				})
 		)
@@ -151,6 +164,17 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 	const summaries = opts.seeds
 		.map((seed) => bySeed.get(seed))
 		.filter((s): s is GameSummary => s !== undefined);
+	// meta.json alongside the shards: ml/model.py's load_dims_from_meta prefers it, and
+	// without it the trainer would infer dims from the first *.jsonl alphabetically —
+	// which is games-0.jsonl (summaries, no obs), not a sample shard.
+	writeFileSync(
+		join(outDir, 'meta.json'),
+		JSON.stringify(
+			{ obs_dim: OBS_DIM, act_dim: ACT_DIM, samples, games: summaries.length, workers: nWorkers },
+			null,
+			2
+		)
+	);
 	const outFiles = readdirSync(outDir);
 	return {
 		workers: nWorkers,

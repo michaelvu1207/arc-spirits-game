@@ -27,6 +27,7 @@ const { values: args } = parseArgs({
 		seats: { type: 'string', default: '4' },
 		'max-rounds': { type: 'string', default: '90' },
 		weights: { type: 'string' },
+		'infer-socket': { type: 'string' },
 		out: { type: 'string', default: 'ml/data/poolrun' },
 		profiles: { type: 'string', default: 'pvphunter,medium,aggressive,hard' },
 		selection: { type: 'string', default: 'hybrid' },
@@ -47,7 +48,7 @@ const { values: args } = parseArgs({
 if (args.help) {
 	console.log(
 		'usage: node scripts/run-actor-pool.mjs [--games N] [--workers N] [--seed0 N] [--seats N]\n' +
-			'         [--max-rounds N] [--weights FILE] [--out DIR] [--profiles a,b,c] \n' +
+			'         [--max-rounds N] [--weights FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
 			'         [--selection hybrid|value|policy] [--sample] [--temperature X]\n' +
 			'         [--neural-seats Red,Blue] [--record-seats Red] [--forbid type1,type2]\n' +
 			'         [--max-status-level N] [--gamma X] [--iter N] [--append] [--quiet]'
@@ -55,7 +56,13 @@ if (args.help) {
 	process.exit(0);
 }
 
-const csv = (s) => (s ? s.split(',').map((x) => x.trim()).filter(Boolean) : undefined);
+const csv = (s) =>
+	s
+		? s
+				.split(',')
+				.map((x) => x.trim())
+				.filter(Boolean)
+		: undefined;
 const num = (s) => (s === undefined ? undefined : parseFloat(s));
 
 const games = parseInt(args.games, 10);
@@ -67,6 +74,7 @@ const config = {
 	maxRounds: parseInt(args['max-rounds'], 10),
 	profiles: csv(args.profiles),
 	weightsPath: args.weights ? path.resolve(args.weights) : undefined,
+	inferSocket: args['infer-socket'],
 	selection: args.selection,
 	sample: args.sample || undefined,
 	temperature: num(args.temperature),
@@ -79,7 +87,9 @@ const config = {
 };
 
 const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src', 'lib') } });
-const { runActorPool } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts'));
+const { runActorPool } = await jiti.import(
+	path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts')
+);
 
 const seeds = Array.from({ length: games }, (_, i) => seed0 + i);
 const logEvery = Math.max(1, Math.floor(games / 10));
@@ -88,7 +98,7 @@ const t0 = Date.now();
 
 console.log(
 	`[pool] ${games} games x ${config.seats} seats, ${workers} workers, ` +
-		`${config.weightsPath ? `weights=${args.weights}` : `heuristic profiles=${args.profiles}`}`
+		`${config.inferSocket ? `infer-socket=${config.inferSocket}` : config.weightsPath ? `weights=${args.weights}` : `heuristic profiles=${args.profiles}`}`
 );
 const res = await runActorPool({
 	seeds,
@@ -112,7 +122,9 @@ console.log(
 	`[pool] DONE games=${res.games} samples=${res.samples} workers=${res.workers} ` +
 		`wall=${(res.wallMs / 1000).toFixed(1)}s rate=${res.gamesPerSec.toFixed(1)} games/s`
 );
-console.log(`[pool] shards: ${res.shardFiles.length} files, summaries: ${res.gameFiles.length} files in ${path.resolve(args.out)}`);
+console.log(
+	`[pool] shards: ${res.shardFiles.length} files, summaries: ${res.gameFiles.length} files in ${path.resolve(args.out)}`
+);
 if (res.games !== games) {
 	console.error(`[pool] WARNING: expected ${games} games, got ${res.games}`);
 	process.exit(1);

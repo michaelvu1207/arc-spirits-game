@@ -20,6 +20,7 @@ import { profileFor } from '../server/botPolicy';
 import type { GameCommand, PlayCatalog, SeatColor } from '../types';
 import { playRecordingGame } from './driver';
 import { appendSamples, loadWeightsIfPresent } from './nodeIo';
+import { asNeuralPolicy, RemotePolicy } from './inferenceClient';
 import type { NeuralPolicy } from './net';
 import type { ActorWorkerData, ActorWorkerMessage, GameSummary } from './poolTypes';
 
@@ -36,7 +37,14 @@ export function runActorGames(
 ): { games: number; samples: number } {
 	const { workerIndex, seeds, config, outDir, catalogPath } = data;
 	const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as PlayCatalog;
-	const policy = config.weightsPath ? loadPolicyStrict(config.weightsPath) : undefined;
+	// Learner policy: a RemotePolicy over the inference server's socket when configured,
+	// else the in-process net from a weights file. Opponents always load in-process.
+	const remote = config.inferSocket ? new RemotePolicy(config.inferSocket) : null;
+	const policy = remote
+		? asNeuralPolicy(remote)
+		: config.weightsPath
+			? loadPolicyStrict(config.weightsPath)
+			: undefined;
 	let opponentPolicies: Partial<Record<SeatColor, NeuralPolicy>> | undefined;
 	if (config.opponentWeights) {
 		opponentPolicies = {};
@@ -52,52 +60,59 @@ export function runActorGames(
 		: undefined;
 	const shardFile = join(outDir, `shard-${workerIndex}.jsonl`);
 	const gamesFile = join(outDir, `games-${workerIndex}.jsonl`);
-	const weightsOrProfiles = config.weightsPath ?? config.profiles.join(',');
+	// Identify the generator by the server's actual checkpoint when remote (the socket
+	// path says nothing about which weights produced the games).
+	const weightsOrProfiles = remote?.info.weights ?? config.weightsPath ?? config.profiles.join(',');
 
 	let samplesTotal = 0;
-	for (const seed of seeds) {
-		const t0 = performance.now();
-		const r = playRecordingGame(catalog, {
-			seed,
-			profiles,
-			maxRounds: config.maxRounds,
-			policy,
-			neuralSeats: config.neuralSeats,
-			recordSeats: config.recordSeats,
-			sample: config.sample,
-			temperature: config.temperature,
-			selection: config.selection,
-			opponentPolicies,
-			forbidTypes,
-			maxStatusLevel: config.maxStatusLevel,
-			gamma: config.gamma
-		});
-		const wallMs = performance.now() - t0;
-		appendSamples(shardFile, r.samples, config.iter ?? 0);
-		samplesTotal += r.samples.length;
+	try {
+		for (const seed of seeds) {
+			const t0 = performance.now();
+			const r = playRecordingGame(catalog, {
+				seed,
+				profiles,
+				maxRounds: config.maxRounds,
+				policy,
+				neuralSeats: config.neuralSeats,
+				recordSeats: config.recordSeats,
+				sample: config.sample,
+				temperature: config.temperature,
+				selection: config.selection,
+				opponentPolicies,
+				forbidTypes,
+				maxStatusLevel: config.maxStatusLevel,
+				gamma: config.gamma
+			});
+			const wallMs = performance.now() - t0;
+			appendSamples(shardFile, r.samples, config.iter ?? 0);
+			samplesTotal += r.samples.length;
 
-		const seatList = Object.keys(r.finalVP) as SeatColor[];
-		const summary: GameSummary = {
-			seed,
-			seats: seatList.length,
-			weightsOrProfiles,
-			rounds: r.rounds,
-			winnerSeat: r.winnerSeat,
-			finished: r.finished,
-			stalled: r.stalled,
-			samples: r.samples.length,
-			perSeat: seatList.map((seat) => ({
-				seat,
-				finalVP: r.finalVP[seat] ?? 0,
-				placement:
-					1 +
-					seatList.filter((o) => o !== seat && (r.finalVP[o] ?? 0) > (r.finalVP[seat] ?? 0)).length,
-				finalStatus: r.finalState?.players[seat]?.statusLevel ?? 0
-			})),
-			wallMs: Math.round(wallMs * 10) / 10
-		};
-		appendFileSync(gamesFile, JSON.stringify(summary) + '\n');
-		onGame?.(summary);
+			const seatList = Object.keys(r.finalVP) as SeatColor[];
+			const summary: GameSummary = {
+				seed,
+				seats: seatList.length,
+				weightsOrProfiles,
+				rounds: r.rounds,
+				winnerSeat: r.winnerSeat,
+				finished: r.finished,
+				stalled: r.stalled,
+				samples: r.samples.length,
+				perSeat: seatList.map((seat) => ({
+					seat,
+					finalVP: r.finalVP[seat] ?? 0,
+					placement:
+						1 +
+						seatList.filter((o) => o !== seat && (r.finalVP[o] ?? 0) > (r.finalVP[seat] ?? 0))
+							.length,
+					finalStatus: r.finalState?.players[seat]?.statusLevel ?? 0
+				})),
+				wallMs: Math.round(wallMs * 10) / 10
+			};
+			appendFileSync(gamesFile, JSON.stringify(summary) + '\n');
+			onGame?.(summary);
+		}
+	} finally {
+		remote?.close(); // the bridge's IO thread would otherwise outlive the run
 	}
 	return { games: seeds.length, samples: samplesTotal };
 }
@@ -109,7 +124,11 @@ if (parentPort && wd?.__actorPool) {
 	const t0 = performance.now();
 	try {
 		const { games, samples } = runActorGames(wd, (summary) =>
-			port.postMessage({ type: 'game', workerIndex: wd.workerIndex, summary } satisfies ActorWorkerMessage)
+			port.postMessage({
+				type: 'game',
+				workerIndex: wd.workerIndex,
+				summary
+			} satisfies ActorWorkerMessage)
 		);
 		port.postMessage({
 			type: 'done',

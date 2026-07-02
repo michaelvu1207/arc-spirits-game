@@ -58,6 +58,27 @@ export interface Sample {
 	routeMode?: number;
 	/** Optional curriculum/source label used by lane scripts to filter narrow training slices. */
 	teacherKind?: string;
+	/**
+	 * PPO trajectory fields (consumed by ml/ppo.py via train.py --mode ppo). The episode key
+	 * is per (game, seat) — ml/ppo.py groups rows by gameId alone, so two seats sharing one
+	 * id would interleave into a single bogus episode. Heuristic-teacher and custom-chooser
+	 * rows carry the trajectory stamps but omit logpOld/vPred (no softmax behavior
+	 * distribution exists for them); the PPO loader skips such rows by design while
+	 * AWR/AlphaZero modes keep training on them unchanged.
+	 */
+	gameId?: string;
+	stepIdx?: number;
+	/** Per-step shaping reward (default 0; see RecordGameOptions.stepRewards). */
+	rStep?: number;
+	/** True on the seat's last decision of a FINISHED game. Capped/stalled games leave the
+	 *  episode truncated, so the PPO trainer bootstraps GAE from the last vPred. */
+	done?: boolean;
+	/** Behavior log-prob of the chosen candidate under the acting policy's temp-1 softmax. */
+	logpOld?: number;
+	/** Value-head output at decision time. */
+	vPred?: number;
+	/** Final placement 1..seats (ties share the better place), on rows of finished games. */
+	placement?: number;
 }
 
 export interface RecordGameOptions {
@@ -116,6 +137,13 @@ export interface RecordGameOptions {
 	 * a bad state cannot softlock.
 	 */
 	maxStatusLevel?: number;
+	/**
+	 * Per-step PPO shaping rewards (Sample.rStep): given one seat's recorded decisions in play
+	 * order, return a reward per decision. Default: all 0 — the terminal placement reward is
+	 * added trainer-side (ml/ppo.py), so sparse works. This is the hook where potential-based
+	 * shaping (e.g. ΔΦ from shaping.ts) plugs in later without touching the recording path.
+	 */
+	stepRewards?: (seatSamples: Sample[], seat: SeatColor, finalVP: Record<string, number>) => number[];
 }
 
 export interface RecordGameResult {
@@ -342,6 +370,17 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 								? valueGuidedIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog)
 								: hybridIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog);
 		if (cands.length > 1 && recordSet.has(seat) && !oppPolicy) {
+			// PPO behavior stats, only when a real softmax policy made this decision (not a
+			// custom chooser). logpOld is the temp-1 softmax — the distribution the trainer's
+			// log_softmax reproduces — regardless of the exploration temperature used to act.
+			let ppo: { logpOld: number; vPred: number } | undefined;
+			if (opts.policy && !opts.chooser) {
+				const p = opts.policy.probs(obs, feats);
+				ppo = {
+					logpOld: Math.log(Math.max(p[idx], 1e-12)),
+					vPred: opts.policy.value(obs)
+				};
+			}
 			samples.push({
 				obs,
 				cands: feats,
@@ -351,6 +390,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				vp: vpOf(state.players[seat]),
 				phi: buildPotential(state.players[seat], shaping),
 				kill: cands[idx].type === 'resolveMonsterReward' ? 1 : 0,
+				...ppo,
 				...sampleAuxTargets(state, seat, catalog, withNext)
 			});
 		}
@@ -388,6 +428,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 
 	// VP-maximizing return-to-go: per seat, credit each decision with its discounted future VP
 	// (plus potential-based build shaping). γ<1 trades total-VP vs VP/turn — a harness knob.
+	const finished = state.status === 'finished';
 	for (const seat of seats) {
 		const seatSamples = samples.filter((s) => s.seat === seat); // already in play order
 		if (seatSamples.length === 0) continue;
@@ -401,6 +442,18 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			seatSamples.map((s) => huntBonus * s.kill)
 		);
 		seatSamples.forEach((s, i) => (s.ret = g[i]));
+
+		// PPO trajectory stamps (per-seat episode; see the Sample field docs).
+		const gameId = `${opts.seed}-${n}p-${seat}`;
+		const placement = 1 + seats.filter((o) => o !== seat && finalVP[o] > finalVP[seat]).length;
+		const rSteps = opts.stepRewards?.(seatSamples, seat, finalVP);
+		seatSamples.forEach((s, i) => {
+			s.gameId = gameId;
+			s.stepIdx = i;
+			s.rStep = rSteps?.[i] ?? 0;
+			s.done = finished && i === seatSamples.length - 1;
+			if (finished) s.placement = placement;
+		});
 	}
 
 	return {

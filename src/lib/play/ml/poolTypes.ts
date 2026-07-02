@@ -19,6 +19,13 @@ export interface ActorGameConfig {
 	profiles: string[];
 	/** Learner policy weights file. Omit for heuristic-only (BC/cold-start) generation. */
 	weightsPath?: string;
+	/**
+	 * Unix socket of a running ml/infer_server.py. When set, the learner policy is a
+	 * RemotePolicy over this socket (weightsPath is then ignored for the learner; opponent
+	 * weights still load in-process). See inferenceClient.ts for the fp-precision
+	 * determinism caveat when comparing against in-process runs.
+	 */
+	inferSocket?: string;
 	selection?: 'hybrid' | 'value' | 'policy';
 	sample?: boolean;
 	temperature?: number;
