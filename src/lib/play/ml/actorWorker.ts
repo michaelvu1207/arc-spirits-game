@@ -47,9 +47,13 @@ export function runActorGames(
 	// Learner policy: a RemotePolicy over the inference server's socket when configured,
 	// else the in-process net from a weights file. Opponents always load in-process.
 	// expectObsDim pins the served checkpoint to the requested policy obs version.
+	// ARC_INFER_WIRE=json|binary overrides the checkpoint-based wire cut (wire A/B,
+	// forcing binary on v1 shapes, pre-binary servers).
+	const wireEnv = process.env.ARC_INFER_WIRE;
 	const remote = config.inferSocket
 		? new RemotePolicy(config.inferSocket, {
-				expectObsDim: config.policyObsVersion === 2 ? obsV2Meta(catalog).flatLength : OBS_DIM
+				expectObsDim: config.policyObsVersion === 2 ? obsV2Meta(catalog).flatLength : OBS_DIM,
+				wire: wireEnv === 'json' || wireEnv === 'binary' ? wireEnv : undefined
 			})
 		: null;
 	const policy = remote
