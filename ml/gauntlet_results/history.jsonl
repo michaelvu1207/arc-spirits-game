@@ -1,2 +1,3 @@
 {"ts": "2026-07-02T04:00:00Z", "rev": "league-run1", "weights": "ml/champions/league-run1-main0-gen8-elo268.json", "gauntletVersion": "gauntlet-v1", "games": 800, "smoke": false, "elo": 268, "meanPlacement": 1.375, "winRate": 0.67625, "meanVP": 12.305}
 {"ts": "2026-07-02T06:20:00Z", "rev": "rediscovery-gen20", "weights": "ml/champions/rediscovery/main-0-gen20.json", "gauntletVersion": "gauntlet-v1", "games": 800, "smoke": false, "elo": 1056, "meanPlacement": 1.00375, "winRate": 0.99375, "meanVP": 21.7025}
+{"ts": "2026-07-02T10:40:00Z", "rev": "fair-gen24", "weights": "ml/champions/fair/main-0-gen24.json", "gauntletVersion": "gauntlet-v2", "games": 800, "smoke": false, "elo": 1014, "meanPlacement": null, "winRate": 0.99, "meanVP": 29.8}
