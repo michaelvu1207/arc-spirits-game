@@ -47,4 +47,7 @@ __pycache__/
 # Arc Spirits AlphaZero run artifacts
 ml/meta_runs/
 ml/data_smoke/
-ml/weights/policy-smoke.json
+ml/_archive/
+ml/weights/
+ml/*_result.json
+ml/azeval_*.json
