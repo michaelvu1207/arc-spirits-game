@@ -51,3 +51,4 @@ ml/_archive/
 ml/weights/
 ml/*_result.json
 ml/azeval_*.json
+ml/gauntlet_results/
