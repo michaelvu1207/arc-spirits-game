@@ -260,3 +260,18 @@ points**, every decision encoded; `encodeV2.test.ts` "full-game smoke"):
   `f(obs_tokens, action_feat)` per legal candidate as today.
 - Write `obsV2Meta(catalog)` to `meta.json` for every v2 dataset; the trainer
   must refuse data whose `flatHeader` mismatches its parser.
+
+## Format clarifications (pinned 2026-07-02, after model-v2 integration)
+1. `global` is the only maskless family; consumers must synthesize an all-ones
+   mask for it. **At least the global token is always real** — this is a
+   contract (rune family can be all-pad early game; monster mask can be 0).
+2. `obsV2Meta().caps` key naming is fixed as: `seats`, `spirits`, `runes`,
+   `market` (no caps entries for global/monster — cap 1 implied by header).
+   Renaming or adding keys breaks `obs_v2.from_meta` validation — version bump
+   required.
+3. The monster-present bit exists in three places (monster mask, monster.present
+   field, global.monsterPresent); **the mask is the authority**.
+4. `flattenObsV2` emits float64 JS numbers; header entries are small ints so
+   float32 casting is exact. Parsers compare headers after float32 cast.
+5. Python consumers: parse via the self-describing header / `obs_v2.ObsV2Spec`,
+   never hard-coded offsets.
