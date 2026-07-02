@@ -147,6 +147,15 @@ export interface LeagueConfig {
 	 */
 	seedCheckpointAnchors?: boolean;
 	/**
+	 * Additional frozen members seeded at init — e.g. a promoted champion the
+	 * main lane must keep facing so PFSP always has a peer-level target (a main
+	 * warm-started ABOVE the whole field has nothing to push against and drifts).
+	 * `elo` stamps eloVsAnchors directly (raising the promotion bar); omit it to
+	 * let the gauntlet-results scan / byte-identity stamping try instead.
+	 * Arrays REPLACE on config merge (they don't concatenate).
+	 */
+	extraFrozen?: { id: string; weightsPath: string; elo?: number }[];
+	/**
 	 * Baseline gauntlet-v1 Elos stamped on seeded FROZEN members at init, keyed by
 	 * member id or weights path. Takes precedence over the ml/gauntlet_results scan;
 	 * without either source the first promotion check has no bar (bestFrozen −Inf).

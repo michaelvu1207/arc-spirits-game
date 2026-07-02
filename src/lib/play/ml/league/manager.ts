@@ -188,6 +188,19 @@ export function seedRoster(config: LeagueConfig): LeagueMember[] {
 			members.push({ id: `frozen-${c.name}`, kind: 'frozen', weightsPath: c.path, createdGen: 0, matchStats: {} });
 		}
 	}
+	// Extra frozen members (e.g. a promoted champion kept in the field as the
+	// main lane's peer-level PFSP target). An explicit elo stamps the promotion
+	// bar directly; without one, stampBaselineElos' scan/byte-identity may still.
+	for (const x of config.extraFrozen ?? []) {
+		members.push({
+			id: x.id,
+			kind: 'frozen',
+			weightsPath: x.weightsPath,
+			createdGen: 0,
+			...(typeof x.elo === 'number' ? { eloVsAnchors: x.elo } : {}),
+			matchStats: {}
+		});
+	}
 	for (let i = 0; i < config.lanes.main; i++) {
 		members.push({ id: `main-${i}`, kind: 'main', initFrom: config.initFrom, createdGen: 0, matchStats: {} });
 	}

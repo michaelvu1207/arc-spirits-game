@@ -241,6 +241,41 @@ describe('promotion bar + baseline elos', () => {
 		members.push(member('frozen-c', 'frozen', { weightsPath: 'c.json', eloVsAnchors: 221 }));
 		expect(promotionBar(members)).toBe(221);
 	});
+
+	it('extraFrozen: seeded as frozen, PFSP-eligible for main, raises the promotion bar', () => {
+		const root = mkdtempSync(join(tmpdir(), 'league-extrafrozen-'));
+		try {
+			const { state } = initLeague(root, {
+				extraFrozen: [
+					{ id: 'frozen-champion-run1', weightsPath: 'ml/champions/league-run1-main0-gen8-elo268.json', elo: 268 },
+					{ id: 'frozen-unscored', weightsPath: 'ml/champions/nonexistent-for-scan.json' } // no elo, fake path
+				]
+			});
+			const champ = state.members.find((m) => m.id === 'frozen-champion-run1')!;
+			expect(champ.kind).toBe('frozen');
+			expect(champ.weightsPath).toBe('ml/champions/league-run1-main0-gen8-elo268.json');
+			expect(champ.eloVsAnchors).toBe(268); // explicit elo stamps directly
+
+			// PFSP-eligible: the main lane's opponent pool contains the champion…
+			const main = state.members.find((m) => m.id === 'main-0')!;
+			const pool = opponentPool(main, state.members);
+			expect(pool.map((m) => m.id)).toContain('frozen-champion-run1');
+			// …and a league exploiter's frozen pool does too.
+			const lx = state.members.find((m) => m.id === 'league_exploiter-0')!;
+			expect(opponentPool(lx, state.members).map((m) => m.id)).toContain('frozen-champion-run1');
+
+			// Promotion bar rises to the champion's stamped elo (268 > routeexecq's 192).
+			expect(promotionBar(state.members)).toBe(268);
+
+			// No explicit elo + nothing matching in the scan ⇒ stays unscored (no bar
+			// contribution) but remains a playable .json opponent.
+			const unscored = state.members.find((m) => m.id === 'frozen-unscored')!;
+			expect(unscored.eloVsAnchors).toBeUndefined();
+			expect(isPlayable(unscored)).toBe(true);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
 
 describe('league init + state round-trip', () => {
