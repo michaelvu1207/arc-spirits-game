@@ -664,7 +664,7 @@ def train(
     )
 
     if effective_placement_coef > 0:
-        from ppo import placement_aux_loss
+        from ppo import placement_aux_loss, placement_aux_loss_v1
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     history: list[dict] = []
@@ -738,7 +738,11 @@ def train(
 
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
             if effective_placement_coef > 0 and placement_mask.any():
-                placement_loss = placement_aux_loss(model, obs, placement, placement_mask)
+                # v1 (4-way CE on placement_head) vs v2 (per-seat-token regression).
+                if hasattr(model, "placement_head"):
+                    placement_loss = placement_aux_loss_v1(model, obs, placement, placement_mask)
+                elif hasattr(model, "placement_logits"):
+                    placement_loss = placement_aux_loss(model, obs, placement, placement_mask)
 
             # --- Total ---
             loss = (
