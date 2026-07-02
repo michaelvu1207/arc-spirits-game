@@ -160,11 +160,24 @@ export class RemotePolicy {
 	private lastObs: number[] | null = null;
 	private lastValue = 0;
 
-	constructor(socketPath: string, opts?: { timeoutMs?: number }) {
+	/**
+	 * `expectObsDim` pins the server's observation width at handshake time (62 for the
+	 * v1 MLP, obsV2Meta().flatLength for arc-entity-scorer-v2). A mismatch — e.g. the
+	 * server still holds a v1 checkpoint while the caller plays at policyObsVersion 2 —
+	 * fails HERE with one clear error instead of per-request shape errors mid-game.
+	 */
+	constructor(socketPath: string, opts?: { timeoutMs?: number; expectObsDim?: number }) {
 		this.bridge = new SyncInferBridge(socketPath, opts?.timeoutMs ?? 30_000);
 		const resp = this.bridge.request({ want: ['info'] });
 		if (!resp.info) throw new Error('RemotePolicy: handshake returned no info');
 		this.info = resp.info;
+		if (opts?.expectObsDim !== undefined && this.info.obs_dim !== opts.expectObsDim) {
+			const served = `${this.info.obs_dim} (${this.info.weights})`;
+			this.bridge.close();
+			throw new Error(
+				`RemotePolicy: server obs_dim ${served} != expected ${opts.expectObsDim} — wrong checkpoint for this obs version`
+			);
+		}
 		this.zeroCand = new Array<number>(this.info.act_dim).fill(0);
 	}
 

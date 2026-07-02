@@ -18,6 +18,8 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { profileFor } from '../server/botPolicy';
 import type { GameCommand, PlayCatalog, SeatColor } from '../types';
+import { OBS_DIM } from './encode';
+import { obsV2Meta } from './encodeV2';
 import { playRecordingGame } from './driver';
 import { appendSamples, loadWeightsIfPresent } from './nodeIo';
 import { asNeuralPolicy, RemotePolicy } from './inferenceClient';
@@ -37,9 +39,19 @@ export function runActorGames(
 ): { games: number; samples: number } {
 	const { workerIndex, seeds, config, outDir, catalogPath } = data;
 	const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as PlayCatalog;
+	if (config.policyObsVersion === 2 && !config.inferSocket) {
+		throw new Error(
+			'actorWorker: policyObsVersion 2 requires inferSocket (--infer-socket) — the in-process TS net is v1-only'
+		);
+	}
 	// Learner policy: a RemotePolicy over the inference server's socket when configured,
 	// else the in-process net from a weights file. Opponents always load in-process.
-	const remote = config.inferSocket ? new RemotePolicy(config.inferSocket) : null;
+	// expectObsDim pins the served checkpoint to the requested policy obs version.
+	const remote = config.inferSocket
+		? new RemotePolicy(config.inferSocket, {
+				expectObsDim: config.policyObsVersion === 2 ? obsV2Meta(catalog).flatLength : OBS_DIM
+			})
+		: null;
 	const policy = remote
 		? asNeuralPolicy(remote)
 		: config.weightsPath
@@ -82,7 +94,8 @@ export function runActorGames(
 				forbidTypes,
 				maxStatusLevel: config.maxStatusLevel,
 				gamma: config.gamma,
-				obsVersion: config.obsVersion
+				obsVersion: config.obsVersion,
+				policyObsVersion: config.policyObsVersion
 			});
 			const wallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);

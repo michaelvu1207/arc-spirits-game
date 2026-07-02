@@ -125,6 +125,28 @@ describe('actor pool', () => {
 		}
 	}, 300_000);
 
+	it('policy-obs-version 2 without an infer socket is rejected with a clear error', async () => {
+		const dir = tempDir('pov2');
+		try {
+			await expect(
+				runActorPool({
+					seeds: [61_000],
+					outDir: dir,
+					workers: 1,
+					config: {
+						seats: 4,
+						maxRounds: 10,
+						profiles: ['medium'],
+						weightsPath: WEIGHTS,
+						policyObsVersion: 2
+					}
+				})
+			).rejects.toThrow(/policyObsVersion 2 requires inferSocket/);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
+
 	(RUN_BENCH ? it : it.skip)(
 		'scaling benchmark: 1 worker vs cpus-1 workers (POOL=1)',
 		async () => {

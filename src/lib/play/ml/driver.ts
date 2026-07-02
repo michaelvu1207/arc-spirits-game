@@ -26,13 +26,26 @@ import {
 	type BotProfile,
 	type BotRandom
 } from '../server/botPolicy';
-import { SEAT_COLORS, type GameActor, type GameCommand, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
+import {
+	SEAT_COLORS,
+	type GameActor,
+	type GameCommand,
+	type PlayCatalog,
+	type PublicGameState,
+	type SeatColor
+} from '../types';
 import { encodeAction, encodeObs } from './encode';
 import { encodeEntityObsV2, flattenObsV2 } from './encodeV2';
 import { legalActionsWithNext, commandMatches, type LegalAction } from './actions';
 import { sampleAuxTargets } from './auxTargets';
 import { valueGuidedIndex, hybridIndex, policyIndexWithProgressGuard } from './neuralBot';
-import { buildPotential, vpOf, vpReturnsToGo, BALANCED_SHAPING, type ShapingWeights } from './shaping';
+import {
+	buildPotential,
+	vpOf,
+	vpReturnsToGo,
+	BALANCED_SHAPING,
+	type ShapingWeights
+} from './shaping';
 import type { NeuralPolicy } from './net';
 
 /** One recorded decision. `vp`/`phi` (VP and build-potential at decision time) are used to
@@ -110,7 +123,13 @@ export interface RecordGameOptions {
 	 * `policy.pick` — given the legal candidates, return the index to take. Lets you drop in a
 	 * hand-written or alternative bot without changing the engine.
 	 */
-	chooser?: (obs: number[], candFeatures: number[][], cands: GameCommand[], seat: SeatColor, state: PublicGameState) => number;
+	chooser?: (
+		obs: number[],
+		candFeatures: number[][],
+		cands: GameCommand[],
+		seat: SeatColor,
+		state: PublicGameState
+	) => number;
 	/**
 	 * League play: per-seat opponent policies. A seat listed here is driven by ITS OWN policy
 	 * (a sampled past checkpoint / exploiter), instead of `opts.policy` or a heuristic — so the
@@ -149,7 +168,11 @@ export interface RecordGameOptions {
 	 * added trainer-side (ml/ppo.py), so sparse works. This is the hook where potential-based
 	 * shaping (e.g. ΔΦ from shaping.ts) plugs in later without touching the recording path.
 	 */
-	stepRewards?: (seatSamples: Sample[], seat: SeatColor, finalVP: Record<string, number>) => number[];
+	stepRewards?: (
+		seatSamples: Sample[],
+		seat: SeatColor,
+		finalVP: Record<string, number>
+	) => number[];
 	/**
 	 * Observation schema recorded on samples (default 1). At 2, every recorded Sample
 	 * ADDITIONALLY carries obsV2 = flattenObsV2 (3,419 floats for the frozen catalog);
@@ -161,6 +184,18 @@ export interface RecordGameOptions {
 	 * input — fine for BC / off-policy warm start of the Python v2 model.
 	 */
 	obsVersion?: 1 | 2;
+	/**
+	 * Observation schema fed to the ACTING policy at decision time (default 1). At 2 the
+	 * learner policy receives flattenObsV2 (3,419f) instead of v1 encodeObs, so logpOld/
+	 * vPred become the v2 net's — league-v2 PPO data turns truly on-policy. Requires a
+	 * v2-capable policy (a RemotePolicy over an infer socket serving arc-entity-scorer-v2);
+	 * the in-process TS NeuralPolicy is v1-only and rejected. Selection must be 'hybrid'
+	 * or 'policy' — 'value' does 1-ply lookahead on per-candidate NEXT-state observations,
+	 * which the root-obs substitution cannot express. Opponent seats and the heuristic
+	 * unstick path stay v1. Candidates stay v1 52f and Sample.obs stays v1 62f throughout;
+	 * at obsVersion 2 the flat array is computed once per decision and shared with obsV2.
+	 */
+	policyObsVersion?: 1 | 2;
 }
 
 export interface RecordGameResult {
@@ -228,7 +263,58 @@ function filterConstrainedActions(
 	return filtered.length > 0 ? filtered : withNext;
 }
 
+/**
+ * neuralBot's selection helpers re-encode the v1 obs internally, so at policyObsVersion 2
+ * the learner policy is wrapped to see this DECISION's flat v2 obs on every call instead.
+ * All substituted methods are root-state ones — selection 'value' (whose 1-ply lookahead
+ * calls value() on per-candidate next-state obs) is rejected before this shim is built.
+ */
+function withFixedObs(policy: NeuralPolicy, obs: number[]): NeuralPolicy {
+	const p = policy as unknown as {
+		scoreCandidates(o: number[], c: number[][]): number[];
+		probs(o: number[], c: number[][], t?: number): number[];
+		value(o: number[]): number;
+		farmValue(o: number[]): number;
+		routeMode(o: number[]): number | null;
+		rewardPickScores(o: number[], c: number[][]): number[] | null;
+		rewardPickProbs(o: number[], c: number[][], t?: number): number[] | null;
+		pick(
+			o: number[],
+			c: number[][],
+			po?: { sample?: boolean; temperature?: number; rand?: () => number }
+		): number;
+	};
+	const shim = {
+		scoreCandidates: (_o: number[], c: number[][]) => p.scoreCandidates(obs, c),
+		probs: (_o: number[], c: number[][], t?: number) => p.probs(obs, c, t),
+		value: (_o: number[]) => p.value(obs),
+		farmValue: (_o: number[]) => p.farmValue(obs),
+		routeMode: (_o: number[]) => p.routeMode(obs),
+		rewardPickScores: (_o: number[], c: number[][]) => p.rewardPickScores(obs, c),
+		rewardPickProbs: (_o: number[], c: number[][], t?: number) => p.rewardPickProbs(obs, c, t),
+		pick: (
+			_o: number[],
+			c: number[][],
+			po?: { sample?: boolean; temperature?: number; rand?: () => number }
+		) => p.pick(obs, c, po)
+	};
+	return shim as unknown as NeuralPolicy;
+}
+
 export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions): RecordGameResult {
+	if (opts.policyObsVersion === 2) {
+		// The in-process TS net is v1-only: local weights (a `.w` blob) mean 62-float obs.
+		if (opts.policy && (opts.policy as unknown as { w?: unknown }).w) {
+			throw new Error(
+				'driver: policyObsVersion 2 requires a v2-capable policy (RemotePolicy over an infer socket serving arc-entity-scorer-v2); the in-process NeuralPolicy is v1-only'
+			);
+		}
+		if (opts.selection === 'value') {
+			throw new Error(
+				"driver: policyObsVersion 2 does not support selection 'value' — its 1-ply lookahead needs per-candidate next-state observations"
+			);
+		}
+	}
 	const profiles = opts.profiles;
 	const maxRounds = opts.maxRounds ?? 300;
 	const n = Math.min(profiles.length, SEAT_COLORS.length, catalog.guardians.length);
@@ -260,9 +346,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	}
 
 	const hasController = !!(opts.policy || opts.chooser);
-	const neuralSet = new Set<SeatColor>(
-		hasController ? (opts.neuralSeats ?? seats) : []
-	);
+	const neuralSet = new Set<SeatColor>(hasController ? (opts.neuralSeats ?? seats) : []);
 	const recordSet = new Set<SeatColor>(
 		opts.recordSeats ?? (opts.policy ? Array.from(neuralSet) : seats)
 	);
@@ -286,15 +370,28 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		profileBySeat[seat] = profiles[i] ?? MEDIUM_DEFAULTS;
 		const memberId = `bot-${seat}`;
 		expectOk(
-			applyGameCommand(state, { memberId, displayName: seat, role: 'player', seatColor: null }, { type: 'claimSeat', seatColor: seat }, catalog),
+			applyGameCommand(
+				state,
+				{ memberId, displayName: seat, role: 'player', seatColor: null },
+				{ type: 'claimSeat', seatColor: seat },
+				catalog
+			),
 			`claimSeat ${seat}`
 		);
 		expectOk(
-			applyGameCommand(state, { memberId, displayName: seat, role: 'player', seatColor: seat }, { type: 'selectGuardian', guardianName: guardianNames[i] }, catalog),
+			applyGameCommand(
+				state,
+				{ memberId, displayName: seat, role: 'player', seatColor: seat },
+				{ type: 'selectGuardian', guardianName: guardianNames[i] },
+				catalog
+			),
 			`selectGuardian ${seat}`
 		);
 	});
-	expectOk(applyGameCommand(state, host, { type: 'startGame', seed: opts.seed }, catalog), 'startGame');
+	expectOk(
+		applyGameCommand(state, host, { type: 'startGame', seed: opts.seed }, catalog),
+		'startGame'
+	);
 
 	const botRng = seededBotRandom(createRng(opts.seed));
 	const pickRng = createRng(opts.seed ^ 0x9e3779b9);
@@ -310,7 +407,8 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	// encodeObs is called for the same decision.
 	const recordObsV2 =
 		opts.obsVersion === 2
-			? (seat: SeatColor): number[] => flattenObsV2(encodeEntityObsV2(state, seat, catalog), catalog)
+			? (seat: SeatColor): number[] =>
+					flattenObsV2(encodeEntityObsV2(state, seat, catalog), catalog)
 			: null;
 
 	const applyHeuristic = (seat: SeatColor): boolean => {
@@ -320,7 +418,8 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			if (opts.forbidTypes?.has(cmd.type)) continue;
 			if (opts.maxStatusLevel !== undefined) {
 				const probe = applyGameCommand(state, botActorFor(state, seat), cmd, catalog);
-				if (probe.ok && (probe.state.players[seat]?.statusLevel ?? 0) > opts.maxStatusLevel) continue;
+				if (probe.ok && (probe.state.players[seat]?.statusLevel ?? 0) > opts.maxStatusLevel)
+					continue;
 			}
 			// Record covered heuristic decisions (BC label) BEFORE applying — but only for
 			// strategic command types, since recording dry-runs many candidates (expensive).
@@ -379,37 +478,71 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		);
 		const cands = withNext.map((x) => x.cmd);
 		const obs = encodeObs(state, seat);
+		// One flatten per decision, shared by the v2-driven policy and the recorded obsV2.
+		const flatV2 =
+			opts.policyObsVersion === 2 || recordObsV2
+				? flattenObsV2(encodeEntityObsV2(state, seat, catalog), catalog)
+				: null;
+		const policyObs = opts.policyObsVersion === 2 ? flatV2! : obs;
 		const feats = withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog));
 		// League opponents play their own checkpoint greedily (no exploration, no recording);
 		// the learner seat uses the configured selection + exploration and is recorded.
 		const oppPolicy = opts.opponentPolicies?.[seat];
 		const seatPolicy = oppPolicy ?? opts.policy!;
+		// Learner at policyObsVersion 2: neuralBot re-encodes v1 obs internally, so wrap the
+		// policy to substitute this decision's flat v2 obs. Opponents keep v1 nets + v1 obs.
+		const activePolicy =
+			opts.policyObsVersion === 2 && !oppPolicy && opts.policy
+				? withFixedObs(seatPolicy, flatV2!)
+				: seatPolicy;
 		const sample = oppPolicy ? false : opts.sample;
 		const idx =
 			cands.length === 1
 				? 0
 				: opts.chooser && !oppPolicy
-					? opts.chooser(obs, feats, cands, seat, state)
+					? opts.chooser(policyObs, feats, cands, seat, state)
 					: opts.selection === 'policy'
-							? policyIndexWithProgressGuard(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog)
-							: opts.selection === 'value'
-								? valueGuidedIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog)
-								: hybridIndex(seatPolicy, state, seat, withNext, { sample, temperature: opts.temperature, rand }, catalog);
+						? policyIndexWithProgressGuard(
+								activePolicy,
+								state,
+								seat,
+								withNext,
+								{ sample, temperature: opts.temperature, rand },
+								catalog
+							)
+						: opts.selection === 'value'
+							? valueGuidedIndex(
+									activePolicy,
+									state,
+									seat,
+									withNext,
+									{ sample, temperature: opts.temperature, rand },
+									catalog
+								)
+							: hybridIndex(
+									activePolicy,
+									state,
+									seat,
+									withNext,
+									{ sample, temperature: opts.temperature, rand },
+									catalog
+								);
 		if (cands.length > 1 && recordSet.has(seat) && !oppPolicy) {
 			// PPO behavior stats, only when a real softmax policy made this decision (not a
 			// custom chooser). logpOld is the temp-1 softmax — the distribution the trainer's
 			// log_softmax reproduces — regardless of the exploration temperature used to act.
+			// At policyObsVersion 2 these come from the v2 net on the v2 obs: on-policy v2 data.
 			let ppo: { logpOld: number; vPred: number } | undefined;
 			if (opts.policy && !opts.chooser) {
-				const p = opts.policy.probs(obs, feats);
+				const p = opts.policy.probs(policyObs, feats);
 				ppo = {
 					logpOld: Math.log(Math.max(p[idx], 1e-12)),
-					vPred: opts.policy.value(obs)
+					vPred: opts.policy.value(policyObs)
 				};
 			}
 			samples.push({
 				obs,
-				...(recordObsV2 ? { obsV2: recordObsV2(seat) } : {}),
+				...(recordObsV2 ? { obsV2: flatV2! } : {}),
 				cands: feats,
 				chosen: idx,
 				ret: 0,

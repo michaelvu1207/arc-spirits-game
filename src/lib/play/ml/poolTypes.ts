@@ -48,6 +48,13 @@ export interface ActorGameConfig {
 	 * (obsV2Meta(catalog)) that ml/obs_v2.py ObsV2Spec.from_meta validates against.
 	 */
 	obsVersion?: 1 | 2;
+	/**
+	 * Observation schema fed to the ACTING learner policy (driver policyObsVersion,
+	 * default 1). At 2 the learner plays on flattenObsV2 — legal only with inferSocket
+	 * (the server must hold an arc-entity-scorer-v2 checkpoint; the handshake obs_dim is
+	 * verified) and selection 'hybrid'/'policy'. logpOld/vPred become the v2 net's.
+	 */
+	policyObsVersion?: 1 | 2;
 }
 
 export interface SeatSummary {
