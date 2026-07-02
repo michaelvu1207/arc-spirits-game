@@ -64,6 +64,13 @@ export interface SeatSummary {
 	placement: number;
 	/** Final corruption status level (0 = pure). */
 	finalStatus: number;
+	/**
+	 * What drove this seat: 'neural' = ANY net (the learner OR a league-opponent
+	 * checkpoint — use GameSummary.neuralSeats to tell them apart), 'heuristic' = a
+	 * BOT_PROFILES plan. 'uniform' is reserved for live-bot parity (a null-policy
+	 * random fallback); the pool never emits it. Optional: absent on old rows.
+	 */
+	policy?: 'neural' | 'heuristic' | 'uniform';
 }
 
 /** One line of games-<workerIndex>.jsonl — the league-manager / balance-dashboard feed. */
@@ -77,6 +84,14 @@ export interface GameSummary {
 	finished: boolean;
 	stalled: boolean;
 	samples: number;
+	/**
+	 * Seats the LEARNER policy (weightsPath / inferSocket) drove in this game —
+	 * league-opponent checkpoint seats are excluded. The per-seat attribution that
+	 * makes "did the learner itself corrupt?" answerable from summaries alone
+	 * (ml/dashboard.py learner corruption column). Empty on heuristic-only games;
+	 * absent on rows written before this field existed.
+	 */
+	neuralSeats?: SeatColor[];
 	perSeat: SeatSummary[];
 	wallMs: number;
 }

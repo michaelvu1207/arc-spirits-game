@@ -91,6 +91,14 @@ describe('actor pool', () => {
 			expect(res.games).toBe(seeds.length);
 			expect(res.samples).toBeGreaterThan(0);
 
+			// Learner attribution: a weights-driven game marks every seat neural, and all
+			// of them belong to the learner (no opponentWeights here).
+			if (config.weightsPath) {
+				const s0 = res.summaries[0];
+				expect(s0.neuralSeats).toEqual(s0.perSeat.map((p) => p.seat));
+				expect(s0.perSeat.every((p) => p.policy === 'neural')).toBe(true);
+			}
+
 			// Pinned paired-row contract (docs/encoder-v2.md): obs stays v1 62-float,
 			// obsV2 carries the flat array, meta nests obsV2Meta under "obs_v2".
 			const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
@@ -124,6 +132,25 @@ describe('actor pool', () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	}, 300_000);
+
+	it('heuristic-only games attribute no neural seats', async () => {
+		const dir = tempDir('attr');
+		try {
+			const res = await runActorPool({
+				seeds: [62_000, 62_001],
+				outDir: dir,
+				workers: 1,
+				config: { seats: 4, maxRounds: 30, profiles: ['medium'] }
+			});
+			expect(res.games).toBe(2);
+			for (const s of res.summaries) {
+				expect(s.neuralSeats).toEqual([]);
+				expect(s.perSeat.every((p) => p.policy === 'heuristic')).toBe(true);
+			}
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
 
 	it('policy-obs-version 2 without an infer socket is rejected with a clear error', async () => {
 		const dir = tempDir('pov2');

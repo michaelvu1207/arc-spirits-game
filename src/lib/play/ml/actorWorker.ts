@@ -79,6 +79,14 @@ export function runActorGames(
 	// Identify the generator by the server's actual checkpoint when remote (the socket
 	// path says nothing about which weights produced the games).
 	const weightsOrProfiles = remote?.info.weights ?? config.weightsPath ?? config.profiles.join(',');
+	// Per-seat policy attribution, mirroring the driver's seat routing: with a learner
+	// policy, neural seats = config.neuralSeats ?? all seats; opponentWeights seats play
+	// their OWN checkpoint and are excluded from the learner's neuralSeats list.
+	const opponentSeats = new Set(Object.keys(config.opponentWeights ?? {}) as SeatColor[]);
+	const isNeuralSeat = (seat: SeatColor): boolean =>
+		!!policy && (config.neuralSeats ? config.neuralSeats.includes(seat) : true);
+	const isLearnerSeat = (seat: SeatColor): boolean =>
+		isNeuralSeat(seat) && !opponentSeats.has(seat);
 
 	let samplesTotal = 0;
 	try {
@@ -115,6 +123,7 @@ export function runActorGames(
 				finished: r.finished,
 				stalled: r.stalled,
 				samples: r.samples.length,
+				neuralSeats: seatList.filter(isLearnerSeat),
 				perSeat: seatList.map((seat) => ({
 					seat,
 					finalVP: r.finalVP[seat] ?? 0,
@@ -122,7 +131,8 @@ export function runActorGames(
 						1 +
 						seatList.filter((o) => o !== seat && (r.finalVP[o] ?? 0) > (r.finalVP[seat] ?? 0))
 							.length,
-					finalStatus: r.finalState?.players[seat]?.statusLevel ?? 0
+					finalStatus: r.finalState?.players[seat]?.statusLevel ?? 0,
+					policy: isNeuralSeat(seat) ? ('neural' as const) : ('heuristic' as const)
 				})),
 				wallMs: Math.round(wallMs * 10) / 10
 			};

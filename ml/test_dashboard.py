@@ -21,12 +21,15 @@ from dashboard import gauntlet_tables, league_tables, summarize_games
 ML_DIR = Path(__file__).parent
 
 
-def game_row(seed, labels, placements, statuses, vps=None, rounds=20, finished=True):
-    """One GameSummary row. labels: per-seat weightsOrProfiles list or single str."""
+def game_row(seed, labels, placements, statuses, vps=None, rounds=20, finished=True,
+             neural_seats=None):
+    """One GameSummary row. labels: per-seat weightsOrProfiles list or single str.
+    neural_seats: LEARNER-seat attribution (GameSummary.neuralSeats); None = old-format
+    row without the field."""
     seat_names = ["Red", "Blue", "Orange", "Green"][: len(placements)]
     vps = vps or [10 - 2 * (p - 1) for p in placements]
     winner = seat_names[placements.index(1)]
-    return {
+    row = {
         "seed": seed,
         "seats": len(placements),
         "weightsOrProfiles": labels,
@@ -42,6 +45,9 @@ def game_row(seed, labels, placements, statuses, vps=None, rounds=20, finished=T
         ],
         "wallMs": 100,
     }
+    if neural_seats is not None:
+        row["neuralSeats"] = neural_seats
+    return row
 
 
 def write_games(d: Path, rows: list[dict], name: str = "games-0.jsonl") -> None:
@@ -132,9 +138,14 @@ def make_league_fixture(d: Path) -> None:
     write_games(d / "league" / "data" / "gen1" / "main-0_eval", [
         game_row(9, "ck", [1, 2], [3, 3]),
     ])
-    # gen2: all clean.
+    # gen2: all clean, WITH learner attribution (neuralSeats).
     write_games(d / "league" / "data" / "gen2" / "main-0", [
-        game_row(3, "ck", [1, 2, 3, 4], [0, 0, 0, 0]),
+        game_row(3, "ck", [1, 2, 3, 4], [0, 0, 0, 0], neural_seats=["Red"]),
+    ])
+    # gen3: attribution separates learner from field — learner (Red) corrupted,
+    # 2 of 4 seats corrupt overall.
+    write_games(d / "league" / "data" / "gen3" / "main-0", [
+        game_row(4, "ck", [1, 2, 3, 4], [3, 3, 0, 0], neural_seats=["Red"]),
     ])
 
 
@@ -161,7 +172,13 @@ def test_league_tables():
     assert c[1]["games"] == 2
     assert c[1]["corruptSeatPct"] == 37.5      # 3 of 8 seats (eval dir excluded)
     assert c[1]["winnerCorruptPct"] == 50.0    # 1 of 2 finished winners
+    assert c[1]["learnerCorruptPct"] is None   # old-format rows: no neuralSeats
     assert c[2]["corruptSeatPct"] == 0.0 and c[2]["winnerCorruptPct"] == 0.0
+    assert c[2]["learnerCorruptPct"] == 0.0    # attributed, learner clean
+    # gen3: the learner-only % (100) diverges from the all-seats % (50) — the point.
+    assert c[3]["corruptSeatPct"] == 50.0
+    assert c[3]["learnerCorruptPct"] == 100.0
+    assert c[3]["winnerCorruptPct"] == 100.0
 
 
 # ---------------------------------------------------------------------------

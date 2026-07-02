@@ -19,12 +19,13 @@ Commands:
 
 league/gauntlet print markdown to stdout (--json for machine output).
 
-Corruption attribution caveat: GameSummary does not record which seats were the
-learner vs. league opponents, so per-lane corruption is computed over ALL seats
-of that lane's training-pool games (data/gen*/<lane>/, _eval dirs excluded).
-winnerCorruptPct — the share of finished games whose WINNER ended at status 3 —
-is the sharper corruption-attractor signal: it answers "does winning pull you
-into corruption?" independent of seat attribution.
+Corruption attribution: rows written since GameSummary.neuralSeats landed carry
+per-seat learner attribution, so learnerCorruptPct (finalStatus==3 share over the
+LEARNER's seats only) answers "did the learner itself corrupt?" directly. Rows
+without neuralSeats fall back to corruptSeatPct — ALL seats of that lane's
+training-pool games (data/gen*/<lane>/, _eval dirs excluded). winnerCorruptPct —
+the share of finished games whose WINNER ended at status 3 — remains the
+attribution-free corruption-attractor signal.
 """
 from __future__ import annotations
 
@@ -186,6 +187,7 @@ def league_tables(league_dir: str | Path, corruption: bool = True) -> dict:
                     if lane_dir.name.endswith("_eval"):
                         continue  # training-pool games only (see attribution caveat)
                     n_games = n_seats = n_corrupt = n_finished = n_winner_corrupt = 0
+                    n_learner_seats = n_learner_corrupt = 0
                     for row in load_rows(str(lane_dir)):
                         seats = row.get("perSeat") or []
                         if not seats:
@@ -193,6 +195,15 @@ def league_tables(league_dir: str | Path, corruption: bool = True) -> dict:
                         n_games += 1
                         n_seats += len(seats)
                         n_corrupt += sum(1 for s in seats if s.get("finalStatus") == 3)
+                        # Learner-only attribution (GameSummary.neuralSeats = seats the
+                        # LEARNER policy drove; league-opponent seats excluded upstream).
+                        learners = set(row.get("neuralSeats") or [])
+                        if learners:
+                            for s in seats:
+                                if s.get("seat") in learners:
+                                    n_learner_seats += 1
+                                    if s.get("finalStatus") == 3:
+                                        n_learner_corrupt += 1
                         winner = row.get("winnerSeat")
                         if row.get("finished") and winner is not None:
                             n_finished += 1
@@ -203,6 +214,9 @@ def league_tables(league_dir: str | Path, corruption: bool = True) -> dict:
                         out["corruption"].setdefault(lane_dir.name, {})[gen] = {
                             "games": n_games,
                             "corruptSeatPct": pct(n_corrupt, n_seats),
+                            # None when no row carried neuralSeats (pre-attribution data).
+                            "learnerCorruptPct": pct(n_learner_corrupt, n_learner_seats)
+                            if n_learner_seats else None,
                             "winnerCorruptPct": pct(n_winner_corrupt, n_finished),
                         }
     return out
@@ -338,12 +352,17 @@ def render_league_md(t: dict) -> str:
         for lane in sorted(t["corruption"]):
             for gen in sorted(t["corruption"][lane]):
                 c = t["corruption"][lane][gen]
-                rows.append([lane, gen, c["games"], c["corruptSeatPct"], c["winnerCorruptPct"]])
+                lc = c.get("learnerCorruptPct")
+                rows.append([lane, gen, c["games"], c["corruptSeatPct"],
+                             lc if lc is not None else c["corruptSeatPct"],
+                             c["winnerCorruptPct"]])
         lines.append(md_table(
-            ["lane", "gen", "games", "corrupt seats %", "winner corrupt %"], rows))
-        lines += ["", "_corrupt seats % = share of ALL seats in the lane's pool games "
-                  "(GameSummary has no per-seat policy attribution); winner corrupt % = "
-                  "share of finished games whose winner ended corrupted._"]
+            ["lane", "gen", "games", "corrupt seats %", "learner corrupt %",
+             "winner corrupt %"], rows))
+        lines += ["", "_learner corrupt % = finalStatus==3 share over the LEARNER's seats "
+                  "only (GameSummary.neuralSeats); falls back to the all-seats number for "
+                  "rows without attribution. corrupt seats % = share of ALL seats; winner "
+                  "corrupt % = share of finished games whose winner ended corrupted._"]
     return "\n".join(lines)
 
 
