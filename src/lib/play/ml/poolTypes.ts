@@ -35,6 +35,21 @@ export interface ActorGameConfig {
 	recordSeats?: SeatColor[];
 	/** League play: per-seat opponent checkpoint weight files (seat plays its own policy, greedy, unrecorded). */
 	opponentWeights?: Partial<Record<SeatColor, string>>;
+	/**
+	 * Expert-iteration Gumbel search during generation. Searched decisions (nav +
+	 * encounter, learner seats) play the search result and record `pi` — the
+	 * alphazero-mode policy target. `frac` < 1 = playout-cap randomization: only
+	 * that fraction of eligible decisions gets the (expensive) search + pi.
+	 */
+	search?: {
+		sims: number;
+		navTemperature?: number;
+		/** Leaf rollouts: 'policy' = self-model hybridIndex (slow, unbiased); 'heuristic' = medium profile. */
+		rollout?: 'policy' | 'heuristic';
+		frac?: number;
+		horizonRounds?: number;
+		valueWeight?: number;
+	};
 	/** Command types stripped from neural seats' legal sets (hard behavioral constraint). */
 	forbidTypes?: string[];
 	maxStatusLevel?: number;

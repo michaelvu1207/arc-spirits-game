@@ -129,6 +129,19 @@ export interface LeagueConfig {
 	 * oversubscribing cores.
 	 */
 	matchupConcurrency?: number;
+	/**
+	 * Expert-iteration search during data generation (learner seats, v1 lanes):
+	 * passed through to ActorGameConfig.search. Pair with mode 'alphazero' so the
+	 * trainer consumes the recorded pi targets.
+	 */
+	search?: {
+		sims: number;
+		navTemperature?: number;
+		rollout?: 'policy' | 'heuristic';
+		frac?: number;
+		horizonRounds?: number;
+		valueWeight?: number;
+	};
 	selection: 'hybrid' | 'value' | 'policy';
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;

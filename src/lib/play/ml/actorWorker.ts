@@ -17,10 +17,13 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { profileFor } from '../server/botPolicy';
+import { createRng, nextInt } from '../rng';
 import type { GameCommand, PlayCatalog, SeatColor } from '../types';
 import { OBS_DIM } from './encode';
 import { obsV2Meta } from './encodeV2';
 import { playRecordingGame } from './driver';
+import { planDecisionGumbel } from './gumbelPlanner';
+import { hybridIndex } from './neuralBot';
 import { appendSamples, loadWeightsIfPresent } from './nodeIo';
 import { asNeuralPolicy, RemotePolicy } from './inferenceClient';
 import type { NeuralPolicy } from './net';
@@ -92,6 +95,36 @@ export function runActorGames(
 	try {
 		for (const seed of seeds) {
 			const t0 = performance.now();
+			// Expert-iteration searcher: deterministic per (seed, decision index); the
+			// frac draw shares the stream, so runs are exactly reproducible.
+			let searcher: ((st: Parameters<typeof planDecisionGumbel>[0], seat: SeatColor, withNext: Parameters<typeof planDecisionGumbel>[4]) => { index: number; pi: number[] } | null) | undefined;
+			if (config.search && policy) {
+				const sc = config.search;
+				const frac = sc.frac ?? 1;
+				const searchRng = createRng((seed ^ 0x517cc1b7) >>> 0 || 1);
+				const uni = (): number => (nextInt(searchRng, 1_073_741_824) + 0.5) / 1_073_741_824;
+				let decisionN = 0;
+				searcher = (st, seat, withNext) => {
+					if (st.phase !== 'navigation' && st.phase !== 'encounter') return null;
+					if (withNext.length < 2) return null;
+					decisionN += 1;
+					if (frac < 1 && uni() >= frac) return null;
+					const res = planDecisionGumbel(st, seat, catalog, policy!, withNext, {
+						simulations: sc.sims,
+						horizonRounds: sc.horizonRounds ?? 6,
+						valueWeight: sc.valueWeight ?? 0.5,
+						seed: (seed * 2654435761 + st.round * 7919 + decisionN * 104729) >>> 0,
+						temperature: st.phase === 'navigation' ? (sc.navTemperature ?? 0.8) : 0,
+						...(sc.rollout === 'heuristic'
+							? {}
+							: {
+									rolloutChoose: (rs, rSeat, rWithNext) =>
+										hybridIndex(policy!, rs, rSeat, rWithNext, { sample: false }, catalog)
+								})
+					});
+					return res ? { index: res.index, pi: res.pi } : null;
+				};
+			}
 			const r = playRecordingGame(catalog, {
 				seed,
 				profiles,
@@ -107,7 +140,8 @@ export function runActorGames(
 				maxStatusLevel: config.maxStatusLevel,
 				gamma: config.gamma,
 				obsVersion: config.obsVersion,
-				policyObsVersion: config.policyObsVersion
+				policyObsVersion: config.policyObsVersion,
+				searcher
 			});
 			const wallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);

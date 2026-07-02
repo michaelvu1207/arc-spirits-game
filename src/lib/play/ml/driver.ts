@@ -132,6 +132,19 @@ export interface RecordGameOptions {
 		withNext: LegalAction[]
 	) => number;
 	/**
+	 * Expert-iteration search hook (learner seats only). Called before the
+	 * selection modes; a non-null result plays `index` AND records `pi` (the
+	 * search-improved distribution over the candidate set) into the sample row —
+	 * the policy target train.py --mode alphazero consumes. Return null to fall
+	 * through to the configured selection (playout-cap randomization: search a
+	 * fraction of decisions, record pi only for those).
+	 */
+	searcher?: (
+		state: PublicGameState,
+		seat: SeatColor,
+		withNext: LegalAction[]
+	) => { index: number; pi: number[] } | null;
+	/**
 	 * League play: per-seat opponent policies. A seat listed here is driven by ITS OWN policy
 	 * (a sampled past checkpoint / exploiter), instead of `opts.policy` or a heuristic — so the
 	 * learner trains against a diverse, strong, self-generated field rather than one weak bot.
@@ -504,10 +517,14 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		// decision instead of two. Pure-function nets are order-indifferent.
 		const behaviorProbs =
 			willRecord && opts.policy && !opts.chooser ? opts.policy.probs(policyObs, feats) : null;
+		const searched =
+			opts.searcher && !oppPolicy && cands.length > 1 ? opts.searcher(state, seat, withNext) : null;
 		const idx =
 			cands.length === 1
 				? 0
-				: opts.chooser && !oppPolicy
+				: searched
+					? searched.index
+					: opts.chooser && !oppPolicy
 					? opts.chooser(policyObs, feats, cands, seat, state, withNext)
 					: opts.selection === 'policy'
 						? policyIndexWithProgressGuard(
@@ -550,6 +567,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			samples.push({
 				obs,
 				...(recordObsV2 ? { obsV2: flatV2! } : {}),
+				...(searched ? { pi: searched.pi } : {}),
 				cands: feats,
 				chosen: idx,
 				ret: 0,
