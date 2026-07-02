@@ -164,8 +164,9 @@ def load_dims_from_meta(data_dir: str | Path) -> tuple[int, int]:
             meta = json.load(f)
         return int(meta["obs_dim"]), int(meta["act_dim"])
 
-    # Fallback: infer from first JSONL line
-    jsonl_files = sorted(data_dir.glob("*.jsonl"))
+    # Fallback: infer from first JSONL line. Skip the actor pool's games-*.jsonl
+    # per-game summaries (no obs/cands keys — games-0.jsonl sorts before shard-0.jsonl).
+    jsonl_files = sorted(p for p in data_dir.glob("*.jsonl") if not p.name.startswith("games-"))
     if not jsonl_files:
         raise FileNotFoundError(f"No meta.json or *.jsonl in {data_dir}")
     with open(jsonl_files[0]) as f:
