@@ -38,9 +38,15 @@ export function pfspWeight(winrate: number, cfg: PfspConfig): number {
 	return Math.max(PFSP_WEIGHT_FLOOR, raw);
 }
 
-/** A member that can actually sit in a seat: a heuristic profile or a checkpoint. */
+/**
+ * A member that can sit in an OPPONENT seat: a heuristic profile or a v1-JSON
+ * checkpoint (opponents always load in-process — v1-JSON-only). A v2 member
+ * qualifies through its distilled student; a v2 learner with only a .pt does
+ * NOT (the .pt plays via the lane's inference server, learner-side only).
+ */
 export function isPlayable(m: LeagueMember): boolean {
-	return !!(m.profile || m.weightsPath || m.initFrom);
+	if (m.profile) return true;
+	return [m.distilledPath, m.weightsPath, m.initFrom].some((p) => !!p && p.endsWith('.json'));
 }
 
 /** The candidate opponent pool for a learner, by lane rules (see header). */

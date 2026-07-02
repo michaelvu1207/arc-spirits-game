@@ -33,19 +33,32 @@
  * exploiter) plays its first generation HEURISTIC-driven (profile-based, BC-style
  * samples for the learner seat) and trains from scratch on those; from gen 2 it
  * plays its own ckpt.
+ *
+ * v2 lanes (config.laneModel[id] === 'v2'): the lane trains arc-entity-scorer-v2
+ * .pt checkpoints (train.py --model v2) on obsVersion-2 paired rows, and PLAYS
+ * through a manager-owned ml/infer_server.py on a per-lane socket
+ * (policyObsVersion 2) — see the inference-server section below for the spawn /
+ * SIGHUP-hot-swap / kill lifecycle. Because the gauntlet harness and in-process
+ * opponent seats are v1-JSON-only, a v2 member reaches both through its DISTILLED
+ * student (ml/distill.py): "v2 gauntlet = distilled proxy", refreshed at every
+ * promotion check (or every gen with config.v2.distillEveryGen). TODO: gauntlet
+ * the v2 net directly through the socket and retire the proxy.
  */
 
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import {
 	appendFileSync,
 	copyFileSync,
 	existsSync,
 	mkdirSync,
+	openSync,
 	readdirSync,
 	readFileSync,
 	renameSync,
+	rmSync,
 	writeFileSync
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { createRng, nextInt } from '../../rng';
@@ -119,7 +132,11 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 		paths: { ...base.paths, ...over.paths },
 		...(base.baselineElos || over.baselineElos
 			? { baselineElos: { ...base.baselineElos, ...over.baselineElos } }
-			: {})
+			: {}),
+		...(base.laneModel || over.laneModel
+			? { laneModel: { ...base.laneModel, ...over.laneModel } }
+			: {}),
+		...(base.v2 || over.v2 ? { v2: { ...base.v2, ...over.v2 } } : {})
 	};
 }
 
@@ -171,6 +188,10 @@ export function seedRoster(config: LeagueConfig): LeagueMember[] {
 	}
 	for (let i = 0; i < config.lanes.leagueExploiter; i++) {
 		members.push({ id: `league_exploiter-${i}`, kind: 'league_exploiter', createdGen: 0, matchStats: {} });
+	}
+	for (const m of members) {
+		const model = config.laneModel?.[m.id];
+		if (model) m.model = model;
 	}
 	return members;
 }
@@ -226,12 +247,19 @@ export function promotionBar(members: LeagueMember[]): number {
 /**
  * Stamp seeded frozen members with baseline Elos: config map first (by member id
  * or weights path), then the committed ml/gauntlet_results scan — matched on the
- * exact weights path, falling back to byte-identity with a scored file (the live
- * policy-weights.json is a byte-identical copy of the traceq anchor, scored under
- * its shipped path; basenames collide across meta_runs so paths alone can't map it).
+ * exact weights path, falling back to byte-identity with a scored file (anchors
+ * are often byte-copies scored under another path; basenames collide across
+ * meta_runs so paths alone can't map them). The identity fallback assumes scored
+ * artifacts are immutable; a RE-SHIPPED path (e.g. the live policy-weights.json
+ * after a promotion) simply stops matching its old score — stamp such members
+ * via config.baselineElos, or re-gauntlet their immutable meta_runs path.
  */
-export function stampBaselineElos(members: LeagueMember[], config: LeagueConfig): void {
-	const scanned = readGauntletBaselines();
+export function stampBaselineElos(
+	members: LeagueMember[],
+	config: LeagueConfig,
+	resultsDir?: string
+): void {
+	const scanned = readGauntletBaselines(resultsDir);
 	const scoredBytes = new Map<string, Buffer>();
 	const bytesOf = (path: string): Buffer | undefined => {
 		if (!scoredBytes.has(path)) {
@@ -304,10 +332,175 @@ function memberById(state: LeagueState, id: string): LeagueMember {
 	return m;
 }
 
-/** The weights an opponent member plays with (frozen path, or a learner's current ckpt). */
+/**
+ * The v1-JSON weights a member plays with when sitting in an OPPONENT seat
+ * (opponents always load in-process, v1-JSON-only). v2 members are represented
+ * by their distilled student; a v2 lane's .pt/initFrom .pt never qualifies.
+ */
 function playWeights(m: LeagueMember): string | undefined {
-	return m.weightsPath ?? m.initFrom;
+	return [m.distilledPath, m.weightsPath, m.initFrom].find((p) => !!p && p.endsWith('.json'));
 }
+
+/** Model family of a learner lane (config wins over the stamped member field). */
+export function laneModelOf(config: LeagueConfig, m: LeagueMember): 'v1' | 'v2' {
+	return config.laneModel?.[m.id] ?? m.model ?? 'v1';
+}
+
+/** The .pt a v2 learner currently plays/warm-starts from (current ckpt, else initFrom). */
+function lanePt(m: LeagueMember): string | undefined {
+	if (m.ptPath) return m.ptPath;
+	return m.initFrom?.endsWith('.pt') ? m.initFrom : undefined;
+}
+
+// ── v2 inference servers (manager-owned child processes) ────────────────────
+//
+// One ml/infer_server.py per v2 lane, serving the lane's LIVE checkpoint
+// (<checkpoints>/<lane>-live.pt) on a per-lane unix socket. After each training
+// step the new .pt (+ sibling manifest) is copied over the live path and the
+// server is SIGHUP'd to hot-swap in place; the swap is CONFIRMED by watching the
+// server log for its reload line before any eval runs (an eval on stale weights
+// would silently corrupt matchStats). Servers persist across generations within
+// one process; stopInferServers() kills them (runGenerations' finally, the CLI,
+// tests) and a process-exit hook backstops crashes.
+
+interface InferServerEntry {
+	laneId: string;
+	child: ChildProcess;
+	socket: string;
+	logPath: string;
+	livePt: string;
+}
+
+const inferServers = new Map<string, InferServerEntry>();
+
+const manifestOf = (pt: string): string => pt.replace(/\.pt$/, '.manifest.json');
+
+/** Copy a .pt checkpoint together with its sibling .manifest.json. */
+function copyCkptPair(src: string, dst: string): void {
+	if (resolve(src) === resolve(dst)) return;
+	copyFileSync(resolve(src), resolve(dst));
+	if (!existsSync(manifestOf(resolve(src)))) {
+		throw new Error(`league: v2 checkpoint ${src} is missing its sibling ${manifestOf(src)}`);
+	}
+	copyFileSync(manifestOf(resolve(src)), manifestOf(resolve(dst)));
+}
+
+function logTail(path: string, lines = 15): string {
+	if (!existsSync(path)) return '(no log)';
+	return readFileSync(path, 'utf8').trim().split('\n').slice(-lines).join('\n');
+}
+
+function countInLog(path: string, needle: string): number {
+	if (!existsSync(path)) return 0;
+	return readFileSync(path, 'utf8').split(needle).length - 1;
+}
+
+async function waitFor(
+	cond: () => boolean,
+	timeoutMs: number,
+	what: string,
+	diag: () => string
+): Promise<void> {
+	const t0 = Date.now();
+	while (!cond()) {
+		if (Date.now() - t0 > timeoutMs) {
+			throw new Error(`league: timed out (${timeoutMs}ms) waiting for ${what}\n${diag()}`);
+		}
+		await new Promise((r) => setTimeout(r, 250));
+	}
+}
+
+/** Start (or reuse) the lane's inference server, serving `ptSource` as the live ckpt. */
+export async function ensureInferServer(
+	config: LeagueConfig,
+	root: string,
+	laneIdx: number,
+	laneId: string,
+	ptSource: string
+): Promise<InferServerEntry> {
+	const existing = inferServers.get(laneId);
+	if (existing && existing.child.exitCode === null) return existing;
+	inferServers.delete(laneId);
+
+	const p = leaguePaths(root);
+	const livePt = join(p.checkpoints, `${laneId}-live.pt`);
+	copyCkptPair(ptSource, livePt);
+	// tmpdir keeps the socket path under the ~104-char unix limit (league roots
+	// in tests live deep under /var/folders); the log stays with the league.
+	const socket = join(tmpdir(), `arcl-${process.pid}-${laneIdx}.sock`);
+	const logPath = join(p.root, `infer-${laneId}.log`);
+	const logFd = openSync(logPath, 'a');
+	const child = spawn(
+		config.pythonBin,
+		[
+			'ml/infer_server.py',
+			'--weights', livePt,
+			'--socket', socket,
+			'--device', config.v2?.device ?? 'auto',
+			'--window-ms', String(config.v2?.windowMs ?? 2),
+			'--max-batch', String(config.v2?.maxBatch ?? 512)
+		],
+		{ stdio: ['ignore', logFd, logFd] }
+	);
+	const entry: InferServerEntry = { laneId, child, socket, logPath, livePt };
+	inferServers.set(laneId, entry);
+	const serveMarks = countInLog(logPath, '[infer] serving');
+	await waitFor(
+		() => {
+			if (child.exitCode !== null) {
+				throw new Error(
+					`league: infer server for ${laneId} exited (code ${child.exitCode}) during startup\n${logTail(logPath)}`
+				);
+			}
+			return existsSync(socket) && countInLog(logPath, '[infer] serving') > serveMarks;
+		},
+		config.v2?.serverStartTimeoutMs ?? 180_000,
+		`infer server ${laneId} (${socket})`,
+		() => logTail(logPath)
+	);
+	return entry;
+}
+
+/** Swap the lane server onto `newPt` in place (copy over live path + SIGHUP), and
+ *  WAIT for the confirmed reload line so nothing ever runs on stale weights. */
+export async function hotSwapInferServer(entry: InferServerEntry, newPt: string): Promise<void> {
+	const okBefore = countInLog(entry.logPath, '[infer] reloaded weights');
+	const failBefore = countInLog(entry.logPath, 'reload FAILED');
+	copyCkptPair(newPt, entry.livePt);
+	entry.child.kill('SIGHUP');
+	await waitFor(
+		() => {
+			if (countInLog(entry.logPath, 'reload FAILED') > failBefore) {
+				throw new Error(
+					`league: infer server ${entry.laneId} FAILED to reload ${newPt}\n${logTail(entry.logPath)}`
+				);
+			}
+			return countInLog(entry.logPath, '[infer] reloaded weights') > okBefore;
+		},
+		30_000,
+		`infer server ${entry.laneId} reload of ${newPt}`,
+		() => logTail(entry.logPath)
+	);
+}
+
+/** Kill every manager-owned inference server (idempotent). */
+export function stopInferServers(): void {
+	for (const entry of inferServers.values()) {
+		try {
+			entry.child.kill('SIGTERM');
+		} catch {
+			// already gone
+		}
+		try {
+			rmSync(entry.socket, { force: true });
+		} catch {
+			// best effort
+		}
+	}
+	inferServers.clear();
+}
+
+process.once('exit', stopInferServers);
 
 interface MatchupPlan {
 	learnerSeat: SeatColor;
@@ -316,13 +509,21 @@ interface MatchupPlan {
 	config: ActorGameConfig;
 }
 
-/** Build the ActorGameConfig for one lineup, learner in seat `learnerSeatIdx`. */
+/**
+ * Build the ActorGameConfig for one lineup, learner in seat `learnerSeatIdx`.
+ * `v2` marks a v2 lane: rows record at obsVersion 2 (paired contract) and, when
+ * `v2.socket` is set, the learner PLAYS through the lane's inference server
+ * (policyObsVersion 2; in-process weightsPath is never used for the learner).
+ * A v2 lane without a socket is the fresh-net bootstrap: heuristic-driven games,
+ * still recorded at obsVersion 2 so the first .pt can train from them.
+ */
 export function buildMatchup(
 	config: LeagueConfig,
 	learner: LeagueMember,
 	opponents: LeagueMember[],
 	learnerSeatIdx: number,
-	iter: number
+	iter: number,
+	v2?: { socket?: string }
 ): MatchupPlan {
 	const seatColors = SEAT_COLORS.slice(0, config.seats) as SeatColor[];
 	const learnerSeat = seatColors[learnerSeatIdx % config.seats];
@@ -342,7 +543,8 @@ export function buildMatchup(
 		else if (opp.profile) profiles[seatColors.indexOf(seat)] = opp.profile;
 		else throw new Error(`league: opponent ${opp.id} is not playable`);
 	});
-	const learnerWeights = playWeights(learner);
+	const learnerWeights = v2 ? undefined : playWeights(learner);
+	const viaSocket = !!v2?.socket;
 	return {
 		learnerSeat,
 		oppBySeat,
@@ -351,14 +553,17 @@ export function buildMatchup(
 			maxRounds: config.maxRounds,
 			profiles,
 			weightsPath: learnerWeights ? resolve(learnerWeights) : undefined,
-			selection: config.selection,
+			// policyObsVersion 2 supports only hybrid/policy selection (actorWorker).
+			selection: viaSocket && config.selection === 'value' ? 'hybrid' : config.selection,
 			sample: config.sample,
 			temperature: config.temperature,
-			neuralSeats: learnerWeights ? [learnerSeat] : undefined,
+			neuralSeats: learnerWeights || viaSocket ? [learnerSeat] : undefined,
 			recordSeats: [learnerSeat],
 			opponentWeights: Object.keys(opponentWeights).length ? opponentWeights : undefined,
 			gamma: config.gamma,
-			iter
+			iter,
+			...(v2 ? { obsVersion: 2 as const } : {}),
+			...(viaSocket ? { inferSocket: v2!.socket, policyObsVersion: 2 as const } : {})
 		}
 	};
 }
@@ -393,7 +598,8 @@ function runTrainer(
 	config: LeagueConfig,
 	dataDir: string,
 	outCkpt: string,
-	initFrom: string | undefined
+	initFrom: string | undefined,
+	model: 'v1' | 'v2' = 'v1'
 ): number {
 	const args = [
 		'ml/train.py',
@@ -402,6 +608,15 @@ function runTrainer(
 		'--mode', config.mode,
 		'--epochs', String(config.train.epochs)
 	];
+	if (model === 'v2') {
+		args.push('--model', 'v2');
+		if (!initFrom) {
+			// Fresh-net dims (train.py ignores these on a warm start).
+			if (config.v2?.dModel !== undefined) args.push('--v2-d-model', String(config.v2.dModel));
+			if (config.v2?.layers !== undefined) args.push('--v2-layers', String(config.v2.layers));
+			if (config.v2?.heads !== undefined) args.push('--v2-heads', String(config.v2.heads));
+		}
+	}
 	if (config.train.beta !== undefined) args.push('--beta', String(config.train.beta));
 	if (config.train.batchSize !== undefined) args.push('--batch-size', String(config.train.batchSize));
 	if (initFrom) args.push('--init-from', resolve(initFrom));
@@ -411,6 +626,29 @@ function runTrainer(
 	if (r.status !== 0) {
 		const tail = (r.stderr || r.stdout || '').split('\n').slice(-25).join('\n');
 		throw new Error(`league: train.py failed (status ${r.status}):\n${tail}`);
+	}
+	return performance.now() - t0;
+}
+
+/** Distill a v2 .pt teacher into a v1-JSON student on the lane's paired data. */
+function runDistiller(
+	config: LeagueConfig,
+	dataDir: string,
+	teacherPt: string,
+	outJson: string
+): number {
+	const args = [
+		'ml/distill.py',
+		'--data', dataDir,
+		'--teacher', resolve(teacherPt),
+		'--out', resolve(outJson),
+		'--epochs', String(config.v2?.distillEpochs ?? 6)
+	];
+	const t0 = performance.now();
+	const r = spawnSync(config.pythonBin, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+	if (r.status !== 0) {
+		const tail = (r.stderr || r.stdout || '').split('\n').slice(-25).join('\n');
+		throw new Error(`league: distill.py failed (status ${r.status}):\n${tail}`);
 	}
 	return performance.now() - t0;
 }
@@ -442,10 +680,19 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 
 	for (let laneIdx = 0; laneIdx < learners.length; laneIdx++) {
 		const learner = learners[laneIdx];
+		const model = laneModelOf(config, learner);
 		const laneDir = p.laneData(gen, learner.id);
 		mkdirSync(laneDir, { recursive: true });
 		state.phase = `gen${gen}:${learner.id}:games`;
 		saveStateAtomic(root, state);
+
+		// v2 lane with a checkpoint: the learner plays through the lane's server.
+		// Without one (fresh net) the bootstrap generation is heuristic-driven.
+		let laneServer =
+			model === 'v2' && lanePt(learner)
+				? await ensureInferServer(config, root, laneIdx, learner.id, lanePt(learner)!)
+				: undefined;
+		const v2Arg = model === 'v2' ? { socket: laneServer?.socket } : undefined;
 
 		// Deterministic PFSP draw for this (gen, lane).
 		const rng = createRng(config.seedBase + gen * 1009 + laneIdx * 101);
@@ -459,7 +706,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		let samples = 0;
 		for (let m = 0; m < matchups; m++) {
 			const opps = sampleOpponents(learner, state.members, config.seats - 1, config.pfsp, rand);
-			const plan = buildMatchup(config, learner, opps, m, gen);
+			const plan = buildMatchup(config, learner, opps, m, gen, v2Arg);
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
 			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
 			const seeds = Array.from({ length: count }, (_, i) => seed0 + i);
@@ -475,18 +722,46 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			samples += res.samples;
 			foldSummaries(learner, plan, res.summaries, opponentsFaced);
 		}
-		// train.py infers dims from meta.json; without it the fallback reads the
-		// FIRST sorted *.jsonl — games-0.jsonl, which has no obs — and crashes.
+		// The pool wrote meta.json for its LAST run (dims, obs_version, and the obs_v2
+		// block v2 training needs) — MERGE our lane totals in rather than clobbering it.
+		const metaPath = join(laneDir, 'meta.json');
+		const poolMeta = existsSync(metaPath)
+			? (JSON.parse(readFileSync(metaPath, 'utf8')) as Record<string, unknown>)
+			: {};
 		writeFileSync(
-			join(laneDir, 'meta.json'),
-			JSON.stringify({ obs_dim: OBS_DIM, act_dim: ACT_DIM, gen, lane: learner.id, games, samples })
+			metaPath,
+			JSON.stringify({ obs_dim: OBS_DIM, act_dim: ACT_DIM, ...poolMeta, gen, lane: learner.id, games, samples })
 		);
 
 		// ── 3: train ─────────────────────────────────────────────────────────
 		state.phase = `gen${gen}:${learner.id}:train`;
 		saveStateAtomic(root, state);
-		const ckpt = join(p.checkpoints, `${learner.id}-gen${gen}.json`);
-		const trainMs = runTrainer(config, laneDir, ckpt, playWeights(learner));
+		const ckpt = join(p.checkpoints, `${learner.id}-gen${gen}.${model === 'v2' ? 'pt' : 'json'}`);
+		const trainInit = model === 'v2' ? lanePt(learner) : playWeights(learner);
+		const trainMs = runTrainer(config, laneDir, ckpt, trainInit, model);
+
+		// v2: hot-swap the lane server onto the fresh checkpoint (or first-start it
+		// for a lane that just trained its first net) BEFORE eval plays through it.
+		if (model === 'v2') {
+			if (laneServer && laneServer.child.exitCode === null) {
+				await hotSwapInferServer(laneServer, ckpt);
+			} else {
+				laneServer = await ensureInferServer(config, root, laneIdx, learner.id, ckpt);
+			}
+		}
+		const v2Eval = model === 'v2' ? { socket: laneServer!.socket } : undefined;
+
+		// v2 → v1 distilled student: the member's gauntlet + opponent-seat proxy.
+		let distilled: string | undefined;
+		let distillMs = 0;
+		const promotionDue =
+			learner.kind === 'main' && config.promoteEvery > 0 && gen % config.promoteEvery === 0;
+		if (model === 'v2' && (config.v2?.distillEveryGen || promotionDue)) {
+			state.phase = `gen${gen}:${learner.id}:distill`;
+			saveStateAtomic(root, state);
+			distilled = join(p.checkpoints, `${learner.id}-gen${gen}-distilled.json`);
+			distillMs = runDistiller(config, laneDir, ckpt, distilled);
+		}
 
 		// ── 4: quick eval vs the fixed field, learner seat rotating ──────────
 		state.phase = `gen${gen}:${learner.id}:eval`;
@@ -503,13 +778,14 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		let evalEncounters = 0;
 		let evalWins = 0;
 		let evalGames = 0;
-		const trained: LeagueMember = { ...learner, weightsPath: ckpt };
+		const trained: LeagueMember =
+			model === 'v2' ? { ...learner, ptPath: ckpt } : { ...learner, weightsPath: ckpt };
 		for (let r = 0; r < config.seats && evalGames < config.evalGames; r++) {
 			const count = Math.min(
 				Math.ceil(config.evalGames / config.seats),
 				config.evalGames - evalGames
 			);
-			const plan = buildMatchup(config, trained, evalField, r, gen);
+			const plan = buildMatchup(config, trained, evalField, r, gen, v2Eval);
 			plan.config.recordSeats = [];
 			plan.config.sample = false;
 			const seed0 =
@@ -530,14 +806,22 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		const evalMs = performance.now() - tEval;
 
 		// ── 5: accept + (main lanes) gauntlet promotion check ────────────────
-		learner.weightsPath = ckpt;
+		if (model === 'v2') {
+			learner.ptPath = ckpt;
+			if (distilled) learner.distilledPath = distilled;
+		} else {
+			learner.weightsPath = ckpt;
+		}
 		let promoted: boolean | null = null;
 		let gauntletElo: number | undefined;
-		if (learner.kind === 'main' && config.promoteEvery > 0 && gen % config.promoteEvery === 0) {
+		if (promotionDue) {
+			// v2 members are gauntlet-scored via their DISTILLED student — the gauntlet
+			// harness is v1-JSON-only (TODO: direct socket gauntlet).
+			const gauntletTarget = model === 'v2' ? distilled! : ckpt;
 			state.phase = `gen${gen}:${learner.id}:gauntlet`;
 			saveStateAtomic(root, state);
 			const [cmd, ...cmdArgs] = config.gauntletCmd;
-			const g = spawnSync(cmd, [...cmdArgs, ckpt], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+			const g = spawnSync(cmd, [...cmdArgs, gauntletTarget], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 			if (g.status !== 0) {
 				throw new Error(`league: gauntlet failed (status ${g.status}): ${(g.stderr || '').slice(-2000)}`);
 			}
@@ -546,12 +830,19 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			promoted =
 				gauntletElo !== undefined && gauntletElo > bestFrozen + config.promoteMarginElo;
 			if (promoted) {
-				const frozenPath = join(p.checkpoints, `frozen-${learner.id}-gen${gen}.json`);
-				copyFileSync(ckpt, frozenPath);
+				const frozenId = `frozen-${learner.id}-gen${gen}`;
+				const frozenJson = join(p.checkpoints, `${frozenId}.json`);
+				copyFileSync(gauntletTarget, frozenJson);
+				let frozenPt: string | undefined;
+				if (model === 'v2') {
+					frozenPt = join(p.checkpoints, `${frozenId}.pt`);
+					copyCkptPair(ckpt, frozenPt);
+				}
 				state.members.push({
-					id: `frozen-${learner.id}-gen${gen}`,
+					id: frozenId,
 					kind: 'frozen',
-					weightsPath: frozenPath,
+					...(model === 'v2' ? { model: 'v2' as const, ptPath: frozenPt } : {}),
+					weightsPath: frozenJson,
 					createdGen: gen,
 					eloVsAnchors: gauntletElo,
 					matchStats: {}
@@ -571,12 +862,15 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			opponents: opponentsFaced,
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
+			...(distillMs > 0 ? { distillMs: Math.round(distillMs) } : {}),
 			evalMs: Math.round(evalMs),
 			evalGames,
 			evalWinRate: evalGames > 0 ? evalWins / evalGames : 0,
 			evalPairwiseScore: evalEncounters > 0 ? evalScore / evalEncounters : 0,
 			eloEstimate: eloFromScore(evalScore, evalEncounters),
 			ckpt,
+			model,
+			...(distilled ? { distilledCkpt: distilled } : {}),
 			promoted,
 			...(gauntletElo !== undefined ? { gauntletElo } : {})
 		};
@@ -591,10 +885,17 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 	return { gen, lanes: lines };
 }
 
-/** Run `n` generations back-to-back (each resumes from persisted state). */
+/** Run `n` generations back-to-back (each resumes from persisted state). v2 lane
+ *  inference servers persist ACROSS generations here and are killed on the way
+ *  out — success or crash. Standalone runGeneration callers own that cleanup
+ *  themselves (call stopInferServers in a finally). */
 export async function runGenerations(root: string, n: number): Promise<GenerationReport[]> {
 	const out: GenerationReport[] = [];
-	for (let i = 0; i < n; i++) out.push(await runGeneration(root));
+	try {
+		for (let i = 0; i < n; i++) out.push(await runGeneration(root));
+	} finally {
+		stopInferServers();
+	}
 	return out;
 }
 
@@ -602,7 +903,14 @@ export async function runGenerations(root: string, n: number): Promise<Generatio
 export function leagueStatus(root: string): {
 	gen: number;
 	phase: string;
-	members: { id: string; kind: string; ckpt?: string; eloVsAnchors?: number; games: number }[];
+	members: {
+		id: string;
+		kind: string;
+		model?: 'v1' | 'v2';
+		ckpt?: string;
+		eloVsAnchors?: number;
+		games: number;
+	}[];
 	lastLines: HistoryLine[];
 } {
 	const { state } = loadLeague(root);
@@ -622,7 +930,8 @@ export function leagueStatus(root: string): {
 		members: state.members.map((m) => ({
 			id: m.id,
 			kind: m.kind,
-			ckpt: m.weightsPath,
+			model: m.model,
+			ckpt: m.model === 'v2' ? m.ptPath : m.weightsPath,
 			eloVsAnchors: m.eloVsAnchors,
 			games: totalGames(m.matchStats)
 		})),

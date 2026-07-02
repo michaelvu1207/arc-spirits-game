@@ -33,20 +33,52 @@ export interface MatchStats {
 export interface LeagueMember {
 	id: string;
 	kind: LeagueMemberKind;
-	/** Checkpoint weights (learners: the CURRENT ckpt, rewritten each generation;
-	 *  frozen: immutable snapshot). Heuristic members have `profile` instead. */
+	/** Model family. 'v1' (default) = TS-JSON MLP played in-process; 'v2' =
+	 *  arc-entity-scorer-v2 .pt played via a manager-owned inference server. */
+	model?: 'v1' | 'v2';
+	/** v1 JSON checkpoint (learners: the CURRENT ckpt, rewritten each generation;
+	 *  frozen: immutable snapshot). Heuristic members have `profile` instead.
+	 *  v2 members leave this unset — see ptPath/distilledPath. */
 	weightsPath?: string;
+	/** v2 members: the CURRENT arc-entity-scorer-v2 .pt (+ sibling .manifest.json). */
+	ptPath?: string;
+	/** v2 members: the latest distilled v1-JSON student (ml/distill.py). This is how
+	 *  a v2 member is gauntlet-scored (distilled proxy — TODO: direct socket gauntlet)
+	 *  AND how it sits in other lanes' seats (opponents load in-process, v1-JSON-only). */
+	distilledPath?: string;
 	/** BOT_PROFILES name for heuristic members. */
 	profile?: string;
 	/** Learner lanes only: checkpoint to warm-start from before the first
 	 *  generation trains (also plays the gen-1 games when no ckpt exists yet).
-	 *  Omit for a from-scratch (fresh-net) exploiter. */
+	 *  v1 lanes: a JSON; v2 lanes: a .pt. Omit for a from-scratch exploiter. */
 	initFrom?: string;
 	createdGen: number;
-	/** Aggregate gauntlet-v1 Elo, when this member has been gauntlet-scored. */
+	/** Aggregate gauntlet-v1 Elo, when this member has been gauntlet-scored.
+	 *  For v2 members this is the DISTILLED student's score. */
 	eloVsAnchors?: number;
 	/** Pairwise placement stats keyed by opponent member id (PFSP input). */
 	matchStats: Record<string, MatchStats>;
+}
+
+/** Inference-server + distillation knobs for v2 lanes. */
+export interface LeagueV2Config {
+	/** infer_server --device (default auto). */
+	device?: string;
+	/** infer_server --window-ms. */
+	windowMs?: number;
+	/** infer_server --max-batch. */
+	maxBatch?: number;
+	/** Fresh-model dims (train.py --v2-d-model/-layers/-heads; ignored on warm start). */
+	dModel?: number;
+	layers?: number;
+	heads?: number;
+	/** ml/distill.py epochs for the gauntlet/opponent proxy student (default 6). */
+	distillEpochs?: number;
+	/** Distill after EVERY training step (default false = only at promotion checks).
+	 *  Without this, a v2 learner is opponent-playable only as of its last promotion. */
+	distillEveryGen?: boolean;
+	/** How long to wait for the server socket + ready line (default 180000 ms). */
+	serverStartTimeoutMs?: number;
 }
 
 export interface PfspConfig {
@@ -104,6 +136,15 @@ export interface LeagueConfig {
 	 * without either source the first promotion check has no bar (bestFrozen −Inf).
 	 */
 	baselineElos?: Record<string, number>;
+	/**
+	 * Model family per learner lane, keyed by member id (e.g. {"main-0": "v2"}).
+	 * Unlisted lanes default to v1. v2 lanes train .pt checkpoints (--model v2),
+	 * generate at obsVersion 2 (paired rows), and PLAY through a manager-owned
+	 * ml/infer_server.py on a per-lane socket (policyObsVersion 2).
+	 */
+	laneModel?: Record<string, 'v1' | 'v2'>;
+	/** v2-lane knobs (server device/batching, fresh dims, distillation). */
+	v2?: LeagueV2Config;
 	pythonBin: string;
 	/** Promotion command; the candidate ckpt path is appended. Overridable in tests. */
 	gauntletCmd: string[];
@@ -134,6 +175,8 @@ export interface HistoryLine {
 	opponents: Record<string, number>;
 	poolWallMs: number;
 	trainMs: number;
+	/** v2 lanes: wall time of the ml/distill.py student run, when one happened. */
+	distillMs?: number;
 	evalMs: number;
 	evalGames: number;
 	/** Placement-1 share of the eval games. */
@@ -143,7 +186,13 @@ export interface HistoryLine {
 	/** eloFromScore over the eval pairwise encounters (quick estimate, NOT gauntlet). */
 	eloEstimate: number;
 	ckpt: string;
-	/** null = no promotion check this gen; otherwise the gauntlet verdict. */
+	/** Lane model family ('v1' when absent — pre-v2 lines). */
+	model?: 'v1' | 'v2';
+	/** v2 lanes: the distilled v1-JSON student produced this gen, when any. */
+	distilledCkpt?: string;
+	/** null = no promotion check this gen; otherwise the gauntlet verdict.
+	 *  v2 lanes are gauntlet-scored via their DISTILLED student (proxy — the
+	 *  gauntlet harness is v1-JSON-only; TODO: direct socket gauntlet). */
 	promoted: boolean | null;
 	gauntletElo?: number;
 }

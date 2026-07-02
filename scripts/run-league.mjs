@@ -63,7 +63,8 @@ if (cmd === 'init') {
 	for (const m of s.members) {
 		const elo = m.eloVsAnchors !== undefined ? `  elo=${m.eloVsAnchors}` : '';
 		const ckpt = m.ckpt ? `  ${m.ckpt}` : '';
-		console.log(`  ${m.kind.padEnd(16)} ${m.id.padEnd(28)} games=${m.games}${elo}${ckpt}`);
+		const model = m.model === 'v2' ? '  [v2]' : '';
+		console.log(`  ${m.kind.padEnd(16)} ${m.id.padEnd(28)} games=${m.games}${model}${elo}${ckpt}`);
 	}
 	for (const l of s.lastLines) {
 		console.log(

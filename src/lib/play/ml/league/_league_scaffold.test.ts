@@ -3,13 +3,28 @@
  *
  *   - PFSP math + lane rules (always runs; pure).
  *   - Roster seeding + atomic state round-trip (always runs; tmpdir).
- *   - SMOKE=1: one end-to-end micro-generation on this machine — PFSP → actor
- *     pool → ml/train.py (awr, 1 epoch) → quick eval → history line + new ckpt.
+ *   - v2-lane wiring: laneModel stamping, opponent-playability rules, buildMatchup
+ *     socket/obsVersion config (always runs; pure).
+ *   - SMOKE=1: one end-to-end v1 micro-generation — PFSP → actor pool →
+ *     ml/train.py (awr, 1 epoch) → quick eval → history line + new ckpt.
+ *   - SMOKE_V2=1: one end-to-end v2 micro-generation — heuristic bootstrap at
+ *     obsVersion 2 → train.py --model v2 (fresh tiny transformer, .pt) → manager
+ *     spawns ml/infer_server.py → eval through the socket → distill → history.
  *
- *   SMOKE=1 npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
+ *   SMOKE=1    npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
+ *   SMOKE_V2=1 npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
  */
 import { describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -23,7 +38,9 @@ import {
 	winrateVs
 } from './pfsp';
 import {
+	buildMatchup,
 	initLeague,
+	laneModelOf,
 	leaguePaths,
 	loadLeague,
 	promotionBar,
@@ -31,11 +48,14 @@ import {
 	runGeneration,
 	saveStateAtomic,
 	seedRoster,
+	stampBaselineElos,
+	stopInferServers,
 	defaultConfig
 } from './manager';
 import type { HistoryLine, LeagueMember } from './types';
 
 const SMOKE = process.env.SMOKE === '1';
+const SMOKE_V2 = process.env.SMOKE_V2 === '1';
 const LIVE_WEIGHTS = resolve(process.cwd(), 'src/lib/play/ml/policy-weights.json');
 
 function member(id: string, kind: LeagueMember['kind'], extra: Partial<LeagueMember> = {}): LeagueMember {
@@ -74,7 +94,7 @@ describe('pfsp math', () => {
 			member('lx-0', 'league_exploiter'), // fresh — not yet playable
 			member('frozen-a', 'frozen', { weightsPath: 'a.json' }),
 			member('heur-medium', 'heuristic', { profile: 'medium' })
-		];
+		]; // (all checkpoint fixtures use .json — isPlayable is v1-JSON-only for opponents)
 		const ids = (ms: LeagueMember[]): string[] => ms.map((m) => m.id).sort();
 		expect(ids(opponentPool(members[0], members))).toEqual(['frozen-a', 'heur-medium', 'mx-0']);
 		expect(ids(opponentPool(members[1], members))).toEqual(['main-0']);
@@ -89,13 +109,13 @@ describe('pfsp math', () => {
 	});
 
 	it('sampleOpponents: deterministic given the rand stream, weighted toward losses', () => {
-		const learner = member('main-0', 'main', { weightsPath: 'w' });
+		const learner = member('main-0', 'main', { weightsPath: 'w.json' });
 		learner.matchStats['easy'] = { games: 10, better: 10, worse: 0 }; // ~beaten → floor weight
 		learner.matchStats['nemesis'] = { games: 10, better: 0, worse: 10 }; // always lose → weight 1
 		const members = [
 			learner,
-			member('easy', 'frozen', { weightsPath: 'e' }),
-			member('nemesis', 'frozen', { weightsPath: 'n' })
+			member('easy', 'frozen', { weightsPath: 'e.json' }),
+			member('nemesis', 'frozen', { weightsPath: 'n.json' })
 		];
 		const cfg = { p: 2, variant: 'squared' as const };
 		const a = sampleOpponents(learner, members, 6, cfg, randFrom([0.1, 0.5, 0.9, 0.2, 0.7, 0.4]));
@@ -133,16 +153,58 @@ describe('promotion bar + baseline elos', () => {
 		try {
 			const { state } = initLeague(root);
 			const frozen = state.members.filter((m) => m.kind === 'frozen');
-			// routeexecq matches its own full-gauntlet result by exact path (192);
-			// traceq was scored under the shipped policy-weights.json path (a byte-identical
-			// copy), so it is stamped 221 via the byte-identity fallback.
+			// routeexecq matches its own full-gauntlet result by exact path (192).
+			// traceq was scored under the live policy-weights.json path (a byte-identical
+			// copy AT FREEZE) — but the live path has since been re-shipped (league-run1
+			// champion promotion), so neither path- nor byte-matching can stamp it any
+			// more. That is the fallback's documented immutability assumption working as
+			// intended; traceq's 221 now needs config.baselineElos (test below).
 			expect(frozen.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors).toBe(192);
-			expect(frozen.find((m) => m.id === 'frozen-traceq-damage-nearmiss')!.eloVsAnchors).toBe(221);
 			// Heuristic anchors do NOT participate in the promotion bar and stay unstamped.
 			expect(state.members.find((m) => m.id === 'heur-pvphunter')!.eloVsAnchors).toBeUndefined();
-			expect(promotionBar(state.members)).toBe(221);
+			expect(promotionBar(state.members)).toBeGreaterThanOrEqual(192);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it('byte-identity fallback: a byte-copy of a scored file inherits its Elo (synthetic)', () => {
+		const dir = mkdtempSync(join(tmpdir(), 'league-identity-'));
+		try {
+			const scoredPath = join(dir, 'scored.json');
+			const copyPath = join(dir, 'copy-under-another-name.json');
+			writeFileSync(scoredPath, JSON.stringify({ format: 'arc-cand-scorer-v1', w: [1, 2, 3] }));
+			copyFileSync(scoredPath, copyPath);
+			const resultsDir = join(dir, 'results');
+			mkdirSync(resultsDir);
+			writeFileSync(
+				join(resultsDir, 'scored.json'),
+				JSON.stringify({
+					gauntletVersion: 'gauntlet-v1',
+					smoke: false,
+					candidate: { kind: 'weights', ref: scoredPath },
+					timestamp: '2026-07-01T00:00:00Z',
+					eloVsAnchors: { aggregate: { elo: 314 } }
+				})
+			);
+			const members = [member('frozen-x', 'frozen', { weightsPath: copyPath })];
+			stampBaselineElos(members, defaultConfig('unused'), resultsDir);
+			expect(members[0].eloVsAnchors).toBe(314);
+			// Smoke results never stamp.
+			writeFileSync(
+				join(resultsDir, 'scored.json'),
+				JSON.stringify({
+					gauntletVersion: 'gauntlet-v1',
+					smoke: true,
+					candidate: { kind: 'weights', ref: scoredPath },
+					eloVsAnchors: { aggregate: { elo: 999 } }
+				})
+			);
+			const fresh = [member('frozen-y', 'frozen', { weightsPath: copyPath })];
+			stampBaselineElos(fresh, defaultConfig('unused'), resultsDir);
+			expect(fresh[0].eloVsAnchors).toBeUndefined();
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
 		}
 	});
 
@@ -285,5 +347,154 @@ describe('league smoke generation (SMOKE=1)', () => {
 			}
 		},
 		15 * 60 * 1000
+	);
+});
+
+describe('v2 lanes (unit)', () => {
+	it('laneModel stamps members at init; config wins over the member field', () => {
+		const root = mkdtempSync(join(tmpdir(), 'league-v2-init-'));
+		try {
+			const { config, state } = initLeague(root, { laneModel: { 'main-0': 'v2' } });
+			const main = state.members.find((m) => m.id === 'main-0')!;
+			expect(main.model).toBe('v2');
+			expect(laneModelOf(config, main)).toBe('v2');
+			expect(laneModelOf(config, state.members.find((m) => m.id === 'main_exploiter-0')!)).toBe('v1');
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it('opponent playability: a v2 .pt is learner-side only; the distilled JSON qualifies', () => {
+		const v2Learner = member('main-0', 'main', { model: 'v2', ptPath: 'ckpt/main-0-gen3.pt' });
+		expect(isPlayable(v2Learner)).toBe(false); // .pt cannot sit in an in-process opponent seat
+		v2Learner.distilledPath = 'ckpt/main-0-gen3-distilled.json';
+		expect(isPlayable(v2Learner)).toBe(true);
+		// A v2 lane's initFrom .pt must never leak into opponent seats either.
+		expect(isPlayable(member('x', 'main_exploiter', { model: 'v2', initFrom: 'w/init.pt' }))).toBe(false);
+		expect(isPlayable(member('y', 'main_exploiter', { initFrom: 'w/init.json' }))).toBe(true);
+	});
+
+	it('buildMatchup v2: socket play → inferSocket + policyObsVersion 2 + obsVersion 2', () => {
+		const config = defaultConfig('unused');
+		const learner = member('main-0', 'main', { model: 'v2', ptPath: 'ckpt/x.pt' });
+		const opps = [
+			member('heur-medium', 'heuristic', { profile: 'medium' }),
+			member('heur-hard', 'heuristic', { profile: 'hard' }),
+			member('frozen-a', 'frozen', { weightsPath: 'a.json' })
+		];
+		const plan = buildMatchup(config, learner, opps, 1, 7, { socket: '/tmp/s.sock' });
+		expect(plan.config.inferSocket).toBe('/tmp/s.sock');
+		expect(plan.config.policyObsVersion).toBe(2);
+		expect(plan.config.obsVersion).toBe(2);
+		expect(plan.config.weightsPath).toBeUndefined(); // learner never loads in-process
+		expect(plan.config.neuralSeats).toEqual([plan.learnerSeat]);
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
+		// Opponents still load in-process (frozen JSON) / by profile.
+		expect(Object.values(plan.config.opponentWeights ?? {})).toHaveLength(1);
+
+		// Bootstrap (no socket): heuristic learner, but rows still record at obsVersion 2.
+		const fresh = member('main_exploiter-0', 'main_exploiter', { model: 'v2' });
+		const boot = buildMatchup(config, fresh, opps, 0, 1, {});
+		expect(boot.config.obsVersion).toBe(2);
+		expect(boot.config.inferSocket).toBeUndefined();
+		expect(boot.config.policyObsVersion).toBeUndefined();
+		expect(boot.config.weightsPath).toBeUndefined();
+		expect(boot.config.neuralSeats).toBeUndefined();
+
+		// v1 lanes are untouched: no obsVersion/policyObsVersion/inferSocket keys.
+		const v1 = buildMatchup(config, member('m', 'main', { weightsPath: 'w.json' }), opps, 0, 1);
+		expect(v1.config.obsVersion).toBeUndefined();
+		expect(v1.config.policyObsVersion).toBeUndefined();
+		expect(v1.config.inferSocket).toBeUndefined();
+		expect(v1.config.weightsPath).toBe(resolve('w.json'));
+	});
+
+	it('buildMatchup v2 clamps value-selection to hybrid (policyObsVersion 2 constraint)', () => {
+		const config = { ...defaultConfig('unused'), selection: 'value' as const };
+		const learner = member('main-0', 'main', { model: 'v2', ptPath: 'x.pt' });
+		const opps = [
+			member('heur-medium', 'heuristic', { profile: 'medium' }),
+			member('heur-hard', 'heuristic', { profile: 'hard' }),
+			member('heur-insane', 'heuristic', { profile: 'insane' })
+		];
+		expect(buildMatchup(config, learner, opps, 0, 1, { socket: '/tmp/s' }).config.selection).toBe('hybrid');
+		expect(buildMatchup(config, learner, opps, 0, 1).config.selection).toBe('value'); // v1 path untouched
+	});
+});
+
+describe('league v2 smoke generation (SMOKE_V2=1)', () => {
+	(SMOKE_V2 ? it : it.skip)(
+		'v2 micro-generation: bootstrap → train --model v2 → server spawn → socket eval → distill',
+		async () => {
+			const root = mkdtempSync(join(tmpdir(), 'league-v2smoke-'));
+			try {
+				initLeague(root, {
+					mode: 'awr', // fresh v2 net: no logpOld until it plays, so awr for the smoke
+					gamesPerGen: 4,
+					matchupGames: 2,
+					evalGames: 2,
+					seats: 4,
+					maxRounds: 15,
+					lanes: { main: 1, mainExploiter: 0, leagueExploiter: 0 },
+					laneModel: { 'main-0': 'v2' },
+					v2: { dModel: 32, layers: 1, heads: 2, device: 'cpu', distillEpochs: 1, distillEveryGen: true },
+					train: { epochs: 1 },
+					initFrom: undefined, // fresh net — gen 1 bootstraps heuristically
+					promoteEvery: 0,
+					sample: true,
+					workers: 2
+				});
+				const report = await runGeneration(root);
+				const line = report.lanes[0];
+				expect(line.model).toBe('v2');
+				expect(line.games).toBe(4);
+				expect(line.samples).toBeGreaterThan(0);
+				expect(line.evalGames).toBe(2);
+
+				// .pt + sibling manifest checkpoint; distilled v1 student on the 62/52 contract.
+				expect(line.ckpt.endsWith('.pt')).toBe(true);
+				expect(existsSync(line.ckpt)).toBe(true);
+				expect(existsSync(line.ckpt.replace(/\.pt$/, '.manifest.json'))).toBe(true);
+				expect(line.distilledCkpt).toBeDefined();
+				const student = JSON.parse(readFileSync(line.distilledCkpt!, 'utf8')) as {
+					obs_dim: number;
+					act_dim: number;
+				};
+				expect(student.obs_dim).toBe(62);
+				expect(student.act_dim).toBe(52);
+
+				// Paired-row training data: meta kept the pool's obs_v2 block after the merge.
+				const meta = JSON.parse(
+					readFileSync(join(leaguePaths(root).laneData(1, 'main-0'), 'meta.json'), 'utf8')
+				) as { obs_version?: number; obs_v2?: unknown; lane?: string };
+				expect(meta.obs_version).toBe(2);
+				expect(meta.obs_v2).toBeDefined();
+				expect(meta.lane).toBe('main-0');
+
+				// Server lifecycle: it started, served, and the log survives in the league root.
+				const serverLog = join(leaguePaths(root).root, 'infer-main-0.log');
+				expect(existsSync(serverLog)).toBe(true);
+				expect(readFileSync(serverLog, 'utf8')).toContain('[infer] serving');
+
+				// State: v2 learner advanced on ptPath (+ distilled), never weightsPath.
+				const { state } = loadLeague(root);
+				const main = state.members.find((m) => m.id === 'main-0')!;
+				expect(main.ptPath).toBe(line.ckpt);
+				expect(main.distilledPath).toBe(line.distilledCkpt);
+				expect(main.weightsPath).toBeUndefined();
+				expect(isPlayable(main)).toBe(true); // opponent-playable via the distilled student
+
+				// eslint-disable-next-line no-console
+				console.log(
+					`[league-v2-smoke] games=${line.games} samples=${line.samples} ` +
+						`pool=${(line.poolWallMs / 1000).toFixed(1)}s train=${(line.trainMs / 1000).toFixed(1)}s ` +
+						`distill=${((line.distillMs ?? 0) / 1000).toFixed(1)}s eval=${(line.evalMs / 1000).toFixed(1)}s`
+				);
+			} finally {
+				stopInferServers();
+				rmSync(root, { recursive: true, force: true });
+			}
+		},
+		20 * 60 * 1000
 	);
 });
