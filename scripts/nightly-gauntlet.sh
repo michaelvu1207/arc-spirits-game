@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 
 CANDIDATES=("${@:-src/lib/play/ml/policy-weights.json}")
 STAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-GIT_REV=$(git rev-parse --short HEAD)
+GIT_REV=$(git rev-parse --short HEAD 2>/dev/null || echo nogit)
 
 for W in "${CANDIDATES[@]}"; do
   echo "[nightly-gauntlet] scoring $W"
