@@ -24,7 +24,7 @@
 
 import { createRng, nextInt } from '../../rng';
 
-export const GAUNTLET_VERSION = 'gauntlet-v1';
+export const GAUNTLET_VERSION = 'gauntlet-v2'; // v2 = rules v1.1 (market hole closed); seeds/anchors/metric unchanged from v1
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;

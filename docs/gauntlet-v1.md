@@ -92,3 +92,11 @@ ledger.
   the SERVER-reported checkpoint path as `candidate.ref` — never compare a
   `via: 'socket'` score with a distilled-proxy score of "the same" checkpoint without
   labeling both.
+
+## gauntlet-v2 (2026-07-02)
+Version bumped because the RULES changed under the measure (rules v1.1: market
+command family closed — docs/rules-v1.1.md). Seeds, anchor pool, and metric are
+UNCHANGED from v1. v1 numbers (incl. the 221 baseline, 268/287 champions, and
+the 920/1056 rediscovery scores) measured the exploitable ruleset and are not
+comparable to v2 numbers. First v2 baselines: see ml/gauntlet_results/ entries
+with gauntletVersion gauntlet-v2.
