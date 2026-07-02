@@ -72,3 +72,28 @@ fixed point of every trainer we have under the current rules. What remains is
 - Box gauntlet history (`/tmp/arc-bot/league/ml/gauntlet_results/history.jsonl`)
   carries all v3 promotion checks; volatile-box artifacts pulled and committed
   per milestone discipline.
+
+---
+
+## Addendum — Rules v1.2 and the new champion (same session, late evening)
+
+Michael shipped a design rule mid-session: **corrupting while already Fallen
+converts unpayable sacrifice shortfall to −1 VP each** (docs/rules-v1.2.md,
+gauntlet → v4). Effects, measured:
+
+- **Corruption meta collapsed.** v1.1 champion: 525/85.4%/29.1 → **−88/8.6%/
+  4.8 VP** (it earns ~30 and bleeds ~25 in shortfall). pvphunter −30; paragon
+  (the Good line) topped the old field at +44.
+- **From-scratch retrain under v1.2** (fair-league recipe, 50 gens, ~50s/gen):
+  −13 → 153 → 264 → 314 → 406 → **467 (gen-44: 84% win, 14.6 VP, place 1.16)**.
+  The new meta is MONSTER-DRIVEN: ~4.6 kills/game, Fallen rate 4% (was
+  77–86%). The designer's intended line ("you can win by just killing the
+  monster") is now the discovered optimum; full ladder clears (30+ VP) occur
+  but are not yet routine — VP ceiling question is now a game-pacing call.
+- **Shipped + certified:** gen-44 live (commit 8b9cfa2, contract 3/3);
+  exploiter probe **PASS at −545** (ml/gauntlet_results/probe-v12gen44.json).
+- Correction logged: the driver's per-row `kill` flag disagreed with
+  feature-decoded actions (false "zero kills" reading); decode from the
+  candidate one-hot until the flag is fixed.
+- Still open for Michael: seat-order tiebreak (mirror probe worth re-running
+  under v1.2), the 30-VP pacing question, his 20 games vs the new champion.
