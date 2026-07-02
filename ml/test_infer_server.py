@@ -100,7 +100,7 @@ def _random_request(rng: np.random.Generator, obs_dim: int, act_dim: int,
 # ---------------------------------------------------------------------------
 
 def test_correctness_matches_in_process_forward():
-    model, obs_dim, act_dim = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    model, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     rng = np.random.default_rng(0)
     server = ServerProc(device="cpu")
 
@@ -139,7 +139,7 @@ def test_correctness_matches_in_process_forward():
 
 
 def test_want_field_and_bad_request_error():
-    _, obs_dim, act_dim = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     rng = np.random.default_rng(1)
     server = ServerProc(device="cpu")
 
@@ -167,7 +167,7 @@ def test_want_field_and_bad_request_error():
 
 
 def test_concurrent_clients_no_drops():
-    _, obs_dim, act_dim = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     server = ServerProc(device="cpu")
     n_clients, n_requests = 8, 200
 
@@ -206,7 +206,7 @@ def test_concurrent_clients_no_drops():
 
 
 def test_sighup_reload_keeps_serving():
-    _, obs_dim, act_dim = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     rng = np.random.default_rng(7)
     server = ServerProc(device="cpu")
 
@@ -243,9 +243,60 @@ def test_sighup_reload_keeps_serving():
     assert np.allclose(before["value"], after["value"])
 
 
+def test_info_handshake_and_aux_heads():
+    model, obs_dim, act_dim, aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    rng = np.random.default_rng(11)
+    server = ServerProc(device="cpu")
+
+    async def run():
+        await server.wait_ready()
+        client = await InferClient.connect(server.socket_path)
+        info = (await client.info())["info"]
+        assert info["obs_dim"] == obs_dim and info["act_dim"] == act_dim, info
+        assert info["aux"] == aux, (info["aux"], aux)
+
+        obs, cands = _random_request(rng, obs_dim, act_dim)
+        obs_l = [o.tolist() for o in obs]
+        cands_l = [c.tolist() for c in cands]
+        available = [h for h, ok in aux.items() if ok]
+        missing = [h for h, ok in aux.items() if not ok]
+
+        if available:
+            resp = await client.request(obs_l, cands_l, want=available)
+            assert "error" not in resp, resp
+            with torch.no_grad():
+                obs_t = torch.from_numpy(obs)
+                if "farm_value" in available:
+                    ref = model.farm_value(obs_t).numpy()
+                    assert np.allclose(resp["farm_value"], ref, atol=1e-5)
+                if "route_mode" in available:
+                    ref = model.route_mode_logits(obs_t).numpy()
+                    assert np.allclose(resp["route_mode"], ref, atol=1e-5)
+                if "reward_pick" in available:
+                    for i, c in enumerate(cands):
+                        logits = model.reward_pick_logits(
+                            obs_t[i : i + 1],
+                            torch.from_numpy(c).unsqueeze(0),
+                            torch.ones(1, c.shape[0], dtype=torch.bool),
+                        ).squeeze(0).numpy()
+                        assert np.allclose(resp["reward_pick"][i], logits, atol=1e-5)
+        # A head the checkpoint doesn't carry must be refused, not served from random init.
+        if missing:
+            resp = await client.request(obs_l, cands_l, want=[missing[0]])
+            assert "error" in resp and "not present" in resp["error"], resp
+        await client.close()
+        return available, missing
+
+    try:
+        available, missing = asyncio.run(run())
+    finally:
+        server.stop()
+    print(f"aux heads: served={available} refused={missing}")
+
+
 def test_throughput_report():
     """Not an assertion-heavy test: measures rows/s on the auto-selected device."""
-    _, obs_dim, act_dim = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     device = "auto"  # mps on this Mac if available, else cpu
     server = ServerProc(device=device)
     rows_per_req = 32
@@ -307,6 +358,7 @@ def main() -> int:
         test_want_field_and_bad_request_error,
         test_concurrent_clients_no_drops,
         test_sighup_reload_keeps_serving,
+        test_info_handshake_and_aux_heads,
         test_throughput_report,
     ]
     failed = 0
