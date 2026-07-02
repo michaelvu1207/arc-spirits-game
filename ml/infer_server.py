@@ -1,9 +1,15 @@
 """
 Batched GPU inference server for the Arc Spirits candidate scorer.
 
-Holds one CandidateScorer loaded from an arc-cand-scorer-v1 JSON weights file
-and serves scoring requests over a Unix domain socket, coalescing rows from
-concurrent connections into single forward passes.
+Serves scoring requests over a Unix domain socket, coalescing rows from
+concurrent connections into single forward passes. --weights accepts either:
+  - arc-cand-scorer-v1 JSON (CandidateScorer MLP; obs rows = 62-float v1), or
+  - arc-entity-scorer-v2 .pt with a sibling .manifest.json (EntityCandidateScorer
+    set-transformer; obs rows = the flat arc-obs-v2 arrays, 3419 floats for the
+    frozen catalog). The manifest is the format probe, so SIGHUP can swap a
+    fixed --weights path between v1 and v2 checkpoints; the info handshake
+    reports the active format/obs_dim so RemotePolicy self-configures.
+    The v2 placement head is NOT exposed over the wire.
 
 Framing:  4-byte little-endian length prefix + JSON payload.
 Request:  {"id": <any>, "obs": [B x obs_dim], "cands": [B x C_i x act_dim],
@@ -83,14 +89,48 @@ async def read_frame(reader: asyncio.StreamReader) -> dict:
 # ---------------------------------------------------------------------------
 
 AUX_HEADS = ("farm_value", "route_mode", "reward_pick")
+FORMAT_V1 = "arc-cand-scorer-v1"
+FORMAT_V2 = "arc-entity-scorer-v2"
 
 
 def load_scorer(
     weights_path: Path, device: torch.device
-) -> tuple[CandidateScorer, int, int, dict[str, bool]]:
+) -> tuple[torch.nn.Module, int, int, dict[str, bool], str]:
+    """Load a checkpoint of either format.
+
+    Returns (model, obs_dim, act_dim, aux availability, format string). The
+    format probe is the sibling .manifest.json (v2), falling back to v1 JSON —
+    content-based, so a fixed --weights path can swap formats across SIGHUPs.
+    """
+    weights_path = Path(weights_path)
+    manifest_path = weights_path.with_suffix(".manifest.json")
+    manifest = None
+    if manifest_path.exists():
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+    if manifest is not None and manifest.get("format") == FORMAT_V2:
+        from model_v2 import load_checkpoint  # lazy: v1-only deployments never pay for it
+
+        model = load_checkpoint(weights_path, device)
+        model.eval()
+        obs_dim = model.obs_dim  # = spec.flat_length
+        if int(manifest.get("obs_flat_len", obs_dim)) != obs_dim:
+            raise ValueError(
+                f"{manifest_path.name}: obs_flat_len {manifest.get('obs_flat_len')} "
+                f"!= checkpoint flat length {obs_dim}"
+            )
+        # v2 checkpoints carry every aux head in the state_dict (trained together).
+        aux = {k: True for k in AUX_HEADS}
+        return model, obs_dim, model.act_dim, aux, FORMAT_V2
+    if weights_path.suffix == ".pt":
+        raise ValueError(
+            f"{weights_path}: .pt checkpoint without a valid sibling "
+            f"{manifest_path.name} (format {FORMAT_V2!r})"
+        )
+
     with open(weights_path) as f:
         payload = json.load(f)
-    if payload.get("format") != "arc-cand-scorer-v1":
+    if payload.get("format") != FORMAT_V1:
         raise ValueError(f"{weights_path}: unexpected format {payload.get('format')!r}")
     obs_dim = int(payload["obs_dim"])
     act_dim = int(payload["act_dim"])
@@ -108,7 +148,7 @@ def load_scorer(
     # Aux heads exist on every model instance, but only ones present in the
     # checkpoint have real weights (the rest are random init — never serve those).
     aux = {k: bool(payload.get(k)) for k in AUX_HEADS}
-    return model, obs_dim, act_dim, aux
+    return model, obs_dim, act_dim, aux, FORMAT_V1
 
 
 def resolve_device(spec: str) -> torch.device:
@@ -150,11 +190,20 @@ class InferServer:
         self.window_s = window_s
         self.max_batch_rows = max_batch_rows
         self.stats_interval = stats_interval
-        self.model, self.obs_dim, self.act_dim, self.aux = load_scorer(weights_path, device)
+        self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = load_scorer(
+            weights_path, device
+        )
+        self._v2_header = self._expected_header()
         self.queue: asyncio.Queue[_Job] = asyncio.Queue()
         self.n_reqs = 0
         self.n_rows = 0
         self.n_batches = 0
+
+    def _expected_header(self) -> np.ndarray | None:
+        """For v2, the arc-obs-v2 header every obs row must start with."""
+        if self.model_format != FORMAT_V2:
+            return None
+        return np.asarray(self.model.spec.header, dtype=np.float32)
 
     # -- request parsing ----------------------------------------------------
 
@@ -191,6 +240,15 @@ class InferServer:
         obs = np.asarray(obs_raw, dtype=np.float32)
         if obs.ndim != 2 or obs.shape[1] != self.obs_dim:
             raise ValueError(f"obs must be [B x {self.obs_dim}], got shape {obs.shape}")
+        if self._v2_header is not None:
+            # Validate the embedded arc-obs-v2 header up front so a bad row fails
+            # THIS request instead of the whole coalesced batch inside forward.
+            hlen = self._v2_header.shape[0]
+            if not bool((obs[:, :hlen] == self._v2_header).all()):
+                raise ValueError(
+                    "obs rows do not carry the arc-obs-v2 header this checkpoint "
+                    f"expects ({self.model_format}, obs_dim={self.obs_dim})"
+                )
         cands: list[np.ndarray] = []
         for i, row in enumerate(cands_raw):
             c = np.asarray(row, dtype=np.float32)
@@ -299,7 +357,7 @@ class InferServer:
                     if "info" in want:
                         result: dict[str, object] = {
                             "info": {
-                                "format": "arc-cand-scorer-v1",
+                                "format": self.model_format,
                                 "obs_dim": self.obs_dim,
                                 "act_dim": self.act_dim,
                                 "device": str(self.device),
@@ -348,13 +406,20 @@ class InferServer:
 
     def reload_weights(self) -> None:
         try:
-            model, obs_dim, act_dim, aux = load_scorer(self.weights_path, self.device)
+            model, obs_dim, act_dim, aux, fmt = load_scorer(self.weights_path, self.device)
         except Exception as e:  # noqa: BLE001 — keep serving the old model
             print(f"[infer] SIGHUP reload FAILED, keeping old weights: {e}",
                   file=sys.stderr, flush=True)
             return
-        self.model, self.obs_dim, self.act_dim, self.aux = model, obs_dim, act_dim, aux
-        print(f"[infer] reloaded weights from {self.weights_path}", file=sys.stderr, flush=True)
+        self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = (
+            model, obs_dim, act_dim, aux, fmt
+        )
+        self._v2_header = self._expected_header()
+        print(
+            f"[infer] reloaded weights from {self.weights_path} "
+            f"({self.model_format}, obs_dim={obs_dim})",
+            file=sys.stderr, flush=True,
+        )
 
 
 async def serve(args: argparse.Namespace) -> None:
@@ -380,7 +445,8 @@ async def serve(args: argparse.Namespace) -> None:
     tasks = [asyncio.create_task(server.batcher()), asyncio.create_task(server.stats_loop())]
     unix_server = await asyncio.start_unix_server(server.handle_connection, path=str(sock_path))
     print(
-        f"[infer] serving {args.weights} (obs_dim={server.obs_dim}, act_dim={server.act_dim}) "
+        f"[infer] serving {args.weights} ({server.model_format}, "
+        f"obs_dim={server.obs_dim}, act_dim={server.act_dim}) "
         f"on {sock_path} device={device} window={args.window_ms}ms max_batch={args.max_batch}",
         file=sys.stderr,
         flush=True,
@@ -450,7 +516,8 @@ class InferClient:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Batched inference server for the candidate scorer")
     p.add_argument("--weights", type=Path, default=Path("src/lib/play/ml/policy-weights.json"),
-                   help="arc-cand-scorer-v1 JSON weights file (reloaded on SIGHUP)")
+                   help="arc-cand-scorer-v1 JSON or arc-entity-scorer-v2 .pt (+ sibling "
+                        ".manifest.json) checkpoint; reloaded and re-probed on SIGHUP")
     p.add_argument("--socket", type=str, default="/tmp/arc-infer.sock",
                    help="Unix domain socket path to listen on")
     p.add_argument("--device", type=str, default="auto",

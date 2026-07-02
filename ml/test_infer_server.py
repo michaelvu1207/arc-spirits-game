@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -32,13 +33,41 @@ from infer_server import InferClient, load_scorer
 ML_DIR = Path(__file__).parent
 REPO_ROOT = ML_DIR.parent
 LIVE_WEIGHTS = REPO_ROOT / "src" / "lib" / "play" / "ml" / "policy-weights.json"
+V2_FIXTURE = ML_DIR / "data_fixtures" / "obsv2_fixture.json"
 PYTHON = str(ML_DIR / ".venv" / "bin" / "python")
+
+_v2_fixture_cache: dict | None = None
+
+
+def v2_fixture() -> dict:
+    global _v2_fixture_cache
+    if _v2_fixture_cache is None:
+        _v2_fixture_cache = json.loads(V2_FIXTURE.read_text())
+    return _v2_fixture_cache
+
+
+def make_v2_checkpoint(out_dir: Path, name: str = "v2.pt") -> Path:
+    """Fresh-init default-size v2 checkpoint saved via the official convention."""
+    from model_v2 import build_model_v2, save_checkpoint
+    from obs_v2 import ObsV2Spec
+
+    spec = ObsV2Spec.from_meta(v2_fixture()["meta"])
+    model = build_model_v2(spec, 52, torch.device("cpu"), seed=0)
+    path = Path(out_dir) / name
+    save_checkpoint(model, path)
+    return path
+
+
+def v2_obs_pool() -> np.ndarray:
+    """Real arc-obs-v2 rows: random floats would fail the embedded-header check."""
+    return np.asarray(v2_fixture()["flat"], dtype=np.float32)
 
 
 class ServerProc:
     """Spawn infer_server.py on a temp socket and wait until it accepts connections."""
 
-    def __init__(self, device: str = "cpu", window_ms: float = 2.0, max_batch: int = 512):
+    def __init__(self, device: str = "cpu", window_ms: float = 2.0, max_batch: int = 512,
+                 weights: Path | str | None = None):
         self.dir = tempfile.TemporaryDirectory()
         self.socket_path = str(Path(self.dir.name) / "infer.sock")
         self.log_path = Path(self.dir.name) / "server.log"
@@ -46,7 +75,7 @@ class ServerProc:
         self.proc = subprocess.Popen(
             [
                 PYTHON, str(ML_DIR / "infer_server.py"),
-                "--weights", str(LIVE_WEIGHTS),
+                "--weights", str(weights if weights is not None else LIVE_WEIGHTS),
                 "--socket", self.socket_path,
                 "--device", device,
                 "--window-ms", str(window_ms),
@@ -100,7 +129,7 @@ def _random_request(rng: np.random.Generator, obs_dim: int, act_dim: int,
 # ---------------------------------------------------------------------------
 
 def test_correctness_matches_in_process_forward():
-    model, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    model, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     rng = np.random.default_rng(0)
     server = ServerProc(device="cpu")
 
@@ -139,7 +168,7 @@ def test_correctness_matches_in_process_forward():
 
 
 def test_want_field_and_bad_request_error():
-    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     rng = np.random.default_rng(1)
     server = ServerProc(device="cpu")
 
@@ -167,7 +196,7 @@ def test_want_field_and_bad_request_error():
 
 
 def test_concurrent_clients_no_drops():
-    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     server = ServerProc(device="cpu")
     n_clients, n_requests = 8, 200
 
@@ -206,7 +235,7 @@ def test_concurrent_clients_no_drops():
 
 
 def test_sighup_reload_keeps_serving():
-    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     rng = np.random.default_rng(7)
     server = ServerProc(device="cpu")
 
@@ -244,7 +273,7 @@ def test_sighup_reload_keeps_serving():
 
 
 def test_info_handshake_and_aux_heads():
-    model, obs_dim, act_dim, aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    model, obs_dim, act_dim, aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     rng = np.random.default_rng(11)
     server = ServerProc(device="cpu")
 
@@ -294,9 +323,177 @@ def test_info_handshake_and_aux_heads():
     print(f"aux heads: served={available} refused={missing}")
 
 
+def test_v2_correctness_handshake_and_aux():
+    with tempfile.TemporaryDirectory() as td:
+        ckpt = make_v2_checkpoint(Path(td))
+        model, obs_dim, act_dim, aux, fmt = load_scorer(ckpt, torch.device("cpu"))
+        assert fmt == "arc-entity-scorer-v2" and obs_dim == 3419 and act_dim == 52
+        assert aux == {"farm_value": True, "route_mode": True, "reward_pick": True}
+        pool = v2_obs_pool()
+        rng = np.random.default_rng(21)
+        server = ServerProc(device="cpu", weights=ckpt)
+
+        async def run():
+            await server.wait_ready()
+            client = await InferClient.connect(server.socket_path)
+            info = (await client.info())["info"]
+            assert info["format"] == "arc-entity-scorer-v2", info
+            assert info["obs_dim"] == 3419 and info["act_dim"] == 52, info
+            assert info["aux"] == aux, info
+
+            max_ld = max_vd = 0.0
+            obs = cands = None
+            for _ in range(10):
+                B = int(rng.integers(1, 5))
+                obs = pool[rng.integers(0, pool.shape[0], size=B)]
+                cands = [
+                    rng.standard_normal((int(rng.integers(1, 9)), act_dim)).astype(np.float32)
+                    for _ in range(B)
+                ]
+                resp = await client.request(
+                    obs.tolist(), [c.tolist() for c in cands],
+                    want=["logits", "value", "farm_value", "route_mode", "reward_pick"],
+                )
+                assert "error" not in resp, resp
+                with torch.no_grad():
+                    obs_t = torch.from_numpy(obs)
+                    assert np.allclose(resp["farm_value"], model.farm_value(obs_t).numpy(), atol=1e-5)
+                    assert np.allclose(resp["route_mode"], model.route_mode_logits(obs_t).numpy(), atol=1e-5)
+                    for i in range(B):
+                        logits_t, _, value_t = model.score_single(
+                            torch.from_numpy(obs[i]), torch.from_numpy(cands[i])
+                        )
+                        ref = logits_t.squeeze(0).numpy()
+                        got = np.asarray(resp["logits"][i], dtype=np.float32)
+                        assert got.shape == ref.shape
+                        max_ld = max(max_ld, float(np.abs(got - ref).max()))
+                        max_vd = max(max_vd, abs(float(resp["value"][i]) - float(value_t.squeeze())))
+                        rp_ref = model.reward_pick_logits(
+                            obs_t[i : i + 1],
+                            torch.from_numpy(cands[i]).unsqueeze(0),
+                            torch.ones(1, cands[i].shape[0], dtype=torch.bool),
+                        ).squeeze(0).numpy()
+                        assert np.allclose(resp["reward_pick"][i], rp_ref, atol=1e-5)
+
+            # The placement head is NOT exposed over the wire.
+            bad = await client.request(obs.tolist(), [c.tolist() for c in cands], want=["placement"])
+            assert "error" in bad and "unknown want" in bad["error"], bad
+            # Rows without the arc-obs-v2 header fail per-request; connection survives.
+            junk = await client.request(
+                np.zeros((1, 3419), dtype=np.float32).tolist(),
+                [np.zeros((2, act_dim), dtype=np.float32).tolist()],
+            )
+            assert "error" in junk and "header" in junk["error"], junk
+            ok = await client.request(obs[:1].tolist(), [cands[0].tolist()])
+            assert "error" not in ok
+            await client.close()
+            return max_ld, max_vd
+
+        try:
+            max_ld, max_vd = asyncio.run(run())
+        finally:
+            server.stop()
+    print(f"v2 correctness: max_logit_diff={max_ld:.2e} max_value_diff={max_vd:.2e}")
+    assert max_ld < 1e-5, max_ld
+    assert max_vd < 1e-5, max_vd
+
+
+def test_sighup_swaps_v1_to_v2():
+    """A fixed --weights path swaps formats across SIGHUP (manifest is the probe)."""
+    with tempfile.TemporaryDirectory() as td:
+        current = Path(td) / "current"  # extensionless pointer path
+        shutil.copyfile(LIVE_WEIGHTS, current)
+        server = ServerProc(device="cpu", weights=current)
+        pool = v2_obs_pool()
+        rng = np.random.default_rng(31)
+
+        async def run():
+            await server.wait_ready()
+            client = await InferClient.connect(server.socket_path)
+            info1 = (await client.info())["info"]
+            assert info1["format"] == "arc-cand-scorer-v1" and info1["obs_dim"] == 62, info1
+            r1 = await client.request(
+                rng.standard_normal((1, 62)).tolist(), [rng.standard_normal((3, 52)).tolist()]
+            )
+            assert "error" not in r1
+
+            # Replace the SAME path with a v2 checkpoint (+ sibling manifest), then SIGHUP.
+            from model_v2 import build_model_v2, save_checkpoint
+            from obs_v2 import ObsV2Spec
+
+            spec = ObsV2Spec.from_meta(v2_fixture()["meta"])
+            save_checkpoint(build_model_v2(spec, 52, torch.device("cpu"), seed=0), current)
+            server.proc.send_signal(signal.SIGHUP)
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                if "reloaded weights" in server.log_path.read_text():
+                    break
+                await asyncio.sleep(0.1)
+            else:
+                raise TimeoutError(f"no reload log line:\n{server.log_path.read_text()}")
+
+            info2 = (await client.info())["info"]
+            assert info2["format"] == "arc-entity-scorer-v2" and info2["obs_dim"] == 3419, info2
+            assert info2["aux"] == {"farm_value": True, "route_mode": True, "reward_pick": True}
+            ok = await client.request(pool[:1].tolist(), [rng.standard_normal((3, 52)).tolist()])
+            assert "error" not in ok and len(ok["logits"][0]) == 3, ok
+            stale = await client.request(
+                rng.standard_normal((1, 62)).tolist(), [rng.standard_normal((3, 52)).tolist()]
+            )
+            assert "error" in stale, stale  # old-format rows are refused after the swap
+            await client.close()
+
+        try:
+            asyncio.run(run())
+        finally:
+            server.stop()
+
+
+def test_v2_throughput_report():
+    """v2 transformer at realistic decision shapes (B=32 rows, C=30 cands) on auto device."""
+    with tempfile.TemporaryDirectory() as td:
+        ckpt = make_v2_checkpoint(Path(td))
+        server = ServerProc(device="auto", weights=ckpt)
+        pool = v2_obs_pool()
+        rng = np.random.default_rng(41)
+        rows_per_req, n_cands = 32, 30
+        obs = pool[rng.integers(0, pool.shape[0], size=rows_per_req)].tolist()
+        cands = [rng.standard_normal((n_cands, 52)).tolist() for _ in range(rows_per_req)]
+
+        async def closed_loop(n_reqs: int) -> int:
+            client = await InferClient.connect(server.socket_path)
+            for _ in range(n_reqs):
+                resp = await client.request(obs, cands)
+                assert "error" not in resp
+            await client.close()
+            return n_reqs * rows_per_req
+
+        async def run():
+            await server.wait_ready()
+            await closed_loop(3)  # warmup
+            t0 = time.monotonic()
+            rows = await closed_loop(20)
+            single = rows / (time.monotonic() - t0)
+            t0 = time.monotonic()
+            totals = await asyncio.gather(*(closed_loop(8) for _ in range(8)))
+            eight = sum(totals) / (time.monotonic() - t0)
+            return single, eight
+
+        try:
+            single, eight = asyncio.run(run())
+            log_tail = "\n".join(server.log_path.read_text().strip().splitlines()[-3:])
+        finally:
+            server.stop()
+    print(f"v2 throughput (auto device, {rows_per_req} rows/req, {n_cands} cands/row):")
+    print(f"  single client: {single:,.0f} rows/s")
+    print(f"  8 clients:     {eight:,.0f} rows/s")
+    print(f"  server log tail:\n{log_tail}")
+    assert single > 0 and eight > 0
+
+
 def test_throughput_report():
     """Not an assertion-heavy test: measures rows/s on the auto-selected device."""
-    _, obs_dim, act_dim, _aux = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    _, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     device = "auto"  # mps on this Mac if available, else cpu
     server = ServerProc(device=device)
     rows_per_req = 32
@@ -359,7 +556,10 @@ def main() -> int:
         test_concurrent_clients_no_drops,
         test_sighup_reload_keeps_serving,
         test_info_handshake_and_aux_heads,
+        test_v2_correctness_handshake_and_aux,
+        test_sighup_swaps_v1_to_v2,
         test_throughput_report,
+        test_v2_throughput_report,
     ]
     failed = 0
     for fn in tests:
