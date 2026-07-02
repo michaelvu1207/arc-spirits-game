@@ -507,6 +507,31 @@ def build_policy_model_v2(
     return model, spec, act_dim
 
 
+# ---------------------------------------------------------------------------
+# Divergence guards (PPO/AWR explosions must never reach a checkpoint on disk)
+# ---------------------------------------------------------------------------
+
+def model_is_finite(model: torch.nn.Module) -> bool:
+    return all(torch.isfinite(p).all() for p in model.parameters())
+
+
+def snapshot_state(model: torch.nn.Module) -> dict:
+    """CPU copy of the state dict — the rolling restore point for the NaN guard."""
+    return {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+
+
+def assert_finite_weights(model: torch.nn.Module, context: str) -> None:
+    """A corrupt checkpoint must never reach disk (a NaN-weights JSON crashed
+    the fair-rules league's actors at gen 13)."""
+    for name, t in model.state_dict().items():
+        if not torch.isfinite(t).all():
+            raise ValueError(
+                f"{context}: non-finite values in parameter {name!r} — refusing to "
+                "write a corrupt checkpoint. Training diverged; lower --lr or keep "
+                "--max-grad-norm enabled."
+            )
+
+
 def train(
     data_dir: Path,
     out_path: Path,
@@ -535,6 +560,7 @@ def train(
     v2_d_model: int = 128,
     v2_layers: int = 3,
     v2_heads: int = 4,
+    max_grad_norm: float = 1.0,
 ) -> list[dict]:
     """Train and export; returns per-epoch metric dicts (used by tests)."""
     device = get_device()
@@ -550,6 +576,9 @@ def train(
         if model_version == "v2":
             from model_v2 import save_checkpoint
 
+            # save_checkpoint lives in model_v2.py (not this file's to change);
+            # the guard sits in front of it so no trainer path can write NaNs.
+            assert_finite_weights(model, "save_checkpoint")
             manifest = save_checkpoint(model, out_path)
             print(f"\nCheckpoint written: {out_path} (+ {manifest.name})")
         else:
@@ -590,6 +619,7 @@ def train(
             value_clip_eps=value_clip_eps,
             target_kl=target_kl,
             placement_coef=effective_placement_coef,
+            max_grad_norm=max_grad_norm,
         )
         export_model(model, obs_dim, act_dim)
         return history
@@ -622,6 +652,10 @@ def train(
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     history: list[dict] = []
+    # Rolling restore point: refreshed at every finite epoch boundary, so a
+    # mid-epoch divergence loses at most one epoch instead of the whole run.
+    last_finite = snapshot_state(model)
+    halted = False
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -702,7 +736,18 @@ def train(
 
             optimizer.zero_grad()
             loss.backward()
+            if max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
+            if not model_is_finite(model):
+                print(
+                    f"WARNING: non-finite weights after a step in epoch {epoch} — "
+                    "halting and restoring the last finite snapshot",
+                    file=sys.stderr,
+                )
+                model.load_state_dict(last_finite)
+                halted = True
+                break
 
             # Accuracy: argmax of logits (among valid candidates)
             # Zero out invalid candidates by setting logits to -inf before argmax
@@ -717,6 +762,8 @@ def train(
             total_route_mode_loss += route_loss.item() * len(chosen)
             total_placement_loss += placement_loss.item() * len(chosen)
 
+        if halted:
+            break
         avg_policy = total_policy_loss / total_samples
         avg_value = total_value_loss / total_samples
         avg_farm = total_farm_value_loss / total_samples
@@ -744,6 +791,7 @@ def train(
             "placement_loss": avg_placement,
             "top1_acc": accuracy,
         })
+        last_finite = snapshot_state(model)
 
     export_model(model, obs_dim, act_dim)
     return history
@@ -767,6 +815,7 @@ def export_weights(
     out_path: Path,
 ) -> None:
     """Export model weights to the TS-consumable JSON format."""
+    assert_finite_weights(model, "export_weights")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Trunk: Sequential with Linear(trunk_in,128), ReLU, Linear(128,128), ReLU, Linear(128,1)
@@ -876,6 +925,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--v2-d-model", type=int, default=128, help="v2 width (fresh models only)")
     p.add_argument("--v2-layers", type=int, default=3, help="v2 encoder layers (fresh models only)")
     p.add_argument("--v2-heads", type=int, default=4, help="v2 attention heads (fresh models only)")
+    p.add_argument("--max-grad-norm", type=float, default=1.0,
+                   help="Gradient clipping (clip_grad_norm_) in all modes; 0 disables")
     p.add_argument("--init-from", type=Path, default=None,
                    help="Optional checkpoint to warm-start from while exporting to --out")
     p.add_argument("--no-warm-start", dest="warm_start", action="store_false",
@@ -914,4 +965,5 @@ if __name__ == "__main__":
         v2_d_model=args.v2_d_model,
         v2_layers=args.v2_layers,
         v2_heads=args.v2_heads,
+        max_grad_norm=args.max_grad_norm,
     )

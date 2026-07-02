@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -350,10 +351,16 @@ def train_ppo(
     value_clip_eps: float = 0.0,
     target_kl: float | None = None,
     placement_coef: float = 0.0,
+    max_grad_norm: float = 1.0,
     seed: int | None = None,
 ) -> list[dict]:
     """K epochs of clipped-surrogate PPO over a fixed rollout buffer.
-    Returns per-epoch metric dicts (used by tests)."""
+    Returns per-epoch metric dicts (used by tests).
+
+    Divergence guards: gradient clipping (max_grad_norm, 0=off) and a NaN/Inf
+    check after every optimizer step — on a non-finite step the run halts and
+    the last finite epoch snapshot is restored, so the exported checkpoint is
+    always finite (the fair-rules league diverged at gen ~13 without this)."""
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     n = len(buffer)
     rng = np.random.default_rng(seed)
@@ -361,6 +368,8 @@ def train_ppo(
     # The placement aux head only exists on model v2.
     use_placement = placement_coef > 0 and hasattr(model, "placement_logits")
     history: list[dict] = []
+    last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    halted = False
 
     for epoch in range(1, epochs + 1):
         frac = 0.0 if epochs <= 1 else (epoch - 1) / (epochs - 1)
@@ -424,7 +433,18 @@ def train_ppo(
             )
             optimizer.zero_grad()
             loss.backward()
+            if max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
+            if not all(torch.isfinite(p).all() for p in model.parameters()):
+                print(
+                    f"WARNING: non-finite weights after a PPO step in epoch {epoch} — "
+                    "halting and restoring the last finite snapshot",
+                    file=sys.stderr,
+                )
+                model.load_state_dict(last_finite)
+                halted = True
+                break
 
             bs = len(mb)
             n_seen += bs
@@ -436,6 +456,8 @@ def train_ppo(
             tot_prob += logp_new.detach().exp().mean().item() * bs
             tot_placement += placement_loss.item() * bs
 
+        if halted:
+            break
         if n_seen:
             print(
                 f"PPO epoch {epoch}/{epochs} | "
@@ -456,6 +478,7 @@ def train_ppo(
                 "placement_loss": tot_placement / n_seen,
                 "mean_p_chosen": tot_prob / n_seen,
             })
+            last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
         if stop:
             break
     return history
