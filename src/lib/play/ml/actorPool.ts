@@ -16,13 +16,15 @@
  * land in different shards under different worker counts, but per-seed outcomes match.
  */
 import { Worker } from 'node:worker_threads';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { cpus } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import { ACT_DIM, OBS_DIM } from './encode';
+import { obsV2Meta } from './encodeV2';
+import type { PlayCatalog } from '../types';
 import type { ActorGameConfig, ActorWorkerMessage, GameSummary } from './poolTypes';
 
 export interface ActorPoolOptions {
@@ -166,11 +168,24 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 		.filter((s): s is GameSummary => s !== undefined);
 	// meta.json alongside the shards: ml/model.py's load_dims_from_meta prefers it, and
 	// without it the trainer would infer dims from the first *.jsonl alphabetically —
-	// which is games-0.jsonl (summaries, no obs), not a sample shard.
+	// which is games-0.jsonl (summaries, no obs), not a sample shard. Shape follows the
+	// pinned paired-row contract (docs/encoder-v2.md): obs_dim stays the v1 62 on every
+	// dataset, and v2 runs nest obsV2Meta under the exact key "obs_v2" — the block
+	// bc_warmstart_v2 / train.py --model v2 build their ObsV2Spec from.
 	writeFileSync(
 		join(outDir, 'meta.json'),
 		JSON.stringify(
-			{ obs_dim: OBS_DIM, act_dim: ACT_DIM, samples, games: summaries.length, workers: nWorkers },
+			{
+				obs_dim: OBS_DIM,
+				act_dim: ACT_DIM,
+				samples,
+				games: summaries.length,
+				workers: nWorkers,
+				obs_version: opts.config.obsVersion ?? 1,
+				...(opts.config.obsVersion === 2
+					? { obs_v2: obsV2Meta(JSON.parse(readFileSync(catalogPath, 'utf8')) as PlayCatalog) }
+					: {})
+			},
 			null,
 			2
 		)

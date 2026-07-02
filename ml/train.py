@@ -22,6 +22,17 @@ Losses:
 gameId/stepIdx/rStep/done/logpOld/vPred/placement on top of the usual fields)
 with clipped-surrogate PPO + GAE; see ppo.py. Old-format rows without those
 fields still train under awr/alphazero, and trajectory rows still load here.
+
+--model v2 trains the entity set-transformer (ml/model_v2.py) instead of the
+v1 MLP, on the PAIRED-ROW contract (authoritative, see bc_warmstart_v2.py):
+rows keep `obs` = the 62-float v1 summary AND carry the flat arc-obs-v2 array
+(3419 floats for the frozen catalog) under `obsV2`. --model v2 reads obsV2 and
+skips rows without it (counted); the layout is resolved from meta.json's
+"obs_v2" obsV2Meta block or the row's self-describing header. v2 checkpoints
+are .pt + manifest (arc-entity-scorer-v2), never the TS JSON export: --out and
+--init-from must be .pt for v2 and .json for v1. All modes (awr/alphazero/ppo)
+work on v2; rows with `placement` additionally train the v2 placement aux head
+(--placement-coef).
 """
 
 from __future__ import annotations
@@ -47,13 +58,26 @@ from model import CandidateScorer, build_model, get_device, load_dims_from_meta
 # Dataset
 # ---------------------------------------------------------------------------
 
+def sample_files(data_dir: Path) -> list[Path]:
+    """All *.jsonl sample shards, excluding the actor pool's games-*.jsonl
+    per-game summaries (no obs/cands keys — they'd crash header inference)."""
+    return sorted(
+        p for p in data_dir.rglob("*.jsonl")
+        if p.is_file() and not p.name.startswith("games-")
+    )
+
+
 class DecisionDataset(Dataset):
     """
     Stores all decisions from JSONL files as numpy arrays.
     Padding is done at collation time (per-batch).
+
+    obs_key selects which field feeds the model: "obs" (v1 62-float summary)
+    or "obsV2" (flat arc-obs-v2, paired-row contract). Rows lacking obs_key
+    are skipped and counted (v1-only rows mixed into a v2 dataset).
     """
 
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(self, data_dir: Path, obs_key: str = "obs") -> None:
         self.obs_list: list[np.ndarray] = []
         self.cands_list: list[np.ndarray] = []  # variable-length lists of cand vecs
         self.chosen_list: list[int] = []
@@ -66,13 +90,17 @@ class DecisionDataset(Dataset):
         self.policy_weight_list: list[float] = []
         self.route_mode_list: list[float] = []
         self.route_mode_mask: list[bool] = []
+        self.placement_list: list[int] = []
+        self.placement_mask: list[bool] = []
         self.n_with_pi = 0
         self.n_with_farm_value = 0
         self.n_with_reward_pi = 0
         self.n_with_route_mode = 0
+        self.n_with_placement = 0
         self.n_value_only = 0
+        self.n_missing_obs = 0
 
-        jsonl_files = sorted(p for p in data_dir.rglob("*.jsonl") if p.is_file())
+        jsonl_files = sample_files(data_dir)
         if not jsonl_files:
             raise FileNotFoundError(f"No *.jsonl files found in {data_dir}")
 
@@ -84,11 +112,19 @@ class DecisionDataset(Dataset):
                         continue
                     try:  # tolerate a partial last line if a file is being appended concurrently
                         rec: dict[str, Any] = json.loads(line)
-                        obs = np.array(rec["obs"], dtype=np.float32)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    if obs_key not in rec:
+                        self.n_missing_obs += 1
+                        continue
+                    try:
+                        obs = np.array(rec[obs_key], dtype=np.float32)
                         cands = np.array(rec["cands"], dtype=np.float32)  # (n_cands, act_dim)
                         chosen = int(rec["chosen"])
                         ret = float(rec["ret"])
-                    except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+                    except (KeyError, ValueError, TypeError):
                         continue
                     n = cands.shape[0]
                     # AlphaZero policy target: the recorded MCTS visit distribution `pi` (search-improved).
@@ -142,6 +178,19 @@ class DecisionDataset(Dataset):
                     else:
                         route_mode = 0.0
                         has_route_mode = False
+                    placement_raw = rec.get("placement")
+                    if (
+                        isinstance(placement_raw, (int, float))
+                        and not isinstance(placement_raw, bool)
+                        and float(placement_raw).is_integer()
+                        and 1 <= int(placement_raw) <= 4
+                    ):
+                        placement = int(placement_raw)
+                        has_placement = True
+                        self.n_with_placement += 1
+                    else:
+                        placement = 0
+                        has_placement = False
                     if policy_weight == 0.0:
                         self.n_value_only += 1
                     self.obs_list.append(obs)
@@ -156,6 +205,8 @@ class DecisionDataset(Dataset):
                     self.policy_weight_list.append(policy_weight)
                     self.route_mode_list.append(route_mode)
                     self.route_mode_mask.append(has_route_mode)
+                    self.placement_list.append(placement)
+                    self.placement_mask.append(has_placement)
 
         if not self.obs_list:
             raise ValueError(f"No samples loaded from {data_dir}")
@@ -165,13 +216,15 @@ class DecisionDataset(Dataset):
             f"({self.n_with_pi} with MCTS pi targets, "
             f"{self.n_with_farm_value} with farmValue, {self.n_with_reward_pi} with rewardPi, "
             f"{self.n_with_route_mode} with routeMode, "
-            f"{self.n_value_only} value-only)"
+            f"{self.n_with_placement} with placement, "
+            f"{self.n_value_only} value-only, "
+            f"{self.n_missing_obs} skipped without {obs_key!r})"
         )
 
     def __len__(self) -> int:
         return len(self.obs_list)
 
-    def __getitem__(self, idx: int) -> tuple[np.ndarray, np.ndarray, int, float, np.ndarray, float, bool, np.ndarray, bool, float, float, bool]:
+    def __getitem__(self, idx: int) -> tuple:
         return (
             self.obs_list[idx],
             self.cands_list[idx],
@@ -185,17 +238,17 @@ class DecisionDataset(Dataset):
             self.policy_weight_list[idx],
             self.route_mode_list[idx],
             self.route_mode_mask[idx],
+            self.placement_list[idx],
+            self.placement_mask[idx],
         )
 
 
-def collate_fn(
-    batch: list[tuple[np.ndarray, np.ndarray, int, float, np.ndarray, float, bool, np.ndarray, bool, float, float, bool]],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def collate_fn(batch: list[tuple]) -> tuple[torch.Tensor, ...]:
     """
     Pad cands (and the pi targets) to the maximum number of candidates in the batch.
     Returns: obs, cands_padded, mask, chosen, rets, pi_padded
     """
-    obs_list, cands_list, chosen_list, ret_list, pi_list, farm_value_list, farm_mask_list, reward_pi_list, reward_mask_list, policy_weight_list, route_mode_list, route_mask_list = zip(*batch)
+    obs_list, cands_list, chosen_list, ret_list, pi_list, farm_value_list, farm_mask_list, reward_pi_list, reward_mask_list, policy_weight_list, route_mode_list, route_mask_list, placement_list, placement_mask_list = zip(*batch)
 
     obs = torch.from_numpy(np.stack(obs_list))  # (B, obs_dim)
     max_cands = max(c.shape[0] for c in cands_list)
@@ -226,8 +279,10 @@ def collate_fn(
     policy_weight_t = torch.tensor(policy_weight_list, dtype=torch.float32)  # (B,)
     route_mode_t = torch.tensor(route_mode_list, dtype=torch.float32)  # (B,)
     route_mask_t = torch.tensor(route_mask_list, dtype=torch.bool)  # (B,)
+    placement_t = torch.tensor(placement_list, dtype=torch.long)  # (B,) 0 = unknown
+    placement_mask_t = torch.tensor(placement_mask_list, dtype=torch.bool)  # (B,)
 
-    return obs, cands_t, mask_t, chosen_t, rets_t, pi_t, farm_t, farm_mask_t, reward_pi_t, reward_mask_t, policy_weight_t, route_mode_t, route_mask_t
+    return obs, cands_t, mask_t, chosen_t, rets_t, pi_t, farm_t, farm_mask_t, reward_pi_t, reward_mask_t, policy_weight_t, route_mode_t, route_mask_t, placement_t, placement_mask_t
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +396,117 @@ def build_policy_model(
     return model
 
 
+# ---------------------------------------------------------------------------
+# Model v2 (entity set-transformer, arc-entity-scorer-v2 checkpoints)
+# ---------------------------------------------------------------------------
+
+def check_out_format(model_version: str, out_path: Path, init_from: Path | None) -> None:
+    """v2 checkpoints are .pt (+ manifest); the TS JSON export is v1-only."""
+    if model_version == "v2":
+        if out_path.suffix != ".pt":
+            raise ValueError(
+                f"--model v2 writes arc-entity-scorer-v2 .pt checkpoints; --out {out_path} "
+                "must end in .pt (the arc-cand-scorer-v1 JSON export cannot hold a transformer)"
+            )
+        if init_from is not None and init_from.suffix != ".pt":
+            raise ValueError(f"--model v2 --init-from {init_from} must be a .pt checkpoint")
+    else:
+        if out_path.suffix == ".pt":
+            raise ValueError(
+                f"--model v1 exports arc-cand-scorer-v1 JSON; --out {out_path} is a .pt "
+                "(did you mean --model v2?)"
+            )
+        if init_from is not None and init_from.suffix == ".pt":
+            raise ValueError(f"--model v1 --init-from {init_from} is a .pt (did you mean --model v2?)")
+
+
+def resolve_v2_spec(data_dir: Path) -> tuple["ObsV2Spec", int]:  # noqa: F821 — lazy import
+    """
+    Resolve the arc-obs-v2 layout + act_dim for a dataset directory.
+    Preference order: meta.json `obs_v2` sub-object (the convention used by
+    bc_warmstart_v2.py) > meta.json that IS an obsV2Meta blob (flatHeader at top
+    level) > the self-describing header of the first row carrying `obsV2`.
+    """
+    from obs_v2 import ObsV2Spec
+
+    meta: dict[str, Any] = {}
+    meta_path = data_dir / "meta.json"
+    if meta_path.exists():
+        with open(meta_path) as f:
+            meta = json.load(f)
+
+    spec = None
+    if isinstance(meta.get("obs_v2"), dict):
+        spec = ObsV2Spec.from_meta(meta["obs_v2"])
+    elif "flatHeader" in meta:
+        spec = ObsV2Spec.from_meta(meta)
+    act_dim = meta.get("act_dim")
+
+    if spec is None or act_dim is None:
+        for fpath in sample_files(data_dir):
+            with open(fpath) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(rec, dict):
+                        continue
+                    if act_dim is None and isinstance(rec.get("cands"), list) and rec["cands"]:
+                        act_dim = len(rec["cands"][0])
+                    if spec is None and "obsV2" in rec:
+                        spec = ObsV2Spec.from_flat(rec["obsV2"])
+                    if spec is not None and act_dim is not None:
+                        break
+            if spec is not None and act_dim is not None:
+                break
+        if spec is None:
+            raise ValueError(
+                f"{data_dir}: no meta.json obs_v2 block and no rows carrying obsV2 — "
+                "cannot resolve the arc-obs-v2 layout"
+            )
+        if act_dim is None:
+            raise ValueError(f"{data_dir}: could not resolve act_dim from meta.json or data rows")
+    return spec, int(act_dim)
+
+
+def build_policy_model_v2(
+    data_dir: Path,
+    device: torch.device,
+    out_path: Path,
+    init_from: Path | None,
+    warm_start: bool,
+    d_model: int,
+    layers: int,
+    heads: int,
+):
+    """v2 counterpart of build_policy_model: EntityCandidateScorer with .pt warm start.
+    On resume the architecture comes from the checkpoint config; the d_model/layers/
+    heads flags only shape a fresh model."""
+    from model_v2 import build_model_v2, load_checkpoint
+
+    spec, act_dim = resolve_v2_spec(data_dir)
+    init_path = init_from if init_from is not None else (out_path if out_path.exists() else None)
+    if warm_start and init_path is not None and Path(init_path).exists():
+        try:
+            model = load_checkpoint(init_path, device, spec=spec)
+            print(f"warm-start from {init_path}: OK (architecture from checkpoint)")
+            return model, spec, act_dim
+        except Exception as e:  # noqa: BLE001
+            if init_from is not None:
+                raise  # an explicit --init-from that doesn't load is an error, not a fallback
+            print(f"warm-start skipped: {e}")
+    # seed=None: don't let build_model_v2's convenience seeding stomp the global
+    # RNG mid-run (it would also freeze the DataLoader shuffle order).
+    model = build_model_v2(
+        spec, act_dim, device, d_model=d_model, layers=layers, heads=heads, seed=None
+    )
+    return model, spec, act_dim
+
+
 def train(
     data_dir: Path,
     out_path: Path,
@@ -364,23 +530,52 @@ def train(
     value_clip_eps: float = 0.0,
     target_kl: float | None = None,
     placement_rewards: str = "1.0,0.3,-0.3,-1.0",
-) -> None:
+    model_version: str = "v1",
+    placement_coef: float = 0.1,
+    v2_d_model: int = 128,
+    v2_layers: int = 3,
+    v2_heads: int = 4,
+) -> list[dict]:
+    """Train and export; returns per-epoch metric dicts (used by tests)."""
     device = get_device()
-    print(f"Device: {device}  mode={mode}")
+    print(f"Device: {device}  mode={mode}  model={model_version}")
+    check_out_format(model_version, out_path, init_from)
+    # The placement aux head only exists on v2.
+    effective_placement_coef = placement_coef if model_version == "v2" else 0.0
+    # Paired-row contract: v2 reads the flat arc-obs-v2 array from `obsV2`;
+    # `obs` stays the v1 62-float summary for the v1 net / distillation.
+    obs_key = "obsV2" if model_version == "v2" else "obs"
+
+    def export_model(model, obs_dim: int, act_dim: int) -> None:
+        if model_version == "v2":
+            from model_v2 import save_checkpoint
+
+            manifest = save_checkpoint(model, out_path)
+            print(f"\nCheckpoint written: {out_path} (+ {manifest.name})")
+        else:
+            export_weights(model, obs_dim, act_dim, out_path)
+            print(f"\nWeights exported to: {out_path}")
 
     if mode == "ppo":
         from ppo import load_trajectory_buffer, parse_placement_rewards, train_ppo
 
-        obs_dim, act_dim = load_dims_from_meta(data_dir)
-        print(f"obs_dim={obs_dim}, act_dim={act_dim}")
         buffer = load_trajectory_buffer(
             data_dir,
             gamma=gamma,
             gae_lambda=gae_lambda,
             placement_rewards=parse_placement_rewards(placement_rewards),
+            obs_key=obs_key,
         )
-        model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
-        train_ppo(
+        if model_version == "v2":
+            model, spec, act_dim = build_policy_model_v2(
+                data_dir, device, out_path, init_from, warm_start, v2_d_model, v2_layers, v2_heads
+            )
+            obs_dim = spec.flat_length
+        else:
+            obs_dim, act_dim = load_dims_from_meta(data_dir)
+            model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
+        print(f"obs_dim={obs_dim}, act_dim={act_dim}")
+        history = train_ppo(
             model,
             buffer,
             device,
@@ -394,17 +589,24 @@ def train(
             entropy_anneal=entropy_anneal,
             value_clip_eps=value_clip_eps,
             target_kl=target_kl,
+            placement_coef=effective_placement_coef,
         )
-        export_weights(model, obs_dim, act_dim, out_path)
-        print(f"\nWeights exported to: {out_path}")
-        return
+        export_model(model, obs_dim, act_dim)
+        return history
 
     # Load data
-    dataset = DecisionDataset(data_dir)
+    dataset = DecisionDataset(data_dir, obs_key=obs_key)
     baseline = compute_baseline(dataset)
     print(f"Baseline return (mean ret): {baseline:.4f}")
 
-    obs_dim, act_dim = load_dims_from_meta(data_dir)
+    if model_version == "v2":
+        model, spec, act_dim = build_policy_model_v2(
+            data_dir, device, out_path, init_from, warm_start, v2_d_model, v2_layers, v2_heads
+        )
+        obs_dim = spec.flat_length
+    else:
+        obs_dim, act_dim = load_dims_from_meta(data_dir)
+        model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
     print(f"obs_dim={obs_dim}, act_dim={act_dim}")
 
     loader = DataLoader(
@@ -415,8 +617,11 @@ def train(
         drop_last=False,
     )
 
-    model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
+    if effective_placement_coef > 0:
+        from ppo import placement_aux_loss
+
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    history: list[dict] = []
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -425,10 +630,11 @@ def train(
         total_farm_value_loss = 0.0
         total_reward_pick_loss = 0.0
         total_route_mode_loss = 0.0
+        total_placement_loss = 0.0
         total_samples = 0
         correct = 0
 
-        for obs, cands, mask, chosen, rets, pi, farm_value, farm_mask, reward_pi, reward_mask, policy_weight, route_mode, route_mask in loader:
+        for obs, cands, mask, chosen, rets, pi, farm_value, farm_mask, reward_pi, reward_mask, policy_weight, route_mode, route_mask, placement, placement_mask in loader:
             obs = obs.to(device)
             cands = cands.to(device)
             mask = mask.to(device)
@@ -442,6 +648,8 @@ def train(
             policy_weight = policy_weight.to(device)
             route_mode = route_mode.to(device)
             route_mask = route_mask.to(device)
+            placement = placement.to(device)
+            placement_mask = placement_mask.to(device)
 
             logits, probs, value = model(obs, cands, mask)
             log_probs = F.log_softmax(logits, dim=-1)  # (B, max_cands), padded = -inf → 0 prob
@@ -478,6 +686,10 @@ def train(
                 route_logits = model.route_mode_logits(obs)
                 route_loss = F.binary_cross_entropy_with_logits(route_logits[route_mask], route_mode[route_mask])
 
+            placement_loss = torch.zeros((), dtype=torch.float32, device=device)
+            if effective_placement_coef > 0 and placement_mask.any():
+                placement_loss = placement_aux_loss(model, obs, placement, placement_mask)
+
             # --- Total ---
             loss = (
                 policy_coef * policy_loss
@@ -485,6 +697,7 @@ def train(
                 + farm_value_coef * farm_loss
                 + reward_pick_coef * reward_loss
                 + route_mode_coef * route_loss
+                + effective_placement_coef * placement_loss
             )
 
             optimizer.zero_grad()
@@ -502,12 +715,14 @@ def train(
             total_farm_value_loss += farm_loss.item() * len(chosen)
             total_reward_pick_loss += reward_loss.item() * len(chosen)
             total_route_mode_loss += route_loss.item() * len(chosen)
+            total_placement_loss += placement_loss.item() * len(chosen)
 
         avg_policy = total_policy_loss / total_samples
         avg_value = total_value_loss / total_samples
         avg_farm = total_farm_value_loss / total_samples
         avg_reward = total_reward_pick_loss / total_samples
         avg_route = total_route_mode_loss / total_samples
+        avg_placement = total_placement_loss / total_samples
         accuracy = correct / total_samples
 
         print(
@@ -517,12 +732,21 @@ def train(
             f"farm_value_loss={avg_farm:.4f} | "
             f"reward_pick_loss={avg_reward:.4f} | "
             f"route_mode_loss={avg_route:.4f} | "
+            f"placement_loss={avg_placement:.4f} | "
             f"top1_acc={accuracy:.3f}"
         )
+        history.append({
+            "policy_loss": avg_policy,
+            "value_loss": avg_value,
+            "farm_value_loss": avg_farm,
+            "reward_pick_loss": avg_reward,
+            "route_mode_loss": avg_route,
+            "placement_loss": avg_placement,
+            "top1_acc": accuracy,
+        })
 
-    # Export weights
-    export_weights(model, obs_dim, act_dim, out_path)
-    print(f"\nWeights exported to: {out_path}")
+    export_model(model, obs_dim, act_dim)
+    return history
 
 
 # ---------------------------------------------------------------------------
@@ -642,6 +866,16 @@ def parse_args() -> argparse.Namespace:
                    help="Early-stop the PPO epochs when approx KL(old||new) exceeds this")
     p.add_argument("--placement-rewards", type=str, default="1.0,0.3,-0.3,-1.0",
                    help="Terminal reward for placements 1-4, added to rStep on the done row")
+    # Model v2 (entity set-transformer) flags. --out/--init-from must be .pt for
+    # v2; the arc-cand-scorer-v1 JSON export stays v1-only.
+    p.add_argument("--model", dest="model_version", choices=["v1", "v2"], default="v1",
+                   help="v1 = CandidateScorer MLP (JSON export); v2 = EntityCandidateScorer "
+                        "set-transformer on flat arc-obs-v2 rows (.pt + manifest checkpoints)")
+    p.add_argument("--placement-coef", type=float, default=0.1,
+                   help="Weight on the v2 placement aux loss (rows with `placement`; v1 ignores)")
+    p.add_argument("--v2-d-model", type=int, default=128, help="v2 width (fresh models only)")
+    p.add_argument("--v2-layers", type=int, default=3, help="v2 encoder layers (fresh models only)")
+    p.add_argument("--v2-heads", type=int, default=4, help="v2 attention heads (fresh models only)")
     p.add_argument("--init-from", type=Path, default=None,
                    help="Optional checkpoint to warm-start from while exporting to --out")
     p.add_argument("--no-warm-start", dest="warm_start", action="store_false",
@@ -675,4 +909,9 @@ if __name__ == "__main__":
         value_clip_eps=args.value_clip_eps,
         target_kl=args.target_kl,
         placement_rewards=args.placement_rewards,
+        model_version=args.model_version,
+        placement_coef=args.placement_coef,
+        v2_d_model=args.v2_d_model,
+        v2_layers=args.v2_layers,
+        v2_heads=args.v2_heads,
     )

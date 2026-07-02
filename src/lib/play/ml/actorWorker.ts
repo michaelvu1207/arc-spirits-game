@@ -81,7 +81,8 @@ export function runActorGames(
 				opponentPolicies,
 				forbidTypes,
 				maxStatusLevel: config.maxStatusLevel,
-				gamma: config.gamma
+				gamma: config.gamma,
+				obsVersion: config.obsVersion
 			});
 			const wallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);

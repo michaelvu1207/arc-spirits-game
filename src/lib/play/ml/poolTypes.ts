@@ -41,6 +41,13 @@ export interface ActorGameConfig {
 	gamma?: number;
 	/** Training iteration stamped on every sample row (appendSamples `iter`). */
 	iter?: number;
+	/**
+	 * Observation schema on recorded samples (driver obsVersion, default 1). At 2 every
+	 * row gains a PAIRED obsV2 flat array next to the v1 obs (pinned contract in
+	 * docs/encoder-v2.md), and the pool's meta.json gains obs_version + an "obs_v2" block
+	 * (obsV2Meta(catalog)) that ml/obs_v2.py ObsV2Spec.from_meta validates against.
+	 */
+	obsVersion?: 1 | 2;
 }
 
 export interface SeatSummary {

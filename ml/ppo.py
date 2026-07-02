@@ -98,6 +98,10 @@ class TrajectoryBuffer:
     v_pred: np.ndarray              # (N,) float32
     advantages: np.ndarray          # (N,) float32
     returns: np.ndarray             # (N,) float32
+    # Game placement broadcast to every step of the game (0 = unknown): the
+    # placement-aux target "final placement given this state" is defined at
+    # every decision, not just on the terminal row.
+    placement: np.ndarray           # (N,) int64
 
     def __len__(self) -> int:
         return len(self.cands)
@@ -118,16 +122,25 @@ def load_trajectory_buffer(
     gamma: float,
     gae_lambda: float,
     placement_rewards: tuple[float, float, float, float],
+    obs_key: str = "obs",
 ) -> TrajectoryBuffer:
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
-    GAE advantages + returns learner-side."""
+    GAE advantages + returns learner-side.
+
+    obs_key: "obs" (v1 62-float summary) or "obsV2" (flat arc-obs-v2,
+    paired-row contract); rows lacking it are skipped and counted."""
     data_dir = Path(data_dir)
-    jsonl_files = sorted(p for p in data_dir.rglob("*.jsonl") if p.is_file())
+    # Skip the actor pool's games-*.jsonl per-game summaries (no obs/cands keys).
+    jsonl_files = sorted(
+        p for p in data_dir.rglob("*.jsonl")
+        if p.is_file() and not p.name.startswith("games-")
+    )
     if not jsonl_files:
         raise FileNotFoundError(f"No *.jsonl files found in {data_dir}")
 
     episodes: dict[str, list[dict]] = {}
     n_skipped = 0
+    n_missing_obs = 0
     for fpath in jsonl_files:
         with open(fpath) as f:
             for line in f:
@@ -136,10 +149,18 @@ def load_trajectory_buffer(
                     continue
                 try:  # tolerate a partial last line if a file is being appended concurrently
                     rec: dict[str, Any] = json.loads(line)
-                    obs = np.array(rec["obs"], dtype=np.float32)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(rec, dict):
+                    continue
+                if obs_key not in rec:
+                    n_missing_obs += 1
+                    continue
+                try:
+                    obs = np.array(rec[obs_key], dtype=np.float32)
                     cands = np.array(rec["cands"], dtype=np.float32)
                     chosen = int(rec["chosen"])
-                except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+                except (KeyError, ValueError, TypeError):
                     continue
                 try:
                     step = {
@@ -173,6 +194,7 @@ def load_trajectory_buffer(
     chosen_list: list[int] = []
     logp_old_list: list[float] = []
     v_pred_list: list[float] = []
+    placement_list: list[int] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
     n_truncated = 0
@@ -202,12 +224,13 @@ def load_trajectory_buffer(
             n_truncated += 1
 
         adv, ret = compute_gae(rewards, values, dones, gamma, gae_lambda, last_value)
-        for i, s in enumerate(steps):
+        for s in steps:
             obs_list.append(s["obs"])
             cands_list.append(s["cands"])
             chosen_list.append(s["chosen"])
             logp_old_list.append(s["logp_old"])
             v_pred_list.append(s["v_pred"])
+            placement_list.append(placement if placement is not None else 0)
         adv_list.append(adv)
         ret_list.append(ret)
 
@@ -216,7 +239,8 @@ def load_trajectory_buffer(
     print(
         f"Loaded {len(cands_list)} PPO steps from {len(episodes)} game(s) "
         f"({n_with_placement} with terminal placement reward, {n_truncated} truncated, "
-        f"{n_skipped} rows without PPO fields skipped)"
+        f"{n_skipped} rows without PPO fields skipped, "
+        f"{n_missing_obs} skipped without {obs_key!r})"
     )
     return TrajectoryBuffer(
         obs=np.stack(obs_list),
@@ -226,7 +250,58 @@ def load_trajectory_buffer(
         v_pred=np.array(v_pred_list, dtype=np.float32),
         advantages=advantages,
         returns=returns,
+        placement=np.array(placement_list, dtype=np.int64),
     )
+
+
+# ---------------------------------------------------------------------------
+# Placement aux loss (model v2 only)
+# ---------------------------------------------------------------------------
+
+# Seat-family field index of `isSelf`, fixed by the encodeV2 contract
+# (src/lib/play/ml/encodeV2.ts fieldNames.seat = ["present", "isSelf", ...]).
+SEAT_ISSELF_IDX = 1
+
+
+def placement_aux_loss(
+    model,
+    obs: torch.Tensor,            # (B, flat_len) raw v2 obs
+    placement: torch.Tensor,      # (B,) int, 1-4, 0 = unknown
+    has_placement: torch.Tensor,  # (B,) bool
+) -> torch.Tensor:
+    """
+    Aux loss for EntityCandidateScorer.placement_logits on rows carrying `placement`.
+
+    Regression, not CE: the head emits ONE scalar per seat token (there is no
+    4-way simplex per seat), and placement is ordinal — a scalar score
+    t = (4 - placement) / 3 (1st -> 1.0 ... 4th -> 0.0) preserves the ordering
+    and stays meaningful if the seat count ever differs from 4. Only the ego
+    seat is supervised: rows are egocentric and carry just the recorder's own
+    placement, so the other seats' scalars come alive once the recorder emits
+    all-seat placements. Ego seat = the seat token whose isSelf feature is set.
+
+    Note: placement_logits re-runs encode_state, so enabling this roughly
+    doubles the v2 forward cost for placement-carrying batches.
+    """
+    rows = has_placement
+    if not bool(torch.any(rows)):
+        return torch.zeros((), dtype=torch.float32, device=obs.device)
+    obs_p = obs[rows]
+    pred, _seat_real = model.placement_logits(obs_p)
+
+    spec = model.spec
+    seat = spec.family("seat")
+    off = spec.header_len
+    for f in spec.families:
+        if f.name == "seat":
+            break
+        off += f.cap * f.dim
+    is_self = obs_p[:, off : off + seat.cap * seat.dim].reshape(-1, seat.cap, seat.dim)[:, :, SEAT_ISSELF_IDX]
+    ego = is_self.argmax(dim=1)  # (B',)
+
+    ego_pred = pred.gather(1, ego.unsqueeze(1)).squeeze(1)
+    target = (4.0 - placement[rows].float()) / 3.0
+    return F.mse_loss(ego_pred, target)
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +330,7 @@ def _minibatch_tensors(
         torch.from_numpy(buffer.v_pred[idx]).to(device),
         torch.from_numpy(buffer.advantages[idx]).to(device),
         torch.from_numpy(buffer.returns[idx]).to(device),
+        torch.from_numpy(buffer.placement[idx]).to(device),
     )
 
 
@@ -273,13 +349,18 @@ def train_ppo(
     entropy_anneal: bool = False,
     value_clip_eps: float = 0.0,
     target_kl: float | None = None,
+    placement_coef: float = 0.0,
     seed: int | None = None,
-) -> None:
-    """K epochs of clipped-surrogate PPO over a fixed rollout buffer."""
+) -> list[dict]:
+    """K epochs of clipped-surrogate PPO over a fixed rollout buffer.
+    Returns per-epoch metric dicts (used by tests)."""
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     n = len(buffer)
     rng = np.random.default_rng(seed)
     indices = np.arange(n)
+    # The placement aux head only exists on model v2.
+    use_placement = placement_coef > 0 and hasattr(model, "placement_logits")
+    history: list[dict] = []
 
     for epoch in range(1, epochs + 1):
         frac = 0.0 if epochs <= 1 else (epoch - 1) / (epochs - 1)
@@ -288,12 +369,13 @@ def train_ppo(
         model.train()
 
         tot_policy = tot_value = tot_entropy = tot_kl = tot_clip = tot_prob = 0.0
+        tot_placement = 0.0
         n_seen = 0
         stop = False
 
         for start in range(0, n, batch_size):
             mb = indices[start : start + batch_size]
-            obs, cands, mask, chosen, logp_old, v_pred, adv, ret = _minibatch_tensors(
+            obs, cands, mask, chosen, logp_old, v_pred, adv, ret, placement = _minibatch_tensors(
                 buffer, mb, device
             )
             adv = (adv - adv.mean()) / (adv.std() + 1e-8)
@@ -330,7 +412,16 @@ def train_ppo(
             plogp = torch.where(mask, probs * log_probs, torch.zeros_like(probs))
             entropy = -plogp.sum(dim=-1).mean()
 
-            loss = policy_coef * policy_loss + value_coef * value_loss - ent_coef * entropy
+            placement_loss = torch.zeros((), dtype=torch.float32, device=device)
+            if use_placement:
+                placement_loss = placement_aux_loss(model, obs, placement, placement > 0)
+
+            loss = (
+                policy_coef * policy_loss
+                + value_coef * value_loss
+                - ent_coef * entropy
+                + placement_coef * placement_loss
+            )
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -343,6 +434,7 @@ def train_ppo(
             tot_kl += approx_kl * bs
             tot_clip += clip_frac * bs
             tot_prob += logp_new.detach().exp().mean().item() * bs
+            tot_placement += placement_loss.item() * bs
 
         if n_seen:
             print(
@@ -352,7 +444,18 @@ def train_ppo(
                 f"entropy={tot_entropy / n_seen:.4f} (coef={ent_coef:.4f}) | "
                 f"approx_kl={tot_kl / n_seen:.4f} | "
                 f"clip_frac={tot_clip / n_seen:.3f} | "
+                f"placement_loss={tot_placement / n_seen:.4f} | "
                 f"mean_p_chosen={tot_prob / n_seen:.3f}"
             )
+            history.append({
+                "policy_loss": tot_policy / n_seen,
+                "value_loss": tot_value / n_seen,
+                "entropy": tot_entropy / n_seen,
+                "approx_kl": tot_kl / n_seen,
+                "clip_frac": tot_clip / n_seen,
+                "placement_loss": tot_placement / n_seen,
+                "mean_p_chosen": tot_prob / n_seen,
+            })
         if stop:
             break
+    return history

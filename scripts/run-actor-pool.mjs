@@ -39,6 +39,7 @@ const { values: args } = parseArgs({
 		'max-status-level': { type: 'string' },
 		gamma: { type: 'string' },
 		iter: { type: 'string', default: '0' },
+		'obs-version': { type: 'string', default: '1' },
 		append: { type: 'boolean', default: false },
 		quiet: { type: 'boolean', default: false },
 		help: { type: 'boolean', default: false }
@@ -51,7 +52,7 @@ if (args.help) {
 			'         [--max-rounds N] [--weights FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
 			'         [--selection hybrid|value|policy] [--sample] [--temperature X]\n' +
 			'         [--neural-seats Red,Blue] [--record-seats Red] [--forbid type1,type2]\n' +
-			'         [--max-status-level N] [--gamma X] [--iter N] [--append] [--quiet]'
+			'         [--max-status-level N] [--gamma X] [--iter N] [--obs-version 1|2] [--append] [--quiet]'
 	);
 	process.exit(0);
 }
@@ -83,8 +84,13 @@ const config = {
 	forbidTypes: csv(args.forbid),
 	maxStatusLevel: args['max-status-level'] ? parseInt(args['max-status-level'], 10) : undefined,
 	gamma: num(args.gamma),
-	iter: parseInt(args.iter, 10)
+	iter: parseInt(args.iter, 10),
+	obsVersion: parseInt(args['obs-version'], 10)
 };
+if (config.obsVersion !== 1 && config.obsVersion !== 2) {
+	console.error(`--obs-version must be 1 or 2, got ${args['obs-version']}`);
+	process.exit(1);
+}
 
 const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src', 'lib') } });
 const { runActorPool } = await jiti.import(

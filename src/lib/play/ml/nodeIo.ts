@@ -51,6 +51,7 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 		.map((s) =>
 			JSON.stringify({
 				obs: round4(s.obs),
+				...(s.obsV2 ? { obsV2: round4(s.obsV2) } : {}),
 				cands: s.cands.map(round4),
 				chosen: s.chosen,
 				ret: r4(s.ret),
@@ -75,7 +76,10 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 	appendFileSync(file, lines + '\n');
 }
 
-/** Truncate floats to 4 decimals to shrink JSONL ~3x with no learning impact. */
+/** Truncate floats to 4 decimals to shrink JSONL ~3x with no learning impact.
+ *  Holds for v2 flat obs rows too: header/mask entries are small ints (≤122), exact
+ *  at 4dp (parsers compare them after float32 cast — encoder-v2.md clarification 4),
+ *  and the features are ~[0,1]-clamped like v1, so 4dp is the same accepted loss. */
 function r4(x: number): number {
 	return Math.round(x * 1e4) / 1e4;
 }

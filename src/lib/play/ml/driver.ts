@@ -28,6 +28,7 @@ import {
 } from '../server/botPolicy';
 import { SEAT_COLORS, type GameActor, type GameCommand, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
 import { encodeAction, encodeObs } from './encode';
+import { encodeEntityObsV2, flattenObsV2 } from './encodeV2';
 import { legalActionsWithNext, commandMatches, type LegalAction } from './actions';
 import { sampleAuxTargets } from './auxTargets';
 import { valueGuidedIndex, hybridIndex, policyIndexWithProgressGuard } from './neuralBot';
@@ -38,6 +39,11 @@ import type { NeuralPolicy } from './net';
  *  compute `ret` (VP-maximizing return-to-go) once the game's VP trajectory is known. */
 export interface Sample {
 	obs: number[];
+	/** Paired v2 observation (arc-obs-v2 flat array), present when recorded at obsVersion 2.
+	 *  `obs` stays the v1 62-float vector on EVERY row — the pinned paired-row contract
+	 *  (docs/encoder-v2.md): v1 consumers read obs, v2 trainers read obsV2, and
+	 *  distillation reads both views of the same decision. */
+	obsV2?: number[];
 	cands: number[][];
 	chosen: number;
 	ret: number;
@@ -144,6 +150,17 @@ export interface RecordGameOptions {
 	 * shaping (e.g. ΔΦ from shaping.ts) plugs in later without touching the recording path.
 	 */
 	stepRewards?: (seatSamples: Sample[], seat: SeatColor, finalVP: Record<string, number>) => number[];
+	/**
+	 * Observation schema recorded on samples (default 1). At 2, every recorded Sample
+	 * ADDITIONALLY carries obsV2 = flattenObsV2 (3,419 floats for the frozen catalog);
+	 * Sample.obs remains the v1 62-float vector on every row and Sample.cands stay v1
+	 * encodeAction rows — the pinned paired-row contract (docs/encoder-v2.md), which is
+	 * exactly what v1<-v2 distillation needs (both views of the same decision). The
+	 * ACTING policy runs on v1 obs regardless: selection, logpOld and vPred come from
+	 * the v1 in-process net (there is no TS v2 net), so obsV2 is behavior-off-policy
+	 * input — fine for BC / off-policy warm start of the Python v2 model.
+	 */
+	obsVersion?: 1 | 2;
 }
 
 export interface RecordGameResult {
@@ -288,6 +305,14 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	let ticks = 0;
 	let stalled = false;
 
+	// v2 recording: samples gain a PAIRED obsV2 flat array next to the v1 obs (see the
+	// obsVersion option docs). Reads the live `state` binding, so call it exactly where
+	// encodeObs is called for the same decision.
+	const recordObsV2 =
+		opts.obsVersion === 2
+			? (seat: SeatColor): number[] => flattenObsV2(encodeEntityObsV2(state, seat, catalog), catalog)
+			: null;
+
 	const applyHeuristic = (seat: SeatColor): boolean => {
 		let progressed = false;
 		const plan = planBotPhaseActions(state, seat, catalog, botRng, profileBySeat[seat]);
@@ -312,6 +337,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 						const obs = encodeObs(state, seat);
 						samples.push({
 							obs,
+							...(recordObsV2 ? { obsV2: recordObsV2(seat) } : {}),
 							cands: withNextH.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 							chosen: mi,
 							ret: 0,
@@ -383,6 +409,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			}
 			samples.push({
 				obs,
+				...(recordObsV2 ? { obsV2: recordObsV2(seat) } : {}),
 				cands: feats,
 				chosen: idx,
 				ret: 0,
