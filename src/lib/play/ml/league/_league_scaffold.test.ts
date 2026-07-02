@@ -292,8 +292,10 @@ describe('league init + state round-trip', () => {
 				return acc;
 			}, {});
 			// 8 gauntlet heuristic anchors + the active frozen checkpoint anchors + 3 lanes.
+			// (3 frozen since gauntlet-v3: the fair-gen24 champion anchor means leagues
+			// seeding checkpoint anchors get the champion as a frozen PFSP peer.)
 			expect(kinds['heuristic']).toBe(8);
-			expect(kinds['frozen']).toBe(2);
+			expect(kinds['frozen']).toBe(3);
 			expect(kinds['main']).toBe(1);
 			expect(kinds['main_exploiter']).toBe(1);
 			expect(kinds['league_exploiter']).toBe(1);

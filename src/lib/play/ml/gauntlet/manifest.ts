@@ -24,7 +24,13 @@
 
 import { createRng, nextInt } from '../../rng';
 
-export const GAUNTLET_VERSION = 'gauntlet-v2'; // v2 = rules v1.1 (market hole closed); seeds/anchors/metric unchanged from v1
+// v2 = rules v1.1 (market hole closed); seeds/anchors/metric unchanged from v1.
+// v3 = fair-gen24 champion added to the checkpoint anchor pool: gauntlet-v2 was
+// SATURATED (the champion scored 99% win / placement 1.00), so post-champion
+// candidates could not gain measurable Elo. Adding the champion restores
+// headroom. The anchor-field draw shifts with the pool → v3 scores are a NEW
+// SCALE, non-comparable to v2 (v2 result files remain the historical record).
+export const GAUNTLET_VERSION = 'gauntlet-v3';
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;
@@ -86,6 +92,12 @@ export interface CheckpointAnchor {
  *     rather than silently dropped.
  */
 export const CHECKPOINT_ANCHORS: readonly CheckpointAnchor[] = [
+	{
+		name: 'fair-gen24-champion',
+		path: 'ml/champions/fair/main-0-gen24.json',
+		status: 'active',
+		note: 'gauntlet-v3 anchor: the fair-rules champion (v2 Elo 1014 / 99% win / 29.8 meanVP; live since 1c7766a). Added because it saturated the v2 field.'
+	},
 	{
 		name: 'traceq-damage-nearmiss',
 		path: 'ml/meta_runs/traceq-damage-nearmiss-vp28-29-20260630T053132Z/best_policy.json',
