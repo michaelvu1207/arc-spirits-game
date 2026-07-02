@@ -112,9 +112,9 @@ def make_v2_dataset(
         for r in rows:
             f.write(json.dumps(r) + "\n")
     if full_meta:
-        # In-repo convention (bc_warmstart_v2.py): obsV2Meta under `obs_v2`,
-        # obs_dim = the v1 width of the `obs` field.
-        meta = {"obs_dim": OBS_V1_DIM, "act_dim": ACT_DIM, "obs_v2": fx["meta"]}
+        # PINNED meta shape (docs/encoder-v2.md, commit 2b4ef69): obs_dim = the
+        # v1 width of `obs`, obs_version: 2, obsV2Meta NESTED under `obs_v2`.
+        meta = {"obs_dim": OBS_V1_DIM, "act_dim": ACT_DIM, "obs_version": 2, "obs_v2": fx["meta"]}
     else:
         # Minimal meta: layout must come from the rows' self-describing obsV2 header.
         meta = {"obs_version": 2, "act_dim": ACT_DIM}
