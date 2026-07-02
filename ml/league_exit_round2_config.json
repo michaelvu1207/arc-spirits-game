@@ -1,0 +1,61 @@
+{
+ "_readme": "EXPERT-ITERATION league (Phase C, plan happy-quail). Main lane warm-starts from the fair gen-24 champion; gauntlet-v3 anchors seed the champion itself as a frozen PFSP peer (the league-needs-peers fix is automatic now). Data generation searches 25% of strategic decisions (Gumbel-48, self-model rollouts) and records pi; mode alphazero trains CE-to-pi + value-to-returns + 4-way placement aux. Eval + gauntlet always score the RAW net. Promotion every 4 gens vs gauntlet-v3 (champion rebaseline: 525/85.4%/29.1).",
+ "version": "league-v1",
+ "mode": "alphazero",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "workers": 120,
+ "matchupConcurrency": 15,
+ "evalGames": 48,
+ "evalOpponents": [
+  "heur-medium",
+  "heur-hard",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "initFrom": "ml/champions/fair/main-0-gen24.json",
+ "seedCheckpointAnchors": true,
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 25,
+ "seedBase": 61000000,
+ "selection": "hybrid",
+ "sample": false,
+ "temperature": 1.0,
+ "search": {
+  "sims": 64,
+  "navTemperature": 0.8,
+  "rollout": "policy",
+  "frac": 0.08,
+  "horizonRounds": 8,
+  "valueWeight": 0.5
+ },
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--lr",
+   "5e-4"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_exit"
+ },
+ "_exploration": "AlphaZero-style: exploration comes from the SEARCH (nav pi-sampling at navTemperature + per-decision Gumbel noise), not softmax-sampling every decision \u2014 temp-1.0 sampled games ran to the 120-round cap and made search cost explode (14min/game).",
+ "_round2": "ExIt round 2: few BIG searches (64 sims @ 8% of decisions) instead of many small (16 @ 25%) \u2014 round 1 was flat at 515/506/503/503/501 vs bar 550."
+}
