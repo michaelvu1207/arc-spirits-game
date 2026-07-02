@@ -554,6 +554,8 @@ def train(
     entropy_anneal: bool = False,
     value_clip_eps: float = 0.0,
     target_kl: float | None = None,
+    kl_ref_coef: float = 0.0,
+    lr_schedule: str = "const",
     placement_rewards: str = "1.0,0.3,-0.3,-1.0",
     model_version: str = "v1",
     placement_coef: float = 0.1,
@@ -618,6 +620,8 @@ def train(
             entropy_anneal=entropy_anneal,
             value_clip_eps=value_clip_eps,
             target_kl=target_kl,
+            kl_ref_coef=kl_ref_coef,
+            lr_schedule=lr_schedule,
             placement_coef=effective_placement_coef,
             max_grad_norm=max_grad_norm,
         )
@@ -911,6 +915,10 @@ def parse_args() -> argparse.Namespace:
                    help="Linearly anneal the entropy coefficient to 0 over the epochs")
     p.add_argument("--value-clip-eps", type=float, default=0.0,
                    help=">0 enables PPO value clipping against the recorded vPred")
+    p.add_argument("--kl-ref-coef", type=float, default=0.0,
+                   help="KL(new||warm-start reference) penalty coefficient (piKL anchor; 0=off)")
+    p.add_argument("--lr-schedule", choices=["const", "cosine"], default="const",
+                   help="LR schedule across PPO epochs (cosine decays to 0.1*lr)")
     p.add_argument("--target-kl", type=float, default=None,
                    help="Early-stop the PPO epochs when approx KL(old||new) exceeds this")
     p.add_argument("--placement-rewards", type=str, default="1.0,0.3,-0.3,-1.0",
@@ -959,6 +967,8 @@ if __name__ == "__main__":
         entropy_anneal=args.entropy_anneal,
         value_clip_eps=args.value_clip_eps,
         target_kl=args.target_kl,
+        kl_ref_coef=args.kl_ref_coef,
+        lr_schedule=args.lr_schedule,
         placement_rewards=args.placement_rewards,
         model_version=args.model_version,
         placement_coef=args.placement_coef,

@@ -350,6 +350,8 @@ def train_ppo(
     entropy_anneal: bool = False,
     value_clip_eps: float = 0.0,
     target_kl: float | None = None,
+    kl_ref_coef: float = 0.0,
+    lr_schedule: str = "const",
     placement_coef: float = 0.0,
     max_grad_norm: float = 1.0,
     seed: int | None = None,
@@ -362,6 +364,16 @@ def train_ppo(
     the last finite epoch snapshot is restored, so the exported checkpoint is
     always finite (the fair-rules league diverged at gen ~13 without this)."""
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    # KL-to-reference anchor (piKL / AlphaStar KL-to-BC): penalize divergence from
+    # the WARM-START policy. The reference is the state of `model` at entry.
+    ref_model = None
+    if kl_ref_coef > 0:
+        import copy
+
+        ref_model = copy.deepcopy(model)
+        ref_model.eval()
+        for p_ in ref_model.parameters():
+            p_.requires_grad_(False)
     n = len(buffer)
     rng = np.random.default_rng(seed)
     indices = np.arange(n)
@@ -374,11 +386,17 @@ def train_ppo(
     for epoch in range(1, epochs + 1):
         frac = 0.0 if epochs <= 1 else (epoch - 1) / (epochs - 1)
         ent_coef = entropy_coef * (1.0 - frac) if entropy_anneal else entropy_coef
+        if lr_schedule == "cosine":
+            # lr -> 0.1*lr over the epochs; guards late-epoch overshoot on small buffers.
+            lr_e = lr * (0.1 + 0.45 * (1.0 + math.cos(math.pi * frac)))
+            for group in optimizer.param_groups:
+                group["lr"] = lr_e
         rng.shuffle(indices)
         model.train()
 
         tot_policy = tot_value = tot_entropy = tot_kl = tot_clip = tot_prob = 0.0
         tot_placement = 0.0
+        tot_kl_ref = 0.0
         n_seen = 0
         stop = False
 
@@ -421,6 +439,15 @@ def train_ppo(
             plogp = torch.where(mask, probs * log_probs, torch.zeros_like(probs))
             entropy = -plogp.sum(dim=-1).mean()
 
+            kl_ref = torch.zeros((), dtype=torch.float32, device=device)
+            if ref_model is not None:
+                with torch.no_grad():
+                    ref_logits, _, _ = ref_model(obs, cands, mask)
+                    ref_logp = F.log_softmax(ref_logits, dim=-1)
+                # KL(new || ref) over legal candidates only.
+                kl_terms = torch.where(mask, probs * (log_probs - ref_logp), torch.zeros_like(probs))
+                kl_ref = kl_terms.sum(dim=-1).mean()
+
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
             if use_placement:
                 placement_loss = placement_aux_loss(model, obs, placement, placement > 0)
@@ -430,6 +457,7 @@ def train_ppo(
                 + value_coef * value_loss
                 - ent_coef * entropy
                 + placement_coef * placement_loss
+                + kl_ref_coef * kl_ref
             )
             optimizer.zero_grad()
             loss.backward()
@@ -455,6 +483,7 @@ def train_ppo(
             tot_clip += clip_frac * bs
             tot_prob += logp_new.detach().exp().mean().item() * bs
             tot_placement += placement_loss.item() * bs
+            tot_kl_ref += kl_ref.item() * bs
 
         if halted:
             break
@@ -467,6 +496,7 @@ def train_ppo(
                 f"approx_kl={tot_kl / n_seen:.4f} | "
                 f"clip_frac={tot_clip / n_seen:.3f} | "
                 f"placement_loss={tot_placement / n_seen:.4f} | "
+                f"kl_ref={tot_kl_ref / n_seen:.4f} | "
                 f"mean_p_chosen={tot_prob / n_seen:.3f}"
             )
             history.append({
@@ -476,6 +506,7 @@ def train_ppo(
                 "approx_kl": tot_kl / n_seen,
                 "clip_frac": tot_clip / n_seen,
                 "placement_loss": tot_placement / n_seen,
+                "kl_ref": tot_kl_ref / n_seen,
                 "mean_p_chosen": tot_prob / n_seen,
             })
             last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
