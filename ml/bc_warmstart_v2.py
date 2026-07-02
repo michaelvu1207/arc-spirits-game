@@ -1,24 +1,24 @@
 """
 Behavior-cloning warm start for the v2 set-transformer (EntityCandidateScorer).
 
-Trains ml/model_v2.py on decision datasets whose `obs` field is the FLAT
-arc-obs-v2 array (see ml/obs_v2.py, docs/encoder-v2.md) instead of the v1
-62-float summary. Everything else keeps the existing JSONL row schema
-(train.py's DecisionDataset conventions):
+Trains ml/model_v2.py on the PINNED v2 row shape (docs/encoder-v2.md
+§"PINNED DATA CONTRACT"): every row always carries the v1 `obs` (62 floats,
+ignored here) and, when recorded at obs_version 2, an `obsV2` FLAT arc-obs-v2
+array — that is what this trainer consumes:
 
-    {"obs": [<flat v2, e.g. 3419 floats>], "cands": [[52]...], "chosen": i,
-     "ret": r, ...}          # extra fields (pi, farmValue, ...) are ignored here
+    {"obs": [62 floats], "obsV2": [<flat v2, e.g. 3419 floats>],
+     "cands": [[52]...], "chosen": i, "ret": r, ...}   # pi/farmValue/... ignored
 
 Dataset meta contract (meta.json in the data dir):
 
-    {"obs_dim": <flatLength>, "act_dim": 52, "obs_v2": <obsV2Meta(catalog)>}
+    {"obs_dim": 62, "act_dim": 52, "obs_version": 2,
+     "obs_v2": <obsV2Meta(catalog) block>}
 
-The trainer builds its parser from meta["obs_v2"] and REFUSES the dataset if
-meta.obs_dim disagrees with the header-implied flat length (the encoder-v2 doc
-requires refusing data whose flatHeader mismatches the parser). If "obs_v2" is
-absent (early hand-rolled datasets), the spec is recovered from the first row's
-self-describing header — every row's embedded header is still validated during
-parsing either way.
+The parser is built via ObsV2Spec.from_meta(meta["obs_v2"]) — the flat length
+comes from that block, NOT from meta.obs_dim (which is always the v1 width).
+Datasets without an obs_v2 block, or declaring obs_version != 2, are refused;
+rows lacking obsV2 (v1-only rows mixed in) are skipped and counted. Every kept
+row's embedded flat header is still validated during parsing.
 
 Losses (warm start = imitation + value regression):
     CE(chosen | masked softmax over candidate logits) + value_coef * MSE(value, ret)
@@ -59,20 +59,11 @@ def load_spec_for_dataset(data_dir: Path) -> tuple[ObsV2Spec, int]:
     with open(meta_path) as f:
         meta = json.load(f)
     act_dim = int(meta["act_dim"])
-    if "obs_v2" in meta:
-        spec = ObsV2Spec.from_meta(meta["obs_v2"])
-    else:
-        jsonl_files = sorted(p for p in data_dir.rglob("*.jsonl") if p.is_file())
-        if not jsonl_files:
-            raise FileNotFoundError(f"No *.jsonl files found in {data_dir}")
-        with open(jsonl_files[0]) as f:
-            first = json.loads(f.readline())
-        spec = ObsV2Spec.from_flat(np.asarray(first["obs"], dtype=np.float32))
-        print(f"warning: {meta_path} has no obs_v2 block; spec recovered from row header")
-    if int(meta["obs_dim"]) != spec.flat_length:
-        raise ValueError(
-            f"{meta_path}: obs_dim {meta['obs_dim']} != header-implied flat length {spec.flat_length}"
-        )
+    if "obs_v2" not in meta:
+        raise ValueError(f"{meta_path}: v2 training requires an obs_v2 block (pinned contract)")
+    if "obs_version" in meta and int(meta["obs_version"]) != 2:
+        raise ValueError(f"{meta_path}: obs_version {meta['obs_version']} != 2")
+    spec = ObsV2Spec.from_meta(meta["obs_v2"])
     return spec, act_dim
 
 
@@ -86,6 +77,7 @@ class DecisionDatasetV2(Dataset):
         self.chosen_list: list[int] = []
         self.ret_list: list[float] = []
         skipped = 0
+        skipped_no_v2 = 0
 
         jsonl_files = sorted(p for p in data_dir.rglob("*.jsonl") if p.is_file())
         if not jsonl_files:
@@ -98,7 +90,10 @@ class DecisionDatasetV2(Dataset):
                         continue
                     try:  # tolerate a partial trailing line during concurrent appends
                         rec: dict[str, Any] = json.loads(line)
-                        obs = np.asarray(rec["obs"], dtype=np.float32)
+                        if "obsV2" not in rec:  # v1-only row mixed into the dataset
+                            skipped_no_v2 += 1
+                            continue
+                        obs = np.asarray(rec["obsV2"], dtype=np.float32)
                         cands = np.asarray(rec["cands"], dtype=np.float32)
                         chosen = int(rec["chosen"])
                         ret = float(rec.get("ret", 0.0))
@@ -112,10 +107,16 @@ class DecisionDatasetV2(Dataset):
                     self.cands_list.append(cands)
                     self.chosen_list.append(chosen)
                     self.ret_list.append(ret)
+        self.skipped_no_v2 = skipped_no_v2
         if not self.obs_list:
-            raise ValueError(f"{data_dir}: no usable v2 rows (skipped {skipped})")
-        if skipped:
-            print(f"dataset: kept {len(self.obs_list)} rows, skipped {skipped}")
+            raise ValueError(
+                f"{data_dir}: no usable v2 rows (skipped {skipped} malformed, {skipped_no_v2} without obsV2)"
+            )
+        if skipped or skipped_no_v2:
+            print(
+                f"dataset: kept {len(self.obs_list)} rows, skipped {skipped} malformed, "
+                f"{skipped_no_v2} without obsV2"
+            )
 
     def __len__(self) -> int:
         return len(self.obs_list)

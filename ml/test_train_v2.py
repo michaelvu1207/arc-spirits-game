@@ -37,31 +37,35 @@ def load_fixture() -> tuple[ObsV2Spec, np.ndarray, dict]:
     return ObsV2Spec.from_meta(fx["meta"]), np.asarray(fx["flat"], dtype=np.float32), fx["meta"]
 
 
-def write_dataset(data_dir: Path, n_rows: int, paired: bool, seed: int = 11) -> dict:
-    """Real v2 obs + random cands; chosen = argmax(cands[:, 0]) so BC is learnable."""
-    spec, flat, meta = load_fixture()
+def write_dataset(data_dir: Path, n_rows: int, n_v1_only: int = 0, seed: int = 11) -> dict:
+    """
+    PINNED-contract rows (docs/encoder-v2.md): obs = v1 62-float ALWAYS,
+    obsV2 = real flat v2 encoding, cands random with a learnable signal
+    (chosen = argmax(cands[:, 0])). `n_v1_only` extra rows omit obsV2 to
+    exercise the skip-and-count path.
+    """
+    _, flat, meta = load_fixture()
     rng = np.random.default_rng(seed)
     data_dir.mkdir(parents=True, exist_ok=True)
     with open(data_dir / "gen.jsonl", "w") as f:
-        for i in range(n_rows):
+        for i in range(n_rows + n_v1_only):
             n_cands = int(rng.integers(3, 12))
             cands = rng.random((n_cands, ACT_DIM)).astype(np.float32)
-            chosen = int(np.argmax(cands[:, 0]))
             rec = {
-                "obs": flat[i % flat.shape[0]].tolist(),
+                "obs": rng.random(OBS_V1_DIM).astype(np.float32).round(4).tolist(),
                 "cands": cands.round(4).tolist(),
-                "chosen": chosen,
+                "chosen": int(np.argmax(cands[:, 0])),
                 "ret": float(rng.uniform(-1, 1)),
             }
-            if paired:
-                rec["obsV2"] = rec["obs"]
-                rec["obs"] = rng.random(OBS_V1_DIM).astype(np.float32).round(4).tolist()
+            if i < n_rows:
+                rec["obsV2"] = flat[i % flat.shape[0]].tolist()
             f.write(json.dumps(rec) + "\n")
     ds_meta = {
-        "obs_dim": OBS_V1_DIM if paired else spec.flat_length,
+        "obs_dim": OBS_V1_DIM,
         "act_dim": ACT_DIM,
+        "obs_version": 2,
         "obs_v2": meta,
-        "samples": n_rows,
+        "samples": n_rows + n_v1_only,
     }
     with open(data_dir / "meta.json", "w") as f:
         json.dump(ds_meta, f)
@@ -73,21 +77,35 @@ def write_dataset(data_dir: Path, n_rows: int, paired: bool, seed: int = 11) -> 
 def test_bc_dataset_and_meta_validation():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td) / "data"
-        write_dataset(d, 24, paired=False)
+        write_dataset(d, 24, n_v1_only=5)
         spec, act_dim = load_spec_for_dataset(d)
         assert act_dim == ACT_DIM
+        # BC reads obsV2 and skips+counts the v1-only rows.
         ds = DecisionDatasetV2(d, spec)
         assert len(ds) == 24
+        assert ds.skipped_no_v2 == 5
+        assert ds.obs_list[0].shape == (spec.flat_length,)
 
-        # Corrupt meta: obs_dim disagreeing with the header must be refused.
         with open(d / "meta.json") as f:
             meta = json.load(f)
-        meta["obs_dim"] += 1
+
+        # obs_version other than 2 must be refused.
+        bad = dict(meta, obs_version=1)
         with open(d / "meta.json", "w") as f:
-            json.dump(meta, f)
+            json.dump(bad, f)
         try:
             load_spec_for_dataset(d)
-            raise AssertionError("accepted obs_dim/header mismatch")
+            raise AssertionError("accepted obs_version 1")
+        except ValueError:
+            pass
+
+        # Missing obs_v2 block must be refused (pinned contract).
+        bad = {k: v for k, v in meta.items() if k != "obs_v2"}
+        with open(d / "meta.json", "w") as f:
+            json.dump(bad, f)
+        try:
+            load_spec_for_dataset(d)
+            raise AssertionError("accepted dataset without obs_v2 block")
         except ValueError:
             pass
 
@@ -103,7 +121,7 @@ def test_bc_dataset_and_meta_validation():
 def test_bc_warmstart_end_to_end():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td) / "data"
-        write_dataset(d, 64, paired=False)
+        write_dataset(d, 64)
         out = Path(td) / "weights" / "v2_bc.pt"
         stats = train_bc(
             d, out, epochs=4, batch_size=16, lr=1e-3,
@@ -133,7 +151,7 @@ def test_bc_warmstart_end_to_end():
 def test_bc_cli_smoke():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td) / "data"
-        write_dataset(d, 16, paired=False)
+        write_dataset(d, 16)
         out = Path(td) / "v2_bc.pt"
         r = subprocess.run(
             [sys.executable, str(Path(__file__).parent / "bc_warmstart_v2.py"),
@@ -150,7 +168,7 @@ def test_bc_cli_smoke():
 def test_distill_end_to_end():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td) / "data"
-        write_dataset(d, 64, paired=True)
+        write_dataset(d, 64)
         spec, _, _ = load_fixture()
         teacher = build_model_v2(spec, ACT_DIM, d_model=32, layers=1, heads=2, seed=3)
         teacher_pt = Path(td) / "teacher.pt"
@@ -180,7 +198,7 @@ def test_distill_end_to_end():
 def test_distill_refuses_mismatched_teacher():
     with tempfile.TemporaryDirectory() as td:
         d = Path(td) / "data"
-        write_dataset(d, 8, paired=True)
+        write_dataset(d, 8)
         # Teacher trained on a DIFFERENT obs layout (rune cap 9 instead of 8).
         other = ObsV2Spec.from_header([2, 6, 0, 1, 122, 1, 6, 55, 2, 42, 58, 3, 6, 49, 4, 9, 18, 5, 1, 10])
         teacher = build_model_v2(other, ACT_DIM, d_model=32, layers=1, heads=2, seed=0)

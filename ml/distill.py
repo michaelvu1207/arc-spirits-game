@@ -8,14 +8,16 @@ distillation: a frozen EntityCandidateScorer teacher (arc-entity-scorer-v2 .pt)
 supervises a fresh CandidateScorer student (ml/model.py), and the student is
 exported with train.py's export_weights to arc-cand-scorer-v1 JSON.
 
-PAIRED dataset contract — rows must carry BOTH encodings of the SAME decision:
+PAIRED rows per the pinned contract (docs/encoder-v2.md §"PINNED DATA
+CONTRACT") — both encodings of the SAME decision on one row:
 
     {"obs":   [62 floats],            # v1 summary (student input)
      "obsV2": [<flat v2 floats>],     # arc-obs-v2 flat (teacher input)
      "cands": [[52]...],
      "chosen": i, "ret": r, ...}      # chosen/ret optional (hard-label mixing)
 
-meta.json: {"obs_dim": 62, "act_dim": 52, "obs_v2": <obsV2Meta(catalog)>}.
+meta.json: {"obs_dim": 62, "act_dim": 52, "obs_version": 2,
+"obs_v2": <obsV2Meta(catalog) block>}.
 The teacher checkpoint's stored obs header must match meta.obs_v2's — a
 mismatch means the encodings drifted apart and distillation would be garbage.
 
@@ -152,6 +154,8 @@ def distill(
     obs_dim, act_dim = int(meta["obs_dim"]), int(meta["act_dim"])
     if "obs_v2" not in meta:
         raise ValueError(f"{meta_path}: paired distill datasets require an obs_v2 block")
+    if "obs_version" in meta and int(meta["obs_version"]) != 2:
+        raise ValueError(f"{meta_path}: obs_version {meta['obs_version']} != 2")
     spec = ObsV2Spec.from_meta(meta["obs_v2"])
 
     teacher = load_checkpoint(teacher_path, device=device, spec=spec).eval()
