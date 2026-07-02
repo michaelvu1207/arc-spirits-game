@@ -275,3 +275,18 @@ points**, every decision encoded; `encodeV2.test.ts` "full-game smoke"):
    float32 casting is exact. Parsers compare headers after float32 cast.
 5. Python consumers: parse via the self-describing header / `obs_v2.ObsV2Spec`,
    never hard-coded offsets.
+
+## PINNED DATA CONTRACT — v2 training rows (authoritative, 2026-07-02)
+One JSONL row format serves PPO-v2, BC warm start, AND v1<-v2 distillation:
+- `obs`  = v1 62-float vector (ALWAYS present, every row, all obs versions)
+- `obsV2` = 3,419-float arc-obs-v2 flat array (present when recorded at
+  obsVersion 2; absent on v1-only datasets)
+- `cands` = v1 encodeAction rows (52 floats) in every case
+- meta.json = { "obs_dim": 62, "act_dim": 52, "obs_version": 1|2,
+  "obs_v2": <obsV2Meta(catalog) block>  (present iff obs_version 2), ... }
+Consumers:
+- train.py --model v1 / awr / alphazero / ppo: read `obs`, ignore `obsV2`.
+- train.py --model v2 + bc_warmstart_v2.py: read `obsV2` (skip+count rows
+  lacking it), validate via ObsV2Spec.from_meta(meta["obs_v2"]).
+- distill.py: reads both keys on the same row (paired teacher/student).
+Any deviation from this shape is a bug; version-bump the contract to change it.
