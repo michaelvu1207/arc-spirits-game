@@ -128,8 +128,24 @@ export interface LeagueConfig {
 	temperature?: number;
 	gamma?: number;
 	train: LeagueTrainConfig;
-	/** Default init checkpoint for learner lanes (main; exploiters start fresh). */
+	/** Default init checkpoint for learner MAIN lanes (exploiters start fresh).
+	 *  The literal 'random' mints a deterministic random-init v1 checkpoint at
+	 *  init (ml/random_init_v1.py) — the honest zero-knowledge PPO start. */
 	initFrom?: string;
+	/**
+	 * Per-lane init override keyed by member id — a checkpoint path, or 'random'
+	 * to mint a fresh random-init v1 JSON for that lane. Beats `initFrom`.
+	 * A random-init lane is policy-driven (real logpOld) from game 1, so mode
+	 * ppo works from gen 1 with NO heuristic-bootstrap pollution — unlike a
+	 * no-init lane, whose gen-1 games are heuristic-played BC rows.
+	 */
+	laneInit?: Record<string, string>;
+	/**
+	 * Seed the roster with the frozen checkpoint anchors (default true). Set
+	 * false for from-scratch rediscovery runs: the league then contains ONLY
+	 * heuristic anchors + learners — no corruption-knowing checkpoints anywhere.
+	 */
+	seedCheckpointAnchors?: boolean;
 	/**
 	 * Baseline gauntlet-v1 Elos stamped on seeded FROZEN members at init, keyed by
 	 * member id or weights path. Takes precedence over the ml/gauntlet_results scan;

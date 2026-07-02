@@ -136,6 +136,9 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 		...(base.laneModel || over.laneModel
 			? { laneModel: { ...base.laneModel, ...over.laneModel } }
 			: {}),
+		...(base.laneInit || over.laneInit
+			? { laneInit: { ...base.laneInit, ...over.laneInit } }
+			: {}),
 		...(base.v2 || over.v2 ? { v2: { ...base.v2, ...over.v2 } } : {})
 	};
 }
@@ -167,18 +170,23 @@ export function loadLeague(root: string): { config: LeagueConfig; state: LeagueS
 // ── Init: seed the roster ────────────────────────────────────────────────────
 
 /**
- * Seed roster: the 8 gauntlet heuristic anchors + every active frozen checkpoint
+ * Seed roster: the 8 gauntlet heuristic anchors + (unless seedCheckpointAnchors
+ * is false — from-scratch rediscovery leagues) every active frozen checkpoint
  * anchor, plus the configured learner lanes. Main lanes warm-start from
- * config.initFrom; exploiter lanes start fresh (see bootstrap note in header).
+ * config.initFrom; config.laneInit overrides per lane; exploiter lanes default
+ * fresh (see bootstrap note in header). The 'random' init sentinel is resolved
+ * to a minted checkpoint by initLeague, not here (seedRoster stays fs-free).
  */
 export function seedRoster(config: LeagueConfig): LeagueMember[] {
 	const members: LeagueMember[] = [];
 	for (const name of HEURISTIC_ANCHORS) {
 		members.push({ id: `heur-${name}`, kind: 'heuristic', profile: name, createdGen: 0, matchStats: {} });
 	}
-	for (const c of CHECKPOINT_ANCHORS) {
-		if (c.status !== 'active') continue;
-		members.push({ id: `frozen-${c.name}`, kind: 'frozen', weightsPath: c.path, createdGen: 0, matchStats: {} });
+	if (config.seedCheckpointAnchors !== false) {
+		for (const c of CHECKPOINT_ANCHORS) {
+			if (c.status !== 'active') continue;
+			members.push({ id: `frozen-${c.name}`, kind: 'frozen', weightsPath: c.path, createdGen: 0, matchStats: {} });
+		}
 	}
 	for (let i = 0; i < config.lanes.main; i++) {
 		members.push({ id: `main-${i}`, kind: 'main', initFrom: config.initFrom, createdGen: 0, matchStats: {} });
@@ -192,8 +200,45 @@ export function seedRoster(config: LeagueConfig): LeagueMember[] {
 	for (const m of members) {
 		const model = config.laneModel?.[m.id];
 		if (model) m.model = model;
+		const init = config.laneInit?.[m.id];
+		if (init) m.initFrom = init;
 	}
 	return members;
+}
+
+/** Mint a deterministic random-init v1 checkpoint (ml/random_init_v1.py). */
+export function mintRandomInitCkpt(config: LeagueConfig, out: string, seed: number): void {
+	const r = spawnSync(
+		config.pythonBin,
+		['ml/random_init_v1.py', '--out', resolve(out), '--seed', String(seed)],
+		{ encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }
+	);
+	if (r.status !== 0) {
+		const tail = (r.stderr || r.stdout || '').split('\n').slice(-15).join('\n');
+		throw new Error(`league: random_init_v1.py failed (status ${r.status}):\n${tail}`);
+	}
+}
+
+/**
+ * Resolve every member whose initFrom is the 'random' sentinel to a freshly
+ * minted checkpoint under <root>/checkpoints/. The mint seed derives from
+ * seedBase + the member's roster position, so the SAME config reproduces the
+ * SAME zero-knowledge starting net anywhere. A random-init lane plays its own
+ * (random) net from game 1 — policy-driven, real logpOld — which is what lets
+ * mode ppo run from gen 1 with no heuristic-teacher pollution.
+ */
+export function resolveRandomInits(
+	members: LeagueMember[],
+	config: LeagueConfig,
+	root: string
+): void {
+	const p = leaguePaths(root);
+	members.forEach((m, idx) => {
+		if (m.initFrom !== 'random') return;
+		const out = join(p.checkpoints, `${m.id}-random-init.json`);
+		mintRandomInitCkpt(config, out, config.seedBase + 7919 * (idx + 1));
+		m.initFrom = out;
+	});
 }
 
 /**
@@ -307,6 +352,7 @@ export function initLeague(
 	if (!existsSync(p.config)) writeFileSync(p.config, JSON.stringify(config, null, '\t'));
 	const members = seedRoster(config);
 	stampBaselineElos(members, config);
+	resolveRandomInits(members, config, root);
 	const state: LeagueState = {
 		version: 'league-v1',
 		gen: 0,

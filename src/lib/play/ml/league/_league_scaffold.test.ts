@@ -43,6 +43,7 @@ import {
 	laneModelOf,
 	leaguePaths,
 	loadLeague,
+	mintRandomInitCkpt,
 	promotionBar,
 	readGauntletBaselines,
 	runGeneration,
@@ -52,11 +53,14 @@ import {
 	stopInferServers,
 	defaultConfig
 } from './manager';
-import type { HistoryLine, LeagueMember } from './types';
+import { loadPolicyWeights } from '../net';
+import type { HistoryLine, LeagueConfig, LeagueMember } from './types';
 
 const SMOKE = process.env.SMOKE === '1';
 const SMOKE_V2 = process.env.SMOKE_V2 === '1';
 const LIVE_WEIGHTS = resolve(process.cwd(), 'src/lib/play/ml/policy-weights.json');
+/** Random-init tests spawn the python util — skip cleanly where the venv is absent. */
+const HAVE_VENV = existsSync(resolve(process.cwd(), 'ml/.venv/bin/python'));
 
 function member(id: string, kind: LeagueMember['kind'], extra: Partial<LeagueMember> = {}): LeagueMember {
 	return { id, kind, createdGen: 0, matchStats: {}, ...extra };
@@ -420,6 +424,89 @@ describe('v2 lanes (unit)', () => {
 		expect(buildMatchup(config, learner, opps, 0, 1, { socket: '/tmp/s' }).config.selection).toBe('hybrid');
 		expect(buildMatchup(config, learner, opps, 0, 1).config.selection).toBe('value'); // v1 path untouched
 	});
+});
+
+describe('random-init lanes (from-scratch rediscovery)', () => {
+	(HAVE_VENV ? it : it.skip)(
+		'random_init_v1.py mints a deterministic ckpt that net.ts loadPolicyWeights accepts',
+		() => {
+			const dir = mkdtempSync(join(tmpdir(), 'league-randinit-'));
+			try {
+				const cfg = defaultConfig('unused');
+				const a = join(dir, 'a.json');
+				const b = join(dir, 'b.json');
+				mintRandomInitCkpt(cfg, a, 123);
+				mintRandomInitCkpt(cfg, b, 123);
+				expect(readFileSync(a, 'utf8')).toBe(readFileSync(b, 'utf8')); // seed-deterministic
+				const policy = loadPolicyWeights(JSON.parse(readFileSync(a, 'utf8')), {
+					expectedObsDim: 62,
+					expectedActDim: 52
+				});
+				expect(typeof policy.probs).toBe('function');
+				// A different seed mints a different net.
+				const c = join(dir, 'c.json');
+				mintRandomInitCkpt(cfg, c, 124);
+				expect(readFileSync(c, 'utf8')).not.toBe(readFileSync(a, 'utf8'));
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		},
+		120_000
+	);
+
+	(HAVE_VENV ? it : it.skip)(
+		'rediscovery template: heuristic-only roster, minted random init, PPO-driven from gen 1',
+		() => {
+			const template = JSON.parse(
+				readFileSync(resolve(process.cwd(), 'ml/league/configs/rediscovery.json'), 'utf8')
+			) as Partial<LeagueConfig>;
+			expect(template.laneInit).toEqual({ 'main-0': 'random' });
+			expect(template.seedCheckpointAnchors).toBe(false);
+			expect(template.mode).toBe('ppo');
+
+			const rootA = mkdtempSync(join(tmpdir(), 'league-rediscover-a-'));
+			const rootB = mkdtempSync(join(tmpdir(), 'league-rediscover-b-'));
+			try {
+				const { config, state } = initLeague(rootA, template);
+				// No corruption-knowing checkpoints anywhere: heuristics + the learner only.
+				expect(state.members.filter((m) => m.kind === 'frozen')).toHaveLength(0);
+				expect(state.members.filter((m) => m.kind === 'heuristic')).toHaveLength(8);
+				expect(state.members.map((m) => m.kind)).toContain('main');
+
+				// The 'random' sentinel resolved to a minted, loadable checkpoint.
+				const main = state.members.find((m) => m.id === 'main-0')!;
+				expect(main.initFrom).toBe(join(leaguePaths(rootA).checkpoints, 'main-0-random-init.json'));
+				expect(existsSync(main.initFrom!)).toBe(true);
+				loadPolicyWeights(JSON.parse(readFileSync(main.initFrom!, 'utf8')), {
+					expectedObsDim: 62,
+					expectedActDim: 52
+				});
+
+				// PPO from gen 1: the random-init lane is POLICY-driven in its first games
+				// (weightsPath + neuralSeats set ⇒ driver records logpOld/vPred)…
+				const heur = state.members.filter((m) => m.kind === 'heuristic').slice(0, 3);
+				const plan = buildMatchup(config, main, heur, 0, 1);
+				expect(plan.config.weightsPath).toBe(resolve(main.initFrom!));
+				expect(plan.config.neuralSeats).toEqual([plan.learnerSeat]);
+				// …unlike the no-init fallback, whose gen-1 games are heuristic-played
+				// BC rows (the bootstrap pollution the random init exists to avoid).
+				const fresh = member('main_exploiter-9', 'main_exploiter');
+				const boot = buildMatchup(config, fresh, heur, 0, 1);
+				expect(boot.config.weightsPath).toBeUndefined();
+				expect(boot.config.neuralSeats).toBeUndefined();
+
+				// Same config elsewhere reproduces the SAME zero-knowledge net.
+				const b = initLeague(rootB, template);
+				expect(readFileSync(b.state.members.find((m) => m.id === 'main-0')!.initFrom!, 'utf8')).toBe(
+					readFileSync(main.initFrom!, 'utf8')
+				);
+			} finally {
+				rmSync(rootA, { recursive: true, force: true });
+				rmSync(rootB, { recursive: true, force: true });
+			}
+		},
+		120_000
+	);
 });
 
 describe('league v2 smoke generation (SMOKE_V2=1)', () => {
