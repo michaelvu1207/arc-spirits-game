@@ -11,7 +11,9 @@ concurrent connections into single forward passes. --weights accepts either:
     reports the active format/obs_dim so RemotePolicy self-configures.
     The v2 placement head is NOT exposed over the wire.
 
-Framing:  4-byte little-endian length prefix + JSON payload.
+Framing:  4-byte little-endian length prefix + payload. The payload is JSON
+          (starts with '{') or a binary frame (first byte 0xB1) — see the
+          "Binary framing" block below; connections may mix both freely.
 Request:  {"id": <any>, "obs": [B x obs_dim], "cands": [B x C_i x act_dim],
            "want": ["logits", "value"]}          (want optional, default both;
                                                   cands may be ragged per row)
@@ -71,17 +73,172 @@ from train import hidden_sizes_from_checkpoint, load_json_weights_into
 MAX_FRAME_BYTES = 256 * 1024 * 1024
 
 
+def frame_bytes(payload: bytes) -> bytes:
+    return struct.pack("<I", len(payload)) + payload
+
+
 def encode_frame(obj: dict) -> bytes:
-    data = json.dumps(obj, separators=(",", ":")).encode()
-    return struct.pack("<I", len(data)) + data
+    return frame_bytes(json.dumps(obj, separators=(",", ":")).encode())
 
 
-async def read_frame(reader: asyncio.StreamReader) -> dict:
+async def read_payload(reader: asyncio.StreamReader) -> bytes:
     header = await reader.readexactly(4)
     (length,) = struct.unpack("<I", header)
     if length > MAX_FRAME_BYTES:
         raise ValueError(f"frame of {length} bytes exceeds limit")
-    return json.loads(await reader.readexactly(length))
+    return await reader.readexactly(length)
+
+
+async def read_frame(reader: asyncio.StreamReader) -> dict:
+    return json.loads(await read_payload(reader))
+
+
+# ---------------------------------------------------------------------------
+# Binary framing (v1)
+# ---------------------------------------------------------------------------
+# Same outer length prefix as JSON; the first PAYLOAD byte disambiguates
+# (JSON always starts with '{' = 0x7B, binary requests with 0xB1). No
+# negotiation round-trip; scoring only — the info handshake stays JSON.
+# All integers little-endian, floats little-endian f32. Bump the magic bytes
+# for any layout change.
+#
+# Request  = [0xB1 u8][want u8][id_len u32][B u32][obs_dim u32][act_dim u32]
+#            [C_i u32 x B][id utf8][obs f32 x B*obs_dim]
+#            [cands f32 x sum(C_i)*act_dim, row-major per row]
+# Response = [0xB2 u8][flags u8][id_len u32][id utf8] then
+#            if flags & 0x80 (error): [msg_len u32][msg utf8]
+#            else: [B u32][C_i u32 x B] + one section per set flag bit, in
+#            BIN_SECTION_ORDER: logits f32 x sum(C_i), value f32 x B,
+#            farm_value f32 x B, route_mode f32 x B, reward_pick f32 x sum(C_i)
+# want bitmask: 1=logits 2=value 4=farm_value 8=route_mode 16=reward_pick;
+# 0 = default (logits|value). Binary ids are UTF-8 strings, echoed verbatim.
+
+BIN_MAGIC_REQUEST = 0xB1
+BIN_MAGIC_RESPONSE = 0xB2
+BIN_ERROR_FLAG = 0x80
+BIN_WANT_BITS = {"logits": 1, "value": 2, "farm_value": 4, "route_mode": 8, "reward_pick": 16}
+BIN_SECTION_ORDER = ("logits", "value", "farm_value", "route_mode", "reward_pick")
+_BIN_REQ_HEADER = struct.Struct("<BBIIII")  # magic, want, id_len, B, obs_dim, act_dim
+
+
+def want_from_bits(bits: int) -> frozenset[str]:
+    if bits == 0:
+        return frozenset(("logits", "value"))
+    unknown = bits & ~sum(BIN_WANT_BITS.values())
+    if unknown:
+        raise ValueError(f"unknown want bits 0x{unknown:02x}")
+    return frozenset(k for k, b in BIN_WANT_BITS.items() if bits & b)
+
+
+def encode_binary_request(
+    req_id: str, obs: np.ndarray, cands: list[np.ndarray], want_bits: int = 0
+) -> bytes:
+    obs = np.ascontiguousarray(obs, dtype="<f4")
+    idb = str(req_id).encode()
+    act_dim = cands[0].shape[1] if cands else 0
+    parts = [
+        _BIN_REQ_HEADER.pack(BIN_MAGIC_REQUEST, want_bits, len(idb),
+                             obs.shape[0], obs.shape[1] if obs.ndim == 2 else 0, act_dim),
+        np.asarray([c.shape[0] for c in cands], dtype="<u4").tobytes(),
+        idb,
+        obs.tobytes(),
+    ]
+    parts += [np.ascontiguousarray(c, dtype="<f4").tobytes() for c in cands]
+    return b"".join(parts)
+
+
+def decode_binary_request(payload: bytes) -> tuple[str, np.ndarray, list[np.ndarray], int]:
+    """Returns (req_id, obs (B,obs_dim) f32, cands list of (C_i,act_dim) f32, want_bits)."""
+    if len(payload) < _BIN_REQ_HEADER.size:
+        raise ValueError("binary request truncated (header)")
+    _magic, want_bits, id_len, B, obs_dim, act_dim = _BIN_REQ_HEADER.unpack_from(payload, 0)
+    if id_len > len(payload) or B > 10_000_000:
+        raise ValueError("binary request header out of range")
+    off = _BIN_REQ_HEADER.size
+    counts = np.frombuffer(payload, dtype="<u4", count=B, offset=off)
+    off += 4 * B
+    req_id = payload[off : off + id_len].decode("utf-8")
+    off += id_len
+    obs = np.frombuffer(payload, dtype="<f4", count=B * obs_dim, offset=off)
+    obs = obs.reshape(B, obs_dim).copy()  # copy: frombuffer views are read-only
+    off += 4 * B * obs_dim
+    cands: list[np.ndarray] = []
+    for c in counts.tolist():
+        n = int(c) * act_dim
+        cands.append(
+            np.frombuffer(payload, dtype="<f4", count=n, offset=off).reshape(int(c), act_dim).copy()
+        )
+        off += 4 * n
+    if off != len(payload):
+        raise ValueError(f"binary request length mismatch: parsed {off} of {len(payload)} bytes")
+    return req_id, obs, cands, want_bits
+
+
+def encode_binary_response(req_id: str, result: dict[str, list], counts: list[int]) -> bytes:
+    idb = str(req_id).encode()
+    flags = sum(BIN_WANT_BITS[k] for k in BIN_SECTION_ORDER if k in result)
+    parts = [
+        struct.pack("<BBI", BIN_MAGIC_RESPONSE, flags, len(idb)),
+        idb,
+        struct.pack("<I", len(counts)),
+        np.asarray(counts, dtype="<u4").tobytes(),
+    ]
+    for k in BIN_SECTION_ORDER:
+        if k not in result:
+            continue
+        if k in ("logits", "reward_pick"):
+            flat = [x for row in result[k] for x in row]
+            parts.append(np.asarray(flat, dtype="<f4").tobytes())
+        else:
+            parts.append(np.asarray(result[k], dtype="<f4").tobytes())
+    return b"".join(parts)
+
+
+def encode_binary_error(req_id: str, message: str) -> bytes:
+    idb = str(req_id).encode()
+    msg = message.encode()
+    return b"".join([
+        struct.pack("<BBI", BIN_MAGIC_RESPONSE, BIN_ERROR_FLAG, len(idb)),
+        idb,
+        struct.pack("<I", len(msg)),
+        msg,
+    ])
+
+
+def decode_binary_response(payload: bytes) -> dict:
+    """Decodes to the SAME shape as a JSON response dict ({"id", sections} or {"id","error"})."""
+    if len(payload) < 6 or payload[0] != BIN_MAGIC_RESPONSE:
+        raise ValueError("not a binary response frame")
+    flags = payload[1]
+    (id_len,) = struct.unpack_from("<I", payload, 2)
+    off = 6
+    req_id = payload[off : off + id_len].decode("utf-8")
+    off += id_len
+    if flags & BIN_ERROR_FLAG:
+        (msg_len,) = struct.unpack_from("<I", payload, off)
+        off += 4
+        return {"id": req_id, "error": payload[off : off + msg_len].decode("utf-8")}
+    (B,) = struct.unpack_from("<I", payload, off)
+    off += 4
+    counts = np.frombuffer(payload, dtype="<u4", count=B, offset=off).tolist()
+    off += 4 * B
+    total = int(sum(counts))
+    out: dict = {"id": req_id}
+    for k in BIN_SECTION_ORDER:
+        if not (flags & BIN_WANT_BITS[k]):
+            continue
+        n = total if k in ("logits", "reward_pick") else B
+        arr = np.frombuffer(payload, dtype="<f4", count=n, offset=off)
+        off += 4 * n
+        if k in ("logits", "reward_pick"):
+            rows, i = [], 0
+            for c in counts:
+                rows.append(arr[i : i + c].tolist())
+                i += c
+            out[k] = rows
+        else:
+            out[k] = arr.tolist()
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -217,27 +374,37 @@ class InferServer:
         unknown = want - VALID_WANT
         if unknown:
             raise ValueError(f"unknown want keys {sorted(unknown)}; valid: {sorted(VALID_WANT)}")
+        self.check_aux_available(want)
+        return want
+
+    def check_aux_available(self, want: frozenset[str]) -> None:
         for head in AUX_HEADS:
             if head in want and not self.aux.get(head):
                 raise ValueError(f"{head} head not present in {self.weights_path.name}")
-        return want
 
     def make_job(self, msg: dict, want: frozenset[str]) -> _Job:
         obs_raw = msg.get("obs")
         cands_raw = msg.get("cands")
         if not isinstance(obs_raw, list) or not isinstance(cands_raw, list):
             raise ValueError("obs and cands must be lists")
-        if len(obs_raw) != len(cands_raw):
-            raise ValueError(f"obs has {len(obs_raw)} rows but cands has {len(cands_raw)}")
+        obs = np.asarray(obs_raw, dtype=np.float32) if obs_raw else np.zeros((0, self.obs_dim), dtype=np.float32)
+        cands = [np.asarray(row, dtype=np.float32) for row in cands_raw]
+        return self.job_from_arrays(obs, cands, want)
+
+    def job_from_arrays(
+        self, obs: np.ndarray, cands: list[np.ndarray], want: frozenset[str]
+    ) -> _Job:
+        """Shared validation for the JSON and binary paths (arrays already f32)."""
         loop = asyncio.get_running_loop()
-        if len(obs_raw) == 0:
+        if obs.shape[0] != len(cands):
+            raise ValueError(f"obs has {obs.shape[0]} rows but cands has {len(cands)}")
+        if len(cands) == 0:
             return _Job(
                 obs=np.zeros((0, self.obs_dim), dtype=np.float32),
                 cands=[],
                 want=want,
                 future=loop.create_future(),
             )
-        obs = np.asarray(obs_raw, dtype=np.float32)
         if obs.ndim != 2 or obs.shape[1] != self.obs_dim:
             raise ValueError(f"obs must be [B x {self.obs_dim}], got shape {obs.shape}")
         if self._v2_header is not None:
@@ -249,14 +416,11 @@ class InferServer:
                     "obs rows do not carry the arc-obs-v2 header this checkpoint "
                     f"expects ({self.model_format}, obs_dim={self.obs_dim})"
                 )
-        cands: list[np.ndarray] = []
-        for i, row in enumerate(cands_raw):
-            c = np.asarray(row, dtype=np.float32)
+        for i, c in enumerate(cands):
             if c.ndim != 2 or c.shape[0] < 1 or c.shape[1] != self.act_dim:
                 raise ValueError(
                     f"cands[{i}] must be [C_i x {self.act_dim}] with C_i >= 1, got shape {c.shape}"
                 )
-            cands.append(c)
         return _Job(obs=obs, cands=cands, want=want, future=loop.create_future())
 
     # -- batched forward ----------------------------------------------------
@@ -342,15 +506,38 @@ class InferServer:
 
     # -- connections ----------------------------------------------------------
 
+    async def handle_binary(self, payload: bytes, writer: asyncio.StreamWriter) -> None:
+        req_id = ""
+        try:
+            req_id, obs, cands, want_bits = decode_binary_request(payload)
+            want = want_from_bits(want_bits)
+            self.check_aux_available(want)
+            job = self.job_from_arrays(obs, cands, want)
+            if job.n_rows == 0:
+                result: dict[str, list] = {key: [] for key in want}
+            else:
+                await self.queue.put(job)
+                result = await job.future
+            writer.write(frame_bytes(
+                encode_binary_response(req_id, result, [c.shape[0] for c in cands])
+            ))
+        except Exception as e:  # noqa: BLE001 — per-request errors go to the client
+            writer.write(frame_bytes(encode_binary_error(req_id, str(e))))
+        await writer.drain()
+
     async def handle_connection(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         try:
             while True:
                 try:
-                    msg = await read_frame(reader)
+                    payload = await read_payload(reader)
                 except (asyncio.IncompleteReadError, ConnectionResetError):
                     break
+                if payload[:1] == bytes((BIN_MAGIC_REQUEST,)):
+                    await self.handle_binary(payload, writer)
+                    continue
+                msg = json.loads(payload)
                 req_id = msg.get("id") if isinstance(msg, dict) else None
                 try:
                     want = self.parse_want(msg if isinstance(msg, dict) else {})
@@ -482,6 +669,21 @@ class InferClient:
 
     async def info(self) -> dict:
         return await self.request(None, None, want=["info"])
+
+    async def request_binary(self, obs, cands, want: list[str] | None = None, req_id=None) -> dict:
+        """Binary-framed request; returns the same dict shape as request()."""
+        if req_id is None:
+            self._next_id += 1
+            req_id = self._next_id
+        bits = 0 if want is None else sum(BIN_WANT_BITS[w] for w in want)
+        obs_arr = np.asarray(obs, dtype=np.float32)
+        cand_arrs = [np.asarray(c, dtype=np.float32) for c in cands]
+        self._writer.write(frame_bytes(encode_binary_request(str(req_id), obs_arr, cand_arrs, bits)))
+        await self._writer.drain()
+        resp = decode_binary_response(await read_payload(self._reader))
+        if resp.get("id") != str(req_id):
+            raise RuntimeError(f"response id {resp.get('id')!r} != request id {req_id!r}")
+        return resp
 
     async def request(self, obs, cands, want: list[str] | None = None, req_id=None) -> dict:
         if req_id is None:

@@ -28,7 +28,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 import numpy as np
 import torch
 
-from infer_server import InferClient, load_scorer
+from infer_server import (
+    InferClient,
+    decode_binary_response,
+    encode_binary_request,
+    encode_frame,
+    frame_bytes,
+    load_scorer,
+    read_payload,
+)
 
 ML_DIR = Path(__file__).parent
 REPO_ROOT = ML_DIR.parent
@@ -323,6 +331,93 @@ def test_info_handshake_and_aux_heads():
     print(f"aux heads: served={available} refused={missing}")
 
 
+def _assert_same_response(json_resp: dict, bin_resp: dict, keys: list[str]) -> None:
+    for k in keys:
+        if k in ("logits", "reward_pick"):
+            for jr, br in zip(json_resp[k], bin_resp[k]):
+                assert np.allclose(
+                    np.asarray(jr, np.float32), np.asarray(br, np.float32), atol=1e-6
+                ), k
+        else:
+            assert np.allclose(
+                np.asarray(json_resp[k], np.float32), np.asarray(bin_resp[k], np.float32), atol=1e-6
+            ), k
+
+
+def test_binary_matches_json_and_malformed_frame():
+    _, obs_dim, act_dim, aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    rng = np.random.default_rng(51)
+    server = ServerProc(device="cpu")
+    want = ["logits", "value"] + [h for h, ok in aux.items() if ok]
+
+    async def run():
+        await server.wait_ready()
+        client = await InferClient.connect(server.socket_path)
+        for _ in range(10):
+            obs, cands = _random_request(rng, obs_dim, act_dim)
+            obs_l = [o.tolist() for o in obs]
+            cands_l = [c.tolist() for c in cands]
+            j = await client.request(obs_l, cands_l, want=want)
+            b = await client.request_binary(obs, cands, want=want)
+            assert "error" not in j and "error" not in b, (j.get("error"), b.get("error"))
+            _assert_same_response(j, b, want)
+
+        # Malformed binary frame: errors THIS request; the connection survives.
+        client._writer.write(frame_bytes(b"\xb1garbage"))
+        await client._writer.drain()
+        err = decode_binary_response(await read_payload(client._reader))
+        assert "error" in err, err
+        ok = await client.request_binary(obs, cands)
+        assert "error" not in ok and len(ok["value"]) == len(cands)
+        # Unavailable aux head over binary want bits -> per-request error.
+        missing = [h for h, has in aux.items() if not has]
+        if missing:
+            bad = await client.request_binary(obs, cands, want=[missing[0]])
+            assert "error" in bad and "not present" in bad["error"], bad
+        await client.close()
+
+    try:
+        asyncio.run(run())
+    finally:
+        server.stop()
+    print(f"binary==json on v1 for want={want}")
+
+
+def test_binary_and_json_clients_mixed():
+    _, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
+    server = ServerProc(device="cpu")
+    n_each, n_requests = 4, 50
+
+    async def one_client(ci: int, binary: bool) -> int:
+        rng = np.random.default_rng(300 + ci)
+        client = await InferClient.connect(server.socket_path)
+        for ri in range(n_requests):
+            obs, cands = _random_request(rng, obs_dim, act_dim, max_rows=4, max_cands=6)
+            if binary:
+                resp = await client.request_binary(obs, cands, req_id=f"b{ci}-{ri}")
+            else:
+                resp = await client.request(
+                    [o.tolist() for o in obs], [c.tolist() for c in cands], req_id=f"j{ci}-{ri}"
+                )
+            assert "error" not in resp, resp
+            assert len(resp["logits"]) == len(cands) and len(resp["value"]) == len(cands)
+        await client.close()
+        return n_requests
+
+    async def run():
+        await server.wait_ready()
+        jobs = [one_client(i, binary=False) for i in range(n_each)]
+        jobs += [one_client(i, binary=True) for i in range(n_each)]
+        return await asyncio.gather(*jobs)
+
+    try:
+        results = asyncio.run(run())
+    finally:
+        server.stop()
+    assert results == [n_requests] * (2 * n_each), results
+    print(f"mixed clients: {n_each} JSON + {n_each} binary x {n_requests} requests, all clean")
+
+
 def test_v2_correctness_handshake_and_aux():
     with tempfile.TemporaryDirectory() as td:
         ckpt = make_v2_checkpoint(Path(td))
@@ -450,45 +545,69 @@ def test_sighup_swaps_v1_to_v2():
 
 
 def test_v2_throughput_report():
-    """v2 transformer at realistic decision shapes (B=32 rows, C=30 cands) on auto device."""
+    """v2 transformer at realistic decision shapes (B=32 rows, C=30 cands) on auto
+    device: JSON vs binary framing, single client and 8 clients, plus the
+    bytes-per-request comparison for the TS client."""
     with tempfile.TemporaryDirectory() as td:
         ckpt = make_v2_checkpoint(Path(td))
         server = ServerProc(device="auto", weights=ckpt)
         pool = v2_obs_pool()
         rng = np.random.default_rng(41)
         rows_per_req, n_cands = 32, 30
-        obs = pool[rng.integers(0, pool.shape[0], size=rows_per_req)].tolist()
-        cands = [rng.standard_normal((n_cands, 52)).tolist() for _ in range(rows_per_req)]
+        obs_arr = pool[rng.integers(0, pool.shape[0], size=rows_per_req)]
+        cand_arrs = [rng.standard_normal((n_cands, 52)).astype(np.float32) for _ in range(rows_per_req)]
+        obs = obs_arr.tolist()
+        cands = [c.tolist() for c in cand_arrs]
 
-        async def closed_loop(n_reqs: int) -> int:
+        json_bytes = len(encode_frame({"id": 1, "obs": obs, "cands": cands}))
+        bin_bytes = len(frame_bytes(encode_binary_request("1", obs_arr, cand_arrs, 0)))
+
+        async def closed_loop(binary: bool, n_reqs: int) -> int:
             client = await InferClient.connect(server.socket_path)
             for _ in range(n_reqs):
-                resp = await client.request(obs, cands)
+                if binary:
+                    resp = await client.request_binary(obs_arr, cand_arrs)
+                else:
+                    resp = await client.request(obs, cands)
                 assert "error" not in resp
             await client.close()
             return n_reqs * rows_per_req
 
-        async def run():
-            await server.wait_ready()
-            await closed_loop(3)  # warmup
+        async def measure(binary: bool) -> tuple[float, float]:
             t0 = time.monotonic()
-            rows = await closed_loop(20)
+            rows = await closed_loop(binary, 20)
             single = rows / (time.monotonic() - t0)
             t0 = time.monotonic()
-            totals = await asyncio.gather(*(closed_loop(8) for _ in range(8)))
+            totals = await asyncio.gather(*(closed_loop(binary, 8) for _ in range(8)))
             eight = sum(totals) / (time.monotonic() - t0)
             return single, eight
 
+        async def run():
+            await server.wait_ready()
+            await closed_loop(False, 3)  # warmup (device kernels + first forwards)
+            json_nums = await measure(binary=False)
+            bin_nums = await measure(binary=True)
+            # Sanity: both framings return the same scores for the same inputs.
+            client = await InferClient.connect(server.socket_path)
+            j = await client.request(obs, cands)
+            b = await client.request_binary(obs_arr, cand_arrs)
+            _assert_same_response(j, b, ["logits", "value"])
+            await client.close()
+            return json_nums, bin_nums
+
         try:
-            single, eight = asyncio.run(run())
+            (json_single, json_eight), (bin_single, bin_eight) = asyncio.run(run())
             log_tail = "\n".join(server.log_path.read_text().strip().splitlines()[-3:])
         finally:
             server.stop()
     print(f"v2 throughput (auto device, {rows_per_req} rows/req, {n_cands} cands/row):")
-    print(f"  single client: {single:,.0f} rows/s")
-    print(f"  8 clients:     {eight:,.0f} rows/s")
+    print(f"  request size: JSON {json_bytes:,} B vs binary {bin_bytes:,} B "
+          f"({json_bytes / bin_bytes:.1f}x smaller)")
+    print(f"  JSON   single: {json_single:,.0f} rows/s | 8 clients: {json_eight:,.0f} rows/s")
+    print(f"  binary single: {bin_single:,.0f} rows/s | 8 clients: {bin_eight:,.0f} rows/s")
+    print(f"  speedup: single {bin_single / json_single:.2f}x | 8-client {bin_eight / json_eight:.2f}x")
     print(f"  server log tail:\n{log_tail}")
-    assert single > 0 and eight > 0
+    assert bin_single > 0 and bin_eight > 0 and json_single > 0 and json_eight > 0
 
 
 def test_throughput_report():
@@ -556,6 +675,8 @@ def main() -> int:
         test_concurrent_clients_no_drops,
         test_sighup_reload_keeps_serving,
         test_info_handshake_and_aux_heads,
+        test_binary_matches_json_and_malformed_frame,
+        test_binary_and_json_clients_mixed,
         test_v2_correctness_handshake_and_aux,
         test_sighup_swaps_v1_to_v2,
         test_throughput_report,
