@@ -17,6 +17,11 @@ Losses:
       reward_pick(obs, cand) -> reward-pick policy target
       route_mode(obs) -> Fallen route mode scalar (1=hunt Good player, 0=return Abyss)
   - Total:  policy_loss + value_coef * value_loss + optional auxiliary losses
+
+--mode ppo trains on the trajectory JSONL format (rows carrying
+gameId/stepIdx/rStep/done/logpOld/vPred/placement on top of the usual fields)
+with clipped-surrogate PPO + GAE; see ppo.py. Old-format rows without those
+fields still train under awr/alphazero, and trajectory rows still load here.
 """
 
 from __future__ import annotations
@@ -312,6 +317,30 @@ def hidden_sizes_from_checkpoint(path: Path) -> tuple[tuple[int, ...], tuple[int
         return None
 
 
+def build_policy_model(
+    obs_dim: int,
+    act_dim: int,
+    device: torch.device,
+    out_path: Path,
+    init_from: Path | None,
+    warm_start: bool,
+) -> CandidateScorer:
+    """Build the model, inferring widths from and warm-starting on a checkpoint if available."""
+    init_path = init_from if init_from is not None else (out_path if out_path.exists() else None)
+    inferred_hidden = hidden_sizes_from_checkpoint(init_path) if init_path is not None else None
+    model = build_model(
+        obs_dim,
+        act_dim,
+        device,
+        trunk_hidden=inferred_hidden[0] if inferred_hidden else None,
+        value_hidden=inferred_hidden[1] if inferred_hidden else None,
+    )
+    if warm_start and init_path is not None and init_path.exists():
+        ok = load_json_weights_into(model, init_path)
+        print(f"warm-start from {init_path}: {'OK' if ok else 'skipped (mismatch)'}")
+    return model
+
+
 def train(
     data_dir: Path,
     out_path: Path,
@@ -327,9 +356,48 @@ def train(
     route_mode_coef: float = 0.0,
     warm_start: bool = True,
     init_from: Path | None = None,
+    gamma: float = 0.997,
+    gae_lambda: float = 0.95,
+    clip_eps: float = 0.2,
+    entropy_coef: float = 0.01,
+    entropy_anneal: bool = False,
+    value_clip_eps: float = 0.0,
+    target_kl: float | None = None,
+    placement_rewards: str = "1.0,0.3,-0.3,-1.0",
 ) -> None:
     device = get_device()
     print(f"Device: {device}  mode={mode}")
+
+    if mode == "ppo":
+        from ppo import load_trajectory_buffer, parse_placement_rewards, train_ppo
+
+        obs_dim, act_dim = load_dims_from_meta(data_dir)
+        print(f"obs_dim={obs_dim}, act_dim={act_dim}")
+        buffer = load_trajectory_buffer(
+            data_dir,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+            placement_rewards=parse_placement_rewards(placement_rewards),
+        )
+        model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
+        train_ppo(
+            model,
+            buffer,
+            device,
+            epochs=epochs,
+            batch_size=batch_size,
+            lr=lr,
+            clip_eps=clip_eps,
+            policy_coef=policy_coef,
+            value_coef=value_coef,
+            entropy_coef=entropy_coef,
+            entropy_anneal=entropy_anneal,
+            value_clip_eps=value_clip_eps,
+            target_kl=target_kl,
+        )
+        export_weights(model, obs_dim, act_dim, out_path)
+        print(f"\nWeights exported to: {out_path}")
+        return
 
     # Load data
     dataset = DecisionDataset(data_dir)
@@ -347,18 +415,7 @@ def train(
         drop_last=False,
     )
 
-    init_path = init_from if init_from is not None else (out_path if out_path.exists() else None)
-    inferred_hidden = hidden_sizes_from_checkpoint(init_path) if init_path is not None else None
-    model = build_model(
-        obs_dim,
-        act_dim,
-        device,
-        trunk_hidden=inferred_hidden[0] if inferred_hidden else None,
-        value_hidden=inferred_hidden[1] if inferred_hidden else None,
-    )
-    if warm_start and init_path is not None and init_path.exists():
-        ok = load_json_weights_into(model, init_path)
-        print(f"warm-start from {init_path}: {'OK' if ok else 'skipped (mismatch)'}")
+    model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     for epoch in range(1, epochs + 1):
@@ -555,8 +612,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--beta", type=float, default=1.0, help="AWR temperature (0=behavior cloning)")
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--mode", choices=["awr", "alphazero"], default="awr",
-                   help="awr = advantage-weighted CE on chosen; alphazero = cross-entropy to MCTS pi")
+    p.add_argument("--mode", choices=["awr", "alphazero", "ppo"], default="awr",
+                   help="awr = advantage-weighted CE on chosen; alphazero = cross-entropy to MCTS pi; "
+                        "ppo = clipped PPO on trajectory rows (gameId/stepIdx/rStep/done/logpOld/vPred)")
     p.add_argument("--value-coef", type=float, default=0.5, help="Weight on the value-head MSE loss")
     p.add_argument("--policy-coef", type=float, default=1.0, help="Weight on the main policy loss")
     p.add_argument("--farm-value-coef", type=float, default=0.0,
@@ -565,6 +623,25 @@ def parse_args() -> argparse.Namespace:
                    help="Weight on the auxiliary reward-pick policy cross-entropy loss")
     p.add_argument("--route-mode-coef", type=float, default=0.0,
                    help="Weight on the auxiliary Fallen route-mode BCE loss")
+    # PPO flags (used only with --mode ppo). --epochs is the K passes over the
+    # rollout buffer; --batch-size the minibatch size; --policy-coef/--value-coef
+    # weight the surrogate and value losses as in the other modes.
+    # gamma default 0.997: effective horizon 1/(1-gamma) ~ 333 steps. Games run
+    # ~200-1000 decisions, so the terminal placement reward still reaches
+    # early-game decisions (0.997^300 ~ 0.41) without washing out per-step
+    # shaping credit on short games.
+    p.add_argument("--gamma", type=float, default=0.997, help="PPO discount factor")
+    p.add_argument("--gae-lambda", type=float, default=0.95, help="GAE lambda")
+    p.add_argument("--clip-eps", type=float, default=0.2, help="PPO surrogate clip epsilon")
+    p.add_argument("--entropy-coef", type=float, default=0.01, help="PPO entropy bonus coefficient")
+    p.add_argument("--entropy-anneal", action="store_true",
+                   help="Linearly anneal the entropy coefficient to 0 over the epochs")
+    p.add_argument("--value-clip-eps", type=float, default=0.0,
+                   help=">0 enables PPO value clipping against the recorded vPred")
+    p.add_argument("--target-kl", type=float, default=None,
+                   help="Early-stop the PPO epochs when approx KL(old||new) exceeds this")
+    p.add_argument("--placement-rewards", type=str, default="1.0,0.3,-0.3,-1.0",
+                   help="Terminal reward for placements 1-4, added to rStep on the done row")
     p.add_argument("--init-from", type=Path, default=None,
                    help="Optional checkpoint to warm-start from while exporting to --out")
     p.add_argument("--no-warm-start", dest="warm_start", action="store_false",
@@ -590,4 +667,12 @@ if __name__ == "__main__":
         route_mode_coef=args.route_mode_coef,
         warm_start=args.warm_start,
         init_from=args.init_from,
+        gamma=args.gamma,
+        gae_lambda=args.gae_lambda,
+        clip_eps=args.clip_eps,
+        entropy_coef=args.entropy_coef,
+        entropy_anneal=args.entropy_anneal,
+        value_clip_eps=args.value_clip_eps,
+        target_kl=args.target_kl,
+        placement_rewards=args.placement_rewards,
     )
