@@ -774,3 +774,78 @@ describe('per-combat flags reset between combats', () => {
 		expect(p.initiative).toBe(0);
 	});
 });
+
+describe('rules v1.2 — Fallen corruption shortfall costs VP', () => {
+	it('already-Fallen corruption with too few spirits: unpayable sacrifices become -1 VP each', () => {
+		// 4th corruption owes 4; only 2 spirits held → discard 2, lose 2 VP.
+		const p = makePlayer({
+			barrier: 2,
+			maxBarrier: 4,
+			statusLevel: 3,
+			statusToken: 'Fallen',
+			corruptionCount: 3,
+			victoryPoints: 10,
+			spirits: [spirit(1, {}), spirit(2, {})]
+		});
+		const log: string[] = [];
+		const r = takeDamage(p, 2, undefined, log);
+		expect(r.corrupted).toBe(true);
+		expect(p.statusLevel).toBe(3); // ladder clamps at Fallen
+		expect(p.corruptionCount).toBe(4);
+		expect(p.pendingCorruptionDiscard).toEqual({ count: 2, reason: undefined });
+		expect(p.victoryPoints).toBe(8);
+		expect(log.some((l) => l.includes('2 VP lost'))).toBe(true);
+	});
+
+	it('already-Fallen corruption with ZERO spirits: the whole debt converts to VP, clamped at 0', () => {
+		// 5th corruption owes 5; no spirits → no obligation, VP 3 → 0 (clamp).
+		const p = makePlayer({
+			barrier: 1,
+			maxBarrier: 4,
+			statusLevel: 3,
+			statusToken: 'Fallen',
+			corruptionCount: 4,
+			victoryPoints: 3,
+			spirits: []
+		});
+		const r = takeDamage(p, 1);
+		expect(r.corrupted).toBe(true);
+		expect(p.pendingCorruptionDiscard).toBeNull();
+		expect(p.victoryPoints).toBe(0);
+	});
+
+	it('the corruption that CROSSES into Fallen is exempt (pre-corruption status decides)', () => {
+		// Corrupt → Fallen crossing, 3rd corruption owes 3, zero spirits: old forgiveness, no VP loss.
+		const p = makePlayer({
+			barrier: 1,
+			maxBarrier: 4,
+			statusLevel: 2,
+			statusToken: 'Corrupt',
+			corruptionCount: 2,
+			victoryPoints: 10,
+			spirits: []
+		});
+		const r = takeDamage(p, 1);
+		expect(r.corrupted).toBe(true);
+		expect(p.statusLevel).toBe(3);
+		expect(p.victoryPoints).toBe(10);
+		expect(p.pendingCorruptionDiscard).toBeNull();
+	});
+
+	it('pre-Fallen shortfalls keep the old forgiveness (no VP loss)', () => {
+		// Pure → Tainted, 2nd corruption owes 2, 1 spirit: discard 1, forgive 1, VP untouched.
+		const p = makePlayer({
+			barrier: 1,
+			maxBarrier: 4,
+			statusLevel: 0,
+			statusToken: 'Pure',
+			corruptionCount: 1,
+			victoryPoints: 5,
+			spirits: [spirit(1, {})]
+		});
+		const r = takeDamage(p, 1);
+		expect(r.corrupted).toBe(true);
+		expect(p.pendingCorruptionDiscard).toEqual({ count: 1, reason: undefined });
+		expect(p.victoryPoints).toBe(5);
+	});
+});

@@ -1527,7 +1527,12 @@ export function applyGameCommand(
 					activePlayer.player.barrier = activePlayer.player.maxBarrier;
 					activePlayer.player.brokenBarrier = 0;
 					activePlayer.player.corruptionCount = (activePlayer.player.corruptionCount ?? 0) + 1;
-					setCorruptionDiscardObligation(activePlayer.player);
+					// wasFallen is structurally false here (an upward move FROM Fallen is
+					// impossible — the ladder clamps), but pass the real check for parity
+					// with the combat site.
+					setCorruptionDiscardObligation(activePlayer.player, undefined, {
+						wasFallen: oldStatus === STATUS_LADDER.length - 1
+					});
 				}
 				applyStatusChange(
 					state,

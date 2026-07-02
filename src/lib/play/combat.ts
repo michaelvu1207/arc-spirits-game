@@ -178,7 +178,14 @@ export function takeDamage(
 		player.barrier = player.maxBarrier;
 		player.brokenBarrier = 0;
 		player.corruptionCount = (player.corruptionCount ?? 0) + 1;
-		setCorruptionDiscardObligation(player);
+		const vpCharged = setCorruptionDiscardObligation(player, undefined, {
+			wasFallen: oldStatus === STATUS_LADDER.length - 1
+		});
+		if (vpCharged > 0) {
+			log?.push(
+				`Corruption while Fallen: ${vpCharged} owed sacrifice${vpCharged === 1 ? '' : 's'} could not be paid in spirits — ${vpCharged} VP lost instead.`
+			);
+		}
 		// onStatusChange: record the crossed thresholds + fire the trigger (only when
 		// we have the state/seat plumbing — `ctx` is absent for bare-player tests).
 		if (ctx && player.statusLevel !== oldStatus) {

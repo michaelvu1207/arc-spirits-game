@@ -209,20 +209,37 @@ export function spiritLimitFor(_statusLevel?: number): number {
  * corruptions land in one exchange the owed counts ACCUMULATE so none are dropped. The owner
  * chooses which spirits to shed via `discardSpirit`; the deadline drain auto-resolves any
  * remainder. There is no status slot-cap any more.
+ *
+ * Rules v1.2: corrupting while ALREADY Fallen (`opts.wasFallen` — the caller passes the
+ * status BEFORE this corruption, so the 2→3 crossing itself is exempt) converts the
+ * unpayable part of the sacrifice into VP loss: 1 VP per owed spirit the player cannot
+ * discard, clamped at 0 VP (the adjustVictoryPoints convention). Pre-Fallen corruptions
+ * keep the old forgiveness — the descent stays cheap; the Fallen treadmill no longer is.
+ * Returns the VP charged (0 when the rule did not fire) so combat callers can log it.
  */
-export function setCorruptionDiscardObligation(player: PrivatePlayerState, reason?: string): void {
+export function setCorruptionDiscardObligation(
+	player: PrivatePlayerState,
+	reason?: string,
+	opts?: { wasFallen?: boolean }
+): number {
 	const owed = player.corruptionCount ?? 0;
-	if (owed <= 0) return;
+	if (owed <= 0) return 0;
 	const existing = player.pendingCorruptionDiscard;
 	// You can only ever sacrifice spirits you actually have. Cap the obligation at the
 	// current spirit count so corrupting with too few — or zero — spirits never strands an
 	// unpayable debt that blocks Cleanup: zero spirits skips the obligation entirely, and
 	// fewer spirits than owed just sheds every remaining spirit, then clears.
 	const available = player.spirits?.length ?? 0;
-	const count = Math.min((existing?.count ?? 0) + owed, available);
+	const desired = (existing?.count ?? 0) + owed;
+	const count = Math.min(desired, available);
+	let vpCharged = 0;
+	if (opts?.wasFallen && desired > count) {
+		vpCharged = desired - count;
+		player.victoryPoints = Math.max(0, (player.victoryPoints ?? 0) - vpCharged);
+	}
 	if (count <= 0) {
 		player.pendingCorruptionDiscard = null;
-		return;
+		return vpCharged;
 	}
 	if (existing) {
 		existing.count = count;
@@ -230,6 +247,7 @@ export function setCorruptionDiscardObligation(player: PrivatePlayerState, reaso
 	} else {
 		player.pendingCorruptionDiscard = { count, reason };
 	}
+	return vpCharged;
 }
 
 /** Attack-dice tiers, weakest → strongest. Elementalist upgrades climb this list. */

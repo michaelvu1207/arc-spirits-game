@@ -30,7 +30,9 @@ import { createRng, nextInt } from '../../rng';
 // candidates could not gain measurable Elo. Adding the champion restores
 // headroom. The anchor-field draw shifts with the pool → v3 scores are a NEW
 // SCALE, non-comparable to v2 (v2 result files remain the historical record).
-export const GAUNTLET_VERSION = 'gauntlet-v3';
+// v4 = rules v1.2 (Fallen corruption shortfall costs VP — docs/rules-v1.2.md);
+// schedule/anchors/metric identical to v3, scored under the new rules.
+export const GAUNTLET_VERSION = 'gauntlet-v4';
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;
