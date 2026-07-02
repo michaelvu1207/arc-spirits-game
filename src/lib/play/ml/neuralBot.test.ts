@@ -311,24 +311,23 @@ describe('neural value action scoring', () => {
 		expect(plan!.priors[abyssIndex]).toBeGreaterThan(Math.max(...plan!.priors.filter((_, i) => i !== abyssIndex)));
 	});
 
-	it('treats ending location actions as progress and market refill as a no-op', () => {
+	it('offers no market commands (rules v1.1) and treats ending location actions as progress', () => {
 		const state = atQuietLocation();
 		const actions = legalActionsWithNext(state, 'Red', CATALOG);
-		const refill = actions.findIndex((a) => a.cmd.type === 'refillMarket');
-		const endLocation = actions.findIndex((a) => a.cmd.type === 'endLocationActions');
+		// Rules v1.1: the market family is not a player action, so the free
+		// refillMarket/takeSpirit churn that used to dominate quiet locations must
+		// never reach the candidate surface.
+		expect(actions.some((a) => a.cmd.type === 'refillMarket')).toBe(false);
+		expect(actions.some((a) => a.cmd.type === 'takeSpirit')).toBe(false);
+		expect(actions.some((a) => a.cmd.type === 'replaceSpirit')).toBe(false);
 
-		expect(refill).toBeGreaterThanOrEqual(0);
+		const endLocation = actions.findIndex((a) => a.cmd.type === 'endLocationActions');
 		expect(endLocation).toBeGreaterThanOrEqual(0);
 		expect(actions[endLocation].next.players.Red!.phaseReady).toBe(true);
 
-		const scores = scoreByValue(neutralPolicy, state, 'Red', actions);
-		const refillFeatures = encodeAction(state, 'Red', actions[refill].cmd, actions[refill].next);
 		const endFeatures = encodeAction(state, 'Red', actions[endLocation].cmd, actions[endLocation].next);
-		expect(refillFeatures).toHaveLength(ACT_DIM);
 		expect(endFeatures).toHaveLength(ACT_DIM);
-		expect(refillFeatures.at(-1)).toBe(1);
 		expect(endFeatures.slice(-5)[2]).toBe(1);
-		expect(scores[endLocation]).toBeGreaterThan(scores[refill]);
 		expect(actions[valueGuidedIndex(neutralPolicy, state, 'Red', actions)].cmd.type).toBe(
 			'endLocationActions'
 		);

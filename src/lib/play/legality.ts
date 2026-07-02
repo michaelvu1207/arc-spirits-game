@@ -60,6 +60,11 @@ export function canApply(
 		case 'absorbSpirit':
 		case 'attachRuneToSpirit':
 		case 'detachRuneFromSpirit':
+		// Market family removed from the player surface (rules v1.1): the reducer
+		// rejects all three unconditionally ('unsupported_command').
+		case 'takeSpirit':
+		case 'replaceSpirit':
+		case 'refillMarket':
 			return false;
 
 		// ─── Navigation phase ───────────────────────────────────────────────
@@ -84,23 +89,6 @@ export function canApply(
 			if (!me) return false;
 			if (!isEvilAlignment(me.statusLevel)) return false;
 			return undefined; // no_targets needs encounterGoodTargets(state, seat) — defer (1 candidate)
-		}
-
-		// ─── Location phase: market ─────────────────────────────────────────
-		case 'takeSpirit':
-		case 'replaceSpirit': {
-			if (!active) return false;
-			const me = seatPlayer(state, actor);
-			if (!me) return false;
-			const slot = state.market?.[command.marketIndex];
-			if (!slot || !slot.spiritId) return false;
-			if (!catalog.spirits.find((e) => e.id === slot.spiritId)) return false;
-			const slotIndex = command.type === 'takeSpirit' ? command.slotIndex ?? firstOpenSpiritSlot(me) : command.slotIndex;
-			if (!slotIndex || slotIndex < 1 || slotIndex > 7) return false;
-			return true;
-		}
-		case 'refillMarket': {
-			return active ? true : false;
 		}
 
 		// ─── Location phase: hand draws (summoning) ─────────────────────────

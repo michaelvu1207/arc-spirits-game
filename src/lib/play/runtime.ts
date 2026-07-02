@@ -1305,70 +1305,31 @@ export function applyGameCommand(
 			return success(state);
 		}
 
+		// ── Market commands: removed from the player surface (rules v1.1) ──────
+		// The specialized-location model has no market action: spirits enter play
+		// only through Summon draws (location reward rows / monster-reward tokens)
+		// or the opening hands, all inside the one-location-per-round commitment.
+		// These three commands had no UI dispatch path, no cost, no phase or
+		// destination gate and no per-round limit, so bots could build entire
+		// boards from free market takes while locked to the Abyss (replaceSpirit
+		// also destroyed the replaced spirit instead of returning it to its bag).
+		// The market array stays in state for snapshot compatibility but is inert;
+		// startGame still stocks it via refillEmptyMarketSlots (display only).
 		case 'takeSpirit':
-		case 'replaceSpirit': {
-			if (state.status !== 'active') {
-				return failure('inactive', 'The game has not started yet.');
-			}
-
-			const activePlayer = activePlayerForActor(state, actor);
-			if (!activePlayer) {
-				return failure('seat_required', 'Only seated players can take a spirit.');
-			}
-
-			const marketSlot = state.market[command.marketIndex];
-			if (!marketSlot || !marketSlot.spiritId) {
-				return failure('market_empty', 'That market slot is empty.');
-			}
-
-			const spirit = catalog.spirits.find((entry) => entry.id === marketSlot.spiritId);
-			if (!spirit) {
-				return failure('spirit_missing', 'That spirit could not be found in the catalog.');
-			}
-
-			const slotIndex =
-				command.type === 'replaceSpirit'
-					? command.slotIndex
-					: (command.slotIndex ?? firstOpenSpiritSlot(activePlayer.player));
-
-			if (!slotIndex || slotIndex < 1 || slotIndex > 7) {
-				return failure('slot_missing', 'No open spirit slot is available.');
-			}
-
-			activePlayer.player.spirits = activePlayer.player.spirits.filter(
-				(candidate) => candidate.slotIndex !== slotIndex
-			);
-			// Overwriting a slot drops any augment bound to the spirit that was there.
-			activePlayer.player.spiritAugmentAttachments = (
-				activePlayer.player.spiritAugmentAttachments ?? []
-			).filter((attachment) => attachment.spiritSlotIndex !== slotIndex);
-			activePlayer.player.spirits.push({
-				slotIndex,
-				id: spirit.id,
-				name: spirit.name,
-				cost: spirit.cost,
-				classes: spirit.classes,
-				origins: spirit.origins,
-				isFaceDown: false
-			});
-			activePlayer.player.spirits.sort((a, b) => a.slotIndex - b.slotIndex);
-
-			marketSlot.spiritId = null;
-			refillSingleMarketSlot(state, command.marketIndex);
-			// onSpiritSummon: taking a market spirit is also a summon — fire scoped to the
-			// taken spirit's own classes so its on-summon grant resolves here too (silently;
-			// the granted die/barrier shows directly, no result-card interruption).
-			applyTrigger(state, activePlayer.seatColor, 'onSpiritSummon', [], {
-				catalog,
-				command,
-				counts: spirit.classes
-			});
-			return success(state);
-		}
+		case 'replaceSpirit':
+		case 'refillMarket':
+			return failure('unsupported_command', 'The spirit market is not a player action.');
 
 		case 'selectNavigationDestination': {
 			if (state.status !== 'active') {
 				return failure('inactive', 'The game has not started yet.');
+			}
+			// Same commitment gate as lockNavigation: a destination may only be set
+			// during the pre-reveal Navigation phase. Without this, the (legacy,
+			// UI-less) command could rewrite navigationDestination mid-round and
+			// break the one-location-per-round rule for any future caller.
+			if (state.phase !== 'navigation' || state.revealedDestinations) {
+				return failure('wrong_phase', 'Navigation is closed for this round.');
 			}
 
 			const activePlayer = activePlayerForActor(state, actor);
@@ -1387,14 +1348,6 @@ export function applyGameCommand(
 			}
 
 			activePlayer.player.navigationDestination = command.destination;
-			return success(state);
-		}
-
-		case 'refillMarket': {
-			if (state.status !== 'active') {
-				return failure('inactive', 'The game has not started yet.');
-			}
-			refillEmptyMarketSlots(state);
 			return success(state);
 		}
 

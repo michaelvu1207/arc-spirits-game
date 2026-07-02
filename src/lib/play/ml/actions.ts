@@ -14,6 +14,13 @@
  *     spawnMatItem, clearSpawnedItems, moveMatObject, flipSpirit (manual face toggle)
  *   - lobby/host/dev: claimSeat, releaseSeat, selectGuardian, setNavigationTimer,
  *     startGame, forceAdvancePhase, debugGrant
+ *   - market family (rules v1.1): takeSpirit, replaceSpirit, refillMarket — removed
+ *     from the game rules entirely (the reducer rejects them as unsupported_command).
+ *     They were never reachable from the UI, had no cost/phase/destination gating,
+ *     and let bots build whole boards from free market takes while locked to the
+ *     Abyss (see docs/rules-v1.1.md). NOTE: removing them changed the candidate
+ *     enumeration ORDER, so BC `chosen` indices recorded before rules v1.1 do not
+ *     align with post-v1.1 candidate sets.
  * Everything else — every rules-driven action across all six phases — is enumerated.
  */
 
@@ -157,13 +164,6 @@ export function enumerateCandidates(
 			// Monster combat + reward claim.
 			tryAdd({ type: 'startCombat' });
 			if (me?.pendingReward) emitMonsterRewardCommands(me.pendingReward, tryAdd);
-			// Market: buy/replace spirits from filled slots.
-			for (let i = 0; i < (state.market?.length ?? 0); i++) {
-				if (!state.market[i]?.spiritId) continue;
-				tryAdd({ type: 'takeSpirit', marketIndex: i });
-				for (let s = 0; s < (me?.spirits?.length ?? 0); s++) tryAdd({ type: 'replaceSpirit', marketIndex: i, slotIndex: s });
-			}
-			tryAdd({ type: 'refillMarket' });
 			// Spirit/rune management actions that exist in real play.
 			for (let s = 0; s < (me?.spirits?.length ?? 0); s++) tryAdd({ type: 'absorbSpirit', slotIndex: s });
 			for (const mat of me?.mats ?? []) {

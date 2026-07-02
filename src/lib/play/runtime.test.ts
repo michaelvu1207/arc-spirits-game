@@ -479,42 +479,60 @@ describe('play runtime', () => {
 		expect(items.map((item) => item.kind)).toEqual(['rune', 'augment', 'relic']);
 	});
 
-	test('takes a spirit into the first empty slot and refills the market', () => {
+	// ── Rules v1.1 regression: the market family is not a player action, and a
+	// destination can never be (re)set outside the pre-reveal Navigation phase.
+	// These pin the location-commitment rule: bots exploited the ungated market
+	// to build whole boards for free while locked to the Abyss (docs/rules-v1.1.md).
+	test('rules v1.1: takeSpirit / replaceSpirit / refillMarket are rejected for players', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		// The market is still stocked at startGame (display only) — a filled slot
+		// must NOT make the command acceptable.
+		expect(started.state.market[0].spiritId).not.toBeNull();
+
+		const commands = [
+			{ type: 'takeSpirit', marketIndex: 0 },
+			{ type: 'replaceSpirit', marketIndex: 0, slotIndex: 1 },
+			{ type: 'refillMarket' }
+		] as const;
+		for (const command of commands) {
+			const r = applyGameCommand(started.state, { ...HOST, seatColor: 'Red' }, command, CATALOG);
+			expect(r.ok).toBe(false);
+			if (r.ok) throw new Error(`${command.type} unexpectedly accepted`);
+			expect(r.error.code).toBe('unsupported_command');
+		}
+		// Player state is untouched by the rejected commands.
+		expect(started.state.players.Red!.spirits).toHaveLength(4);
+	});
+
+	test('rules v1.1: selectNavigationDestination is gated to the pre-reveal Navigation phase', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
 
-		// The bag is shuffled, so capture the spirit in slot 0 and the next bag entry
-		// (which will refill slot 0) up front rather than assuming alphabetical order.
-		const takenId = started.state.market[0].spiritId;
-		const expectedRefillId = started.state.bags.hexSpirits.contents[0]?.id ?? null;
-		const takenSpirit = CATALOG.spirits.find((s) => s.id === takenId);
-		expect(takenSpirit).toBeDefined();
-
-		const taken = applyGameCommand(
+		// Navigation phase, pre-reveal: still accepted (legacy destination set).
+		const inNav = applyGameCommand(
 			started.state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'takeSpirit', marketIndex: 0 },
+			{ type: 'selectNavigationDestination', destination: 'Tidal Cove' },
 			CATALOG
 		);
+		expect(inNav.ok).toBe(true);
 
-		expect(taken.ok).toBe(true);
-		if (!taken.ok) return;
-
-		const redPlayer = taken.state.players.Red;
-		expect(redPlayer).toBeDefined();
-		if (!redPlayer) return;
-		// Slots 1-4 hold the opening spirits; the taken spirit lands in slot 5.
-		expect(redPlayer.spirits).toHaveLength(5);
-		const placed = redPlayer.spirits.find((s) => s.slotIndex === 5);
-		expect(placed).toMatchObject({
-			slotIndex: 5,
-			id: takenId,
-			name: takenSpirit!.name
-		});
-		// Slot 0 refills from the front of the (shuffled) bag.
-		expect(taken.state.market[0].spiritId).toBe(expectedRefillId);
-		expect(taken.state.bags.hexSpirits.count).toBe(SW_BAG_AFTER_START - 1);
+		// Location phase (destinations revealed): switching destinations mid-round
+		// would break the one-location-per-round commitment — rejected.
+		const located = locationPhase(started.state, 'Tidal Cove');
+		const midRound = applyGameCommand(
+			located,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'selectNavigationDestination', destination: 'Floral Patch' },
+			CATALOG
+		);
+		expect(midRound.ok).toBe(false);
+		if (midRound.ok) return;
+		expect(midRound.error.code).toBe('wrong_phase');
+		expect(located.players.Red!.navigationDestination).toBe('Tidal Cove');
 	});
 
 	test('draws four spirit world spirits into the private tray and tracks picks remaining', () => {
@@ -1116,16 +1134,27 @@ describe('play runtime', () => {
 		if (!placed.ok) throw new Error(placed.error.message);
 		expect(placed.state.players.Red!.spiritAugmentAttachments).toHaveLength(1);
 
-		// Replace that slot with a fresh market spirit — the augment must NOT ride along.
-		const replaced = applyGameCommand(
-			placed.state,
+		// Summon a fresh spirit INTO that slot (Tidal Cove row 0 = free Spirit World
+		// Summon) — the augment must NOT ride along onto the newcomer.
+		let state = locationPhase(placed.state, 'Tidal Cove');
+		const open = applyGameCommand(
+			state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'replaceSpirit', marketIndex: 0, slotIndex: target.slotIndex },
+			{ type: 'resolveLocationInteraction', rowIndex: 0, choices: [] },
 			CATALOG
 		);
-		expect(replaced.ok).toBe(true);
-		if (!replaced.ok) return;
-		expect(replaced.state.players.Red!.spiritAugmentAttachments).toHaveLength(0);
+		if (!open.ok) throw new Error(open.error.message);
+		state = open.state;
+		const guid = state.players.Red!.handDraws[0]!.guid;
+		const summoned = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'spawnHandSpirit', guid, slotIndex: target.slotIndex },
+			CATALOG
+		);
+		expect(summoned.ok).toBe(true);
+		if (!summoned.ok) return;
+		expect(summoned.state.players.Red!.spiritAugmentAttachments).toHaveLength(0);
 	});
 
 	test('adjustBarrier / adjustBrokenBarrier keep arcane blood === maxTokens − barrier', () => {
@@ -1380,23 +1409,8 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(r.ok).toBe(false);
 	});
 
-	test('takeSpirit fires onSpiritSummon scoped to the taken spirit (Sharpshooter)', () => {
-		const lobby = withLobbySelections();
-		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, sharpCatalog);
-		if (!started.ok) throw new Error(started.error.message);
-		let state = started.state;
-
-		// Taking the Sharpshooter from the market is a summon — its onSpiritSummon grant
-		// ("gain 1 Enchanted Attack; stun-immune") sets stunImmune, proving takeSpirit fires
-		// the trigger scoped to the taken spirit's classes.
-		state.market[0]!.spiritId = SHARP.id;
-		state.players.Red!.stunImmune = false;
-		const taken = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'takeSpirit', marketIndex: 0 }, sharpCatalog);
-		if (!taken.ok) throw new Error(taken.error.message);
-		state = taken.state;
-
-		expect(state.players.Red!.stunImmune).toBe(true);
-	});
+	// (The former takeSpirit onSpiritSummon test is gone with the market family —
+	// rules v1.1 — the spawnHandSpirit test above pins the same trigger scoping.)
 });
 
 describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
