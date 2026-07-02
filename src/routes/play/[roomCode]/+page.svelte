@@ -683,7 +683,7 @@
 		</MenuShell>
 	{:else}
 		<div class="game-viewport">
-			{#if !assetState.isLoaded}
+			{#if !assetState.imagesReady}
 				<AssetLoadingScreen progress={assetState.imageProgress} dataReady={assetState.isLoaded} />
 			{:else}
 				<GameBoard2D {room} {member} assets={assetState} />
