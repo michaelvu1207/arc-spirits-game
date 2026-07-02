@@ -2,9 +2,11 @@ import type { GameCommand, PublicGameState, SeatColor } from '../types';
 
 export const BOT_CONTRACT_VERSION = 'arc-bot-v1';
 export const ML_BOT_PROFILE_KEY = 'neural';
+/** Champion net + Gumbel root search at the strategic nodes (nav/encounter). */
+export const EXPERT_BOT_PROFILE_KEY = 'expert';
 export const DEFAULT_BOT_PROFILE_KEY = ML_BOT_PROFILE_KEY;
 
-export const BOT_PROFILE_KEYS = [ML_BOT_PROFILE_KEY] as const;
+export const BOT_PROFILE_KEYS = [ML_BOT_PROFILE_KEY, EXPERT_BOT_PROFILE_KEY] as const;
 
 export type BotProfileKey = (typeof BOT_PROFILE_KEYS)[number];
 export type BotActionId = `${typeof BOT_CONTRACT_VERSION}:${string}`;

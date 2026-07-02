@@ -27,6 +27,7 @@ import { buildBotObservation, type BotObservationV1 } from '../bots/contract';
 import { buildMonsterRewards } from '../monsterRewards';
 import { ACT_DIM, OBS_DIM, encodeAction, encodeObs } from './encode';
 import { legalActionsWithNext, type LegalAction } from './actions';
+import { planDecisionGumbel } from './gumbelPlanner';
 import { loadPolicyWeights, type NeuralPolicy } from './net';
 
 /** Safety cap on actions per phase so a degenerate policy can never loop forever. */
@@ -579,13 +580,29 @@ export function planUniformLegalPhaseActions(
 	return out;
 }
 
+export interface NeuralPlanOptions {
+	/**
+	 * Expert tier: Gumbel root search at the STRATEGIC nodes — navigation
+	 * (sampled from π': the simultaneous hidden pick must mix, a deterministic
+	 * lock is exploitable) and encounter (argmax: replaces the hand-coded
+	 * "always initiatePvp" rule with real lookahead, which can also veto).
+	 * All other phases stay hybridIndex.
+	 */
+	search?: boolean;
+	/** Sim budget per searched decision (default 16). */
+	searchSims?: number;
+	/** Search seed; live callers leave it undefined (fresh noise per decision). */
+	searchSeed?: number;
+}
+
 /** Synchronous variant when the caller already holds a policy (e.g. self-play / eval).
  *  Returns the batch of commands for the current phase, chosen by value-lookahead. */
 export function planNeuralPhaseActions(
 	state: PublicGameState,
 	seat: SeatColor,
 	catalog: PlayCatalog,
-	policy: NeuralPolicy
+	policy: NeuralPolicy,
+	opts: NeuralPlanOptions = {}
 ): GameCommand[] {
 	const out: GameCommand[] = [];
 	let s = state;
@@ -599,7 +616,18 @@ export function planNeuralPhaseActions(
 		// but the win condition). NOTE: this is a BASELINE — it positions like the hunter but
 		// does not reliably execute the deliberate corruption→Fallen setup; beating the
 		// heuristics needs the RL scale-up (see ml/README.md "Status").
-		const idx = hybridIndex(policy, s, seat, withNext, { sample: false }, catalog);
+		let idx = -1;
+		if (opts.search && (s.phase === 'navigation' || s.phase === 'encounter') && withNext.length > 1) {
+			const res = planDecisionGumbel(s, seat, catalog, policy, withNext, {
+				simulations: opts.searchSims ?? 16,
+				horizonRounds: 6,
+				valueWeight: 0.5,
+				seed: opts.searchSeed ?? (Math.random() * 0x7fffffff) >>> 0,
+				temperature: s.phase === 'navigation' ? 0.8 : 0
+			});
+			if (res) idx = res.index;
+		}
+		if (idx < 0) idx = hybridIndex(policy, s, seat, withNext, { sample: false }, catalog);
 		out.push(withNext[idx].cmd);
 		s = withNext[idx].next;
 	}

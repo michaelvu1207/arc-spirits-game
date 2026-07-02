@@ -28,10 +28,13 @@ import { describe, it } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { BOT_PROFILES, profileFor } from '../../server/botPolicy';
-import { SEAT_COLORS, type SeatColor } from '../../types';
+import { SEAT_COLORS, type PublicGameState, type SeatColor } from '../../types';
+import type { LegalAction } from '../actions';
 import { playRecordingGame } from '../driver';
 import { OBS_DIM } from '../encode';
 import { obsV2Meta } from '../encodeV2';
+import { planDecisionGumbel } from '../gumbelPlanner';
+import { hybridIndex } from '../neuralBot';
 import { asNeuralPolicy, RemotePolicy } from '../inferenceClient';
 import { loadOrSnapshotCatalog, loadPolicyForEval, mlPath } from '../nodeIo';
 import type { NeuralPolicy } from '../net';
@@ -72,6 +75,11 @@ describe('gauntlet-v1', () => {
 					'gauntlet: set exactly one of GAUNTLET_WEIGHTS, GAUNTLET_PROFILE or GAUNTLET_INFER_SOCKET'
 				);
 			}
+			// GAUNTLET_SEARCH=<sims>: score the candidate WITH Gumbel root search at the
+			// strategic nodes (nav sampled from π', encounter argmax) — a distinct
+			// candidate kind ("<weights>+search<sims>"), same frozen measure. Seeded from
+			// the game seed + decision cursor, so runs are exactly reproducible.
+			const searchSims = parseInt(process.env.GAUNTLET_SEARCH ?? '0', 10);
 			const policyObsVersion = parseInt(process.env.GAUNTLET_POLICY_OBS_VERSION ?? '1', 10);
 			if (policyObsVersion !== 1 && policyObsVersion !== 2) {
 				throw new Error(`gauntlet: GAUNTLET_POLICY_OBS_VERSION must be 1 or 2`);
@@ -142,8 +150,34 @@ describe('gauntlet-v1', () => {
 					throw new Error(`gauntlet: anchor profile '${name}' not in BOT_PROFILES`);
 			}
 
+			if (searchSims > 0) {
+				if (!candidatePolicy) throw new Error('gauntlet: GAUNTLET_SEARCH needs a weights/socket candidate');
+				candidateRef = `${candidateRef}+search${searchSims}`;
+				slug = `${slug}--search${searchSims}`;
+			}
+
 			const seats = SEAT_COLORS.slice(0, GAUNTLET_SEATS) as SeatColor[];
-			const schedule = buildSchedule(totalGames);
+			// GAUNTLET_SHARD="k/n": play only this shard of the frozen schedule, keyed by
+			// base-seed group (floor(game/4) keeps a seed's 4 rotations together). Games
+			// are independently seeded, so sharded runs play EXACTLY the same games as
+			// the serial runner — scripts/merge-gauntlet-shards.mjs sums the raw tallies
+			// back into the standard result. Execution change only; gauntlet version
+			// unaffected.
+			const shardSpec = process.env.GAUNTLET_SHARD;
+			let shardK = 0;
+			let shardN = 1;
+			if (shardSpec) {
+				const mm = /^(\d+)\/(\d+)$/.exec(shardSpec);
+				if (!mm) throw new Error(`gauntlet: GAUNTLET_SHARD must be "k/n", got '${shardSpec}'`);
+				shardK = parseInt(mm[1], 10);
+				shardN = parseInt(mm[2], 10);
+				if (shardN < 1 || shardK < 0 || shardK >= shardN) {
+					throw new Error(`gauntlet: GAUNTLET_SHARD out of range: ${shardSpec}`);
+				}
+			}
+			const schedule = buildSchedule(totalGames).filter(
+				(g) => shardN === 1 || Math.floor(g.game / 4) % shardN === shardK
+			);
 
 			try {
 				// ── Play ─────────────────────────────────────────────────────────────────
@@ -190,7 +224,35 @@ describe('gauntlet-v1', () => {
 					// for a heuristic candidate is inert.
 					const policy =
 						candidatePolicy ?? (neuralSeats.length ? [...anchorPolicies.values()][0] : undefined);
+					// Search candidate: the chooser drives ONLY the candidate seat (the driver
+					// skips it for opponentPolicies seats). Deterministic per (game, decision).
+					let decisionN = 0;
+					const chooser =
+						searchSims > 0
+							? (
+									_o: number[],
+									_f: number[][],
+									_c: unknown,
+									seat: SeatColor,
+									st: PublicGameState,
+									withNext: LegalAction[]
+								): number => {
+									decisionN += 1;
+									if ((st.phase === 'navigation' || st.phase === 'encounter') && withNext.length > 1) {
+										const res = planDecisionGumbel(st, seat, catalog, candidatePolicy!, withNext, {
+											simulations: searchSims,
+											horizonRounds: 6,
+											valueWeight: 0.5,
+											seed: (g.seed * 2654435761 + st.round * 7919 + decisionN * 104729) >>> 0,
+											temperature: st.phase === 'navigation' ? 0.8 : 0
+										});
+										if (res) return res.index;
+									}
+									return hybridIndex(candidatePolicy!, st, seat, withNext, { sample: false }, catalog);
+								}
+							: undefined;
 					const r = playRecordingGame(catalog, {
+						...(chooser ? { chooser } : {}),
 						seed: g.seed,
 						profiles,
 						maxRounds: GAUNTLET_MAX_ROUNDS,
@@ -253,6 +315,19 @@ describe('gauntlet-v1', () => {
 					policyObsVersion,
 					games: n,
 					smoke: n < TOTAL_GAMES,
+					...(shardN > 1 ? { shard: `${shardK}/${shardN}` } : {}),
+					// Raw tallies: exact integer/sum state so shard results merge losslessly.
+					raw: {
+						wins,
+						sumPlace,
+						sumVP,
+						sumRounds,
+						finished,
+						agg: { games: agg.games, scoreSum: agg.scoreSum },
+						perAnchor: Object.fromEntries(
+							[...perAnchor.entries()].map(([k, t]) => [k, { games: t.games, scoreSum: t.scoreSum }])
+						)
+					},
 					eloVsAnchors: {
 						aggregate: {
 							games: agg.games,

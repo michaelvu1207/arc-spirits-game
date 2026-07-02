@@ -30,6 +30,7 @@ import { SEAT_COLORS, type SeatColor, type PublicGameState } from '../types';
 import { BOT_NAME_PREFIX } from '../roomLifecycle';
 import {
 	DEFAULT_BOT_PROFILE_KEY,
+	EXPERT_BOT_PROFILE_KEY,
 	ML_BOT_PROFILE_KEY,
 	normalizeBotProfileKey
 } from '../bots/contract';
@@ -425,9 +426,14 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		const profileKey = normalizeDifficulty(
 			botMembers.get(botMemberId) ?? difficultyFromBotName(state.seats[seat]?.displayName)
 		);
+		// ARC_EXPERT_BOTS=1 upgrades every neural bot to the expert (search) tier —
+		// the dev-server switch for playtesting the searched bot without UI work.
+		const expert =
+			profileKey === EXPERT_BOT_PROFILE_KEY ||
+			(profileKey === NEURAL_PROFILE_KEY && process.env.ARC_EXPERT_BOTS === '1');
 		const commands =
-			profileKey === NEURAL_PROFILE_KEY && neuralPolicy
-				? planNeuralPhaseActions(state, seat, catalog, neuralPolicy)
+			(profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && neuralPolicy
+				? planNeuralPhaseActions(state, seat, catalog, neuralPolicy, { search: expert })
 				: planUniformLegalPhaseActions(state, seat, catalog);
 		for (const command of commands) {
 			// Each command is its own load+CAS write. A planned command can be REJECTED at

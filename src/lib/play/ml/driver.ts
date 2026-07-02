@@ -128,7 +128,8 @@ export interface RecordGameOptions {
 		candFeatures: number[][],
 		cands: GameCommand[],
 		seat: SeatColor,
-		state: PublicGameState
+		state: PublicGameState,
+		withNext: LegalAction[]
 	) => number;
 	/**
 	 * League play: per-seat opponent policies. A seat listed here is driven by ITS OWN policy
@@ -507,7 +508,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			cands.length === 1
 				? 0
 				: opts.chooser && !oppPolicy
-					? opts.chooser(policyObs, feats, cands, seat, state)
+					? opts.chooser(policyObs, feats, cands, seat, state, withNext)
 					: opts.selection === 'policy'
 						? policyIndexWithProgressGuard(
 								activePolicy,
