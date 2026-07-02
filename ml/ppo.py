@@ -264,6 +264,20 @@ def load_trajectory_buffer(
 SEAT_ISSELF_IDX = 1
 
 
+def placement_aux_loss_v1(
+    model,
+    obs: torch.Tensor,            # (B, obs_dim) v1 obs
+    placement: torch.Tensor,      # (B,) int, 1-4, 0 = unknown
+    has_placement: torch.Tensor,  # (B,) bool
+) -> torch.Tensor:
+    """4-way CE on CandidateScorer.placement_head for rows carrying placement."""
+    if not has_placement.any():
+        return torch.zeros((), dtype=torch.float32, device=obs.device)
+    logits = model.placement_head_logits(obs[has_placement])
+    target = (placement[has_placement] - 1).long().clamp(0, 3)
+    return F.cross_entropy(logits, target)
+
+
 def placement_aux_loss(
     model,
     obs: torch.Tensor,            # (B, flat_len) raw v2 obs
@@ -377,8 +391,9 @@ def train_ppo(
     n = len(buffer)
     rng = np.random.default_rng(seed)
     indices = np.arange(n)
-    # The placement aux head only exists on model v2.
+    # v2 (per-seat-token regression) and v1 (4-way CE) placement aux heads.
     use_placement = placement_coef > 0 and hasattr(model, "placement_logits")
+    use_placement_v1 = placement_coef > 0 and hasattr(model, "placement_head")
     history: list[dict] = []
     last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     halted = False
@@ -451,6 +466,8 @@ def train_ppo(
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
             if use_placement:
                 placement_loss = placement_aux_loss(model, obs, placement, placement > 0)
+            elif use_placement_v1:
+                placement_loss = placement_aux_loss_v1(model, obs, placement, placement > 0)
 
             loss = (
                 policy_coef * policy_loss

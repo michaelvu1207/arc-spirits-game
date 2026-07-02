@@ -325,6 +325,16 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
                     return False
                 lin.weight.copy_(W)
                 lin.bias.copy_(b)
+            # Optional heads: absent in older checkpoints — leave their random init
+            # (they train up from PPO aux losses) rather than failing the warm start.
+            placement_linears = [m for m in model.placement_head if isinstance(m, torch.nn.Linear)]
+            if "placement" in w and len(placement_linears) == len(w["placement"]):
+                for lin, d in zip(placement_linears, w["placement"]):
+                    W = torch.tensor(d["W"], dtype=torch.float32)
+                    b = torch.tensor(d["b"], dtype=torch.float32)
+                    if lin.weight.shape == W.shape:
+                        lin.weight.copy_(W)
+                        lin.bias.copy_(b)
             if "farm_value" in w and len(farm_value_linears) == len(w["farm_value"]):
                 for lin, d in zip(farm_value_linears, w["farm_value"]):
                     W = torch.tensor(d["W"], dtype=torch.float32)
@@ -569,7 +579,9 @@ def train(
     print(f"Device: {device}  mode={mode}  model={model_version}")
     check_out_format(model_version, out_path, init_from)
     # The placement aux head only exists on v2.
-    effective_placement_coef = placement_coef if model_version == "v2" else 0.0
+    # v1 gained a 4-way placement head (KataGo outcome aux) — the coef now applies
+    # to both model versions; train_ppo dispatches to the right aux loss.
+    effective_placement_coef = placement_coef
     # Paired-row contract: v2 reads the flat arc-obs-v2 array from `obsV2`;
     # `obs` stays the v1 62-float summary for the v1 net / distillation.
     obs_key = "obsV2" if model_version == "v2" else "obs"
@@ -851,7 +863,15 @@ def export_weights(
         for layer in model.reward_pick_head
         if isinstance(layer, torch.nn.Linear)
     ]
-    all_linears = trunk_linears + value_linears + farm_value_linears + route_mode_linears + reward_pick_linears
+    placement_linears = [
+        _linear_to_dict(layer)
+        for layer in model.placement_head
+        if isinstance(layer, torch.nn.Linear)
+    ]
+    all_linears = (
+        trunk_linears + value_linears + farm_value_linears + route_mode_linears
+        + reward_pick_linears + placement_linears
+    )
 
     payload = {
         "format": "arc-cand-scorer-v1",
@@ -865,10 +885,12 @@ def export_weights(
         "farm_value": farm_value_linears,
         "route_mode": route_mode_linears,
         "reward_pick": reward_pick_linears,
+        "placement": placement_linears,
         "aux_heads": {
             "farm_value": "obs -> scalar clean farm opportunity target",
             "reward_pick": "obs + candidate -> reward-pick target logits",
-            "route_mode": "obs -> Fallen route mode logit, sigmoid=probability to hunt Good player"
+            "route_mode": "obs -> Fallen route mode logit, sigmoid=probability to hunt Good player",
+            "placement": "obs -> 4-way final-placement logits (KataGo outcome aux)"
         },
         "params": sum(len(l["W"]) * len(l["W"][0]) + len(l["b"]) for l in all_linears),
     }

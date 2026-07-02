@@ -72,6 +72,10 @@ class CandidateScorer(nn.Module):
         self.farm_value_head = mlp(obs_dim, self.value_hidden, 1)
         self.route_mode_head = mlp(obs_dim, self.value_hidden, 1)
         self.reward_pick_head = mlp(obs_dim + act_dim, self.trunk_hidden, 1)
+        # KataGo-style outcome aux: 4-way final-placement logits from the obs.
+        # Distinct name from model_v2's placement_logits — the v2 aux loss has a
+        # different contract (per-seat-token scalar) and must not activate here.
+        self.placement_head = mlp(obs_dim, self.value_hidden, 4)
 
     def forward(
         self,
@@ -99,6 +103,10 @@ class CandidateScorer(nn.Module):
         value = self.value_head(obs).squeeze(-1)
 
         return logits_masked, probs, value
+
+    def placement_head_logits(self, obs: torch.Tensor) -> torch.Tensor:
+        """(B, 4) final-placement logits (CE target: placement-1)."""
+        return self.placement_head(obs)
 
     def farm_value(self, obs: torch.Tensor) -> torch.Tensor:
         """Auxiliary farm-value prediction from obs only: (batch,)."""

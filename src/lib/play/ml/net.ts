@@ -22,6 +22,7 @@ export interface PolicyWeights {
 	trunk: LinearLayer[];
 	value: LinearLayer[];
 	farm_value?: LinearLayer[];
+	placement?: LinearLayer[];
 	reward_pick?: LinearLayer[];
 	route_mode?: LinearLayer[];
 }
@@ -83,6 +84,17 @@ export class NeuralPolicy {
 	/** Optional auxiliary clean-farm opportunity prediction. Missing on older checkpoints. */
 	farmValue(obs: number[]): number {
 		return this.w.farm_value ? mlp(obs, this.w.farm_value)[0] : 0;
+	}
+
+	/** Optional 4-way final-placement probabilities (KataGo outcome aux). */
+	placementProbs(obs: number[]): number[] | null {
+		if (!this.w.placement) return null;
+		const logits = mlp(obs, this.w.placement);
+		let max = -Infinity;
+		for (const x of logits) if (x > max) max = x;
+		const exps = logits.map((x) => Math.exp(x - max));
+		const sum = exps.reduce((a, b) => a + b, 0) || 1;
+		return exps.map((e) => e / sum);
 	}
 
 	/** Optional Fallen route-mode probability. Missing on older checkpoints. */
