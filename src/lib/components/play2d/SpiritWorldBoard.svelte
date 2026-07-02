@@ -388,11 +388,6 @@
 	function handleCarouselPointerDown(event: PointerEvent) {
 		if (event.pointerType === 'mouse' && event.button !== 0) return;
 		carouselPointerId = event.pointerId;
-		try {
-			(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-		} catch {
-			// WebKit can reject capture on detached/rebuilt targets; move/up still use the guard.
-		}
 		startCarouselDragGuard(event.clientX, event.clientY);
 	}
 
@@ -400,6 +395,17 @@
 		if (carouselPointerId !== null && event.pointerId !== carouselPointerId) return;
 		updateCarouselDragGuard(event.clientX, event.clientY);
 		if (carouselPointerStart) {
+			// Capture only once a real drag is registered. Capturing on pointerdown
+			// retargets the browser's synthesized click to this surface, which ate
+			// plain taps on the location buttons (compass arms and carousel cards).
+			// Post-drag click suppression is handleCarouselClickCapture's job.
+			if (carouselDragged) {
+				try {
+					(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+				} catch {
+					// WebKit can reject capture on detached/rebuilt targets; move/up still use the guard.
+				}
+			}
 			event.preventDefault();
 			event.stopPropagation();
 		}
