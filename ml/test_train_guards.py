@@ -166,12 +166,70 @@ def test_grad_clipping_is_wired_into_the_step():
     print(f"clip wiring: mean|dW| clipped={d_clip:.2e} vs unclipped={d_free:.2e}")
 
 
+def test_bc_warmstart_save_path_guard():
+    """bc_warmstart_v2 has no halt/restore loop — a diverged run must RAISE at
+    save_checkpoint instead of writing a NaN .pt; a sane run still completes."""
+    from bc_warmstart_v2 import train_bc
+    from test_train_v2 import write_dataset
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td) / "data"
+        write_dataset(d, 24)  # pinned paired rows (obs v1 + obsV2)
+        out = Path(td) / "w" / "bc.pt"
+        try:
+            train_bc(d, out, epochs=2, batch_size=8, lr=1e18, d_model=32, layers=1,
+                     heads=2, seed=0, max_grad_norm=1.0, device=torch.device("cpu"))
+        except ValueError as e:
+            assert "non-finite" in str(e), e
+        else:
+            raise AssertionError("bc_warmstart_v2 wrote a NaN checkpoint")
+        assert not out.exists() and not out.with_suffix(".manifest.json").exists()
+
+        # Default clipping doesn't break a normal run; the checkpoint loads.
+        from model_v2 import load_checkpoint
+        out2 = Path(td) / "w" / "bc_ok.pt"
+        stats = train_bc(d, out2, epochs=1, batch_size=8, lr=3e-4, d_model=32, layers=1,
+                         heads=2, seed=0, device=torch.device("cpu"))
+        assert out2.exists() and math.isfinite(stats["epochs"][0]["ce"])
+        load_checkpoint(out2)
+    print("bc save path: explosion raises, nothing on disk; normal run clean")
+
+
+def test_distill_save_path_guard():
+    """distill exports through train.export_weights, so a diverged student must
+    raise there — never ship a NaN arc-cand-scorer-v1 JSON."""
+    from distill import distill
+    from model_v2 import build_model_v2, save_checkpoint
+    from test_train_v2 import load_fixture, write_dataset
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td) / "data"
+        write_dataset(d, 24)  # pinned paired rows (obs v1 + obsV2)
+        spec, _, _ = load_fixture()
+        teacher = build_model_v2(spec, 52, d_model=32, layers=1, heads=2, seed=3)
+        teacher_pt = Path(td) / "teacher.pt"
+        save_checkpoint(teacher, teacher_pt)
+        out = Path(td) / "w" / "student.json"
+        try:
+            distill(d, teacher_pt, out, epochs=2, batch_size=8, lr=1e18,
+                    trunk_hidden=(32,), value_hidden=(16,), seed=0,
+                    max_grad_norm=1.0, device=torch.device("cpu"))
+        except ValueError as e:
+            assert "non-finite" in str(e), e
+        else:
+            raise AssertionError("distill exported a NaN student JSON")
+        assert not out.exists()
+    print("distill save path: explosion raises at export_weights, nothing on disk")
+
+
 def main() -> int:
     tests = [
         test_export_refuses_poisoned_model,
         test_awr_explosion_halts_with_finite_export,
         test_ppo_explosion_halts_with_finite_export,
         test_grad_clipping_is_wired_into_the_step,
+        test_bc_warmstart_save_path_guard,
+        test_distill_save_path_guard,
     ]
     failed = 0
     for fn in tests:

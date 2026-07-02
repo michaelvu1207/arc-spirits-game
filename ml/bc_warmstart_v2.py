@@ -49,6 +49,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from model import get_device
 from model_v2 import EntityCandidateScorer, build_model_v2, save_checkpoint
 from obs_v2 import ObsV2Spec
+from train import assert_finite_weights
 
 
 def load_spec_for_dataset(data_dir: Path) -> tuple[ObsV2Spec, int]:
@@ -139,6 +140,23 @@ def collate(batch) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tens
     return obs, cands, mask, chosen, ret
 
 
+def _evaluate(model, dl, device) -> dict:
+    model.eval()
+    tot_ce = tot_v = tot_acc = n = 0.0
+    with torch.no_grad():
+        for obs, cands, mask, chosen, ret in dl:
+            obs, cands, mask = obs.to(device), cands.to(device), mask.to(device)
+            chosen, ret = chosen.to(device), ret.to(device)
+            logits, _, value = model(obs, cands, mask)
+            b = obs.shape[0]
+            tot_ce += F.cross_entropy(logits, chosen).item() * b
+            tot_v += F.mse_loss(value, ret).item() * b
+            tot_acc += (logits.argmax(dim=-1) == chosen).float().sum().item()
+            n += b
+    model.train()
+    return {"ce": tot_ce / n, "value_mse": tot_v / n, "acc": tot_acc / n}
+
+
 def train_bc(
     data_dir: Path,
     out_path: Path,
@@ -150,23 +168,41 @@ def train_bc(
     layers: int = 3,
     heads: int = 4,
     seed: int = 0,
+    val_frac: float = 0.0,
+    max_grad_norm: float = 1.0,
     device: torch.device | None = None,
     model: EntityCandidateScorer | None = None,
 ) -> dict:
-    """BC warm start; returns per-epoch stats. Pass `model` to continue training."""
+    """
+    BC warm start; returns per-epoch stats. Pass `model` to continue training.
+    With val_frac > 0, a seeded held-out split is scored every epoch and the
+    checkpoint written at the end is the BEST-val-CE epoch, not the last one.
+    """
     if device is None:
         device = get_device()
     spec, act_dim = load_spec_for_dataset(data_dir)
     ds = DecisionDatasetV2(data_dir, spec)
     gen = torch.Generator().manual_seed(seed)
-    dl = DataLoader(ds, batch_size=batch_size, shuffle=True, collate_fn=collate, generator=gen)
+
+    val_dl = None
+    train_ds: Dataset = ds
+    if val_frac > 0:
+        n_val = max(1, int(len(ds) * val_frac))
+        perm = torch.randperm(len(ds), generator=torch.Generator().manual_seed(seed + 1)).tolist()
+        train_ds = torch.utils.data.Subset(ds, perm[n_val:])
+        val_ds = torch.utils.data.Subset(ds, perm[:n_val])
+        val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate)
+    dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=collate, generator=gen)
 
     if model is None:
         model = build_model_v2(spec, act_dim, device=device, d_model=d_model, layers=layers, heads=heads, seed=seed)
     model = model.to(device).train()
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
-    stats: dict = {"epochs": [], "samples": len(ds)}
+    stats: dict = {"epochs": [], "samples": len(ds), "train_samples": len(train_ds)}
+    best_val_ce = float("inf")
+    best_state: dict | None = None
+    best_epoch = -1
     for epoch in range(epochs):
         tot_ce = tot_v = tot_acc = n = 0.0
         for obs, cands, mask, chosen, ret in dl:
@@ -178,6 +214,8 @@ def train_bc(
             loss = ce + value_coef * v_loss
             opt.zero_grad()
             loss.backward()
+            if max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             opt.step()
             b = obs.shape[0]
             tot_ce += ce.item() * b
@@ -185,10 +223,28 @@ def train_bc(
             tot_acc += (logits.argmax(dim=-1) == chosen).float().sum().item()
             n += b
         ep = {"ce": tot_ce / n, "value_mse": tot_v / n, "acc": tot_acc / n}
+        line = f"epoch {epoch + 1}/{epochs}  ce={ep['ce']:.4f}  acc={ep['acc']:.3f}  vmse={ep['value_mse']:.4f}"
+        if val_dl is not None:
+            val = _evaluate(model, val_dl, device)
+            ep["val_ce"], ep["val_acc"], ep["val_value_mse"] = val["ce"], val["acc"], val["value_mse"]
+            line += f"  val_ce={val['ce']:.4f}  val_acc={val['acc']:.3f}"
+            if val["ce"] < best_val_ce:
+                best_val_ce = val["ce"]
+                best_epoch = epoch
+                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
         stats["epochs"].append(ep)
-        print(f"epoch {epoch + 1}/{epochs}  ce={ep['ce']:.4f}  acc={ep['acc']:.3f}  vmse={ep['value_mse']:.4f}")
+        print(line, flush=True)
 
+    if best_state is not None:
+        model.load_state_dict(best_state)
+        model = model.to(device)
+        stats["best_epoch"] = best_epoch + 1
+        stats["best_val_ce"] = best_val_ce
+        print(f"restored best epoch {best_epoch + 1} (val_ce={best_val_ce:.4f})")
     model.eval()
+    # Same guard as train.py's export paths: a diverged run must raise here,
+    # never write a NaN checkpoint (the fair-rules league shipped one at gen 13).
+    assert_finite_weights(model, "bc_warmstart_v2 save_checkpoint")
     manifest = save_checkpoint(model, out_path)
     stats["out"] = str(out_path)
     stats["manifest"] = str(manifest)
@@ -208,9 +264,13 @@ def main() -> int:
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--heads", type=int, default=4)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--val-frac", type=float, default=0.0, help="held-out fraction; best-val epoch is saved")
+    ap.add_argument("--max-grad-norm", type=float, default=1.0,
+                    help="Gradient clipping (clip_grad_norm_); 0 disables")
     ap.add_argument("--device", type=str, default=None, help="cpu / cuda / mps (default: auto)")
+    ap.add_argument("--stats-out", type=Path, default=None, help="optional JSON file for the training curves")
     a = ap.parse_args()
-    train_bc(
+    stats = train_bc(
         a.data,
         a.out,
         epochs=a.epochs,
@@ -221,8 +281,14 @@ def main() -> int:
         layers=a.layers,
         heads=a.heads,
         seed=a.seed,
+        val_frac=a.val_frac,
+        max_grad_norm=a.max_grad_norm,
         device=torch.device(a.device) if a.device else None,
     )
+    if a.stats_out is not None:
+        a.stats_out.parent.mkdir(parents=True, exist_ok=True)
+        with open(a.stats_out, "w") as f:
+            json.dump(stats, f, indent=2)
     return 0
 
 

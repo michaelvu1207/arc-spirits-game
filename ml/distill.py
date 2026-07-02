@@ -142,6 +142,7 @@ def distill(
     trunk_hidden: tuple[int, ...] | None = None,
     value_hidden: tuple[int, ...] | None = None,
     seed: int = 0,
+    max_grad_norm: float = 1.0,
     device: torch.device | None = None,
 ) -> dict:
     """Distill teacher -> fresh v1 student, export arc-cand-scorer-v1 JSON."""
@@ -190,6 +191,8 @@ def distill(
                     loss = loss + hard_coef * F.cross_entropy(s_logits[has_label], chosen[has_label])
             opt.zero_grad()
             loss.backward()
+            if max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(student.parameters(), max_grad_norm)
             opt.step()
             b = obs.shape[0]
             tot_kl += kl_item * b
@@ -204,6 +207,8 @@ def distill(
         )
 
     student.eval()
+    # export_weights carries the finite-weights guard (train.py): a diverged
+    # student raises here instead of shipping a NaN JSON.
     export_weights(student, obs_dim, act_dim, out_json)
     stats["out"] = str(out_json)
     print(f"arc-cand-scorer-v1 weights exported: {out_json}")
@@ -224,6 +229,8 @@ def main() -> int:
     ap.add_argument("--hidden", type=str, default=None, help='student trunk widths, e.g. "384,384"')
     ap.add_argument("--value-hidden", type=str, default=None, help='student value widths, e.g. "128"')
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max-grad-norm", type=float, default=1.0,
+                    help="Gradient clipping (clip_grad_norm_); 0 disables")
     ap.add_argument("--device", type=str, default=None)
     a = ap.parse_args()
     parse_h = lambda s: tuple(int(x) for x in s.split(",") if x.strip()) if s else None  # noqa: E731
@@ -240,6 +247,7 @@ def main() -> int:
         trunk_hidden=parse_h(a.hidden),
         value_hidden=parse_h(a.value_hidden),
         seed=a.seed,
+        max_grad_norm=a.max_grad_norm,
         device=torch.device(a.device) if a.device else None,
     )
     return 0
