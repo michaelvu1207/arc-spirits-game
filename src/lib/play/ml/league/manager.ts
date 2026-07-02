@@ -41,6 +41,7 @@ import {
 	copyFileSync,
 	existsSync,
 	mkdirSync,
+	readdirSync,
 	readFileSync,
 	renameSync,
 	writeFileSync
@@ -115,7 +116,10 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 		lanes: { ...base.lanes, ...over.lanes },
 		pfsp: { ...base.pfsp, ...over.pfsp },
 		train: { ...base.train, ...over.train },
-		paths: { ...base.paths, ...over.paths }
+		paths: { ...base.paths, ...over.paths },
+		...(base.baselineElos || over.baselineElos
+			? { baselineElos: { ...base.baselineElos, ...over.baselineElos } }
+			: {})
 	};
 }
 
@@ -172,6 +176,91 @@ export function seedRoster(config: LeagueConfig): LeagueMember[] {
 }
 
 /**
+ * Known gauntlet-v1 baselines from committed result files: candidate weights path
+ * → aggregate Elo. Only FULL (non-smoke) gauntlet-v1 runs of weights candidates
+ * count; the newest result per path wins. Missing directory ⇒ empty map.
+ */
+export function readGauntletBaselines(
+	resultsDir = resolve('ml', 'gauntlet_results')
+): Record<string, number> {
+	if (!existsSync(resultsDir)) return {};
+	const byRef: Record<string, { elo: number; ts: string }> = {};
+	for (const f of readdirSync(resultsDir)) {
+		if (!f.endsWith('.json')) continue;
+		let d: {
+			gauntletVersion?: string;
+			smoke?: boolean;
+			candidate?: { kind?: string; ref?: string };
+			timestamp?: string;
+			eloVsAnchors?: { aggregate?: { elo?: number } };
+		};
+		try {
+			d = JSON.parse(readFileSync(join(resultsDir, f), 'utf8'));
+		} catch {
+			continue; // non-result JSON (benches etc.) — ignore
+		}
+		const elo = d.eloVsAnchors?.aggregate?.elo;
+		const ref = d.candidate?.ref;
+		if (d.gauntletVersion !== 'gauntlet-v1' || d.smoke !== false) continue;
+		if (d.candidate?.kind !== 'weights' || !ref || typeof elo !== 'number') continue;
+		const ts = d.timestamp ?? '';
+		if (!byRef[ref] || ts > byRef[ref].ts) byRef[ref] = { elo, ts };
+	}
+	return Object.fromEntries(Object.entries(byRef).map(([ref, v]) => [ref, v.elo]));
+}
+
+/**
+ * The promotion bar: best gauntlet Elo among FROZEN members (−Infinity when none
+ * is scored). Heuristic anchors deliberately do NOT participate — the bar tracks
+ * the best frozen NEURAL snapshot; heuristics are opponents, not the champion line.
+ */
+export function promotionBar(members: LeagueMember[]): number {
+	return Math.max(
+		...members
+			.filter((m) => m.kind === 'frozen' && typeof m.eloVsAnchors === 'number')
+			.map((m) => m.eloVsAnchors as number),
+		-Infinity
+	);
+}
+
+/**
+ * Stamp seeded frozen members with baseline Elos: config map first (by member id
+ * or weights path), then the committed ml/gauntlet_results scan — matched on the
+ * exact weights path, falling back to byte-identity with a scored file (the live
+ * policy-weights.json is a byte-identical copy of the traceq anchor, scored under
+ * its shipped path; basenames collide across meta_runs so paths alone can't map it).
+ */
+export function stampBaselineElos(members: LeagueMember[], config: LeagueConfig): void {
+	const scanned = readGauntletBaselines();
+	const scoredBytes = new Map<string, Buffer>();
+	const bytesOf = (path: string): Buffer | undefined => {
+		if (!scoredBytes.has(path)) {
+			scoredBytes.set(path, existsSync(path) ? readFileSync(path) : Buffer.alloc(0));
+		}
+		const b = scoredBytes.get(path)!;
+		return b.length > 0 ? b : undefined;
+	};
+	const byIdentity = (weightsPath: string): number | undefined => {
+		const mine = bytesOf(resolve(weightsPath));
+		if (!mine) return undefined;
+		for (const [ref, elo] of Object.entries(scanned)) {
+			const theirs = bytesOf(resolve(ref));
+			if (theirs && theirs.length === mine.length && theirs.equals(mine)) return elo;
+		}
+		return undefined;
+	};
+	for (const m of members) {
+		if (m.kind !== 'frozen' || m.eloVsAnchors !== undefined) continue;
+		const elo =
+			config.baselineElos?.[m.id] ??
+			(m.weightsPath
+				? (config.baselineElos?.[m.weightsPath] ?? scanned[m.weightsPath] ?? byIdentity(m.weightsPath))
+				: undefined);
+		if (typeof elo === 'number') m.eloVsAnchors = elo;
+	}
+}
+
+/**
  * Initialize a league root: write config.json (defaults merged with `overrides`)
  * and a seeded state.json. Idempotent: an already-initialized root is loaded and
  * returned untouched (state is never reseeded over an existing league).
@@ -188,10 +277,12 @@ export function initLeague(
 	mkdirSync(p.root, { recursive: true });
 	mkdirSync(p.checkpoints, { recursive: true });
 	if (!existsSync(p.config)) writeFileSync(p.config, JSON.stringify(config, null, '\t'));
+	const members = seedRoster(config);
+	stampBaselineElos(members, config);
 	const state: LeagueState = {
 		version: 'league-v1',
 		gen: 0,
-		members: seedRoster(config),
+		members,
 		phase: 'idle',
 		updatedAt: new Date().toISOString()
 	};
@@ -451,12 +542,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				throw new Error(`league: gauntlet failed (status ${g.status}): ${(g.stderr || '').slice(-2000)}`);
 			}
 			gauntletElo = lastGauntletElo();
-			const bestFrozen = Math.max(
-				...state.members
-					.filter((m) => m.kind === 'frozen' && typeof m.eloVsAnchors === 'number')
-					.map((m) => m.eloVsAnchors as number),
-				-Infinity
-			);
+			const bestFrozen = promotionBar(state.members);
 			promoted =
 				gauntletElo !== undefined && gauntletElo > bestFrozen + config.promoteMarginElo;
 			if (promoted) {

@@ -26,6 +26,8 @@ import {
 	initLeague,
 	leaguePaths,
 	loadLeague,
+	promotionBar,
+	readGauntletBaselines,
 	runGeneration,
 	saveStateAtomic,
 	seedRoster,
@@ -113,6 +115,65 @@ describe('pfsp math', () => {
 		recordPairwise(m, 'X', 4, 1); // worse
 		expect(m.matchStats['X']).toEqual({ games: 3, better: 1, worse: 1 });
 		expect(winrateVs(m, 'X')).toBeCloseTo(0.5, 12);
+	});
+});
+
+describe('promotion bar + baseline elos', () => {
+	it('reads full-gauntlet baselines from committed ml/gauntlet_results (path-matched)', () => {
+		// vitest runs from the repo root, where the committed result files live.
+		const scanned = readGauntletBaselines();
+		expect(scanned['src/lib/play/ml/policy-weights.json']).toBe(221);
+		expect(
+			scanned['ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json']
+		).toBe(192);
+	});
+
+	it('initLeague stamps frozen anchors so the first promotion check has a real bar', () => {
+		const root = mkdtempSync(join(tmpdir(), 'league-baseline-'));
+		try {
+			const { state } = initLeague(root);
+			const frozen = state.members.filter((m) => m.kind === 'frozen');
+			// routeexecq matches its own full-gauntlet result by exact path (192);
+			// traceq was scored under the shipped policy-weights.json path (a byte-identical
+			// copy), so it is stamped 221 via the byte-identity fallback.
+			expect(frozen.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors).toBe(192);
+			expect(frozen.find((m) => m.id === 'frozen-traceq-damage-nearmiss')!.eloVsAnchors).toBe(221);
+			// Heuristic anchors do NOT participate in the promotion bar and stay unstamped.
+			expect(state.members.find((m) => m.id === 'heur-pvphunter')!.eloVsAnchors).toBeUndefined();
+			expect(promotionBar(state.members)).toBe(221);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it('config.baselineElos overrides the scan and can stamp by id or path', () => {
+		const root = mkdtempSync(join(tmpdir(), 'league-baseline-map-'));
+		try {
+			const { state } = initLeague(root, {
+				baselineElos: {
+					'frozen-traceq-damage-nearmiss': 221, // by member id
+					'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json': 500 // by path, overrides scan
+				}
+			});
+			expect(state.members.find((m) => m.id === 'frozen-traceq-damage-nearmiss')!.eloVsAnchors).toBe(221);
+			expect(state.members.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors).toBe(500);
+			expect(promotionBar(state.members)).toBe(500);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it('promotionBar: max over scored frozen members only; -Infinity when none', () => {
+		expect(promotionBar([])).toBe(-Infinity);
+		const members = [
+			member('heur-pvphunter', 'heuristic', { profile: 'pvphunter', eloVsAnchors: 999 }),
+			member('main-0', 'main', { eloVsAnchors: 998 }),
+			member('frozen-a', 'frozen', { weightsPath: 'a.json' }) // unscored
+		];
+		expect(promotionBar(members)).toBe(-Infinity); // heuristics/learners never count
+		members.push(member('frozen-b', 'frozen', { weightsPath: 'b.json', eloVsAnchors: 192 }));
+		members.push(member('frozen-c', 'frozen', { weightsPath: 'c.json', eloVsAnchors: 221 }));
+		expect(promotionBar(members)).toBe(221);
 	});
 });
 

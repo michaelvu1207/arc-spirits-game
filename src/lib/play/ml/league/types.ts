@@ -98,6 +98,12 @@ export interface LeagueConfig {
 	train: LeagueTrainConfig;
 	/** Default init checkpoint for learner lanes (main; exploiters start fresh). */
 	initFrom?: string;
+	/**
+	 * Baseline gauntlet-v1 Elos stamped on seeded FROZEN members at init, keyed by
+	 * member id or weights path. Takes precedence over the ml/gauntlet_results scan;
+	 * without either source the first promotion check has no bar (bestFrozen −Inf).
+	 */
+	baselineElos?: Record<string, number>;
 	pythonBin: string;
 	/** Promotion command; the candidate ckpt path is appended. Overridable in tests. */
 	gauntletCmd: string[];
