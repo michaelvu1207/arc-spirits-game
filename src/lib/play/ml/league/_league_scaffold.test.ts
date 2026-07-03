@@ -469,6 +469,46 @@ describe('v2 lanes (unit)', () => {
 	});
 });
 
+describe('v1 socket lanes (unit)', () => {
+	const opps = () => [
+		member('heur-medium', 'heuristic', { profile: 'medium' }),
+		member('heur-hard', 'heuristic', { profile: 'hard' }),
+		member('frozen-a', 'frozen', { weightsPath: 'a.json' })
+	];
+
+	it('buildMatchup v1Socket: RemotePolicy learner at obs v1 (no obsVersion/policyObsVersion), no in-process weights', () => {
+		const config = defaultConfig('unused');
+		const learner = member('main-0', 'main', { weightsPath: 'ckpt/main-0-gen3.json' });
+		const plan = buildMatchup(config, learner, opps(), 1, 7, undefined, '/tmp/v1.sock');
+		expect(plan.config.inferSocket).toBe('/tmp/v1.sock');
+		expect(plan.config.policyObsVersion).toBeUndefined(); // stays v1
+		expect(plan.config.obsVersion).toBeUndefined(); // stays v1
+		expect(plan.config.weightsPath).toBeUndefined(); // learner plays the socket, not in-process
+		expect(plan.config.neuralSeats).toEqual([plan.learnerSeat]);
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
+		// Opponents still load their own in-process weights / profiles.
+		expect(Object.values(plan.config.opponentWeights ?? {})).toHaveLength(1);
+	});
+
+	it('buildMatchup v1Socket keeps value-selection (obs v1 supports it over the socket)', () => {
+		const config = { ...defaultConfig('unused'), selection: 'value' as const };
+		const learner = member('main-0', 'main', { weightsPath: 'w.json' });
+		expect(
+			buildMatchup(config, learner, opps(), 0, 1, undefined, '/tmp/v1.sock').config.selection
+		).toBe('value');
+	});
+
+	it('buildMatchup: a v2 lane ignores v1Socket (v2 socket wins, obs v2)', () => {
+		const config = defaultConfig('unused');
+		const learner = member('main-0', 'main', { model: 'v2', ptPath: 'x.pt' });
+		// Both provided: the v2 arg is authoritative, v1Socket is dropped.
+		const plan = buildMatchup(config, learner, opps(), 0, 1, { socket: '/tmp/v2.sock' }, '/tmp/v1.sock');
+		expect(plan.config.inferSocket).toBe('/tmp/v2.sock');
+		expect(plan.config.policyObsVersion).toBe(2);
+		expect(plan.config.obsVersion).toBe(2);
+	});
+});
+
 describe('random-init lanes (from-scratch rediscovery)', () => {
 	(HAVE_VENV ? it : it.skip)(
 		'random_init_v1.py mints a deterministic ckpt that net.ts loadPolicyWeights accepts',

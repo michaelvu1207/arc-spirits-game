@@ -60,14 +60,20 @@ export interface LeagueMember {
 	matchStats: Record<string, MatchStats>;
 }
 
-/** Inference-server + distillation knobs for v2 lanes. */
-export interface LeagueV2Config {
+/** Shared ml/infer_server.py knobs (both v1-socket and v2 lanes spawn one). */
+export interface LeagueInferConfig {
 	/** infer_server --device (default auto). */
 	device?: string;
-	/** infer_server --window-ms. */
+	/** infer_server --window-ms (default 2). */
 	windowMs?: number;
-	/** infer_server --max-batch. */
+	/** infer_server --max-batch (default 512). */
 	maxBatch?: number;
+	/** How long to wait for the server socket + ready line (default 180000 ms). */
+	serverStartTimeoutMs?: number;
+}
+
+/** Inference-server + distillation knobs for v2 lanes. */
+export interface LeagueV2Config extends LeagueInferConfig {
 	/** Fresh-model dims (train.py --v2-d-model/-layers/-heads; ignored on warm start). */
 	dModel?: number;
 	layers?: number;
@@ -77,8 +83,6 @@ export interface LeagueV2Config {
 	/** Distill after EVERY training step (default false = only at promotion checks).
 	 *  Without this, a v2 learner is opponent-playable only as of its last promotion. */
 	distillEveryGen?: boolean;
-	/** How long to wait for the server socket + ready line (default 180000 ms). */
-	serverStartTimeoutMs?: number;
 }
 
 export interface PfspConfig {
@@ -194,6 +198,17 @@ export interface LeagueConfig {
 	laneModel?: Record<string, 'v1' | 'v2'>;
 	/** v2-lane knobs (server device/batching, fresh dims, distillation). */
 	v2?: LeagueV2Config;
+	/**
+	 * Route v1 (JSON MLP) learner lanes through a manager-owned ml/infer_server.py:
+	 * the learner plays a batched-GPU RemotePolicy (policyObsVersion 1) instead of
+	 * the in-process TS net, while opponents keep their in-process weights. Presence
+	 * enables it (`{}` = defaults); fields tune the shared server. A lane's server
+	 * serves its LIVE JSON checkpoint (<lane>-live.json), hot-swapped + SIGHUP'd each
+	 * generation exactly like the v2 lane. Skipped for lanes running expert-iteration
+	 * `search` (the Gumbel searcher needs the local net for rollouts) and for the
+	 * heuristic bootstrap generation (no checkpoint to serve yet).
+	 */
+	v1Infer?: LeagueInferConfig;
 	pythonBin: string;
 	/** Promotion command; the candidate ckpt path is appended. Overridable in tests. */
 	gauntletCmd: string[];

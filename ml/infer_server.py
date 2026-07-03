@@ -3,7 +3,8 @@ Batched GPU inference server for the Arc Spirits candidate scorer.
 
 Serves scoring requests over a Unix domain socket, coalescing rows from
 concurrent connections into single forward passes. --weights accepts either:
-  - arc-cand-scorer-v1 JSON (CandidateScorer MLP; obs rows = 62-float v1), or
+  - arc-cand-scorer-v1 JSON (CandidateScorer MLP; obs_dim is read from the file —
+    77 for obs v1.1, whatever the encoder currently emits), or
   - arc-entity-scorer-v2 .pt with a sibling .manifest.json (EntityCandidateScorer
     set-transformer; obs rows = the flat arc-obs-v2 arrays, 3419 floats for the
     frozen catalog). The manifest is the format probe, so SIGHUP can swap a

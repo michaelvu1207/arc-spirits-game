@@ -71,6 +71,7 @@ import { isPlayable, recordPairwise, sampleOpponents } from './pfsp';
 import type {
 	HistoryLine,
 	LeagueConfig,
+	LeagueInferConfig,
 	LeagueMember,
 	LeagueState,
 	MatchStats
@@ -139,7 +140,8 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 		...(base.laneInit || over.laneInit
 			? { laneInit: { ...base.laneInit, ...over.laneInit } }
 			: {}),
-		...(base.v2 || over.v2 ? { v2: { ...base.v2, ...over.v2 } } : {})
+		...(base.v2 || over.v2 ? { v2: { ...base.v2, ...over.v2 } } : {}),
+		...(base.v1Infer || over.v1Infer ? { v1Infer: { ...base.v1Infer, ...over.v1Infer } } : {})
 	};
 }
 
@@ -432,20 +434,22 @@ function lanePt(m: LeagueMember): string | undefined {
 
 // ── v2 inference servers (manager-owned child processes) ────────────────────
 //
-// One ml/infer_server.py per v2 lane, serving the lane's LIVE checkpoint
-// (<checkpoints>/<lane>-live.pt) on a per-lane unix socket. After each training
-// step the new .pt (+ sibling manifest) is copied over the live path and the
-// server is SIGHUP'd to hot-swap in place; the swap is CONFIRMED by watching the
-// server log for its reload line before any eval runs (an eval on stale weights
-// would silently corrupt matchStats). Servers persist across generations within
-// one process; stopInferServers() kills them (runGenerations' finally, the CLI,
-// tests) and a process-exit hook backstops crashes.
+// One ml/infer_server.py per socket-served lane, serving the lane's LIVE
+// checkpoint (<checkpoints>/<lane>-live.{pt,json}) on a per-lane unix socket.
+// v2 lanes serve a .pt (+ sibling manifest); v1Infer lanes serve the JSON MLP.
+// After each training step the new checkpoint is copied over the live path and
+// the server is SIGHUP'd to hot-swap in place; the swap is CONFIRMED by watching
+// the server log for its reload line before any eval runs (an eval on stale
+// weights would silently corrupt matchStats). Servers persist across generations
+// within one process; stopInferServers() kills them (runGenerations' finally, the
+// CLI, tests) and a process-exit hook backstops crashes.
 
 interface InferServerEntry {
 	laneId: string;
 	child: ChildProcess;
 	socket: string;
 	logPath: string;
+	/** Live checkpoint the server reads (a .pt for v2 lanes, a .json for v1Infer). */
 	livePt: string;
 }
 
@@ -453,14 +457,20 @@ const inferServers = new Map<string, InferServerEntry>();
 
 const manifestOf = (pt: string): string => pt.replace(/\.pt$/, '.manifest.json');
 
-/** Copy a .pt checkpoint together with its sibling .manifest.json. */
-function copyCkptPair(src: string, dst: string): void {
+/**
+ * Copy an inference checkpoint to a serve path. v2 .pt checkpoints carry a
+ * sibling .manifest.json (the server's format probe) that must travel with them;
+ * v1 .json checkpoints are a single self-describing file.
+ */
+function copyCheckpoint(src: string, dst: string): void {
 	if (resolve(src) === resolve(dst)) return;
 	copyFileSync(resolve(src), resolve(dst));
-	if (!existsSync(manifestOf(resolve(src)))) {
-		throw new Error(`league: v2 checkpoint ${src} is missing its sibling ${manifestOf(src)}`);
+	if (resolve(src).endsWith('.pt')) {
+		if (!existsSync(manifestOf(resolve(src)))) {
+			throw new Error(`league: v2 checkpoint ${src} is missing its sibling ${manifestOf(src)}`);
+		}
+		copyFileSync(manifestOf(resolve(src)), manifestOf(resolve(dst)));
 	}
-	copyFileSync(manifestOf(resolve(src)), manifestOf(resolve(dst)));
 }
 
 function logTail(path: string, lines = 15): string {
@@ -488,21 +498,26 @@ async function waitFor(
 	}
 }
 
-/** Start (or reuse) the lane's inference server, serving `ptSource` as the live ckpt. */
+/** Start (or reuse) the lane's inference server, serving `ckptSource` as the live
+ *  checkpoint. `knobs` are the shared server flags (config.v2 for v2 lanes,
+ *  config.v1Infer for v1-socket lanes); the live path's extension mirrors the
+ *  source so the server format-probes correctly (.pt → v2, .json → v1). */
 export async function ensureInferServer(
 	config: LeagueConfig,
 	root: string,
 	laneIdx: number,
 	laneId: string,
-	ptSource: string
+	ckptSource: string,
+	knobs: LeagueInferConfig
 ): Promise<InferServerEntry> {
 	const existing = inferServers.get(laneId);
 	if (existing && existing.child.exitCode === null) return existing;
 	inferServers.delete(laneId);
 
 	const p = leaguePaths(root);
-	const livePt = join(p.checkpoints, `${laneId}-live.pt`);
-	copyCkptPair(ptSource, livePt);
+	const ext = ckptSource.endsWith('.pt') ? 'pt' : 'json';
+	const livePt = join(p.checkpoints, `${laneId}-live.${ext}`);
+	copyCheckpoint(ckptSource, livePt);
 	// tmpdir keeps the socket path under the ~104-char unix limit (league roots
 	// in tests live deep under /var/folders); the log stays with the league.
 	const socket = join(tmpdir(), `arcl-${process.pid}-${laneIdx}.sock`);
@@ -514,9 +529,9 @@ export async function ensureInferServer(
 			'ml/infer_server.py',
 			'--weights', livePt,
 			'--socket', socket,
-			'--device', config.v2?.device ?? 'auto',
-			'--window-ms', String(config.v2?.windowMs ?? 2),
-			'--max-batch', String(config.v2?.maxBatch ?? 512)
+			'--device', knobs.device ?? 'auto',
+			'--window-ms', String(knobs.windowMs ?? 2),
+			'--max-batch', String(knobs.maxBatch ?? 512)
 		],
 		{ stdio: ['ignore', logFd, logFd] }
 	);
@@ -532,7 +547,7 @@ export async function ensureInferServer(
 			}
 			return existsSync(socket) && countInLog(logPath, '[infer] serving') > serveMarks;
 		},
-		config.v2?.serverStartTimeoutMs ?? 180_000,
+		knobs.serverStartTimeoutMs ?? 180_000,
 		`infer server ${laneId} (${socket})`,
 		() => logTail(logPath)
 	);
@@ -544,7 +559,7 @@ export async function ensureInferServer(
 export async function hotSwapInferServer(entry: InferServerEntry, newPt: string): Promise<void> {
 	const okBefore = countInLog(entry.logPath, '[infer] reloaded weights');
 	const failBefore = countInLog(entry.logPath, 'reload FAILED');
-	copyCkptPair(newPt, entry.livePt);
+	copyCheckpoint(newPt, entry.livePt);
 	entry.child.kill('SIGHUP');
 	await waitFor(
 		() => {
@@ -594,6 +609,10 @@ interface MatchupPlan {
  * (policyObsVersion 2; in-process weightsPath is never used for the learner).
  * A v2 lane without a socket is the fresh-net bootstrap: heuristic-driven games,
  * still recorded at obsVersion 2 so the first .pt can train from them.
+ * `v1Socket` (v1 lanes only, mutually exclusive with `v2`) routes the v1 JSON
+ * learner through the lane's inference server: same policyObsVersion 1 / obsVersion 1
+ * as an in-process v1 lane, but the acting net is a batched-GPU RemotePolicy and
+ * weightsPath is left unset (the learner never loads in-process).
  */
 export function buildMatchup(
 	config: LeagueConfig,
@@ -601,7 +620,8 @@ export function buildMatchup(
 	opponents: LeagueMember[],
 	learnerSeatIdx: number,
 	iter: number,
-	v2?: { socket?: string }
+	v2?: { socket?: string },
+	v1Socket?: string
 ): MatchupPlan {
 	const seatColors = SEAT_COLORS.slice(0, config.seats) as SeatColor[];
 	const learnerSeat = seatColors[learnerSeatIdx % config.seats];
@@ -621,8 +641,12 @@ export function buildMatchup(
 		else if (opp.profile) profiles[seatColors.indexOf(seat)] = opp.profile;
 		else throw new Error(`league: opponent ${opp.id} is not playable`);
 	});
-	const learnerWeights = v2 ? undefined : playWeights(learner);
-	const viaSocket = !!v2?.socket;
+	// v1Socket routes the v1 learner through the server (no in-process weights); a v2
+	// lane never uses it. Either socket mode plays the learner via the RemotePolicy.
+	const viaV1Socket = !v2 && !!v1Socket;
+	const viaV2Socket = !!v2?.socket;
+	const viaSocket = viaV1Socket || viaV2Socket;
+	const learnerWeights = v2 || viaV1Socket ? undefined : playWeights(learner);
 	return {
 		learnerSeat,
 		oppBySeat,
@@ -631,22 +655,26 @@ export function buildMatchup(
 			maxRounds: config.maxRounds,
 			profiles,
 			weightsPath: learnerWeights ? resolve(learnerWeights) : undefined,
-			// policyObsVersion 2 supports only hybrid/policy selection (actorWorker).
-			selection: viaSocket && config.selection === 'value' ? 'hybrid' : config.selection,
+			// policyObsVersion 2 supports only hybrid/policy selection (actorWorker); the
+			// v1 socket serves the same obs version as in-process, so value stays valid.
+			selection: viaV2Socket && config.selection === 'value' ? 'hybrid' : config.selection,
 			sample: config.sample,
 			temperature: config.temperature,
 			neuralSeats: learnerWeights || viaSocket ? [learnerSeat] : undefined,
 			recordSeats: [learnerSeat],
 			opponentWeights: Object.keys(opponentWeights).length ? opponentWeights : undefined,
 			// Expert iteration: learner-seat decisions get Gumbel search + recorded pi
-			// (v1 in-process lanes only — the searcher needs the local net for rollouts).
+			// (in-process lanes only — the searcher needs the local net for rollouts, so
+			// socket lanes never carry search; the manager also skips the socket for them).
 			...(config.search && learnerWeights && !viaSocket ? { search: config.search } : {}),
 			...(config.denseVpReward ? { denseVpReward: true } : {}),
 			...(config.shapingPreset ? { shapingPreset: config.shapingPreset } : {}),
 			gamma: config.gamma,
 			iter,
 			...(v2 ? { obsVersion: 2 as const } : {}),
-			...(viaSocket ? { inferSocket: v2!.socket, policyObsVersion: 2 as const } : {})
+			...(viaV2Socket ? { inferSocket: v2!.socket, policyObsVersion: 2 as const } : {}),
+			// v1 socket: play remotely but keep obsVersion / policyObsVersion at 1 (default).
+			...(viaV1Socket ? { inferSocket: v1Socket } : {})
 		}
 	};
 }
@@ -769,13 +797,22 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		state.phase = `gen${gen}:${learner.id}:games`;
 		saveStateAtomic(root, state);
 
-		// v2 lane with a checkpoint: the learner plays through the lane's server.
-		// Without one (fresh net) the bootstrap generation is heuristic-driven.
+		// v1 lanes opt into socket play via config.v1Infer once they have a JSON to serve
+		// (the fresh-exploiter bootstrap gen plays heuristic in-process). Skipped when the
+		// lane runs Gumbel search — its rollouts need the local net, not the socket.
+		const v1SocketWeights =
+			model === 'v1' && config.v1Infer && !config.search ? playWeights(learner) : undefined;
+
+		// v2 lane with a checkpoint (or a v1Infer lane with a JSON): the learner plays
+		// through the lane's server. Otherwise (fresh net) the bootstrap gen is heuristic.
 		let laneServer =
 			model === 'v2' && lanePt(learner)
-				? await ensureInferServer(config, root, laneIdx, learner.id, lanePt(learner)!)
-				: undefined;
+				? await ensureInferServer(config, root, laneIdx, learner.id, lanePt(learner)!, config.v2 ?? {})
+				: v1SocketWeights
+					? await ensureInferServer(config, root, laneIdx, learner.id, v1SocketWeights, config.v1Infer!)
+					: undefined;
 		const v2Arg = model === 'v2' ? { socket: laneServer?.socket } : undefined;
+		const v1SocketArg = v1SocketWeights ? laneServer!.socket : undefined;
 
 		// Deterministic PFSP draw for this (gen, lane).
 		const rng = createRng(config.seedBase + gen * 1009 + laneIdx * 101);
@@ -794,7 +831,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		}
 		const plans = Array.from({ length: matchups }, (_, m) => {
 			const opps = sampleOpponents(learner, state.members, config.seats - 1, config.pfsp, rand);
-			const plan = buildMatchup(config, learner, opps, m, gen, v2Arg);
+			const plan = buildMatchup(config, learner, opps, m, gen, v2Arg, v1SocketArg);
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
 			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
 			const seeds = Array.from({ length: count }, (_, i) => seed0 + i);
@@ -859,16 +896,21 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		const trainInit = model === 'v2' ? lanePt(learner) : playWeights(learner);
 		const trainMs = runTrainer(config, laneDir, ckpt, trainInit, model);
 
-		// v2: hot-swap the lane server onto the fresh checkpoint (or first-start it
-		// for a lane that just trained its first net) BEFORE eval plays through it.
-		if (model === 'v2') {
+		// Socket-served lanes (v2, or v1Infer): hot-swap the lane server onto the fresh
+		// checkpoint (or first-start it for a lane that just trained its first net —
+		// e.g. a v1Infer exploiter whose bootstrap gen was heuristic) BEFORE eval plays
+		// through it. A v1Infer lane serves the eval on the just-trained JSON.
+		const useV1SocketEval = model === 'v1' && !!config.v1Infer && !config.search;
+		if (model === 'v2' || useV1SocketEval) {
+			const knobs = model === 'v2' ? (config.v2 ?? {}) : config.v1Infer!;
 			if (laneServer && laneServer.child.exitCode === null) {
 				await hotSwapInferServer(laneServer, ckpt);
 			} else {
-				laneServer = await ensureInferServer(config, root, laneIdx, learner.id, ckpt);
+				laneServer = await ensureInferServer(config, root, laneIdx, learner.id, ckpt, knobs);
 			}
 		}
 		const v2Eval = model === 'v2' ? { socket: laneServer!.socket } : undefined;
+		const v1EvalSocket = useV1SocketEval ? laneServer!.socket : undefined;
 
 		// v2 → v1 distilled student: the member's gauntlet + opponent-seat proxy.
 		let distilled: string | undefined;
@@ -904,7 +946,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				Math.ceil(config.evalGames / config.seats),
 				config.evalGames - evalGames
 			);
-			const plan = buildMatchup(config, trained, evalField, r, gen, v2Eval);
+			const plan = buildMatchup(config, trained, evalField, r, gen, v2Eval, v1EvalSocket);
 			plan.config.recordSeats = [];
 			plan.config.sample = false;
 			// Eval measures the RAW net (what ships/promotes) — never the searched agent.
@@ -957,7 +999,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				let frozenPt: string | undefined;
 				if (model === 'v2') {
 					frozenPt = join(p.checkpoints, `${frozenId}.pt`);
-					copyCkptPair(ckpt, frozenPt);
+					copyCheckpoint(ckpt, frozenPt);
 				}
 				state.members.push({
 					id: frozenId,

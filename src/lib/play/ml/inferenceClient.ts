@@ -245,8 +245,20 @@ class SyncInferBridge {
 		if (Atomics.wait(this.sig, 0, 0, this.timeoutMs) === 'timed-out') {
 			throw new Error(`RemotePolicy: no response within ${this.timeoutMs}ms`);
 		}
-		const received = receiveMessageOnPort(this.port);
-		if (!received) throw new Error('RemotePolicy: woken with no message queued');
+		// The IO worker posts the reply and THEN signals (postMessage → Atomics.notify),
+		// but cross-thread MessagePort delivery is decoupled from the wake: under heavy
+		// concurrency the notify routinely beats the posted message into this port's
+		// queue, so the first receiveMessageOnPort can come back empty. The signal
+		// guarantees a message is en route — spin (bounded by the same timeout) until it
+		// lands instead of treating the delivery lag as a failure.
+		let received = receiveMessageOnPort(this.port);
+		if (!received) {
+			const deadline = Date.now() + this.timeoutMs;
+			do {
+				received = receiveMessageOnPort(this.port);
+			} while (!received && Date.now() < deadline);
+			if (!received) throw new Error('RemotePolicy: woken but reply never arrived');
+		}
 		const msg = received.message as Uint8Array | { __error?: string };
 		if (!(msg instanceof Uint8Array)) {
 			throw new Error(`RemotePolicy: ${(msg as { __error?: string }).__error ?? 'bridge failure'}`);
@@ -291,8 +303,8 @@ export class RemotePolicy {
 	private lastValue = 0;
 
 	/**
-	 * `expectObsDim` pins the server's observation width at handshake time (62 for the
-	 * v1 MLP, obsV2Meta().flatLength for arc-entity-scorer-v2). A mismatch — e.g. the
+	 * `expectObsDim` pins the server's observation width at handshake time (OBS_DIM for
+	 * the v1 MLP — 77 at obs v1.1, obsV2Meta().flatLength for arc-entity-scorer-v2). A mismatch — e.g. the
 	 * server still holds a v1 checkpoint while the caller plays at policyObsVersion 2 —
 	 * fails HERE with one clear error instead of per-request shape errors mid-game.
 	 * `wire` overrides the scoring encoding (default: binary for v2 checkpoints, JSON
