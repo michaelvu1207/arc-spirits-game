@@ -37,6 +37,23 @@ export interface ShapingWeights {
 	 *  zero potential; this term gives it some, so an unawakened Abyss Summon finally counts toward
 	 *  Φ instead of looking like a wasted action. Optional (defaults to 0). */
 	faceDown?: number;
+	/** Credit for ATTACK POWER — min(1, expectedAttack/20) where expectedAttack is the dice pool's
+	 *  summed mean face value (basic 1/3, enchanted 2/3, exalted 1, arcane 2), the same expRoll the
+	 *  encoder exposes. Michael's diagnosis of the Fallen spiral: the bot accumulates far less attack
+	 *  power than a strong opponent, so its fights keep failing and its corruptions are worthless.
+	 *  This rewards the ENGINE (fight-winning power) directly instead of penalizing the corruption
+	 *  symptom. Optional (defaults to 0). */
+	attackPower?: number;
+}
+
+/** Dice-tier mean face value (matches encode.ts expRoll: basic 1/3, enchanted 2/3, exalted 1, arcane 2). */
+const DICE_MEAN: Record<string, number> = { basic: 1 / 3, enchanted: 2 / 3, exalted: 1, arcane: 2 };
+
+/** Expected roll of a player's attack-dice pool — Σ mean face value over the pool. */
+export function expectedAttack(p: PrivatePlayerState | undefined): number {
+	let sum = 0;
+	for (const d of p?.attackDice ?? []) sum += DICE_MEAN[d.tier] ?? 0;
+	return sum;
 }
 
 /** Balanced default: modest build guidance toward dice + barrier (the economy core). */
@@ -73,13 +90,19 @@ export const SHAPING_PRESETS: Record<string, ShapingWeights> = {
 	// return-to-go (γ→1) credits the setup steps. With effect-aware encoding the net can now SEE+pick them.
 	banker: { dice: 0.05, maxBarrier: 0.35, awakened: 0.15, status: 0, classProgress: 0.4 }, // assemble Cultivators → maxBarrier → kill monsters
 	ascend: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: 0, classProgress: 0.4 }, // assemble + awaken VP-class spirits (World Ender +1/round)
-	// ascend2 (ladder4): the SPIRAL fix. Same build objective as ascend, plus two potential-based
-	// terms: (a) faceDown 0.1 credits an unawakened summon (an Abyss Summon finally earns some Φ
-	// instead of reading as a wasted action), and (b) a NEGATIVE status weight so DESCENDING the
-	// corruption ladder toward Fallen LOSES potential — every corruption step is penalized via the
-	// telescoping ΔΦ. This is Φ-of-state (opposite sign of the deleted live STATUS_SHAPE hack) so it
-	// stays policy-invariant (Ng et al. 1999). `ascend` is left frozen for reproducibility.
-	ascend2: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: -0.25, faceDown: 0.1, classProgress: 0.4 }
+	// ascend2 (ladder4, ABLATION): tested whether a NEGATIVE status potential (−0.25) reduces the
+	// corruption→Fallen spiral. It did NOT — Fallen held ~100% across all 60 gens. Potential-based
+	// shaping is policy-invariant (Ng et al. 1999), so it cannot move a VP-optimal corrupt policy;
+	// and per Michael, corrupting is a legitimate line when the engine backs it. Kept frozen as the
+	// ablation arm. `ascend` is likewise frozen for reproducibility.
+	ascend2: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: -0.25, faceDown: 0.1, classProgress: 0.4 },
+	// ascend3 (ladder5): the ENGINE-POWER fix. Michael's diagnosis is that the Fallen spiral is a
+	// SYMPTOM — the real deficit is attack power / initiative: the bot fights with a far weaker dice
+	// pool than a strong player, so its fights fail and its corruptions pay nothing. So NO status
+	// penalty (corruption is fine when it earns value); instead ADD attackPower 0.3 crediting the
+	// dice-pool expected roll, keep faceDown 0.1 (unawakened summons feed the engine loop), and lower
+	// awakened 0.35→0.25 to keep total Φ ~O(1). All terms are Φ-of-state, policy-invariant.
+	ascend3: { dice: 0.05, maxBarrier: 0.15, awakened: 0.25, status: 0, faceDown: 0.1, classProgress: 0.4, attackPower: 0.3 }
 };
 
 export function shapingFor(name: string | undefined): ShapingWeights {
@@ -99,6 +122,7 @@ export function buildPotential(p: PrivatePlayerState | undefined, w: ShapingWeig
 	const awakened = Math.min(1, (p.spirits?.filter((s) => !s.isFaceDown).length ?? 0) / 7);
 	const faceDown = Math.min(1, (p.spirits?.filter((s) => s.isFaceDown).length ?? 0) / 7);
 	const status = Math.min(1, (p.statusLevel ?? 0) / 3);
+	const attack = Math.min(1, expectedAttack(p) / 20); // dice-pool expected roll (fight-winning engine power)
 	const cc = awakenedClassCounts(p);
 	const cultProg = Math.min(1, (cc['Cultivator'] ?? 0) / 5); // progress toward the 5-Cultivator maxBarrier breakpoint
 	const vpClass = Math.min(1, ((cc['World Ender'] ?? 0) + (cc['Golden Ruler'] ?? 0)) / 3); // +1 VP/round classes
@@ -107,6 +131,7 @@ export function buildPotential(p: PrivatePlayerState | undefined, w: ShapingWeig
 		w.maxBarrier * barrier +
 		w.awakened * awakened +
 		(w.faceDown ?? 0) * faceDown +
+		(w.attackPower ?? 0) * attack +
 		w.status * status +
 		(w.classProgress ?? 0) * (cultProg + vpClass)
 	);
