@@ -1,0 +1,61 @@
+{
+ "_readme": "PHASE 3b retrain: identical ladder recipe, but on the FRESH catalog (5th location + monster rebalance, re-frozen 2026-07-03), rules fix (unpayable corruption debt settles as VP loss), and STATUS_SHAPE deleted from hybrid selection. Goal: close the live-vs-certified gap found in playtest U94RP3.",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": [
+  "heur-medium",
+  "heur-hard",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "laneInit": {
+  "main-0": "random"
+ },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend",
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 25,
+ "seedBase": 91000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--farm-value-coef",
+   "0.25",
+   "--reward-pick-coef",
+   "0.25",
+   "--gamma",
+   "0.999",
+   "--win-bonus",
+   "1.0"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_ladder2"
+ },
+ "workers": 120,
+ "matchupConcurrency": 15
+}
