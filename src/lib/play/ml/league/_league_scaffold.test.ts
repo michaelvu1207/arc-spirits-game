@@ -14,6 +14,7 @@
  *   SMOKE=1    npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
  *   SMOKE_V2=1 npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
  */
+import { OBS_DIM } from '../encode';
 import { describe, expect, it } from 'vitest';
 import {
 	copyFileSync,
@@ -368,7 +369,7 @@ describe('league smoke generation (SMOKE=1)', () => {
 				// The trained checkpoint exists and matches the 62/52 contract.
 				expect(existsSync(line.ckpt)).toBe(true);
 				const ckpt = JSON.parse(readFileSync(line.ckpt, 'utf8')) as { obs_dim: number; act_dim: number };
-				expect(ckpt.obs_dim).toBe(62);
+				expect(ckpt.obs_dim).toBe(OBS_DIM);
 				expect(ckpt.act_dim).toBe(52);
 
 				// State advanced + learner now plays its new ckpt; history has the line.
@@ -481,7 +482,7 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 				mintRandomInitCkpt(cfg, b, 123);
 				expect(readFileSync(a, 'utf8')).toBe(readFileSync(b, 'utf8')); // seed-deterministic
 				const policy = loadPolicyWeights(JSON.parse(readFileSync(a, 'utf8')), {
-					expectedObsDim: 62,
+					expectedObsDim: OBS_DIM,
 					expectedActDim: 52
 				});
 				expect(typeof policy.probs).toBe('function');
@@ -553,7 +554,7 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 				expect(main.initFrom).toBe(join(leaguePaths(rootA).checkpoints, 'main-0-random-init.json'));
 				expect(existsSync(main.initFrom!)).toBe(true);
 				loadPolicyWeights(JSON.parse(readFileSync(main.initFrom!, 'utf8')), {
-					expectedObsDim: 62,
+					expectedObsDim: OBS_DIM,
 					expectedActDim: 52
 				});
 
@@ -622,7 +623,7 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 					obs_dim: number;
 					act_dim: number;
 				};
-				expect(student.obs_dim).toBe(62);
+				expect(student.obs_dim).toBe(OBS_DIM);
 				expect(student.act_dim).toBe(52);
 
 				// Paired-row training data: meta kept the pool's obs_v2 block after the merge.

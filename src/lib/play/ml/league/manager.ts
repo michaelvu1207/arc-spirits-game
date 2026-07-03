@@ -223,7 +223,19 @@ export function seedRoster(config: LeagueConfig): LeagueMember[] {
 export function mintRandomInitCkpt(config: LeagueConfig, out: string, seed: number): void {
 	const r = spawnSync(
 		config.pythonBin,
-		['ml/random_init_v1.py', '--out', resolve(out), '--seed', String(seed)],
+		[
+			'ml/random_init_v1.py',
+			'--out',
+			resolve(out),
+			'--seed',
+			String(seed),
+			// Pin to the CURRENT encoder contract — the script's own defaults lag
+			// encoder bumps (obs v1.1 62→77 was minted at 62 without this).
+			'--obs-dim',
+			String(OBS_DIM),
+			'--act-dim',
+			String(ACT_DIM)
+		],
 		{ encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }
 	);
 	if (r.status !== 0) {
