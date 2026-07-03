@@ -1897,7 +1897,7 @@ export function applyGameCommand(
 				}
 			}
 			active.player.phaseReady = true;
-			tryAdvanceFromCleanup(state);
+			tryAdvanceFromCleanup(state, catalog);
 			return success(state);
 		}
 

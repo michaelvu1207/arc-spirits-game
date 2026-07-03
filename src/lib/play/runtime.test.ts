@@ -995,6 +995,75 @@ describe('play runtime', () => {
 		expect(res.state.players.Red!.victoryPoints).toBe(3);
 	});
 
+	test('round-cap end runs FINAL SCORING: last-round World Guardian pays its +6 VP (U94RP3 case)', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = started.state;
+		// Michael's game: 25 VP, Good (Corrupt L2), Cosmic Guardian (World Guardian class)
+		// awakened in round 30's awakening phase — benefits phase never comes back, so
+		// without final scoring the +6 ("24+ VP and Good") evaporates. He really hit 31.
+		state.phase = 'cleanup';
+		state.round = 30;
+		const red = state.players.Red!;
+		red.victoryPoints = 25;
+		red.statusLevel = 2; // Corrupt — still Good (only Fallen is Evil)
+		red.spirits = [
+			...red.spirits.filter((s) => s.slotIndex !== 6),
+			{ slotIndex: 6, id: 'cg', name: 'Cosmic Guardian', cost: 9, classes: { 'World Guardian': 1 }, origins: {}, isFaceDown: false }
+		];
+		for (const seat of state.activeSeats) {
+			if (seat !== 'Red') state.players[seat]!.phaseReady = true;
+		}
+
+		const committed = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'commitCleanup' },
+			CATALOG
+		);
+		expect(committed.ok).toBe(true);
+		if (!committed.ok) return;
+		expect(committed.state.status).toBe('finished');
+		expect(committed.state.winnerSeat).toBe('Red');
+		expect(committed.state.players.Red!.victoryPoints).toBe(31);
+		// The points-over-time chart's last point shows the final score.
+		const hist = committed.state.players.Red!.vpHistory!;
+		expect(hist[hist.length - 1]).toBe(31);
+	});
+
+	test('final scoring does NOT run before the round cap', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = started.state;
+		state.phase = 'cleanup';
+		state.round = 5;
+		const red = state.players.Red!;
+		red.victoryPoints = 25;
+		red.statusLevel = 2;
+		red.spirits = [
+			...red.spirits.filter((s) => s.slotIndex !== 6),
+			{ slotIndex: 6, id: 'cg', name: 'Cosmic Guardian', cost: 9, classes: { 'World Guardian': 1 }, origins: {}, isFaceDown: false }
+		];
+		for (const seat of state.activeSeats) {
+			if (seat !== 'Red') state.players[seat]!.phaseReady = true;
+		}
+
+		const committed = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'commitCleanup' },
+			CATALOG
+		);
+		expect(committed.ok).toBe(true);
+		if (!committed.ok) return;
+		// Round advances normally; the +6 is the NEXT benefits phase's business.
+		expect(committed.state.status).toBe('active');
+		expect(committed.state.round).toBe(6);
+		expect(committed.state.players.Red!.victoryPoints).toBe(25);
+	});
+
 	test('the deadline drain auto-resolves leftover corruption in cleanup (highest slots)', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);

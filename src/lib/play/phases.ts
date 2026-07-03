@@ -17,6 +17,7 @@ import type {
 	AwakenLockedOffer,
 	AwakenOffer,
 	PlayCatalog,
+	PrivatePlayerState,
 	PublicGameState,
 	SeatColor
 } from './types';
@@ -224,40 +225,7 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 		// Always start from a clean slate so a stale claim (e.g. a prior round the host
 		// force-advanced before it was claimed) can never linger and block this step.
 		player.pendingAwakenReward = null;
-		const counts = awakenedClassCounts(player);
-		const evil = isEvilAlignment(player.statusLevel);
-		const grants: AwakenGrant[] = [];
-
-		// Cursed Spirit — one line per corruption stage entered this round, each ×N.
-		const cursed = counts['Cursed Spirit'] ?? 0;
-		if (cursed >= 1) {
-			if (player.becameTaintedThisRound)
-				grants.push({ kind: 'taintedChoice', amount: cursed, source: 'Cursed Spirit' });
-			if (player.becameCorruptThisRound)
-				grants.push({ kind: 'relicChoice', amount: cursed, source: 'Cursed Spirit' });
-			if (player.becameFallenThisRound)
-				grants.push({ kind: 'augment', amount: cursed, source: 'Cursed Spirit' });
-		}
-		// Golden Ruler — +1 VP (the Evil self-discard penalty is applied on claim).
-		if ((counts['Golden Ruler'] ?? 0) >= 1) {
-			grants.push({
-				kind: 'vp',
-				amount: 1,
-				source: 'Golden Ruler',
-				...(evil ? { note: 'You are Evil — claiming also discards a Golden Ruler spirit.' } : {})
-			});
-		}
-		// The Corruptor — +1 Arcane Attack die, only if you corrupted this round.
-		if ((counts['The Corruptor'] ?? 0) >= 1 && player.corruptedThisRound) {
-			grants.push({ kind: 'attackDice', tier: 'arcane', amount: 1, source: 'The Corruptor' });
-		}
-		// World Ender — now a flat +1 VP via its awakeningPhase `run` handler
-		// (classes/worldEnder.ts), no longer a Cleanup claim.
-		// World Guardian — +6 VP, only when you are Good with ≥24 VP.
-		if ((counts['World Guardian'] ?? 0) >= 1 && !evil && player.victoryPoints >= 24) {
-			grants.push({ kind: 'vp', amount: 6, source: 'World Guardian' });
-		}
-
+		const grants = collectBenefitGrants(player);
 		if (grants.length > 0) {
 			player.pendingAwakenReward = { grants };
 		}
@@ -268,6 +236,82 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 	// to drive it off. Done here (not mid-fight) so every player faces the same listed
 	// monster all round and excess kills never carry over.
 	advanceMonsterIfDefeated(state, catalog);
+}
+
+/**
+ * The per-round Benefits grants a player is owed (gated by awakened class counts +
+ * each class's condition). Shared by {@link enterBenefits} (surfaced as a claimable
+ * `pendingAwakenReward`) and the round-cap final-scoring pass (VP grants applied
+ * directly — the game is over, there is nobody left to click a claim).
+ */
+function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
+	const counts = awakenedClassCounts(player);
+	const evil = isEvilAlignment(player.statusLevel);
+	const grants: AwakenGrant[] = [];
+
+	// Cursed Spirit — one line per corruption stage entered this round, each ×N.
+	const cursed = counts['Cursed Spirit'] ?? 0;
+	if (cursed >= 1) {
+		if (player.becameTaintedThisRound)
+			grants.push({ kind: 'taintedChoice', amount: cursed, source: 'Cursed Spirit' });
+		if (player.becameCorruptThisRound)
+			grants.push({ kind: 'relicChoice', amount: cursed, source: 'Cursed Spirit' });
+		if (player.becameFallenThisRound)
+			grants.push({ kind: 'augment', amount: cursed, source: 'Cursed Spirit' });
+	}
+	// Golden Ruler — +1 VP (the Evil self-discard penalty is applied on claim).
+	if ((counts['Golden Ruler'] ?? 0) >= 1) {
+		grants.push({
+			kind: 'vp',
+			amount: 1,
+			source: 'Golden Ruler',
+			...(evil ? { note: 'You are Evil — claiming also discards a Golden Ruler spirit.' } : {})
+		});
+	}
+	// The Corruptor — +1 Arcane Attack die, only if you corrupted this round.
+	if ((counts['The Corruptor'] ?? 0) >= 1 && player.corruptedThisRound) {
+		grants.push({ kind: 'attackDice', tier: 'arcane', amount: 1, source: 'The Corruptor' });
+	}
+	// World Ender — now a flat +1 VP via its awakeningPhase `run` handler
+	// (classes/worldEnder.ts), no longer a Cleanup claim.
+	// World Guardian — +6 VP, only when you are Good with ≥24 VP.
+	if ((counts['World Guardian'] ?? 0) >= 1 && !evil && player.victoryPoints >= 24) {
+		grants.push({ kind: 'vp', amount: 6, source: 'World Guardian' });
+	}
+
+	return grants;
+}
+
+/**
+ * FINAL SCORING at the round cap: the round order puts Benefits before Awakening, so a
+ * spirit awakened in the last round would never see the Benefits phase its class pays
+ * out in — at a physical table players count those points anyway (rules decision,
+ * 2026-07-03). So when the game ends on the {@link MAX_ROUNDS} cap, run one last
+ * benefits pass for every seat, for scoring only: the `awakeningPhase` trigger (bespoke
+ * VP handlers like World Ender) plus the DIRECT application of every VP-kind Benefits
+ * grant (World Guardian, Golden Ruler). Non-VP grants (dice, relics, augment picks) are
+ * skipped — they cannot affect the result of a finished game. The last vpHistory point
+ * is re-synced so the points-over-time chart shows the final score.
+ */
+function applyFinalScoring(state: PublicGameState, catalog?: PlayCatalog): void {
+	for (const seat of state.activeSeats) {
+		const player = state.players[seat];
+		if (!player) continue;
+		const log: string[] = [];
+		applyTrigger(state, seat, 'awakeningPhase', log, { catalog });
+		for (const grant of collectBenefitGrants(player)) {
+			if (grant.kind === 'vp' && grant.amount > 0) {
+				player.victoryPoints = (player.victoryPoints ?? 0) + grant.amount;
+				log.push(`Final scoring: +${grant.amount} VP (${grant.source}).`);
+			}
+		}
+		if (log.length > 0) {
+			player.lastAction = { key: 'final-scoring', label: 'Final Scoring', log };
+		}
+		if (player.vpHistory && player.vpHistory.length > 0) {
+			player.vpHistory[player.vpHistory.length - 1] = player.victoryPoints;
+		}
+	}
 }
 
 /** Advance to the Awakening step once every seat has confirmed its benefits. */
@@ -365,7 +409,7 @@ export function recomputeAwakenEligibility(state: PublicGameState, catalog?: Pla
  * Once every seat confirms cleanup, either finish the game (a player reached the
  * VP target) or roll into the next round's navigation phase.
  */
-export function tryAdvanceFromCleanup(state: PublicGameState): void {
+export function tryAdvanceFromCleanup(state: PublicGameState, catalog?: PlayCatalog): void {
 	if (!allActiveSeatsReady(state)) return;
 
 	// Snapshot each player's VP for the post-game "points over time" chart. This runs
@@ -396,10 +440,12 @@ export function tryAdvanceFromCleanup(state: PublicGameState): void {
 	}
 
 	// Hard round cap: round MAX_ROUNDS is the last round. If its cleanup closes with no VP-target
-	// winner and not all Fallen, end now — the player with the most Victory Points wins (ties → seat
+	// winner and not all Fallen, run FINAL SCORING (one last benefits pass — see
+	// applyFinalScoring) and end — the player with the most Victory Points wins (ties → seat
 	// order). Runs only after allActiveSeatsReady, so round 30 is fully played (all cleanup VP claims
 	// and the vpHistory snapshot above have landed) before the winner is read. `>=` is defensive.
 	if (state.round >= MAX_ROUNDS) {
+		applyFinalScoring(state, catalog);
 		state.winnerSeat = highestVpSeat(state);
 		state.status = 'finished';
 		return;
@@ -479,7 +525,7 @@ export function forceAdvancePhase(state: PublicGameState, catalog?: PlayCatalog)
 				const player = state.players[seat];
 				if (player) player.phaseReady = true;
 			}
-			tryAdvanceFromCleanup(state);
+			tryAdvanceFromCleanup(state, catalog);
 			return;
 		}
 	}
