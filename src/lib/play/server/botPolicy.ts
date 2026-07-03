@@ -1180,6 +1180,14 @@ export function computeKillProbability(
 	// is impossible. (skipTakeDamage from a Guardian dodges the hit entirely.)
 	const mitigation = (player.damageReduction ?? 0) + (player.deflect ?? 0);
 	const incoming = Math.max(0, monster.damage - mitigation);
+	// Deflected damage is dealt BACK to the monster (rules 2026-07-03) and counts toward
+	// the kill, so the roll only has to cover the remainder. A Guardian dodge
+	// (skipTakeDamage) means no hit landed — nothing to deflect.
+	const deflected = player.skipTakeDamage
+		? 0
+		: Math.min(player.deflect ?? 0, Math.max(0, monster.damage - (player.damageReduction ?? 0)));
+	const hpTarget = Math.max(0, monster.maxHp - deflected);
+	if (!player.skipTakeDamage && hpTarget === 0) return 1; // deflection alone finishes it
 	if (!player.skipTakeDamage && incoming >= player.barrier) {
 		// Would corrupt at the CURRENT barrier. If a FULL barrier (maxBarrier) WOULD survive this hit,
 		// don't corrupt — return 0 so the bot restores barrier first and fights cleanly. Corruption is NOT free:
@@ -1192,12 +1200,12 @@ export function computeKillProbability(
 		const c = awakenedClassCounts(player);
 		const simultaneous = (c['Sharpshooter'] ?? 0) >= 1 || (c['Soul Weaver'] ?? 0) >= 2;
 		if (opts.allowCorruptKill && simultaneous && (player.statusLevel ?? 0) <= 1) {
-			return firepowerFromClone(sim, player, monster.maxHp);
+			return firepowerFromClone(sim, player, hpTarget);
 		}
 		return 0;
 	}
 
-	return firepowerFromClone(sim, player, monster.maxHp);
+	return firepowerFromClone(sim, player, hpTarget);
 }
 
 /**

@@ -209,10 +209,26 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 		]);
 		const p = fireRest('SynthDeflect', 1, { barrier: 4, maxBarrier: 4 });
 		expect(p.deflect).toBe(3);
-		// 3 incoming fully deflected → no barrier loss.
+		// 3 incoming fully deflected → no barrier loss — and the deflected amount is
+		// reported back so the caller can deal it to the opponent (rules 2026-07-03).
 		const r = takeDamage(p, 3);
 		expect(r.barrierLost).toBe(0);
 		expect(p.barrier).toBe(4);
+		expect(r.deflected).toBe(3);
+	});
+
+	it('deflected is capped by the damage that would have landed (after reduction)', () => {
+		withSynthClass('SynthDeflect2', [
+			{ trigger: 'onRest', breakpoints: [{ count: 1, actions: [{ kind: 'deflect', amount: 5 }] }] }
+		]);
+		const p = fireRest('SynthDeflect2', 1, { barrier: 6, maxBarrier: 6 });
+		// Only 2 incoming → only 2 can bounce back, not the full 5.
+		expect(takeDamage(p, 2).deflected).toBe(2);
+		// A partial deflect reports its full contribution and the rest hits the barrier.
+		p.deflect = 5;
+		const r = takeDamage(p, 8);
+		expect(r.deflected).toBe(5);
+		expect(r.barrierLost).toBe(3);
 	});
 
 	it('combatBonus raises combatDamageBonus, then adds in rollAttack', () => {

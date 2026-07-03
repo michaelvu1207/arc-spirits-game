@@ -125,7 +125,7 @@ export function takeDamage(
 	amount: number,
 	ctx?: TakeDamageContext,
 	log?: string[]
-): { corrupted: boolean; barrierLost: number; discarded: number } {
+): { corrupted: boolean; barrierLost: number; discarded: number; deflected: number } {
 	// Fire the onTakeDamage trigger BEFORE applying, so class effects (Aquamaiden,
 	// Firekeeper, Disruptor, Guardian) can set reductions / halve / skip flags for
 	// this hit. The incoming `amount` is exposed via combat.dealt so handlers that
@@ -147,15 +147,24 @@ export function takeDamage(
 
 	// Guardian: skip the take-damage step entirely (it would have corrupted).
 	if (player.skipTakeDamage) {
-		return { corrupted: false, barrierLost: 0, discarded: 0 };
+		return { corrupted: false, barrierLost: 0, discarded: 0, deflected: 0 };
 	}
 
 	// Mitigation primitives (default 0 ⇒ no change): reduce + deflect before barriers.
+	// DEFLECTED damage is not just absorbed — it is dealt BACK to the opponent
+	// (Michael's ruling, 2026-07-03): the caller receives `deflected` and applies it
+	// (fightMonster counts it as damage dealt to the monster this combat; the PvP
+	// strike hits the attacking side's representative). Reduction soaks first; only
+	// damage that would have landed can be deflected.
+	const deflected = Math.min(
+		player.deflect ?? 0,
+		Math.max(0, amount - (player.damageReduction ?? 0))
+	);
 	const mitigation = (player.damageReduction ?? 0) + (player.deflect ?? 0);
 	amount = Math.max(0, amount - mitigation);
 	// Disruptor: halve the (post-reduction) incoming damage, rounding up.
 	if (player.halveIncoming) amount = Math.ceil(amount / 2);
-	if (amount <= 0) return { corrupted: false, barrierLost: 0, discarded: 0 };
+	if (amount <= 0) return { corrupted: false, barrierLost: 0, discarded: 0, deflected };
 	const barrierBefore = player.barrier;
 	const barrierLost = Math.min(barrierBefore, amount);
 	player.barrier = Math.max(0, barrierBefore - amount);
@@ -194,7 +203,7 @@ export function takeDamage(
 	}
 	// `discarded` is retained for caller back-compat but is always 0 now: corruption no
 	// longer auto-trims spirits here — it queues a forced player-chosen discard instead.
-	return { corrupted, barrierLost, discarded: 0 };
+	return { corrupted, barrierLost, discarded: 0, deflected };
 }
 
 /**
@@ -319,12 +328,25 @@ export function resolveEncounterCombat(
 		for (const { seat, player } of defenders) {
 			// opponentInitiative = the attacking SIDE's pooled total, so Disruptor judges
 			// against the whole side (not just the representative seat).
-			const { corrupted } = takeDamage(
+			const { corrupted, deflected } = takeDamage(
 				player,
 				dmg,
 				{ state, seat, catalog, opponent: attackerRep, opponentInitiative: attackerInit },
 				log
 			);
+			// Deflected damage is dealt BACK to the attacking side's representative.
+			// Applied without a trigger context so it cannot chain (a reflection is
+			// never itself deflected — takeDamage only reports; callers reflect).
+			if (deflected > 0 && attackerRep) {
+				const attacker = state.players[attackerRep];
+				if (attacker) {
+					const bounce = takeDamage(attacker, deflected, undefined, log);
+					log.push(
+						`${seat} deflects ${deflected} damage back at ${attackerRep}` +
+							(bounce.corrupted ? ` — ${attackerRep} is corrupted!` : '.')
+					);
+				}
+			}
 			const attacksSimultaneously = player.stunImmune || hasSimultaneousAttack(player);
 			if ((corrupted || player.barrier === 0) && !attacksSimultaneously) {
 				player.stunned = true;
@@ -413,12 +435,14 @@ export function fightMonster(
 
 	// 1. Monster attacks first. The take-damage context lets onTakeDamage class
 	//    effects (Aquamaiden/Firekeeper/Guardian) fire before the hit is applied.
-	const { corrupted, barrierLost, discarded } = takeDamage(player, monster.damage, {
+	const { corrupted, barrierLost, discarded, deflected } = takeDamage(player, monster.damage, {
 		state,
 		seat,
 		catalog
 	}, log);
 	log.push(`${monster.name} attacks for ${monster.damage} (${barrierLost} barrier lost).`);
+	if (deflected > 0)
+		log.push(`Deflected ${deflected} damage back at ${monster.name}.`);
 	if (corrupted) log.push(`You were corrupted — status is now ${player.statusToken}.`);
 	if (discarded > 0) log.push(`Discarded ${discarded} spirit(s) to meet the new limit.`);
 
@@ -442,9 +466,12 @@ export function fightMonster(
 	}
 
 	// 3. Resolve the outcome against the monster's FULL health — a kill needs maxHp damage in this
-	//    single combat. The `onMonsterKill` trigger fires on EVERY combat resolution (carrying
-	//    `killed`), so Adaptive Fighter's no-kill branch runs; Fairy's rune is gated behind `killed`.
-	const endingHp = Math.max(0, monster.maxHp - playerDamage);
+	//    single combat. DEFLECTED damage from the monster's opening strike counts as damage
+	//    dealt to it (it is passive reflection, so it lands even for a corrupted player who
+	//    cannot strike back). The `onMonsterKill` trigger fires on EVERY combat resolution
+	//    (carrying `killed`), so Adaptive Fighter's no-kill branch runs; Fairy's rune is gated
+	//    behind `killed`.
+	const endingHp = Math.max(0, monster.maxHp - playerDamage - deflected);
 	const killed = endingHp <= 0;
 	const vpGained = 0; // VP now comes from the reward selection, not a flat kill bonus.
 	if (killed) {
@@ -454,7 +481,7 @@ export function fightMonster(
 		catalog,
 		combat: {
 			dealt: playerDamage,
-			overkill: Math.max(0, playerDamage - hpBeforeStrike),
+			overkill: Math.max(0, playerDamage + deflected - hpBeforeStrike),
 			killed
 		}
 	});
