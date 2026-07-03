@@ -598,6 +598,16 @@ export interface NeuralPlanOptions {
 	searchSims?: number;
 	/** Search seed; live callers leave it undefined (fresh noise per decision). */
 	searchSeed?: number;
+	/**
+	 * Sampling temperature for the hybrid pick (0/undefined = argmax). The tempo
+	 * champions train ENTIRELY on temperature-1.0 self-play, so greedy play is
+	 * out-of-distribution for them — and identical greedy copies in one game pile
+	 * onto the same plan and split the shared monster ladder (measured: the same
+	 * policy that closes 30 VP at median round 16 sampled goes 0-for-20 as three
+	 * argmax clones). A modest live temperature restores in-distribution behavior,
+	 * breaks the clone symmetry, and makes bots less predictable to humans.
+	 */
+	temperature?: number;
 }
 
 /** Synchronous variant when the caller already holds a policy (e.g. self-play / eval).
@@ -632,7 +642,17 @@ export function planNeuralPhaseActions(
 			});
 			if (res) idx = res.index;
 		}
-		if (idx < 0) idx = hybridIndex(policy, s, seat, withNext, { sample: false }, catalog);
+		if (idx < 0)
+			idx = hybridIndex(
+				policy,
+				s,
+				seat,
+				withNext,
+				opts.temperature && opts.temperature > 0
+					? { sample: true, temperature: opts.temperature }
+					: { sample: false },
+				catalog
+			);
 		out.push(withNext[idx].cmd);
 		s = withNext[idx].next;
 	}

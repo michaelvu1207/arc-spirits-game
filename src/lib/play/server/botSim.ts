@@ -443,6 +443,14 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		const expert =
 			profileKey === EXPERT_BOT_PROFILE_KEY ||
 			(profileKey === NEURAL_PROFILE_KEY && process.env.ARC_EXPERT_BOTS === '1');
+		// Live sampling temperature (default 0.65, ARC_LIVE_BOT_TEMP overrides; 0 = argmax).
+		// The tempo champions train entirely on temperature-1.0 self-play, so greedy live
+		// play is out-of-distribution — and multiple greedy clones in one room chase the
+		// same plan and split the shared monster ladder. See NeuralPlanOptions.temperature.
+		const liveTemp =
+			process.env.ARC_LIVE_BOT_TEMP !== undefined
+				? parseFloat(process.env.ARC_LIVE_BOT_TEMP)
+				: 0.65;
 		// A planner exception must never escape: it would abort the whole tick (HTTP 500) and
 		// strand this seat AND every seat after it, forever (ticks re-plan seats in order, so a
 		// deterministic throw repeats every poll). Degrade to uniform-legal for the seat; if
@@ -451,7 +459,10 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		try {
 			commands =
 				(profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && neuralPolicy
-					? planNeuralPhaseActions(state, seat, catalog, neuralPolicy, { search: expert })
+					? planNeuralPhaseActions(state, seat, catalog, neuralPolicy, {
+							search: expert,
+							temperature: liveTemp
+						})
 					: planUniformLegalPhaseActions(state, seat, catalog);
 		} catch (err) {
 			console.error(`[botSim] planner threw for seat ${seat}; degrading to uniform`, err);

@@ -1,0 +1,115 @@
+{
+  "gauntletVersion": "gauntlet-v7",
+  "candidate": {
+    "kind": "weights",
+    "ref": "ml/league_ladder3/checkpoints/main-0-gen60.json",
+    "slug": "checkpoints--main-0-gen60"
+  },
+  "via": "in-process",
+  "policyObsVersion": 1,
+  "games": 800,
+  "smoke": false,
+  "mergedFromShards": 32,
+  "raw": {
+    "wins": 792,
+    "sumPlace": 814,
+    "sumVP": 22952,
+    "sumRounds": 14368,
+    "finished": 800,
+    "agg": {
+      "games": 2400,
+      "scoreSum": 2385.5
+    },
+    "perAnchor": {
+      "pvphunter": {
+        "games": 272,
+        "scoreSum": 271
+      },
+      "hard": {
+        "games": 316,
+        "scoreSum": 313
+      },
+      "cultivator": {
+        "games": 388,
+        "scoreSum": 387
+      },
+      "rushpatient": {
+        "games": 280,
+        "scoreSum": 277
+      },
+      "paragon": {
+        "games": 296,
+        "scoreSum": 293.5
+      },
+      "insane": {
+        "games": 316,
+        "scoreSum": 314
+      },
+      "medium": {
+        "games": 268,
+        "scoreSum": 268
+      },
+      "survivor": {
+        "games": 264,
+        "scoreSum": 262
+      }
+    }
+  },
+  "eloVsAnchors": {
+    "aggregate": {
+      "games": 2400,
+      "score": 0.9939583333333334,
+      "elo": 881
+    },
+    "perAnchor": {
+      "cultivator": {
+        "games": 388,
+        "score": 0.9974226804123711,
+        "elo": 965
+      },
+      "hard": {
+        "games": 316,
+        "score": 0.990506329113924,
+        "elo": 781
+      },
+      "insane": {
+        "games": 316,
+        "score": 0.9936708860759493,
+        "elo": 840
+      },
+      "medium": {
+        "games": 268,
+        "score": 1,
+        "elo": 1092
+      },
+      "paragon": {
+        "games": 296,
+        "score": 0.9915540540540541,
+        "elo": 796
+      },
+      "pvphunter": {
+        "games": 272,
+        "score": 0.9963235294117647,
+        "elo": 903
+      },
+      "rushpatient": {
+        "games": 280,
+        "score": 0.9892857142857143,
+        "elo": 760
+      },
+      "survivor": {
+        "games": 264,
+        "score": 0.9924242424242424,
+        "elo": 808
+      }
+    }
+  },
+  "meanPlacement": 1.0175,
+  "winRate": 0.99,
+  "meanVP": 28.69,
+  "meanRounds": 17.96,
+  "finishedRate": 1,
+  "wallClockMs": 108593,
+  "msPerGame": 135.74125,
+  "timestamp": "2026-07-03T16:34:43.844Z"
+}

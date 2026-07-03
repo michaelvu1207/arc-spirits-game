@@ -1,0 +1,857 @@
+{
+ "summary": {
+  "runs": 20,
+  "ghostSeat": "Red",
+  "ghostVp": {
+   "mean": 21.55,
+   "min": 6,
+   "max": 31
+  },
+  "botWins": 13,
+  "botBeatsGhostVp": 13,
+  "botTrue30Wins": 10,
+  "maxBotVp": 33
+ },
+ "results": [
+  {
+   "run": 0,
+   "sampled": false,
+   "endRound": 28,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 21,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 18,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 37,
+   "iterations": 157
+  },
+  {
+   "run": 1,
+   "sampled": true,
+   "endRound": 24,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 11,
+     "status": 1,
+     "corruptions": 1,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 4
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 12,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 34,
+   "iterations": 138
+  },
+  {
+   "run": 2,
+   "sampled": true,
+   "endRound": 21,
+   "endPhase": "cleanup",
+   "winnerSeat": "Green",
+   "trueTargetWin": false,
+   "seats": {
+    "Red": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 14,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 24,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 31,
+   "iterations": 124
+  },
+  {
+   "run": 3,
+   "sampled": true,
+   "endRound": 26,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 17,
+     "status": 1,
+     "corruptions": 1,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 31,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 12,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 35,
+   "iterations": 146
+  },
+  {
+   "run": 4,
+   "sampled": true,
+   "endRound": 30,
+   "endPhase": "cleanup",
+   "winnerSeat": "Red",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 31,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 6
+    },
+    "Orange": {
+     "vp": 16,
+     "status": 3,
+     "corruptions": 4,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 12,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 6
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 40,
+   "iterations": 168
+  },
+  {
+   "run": 5,
+   "sampled": true,
+   "endRound": 28,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 21,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 39,
+   "iterations": 159
+  },
+  {
+   "run": 6,
+   "sampled": true,
+   "endRound": 30,
+   "endPhase": "cleanup",
+   "winnerSeat": "Red",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 31,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 14,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 16,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 43,
+   "iterations": 173
+  },
+  {
+   "run": 7,
+   "sampled": true,
+   "endRound": 25,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 14,
+     "status": 1,
+     "corruptions": 1,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 33,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 38,
+   "iterations": 149
+  },
+  {
+   "run": 8,
+   "sampled": true,
+   "endRound": 30,
+   "endPhase": "cleanup",
+   "winnerSeat": "Red",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 31,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 3
+    },
+    "Green": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 40,
+   "iterations": 166
+  },
+  {
+   "run": 9,
+   "sampled": true,
+   "endRound": 27,
+   "endPhase": "cleanup",
+   "winnerSeat": "Green",
+   "trueTargetWin": false,
+   "seats": {
+    "Red": {
+     "vp": 14,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 16,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 25,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 38,
+   "iterations": 158
+  },
+  {
+   "run": 10,
+   "sampled": true,
+   "endRound": 28,
+   "endPhase": "cleanup",
+   "winnerSeat": "Green",
+   "trueTargetWin": false,
+   "seats": {
+    "Red": {
+     "vp": 17,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 6
+    },
+    "Orange": {
+     "vp": 12,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 20,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 39,
+   "iterations": 162
+  },
+  {
+   "run": 11,
+   "sampled": true,
+   "endRound": 30,
+   "endPhase": "cleanup",
+   "winnerSeat": "Red",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 31,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 21,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 2
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 43,
+   "iterations": 176
+  },
+  {
+   "run": 12,
+   "sampled": true,
+   "endRound": 30,
+   "endPhase": "cleanup",
+   "winnerSeat": "Red",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 31,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 24,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 17,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 43,
+   "iterations": 176
+  },
+  {
+   "run": 13,
+   "sampled": true,
+   "endRound": 30,
+   "endPhase": "cleanup",
+   "winnerSeat": "Red",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 31,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 6
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 38,
+   "iterations": 163
+  },
+  {
+   "run": 14,
+   "sampled": true,
+   "endRound": 28,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 21,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 36,
+   "iterations": 153
+  },
+  {
+   "run": 15,
+   "sampled": true,
+   "endRound": 27,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 17,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 2
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 12,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 37,
+   "iterations": 153
+  },
+  {
+   "run": 16,
+   "sampled": true,
+   "endRound": 30,
+   "endPhase": "cleanup",
+   "winnerSeat": "Red",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 31,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 6
+    },
+    "Green": {
+     "vp": 29,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 38,
+   "iterations": 164
+  },
+  {
+   "run": 17,
+   "sampled": true,
+   "endRound": 27,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 17,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 15,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 37,
+   "iterations": 154
+  },
+  {
+   "run": 18,
+   "sampled": true,
+   "endRound": 28,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 21,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 2
+    },
+    "Blue": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 3
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 9,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 37,
+   "iterations": 155
+  },
+  {
+   "run": 19,
+   "sampled": true,
+   "endRound": 27,
+   "endPhase": "cleanup",
+   "winnerSeat": "Orange",
+   "trueTargetWin": true,
+   "seats": {
+    "Red": {
+     "vp": 17,
+     "status": 2,
+     "corruptions": 2,
+     "spirits": 0
+    },
+    "Blue": {
+     "vp": 6,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 6
+    },
+    "Orange": {
+     "vp": 30,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    },
+    "Green": {
+     "vp": 25,
+     "status": 3,
+     "corruptions": 3,
+     "spirits": 7
+    }
+   },
+   "ghost": {
+    "exact": 0,
+    "coerced": 0,
+    "skipped": 0,
+    "fallback": 0
+   },
+   "deadlineAdvances": 40,
+   "iterations": 161
+  }
+ ]
+}

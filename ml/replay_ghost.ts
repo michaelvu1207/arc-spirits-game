@@ -395,12 +395,28 @@ function runCf(
 
 		const botStep = (seat: SeatColor): boolean => {
 			// ARC_REPLAY_BOTMODE=search plays every bot through the LIVE expert tier
-			// (planNeuralPhaseActions with Gumbel root search at navigation/encounter).
-			// Run-to-run variance comes from the search seed, so no sampling needed.
-			if (process.env.ARC_REPLAY_BOTMODE === 'search') {
+			// (planNeuralPhaseActions with Gumbel root search at navigation/encounter);
+			// ARC_REPLAY_BOTMODE=live plays the ACTUAL live server config (temperature
+			// sampling, ARC_LIVE_BOT_TEMP or the 0.65 default). Run-to-run variance comes
+			// from the search seed / sampling rng respectively.
+			const botMode = process.env.ARC_REPLAY_BOTMODE;
+			if (botMode === 'search' || botMode === 'live') {
 				if (!botSeatNeedsToAct(state, seat)) return false;
 				let progressed = false;
-				const commands = planNeuralPhaseActions(state, seat, catalog, policy, { search: true });
+				const commands = planNeuralPhaseActions(
+					state,
+					seat,
+					catalog,
+					policy,
+					botMode === 'search'
+						? { search: true }
+						: {
+								temperature:
+									process.env.ARC_LIVE_BOT_TEMP !== undefined
+										? parseFloat(process.env.ARC_LIVE_BOT_TEMP)
+										: 0.65
+							}
+				);
 				for (const cmd of commands) {
 					const res = applyGameCommand(state, actorFor(seat), cmd, catalog);
 					if (!res.ok) break;
