@@ -15,6 +15,7 @@
  */
 
 import {
+	enforceRoomDeadlines,
 	getSessionIdByRoomCode,
 	getSessionModeByRoomCode,
 	joinRoom,
@@ -26,7 +27,7 @@ import {
 } from './service';
 import { botSeatNeedsToAct } from './botPolicy';
 import { loadPlayCatalog } from './catalog';
-import { SEAT_COLORS, type SeatColor, type PublicGameState } from '../types';
+import { SEAT_COLORS, type SeatColor, type PublicGameState, type GameCommand } from '../types';
 import { BOT_NAME_PREFIX } from '../roomLifecycle';
 import {
 	DEFAULT_BOT_PROFILE_KEY,
@@ -403,6 +404,17 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		return { view, commandsIssued: 0 };
 	}
 
+	// Run the deadline drain up front. runRoomCommand does this too, but a bot with NO legal
+	// plan issues zero commands — if the humans are also idle (waiting on that bot), nothing
+	// would ever trigger the drain and the room would hang. The poll tick is the one thing
+	// guaranteed to keep firing, so it must be able to unstick the room by itself.
+	await enforceRoomDeadlines(roomCode);
+	state = await loadRawRoomState(roomCode);
+	if (state.status !== 'active') {
+		const view = await loadRoomView(roomCode, hostMemberId ?? null);
+		return { view, commandsIssued: 0 };
+	}
+
 	// Authoritative bot identity + strategy comes from the DB (`is_bot` / `bot_profile`),
 	// not the display name — so a human-named matchmaking bot is still driven here. Loaded
 	// once per tick (the seats don't change mid-tick); empty map ⇒ falls back to 🤖 names.
@@ -431,10 +443,25 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		const expert =
 			profileKey === EXPERT_BOT_PROFILE_KEY ||
 			(profileKey === NEURAL_PROFILE_KEY && process.env.ARC_EXPERT_BOTS === '1');
-		const commands =
-			(profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && neuralPolicy
-				? planNeuralPhaseActions(state, seat, catalog, neuralPolicy, { search: expert })
-				: planUniformLegalPhaseActions(state, seat, catalog);
+		// A planner exception must never escape: it would abort the whole tick (HTTP 500) and
+		// strand this seat AND every seat after it, forever (ticks re-plan seats in order, so a
+		// deterministic throw repeats every poll). Degrade to uniform-legal for the seat; if
+		// even that throws, skip the seat this tick and let the deadline drain advance it.
+		let commands: GameCommand[];
+		try {
+			commands =
+				(profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && neuralPolicy
+					? planNeuralPhaseActions(state, seat, catalog, neuralPolicy, { search: expert })
+					: planUniformLegalPhaseActions(state, seat, catalog);
+		} catch (err) {
+			console.error(`[botSim] planner threw for seat ${seat}; degrading to uniform`, err);
+			try {
+				commands = planUniformLegalPhaseActions(state, seat, catalog);
+			} catch (fallbackErr) {
+				console.error(`[botSim] uniform fallback also threw for seat ${seat}; skipping`, fallbackErr);
+				commands = [];
+			}
+		}
 		for (const command of commands) {
 			// Each command is its own load+CAS write. A planned command can be REJECTED at
 			// execution time even though it passed the planner's trial-apply — e.g. the

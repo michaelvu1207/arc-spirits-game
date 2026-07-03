@@ -250,6 +250,31 @@ export function setCorruptionDiscardObligation(
 	return vpCharged;
 }
 
+/**
+ * Settles a corruption discard debt the player can no longer pay: with ZERO spirits left,
+ * every still-owed discard converts to VP loss instead — 1 VP per owed spirit, clamped at 0
+ * (the rule Michael stated: "discard four with three spirits — the last one subtracts a
+ * point instead"). The debt is payable at creation ({@link setCorruptionDiscardObligation}
+ * caps it), but effects that remove spirits OUTSIDE `discardSpirit` (Golden Ruler's evil
+ * discard, Undercover self-discards, …) can strand a remainder afterwards — before this
+ * helper, that remainder hard-blocked `commitCleanup` with no legal move and froze the
+ * seat. Call it after any such removal, and defensively before honoring the debt in phase
+ * gates. Returns the VP charged (0 when nothing settled) so callers can log it.
+ */
+export function settleUnpayableCorruptionDebt(player: PrivatePlayerState): number {
+	const debt = player.pendingCorruptionDiscard;
+	if (!debt) return 0;
+	if (debt.count <= 0) {
+		player.pendingCorruptionDiscard = null;
+		return 0;
+	}
+	if ((player.spirits?.length ?? 0) > 0) return 0;
+	const vpCharged = debt.count;
+	player.victoryPoints = Math.max(0, (player.victoryPoints ?? 0) - vpCharged);
+	player.pendingCorruptionDiscard = null;
+	return vpCharged;
+}
+
 /** Attack-dice tiers, weakest → strongest. Elementalist upgrades climb this list. */
 export type DiceTier = 'basic' | 'enchanted' | 'exalted' | 'arcane';
 export const DICE_TIER_ORDER: DiceTier[] = ['basic', 'enchanted', 'exalted', 'arcane'];

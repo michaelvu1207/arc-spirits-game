@@ -36,7 +36,13 @@ import { createRng, nextInt } from '../../rng';
 // 62-dim checkpoint anchor became dim-incompatible (same fate as act52-full-g6
 // at the 55→62 bump), so the pool is the 8 heuristics until a 78-dim champion
 // is promoted in. NEW SCALE vs v4 (anchor-field draw shifts with the pool).
-export const GAUNTLET_VERSION = 'gauntlet-v5';
+// v6 = two eval-visible behavior changes after the 2026-07-02 live playtest:
+// (a) STATUS_SHAPE (the pre-v1.2 "descend to Fallen" pull in the hybrid value
+// lookahead) deleted — it sabotaged the v1.1 ladder champion in live play; and
+// (b) the unpayable-corruption-debt rule (zero spirits ⇒ remaining owed
+// discards settle as -1 VP each instead of freezing the seat). Both shift
+// game outcomes → NEW SCALE vs v5.
+export const GAUNTLET_VERSION = 'gauntlet-v6';
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;

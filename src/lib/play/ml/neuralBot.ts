@@ -43,14 +43,6 @@ const VP_SHAPE = 1.0;
 /** Reward for an action that immediately wins the game (reaches the VP target). */
 const WIN_SCORE = 1e6;
 /**
- * Reward for descending the corruption ladder toward Fallen. Under current rules the ONLY
- * winning line at 4+ players is the Fallen group-attack (+3 VP/round) — so deliberately
- * corrupting to Fallen is correct, the opposite of normal play. This shaping makes the
- * value-lookahead actively seek the setup the sparse VP signal can't reach on its own.
- */
-const STATUS_SHAPE =
-	process.env.ARC_STATUS_SHAPE !== undefined ? parseFloat(process.env.ARC_STATUS_SHAPE) : 0.25;
-/**
  * Penalty for an action that leaves the player's material situation unchanged within the same
  * phase (e.g. `refillMarket` with no purchase). The value head is smooth, so without this the
  * lookahead ties and collapses onto such no-ops, spamming them until the safety cap. Penalizing
@@ -285,26 +277,22 @@ export function scoreByValue(
 	catalog: PlayCatalog
 ): number[] {
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
-	const curStatus = state.players[seat]?.statusLevel ?? 0;
 	const curSig = materialSig(state, seat);
 	const curPendingRewardVp = pendingRewardVpPotential(state, seat);
 	const rootObs = encodeObs(state, seat, catalog);
 	const rewardPickProbs = state.players[seat]?.pendingReward
 		? rewardPickAuxProbs(policy, rootObs, withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)))
 		: null;
-	// Only chase corruption while there are enough players for the PvP line to pay off.
-	const pvpMeta = state.activeSeats.length >= 3;
 	return withNext.map((action, i) => {
 		const next = action.next;
 		if (next.winnerSeat === seat) return WIN_SCORE;
 		const v = policyStateValue(policy, next, seat, catalog);
 		const dVP = ((next.players[seat]?.victoryPoints ?? 0) - curVP) / VP_TO_WIN;
 		const dPendingRewardVP = Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
-		const dStatus = pvpMeta ? ((next.players[seat]?.statusLevel ?? 0) - curStatus) / 3 : 0;
 		const noop = materialSig(next, seat) === curSig ? nonProgressPenalty(action.cmd) : 0;
 		const rewardPickBonus = action.cmd.type === 'resolveMonsterReward' ? REWARD_PICK_AUX_SHAPE * (rewardPickProbs?.[i] ?? 0) : 0;
 		const farmNavBonus = farmNavigationActionBonus(policy, state, seat, action.cmd, catalog);
-		return v + VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP + STATUS_SHAPE * dStatus + rewardPickBonus + farmNavBonus - noop;
+		return v + VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP + rewardPickBonus + farmNavBonus - noop;
 	});
 }
 
@@ -312,14 +300,11 @@ function transitionReward(state: PublicGameState, seat: SeatColor, action: Legal
 	const next = action.next;
 	if (next.winnerSeat === seat) return WIN_SCORE;
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
-	const curStatus = state.players[seat]?.statusLevel ?? 0;
 	const curPendingRewardVp = pendingRewardVpPotential(state, seat);
 	const dVP = ((next.players[seat]?.victoryPoints ?? 0) - curVP) / VP_TO_WIN;
 	const dPendingRewardVP = Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
-	const pvpMeta = state.activeSeats.length >= 3;
-	const dStatus = pvpMeta ? ((next.players[seat]?.statusLevel ?? 0) - curStatus) / 3 : 0;
 	const noop = isProgressTransition(state, seat, next) ? 0 : nonProgressPenalty(action.cmd);
-	return VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP + STATUS_SHAPE * dStatus - noop;
+	return VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP - noop;
 }
 
 function leafValue(

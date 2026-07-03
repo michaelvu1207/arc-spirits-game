@@ -68,7 +68,12 @@ import {
 	MANUAL_AWAKEN,
 	recordRestAwakenProgress
 } from './effects/awakenHandlers';
-import { STATUS_LADDER, isEvilAlignment, setCorruptionDiscardObligation } from './types';
+import {
+	STATUS_LADDER,
+	isEvilAlignment,
+	setCorruptionDiscardObligation,
+	settleUnpayableCorruptionDebt
+} from './types';
 
 const EMPTY_BAG = Object.freeze({
 	count: 0,
@@ -610,6 +615,9 @@ function applyAwakenRewardClaim(
 				if (idx >= 0) {
 					const [discarded] = player.spirits.splice(idx, 1);
 					log.push(`Golden Ruler: you are evil — discarded ${discarded.name}.`);
+					const vpSettled = settleUnpayableCorruptionDebt(player);
+					if (vpSettled > 0)
+						log.push(`No spirits left for the corruption sacrifice — lost ${vpSettled} VP instead.`);
 				}
 			}
 		}
@@ -1620,10 +1628,11 @@ export function applyGameCommand(
 			const obligation = player.pendingCorruptionDiscard;
 			if (obligation && obligation.count > 0) {
 				obligation.count -= 1;
-				// Clear when the debt is paid OR you've nothing left to give — you can't
-				// sacrifice more spirits than you hold, so an empty tableau discharges it.
-				if (obligation.count <= 0 || player.spirits.length === 0)
-					player.pendingCorruptionDiscard = null;
+				if (obligation.count <= 0) player.pendingCorruptionDiscard = null;
+				// Out of spirits with debt remaining: the unpayable part converts to VP
+				// loss (1 VP each) instead of being forgiven, and the debt clears so the
+				// round can advance.
+				else settleUnpayableCorruptionDebt(player);
 			}
 			return success(state);
 		}
@@ -1801,13 +1810,17 @@ export function applyGameCommand(
 			}
 			// A corruption this turn forces its escalating spirit sacrifice IMMEDIATELY: you
 			// can't end your location actions until you've shed the owed spirit(s). (Corruption
-			// already restored your barrier instantly — this is the cost.) The deadline drain auto-resolves
-			// it for idle players so the round never deadlocks.
+			// already restored your barrier instantly — this is the cost.) With zero spirits
+			// left the debt is unpayable — settle it as VP loss (1 VP each) so the seat can
+			// never be frozen; while spirits remain the player must keep discarding.
 			if (active.player.pendingCorruptionDiscard) {
-				return failure(
-					'corruption_pending',
-					'Discard your corrupted spirit(s) before ending your turn.'
-				);
+				settleUnpayableCorruptionDebt(active.player);
+				if (active.player.pendingCorruptionDiscard) {
+					return failure(
+						'corruption_pending',
+						'Discard your corrupted spirit(s) before ending your turn.'
+					);
+				}
 			}
 			// Defeating the Abyss monster opens a reward pick — claim it before passing.
 			if (active.player.pendingReward) {
@@ -1874,10 +1887,14 @@ export function applyGameCommand(
 			}
 			// Corruption owes a forced spirit sacrifice (it already restored your barrier instantly): shed
 			// the owed spirit(s). The round cannot advance past cleanup until the obligation
-			// is fully cleared (null). The deadline / host force-advance drain auto-resolves
-			// it so an idle/disconnected player can never deadlock the round.
+			// is fully cleared (null). With ZERO spirits left the debt is unpayable — settle
+			// it as VP loss (1 VP each) right here so the seat can never be frozen; while
+			// spirits remain the player must keep discarding.
 			if (active.player.pendingCorruptionDiscard) {
-				return failure('corruption_pending', 'Resolve corruption before ending the round.');
+				settleUnpayableCorruptionDebt(active.player);
+				if (active.player.pendingCorruptionDiscard) {
+					return failure('corruption_pending', 'Resolve corruption before ending the round.');
+				}
 			}
 			active.player.phaseReady = true;
 			tryAdvanceFromCleanup(state);
@@ -2378,7 +2395,14 @@ export function applyGameCommand(
 						bag.count = bag.contents.length;
 						log.push(`${u.name} went undercover and was discarded.`);
 					}
-					if (undercovers.length > 0) state.bags.history = buildHistoryBags(state.bags);
+					if (undercovers.length > 0) {
+						state.bags.history = buildHistoryBags(state.bags);
+						const vpSettled = settleUnpayableCorruptionDebt(player);
+						if (vpSettled > 0)
+							log.push(
+								`No spirits left for the corruption sacrifice — lost ${vpSettled} VP instead.`
+							);
+					}
 				} else {
 					// `costChoices` lets the player pick WHICH held slot to discard for a
 					// wildcard cost; specific costs and missing picks fall back to auto-pick.

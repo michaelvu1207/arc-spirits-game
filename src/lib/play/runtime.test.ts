@@ -919,6 +919,82 @@ describe('play runtime', () => {
 		expect(committed.ok).toBe(true);
 	});
 
+	test('commitCleanup settles an UNPAYABLE corruption debt as VP loss instead of freezing the seat', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = started.state;
+		state.phase = 'cleanup';
+		const red = state.players.Red!;
+		// The 2026-07-02 playtest freeze: spirits removed AFTER the debt was set (Golden
+		// Ruler evil-discard etc.) leave a debt with nothing to pay it — no legal discard,
+		// commit blocked, seat frozen. The debt must settle as -1 VP each on commit.
+		red.spirits = [];
+		red.victoryPoints = 5;
+		red.pendingCorruptionDiscard = { count: 2, reason: 'corruption' };
+
+		const committed = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'commitCleanup' },
+			CATALOG
+		);
+		expect(committed.ok).toBe(true);
+		if (!committed.ok) return;
+		expect(committed.state.players.Red!.pendingCorruptionDiscard).toBeNull();
+		expect(committed.state.players.Red!.victoryPoints).toBe(3);
+	});
+
+	test('endLocationActions settles an UNPAYABLE corruption debt as VP loss (clamped at 0)', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = started.state;
+		state.phase = 'location';
+		const red = state.players.Red!;
+		red.spirits = [];
+		red.victoryPoints = 1;
+		red.pendingCorruptionDiscard = { count: 3, reason: 'corruption' };
+
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'endLocationActions' },
+			CATALOG
+		);
+		expect(res.ok).toBe(true);
+		if (!res.ok) return;
+		expect(res.state.players.Red!.pendingCorruptionDiscard).toBeNull();
+		// 3 owed, 1 VP held → clamped at 0 (the adjustVictoryPoints convention).
+		expect(res.state.players.Red!.victoryPoints).toBe(0);
+	});
+
+	test('discardSpirit converts the unpayable remainder to VP loss when the tableau empties', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = started.state;
+		state.phase = 'cleanup';
+		const red = state.players.Red!;
+		// One spirit, three owed: the discard pays one, the unpayable remainder (2)
+		// converts to VP loss instead of the old silent forgiveness.
+		red.spirits = [red.spirits[0]!];
+		red.victoryPoints = 5;
+		red.pendingCorruptionDiscard = { count: 3, reason: 'corruption' };
+
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'discardSpirit', slotIndex: red.spirits[0]!.slotIndex },
+			CATALOG
+		);
+		expect(res.ok).toBe(true);
+		if (!res.ok) return;
+		expect(res.state.players.Red!.spirits).toHaveLength(0);
+		expect(res.state.players.Red!.pendingCorruptionDiscard).toBeNull();
+		expect(res.state.players.Red!.victoryPoints).toBe(3);
+	});
+
 	test('the deadline drain auto-resolves leftover corruption in cleanup (highest slots)', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);

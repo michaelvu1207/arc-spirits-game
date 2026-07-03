@@ -141,7 +141,9 @@ export function canApply(
 			const me = seatPlayer(state, actor);
 			if (!me) return false;
 			if (me.pendingDraw || (me.handDraws?.length ?? 0) > 0 || (me.pendingDrawQueue?.length ?? 0) > 0) return false;
-			if (me.pendingCorruptionDiscard) return false;
+			// A payable corruption debt blocks passing (must discard first); an UNPAYABLE one
+			// (zero spirits) does not — the reducer settles it as VP loss on this command.
+			if (me.pendingCorruptionDiscard && me.spirits.length > 0) return false;
 			if (me.pendingReward) return false;
 			return true;
 		}
@@ -261,7 +263,9 @@ export function canApply(
 			if (!me) return false;
 			const heldRunes = (me.mats ?? []).filter((s) => s.hasRune).length;
 			if (heldRunes > RUNE_CARRY_LIMIT) return false;
-			if (me.pendingCorruptionDiscard) return false;
+			// A payable corruption debt blocks the commit (must discard first); an UNPAYABLE
+			// one (zero spirits) does not — the reducer settles it as VP loss on commit.
+			if (me.pendingCorruptionDiscard && me.spirits.length > 0) return false;
 			return true;
 		}
 
