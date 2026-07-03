@@ -102,6 +102,22 @@ export interface Sample {
 	placement?: number;
 }
 
+/**
+ * Did this decision KILL the monster (or claim its reward)? The old flag fired only on
+ * recorded `resolveMonsterReward` rows — but a forced claim (single legal candidate) is
+ * never recorded, so those kills were invisible (the "zero kills" misread, 2026-07-02).
+ * A kill is detected structurally: the seat's pendingReward APPEARS in the next state.
+ */
+function decisionKills(
+	prev: PublicGameState,
+	next: PublicGameState,
+	seat: SeatColor,
+	cmd: GameCommand
+): boolean {
+	if (cmd.type === 'resolveMonsterReward') return true;
+	return !prev.players[seat]?.pendingReward && !!next.players[seat]?.pendingReward;
+}
+
 export interface RecordGameOptions {
 	seed: number;
 	/** One profile per seat; seat count = profiles.length. Used for heuristic seats and as
@@ -466,7 +482,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 							seat,
 							vp: vpOf(state.players[seat]),
 							phi: buildPotential(state.players[seat], shaping),
-							kill: cmd.type === 'resolveMonsterReward' ? 1 : 0,
+							kill: decisionKills(state, withNextH[mi].next, seat, cmd) ? 1 : 0,
 							...sampleAuxTargets(state, seat, catalog, withNextH)
 						});
 					}
@@ -583,7 +599,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				seat,
 				vp: vpOf(state.players[seat]),
 				phi: buildPotential(state.players[seat], shaping),
-				kill: cands[idx].type === 'resolveMonsterReward' ? 1 : 0,
+				kill: decisionKills(state, withNext[idx].next, seat, cands[idx]) ? 1 : 0,
 				...ppo,
 				...sampleAuxTargets(state, seat, catalog, withNext)
 			});
