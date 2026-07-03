@@ -22,6 +22,7 @@ import type { GameCommand, PlayCatalog, SeatColor } from '../types';
 import { OBS_DIM } from './encode';
 import { obsV2Meta } from './encodeV2';
 import { playRecordingGame } from './driver';
+import { shapingFor } from './shaping';
 import { planDecisionGumbel } from './gumbelPlanner';
 import { hybridIndex } from './neuralBot';
 import { appendSamples, loadWeightsIfPresent } from './nodeIo';
@@ -141,6 +142,8 @@ export function runActorGames(
 				gamma: config.gamma,
 				obsVersion: config.obsVersion,
 				policyObsVersion: config.policyObsVersion,
+				denseVpReward: config.denseVpReward,
+				...(config.shapingPreset ? { shaping: shapingFor(config.shapingPreset) } : {}),
 				searcher
 			});
 			const wallMs = performance.now() - t0;

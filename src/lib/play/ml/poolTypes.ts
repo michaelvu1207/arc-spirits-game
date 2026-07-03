@@ -50,6 +50,10 @@ export interface ActorGameConfig {
 		horizonRounds?: number;
 		valueWeight?: number;
 	};
+	/** Dense PPO reward: rStep = ΔVP/VP_TO_WIN + ΔΦ_build (see driver.denseVpReward). */
+	denseVpReward?: boolean;
+	/** Shaping preset name (shaping.ts shapingFor: 'balanced' | 'banker' | 'ascend' ...). */
+	shapingPreset?: string;
 	/** Command types stripped from neural seats' legal sets (hard behavioral constraint). */
 	forbidTypes?: string[];
 	maxStatusLevel?: number;

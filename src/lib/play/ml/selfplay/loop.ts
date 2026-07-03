@@ -373,7 +373,7 @@ export function chooseFullActionDecision(
 ): { idx: number; pi: number[] } {
 	if (withNext.length <= 1) return { idx: 0, pi: [1] };
 	const rand = (): number => nextInt(rng, 1_000_000) / 1_000_000;
-	const obs = encodeObs(state, seat);
+	const obs = encodeObs(state, seat, catalog);
 	const cands = withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog));
 	if (selection === 'policy') {
 		return {
@@ -885,7 +885,7 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			if (gate === 'pvp-predictive-mode-pivot') {
 				const player = state.players[seat];
 				if ((player?.statusLevel ?? 0) >= 3) {
-					const huntProb = routeModeHuntProbability(policy, state, seat);
+					const huntProb = routeModeHuntProbability(policy, state, seat, catalog);
 					if (huntProb !== null && huntProb < routeModeThreshold) return ['Arcane Abyss'];
 				const visible = visiblePvpHuntDestinations(state, seat);
 				return visible.length > 0
@@ -900,7 +900,7 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			) {
 				const player = state.players[seat];
 				if ((player?.statusLevel ?? 0) >= 3) {
-					const huntProb = routeModeHuntProbability(policy, state, seat);
+					const huntProb = routeModeHuntProbability(policy, state, seat, catalog);
 					if (huntProb !== null && huntProb < routeModeThreshold) {
 						return gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot'
 							? fallenRebuildDestinations(state, seat, catalog, farmNavigationThreshold)
@@ -1723,7 +1723,7 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 					seed: (opts.seed * 31 + state.round * 7 + 1) >>> 0
 				});
 					if (res) {
-						const obs = encodeObs(state, seat);
+						const obs = encodeObs(state, seat, catalog);
 						const cands = res.destinations.map((d) =>
 							encodeAction(state, seat, { type: 'lockNavigation', destination: d }, undefined, catalog)
 						);
@@ -1837,7 +1837,7 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 							decisionType: chosen.cmd.type
 						});
 						if (withNext.length > 1 && recordSeats.has(seat)) {
-							const obs = encodeObs(state, seat);
+							const obs = encodeObs(state, seat, catalog);
 							samples.push({
 								obs,
 								cands: withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),

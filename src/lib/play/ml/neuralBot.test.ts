@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyGameCommand, createLobbyState } from '../runtime';
 import type { GameActor, GameCommand, PlayCatalog, PublicGameState } from '../types';
+import { computeKillProbability } from '../server/botPolicy';
 import { legalActionsWithNext } from './actions';
 import { rewardPickTarget } from './auxTargets';
 import { ACT_DIM, COMMAND_VOCAB, OBS_DIM, encodeAction, encodeObs } from './encode';
@@ -224,17 +225,31 @@ describe('neural value action scoring', () => {
 			}
 		];
 
-		const obs = encodeObs(state, 'Red');
+		const obs = encodeObs(state, 'Red', CATALOG);
 		expect(obs).toHaveLength(OBS_DIM);
-		expect(obs.slice(-7)).toEqual([
-			2 / 7,
-			1 / 3,
-			1 / 3,
-			1 / 3,
-			0,
-			0,
-			0
-		]);
+		// Class-composition block now sits ahead of the 15 v1.1 ladder features.
+		expect(obs.slice(-22, -15)).toEqual([2 / 7, 1 / 3, 1 / 3, 1 / 3, 0, 0, 0]);
+	});
+
+	it('encodes the v1.1 ladder forward-value block (obs 62→77)', () => {
+		const state = atAbyss();
+		const obs = encodeObs(state, 'Red', CATALOG);
+		expect(obs).toHaveLength(OBS_DIM);
+		const block = obs.slice(-15);
+		const mon = state.monster!;
+		// killProb feature must MATCH the bot helper (no train/serve skew).
+		expect(block[0]).toBeCloseTo(
+			Math.min(1, Math.max(0, computeKillProbability(state, 'Red', CATALOG)))
+		);
+		// Current-rung claimable VP.
+		expect(block[4]).toBeCloseTo(
+			Math.min(1, claimableMonsterRewardVp(mon.rewardTrack, mon.chooseAmount) / 10)
+		);
+		// Corruption margin: (barrier − monster damage + 8) / 16.
+		const me = state.players.Red!;
+		expect(block[3]).toBeCloseTo(Math.min(1, Math.max(0, (me.barrier - mon.damage + 8) / 16)));
+		// Combat allowance: 1 base swing, none used yet → 1/2.
+		expect(block[14]).toBeCloseTo(1 / 2);
 	});
 
 	it('credits a monster kill for the VP pending in its reward claim', () => {
@@ -248,7 +263,7 @@ describe('neural value action scoring', () => {
 		expect(actions[startCombat].next.players.Red!.victoryPoints).toBe(0);
 		expect(actions[startCombat].next.players.Red!.pendingReward).not.toBeNull();
 
-		const scores = scoreByValue(neutralPolicy, state, 'Red', actions);
+		const scores = scoreByValue(neutralPolicy, state, 'Red', actions, CATALOG);
 		expect(scores[startCombat]).toBeGreaterThan(scores[endLocation]);
 
 		const encoded = encodeAction(state, 'Red', actions[startCombat].cmd, actions[startCombat].next);
@@ -328,7 +343,7 @@ describe('neural value action scoring', () => {
 		const endFeatures = encodeAction(state, 'Red', actions[endLocation].cmd, actions[endLocation].next);
 		expect(endFeatures).toHaveLength(ACT_DIM);
 		expect(endFeatures.slice(-5)[2]).toBe(1);
-		expect(actions[valueGuidedIndex(neutralPolicy, state, 'Red', actions)].cmd.type).toBe(
+		expect(actions[valueGuidedIndex(neutralPolicy, state, 'Red', actions, undefined, CATALOG)].cmd.type).toBe(
 			'endLocationActions'
 		);
 		expect(actions[lookaheadIndex(neutralPolicy, state, 'Red', actions, CATALOG)].cmd.type).toBe(
@@ -341,9 +356,9 @@ describe('neural value action scoring', () => {
 			probs: neutralPolicy.probs,
 			pick: () => 0
 		} as unknown as NeuralPolicy;
-		const idx = hybridIndex(policyThatWouldPickFirst, state, 'Red', actions);
+		const idx = hybridIndex(policyThatWouldPickFirst, state, 'Red', actions, undefined, CATALOG);
 		expect(actions[idx].cmd.type).toBe('endLocationActions');
-		expect(actions[policyIndexWithProgressGuard(policyThatWouldPickFirst, state, 'Red', actions)].cmd.type).toBe(
+		expect(actions[policyIndexWithProgressGuard(policyThatWouldPickFirst, state, 'Red', actions, undefined, CATALOG)].cmd.type).toBe(
 			'endLocationActions'
 		);
 	});

@@ -226,7 +226,7 @@ export function planDecisionGumbel(
 	const baseSeed = (opts.seed ?? (state.round * 7919 + 977)) >>> 0 || 1;
 
 	// Priors over ALL candidates from the policy net.
-	const obs = encodeObs(state, seat);
+	const obs = encodeObs(state, seat, catalog);
 	const feats = withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog));
 	const logits = policy.scoreCandidates(obs, feats);
 
@@ -252,7 +252,7 @@ export function planDecisionGumbel(
 			chance: () => nextInt(s.rng, 2) === 0
 		};
 		s = rollout(s, catalog, profile, botRng, state.round + horizon, opts.rolloutChoose);
-		const vNet = clamp01(policy.value(encodeObs(s, seat)));
+		const vNet = clamp01(policy.value(encodeObs(s, seat, catalog)));
 		const value =
 			valueWeight >= 1 || s.status !== 'active'
 				? s.status !== 'active'

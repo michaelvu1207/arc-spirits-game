@@ -225,7 +225,7 @@ function leafValue(
 	botRng: BotRandom,
 	stopRound: number
 ): number {
-	const obs = encodeObs(s, seat);
+	const obs = encodeObs(s, seat, catalog);
 	const vNet = clamp01(policy.value(obs) + farmValueBonus(policy, obs));
 	if (valueWeight >= 1) return vNet;
 	const vRollout = playoutOutcome(s, seat, catalog, rolloutProfile, botRng, stopRound);
@@ -272,7 +272,7 @@ export function neuralPlanNavigation(
 
 	// Root priors P(dest) from the learned navigation-prior policy over legal lockNavigation candidates.
 	const priorPolicy = opts.priorPolicy ?? policy;
-	const rootObs = encodeObs(state, seat);
+	const rootObs = encodeObs(state, seat, catalog);
 	const priorFeats = rootLegal.map((dest) => {
 		const cmd: GameCommand = { type: 'lockNavigation', destination: dest };
 		const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog); // clone (no mutate)

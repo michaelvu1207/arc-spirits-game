@@ -32,7 +32,11 @@ import { createRng, nextInt } from '../../rng';
 // SCALE, non-comparable to v2 (v2 result files remain the historical record).
 // v4 = rules v1.2 (Fallen corruption shortfall costs VP — docs/rules-v1.2.md);
 // schedule/anchors/metric identical to v3, scored under the new rules.
-export const GAUNTLET_VERSION = 'gauntlet-v4';
+// v5 = obs v1.1 encoder (OBS_DIM 62 → 78, ladder forward-value features): every
+// 62-dim checkpoint anchor became dim-incompatible (same fate as act52-full-g6
+// at the 55→62 bump), so the pool is the 8 heuristics until a 78-dim champion
+// is promoted in. NEW SCALE vs v4 (anchor-field draw shifts with the pool).
+export const GAUNTLET_VERSION = 'gauntlet-v5';
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;
@@ -97,20 +101,20 @@ export const CHECKPOINT_ANCHORS: readonly CheckpointAnchor[] = [
 	{
 		name: 'fair-gen24-champion',
 		path: 'ml/champions/fair/main-0-gen24.json',
-		status: 'active',
-		note: 'gauntlet-v3 anchor: the fair-rules champion (v2 Elo 1014 / 99% win / 29.8 meanVP; live since 1c7766a). Added because it saturated the v2 field.'
+		status: 'dim-incompatible',
+		note: '[v5: obs_dim 62 vs v1.1 encoder 78] gauntlet-v3 anchor: the fair-rules champion (v2 Elo 1014 / 99% win / 29.8 meanVP; live since 1c7766a). Added because it saturated the v2 field.'
 	},
 	{
 		name: 'traceq-damage-nearmiss',
 		path: 'ml/meta_runs/traceq-damage-nearmiss-vp28-29-20260630T053132Z/best_policy.json',
-		status: 'active',
-		note: 'strongest 62/52 checkpoint at freeze (2026-07-01); byte-identical to the shipped live policy-weights.json'
+		status: 'dim-incompatible',
+		note: '[v5: obs_dim 62 vs v1.1 encoder 78] strongest 62/52 checkpoint at freeze (2026-07-01); byte-identical to the shipped live policy-weights.json'
 	},
 	{
 		name: 'routeexecq-shared-allseat',
 		path: 'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json',
-		status: 'active',
-		note: 'co-strongest 62/52 checkpoint at freeze (2026-07-01): 40% vs pvphunter / 81% vs mixed'
+		status: 'dim-incompatible',
+		note: '[v5: obs_dim 62 vs v1.1 encoder 78] co-strongest 62/52 checkpoint at freeze (2026-07-01): 40% vs pvphunter / 81% vs mixed'
 	},
 	{
 		name: 'act52-full-g6',

@@ -247,7 +247,7 @@ function runCurriculumGame(
 			const chosen = withNext[idx];
 			if (withNext.length > 1 && !skipRecordTypes.has(chosen.cmd.type)) {
 					samples.push({
-						obs: encodeObs(state, seat),
+						obs: encodeObs(state, seat, catalog),
 						cands: withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 						chosen: idx,
 					pi: oneHot(withNext.length, idx),

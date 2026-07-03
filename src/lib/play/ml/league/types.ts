@@ -142,6 +142,10 @@ export interface LeagueConfig {
 		horizonRounds?: number;
 		valueWeight?: number;
 	};
+	/** Dense PPO reward (ΔVP + ΔΦ per decision) — REQUIRED for "reach 30" training. */
+	denseVpReward?: boolean;
+	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
+	shapingPreset?: string;
 	selection: 'hybrid' | 'value' | 'policy';
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;

@@ -1793,7 +1793,7 @@ function rolloutScript(
 						(!cfg.fullSampleTypes?.size || cfg.fullSampleTypes.has(chosen.cmd.type))
 					) {
 							fullSamples.push({
-								obs: encodeObs(state, activeSeat),
+								obs: encodeObs(state, activeSeat, catalog),
 								cands: decision.withNext.map((x) => encodeAction(state, activeSeat, x.cmd, x.next, catalog)),
 								chosen: decision.chosenIdx,
 							pi: decision.pi,
@@ -1987,7 +1987,7 @@ function recordNavigationSample(
 	const snap = snapAt(bestMetrics, cfg.labelHorizon);
 	const currentVp = window.state.players[window.seat]?.victoryPoints ?? 0;
 	samples.push({
-		obs: encodeObs(window.state, window.seat),
+		obs: encodeObs(window.state, window.seat, window.catalog),
 		cands: branches.map((branch) => encodeAction(window.state, window.seat, branch.cmd, branch.next, window.catalog)),
 		chosen,
 		pi: branches.map((_, i) => (i === chosen ? 1 : 0)),

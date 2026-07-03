@@ -158,16 +158,14 @@ describe('promotion bar + baseline elos', () => {
 		try {
 			const { state } = initLeague(root);
 			const frozen = state.members.filter((m) => m.kind === 'frozen');
-			// routeexecq matches its own full-gauntlet result by exact path (192).
-			// traceq was scored under the live policy-weights.json path (a byte-identical
-			// copy AT FREEZE) — but the live path has since been re-shipped (league-run1
-			// champion promotion), so neither path- nor byte-matching can stamp it any
-			// more. That is the fallback's documented immutability assumption working as
-			// intended; traceq's 221 now needs config.baselineElos (test below).
-			expect(frozen.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors).toBe(192);
+			// gauntlet-v5 (obs v1.1, OBS_DIM 62→77): EVERY 62-dim checkpoint anchor went
+			// dim-incompatible, so initLeague seeds no frozen checkpoint members at all.
+			// The first promotion bar comes from extraFrozen/baselineElos (test below) —
+			// exactly the -Infinity-bar gotcha documented in the Phase 2 league runs.
+			expect(frozen).toHaveLength(0);
 			// Heuristic anchors do NOT participate in the promotion bar and stay unstamped.
 			expect(state.members.find((m) => m.id === 'heur-pvphunter')!.eloVsAnchors).toBeUndefined();
-			expect(promotionBar(state.members)).toBeGreaterThanOrEqual(192);
+			expect(promotionBar(state.members)).toBe(-Infinity);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -217,6 +215,12 @@ describe('promotion bar + baseline elos', () => {
 		const root = mkdtempSync(join(tmpdir(), 'league-baseline-map-'));
 		try {
 			const { state } = initLeague(root, {
+				// v5 pool has no checkpoint anchors; frozen peers enter via extraFrozen and
+				// are stamped through baselineElos exactly as before (by id or by path).
+				extraFrozen: [
+					{ id: 'frozen-traceq-damage-nearmiss', weightsPath: 'ml/meta_runs/traceq-damage-nearmiss-vp28-29-20260630T053132Z/best_policy.json' },
+					{ id: 'frozen-routeexecq-shared-allseat', weightsPath: 'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json' }
+				],
 				baselineElos: {
 					'frozen-traceq-damage-nearmiss': 221, // by member id
 					'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json': 500 // by path, overrides scan
@@ -292,10 +296,10 @@ describe('league init + state round-trip', () => {
 				return acc;
 			}, {});
 			// 8 gauntlet heuristic anchors + the active frozen checkpoint anchors + 3 lanes.
-			// (3 frozen since gauntlet-v3: the fair-gen24 champion anchor means leagues
-			// seeding checkpoint anchors get the champion as a frozen PFSP peer.)
+			// (0 frozen since gauntlet-v5: obs v1.1 made every 62-dim checkpoint anchor
+			// dim-incompatible; frozen PFSP peers now come from extraFrozen.)
 			expect(kinds['heuristic']).toBe(8);
-			expect(kinds['frozen']).toBe(3);
+			expect(kinds['frozen']).toBeUndefined();
 			expect(kinds['main']).toBe(1);
 			expect(kinds['main_exploiter']).toBe(1);
 			expect(kinds['league_exploiter']).toBe(1);

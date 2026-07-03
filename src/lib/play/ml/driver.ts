@@ -26,7 +26,7 @@ import {
 	type BotProfile,
 	type BotRandom
 } from '../server/botPolicy';
-import {
+import { VP_TO_WIN,
 	SEAT_COLORS,
 	type GameActor,
 	type GameCommand,
@@ -92,6 +92,8 @@ export interface Sample {
 	/** True on the seat's last decision of a FINISHED game. Capped/stalled games leave the
 	 *  episode truncated, so the PPO trainer bootstraps GAE from the last vPred. */
 	done?: boolean;
+	/** 1 on the terminal row of a TRUE 30-VP win (not cap/all-Fallen wins). */
+	won?: number;
 	/** Behavior log-prob of the chosen candidate under the acting policy's temp-1 softmax. */
 	logpOld?: number;
 	/** Value-head output at decision time. */
@@ -187,6 +189,13 @@ export interface RecordGameOptions {
 		seat: SeatColor,
 		finalVP: Record<string, number>
 	) => number[];
+	/**
+	 * Dense PPO reward (Phase 3): fills rStep with ΔVP/VP_TO_WIN + ΔΦ_build per
+	 * recorded decision (potential-based, policy-invariant). Without this (or a
+	 * stepRewards callback) rStep is 0 and PPO trains on placement alone — which
+	 * teaches "out-place the field", never "reach 30". See plan happy-quail W1.
+	 */
+	denseVpReward?: boolean;
 	/**
 	 * Observation schema recorded on samples (default 1). At 2, every recorded Sample
 	 * ADDITIONALLY carries obsV2 = flattenObsV2 (3,419 floats for the frozen catalog);
@@ -447,7 +456,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				if (withNextH.length > 1) {
 					const mi = withNextH.findIndex((x) => commandMatches(x.cmd, cmd));
 					if (mi >= 0) {
-						const obs = encodeObs(state, seat);
+						const obs = encodeObs(state, seat, catalog);
 						samples.push({
 							obs,
 							...(recordObsV2 ? { obsV2: recordObsV2(seat) } : {}),
@@ -491,7 +500,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			opts.maxStatusLevel
 		);
 		const cands = withNext.map((x) => x.cmd);
-		const obs = encodeObs(state, seat);
+		const obs = encodeObs(state, seat, catalog);
 		// One flatten per decision, shared by the v2-driven policy and the recorded obsV2.
 		const flatV2 =
 			opts.policyObsVersion === 2 || recordObsV2
@@ -632,12 +641,27 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		const gameId = `${opts.seed}-${n}p-${seat}`;
 		const placement = 1 + seats.filter((o) => o !== seat && finalVP[o] > finalVP[seat]).length;
 		const rSteps = opts.stepRewards?.(seatSamples, seat, finalVP);
+		// Dense reward: ΔVP + ΔΦ between consecutive recorded decisions; the last
+		// row absorbs the tail to the FINAL state (cleanup VP, end-of-game build).
+		let dense: number[] | null = null;
+		if (!rSteps && opts.denseVpReward) {
+			dense = seatSamples.map((s, i) => {
+				const nextVp = i + 1 < seatSamples.length ? seatSamples[i + 1].vp : finalVP[seat];
+				const nextPhi = i + 1 < seatSamples.length ? seatSamples[i + 1].phi : finalBuild;
+				return (nextVp - s.vp) / VP_TO_WIN + (nextPhi - s.phi);
+			});
+		}
+		// True 30-VP win (not a round-cap or all-Fallen highest-VP finish): the
+		// PPO --win-bonus rewards THIS, so the trainer distinguishes winning the
+		// game from merely out-placing the field.
+		const wonGame = finished && state.winnerSeat === seat && finalVP[seat] >= VP_TO_WIN ? 1 : 0;
 		seatSamples.forEach((s, i) => {
 			s.gameId = gameId;
 			s.stepIdx = i;
-			s.rStep = rSteps?.[i] ?? 0;
+			s.rStep = rSteps?.[i] ?? dense?.[i] ?? 0;
 			s.done = finished && i === seatSamples.length - 1;
 			if (finished) s.placement = placement;
+			if (s.done) s.won = wonGame;
 		});
 	}
 

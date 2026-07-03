@@ -567,6 +567,7 @@ def train(
     kl_ref_coef: float = 0.0,
     lr_schedule: str = "const",
     placement_rewards: str = "1.0,0.3,-0.3,-1.0",
+    win_bonus: float = 0.0,
     model_version: str = "v1",
     placement_coef: float = 0.1,
     v2_d_model: int = 128,
@@ -607,6 +608,7 @@ def train(
             gamma=gamma,
             gae_lambda=gae_lambda,
             placement_rewards=parse_placement_rewards(placement_rewards),
+            win_bonus=win_bonus,
             obs_key=obs_key,
         )
         if model_version == "v2":
@@ -947,6 +949,9 @@ def parse_args() -> argparse.Namespace:
                    help="LR schedule across PPO epochs (cosine decays to 0.1*lr)")
     p.add_argument("--target-kl", type=float, default=None,
                    help="Early-stop the PPO epochs when approx KL(old||new) exceeds this")
+    p.add_argument("--win-bonus", type=float, default=0.0,
+                   help="Extra terminal reward on TRUE 30-VP wins (driver `won` rows; "
+                        "distinguishes winning the game from out-placing the field)")
     p.add_argument("--placement-rewards", type=str, default="1.0,0.3,-0.3,-1.0",
                    help="Terminal reward for placements 1-4, added to rStep on the done row")
     # Model v2 (entity set-transformer) flags. --out/--init-from must be .pt for
@@ -996,6 +1001,7 @@ if __name__ == "__main__":
         kl_ref_coef=args.kl_ref_coef,
         lr_schedule=args.lr_schedule,
         placement_rewards=args.placement_rewards,
+        win_bonus=args.win_bonus,
         model_version=args.model_version,
         placement_coef=args.placement_coef,
         v2_d_model=args.v2_d_model,

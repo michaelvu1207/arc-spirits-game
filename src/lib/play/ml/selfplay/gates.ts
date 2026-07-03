@@ -2365,11 +2365,16 @@ function shouldFallenRebuildRoute(
 	return !fallenCanContinueAbyssFarm(state, seat, catalog, threshold);
 }
 
-function routeModeHuntProbability(policy: NeuralPolicy | undefined, state: PublicGameState, seat: SeatColor): number | null {
+function routeModeHuntProbability(
+	policy: NeuralPolicy | undefined,
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): number | null {
 	if (!policy) return null;
 	const fn = (policy as unknown as { routeMode?: (obs: number[]) => number | null }).routeMode;
 	if (!fn) return null;
-	const value = fn.call(policy, encodeObs(state, seat));
+	const value = fn.call(policy, encodeObs(state, seat, catalog));
 	return typeof value === 'number' && Number.isFinite(value) ? clamp01(value) : null;
 }
 

@@ -551,7 +551,7 @@ function recordNavigationSample(
 	};
 	const aux = sampleAuxTargets(state, seat, catalog, withNext);
 	samples.push({
-		obs: encodeObs(state, seat),
+		obs: encodeObs(state, seat, catalog),
 		cands: withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 		chosen: chosenIdx,
 		pi: withNext.map((_, i) => (i === chosenIdx ? 1 : 0)),

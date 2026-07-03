@@ -841,7 +841,7 @@ function recordSample(samples: Sample[], state: PublicGameState, seat: SeatColor
 	if (branches.length <= 1 || chosenIdx < 0) return;
 	const chosenSnap = snapAt(chosenMetrics, labelHorizon);
 	samples.push({
-		obs: encodeObs(state, seat),
+		obs: encodeObs(state, seat, catalog),
 		cands: branches.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 		chosen: chosenIdx,
 		pi: branches.map((_, i) => (i === chosenIdx ? 1 : 0)),

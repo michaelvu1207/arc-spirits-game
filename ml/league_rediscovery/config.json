@@ -1,0 +1,46 @@
+{
+  "_readme": "FROM-SCRATCH REDISCOVERY league (M3 exit criterion: 'exploiter rediscovers the corruption\u2192Fallen PvP line without gates'). One main lane starting from a MINTED RANDOM net (laneInit 'random' \u2192 ml/random_init_v1.py, deterministic via seedBase), against the 8 heuristic anchors ONLY \u2014 seedCheckpointAnchors:false strips every corruption-knowing checkpoint from the roster, so nothing in the league can teach the line. mode ppo works from gen 1 because the random net is policy-driven (real logpOld) \u2014 no heuristic-bootstrap BC rows anywhere. USAGE: mkdir -p ml/league_rediscovery && cp ml/league/configs/rediscovery.json ml/league_rediscovery/config.json && node scripts/run-league.mjs init --root ml/league_rediscovery && node scripts/run-league.mjs run --root ml/league_rediscovery --gens 20. METRICS (per gen): ml/.venv/bin/python ml/dashboard.py league --league-dir ml/league_rediscovery \u2014 read the corruption table (finalStatus==3 share) and winnerCorruptPct trajectories; SUCCESS = the learner's corruption rate climbs from ~random toward the Fallen line and its eval/gauntlet strength follows, with no gate, teacher, or warm start. Gauntlet promotion (every promoteEvery gens) still scores vs the frozen anchor pool \u2014 that is a benchmark, not an opponent.",
+  "version": "league-v1",
+  "mode": "ppo",
+  "seats": 4,
+  "maxRounds": 120,
+  "gamesPerGen": 128,
+  "matchupGames": 8,
+  "evalGames": 24,
+  "evalOpponents": [
+    "heur-medium",
+    "heur-hard",
+    "heur-pvphunter"
+  ],
+  "lanes": {
+    "main": 1,
+    "mainExploiter": 0,
+    "leagueExploiter": 0
+  },
+  "laneInit": {
+    "main-0": "random"
+  },
+  "seedCheckpointAnchors": false,
+  "pfsp": {
+    "p": 2,
+    "variant": "squared"
+  },
+  "promoteEvery": 10,
+  "promoteMarginElo": 25,
+  "seedBase": 47000000,
+  "selection": "hybrid",
+  "sample": true,
+  "temperature": 1.0,
+  "train": {
+    "epochs": 4
+  },
+  "pythonBin": "ml/.venv/bin/python",
+  "gauntletCmd": [
+    "bash",
+    "scripts/nightly-gauntlet.sh"
+  ],
+  "paths": {
+    "root": "ml/league_rediscovery"
+  },
+  "workers": 4
+}

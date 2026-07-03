@@ -576,7 +576,7 @@ export function createSelfPlayRecorder(deps: SelfPlayRecorderDeps) {
 		return {
 			activeNavigationGate: activeGate,
 			rootDestinations: rootDestinations ? [...rootDestinations] : undefined,
-			routeModeHuntProb: fallen ? routeModeHuntProbability(policy, state, seat) : undefined,
+			routeModeHuntProb: fallen ? routeModeHuntProbability(policy, state, seat, catalog) : undefined,
 			routeModeThreshold: fallen ? routeModeThreshold : undefined,
 			bestGoodTargetVp: fallen ? bestGoodTargetVp(state, seat) : undefined,
 			visiblePvpDestinations: fallen ? visiblePvpHuntDestinations(state, seat) : undefined,
@@ -603,7 +603,7 @@ export function createSelfPlayRecorder(deps: SelfPlayRecorderDeps) {
 		if (idx < 0 || destinations.length <= 1) return;
 		const cmd: GameCommand = { type: 'lockNavigation', destination };
 		samples.push({
-			obs: encodeObs(state, seat),
+			obs: encodeObs(state, seat, catalog),
 			cands: destinations.map((d) =>
 				encodeAction(state, seat, { type: 'lockNavigation', destination: d }, undefined, catalog)
 			),

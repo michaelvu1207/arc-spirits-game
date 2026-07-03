@@ -288,7 +288,7 @@ function recordSample(
 	const chosen = withNext[decision.idx];
 	const aux = sampleAuxTargets(state, seat, catalog, withNext);
 	samples.push({
-		obs: encodeObs(state, seat),
+		obs: encodeObs(state, seat, catalog),
 		cands: withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 		chosen: decision.idx,
 		pi: policyTarget(withNext, decision.idx, decision.kind, cfg),

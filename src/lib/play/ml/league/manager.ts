@@ -629,6 +629,8 @@ export function buildMatchup(
 			// Expert iteration: learner-seat decisions get Gumbel search + recorded pi
 			// (v1 in-process lanes only — the searcher needs the local net for rollouts).
 			...(config.search && learnerWeights && !viaSocket ? { search: config.search } : {}),
+			...(config.denseVpReward ? { denseVpReward: true } : {}),
+			...(config.shapingPreset ? { shapingPreset: config.shapingPreset } : {}),
 			gamma: config.gamma,
 			iter,
 			...(v2 ? { obsVersion: 2 as const } : {}),

@@ -1,0 +1,113 @@
+{
+	"version": "league-v1",
+	"gen": 8,
+	"members": [
+		{
+			"id": "heur-medium",
+			"kind": "heuristic",
+			"profile": "medium",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-hard",
+			"kind": "heuristic",
+			"profile": "hard",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-insane",
+			"kind": "heuristic",
+			"profile": "insane",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-survivor",
+			"kind": "heuristic",
+			"profile": "survivor",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-cultivator",
+			"kind": "heuristic",
+			"profile": "cultivator",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-rushpatient",
+			"kind": "heuristic",
+			"profile": "rushpatient",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-paragon",
+			"kind": "heuristic",
+			"profile": "paragon",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-pvphunter",
+			"kind": "heuristic",
+			"profile": "pvphunter",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "main-0",
+			"kind": "main",
+			"initFrom": "/Users/maikyon/Documents/Programming/ArcSpiritsPlan2/arc-spirits-spectate/ml/league_rediscovery/checkpoints/main-0-random-init.json",
+			"createdGen": 0,
+			"matchStats": {
+				"heur-paragon": {
+					"games": 216,
+					"better": 165,
+					"worse": 38
+				},
+				"heur-hard": {
+					"games": 520,
+					"better": 367,
+					"worse": 97
+				},
+				"heur-cultivator": {
+					"games": 344,
+					"better": 233,
+					"worse": 75
+				},
+				"heur-rushpatient": {
+					"games": 40,
+					"better": 34,
+					"worse": 3
+				},
+				"heur-medium": {
+					"games": 440,
+					"better": 312,
+					"worse": 84
+				},
+				"heur-insane": {
+					"games": 344,
+					"better": 221,
+					"worse": 95
+				},
+				"heur-pvphunter": {
+					"games": 1480,
+					"better": 523,
+					"worse": 850
+				},
+				"heur-survivor": {
+					"games": 264,
+					"better": 175,
+					"worse": 65
+				}
+			},
+			"weightsPath": "/Users/maikyon/Documents/Programming/ArcSpiritsPlan2/arc-spirits-spectate/ml/league_rediscovery/checkpoints/main-0-gen8.json"
+		}
+	],
+	"phase": "idle",
+	"updatedAt": "2026-07-02T05:10:20.779Z"
+}

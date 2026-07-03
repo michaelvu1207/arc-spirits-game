@@ -9,6 +9,7 @@
  *
  *   POOL=1 npx vitest run src/lib/play/ml/_actorpool.test.ts --disable-console-intercept
  */
+import { OBS_DIM } from './encode';
 import { describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, tmpdir } from 'node:os';
@@ -103,7 +104,7 @@ describe('actor pool', () => {
 			// obsV2 carries the flat array, meta nests obsV2Meta under "obs_v2".
 			const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
 			expect(meta.obs_version).toBe(2);
-			expect(meta.obs_dim).toBe(62);
+			expect(meta.obs_dim).toBe(OBS_DIM);
 			expect(meta.obs_v2.versionCode).toBe(2);
 			expect(Array.isArray(meta.obs_v2.flatHeader)).toBe(true);
 

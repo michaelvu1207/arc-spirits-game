@@ -30,6 +30,8 @@ import {
 } from '../types';
 import { awakenedClassCounts } from '../effects/apply';
 import { buildMonsterRewards } from '../monsterRewards';
+import { computeKillProbability } from '../server/botPolicy';
+import { claimableMonsterRewardVp } from './farmValue';
 
 /** Rough horizon used to normalize the round counter. */
 const ROUND_NORM = 36;
@@ -83,7 +85,11 @@ function placementFraction(state: PublicGameState, seat: SeatColor): number {
  * State features from `seat`'s point of view: global tempo, my resources, the field
  * (best opponent), and relative standing. ORDER IS PART OF THE CONTRACT — see header.
  */
-export function encodeObs(state: PublicGameState, seat: SeatColor): number[] {
+export function encodeObs(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): number[] {
 	const f: number[] = [];
 	const me = state.players[seat];
 
@@ -185,11 +191,49 @@ export function encodeObs(state: PublicGameState, seat: SeatColor): number[] {
 	f.push(clamp01((cc['Dragon Warrior'] ?? 0) / 3)); // combat scaling
 	f.push(clamp01((cc['Fairy'] ?? 0) / 3)); // combat/support scaling
 
+	// ── Ladder forward-value block (obs v1.1, Phase 3 "crack the monster ladder").
+	// The build chain was invisible: the net saw dice COUNTS but never "can I one-shot
+	// this rung", what the rung PAYS, or what the next rung costs. Every quantity here
+	// reuses an engine/bot helper — no new game math. Append-only per the header rule.
+	const dt = me ? diceCountByTier(me) : { basic: 0, enchanted: 0, exalted: 0, arcane: 0 };
+	// Static expected roll of the pool (die-face means; inCombat trigger bonuses land in
+	// killProb below, which simulates them).
+	const expRoll = dt.basic / 3 + (dt.enchanted * 2) / 3 + dt.exalted + dt.arcane * 2;
+	const killProb = me && mon ? computeKillProbability(state, seat, catalog) : 0;
+	f.push(clamp01(killProb)); // P(clean kill of the current rung) — the climb decision
+	f.push(clamp01(expRoll / 20));
+	f.push(me && mon ? clamp01((expRoll - mon.maxHp + 12) / 24) : 0); // one-shot margin (signed, centered)
+	f.push(me && mon ? clamp01((me.barrier - mon.damage + 8) / 16) : 0); // corruption margin: monster hits FIRST
+	f.push(mon ? clamp01(claimableMonsterRewardVp(mon.rewardTrack, mon.chooseAmount) / 10) : 0); // rung pay
+	// Next-rung lookahead (catalog.monsters is the ladder, weakest-first — combat.ts).
+	const ladder = catalog.monsters ?? [];
+	const ladderIdx = mon ? ladder.findIndex((mm) => mm.id === mon.id) : -1;
+	const nextRung = ladderIdx >= 0 ? ladder[ladderIdx + 1] : undefined;
+	f.push(nextRung ? clamp01(nextRung.barrier / 20) : 0);
+	f.push(nextRung ? clamp01(nextRung.damage / 20) : 0);
+	f.push(nextRung ? clamp01(claimableMonsterRewardVp(nextRung.rewardTrack, nextRung.chooseAmount) / 10) : 0);
+	// Face-down dice-class counts: awakening ONE of these crosses the super-linear dice
+	// breakpoints (Fighter/Elementalist 2/3/4/5 → +1/+2/+5/+10) — invisible until now.
+	const fdClass = (cls: string): number =>
+		me ? (me.spirits ?? []).filter((s) => s.isFaceDown && (s.classes?.[cls] ?? 0) > 0).length : 0;
+	f.push(clamp01(fdClass('Fighter') / 5));
+	f.push(clamp01(fdClass('Elementalist') / 5));
+	f.push(clamp01(fdClass('Arc Mage') / 3));
+	f.push(clamp01(fdClass('Dragon Warrior') / 3));
+	// Awakened Fighter/Elementalist on a /5 scale: the /3 one-hots above saturate at 3,
+	// hiding the 4→5 breakpoints (+5/+10 dice) that gate the boss-rung pool.
+	f.push(clamp01((cc['Fighter'] ?? 0) / 5));
+	f.push(clamp01((cc['Elementalist'] ?? 0) / 5));
+	// Combat allowance left this round (Ironmane grants a 2nd swing — runtime.ts gate).
+	const combatsUsed = me ? me.actionsUsedThisRound.filter((a) => a === 'combat').length : 0;
+	const combatAllowance = me ? 1 + (me.extraActions?.combat ?? 0) : 0;
+	f.push(clamp01((combatAllowance - combatsUsed) / 2));
+
 	return f;
 }
 
 /** Number of features encodeObs emits. Asserted in tests; also written to meta.json. */
-export const OBS_DIM = 62;
+export const OBS_DIM = 77; // v1.1: 62 + 15 ladder forward-value features (Phase 3)
 
 // Command-type vocabulary for the action one-hot. Append-only; index is the contract.
 export const COMMAND_VOCAB: GameCommand['type'][] = [

@@ -123,6 +123,7 @@ def load_trajectory_buffer(
     gamma: float,
     gae_lambda: float,
     placement_rewards: tuple[float, float, float, float],
+    win_bonus: float = 0.0,
     obs_key: str = "obs",
 ) -> TrajectoryBuffer:
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
@@ -172,6 +173,7 @@ def load_trajectory_buffer(
                         "logp_old": float(rec["logpOld"]),
                         "v_pred": float(rec["vPred"]),
                         "placement": _coerce_placement(rec.get("placement")),
+                        "won": 1 if rec.get("won") else 0,
                         "obs": obs,
                         "cands": cands,
                         "chosen": min(max(chosen, 0), cands.shape[0] - 1),
@@ -214,6 +216,12 @@ def load_trajectory_buffer(
         if dones[-1] and placement is not None:
             rewards[-1] += placement_rewards[placement - 1]
             n_with_placement += 1
+        # True 30-VP win (driver stamps won=1 only on target-VP finishes, never
+        # cap/all-Fallen wins): the explicit "win the game" incentive on top of
+        # placement — out-placing a weak field at 14 VP earns placement reward
+        # but NOT this.
+        if dones[-1] and win_bonus and any(s["won"] for s in steps):
+            rewards[-1] += win_bonus
 
         if dones[-1]:
             last_value = 0.0

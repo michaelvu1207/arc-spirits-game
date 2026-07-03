@@ -1581,7 +1581,7 @@ function recordLocationSample(
 	if (withNext.length <= 1 || chosenIdx < 0) return;
 	const chosenSnap = snapAt(chosenMetrics, labelHorizon);
 	samples.push({
-		obs: encodeObs(state, seat),
+		obs: encodeObs(state, seat, catalog),
 		cands: withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 		chosen: chosenIdx,
 		pi: withNext.map((_, i) => (i === chosenIdx ? 1 : 0)),

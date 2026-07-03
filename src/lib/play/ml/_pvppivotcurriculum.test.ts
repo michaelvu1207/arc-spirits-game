@@ -607,7 +607,7 @@ function recordSample(
 	const chosen = withNext[decision.idx];
 	const routeMode = routeModeTarget(decision);
 	samples.push({
-		obs: encodeObs(state, seat),
+		obs: encodeObs(state, seat, catalog),
 		cands: withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 		chosen: decision.idx,
 		pi: policyTarget(withNext, decision, cfg),

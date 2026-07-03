@@ -241,7 +241,8 @@ function farmNavigationActionBonus(
 	policy: NeuralPolicy,
 	state: PublicGameState,
 	seat: SeatColor,
-	cmd: GameCommand
+	cmd: GameCommand,
+	catalog: PlayCatalog
 ): number {
 	if (FARM_NAV_AUX_SHAPE <= 0 || cmd.type !== 'lockNavigation' || cmd.destination !== 'Arcane Abyss') return 0;
 	const player = state.players[seat];
@@ -250,13 +251,18 @@ function farmNavigationActionBonus(
 	const monsterHp = monster.hp ?? monster.maxHp ?? 0;
 	if (monsterHp < FARM_NAV_AUX_MIN_MONSTER_HP || monsterHp > FARM_NAV_AUX_MAX_MONSTER_HP) return 0;
 	if ((player.statusLevel ?? 0) > FARM_NAV_AUX_MAX_STATUS) return 0;
-	const farm = farmValueRaw(policy, encodeObs(state, seat));
+	const farm = farmValueRaw(policy, encodeObs(state, seat, catalog));
 	if (farm < FARM_NAV_AUX_THRESHOLD) return 0;
 	return FARM_NAV_AUX_SHAPE * farm;
 }
 
-function policyStateValue(policy: NeuralPolicy, state: PublicGameState, seat: SeatColor): number {
-	const obs = encodeObs(state, seat);
+function policyStateValue(
+	policy: NeuralPolicy,
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): number {
+	const obs = encodeObs(state, seat, catalog);
 	return policy.value(obs) + farmValueBonus(policy, obs);
 }
 
@@ -276,13 +282,13 @@ export function scoreByValue(
 	state: PublicGameState,
 	seat: SeatColor,
 	withNext: LegalAction[],
-	catalog?: PlayCatalog
+	catalog: PlayCatalog
 ): number[] {
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
 	const curStatus = state.players[seat]?.statusLevel ?? 0;
 	const curSig = materialSig(state, seat);
 	const curPendingRewardVp = pendingRewardVpPotential(state, seat);
-	const rootObs = encodeObs(state, seat);
+	const rootObs = encodeObs(state, seat, catalog);
 	const rewardPickProbs = state.players[seat]?.pendingReward
 		? rewardPickAuxProbs(policy, rootObs, withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)))
 		: null;
@@ -291,13 +297,13 @@ export function scoreByValue(
 	return withNext.map((action, i) => {
 		const next = action.next;
 		if (next.winnerSeat === seat) return WIN_SCORE;
-		const v = policyStateValue(policy, next, seat);
+		const v = policyStateValue(policy, next, seat, catalog);
 		const dVP = ((next.players[seat]?.victoryPoints ?? 0) - curVP) / VP_TO_WIN;
 		const dPendingRewardVP = Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
 		const dStatus = pvpMeta ? ((next.players[seat]?.statusLevel ?? 0) - curStatus) / 3 : 0;
 		const noop = materialSig(next, seat) === curSig ? nonProgressPenalty(action.cmd) : 0;
 		const rewardPickBonus = action.cmd.type === 'resolveMonsterReward' ? REWARD_PICK_AUX_SHAPE * (rewardPickProbs?.[i] ?? 0) : 0;
-		const farmNavBonus = farmNavigationActionBonus(policy, state, seat, action.cmd);
+		const farmNavBonus = farmNavigationActionBonus(policy, state, seat, action.cmd, catalog);
 		return v + VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP + STATUS_SHAPE * dStatus + rewardPickBonus + farmNavBonus - noop;
 	});
 }
@@ -316,10 +322,15 @@ function transitionReward(state: PublicGameState, seat: SeatColor, action: Legal
 	return VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP + STATUS_SHAPE * dStatus - noop;
 }
 
-function leafValue(policy: NeuralPolicy, state: PublicGameState, seat: SeatColor): number {
+function leafValue(
+	policy: NeuralPolicy,
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): number {
 	if (state.winnerSeat === seat) return WIN_SCORE;
 	if (state.status === 'finished') return 0;
-	return policyStateValue(policy, state, seat);
+	return policyStateValue(policy, state, seat, catalog);
 }
 
 function topIndices(scores: number[], limit: number): number[] {
@@ -375,15 +386,17 @@ function lookaheadActionScore(
 	beam: number
 ): number {
 	const next = action.next;
-	const reward = transitionReward(state, seat, action) + farmNavigationActionBonus(policy, state, seat, action.cmd);
+	const reward = transitionReward(state, seat, action) + farmNavigationActionBonus(policy, state, seat, action.cmd, catalog);
 	if (reward >= WIN_SCORE / 2) return reward;
 	if (depth <= 0 || next.status !== 'active' || !botSeatNeedsToAct(next, seat)) {
-		return reward + leafValue(policy, next, seat);
+		return reward + leafValue(policy, next, seat, catalog);
 	}
 	const children = legalActionsWithNext(next, seat, catalog);
-	if (children.length === 0) return reward + leafValue(policy, next, seat);
+	if (children.length === 0) return reward + leafValue(policy, next, seat, catalog);
 	const shallow = children.map((child) =>
-		transitionReward(next, seat, child) + farmNavigationActionBonus(policy, next, seat, child.cmd) + leafValue(policy, child.next, seat)
+		transitionReward(next, seat, child) +
+			farmNavigationActionBonus(policy, next, seat, child.cmd, catalog) +
+			leafValue(policy, child.next, seat, catalog)
 	);
 	let best = -Infinity;
 	for (const i of topIndices(shallow, beam)) {
@@ -434,7 +447,12 @@ export function scoreByLookahead(
 	const depth = Math.max(0, opts?.depth ?? 2);
 	const beam = Math.max(1, opts?.beam ?? DEFAULT_LOOKAHEAD_BEAM);
 	const rootBeam = Math.max(1, opts?.rootBeam ?? DEFAULT_LOOKAHEAD_ROOT_BEAM);
-	const scores = withNext.map((action) => transitionReward(state, seat, action) + farmNavigationActionBonus(policy, state, seat, action.cmd) + leafValue(policy, action.next, seat));
+	const scores = withNext.map(
+		(action) =>
+			transitionReward(state, seat, action) +
+			farmNavigationActionBonus(policy, state, seat, action.cmd, catalog) +
+			leafValue(policy, action.next, seat, catalog)
+	);
 	if (depth > 0) {
 		for (const i of topIndices(scores, rootBeam)) {
 			scores[i] = lookaheadActionScore(policy, state, seat, withNext[i], catalog, depth - 1, beam);
@@ -494,13 +512,14 @@ export function policyIndexWithProgressGuard(
 	opts?: { sample?: boolean; temperature?: number; rand?: () => number },
 	catalog?: PlayCatalog
 ): number {
+	if (!catalog) throw new Error('policyIndexWithProgressGuard: catalog is required (obs v1.1 ladder features)');
 	const progress = progressCandidateIndices(state, seat, withNext);
 	const filtered =
 		progress.length > 0 && progress.length < withNext.length
 			? progress.map((i) => withNext[i])
 			: withNext;
 	const picked = policy.pick(
-		encodeObs(state, seat),
+		encodeObs(state, seat, catalog),
 		filtered.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
 		{
 			sample: opts?.sample,
@@ -521,6 +540,7 @@ export function valueGuidedIndex(
 	opts?: { sample?: boolean; temperature?: number; rand?: () => number },
 	catalog?: PlayCatalog
 ): number {
+	if (!catalog) throw new Error('valueGuidedIndex: catalog is required (obs v1.1 ladder features)');
 	const scores = scoreByValue(policy, state, seat, withNext, catalog);
 	return pickMappedIndexFromScores(selectableCandidateIndices(state, seat, withNext), scores, opts);
 }
