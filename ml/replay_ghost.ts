@@ -33,7 +33,14 @@ import {
 } from '../src/lib/play/runtime';
 import { legalActionsWithNext } from '../src/lib/play/ml/actions';
 import { botSeatNeedsToAct } from '../src/lib/play/server/botPolicy';
-import { hybridIndex, getNeuralPolicy, type NeuralPolicy } from '../src/lib/play/ml/neuralBot';
+import {
+	hybridIndex,
+	getNeuralPolicy,
+	planNeuralPhaseActions,
+	type NeuralPolicy
+} from '../src/lib/play/ml/neuralBot';
+import { loadPolicyWeights } from '../src/lib/play/ml/net';
+import { ACT_DIM, OBS_DIM } from '../src/lib/play/ml/encode';
 import { VP_TO_WIN } from '../src/lib/play/types';
 import type {
 	GameActor,
@@ -387,6 +394,21 @@ function runCf(
 		};
 
 		const botStep = (seat: SeatColor): boolean => {
+			// ARC_REPLAY_BOTMODE=search plays every bot through the LIVE expert tier
+			// (planNeuralPhaseActions with Gumbel root search at navigation/encounter).
+			// Run-to-run variance comes from the search seed, so no sampling needed.
+			if (process.env.ARC_REPLAY_BOTMODE === 'search') {
+				if (!botSeatNeedsToAct(state, seat)) return false;
+				let progressed = false;
+				const commands = planNeuralPhaseActions(state, seat, catalog, policy, { search: true });
+				for (const cmd of commands) {
+					const res = applyGameCommand(state, actorFor(seat), cmd, catalog);
+					if (!res.ok) break;
+					state = res.state;
+					progressed = true;
+				}
+				return progressed;
+			}
 			let progressed = false;
 			let guard = 0;
 			while (botSeatNeedsToAct(state, seat) && guard++ < 40) {
@@ -481,7 +503,15 @@ async function main() {
 		runValidate(eventsPath!, snapshotPath!, catalog);
 	} else if (mode === 'cf' || mode === 'pace') {
 		const [eventsPath, runsStr, outPath] = rest;
-		const policy = await getNeuralPolicy();
+		// ARC_REPLAY_WEIGHTS: probe a CANDIDATE checkpoint without touching the shipped
+		// policy-weights.json (certification runs before any ship).
+		const wPath = process.env.ARC_REPLAY_WEIGHTS;
+		const policy = wPath
+			? loadPolicyWeights(JSON.parse(readFileSync(wPath, 'utf8')), {
+					expectedObsDim: OBS_DIM,
+					expectedActDim: ACT_DIM
+				})
+			: await getNeuralPolicy();
 		if (!policy) throw new Error('no neural policy bundled');
 		runCf(
 			eventsPath!,
