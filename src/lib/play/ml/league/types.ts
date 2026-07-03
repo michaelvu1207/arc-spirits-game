@@ -148,6 +148,17 @@ export interface LeagueConfig {
 	};
 	/** Dense PPO reward (ΔVP + ΔΦ per decision) — REQUIRED for "reach 30" training. */
 	denseVpReward?: boolean;
+	/**
+	 * Mirror-contention fraction (0..1, default 0 = off). This fraction of a
+	 * generation's matchups replaces the PFSP lineup with a PURE MIRROR: all
+	 * seats−1 opponents play the learner's CURRENT checkpoint, so the learner
+	 * races equal-strength copies of itself on the shared ladder (the contention
+	 * capability the mostly-heuristic PFSP field under-trains). Only the learner
+	 * seat is recorded (as always). Mirror slots are chosen deterministically and
+	 * evenly spread; the remaining (1−fraction) stay ordinary PFSP. A lane with no
+	 * playable checkpoint yet (fresh-net bootstrap gen) silently falls back to PFSP.
+	 */
+	selfPlayFraction?: number;
 	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
 	shapingPreset?: string;
 	selection: 'hybrid' | 'value' | 'policy';
@@ -237,6 +248,8 @@ export interface HistoryLine {
 	samples: number;
 	/** Opponent member id → games faced this generation. */
 	opponents: Record<string, number>;
+	/** How many of this generation's matchups were pure mirror (selfPlayFraction); absent when 0. */
+	mirrorMatchups?: number;
 	poolWallMs: number;
 	trainMs: number;
 	/** v2 lanes: wall time of the ml/distill.py student run, when one happened. */

@@ -118,12 +118,25 @@ def _coerce_placement(raw: Any) -> int | None:
     return None
 
 
+def _coerce_end_round(raw: Any) -> int | None:
+    """The game's final round from a done row (driver stamps endRound). Any positive
+    integer; None when absent (old-format rows) — the win bonus then stays undecayed."""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int) and raw >= 1:
+        return raw
+    if isinstance(raw, float) and raw.is_integer() and raw >= 1:
+        return int(raw)
+    return None
+
+
 def load_trajectory_buffer(
     data_dir: Path,
     gamma: float,
     gae_lambda: float,
     placement_rewards: tuple[float, float, float, float],
     win_bonus: float = 0.0,
+    win_bonus_halflife: float = 0.0,
     obs_key: str = "obs",
 ) -> TrajectoryBuffer:
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
@@ -174,6 +187,7 @@ def load_trajectory_buffer(
                         "v_pred": float(rec["vPred"]),
                         "placement": _coerce_placement(rec.get("placement")),
                         "won": 1 if rec.get("won") else 0,
+                        "end_round": _coerce_end_round(rec.get("endRound")),
                         "obs": obs,
                         "cands": cands,
                         "chosen": min(max(chosen, 0), cands.shape[0] - 1),
@@ -210,9 +224,12 @@ def load_trajectory_buffer(
         dones = np.array([s["done"] for s in steps], dtype=bool)
 
         placement = None
+        end_round = None
         for s in steps:
             if s["placement"] is not None:
                 placement = s["placement"]
+            if s["end_round"] is not None:
+                end_round = s["end_round"]
         if dones[-1] and placement is not None:
             rewards[-1] += placement_rewards[placement - 1]
             n_with_placement += 1
@@ -221,7 +238,14 @@ def load_trajectory_buffer(
         # placement — out-placing a weak field at 14 VP earns placement reward
         # but NOT this.
         if dones[-1] and win_bonus and any(s["won"] for s in steps):
-            rewards[-1] += win_bonus
+            bonus = win_bonus
+            # Tempo decay: with a halflife R, a win at round 12-or-earlier pays the
+            # full bonus and every R rounds later halves it (round 20 -> 0.5x,
+            # round 28 -> 0.25x at R=8). Late wins still pay > a loss (0). Off (0) =
+            # flat bonus, unchanged. Rounds before 12 are not amplified (max(0, ...)).
+            if win_bonus_halflife > 0 and end_round is not None:
+                bonus *= 0.5 ** (max(0, end_round - 12) / win_bonus_halflife)
+            rewards[-1] += bonus
 
         if dones[-1]:
             last_value = 0.0

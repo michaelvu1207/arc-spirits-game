@@ -568,6 +568,7 @@ def train(
     lr_schedule: str = "const",
     placement_rewards: str = "1.0,0.3,-0.3,-1.0",
     win_bonus: float = 0.0,
+    win_bonus_halflife: float = 0.0,
     model_version: str = "v1",
     placement_coef: float = 0.1,
     v2_d_model: int = 128,
@@ -609,6 +610,7 @@ def train(
             gae_lambda=gae_lambda,
             placement_rewards=parse_placement_rewards(placement_rewards),
             win_bonus=win_bonus,
+            win_bonus_halflife=win_bonus_halflife,
             obs_key=obs_key,
         )
         if model_version == "v2":
@@ -952,6 +954,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--win-bonus", type=float, default=0.0,
                    help="Extra terminal reward on TRUE 30-VP wins (driver `won` rows; "
                         "distinguishes winning the game from out-placing the field)")
+    p.add_argument("--win-bonus-halflife", type=float, default=0.0,
+                   help="Tempo decay for --win-bonus (0=off): the bonus is multiplied by "
+                        "0.5**(max(0,endRound-12)/R), so a round-12-or-earlier win pays full "
+                        "and every R rounds later halves it (R=8: round 20 -> 0.5x, 28 -> 0.25x)")
     p.add_argument("--placement-rewards", type=str, default="1.0,0.3,-0.3,-1.0",
                    help="Terminal reward for placements 1-4, added to rStep on the done row")
     # Model v2 (entity set-transformer) flags. --out/--init-from must be .pt for
@@ -1002,6 +1008,7 @@ if __name__ == "__main__":
         lr_schedule=args.lr_schedule,
         placement_rewards=args.placement_rewards,
         win_bonus=args.win_bonus,
+        win_bonus_halflife=args.win_bonus_halflife,
         model_version=args.model_version,
         placement_coef=args.placement_coef,
         v2_d_model=args.v2_d_model,

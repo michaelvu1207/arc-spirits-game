@@ -213,6 +213,54 @@ def test_old_format_rows_still_train_in_awr_mode():
         assert len(ds) == 30
 
 
+def _win_row(end_round: int | None, won: int = 1) -> list[dict]:
+    """One 1-step done episode with a true-win flag (and optional endRound)."""
+    rng = np.random.default_rng(7)
+    row = {
+        "obs": rng.standard_normal(OBS_DIM).tolist(),
+        "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+        "chosen": 0,
+        "ret": 0.0,
+        "gameId": "g0",
+        "stepIdx": 0,
+        "rStep": 0.0,
+        "done": True,
+        "logpOld": math.log(1.0 / N_CANDS),
+        "vPred": 0.0,
+        "won": won,
+    }
+    if end_round is not None:
+        row["endRound"] = end_round
+    return [row]
+
+
+def _terminal_return(rows: list[dict], **kw) -> float:
+    # gamma=lam=1, vPred=0, no placement -> the done step's return == rewards[-1].
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(d, gamma=1.0, gae_lambda=1.0,
+                                     placement_rewards=PLACEMENT_REWARDS, **kw)
+    assert len(buf) == 1
+    return float(buf.returns[0])
+
+
+def test_win_bonus_halflife_decays_late_wins():
+    wb = 1.0
+    R = 8.0
+    # Flat bonus when the halflife is off (default), regardless of endRound.
+    assert math.isclose(_terminal_return(_win_row(28), win_bonus=wb), 1.0, abs_tol=1e-6)
+    # With R=8: <=round-12 pays full, round 20 -> 0.5x, round 28 -> 0.25x.
+    assert math.isclose(_terminal_return(_win_row(12), win_bonus=wb, win_bonus_halflife=R), 1.0, abs_tol=1e-6)
+    assert math.isclose(_terminal_return(_win_row(8), win_bonus=wb, win_bonus_halflife=R), 1.0, abs_tol=1e-6)
+    assert math.isclose(_terminal_return(_win_row(20), win_bonus=wb, win_bonus_halflife=R), 0.5, abs_tol=1e-6)
+    assert math.isclose(_terminal_return(_win_row(28), win_bonus=wb, win_bonus_halflife=R), 0.25, abs_tol=1e-6)
+    # A non-win row never earns the bonus, decayed or not.
+    assert math.isclose(_terminal_return(_win_row(12, won=0), win_bonus=wb, win_bonus_halflife=R), 0.0, abs_tol=1e-6)
+    # Old-format rows (no endRound) stay undecayed — the flag can't punish missing data.
+    assert math.isclose(_terminal_return(_win_row(None), win_bonus=wb, win_bonus_halflife=R), 1.0, abs_tol=1e-6)
+
+
 def main() -> int:
     tests = [
         (name, fn)

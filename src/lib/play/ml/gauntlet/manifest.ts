@@ -42,7 +42,13 @@ import { createRng, nextInt } from '../../rng';
 // (b) the unpayable-corruption-debt rule (zero spirits ⇒ remaining owed
 // discards settle as -1 VP each instead of freezing the seat). Both shift
 // game outcomes → NEW SCALE vs v5.
-export const GAUNTLET_VERSION = 'gauntlet-v6';
+// v7 = final-scoring-at-cap engine rule (Michael's ruling, commit 96ec2e3: a
+// game that hits the round cap scores final VP for placement instead of the
+// pre-cap snapshot — the U94RP3 31-VP case) + the Phase 3c tempo recipe
+// (--win-bonus now actually fires: the `won`/`endRound` fields were stamped but
+// never serialized before, so v6 champions trained with an inert win bonus).
+// The cap-scoring change is eval-visible at cap-end → NEW SCALE vs v6.
+export const GAUNTLET_VERSION = 'gauntlet-v7';
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;

@@ -94,6 +94,10 @@ export interface Sample {
 	done?: boolean;
 	/** 1 on the terminal row of a TRUE 30-VP win (not cap/all-Fallen wins). */
 	won?: number;
+	/** The game's final round number, stamped on done rows alongside `won`. Training-data-only
+	 *  (tempo signal): the PPO trainer's --win-bonus-halflife decays the win bonus by how late the
+	 *  win landed, so a round-18 30-VP finish is rewarded more than a round-28 one. */
+	endRound?: number;
 	/** Behavior log-prob of the chosen candidate under the acting policy's temp-1 softmax. */
 	logpOld?: number;
 	/** Value-head output at decision time. */
@@ -677,7 +681,12 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			s.rStep = rSteps?.[i] ?? dense?.[i] ?? 0;
 			s.done = finished && i === seatSamples.length - 1;
 			if (finished) s.placement = placement;
-			if (s.done) s.won = wonGame;
+			if (s.done) {
+				s.won = wonGame;
+				// The game's final round — the tempo trainer decays the win bonus by how late
+				// it landed. state.round is the terminal round for both finished and capped games.
+				s.endRound = state.round;
+			}
 		});
 	}
 

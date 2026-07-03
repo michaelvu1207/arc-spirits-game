@@ -1,0 +1,64 @@
+{
+ "_readme": "PHASE 3c TEMPO cycle: the ladder2 recipe (dense VP + ascend Φ + placement/farm/reward aux, gamma .999, PPO, 512 games/gen, 60 gens) PLUS two capabilities — (1) TEMPO: --win-bonus-halflife 8 decays the 30-VP win bonus by how late the win lands (round<=12 full, 20 half, 28 quarter), so the net is pushed to cross 30 EARLIER; (2) CONTENTION: selfPlayFraction 0.35 replaces a third of each generation's matchups with a pure mirror (all opponents = the learner's current ckpt), training equal-strength racing/denial on the shared ladder. NOTE: the win bonus fires for the FIRST time here — ladder2's `won` field was stamped but never serialized, so its --win-bonus 1.0 was inert.",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": [
+  "heur-medium",
+  "heur-hard",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "laneInit": {
+  "main-0": "random"
+ },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend",
+ "selfPlayFraction": 0.35,
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 25,
+ "seedBase": 92000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--farm-value-coef",
+   "0.25",
+   "--reward-pick-coef",
+   "0.25",
+   "--gamma",
+   "0.999",
+   "--win-bonus",
+   "1.0",
+   "--win-bonus-halflife",
+   "8"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_ladder3"
+ },
+ "workers": 120,
+ "matchupConcurrency": 15
+}

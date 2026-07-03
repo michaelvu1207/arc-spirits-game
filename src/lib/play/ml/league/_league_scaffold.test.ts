@@ -41,6 +41,9 @@ import {
 } from './pfsp';
 import {
 	buildMatchup,
+	isMirrorSlot,
+	mirrorOpponents,
+	matchupOpponents,
 	initLeague,
 	laneModelOf,
 	leaguePaths,
@@ -700,4 +703,77 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 		},
 		20 * 60 * 1000
 	);
+});
+
+describe('mirror-contention lane (selfPlayFraction)', () => {
+	it('isMirrorSlot: exactly floor(matchups·f) mirrors, evenly spread; off at f=0', () => {
+		const count = (matchups: number, f: number) =>
+			Array.from({ length: matchups }, (_, m) => isMirrorSlot(m, matchups, f)).filter(Boolean).length;
+		expect(count(16, 0)).toBe(0);
+		expect(count(16, 0.35)).toBe(Math.floor(16 * 0.35)); // 5
+		expect(count(20, 0.35)).toBe(7); // 20·0.35 = 7 exactly
+		expect(count(10, 1)).toBe(10);
+		// Spread, not clustered: with f=0.5 every other matchup is a mirror.
+		expect(Array.from({ length: 6 }, (_, m) => isMirrorSlot(m, 6, 0.5))).toEqual([
+			false, true, false, true, false, true
+		]);
+		// Fraction is clamped into [0,1].
+		expect(count(8, -0.2)).toBe(0);
+		expect(count(8, 5)).toBe(8);
+	});
+
+	it('mirrorOpponents: N copies resolving to the learner ckpt; null with no ckpt', () => {
+		const learner = member('main-0', 'main', { weightsPath: 'ckpt/main-0-gen3.json' });
+		const opps = mirrorOpponents(learner, 3);
+		expect(opps).not.toBeNull();
+		expect(opps!).toHaveLength(3);
+		for (const o of opps!) {
+			expect(o.weightsPath).toBe('ckpt/main-0-gen3.json'); // exactly the learner's net
+			expect(o.id).toBe('main-0-mirror'); // distinct id: self-play stays out of real matchStats
+		}
+		// Warm-start-only learner (gen 1): mirrors its initFrom.
+		expect(mirrorOpponents(member('main-0', 'main', { initFrom: 'init.json' }), 3)![0].weightsPath).toBe(
+			'init.json'
+		);
+		// Fresh net, no checkpoint yet → null (caller falls back to PFSP).
+		expect(mirrorOpponents(member('x', 'main_exploiter'), 3)).toBeNull();
+	});
+
+	it('matchupOpponents: mirror slots self-play; PFSP slots draw the field; bootstrap falls back', () => {
+		const config = { ...defaultConfig('unused'), seats: 4, selfPlayFraction: 0.5 };
+		const learner = member('main-0', 'main', { weightsPath: 'ckpt/cur.json' });
+		const members = [
+			learner,
+			member('heur-medium', 'heuristic', { profile: 'medium' }),
+			member('heur-hard', 'heuristic', { profile: 'hard' }),
+			member('heur-pvphunter', 'heuristic', { profile: 'pvphunter' })
+		];
+		const rand = randFrom([0.1, 0.5, 0.9]);
+		// m=1 is a mirror slot at f=0.5: three copies of the learner's current ckpt.
+		const mir = matchupOpponents(config, learner, members, 1, 6, rand);
+		expect(mir.mirror).toBe(true);
+		expect(mir.opponents.map((o) => o.weightsPath)).toEqual(['ckpt/cur.json', 'ckpt/cur.json', 'ckpt/cur.json']);
+		// buildMatchup resolves them into opponentWeights all equal to the learner net.
+		const plan = buildMatchup(config, learner, mir.opponents, 1, 5);
+		const oppW = Object.values(plan.config.opponentWeights ?? {});
+		expect(oppW).toHaveLength(3);
+		expect(new Set(oppW)).toEqual(new Set([resolve('ckpt/cur.json')]));
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]); // still learner-only recording
+		// m=0 is a PFSP slot: opponents come from the field (heuristics), not the mirror.
+		const pf = matchupOpponents(config, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
+		expect(pf.mirror).toBe(false);
+		expect(pf.opponents.every((o) => o.kind === 'heuristic')).toBe(true);
+		// Bootstrap (fresh net, no ckpt yet): even a mirror slot falls back to PFSP.
+		const fresh = member('main-0', 'main'); // no weights/initFrom → mirrorOpponents returns null
+		const boot = matchupOpponents(
+			{ ...config, selfPlayFraction: 1 },
+			fresh,
+			[fresh, ...members.slice(1)],
+			0,
+			4,
+			randFrom([0.1, 0.5, 0.9])
+		);
+		expect(boot.mirror).toBe(false);
+		expect(boot.opponents.every((o) => o.kind === 'heuristic')).toBe(true);
+	});
 });

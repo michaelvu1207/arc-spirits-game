@@ -69,6 +69,11 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 					...(typeof s.logpOld === 'number' ? { logpOld: r4(s.logpOld) } : {}),
 					...(typeof s.vPred === 'number' ? { vPred: r4(s.vPred) } : {}),
 					...(typeof s.placement === 'number' ? { placement: s.placement } : {}),
+					// True 30-VP win flag + final round (done rows only): the PPO --win-bonus
+					// reads `won`, and --win-bonus-halflife reads `endRound`. These were stamped
+					// on the Sample but never serialized before (win bonus was silently inert).
+					...(typeof s.won === 'number' ? { won: s.won } : {}),
+					...(typeof s.endRound === 'number' ? { endRound: s.endRound } : {}),
 					iter
 				})
 			)

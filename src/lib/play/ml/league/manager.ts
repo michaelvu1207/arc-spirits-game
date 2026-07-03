@@ -679,6 +679,62 @@ export function buildMatchup(
 	};
 }
 
+/**
+ * Deterministic mirror-slot predicate: given `matchups` total lineups this
+ * generation and a fraction `f` (0..1), returns whether matchup index `m` is a
+ * mirror. Uses the Bresenham-style even spread `floor((m+1)f) > floor(m·f)`, so
+ * exactly floor(matchups·f) of the m in [0, matchups) are mirrors and they are
+ * spread across the generation rather than clustered at the front.
+ */
+export function isMirrorSlot(m: number, matchups: number, fraction: number): boolean {
+	const f = Math.max(0, Math.min(1, fraction));
+	if (f <= 0) return false;
+	return Math.floor((m + 1) * f) > Math.floor(m * f);
+}
+
+/**
+ * The `count` opponents for a PURE MIRROR matchup: `count` copies of one synthetic
+ * frozen member resolving to the learner's CURRENT play weights, so every opponent
+ * seat plays exactly the net the learner seat plays. Returns null when the learner
+ * has no playable checkpoint yet (fresh-net bootstrap generation) — the caller then
+ * falls back to PFSP. The distinct `-mirror` id keeps self-play out of the real
+ * opponents' PFSP matchStats.
+ */
+export function mirrorOpponents(learner: LeagueMember, count: number): LeagueMember[] | null {
+	const w = playWeights(learner);
+	if (!w) return null;
+	const mirror: LeagueMember = {
+		id: `${learner.id}-mirror`,
+		kind: 'frozen',
+		weightsPath: w,
+		createdGen: learner.createdGen,
+		matchStats: {}
+	};
+	return Array.from({ length: count }, () => mirror);
+}
+
+/**
+ * Opponents for matchup `m` of a generation: a deterministic mirror lineup at the
+ * configured selfPlayFraction (else PFSP). Mirror slots do NOT consume the PFSP
+ * rand stream, so the non-mirror matchups keep pure PFSP draws.
+ */
+export function matchupOpponents(
+	config: LeagueConfig,
+	learner: LeagueMember,
+	members: LeagueMember[],
+	m: number,
+	matchups: number,
+	rand: () => number
+): { opponents: LeagueMember[]; mirror: boolean } {
+	const count = config.seats - 1;
+	if (isMirrorSlot(m, matchups, config.selfPlayFraction ?? 0)) {
+		const mir = mirrorOpponents(learner, count);
+		if (mir) return { opponents: mir, mirror: true };
+		// Fresh-net bootstrap gen: no checkpoint to mirror yet → ordinary PFSP.
+	}
+	return { opponents: sampleOpponents(learner, members, count, config.pfsp, rand), mirror: false };
+}
+
 /** Fold a pool run's summaries into the learner's matchStats; returns pairwise (score, n). */
 function foldSummaries(
 	learner: LeagueMember,
@@ -829,9 +885,11 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		for (const f of readdirSync(laneDir)) {
 			if (/^m-\d+$/.test(f)) rmSync(join(laneDir, f), { recursive: true, force: true });
 		}
+		let mirrorMatchups = 0;
 		const plans = Array.from({ length: matchups }, (_, m) => {
-			const opps = sampleOpponents(learner, state.members, config.seats - 1, config.pfsp, rand);
-			const plan = buildMatchup(config, learner, opps, m, gen, v2Arg, v1SocketArg);
+			const { opponents, mirror } = matchupOpponents(config, learner, state.members, m, matchups, rand);
+			if (mirror) mirrorMatchups += 1;
+			const plan = buildMatchup(config, learner, opponents, m, gen, v2Arg, v1SocketArg);
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
 			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
 			const seeds = Array.from({ length: count }, (_, i) => seed0 + i);
@@ -1023,6 +1081,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			games,
 			samples,
 			opponents: opponentsFaced,
+			...(mirrorMatchups > 0 ? { mirrorMatchups } : {}),
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
 			...(distillMs > 0 ? { distillMs: Math.round(distillMs) } : {}),
