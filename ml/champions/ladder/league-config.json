@@ -1,0 +1,32 @@
+{
+ "_readme": "PHASE 3 ladder league: obs v1.1 (77 floats: killProb/rung-pay/next-rung/breakpoints), dense VP reward (rStep = dVP/30 + dPhi_ascend), --win-bonus 1.0 on true 30-VP finishes, gamma .999, farm-value + reward-pick aux heads ON. Goal: a champion that WINS (>=25 meanVP, >=50% 30-VP finishes), not one that out-places a 7-VP field. Fair-recipe otherwise (random init, PPO, 8 heuristic anchors).",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": ["heur-medium", "heur-hard", "heur-pvphunter"],
+ "lanes": { "main": 1, "mainExploiter": 0, "leagueExploiter": 0 },
+ "laneInit": { "main-0": "random" },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend",
+ "pfsp": { "p": 2, "variant": "squared" },
+ "promoteEvery": 4,
+ "promoteMarginElo": 25,
+ "seedBase": 91000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "train": {
+  "epochs": 4,
+  "extraArgs": ["--placement-coef", "0.3", "--farm-value-coef", "0.25", "--reward-pick-coef", "0.25", "--gamma", "0.999", "--win-bonus", "1.0"]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": ["bash", "scripts/league-gauntlet.sh"],
+ "paths": { "root": "ml/league_ladder" },
+ "workers": 120,
+ "matchupConcurrency": 15
+}
