@@ -614,6 +614,19 @@ interface MatchupPlan {
  * as an in-process v1 lane, but the acting net is a batched-GPU RemotePolicy and
  * weightsPath is left unset (the learner never loads in-process).
  */
+/**
+ * Sampling temperature for generation `gen` (1-indexed). With a `temperatureAnneal`
+ * schedule the temperature moves LINEARLY from `from` at gen 1 to `to` at gen
+ * `overGens`, then holds `to`; without one it is the flat `config.temperature`.
+ */
+export function annealedTemperature(config: LeagueConfig, gen: number): number | undefined {
+	const a = config.temperatureAnneal;
+	if (!a) return config.temperature;
+	const span = Math.max(1, a.overGens - 1); // gen 1 → from, gen overGens → to
+	const frac = Math.min(1, Math.max(0, (gen - 1) / span));
+	return a.from + (a.to - a.from) * frac;
+}
+
 export function buildMatchup(
 	config: LeagueConfig,
 	learner: LeagueMember,
@@ -659,7 +672,7 @@ export function buildMatchup(
 			// v1 socket serves the same obs version as in-process, so value stays valid.
 			selection: viaV2Socket && config.selection === 'value' ? 'hybrid' : config.selection,
 			sample: config.sample,
-			temperature: config.temperature,
+			temperature: annealedTemperature(config, iter),
 			neuralSeats: learnerWeights || viaSocket ? [learnerSeat] : undefined,
 			recordSeats: [learnerSeat],
 			opponentWeights: Object.keys(opponentWeights).length ? opponentWeights : undefined,

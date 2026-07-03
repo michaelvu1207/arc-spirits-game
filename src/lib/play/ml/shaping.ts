@@ -32,6 +32,11 @@ export interface ShapingWeights {
 	 *  DENSE gradient to ASSEMBLE multi-spirit setups whose final payoff (maxBarrier / +1-VP-round)
 	 *  is otherwise invisible to a 1-step scorer until the breakpoint. Optional (defaults to 0). */
 	classProgress?: number;
+	/** Credit for HOLDING face-down (unawakened) spirits — min(1, faceDownCount/7). `awakened`
+	 *  only ever credits face-UP spirits, so a spirit that is summoned but not yet awakened earned
+	 *  zero potential; this term gives it some, so an unawakened Abyss Summon finally counts toward
+	 *  Φ instead of looking like a wasted action. Optional (defaults to 0). */
+	faceDown?: number;
 }
 
 /** Balanced default: modest build guidance toward dice + barrier (the economy core). */
@@ -67,7 +72,14 @@ export const SHAPING_PRESETS: Record<string, ShapingWeights> = {
 	// (~0.1) never overcame the noise, so bots stayed at base barrier 4 / scored 0. Crank them so the
 	// return-to-go (γ→1) credits the setup steps. With effect-aware encoding the net can now SEE+pick them.
 	banker: { dice: 0.05, maxBarrier: 0.35, awakened: 0.15, status: 0, classProgress: 0.4 }, // assemble Cultivators → maxBarrier → kill monsters
-	ascend: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: 0, classProgress: 0.4 } // assemble + awaken VP-class spirits (World Ender +1/round)
+	ascend: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: 0, classProgress: 0.4 }, // assemble + awaken VP-class spirits (World Ender +1/round)
+	// ascend2 (ladder4): the SPIRAL fix. Same build objective as ascend, plus two potential-based
+	// terms: (a) faceDown 0.1 credits an unawakened summon (an Abyss Summon finally earns some Φ
+	// instead of reading as a wasted action), and (b) a NEGATIVE status weight so DESCENDING the
+	// corruption ladder toward Fallen LOSES potential — every corruption step is penalized via the
+	// telescoping ΔΦ. This is Φ-of-state (opposite sign of the deleted live STATUS_SHAPE hack) so it
+	// stays policy-invariant (Ng et al. 1999). `ascend` is left frozen for reproducibility.
+	ascend2: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: -0.25, faceDown: 0.1, classProgress: 0.4 }
 };
 
 export function shapingFor(name: string | undefined): ShapingWeights {
@@ -85,11 +97,19 @@ export function buildPotential(p: PrivatePlayerState | undefined, w: ShapingWeig
 	const dice = Math.min(1, (p.attackDice?.length ?? 0) / 10);
 	const barrier = Math.min(1, (p.maxBarrier ?? 0) / 10);
 	const awakened = Math.min(1, (p.spirits?.filter((s) => !s.isFaceDown).length ?? 0) / 7);
+	const faceDown = Math.min(1, (p.spirits?.filter((s) => s.isFaceDown).length ?? 0) / 7);
 	const status = Math.min(1, (p.statusLevel ?? 0) / 3);
 	const cc = awakenedClassCounts(p);
 	const cultProg = Math.min(1, (cc['Cultivator'] ?? 0) / 5); // progress toward the 5-Cultivator maxBarrier breakpoint
 	const vpClass = Math.min(1, ((cc['World Ender'] ?? 0) + (cc['Golden Ruler'] ?? 0)) / 3); // +1 VP/round classes
-	return w.dice * dice + w.maxBarrier * barrier + w.awakened * awakened + w.status * status + (w.classProgress ?? 0) * (cultProg + vpClass);
+	return (
+		w.dice * dice +
+		w.maxBarrier * barrier +
+		w.awakened * awakened +
+		(w.faceDown ?? 0) * faceDown +
+		w.status * status +
+		(w.classProgress ?? 0) * (cultProg + vpClass)
+	);
 }
 
 /**

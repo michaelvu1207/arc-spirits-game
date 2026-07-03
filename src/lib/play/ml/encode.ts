@@ -229,11 +229,22 @@ export function encodeObs(
 	const combatAllowance = me ? 1 + (me.extraActions?.combat ?? 0) : 0;
 	f.push(clamp01((combatAllowance - combatsUsed) / 2));
 
+	// ── Own-location block (obs v1.2): WHICH destination am I currently resolving? ──
+	// encodeObs previously carried NO own-location feature, so a resolveLocationInteraction
+	// row looked identical whether it belonged to Cyber City or the Arcane Abyss — the net
+	// could not tell which location's interaction it was scoring (e.g. the Abyss Summon vs an
+	// ordinary market row). This mirrors the lockNavigation destination one-hot in encodeAction.
+	// Append-only per the header rule.
+	const myDest = me?.navigationDestination ?? null;
+	const myDestIdx = myDest ? ALL_DESTINATIONS.indexOf(myDest as (typeof ALL_DESTINATIONS)[number]) : -1;
+	for (let i = 0; i < 5; i++) f.push(myDestIdx === i ? 1 : 0); // destination one-hot across ALL_DESTINATIONS
+	f.push(myDest === 'Arcane Abyss' ? 1 : 0); // at-Abyss flag (mirrors lockNavigation encoding)
+
 	return f;
 }
 
 /** Number of features encodeObs emits. Asserted in tests; also written to meta.json. */
-export const OBS_DIM = 77; // v1.1: 62 + 15 ladder forward-value features (Phase 3)
+export const OBS_DIM = 83; // v1.2: 77 + 6 own-location features (destination one-hot + at-Abyss)
 
 // Command-type vocabulary for the action one-hot. Append-only; index is the contract.
 export const COMMAND_VOCAB: GameCommand['type'][] = [

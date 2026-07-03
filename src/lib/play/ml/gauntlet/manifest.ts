@@ -48,7 +48,14 @@ import { createRng, nextInt } from '../../rng';
 // (--win-bonus now actually fires: the `won`/`endRound` fields were stamped but
 // never serialized before, so v6 champions trained with an inert win bonus).
 // The cap-scoring change is eval-visible at cap-end → NEW SCALE vs v6.
-export const GAUNTLET_VERSION = 'gauntlet-v7';
+// v8 = deflect-reflection combat rule (commit a883446: a Golem-of-Wishes deflect
+// now DEALS the deflected damage back to the opponent and fightMonster counts it
+// toward the kill) — this changes combat outcomes ENGINE-WIDE, every kill/PvP
+// resolution can differ + final-scoring-at-cap is now in the training engine — plus
+// the obs v1.2 encoder (OBS_DIM 77 → 83, own-location block): every 77-dim anchor
+// became dim-incompatible (same fate as the 62→78 bump at v5), so the pool is the
+// heuristics until an 83-dim champion is promoted in. NEW SCALE vs v7.
+export const GAUNTLET_VERSION = 'gauntlet-v8';
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;

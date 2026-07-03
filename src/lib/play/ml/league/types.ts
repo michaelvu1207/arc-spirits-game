@@ -165,6 +165,16 @@ export interface LeagueConfig {
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;
 	temperature?: number;
+	/**
+	 * Linear per-generation temperature schedule (overrides the flat `temperature`
+	 * when set). The sampling temperature anneals from `from` at generation 1 to `to`
+	 * at generation `overGens`, then holds `to` for every later generation. Use this to
+	 * end training AT the deployment temperature: a champion sampled at temp 0.65 live
+	 * should have been trained toward that same sharpness, not left at the exploration
+	 * temp 1.0 it warmed up under. gen 1 keeps `from` so the warm-start eval gate is
+	 * unaffected. Both generation and quick-eval matchups anneal together.
+	 */
+	temperatureAnneal?: { from: number; to: number; overGens: number };
 	gamma?: number;
 	train: LeagueTrainConfig;
 	/** Default init checkpoint for learner MAIN lanes (exploiters start fresh).

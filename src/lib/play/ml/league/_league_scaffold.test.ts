@@ -40,6 +40,7 @@ import {
 	winrateVs
 } from './pfsp';
 import {
+	annealedTemperature,
 	buildMatchup,
 	isMirrorSlot,
 	mirrorOpponents,
@@ -509,6 +510,21 @@ describe('v1 socket lanes (unit)', () => {
 		expect(plan.config.inferSocket).toBe('/tmp/v2.sock');
 		expect(plan.config.policyObsVersion).toBe(2);
 		expect(plan.config.obsVersion).toBe(2);
+	});
+
+	it('temperatureAnneal: linear from→to over gens, then holds; flat temperature without a schedule', () => {
+		const flat = { ...defaultConfig('unused'), temperature: 0.9 };
+		expect(annealedTemperature(flat, 1)).toBe(0.9);
+		expect(annealedTemperature(flat, 50)).toBe(0.9);
+
+		const cfg = { ...defaultConfig('unused'), temperature: 0.9, temperatureAnneal: { from: 1.0, to: 0.65, overGens: 40 } };
+		expect(annealedTemperature(cfg, 1)).toBeCloseTo(1.0); // gen 1 = from (warm-start gate unaffected)
+		expect(annealedTemperature(cfg, 40)).toBeCloseTo(0.65); // reaches `to` at overGens
+		expect(annealedTemperature(cfg, 60)).toBeCloseTo(0.65); // holds after
+		expect(annealedTemperature(cfg, 20)).toBeCloseTo(1.0 + (0.65 - 1.0) * (19 / 39)); // linear midpoint
+		// It flows into the actor game config (both generation and eval matchups use buildMatchup).
+		const plan = buildMatchup(cfg, member('main-0', 'main', { weightsPath: 'w.json' }), opps(), 0, 40);
+		expect(plan.config.temperature).toBeCloseTo(0.65);
 	});
 });
 

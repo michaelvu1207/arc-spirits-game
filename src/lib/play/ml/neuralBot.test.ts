@@ -227,15 +227,16 @@ describe('neural value action scoring', () => {
 
 		const obs = encodeObs(state, 'Red', CATALOG);
 		expect(obs).toHaveLength(OBS_DIM);
-		// Class-composition block now sits ahead of the 15 v1.1 ladder features.
-		expect(obs.slice(-22, -15)).toEqual([2 / 7, 1 / 3, 1 / 3, 1 / 3, 0, 0, 0]);
+		// Class-composition block sits ahead of the 15 v1.1 ladder features + 6 v1.2 own-location features.
+		expect(obs.slice(-28, -21)).toEqual([2 / 7, 1 / 3, 1 / 3, 1 / 3, 0, 0, 0]);
 	});
 
 	it('encodes the v1.1 ladder forward-value block (obs 62→77)', () => {
 		const state = atAbyss();
 		const obs = encodeObs(state, 'Red', CATALOG);
 		expect(obs).toHaveLength(OBS_DIM);
-		const block = obs.slice(-15);
+		// The ladder block now sits ahead of the 6 v1.2 own-location features appended after it.
+		const block = obs.slice(-21, -6);
 		const mon = state.monster!;
 		// killProb feature must MATCH the bot helper (no train/serve skew).
 		expect(block[0]).toBeCloseTo(
@@ -250,6 +251,16 @@ describe('neural value action scoring', () => {
 		expect(block[3]).toBeCloseTo(Math.min(1, Math.max(0, (me.barrier - mon.damage + 8) / 16)));
 		// Combat allowance: 1 base swing, none used yet → 1/2.
 		expect(block[14]).toBeCloseTo(1 / 2);
+	});
+
+	it('encodes the v1.2 own-location block (destination one-hot + at-Abyss flag)', () => {
+		// At the Arcane Abyss (ALL_DESTINATIONS index 4): one-hot slot 4 set + at-Abyss flag.
+		const abyss = encodeObs(atAbyss(), 'Red', CATALOG);
+		expect(abyss).toHaveLength(OBS_DIM);
+		expect(abyss.slice(-6)).toEqual([0, 0, 0, 0, 1, 1]);
+		// At a Spirit World location (Floral Patch, index 0): one-hot slot 0, at-Abyss flag clear.
+		const floral = encodeObs(atQuietLocation(), 'Red', CATALOG);
+		expect(floral.slice(-6)).toEqual([1, 0, 0, 0, 0, 0]);
 	});
 
 	it('credits a monster kill for the VP pending in its reward claim', () => {

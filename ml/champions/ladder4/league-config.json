@@ -1,0 +1,69 @@
+{
+ "_readme": "PHASE 3d SPIRAL-FIX cycle (ladder4): the ladder3 tempo recipe (dense VP + placement/farm/reward aux, gamma .999, PPO, 512 games/gen, 60 gens, win-bonus-halflife 8, selfPlayFraction .35) PLUS four changes targeting the corruption->Fallen spiral that Michael beat live: (1) obs v1.2 (OBS_DIM 77->83): an own-location block (destination one-hot + at-Abyss flag) so the net can finally tell WHICH location's interaction row it is scoring (the Arcane Abyss Summon was indistinguishable from any other row); (2) shapingPreset 'ascend2' = ascend + faceDown credit (an unawakened summon earns some potential) + a NEGATIVE status weight (descending the corruption ladder LOSES potential -> the spiral is penalized, policy-invariant Phi-of-state); (3) TEMPERATURE ANNEAL 1.0->0.65 over gens 1-40 then hold, so training ends AT the 0.65 deployment sampling temp; (4) engine now carries deflect-reflection (a883446) + final-scoring-at-cap (96ec2e3). main-0 WARM-STARTS from the ladder3 gen-60 champion expanded 77->83 with zero columns (byte-identical outputs at gen 1) -> gen-1 eval should be STRONG immediately.",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": [
+  "heur-medium",
+  "heur-hard",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "laneInit": {
+  "main-0": "ml/warmstart/ladder4-main0-obs83.json"
+ },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend2",
+ "selfPlayFraction": 0.35,
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 25,
+ "seedBase": 93000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "temperatureAnneal": {
+  "from": 1.0,
+  "to": 0.65,
+  "overGens": 40
+ },
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--farm-value-coef",
+   "0.25",
+   "--reward-pick-coef",
+   "0.25",
+   "--gamma",
+   "0.999",
+   "--win-bonus",
+   "1.0",
+   "--win-bonus-halflife",
+   "8"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_ladder4"
+ },
+ "workers": 120,
+ "matchupConcurrency": 15
+}

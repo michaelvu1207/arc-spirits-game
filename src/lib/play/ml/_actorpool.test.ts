@@ -21,6 +21,23 @@ import type { ActorGameConfig, GameSummary } from './poolTypes';
 const WEIGHTS = resolve(process.cwd(), 'src/lib/play/ml/policy-weights.json');
 const RUN_BENCH = process.env.POOL === '1';
 
+/**
+ * The live policy-weights.json only serves as an optional neural fixture while its
+ * obs_dim matches the CURRENT encoder. During an encoder bump the shipped champion
+ * lags the new OBS_DIM (it is reshipped after the next cycle's pace bars), so a
+ * dim-mismatched file falls back to heuristic-only — exactly like an absent one —
+ * instead of tripping net.ts's strict dim guard.
+ */
+function neuralFixture(): string | undefined {
+	if (!existsSync(WEIGHTS)) return undefined;
+	try {
+		return (JSON.parse(readFileSync(WEIGHTS, 'utf8')) as { obs_dim?: number }).obs_dim === OBS_DIM ? WEIGHTS : undefined;
+	} catch {
+		return undefined;
+	}
+}
+const NEURAL_WEIGHTS = neuralFixture();
+
 /** Collapse a summary to the outcome fields that must be identical across worker counts. */
 function outcomeKey(s: GameSummary): string {
 	return JSON.stringify({
@@ -46,7 +63,7 @@ describe('actor pool', () => {
 			profiles: ['pvphunter', 'medium', 'aggressive', 'hard'],
 			// Exercise the neural path when a checkpoint is available (the shipping config);
 			// fall back to heuristic-only so the guarantee is still tested without weights.
-			...(existsSync(WEIGHTS) ? { weightsPath: WEIGHTS, selection: 'hybrid' as const } : {})
+			...(NEURAL_WEIGHTS ? { weightsPath: NEURAL_WEIGHTS, selection: 'hybrid' as const } : {})
 		};
 		const dirA = tempDir('det1');
 		const dirB = tempDir('det4');
@@ -84,7 +101,7 @@ describe('actor pool', () => {
 			maxRounds: 40,
 			profiles: ['pvphunter', 'medium', 'aggressive', 'hard'],
 			obsVersion: 2,
-			...(existsSync(WEIGHTS) ? { weightsPath: WEIGHTS, selection: 'hybrid' as const } : {})
+			...(NEURAL_WEIGHTS ? { weightsPath: NEURAL_WEIGHTS, selection: 'hybrid' as const } : {})
 		};
 		const dir = tempDir('v2');
 		try {
