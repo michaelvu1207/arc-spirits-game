@@ -35,6 +35,11 @@ export interface ActorGameConfig {
 	recordSeats?: SeatColor[];
 	/** League play: per-seat opponent checkpoint weight files (seat plays its own policy, greedy, unrecorded). */
 	opponentWeights?: Partial<Record<SeatColor, string>>;
+	/** Sampling temperature for opponentWeights seats (default 0 = greedy, historical/bit-parity).
+	 *  > 0 makes opponents sample — breaks argmax-clone collision when several opponent seats share
+	 *  one checkpoint (mirror/self-play/exploiter), so measurements/training aren't dominated by
+	 *  clones self-sabotaging. Deployment temp is 0.65. */
+	opponentTemperature?: number;
 	/**
 	 * Expert-iteration Gumbel search during generation. Searched decisions (nav +
 	 * encounter, learner seats) play the search result and record `pi` — the

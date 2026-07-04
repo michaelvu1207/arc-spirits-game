@@ -676,6 +676,7 @@ export function buildMatchup(
 			neuralSeats: learnerWeights || viaSocket ? [learnerSeat] : undefined,
 			recordSeats: [learnerSeat],
 			opponentWeights: Object.keys(opponentWeights).length ? opponentWeights : undefined,
+			...(config.opponentTemperature ? { opponentTemperature: config.opponentTemperature } : {}),
 			// Expert iteration: learner-seat decisions get Gumbel search + recorded pi
 			// (in-process lanes only — the searcher needs the local net for rollouts, so
 			// socket lanes never carry search; the manager also skips the socket for them).

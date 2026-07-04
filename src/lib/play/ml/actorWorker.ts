@@ -137,6 +137,7 @@ export function runActorGames(
 				temperature: config.temperature,
 				selection: config.selection,
 				opponentPolicies,
+				opponentTemperature: config.opponentTemperature,
 				forbidTypes,
 				maxStatusLevel: config.maxStatusLevel,
 				gamma: config.gamma,

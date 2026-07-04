@@ -170,10 +170,16 @@ export interface RecordGameOptions {
 	 * League play: per-seat opponent policies. A seat listed here is driven by ITS OWN policy
 	 * (a sampled past checkpoint / exploiter), instead of `opts.policy` or a heuristic — so the
 	 * learner trains against a diverse, strong, self-generated field rather than one weak bot.
-	 * Opponent seats always play greedily (no recording). The learner seat(s) still use
-	 * `opts.policy` + `recordSeats`.
+	 * Opponent seats play greedily by default (no recording); `opponentTemperature` > 0 makes
+	 * them SAMPLE instead. The learner seat(s) still use `opts.policy` + `recordSeats`.
 	 */
 	opponentPolicies?: Partial<Record<SeatColor, NeuralPolicy>>;
+	/** Sampling temperature for opponentPolicies seats. Default 0 = greedy (argmax) — the
+	 *  historical behavior, kept for bit-parity. > 0 makes opponents sample at this temperature,
+	 *  which is what breaks the argmax-clone-collision artifact when several opponent seats share
+	 *  one checkpoint (mirror/self-play/exploiter fields): greedy clones make identical moves and
+	 *  self-sabotage, so a measurement against them is not a real strength/exploitability test. */
+	opponentTemperature?: number;
 	/** Reward-shaping weights for the progress potential Φ (default BALANCED). Drives the
 	 *  per-decision return-to-go; vary across a population for diverse playstyles. */
 	shaping?: ShapingWeights;
@@ -538,7 +544,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			opts.policyObsVersion === 2 && !oppPolicy && opts.policy
 				? withFixedObs(seatPolicy, flatV2!)
 				: seatPolicy;
-		const sample = oppPolicy ? false : opts.sample;
+		// Opponents: greedy by default (opponentTemperature 0), else sample at opponentTemperature.
+		const oppTemp = opts.opponentTemperature ?? 0;
+		const sample = oppPolicy ? oppTemp > 0 : opts.sample;
+		const pickTemperature = oppPolicy ? oppTemp : opts.temperature;
 		const willRecord = cands.length > 1 && recordSet.has(seat) && !oppPolicy;
 		// PPO behavior probs are fetched BEFORE selection: for a RemotePolicy this makes
 		// the FULL candidate set the cached response, so selection's (possibly progress-
@@ -561,7 +570,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 								state,
 								seat,
 								withNext,
-								{ sample, temperature: opts.temperature, rand },
+								{ sample, temperature: pickTemperature, rand },
 								catalog
 							)
 						: opts.selection === 'value'
@@ -570,7 +579,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 									state,
 									seat,
 									withNext,
-									{ sample, temperature: opts.temperature, rand },
+									{ sample, temperature: pickTemperature, rand },
 									catalog
 								)
 							: hybridIndex(
@@ -578,7 +587,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 									state,
 									seat,
 									withNext,
-									{ sample, temperature: opts.temperature, rand },
+									{ sample, temperature: pickTemperature, rand },
 									catalog
 								);
 		if (willRecord) {

@@ -175,6 +175,12 @@ export interface LeagueConfig {
 	/** BOT_PROFILES names cycled across the opponent seats of a heuristic-field matchup
 	 *  (default ['paragon','insane']). Only used when heuristicOpponentFraction > 0. */
 	heuristicOpponentProfiles?: string[];
+	/** Sampling temperature for checkpoint opponent seats (mirror/PFSP/exploiter fields), default
+	 *  0 = greedy (historical, bit-parity). > 0 (e.g. 0.65) makes them sample, which breaks the
+	 *  argmax-clone-collision artifact where several opponent seats sharing one checkpoint make
+	 *  identical greedy moves and self-sabotage — so the learner's "contention" is real contested
+	 *  play, not clones colliding. Heuristic-profile opponents are unaffected (they RNG already). */
+	opponentTemperature?: number;
 	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
 	shapingPreset?: string;
 	selection: 'hybrid' | 'value' | 'policy';
