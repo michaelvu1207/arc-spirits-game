@@ -673,7 +673,16 @@ export function buildMatchup(
 			selection: viaV2Socket && config.selection === 'value' ? 'hybrid' : config.selection,
 			sample: config.sample,
 			temperature: annealedTemperature(config, iter),
-			neuralSeats: learnerWeights || viaSocket ? [learnerSeat] : undefined,
+			// Checkpoint-opponent seats must be neural too, else the driver routes them to
+			// applyHeuristic (medium) and their opponentPolicies net never plays — every
+			// frozen/PFSP/mirror opponent was a medium bot before this. Heuristic-profile
+			// opponents stay OUT (they play their profile via `profiles`). recordSeats keeps
+			// the learner only, and willRecord already excludes oppPolicy seats, so opponents
+			// are still never recorded/trained on.
+			neuralSeats:
+				learnerWeights || viaSocket
+					? ([learnerSeat, ...(Object.keys(opponentWeights) as SeatColor[])] as SeatColor[])
+					: undefined,
 			recordSeats: [learnerSeat],
 			opponentWeights: Object.keys(opponentWeights).length ? opponentWeights : undefined,
 			...(config.opponentTemperature ? { opponentTemperature: config.opponentTemperature } : {}),

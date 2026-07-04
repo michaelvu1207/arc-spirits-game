@@ -440,8 +440,13 @@ describe('v2 lanes (unit)', () => {
 		expect(plan.config.policyObsVersion).toBe(2);
 		expect(plan.config.obsVersion).toBe(2);
 		expect(plan.config.weightsPath).toBeUndefined(); // learner never loads in-process
-		expect(plan.config.neuralSeats).toEqual([plan.learnerSeat]);
-		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
+		// Checkpoint-opponent seats must be neural too, or the driver routes them to the
+		// medium heuristic and their net never plays (the medium-opponent bug). frozen-a is
+		// the only checkpoint opponent here; the two heuristic-profile seats stay out.
+		const ckptSeats = Object.keys(plan.config.opponentWeights ?? {});
+		expect(ckptSeats).toHaveLength(1);
+		expect(plan.config.neuralSeats).toEqual([plan.learnerSeat, ...ckptSeats]);
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]); // only the learner is recorded
 		// Opponents still load in-process (frozen JSON) / by profile.
 		expect(Object.values(plan.config.opponentWeights ?? {})).toHaveLength(1);
 
@@ -460,6 +465,29 @@ describe('v2 lanes (unit)', () => {
 		expect(v1.config.policyObsVersion).toBeUndefined();
 		expect(v1.config.inferSocket).toBeUndefined();
 		expect(v1.config.weightsPath).toBe(resolve('w.json'));
+	});
+
+	it('buildMatchup v1: checkpoint-opponent seats are neural, profile seats are not (medium-opponent bug regression)', () => {
+		// The bug: buildMatchup emitted neuralSeats = [learnerSeat] only, so checkpoint
+		// opponents (frozen/PFSP/mirror) fell through the driver's neuralSet gate to the
+		// medium heuristic and their net never played. Every ladder2-5 trained vs medium.
+		const config = defaultConfig('unused');
+		const learner = member('main-0', 'main', { weightsPath: 'w.json' });
+		const opps = [
+			member('frozen-a', 'frozen', { weightsPath: 'a.json' }),
+			member('heur-medium', 'heuristic', { profile: 'medium' }),
+			member('frozen-b', 'frozen', { weightsPath: 'b.json' })
+		];
+		const plan = buildMatchup(config, learner, opps, 0, 1);
+		const ckptSeats = Object.keys(plan.config.opponentWeights ?? {});
+		expect(ckptSeats).toHaveLength(2); // two frozen opponents → two checkpoint seats
+		// neuralSeats = learner + every checkpoint-opponent seat, and nothing else.
+		expect(new Set(plan.config.neuralSeats)).toEqual(new Set([plan.learnerSeat, ...ckptSeats]));
+		// The heuristic-profile seat stays OUT (it plays its profile, not a net).
+		const heurSeat = plan.oppBySeat.find(([, m]) => m.profile)![0];
+		expect(plan.config.neuralSeats).not.toContain(heurSeat);
+		// Only the learner is recorded/trained on — opponents are never recorded.
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
 	});
 
 	it('buildMatchup v2 clamps value-selection to hybrid (policyObsVersion 2 constraint)', () => {
@@ -490,7 +518,12 @@ describe('v1 socket lanes (unit)', () => {
 		expect(plan.config.policyObsVersion).toBeUndefined(); // stays v1
 		expect(plan.config.obsVersion).toBeUndefined(); // stays v1
 		expect(plan.config.weightsPath).toBeUndefined(); // learner plays the socket, not in-process
-		expect(plan.config.neuralSeats).toEqual([plan.learnerSeat]);
+		// The socket learner AND every checkpoint-opponent seat are neural (the frozen opponent
+		// still loads its net in-process); heuristic-profile seats stay out. See the
+		// medium-opponent bug regression above.
+		const ckptSeats = Object.keys(plan.config.opponentWeights ?? {});
+		expect(ckptSeats).toHaveLength(1);
+		expect(plan.config.neuralSeats).toEqual([plan.learnerSeat, ...ckptSeats]);
 		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
 		// Opponents still load their own in-process weights / profiles.
 		expect(Object.values(plan.config.opponentWeights ?? {})).toHaveLength(1);
