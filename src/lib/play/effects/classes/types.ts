@@ -32,7 +32,10 @@ export type ClassAbility = { on: EffectTrigger } & (
  * `CLASS_DECISIONS`, which `decisions.ts` exposes as the runtime `DECISION_RESOLVERS`
  * map. Colocating a resolver with its ability keeps each "may" choice in one file.
  */
-export type ClassDecisions = Record<string, (ctx: EffectContext, optionId: string) => void>;
+export type ClassDecisions = Record<
+	string,
+	(ctx: EffectContext, optionId: string, selectedInstanceIds?: string[]) => void
+>;
 
 /** The shape each `classes/<name>.ts` module exports (decisions optional). */
 export interface ClassModule {

@@ -84,7 +84,11 @@
 		 *  = chosen relic index (into the 5 relics) per Cursed Spirit Corrupt unit. */
 		onClaimAwakenReward: (taintedPotential: number, relicPicks: number[]) => void;
 		/** Resolve an opt-in/choice ability card (Purifier class pick, etc.). */
-		onResolveDecision: (decisionId: string, optionId: string) => void;
+		onResolveDecision: (
+			decisionId: string,
+			optionId: string,
+			selectedInstanceIds?: string[]
+		) => void;
 		/** Dismiss a hand-resolved (manual) prompt. */
 		onDismissManual: (id: string) => void;
 		/** Place a chosen Spirit Augment (class) onto a spirit (in-stage placement). */
@@ -282,6 +286,35 @@
 		pickingSlot = null;
 		pickedIdx = [];
 	}
+
+	// Arc Mage convert: the owner clicks exactly 4 attack dice to spend, then confirms
+	// → gain 1 Arcane. A picker embedded in the decision card so an Arcane is never
+	// spent by accident. Done once per cultivate.
+	const ARC_MAGE_CONVERT_COST = 4;
+	let arcMagePick = $state<string[]>([]);
+	function isArcMageDecision(kind: string): boolean {
+		return kind === 'arcMageTrade';
+	}
+	function toggleArcMageDie(instanceId: string) {
+		if (arcMagePick.includes(instanceId))
+			arcMagePick = arcMagePick.filter((id) => id !== instanceId);
+		else if (arcMagePick.length < ARC_MAGE_CONVERT_COST) arcMagePick = [...arcMagePick, instanceId];
+	}
+	function confirmArcMage(decisionId: string) {
+		if (arcMagePick.length !== ARC_MAGE_CONVERT_COST) return;
+		onResolveDecision(decisionId, 'yes', arcMagePick);
+		arcMagePick = [];
+	}
+	function declineArcMage(decisionId: string) {
+		onResolveDecision(decisionId, 'no');
+		arcMagePick = [];
+	}
+	// Drop stale selections if the decision clears or dice change out from under it.
+	$effect(() => {
+		const owned = new Set((myPlayer?.attackDice ?? []).map((d) => d.instanceId));
+		if (arcMagePick.some((id) => !owned.has(id)))
+			arcMagePick = arcMagePick.filter((id) => owned.has(id));
+	});
 	const heldRunes = $derived((myPlayer?.mats ?? []).filter((r) => r.hasRune));
 	const runeOverLimit = $derived(heldRunes.length > RUNE_CARRY_LIMIT);
 
@@ -694,18 +727,59 @@
 						{#each awakeningChoices as choice (choice.id)}
 							<section class="scene-panel decision-panel" data-testid={`decision-${choice.id}`}>
 								<p class="scene-prompt">{choice.prompt}</p>
-								<div class="choice-opts" role="group" aria-label="Choose an option">
-									{#each choice.options as option (option.id)}
-										<button
-											type="button"
-											class="opt-btn"
-											class:decline={option.id === 'no'}
-											data-testid={`decision-${choice.id}-${option.id}`}
-											disabled={busy}
-											onclick={() => onResolveDecision(choice.id, option.id)}>{option.label}</button
-										>
-									{/each}
-								</div>
+								{#if isArcMageDecision(choice.kind)}
+									<div class="arc-convert" data-testid={`arc-convert-${choice.id}`}>
+										<div class="infil-dice" class:hasPick={arcMagePick.length > 0}>
+											{#if (myPlayer?.attackDice.length ?? 0) === 0}
+												<span class="scene-note">No attack dice</span>
+											{/if}
+											{#each myPlayer?.attackDice ?? [] as die (die.instanceId)}
+												<button
+													type="button"
+													class="die-token"
+													class:selected={arcMagePick.includes(die.instanceId)}
+													style="--tier: {TIER_COLOR[die.tier]}"
+													disabled={busy}
+													data-testid={`arc-die-${die.instanceId}`}
+													onclick={() => toggleArcMageDie(die.instanceId)}
+												>
+													{TIER_LABEL[die.tier]}
+												</button>
+											{/each}
+										</div>
+										<div class="choice-opts" role="group" aria-label="Convert dice">
+											<button
+												type="button"
+												class="opt-btn"
+												data-testid={`decision-${choice.id}-yes`}
+												disabled={busy || arcMagePick.length !== ARC_MAGE_CONVERT_COST}
+												onclick={() => confirmArcMage(choice.id)}
+												>Convert ({arcMagePick.length}/{ARC_MAGE_CONVERT_COST}) → 1 Arcane</button
+											>
+											<button
+												type="button"
+												class="opt-btn decline"
+												data-testid={`decision-${choice.id}-no`}
+												disabled={busy}
+												onclick={() => declineArcMage(choice.id)}>No</button
+											>
+										</div>
+									</div>
+								{:else}
+									<div class="choice-opts" role="group" aria-label="Choose an option">
+										{#each choice.options as option (option.id)}
+											<button
+												type="button"
+												class="opt-btn"
+												class:decline={option.id === 'no'}
+												data-testid={`decision-${choice.id}-${option.id}`}
+												disabled={busy}
+												onclick={() => onResolveDecision(choice.id, option.id)}
+												>{option.label}</button
+											>
+										{/each}
+									</div>
+								{/if}
 							</section>
 						{/each}
 					</div>
@@ -1890,6 +1964,15 @@
 			flex-wrap: wrap;
 			justify-content: center;
 			gap: 0.5rem;
+		}
+		.arc-convert {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 0.7rem;
+		}
+		.arc-convert .infil-dice {
+			justify-content: center;
 		}
 		.opt-btn {
 			flex: 0 1 auto;

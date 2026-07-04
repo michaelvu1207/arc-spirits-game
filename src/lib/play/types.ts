@@ -1063,7 +1063,18 @@ export type GameCommand =
 	| { type: 'resolveAwakenReward'; taintedMaxBarrier?: number; relicPicks?: number[] }
 	| { type: 'forceAdvancePhase' }
 	| { type: 'dismissManualPrompt'; id: string }
-	| { type: 'resolveDecision'; decisionId: string; optionId: string }
+	/**
+	 * Resolve a pending class decision. `selectedInstanceIds` is an optional payload
+	 * for picker-style decisions (e.g. Arc Mage choosing WHICH 4 attack dice to
+	 * convert); plain Yes/No decisions ignore it, and bots that omit it fall back to
+	 * the resolver's auto-pick.
+	 */
+	| {
+			type: 'resolveDecision';
+			decisionId: string;
+			optionId: string;
+			selectedInstanceIds?: string[];
+	  }
 	/**
 	 * Flip a face-down spirit face-up, paying its awaken cost. `runeInstanceIds`
 	 * disambiguates which rune copies pay a `rune_cost`; `discardRefs` lets the

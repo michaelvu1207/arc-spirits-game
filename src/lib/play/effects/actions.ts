@@ -284,6 +284,14 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			if (discarded > 0) log.push(`Discarded ${discarded} attack dice.`);
 			break;
 		}
+		case 'discardAttackDiceByIds': {
+			const remove = new Set(action.instanceIds);
+			const before = player.attackDice.length;
+			player.attackDice = player.attackDice.filter((d) => !remove.has(d.instanceId));
+			const discarded = before - player.attackDice.length;
+			if (discarded > 0) log.push(`Discarded ${discarded} attack dice.`);
+			break;
+		}
 		case 'conditional': {
 			const branch = evalCondition(ctx, action.when) ? action.then : action.else ?? [];
 			for (const next of branch) runAction(ctx, next, multiplier);

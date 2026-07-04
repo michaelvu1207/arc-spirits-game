@@ -11,6 +11,9 @@
 import type { EffectContext } from './context';
 import { CLASS_DECISIONS } from './abilities';
 
-export const DECISION_RESOLVERS: Record<string, (ctx: EffectContext, optionId: string) => void> = {
+export const DECISION_RESOLVERS: Record<
+	string,
+	(ctx: EffectContext, optionId: string, selectedInstanceIds?: string[]) => void
+> = {
 	...CLASS_DECISIONS
 };

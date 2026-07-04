@@ -63,6 +63,8 @@ export type EffectAction =
 	| { kind: 'setStunImmune' }
 	/** Discard up to `amount` attack dice (cost half of a discard-to-gain trade). */
 	| { kind: 'discardAttackDice'; amount: number }
+	/** Discard specific attack dice by instance id (Arc Mage's player-chosen convert). */
+	| { kind: 'discardAttackDiceByIds'; instanceIds: string[] }
 	// ── P4 kinds (Combat-trigger coverage) ───────────────────────────────────
 	/**
 	 * Add combat damage equal to the player's current broken barrier, capped at

@@ -1,15 +1,18 @@
+import { DICE_TIER_ORDER } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Arc Mage — "When you cultivate, you may discard 4 attack dice to gain 1 Arcane
-// Attack Dice." (CHANGED: was 3 → now 4.) Gated on ≥4 dice, then an opt-in Yes/No
-// card (`arcMageTrade`). REPEATABLE: each Yes re-offers the choice while the player
-// still holds ≥4 dice, so they can convert multiple sets in one cultivate.
+// Attack Dice." (CHANGED: was 3 → now 4.) Gated on ≥4 dice, then an opt-in
+// `arcMageTrade` card. The owner PICKS which 4 dice to spend (client sends their
+// instance ids) so they never lose an Arcane die by accident; bots (and any
+// resolve that omits a pick) auto-spend the 4 lowest-value dice. Done ONCE per
+// cultivate — no re-offer loop.
 const TRADE_COST = 4;
 
 const tradePrompt = `When you cultivate, you may discard ${TRADE_COST} attack dice to gain 1 Arcane Attack Dice.`;
 const tradeOptions = [
-	{ id: 'yes', label: `Discard ${TRADE_COST} dice → 1 Arcane` },
+	{ id: 'yes', label: `Convert ${TRADE_COST} dice → 1 Arcane` },
 	{ id: 'no', label: 'No' }
 ];
 
@@ -38,22 +41,30 @@ export const ability: ClassAbility[] = [
 	}
 ];
 
-// Colocated resolver for the opt-in Yes/No card. On Yes, discard 4 → gain 1 Arcane,
-// then re-offer the choice if the player still holds ≥4 dice (repeatable). The
-// runtime removes the just-resolved decision by id AFTER this runs, so the freshly
-// enqueued `choose` (new id) survives and surfaces as the next decision card.
+// Colocated resolver for the opt-in card. On Yes, discard the chosen 4 dice → gain
+// 1 Arcane. The owner's client sends `selectedInstanceIds` (the 4 dice they clicked);
+// when absent or invalid (bots, or a malformed pick) we auto-spend the 4 LOWEST-value
+// dice so an Arcane is never wasted. Fires ONCE per cultivate — no re-offer loop.
 export const decisions: ClassDecisions = {
-	arcMageTrade(ctx, optionId) {
+	arcMageTrade(ctx, optionId, selectedInstanceIds) {
 		if (optionId !== 'yes') return;
-		runAction(ctx, { kind: 'discardAttackDice', amount: TRADE_COST });
+		const dice = ctx.player.attackDice;
+		if (dice.length < TRADE_COST) return;
+
+		const owned = new Set(dice.map((d) => d.instanceId));
+		const picked = [...new Set(selectedInstanceIds ?? [])].filter((id) => owned.has(id));
+
+		const ids =
+			picked.length === TRADE_COST
+				? picked
+				: [...dice]
+						.sort(
+							(a, b) => DICE_TIER_ORDER.indexOf(a.tier) - DICE_TIER_ORDER.indexOf(b.tier)
+						)
+						.slice(0, TRADE_COST)
+						.map((d) => d.instanceId);
+
+		runAction(ctx, { kind: 'discardAttackDiceByIds', instanceIds: ids });
 		runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: 1 });
-		if (ctx.player.attackDice.length >= TRADE_COST) {
-			runAction(ctx, {
-				kind: 'choose',
-				decisionKind: 'arcMageTrade',
-				prompt: tradePrompt,
-				options: tradeOptions
-			});
-		}
 	}
 };

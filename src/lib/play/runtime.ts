@@ -2076,7 +2076,7 @@ export function applyGameCommand(
 					traitCount: 0,
 					catalog
 				});
-				resolver(ctx, command.optionId);
+				resolver(ctx, command.optionId, command.selectedInstanceIds);
 			}
 			// Abyss Summoner (Florality): Yes starts an Abyss draw (3 → summon 1) flagged
 			// autoAwaken, so the summoned spirit flips + awakens in spawnHandSpirit. Driven

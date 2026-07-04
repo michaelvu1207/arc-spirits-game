@@ -816,8 +816,13 @@
 	function discardRune(slotIndex: number) {
 		send('discard-rune', { type: 'discardRune', slotIndex });
 	}
-	function resolveDecision(decisionId: string, optionId: string) {
-		send('resolve-decision', { type: 'resolveDecision', decisionId, optionId });
+	function resolveDecision(decisionId: string, optionId: string, selectedInstanceIds?: string[]) {
+		send('resolve-decision', {
+			type: 'resolveDecision',
+			decisionId,
+			optionId,
+			...(selectedInstanceIds ? { selectedInstanceIds } : {})
+		});
 	}
 	function dismissManual(id: string) {
 		send('dismiss-manual', { type: 'dismissManualPrompt', id });
