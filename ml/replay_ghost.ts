@@ -130,7 +130,10 @@ interface ReplayBase {
 function replayVerbatim(events: EventRow[], catalog: PlayCatalog): ReplayBase {
 	const seats = seatMap(events);
 	const hostMemberId = events[0]!.actor_member_id; // first claimSeat = room creator/host
-	const roomCode = 'U94RP3';
+	// The engine seed derives from the room code (hashString(roomCode) at startGame),
+	// so replaying a different room REQUIRES its real code. ARC_REPLAY_ROOM overrides;
+	// default is the original U94RP3 benchmark game.
+	const roomCode = process.env.ARC_REPLAY_ROOM ?? 'U94RP3';
 	let state = createLobbyState({
 		roomCode,
 		guardianNames: catalog.guardians.map((g) => g.name)
@@ -244,7 +247,33 @@ function runCf(
 		JSON.parse(readFileSync(eventsPath, 'utf8')) as EventRow[],
 		catalog
 	);
-	if (base.rejects.length > 0) {
+	// ARC_REPLAY_HISTORY_JSON=<final_state.json>: take the ghost's per-round line from
+	// the RECORDED snapshot's vpHistory instead of the re-derived replay. Needed when
+	// the engine's rules moved since the game was played (the replay legally forks —
+	// e.g. the deflect-reflection rule turning a recorded near-miss into a kill), which
+	// makes the re-derived line invalid but leaves the real scoreboard authoritative.
+	// Pace mode never replays the ghost's commands, so base rejects are tolerable here.
+	const historyJson = process.env.ARC_REPLAY_HISTORY_JSON;
+	if (historyJson && pace) {
+		const snapRaw = JSON.parse(readFileSync(historyJson, 'utf8'));
+		const snap = (snapRaw.state ?? snapRaw) as PublicGameState;
+		const ghostSeatFromHost = base.seats.get(base.hostMemberId)!;
+		const p = snap.players[ghostSeatFromHost];
+		if (!p?.vpHistory) throw new Error('history snapshot has no vpHistory for the ghost seat');
+		base.ghostHistory.clear();
+		p.vpHistory.forEach((vp, i) => {
+			base.ghostHistory.set(i + 1, {
+				vp,
+				status: p.statusLevel ?? 0,
+				corruptions: p.corruptionCount ?? 0
+			});
+		});
+		if (base.rejects.length > 0) {
+			console.log(
+				`[pace] base replay forked at ${base.rejects.length} rows (rules drift) — using recorded vpHistory`
+			);
+		}
+	} else if (base.rejects.length > 0) {
 		throw new Error(`base replay rejected ${base.rejects.length} rows — fix before counterfactuals`);
 	}
 	const seats = base.seats;
@@ -269,7 +298,7 @@ function runCf(
 		const rand = mulberry32(0xa5f00d + run);
 		// identical setup: claimSeat/selectGuardian/startGame verbatim
 		let state = createLobbyState({
-			roomCode: 'U94RP3',
+			roomCode: process.env.ARC_REPLAY_ROOM ?? 'U94RP3',
 			guardianNames: catalog.guardians.map((g) => g.name)
 		});
 		for (const row of eventsMaster) {
