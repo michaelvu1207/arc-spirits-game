@@ -1,0 +1,33 @@
+{
+ "pending_human_layers": [
+  "michael-20-games",
+  "bc-of-human-response-training"
+ ],
+ "gauntlet": {
+  "version": "gauntlet-v8",
+  "elo": 951,
+  "winRate": 0.98875,
+  "meanVP": 28.5725
+ },
+ "exploiter": {
+  "verdict": "PASS",
+  "eloGainEstimate": -676,
+  "thresholdElo": 50.0,
+  "budgetGens": 16
+ },
+ "collusion": {
+  "score_vs_2_hunters": 0.98,
+  "score_vs_1_hunter": 0.9883333333333332,
+  "games": [
+   200,
+   200
+  ],
+  "drop": 0.008333333333333193,
+  "note": "large drop = coordinated pair exploits the candidate; compare to how heuristics degrade"
+ },
+ "mirror": {
+  "red_seat_score": 0.54,
+  "games": 200,
+  "note": "expected ~0.5; large deviation = seat-order pathology"
+ }
+}

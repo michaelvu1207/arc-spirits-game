@@ -1,0 +1,69 @@
+{
+ "_readme": "PHASE 3d ENGINE-POWER cycle (ladder5): IDENTICAL to ladder4 (same 83-dim gen-60 warm start, temp anneal 1.0->0.65 over 40 gens, dense VP + placement/farm/reward aux, gamma .999, PPO, 512 games/gen, 60 gens, win-bonus-halflife 8, selfPlayFraction .35, obs v1.2, deflect+final-cap engine, gauntlet-v8) EXCEPT shapingPreset='ascend3'. Michael's correction: the corruption->Fallen spiral is a SYMPTOM, not the disease — corrupting is a legitimate line when the engine backs it; the real deficit is ATTACK POWER (the bot fights with a far weaker dice pool than a strong player, so fights fail and corruptions pay nothing). ascend3 = ascend2 minus the status penalty (status 0) plus attackPower 0.3 = w*clamp01(expectedAttack/20) crediting the dice-pool expected roll; keeps faceDown 0.1; awakened lowered 0.35->0.25 to hold total Phi ~O(1). ladder4 (ascend2, status -0.25) is the ABLATION arm. Both champions hand off for pace tests.",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": [
+  "heur-medium",
+  "heur-hard",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "laneInit": {
+  "main-0": "ml/warmstart/ladder4-main0-obs83.json"
+ },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend3",
+ "selfPlayFraction": 0.35,
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 25,
+ "seedBase": 94000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "temperatureAnneal": {
+  "from": 1.0,
+  "to": 0.65,
+  "overGens": 40
+ },
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--farm-value-coef",
+   "0.25",
+   "--reward-pick-coef",
+   "0.25",
+   "--gamma",
+   "0.999",
+   "--win-bonus",
+   "1.0",
+   "--win-bonus-halflife",
+   "8"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_ladder5"
+ },
+ "workers": 120,
+ "matchupConcurrency": 15
+}
