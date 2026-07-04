@@ -10,7 +10,6 @@
 	import { expectedAttack } from '$lib/play/combat';
 	import { augmentContributions } from '$lib/play/augments';
 	import { seatAccent, storageUrl, spiritBackImageUrl, iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
-	import RankEmblem from './RankEmblem.svelte';
 
 	interface Props {
 		room: SpectatorProjection;
@@ -339,7 +338,6 @@
 				<span class="hero-status" style="--sc: {me.statusColor}">{me.statusLabel}</span>
 
 				<div class="ladder" style="--rank-accent: {cosmetics.rank.accent}">
-					<RankEmblem rankId={cosmetics.rank.id} size="lg" label="{cosmetics.rank.name} rank" />
 					<span class="ladder-name">{promotedTo ? `Promoted to ${promotedTo.name}` : cosmetics.rank.name}</span>
 					<span class="ladder-xp">{cosmetics.progression.rankXp} ladder XP</span>
 				</div>

@@ -4,7 +4,6 @@
 	import { fetchMy2DRating, type Rating2DRow } from '$lib/supabase';
 	import { getCosmeticsState } from '$lib/stores/cosmetics.svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
-	import RankEmblem from './RankEmblem.svelte';
 	import StatCell from './screens/StatCell.svelte';
 	import MatchHistoryOverlay from './MatchHistoryOverlay.svelte';
 
@@ -110,10 +109,6 @@
 		goto('/play/records');
 	}
 
-	function goShop() {
-		click();
-		goto('/play/shop');
-	}
 </script>
 
 <svelte:window
@@ -168,7 +163,6 @@
 
 				<div class="stats">
 					<div class="wallet-stat">
-						<RankEmblem rankId={cosmetics.rank.id} label="{cosmetics.rank.name} rank" />
 						<div>
 							<span>{cosmetics.rank.name}</span>
 							<small>{cosmetics.progression.credits} Credits</small>
@@ -186,11 +180,6 @@
 				</div>
 
 				<nav class="actions" aria-label="Profile actions">
-					<button class="act" type="button" onclick={goShop} onpointerenter={hover}>
-						<span class="gem" aria-hidden="true"></span>
-						<span class="lbl">Abyss Market</span>
-						<span class="go" aria-hidden="true">→</span>
-					</button>
 					<button class="act" type="button" onclick={openHistory} onpointerenter={hover}>
 						<span class="gem" aria-hidden="true"></span>
 						<span class="lbl">Past Games</span>

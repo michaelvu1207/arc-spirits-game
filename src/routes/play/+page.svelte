@@ -279,14 +279,6 @@
 					</a>
 					<a
 						class="row link"
-						href="/play/shop"
-						onpointerenter={hover}
-						onclick={() => playMenuSfx('ui-click')}
-					>
-						<span class="gem"></span><span class="lbl">Abyss Market</span><span class="go">→</span>
-					</a>
-					<a
-						class="row link"
 						href="/play/builder"
 						onpointerenter={hover}
 						onclick={() => playMenuSfx('ui-click')}
