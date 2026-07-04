@@ -569,6 +569,7 @@ def train(
     placement_rewards: str = "1.0,0.3,-0.3,-1.0",
     win_bonus: float = 0.0,
     win_bonus_halflife: float = 0.0,
+    all_fallen_loss: float = 0.0,
     model_version: str = "v1",
     placement_coef: float = 0.1,
     v2_d_model: int = 128,
@@ -611,6 +612,7 @@ def train(
             placement_rewards=parse_placement_rewards(placement_rewards),
             win_bonus=win_bonus,
             win_bonus_halflife=win_bonus_halflife,
+            all_fallen_loss=all_fallen_loss,
             obs_key=obs_key,
         )
         if model_version == "v2":
@@ -960,6 +962,11 @@ def parse_args() -> argparse.Namespace:
                         "and every R rounds later halves it (R=8: round 20 -> 0.5x, 28 -> 0.25x)")
     p.add_argument("--placement-rewards", type=str, default="1.0,0.3,-0.3,-1.0",
                    help="Terminal reward for placements 1-4, added to rStep on the done row")
+    p.add_argument("--all-fallen-loss", type=float, default=0.0,
+                   help="Terminal LOSS (negative) for EVERY seat when a game ends via the all-Fallen "
+                        "collapse (no 30-VP finish); REPLACES the placement reward on those games so "
+                        "racing to mutual Fallen pays nothing. 0=off (normal placement). Driver stamps "
+                        "the allFallen flag on done rows.")
     # Model v2 (entity set-transformer) flags. --out/--init-from must be .pt for
     # v2; the arc-cand-scorer-v1 JSON export stays v1-only.
     p.add_argument("--model", dest="model_version", choices=["v1", "v2"], default="v1",
@@ -1009,6 +1016,7 @@ if __name__ == "__main__":
         placement_rewards=args.placement_rewards,
         win_bonus=args.win_bonus,
         win_bonus_halflife=args.win_bonus_halflife,
+        all_fallen_loss=args.all_fallen_loss,
         model_version=args.model_version,
         placement_coef=args.placement_coef,
         v2_d_model=args.v2_d_model,

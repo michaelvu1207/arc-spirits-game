@@ -17,6 +17,7 @@
  */
 
 import { applyDeadlineAdvance, applyGameCommand, createLobbyState } from '../runtime';
+import { allPlayersFallen } from '../phases';
 import { createRng, nextInt, type RngState } from '../rng';
 import {
 	botActorFor,
@@ -94,6 +95,10 @@ export interface Sample {
 	done?: boolean;
 	/** 1 on the terminal row of a TRUE 30-VP win (not cap/all-Fallen wins). */
 	won?: number;
+	/** 1 on the terminal row of EVERY seat when the game ended via the all-Fallen collapse (no seat
+	 *  reached 30). The PPO trainer's --all-fallen-loss stamps a terminal LOSS on these rows for all
+	 *  seats, so the degenerate mutual-corruption ending pays nothing to anyone (ladder8-C lever). */
+	allFallen?: number;
 	/** The game's final round number, stamped on done rows alongside `won`. Training-data-only
 	 *  (tempo signal): the PPO trainer's --win-bonus-halflife decays the win bonus by how late the
 	 *  win landed, so a round-18 30-VP finish is rewarded more than a round-28 one. */
@@ -652,6 +657,13 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	// VP-maximizing return-to-go: per seat, credit each decision with its discounted future VP
 	// (plus potential-based build shaping). γ<1 trades total-VP vs VP/turn — a harness knob.
 	const finished = state.status === 'finished';
+	// All-Fallen collapse terminal: the game ended (finished) with NO seat at the VP target and
+	// every player Fallen (phases.tryAdvanceFromCleanup's second branch). Stamped on every seat's
+	// terminal row so the trainer can price the degenerate mutual-corruption ending as a loss.
+	const allFallenEnd =
+		finished &&
+		(finalVP[state.winnerSeat ?? ''] ?? 0) < VP_TO_WIN &&
+		allPlayersFallen(state);
 	for (const seat of seats) {
 		const seatSamples = samples.filter((s) => s.seat === seat); // already in play order
 		if (seatSamples.length === 0) continue;
@@ -692,6 +704,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			if (finished) s.placement = placement;
 			if (s.done) {
 				s.won = wonGame;
+				s.allFallen = allFallenEnd ? 1 : 0;
 				// The game's final round — the tempo trainer decays the win bonus by how late
 				// it landed. state.round is the terminal round for both finished and capped games.
 				s.endRound = state.round;

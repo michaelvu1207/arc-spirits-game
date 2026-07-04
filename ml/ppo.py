@@ -137,6 +137,7 @@ def load_trajectory_buffer(
     placement_rewards: tuple[float, float, float, float],
     win_bonus: float = 0.0,
     win_bonus_halflife: float = 0.0,
+    all_fallen_loss: float = 0.0,
     obs_key: str = "obs",
 ) -> TrajectoryBuffer:
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
@@ -187,6 +188,7 @@ def load_trajectory_buffer(
                         "v_pred": float(rec["vPred"]),
                         "placement": _coerce_placement(rec.get("placement")),
                         "won": 1 if rec.get("won") else 0,
+                        "all_fallen": 1 if rec.get("allFallen") else 0,
                         "end_round": _coerce_end_round(rec.get("endRound")),
                         "obs": obs,
                         "cands": cands,
@@ -230,22 +232,27 @@ def load_trajectory_buffer(
                 placement = s["placement"]
             if s["end_round"] is not None:
                 end_round = s["end_round"]
-        if dones[-1] and placement is not None:
-            rewards[-1] += placement_rewards[placement - 1]
-            n_with_placement += 1
-        # True 30-VP win (driver stamps won=1 only on target-VP finishes, never
-        # cap/all-Fallen wins): the explicit "win the game" incentive on top of
-        # placement — out-placing a weak field at 14 VP earns placement reward
-        # but NOT this.
-        if dones[-1] and win_bonus and any(s["won"] for s in steps):
-            bonus = win_bonus
-            # Tempo decay: with a halflife R, a win at round 12-or-earlier pays the
-            # full bonus and every R rounds later halves it (round 20 -> 0.5x,
-            # round 28 -> 0.25x at R=8). Late wins still pay > a loss (0). Off (0) =
-            # flat bonus, unchanged. Rounds before 12 are not amplified (max(0, ...)).
-            if win_bonus_halflife > 0 and end_round is not None:
-                bonus *= 0.5 ** (max(0, end_round - 12) / win_bonus_halflife)
-            rewards[-1] += bonus
+        if dones[-1]:
+            # All-Fallen collapse (driver stamps allFallen=1 on EVERY seat's done row when the game
+            # ended via mutual corruption with no 30-VP finish): a uniform LOSS terminal for every
+            # seat, REPLACING the placement reward — so racing to Fallen (and assassinating a
+            # non-corruptor to force the ending) pays nothing to anyone. all_fallen_loss < 0; 0 = off
+            # (normal placement). dense ΔVP and win_bonus are untouched.
+            if all_fallen_loss and any(s["all_fallen"] for s in steps):
+                rewards[-1] += all_fallen_loss
+            elif placement is not None:
+                rewards[-1] += placement_rewards[placement - 1]
+                n_with_placement += 1
+            # True 30-VP win (driver stamps won=1 only on target-VP finishes, never cap/all-Fallen):
+            # the explicit "win the game" incentive on top of placement. Never fires on a collapse.
+            if win_bonus and any(s["won"] for s in steps):
+                bonus = win_bonus
+                # Tempo decay: with a halflife R, a win at round 12-or-earlier pays the full bonus
+                # and every R rounds later halves it (round 20 -> 0.5x, 28 -> 0.25x at R=8). Off (0)
+                # = flat bonus. Rounds before 12 are not amplified (max(0, ...)).
+                if win_bonus_halflife > 0 and end_round is not None:
+                    bonus *= 0.5 ** (max(0, end_round - 12) / win_bonus_halflife)
+                rewards[-1] += bonus
 
         if dones[-1]:
             last_value = 0.0

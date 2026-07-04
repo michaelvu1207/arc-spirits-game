@@ -73,6 +73,9 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 					// reads `won`, and --win-bonus-halflife reads `endRound`. These were stamped
 					// on the Sample but never serialized before (win bonus was silently inert).
 					...(typeof s.won === 'number' ? { won: s.won } : {}),
+					// All-Fallen collapse terminal (done rows): the PPO --all-fallen-loss stamps a
+					// terminal loss on these rows for every seat.
+					...(typeof s.allFallen === 'number' ? { allFallen: s.allFallen } : {}),
 					...(typeof s.endRound === 'number' ? { endRound: s.endRound } : {}),
 					iter
 				})

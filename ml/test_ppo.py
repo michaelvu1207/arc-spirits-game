@@ -147,6 +147,46 @@ def test_placement_reward_lands_on_terminal_step():
     assert np.allclose(buf.advantages, [1.0, 1.0]), buf.advantages
 
 
+def _two_step_terminal(*, placement=None, all_fallen=0, won=0, **buf_kw) -> float:
+    """A 2-step rStep=0/vPred=0 game with the given terminal flags; returns the terminal return
+    (== terminal reward at gamma=lam=1)."""
+    rng = np.random.default_rng(7)
+    rows = []
+    for t in range(2):
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0, "ret": 0.0, "gameId": "g0", "stepIdx": t, "rStep": 0.0,
+            "done": t == 1, "logpOld": math.log(1.0 / N_CANDS), "vPred": 0.0,
+        })
+    if placement is not None:
+        rows[-1]["placement"] = placement
+    rows[-1]["allFallen"] = all_fallen
+    rows[-1]["won"] = won
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(d, gamma=1.0, gae_lambda=1.0,
+                                     placement_rewards=PLACEMENT_REWARDS, **buf_kw)
+    return float(buf.returns[-1])
+
+
+def test_all_fallen_loss_replaces_placement_on_collapse():
+    # Collapse "winner" (placement=1 would pay +1.0) with allFallen=1: --all-fallen-loss REPLACES
+    # the placement reward with the loss, so the collapse pays the loss to every seat.
+    assert math.isclose(_two_step_terminal(placement=1, all_fallen=1, all_fallen_loss=-1.0),
+                        -1.0, abs_tol=1e-6)
+    # The loss VALUE is used (not last-place placement by coincidence): flip it to -2.0.
+    assert math.isclose(_two_step_terminal(placement=1, all_fallen=1, all_fallen_loss=-2.0),
+                        -2.0, abs_tol=1e-6)
+    # Off (0): normal placement reward even on an all-Fallen game (bit-parity for existing configs).
+    assert math.isclose(_two_step_terminal(placement=1, all_fallen=1, all_fallen_loss=0.0),
+                        1.0, abs_tol=1e-6)
+    # Non-collapse game (allFallen=0): placement reward, unaffected by the loss knob.
+    assert math.isclose(_two_step_terminal(placement=1, all_fallen=0, all_fallen_loss=-1.0),
+                        1.0, abs_tol=1e-6)
+
+
 def test_ppo_improves_good_action_prob():
     torch.manual_seed(0)
     with tempfile.TemporaryDirectory() as td:
