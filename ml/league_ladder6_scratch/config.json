@@ -1,0 +1,76 @@
+{
+ "_readme": "PHASE 3d FIELD cycle (ladder6, FROM-SCRATCH arm): identical to ladder6_warm EXCEPT laneInit main-0 = 'random' (mint a fresh 83-dim random-init v1 ckpt, honest zero-knowledge PPO start) instead of warm-starting from ladder5 gen60. Rationale: warm starts inherited and stayed in the low-attack VP basin in BOTH ladder4 and ladder5 — potential shaping couldn't pull them out. With the field lever now making a strong engine VP-optimal, a from-scratch policy has no low-attack prior to escape and may discover the strong-engine line the warm arm can't. This is the fallback arm: launch it if ladder6_warm's attack-gap probe is still flat by ~gen 15. Everything else (heuristicOpponentFraction 0.4 paragon/insane field, selfPlayFraction 0.35, ascend3, anneal 1.0->0.65/40, obs v1.2, gauntlet-v8, evalOpponents strong-first, promoteMarginElo 10) is IDENTICAL to the warm arm.",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": [
+  "heur-paragon",
+  "heur-insane",
+  "heur-hard",
+  "heur-medium",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "laneInit": {
+  "main-0": "random"
+ },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend3",
+ "selfPlayFraction": 0.35,
+ "heuristicOpponentFraction": 0.4,
+ "heuristicOpponentProfiles": [
+  "paragon",
+  "insane"
+ ],
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 10,
+ "seedBase": 96000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "temperatureAnneal": {
+  "from": 1.0,
+  "to": 0.65,
+  "overGens": 40
+ },
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--farm-value-coef",
+   "0.25",
+   "--reward-pick-coef",
+   "0.25",
+   "--gamma",
+   "0.999",
+   "--win-bonus",
+   "1.0",
+   "--win-bonus-halflife",
+   "8"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_ladder6_scratch"
+ },
+ "workers": 120,
+ "matchupConcurrency": 15
+}

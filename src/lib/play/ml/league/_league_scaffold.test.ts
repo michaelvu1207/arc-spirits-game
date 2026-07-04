@@ -43,6 +43,8 @@ import {
 	annealedTemperature,
 	buildMatchup,
 	isMirrorSlot,
+	matchupSlotKind,
+	heuristicFieldOpponents,
 	mirrorOpponents,
 	matchupOpponents,
 	initLeague,
@@ -791,5 +793,75 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		);
 		expect(boot.mirror).toBe(false);
 		expect(boot.opponents.every((o) => o.kind === 'heuristic')).toBe(true);
+	});
+});
+
+describe('heuristic-field contention (heuristicOpponentFraction)', () => {
+	const kinds = (matchups: number, sp: number, hf: number) =>
+		Array.from({ length: matchups }, (_, m) => matchupSlotKind(m, matchups, sp, hf));
+	const tally = (ks: string[]) => ({
+		mirror: ks.filter((k) => k === 'mirror').length,
+		heuristic: ks.filter((k) => k === 'heuristic').length,
+		pfsp: ks.filter((k) => k === 'pfsp').length
+	});
+
+	it('matchupSlotKind: heuristicFraction 0 reproduces the isMirrorSlot split exactly (backward compat)', () => {
+		for (const matchups of [4, 6, 8, 16, 20, 32]) {
+			for (const sp of [0, 0.2, 0.35, 0.5, 1]) {
+				for (let m = 0; m < matchups; m++) {
+					const expected = isMirrorSlot(m, matchups, sp) ? 'mirror' : 'pfsp';
+					expect(matchupSlotKind(m, matchups, sp, 0)).toBe(expected);
+				}
+			}
+		}
+	});
+
+	it('matchupSlotKind: disjoint three-way split, mirror = isMirrorSlot, heuristic ≈ floor(matchups·hf)', () => {
+		const ks = kinds(16, 0.35, 0.4);
+		const t = tally(ks);
+		expect(t.mirror).toBe(Math.floor(16 * 0.35)); // 5 — unchanged from isMirrorSlot
+		expect(t.heuristic).toBe(6); // floor(16·0.4), error-diffused over the 11 non-mirror slots
+		expect(t.mirror + t.heuristic + t.pfsp).toBe(16);
+		// Mirror slots are EXACTLY isMirrorSlot; heuristic never lands on a mirror slot.
+		for (let m = 0; m < 16; m++) {
+			if (isMirrorSlot(m, 16, 0.35)) expect(ks[m]).toBe('mirror');
+			else expect(ks[m]).not.toBe('mirror');
+		}
+		// Heuristic count is capped at the non-mirror slot count.
+		expect(tally(kinds(8, 0.5, 1)).heuristic).toBe(8 - Math.floor(8 * 0.5)); // 4 non-mirror → 4 heuristic
+	});
+
+	it('heuristicFieldOpponents: cycles the configured profiles as scripted, weightless opponents', () => {
+		const config = { ...defaultConfig('unused'), seats: 4, heuristicOpponentProfiles: ['paragon', 'insane'] };
+		const opps = heuristicFieldOpponents(config, 3);
+		expect(opps).toHaveLength(3);
+		expect(opps.map((o) => o.profile)).toEqual(['paragon', 'insane', 'paragon']); // cycled over seats
+		expect(opps.every((o) => o.kind === 'heuristic' && !o.weightsPath)).toBe(true);
+		expect(opps.every((o) => o.id.startsWith('heur-field-'))).toBe(true); // distinct from roster anchors
+		// Default field when none configured.
+		expect(heuristicFieldOpponents(defaultConfig('unused'), 2).map((o) => o.profile)).toEqual(['paragon', 'insane']);
+	});
+
+	it('matchupOpponents: a heuristic slot seats the strong scripted field; learner still records alone', () => {
+		const config = {
+			...defaultConfig('unused'),
+			seats: 4,
+			selfPlayFraction: 0,
+			heuristicOpponentFraction: 1, // every slot is the heuristic field
+			heuristicOpponentProfiles: ['paragon', 'insane']
+		};
+		const learner = member('main-0', 'main', { weightsPath: 'ckpt/cur.json' });
+		const res = matchupOpponents(config, learner, [learner], 0, 4, randFrom([0.1]));
+		expect(res.heuristic).toBe(true);
+		expect(res.mirror).toBe(false);
+		expect(res.opponents.map((o) => o.profile)).toEqual(['paragon', 'insane', 'paragon']);
+		// buildMatchup seats them as scripted profiles (NO opponentWeights) and keeps learner-only recording,
+		// so placement/win reward semantics are unchanged — the heuristic seats are pure environment.
+		const plan = buildMatchup(config, learner, res.opponents, 0, 5);
+		expect(plan.config.opponentWeights).toBeUndefined();
+		expect(plan.config.profiles).toContain('paragon');
+		expect(plan.config.profiles).toContain('insane');
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
+		expect(plan.config.weightsPath).toBe(resolve('ckpt/cur.json')); // learner still plays its net
 	});
 });

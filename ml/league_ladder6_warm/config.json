@@ -1,0 +1,76 @@
+{
+ "_readme": "PHASE 3d FIELD cycle (ladder6, WARM-START arm): the SINGLE lever is the TRAINING FIELD, not the reward. ladders 4+5 proved potential-based shaping (status penalty OR attackPower credit) is policy-invariant and cannot move the low-attack VP-optimal policy while the learner only ever faces weak heuristics + self-mirror — the fast low-attack corrupt line stays optimal, so the attack gap (~-3 vs strong play) and vpClassAwake (0%) never budged. FIX: heuristicOpponentFraction 0.4 seats a PURE PARAGON/INSANE field in 40% of training matchups so a weak engine ACTUALLY LOSES and building one becomes VP-optimal + learnable. Field mix: mirror 0.35 (selfPlayFraction kept) + heuristic-field 0.40 + PFSP 0.25. Shaping (ascend3), temp anneal (1.0->0.65/40), obs v1.2, gauntlet-v8 ALL kept IDENTICAL to ladder5 to isolate the field change. evalOpponents lead with paragon+insane so per-gen eval tracks the strong field (where 'weak engine loses' is visible). promoteMarginElo lowered 25->10 (ladder5 gen36/gen60 both missed promotion by 1 Elo). WARM-START from ladder5 gen60 (already 83-dim, obs v1.2). LAUNCH DECISION: run this warm arm first; if the attack-gap probe is STILL flat by ~gen 15, pivot to the from-scratch arm (ladder6_scratch) — warm starts have stayed in the low-attack basin both prior cycles, scratch may escape it once the field rewards a strong engine.",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": [
+  "heur-paragon",
+  "heur-insane",
+  "heur-hard",
+  "heur-medium",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "laneInit": {
+  "main-0": "ml/champions/ladder5/main-0-gen60.json"
+ },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend3",
+ "selfPlayFraction": 0.35,
+ "heuristicOpponentFraction": 0.4,
+ "heuristicOpponentProfiles": [
+  "paragon",
+  "insane"
+ ],
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 10,
+ "seedBase": 95000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "temperatureAnneal": {
+  "from": 1.0,
+  "to": 0.65,
+  "overGens": 40
+ },
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--farm-value-coef",
+   "0.25",
+   "--reward-pick-coef",
+   "0.25",
+   "--gamma",
+   "0.999",
+   "--win-bonus",
+   "1.0",
+   "--win-bonus-halflife",
+   "8"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_ladder6_warm"
+ },
+ "workers": 120,
+ "matchupConcurrency": 15
+}

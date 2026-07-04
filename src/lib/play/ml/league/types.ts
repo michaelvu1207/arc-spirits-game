@@ -159,6 +159,22 @@ export interface LeagueConfig {
 	 * playable checkpoint yet (fresh-net bootstrap gen) silently falls back to PFSP.
 	 */
 	selfPlayFraction?: number;
+	/**
+	 * Strong-scripted-opponent contention fraction (0..1, default 0 = off). This fraction of a
+	 * generation's matchups seats the learner against a PURE HEURISTIC FIELD — every opponent seat
+	 * plays a scripted profile from `heuristicOpponentProfiles` (default ['paragon','insane'])
+	 * instead of a PFSP-sampled checkpoint. Unlike the occasional heuristic anchor a PFSP draw
+	 * yields, this GUARANTEES the learner regularly faces the strongest scripted play, so a weak
+	 * engine actually loses and building one becomes VP-optimal (the ladder6 field lever). Slots are
+	 * disjoint from mirror slots and spread deterministically across the non-mirror slots; the
+	 * remaining (1 − selfPlayFraction − heuristicOpponentFraction) stay ordinary PFSP. Only the
+	 * learner seat records (as always), so reward/placement semantics are unchanged — the heuristic
+	 * seats are environment, exactly like a PFSP-drawn heuristic anchor.
+	 */
+	heuristicOpponentFraction?: number;
+	/** BOT_PROFILES names cycled across the opponent seats of a heuristic-field matchup
+	 *  (default ['paragon','insane']). Only used when heuristicOpponentFraction > 0. */
+	heuristicOpponentProfiles?: string[];
 	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
 	shapingPreset?: string;
 	selection: 'hybrid' | 'value' | 'policy';
@@ -260,6 +276,8 @@ export interface HistoryLine {
 	opponents: Record<string, number>;
 	/** How many of this generation's matchups were pure mirror (selfPlayFraction); absent when 0. */
 	mirrorMatchups?: number;
+	/** How many of this generation's matchups were the pure heuristic field (heuristicOpponentFraction); absent when 0. */
+	heuristicMatchups?: number;
 	poolWallMs: number;
 	trainMs: number;
 	/** v2 lanes: wall time of the ml/distill.py student run, when one happened. */

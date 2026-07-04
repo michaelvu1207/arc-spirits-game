@@ -705,6 +705,36 @@ export function isMirrorSlot(m: number, matchups: number, fraction: number): boo
 	return Math.floor((m + 1) * f) > Math.floor(m * f);
 }
 
+export type MatchupKind = 'mirror' | 'heuristic' | 'pfsp';
+
+/**
+ * Deterministic three-way slot assignment for matchup `m`: 'mirror' (selfPlayFraction),
+ * 'heuristic' (heuristicOpponentFraction, a pure strong-scripted field), or 'pfsp' (the rest).
+ * Mirror slots are EXACTLY isMirrorSlot (so runs with heuristicOpponentFraction 0 reproduce the
+ * old mirror/PFSP split byte-for-byte). Heuristic slots are error-diffused across the NON-mirror
+ * slots, targeting floor(matchups·heuristicFraction) of them (capped at the non-mirror count), so
+ * mirror and heuristic never collide and both stay evenly spread.
+ */
+export function matchupSlotKind(
+	m: number,
+	matchups: number,
+	selfPlayFraction: number,
+	heuristicFraction: number
+): MatchupKind {
+	const sp = Math.max(0, Math.min(1, selfPlayFraction));
+	if (isMirrorSlot(m, matchups, sp)) return 'mirror';
+	const hf = Math.max(0, Math.min(1, heuristicFraction));
+	if (hf <= 0) return 'pfsp';
+	// Distribute exactly `target` heuristic slots over the non-mirror slots via integer Bresenham
+	// (no float drift). j = m's 0-based index among the non-mirror slots = m minus the mirror slots
+	// before it (floor(m·sp), the isMirrorSlot count over [0, m)).
+	const nonMirror = matchups - Math.floor(matchups * sp);
+	if (nonMirror <= 0) return 'pfsp';
+	const target = Math.min(nonMirror, Math.floor(matchups * hf));
+	const j = m - Math.floor(m * sp);
+	return Math.floor(((j + 1) * target) / nonMirror) > Math.floor((j * target) / nonMirror) ? 'heuristic' : 'pfsp';
+}
+
 /**
  * The `count` opponents for a PURE MIRROR matchup: `count` copies of one synthetic
  * frozen member resolving to the learner's CURRENT play weights, so every opponent
@@ -726,10 +756,31 @@ export function mirrorOpponents(learner: LeagueMember, count: number): LeagueMem
 	return Array.from({ length: count }, () => mirror);
 }
 
+/** Default strong-scripted field when a heuristic-field matchup names no profiles. */
+const DEFAULT_HEURISTIC_FIELD = ['paragon', 'insane'];
+
 /**
- * Opponents for matchup `m` of a generation: a deterministic mirror lineup at the
- * configured selfPlayFraction (else PFSP). Mirror slots do NOT consume the PFSP
- * rand stream, so the non-mirror matchups keep pure PFSP draws.
+ * The `count` opponents for a HEURISTIC-FIELD matchup: synthetic heuristic members whose
+ * profiles cycle through config.heuristicOpponentProfiles (default paragon/insane). They carry a
+ * `profile` and no weights, so buildMatchup seats them as scripted bots exactly like a PFSP-drawn
+ * heuristic anchor. The distinct `-field` id keeps them out of the real anchors' PFSP matchStats.
+ */
+export function heuristicFieldOpponents(config: LeagueConfig, count: number): LeagueMember[] {
+	const profiles = config.heuristicOpponentProfiles?.length
+		? config.heuristicOpponentProfiles
+		: DEFAULT_HEURISTIC_FIELD;
+	return Array.from({ length: count }, (_, i) => {
+		const profile = profiles[i % profiles.length];
+		return { id: `heur-field-${profile}`, kind: 'heuristic' as const, profile, createdGen: 0, matchStats: {} };
+	});
+}
+
+/**
+ * Opponents for matchup `m` of a generation: a deterministic mirror lineup (selfPlayFraction), a
+ * pure strong-heuristic field (heuristicOpponentFraction), or a PFSP lineup (the rest). Only PFSP
+ * slots consume the PFSP rand stream, so — as before — the non-PFSP matchups do not perturb the
+ * PFSP draw sequence. A learner with no playable checkpoint yet (fresh-net bootstrap) can't mirror,
+ * so a would-be mirror slot falls back to PFSP.
  */
 export function matchupOpponents(
 	config: LeagueConfig,
@@ -738,14 +789,17 @@ export function matchupOpponents(
 	m: number,
 	matchups: number,
 	rand: () => number
-): { opponents: LeagueMember[]; mirror: boolean } {
+): { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean } {
 	const count = config.seats - 1;
-	if (isMirrorSlot(m, matchups, config.selfPlayFraction ?? 0)) {
+	const kind = matchupSlotKind(m, matchups, config.selfPlayFraction ?? 0, config.heuristicOpponentFraction ?? 0);
+	if (kind === 'mirror') {
 		const mir = mirrorOpponents(learner, count);
-		if (mir) return { opponents: mir, mirror: true };
+		if (mir) return { opponents: mir, mirror: true, heuristic: false };
 		// Fresh-net bootstrap gen: no checkpoint to mirror yet → ordinary PFSP.
+	} else if (kind === 'heuristic') {
+		return { opponents: heuristicFieldOpponents(config, count), mirror: false, heuristic: true };
 	}
-	return { opponents: sampleOpponents(learner, members, count, config.pfsp, rand), mirror: false };
+	return { opponents: sampleOpponents(learner, members, count, config.pfsp, rand), mirror: false, heuristic: false };
 }
 
 /** Fold a pool run's summaries into the learner's matchStats; returns pairwise (score, n). */
@@ -899,9 +953,11 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			if (/^m-\d+$/.test(f)) rmSync(join(laneDir, f), { recursive: true, force: true });
 		}
 		let mirrorMatchups = 0;
+		let heuristicMatchups = 0;
 		const plans = Array.from({ length: matchups }, (_, m) => {
-			const { opponents, mirror } = matchupOpponents(config, learner, state.members, m, matchups, rand);
+			const { opponents, mirror, heuristic } = matchupOpponents(config, learner, state.members, m, matchups, rand);
 			if (mirror) mirrorMatchups += 1;
+			if (heuristic) heuristicMatchups += 1;
 			const plan = buildMatchup(config, learner, opponents, m, gen, v2Arg, v1SocketArg);
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
 			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
@@ -1095,6 +1151,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			samples,
 			opponents: opponentsFaced,
 			...(mirrorMatchups > 0 ? { mirrorMatchups } : {}),
+			...(heuristicMatchups > 0 ? { heuristicMatchups } : {}),
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
 			...(distillMs > 0 ? { distillMs: Math.round(distillMs) } : {}),
