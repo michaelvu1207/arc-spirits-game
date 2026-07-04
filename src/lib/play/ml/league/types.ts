@@ -181,6 +181,18 @@ export interface LeagueConfig {
 	 *  identical greedy moves and self-sabotage — so the learner's "contention" is real contested
 	 *  play, not clones colliding. Heuristic-profile opponents are unaffected (they RNG already). */
 	opponentTemperature?: number;
+	/**
+	 * TERMINATION BLOCKER (default undefined = off): a BOT_PROFILES name (e.g. 'paragon') seated in
+	 * EVERY matchup — mirror, heuristic, and PFSP alike — replacing one opponent slot. A non-corrupting
+	 * profile that never Falls makes the all-Fallen early-termination (phases.ts tryAdvanceFromCleanup)
+	 * unreachable in training, so games must run to the real VP target or the round cap. This removes the
+	 * degenerate all-bot collapse (every seat racing to Fallen ends the game at ~round 8 / ~12 VP) that
+	 * poisons the reach-30 signal — matching deployment, where a human opponent never Falls. It is NOT
+	 * the heuristicOpponentFraction field lever (paragon as a punisher); it is paragon as a structural
+	 * termination blocker (one guaranteed non-corruptor per table). Whether the profile truly never Falls
+	 * (forced corruption via damage overflow) is verified empirically, not assumed.
+	 */
+	terminationBlocker?: string;
 	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
 	shapingPreset?: string;
 	selection: 'hybrid' | 'value' | 'policy';

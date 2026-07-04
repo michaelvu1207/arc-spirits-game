@@ -827,6 +827,49 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		expect(boot.mirror).toBe(false);
 		expect(boot.opponents.every((o) => o.kind === 'heuristic')).toBe(true);
 	});
+
+	it('matchupOpponents: terminationBlocker seats one fixed non-corruptor in EVERY matchup (mirror + pfsp)', () => {
+		const config = {
+			...defaultConfig('unused'),
+			seats: 4,
+			selfPlayFraction: 0.5,
+			terminationBlocker: 'paragon'
+		};
+		const learner = member('main-0', 'main', { weightsPath: 'ckpt/cur.json' });
+		const members = [
+			learner,
+			member('heur-medium', 'heuristic', { profile: 'medium' }),
+			member('heur-hard', 'heuristic', { profile: 'hard' }),
+			member('heur-pvphunter', 'heuristic', { profile: 'pvphunter' })
+		];
+		const blockers = (r: { opponents: LeagueMember[] }) =>
+			r.opponents.filter((o) => o.kind === 'heuristic' && o.profile === 'paragon');
+		// Mirror slot: 2 learner copies + 1 paragon blocker (was 3 copies without the blocker).
+		const mir = matchupOpponents(config, learner, members, 1, 6, randFrom([0.1, 0.5, 0.9]));
+		expect(mir.opponents).toHaveLength(config.seats - 1);
+		expect(mir.opponents.filter((o) => o.weightsPath === 'ckpt/cur.json')).toHaveLength(2);
+		expect(blockers(mir)).toHaveLength(1);
+		// PFSP slot: field draws + 1 paragon blocker.
+		const pf = matchupOpponents(config, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
+		expect(pf.opponents).toHaveLength(config.seats - 1);
+		expect(blockers(pf)).toHaveLength(1);
+		// buildMatchup seats the blocker as a heuristic (profile), NOT a checkpoint or neural seat.
+		const plan = buildMatchup(config, learner, mir.opponents, 1, 5);
+		const paragonSeat = plan.oppBySeat.find(([, mm]) => mm.profile === 'paragon')![0];
+		expect(plan.config.neuralSeats).not.toContain(paragonSeat);
+		expect(Object.keys(plan.config.opponentWeights ?? {})).not.toContain(paragonSeat);
+		// Off by default: no blocker → unchanged 3 mirror copies.
+		const off = matchupOpponents(
+			{ ...config, terminationBlocker: undefined },
+			learner,
+			members,
+			1,
+			6,
+			randFrom([0.1, 0.5, 0.9])
+		);
+		expect(off.opponents).toHaveLength(3);
+		expect(blockers(off)).toHaveLength(0);
+	});
 });
 
 describe('heuristic-field contention (heuristicOpponentFraction)', () => {

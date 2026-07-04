@@ -792,6 +792,12 @@ export function heuristicFieldOpponents(config: LeagueConfig, count: number): Le
  * PFSP draw sequence. A learner with no playable checkpoint yet (fresh-net bootstrap) can't mirror,
  * so a would-be mirror slot falls back to PFSP.
  */
+/** The fixed non-corrupting seat (config.terminationBlocker) — same shape as a heuristic-field
+ *  member, so buildMatchup seats it by profile. Present in EVERY matchup; never recorded. */
+function blockerMember(profile: string): LeagueMember {
+	return { id: `blocker-${profile}`, kind: 'heuristic', profile, createdGen: 0, matchStats: {} };
+}
+
 export function matchupOpponents(
 	config: LeagueConfig,
 	learner: LeagueMember,
@@ -800,16 +806,22 @@ export function matchupOpponents(
 	matchups: number,
 	rand: () => number
 ): { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean } {
-	const count = config.seats - 1;
+	// Termination blocker (option c): reserve ONE opponent slot for a fixed non-corrupting profile in
+	// every matchup — mirror, heuristic, and PFSP alike — so the all-Fallen terminal can't fire in
+	// training. The remaining slots use the normal mirror/heuristic/PFSP selection.
+	const blocker = config.terminationBlocker ? blockerMember(config.terminationBlocker) : null;
+	const count = config.seats - 1 - (blocker ? 1 : 0);
+	const withBlocker = (r: { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean }) =>
+		blocker ? { ...r, opponents: [...r.opponents, blocker] } : r;
 	const kind = matchupSlotKind(m, matchups, config.selfPlayFraction ?? 0, config.heuristicOpponentFraction ?? 0);
 	if (kind === 'mirror') {
 		const mir = mirrorOpponents(learner, count);
-		if (mir) return { opponents: mir, mirror: true, heuristic: false };
+		if (mir) return withBlocker({ opponents: mir, mirror: true, heuristic: false });
 		// Fresh-net bootstrap gen: no checkpoint to mirror yet → ordinary PFSP.
 	} else if (kind === 'heuristic') {
-		return { opponents: heuristicFieldOpponents(config, count), mirror: false, heuristic: true };
+		return withBlocker({ opponents: heuristicFieldOpponents(config, count), mirror: false, heuristic: true });
 	}
-	return { opponents: sampleOpponents(learner, members, count, config.pfsp, rand), mirror: false, heuristic: false };
+	return withBlocker({ opponents: sampleOpponents(learner, members, count, config.pfsp, rand), mirror: false, heuristic: false });
 }
 
 /** Fold a pool run's summaries into the learner's matchStats; returns pairwise (score, n). */
