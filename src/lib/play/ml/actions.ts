@@ -177,6 +177,16 @@ export function enumerateCandidates(
 					if (rId) tryAdd({ type: 'detachRuneFromSpirit', runeId: rId, spiritSlotIndex: s });
 				}
 			}
+			// Pay down a forced corruption-discard obligation (from fighting the Abyss
+			// monster, or a lost PvP strike). It blocks `endLocationActions` until paid, so
+			// WITHOUT these candidates a corrupted bot had no progressing move and stalled
+			// until the host deadline drain — the "bots freeze when they corrupt" bug. The
+			// heuristic botPolicy already sheds spirits here; this gives the neural surface
+			// the same escape.
+			if (me?.pendingCorruptionDiscard && (me?.spirits?.length ?? 0) > 0) {
+				for (let i = 0; i < (me?.spirits?.length ?? 0); i++)
+					tryAdd({ type: 'discardSpirit', slotIndex: me!.spirits[i].slotIndex });
+			}
 			tryAdd({ type: 'endLocationActions' }); // yield
 			break;
 		}
