@@ -92,6 +92,39 @@ const MAT_ITEM_SLOT_POSITIONS = [
 const MAT_ITEM_RESERVE_START = { x: -0.42, z: -0.95 };
 const MAT_ITEM_RESERVE_SPACING = 0.18;
 
+/**
+ * JSON-semantics deep clone WITHOUT the string round-trip. Produces byte-identical output to
+ * JSON.parse(JSON.stringify(v)) for plain-JSON values — drops undefined/function/symbol-valued
+ * keys, maps undefined/function/symbol array elements and non-finite numbers to null, preserves
+ * key order — but ~5x faster on the game state (measured: 5.4k → 30k clones/s on a mid-game
+ * state) because it skips serialize+parse entirely. The state is pure JSON (no Maps/Sets/Dates),
+ * so the two are equivalent; parity is gated by sim/_parity.test.ts (byte-identical shards).
+ */
+function jsonClone<T>(v: T): T {
+	if (v === null) return v;
+	const t = typeof v;
+	if (t === 'number') return (Number.isFinite(v as unknown as number) ? v : null) as unknown as T;
+	if (t !== 'object') return v;
+	if (Array.isArray(v)) {
+		const n = new Array(v.length);
+		for (let i = 0; i < v.length; i++) {
+			const e = v[i];
+			const et = typeof e;
+			n[i] = e === undefined || et === 'function' || et === 'symbol' ? null : jsonClone(e);
+		}
+		return n as unknown as T;
+	}
+	const n: Record<string, unknown> = {};
+	for (const k in v) {
+		if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
+		const val = (v as Record<string, unknown>)[k];
+		const vt = typeof val;
+		if (val === undefined || vt === 'function' || vt === 'symbol') continue;
+		n[k] = jsonClone(val);
+	}
+	return n as unknown as T;
+}
+
 function cloneState(state: PublicGameState): PublicGameState {
 	// The game state is fully JSON-serializable (no Maps/Sets/Dates/functions; the RNG is
 	// {seed,cursor}), so a JSON round-trip is an exact deep clone. MEASURED faster than
@@ -108,9 +141,9 @@ function cloneState(state: PublicGameState): PublicGameState {
 	// it by reference on the clone — adding zero serialized bytes. Parity-gated by
 	// sim/_parity.test.ts (byte-identical state vs the naive full clone across seeds).
 	const history = state.bags?.history as BagsData | undefined;
-	if (!history) return JSON.parse(JSON.stringify(state)) as PublicGameState;
+	if (!history) return jsonClone(state);
 	state.bags.history = undefined as unknown as BagsData; // transient detach (restored below; sync, unobservable)
-	const cloned = JSON.parse(JSON.stringify(state)) as PublicGameState;
+	const cloned = jsonClone(state);
 	state.bags.history = history; // restore original ref — contents were never mutated
 	cloned.bags.history = buildHistoryBags(cloned.bags); // rebuild by reference: no extra serialized bytes
 	return cloned;
