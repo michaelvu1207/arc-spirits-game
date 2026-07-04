@@ -9,6 +9,12 @@
 #   1. Frozen gauntlet (sharded) — strength vs the anchor field.
 #   2. Held-out exploiter probe — fresh 16-gen exploiter must stay < +50 Elo
 #      head-to-head (KataGo lesson: Elo alone is necessary, not sufficient).
+#      SEMANTICS CHANGED 2026-07-04 (medium-opponent bug): the champion opponent
+#      seats now actually play their net (neuralSeats fix in exploit_probe.py) and
+#      SAMPLE at deployment temp 0.65 (--opponent-temperature below) instead of the
+#      old confound (opponents were the medium heuristic / greedy argmax clones). The
+#      < +50 Elo threshold predates this and should be RECALIBRATED on the first real
+#      champion certified under the new gate. Prior exploiter-gate numbers are void.
 #   3. 2v1 collusion probe — two coordinated pvphunter seats vs the candidate:
 #      candidate's seat-normalized score must not collapse vs the 1v1 baseline.
 #   4. Mirror sanity — candidate vs 3 copies of itself: placement ≈ 2.5, no
@@ -31,6 +37,7 @@ ml/.venv/bin/python ml/exploit_probe.py \
   --champion "$W" \
   --budget-gens "${CERT_EXPLOIT_GENS:-16}" \
   --games-per-gen 64 --workers "${CERT_EXPLOIT_WORKERS:-32}" \
+  --opponent-temperature "${CERT_EXPLOIT_OPP_TEMP:-0.65}" \
   --out "$OUT/exploit_probe.json" 2>&1 | tail -3
 
 echo "[certify] 3/4 2v1 collusion probe"
