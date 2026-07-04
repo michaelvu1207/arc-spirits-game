@@ -1,0 +1,72 @@
+{
+ "_readme": "PHASE 3d COLLAPSE-IS-LOSS cycle, DOSE 2 (ladder8c2): IDENTICAL to ladder8c EXCEPT --all-fallen-loss -3.0 (was -1.0, which was TOO WEAK \u2014 training all-Fallen ROSE 22->77%, reach-30 fell 54->18%). Reward math for why -1.0 failed: dense ChangeVP telescopes to finalVP/30, so corrupt-to-12VP-then-collapse nets +0.4-1.0=-0.6 > stay-Good-and-lose-to-a-corrupting-copy (~-1.0), and even INSIDE a collapse the uniform penalty leaves the collapse-WINNER (-0.6) ahead of the loser (-0.9) so the gradient still rewarded corrupt-racing. At -3.0 the collapse-winner's -2.6 is strictly worse than stay-Good-and-lose (-1.0) \u2014 the game-theoretic condition that flips the best response even when the other 3 copies race, so a symmetric population can shift off collapse. ladder7 recipe + neuralSeats fix, warm ladder5 gen60, NO blocker (clean A/B). ladder8c (-1.0) data KEPT as the dose-response point. DISCRIMINATOR (team-lead): watch TRAINING reach-30% \u2014 if all-Fallen falls AND reach-30 RISES = cracked (engine gets its fair test); if all-Fallen falls but games pile at cap with reach-30 flat = path-2 (reaching 30 vs a corruptor field is unreachable) -> Michael evidence for 'corruption must cost tempo'. Also watch PPO KL/loss first gens (-3.0 is a bigger reward scale \u2014 if training destabilizes that's a value-fn-scale issue, flag it, not a verdict). If -3.0 flips trends -> run to 60 + pace-test. If gapEnd STILL flat with collapse suppressed -> training side conclusively exhausted.",
+ "version": "league-v1",
+ "mode": "ppo",
+ "seats": 4,
+ "maxRounds": 120,
+ "gamesPerGen": 512,
+ "matchupGames": 32,
+ "evalGames": 24,
+ "evalOpponents": [
+  "heur-medium",
+  "heur-hard",
+  "heur-pvphunter"
+ ],
+ "lanes": {
+  "main": 1,
+  "mainExploiter": 0,
+  "leagueExploiter": 0
+ },
+ "laneInit": {
+  "main-0": "ml/champions/ladder5/main-0-gen60.json"
+ },
+ "seedCheckpointAnchors": false,
+ "denseVpReward": true,
+ "shapingPreset": "ascend3",
+ "selfPlayFraction": 0.35,
+ "opponentTemperature": 0.65,
+ "pfsp": {
+  "p": 2,
+  "variant": "squared"
+ },
+ "promoteEvery": 4,
+ "promoteMarginElo": 25,
+ "seedBase": 100000000,
+ "selection": "hybrid",
+ "sample": true,
+ "temperature": 1.0,
+ "temperatureAnneal": {
+  "from": 1.0,
+  "to": 0.65,
+  "overGens": 40
+ },
+ "train": {
+  "epochs": 4,
+  "extraArgs": [
+   "--placement-coef",
+   "0.3",
+   "--farm-value-coef",
+   "0.25",
+   "--reward-pick-coef",
+   "0.25",
+   "--gamma",
+   "0.999",
+   "--win-bonus",
+   "1.0",
+   "--win-bonus-halflife",
+   "8",
+   "--all-fallen-loss",
+   "-3.0"
+  ]
+ },
+ "pythonBin": "ml/.venv/bin/python",
+ "gauntletCmd": [
+  "bash",
+  "scripts/league-gauntlet.sh"
+ ],
+ "paths": {
+  "root": "ml/league_ladder8c2"
+ },
+ "workers": 120,
+ "matchupConcurrency": 15
+}
