@@ -115,16 +115,17 @@ export interface AwakenPayment {
 
 /**
  * Pay a `rune_cost` awakening by discarding the matched runes (sets `hasRune`
- * to false on the chosen slots). `runeInstanceIds` — the snapshot `guid`s — let
- * the caller disambiguate which copies to spend; otherwise the matcher
- * auto-picks per its named-before-wildcard preference. A free/`text` condition
- * is a no-op pay (free succeeds, text is rejected — it has no payable cost).
+ * to false on the chosen slots). `runeSelection` — the mats the caller chose,
+ * named by slot index (what the picker's refs carry) or snapshot `guid` — lets
+ * the caller disambiguate which copies to spend; otherwise the matcher auto-picks
+ * per its named-before-wildcard preference. A free/`text` condition is a no-op pay
+ * (free succeeds, text is rejected — it has no payable cost).
  *
- * `strict` (F1): treat `runeInstanceIds` as a BINDING selection — the cost must be
- * payable using ONLY those copies, else the pay fails with `invalid_discard_selection`
+ * `strict` (F1): treat `runeSelection` as a BINDING selection — the cost must be
+ * payable using ONLY those mats, else the pay fails with `invalid_discard_selection`
  * (no silent auto-pick of other mats). The caller enables strict only when the
- * selection is complete (one id per required unit); a partial/omitted selection stays
- * a preference so bots and old clients keep auto-pick.
+ * selection is complete (one entry per required unit); a partial/omitted selection
+ * stays a preference so bots and old clients keep auto-pick.
  *
  * Returns `ok:false` (and discards nothing) if the cost cannot be met, so the
  * caller can keep `check` and `pay` consistent.
@@ -132,7 +133,7 @@ export interface AwakenPayment {
 export function payAwakenCondition(
 	ctx: EffectContext,
 	target: AwakenTarget,
-	runeInstanceIds?: string[],
+	runeSelection?: string[],
 	strict = false
 ): AwakenPayment {
 	const catalogSpirit = catalogSpiritFor(ctx, target.spirit);
@@ -162,8 +163,8 @@ export function payAwakenCondition(
 	// A partial/omitted selection stays a preference so bots + old clients keep
 	// auto-pick; a complete-but-wrong selection is rejected (F1).
 	const totalRequired = awaken.mats.reduce((sum, r) => sum + r.count, 0);
-	const bindExact = strict && !!runeInstanceIds && runeInstanceIds.length === totalRequired;
-	const match = matchMatCost(awaken.mats, spendableMats(mats), runeInstanceIds, { strict: bindExact });
+	const bindExact = strict && !!runeSelection && runeSelection.length === totalRequired;
+	const match = matchMatCost(awaken.mats, spendableMats(mats), runeSelection, { strict: bindExact });
 	if (!match.ok) {
 		// A failed strict match means the player's explicit picks don't pay the cost
 		// (wrong items); otherwise the cost is simply unaffordable.

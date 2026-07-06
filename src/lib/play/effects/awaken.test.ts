@@ -483,6 +483,49 @@ describe('payAwakenCondition', () => {
 		expect(player.mats.find((r) => r.guid === 'g2')!.hasRune).toBe(false);
 		expect(player.mats.find((r) => r.guid === 'g1')!.hasRune).toBe(true);
 	});
+
+	// Regression (F1 guid hole): a strict selection binds by SLOT INDEX on guid-less
+	// mats (the production shape). A wrong complete selection is rejected and spends
+	// nothing; the correct one spends exactly the chosen slots. Pre-fix, guid-less mats
+	// made strict binding a no-op and auto-pick silently paid the wrong cost.
+	it('strict selection binds by slotIndex on guid-less mats (wrong reject, right pay)', () => {
+		const FLOWER = 'flower-id';
+		const FAIRY = 'fairy-id';
+		const awaken: NormalizedAwaken = {
+			kind: 'rune_cost',
+			mats: [{ runeId: FLOWER, name: 'Flower', kind: 'relic', count: 2, wildcard: false }]
+		};
+		const makeMats = () => [
+			rune(1, { id: FLOWER, name: 'Flower' }),
+			rune(2, { id: FLOWER, name: 'Flower' }),
+			rune(3, { id: FAIRY, name: 'Fairy' }),
+			rune(4, { id: FAIRY, name: 'Fairy' })
+		];
+
+		// Two Fairy slots (3,4) for a Flower ×2 cost → rejected, nothing spent.
+		const wrong = makePlayer({ spirits: [spirit(1, 'rc', 'RC')], mats: makeMats() });
+		const rejected = payAwakenCondition(
+			ctxFor(wrong, catalogWith('rc', awaken)),
+			{ spirit: wrong.spirits[0] },
+			['3', '4'],
+			true
+		);
+		expect(rejected.ok).toBe(false);
+		expect(rejected.reason).toBe('invalid_discard_selection');
+		expect(wrong.mats.every((r) => r.hasRune)).toBe(true);
+
+		// The two Flower slots (1,2) → pays exactly the Flowers, Fairies untouched.
+		const right = makePlayer({ spirits: [spirit(1, 'rc', 'RC')], mats: makeMats() });
+		const paid = payAwakenCondition(
+			ctxFor(right, catalogWith('rc', awaken)),
+			{ spirit: right.spirits[0] },
+			['1', '2'],
+			true
+		);
+		expect(paid.ok).toBe(true);
+		expect(right.mats.filter((r) => r.id === FLOWER).every((r) => !r.hasRune)).toBe(true);
+		expect(right.mats.filter((r) => r.id === FAIRY).every((r) => r.hasRune)).toBe(true);
+	});
 });
 
 describe('canAutoAwaken', () => {
@@ -745,6 +788,12 @@ describe('runtime awakenSpirit gate', () => {
 	// F1: an EXPLICIT, COMPLETE discard selection is BINDING — the exact case from the
 	// audit (cost "Flower ×2", player selected two Fairy Relics, engine silently discarded
 	// two Flowers). Wrong picks now reject; right picks pay; no picks still auto-pick.
+	//
+	// Regression: the mats carry NO `guid` — the production snapshot shape. The prior
+	// binding keyed on guid, so server-side (guid-less) mats made the ref→id translation
+	// come out EMPTY and strict binding silently degraded to auto-pick, letting the forged
+	// Fairy selection through. Binding on slotIndex closes that hole. (Adding guids here
+	// would mask the bug — which is exactly why the earlier unit test missed it.)
 	it('F1: complete explicit discardRefs are binding — wrong reject, right pay, none auto-pick', () => {
 		const FLOWER = 'flower-id';
 		const FAIRY = 'fairy-id';
@@ -757,11 +806,12 @@ describe('runtime awakenSpirit gate', () => {
 			const state = startedGame(catalog);
 			const red = state.players.Red!;
 			red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
+			// No guids — mirrors the real server snapshot (see MatSlotSnapshot: guid?).
 			red.mats = [
-				rune(1, { id: FLOWER, name: 'Flower', guid: 'f1' }),
-				rune(2, { id: FLOWER, name: 'Flower', guid: 'f2' }),
-				rune(3, { id: FAIRY, name: 'Fairy', guid: 'y1' }),
-				rune(4, { id: FAIRY, name: 'Fairy', guid: 'y2' })
+				rune(1, { id: FLOWER, name: 'Flower' }),
+				rune(2, { id: FLOWER, name: 'Flower' }),
+				rune(3, { id: FAIRY, name: 'Fairy' }),
+				rune(4, { id: FAIRY, name: 'Fairy' })
 			];
 			return state;
 		};
@@ -831,8 +881,8 @@ describe('runtime awakenSpirit gate', () => {
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
 		red.mats = [
-			rune(1, { id: FLOWER, name: 'Flower', guid: 'f1' }),
-			rune(2, { id: FLOWER, name: 'Flower', guid: 'f2' })
+			rune(1, { id: FLOWER, name: 'Flower' }),
+			rune(2, { id: FLOWER, name: 'Flower' })
 		];
 		const res = applyGameCommand(
 			state,

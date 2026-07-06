@@ -20,6 +20,13 @@ import { WILDCARD_MAT_IDS } from '../awakenConditions';
 export interface SpendableMat {
 	/** Index into the player's `mats` array (the slot we'd flip to hasRune:false). */
 	arrayIndex: number;
+	/**
+	 * The mat's rack slot index — the one identity a production snapshot ALWAYS
+	 * carries and the value the awaken picker's `{kind,slotIndex}` refs point at.
+	 * A caller's selection binds on this (see {@link matchesSelectionKey}); `guid`
+	 * is server-absent so it can't be relied on.
+	 */
+	slotIndex: number;
 	/** Stable per-instance identifier, when present (snapshot `guid`). */
 	instanceId: string | undefined;
 	/** The mat's catalog id, when known. */
@@ -53,6 +60,7 @@ export function spendableMats(mats: MatSlotSnapshot[]): SpendableMat[] {
 		const kind: MatItemKind = slot.originId ? 'rune' : 'relic';
 		out.push({
 			arrayIndex,
+			slotIndex: slot.slotIndex,
 			instanceId: slot.guid,
 			id: slot.id,
 			name: slot.name,
@@ -92,38 +100,52 @@ export function matSatisfiesRequirement(req: AwakenMatRequirement, mat: Spendabl
 }
 
 /**
+ * Does `key` name this held mat? A selection key is either the mat's snapshot
+ * `guid` (when a caller sends explicit instance ids) or — the reliable path — the
+ * stringified rack `slotIndex` the awaken picker's `{kind,slotIndex}` refs resolve
+ * to. Production snapshots carry NO guid, so slot-index keys are what actually
+ * bind a player's payment choice; instance ids remain honoured when present.
+ * The two namespaces don't collide (UUIDs vs small decimals).
+ */
+function matchesSelectionKey(mat: SpendableMat, key: string): boolean {
+	return mat.instanceId === key || String(mat.slotIndex) === key;
+}
+
+/**
  * Try to satisfy every requirement from `available`, preferring an explicit
- * `preferIds` ordering (instance ids the caller asked to spend first). Returns
- * the chosen array indices, or `ok:false` if the cost cannot be met.
+ * `preferKeys` ordering (the mats the caller asked to spend first, named by
+ * {@link matchesSelectionKey} — slot index or instance id). Returns the chosen
+ * array indices, or `ok:false` if the cost cannot be met.
  *
  * Strategy: assign NAMED requirements first (so exact-name matches are consumed
  * before being eaten by a wildcard), then assign wildcard requirements from
  * whatever remains. No held mat is ever assigned to two requirements.
  *
- * STRICT MODE (`opts.strict`) — the F1 fix: the caller's `preferIds` become a
+ * STRICT MODE (`opts.strict`) — the F1 fix: the caller's `preferKeys` become a
  * BINDING selection rather than a preference. The pool is restricted to exactly
- * those instance ids and the cost must be satisfiable using ONLY them; a wrong,
- * short, over-long, or duplicated selection is rejected (`ok:false`) instead of
- * silently falling back to auto-picked mats. Callers gate strict on a
- * COMPLETE selection (see payAwakenCondition) so a partial pick keeps preference
- * behavior for bots/old clients.
+ * those mats and the cost must be satisfiable using ONLY them; a wrong, short,
+ * over-long, or duplicated selection is rejected (`ok:false`) instead of silently
+ * falling back to auto-picked mats. Callers gate strict on a COMPLETE selection
+ * (see payAwakenCondition) so a partial pick keeps preference behavior for
+ * bots/old clients.
  */
 export function matchMatCost(
 	requirements: AwakenMatRequirement[],
 	available: SpendableMat[],
-	preferIds?: string[],
+	preferKeys?: string[],
 	opts?: { strict?: boolean }
 ): MatMatchResult {
-	if (opts?.strict) return matchMatCostStrict(requirements, available, preferIds ?? []);
+	if (opts?.strict) return matchMatCostStrict(requirements, available, preferKeys ?? []);
 
 	const used = new Set<number>(); // array indices already consumed
 	const consumedIndices: number[] = [];
 
-	// Caller-preferred instance ids first, then the natural slot order.
-	const preference = new Set(preferIds ?? []);
+	// Caller-preferred mats first, then the natural slot order.
+	const keys = preferKeys ?? [];
+	const isPreferred = (mat: SpendableMat) => keys.some((key) => matchesSelectionKey(mat, key));
 	const ordered = [...available].sort((a, b) => {
-		const ap = a.instanceId && preference.has(a.instanceId) ? 0 : 1;
-		const bp = b.instanceId && preference.has(b.instanceId) ? 0 : 1;
+		const ap = isPreferred(a) ? 0 : 1;
+		const bp = isPreferred(b) ? 0 : 1;
 		if (ap !== bp) return ap - bp;
 		return a.arrayIndex - b.arrayIndex;
 	});
@@ -165,10 +187,11 @@ export function matchMatCost(
 }
 
 /**
- * Strict binding match (F1): resolve `wanted` (instance ids the player explicitly
- * chose) to a distinct spendable mat each, then require that exact pool to fully
- * satisfy the cost — no auto-pick fallback. Rejected when the selection is the
- * wrong count, references an unknown/unspendable id, repeats an id, or contains an
+ * Strict binding match (F1): resolve `wantedKeys` (the mats the player explicitly
+ * chose, named by {@link matchesSelectionKey} — slot index or instance id) to a
+ * distinct spendable mat each, then require that exact pool to fully satisfy the
+ * cost — no auto-pick fallback. Rejected when the selection is the wrong count,
+ * references an unknown/unspendable mat, names the same copy twice, or contains an
  * item that can't fill any remaining requirement (e.g. a Fairy Relic offered for a
  * Flower cost). Assignment order mirrors the non-strict path (named before wildcard)
  * so a valid selection consumes what the player expects.
@@ -176,22 +199,18 @@ export function matchMatCost(
 function matchMatCostStrict(
 	requirements: AwakenMatRequirement[],
 	available: SpendableMat[],
-	wanted: string[]
+	wantedKeys: string[]
 ): MatMatchResult {
 	const totalRequired = requirements.reduce((sum, r) => sum + r.count, 0);
-	if (wanted.length !== totalRequired) return { ok: false, consumedIndices: [] };
+	if (wantedKeys.length !== totalRequired) return { ok: false, consumedIndices: [] };
 
-	const byInstance = new Map<string, SpendableMat>();
-	for (const mat of available) {
-		if (mat.instanceId) byInstance.set(mat.instanceId, mat);
-	}
 	const pool: SpendableMat[] = [];
-	const seen = new Set<string>();
-	for (const id of wanted) {
-		if (seen.has(id)) return { ok: false, consumedIndices: [] }; // same copy picked twice
-		seen.add(id);
-		const mat = byInstance.get(id);
+	const seenIndices = new Set<number>();
+	for (const key of wantedKeys) {
+		const mat = available.find((m) => matchesSelectionKey(m, key));
 		if (!mat) return { ok: false, consumedIndices: [] }; // unknown / not spendable
+		if (seenIndices.has(mat.arrayIndex)) return { ok: false, consumedIndices: [] }; // same copy twice
+		seenIndices.add(mat.arrayIndex);
 		pool.push(mat);
 	}
 

@@ -2156,24 +2156,26 @@ function reduceCommand(
 			}
 
 			// A rune_cost offer lets the owner pick WHICH held runes to spend; the picker
-			// sends them as `discardRefs` (kind 'rune', by slot). Translate those to the
-			// runes' instance ids so matchMatCost prefers exactly the chosen copies.
+			// sends them as `discardRefs` (kind 'rune', by slot). Bind the selection on the
+			// mats' SLOT INDEXES — the one identity a production snapshot always carries
+			// (server-side mats have no `guid`, so keying on guid silently dropped the
+			// selection and let auto-pick override a wrong choice). A caller may still send
+			// `runeInstanceIds` (guids), which resolve by instance id when present.
 			// (Scripted text handlers read discardRefs directly and ignore this arg.)
-			let runeInstanceIds = command.runeInstanceIds;
+			let runeSelection = command.runeInstanceIds;
 			let explicitRuneSelection = !!command.runeInstanceIds?.length;
-			if (!runeInstanceIds && command.discardRefs?.length) {
+			if (!runeSelection && command.discardRefs?.length) {
 				const runeRefs = command.discardRefs.filter((r) => r.kind === 'rune');
-				const ids = runeRefs
-					.map((r) => active.player.mats.find((s) => s.slotIndex === r.slotIndex)?.guid)
-					.filter((g): g is string => !!g);
-				if (runeRefs.length) explicitRuneSelection = true;
-				if (ids.length) runeInstanceIds = ids;
+				if (runeRefs.length) {
+					explicitRuneSelection = true;
+					runeSelection = runeRefs.map((r) => String(r.slotIndex));
+				}
 			}
 			// A rune_cost awaken with an EXPLICIT rune selection binds it strictly (F1):
 			// the picks must exactly pay the cost or the flip is rejected — no silent
 			// override. Omitted/partial selections keep auto-pick (bots, old clients).
 			const strictAwakenPay = check.kind === 'rune_cost' && explicitRuneSelection;
-			const payment = payAwakenCondition(ctx, { spirit }, runeInstanceIds, strictAwakenPay);
+			const payment = payAwakenCondition(ctx, { spirit }, runeSelection, strictAwakenPay);
 			if (!payment.ok) {
 				if (payment.reason === 'invalid_discard_selection') {
 					return failure(
