@@ -410,23 +410,25 @@ test.describe('capture parity fixtures + web goldens', () => {
 			]);
 
 			// Advance combat to its reward: continue past the dice resolution, then capture the
-			// monster-reward menu if the monster was defeated (8 arcane dice make a kill likely).
+			// monster-reward takeover if the monster was defeated (8 arcane dice make a kill
+			// likely). W2 replaced the old monster-reward-menu with the MonsterRewardTakeover
+			// (reward-grid / reward-pick-count testids).
 			await host.getByTestId('combat-continue').click({ force: true });
 			const rewardVisible = await host
-				.getByTestId('monster-reward-menu')
+				.getByTestId('reward-grid')
 				.isVisible({ timeout: 20_000 })
 				.catch(() => false);
 			if (rewardVisible) {
 				await capture(host, '07', 'reward-claim', 'Red', [
 					'…continue from 06 combat-overlay',
-					'click combat-continue → monster-reward-menu (monster defeated)'
+					'click combat-continue → reward takeover (monster defeated)'
 				]);
 			} else {
 				test.info().annotations.push({
 					type: 'skip-note',
-					description: '07 reward-claim: monster survived the dice roll (no reward menu).'
+					description: '07 reward-claim: monster survived the dice roll (no reward takeover).'
 				});
-				throw new Error('07 reward-claim not reached: no monster-reward-menu (monster survived).');
+				throw new Error('07 reward-claim not reached: no reward-grid (monster survived).');
 			}
 		} finally {
 			await hostCtx.close();
