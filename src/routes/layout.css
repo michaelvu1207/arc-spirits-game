@@ -133,14 +133,14 @@
 	);
 
 	/* === Type ===
-	   Display = Bebas Neue (per brand kit "Arcane Header — bold, heroic, full of energy").
-	   Opsilon kept as fallback for any glyphs Bebas Neue doesn't ship.
+	   Display = Opsilon (Michael, 2026-07-05: brand font promoted from fallback — the
+	   hand-drawn face is the identity; Bebas Neue kept as glyph fallback).
 	   Body = Inter (per brand kit). Montserrat kept as fallback. */
-	--font-display: 'Bebas Neue', 'Opsilon', 'Cinzel', 'Impact', ui-serif, Georgia, serif;
+	--font-display: 'Opsilon', 'Bebas Neue', 'Cinzel', 'Impact', ui-serif, Georgia, serif;
 	--font-script: 'Vincendo', 'Opsilon', ui-serif, serif;
 	--font-body: 'Inter', 'Montserrat', system-ui, -apple-system, sans-serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-	/* Bebas Neue is condensed; bump tracking on display headings so it reads bold but airy. */
+	/* Opsilon is wide; keep tracking modest so dense HUD headings still fit. */
 	--display-tracking: 0.02em;
 }
 
