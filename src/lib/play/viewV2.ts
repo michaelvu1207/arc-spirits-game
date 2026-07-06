@@ -17,6 +17,7 @@
  */
 
 import type {
+	GameActor,
 	GameCommand,
 	GamePhase,
 	MemberRole,
@@ -26,6 +27,10 @@ import type {
 	SeatColor,
 	SpectatorProjection
 } from './types';
+import { ALL_DESTINATIONS, RUNE_CARRY_LIMIT } from './types';
+import { canApply } from './legality';
+import { seatHasResolutionWork } from './phases';
+import { buildSessionProjection } from './runtime';
 
 /** The command discriminant, narrowed to the real GameCommand union — never a bare string. */
 export type GameCommandType = GameCommand['type'];
@@ -158,9 +163,124 @@ export function computeLegalCommandTypes(
 	seat: SeatColor,
 	catalog: PlayCatalog
 ): GameCommandType[] {
-	throw new Error(
-		`computeLegalCommandTypes not implemented (M0c-impl): seat=${seat} phase=${state.phase} catalog=${catalog ? 'present' : 'missing'}`
-	);
+	if (state.status !== 'active') return [];
+	const player = state.players[seat];
+	if (!player) return [];
+
+	// Actor exactly as the reducer would see this seat. canApply only reads `seatColor`
+	// (via seatPlayer), so the id/name coercions here never affect a verdict — they just
+	// satisfy GameActor's non-null string fields.
+	const actor: GameActor = {
+		memberId: state.seats[seat]?.memberId ?? '',
+		displayName: state.players[seat]?.displayName ?? '',
+		role: 'player',
+		seatColor: seat
+	};
+
+	const out: GameCommandType[] = [];
+	for (const type of CANDIDATE_TYPES_BY_PHASE[state.phase] ?? []) {
+		const command = representativeCommand(type, player);
+		if (!command) continue;
+		// Superset-safe: keep on `true` OR `undefined` (not cheaply decidable), drop only on a
+		// provable `false`. The server still authoritatively validates the real command on submit.
+		if (canApply(state, actor, command, catalog) !== false) out.push(type);
+	}
+	return out;
+}
+
+/**
+ * The command types plausibly available in each phase — the probe set computeLegalCommandTypes
+ * runs through canApply. Kept phase-scoped and small so the per-view probe stays cheap: a type is
+ * only listed under a phase where it could realistically be legal (the reducer's own phase guards
+ * reject the rest anyway, but not listing them avoids pointless probes). `dismissManualPrompt` is
+ * unconditionally legal for any seated player per canApply, so it always appears in awakening — the
+ * client uses `pendingWork` (not this list) to decide whether a prompt actually needs surfacing.
+ */
+const CANDIDATE_TYPES_BY_PHASE: Record<GamePhase, GameCommandType[]> = {
+	navigation: ['lockNavigation', 'unlockNavigation'],
+	encounter: ['passEncounter', 'initiatePvp'],
+	location: [
+		'spawnHandSpirit',
+		'discardHandDraws',
+		'redrawHandDraws',
+		'startCombat',
+		'resolveMonsterReward',
+		'resolveLocationInteraction',
+		'endLocationActions'
+	],
+	benefits: ['resolveAwakenReward', 'placeAugmentOnSpirit', 'commitBenefits'],
+	awakening: [
+		'awakenSpirit',
+		'manualAwaken',
+		'resolveDecision',
+		'placeAugmentOnSpirit',
+		'dismissManualPrompt',
+		'commitAwakening'
+	],
+	cleanup: ['discardSpirit', 'discardRune', 'commitCleanup']
+};
+
+/** First face-down spirit's slot (the one that could actually awaken), else the first spirit's,
+ *  else 1 — so awaken probes point at a flippable target when one exists. */
+function firstFaceDownSlot(player: PrivatePlayerState): number {
+	return player.spirits.find((s) => s.isFaceDown)?.slotIndex ?? player.spirits[0]?.slotIndex ?? 1;
+}
+
+/**
+ * ONE representative GameCommand for a candidate type, parameterized from live seat state so the
+ * canApply probe points at the seat's most-likely-legal instance (a real hand-draw guid, a
+ * face-down spirit slot, a held rune slot). Returns null for a type we can't represent.
+ */
+function representativeCommand(
+	type: GameCommandType,
+	player: PrivatePlayerState
+): GameCommand | null {
+	switch (type) {
+		case 'lockNavigation':
+			return { type, destination: ALL_DESTINATIONS[0] };
+		case 'unlockNavigation':
+		case 'passEncounter':
+		case 'initiatePvp':
+		case 'discardHandDraws':
+		case 'redrawHandDraws':
+		case 'startCombat':
+		case 'endLocationActions':
+		case 'resolveAwakenReward':
+		case 'commitBenefits':
+		case 'commitAwakening':
+		case 'commitCleanup':
+			return { type };
+		case 'spawnHandSpirit':
+			return { type, guid: player.handDraws?.[0]?.guid ?? '' };
+		case 'resolveMonsterReward':
+			return { type, picks: [] };
+		case 'resolveLocationInteraction':
+			return { type, rowIndex: 0 };
+		case 'placeAugmentOnSpirit':
+			return {
+				type,
+				augmentIndex: 0,
+				augmentRuneId: player.unplacedAugments?.[0]?.runeId ?? '',
+				spiritSlotIndex: player.spirits[0]?.slotIndex ?? 1
+			};
+		case 'awakenSpirit':
+		case 'manualAwaken':
+			return { type, slotIndex: firstFaceDownSlot(player) };
+		case 'resolveDecision':
+			return {
+				type,
+				decisionId: player.pendingDecisions?.[0]?.id ?? '',
+				optionId: player.pendingDecisions?.[0]?.options?.[0]?.id ?? ''
+			};
+		case 'dismissManualPrompt':
+			return { type, id: player.manualPrompts?.[0]?.id ?? '' };
+		case 'discardSpirit':
+			return { type, slotIndex: player.spirits[0]?.slotIndex ?? 1 };
+		case 'discardRune':
+			return { type, slotIndex: player.mats.find((r) => r.hasRune)?.slotIndex ?? 1 };
+		default:
+			return null;
+	}
 }
 
 /**
@@ -179,9 +299,109 @@ export function describePendingWork(
 	state: PublicGameState,
 	player: PrivatePlayerState
 ): PendingWorkDescriptor[] {
-	throw new Error(
-		`describePendingWork not implemented (M0c-impl): phase=${state.phase} player=${player ? 'present' : 'missing'}`
-	);
+	const work: PendingWorkDescriptor[] = [];
+	if (!player) return work;
+
+	// Phase-independent obligations — mirror seatHasResolutionWork's pre-switch checks
+	// (an in-flight draw/reward or an unplaced augment holds the seat in ANY resolution step).
+	if (player.pendingDraw) work.push({ kind: 'draw', label: 'Resolve summon' });
+	if (player.pendingReward) work.push({ kind: 'reward', label: 'Claim monster reward' });
+	const queued = player.pendingDrawQueue?.length ?? 0;
+	if (queued > 0) {
+		work.push({
+			kind: 'draw',
+			label: queued === 1 ? 'Resolve queued summon' : `Resolve ${queued} queued summons`,
+			count: queued
+		});
+	}
+	const augments = player.unplacedAugments?.length ?? 0;
+	if (augments > 0) {
+		work.push({
+			kind: 'augment',
+			label: augments === 1 ? 'Place Spirit Augment' : `Place ${augments} Spirit Augments`,
+			count: augments
+		});
+	}
+
+	// Phase-specific obligations — mirror seatHasResolutionWork's switch exactly, so
+	// (work.length > 0) === seatHasResolutionWork(state, seat) for the same player.
+	switch (state.phase) {
+		case 'benefits':
+			if (player.pendingAwakenReward) work.push({ kind: 'claim', label: 'Claim class rewards' });
+			break;
+		case 'awakening': {
+			const offers = player.awakenOffers ?? [];
+			if (offers.length > 0) {
+				work.push({
+					kind: 'awaken',
+					label: offers.length === 1 ? 'Awaken a spirit' : `Awaken ${offers.length} spirits`,
+					count: offers.length,
+					slotIndexes: offers.map((o) => o.slotIndex)
+				});
+			}
+			const prompts = player.manualPrompts ?? [];
+			if (prompts.length > 0) {
+				work.push({
+					kind: 'manualPrompt',
+					label:
+						prompts.length === 1
+							? 'Confirm a hand-resolved effect'
+							: `Confirm ${prompts.length} hand-resolved effects`,
+					count: prompts.length,
+					ids: prompts.map((p) => p.id)
+				});
+			}
+			const decisions = player.pendingDecisions ?? [];
+			if (decisions.length > 0) {
+				work.push({
+					kind: 'decision',
+					label:
+						decisions.length === 1 ? 'Resolve a decision' : `Resolve ${decisions.length} decisions`,
+					count: decisions.length,
+					ids: decisions.map((d) => d.id)
+				});
+			}
+			// Still-eligible face-down flips: awakenEligible ∩ isFaceDown (mirrors the `.some` check).
+			const flippable = (player.awakenEligible ?? []).filter(
+				(slot) => player.spirits.find((s) => s.slotIndex === slot)?.isFaceDown
+			);
+			if (flippable.length > 0) {
+				work.push({
+					kind: 'awaken',
+					label:
+						flippable.length === 1
+							? 'Flip a face-down spirit'
+							: `Flip ${flippable.length} face-down spirits`,
+					count: flippable.length,
+					slotIndexes: flippable
+				});
+			}
+			break;
+		}
+		case 'cleanup': {
+			const heldRunes = (player.mats ?? []).filter((r) => r.hasRune).length;
+			if (heldRunes > RUNE_CARRY_LIMIT) {
+				const overflow = heldRunes - RUNE_CARRY_LIMIT;
+				work.push({
+					kind: 'overflow',
+					label: overflow === 1 ? 'Trim 1 rune' : `Trim ${overflow} runes`,
+					count: overflow
+				});
+			}
+			if (player.pendingCorruptionDiscard && player.spirits.length > 0) {
+				const count = player.pendingCorruptionDiscard.count;
+				work.push({
+					kind: 'corruptionDiscard',
+					label: count === 1 ? 'Discard 1 corrupted spirit' : `Discard ${count} corrupted spirits`,
+					count
+				});
+			}
+			break;
+		}
+		default:
+			break;
+	}
+	return work;
 }
 
 /**
@@ -203,9 +423,20 @@ export function computeAffordances(
 	seat: SeatColor,
 	catalog: PlayCatalog
 ): SeatAffordances {
-	throw new Error(
-		`computeAffordances not implemented (M0c-impl): seat=${seat} phase=${state.phase} catalog=${catalog ? 'present' : 'missing'}`
-	);
+	const phase = state.phase;
+	const legalCommandTypes = computeLegalCommandTypes(state, seat, catalog);
+	const passCommand = PASS_COMMAND_BY_PHASE[phase];
+	const player = state.players[seat];
+	return {
+		seat,
+		phase,
+		phaseLabel: PHASE_LABELS[phase],
+		legalCommandTypes,
+		hasResolutionWork: state.status === 'active' && seatHasResolutionWork(state, seat),
+		canPass: !!passCommand && legalCommandTypes.includes(passCommand),
+		pendingWork: player ? describePendingWork(state, player) : [],
+		deadline: state.phaseDeadline
+	};
 }
 
 /**
@@ -225,7 +456,9 @@ export function buildRoomViewV2(
 	member: RoomViewMember,
 	catalog: PlayCatalog
 ): RoomViewV2 {
-	throw new Error(
-		`buildRoomViewV2 not implemented (M0c-impl): viewerSeat=${viewer.seatColor} member=${member.id} phase=${state.phase} catalog=${catalog ? 'present' : 'missing'}`
-	);
+	const projection = buildSessionProjection(state, viewer);
+	const affordances: Partial<Record<SeatColor, SeatAffordances>> = viewer.seatColor
+		? { [viewer.seatColor]: computeAffordances(state, viewer.seatColor, catalog) }
+		: {};
+	return { version: 2, projection, member, affordances };
 }
