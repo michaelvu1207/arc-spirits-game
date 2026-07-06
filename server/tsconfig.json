@@ -1,0 +1,22 @@
+{
+	// Standalone typecheck for the room server: `npx tsc -p server --noEmit`.
+	// Extends the repo config for the $lib/$app/$env *type* path-mappings (the server code
+	// imports the engine via relative ../src paths, but the engine's own `import type
+	// '$lib/...'` needs those mappings to resolve during the check). verbatimModuleSyntax
+	// is inherited from the generated SvelteKit config (type-only imports are mandatory).
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node"],
+		"lib": ["ESNext"],
+		// The engine is browser/isomorphic; the server code is Node. Keep both happy.
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		// smoke.mjs is a runnable Node script, not typed server code — keep it out of the
+		// type program (the root config's checkJs would otherwise flag it).
+		"allowJs": false,
+		"checkJs": false
+	},
+	"include": ["**/*.ts"],
+	"exclude": ["smoke.mjs"]
+}
