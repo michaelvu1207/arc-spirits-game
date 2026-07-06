@@ -295,12 +295,15 @@ export class RoomRegistry {
 		const raced = this.rooms.get(roomCode);
 		if (raced && raced.host) return raced;
 		const entry: RoomEntry = { host, connections: placeholder.connections };
+		let lastBroadcastRev = entry.host.getRevision();
 		entry.host.onServerAdvance = () => {
-			const from = entry.host.getRevision();
-			// Server-driven advances (M0e) broadcast to everyone.
-			this.broadcast(entry, from, entry.host.getRevision());
+			// Server-driven advances (deadline enforcement / bot moves) broadcast to everyone.
+			const to = entry.host.getRevision();
+			this.broadcast(entry, lastBroadcastRev, to);
+			lastBroadcastRev = to;
 		};
 		this.rooms.set(roomCode, entry);
+		entry.host.start(); // begin the in-process tick loop (deadline enforcement + bots)
 		return entry;
 	}
 
@@ -322,8 +325,8 @@ export class RoomRegistry {
 				}
 			}
 
-			entry.host.tick(); // M0e seam (deadline enforcement + bot ticks)
-
+			// Deadline enforcement + bot moves run on the host's own tick timer (started on
+			// load), not here — the sweep only snapshots + evicts.
 			if (dueSnapshot) {
 				try {
 					await entry.host.snapshotIfDirty();
@@ -335,6 +338,7 @@ export class RoomRegistry {
 			// Evict an idle room with no sockets (final snapshot on the way out).
 			const idle = now - entry.host.idleSince() > ROOM_IDLE_EVICT_MS;
 			if (entry.connections.size === 0 && (idle || entry.host.isTerminal())) {
+				entry.host.stop(); // halt the tick timer before dropping the room
 				try {
 					await entry.host.flush();
 				} catch (err) {
@@ -350,6 +354,7 @@ export class RoomRegistry {
 		if (this.sweepTimer) clearInterval(this.sweepTimer);
 		const flushes: Promise<void>[] = [];
 		for (const entry of this.rooms.values()) {
+			entry.host.stop(); // halt tick timers before the final flush
 			flushes.push(
 				entry.host.flush().catch((err) => {
 					console.error('[shutdown] flush failed:', (err as Error).message);

@@ -4,10 +4,13 @@
  * this host is the sole writer of its own state). Snapshots to Supabase on a dirty
  * interval + terminal transitions + graceful shutdown. Crash-recovery is a reload from
  * the last snapshot (stateless-restartable).
+ *
+ * M0e adds the live tick loop: an in-process timer drives deadline enforcement + bot
+ * moves (no per-command Supabase write) and requests a broadcast whenever the revision
+ * advances — the browser-timer /bots/tick POST and HTTP deadline drain, moved server-side.
  */
 
 import { applyGameCommand, applyDeadlineAdvance } from '../src/lib/play/runtime';
-import { SEAT_COLORS, phaseDurationMs } from '../src/lib/play/types';
 import type {
 	CommandResult,
 	GameActor,
@@ -22,55 +25,20 @@ import {
 	type PlaySessionRow
 } from './supabase';
 import { loadCatalog } from './catalog';
+import { stampPhaseDeadline, applyNavLockDeadline, deadlinePassed } from './deadline';
+import {
+	botTuningFromEnv,
+	getNeuralPolicy,
+	hasBotSeats,
+	phaseHoldoutSeats,
+	seatIsBot,
+	stepBotSeats,
+	type BotTuning,
+	type NeuralPolicy
+} from './bots';
 
-const NAV_GRACE_MS = 5000;
-
-/**
- * Stamp the wall-clock deadline for the CURRENT phase if unset. Ported verbatim from
- * service.stampPhaseDeadline — the pure reducer nulls phaseDeadline on every phase entry,
- * so the server re-stamps it against the SERVER clock after a command resolves.
- */
-function stampPhaseDeadline(state: PublicGameState): void {
-	if (state.status !== 'active') {
-		state.phaseDeadline = null;
-		return;
-	}
-	if (state.phase === 'navigation' && !state.revealedDestinations) {
-		const dur = state.navigationDurationMs;
-		if (dur == null) {
-			state.phaseDeadline = null;
-			state.navigationDeadline = null;
-			state.navigationFullDeadline = null;
-			return;
-		}
-		if (state.phaseDeadline == null) state.phaseDeadline = Date.now() + dur;
-		state.navigationDeadline ??= state.phaseDeadline;
-		state.navigationFullDeadline ??= state.navigationDeadline;
-		return;
-	}
-	if (state.phaseDeadline == null) {
-		state.phaseDeadline = Date.now() + phaseDurationMs(state.phase);
-	}
-}
-
-/** Collapse the navigation deadline to a short grace once every seat is locked. Ported
- *  verbatim from service.applyNavLockDeadline. */
-function applyNavLockDeadline(state: PublicGameState): void {
-	if (state.status !== 'active' || state.phase !== 'navigation' || state.revealedDestinations)
-		return;
-	const seats = state.activeSeats;
-	const allLocked = seats.length > 0 && seats.every((s) => state.navigation[s]?.locked === true);
-	const full = state.navigationFullDeadline;
-	if (allLocked) {
-		const grace = Date.now() + NAV_GRACE_MS;
-		const target = full == null ? grace : Math.min(full, grace);
-		state.navigationDeadline = target;
-		state.phaseDeadline = target;
-	} else {
-		state.navigationDeadline = full;
-		state.phaseDeadline = full;
-	}
-}
+/** Live bot/deadline tick cadence — matches today's client `/bots/tick` timer (1300ms). */
+const BOT_TICK_MS = Number(process.env.ARC_WS_BOT_TICK_MS ?? 1300);
 
 export type ApplyOutcome =
 	| { ok: true; revision: number }
@@ -84,17 +52,23 @@ export class RoomHost {
 	private ended_at: string | null;
 	private catalog: PlayCatalog;
 	private botMembers: Map<string, string | null>;
+	private tuning: BotTuning = botTuningFromEnv();
 
 	private dirty = false;
 	private queue: Promise<unknown> = Promise.resolve();
 	private lastActivityAt = Date.now();
+	private persistDisabled = false;
+
+	private timer: NodeJS.Timeout | null = null;
+	private stopped = false;
+	private neuralPromise: Promise<NeuralPolicy | null> | null = null;
 
 	/** Set by the registry so the host can request a broadcast after a server-driven
-	 *  revision advance (deadline enforcement / bot tick in M0e). */
+	 *  revision advance (deadline enforcement / bot tick). */
 	onServerAdvance: (() => void) | null = null;
 
 	private constructor(params: {
-		session: PlaySessionRow;
+		session: Pick<PlaySessionRow, 'id' | 'room_code' | 'started_at' | 'ended_at'>;
 		state: PublicGameState;
 		catalog: PlayCatalog;
 		botMembers: Map<string, string | null>;
@@ -113,12 +87,24 @@ export class RoomHost {
 	static async load(roomCode: string): Promise<RoomHost | null> {
 		const session = await getSessionByRoomCode(roomCode);
 		if (!session) return null;
-		const [catalog, botMembers] = await Promise.all([
-			loadCatalog(),
-			loadBotMembers(session.id)
-		]);
-		const state = parseState(session);
-		return new RoomHost({ session, state, catalog, botMembers });
+		const [catalog, botMembers] = await Promise.all([loadCatalog(), loadBotMembers(session.id)]);
+		return new RoomHost({ session, state: parseState(session), catalog, botMembers });
+	}
+
+	/** In-memory host with persistence disabled — for the bot-game bench (no Supabase). */
+	static forBench(
+		state: PublicGameState,
+		catalog: PlayCatalog,
+		botMembers: Map<string, string | null>
+	): RoomHost {
+		const host = new RoomHost({
+			session: { id: 'bench', room_code: state.roomCode, started_at: null, ended_at: null },
+			state,
+			catalog,
+			botMembers
+		});
+		host.persistDisabled = true;
+		return host;
 	}
 
 	getState(): PublicGameState {
@@ -145,13 +131,24 @@ export class RoomHost {
 		this.botMembers = await loadBotMembers(this.sessionId);
 	}
 
+	private getNeural(): Promise<NeuralPolicy | null> {
+		return (this.neuralPromise ??= getNeuralPolicy());
+	}
+
+	/** Chain work behind the single per-room queue so nothing interleaves with a command. */
+	private enqueue<T>(fn: () => T | Promise<T>): Promise<T> {
+		const run = this.queue.then(fn);
+		this.queue = run.catch(() => undefined);
+		return run;
+	}
+
 	/**
 	 * Apply a command against the authoritative state. Serialized behind the per-room
-	 * queue so concurrent submits from different sockets never interleave. On success the
-	 * revision bumps and the snapshot is marked dirty; the caller broadcasts the delta.
+	 * queue so concurrent submits (different sockets, or the bot tick) never interleave.
+	 * On success the revision bumps and the snapshot is marked dirty.
 	 */
 	applyCommand(actor: GameActor, command: GameCommand): Promise<ApplyOutcome> {
-		const run = this.queue.then((): ApplyOutcome => {
+		return this.enqueue((): ApplyOutcome => {
 			this.lastActivityAt = Date.now();
 			if (this.state.status === 'closed') {
 				return { ok: false, error: { code: 'room_closed', message: 'This room has closed.' } };
@@ -167,29 +164,105 @@ export class RoomHost {
 			this.dirty = true;
 			return { ok: true, revision: next.revision };
 		});
-		// Keep the queue alive even if this step throws, so one bad command can't wedge the room.
-		this.queue = run.catch(() => undefined);
-		return run;
+	}
+
+	// ── Live tick loop (deadline enforcement + bots) ─────────────────────────────────
+
+	/** Start the in-process tick timer (idempotent). Drives deadline enforcement + bot
+	 *  moves at BOT_TICK_MS and requests a broadcast on every revision advance. Self-
+	 *  scheduling (setTimeout) so a slow tick never overlaps the next. */
+	start(): void {
+		if (this.timer || this.stopped) return;
+		const loop = async () => {
+			this.timer = null;
+			if (this.stopped) return;
+			try {
+				if (await this.runTick()) this.onServerAdvance?.();
+			} catch (err) {
+				console.error(`[room ${this.roomCode}] tick failed:`, (err as Error).message);
+			}
+			if (!this.stopped) {
+				this.timer = setTimeout(loop, BOT_TICK_MS);
+				this.timer.unref?.();
+			}
+		};
+		this.timer = setTimeout(loop, BOT_TICK_MS);
+		this.timer.unref?.();
+	}
+
+	/** Stop the tick timer (eviction / shutdown). */
+	stop(): void {
+		this.stopped = true;
+		if (this.timer) clearTimeout(this.timer);
+		this.timer = null;
 	}
 
 	/**
-	 * Per-room timer hook. M0e will fill this in with deadline enforcement
-	 * (applyDeadlineAdvance past a passed phaseDeadline) + bot ticking, calling
-	 * onServerAdvance() to broadcast. For M0 it is intentionally inert: commands stamp
-	 * their own deadlines (above), and no seat is auto-advanced yet.
-	 *
-	 * `applyDeadlineAdvance` is imported here so the M0e seam has its dependency ready.
+	 * One tick of server authority: (1) enforce a passed wall-clock deadline, (2) advance
+	 * every seated bot through the current phase, (3) if the phase is now held up ONLY by
+	 * bots (no human still choosing) and they made no progress, enforce the deadline
+	 * immediately instead of idling to the wall clock — the dead-wait elimination that lets
+	 * a bot game run in seconds. Returns whether the revision advanced. Public so the bench
+	 * and tests can drive it directly.
 	 */
-	tick(): void {
-		void applyDeadlineAdvance; // referenced so the M0e seam keeps the import wired
-		// M0e: if (this.state.status === 'active' && this.state.phaseDeadline != null &&
-		//   Date.now() > this.state.phaseDeadline) { advance one phase; broadcast. }
+	async runTick(): Promise<boolean> {
+		if (this.state.status !== 'active') return false;
+		const startRev = this.state.revision;
+
+		// 1. Wall-clock deadline enforcement — fires with zero connected sockets too.
+		await this.enqueue(() => {
+			if (deadlinePassed(this.state)) {
+				applyDeadlineAdvance(this.state, this.catalog);
+				stampPhaseDeadline(this.state);
+				this.dirty = true;
+			}
+		});
+
+		// 2. Bot moves through the in-memory queue (no per-command DB write).
+		let issued = 0;
+		if (this.state.status === 'active' && hasBotSeats(this.state, this.botMembers)) {
+			const neuralPolicy = await this.getNeural();
+			issued = await stepBotSeats({
+				getState: () => this.state,
+				applyBotCommand: (actor, command) => this.applyCommand(actor, command),
+				catalog: this.catalog,
+				botMembers: this.botMembers,
+				neuralPolicy,
+				tuning: this.tuning
+			});
+		}
+
+		// 3. Bot-blocked fast-forward: the phase is waiting only on stuck bots.
+		if (this.state.status === 'active' && issued === 0) {
+			await this.enqueue(() => this.fastForwardIfBotBlocked());
+		}
+
+		return this.state.revision !== startRev;
 	}
 
-	/** Persist the snapshot when dirty (interval + terminal). Clears the dirty flag first
-	 *  so a concurrent mutation re-dirties rather than being lost. */
+	/**
+	 * Advance immediately when a NON-navigation phase's deadline is being held up only by
+	 * bots (every holdout seat is a bot — no human is still choosing) and the bots made no
+	 * progress this tick. Mirrors what the wall-clock deadline would eventually do
+	 * (applyDeadlineAdvance), minus the dead wait. Navigation keeps its normal deadline /
+	 * back-out grace so a human's lock window is never cut short.
+	 */
+	private fastForwardIfBotBlocked(): void {
+		const s = this.state;
+		if (s.status !== 'active' || s.phase === 'navigation' || s.phaseDeadline == null) return;
+		const holdouts = phaseHoldoutSeats(s);
+		if (holdouts.length === 0) return;
+		if (holdouts.some((seat) => !seatIsBot(s, seat, this.botMembers))) return; // a human is holding it up
+		applyDeadlineAdvance(s, this.catalog);
+		stampPhaseDeadline(s);
+		this.dirty = true;
+	}
+
+	// ── Persistence ──────────────────────────────────────────────────────────────────
+
+	/** Persist the snapshot when dirty (interval + terminal). */
 	async snapshotIfDirty(): Promise<void> {
-		if (!this.dirty) return;
+		if (!this.dirty || this.persistDisabled) return;
 		this.dirty = false;
 		try {
 			await this.persist();
@@ -201,6 +274,7 @@ export class RoomHost {
 
 	/** Force a snapshot regardless of the dirty flag (graceful shutdown). */
 	async flush(): Promise<void> {
+		if (this.persistDisabled) return;
 		this.dirty = false;
 		await this.persist();
 	}
@@ -210,7 +284,6 @@ export class RoomHost {
 			session: { id: this.sessionId, started_at: this.started_at, ended_at: this.ended_at },
 			state: this.state
 		});
-		// Mirror the column stamps we just wrote so a later persist doesn't re-stamp.
 		if (this.started_at == null && this.state.status === 'active') {
 			this.started_at = new Date().toISOString();
 		}
@@ -223,7 +296,7 @@ export class RoomHost {
 		this.lastActivityAt = Date.now();
 	}
 
-	/** Idle since `lastActivityAt` older than `idleMs` (used with a zero-socket check). */
+	/** Wall-clock of the last command/join, for idle eviction. */
 	idleSince(): number {
 		return this.lastActivityAt;
 	}

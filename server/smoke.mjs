@@ -74,7 +74,13 @@ async function main() {
 	// 1) Boot the server as a child process on a random port with the dev seed enabled.
 	child = spawn('npx', ['tsx', join(HERE, 'index.ts')], {
 		cwd: join(HERE, '..'),
-		env: { ...process.env, PORT: String(PORT), ARC_WS_ALLOW_DEBUG_SEED: '1' },
+		env: {
+			...process.env,
+			PORT: String(PORT),
+			ARC_WS_ALLOW_DEBUG_SEED: '1',
+			// Fast tick so the smoke observes bot moves + deadline enforcement quickly.
+			ARC_WS_BOT_TICK_MS: '200'
+		},
 		stdio: ['ignore', 'pipe', 'pipe']
 	});
 	let serverLog = '';
@@ -175,7 +181,64 @@ async function main() {
 	spectator.close();
 	reconnect.close();
 
+	// ── M0e: in-process bot ticking ───────────────────────────────────────────────
+	// 10) Seed 1 human + 3 bots. The human joins and sends NO commands; the server's
+	//     in-process tick loop must drive the bots so the human receives deltas with an
+	//     advancing revision — proving bots act with zero client tick POSTs.
+	const botSeedRes = await fetch(`${BASE}/debug/seed-bots?botCount=3&navMs=1000`, { method: 'POST' });
+	const botSeed = await botSeedRes.json();
+	check('bot room seeded (1 human + 3 bots)', !!botSeed.roomCode && botSeed.botSeats?.length === 3, `room=${botSeed.roomCode} bots=${JSON.stringify(botSeed.botSeats)}`);
+
+	const humanSock = await openSocket();
+	humanSock.send(JSON.stringify({ t: 'join', roomCode: botSeed.roomCode, memberToken: botSeed.humanMemberId }));
+	const humanJoined = await nextMessage(humanSock, (m) => m.t === 'joined');
+	const botStartRev = humanJoined.revision;
+	let deltaCount = 0;
+	humanSock.on('message', (d) => { try { if (JSON.parse(d.toString()).t === 'delta') deltaCount += 1; } catch {} });
+	const tBot0 = performance.now();
+	// No command is ever sent from this client — wait for the bots to advance the game.
+	const botDelta = await nextMessage(humanSock, (m) => m.t === 'delta' && m.toRevision > botStartRev, 12000);
+	const botFirstDeltaMs = performance.now() - tBot0;
+	check('bots advance the game with NO client tick POSTs', botDelta.toRevision > botStartRev, `rev ${botStartRev} → ${botDelta.toRevision} in ${botFirstDeltaMs.toFixed(0)}ms`);
+	check('human receives autonomous bot deltas', botDelta.patch?.version === 2, `phase=${botDelta.patch?.projection?.phase}`);
+	// Let it run a bit to confirm continued autonomy.
+	await new Promise((r) => setTimeout(r, 2500));
+	check('bots keep acting (multiple deltas)', deltaCount >= 1, `deltas received=${deltaCount}`);
+	humanSock.close();
+
+	// ── M0e: deadline enforcement ─────────────────────────────────────────────────
+	// 11) Seed 1 human + 0 bots with a short nav deadline. The human sends NO command;
+	//     the in-process deadline-enforcement path must advance the phase on its own.
+	const dlSeedRes = await fetch(`${BASE}/debug/seed-bots?botCount=0&navMs=700`, { method: 'POST' });
+	const dlSeed = await dlSeedRes.json();
+	check('deadline room seeded (1 human, short nav timer)', !!dlSeed.roomCode);
+	const dlSock = await openSocket();
+	dlSock.send(JSON.stringify({ t: 'join', roomCode: dlSeed.roomCode, memberToken: dlSeed.humanMemberId }));
+	const dlJoined = await nextMessage(dlSock, (m) => m.t === 'joined');
+	const tDl0 = performance.now();
+	const dlDelta = await nextMessage(dlSock, (m) => m.t === 'delta' && m.toRevision > dlJoined.revision, 8000);
+	check('phase advances in-process via deadline enforcement (no commands)', dlDelta.toRevision > dlJoined.revision, `rev ${dlJoined.revision} → ${dlDelta.toRevision} after ${(performance.now() - tDl0).toFixed(0)}ms`);
+
+	dlSock.close();
+
+	// 11b) Zero-socket proof: seed a room with a longer nav timer, join to load the host,
+	//      close the socket BEFORE the deadline fires, wait with NO connections, then
+	//      reconnect and confirm the phase advanced in-process while nobody was watching.
+	const zsSeedRes = await fetch(`${BASE}/debug/seed-bots?botCount=0&navMs=2000`, { method: 'POST' });
+	const zsSeed = await zsSeedRes.json();
+	const zsSock = await openSocket();
+	zsSock.send(JSON.stringify({ t: 'join', roomCode: zsSeed.roomCode, memberToken: zsSeed.humanMemberId }));
+	const zsJoined = await nextMessage(zsSock, (m) => m.t === 'joined');
+	zsSock.close(); // no connections from here on
+	await new Promise((r) => setTimeout(r, 3500)); // host keeps ticking; nav deadline passes unwatched
+	const zsSock2 = await openSocket();
+	zsSock2.send(JSON.stringify({ t: 'join', roomCode: zsSeed.roomCode, memberToken: zsSeed.humanMemberId }));
+	const zsRejoined = await nextMessage(zsSock2, (m) => m.t === 'joined');
+	check('deadline enforcement fires with ZERO connected sockets', zsRejoined.revision > zsJoined.revision, `rev ${zsJoined.revision} → ${zsRejoined.revision} while unwatched`);
+	zsSock2.close();
+
 	console.log(`\ncommand → ack latency: ${ackMs.toFixed(1)}ms`);
+	console.log(`bot first-move latency (join → autonomous delta): ${botFirstDeltaMs.toFixed(0)}ms`);
 }
 
 main()

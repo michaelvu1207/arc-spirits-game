@@ -109,3 +109,123 @@ export async function seedDebugRoom(displayName = 'Smoke Host'): Promise<SeededR
 
 	return { roomCode, memberId, seat, sampleCommand: legal[0] };
 }
+
+export interface SeededBotRoom {
+	roomCode: string;
+	/** The one human (host) seat's member id — the client the smoke joins as. */
+	humanMemberId: string;
+	humanSeat: SeatColor;
+	botSeats: SeatColor[];
+}
+
+/**
+ * Seed a STARTED game with one human (host) seat + `botCount` bot seats (is_bot=true,
+ * bot_profile=neural), parked in navigation. Drives the whole lobby→active transition
+ * through the real reducer, then persists the session + member rows. Used by the M0e smoke
+ * to prove bots act in-process (with bots) and deadline enforcement fires (with 0 bots +
+ * a short nav timer). `navMs` sets the navigation deadline.
+ */
+export async function seedBotRoom(opts: {
+	botCount: number;
+	navMs?: number;
+}): Promise<SeededBotRoom> {
+	const catalog = await loadCatalog();
+	const guardianNames = catalog.guardians.map((g) => g.name);
+	const seatCount = 1 + opts.botCount;
+	if (seatCount > SEAT_COLORS.length) throw new Error('seed: too many seats.');
+	const seats = SEAT_COLORS.slice(0, seatCount);
+	const roomCode = randomRoomCode();
+	const admin = getPlayAdmin();
+
+	// 1) Session + member rows: seat 0 is the human host; the rest are bots.
+	const lobby = createLobbyState({ roomCode, guardianNames });
+	const sessionInsert = await admin
+		.from(PLAY_TABLES.SESSIONS)
+		.insert({
+			room_code: roomCode,
+			status: lobby.status,
+			revision: lobby.revision,
+			scenario: lobby.scenario,
+			public_state: lobby,
+			mode: 'casual'
+		})
+		.select('id')
+		.single();
+	if (sessionInsert.error) throw new Error(`seedBot: session insert: ${sessionInsert.error.message}`);
+	const sessionId = (sessionInsert.data as { id: string }).id;
+
+	const memberIds: string[] = [];
+	for (let i = 0; i < seatCount; i += 1) {
+		const isBot = i > 0;
+		const insert = await admin
+			.from(PLAY_TABLES.MEMBERS)
+			.insert({
+				session_id: sessionId,
+				display_name: isBot ? 'Nameless Spirit' : 'Smoke Host',
+				role: i === 0 ? 'host' : 'spectator',
+				private_state: {},
+				is_bot: isBot,
+				bot_profile: isBot ? 'neural' : null
+			})
+			.select('id')
+			.single();
+		if (insert.error) throw new Error(`seedBot: member insert: ${insert.error.message}`);
+		memberIds.push((insert.data as { id: string }).id);
+	}
+
+	// 2) Drive lobby → active through the real reducer (each seat claims + picks a guardian).
+	let state: PublicGameState = createLobbyState({ roomCode, guardianNames });
+	for (let i = 0; i < seatCount; i += 1) {
+		const actor: GameActor = {
+			memberId: memberIds[i],
+			displayName: i === 0 ? 'Smoke Host' : 'Nameless Spirit',
+			role: i === 0 ? 'host' : 'player',
+			seatColor: null
+		};
+		for (const command of [
+			{ type: 'claimSeat', seatColor: seats[i] },
+			{ type: 'selectGuardian', guardianName: guardianNames[i] }
+		] as GameCommand[]) {
+			const r = applyGameCommand(state, actor, command, catalog);
+			if (!r.ok) throw new Error(`seedBot: ${command.type} seat ${seats[i]}: ${r.error.message}`);
+			state = r.state;
+		}
+	}
+	state.navigationDurationMs = opts.navMs ?? 2000;
+	{
+		const hostActor: GameActor = {
+			memberId: memberIds[0],
+			displayName: 'Smoke Host',
+			role: 'host',
+			seatColor: null
+		};
+		const r = applyGameCommand(state, hostActor, { type: 'startGame' }, catalog);
+		if (!r.ok) throw new Error(`seedBot: startGame: ${r.error.message}`);
+		state = r.state;
+	}
+	// Stamp a navigation deadline so the deadline-enforcement path has something to fire on.
+	if (state.phase === 'navigation' && state.navigationDurationMs != null) {
+		state.phaseDeadline = Date.now() + state.navigationDurationMs;
+	}
+
+	// 3) Persist the active state.
+	const persist = await admin
+		.from(PLAY_TABLES.SESSIONS)
+		.update({
+			status: state.status,
+			revision: state.revision,
+			game_id: state.gameId,
+			scenario: state.scenario,
+			public_state: state,
+			started_at: new Date().toISOString()
+		})
+		.eq('id', sessionId);
+	if (persist.error) throw new Error(`seedBot: persist: ${persist.error.message}`);
+
+	return {
+		roomCode,
+		humanMemberId: memberIds[0],
+		humanSeat: seats[0],
+		botSeats: seats.slice(1)
+	};
+}

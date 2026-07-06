@@ -44,6 +44,20 @@ const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
 		})();
 		return;
 	}
+	if (req.method === 'POST' && req.url?.startsWith('/debug/seed-bots') && ALLOW_DEBUG_SEED) {
+		const params = new URL(req.url, 'http://localhost').searchParams;
+		const botCount = Number(params.get('botCount') ?? 3);
+		const navMs = params.has('navMs') ? Number(params.get('navMs')) : undefined;
+		void (async () => {
+			try {
+				const { seedBotRoom } = await import('./debugSeed');
+				sendJson(res, 200, await seedBotRoom({ botCount, navMs }));
+			} catch (err) {
+				sendJson(res, 500, { ok: false, error: err instanceof Error ? err.message : String(err) });
+			}
+		})();
+		return;
+	}
 	sendJson(res, 404, { ok: false, error: 'not found' });
 });
 
