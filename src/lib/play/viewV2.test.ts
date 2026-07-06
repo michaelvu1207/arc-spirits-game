@@ -14,12 +14,18 @@ import type {
 import {
 	buildRoomViewV2,
 	computeAffordances,
+	computeEncounter,
+	computeInfiltratorSwap,
 	computeLegalCommandTypes,
+	computePendingReward,
 	describePendingWork,
 	PASS_COMMAND_BY_PHASE,
 	PHASE_LABELS,
 	type RoomViewMember
 } from './viewV2';
+import { augmentClassChoices, augmentPlacementEligibility, SPIRIT_AUGMENT_CLASSES } from './augments';
+import { decisionPickerSpec } from './decisionPicker';
+import { enumerateCandidates } from './ml/actions';
 
 // ── Fixture harness (mirrors phases.test.ts: drive a real game via the reducer) ───────
 const HOST: GameActor = { memberId: 'm-host', displayName: 'Host', role: 'host', seatColor: null };
@@ -451,5 +457,380 @@ describe('computeAffordances — passBlockedReason (§5.4, F3)', () => {
 		const nav = locationState([]);
 		nav.phase = 'navigation';
 		expect(computeAffordances(nav, 'Red', LOC_CATALOG).passBlockedReason).toBeUndefined();
+	});
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// Wave 2 engine: resolved rewards (§5.3), pendingWork extensions (§5.4), reducer
+// hardening (F8/F9 + picker), and the bot-compat proof that hardening never touches bots.
+// ════════════════════════════════════════════════════════════════════════════════════
+
+/** Real reward-track VP icon id (mirrors REWARD_ICON_SEMANTICS / the live DB). */
+const VP_THREE_ICON = '54a61c34-6e05-44df-a4d1-115e004af31e';
+
+/** Apply expecting a REJECTION; returns the error so the code can be asserted. */
+function reject(state: PublicGameState, actor: GameActor, command: GameCommand): { code: string } {
+	const result = applyGameCommand(state, actor, command, CATALOG);
+	if (result.ok) throw new Error(`${command.type} unexpectedly succeeded`);
+	return result.error;
+}
+
+// ── §5.3 monster rewards resolved server-side ─────────────────────────────────────────
+describe('computePendingReward — resolved monster rewards (§5.3)', () => {
+	test('a pending reward resolves to labelled, indexed options; a chooseRune carries its options', () => {
+		const state = inPhase(2, 'location');
+		clearWork(state, 'Red');
+		state.players.Red!.pendingReward = {
+			monsterId: 'm1',
+			monsterName: 'Gloomfang',
+			rewardTrack: [VP_THREE_ICON, ANY_RELIC_ICON],
+			chooseAmount: 1
+		};
+		const resolved = computeAffordances(state, 'Red', CATALOG).pendingReward!;
+		expect(resolved.monsterName).toBe('Gloomfang');
+		expect(resolved.chooseAmount).toBe(1);
+		const [vp, relic] = resolved.options;
+		expect(vp).toEqual({ index: 0, label: '3 Victory Points', iconToken: VP_THREE_ICON, effect: 'vp' });
+		expect(vp.chooseOptions).toBeUndefined();
+		expect(relic.index).toBe(1);
+		expect(relic.effect).toBe('chooseRune');
+		expect(relic.chooseOptions?.length ?? 0).toBeGreaterThan(0);
+		// `index` is exactly what resolveMonsterReward.picks selects by — must match the resolver.
+		expect(resolved.options.map((o) => o.index)).toEqual([0, 1]);
+	});
+
+	test('no pendingReward → no resolved reward', () => {
+		const state = inPhase(2, 'location');
+		clearWork(state, 'Red');
+		expect(computeAffordances(state, 'Red', CATALOG).pendingReward).toBeUndefined();
+		expect(computePendingReward(state.players.Red!)).toBeUndefined();
+	});
+});
+
+// ── §5.4 corruptionDiscard / overflow descriptor detail ───────────────────────────────
+describe('describePendingWork — §5.4 corruption + overflow detail', () => {
+	test('corruptionDiscard carries its reason + eligible spirit slots', () => {
+		const state = inPhase(7, 'cleanup');
+		clearWork(state, 'Red');
+		const red = state.players.Red!;
+		red.spirits = [
+			{ slotIndex: 1, id: 'a', name: 'A', cost: 2, classes: {}, origins: {}, isFaceDown: false },
+			{ slotIndex: 2, id: 'b', name: 'B', cost: 2, classes: {}, origins: {}, isFaceDown: false }
+		];
+		red.pendingCorruptionDiscard = { count: 1, reason: 'You corrupted fighting the monster' };
+		const cd = describePendingWork(state, red).find((w) => w.kind === 'corruptionDiscard')!;
+		expect(cd.eligibleSpiritSlots).toEqual([1, 2]);
+		expect(cd.reason).toBe('You corrupted fighting the monster');
+	});
+
+	test('overflow carries the held-rune mat slotIndexes to trim', () => {
+		const state = inPhase(7, 'cleanup');
+		clearWork(state, 'Red');
+		state.players.Red!.mats = [10, 11, 12, 13, 14].map(
+			(slotIndex) => ({ slotIndex, hasRune: true, guid: `r${slotIndex}` }) as MatSlotSnapshot
+		);
+		const ov = describePendingWork(state, state.players.Red!).find((w) => w.kind === 'overflow')!;
+		expect(ov.count).toBe(1);
+		expect(ov.heldRuneSlotIndexes).toEqual([10, 11, 12, 13, 14]);
+	});
+});
+
+// ── §5.4 augment placement eligibility (replaces client isAugmentEligible, S5) ─────────
+describe('augment placement eligibility (§5.4, S5)', () => {
+	/** Fresh Red with three spirits (Fighter, none, Fighter) + one host-class-bound augment. */
+	function augState(): PublicGameState {
+		const state = startedGame();
+		const red = state.players.Red!;
+		red.spirits = [
+			{ slotIndex: 1, id: 'a', name: 'A', cost: 2, classes: { Fighter: 1 }, origins: {}, isFaceDown: false },
+			{ slotIndex: 2, id: 'b', name: 'B', cost: 2, classes: {}, origins: {}, isFaceDown: false },
+			{ slotIndex: 3, id: 'c', name: 'C', cost: 2, classes: { Fighter: 1 }, origins: {}, isFaceDown: false }
+		];
+		red.unplacedAugments = [{ runeId: 'aug-1', name: 'Aug', hostClass: 'Fighter' }];
+		red.spiritAugmentAttachments = [];
+		return state;
+	}
+
+	test('eligibleSpiritSlots EXACTLY matches the slots where placeAugmentOnSpirit succeeds', () => {
+		const augment = augState().players.Red!.unplacedAugments![0];
+		const elig = augmentPlacementEligibility(augState().players.Red!, augment);
+		// hostClass Fighter → slots 1 and 3; slot 2 locked with a reason.
+		expect(elig.eligibleSpiritSlots).toEqual([1, 3]);
+		expect(elig.slotReasons[2]).toBe('Needs Fighter');
+
+		// Ground truth: for each slot, does the reducer actually accept the placement?
+		const accepted: number[] = [];
+		for (const slot of [1, 2, 3]) {
+			const result = applyGameCommand(
+				augState(),
+				RED,
+				{ type: 'placeAugmentOnSpirit', augmentIndex: 0, augmentRuneId: 'aug-1', spiritSlotIndex: slot, className: 'Fighter' },
+				CATALOG
+			);
+			if (result.ok) accepted.push(slot);
+		}
+		expect(accepted).toEqual(elig.eligibleSpiritSlots);
+	});
+
+	test('a full spirit (capacity reached) is ineligible with a reason', () => {
+		const state = augState();
+		const red = state.players.Red!;
+		// Fill slot 1 (default capacity 1) with a class-linked augment.
+		red.spiritAugmentAttachments = [
+			{ runeId: 'x', spiritId: 'a', spiritSlotIndex: 1, name: 'Fighter Augment', className: 'Fighter' }
+		];
+		const unbound = { runeId: 'aug-2', name: 'Aug2' };
+		red.unplacedAugments = [unbound];
+		const elig = augmentPlacementEligibility(red, unbound);
+		expect(elig.eligibleSpiritSlots).toEqual([2, 3]); // 1 is full
+		expect(elig.slotReasons[1]).toBe('Augment slots full');
+	});
+
+	test('classChoices: unbound offers all six; a classId-bound augment offers only its class', () => {
+		expect(augmentClassChoices({ runeId: 'g', name: 'Aug' })).toEqual([...SPIRIT_AUGMENT_CLASSES]);
+		const catalogWithClass: PlayCatalog = {
+			...CATALOG,
+			classes: [{ id: 'cls-fi', name: 'Fighter', classType: null, isSpecial: false, effectSchema: null }]
+		};
+		expect(augmentClassChoices({ runeId: 'g', name: 'Aug', classId: 'cls-fi' }, catalogWithClass)).toEqual(['Fighter']);
+	});
+
+	test('the augment pendingWork descriptor carries per-token placement + class choices', () => {
+		const state = augState();
+		const aug = describePendingWork(state, state.players.Red!, CATALOG).find((w) => w.kind === 'augment')!;
+		expect(aug.augments).toHaveLength(1);
+		expect(aug.augments![0]).toMatchObject({
+			runeId: 'aug-1',
+			eligibleSpiritSlots: [1, 3],
+			classChoices: [...SPIRIT_AUGMENT_CLASSES]
+		});
+		expect(aug.augments![0].slotReasons[2]).toBe('Needs Fighter');
+	});
+});
+
+// ── §5.4 decision pickerSpec ──────────────────────────────────────────────────────────
+describe('decision pickerSpec (§5.4)', () => {
+	test('an arcMageTrade decision surfaces a pickerSpec; a plain Yes/No does not', () => {
+		const state = inPhase(3, 'awakening');
+		clearWork(state, 'Red');
+		const red = state.players.Red!;
+		red.attackDice = [
+			{ instanceId: 'x1', tier: 'basic' },
+			{ instanceId: 'x2', tier: 'basic' },
+			{ instanceId: 'x3', tier: 'enchanted' },
+			{ instanceId: 'x4', tier: 'exalted' }
+		];
+		red.pendingDecisions = [
+			{ id: 'd-arc', source: 'class', kind: 'arcMageTrade', prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] },
+			{ id: 'd-plain', source: 'class', kind: 'plainYesNo', prompt: 'p', options: [{ id: 'yes', label: 'Y' }] }
+		];
+		const dec = describePendingWork(state, red).find((w) => w.kind === 'decision')!;
+		expect(dec.pickerSpecs).toHaveLength(1);
+		expect(dec.pickerSpecs![0]).toEqual({
+			decisionId: 'd-arc',
+			kind: 'attackDice',
+			count: 4,
+			eligibleInstanceIds: ['x1', 'x2', 'x3', 'x4']
+		});
+		expect(decisionPickerSpec(red.pendingDecisions[1], red)).toBeNull();
+	});
+});
+
+// ── §5.4 encounter + infiltratorSwap affordances (voluntary — NOT pendingWork) ─────────
+describe('encounter + infiltrator affordances (§5.4)', () => {
+	test('an Evil seat co-located with a Good player gets an encounter affordance; a Good seat none', () => {
+		const state = inPhase(4, 'encounter');
+		const red = state.players.Red!;
+		const blue = state.players.Blue!;
+		red.statusLevel = 3; // Fallen ⇒ Evil
+		red.navigationDestination = 'Cyber City';
+		red.encounterVote = null;
+		blue.statusLevel = 0;
+		blue.navigationDestination = 'Cyber City';
+		expect(computeAffordances(state, 'Red', CATALOG).encounter).toEqual({
+			eligibleTargets: ['Blue'],
+			votesPending: ['Red']
+		});
+		expect(computeAffordances(state, 'Blue', CATALOG).encounter).toBeUndefined();
+		expect(computeEncounter(state, blue, 'Blue')).toBeUndefined();
+	});
+
+	test('an awakened, unused Infiltrator co-located with a player gets a swap affordance', () => {
+		const state = inPhase(4, 'location');
+		const red = state.players.Red!;
+		const blue = state.players.Blue!;
+		red.navigationDestination = 'Cyber City';
+		red.actionsUsedThisRound = [];
+		red.spirits = [
+			{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { Infiltrator: 1 }, origins: {}, isFaceDown: false }
+		];
+		red.attackDice = [{ instanceId: 'r1', tier: 'basic' }];
+		blue.navigationDestination = 'Cyber City';
+		blue.attackDice = [
+			{ instanceId: 'b1', tier: 'enchanted' },
+			{ instanceId: 'b2', tier: 'exalted' }
+		];
+		expect(computeAffordances(state, 'Red', CATALOG).infiltratorSwap).toEqual({
+			targets: [{ seat: 'Blue', dice: [{ instanceId: 'b1', tier: 'enchanted' }, { instanceId: 'b2', tier: 'exalted' }] }],
+			myDice: [{ instanceId: 'r1', tier: 'basic' }]
+		});
+		// A face-down Infiltrator can't act.
+		red.spirits[0].isFaceDown = true;
+		expect(computeInfiltratorSwap(state, red, 'Red')).toBeUndefined();
+		// Already used this round.
+		red.spirits[0].isFaceDown = false;
+		red.actionsUsedThisRound = ['infiltratorSwap'];
+		expect(computeInfiltratorSwap(state, red, 'Red')).toBeUndefined();
+	});
+
+	test('these voluntary opportunities never enter pendingWork (invariant: pendingWork ⟺ resolution work)', () => {
+		const state = inPhase(4, 'encounter');
+		const red = state.players.Red!;
+		clearWork(state, 'Red');
+		red.statusLevel = 3;
+		red.navigationDestination = 'Cyber City';
+		red.encounterVote = null;
+		state.players.Blue!.statusLevel = 0;
+		state.players.Blue!.navigationDestination = 'Cyber City';
+		// An encounter opportunity exists, but the seat has NO resolution work.
+		expect(computeAffordances(state, 'Red', CATALOG).encounter).toBeDefined();
+		expect(seatHasResolutionWork(state, 'Red')).toBe(false);
+		expect(describePendingWork(state, red)).toHaveLength(0);
+	});
+});
+
+// ── Reducer hardening: F8 (spawnHandSpirit occupied slot) ──────────────────────────────
+describe('reducer hardening — F8 spawnHandSpirit occupied slot', () => {
+	function drawState(): PublicGameState {
+		const state = startedGame();
+		state.phase = 'location';
+		const red = state.players.Red!;
+		red.spirits = [{ slotIndex: 1, id: 's-0', name: 'Resident', cost: 2, classes: {}, origins: {}, isFaceDown: false }];
+		red.pendingDraw = { sourceBag: 'Spirit World Bag', drawCount: 1, summonLimit: 1, summonedCount: 0 };
+		red.handDraws = [{ guid: 'g1', id: 's-1' }] as never;
+		return state;
+	}
+
+	test('an explicit occupied slotIndex is REJECTED (was a silent overwrite)', () => {
+		expect(reject(drawState(), RED, { type: 'spawnHandSpirit', guid: 'g1', slotIndex: 1 }).code).toBe(
+			'slot_occupied'
+		);
+	});
+
+	test('the default (no slotIndex) path still summons into an open slot', () => {
+		const next = apply(drawState(), RED, { type: 'spawnHandSpirit', guid: 'g1' });
+		expect(next.players.Red!.spirits.map((s) => s.slotIndex).sort()).toEqual([1, 2]);
+	});
+});
+
+// ── Reducer hardening: F9 (resolveDecision unknown option) + picker selection ──────────
+describe('reducer hardening — F9 resolveDecision option + arcMage picker', () => {
+	function decisionState(kind: string): PublicGameState {
+		const state = startedGame();
+		state.phase = 'awakening';
+		state.players.Red!.pendingDecisions = [
+			{ id: 'd1', source: 'class', kind, prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] }
+		];
+		return state;
+	}
+
+	test('an optionId not among the options is REJECTED (was a silent no-op consume)', () => {
+		expect(reject(decisionState('plainYesNo'), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'bogus' }).code).toBe(
+			'invalid_option'
+		);
+	});
+
+	test('a valid option resolves and consumes the decision', () => {
+		const next = apply(decisionState('plainYesNo'), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'no' });
+		expect(next.players.Red!.pendingDecisions).toHaveLength(0);
+	});
+
+	function arcState(): PublicGameState {
+		const state = decisionState('arcMageTrade');
+		state.players.Red!.attackDice = [
+			{ instanceId: 'a1', tier: 'basic' },
+			{ instanceId: 'a2', tier: 'basic' },
+			{ instanceId: 'a3', tier: 'basic' },
+			{ instanceId: 'a4', tier: 'basic' },
+			{ instanceId: 'a5', tier: 'exalted' }
+		];
+		return state;
+	}
+
+	test('a wrong-COUNT picker selection is REJECTED (was silently auto-picked)', () => {
+		expect(
+			reject(arcState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes', selectedInstanceIds: ['a1', 'a2'] }).code
+		).toBe('invalid_selection');
+	});
+
+	test('a non-owned die in the selection is REJECTED', () => {
+		expect(
+			reject(arcState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes', selectedInstanceIds: ['a1', 'a2', 'a3', 'nope'] }).code
+		).toBe('invalid_selection');
+	});
+
+	test('exactly 4 owned dice convert to 1 arcane', () => {
+		const next = apply(arcState(), RED, {
+			type: 'resolveDecision',
+			decisionId: 'd1',
+			optionId: 'yes',
+			selectedInstanceIds: ['a1', 'a2', 'a3', 'a4']
+		});
+		const dice = next.players.Red!.attackDice;
+		expect(dice.filter((d) => d.tier === 'arcane')).toHaveLength(1);
+		expect(dice).toHaveLength(2); // 5 − 4 + 1
+	});
+
+	test('an OMITTED selection keeps the resolver auto-pick (bot path) — never rejected', () => {
+		const next = apply(arcState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes' });
+		expect(next.players.Red!.attackDice.filter((d) => d.tier === 'arcane')).toHaveLength(1);
+	});
+});
+
+// ── Bot compat: the enumerator never generates the now-rejected shapes ─────────────────
+describe('bot enumerator never generates the now-rejected command shapes', () => {
+	function collect(state: PublicGameState, seat: 'Red'): GameCommand[] {
+		const out: GameCommand[] = [];
+		enumerateCandidates(state, seat, CATALOG, (c) => out.push(c));
+		return out;
+	}
+
+	test('spawnHandSpirit candidates never carry an explicit slotIndex (F8-safe)', () => {
+		const state = startedGame();
+		state.phase = 'location';
+		const red = state.players.Red!;
+		red.navigationDestination = 'Cyber City';
+		red.handDraws = [{ guid: 'g1', id: 's-1' }, { guid: 'g2', id: 's-2' }] as never;
+		const spawns = collect(state, 'Red').filter(
+			(c): c is Extract<GameCommand, { type: 'spawnHandSpirit' }> => c.type === 'spawnHandSpirit'
+		);
+		expect(spawns.length).toBeGreaterThan(0);
+		expect(spawns.every((c) => c.slotIndex === undefined)).toBe(true);
+	});
+
+	test('resolveDecision candidates use listed optionIds and never a selection (F9 + picker-safe)', () => {
+		const state = startedGame();
+		state.phase = 'awakening';
+		state.players.Red!.pendingDecisions = [
+			{ id: 'arc', source: 'class', kind: 'arcMageTrade', prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] }
+		];
+		const decs = collect(state, 'Red').filter(
+			(c): c is Extract<GameCommand, { type: 'resolveDecision' }> => c.type === 'resolveDecision'
+		);
+		expect(decs.length).toBe(2);
+		expect(decs.every((c) => ['yes', 'no'].includes(c.optionId))).toBe(true);
+		expect(decs.every((c) => c.selectedInstanceIds === undefined)).toBe(true);
+	});
+
+	test('infiltratorSwap is never enumerated for a bot', () => {
+		const state = startedGame();
+		state.phase = 'location';
+		const red = state.players.Red!;
+		red.navigationDestination = 'Cyber City';
+		red.spirits = [{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { Infiltrator: 1 }, origins: {}, isFaceDown: false }];
+		red.attackDice = [{ instanceId: 'r1', tier: 'basic' }];
+		state.players.Blue!.navigationDestination = 'Cyber City';
+		state.players.Blue!.attackDice = [{ instanceId: 'b1', tier: 'basic' }];
+		expect(collect(state, 'Red').some((c) => c.type === 'infiltratorSwap')).toBe(false);
 	});
 });

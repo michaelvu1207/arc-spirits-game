@@ -13,7 +13,8 @@
  *    the spirit, exactly like the spirit's own classes do.
  */
 
-import type { PlaySpirit } from './types';
+import type { PendingAugment, PlayCatalog, PlaySpirit, PrivatePlayerState } from './types';
+import { GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 
 /**
  * The canonical Spirit Augment token set. A Spirit Augment is its OWN token type
@@ -64,6 +65,76 @@ export function augmentCapacityForSpirit(spirit: Pick<PlaySpirit, 'classes'>): n
 		if (count > 0 && UNLIMITED_AUGMENT_CLASSES.has(cls)) return UNLIMITED_AUGMENT_CAPACITY;
 	}
 	return 1;
+}
+
+/**
+ * Count of augments ALREADY placed on the spirit in `slotIndex`, using the exact
+ * predicate the reducer's capacity gate uses (`placeAugmentOnSpirit`): a class-linked
+ * attachment (`className` string) or a legacy generic token. Shared so the view's
+ * eligibility and the reducer's `augment_full` rejection count the same things.
+ */
+function placedAugmentCount(player: PrivatePlayerState, slotIndex: number): number {
+	return (player.spiritAugmentAttachments ?? []).filter(
+		(a) =>
+			a.spiritSlotIndex === slotIndex &&
+			(typeof a.className === 'string' || a.runeId === GENERIC_AUGMENT_RUNE_ID)
+	).length;
+}
+
+/** Where one unplaced augment may legally be placed, and — for every spirit it may
+ *  NOT go on — the reason (so the UI can dim that hex with a lock chip). */
+export interface AugmentPlacementEligibility {
+	/** Spirit slot indexes this augment may be placed on right now. */
+	eligibleSpiritSlots: number[];
+	/** slotIndex → why the augment cannot go there (keyed only for ineligible slots). */
+	slotReasons: Record<number, string>;
+}
+
+/**
+ * Resolve WHERE `augment` may be placed among the player's spirits, mirroring the three
+ * slot gates the `placeAugmentOnSpirit` reducer enforces (designated-target binding,
+ * host-class binding, per-spirit capacity). The className gate is orthogonal (see
+ * {@link augmentClassChoices}) and not considered here. Shared by the reducer's
+ * eligibility surface (viewV2) so the client never re-derives placement legality (S5).
+ */
+export function augmentPlacementEligibility(
+	player: PrivatePlayerState,
+	augment: PendingAugment
+): AugmentPlacementEligibility {
+	const eligibleSpiritSlots: number[] = [];
+	const slotReasons: Record<number, string> = {};
+	for (const spirit of player.spirits ?? []) {
+		const slot = spirit.slotIndex;
+		if (augment.boundSlotIndex != null && augment.boundSlotIndex !== slot) {
+			slotReasons[slot] = `Must go on ${augment.boundLabel ?? 'its designated spirit'}`;
+			continue;
+		}
+		if (augment.hostClass != null && (spirit.classes?.[augment.hostClass] ?? 0) <= 0) {
+			slotReasons[slot] = `Needs ${augment.hostClass}`;
+			continue;
+		}
+		const capacity = Math.max(augmentCapacityForSpirit(spirit), augment.hostCapacity ?? 0);
+		if (placedAugmentCount(player, slot) >= capacity) {
+			slotReasons[slot] = 'Augment slots full';
+			continue;
+		}
+		eligibleSpiritSlots.push(slot);
+	}
+	return { eligibleSpiritSlots, slotReasons };
+}
+
+/**
+ * The Spirit Augment classes the owner may choose for this token at placement. A
+ * pre-bound augment (`classId` set — e.g. a class-scripted grant) offers only its own
+ * class; an unbound augment offers all six {@link SPIRIT_AUGMENT_CLASSES} ("Any Spirit
+ * Augment"). Mirrors the reducer's `className` resolution (`placeAugmentOnSpirit`).
+ */
+export function augmentClassChoices(augment: PendingAugment, catalog?: PlayCatalog): string[] {
+	if (augment.classId) {
+		const name = catalog?.classes.find((c) => c.id === augment.classId)?.name;
+		return name ? [name] : [];
+	}
+	return [...SPIRIT_AUGMENT_CLASSES];
 }
 
 /** One placed augment's contribution to its owner's class traits. */

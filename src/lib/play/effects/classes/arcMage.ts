@@ -8,7 +8,11 @@ import type { ClassAbility, ClassDecisions } from './types';
 // instance ids) so they never lose an Arcane die by accident; bots (and any
 // resolve that omits a pick) auto-spend the 4 lowest-value dice. Done ONCE per
 // cultivate — no re-offer loop.
-const TRADE_COST = 4;
+// Exported so the view/affordances layer (decisionPicker.ts) and the reducer's
+// picker-selection validation read the SAME pick count as this resolver — the count
+// can never drift between "what the UI offers" and "what the resolver spends".
+export const ARC_MAGE_TRADE_COST = 4;
+const TRADE_COST = ARC_MAGE_TRADE_COST;
 
 const tradePrompt = `When you cultivate, you may discard ${TRADE_COST} attack dice to gain 1 Arcane Attack Dice.`;
 const tradeOptions = [

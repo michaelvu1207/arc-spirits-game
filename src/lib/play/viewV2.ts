@@ -17,6 +17,7 @@
  */
 
 import type {
+	DiceTier,
 	GameActor,
 	GameCommand,
 	GamePhase,
@@ -27,10 +28,21 @@ import type {
 	SeatColor,
 	SpectatorProjection
 } from './types';
-import { ALL_DESTINATIONS, RUNE_CARRY_LIMIT } from './types';
+import { ALL_DESTINATIONS, isEvilAlignment, RUNE_CARRY_LIMIT } from './types';
 import { canApply } from './legality';
 import { seatHasResolutionWork } from './phases';
-import { buildSessionProjection } from './runtime';
+import {
+	buildSessionProjection,
+	encounterEvilAggressorsAt,
+	encounterGoodTargets
+} from './runtime';
+import { buildMonsterRewards } from './monsterRewards';
+import {
+	augmentClassChoices,
+	augmentPlacementEligibility,
+	type AugmentPlacementEligibility
+} from './augments';
+import { decisionPickerSpec, type DecisionPickerSpec } from './decisionPicker';
 import {
 	autoPickCostSlots,
 	buildLocationInteractions,
@@ -77,6 +89,33 @@ export interface PendingWorkDescriptor {
 	slotIndexes?: number[];
 	/** Opaque ids the client can deep-link to (decisionId, promptId). */
 	ids?: string[];
+
+	// ── §5.4 per-kind detail (all additive/optional; present only on the matching kind) ──
+	/** `corruptionDiscard`: human cause of the debt (e.g. the corruption source), for copy. */
+	reason?: string;
+	/** `corruptionDiscard`: spirit slot indexes the owner may shed to pay the debt. */
+	eligibleSpiritSlots?: number[];
+	/** `overflow`: `player.mats` slotIndexes of the held runes the owner may trim. */
+	heldRuneSlotIndexes?: number[];
+	/** `augment`: one entry per unplaced augment, with WHERE it may be placed and which
+	 *  Spirit Augment classes it may take — so the client never re-derives placement
+	 *  legality (replaces the client `isAugmentEligible`, S5). Order matches
+	 *  `player.unplacedAugments`. */
+	augments?: PendingAugmentPlacement[];
+	/** `decision`: the picker requirement for each pending decision that HAS one (Arc
+	 *  Mage's "convert 4 attack dice"). Plain Yes/No decisions contribute nothing. Keyed
+	 *  by `decisionId` inside each spec. */
+	pickerSpecs?: DecisionPickerSpec[];
+}
+
+/** One unplaced augment's placement surface: which of the owner's spirits it may go on,
+ *  why the rest can't, and which augment classes the token may take. */
+export interface PendingAugmentPlacement extends AugmentPlacementEligibility {
+	/** The augment's rune id (matches `placeAugmentOnSpirit.augmentRuneId`). */
+	runeId: string;
+	/** Spirit Augment classes the owner may choose for this token (all six, or the one
+	 *  a pre-bound augment is fixed to). */
+	classChoices: string[];
 }
 
 /**
@@ -116,6 +155,59 @@ export interface LocationInteractionAffordance {
 	noEffectNow?: boolean;
 }
 
+/**
+ * A monster-kill reward RESOLVED server-side (§5.3). The raw `player.pendingReward`
+ * (icon `rewardTrack`) stays on the projection unchanged; this is the claimable, labelled
+ * option set the client renders, so it never re-runs `buildMonsterRewards` on raw icon ids.
+ * The `index` is the value the client passes back in `resolveMonsterReward.picks`.
+ */
+export interface ResolvedRewardOption {
+	/** Position in the monster's `rewardTrack` — the id the client picks by. */
+	index: number;
+	/** Human label ("3 Victory Points", "Arcane Abyss Summon"). */
+	label: string;
+	/** icon_pool id, for rendering the reward glyph. */
+	iconToken: string;
+	/** The claimable effect's discriminant ('vp' | 'rune' | 'chooseRune' | 'action' |
+	 *  'restoreBarrier'). */
+	effect: 'vp' | 'rune' | 'chooseRune' | 'action' | 'restoreBarrier';
+	/** For a `chooseRune` reward: the runes the player picks among (the `choices` payload of
+	 *  `resolveMonsterReward` indexes into this, in pick order). Absent otherwise. */
+	chooseOptions?: { runeId: string; name: string }[];
+}
+
+/** The resolved monster reward awaiting a seat (§5.3). Present only while
+ *  `player.pendingReward` is set (Location phase). */
+export interface ResolvedPendingReward {
+	monsterName: string;
+	/** How many options the seat may claim (already capped at the resolvable count). */
+	chooseAmount: number;
+	options: ResolvedRewardOption[];
+}
+
+/** The seat's Encounter-phase PvP opportunity (§5.4 `encounter`). Present only for an
+ *  Evil-aligned seat that shares its location with ≥1 Good target. NOT a mandatory
+ *  obligation (the seat may pass), so it rides here — NOT in `pendingWork`, which is
+ *  contractually the set of seatHasResolutionWork obligations. */
+export interface EncounterAffordance {
+	/** Good seats at this location the aggressor may attack (initiatePvp targets). */
+	eligibleTargets: SeatColor[];
+	/** Co-located Evil aggressors who have not yet voted — the group strike waits on
+	 *  every one of them (unanimous attack; any pass cancels it). */
+	votesPending: SeatColor[];
+}
+
+/** The seat's Location-phase Infiltrator dice-swap opportunity (§5.4 `infiltratorSwap`).
+ *  Present only when the seat has an awakened Infiltrator, has not swapped this round, and
+ *  shares its location with ≥1 other player. Voluntary, so it rides here, not in
+ *  `pendingWork` (same rationale as {@link EncounterAffordance}). */
+export interface InfiltratorSwapAffordance {
+	/** Co-located players and their swappable attack dice. */
+	targets: { seat: SeatColor; dice: { instanceId: string; tier: DiceTier }[] }[];
+	/** The seat's own attack dice (the pool it swaps FROM). */
+	myDice: { instanceId: string; tier: DiceTier }[];
+}
+
 /** Everything a single seat needs to render its own controls, computed server-side. All
  *  fields are derived from state the OWNER may see — see the secrecy note below; the server
  *  must only ever hand a seat its OWN SeatAffordances. */
@@ -152,6 +244,15 @@ export interface SeatAffordances {
 	/** The seat's location reward rows with precise cost/eligibility (§5.2). Present only in
 	 *  the Location phase when the seat is at a location; absent otherwise. */
 	locationInteractions?: LocationInteractionAffordance[];
+	/** The seat's RESOLVED monster reward (§5.3) — claimable, labelled options. Present only
+	 *  in the Location phase while `player.pendingReward` is set; absent otherwise. */
+	pendingReward?: ResolvedPendingReward;
+	/** The seat's Encounter PvP opportunity (§5.4). Present only for an Evil-aligned seat with
+	 *  ≥1 co-located Good target in the Encounter phase. Voluntary — not a `pendingWork` item. */
+	encounter?: EncounterAffordance;
+	/** The seat's Infiltrator dice-swap opportunity (§5.4). Present only for an awakened,
+	 *  unused Infiltrator with a co-located player in the Location phase. Voluntary. */
+	infiltratorSwap?: InfiltratorSwapAffordance;
 	/** Server-clock wall-time (ms epoch) this seat's current phase auto-advances, or null
 	 *  when untimed. Mirrors projection.phaseDeadline. */
 	deadline: number | null;
@@ -351,7 +452,8 @@ function representativeCommand(
  */
 export function describePendingWork(
 	state: PublicGameState,
-	player: PrivatePlayerState
+	player: PrivatePlayerState,
+	catalog?: PlayCatalog
 ): PendingWorkDescriptor[] {
 	const work: PendingWorkDescriptor[] = [];
 	if (!player) return work;
@@ -368,12 +470,20 @@ export function describePendingWork(
 			count: queued
 		});
 	}
-	const augments = player.unplacedAugments?.length ?? 0;
-	if (augments > 0) {
+	const unplaced = player.unplacedAugments ?? [];
+	if (unplaced.length > 0) {
 		work.push({
 			kind: 'augment',
-			label: augments === 1 ? 'Place Spirit Augment' : `Place ${augments} Spirit Augments`,
-			count: augments
+			label:
+				unplaced.length === 1 ? 'Place Spirit Augment' : `Place ${unplaced.length} Spirit Augments`,
+			count: unplaced.length,
+			// Per-token placement eligibility (§5.4) — the reducer's own gates via a shared
+			// helper, so the client never re-derives which spirit a token may go on (S5).
+			augments: unplaced.map((augment) => ({
+				runeId: augment.runeId,
+				...augmentPlacementEligibility(player, augment),
+				classChoices: augmentClassChoices(augment, catalog)
+			}))
 		});
 	}
 
@@ -407,12 +517,18 @@ export function describePendingWork(
 			}
 			const decisions = player.pendingDecisions ?? [];
 			if (decisions.length > 0) {
+				// Picker specs for the decisions that need one (Arc Mage). The reducer validates
+				// selections against the SAME helper, so UI-offer and reducer-accept can't drift.
+				const pickerSpecs = decisions
+					.map((d) => decisionPickerSpec(d, player))
+					.filter((s): s is DecisionPickerSpec => s !== null);
 				work.push({
 					kind: 'decision',
 					label:
 						decisions.length === 1 ? 'Resolve a decision' : `Resolve ${decisions.length} decisions`,
 					count: decisions.length,
-					ids: decisions.map((d) => d.id)
+					ids: decisions.map((d) => d.id),
+					...(pickerSpecs.length > 0 ? { pickerSpecs } : {})
 				});
 			}
 			// Still-eligible face-down flips: awakenEligible ∩ isFaceDown (mirrors the `.some` check).
@@ -433,21 +549,30 @@ export function describePendingWork(
 			break;
 		}
 		case 'cleanup': {
-			const heldRunes = (player.mats ?? []).filter((r) => r.hasRune).length;
-			if (heldRunes > RUNE_CARRY_LIMIT) {
-				const overflow = heldRunes - RUNE_CARRY_LIMIT;
+			const heldRuneSlots = (player.mats ?? []).filter((r) => r.hasRune);
+			if (heldRuneSlots.length > RUNE_CARRY_LIMIT) {
+				const overflow = heldRuneSlots.length - RUNE_CARRY_LIMIT;
 				work.push({
 					kind: 'overflow',
 					label: overflow === 1 ? 'Trim 1 rune' : `Trim ${overflow} runes`,
-					count: overflow
+					count: overflow,
+					// `player.mats` slotIndexes holding a trimmable rune (§5.4) — the values the
+					// client stages for `discardRune`.
+					heldRuneSlotIndexes: heldRuneSlots.map((r) => r.slotIndex)
 				});
 			}
 			if (player.pendingCorruptionDiscard && player.spirits.length > 0) {
-				const count = player.pendingCorruptionDiscard.count;
+				const debt = player.pendingCorruptionDiscard;
 				work.push({
 					kind: 'corruptionDiscard',
-					label: count === 1 ? 'Discard 1 corrupted spirit' : `Discard ${count} corrupted spirits`,
-					count
+					label:
+						debt.count === 1
+							? 'Discard 1 corrupted spirit'
+							: `Discard ${debt.count} corrupted spirits`,
+					count: debt.count,
+					// Any current spirit may be shed to pay the debt (§5.4); reason drives copy.
+					eligibleSpiritSlots: player.spirits.map((s) => s.slotIndex),
+					...(debt.reason ? { reason: debt.reason } : {})
 				});
 			}
 			break;
@@ -552,6 +677,82 @@ export function computeLocationInteractions(
 }
 
 /**
+ * The seat's monster reward RESOLVED for the client (§5.3), or undefined when none is
+ * pending. Reuses `buildMonsterRewards` (the SAME resolver the `resolveMonsterReward`
+ * reducer uses) so the icon→effect mapping never diverges from what actually gets claimed.
+ */
+export function computePendingReward(player: PrivatePlayerState): ResolvedPendingReward | undefined {
+	const pending = player.pendingReward;
+	if (!pending) return undefined;
+	const options: ResolvedRewardOption[] = buildMonsterRewards(pending.rewardTrack).map((o) => ({
+		index: o.index,
+		label: o.label,
+		iconToken: o.token,
+		effect: o.effect.type,
+		...(o.effect.type === 'chooseRune'
+			? { chooseOptions: o.effect.options.map((r) => ({ runeId: r.runeId, name: r.name })) }
+			: {})
+	}));
+	return { monsterName: pending.monsterName, chooseAmount: pending.chooseAmount, options };
+}
+
+/**
+ * The seat's Encounter PvP opportunity (§5.4), or undefined when the seat can't initiate.
+ * Present only for an Evil-aligned seat in the Encounter phase with ≥1 co-located Good
+ * target — the exact gate `initiatePvp` enforces (via the shared `encounter*` helpers).
+ */
+export function computeEncounter(
+	state: PublicGameState,
+	player: PrivatePlayerState,
+	seat: SeatColor
+): EncounterAffordance | undefined {
+	if (state.phase !== 'encounter') return undefined;
+	if (!isEvilAlignment(player.statusLevel)) return undefined;
+	const eligibleTargets = encounterGoodTargets(state, seat);
+	if (eligibleTargets.length === 0) return undefined;
+	const aggressors = encounterEvilAggressorsAt(state, player.navigationDestination ?? null);
+	const votesPending = aggressors.filter(
+		(s) => (state.players[s]?.encounterVote ?? null) === null
+	);
+	return { eligibleTargets, votesPending };
+}
+
+/**
+ * The seat's Infiltrator dice-swap opportunity (§5.4), or undefined when unavailable —
+ * mirrors the `infiltratorSwap` reducer's gates (awakened Infiltrator, not used this
+ * round, at a location with ≥1 co-located player). Any co-located player is a legal swap
+ * target, exactly as the reducer allows (it does not restrict by alignment).
+ */
+export function computeInfiltratorSwap(
+	state: PublicGameState,
+	player: PrivatePlayerState,
+	seat: SeatColor
+): InfiltratorSwapAffordance | undefined {
+	if (state.phase !== 'location') return undefined;
+	const hasInfiltrator = (player.spirits ?? []).some(
+		(s) => !s.isFaceDown && (s.classes?.Infiltrator ?? 0) > 0
+	);
+	if (!hasInfiltrator) return undefined;
+	if ((player.actionsUsedThisRound ?? []).includes('infiltratorSwap')) return undefined;
+	const dest = player.navigationDestination;
+	if (!dest) return undefined;
+	const targets = state.activeSeats
+		.filter((s) => s !== seat && state.players[s]?.navigationDestination === dest)
+		.map((s) => ({
+			seat: s,
+			dice: (state.players[s]?.attackDice ?? []).map((d) => ({
+				instanceId: d.instanceId,
+				tier: d.tier
+			}))
+		}));
+	if (targets.length === 0) return undefined;
+	return {
+		targets,
+		myDice: (player.attackDice ?? []).map((d) => ({ instanceId: d.instanceId, tier: d.tier }))
+	};
+}
+
+/**
  * Why a seat can't pass while a pass command exists (F3 tooltip). Reuses the
  * describePendingWork labels for the obligations it already enumerates, plus a Location-
  * phase corruption fallback (the one blocker describePendingWork keys to Cleanup only —
@@ -594,9 +795,12 @@ export function computeAffordances(
 	const passCommand = PASS_COMMAND_BY_PHASE[phase];
 	const player = state.players[seat];
 	const canPass = !!passCommand && legalCommandTypes.includes(passCommand);
-	const pendingWork = player ? describePendingWork(state, player) : [];
-	const locationInteractions =
-		player && state.status === 'active' ? computeLocationInteractions(state, player, catalog) : [];
+	const active = player && state.status === 'active' ? player : null;
+	const pendingWork = player ? describePendingWork(state, player, catalog) : [];
+	const locationInteractions = active ? computeLocationInteractions(state, active, catalog) : [];
+	const pendingReward = active ? computePendingReward(active) : undefined;
+	const encounter = active ? computeEncounter(state, active, seat) : undefined;
+	const infiltratorSwap = active ? computeInfiltratorSwap(state, active, seat) : undefined;
 	return {
 		seat,
 		phase,
@@ -609,6 +813,9 @@ export function computeAffordances(
 			? { passBlockedReason: passBlockedReasonFor(phase, player, pendingWork) }
 			: {}),
 		...(locationInteractions.length > 0 ? { locationInteractions } : {}),
+		...(pendingReward ? { pendingReward } : {}),
+		...(encounter ? { encounter } : {}),
+		...(infiltratorSwap ? { infiltratorSwap } : {}),
 		deadline: state.phaseDeadline
 	};
 }

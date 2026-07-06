@@ -1261,7 +1261,7 @@ describe('play runtime', () => {
 		expect(otherView.players.Red!.unplacedAugments).toEqual([]);
 	});
 
-	test('overwriting an augmented spirit slot drops the augment (it never migrates)', () => {
+	test('summoning into an occupied augmented slot is rejected (F8) — resident + augment survive', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
@@ -1277,8 +1277,9 @@ describe('play runtime', () => {
 		if (!placed.ok) throw new Error(placed.error.message);
 		expect(placed.state.players.Red!.spiritAugmentAttachments).toHaveLength(1);
 
-		// Summon a fresh spirit INTO that slot (Tidal Cove row 0 = free Spirit World
-		// Summon) — the augment must NOT ride along onto the newcomer.
+		// Summon a fresh spirit and aim it at the OCCUPIED slot (Tidal Cove row 0 = free
+		// Spirit World Summon). F8: this is rejected — the engine never overwrites (and so
+		// never destroys) the resident spirit + its augment.
 		let state = locationPhase(placed.state, 'Tidal Cove');
 		const open = applyGameCommand(
 			state,
@@ -1295,9 +1296,12 @@ describe('play runtime', () => {
 			{ type: 'spawnHandSpirit', guid, slotIndex: target.slotIndex },
 			CATALOG
 		);
-		expect(summoned.ok).toBe(true);
-		if (!summoned.ok) return;
-		expect(summoned.state.players.Red!.spiritAugmentAttachments).toHaveLength(0);
+		expect(summoned.ok).toBe(false);
+		if (summoned.ok) return;
+		expect(summoned.error.code).toBe('slot_occupied');
+		// The resident spirit and its augment are untouched.
+		expect(state.players.Red!.spiritAugmentAttachments).toHaveLength(1);
+		expect(state.players.Red!.spirits.some((s) => s.slotIndex === target.slotIndex)).toBe(true);
 	});
 
 	test('adjustBarrier / adjustBrokenBarrier keep arcane blood === maxTokens − barrier', () => {

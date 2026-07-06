@@ -62,6 +62,7 @@ import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
 import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
+import { decisionPickerSpec, validateDecisionSelection } from './decisionPicker';
 import { checkAwakenCondition, payAwakenCondition, needsManualAwaken } from './effects/awaken';
 import {
 	AWAKEN_HANDLERS,
@@ -1218,6 +1219,13 @@ function reduceCommand(
 			if (!slotIndex || slotIndex < 1 || slotIndex > 7) {
 				return failure('slot_missing', 'No open spirit slot is available.');
 			}
+			// F8: an explicit slotIndex that is already occupied is REJECTED, not silently
+			// overwritten (which destroyed the resident spirit + its augments). The default path
+			// resolves to firstOpenSpiritSlot (always empty), so bots that never send an explicit
+			// slotIndex are unaffected.
+			if (activePlayer.player.spirits.some((s) => s.slotIndex === slotIndex)) {
+				return failure('slot_occupied', 'That spirit slot is already occupied.');
+			}
 
 			activePlayer.player.spirits = activePlayer.player.spirits.filter(
 				(candidate) => candidate.slotIndex !== slotIndex
@@ -2076,6 +2084,25 @@ function reduceCommand(
 				(entry) => entry.id === command.decisionId
 			);
 			if (!decision) return failure('decision_missing', 'No such decision is pending.');
+			// F9: an optionId that isn't one of the decision's own options is REJECTED. It
+			// used to be swallowed — the resolver saw an unknown option, did nothing, and the
+			// decision card was consumed as a silent no-op (a malformed client discarded it).
+			if (!decision.options.some((o) => o.id === command.optionId)) {
+				return failure('invalid_option', 'That option is not available for this decision.');
+			}
+			// Picker decisions (Arc Mage's "convert 4 attack dice"): when the client SENDS a
+			// non-empty selection it must be exactly the required count of eligible instances —
+			// a wrong-count / non-owned pick is rejected instead of silently auto-picking the 4
+			// lowest dice. An omitted or empty selection keeps the resolver's auto-pick (bots
+			// never send selectedInstanceIds; the decline option carries none), so those paths
+			// are unchanged.
+			const picker = decisionPickerSpec(decision, active.player);
+			if (picker && (command.selectedInstanceIds?.length ?? 0) > 0) {
+				const selectionError = validateDecisionSelection(picker, command.selectedInstanceIds!);
+				if (selectionError) {
+					return failure(selectionError, `Choose exactly ${picker.count} of your attack dice.`);
+				}
+			}
 
 			const log: string[] = [];
 			const resolver = DECISION_RESOLVERS[decision.kind];
@@ -2721,8 +2748,10 @@ function reduceCommand(
 	}
 }
 
-/** Good (non-Evil) seats sharing `seat`'s non-Abyss destination — its PvP targets. */
-function encounterGoodTargets(state: PublicGameState, seat: SeatColor): SeatColor[] {
+/** Good (non-Evil) seats sharing `seat`'s non-Abyss destination — its PvP targets.
+ *  Exported so the view layer (viewV2 encounter affordance) reads the SAME target set
+ *  the `initiatePvp` reducer gates on, never re-deriving co-location + alignment. */
+export function encounterGoodTargets(state: PublicGameState, seat: SeatColor): SeatColor[] {
 	const dest = state.players[seat]?.navigationDestination ?? null;
 	if (!dest || dest === 'Arcane Abyss') return [];
 	return state.activeSeats.filter(
@@ -2733,8 +2762,10 @@ function encounterGoodTargets(state: PublicGameState, seat: SeatColor): SeatColo
 	);
 }
 
-/** Evil aggressors at `dest`: Fallen players sharing the (non-Abyss) location with ≥1 Good. */
-function encounterEvilAggressorsAt(state: PublicGameState, dest: string | null): SeatColor[] {
+/** Evil aggressors at `dest`: Fallen players sharing the (non-Abyss) location with ≥1 Good.
+ *  Exported so the view layer computes `votesPending` from the same aggressor set the
+ *  group-attack resolver waits on. */
+export function encounterEvilAggressorsAt(state: PublicGameState, dest: string | null): SeatColor[] {
 	if (!dest || dest === 'Arcane Abyss') return [];
 	const hasGood = state.activeSeats.some(
 		(s) =>
