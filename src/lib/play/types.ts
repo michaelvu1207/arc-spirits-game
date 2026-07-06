@@ -1031,6 +1031,20 @@ export interface SpectatorProjection {
 	monster: MonsterState | null;
 	combats: CombatState[];
 	winnerSeat: SeatColor | null;
+	/**
+	 * Whether the HOST may start the game, with a reason when not (fixes S4 — start
+	 * enablement was client-derived and ignored guardians). Present ONLY for the host
+	 * viewer in a `lobby`-status room; absent for players, spectators, and started games.
+	 * Engine-computed from the same rule the `startGame` reducer enforces.
+	 */
+	canStart?: LobbyStartGate;
+}
+
+/** The host's lobby start-gate: can the game start, and if not, why. */
+export interface LobbyStartGate {
+	ok: boolean;
+	/** Human-readable blocker shown on the disabled Start-Game CTA (absent when `ok`). */
+	reason?: string;
 }
 
 export interface HistorySnapshotRow {

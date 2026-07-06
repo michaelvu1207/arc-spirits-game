@@ -1118,24 +1118,20 @@ function reduceCommand(
 		}
 
 		case 'startGame': {
-			if (state.status !== 'lobby') {
-				return failure('already_started', 'The game has already started.');
+			// Shared start-gate (also drives the host's lobby `canStart`). Preserve the
+			// original error precedence: already-started, then host, then seat/guardian rules.
+			const startGate = canStartGame(state);
+			if (!startGate.ok && startGate.code === 'already_started') {
+				return failure('already_started', startGate.reason!);
 			}
-
 			if (actor.role !== 'host') {
 				return failure('host_required', 'Only the host can start the game.');
 			}
+			if (!startGate.ok) {
+				return failure(startGate.code!, startGate.reason!);
+			}
 
 			const occupiedSeats = SEAT_COLORS.filter((seatColor) => state.seats[seatColor].memberId);
-			if (occupiedSeats.length === 0) {
-				return failure('no_players', 'At least one player must claim a seat.');
-			}
-
-			for (const seatColor of occupiedSeats) {
-				if (!state.seats[seatColor].selectedGuardian) {
-					return failure('guardian_required', `Seat ${seatColor} must choose a guardian.`);
-				}
-			}
 
 			// Seed the deterministic RNG once, here, so the whole game replays
 			// identically. Tests may inject a fixed seed via the command.
@@ -2810,12 +2806,45 @@ function summarizeBagSpirits(contents: RuntimeBagEntry[]): BagSpiritSummary[] {
 	return [...byId.values()].sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
 }
 
+/**
+ * Whether a lobby may transition to an active game — the reducer error CODE and a
+ * human REASON when not. Single source of truth for start-gating: both the
+ * `startGame` reducer and the host lobby projection (`canStart`) call this, so the
+ * enable-state the host sees can never disagree with what the command actually does
+ * (fixes S4 — start enablement was client-derived and ignored guardians).
+ *
+ * State-only (host-independent): the host check is actor-dependent, so callers apply
+ * it separately — the reducer rejects a non-host, and the projection exposes this
+ * ONLY to the host.
+ */
+export function canStartGame(
+	state: PublicGameState
+): { ok: boolean; code?: string; reason?: string } {
+	if (state.status !== 'lobby') {
+		return { ok: false, code: 'already_started', reason: 'The game has already started.' };
+	}
+	const occupied = SEAT_COLORS.filter((seatColor) => state.seats[seatColor].memberId);
+	if (occupied.length === 0) {
+		return { ok: false, code: 'no_players', reason: 'At least one player must claim a seat.' };
+	}
+	for (const seatColor of occupied) {
+		if (!state.seats[seatColor].selectedGuardian) {
+			return { ok: false, code: 'guardian_required', reason: `Seat ${seatColor} must choose a guardian.` };
+		}
+	}
+	return { ok: true };
+}
+
 export function buildSessionProjection(
 	rawState: PublicGameState,
 	viewer: SpectatorProjection['viewer']
 ): SpectatorProjection {
 	const state = ensureStateShape(rawState);
 	const players: Partial<Record<SeatColor, PlayerProjection>> = {};
+
+	// Host-only lobby start-gate (fixes S4). Absent for players/spectators + started games.
+	const startGate =
+		viewer.role === 'host' && state.status === 'lobby' ? canStartGame(state) : null;
 
 	for (const seatColor of state.activeSeats) {
 		const player = state.players[seatColor];
@@ -2875,7 +2904,10 @@ export function buildSessionProjection(
 		locationOccupancy: structuredClone(state.locationOccupancy),
 		monster: state.monster ? { ...state.monster } : null,
 		combats: structuredClone(state.combats),
-		winnerSeat: state.winnerSeat
+		winnerSeat: state.winnerSeat,
+		...(startGate
+			? { canStart: startGate.ok ? { ok: true } : { ok: false, reason: startGate.reason } }
+			: {})
 	};
 }
 

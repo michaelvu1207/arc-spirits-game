@@ -1844,3 +1844,64 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		expect(p.mats.slice(before).map((x) => x.name)).toEqual(['Firecracker Relic', 'Fairy Relic']);
 	});
 });
+
+// ── §5.5 lobby canStart (host start-gate, S4) ─────────────────────────────────────────
+describe('lobby canStart projection', () => {
+	const hostViewer = { role: 'host' as const, seatColor: 'Red' as const, displayName: 'Host Player' };
+	const playerViewer = { role: 'player' as const, seatColor: 'Blue' as const, displayName: 'Guest Player' };
+	const spectatorViewer = { role: 'spectator' as const, seatColor: null, displayName: null };
+
+	function ok(state: PublicGameState, actor: GameActor, command: Parameters<typeof applyGameCommand>[2]): PublicGameState {
+		const r = applyGameCommand(state, actor, command, CATALOG);
+		if (!r.ok) throw new Error(`${command.type}: ${r.error.message}`);
+		return r.state;
+	}
+	const emptyLobby = () =>
+		createLobbyState({ roomCode: 'ROOM42', guardianNames: CATALOG.guardians.map((g) => g.name) });
+
+	test('a ready lobby → host sees canStart ok', () => {
+		expect(buildSessionProjection(withLobbySelections(), hostViewer).canStart).toEqual({ ok: true });
+	});
+
+	test('a seated player without a guardian blocks start; reason names that seat and matches the reducer', () => {
+		let state = emptyLobby();
+		state = ok(state, HOST, { type: 'claimSeat', seatColor: 'Red' });
+		state = ok(state, GUEST, { type: 'claimSeat', seatColor: 'Blue' });
+		state = ok(state, { ...HOST, seatColor: 'Red' }, { type: 'selectGuardian', guardianName: 'Myrtle' });
+		// Blue never picks a guardian.
+		expect(buildSessionProjection(state, hostViewer).canStart).toEqual({
+			ok: false,
+			reason: 'Seat Blue must choose a guardian.'
+		});
+		// The reducer rejects startGame for the SAME reason (shared canStartGame — S4 can't drift).
+		const rejected = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		expect(rejected.ok).toBe(false);
+		if (rejected.ok) throw new Error('expected rejection');
+		expect(rejected.error.code).toBe('guardian_required');
+		expect(rejected.error.message).toBe('Seat Blue must choose a guardian.');
+	});
+
+	test('an empty lobby → blocked on no seated players', () => {
+		expect(buildSessionProjection(emptyLobby(), hostViewer).canStart).toEqual({
+			ok: false,
+			reason: 'At least one player must claim a seat.'
+		});
+	});
+
+	test('canStart is host-only — players and spectators never see it', () => {
+		const ready = withLobbySelections();
+		expect(buildSessionProjection(ready, playerViewer).canStart).toBeUndefined();
+		expect(buildSessionProjection(ready, spectatorViewer).canStart).toBeUndefined();
+	});
+
+	test('canStart is absent once the game has started', () => {
+		const started = applyGameCommand(
+			withLobbySelections(),
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'startGame' },
+			CATALOG
+		);
+		if (!started.ok) throw new Error(started.error.message);
+		expect(buildSessionProjection(started.state, hostViewer).canStart).toBeUndefined();
+	});
+});
