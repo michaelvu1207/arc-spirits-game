@@ -250,14 +250,16 @@
 {/if}
 
 <style>
+	/* Docked top-left (mobile-game identity chip). The popover opens BELOW the
+	   chip: column-reverse keeps the chip — last in DOM — visually first. */
 	.dock {
 		position: fixed;
-		right: max(20px, env(safe-area-inset-right));
-		bottom: max(20px, env(safe-area-inset-bottom));
+		left: max(20px, env(safe-area-inset-left));
+		top: max(20px, env(safe-area-inset-top));
 		z-index: 9500;
 		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
+		flex-direction: column-reverse;
+		align-items: flex-start;
 		gap: 12px;
 	}
 
@@ -635,25 +637,21 @@
 		margin: 14px 18px 18px;
 	}
 
-	/* ── Mobile: full-width bottom bar ───────────────────── */
+	/* ── Mobile: compact chip top-left (clear of the shell's top-right controls);
+	   the popover takes most of the width below it. ───────── */
 	@media (max-width: 560px) {
 		.dock {
 			left: max(12px, env(safe-area-inset-left));
-			right: max(12px, env(safe-area-inset-right));
-			bottom: max(12px, env(safe-area-inset-bottom));
-			align-items: stretch;
+			top: max(12px, env(safe-area-inset-top));
 		}
 		.chip {
 			border-radius: 14px;
 		}
-		.chip-chevron {
-			margin-left: auto;
-		}
 		.pop {
-			width: 100%;
+			width: min(92vw, 340px);
 		}
 		.chip-name {
-			max-width: none;
+			max-width: 118px;
 		}
 	}
 

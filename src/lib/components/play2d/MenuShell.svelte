@@ -209,7 +209,10 @@
 		padding-top: calc(22px + env(safe-area-inset-top));
 		padding-right: calc(30px + env(safe-area-inset-right));
 	}
-	:global(body.guardian-picker-open) .menu-controls {
+	/* Full-screen/pre-game overlays (character select, chat drawer, invite +
+	   create sheets) own the corner while open. */
+	:global(body.guardian-picker-open) .menu-controls,
+	:global(body.pregame-overlay-open) .menu-controls {
 		display: none;
 	}
 

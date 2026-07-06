@@ -29,8 +29,9 @@ let chatError = $state<string | null>(null);
 let chatLoading = $state(false);
 let chatOpen = $state(false);
 let chatRoomCode = $state<string | null>(null);
-// Per-seat action surface from RoomView v2 (WS transport only). Additive: not yet consumed
-// by components — exposed via getPlayState() for future affordance-driven UI. Empty in HTTP mode.
+// Per-seat action surface from RoomView v2, delivered on BOTH transports (WS acks/deltas
+// and the HTTP /view + /commands payloads). Drives pass-turn legality and the §5.2
+// location-interaction affordances in the play board.
 let affordances = $state<Partial<Record<SeatColor, SeatAffordances>>>({});
 
 // Live transport: a Supabase Realtime broadcast channel (push) backed by a slow
@@ -148,7 +149,7 @@ function roomCodeFromPath(path: string): string | null {
 	}
 }
 
-function setRoomView(view: RoomView) {
+function setRoomView(view: RoomView & { affordances?: Partial<Record<SeatColor, SeatAffordances>> }) {
 	// Ignore stale updates FOR THE SAME ROOM. Play is simultaneous: a player's own
 	// command response (older revision) can arrive AFTER an SSE snapshot that
 	// already reflects a newer state from another player; applying it would regress
@@ -173,6 +174,10 @@ function setRoomView(view: RoomView) {
 	}
 	member = view.member;
 	if (view.member?.id) persistMemberId(view.projection.roomCode, view.member.id);
+	// HTTP /view + /commands now carry the seat's affordances alongside the
+	// projection (the WS path applies its own via applyServerView). A payload
+	// WITHOUT the key (e.g. lobby endpoints) leaves the last block in place.
+	if (view.affordances) affordances = view.affordances;
 	error = null;
 }
 
@@ -708,8 +713,7 @@ export function getPlayState() {
 		get chatOpen() {
 			return chatOpen;
 		},
-		/** Per-seat action surface from RoomView v2 (WS mode only; empty on HTTP). Additive —
-		 *  not yet consumed by components. */
+		/** Per-seat action surface from RoomView v2 (both transports). */
 		get affordances() {
 			return affordances;
 		},

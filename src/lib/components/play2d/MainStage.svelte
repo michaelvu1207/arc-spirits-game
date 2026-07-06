@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type {
-		AwakenDiscardOption,
+		AwakenCostSlot,
 		AwakenDiscardRef,
 		AwakenGrant,
 		SpectatorProjection,
@@ -29,6 +29,13 @@
 	import LocationInteractionMenu from './LocationInteractionMenu.svelte';
 	import ActionResult from './ActionResult.svelte';
 	import StageCard from './StageCard.svelte';
+	import TakeoverStage from './takeover/TakeoverStage.svelte';
+	import SourcePanel from './takeover/SourcePanel.svelte';
+	import CandidateRack from './takeover/CandidateRack.svelte';
+	import CommitBar from './takeover/CommitBar.svelte';
+	import type { MeterSlot, RackCandidate } from './takeover/types';
+	import type { SeatAffordances } from '$lib/play/viewV2';
+	import { iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
 
 	export type ActiveAction = 'rest' | 'cultivate' | 'combat' | 'reward' | null;
 
@@ -103,6 +110,12 @@
 		/** Discard a spirit by slot index (forced corruption discard). */
 		onDiscardSpirit: (slotIndex: number) => void;
 		busy?: boolean;
+		/** This seat's engine-computed action surface (RoomView v2). Null for
+		 *  spectators / when the projection predates affordances. */
+		seatAffordances?: SeatAffordances | null;
+		/** Fires when a stage takeover (payment picker / armed trade) opens or
+		 *  closes, so the board can park the pass-turn control meanwhile. */
+		onTakeoverOpenChange?: (open: boolean) => void;
 	}
 
 	let {
@@ -140,7 +153,9 @@
 		onPlaceAugment,
 		onDiscardAugments,
 		onDiscardSpirit,
-		busy = false
+		busy = false,
+		seatAffordances = null,
+		onTakeoverOpenChange
 	}: Props = $props();
 
 	const myLocationConfig = $derived(
@@ -211,81 +226,243 @@
 		if (g.kind === 'augment') return `Gain ${g.amount} Spirit Augment${g.amount === 1 ? '' : 's'}`;
 		return '';
 	}
-	let taintedPotential = $state(0);
-	let relicPicks = $state<number[]>([]);
+	// Tainted split: one heart↔die segment per unit (no ± arithmetic). Relic picks
+	// start EMPTY — claiming is disabled until every unit has an explicit choice,
+	// so a default relic is never silently taken.
+	let taintedSeg = $state<boolean[]>([]); // true = Potential, false = Enchanted Attack
+	let relicPicks = $state<(number | null)[]>([]);
 	let hadAwakenReward = false;
 	$effect(() => {
 		const has = !!awakenReward;
 		if (has && !hadAwakenReward) {
-			taintedPotential = 0;
-			relicPicks = Array.from({ length: relicGrant?.amount ?? 0 }, () => 0);
+			taintedSeg = Array.from({ length: taintedGrant?.amount ?? 0 }, () => false);
+			relicPicks = Array.from({ length: relicGrant?.amount ?? 0 }, () => null);
 		}
 		hadAwakenReward = has;
 	});
 	const taintedMax = $derived(taintedGrant?.amount ?? 0);
-	const taintedPotentialClamped = $derived(Math.max(0, Math.min(taintedPotential, taintedMax)));
+	const taintedPotentialClamped = $derived(taintedSeg.filter(Boolean).length);
 	const taintedEnchanted = $derived(taintedMax - taintedPotentialClamped);
+	function toggleTaintedSeg(i: number) {
+		taintedSeg = taintedSeg.map((v, k) => (k === i ? !v : v));
+	}
 	function pickRelic(unit: number, choice: number) {
 		relicPicks = relicPicks.map((v, i) => (i === unit ? choice : v));
 	}
+	const relicPicksComplete = $derived(relicPicks.every((p) => p !== null));
+	const potentialIcon = $derived(iconPoolUrl(assets.iconPool, RESOURCE_ICON_IDS.barrier));
+	function classIconFor(className: string): string | null {
+		for (const cls of assets.classTraits.values()) {
+			if (cls.name === className) return storageUrl(cls.icon_png ?? null);
+		}
+		return null;
+	}
+	function claimBenefits() {
+		if (busy || !relicPicksComplete) return;
+		onClaimAwakenReward(
+			taintedPotentialClamped,
+			relicPicks.map((p) => p ?? 0)
+		);
+	}
+	const claimSummary = $derived.by(() => {
+		const parts: string[] = [];
+		if (taintedGrant) parts.push(`${taintedPotentialClamped} Potential · ${taintedEnchanted} Enchanted`);
+		if (relicGrant) {
+			const picked = relicPicks.filter((p) => p !== null).length;
+			parts.push(`${picked}/${relicPicks.length} relic${relicPicks.length === 1 ? '' : 's'} chosen`);
+		}
+		return parts.join(' — ') || null;
+	});
 
 	const awakeningChoices = $derived(myPlayer?.pendingDecisions ?? []);
 	const awakenOffers = $derived(myPlayer?.awakenOffers ?? []);
+	const awakenLocked = $derived(myPlayer?.awakenLocked ?? []);
 	const manualPrompts = $derived(myPlayer?.manualPrompts ?? []);
+
+	// ── W1a payment takeover (plans/ux-overhaul.md §4.2) ─────────────────────
+	// Eligibility is engine-owned: `offer.costSlots` (per-required-item eligible
+	// refs) + `offer.ineligible` (dim + reason chips). Scripted handlers ship no
+	// costSlots — their `options` are already precise, so every option is eligible.
 	let pickingSlot = $state<number | null>(null);
-	let pickedIdx = $state<number[]>([]);
+	/** The staged discard per cost-meter slot; nothing mutates until Confirm. */
+	let awakenFilled = $state<(AwakenDiscardRef | null)[]>([]);
 	const pickingOffer = $derived(
 		pickingSlot === null ? null : (awakenOffers.find((o) => o.slotIndex === pickingSlot) ?? null)
 	);
 	$effect(() => {
 		if (pickingSlot !== null && !pickingOffer) {
 			pickingSlot = null;
-			pickedIdx = [];
+			awakenFilled = [];
 		}
 	});
-	function optionIcon(option: AwakenDiscardOption): string | null {
-		if (option.ref.kind === 'spirit') {
-			const slotIndex = option.ref.slotIndex;
-			const id = myPlayer?.spirits.find((s) => s.slotIndex === slotIndex)?.id;
-			return id ? spiritBackImageUrl(id) : null;
+	const awakenCostSlots = $derived<AwakenCostSlot[] | null>(
+		pickingOffer?.costSlots?.length ? pickingOffer.costSlots : null
+	);
+	const awakenSlotCount = $derived(
+		awakenCostSlots ? awakenCostSlots.length : (pickingOffer?.discardCount ?? 0)
+	);
+	// Keep the staged-slot array in lockstep with the open offer's cost shape.
+	$effect(() => {
+		if (pickingOffer && awakenFilled.length !== awakenSlotCount) {
+			awakenFilled = Array.from({ length: awakenSlotCount }, () => null);
 		}
-		if (option.ref.kind === 'rune') {
-			const slotIndex = option.ref.slotIndex;
-			return runeIconUrl(assets, {
-				slotIndex,
-				hasRune: true,
-				id: option.runeId,
-				name: option.label,
-				type: /relic/i.test(option.label) ? 'relic' : 'rune'
-			});
-		}
-		return null;
+	});
+
+	function refKey(ref: AwakenDiscardRef): string {
+		return ref.kind === 'augment' ? 'augment' : `${ref.kind}:${ref.slotIndex}`;
 	}
+	function matIconById(runeId: string | undefined): string | null {
+		return runeId ? storageUrl(assets.matAssets.get(runeId)?.icon_path ?? null) : null;
+	}
+	/** Resolve a discard ref to its display identity: prefer the offer's own option
+	 *  entry (label + runeId), then the live mats / spirits snapshots. */
+	function refDisplay(ref: AwakenDiscardRef, labelHint?: string): { label: string; image: string | null; group: string } {
+		const opt = pickingOffer?.options.find((o) => refKey(o.ref) === refKey(ref));
+		if (ref.kind === 'spirit') {
+			const spirit = myPlayer?.spirits.find((s) => s.slotIndex === ref.slotIndex);
+			const label = labelHint ?? opt?.label ?? spirit?.name ?? 'Spirit';
+			return {
+				label,
+				image: spirit ? spiritBackImageUrl(spirit.id) : null,
+				group: `spirit:${spirit?.id ?? ref.slotIndex}`
+			};
+		}
+		if (ref.kind === 'rune') {
+			const mat = myPlayer?.mats.find((m) => m.slotIndex === ref.slotIndex);
+			const label = labelHint ?? opt?.label ?? mat?.name ?? 'Rune';
+			const runeId = opt?.runeId ?? mat?.id;
+			return {
+				label,
+				image: runeIconUrl(assets, {
+					slotIndex: ref.slotIndex,
+					hasRune: true,
+					id: runeId,
+					name: label,
+					type: mat?.type ?? (/relic/i.test(label) ? 'relic' : 'rune')
+				}),
+				group: runeId ?? `rune-name:${label}`
+			};
+		}
+		return { label: labelHint ?? 'Augment', image: null, group: 'augment' };
+	}
+
+	type AwakenGroup = {
+		key: string;
+		label: string;
+		image: string | null;
+		refs: AwakenDiscardRef[];
+		eligible: boolean;
+		reason?: string;
+	};
+	const awakenGroups = $derived.by<AwakenGroup[]>(() => {
+		const offer = pickingOffer;
+		if (!offer) return [];
+		const groups = new Map<string, AwakenGroup>();
+		const add = (ref: AwakenDiscardRef, eligible: boolean, labelHint?: string, reason?: string) => {
+			const d = refDisplay(ref, labelHint);
+			const existing = groups.get(d.group);
+			if (existing) {
+				if (!existing.refs.some((r) => refKey(r) === refKey(ref))) existing.refs.push(ref);
+				return;
+			}
+			groups.set(d.group, {
+				key: d.group,
+				label: d.label,
+				image: d.image,
+				refs: [ref],
+				eligible,
+				reason
+			});
+		};
+		if (awakenCostSlots) {
+			for (const slot of awakenCostSlots) for (const ref of slot.eligibleRefs) add(ref, true);
+			for (const inel of offer.ineligible ?? []) add(inel.ref, false, inel.label, inel.reason);
+		} else {
+			for (const opt of offer.options) add(opt.ref, true, opt.label);
+		}
+		return [...groups.values()];
+	});
+
+	function awakenSlotAccepts(slotIndex: number, ref: AwakenDiscardRef): boolean {
+		if (!awakenCostSlots) return true;
+		const slot = awakenCostSlots[slotIndex];
+		return !!slot && slot.eligibleRefs.some((r) => refKey(r) === refKey(ref));
+	}
+	function tapAwakenGroup(key: string) {
+		const group = awakenGroups.find((g) => g.key === key);
+		if (!group || !group.eligible) return;
+		const usedKeys = new Set(awakenFilled.filter((r): r is AwakenDiscardRef => !!r).map(refKey));
+		// Stage one more copy from this card into the first open slot that accepts it…
+		for (const ref of group.refs) {
+			if (usedKeys.has(refKey(ref))) continue;
+			const si = awakenFilled.findIndex((f, i) => !f && awakenSlotAccepts(i, ref));
+			if (si >= 0) {
+				awakenFilled = awakenFilled.map((f, i) => (i === si ? ref : f));
+				return;
+			}
+		}
+		// …or, with nothing left to stage, tapping the card un-stages all its copies.
+		const groupKeys = new Set(group.refs.map(refKey));
+		awakenFilled = awakenFilled.map((f) => (f && groupKeys.has(refKey(f)) ? null : f));
+	}
+	const awakenCandidates = $derived<RackCandidate[]>(
+		awakenGroups.map((g) => {
+			const groupKeys = new Set(g.refs.map(refKey));
+			const selected = awakenFilled.filter((f) => f && groupKeys.has(refKey(f))).length;
+			return {
+				key: g.key,
+				label: g.label,
+				image: g.image,
+				count: g.refs.length,
+				selected,
+				eligible: g.eligible,
+				reason: g.reason
+			};
+		})
+	);
+	const awakenMeter = $derived<MeterSlot[]>(
+		Array.from({ length: awakenSlotCount }, (_, i) => {
+			const cs = awakenCostSlots?.[i];
+			const filled = awakenFilled[i];
+			const d = filled ? refDisplay(filled) : null;
+			return {
+				need: cs?.need ?? 'Discard',
+				needIcon: matIconById(cs?.needRuneId),
+				filled: d ? { label: d.label, icon: d.image } : null
+			};
+		})
+	);
+	const awakenFilledCount = $derived(awakenFilled.filter(Boolean).length);
+	const pickingArt = $derived(pickingSlot === null ? null : spiritArt(pickingSlot));
+
 	function clickOffer(offer: PlayerProjection['awakenOffers'][number]) {
-		if (offer.discardCount > 0 && offer.options.length >= offer.discardCount) {
+		if (offer.discardCount > 0 && (offer.costSlots?.length || offer.options.length >= offer.discardCount)) {
 			pickingSlot = offer.slotIndex;
-			pickedIdx = [];
+			awakenFilled = [];
 			return;
 		}
 		onAwaken(offer.slotIndex);
 	}
-	function togglePick(offer: PlayerProjection['awakenOffers'][number], index: number) {
-		if (pickedIdx.includes(index)) pickedIdx = pickedIdx.filter((i) => i !== index);
-		else if (pickedIdx.length < offer.discardCount) pickedIdx = [...pickedIdx, index];
-	}
-	function confirmPick(offer: PlayerProjection['awakenOffers'][number]) {
-		if (pickedIdx.length !== offer.discardCount) return;
-		onAwaken(
-			offer.slotIndex,
-			pickedIdx.map((i) => offer.options[i].ref)
-		);
+	function confirmAwakenPick() {
+		const offer = pickingOffer;
+		if (!offer) return;
+		const refs = awakenFilled.filter((r): r is AwakenDiscardRef => !!r);
+		if (refs.length !== awakenSlotCount) return;
+		onAwaken(offer.slotIndex, refs);
 		pickingSlot = null;
-		pickedIdx = [];
+		awakenFilled = [];
 	}
 	function cancelPick() {
 		pickingSlot = null;
-		pickedIdx = [];
+		awakenFilled = [];
 	}
+
+	// The board parks pass-turn while a takeover is staging a decision.
+	let interactionArmed = $state(false);
+	const takeoverOpen = $derived(pickingSlot !== null || interactionArmed);
+	$effect(() => {
+		onTakeoverOpenChange?.(takeoverOpen);
+	});
 
 	// Arc Mage convert: the owner clicks exactly 4 attack dice to spend, then confirms
 	// → gain 1 Arcane. A picker embedded in the decision card so an Arcane is never
@@ -950,6 +1127,8 @@
 										player={myPlayer}
 										accent={myAccent}
 										{busy}
+										{seatAffordances}
+										onArmedChange={(armed) => (interactionArmed = armed)}
 										onResolve={onResolveInteraction}
 									/>
 								</div>
@@ -1012,7 +1191,7 @@
 											data-testid="infil-confirm"
 											onclick={confirmInfiltratorSwap}
 										>
-											Swap {infiltratorSwaps.length} die{infiltratorSwaps.length === 1 ? '' : 's'}
+											Swap {infiltratorSwaps.length} {infiltratorSwaps.length === 1 ? 'die' : 'dice'}
 										</button>
 										<button type="button" class="ghost-btn" disabled={busy} onclick={cancelInfiltratorSwap}
 											>Cancel</button
@@ -1038,6 +1217,8 @@
 									player={myPlayer}
 									accent={myAccent}
 									{busy}
+									{seatAffordances}
+									onArmedChange={(armed) => (interactionArmed = armed)}
 									onResolve={onResolveInteraction}
 								/>
 							{/if}
@@ -1046,191 +1227,268 @@
 				{/if}
 				{:else if room.phase === 'benefits'}
 					{#if awakenReward}
-						<section class="scene-panel claim" data-testid="awaken-claim">
-							{#each fixedGrants as g (g.source + g.kind)}
-								<div class="claim-line">
-								<span class="claim-label">{g.source}</span>
-								<span class="claim-fixed">{grantLabel(g)}</span>
-								{#if g.kind === 'vp' && g.note}<span class="claim-note">{g.note}</span>{/if}
+						<!-- W1c benefits claim: grant cards at full stage width, a segmented
+						     heart↔die split (no ± arithmetic), and full-size relic racks. The
+						     commit bar claims everything at once. -->
+						<div class="claim-stage" data-testid="awaken-claim">
+							<div class="claim-scroll">
+								{#each fixedGrants as g (g.source + g.kind)}
+									{@const icon = classIconFor(g.source)}
+									<section class="grant-card">
+										<span class="grant-art">
+											{#if icon}<img src={icon} alt={g.source} />{:else}<span class="grant-fb">✦</span
+												>{/if}
+										</span>
+										<span class="grant-body">
+											<span class="grant-source">{g.source}</span>
+											<span class="grant-what">{grantLabel(g)}</span>
+											{#if g.kind === 'vp' && g.note}<span class="grant-note">{g.note}</span>{/if}
+										</span>
+									</section>
+								{/each}
+								{#if taintedGrant}
+									<section class="grant-card choice-card">
+										<span class="grant-art">
+											{#if classIconFor('Cursed Spirit')}<img
+													src={classIconFor('Cursed Spirit')}
+													alt="Cursed Spirit"
+												/>{:else}<span class="grant-fb">✦</span>{/if}
+										</span>
+										<span class="grant-body">
+											<span class="grant-source">Cursed Spirit · Tainted</span>
+											<span class="grant-what"
+												>Split {taintedMax} between Potential and Enchanted Attack — tap a token to
+												flip it.</span
+											>
+											<div class="tainted-row" role="group" aria-label="Split tainted units">
+												{#each taintedSeg as seg, i (i)}
+													<button
+														type="button"
+														class="tainted-seg"
+														class:potential={seg}
+														disabled={busy}
+														aria-label={seg ? 'Potential — tap for Enchanted Attack' : 'Enchanted Attack — tap for Potential'}
+														data-testid={`tainted-seg-${i}`}
+														onclick={() => toggleTaintedSeg(i)}
+													>
+														{#if seg}
+															{#if potentialIcon}<img src={potentialIcon} alt="" />{:else}<span
+																	class="seg-glyph">♥</span
+																>{/if}
+															<span class="seg-label">Potential</span>
+														{:else}
+															<span class="seg-die" aria-hidden="true"></span>
+															<span class="seg-label">Attack</span>
+														{/if}
+													</button>
+												{/each}
+											</div>
+											<span class="tainted-total">
+												<strong data-testid="claim-potential">{taintedPotentialClamped}</strong>
+												Potential ·
+												<strong data-testid="claim-enchanted">{taintedEnchanted}</strong> Enchanted
+												Attack
+											</span>
+										</span>
+									</section>
+								{/if}
+								{#if relicGrant}
+									<section class="grant-card choice-card relic-card">
+										<span class="grant-art">
+											{#if classIconFor('Cursed Spirit')}<img
+													src={classIconFor('Cursed Spirit')}
+													alt="Cursed Spirit"
+												/>{:else}<span class="grant-fb">✦</span>{/if}
+										</span>
+										<span class="grant-body">
+											<span class="grant-source">Cursed Spirit · Corrupt</span>
+											<span class="grant-what"
+												>Choose {relicGrant.amount} relic{relicGrant.amount === 1 ? '' : 's'} — one per
+												row.</span
+											>
+											<div class="relic-rows" data-testid="claim-relic-picks">
+												{#each relicPicks as pick, unit (unit)}
+													<div class="relic-row" class:done={pick !== null}>
+														<span class="relic-row-tag">{unit + 1}</span>
+														<CandidateRack
+															size="md"
+															candidates={relicChoices.map((rc, ri) => ({
+																key: String(ri),
+																label: rc.name,
+																image: rc.icon,
+																count: 1,
+																selected: pick === ri ? 1 : 0,
+																eligible: true
+															}))}
+															onTap={(key) => pickRelic(unit, Number(key))}
+															disabled={busy}
+															testidPrefix={`claim-relic-${unit}`}
+															ariaLabel={`Choose relic ${unit + 1}`}
+														/>
+													</div>
+												{/each}
+											</div>
+										</span>
+									</section>
+								{/if}
 							</div>
-						{/each}
-						{#if taintedGrant}
-							<div class="claim-line">
-								<span class="claim-label">Cursed Spirit · Tainted — split {taintedMax}:</span>
-								<div class="claim-split">
-									<button
-										type="button"
-										class="step"
-										data-testid="claim-potential-minus"
-										disabled={busy || taintedPotentialClamped <= 0}
-										aria-label="Fewer potential"
-										onclick={() => (taintedPotential = Math.max(0, taintedPotentialClamped - 1))}
-										>−</button
-									>
-									<span class="claim-choice"
-										><strong data-testid="claim-potential">{taintedPotentialClamped}</strong> Potential</span
-									>
-									<button
-										type="button"
-										class="step"
-										data-testid="claim-potential-plus"
-										disabled={busy || taintedPotentialClamped >= taintedMax}
-										aria-label="More potential"
-										onclick={() =>
-											(taintedPotential = Math.min(taintedMax, taintedPotentialClamped + 1))}
-										>+</button
-									>
-									<span class="claim-sep" aria-hidden="true">·</span>
-									<span class="claim-choice"
-										><strong data-testid="claim-enchanted">{taintedEnchanted}</strong> Enchanted Attack</span
-									>
-								</div>
-							</div>
-						{/if}
-						{#if relicGrant}
-							<div class="claim-line">
-								<span class="claim-label"
-									>Cursed Spirit · Corrupt — choose {relicGrant.amount} relic{relicGrant.amount ===
-									1
-										? ''
-										: 's'}:</span
-								>
-								<div class="relic-picks" data-testid="claim-relic-picks">
-									{#each relicPicks as pick, unit (unit)}
-										<div class="relic-pick">
-											{#each relicChoices as rc, ri (ri)}
-												<button
-													type="button"
-													class="relic-opt"
-													class:sel={pick === ri}
-													disabled={busy}
-													title={rc.name}
-													aria-label={rc.name}
-													aria-pressed={pick === ri}
-													data-testid={`claim-relic-${unit}-${ri}`}
-													onclick={() => pickRelic(unit, ri)}
-												>
-													{#if rc.icon}<img src={rc.icon} alt={rc.name} />{:else}<span
-															class="relic-fb">{rc.name.slice(0, 1)}</span
-														>{/if}
-												</button>
-											{/each}
+							<CommitBar
+								summary={claimSummary}
+								warning={relicGrant && !relicPicksComplete ? 'Pick your relics to claim' : null}
+								confirmLabel="Claim rewards"
+								confirmDisabled={!relicPicksComplete}
+								confirmTestid="awaken-claim-btn"
+								onConfirm={claimBenefits}
+								{busy}
+							/>
+						</div>
+					{/if}
+				{:else if room.phase === 'awakening'}
+				{#if awakeningChoices.length > 0 || pickingOffer || awakenOffers.length > 0 || awakenLocked.length > 0 || manualPrompts.length > 0}
+					<div class="scene-flow" class:takeover-host={!!pickingOffer} data-testid="awakening-actions">
+						{#if pickingOffer}
+							<!-- W1a payment takeover: the stage becomes the picker. Selections stage
+							     into the cost meter; nothing is spent until Confirm sends the exact
+							     refs (the engine rejects any that don't satisfy the cost). -->
+							<TakeoverStage
+								accent="var(--brand-magenta, #ff2bc7)"
+								testid="awaken-discard-pick"
+								onEscape={busy ? null : cancelPick}
+							>
+								{#snippet source()}
+									<SourcePanel
+										title={pickingOffer.spiritName}
+										subtitle={pickingOffer.requirement}
+										image={pickingArt}
+										imageAlt={pickingOffer.spiritName}
+										flip
+									/>
+								{/snippet}
+								<p class="rack-hint">
+									Tap {awakenSlotCount === 1 ? 'the item' : `${awakenSlotCount} items`} to pay with —
+									locked cards can't pay this cost.
+								</p>
+								<CandidateRack
+									candidates={awakenCandidates}
+									onTap={tapAwakenGroup}
+									disabled={busy}
+									testidPrefix="discard-option"
+									ariaLabel="Choose which items to discard"
+								/>
+								{#snippet bar()}
+									<CommitBar
+										slots={awakenMeter}
+										confirmLabel={`Discard ${awakenFilledCount}/${awakenSlotCount} & Awaken`}
+										confirmDisabled={awakenFilledCount !== awakenSlotCount}
+										confirmTestid="awaken-discard-confirm"
+										onConfirm={confirmAwakenPick}
+										onCancel={cancelPick}
+										{busy}
+									/>
+								{/snippet}
+							</TakeoverStage>
+						{:else}
+							{#each awakeningChoices as choice (choice.id)}
+								<section class="scene-panel choice" data-testid={`ability-choice-${choice.id}`}>
+									<p class="scene-prompt">{choice.prompt}</p>
+									<div class="choice-opts">
+										{#each choice.options as option (option.id)}
+											<button
+												type="button"
+												class="opt-btn"
+												class:decline={option.id === 'no'}
+												data-testid={`ability-choice-${choice.id}-${option.id}`}
+												disabled={busy}
+												onclick={() => onResolveDecision(choice.id, option.id)}>{option.label}</button
+											>
+										{/each}
+									</div>
+								</section>
+							{/each}
+
+							{#if awakenOffers.length > 0 || awakenLocked.length > 0}
+								<!-- Everything that could ever flip is on stage: eligible offers lit,
+								     locked spirits dimmed with the requirement they still need. -->
+								<div class="offer-grid" data-testid="awaken-offers">
+									{#each awakenOffers as offer, i (offer.slotIndex)}
+										{@const art = spiritArt(offer.slotIndex)}
+										<button
+											type="button"
+											class="offer"
+											class:spin={spins(offer.slotIndex)}
+											style="--i: {i}; --art: {art ? `url('${art}')` : 'none'};"
+											data-testid={`awaken-${offer.slotIndex}`}
+											disabled={busy}
+											onclick={() => clickOffer(offer)}
+											onpointermove={tilt}
+											onpointerleave={untilt}
+										>
+											<span class="floater">
+												<span class="tiltable">
+													<span class="aura" aria-hidden="true"></span>
+													{#if art}
+														<img src={art} alt={offer.spiritName} loading="lazy" />
+													{:else}
+														<span class="offer-glyph" aria-hidden="true">✦</span>
+													{/if}
+													<span class="sheen" aria-hidden="true"></span>
+												</span>
+											</span>
+											<span class="offer-name">{offer.spiritName}</span>
+											<span class="offer-req">
+												{offer.discardCount > 0 ? offer.requirement : 'Free — tap to awaken'}
+											</span>
+										</button>
+									{/each}
+									{#each awakenLocked as locked, i (locked.slotIndex)}
+										{@const art = spiritArt(locked.slotIndex)}
+										<div
+											class="offer locked"
+											style="--i: {awakenOffers.length + i}; --art: {art ? `url('${art}')` : 'none'};"
+											data-testid={`awaken-locked-${locked.slotIndex}`}
+										>
+											<span class="floater still">
+												<span class="tiltable">
+													{#if art}
+														<img src={art} alt={locked.spiritName} loading="lazy" />
+													{:else}
+														<span class="offer-glyph" aria-hidden="true">✦</span>
+													{/if}
+													<span class="offer-lock" aria-hidden="true">
+														<svg viewBox="0 0 24 24" width="13" height="13">
+															<path
+																d="M7 10V7a5 5 0 0 1 10 0v3"
+																fill="none"
+																stroke="currentColor"
+																stroke-width="2.4"
+																stroke-linecap="round"
+															/>
+															<rect x="5" y="10" width="14" height="10" rx="2" fill="currentColor" />
+														</svg>
+													</span>
+												</span>
+											</span>
+											<span class="offer-name">{locked.spiritName}</span>
+											<span class="offer-req need">Needs: {locked.requirement}</span>
 										</div>
 									{/each}
 								</div>
-							</div>
-						{/if}
-						<button
-							type="button"
-							class="primary-btn"
-							data-testid="awaken-claim-btn"
-							disabled={busy}
-							onclick={() => onClaimAwakenReward(taintedPotentialClamped, relicPicks)}
-							>Claim rewards</button
-						>
-					</section>
-				{/if}
-				{:else if room.phase === 'awakening'}
-				{#if awakeningChoices.length > 0 || pickingOffer || awakenOffers.length > 0 || manualPrompts.length > 0}
-					<div class="scene-flow" data-testid="awakening-actions">
-						{#each awakeningChoices as choice (choice.id)}
-							<section class="scene-panel choice" data-testid={`ability-choice-${choice.id}`}>
-								<p class="scene-prompt">{choice.prompt}</p>
-								<div class="choice-opts">
-									{#each choice.options as option (option.id)}
-										<button
-											type="button"
-											class="opt-btn"
-											class:decline={option.id === 'no'}
-											data-testid={`ability-choice-${choice.id}-${option.id}`}
-											disabled={busy}
-											onclick={() => onResolveDecision(choice.id, option.id)}>{option.label}</button
-										>
-									{/each}
-								</div>
-							</section>
-						{/each}
-
-						{#if pickingOffer}
-							<section class="scene-panel awaken-pick">
-								<p class="scene-prompt pick-req">
-									{pickingOffer.requirement} — choose {pickingOffer.discardCount} to discard
-								</p>
-								<div class="pick-grid" data-testid="awaken-discard-pick">
-									{#each pickingOffer.options as option, i (i)}
-										{@const url = optionIcon(option)}
-										<button
-											type="button"
-											class="pick-opt"
-											class:selected={pickedIdx.includes(i)}
-											disabled={busy}
-											title={option.label}
-											data-testid={`discard-option-${i}`}
-											onclick={() => togglePick(pickingOffer, i)}
-										>
-											{#if url}<img src={url} alt={option.label} />{/if}
-											<span class="pick-label">{option.label}</span>
-										</button>
-									{/each}
-								</div>
-								<div class="pick-actions">
-									<button
-										type="button"
-										class="primary-btn"
-										disabled={busy || pickedIdx.length !== pickingOffer.discardCount}
-										data-testid="awaken-discard-confirm"
-										onclick={() => confirmPick(pickingOffer)}
-										>Discard &amp; awaken ({pickedIdx.length}/{pickingOffer.discardCount})</button
-									>
-									<button type="button" class="ghost-btn" disabled={busy} onclick={cancelPick}
-										>Cancel</button
-									>
-								</div>
-							</section>
-						{:else if awakenOffers.length > 0}
-							<div class="offer-grid" data-testid="awaken-offers">
-								{#each awakenOffers as offer, i (offer.slotIndex)}
-									{@const art = spiritArt(offer.slotIndex)}
-									<button
-										type="button"
-										class="offer"
-										class:spin={spins(offer.slotIndex)}
-										style="--i: {i}; --art: {art ? `url('${art}')` : 'none'};"
-										data-testid={`awaken-${offer.slotIndex}`}
-										disabled={busy}
-										onclick={() => clickOffer(offer)}
-										onpointermove={tilt}
-										onpointerleave={untilt}
-									>
-										<span class="floater">
-											<span class="tiltable">
-												<span class="aura" aria-hidden="true"></span>
-												{#if art}
-													<img src={art} alt={offer.spiritName} loading="lazy" />
-												{:else}
-													<span class="offer-glyph" aria-hidden="true">✦</span>
-												{/if}
-												<span class="sheen" aria-hidden="true"></span>
-											</span>
-										</span>
-									</button>
-								{/each}
-							</div>
-						{/if}
+							{/if}
 
 							{#each manualPrompts as prompt (prompt.id)}
 								<section class="scene-panel manual" data-testid={`ability-manual-${prompt.id}`}>
 									<p class="scene-prompt">{prompt.text}</p>
 									<button
-									type="button"
-									class="ghost-btn"
-									disabled={busy}
-									onclick={() => onDismissManual(prompt.id)}
-								>
-									Done
-								</button>
-							</section>
-						{/each}
+										type="button"
+										class="ghost-btn"
+										disabled={busy}
+										onclick={() => onDismissManual(prompt.id)}
+									>
+										Done
+									</button>
+								</section>
+							{/each}
+						{/if}
 					</div>
 				{/if}
 				{:else if room.phase === 'cleanup'}
@@ -1446,9 +1704,6 @@
 			min-height: 1px;
 			max-height: 100%;
 			text-align: center;
-		}
-		.scene-panel.claim {
-			width: min(900px, 100%);
 		}
 		.primary-btn {
 			align-self: center;
@@ -1835,118 +2090,223 @@
 		cursor: not-allowed;
 		opacity: 0.45;
 	}
-		.claim-line {
-			display: flex;
-			flex-wrap: wrap;
-			align-items: center;
-			justify-content: center;
-			gap: 0.5rem 0.75rem;
-			padding-bottom: 0.5rem;
-			border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-			width: 100%;
-		}
-	.claim-label {
+	/* ── W1c benefits claim: full-width grant cards + commit bar ─────────────── */
+	.claim-stage {
+		box-sizing: border-box;
+		display: flex;
+		flex-direction: column;
+		gap: clamp(0.6rem, 1.6vh, 1rem);
+		width: min(980px, 100%);
+		height: 100%;
+		min-height: 0;
+		padding: clamp(0.25rem, 1.2vh, 0.75rem) clamp(0.25rem, 1.6vw, 1rem)
+			clamp(0.35rem, 1.4vh, 0.9rem);
+	}
+	.claim-scroll {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		gap: clamp(0.55rem, 1.5vh, 0.9rem);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+	}
+	/* Center when short WITHOUT justify-content:center — that combination makes
+	   overflowing content unreachable above the scroll origin. */
+	.claim-scroll > :first-child {
+		margin-top: auto;
+	}
+	.claim-scroll > :last-child {
+		margin-bottom: auto;
+	}
+	.grant-card {
+		box-sizing: border-box;
+		display: flex;
+		align-items: center;
+		gap: clamp(0.7rem, 2vw, 1.1rem);
+		width: 100%;
+		padding: clamp(0.6rem, 1.6vh, 0.9rem) clamp(0.75rem, 2vw, 1.2rem);
+		border-radius: 16px;
+		border: 1px solid rgba(255, 255, 255, 0.13);
+		background: rgba(15, 10, 28, 0.32);
+		-webkit-backdrop-filter: blur(24px) saturate(1.3);
+		backdrop-filter: blur(24px) saturate(1.3);
+		box-shadow:
+			0 12px 32px rgba(0, 0, 0, 0.4),
+			inset 0 1px 0 rgba(255, 255, 255, 0.14);
+		text-align: left;
+	}
+	.grant-art {
+		flex: none;
+		width: clamp(3rem, 6vh, 4rem);
+		height: clamp(3rem, 6vh, 4rem);
+		display: grid;
+		place-items: center;
+	}
+	.grant-art img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55));
+	}
+	.grant-fb {
+		font-size: 1.4rem;
+		color: var(--color-fog, #8d8aa1);
+	}
+	.grant-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		min-width: 0;
+		flex: 1;
+	}
+	.grant-source {
 		font-family: var(--font-display);
-		font-size: 0.85rem;
-		letter-spacing: 0.04em;
+		font-size: 0.7rem;
+		letter-spacing: 0.16em;
 		text-transform: uppercase;
 		color: var(--brand-cyan, #5cdfff);
 	}
-		.claim-split {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 0.5rem;
-			flex-wrap: wrap;
-	}
-	.step {
-		width: 1.9rem;
-		height: 1.9rem;
-		display: grid;
-		place-items: center;
-		border-radius: 4px;
-		border: 1px solid rgba(255, 255, 255, 0.28);
-		background: rgba(10, 7, 20, 0.6);
-		color: #fff;
-		font-size: 1.1rem;
-		line-height: 1;
-		cursor: pointer;
-	}
-	.step:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-	.claim-choice {
-		font-size: 0.9rem;
+	.grant-what {
+		font-size: clamp(0.9rem, 1.4vw, 1.05rem);
+		line-height: 1.35;
 		color: var(--color-bone, #efeaf7);
 	}
-	.claim-choice strong {
-		font-family: var(--font-display);
-		font-size: 1.15rem;
-		color: #fff;
-	}
-	.claim-sep {
-		color: var(--color-fog, #8d8aa1);
-	}
-	.claim-fixed {
-		font-size: 0.95rem;
-		color: var(--color-bone, #efeaf7);
-	}
-	.claim-note {
-		font-size: 0.82rem;
+	.grant-note {
+		font-size: 0.8rem;
 		font-style: italic;
 		color: var(--color-fog, #9a93b0);
 	}
-		.relic-picks {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			gap: 0.4rem;
-		}
-		.relic-pick {
-			display: flex;
-			justify-content: center;
-			gap: 0.4rem;
-			flex-wrap: wrap;
+	.tainted-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		padding-top: 0.15rem;
 	}
-	.relic-opt {
-		width: 2.4rem;
-		height: 2.4rem;
-		display: grid;
-		place-items: center;
-		padding: 0;
-		border-radius: 8px;
-		border: 1px solid rgba(255, 255, 255, 0.16);
-		background: rgba(10, 7, 20, 0.5);
+	.tainted-seg {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.22rem;
+		width: clamp(3.4rem, 7vh, 4.2rem);
+		height: clamp(3.4rem, 7vh, 4.2rem);
+		padding: 0.3rem;
+		border-radius: 12px;
+		border: 1.5px solid color-mix(in srgb, #4d8bf0 55%, transparent);
+		background: color-mix(in srgb, #4d8bf0 14%, rgba(8, 5, 16, 0.5));
 		cursor: pointer;
-		opacity: 0.55;
 		transition:
-			opacity 120ms ease,
-			border-color 120ms ease,
-			box-shadow 120ms ease;
+			border-color 160ms ease,
+			background 160ms ease,
+			transform 160ms ease;
 	}
-	.relic-opt:not(:disabled):hover {
-		opacity: 0.85;
+	.tainted-seg.potential {
+		border-color: color-mix(in srgb, var(--brand-amber-soft, #ffd56a) 65%, transparent);
+		background: color-mix(in srgb, var(--brand-amber, #ffba3d) 14%, rgba(8, 5, 16, 0.5));
 	}
-	.relic-opt.sel {
-		opacity: 1;
-		border-color: var(--brand-amber-soft, #ffd56a);
-		box-shadow:
-			0 0 0 1px var(--brand-amber-soft, #ffd56a),
-			0 0 10px rgba(255, 213, 106, 0.4);
+	.tainted-seg:not(:disabled):hover {
+		transform: translateY(-2px);
 	}
-	.relic-opt:disabled {
+	.tainted-seg:disabled {
+		opacity: 0.55;
 		cursor: not-allowed;
 	}
-	.relic-opt img {
-		width: 1.8rem;
-		height: 1.8rem;
+	.tainted-seg img {
+		width: 55%;
+		height: 55%;
 		object-fit: contain;
 	}
-	.relic-fb {
+	.seg-glyph {
+		font-size: 1.25rem;
+		color: var(--brand-amber-soft, #ffd56a);
+	}
+	/* Enchanted Attack die token — tier-colored gem. */
+	.seg-die {
+		width: 1.35rem;
+		height: 1.35rem;
+		border-radius: 4px;
+		transform: rotate(45deg);
+		background: linear-gradient(135deg, #7fb0ff 0%, #4d8bf0 55%, #2b5cc0 100%);
+		box-shadow:
+			0 0 10px rgba(77, 139, 240, 0.55),
+			inset 0 1px 1px rgba(255, 255, 255, 0.5);
+	}
+	.seg-label {
 		font-family: var(--font-display);
-		font-size: 1rem;
+		font-size: 0.52rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: rgba(255, 255, 255, 0.78);
+	}
+	.tainted-total {
+		font-size: 0.88rem;
 		color: var(--color-bone, #efeaf7);
+	}
+	.tainted-total strong {
+		font-family: var(--font-display);
+		font-size: 1.05rem;
+		color: #fff;
+	}
+	.relic-rows {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+		width: 100%;
+	}
+	.relic-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.3rem 0.4rem;
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.03);
+	}
+	.relic-row.done {
+		background: color-mix(in srgb, var(--brand-magenta, #ff2bc7) 7%, transparent);
+	}
+	.relic-row-tag {
+		flex: none;
+		width: 1.5rem;
+		height: 1.5rem;
+		display: grid;
+		place-items: center;
+		border-radius: 50%;
+		font-family: var(--font-display);
+		font-size: 0.72rem;
+		color: rgba(255, 255, 255, 0.75);
+		box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.22);
+	}
+	.relic-row.done .relic-row-tag {
+		background: var(--brand-magenta, #ff2bc7);
+		color: #fff;
+		box-shadow: none;
+	}
+	.relic-row :global(.rack) {
+		justify-content: flex-start;
+	}
+	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+		.claim-stage {
+			padding: 0.2rem 0.3rem 0.3rem;
+			gap: 0.4rem;
+		}
+		.grant-card {
+			padding: 0.45rem 0.6rem;
+			gap: 0.55rem;
+			border-radius: 12px;
+		}
+		.grant-art {
+			width: 2.2rem;
+			height: 2.2rem;
+		}
+		.grant-what {
+			font-size: 0.78rem;
+		}
+		.tainted-seg {
+			width: 2.7rem;
+			height: 2.7rem;
+		}
 	}
 		.scene-prompt {
 			margin: 0;
@@ -2134,91 +2494,76 @@
 			animation: sheen-sweep 1.1s ease-in-out;
 		}
 	}
-		.pick-req {
-			color: var(--brand-violet-soft, #b6a8ff);
+		/* ── W1a takeover host + offers spread chrome ─────────────────────────── */
+		.scene-flow.takeover-host {
+			height: 100%;
+			padding: 0;
+			gap: 0;
 		}
-		.pick-grid {
-			display: flex;
-			flex-wrap: wrap;
-			justify-content: center;
-			gap: clamp(0.65rem, 2vw, 1.2rem);
-			width: 100%;
-		}
-		.pick-opt {
-			position: relative;
-			display: grid;
-			grid-template-rows: 1fr auto;
-			place-items: center;
-			gap: 0.4rem;
-			width: clamp(4.6rem, 12vw, 6rem);
-			min-height: clamp(5.3rem, 14vw, 6.5rem);
-			padding: 0.35rem;
-			border: 0;
-			background: transparent;
-			color: inherit;
-			font: inherit;
-			cursor: pointer;
-			opacity: 0.92;
-			transition:
-				transform 140ms ease,
-				filter 140ms ease,
-				opacity 140ms ease;
-		}
-		.pick-opt:not(:disabled):hover {
-			transform: translateY(-3px);
-			opacity: 1;
-		}
-		.pick-opt.selected {
-			opacity: 1;
-			filter: drop-shadow(0 0 16px color-mix(in srgb, var(--brand-cyan, #24d4ff) 62%, transparent));
-			transform: translateY(-4px);
-		}
-		.pick-grid:has(.pick-opt.selected) .pick-opt:not(.selected) {
-			opacity: 0.34;
-		}
-		.pick-opt.selected::after {
-			content: '✓';
-			position: absolute;
-			top: -0.42rem;
-			left: 50%;
-			width: 1.35rem;
-			height: 1.35rem;
-			border-radius: 50%;
-			display: grid;
-			place-items: center;
-			transform: translateX(-50%);
-			background: var(--brand-cyan, #24d4ff);
-			color: var(--color-void, #080510);
-			font-family: var(--font-display);
-			font-size: 0.9rem;
-			box-shadow:
-				0 0 0 2px rgba(8, 5, 16, 0.78),
-				0 0 14px color-mix(in srgb, var(--brand-cyan, #24d4ff) 72%, transparent);
-		}
-	.pick-opt:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-		.pick-opt img {
-			width: clamp(3.2rem, 9vw, 4.4rem);
-			height: clamp(3.2rem, 9vw, 4.4rem);
-			object-fit: contain;
-			filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
-		}
-		.pick-label {
-			font-family: var(--font-display);
-			font-size: clamp(0.68rem, 1.6vw, 0.82rem);
-			line-height: 1.1;
+		.rack-hint {
+			margin: 0;
+			font-size: clamp(0.78rem, 1.2vw, 0.92rem);
+			color: var(--color-parchment, #d8cfee);
 			text-align: center;
+		}
+		.offer-name {
+			display: block;
+			margin-top: 0.55rem;
+			font-family: var(--font-display);
+			font-size: clamp(0.66rem, 1.1vw, 0.8rem);
+			letter-spacing: 0.1em;
+			text-transform: uppercase;
 			color: #fff;
-			opacity: 0.92;
+			text-align: center;
 			text-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
 		}
-		.pick-actions {
-			display: flex;
-			justify-content: center;
-			gap: 0.7rem;
-			flex-wrap: wrap;
+		.offer-req {
+			display: block;
+			margin-top: 0.25rem;
+			margin-inline: auto;
+			width: fit-content;
+			max-width: 100%;
+			padding: 0.2rem 0.55rem;
+			border-radius: 999px;
+			font-size: clamp(0.62rem, 1vw, 0.72rem);
+			line-height: 1.3;
+			color: color-mix(in srgb, var(--brand-magenta, #ff2bc7) 45%, #fff 55%);
+			background: color-mix(in srgb, var(--brand-magenta, #ff2bc7) 12%, transparent);
+			border: 1px solid color-mix(in srgb, var(--brand-magenta, #ff2bc7) 35%, transparent);
+			text-align: center;
+		}
+		.offer-req.need {
+			color: var(--color-fog, #a49fc0);
+			background: rgba(255, 255, 255, 0.05);
+			border-color: rgba(255, 255, 255, 0.16);
+		}
+		/* A locked spirit is on stage but visibly not payable yet. */
+		.offer.locked {
+			cursor: default;
+		}
+		.offer.locked .tiltable {
+			opacity: 0.42;
+			filter: grayscale(0.8) saturate(0.5);
+		}
+		.offer.locked .offer-name {
+			color: var(--color-fog, #a49fc0);
+		}
+		.floater.still {
+			animation: summon-in 0.95s cubic-bezier(0.18, 0.7, 0.2, 1) calc(var(--i) * 0.1s) both;
+		}
+		.offer-lock {
+			position: absolute;
+			right: 6%;
+			bottom: 6%;
+			z-index: 3;
+			width: 1.5rem;
+			height: 1.5rem;
+			display: grid;
+			place-items: center;
+			border-radius: 50%;
+			background: rgba(10, 6, 20, 0.92);
+			color: var(--color-fog, #b9b4cc);
+			box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.22);
 		}
 		.overflow-note {
 			color: var(--brand-coral, #ff704d);

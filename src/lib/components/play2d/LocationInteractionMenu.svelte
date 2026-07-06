@@ -16,17 +16,29 @@
 	} from '$lib/play/locationInteractions';
 	import { awakenedClassCounts } from '$lib/play/effects/apply';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
+	import type { SeatAffordances } from '$lib/play/viewV2';
 	import { runeIconUrl, storageUrl } from './helpers';
+	import TakeoverStage from './takeover/TakeoverStage.svelte';
+	import SourcePanel from './takeover/SourcePanel.svelte';
+	import CandidateRack from './takeover/CandidateRack.svelte';
+	import CommitBar from './takeover/CommitBar.svelte';
+	import type { MeterSlot, RackCandidate } from './takeover/types';
 
 	interface Props {
 		location: GameLocationAsset | null;
 		iconPool?: Map<string, IconPoolEntry>;
 		/** Full asset state — used to draw the icons of held relics/runes in the
-		 *  "which to discard" chooser for wildcard costs. */
+		 *  armed payment rack. */
 		assets: ReturnType<typeof getAssetState>;
 		player: PlayerProjection | null;
 		accent?: string;
 		busy?: boolean;
+		/** This seat's engine affordances (spec §5.2 `locationInteractions`). Optional:
+		 *  until the engine ships them the menu falls back to the same client helpers
+		 *  it always used (status quo, no new rule derivation). */
+		seatAffordances?: SeatAffordances | null;
+		/** Fires when a trade arms/disarms (the board parks pass-turn meanwhile). */
+		onArmedChange?: (armed: boolean) => void;
 		onResolve?: (rowIndex: number, choices: number[], costChoices: number[]) => void;
 	}
 
@@ -37,53 +49,18 @@
 		player,
 		accent = 'var(--brand-violet, #5a2bff)',
 		busy = false,
+		seatAffordances = null,
+		onArmedChange,
 		onResolve
 	}: Props = $props();
 
-	// A wildcard cost ("any relic" / "any basic rune") where the player holds more
-	// than one eligible item to discard — each is the player's choice. `slots` are the
-	// held mats (with their array index into player.mats) that could pay cost slot `ci`.
-	type CostChooser = { ci: number; slots: { arrayIndex: number; slot: MatSlotSnapshot }[] };
-	function costChooserFor(
-		interaction: LocationInteraction,
-		ci: number
-	): CostChooser['slots'] | null {
-		const mats = player?.mats ?? [];
-		const req = interaction.cost[ci];
-		if (!req || !isWildcardCost(req)) return null;
-		// Collapse identical held items to one option — discarding any one of four copies of
-		// the same relic is the same choice, so show each DISTINCT item once.
-		const seen = new Set<string>();
-		const distinct: CostChooser['slots'] = [];
-		for (const arrayIndex of eligibleCostSlots(req, mats)) {
-			const slot = mats[arrayIndex];
-			const key = slot.id ?? `${slot.name ?? ''}|${slot.type ?? ''}|${slot.originId ?? ''}`;
-			if (seen.has(key)) continue;
-			seen.add(key);
-			distinct.push({ arrayIndex, slot });
-		}
-		// Only a real *choice* (>1 distinct item) needs UX — otherwise any one auto-pays.
-		return distinct.length >= 2 ? distinct : null;
-	}
-	function costChoosers(interaction: LocationInteraction): CostChooser[] {
-		const out: CostChooser[] = [];
-		interaction.cost.forEach((_req, ci) => {
-			const slots = costChooserFor(interaction, ci);
-			if (slots) out.push({ ci, slots });
-		});
-		return out;
-	}
+	// Engine-owned per-row eligibility (§5.2 SeatAffordances.locationInteractions).
+	const rowAffordances = $derived(
+		new Map((seatAffordances?.locationInteractions ?? []).map((a) => [a.rowIndex, a]))
+	);
+
 	function slotIconUrl(slot: MatSlotSnapshot): string | null {
 		return runeIconUrl(assets, slot);
-	}
-
-	// Per-row, per-cost-slot discard pick: costSel[rowIndex][ci] = chosen mat array index.
-	let costSel = $state<Record<number, Record<number, number>>>({});
-	function chosenCostIndex(rowIndex: number, ci: number, fallback: number): number {
-		return costSel[rowIndex]?.[ci] ?? fallback;
-	}
-	function selectCost(rowIndex: number, ci: number, arrayIndex: number) {
-		costSel = { ...costSel, [rowIndex]: { ...(costSel[rowIndex] ?? {}), [ci]: arrayIndex } };
 	}
 
 	const interactions = $derived(buildLocationInteractions(location?.reward_rows));
@@ -93,8 +70,6 @@
 	// allowed use, each spent left-to-right as the player resolves the row.
 	const rowAllowance = $derived(1 + (player?.extraActions?.locationInteraction ?? 0));
 
-	// Per-row choices for "or" gains: choices[rowIndex][k] = selected option index.
-	let choices = $state<Record<number, number[]>>({});
 	// The row most recently resolved — only this flipped card shows the detailed
 	// result log (lastAction holds just the latest outcome).
 	let lastRow = $state<number | null>(null);
@@ -112,10 +87,9 @@
 		return soloRow ? 'solo' : 'base';
 	}
 
-	// A card is "dense" when it carries many reward icons / chooser options. Dense
-	// cards shrink their icons + chrome (see .int-card.dense CSS) so every option
-	// stays visible inside the fixed-size card instead of overflowing and being
-	// clipped (the card is overflow:hidden) — this is the "lots of choices" case.
+	// A card is "dense" when it carries many reward icons. Dense cards shrink their
+	// icons + chrome (see .int-card.dense CSS) so every option stays visible inside
+	// the fixed-size card instead of overflowing and being clipped.
 	function iconSlotCount(interaction: LocationInteraction): number {
 		let n = interaction.costTokens.length;
 		for (const t of interaction.gainTokens) n += isOr(t) ? t.icon_ids.length : 1;
@@ -126,46 +100,30 @@
 		return interaction.gainTokens.some((t) => isOr(t) && t.icon_ids.length >= 3);
 	}
 
-	function orSlotOf(interaction: LocationInteraction, tokenIndex: number): number {
-		let slot = 0;
-		for (let i = 0; i < tokenIndex; i += 1) if (isOr(interaction.gainTokens[i])) slot += 1;
-		return slot;
-	}
-	function selectedOption(rowIndex: number, orSlot: number): number {
-		return choices[rowIndex]?.[orSlot] ?? 0;
-	}
-	function selectOption(rowIndex: number, orSlot: number, optionIndex: number) {
-		const current = choices[rowIndex] ? [...choices[rowIndex]] : [];
-		current[orSlot] = optionIndex;
-		choices = { ...choices, [rowIndex]: current };
-	}
-
 	// How many times this row has already been resolved this round (0..rowAllowance).
 	function usedCount(interaction: LocationInteraction): number {
 		return usedRows.filter((a) => a === `row:${interaction.rowIndex}`).length;
 	}
-	// A trade whose cost is WAIVED for this player — mirrors the runtime waiver in
-	// resolveLocationInteraction so the card isn't disabled in the exact case the
-	// ability exists for (an awakened Mod Injector / Undercover who lacks the runes):
+	// A trade whose cost is WAIVED for this player. The engine affordance names the
+	// waiver; the fallback mirrors the runtime waiver exactly as before:
 	//   • Mod Injector — any Spirit-Augment trade is free while awakened.
 	//   • Undercover — the player's next rune→relic trade is free (one-shot flag).
 	function freeTrade(interaction: LocationInteraction): boolean {
+		const aff = rowAffordances.get(interaction.rowIndex);
+		if (aff?.freeTrade) return true;
 		if (!player || interaction.cost.length === 0) return false;
-		// Resolve what the trade grants, honoring an "or" gain's currently-selected
-		// option (mirrors the runtime waiver in resolveLocationInteraction).
-		const picks = choices[interaction.rowIndex] ?? [];
 		let grantsAugment = false;
 		let grantsRelic = false;
-		let cursor = 0;
 		for (const g of interaction.gains) {
 			if (g.type === 'rune') {
 				if (g.rune.type === 'augment') grantsAugment = true;
 				if (g.rune.type === 'relic') grantsRelic = true;
 			} else if (g.type === 'chooseRune') {
-				const chosen = g.options[picks[cursor] ?? 0] ?? g.options[0];
-				cursor += 1;
-				if (chosen?.type === 'augment') grantsAugment = true;
-				if (chosen?.type === 'relic') grantsRelic = true;
+				// Any option counting keeps the waiver visible before the player picks.
+				for (const opt of g.options) {
+					if (opt.type === 'augment') grantsAugment = true;
+					if (opt.type === 'relic') grantsRelic = true;
+				}
 			}
 		}
 		const modInjectorFree =
@@ -174,7 +132,12 @@
 		return modInjectorFree || undercoverFree;
 	}
 	function affordable(interaction: LocationInteraction): boolean {
+		const aff = rowAffordances.get(interaction.rowIndex);
+		if (aff) return aff.affordable || !!aff.freeTrade;
 		return freeTrade(interaction) || canAfford(interaction, player?.mats ?? []);
+	}
+	function noEffectNow(interaction: LocationInteraction): boolean {
+		return rowAffordances.get(interaction.rowIndex)?.noEffectNow ?? false;
 	}
 	// A specific card instance (`inst`, 0-based) is spent once that many uses have
 	// been made; instances fill left-to-right.
@@ -184,16 +147,267 @@
 	function instDisabled(interaction: LocationInteraction, inst: number): boolean {
 		return busy || instUsed(interaction, inst) || !affordable(interaction);
 	}
+	function hasOrChoice(interaction: LocationInteraction): boolean {
+		return interaction.gains.some((g) => g.type === 'chooseRune');
+	}
+	/** A row arms (stage takeover) when paying or choosing is involved; a plain
+	 *  free gain stays one-click. */
+	function needsArming(interaction: LocationInteraction): boolean {
+		return (interaction.cost.length > 0 && !freeTrade(interaction)) || hasOrChoice(interaction);
+	}
 
-	function resolve(interaction: LocationInteraction, inst: number) {
-		if (instDisabled(interaction, inst)) return;
-		lastRow = interaction.rowIndex; // this card will show the detailed result
-		// The held-mat array index the player chose to discard for each wildcard cost
-		// (defaults to the first eligible item, matching the old auto-pick).
-		const costChoices = costChoosers(interaction).map((c) =>
-			chosenCostIndex(interaction.rowIndex, c.ci, c.slots[0].arrayIndex)
+	// ── W1b armed trade (plans/ux-overhaul.md §4.2) ───────────────────────────
+	// Clicking a costed/choice row no longer resolves it — it ARMS: the card pins
+	// as the source, the mat rack rises as the candidate rack, every cost slot is
+	// a visible meter slot, and "or" gains are explicit chips with no default.
+	// NOTHING mutates until Confirm.
+	let armedRow = $state<number | null>(null);
+	/** Chosen mats-array index per cost slot (specific slots pre-filled by auto-match). */
+	let armedFill = $state<(number | null)[]>([]);
+	/** Chosen option per "or" gain group — starts null (no silent default, S6). */
+	let armedChoiceSel = $state<(number | null)[]>([]);
+	const armedInteraction = $derived(
+		armedRow === null ? null : (interactions.find((i) => i.rowIndex === armedRow) ?? null)
+	);
+	$effect(() => {
+		onArmedChange?.(armedRow !== null);
+	});
+	$effect(() => {
+		// The row resolved / location changed out from under the armed view.
+		if (armedRow !== null && !armedInteraction) disarm();
+	});
+
+	type ArmedCostSlot = {
+		need: string;
+		needIcon: string | null;
+		wildcard: boolean;
+		eligible: number[];
+		autoPick: number | null;
+	};
+	const armedFreeTrade = $derived(armedInteraction ? freeTrade(armedInteraction) : false);
+	function costSlotsFor(it: LocationInteraction): ArmedCostSlot[] {
+		if (freeTrade(it)) return [];
+		const aff = rowAffordances.get(it.rowIndex);
+		const tokenIcon = (ci: number): string | null => {
+			const token = it.costTokens[ci];
+			return typeof token === 'string' ? iconUrl(token) : null;
+		};
+		if (aff && aff.costSlots.length === it.cost.length) {
+			return aff.costSlots.map((s, ci) => ({
+				need: s.need,
+				needIcon: tokenIcon(ci),
+				wildcard: s.wildcard,
+				eligible: s.eligibleMatSlotIndexes,
+				autoPick: s.autoPick
+			}));
+		}
+		// Fallback: the exact helpers the old chooser used (status quo semantics).
+		return it.cost.map((req, ci) => {
+			const eligible = eligibleCostSlots(req, player?.mats ?? []);
+			return {
+				need: req.label,
+				needIcon: tokenIcon(ci),
+				wildcard: isWildcardCost(req),
+				eligible,
+				autoPick: eligible[0] ?? null
+			};
+		});
+	}
+	const armedCostSlots = $derived<ArmedCostSlot[]>(
+		armedInteraction ? costSlotsFor(armedInteraction) : []
+	);
+	const armedChoiceGroups = $derived(
+		armedInteraction
+			? armedInteraction.gains.filter((g) => g.type === 'chooseRune')
+			: []
+	);
+
+	function matIdentity(slot: MatSlotSnapshot): string {
+		return slot.id ?? `${slot.name ?? ''}|${slot.type ?? ''}|${slot.originId ?? ''}`;
+	}
+	/** Pre-fill the meter: specific slots take the auto-match pick (S1 — the spend
+	 *  is always visible); a wildcard slot pre-fills only when there is no real
+	 *  choice (a single distinct eligible item). No two slots share one mat. */
+	function initialFill(slots: ArmedCostSlot[]): (number | null)[] {
+		const used = new Set<number>();
+		const take = (idx: number | null | undefined): number | null => {
+			if (idx == null || used.has(idx)) return null;
+			used.add(idx);
+			return idx;
+		};
+		return slots.map((slot) => {
+			if (!slot.wildcard) {
+				const pick = take(slot.autoPick) ?? take(slot.eligible.find((i) => !used.has(i)));
+				return pick;
+			}
+			const mats = player?.mats ?? [];
+			const distinct = new Set(
+				slot.eligible.filter((i) => !used.has(i)).map((i) => matIdentity(mats[i]))
+			);
+			if (distinct.size === 1) return take(slot.eligible.find((i) => !used.has(i)));
+			return null;
+		});
+	}
+	function arm(interaction: LocationInteraction) {
+		armedRow = interaction.rowIndex;
+		armedChoiceSel = Array.from(
+			{ length: interaction.gains.filter((g) => g.type === 'chooseRune').length },
+			() => null
 		);
-		onResolve?.(interaction.rowIndex, choices[interaction.rowIndex] ?? [], costChoices);
+		armedFill = initialFill(costSlotsFor(interaction));
+	}
+	function disarm() {
+		armedRow = null;
+		armedFill = [];
+		armedChoiceSel = [];
+	}
+
+	// Group the FULL held rack (real objects, S1: you always see what you keep and
+	// what you lose). Identical copies collapse to one card + count.
+	type MatGroup = { key: string; label: string; image: string | null; indexes: number[] };
+	const heldGroups = $derived.by<MatGroup[]>(() => {
+		const groups = new Map<string, MatGroup>();
+		(player?.mats ?? []).forEach((slot, arrayIndex) => {
+			if (!slot.hasRune) return;
+			const key = matIdentity(slot);
+			const existing = groups.get(key);
+			if (existing) {
+				existing.indexes.push(arrayIndex);
+				return;
+			}
+			groups.set(key, {
+				key,
+				label: slot.name ?? 'Rune',
+				image: slotIconUrl(slot),
+				indexes: [arrayIndex]
+			});
+		});
+		return [...groups.values()];
+	});
+	function slotAcceptsIndex(si: number, arrayIndex: number): boolean {
+		return armedCostSlots[si]?.eligible.includes(arrayIndex) ?? false;
+	}
+	const armedCandidates = $derived.by<RackCandidate[]>(() => {
+		if (!armedInteraction) return [];
+		const filledSet = new Set(armedFill.filter((v): v is number => v !== null));
+		const wildcardNeeds = armedCostSlots
+			.filter((s, i) => s.wildcard && armedFill[i] === null)
+			.map((s) => s.need);
+		return heldGroups.map((g) => {
+			const selected = g.indexes.filter((i) => filledSet.has(i)).length;
+			// Assignable now: an unused copy fits some unfilled WILDCARD slot.
+			const assignable = g.indexes.some(
+				(idx) =>
+					!filledSet.has(idx) &&
+					armedCostSlots.some((s, si) => s.wildcard && armedFill[si] === null && slotAcceptsIndex(si, idx))
+			);
+			// Removable: one of its copies sits in a WILDCARD slot (specifics are fixed).
+			const removable = armedCostSlots.some(
+				(s, si) => s.wildcard && armedFill[si] !== null && g.indexes.includes(armedFill[si]!)
+			);
+			const anyWildcardEligible = armedCostSlots.some(
+				(s) => s.wildcard && g.indexes.some((idx) => s.eligible.includes(idx))
+			);
+			const hasWildcards = armedCostSlots.some((s) => s.wildcard);
+			const eligible = anyWildcardEligible;
+			const auto = !eligible && selected > 0; // consumed by a specific cost only
+			return {
+				key: g.key,
+				label: g.label,
+				image: g.image,
+				count: g.indexes.length,
+				selected,
+				eligible: eligible && (assignable || removable || selected > 0),
+				auto,
+				reason: eligible
+					? undefined
+					: auto
+						? undefined
+						: hasWildcards
+							? `Can't pay “${wildcardNeeds[0] ?? armedCostSlots.find((s) => s.wildcard)?.need ?? 'this cost'}”`
+							: 'Kept — not part of this cost'
+			};
+		});
+	});
+	function tapArmedGroup(key: string) {
+		const g = heldGroups.find((x) => x.key === key);
+		if (!g) return;
+		const filledSet = new Set(armedFill.filter((v): v is number => v !== null));
+		for (const idx of g.indexes) {
+			if (filledSet.has(idx)) continue;
+			const si = armedCostSlots.findIndex(
+				(s, i) => s.wildcard && armedFill[i] === null && slotAcceptsIndex(i, idx)
+			);
+			if (si >= 0) {
+				armedFill = armedFill.map((v, i) => (i === si ? idx : v));
+				return;
+			}
+		}
+		// Nothing to add — un-stage this group's wildcard picks.
+		armedFill = armedFill.map((v, i) =>
+			v !== null && armedCostSlots[i]?.wildcard && g.indexes.includes(v) ? null : v
+		);
+	}
+	const armedMeter = $derived<MeterSlot[]>(
+		armedCostSlots.map((slot, i) => {
+			const idx = armedFill[i];
+			const mat = idx !== null ? (player?.mats ?? [])[idx] : null;
+			return {
+				need: slot.need,
+				needIcon: slot.needIcon,
+				filled: mat ? { label: mat.name ?? 'Rune', icon: slotIconUrl(mat) } : null
+			};
+		})
+	);
+	const armedComplete = $derived(
+		armedFill.every((v) => v !== null) && armedChoiceSel.every((v) => v !== null)
+	);
+	const armedUsesLeft = $derived.by(() => {
+		const it = armedInteraction;
+		if (!it) return 0;
+		const aff = rowAffordances.get(it.rowIndex);
+		return aff ? aff.usesRemaining : rowAllowance - usedCount(it);
+	});
+	function gainSummary(interaction: LocationInteraction): string {
+		const parts = interaction.gains.map((g) => {
+			if (g.type === 'rune') return g.rune.name;
+			if (g.type === 'restoreBarrier') return 'Restore Barrier';
+			if (g.type === 'vp') return `${g.amount} VP`;
+			if (g.type === 'chooseRune') return 'your pick';
+			if (g.type === 'action') {
+				return g.action === 'cultivate'
+					? 'Cultivate'
+					: g.action === 'rest'
+						? 'Rest'
+						: 'Summon';
+			}
+			return '';
+		});
+		// Collapse duplicates ("Summon + Summon" → "2× Summon").
+		const counts = new Map<string, number>();
+		for (const p of parts) if (p) counts.set(p, (counts.get(p) ?? 0) + 1);
+		return [...counts.entries()].map(([p, n]) => (n > 1 ? `${n}× ${p}` : p)).join(' + ');
+	}
+	function confirmArmed() {
+		const it = armedInteraction;
+		if (!it || busy || !armedComplete) return;
+		const costChoices = armedCostSlots
+			.map((s, i) => (s.wildcard ? armedFill[i] : null))
+			.filter((v): v is number => v !== null);
+		const choices = armedChoiceSel.map((v) => v ?? 0);
+		lastRow = it.rowIndex;
+		onResolve?.(it.rowIndex, choices, costChoices);
+		disarm();
+	}
+
+	function cardClick(interaction: LocationInteraction, inst: number) {
+		if (instDisabled(interaction, inst)) return;
+		if (needsArming(interaction)) {
+			arm(interaction);
+			return;
+		}
+		lastRow = interaction.rowIndex; // this card will show the detailed result
+		onResolve?.(interaction.rowIndex, [], []);
 	}
 
 	function resultLines(interaction: LocationInteraction, inst: number): string[] {
@@ -215,6 +429,117 @@
 
 {#if interactions.length === 0}
 	<div class="empty" data-testid="no-interactions">No interactions here — pass your turn.</div>
+{:else if armedInteraction}
+	{@const it = armedInteraction}
+	<TakeoverStage
+		{accent}
+		testid={`interaction-armed-${it.rowIndex}`}
+		onEscape={busy ? null : disarm}
+	>
+		{#snippet source()}
+			<SourcePanel
+				title={it.kind === 'trade' ? 'Trade' : 'Claim'}
+				subtitle={armedFreeTrade
+					? `Cost waived — take ${gainSummary(it)}`
+					: `Pay the cost, take ${gainSummary(it)}`}
+				{accent}
+			>
+				<span class="armed-flow" aria-hidden="true">
+					{#if it.costTokens.length > 0}
+						<span class="armed-side">
+							{#each it.costTokens as token, ci (ci)}
+								{#if !isOr(token)}{@render icon(iconUrl(token), 'base')}{/if}
+							{/each}
+						</span>
+						<span class="armed-arrow">→</span>
+					{/if}
+					<span class="armed-side">
+						{#each it.gainTokens as token, ti (ti)}
+							{#if isOr(token)}
+								{#each token.icon_ids as optId, oi (optId + oi)}
+									{@render icon(iconUrl(optId), 'base')}
+								{/each}
+							{:else}
+								{@render icon(iconUrl(token), iconSize(token, false))}
+							{/if}
+						{/each}
+					</span>
+				</span>
+				{#if armedUsesLeft > 1}
+					<span class="uses-chip">{armedUsesLeft} uses left this round</span>
+				{/if}
+				{#if armedFreeTrade}
+					<span class="uses-chip free">Free — class ability</span>
+				{/if}
+			</SourcePanel>
+		{/snippet}
+
+		{#if armedChoiceGroups.length > 0}
+			<div class="choice-groups">
+				{#each armedChoiceGroups as group, gi (gi)}
+					{#if group.type === 'chooseRune'}
+						<div class="choice-group" role="group" aria-label="Choose one reward">
+							<span class="choice-title">Choose one</span>
+							<div class="choice-chips">
+								{#each group.options as opt, oi (opt.runeId + oi)}
+									<button
+										type="button"
+										class="choice-chip"
+										class:picked={armedChoiceSel[gi] === oi}
+										disabled={busy}
+										aria-pressed={armedChoiceSel[gi] === oi}
+										data-testid={`armed-choice-${gi}-${oi}`}
+										onclick={() =>
+											(armedChoiceSel = armedChoiceSel.map((v, k) => (k === gi ? oi : v)))}
+									>
+										{#if storageUrl(assets.matAssets.get(opt.runeId)?.icon_path ?? null)}
+											<img
+												src={storageUrl(assets.matAssets.get(opt.runeId)?.icon_path ?? null)}
+												alt=""
+											/>
+										{/if}
+										<span>{opt.name}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				{/each}
+			</div>
+		{/if}
+
+		{#if armedCostSlots.length > 0}
+			<p class="rack-hint">
+				Your rack — tap what you'll pay with. Dimmed items stay yours.
+			</p>
+			<CandidateRack
+				candidates={armedCandidates}
+				onTap={tapArmedGroup}
+				disabled={busy}
+				{accent}
+				testidPrefix="cost-option"
+				testid="armed-cost-pick"
+				ariaLabel="Choose which items to pay with"
+			/>
+		{/if}
+
+		{#snippet bar()}
+			<CommitBar
+				slots={armedMeter}
+				summary={armedCostSlots.length === 0 && armedChoiceGroups.length > 0
+					? 'Pick your reward to continue'
+					: null}
+				warning={noEffectNow(it) ? 'No effect right now' : null}
+				confirmLabel={it.kind === 'trade' ? 'Pay & take' : 'Take'}
+				confirmDisabled={!armedComplete}
+				confirmTestid="armed-confirm"
+				onConfirm={confirmArmed}
+				onCancel={disarm}
+				{busy}
+				{accent}
+			/>
+		{/snippet}
+	</TakeoverStage>
 {:else}
 	<div class="int-scroll">
 		<div class="int-grid" data-testid="interaction-grid">
@@ -225,6 +550,7 @@
 					{@const isTrade = interaction.kind === 'trade'}
 					{@const soloGain = interaction.gainTokens.length === 1}
 					{@const soloCost = interaction.costTokens.length === 1}
+					{@const nullNow = noEffectNow(interaction)}
 					<div
 						class="int-card"
 						class:disabled={instDisabled(interaction, inst)}
@@ -237,11 +563,11 @@
 						data-testid={rowAllowance > 1
 							? `interaction-${interaction.rowIndex}-${inst}`
 							: `interaction-${interaction.rowIndex}`}
-						onclick={() => resolve(interaction, inst)}
+						onclick={() => cardClick(interaction, inst)}
 						onkeydown={(e) => {
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
-								resolve(interaction, inst);
+								cardClick(interaction, inst);
 							}
 						}}
 					>
@@ -252,40 +578,7 @@
 									{#if isTrade}
 										<div class="row cost">
 											{#each interaction.costTokens as token, ci (ci)}
-												{@const costOpts = costChooserFor(interaction, ci)}
-												{#if costOpts}
-													{@const pickedIdx = chosenCostIndex(
-														interaction.rowIndex,
-														ci,
-														costOpts[0].arrayIndex
-													)}
-													<span
-														class="chooser"
-														role="group"
-														aria-label="Choose which one to discard"
-													>
-														<span class="chooser-label">
-															<span class="tap-dot" aria-hidden="true"></span>Discard one
-														</span>
-														<span class="chooser-opts">
-															{#each costOpts as opt, oi (opt.arrayIndex)}
-																<button
-																	type="button"
-																	class="opt"
-																	class:selected={pickedIdx === opt.arrayIndex}
-																	aria-pressed={pickedIdx === opt.arrayIndex}
-																	title="Tap to discard {opt.slot.name ?? 'this'}"
-																	onclick={(e) => {
-																		e.stopPropagation();
-																		selectCost(interaction.rowIndex, ci, opt.arrayIndex);
-																	}}
-																>
-																	{@render icon(slotIconUrl(opt.slot), 'base')}
-																</button>
-															{/each}
-														</span>
-													</span>
-												{:else if !isOr(token)}
+												{#if !isOr(token)}
 													{@render icon(iconUrl(token), iconSize(token, soloCost))}
 												{/if}
 											{/each}
@@ -307,27 +600,13 @@
 									<div class="row gain">
 										{#each interaction.gainTokens as token, ti (ti)}
 											{#if isOr(token)}
-												{@const slot = orSlotOf(interaction, ti)}
-												{@const picked = selectedOption(interaction.rowIndex, slot)}
-												<span class="chooser" role="group" aria-label="Choose one of these rewards">
-													<span class="chooser-label">
+												<span class="or-set" role="group" aria-label="You will choose one of these">
+													<span class="or-label">
 														<span class="tap-dot" aria-hidden="true"></span>Choose one
 													</span>
-													<span class="chooser-opts">
+													<span class="or-opts">
 														{#each token.icon_ids as optId, oi (optId + oi)}
-															<button
-																type="button"
-																class="opt"
-																class:selected={picked === oi}
-																aria-pressed={picked === oi}
-																title="Tap to choose this reward"
-																onclick={(e) => {
-																	e.stopPropagation();
-																	selectOption(interaction.rowIndex, slot, oi);
-																}}
-															>
-																{@render icon(iconUrl(optId), 'base')}
-															</button>
+															{@render icon(iconUrl(optId), 'base')}
 														{/each}
 													</span>
 												</span>
@@ -338,15 +617,21 @@
 									</div>
 								</div>
 
-								<span class="cta" class:locked={cantAfford}>
-									{#if cantAfford}
-										<span class="lock" aria-hidden="true"></span>Can't afford
-									{:else if isTrade}
-										Pay · Take
-									{:else}
-										Take
-									{/if}
-								</span>
+								{#if nullNow && !cantAfford}
+									<span class="cta warn">
+										<span class="warn-dot" aria-hidden="true">⚠</span>No effect right now
+									</span>
+								{:else}
+									<span class="cta" class:locked={cantAfford}>
+										{#if cantAfford}
+											<span class="lock" aria-hidden="true"></span>Can't afford
+										{:else if needsArming(interaction)}
+											{isTrade ? 'Pay · Take' : 'Choose · Take'}
+										{:else}
+											Take
+										{/if}
+									</span>
+								{/if}
 							</div>
 
 							<!-- Back: the result (shown once resolved; the card reads as disabled) -->
@@ -610,9 +895,8 @@
 		}
 	}
 
-	/* ── Choice strip — lightweight label with only the icons as tap targets. ── */
-	.chooser {
-		--choice-size: 3.45rem;
+	/* ── "Or" preview on the card — the pick itself happens in the armed view. ── */
+	.or-set {
 		display: inline-flex;
 		flex-direction: column;
 		align-items: center;
@@ -620,13 +904,8 @@
 		min-width: 0;
 		gap: 0.22rem;
 		max-width: 100%;
-		padding: 0;
-		border: 0;
-		border-radius: 0;
-		background: none;
-		box-shadow: none;
 	}
-	.chooser-label {
+	.or-label {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
@@ -656,7 +935,7 @@
 			opacity: 1;
 		}
 	}
-	.chooser-opts {
+	.or-opts {
 		display: inline-flex;
 		flex-wrap: nowrap;
 		align-items: center;
@@ -666,98 +945,115 @@
 		gap: 0.28rem;
 		max-width: 100%;
 	}
-	.opt {
-		position: relative;
-		display: grid;
-		place-items: center;
-		width: var(--choice-size);
-		height: var(--choice-size);
-		min-width: var(--choice-size);
-		min-height: var(--choice-size);
-		flex: 0 0 var(--choice-size);
-		padding: 0.18rem;
-		border: 1px solid transparent;
-		border-radius: 10px;
-		background: transparent;
-		cursor: pointer;
-		opacity: 0.86;
-		transition:
-			opacity 140ms ease,
-			transform 140ms ease,
-			filter 140ms ease,
-			background 140ms ease,
-			border-color 140ms ease,
-			box-shadow 140ms ease;
-	}
-	.chooser-opts:has(.opt.selected) .opt:not(.selected) {
-		opacity: 0.34;
-		filter: grayscale(0.7) saturate(0.65);
-	}
-	@media (hover: hover) and (pointer: fine) {
-		.opt:hover {
-			opacity: 1;
-			transform: translateY(-2px) scale(1.04);
-		}
-	}
-	.opt.selected {
-		opacity: 1;
-		filter: none;
-		border-color: transparent;
-		background: transparent;
-		box-shadow: none;
-	}
-	/* A check badge on the chosen option makes "this is the one you'll get" unmistakable. */
-	.opt.selected::after {
-		content: '';
-		position: absolute;
-		top: -6px;
-		right: -6px;
-		width: 16px;
-		height: 16px;
-		border-radius: 50%;
-		background: var(--accent)
-			url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 13l4 4L19 7' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-			center / 10px no-repeat;
-		box-shadow: 0 0 0 2px rgba(15, 10, 28, 0.9);
-	}
 
-	/* ── Dense card — many reward icons / chooser options. Shrink the icons, chrome
-	   and spacing so every option stays visible inside the fixed-size card rather
-	   than overflowing (and being clipped) or pushing the CTA off the bottom. ── */
-	.int-card.dense .face {
-		min-height: 13rem;
-		padding: 0.9rem 0.75rem 0.85rem;
+	/* ── Armed takeover chrome ─────────────────────────────────────────────── */
+	.armed-flow {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+	.armed-side {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.armed-arrow {
+		font-size: 1.1rem;
+		color: color-mix(in srgb, var(--accent, #5a2bff) 60%, var(--brand-amber, #ffba3d));
+	}
+	/* Inside the pinned source panel the flow is a summary, not the headline —
+	   cap the action-token size that would otherwise dominate the column. */
+	.armed-flow .ico.act {
+		--icon: 3.4rem;
+	}
+	.armed-flow .ico.solo {
+		--icon: 3rem;
+	}
+	.uses-chip {
+		padding: 0.2rem 0.6rem;
+		border-radius: 999px;
+		font-family: var(--font-display);
+		font-size: 0.58rem;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--color-parchment, #d8cfee);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+	}
+	.uses-chip.free {
+		color: var(--brand-teal, #20e0c1);
+		border-color: color-mix(in srgb, var(--brand-teal, #20e0c1) 45%, transparent);
+	}
+	.rack-hint {
+		margin: 0;
+		font-size: clamp(0.78rem, 1.2vw, 0.92rem);
+		color: var(--color-parchment, #d8cfee);
+		text-align: center;
+	}
+	.choice-groups {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.6rem;
+		width: 100%;
+	}
+	.choice-group {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.choice-title {
+		font-family: var(--font-display);
+		font-size: 0.68rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		color: color-mix(in srgb, var(--accent, #5a2bff) 55%, #fff 45%);
+	}
+	.choice-chips {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem;
+	}
+	.choice-chip {
+		display: inline-flex;
+		align-items: center;
 		gap: 0.45rem;
+		min-height: 44px;
+		padding: 0.4rem 0.85rem;
+		border-radius: 12px;
+		border: 1.5px solid rgba(255, 255, 255, 0.2);
+		background: rgba(15, 10, 28, 0.5);
+		color: var(--color-bone, #efeaf7);
+		font-family: var(--font-display);
+		font-size: 0.72rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition:
+			border-color 150ms ease,
+			background 150ms ease,
+			transform 150ms ease;
 	}
-	.int-card.dense .flow {
-		gap: 0.18rem;
+	.choice-chip img {
+		width: 1.7rem;
+		height: 1.7rem;
+		object-fit: contain;
 	}
-	.int-card.dense .row {
-		gap: 0.24rem;
+	.choice-chip:not(:disabled):hover {
+		transform: translateY(-2px);
+		border-color: color-mix(in srgb, var(--accent, #5a2bff) 55%, #fff 20%);
 	}
-	.int-card.dense .ico.base {
-		--icon: 2.2rem;
+	.choice-chip.picked {
+		border-color: color-mix(in srgb, var(--accent, #5a2bff) 80%, #fff 15%);
+		background: color-mix(in srgb, var(--accent, #5a2bff) 22%, rgba(15, 10, 28, 0.5));
+		box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #5a2bff) 35%, transparent);
 	}
-	.int-card.dense .ico.solo {
-		--icon: 3.2rem;
-	}
-	.int-card.dense .ico.act {
-		--icon: 5rem;
-	}
-	.int-card.dense .chooser {
-		--choice-size: 2.5rem;
-		gap: 0.16rem;
-		padding: 0;
-	}
-	.int-card.dense .chooser-opts {
-		gap: 0.18rem;
-	}
-	.int-card.dense .opt {
-		padding: 0.14rem;
-		border-radius: 10px;
-	}
-	.int-card.dense .arrow {
-		transform: scale(0.8);
+	.choice-chip:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	/* ── Result body ───────────────────────────────────────────────────────── */
@@ -810,6 +1106,15 @@
 		border: 1px solid color-mix(in srgb, var(--color-fog, #8d8aa1) 40%, transparent);
 		box-shadow: none;
 	}
+	/* A legal-but-worthless row is honest about it instead of selling a null trade. */
+	.cta.warn {
+		color: var(--brand-amber-soft, #ffd56a);
+		background: color-mix(in srgb, var(--brand-amber, #ffba3d) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--brand-amber, #ffba3d) 45%, transparent);
+	}
+	.warn-dot {
+		font-size: 0.85rem;
+	}
 	.lock {
 		width: 9px;
 		height: 8px;
@@ -828,6 +1133,36 @@
 		border: 1.5px solid currentColor;
 		border-bottom: 0;
 		border-radius: 4px 4px 0 0;
+	}
+
+	/* ── Dense card — many reward icons. Shrink the icons, chrome and spacing so
+	   every option stays visible inside the fixed-size card rather than overflowing
+	   (and being clipped) or pushing the CTA off the bottom. ── */
+	.int-card.dense .face {
+		min-height: 13rem;
+		padding: 0.9rem 0.75rem 0.85rem;
+		gap: 0.45rem;
+	}
+	.int-card.dense .flow {
+		gap: 0.18rem;
+	}
+	.int-card.dense .row {
+		gap: 0.24rem;
+	}
+	.int-card.dense .ico.base {
+		--icon: 2.2rem;
+	}
+	.int-card.dense .ico.solo {
+		--icon: 3.2rem;
+	}
+	.int-card.dense .ico.act {
+		--icon: 5rem;
+	}
+	.int-card.dense .or-opts {
+		gap: 0.18rem;
+	}
+	.int-card.dense .arrow {
+		transform: scale(0.8);
 	}
 
 	/* ── Empty state ───────────────────────────────────────────────────────── */
@@ -897,10 +1232,6 @@
 		.cta {
 			min-height: 44px;
 		}
-			.chooser {
-				--choice-size: 40px;
-				padding: 0;
-			}
 	}
 
 	/* On reduced-motion devices, drop backdrop-filter entirely on these large card
@@ -962,21 +1293,12 @@
 		.ico.act {
 			--icon: clamp(3.15rem, 14vh, 4.1rem);
 		}
-			.chooser {
-				--choice-size: 32px;
-				gap: 0.12rem;
-				padding: 0;
-			}
-			.chooser-label {
-				font-size: 0.58rem;
-				letter-spacing: 0.1em;
-			}
-			.chooser-opts {
+			.or-opts {
 				gap: 0.16rem;
 			}
-			.opt {
-				padding: 0.12rem;
-				border-radius: 8px;
+			.or-label {
+				font-size: 0.58rem;
+				letter-spacing: 0.1em;
 			}
 		.cta {
 			min-height: 34px;

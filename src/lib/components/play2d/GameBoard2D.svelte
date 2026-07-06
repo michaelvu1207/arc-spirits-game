@@ -92,6 +92,12 @@
 	const isHost = $derived(member.role === 'host');
 	const myPlayer = $derived(mySeat ? (room.players[mySeat] ?? null) : null);
 	const busy = $derived(pendingAction !== null);
+	// This seat's engine-computed action surface (RoomView v2 affordances, threaded
+	// over both the WS and HTTP transports). Null until the server ships it.
+	const myAffordances = $derived(mySeat ? (playState.affordances[mySeat] ?? null) : null);
+	// A stage takeover (awaken payment / armed trade) is staging a decision — park
+	// the pass control so "I'm done" can't race a half-built selection.
+	let stageTakeoverOpen = $state(false);
 
 	const spiritImages = $derived(spiritImageMap(assets.spiritAssets));
 
@@ -941,7 +947,9 @@
 					!isEvilAlignment(room.players[s]?.statusLevel ?? 0)
 			)
 	);
-	const canPassTurn = $derived(
+	// View-state gates the engine can't know about (profile browsing, an open result
+	// card, the encounter Attack/Hold fork, a staging takeover).
+	const passViewGates = $derived(
 		!!mySeat &&
 			!viewingProfile &&
 			room.status === 'active' &&
@@ -962,6 +970,22 @@
 				room.phase === 'cleanup' ||
 				room.phase === 'encounter')
 	);
+	// The RULES verdict comes from the engine when available (F3: the client no
+	// longer re-derives phase legality and misses cases like a location-phase
+	// corruption discard). Without affordances, keep the legacy client guess.
+	const canPassTurn = $derived(
+		passViewGates && !stageTakeoverOpen && (myAffordances ? myAffordances.canPass : true)
+	);
+	// Why the pass control is parked (spec §5.4 passBlockedReason once the engine
+	// ships it; the takeover reason is client view-state).
+	const passBlockedReason = $derived.by(() => {
+		if (!passViewGates) return null;
+		if (stageTakeoverOpen) return 'Finish or cancel the current action';
+		if (myAffordances && !myAffordances.canPass) {
+			return myAffordances.passBlockedReason ?? myAffordances.pendingWork[0]?.label ?? null;
+		}
+		return null;
+	});
 	function passTurn() {
 		playSfx('ui-click');
 		if (room.phase === 'location') send('end', { type: 'endLocationActions' });
@@ -1351,10 +1375,14 @@
 							onDiscardSpirit={discardSpirit}
 							onSceneControls={(controls) => (navSceneControls = controls)}
 							{busy}
+							seatAffordances={myAffordances}
+							onTakeoverOpenChange={(open) => (stageTakeoverOpen = open)}
 						/>
 					{/if}
 				</div>
-				<!-- Pass-turn: the single per-phase "I'm done" control, in the stage footer. -->
+				<!-- Pass-turn: the single per-phase "I'm done" control, in the stage footer.
+				     When the engine says passing is illegal (or a takeover is staging), the
+				     button parks disabled WITH the reason instead of inviting a rejection. -->
 				<div class="stage-foot">
 					{#if canPassTurn}
 						<button
@@ -1366,6 +1394,13 @@
 						>
 							{passLabel}
 						</button>
+					{:else if passBlockedReason}
+						<span class="pass-blocked" data-testid="pass-blocked">
+							<button type="button" class="pass-btn" disabled title={passBlockedReason}>
+								{passLabel}
+							</button>
+							<span class="pass-blocked-reason">{passBlockedReason}</span>
+						</span>
 					{:else if !viewingProfile && mySeat && room.status === 'active' && myPlayer?.phaseReady && room.phase !== 'navigation'}
 						<span class="pass-waiting" data-testid="pass-waiting">Ready ✓ — waiting…</span>
 					{/if}
@@ -2101,6 +2136,27 @@
 		border-radius: 12px;
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
+	}
+	.pass-blocked {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		min-width: 0;
+	}
+	/* The parked button must READ parked: kill the entry animation (its fill-mode
+	   would pin opacity at 1 and beat the :disabled dim). */
+	.pass-blocked .pass-btn {
+		animation: none;
+		opacity: 0.4;
+		filter: saturate(0.55);
+		box-shadow: none;
+	}
+	.pass-blocked-reason {
+		font-size: 0.74rem;
+		color: var(--brand-amber-soft, #ffd56a);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.error {

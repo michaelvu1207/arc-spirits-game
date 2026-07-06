@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getRoomMemberId } from '$lib/play/server/cookies';
 import { loadRoomView } from '$lib/play/server/service';
+import { withAffordances } from '$lib/server/roomAffordances';
 
 // Lightweight "fetch my current room view" endpoint. The realtime broadcast
 // (DB trigger → `realtime.send`) only tells a client that the room's revision
@@ -18,7 +19,12 @@ export const GET: RequestHandler = async ({ request, params, cookies, url, local
 	// A matchmade player may have no member cookie/id — fall back to their auth user_id
 	// so the server recognizes them as their own session member.
 	const { user } = await locals.safeGetSession();
-	const view = await loadRoomView(roomCode, memberId, user?.id ?? null);
+	// Affordances ride along on the HTTP path too (the WS ack is already v2), so
+	// affordance-driven UI behaves identically on both transports.
+	const view = await withAffordances(
+		roomCode,
+		await loadRoomView(roomCode, memberId, user?.id ?? null)
+	);
 	return json(view, {
 		// Always revalidate — this is live game state.
 		headers: { 'Cache-Control': 'no-store' }

@@ -3,6 +3,7 @@ import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 import { getRoomMemberId } from '$lib/play/server/cookies';
 import { runRoomCommand } from '$lib/play/server/service';
+import { withAffordances } from '$lib/server/roomAffordances';
 import type { GameCommand } from '$lib/play/types';
 
 export const POST: RequestHandler = async ({ request, params, cookies, locals }) => {
@@ -29,13 +30,14 @@ export const POST: RequestHandler = async ({ request, params, cookies, locals })
 		throw error(404, 'Not found.');
 	}
 
-	return json(
-		await runRoomCommand({
-			roomCode,
-			memberId,
-			expectedRevision,
-			command,
-			fallbackUserId: user?.id ?? null
-		})
-	);
+	const view = await runRoomCommand({
+		roomCode,
+		memberId,
+		expectedRevision,
+		command,
+		fallbackUserId: user?.id ?? null
+	});
+	// Post-command affordances ride along so the client's action surface never
+	// goes stale between polls (mirrors the WS ack, which is a full RoomView v2).
+	return json(await withAffordances(roomCode, view));
 };

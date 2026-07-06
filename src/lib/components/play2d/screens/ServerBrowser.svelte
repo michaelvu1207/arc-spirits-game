@@ -6,9 +6,12 @@
 		fetchOpenRooms,
 		createPlayRoom,
 		joinPlayRoom,
-		createDebugPlayRoom
+		createDebugPlayRoom,
+		sendPlayCommand,
+		postPlayJson
 	} from '$lib/stores/playStore.svelte';
 	import type { RoomSummary } from '$lib/play/types';
+	import { NAVIGATION_TIMER_OPTIONS, DEFAULT_NAVIGATION_DURATION_MS } from '$lib/play/types';
 	import { formatRelative } from '$lib/features/stats/format';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
 	import { auth } from '$lib/auth/auth.svelte';
@@ -33,7 +36,14 @@
 	/** Holds a roomCode or 'create' while that action is in flight. */
 	let busy = $state<string | null>(null);
 	let nameError = $state(false);
-	let nameInput = $state<HTMLInputElement | null>(null);
+
+	// ── Create sheet (room configured at creation, not via lobby chips) ──────
+	let sheetOpen = $state(false);
+	let sheetTimerMs = $state<number | null>(DEFAULT_NAVIGATION_DURATION_MS);
+	let sheetBots = $state(0);
+	let sheetInvite = $state(false);
+	let sheetNameInput = $state<HTMLInputElement | null>(null);
+	const MAX_SHEET_BOTS = 5;
 
 	const openLobbies = $derived(
 		rooms
@@ -60,14 +70,17 @@
 		if (accountName) name = accountName;
 	});
 
-	/** Trimmed name to play under, or null (flagging the field) when empty. Signed-in
-	 *  users always resolve to their account name. */
+	const shownName = $derived(accountName ?? (name.trim() || null));
+
+	/** Trimmed name to play under, or null (opening the sheet's field) when empty.
+	 *  Signed-in users always resolve to their account name. */
 	function requireName(): string | null {
 		if (accountName) return accountName;
 		const trimmed = name.trim();
 		if (!trimmed) {
 			nameError = true;
-			nameInput?.focus();
+			sheetOpen = true;
+			setTimeout(() => sheetNameInput?.focus(), 60);
 			return null;
 		}
 		nameError = false;
@@ -90,6 +103,16 @@
 		}
 	}
 
+	function openSheet() {
+		playMenuSfx('ui-click');
+		nameError = false;
+		sheetOpen = true;
+	}
+	function closeSheet() {
+		playMenuSfx('ui-back');
+		sheetOpen = false;
+	}
+
 	async function create() {
 		if (busy) return;
 		const typed = requireName();
@@ -100,7 +123,22 @@
 			// Anonymous-first: a first-time guest becomes a real (owned) guest account here.
 			const player = await auth.resolvePlayIdentity(typed);
 			const view = await createPlayRoom(player);
-			await goto(`/play/${encodeURIComponent(view.projection.roomCode)}`);
+			const code = view.projection.roomCode;
+			// Apply the sheet's config as host commands before entering the lobby.
+			// Best-effort: a hiccup here still lands us in a working room.
+			try {
+				if (sheetTimerMs !== DEFAULT_NAVIGATION_DURATION_MS) {
+					await sendPlayCommand({ type: 'setNavigationTimer', durationMs: sheetTimerMs });
+				}
+				for (let i = 0; i < sheetBots; i++) {
+					await postPlayJson(`/api/play/sessions/${encodeURIComponent(code)}/bots/add`, {
+						difficulty: 'neural'
+					});
+				}
+			} catch (configErr) {
+				console.warn('Room created; applying lobby config failed:', configErr);
+			}
+			await goto(`/play/${encodeURIComponent(code)}${sheetInvite ? '?invite=1' : ''}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create room.';
 			busy = null;
@@ -143,6 +181,7 @@
 
 	async function join(room: RoomSummary) {
 		if (busy) return;
+		if (room.occupiedSeats >= room.totalSeats) return;
 		const typed = requireName();
 		if (typed === null) return;
 		busy = room.roomCode;
@@ -171,6 +210,10 @@
 		}
 	}
 
+	function onKey(e: KeyboardEvent) {
+		if (sheetOpen && e.key === 'Escape') closeSheet();
+	}
+
 	onMount(() => {
 		// Signed-in users get their account name (the $effect above sets it); guests
 		// restore their last-typed name.
@@ -188,17 +231,35 @@
 		// storage (the auth store owns that mirror for signed-in users).
 		if (browser && !auth.isSignedIn) localStorage.setItem(NAME_KEY, name);
 	});
+
+	// The shell's top-right controls yield while the create sheet is up (they'd
+	// otherwise paint over the sheet on short viewports).
+	$effect(() => {
+		if (!browser) return;
+		document.body.classList.toggle('pregame-overlay-open', sheetOpen);
+		return () => document.body.classList.remove('pregame-overlay-open');
+	});
 </script>
 
+<svelte:window onkeydown={onKey} />
+
 <ScreenScaffold
-	eyebrow="Play"
-	title="Servers"
-	subtitle="Join an open lobby, spectate a live game, or start your own."
+	eyebrow="Custom Lobby"
+	title="Rooms"
+	subtitle="Join an open lobby, spectate a live game, or forge your own."
 	syncedAt={lastRefresh}
 	{backHref}
 	{backLabel}
 >
 	{#snippet actions()}
+		<span class="playing-chip" data-testid="playing-as">
+			Playing as <b>{shownName ?? 'Nameless Spirit'}</b>
+			{#if accountName}
+				<a class="playing-edit" href="/account" title="Change your account name">change</a>
+			{:else}
+				<button class="playing-edit" type="button" onclick={openSheet}>change</button>
+			{/if}
+		</span>
 		<button
 			class="btn-ghost"
 			type="button"
@@ -225,45 +286,6 @@
 			Refresh
 		</button>
 	{/snippet}
-
-	<!-- ── Host bar ─────────────────────────────────────────── -->
-	<div class="host-bar">
-		<label class="name-field" class:invalid={nameError}>
-			<span class="name-lbl">Playing as</span>
-			<input
-				bind:this={nameInput}
-				class="input-bare"
-				data-testid="player-name"
-				bind:value={name}
-				oninput={() => (nameError = false)}
-				maxlength="40"
-				placeholder="Nameless Spirit"
-				spellcheck="false"
-				aria-label="Playing as"
-				aria-invalid={nameError}
-				readonly={!!accountName}
-				title={accountName ? 'Your account name (change it on the Account page)' : undefined}
-			/>
-			{#if accountName}
-				<span class="name-hint account" data-testid="player-name-locked"
-					>From your account · <a href="/account">change</a></span
-				>
-			{:else if nameError}
-				<span class="name-hint" role="alert">Enter a name to play</span>
-			{/if}
-		</label>
-		<button
-			class="create-btn"
-			type="button"
-			data-testid="create-room"
-			onclick={create}
-			onpointerenter={hover}
-			disabled={busy !== null}
-		>
-			<span class="gem" aria-hidden="true"></span>
-			{busy === 'create' ? 'Creating…' : 'Create Room'}
-		</button>
-	</div>
 
 	{#if dev}
 		<!-- ── Debug bar (dev builds only) ──────────────────────── -->
@@ -301,7 +323,10 @@
 			{/snippet}
 		</StateMessage>
 	{:else if rooms.length === 0}
-		<StateMessage title="No open worlds" message="Be the first — create a room above." />
+		<StateMessage
+			title="No open worlds"
+			message="The abyss is quiet. Forge the first room below."
+		/>
 	{:else}
 		<!-- ── Open Lobbies ─────────────────────────────────── -->
 		<section class="group" aria-label="Open lobbies">
@@ -320,29 +345,41 @@
 							type="button"
 							class="room-card lobby"
 							class:busy={busy === room.roomCode}
+							class:full
 							data-testid={`room-${room.roomCode}`}
 							onclick={() => join(room)}
-							onpointerenter={hover}
-							disabled={busy !== null}
+							onpointerenter={() => !full && hover()}
+							disabled={busy !== null || full}
 						>
-							<div class="room-top">
-								<span class="status-pill lobby">Lobby</span>
-								<span class="room-code">{room.roomCode}</span>
-							</div>
-							<div class="room-host">{room.hostName}'s game</div>
-							<div class="room-meta">
-								<span class="room-world">{room.scenarioName ?? 'Arcane Abyss'}</span>
-								<span class="dot" aria-hidden="true">·</span>
-								<span class="room-age">{formatRelative(room.createdAt)}</span>
-							</div>
-							<div class="room-foot">
-								<span class="seats" class:full>
-									<span class="seats-n">{room.occupiedSeats}/{room.totalSeats}</span> seats
-								</span>
-								<span class="room-cta">
-									{busy === room.roomCode ? 'Joining…' : 'Join'}
-									<span class="cta-arrow" aria-hidden="true">→</span>
-								</span>
+							<span class="host-medallion" aria-hidden="true">
+								{(room.hostName.trim()[0] ?? '?').toUpperCase()}
+							</span>
+							<div class="room-main">
+								<div class="room-top">
+									<span class="room-host">{room.hostName}'s room</span>
+									<span class="room-code">{room.roomCode}</span>
+								</div>
+								<div class="room-meta">
+									<span class="room-world">{room.scenarioName ?? 'Arcane Abyss'}</span>
+									<span class="dot" aria-hidden="true">·</span>
+									<span class="room-age">{formatRelative(room.createdAt)}</span>
+								</div>
+								<div class="room-foot">
+									<span class="seat-pips" aria-label="{room.occupiedSeats} of {room.totalSeats} seats taken">
+										{#each Array(room.totalSeats) as _, i (i)}
+											<span class="pip" class:filled={i < room.occupiedSeats}></span>
+										{/each}
+										<span class="pips-n">{room.occupiedSeats}/{room.totalSeats}</span>
+									</span>
+									{#if full}
+										<span class="full-chip">Full</span>
+									{:else}
+										<span class="room-cta">
+											{busy === room.roomCode ? 'Joining…' : 'Join'}
+											<span class="cta-arrow" aria-hidden="true">→</span>
+										</span>
+									{/if}
+								</div>
 							</div>
 						</button>
 					{/each}
@@ -354,7 +391,7 @@
 		<section class="group" aria-label="Live games">
 			<div class="group-head">
 				<h2 class="group-title">Live Games</h2>
-				<span class="group-count">{liveGames.length}</span>
+				<span class="group-count live">{liveGames.length}</span>
 				<span class="group-rule live" aria-hidden="true"></span>
 			</div>
 			{#if liveGames.length === 0}
@@ -370,23 +407,27 @@
 							onpointerenter={hover}
 							disabled={busy !== null}
 						>
-							<div class="room-top">
-								<span class="room-code">{room.roomCode}</span>
-							</div>
-							<div class="room-host">{room.hostName}'s game</div>
-							<div class="room-meta">
-								<span class="room-world">Round {room.round}</span>
-								<span class="dot" aria-hidden="true">·</span>
-								<span class="room-age">{formatRelative(room.startedAt ?? room.createdAt)}</span>
-							</div>
-							<div class="room-foot">
-								<span class="seats">
-									<span class="seats-n">{room.occupiedSeats}</span> playing
-								</span>
-								<span class="room-cta watch">
-									{busy === room.roomCode ? 'Opening…' : 'Watch'}
-									<span class="cta-arrow" aria-hidden="true">→</span>
-								</span>
+							<span class="host-medallion live" aria-hidden="true">
+								{(room.hostName.trim()[0] ?? '?').toUpperCase()}
+							</span>
+							<div class="room-main">
+								<div class="room-top">
+									<span class="room-host">{room.hostName}'s game</span>
+									<span class="room-code">{room.roomCode}</span>
+								</div>
+								<div class="room-meta">
+									<span class="live-dot" aria-hidden="true"></span>
+									<span class="room-world">Round {room.round}</span>
+									<span class="dot" aria-hidden="true">·</span>
+									<span class="room-age">{formatRelative(room.startedAt ?? room.createdAt)}</span>
+								</div>
+								<div class="room-foot">
+									<span class="seats"><b>{room.occupiedSeats}</b> playing</span>
+									<span class="room-cta watch">
+										{busy === room.roomCode ? 'Opening…' : 'Watch'}
+										<span class="cta-arrow" aria-hidden="true">→</span>
+									</span>
+								</div>
 							</div>
 						</button>
 					{/each}
@@ -398,82 +439,176 @@
 			Showing <b>{openLobbies.length}</b> open · <b>{liveGames.length}</b> live
 		</div>
 	{/if}
+
+	<!-- Spacer so the bottom-anchored Create never covers the last cards. -->
+	<div class="fab-spacer" aria-hidden="true"></div>
 </ScreenScaffold>
 
+<!-- ── Bottom-anchored primary action ─────────────────────────── -->
+<div class="create-dock">
+	<button
+		class="create-btn"
+		type="button"
+		data-testid="create-room"
+		onclick={openSheet}
+		onpointerenter={hover}
+		disabled={busy !== null}
+	>
+		<span class="gem" aria-hidden="true"></span>
+		{busy === 'create' ? 'Creating…' : 'Create Room'}
+	</button>
+</div>
+
+<!-- ── Create sheet: the room is configured AT creation ───────── -->
+{#if sheetOpen}
+	<div class="sheet-layer">
+		<button
+			type="button"
+			class="sheet-backdrop"
+			aria-label="Close create room"
+			onclick={closeSheet}
+		></button>
+		<div class="sheet" role="dialog" aria-modal="true" aria-label="Create a room" data-testid="create-sheet">
+			<header class="sheet-head">
+				<div>
+					<span class="sheet-eyebrow">New room</span>
+					<h2 class="sheet-title">Forge your lobby</h2>
+				</div>
+				<button class="sheet-close" type="button" onclick={closeSheet} aria-label="Close">✕</button>
+			</header>
+
+			<label class="field" class:invalid={nameError}>
+				<span class="field-lbl">Playing as</span>
+				<input
+					bind:this={sheetNameInput}
+					class="field-input"
+					data-testid="player-name"
+					bind:value={name}
+					oninput={() => (nameError = false)}
+					maxlength="40"
+					placeholder="Nameless Spirit"
+					spellcheck="false"
+					aria-label="Playing as"
+					aria-invalid={nameError}
+					readonly={!!accountName}
+					title={accountName ? 'Your account name (change it on the Account page)' : undefined}
+				/>
+				{#if accountName}
+					<span class="field-hint" data-testid="player-name-locked"
+						>From your account · <a href="/account">change</a></span
+					>
+				{:else if nameError}
+					<span class="field-hint error" role="alert">Enter a name to play</span>
+				{/if}
+			</label>
+
+			<div class="field">
+				<span class="field-lbl">Navigation timer</span>
+				<div class="seg-row" role="radiogroup" aria-label="Navigation timer per round">
+					{#each NAVIGATION_TIMER_OPTIONS as opt (opt.label)}
+						<button
+							type="button"
+							class="seg"
+							class:on={sheetTimerMs === opt.ms}
+							role="radio"
+							aria-checked={sheetTimerMs === opt.ms}
+							onclick={() => {
+								playMenuSfx('ui-click');
+								sheetTimerMs = opt.ms;
+							}}
+						>
+							{opt.label}
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<div class="field">
+				<span class="field-lbl">Bots <small class="field-sub">· ML policy</small></span>
+				<div class="stepper">
+					<button
+						type="button"
+						class="step"
+						aria-label="Fewer bots"
+						disabled={sheetBots === 0}
+						onclick={() => {
+							playMenuSfx('ui-click');
+							sheetBots = Math.max(0, sheetBots - 1);
+						}}>−</button
+					>
+					<span class="step-n" data-testid="sheet-bots">{sheetBots}</span>
+					<button
+						type="button"
+						class="step"
+						aria-label="More bots"
+						disabled={sheetBots >= MAX_SHEET_BOTS}
+						onclick={() => {
+							playMenuSfx('ui-click');
+							sheetBots = Math.min(MAX_SHEET_BOTS, sheetBots + 1);
+						}}>+</button
+					>
+					<span class="step-hint"
+						>{sheetBots === 0 ? 'Humans only' : `You + ${sheetBots} bot${sheetBots === 1 ? '' : 's'}`}</span
+					>
+				</div>
+			</div>
+
+			<label class="toggle-row">
+				<input type="checkbox" bind:checked={sheetInvite} />
+				<span class="toggle-ui" aria-hidden="true"></span>
+				<span class="toggle-lbl">Show the invite link when the room opens</span>
+			</label>
+
+			<div class="sheet-foot">
+				<button class="sheet-cancel" type="button" onclick={closeSheet}>Cancel</button>
+				<button
+					class="sheet-create"
+					type="button"
+					data-testid="create-room-confirm"
+					onclick={create}
+					disabled={busy !== null}
+				>
+					<span class="gem" aria-hidden="true"></span>
+					{busy === 'create' ? 'Creating…' : 'Create Room'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
-	/* ── Host bar ──────────────────────────────────────────── */
-	.host-bar {
-		display: flex;
-		align-items: flex-end;
-		gap: 16px;
-		flex-wrap: wrap;
-		margin-bottom: clamp(28px, 5vh, 44px);
-		padding-bottom: 22px;
-		border-bottom: 1px solid var(--color-mist);
-	}
-	.name-field {
-		display: flex;
-		flex-direction: column;
-		gap: 5px;
-		min-width: 200px;
-		position: relative;
-	}
-	.name-lbl {
-		font-family: var(--font-display);
-		font-size: 0.8rem;
-		letter-spacing: 0.26em;
-		text-transform: uppercase;
-		color: var(--color-fog);
-	}
-	.name-field :global(.input-bare) {
-		min-width: 180px;
-	}
-	.name-field.invalid :global(.input-bare) {
-		border-color: var(--color-blood);
-	}
-	.name-hint {
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-		color: var(--color-blood);
-		letter-spacing: 0.02em;
-	}
-	.name-hint.account {
-		color: var(--color-fog);
-	}
-	.name-hint.account a {
-		color: var(--brand-magenta-soft, #ff5dd1);
-	}
-	.create-btn {
+	/* ── Header identity chip ─────────────────────────────── */
+	.playing-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 10px;
-		padding: 11px 20px;
+		gap: 6px;
+		min-height: 38px;
+		padding: 7px 14px;
+		border-radius: 999px;
+		border: 1px solid var(--color-mist);
+		background: rgba(10, 7, 24, 0.5);
+		color: var(--color-fog);
+		font-family: var(--font-body);
+		font-size: 0.8rem;
+		white-space: nowrap;
+	}
+	.playing-chip b {
+		color: var(--color-bone);
+		font-weight: 600;
+		max-width: 150px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.playing-edit {
 		border: none;
-		border-radius: 10px;
-		background: var(--gradient-flame);
-		color: #fff;
-		font-family: var(--font-display);
-		font-size: 0.84rem;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
+		background: none;
+		padding: 0;
+		margin-left: 2px;
+		color: var(--brand-magenta-soft, #ff5dd1);
+		font-family: var(--font-body);
+		font-size: 0.74rem;
+		text-decoration: underline;
 		cursor: pointer;
-		box-shadow: 0 12px 30px -14px rgba(255, 43, 199, 0.7);
-		transition: transform 150ms ease;
-	}
-	.create-btn:hover:not(:disabled) {
-		transform: translateY(-1px);
-	}
-	.create-btn:disabled {
-		opacity: 0.55;
-		cursor: progress;
-	}
-	.create-btn .gem {
-		width: 9px;
-		height: 9px;
-		flex: none;
-		transform: rotate(45deg);
-		background: rgba(255, 255, 255, 0.92);
-		box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
 	}
 
 	.action-error {
@@ -580,6 +715,9 @@
 		background: var(--brand-magenta);
 		border-radius: 999px;
 	}
+	.group-count.live {
+		background: var(--brand-teal);
+	}
 	.group-rule {
 		flex: 1;
 		height: 1px;
@@ -600,34 +738,34 @@
 	/* ── Room cards ───────────────────────────────────────── */
 	.room-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 		gap: 14px;
 	}
 	.room-card {
 		position: relative;
 		display: flex;
-		flex-direction: column;
-		gap: 8px;
+		align-items: stretch;
+		gap: 16px;
 		width: 100%;
-		padding: 18px 20px;
+		min-height: 108px;
+		padding: 16px 18px;
 		text-align: left;
 		cursor: pointer;
 		color: inherit;
 		background: linear-gradient(180deg, rgba(20, 12, 36, 0.74), rgba(10, 6, 20, 0.74));
 		border: 1px solid var(--color-mist);
-		border-left: 4px solid var(--brand-magenta);
-		border-radius: 12px;
+		border-radius: 16px;
 		overflow: hidden;
 		transition:
 			border-color 240ms ease,
 			background 240ms ease,
-			transform 240ms ease;
+			box-shadow 240ms ease;
 	}
 	.room-card::after {
 		content: '';
 		position: absolute;
-		left: 12px;
-		right: 12px;
+		left: 14px;
+		right: 14px;
 		bottom: 0;
 		height: 1px;
 		background: var(--gradient-spectrum);
@@ -636,14 +774,11 @@
 		opacity: 0.85;
 		transition: transform 240ms ease;
 	}
-	.room-card.live {
-		border-left-color: var(--brand-teal);
-	}
 	.room-card:hover:not(:disabled),
 	.room-card:focus-visible {
 		border-color: var(--brand-magenta);
 		background: linear-gradient(180deg, rgba(40, 16, 52, 0.8), rgba(16, 8, 28, 0.8));
-		transform: translateY(-2px);
+		box-shadow: 0 18px 44px -22px rgba(255, 43, 199, 0.55);
 		outline: none;
 	}
 	.room-card:hover:not(:disabled)::after,
@@ -653,6 +788,7 @@
 	.room-card.live:hover:not(:disabled),
 	.room-card.live:focus-visible {
 		border-color: var(--brand-teal);
+		box-shadow: 0 18px 44px -22px rgba(32, 224, 193, 0.45);
 	}
 	.room-card:disabled {
 		cursor: progress;
@@ -660,59 +796,62 @@
 	.room-card.busy {
 		opacity: 0.7;
 	}
-	.room-card:disabled:not(.busy) {
+	.room-card:disabled:not(.busy):not(.full) {
 		opacity: 0.5;
 	}
+	/* Full rooms stay visible but read as closed. */
+	.room-card.full {
+		cursor: not-allowed;
+		opacity: 0.65;
+	}
 
+	.host-medallion {
+		flex: 0 0 auto;
+		align-self: center;
+		width: 58px;
+		height: 58px;
+		display: grid;
+		place-items: center;
+		border-radius: 16px;
+		background: var(--gradient-flame);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 1.5rem;
+		box-shadow: 0 0 22px -6px rgba(255, 43, 199, 0.7);
+	}
+	.host-medallion.live {
+		background: linear-gradient(135deg, var(--brand-teal), var(--brand-cyan));
+		box-shadow: 0 0 22px -6px rgba(32, 224, 193, 0.7);
+	}
+	.room-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+	}
 	.room-top {
 		display: flex;
-		align-items: center;
+		align-items: baseline;
 		justify-content: space-between;
 		gap: 10px;
 	}
-	.status-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 3px 9px;
-		font-family: var(--font-display);
-		font-size: 0.8rem;
-		letter-spacing: 0.2em;
-		text-transform: uppercase;
-		border-radius: 999px;
-	}
-	.status-pill.lobby {
-		color: var(--brand-cyan);
-		background: rgba(36, 212, 255, 0.12);
-	}
-	.status-pill.live {
-		color: var(--brand-teal);
-		background: rgba(32, 224, 193, 0.12);
-	}
-	.live-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--brand-teal);
-		box-shadow: 0 0 6px var(--brand-teal);
-		animation: pulse 1.8s ease-in-out infinite;
-	}
-	.room-code {
-		font-family: var(--font-mono);
-		font-size: 0.92rem;
-		letter-spacing: 0.18em;
-		color: var(--color-fog);
-	}
-
 	.room-host {
 		font-family: var(--font-display);
-		font-size: 1.35rem;
+		font-size: 1.3rem;
 		line-height: 1;
 		letter-spacing: 0.01em;
 		color: var(--color-bone);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	.room-code {
+		flex: none;
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		letter-spacing: 0.16em;
+		color: var(--color-fog);
 	}
 	.room-meta {
 		display: flex;
@@ -735,37 +874,78 @@
 		font-family: var(--font-mono);
 		flex: none;
 	}
+	.live-dot {
+		flex: none;
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--brand-teal);
+		box-shadow: 0 0 8px var(--brand-teal);
+		animation: pulse 1.8s ease-in-out infinite;
+	}
 
 	.room-foot {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 10px;
-		margin-top: 4px;
-		padding-top: 12px;
+		margin-top: auto;
+		padding-top: 10px;
 		border-top: 1px solid var(--color-mist);
+	}
+	.seat-pips {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+	}
+	.pip {
+		width: 9px;
+		height: 9px;
+		border-radius: 3px;
+		transform: rotate(45deg);
+		border: 1px solid var(--color-aether);
+		background: transparent;
+	}
+	.pip.filled {
+		border-color: transparent;
+		background: var(--gradient-flame);
+		box-shadow: 0 0 8px rgba(255, 43, 199, 0.5);
+	}
+	.pips-n {
+		margin-left: 6px;
+		font-family: var(--font-display);
+		font-size: 0.86rem;
+		color: var(--color-bone);
+		font-variant-numeric: tabular-nums;
 	}
 	.seats {
 		font-size: 0.8rem;
 		color: var(--color-fog);
 		letter-spacing: 0.04em;
 	}
-	.seats-n {
+	.seats b {
 		font-family: var(--font-display);
 		font-size: 1rem;
 		color: var(--color-bone);
 		font-variant-numeric: tabular-nums;
 		margin-right: 2px;
 	}
-	.seats.full .seats-n {
+	.full-chip {
+		padding: 4px 12px;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 186, 61, 0.5);
 		color: var(--brand-amber);
+		font-family: var(--font-display);
+		font-size: 0.68rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
 	}
 	.room-cta {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
 		font-family: var(--font-display);
-		font-size: 0.82rem;
+		font-size: 0.84rem;
 		letter-spacing: 0.12em;
 		text-transform: uppercase;
 		color: var(--brand-magenta-soft);
@@ -793,6 +973,375 @@
 		font-family: var(--font-display);
 		font-variant-numeric: tabular-nums;
 	}
+	.fab-spacer {
+		height: 92px;
+	}
+
+	/* ── Bottom-anchored Create ───────────────────────────── */
+	.create-dock {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 65;
+		display: flex;
+		justify-content: center;
+		padding: 26px 18px calc(18px + env(safe-area-inset-bottom));
+		background: linear-gradient(180deg, transparent, rgba(5, 3, 16, 0.88) 55%);
+		pointer-events: none;
+	}
+	.create-btn {
+		pointer-events: auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		min-height: 56px;
+		min-width: min(340px, 86vw);
+		padding: 13px 30px;
+		border: none;
+		border-radius: 15px;
+		background: var(--gradient-flame);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 0.95rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		cursor: pointer;
+		box-shadow: 0 16px 40px -14px rgba(255, 43, 199, 0.75);
+		transition: filter 150ms ease;
+	}
+	.create-btn:hover:not(:disabled) {
+		filter: brightness(1.1);
+	}
+	.create-btn:disabled {
+		opacity: 0.55;
+		cursor: progress;
+	}
+	.gem {
+		width: 9px;
+		height: 9px;
+		flex: none;
+		transform: rotate(45deg);
+		background: rgba(255, 255, 255, 0.92);
+		box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+	}
+
+	/* ── Create sheet ─────────────────────────────────────── */
+	.sheet-layer {
+		position: fixed;
+		inset: 0;
+		z-index: 75;
+		display: grid;
+		place-items: center;
+		padding: 18px;
+	}
+	.sheet-backdrop {
+		position: absolute;
+		inset: 0;
+		border: 0;
+		padding: 0;
+		background: rgba(4, 2, 12, 0.7);
+		backdrop-filter: blur(8px);
+		cursor: pointer;
+	}
+	.sheet {
+		position: relative;
+		width: min(520px, 100%);
+		max-height: calc(100dvh - 32px);
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 18px;
+		padding: 24px 26px;
+		border-radius: 20px;
+		border: 1px solid color-mix(in srgb, var(--brand-magenta) 30%, var(--color-mist));
+		background: linear-gradient(180deg, rgba(26, 15, 46, 0.97), rgba(8, 5, 18, 0.98));
+		box-shadow:
+			0 40px 120px -30px rgba(0, 0, 0, 0.85),
+			0 0 60px -34px var(--brand-magenta);
+		animation: sheet-rise 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+		scrollbar-width: thin;
+	}
+	.sheet-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 14px;
+	}
+	.sheet-eyebrow {
+		font-family: var(--font-display);
+		font-size: 0.62rem;
+		letter-spacing: 0.3em;
+		text-transform: uppercase;
+		color: var(--brand-cyan);
+	}
+	.sheet-title {
+		margin: 5px 0 0;
+		font-family: var(--font-display);
+		font-size: clamp(1.4rem, 4vh, 1.9rem);
+		line-height: 1;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: #fff;
+	}
+	.sheet-close {
+		flex: 0 0 auto;
+		width: 40px;
+		height: 40px;
+		border-radius: 999px;
+		border: 1px solid var(--color-mist);
+		background: transparent;
+		color: var(--color-parchment);
+		cursor: pointer;
+		transition:
+			border-color 150ms ease,
+			color 150ms ease;
+	}
+	.sheet-close:hover {
+		border-color: var(--brand-magenta);
+		color: var(--brand-magenta-soft);
+	}
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.field-lbl {
+		font-family: var(--font-display);
+		font-size: 0.68rem;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: var(--color-fog);
+	}
+	.field-sub {
+		font-size: 0.62rem;
+		letter-spacing: 0.1em;
+		color: var(--color-whisper, #6a5d8a);
+	}
+	.field-input {
+		min-height: 48px;
+		padding: 10px 14px;
+		border-radius: 12px;
+		border: 1px solid var(--color-aether);
+		background: rgba(5, 3, 16, 0.7);
+		color: var(--color-bone);
+		font-family: var(--font-body);
+		font-size: 1rem;
+	}
+	.field-input:focus {
+		outline: none;
+		border-color: var(--brand-magenta);
+	}
+	.field.invalid .field-input {
+		border-color: var(--color-blood);
+	}
+	.field-hint {
+		font-family: var(--font-mono);
+		font-size: 0.74rem;
+		color: var(--color-fog);
+	}
+	.field-hint.error {
+		color: var(--color-blood);
+	}
+	.field-hint a {
+		color: var(--brand-magenta-soft);
+	}
+
+	.seg-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.seg {
+		min-height: 44px;
+		padding: 9px 15px;
+		border-radius: 11px;
+		border: 1px solid var(--color-aether);
+		background: transparent;
+		color: var(--color-parchment);
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		letter-spacing: 0.08em;
+		cursor: pointer;
+		transition:
+			border-color 140ms ease,
+			background 140ms ease,
+			color 140ms ease;
+	}
+	.seg:hover {
+		border-color: var(--brand-magenta);
+	}
+	.seg.on {
+		border-color: transparent;
+		background: var(--gradient-flame);
+		color: #fff;
+		box-shadow: 0 8px 22px -10px rgba(255, 43, 199, 0.7);
+	}
+
+	.stepper {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.step {
+		width: 46px;
+		height: 46px;
+		border-radius: 12px;
+		border: 1px solid var(--color-aether);
+		background: transparent;
+		color: var(--color-bone);
+		font-size: 1.25rem;
+		line-height: 1;
+		cursor: pointer;
+		transition:
+			border-color 140ms ease,
+			background 140ms ease;
+	}
+	.step:hover:not(:disabled) {
+		border-color: var(--brand-magenta);
+		background: rgba(255, 43, 199, 0.08);
+	}
+	.step:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
+	}
+	.step-n {
+		min-width: 34px;
+		text-align: center;
+		font-family: var(--font-display);
+		font-size: 1.5rem;
+		color: var(--color-bone);
+		font-variant-numeric: tabular-nums;
+	}
+	.step-hint {
+		font-family: var(--font-body);
+		font-size: 0.8rem;
+		color: var(--color-fog);
+	}
+
+	.toggle-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		cursor: pointer;
+		user-select: none;
+	}
+	.toggle-row input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.toggle-ui {
+		flex: 0 0 auto;
+		width: 46px;
+		height: 26px;
+		border-radius: 999px;
+		border: 1px solid var(--color-aether);
+		background: rgba(5, 3, 16, 0.7);
+		position: relative;
+		transition:
+			background 160ms ease,
+			border-color 160ms ease;
+	}
+	.toggle-ui::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 3px;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		background: var(--color-fog);
+		transform: translateY(-50%);
+		transition:
+			left 160ms ease,
+			background 160ms ease;
+	}
+	.toggle-row input:checked + .toggle-ui {
+		border-color: transparent;
+		background: var(--gradient-flame);
+	}
+	.toggle-row input:checked + .toggle-ui::after {
+		left: 24px;
+		background: #fff;
+	}
+	.toggle-row input:focus-visible + .toggle-ui {
+		outline: 2px solid var(--brand-magenta);
+		outline-offset: 2px;
+	}
+	.toggle-lbl {
+		font-family: var(--font-body);
+		font-size: 0.86rem;
+		color: var(--color-parchment);
+	}
+
+	.sheet-foot {
+		display: flex;
+		justify-content: flex-end;
+		gap: 12px;
+		margin-top: 4px;
+		/* The sheet body scrolls on short viewports; the action row stays pinned
+		   so Create is never below the fold. Opaque backing hides scrolled fields. */
+		position: sticky;
+		bottom: 0;
+		margin-bottom: -8px;
+		padding: 10px 0 8px;
+		background: linear-gradient(180deg, transparent, rgba(10, 6, 20, 0.96) 26%);
+	}
+	.sheet-cancel {
+		min-height: 50px;
+		padding: 12px 20px;
+		border-radius: 12px;
+		border: 1px solid var(--color-aether);
+		background: transparent;
+		color: var(--color-parchment);
+		font-family: var(--font-display);
+		font-size: 0.74rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition:
+			border-color 150ms ease,
+			color 150ms ease;
+	}
+	.sheet-cancel:hover {
+		border-color: var(--brand-magenta);
+		color: #fff;
+	}
+	.sheet-create {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 50px;
+		padding: 12px 26px;
+		border: none;
+		border-radius: 12px;
+		background: var(--gradient-flame);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 0.86rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		cursor: pointer;
+		box-shadow: 0 14px 34px -14px rgba(255, 43, 199, 0.75);
+		transition: filter 150ms ease;
+	}
+	.sheet-create:hover:not(:disabled) {
+		filter: brightness(1.1);
+	}
+	.sheet-create:disabled {
+		opacity: 0.55;
+		cursor: progress;
+	}
+
+	@keyframes sheet-rise {
+		from {
+			opacity: 0;
+			transform: translateY(22px) scale(0.98);
+		}
+	}
 
 	/* Refresh-icon spin (StateMessage owns the loading ring). */
 	.spin {
@@ -814,58 +1363,45 @@
 	}
 
 	/* ── Responsive ───────────────────────────────────────── */
-	@media (max-width: 600px) {
+	@media (max-width: 640px) {
 		.room-grid {
 			grid-template-columns: 1fr;
 		}
-		.host-bar {
-			gap: 12px;
-		}
-		.name-field,
-		.name-field :global(.input-bare) {
-			min-width: 0;
-		}
-		.name-field {
-			flex: 1;
+		.playing-chip b {
+			max-width: 110px;
 		}
 		.create-btn {
-			align-self: stretch;
+			width: 100%;
+		}
+		/* Bottom sheet on phones. */
+		.sheet-layer {
+			place-items: end center;
+			padding: 0;
+		}
+		.sheet {
+			width: 100%;
+			max-height: 92dvh;
+			border-radius: 22px 22px 0 0;
+			padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+			animation: sheet-up 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+		}
+		.sheet-foot {
+			flex-direction: column-reverse;
+		}
+		.sheet-cancel,
+		.sheet-create {
+			width: 100%;
 			justify-content: center;
-			flex: 1;
+		}
+	}
+	@keyframes sheet-up {
+		from {
+			transform: translateY(40px);
+			opacity: 0;
 		}
 	}
 
 	@media (orientation: landscape) and (max-height: 520px) {
-		.host-bar {
-			display: grid;
-			grid-template-columns: minmax(170px, 260px) auto;
-			align-items: end;
-			gap: 12px;
-			margin-bottom: 16px;
-			padding-bottom: 14px;
-		}
-		.name-field {
-			min-width: 0;
-		}
-		.name-lbl {
-			font-size: 0.66rem;
-			letter-spacing: 0.22em;
-		}
-		.name-field :global(.input-bare) {
-			min-width: 0;
-			width: 100%;
-			font-size: 0.95rem;
-		}
-		.name-hint {
-			font-size: 0.68rem;
-		}
-		.create-btn {
-			min-height: 44px;
-			padding: 10px 18px;
-			border-radius: 9px;
-			font-size: 0.74rem;
-			justify-content: center;
-		}
 		.action-error {
 			margin-bottom: 12px;
 			padding: 9px 12px;
@@ -891,33 +1427,33 @@
 			font-size: 0.76rem;
 		}
 		.room-grid {
-			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+			grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
 			gap: 10px;
 		}
 		.room-card {
-			min-height: 108px;
-			gap: 6px;
-			padding: 13px 14px;
-			border-radius: 10px;
+			min-height: 96px;
+			gap: 12px;
+			padding: 12px 14px;
+			border-radius: 13px;
 		}
-		.status-pill {
-			padding: 3px 7px;
-			font-size: 0.66rem;
-			letter-spacing: 0.15em;
-		}
-		.room-code {
-			font-size: 0.78rem;
-			letter-spacing: 0.14em;
+		.host-medallion {
+			width: 46px;
+			height: 46px;
+			border-radius: 13px;
+			font-size: 1.2rem;
 		}
 		.room-host {
-			font-size: 1.08rem;
+			font-size: 1.06rem;
+		}
+		.room-code {
+			font-size: 0.72rem;
+			letter-spacing: 0.12em;
 		}
 		.room-meta,
 		.seats {
 			font-size: 0.72rem;
 		}
 		.room-foot {
-			margin-top: 2px;
 			padding-top: 8px;
 		}
 		.room-cta {
@@ -926,6 +1462,53 @@
 		}
 		.browser-foot {
 			margin-top: 16px;
+		}
+		.fab-spacer {
+			height: 76px;
+		}
+		.create-dock {
+			justify-content: flex-end;
+			padding: 18px max(18px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom));
+		}
+		.create-btn {
+			min-height: 48px;
+			min-width: 0;
+		}
+		.sheet {
+			max-height: calc(100dvh - 20px);
+			gap: 10px;
+			padding: 14px 20px 10px;
+		}
+		.sheet-title {
+			font-size: 1.2rem;
+		}
+		.sheet-close {
+			width: 34px;
+			height: 34px;
+		}
+		.sheet-foot {
+			margin-top: 0;
+			margin-bottom: -12px;
+			padding: 8px 0;
+		}
+		/* Tighten fields so name + timer + bots + actions fit a 390-high sheet
+		   with little or no scrolling. */
+		.sheet-eyebrow {
+			display: none;
+		}
+		.field {
+			gap: 5px;
+		}
+		.field-input {
+			min-height: 42px;
+			padding: 8px 14px;
+		}
+		.seg {
+			min-height: 40px;
+		}
+		.step {
+			width: 42px;
+			height: 42px;
 		}
 	}
 
@@ -936,12 +1519,11 @@
 		.create-btn {
 			transition: none;
 		}
-		.room-card:hover:not(:disabled),
-		.room-card:focus-visible {
-			transform: none;
-		}
 		.live-dot,
 		.spin {
+			animation: none;
+		}
+		.sheet {
 			animation: none;
 		}
 	}
