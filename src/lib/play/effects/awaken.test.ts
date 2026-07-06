@@ -32,6 +32,7 @@ import {
 import { applyCultivate } from './apply';
 import { createRng } from '../rng';
 import type {
+	AwakenDiscardRef,
 	GameActor,
 	NormalizedAwaken,
 	PlayCatalog,
@@ -107,6 +108,11 @@ function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerS
 
 function spirit(slotIndex: number, id: string, name: string, isFaceDown = true): PlaySpirit {
 	return { slotIndex, id, name, cost: 2, classes: {}, origins: {}, isFaceDown };
+}
+
+/** The `slotIndex` of a rune/spirit discard ref (augment refs are slotless → -1). */
+function runeSlot(ref: AwakenDiscardRef): number {
+	return ref.kind === 'augment' ? -1 : ref.slotIndex;
 }
 
 /**
@@ -736,6 +742,111 @@ describe('runtime awakenSpirit gate', () => {
 		expect(ok.ok).toBe(true);
 	});
 
+	// F1: an EXPLICIT, COMPLETE discard selection is BINDING — the exact case from the
+	// audit (cost "Flower ×2", player selected two Fairy Relics, engine silently discarded
+	// two Flowers). Wrong picks now reject; right picks pay; no picks still auto-pick.
+	it('F1: complete explicit discardRefs are binding — wrong reject, right pay, none auto-pick', () => {
+		const FLOWER = 'flower-id';
+		const FAIRY = 'fairy-id';
+		const awaken: NormalizedAwaken = {
+			kind: 'rune_cost',
+			mats: [{ runeId: FLOWER, name: 'Flower', kind: 'relic', count: 2, wildcard: false }]
+		};
+		const catalog = awakenCatalog(awaken);
+		const seed = () => {
+			const state = startedGame(catalog);
+			const red = state.players.Red!;
+			red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
+			red.mats = [
+				rune(1, { id: FLOWER, name: 'Flower', guid: 'f1' }),
+				rune(2, { id: FLOWER, name: 'Flower', guid: 'f2' }),
+				rune(3, { id: FAIRY, name: 'Fairy', guid: 'y1' }),
+				rune(4, { id: FAIRY, name: 'Fairy', guid: 'y2' })
+			];
+			return state;
+		};
+		const RED_A = { ...HOST, seatColor: 'Red' as const };
+
+		// Wrong items: two Fairy Relics for a Flower ×2 cost → REJECTED, nothing spent.
+		const wrong = seed();
+		const rejected = applyGameCommand(
+			wrong,
+			RED_A,
+			{
+				type: 'awakenSpirit',
+				slotIndex: 1,
+				discardRefs: [
+					{ kind: 'rune', slotIndex: 3 },
+					{ kind: 'rune', slotIndex: 4 }
+				]
+			},
+			catalog
+		);
+		expect(rejected.ok).toBe(false);
+		if (rejected.ok) throw new Error('expected rejection');
+		expect(rejected.error.code).toBe('invalid_discard_selection');
+		expect(wrong.players.Red!.spirits[0].isFaceDown).toBe(true);
+		expect(wrong.players.Red!.mats.every((r) => r.hasRune)).toBe(true);
+
+		// Right items: the two Flowers → SUCCEEDS, spends exactly the Flowers (not the Fairies).
+		const right = seed();
+		const paid = applyGameCommand(
+			right,
+			RED_A,
+			{
+				type: 'awakenSpirit',
+				slotIndex: 1,
+				discardRefs: [
+					{ kind: 'rune', slotIndex: 1 },
+					{ kind: 'rune', slotIndex: 2 }
+				]
+			},
+			catalog
+		);
+		expect(paid.ok).toBe(true);
+		if (!paid.ok) throw new Error(paid.error.message);
+		const outPaid = paid.state.players.Red!;
+		expect(outPaid.spirits[0].isFaceDown).toBe(false);
+		expect(outPaid.mats.filter((r) => r.id === FLOWER).every((r) => r.hasRune === false)).toBe(true);
+		expect(outPaid.mats.filter((r) => r.id === FAIRY).every((r) => r.hasRune === true)).toBe(true);
+
+		// No refs: auto-pick unchanged (spends the two Flowers, the only cost-eligible mats).
+		const auto = seed();
+		const autoRes = applyGameCommand(auto, RED_A, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
+		expect(autoRes.ok).toBe(true);
+		if (!autoRes.ok) throw new Error(autoRes.error.message);
+		expect(autoRes.state.players.Red!.mats.filter((r) => r.id === FLOWER).every((r) => !r.hasRune)).toBe(true);
+	});
+
+	// Bot / old-client compat: a PARTIAL selection (fewer refs than the cost needs) is a
+	// PREFERENCE, not a binding — it must still auto-pick the remainder, never reject.
+	it('a partial explicit selection stays a preference (auto-pick fills the rest)', () => {
+		const FLOWER = 'flower-id';
+		const awaken: NormalizedAwaken = {
+			kind: 'rune_cost',
+			mats: [{ runeId: FLOWER, name: 'Flower', kind: 'relic', count: 2, wildcard: false }]
+		};
+		const catalog = awakenCatalog(awaken);
+		const state = startedGame(catalog);
+		const red = state.players.Red!;
+		red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
+		red.mats = [
+			rune(1, { id: FLOWER, name: 'Flower', guid: 'f1' }),
+			rune(2, { id: FLOWER, name: 'Flower', guid: 'f2' })
+		];
+		const res = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1, discardRefs: [{ kind: 'rune', slotIndex: 1 }] },
+			catalog
+		);
+		expect(res.ok).toBe(true);
+		if (!res.ok) throw new Error(res.error.message);
+		const out = res.state.players.Red!;
+		expect(out.spirits[0].isFaceDown).toBe(false);
+		expect(out.mats.every((r) => r.hasRune === false)).toBe(true);
+	});
+
 	it("fires the 'awakening' trigger on success (onAwaken CLASS_EFFECTS resolve)", () => {
 		withSynthClass('SynthAwaken', [
 			{
@@ -939,6 +1050,62 @@ describe('AWAKEN_HANDLERS discard choice (let-me-choose)', () => {
 		expect(offer!.options).toHaveLength(1);
 		expect(offer!.options[0].ref).toEqual({ kind: 'rune', slotIndex: 1 });
 		expect(offer!.options[0].runeId).toBe(FIRE_RUNE);
+	});
+
+	it('rune_cost costSlots list ONLY cost-eligible mats per slot; ineligible carries the rest (S2)', () => {
+		const FLOWER = 'flower-id';
+		const sp = spirit(1, 'rc', 'Rune Cost');
+		const player = makePlayer({
+			spirits: [sp],
+			mats: [
+				rune(1, { id: FLOWER, name: 'Flower' }),
+				rune(2, { id: FLOWER, name: 'Flower' }),
+				rune(3, { id: 'fairy-id', name: 'Fairy' }),
+				rune(4, { id: 'magnet-id', name: 'Magnet' })
+			]
+		});
+		const awaken: NormalizedAwaken = {
+			kind: 'rune_cost',
+			mats: [{ runeId: FLOWER, name: 'Flower', kind: 'relic', count: 2, wildcard: false }]
+		};
+		const offer = buildAwakenOffer(ctxFor(player, catalogWith('rc', awaken)), { spirit: sp })!;
+		// One cost slot per required unit (Flower ×2), each eligible only to the two Flowers.
+		expect(offer.costSlots).toHaveLength(2);
+		expect(offer.costSlots!.every((s) => s.need === 'Flower' && s.wildcard === false)).toBe(true);
+		expect(offer.costSlots![0].needRuneId).toBe(FLOWER);
+		expect(offer.costSlots![0].eligibleRefs).toEqual([
+			{ kind: 'rune', slotIndex: 1 },
+			{ kind: 'rune', slotIndex: 2 }
+		]);
+		// options narrowed to the eligible Flowers — NOT the whole rack (S2 fix).
+		expect(offer.options.map((o) => runeSlot(o.ref)).sort()).toEqual([1, 2]);
+		// Fairy + Magnet are surfaced as ineligible with an engine-owned reason.
+		expect(offer.ineligible!.map((i) => runeSlot(i.ref)).sort()).toEqual([3, 4]);
+		expect(offer.ineligible!.every((i) => i.reason.includes('Flower'))).toBe(true);
+	});
+
+	it('rune_cost costSlots: a WILDCARD slot lists every held mat of its kind, no others', () => {
+		const sp = spirit(1, 'rc', 'Rune Cost');
+		const player = makePlayer({
+			spirits: [sp],
+			mats: [
+				rune(1, { id: 'fairy-id', name: 'Fairy' }), // relic (no originId)
+				rune(2, { id: 'teapot-id', name: 'Teapot' }), // relic
+				rune(3, { id: 'cyber-id', name: 'Cyber', originId: 'o-cyber' }) // origin rune
+			]
+		});
+		const awaken: NormalizedAwaken = {
+			kind: 'rune_cost',
+			mats: [{ runeId: ANY_RELIC, name: 'Any Relic', kind: 'relic', count: 1, wildcard: true }]
+		};
+		const offer = buildAwakenOffer(ctxFor(player, catalogWith('rc', awaken)), { spirit: sp })!;
+		expect(offer.costSlots).toHaveLength(1);
+		expect(offer.costSlots![0].wildcard).toBe(true);
+		// Wildcards have no named icon id.
+		expect(offer.costSlots![0].needRuneId).toBeUndefined();
+		expect(offer.costSlots![0].eligibleRefs.map(runeSlot)).toEqual([1, 2]);
+		// The origin rune can't pay an "Any Relic" cost → ineligible.
+		expect(offer.ineligible!.map((i) => runeSlot(i.ref))).toEqual([3]);
 	});
 
 	// Discoverability: a Faerie the player CANNOT yet pay for produces no clickable

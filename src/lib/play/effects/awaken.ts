@@ -19,7 +19,10 @@
  */
 
 import type {
+	AwakenCostSlot,
 	AwakenDiscardOption,
+	AwakenDiscardRef,
+	AwakenIneligibleMat,
 	AwakenLockedOffer,
 	AwakenOffer,
 	NormalizedAwaken,
@@ -27,7 +30,7 @@ import type {
 	PlaySpirit
 } from '../types';
 import type { EffectContext } from './context';
-import { matchMatCost, spendableMats } from './matMatch';
+import { matchMatCost, matSatisfiesRequirement, spendableMats, type SpendableMat } from './matMatch';
 import { AWAKEN_HANDLERS, type AwakenHandlerContext } from './awakenHandlers';
 
 /** Result of {@link checkAwakenCondition}: satisfiable + an optional reason. */
@@ -117,13 +120,20 @@ export interface AwakenPayment {
  * auto-picks per its named-before-wildcard preference. A free/`text` condition
  * is a no-op pay (free succeeds, text is rejected — it has no payable cost).
  *
+ * `strict` (F1): treat `runeInstanceIds` as a BINDING selection — the cost must be
+ * payable using ONLY those copies, else the pay fails with `invalid_discard_selection`
+ * (no silent auto-pick of other mats). The caller enables strict only when the
+ * selection is complete (one id per required unit); a partial/omitted selection stays
+ * a preference so bots and old clients keep auto-pick.
+ *
  * Returns `ok:false` (and discards nothing) if the cost cannot be met, so the
  * caller can keep `check` and `pay` consistent.
  */
 export function payAwakenCondition(
 	ctx: EffectContext,
 	target: AwakenTarget,
-	runeInstanceIds?: string[]
+	runeInstanceIds?: string[],
+	strict = false
 ): AwakenPayment {
 	const catalogSpirit = catalogSpiritFor(ctx, target.spirit);
 	const awaken = catalogSpirit?.awaken;
@@ -148,9 +158,20 @@ export function payAwakenCondition(
 	}
 
 	const mats = ctx.player.mats;
-	const match = matchMatCost(awaken.mats, spendableMats(mats), runeInstanceIds);
+	// Bind the selection only when it is COMPLETE (one chosen id per required unit).
+	// A partial/omitted selection stays a preference so bots + old clients keep
+	// auto-pick; a complete-but-wrong selection is rejected (F1).
+	const totalRequired = awaken.mats.reduce((sum, r) => sum + r.count, 0);
+	const bindExact = strict && !!runeInstanceIds && runeInstanceIds.length === totalRequired;
+	const match = matchMatCost(awaken.mats, spendableMats(mats), runeInstanceIds, { strict: bindExact });
 	if (!match.ok) {
-		return { ok: false, reason: 'insufficient_runes', discarded: [] };
+		// A failed strict match means the player's explicit picks don't pay the cost
+		// (wrong items); otherwise the cost is simply unaffordable.
+		return {
+			ok: false,
+			reason: bindExact ? 'invalid_discard_selection' : 'insufficient_runes',
+			discarded: []
+		};
 	}
 
 	const discarded: string[] = [];
@@ -213,20 +234,58 @@ export function buildAwakenOffer(ctx: EffectContext, target: AwakenTarget): Awak
 		return { ...base, requirement: 'Free', discardCount: 0, options: [] };
 	}
 
-	// rune_cost — list the player's spendable runes/relics so the owner picks WHICH to
-	// spend (the chosen instance ids become a spend preference for matchMatCost). The
-	// requirement still spells out what the cost needs.
+	// rune_cost — surface the cost-eligible mats so the owner picks WHICH to spend.
+	// Per-slot `costSlots` carry the precise eligibility the payment takeover lights
+	// (fixes S2: no longer the whole rack); `ineligible` lists what stays dimmed.
 	if (awaken.kind === 'rune_cost') {
 		const summary = awaken.mats
 			.map((r) => (r.count > 1 ? `${r.name} ×${r.count}` : r.name))
 			.join(', ');
 		const discardCount = awaken.mats.reduce((sum, r) => sum + r.count, 0);
-		const options: AwakenDiscardOption[] = spendableMats(ctx.player.mats).map((r) => ({
-			ref: { kind: 'rune' as const, slotIndex: ctx.player.mats[r.arrayIndex].slotIndex },
-			label: r.name ?? 'Rune',
-			...(r.id ? { runeId: r.id } : {})
+		const spendable = spendableMats(ctx.player.mats);
+		const refFor = (m: SpendableMat): AwakenDiscardRef => ({
+			kind: 'rune',
+			slotIndex: ctx.player.mats[m.arrayIndex].slotIndex
+		});
+		const fillsSomeSlot = (m: SpendableMat) =>
+			awaken.mats.some((req) => matSatisfiesRequirement(req, m));
+
+		// One cost slot per required unit, in payment order; each lists only ITS legal payers.
+		const costSlots: AwakenCostSlot[] = [];
+		for (const req of awaken.mats) {
+			const eligibleRefs = spendable
+				.filter((m) => matSatisfiesRequirement(req, m))
+				.map(refFor);
+			for (let n = 0; n < req.count; n += 1) {
+				costSlots.push({
+					need: req.name ?? (req.wildcard ? 'Any mat' : 'Rune'),
+					...(!req.wildcard && req.runeId ? { needRuneId: req.runeId } : {}),
+					wildcard: req.wildcard,
+					eligibleRefs
+				});
+			}
+		}
+
+		// `options` narrows to only the cost-eligible mats (S2 fix): what the picker may pick.
+		const options: AwakenDiscardOption[] = spendable.filter(fillsSomeSlot).map((m) => ({
+			ref: refFor(m),
+			label: m.name ?? 'Rune',
+			...(m.id ? { runeId: m.id } : {})
 		}));
-		return { ...base, requirement: `Discard ${summary}`, discardCount, options };
+
+		// Held mats that fill no slot — dim + reason chips.
+		const ineligible: AwakenIneligibleMat[] = spendable
+			.filter((m) => !fillsSomeSlot(m))
+			.map((m) => ({ ref: refFor(m), label: m.name ?? 'Rune', reason: `Needs ${summary}` }));
+
+		return {
+			...base,
+			requirement: `Discard ${summary}`,
+			discardCount,
+			options,
+			costSlots,
+			ineligible
+		};
 	}
 
 	// Scripted text — discard handlers expose a choice; event/flag handlers don't.

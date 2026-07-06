@@ -423,10 +423,48 @@ export interface AwakenOffer {
 	requirement: string;
 	/** How many items the player must discard (0 for free/no-item flips). */
 	discardCount: number;
-	/** Candidate items to discard. Empty for free flips, rune-cost flips, and
-	 *  event-flag conditions that need no per-item choice; populated for scripted
-	 *  discard handlers (Faeries, relic/trait discards). */
+	/** Candidate items to discard. Empty for free flips and event-flag conditions
+	 *  that need no per-item choice; populated for scripted discard handlers
+	 *  (Faeries, relic/trait discards) AND rune-cost flips (the cost-eligible mats
+	 *  only — see the S2 fix in buildAwakenOffer). */
 	options: AwakenDiscardOption[];
+	/**
+	 * Per-required-item cost slots for a `rune_cost` awaken, in payment order (one
+	 * entry per unit of the cost — "Discard Flower ×2" ⇒ two entries). Each slot
+	 * carries its own precise eligibility so the client's payment takeover (W1a)
+	 * lights ONLY the mats that can legally fill it, never the whole rack (fixes S2).
+	 * Absent for free flips and scripted-text handlers (their `options` are already
+	 * precise).
+	 */
+	costSlots?: AwakenCostSlot[];
+	/**
+	 * Held mats the player owns that CANNOT fill any cost slot — surfaced so the UI
+	 * can show them dimmed with a lock + reason chip ("Needs Flower") instead of
+	 * hiding them. Only populated for `rune_cost` awakens.
+	 */
+	ineligible?: AwakenIneligibleMat[];
+}
+
+/** One unit of a `rune_cost` awaken cost, with the exact mats that can pay it. */
+export interface AwakenCostSlot {
+	/** Display label of the requirement ("Flower", "Any Relic"). */
+	need: string;
+	/** Catalog rune id for icon lookup (named requirements only; absent for wildcards). */
+	needRuneId?: string;
+	/** True when any mat of the requirement's kind pays it ("Any Rune" / "Any Relic"). */
+	wildcard: boolean;
+	/** ONLY the refs that legally satisfy THIS slot (a Flower slot lists held Flowers;
+	 *  an "Any Relic" slot lists every held relic). */
+	eligibleRefs: AwakenDiscardRef[];
+}
+
+/** A held mat that pays no cost slot, with a reason for the dim + lock chip. */
+export interface AwakenIneligibleMat {
+	ref: AwakenDiscardRef;
+	/** The mat's display name. */
+	label: string;
+	/** Why it can't pay (engine-owned; e.g. "Needs Flower"). */
+	reason: string;
 }
 
 /**

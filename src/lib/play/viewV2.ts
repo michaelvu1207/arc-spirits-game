@@ -31,6 +31,16 @@ import { ALL_DESTINATIONS, RUNE_CARRY_LIMIT } from './types';
 import { canApply } from './legality';
 import { seatHasResolutionWork } from './phases';
 import { buildSessionProjection } from './runtime';
+import {
+	autoPickCostSlots,
+	buildLocationInteractions,
+	canAfford,
+	eligibleCostSlots,
+	isWildcardCost,
+	type GainEffect,
+	type LocationInteraction
+} from './locationInteractions';
+import { awakenedClassCounts } from './effects/apply';
 
 /** The command discriminant, narrowed to the real GameCommand union — never a bare string. */
 export type GameCommandType = GameCommand['type'];
@@ -69,6 +79,43 @@ export interface PendingWorkDescriptor {
 	ids?: string[];
 }
 
+/**
+ * The precise, per-seat "what can I pay / claim at this location row" surface (§5.2),
+ * so the client's trade-arming takeover (W1b) never re-derives cost legality. One entry
+ * per resolvable reward row of the seat's current location. Owner-derived (reads private
+ * mats), so it ships only to the seat that owns it.
+ */
+export interface LocationInteractionAffordance {
+	/** Index into the location's reward rows (the `rowIndex` on `resolveLocationInteraction`). */
+	rowIndex: number;
+	/** Times this row may still be resolved this round (allowance − used, floored at 0). */
+	usesRemaining: number;
+	/** True when the seat can resolve the row right now — cost payable OR a waiver applies. */
+	affordable: boolean;
+	/** A cost-waiver in effect for this trade, and which class grants it. Absent = pay normally. */
+	freeTrade?: 'modInjector' | 'undercover';
+	/** One entry per cost requirement, in cost order. Empty for a free (gain) row. */
+	costSlots: {
+		/** Requirement label ("Cyber City rune", "Any relic"). */
+		need: string;
+		/** True for a wildcard cost ("any relic" / "any basic rune") — the only kind with a real
+		 *  choice of WHICH held copy to spend. */
+		wildcard: boolean;
+		/** ARRAY indices into `player.mats` of every held slot that could pay this requirement —
+		 *  the values the client passes back as `costChoices`. */
+		eligibleMatSlotIndexes: number[];
+		/** The mats array index auto-match would spend for this slot (pre-fill), or null if the
+		 *  cost cannot currently be paid. */
+		autoPick: number | null;
+	}[];
+	/** "Or" gains (one group per `chooseRune` gain, in gain order) — no default is pre-selected,
+	 *  so the client must force a choice (fixes S6). */
+	choiceGroups: { options: { runeId: string; name: string }[] }[];
+	/** True when resolving the row would currently do nothing useful (e.g. restore-barrier at
+	 *  full barrier) — the client shows a "no effect now" warning instead of a bright CTA. */
+	noEffectNow?: boolean;
+}
+
 /** Everything a single seat needs to render its own controls, computed server-side. All
  *  fields are derived from state the OWNER may see — see the secrecy note below; the server
  *  must only ever hand a seat its OWN SeatAffordances. */
@@ -98,6 +145,13 @@ export interface SeatAffordances {
 	/** Every outstanding obligation on the seat, richest-first. Empty when the seat is
 	 *  clear to pass. */
 	pendingWork: PendingWorkDescriptor[];
+	/** Why `canPass` is false while a pass command exists for the phase (drives the
+	 *  disabled Pass-Turn tooltip, F3). Absent when the seat can pass, or when the phase
+	 *  has no pass command (navigation). Engine-owned label. */
+	passBlockedReason?: string;
+	/** The seat's location reward rows with precise cost/eligibility (§5.2). Present only in
+	 *  the Location phase when the seat is at a location; absent otherwise. */
+	locationInteractions?: LocationInteractionAffordance[];
 	/** Server-clock wall-time (ms epoch) this seat's current phase auto-advances, or null
 	 *  when untimed. Mirrors projection.phaseDeadline. */
 	deadline: number | null;
@@ -404,6 +458,118 @@ export function describePendingWork(
 	return work;
 }
 
+/** Which item kinds a trade row grants (drives the free-trade waivers). Considers every
+ *  option of an "or" gain, since any of them could be the chosen grant — an OPTIMISTIC
+ *  read (like legalCommandTypes): the reducer re-checks against the actual choice. */
+function tradeGrantKinds(interaction: LocationInteraction): { augment: boolean; relic: boolean } {
+	let augment = false;
+	let relic = false;
+	for (const gain of interaction.gains) {
+		if (gain.type === 'rune') {
+			if (gain.rune.type === 'augment') augment = true;
+			if (gain.rune.type === 'relic') relic = true;
+		} else if (gain.type === 'chooseRune') {
+			for (const opt of gain.options) {
+				if (opt.type === 'augment') augment = true;
+				if (opt.type === 'relic') relic = true;
+			}
+		}
+	}
+	return { augment, relic };
+}
+
+/** The cost waiver in effect for a trade row, mirroring the reducer's Mod Injector /
+ *  Undercover rules (runtime.ts resolveLocationInteraction). Undefined when the player pays. */
+function freeTradeFor(
+	interaction: LocationInteraction,
+	player: PrivatePlayerState,
+	classCounts: Record<string, number>
+): 'modInjector' | 'undercover' | undefined {
+	if (interaction.cost.length === 0) return undefined;
+	const { augment, relic } = tradeGrantKinds(interaction);
+	if ((classCounts['Mod Injector'] ?? 0) >= 1 && augment) return 'modInjector';
+	if (player.freeNextRelicTrade && relic) return 'undercover';
+	return undefined;
+}
+
+/** A row does nothing useful right now iff every gain is a barrier restore and the player is
+ *  already at full barrier (brokenBarrier === 0). Other gains always do something. */
+function interactionHasNoEffect(interaction: LocationInteraction, player: PrivatePlayerState): boolean {
+	if (interaction.gains.length === 0) return false;
+	return (
+		interaction.gains.every((g) => g.type === 'restoreBarrier') && (player.brokenBarrier ?? 0) === 0
+	);
+}
+
+/**
+ * The seat's location reward rows as precise affordances (§5.2), reusing the same
+ * locationInteractions helpers the reducer + menu use so cost legality never diverges.
+ * Empty unless the seat is in the Location phase AND parked at a location with rows.
+ */
+export function computeLocationInteractions(
+	state: PublicGameState,
+	player: PrivatePlayerState,
+	catalog: PlayCatalog
+): LocationInteractionAffordance[] {
+	if (state.phase !== 'location') return [];
+	const destination = player.navigationDestination;
+	if (!destination) return [];
+	const locEntry = (catalog.locations ?? []).find((l) => l.name === destination);
+	const interactions = buildLocationInteractions(locEntry?.rewardRows);
+	if (interactions.length === 0) return [];
+
+	const mats = player.mats ?? [];
+	const rowAllowance = 1 + (player.extraActions?.locationInteraction ?? 0);
+	const classCounts = awakenedClassCounts(player);
+
+	return interactions.map((interaction) => {
+		const usedKey = `row:${interaction.rowIndex}`;
+		const rowUsed = (player.actionsUsedThisRound ?? []).filter((a) => a === usedKey).length;
+		const auto = autoPickCostSlots(interaction.cost, mats);
+		const costSlots = interaction.cost.map((req, ci) => ({
+			need: req.label,
+			wildcard: isWildcardCost(req),
+			eligibleMatSlotIndexes: eligibleCostSlots(req, mats),
+			autoPick: auto[ci] ?? null
+		}));
+		const choiceGroups = interaction.gains
+			.filter((g): g is Extract<GainEffect, { type: 'chooseRune' }> => g.type === 'chooseRune')
+			.map((g) => ({ options: g.options.map((o) => ({ runeId: o.runeId, name: o.name })) }));
+		const freeTrade = freeTradeFor(interaction, player, classCounts);
+		const affordable = canAfford(interaction, mats) || freeTrade != null;
+		const noEffectNow = interactionHasNoEffect(interaction, player);
+
+		return {
+			rowIndex: interaction.rowIndex,
+			usesRemaining: Math.max(0, rowAllowance - rowUsed),
+			affordable,
+			...(freeTrade ? { freeTrade } : {}),
+			costSlots,
+			choiceGroups,
+			...(noEffectNow ? { noEffectNow: true } : {})
+		};
+	});
+}
+
+/**
+ * Why a seat can't pass while a pass command exists (F3 tooltip). Reuses the
+ * describePendingWork labels for the obligations it already enumerates, plus a Location-
+ * phase corruption fallback (the one blocker describePendingWork keys to Cleanup only —
+ * a payable corruption debt blocks endLocationActions too, legality.ts). Only called when
+ * a pass command exists and canPass is false.
+ */
+function passBlockedReasonFor(
+	phase: GamePhase,
+	player: PrivatePlayerState,
+	pendingWork: PendingWorkDescriptor[]
+): string {
+	if (pendingWork.length > 0) return pendingWork[0].label;
+	if (phase === 'location' && player.pendingCorruptionDiscard && player.spirits.length > 0) {
+		return 'Discard your corrupted spirits first.';
+	}
+	return 'Resolve your pending actions first.';
+}
+
 /**
  * The pure affordances projection for ONE seat. Reads owner-private state, so the caller
  * MUST only build this for the seat a connection is authenticated as.
@@ -427,14 +593,22 @@ export function computeAffordances(
 	const legalCommandTypes = computeLegalCommandTypes(state, seat, catalog);
 	const passCommand = PASS_COMMAND_BY_PHASE[phase];
 	const player = state.players[seat];
+	const canPass = !!passCommand && legalCommandTypes.includes(passCommand);
+	const pendingWork = player ? describePendingWork(state, player) : [];
+	const locationInteractions =
+		player && state.status === 'active' ? computeLocationInteractions(state, player, catalog) : [];
 	return {
 		seat,
 		phase,
 		phaseLabel: PHASE_LABELS[phase],
 		legalCommandTypes,
 		hasResolutionWork: state.status === 'active' && seatHasResolutionWork(state, seat),
-		canPass: !!passCommand && legalCommandTypes.includes(passCommand),
-		pendingWork: player ? describePendingWork(state, player) : [],
+		canPass,
+		pendingWork,
+		...(passCommand && !canPass && player
+			? { passBlockedReason: passBlockedReasonFor(phase, player, pendingWork) }
+			: {}),
+		...(locationInteractions.length > 0 ? { locationInteractions } : {}),
 		deadline: state.phaseDeadline
 	};
 }

@@ -2164,15 +2164,27 @@ function reduceCommand(
 			// runes' instance ids so matchMatCost prefers exactly the chosen copies.
 			// (Scripted text handlers read discardRefs directly and ignore this arg.)
 			let runeInstanceIds = command.runeInstanceIds;
+			let explicitRuneSelection = !!command.runeInstanceIds?.length;
 			if (!runeInstanceIds && command.discardRefs?.length) {
-				const ids = command.discardRefs
-					.filter((r) => r.kind === 'rune')
+				const runeRefs = command.discardRefs.filter((r) => r.kind === 'rune');
+				const ids = runeRefs
 					.map((r) => active.player.mats.find((s) => s.slotIndex === r.slotIndex)?.guid)
 					.filter((g): g is string => !!g);
+				if (runeRefs.length) explicitRuneSelection = true;
 				if (ids.length) runeInstanceIds = ids;
 			}
-			const payment = payAwakenCondition(ctx, { spirit }, runeInstanceIds);
+			// A rune_cost awaken with an EXPLICIT rune selection binds it strictly (F1):
+			// the picks must exactly pay the cost or the flip is rejected — no silent
+			// override. Omitted/partial selections keep auto-pick (bots, old clients).
+			const strictAwakenPay = check.kind === 'rune_cost' && explicitRuneSelection;
+			const payment = payAwakenCondition(ctx, { spirit }, runeInstanceIds, strictAwakenPay);
 			if (!payment.ok) {
+				if (payment.reason === 'invalid_discard_selection') {
+					return failure(
+						'invalid_discard_selection',
+						`Those items do not pay ${spirit.name}'s awaken cost.`
+					);
+				}
 				return failure('awaken_unmet', `${spirit.name} cannot be awakened yet.`);
 			}
 			if (payment.discarded.length > 0) {

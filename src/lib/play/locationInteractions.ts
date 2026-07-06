@@ -509,3 +509,36 @@ export function matchRewardCost(
 export function canAfford(interaction: LocationInteraction, runes: MatSlotSnapshot[]): boolean {
 	return matchRewardCost(interaction.cost, runes).ok;
 }
+
+/**
+ * For each cost requirement (in ORIGINAL cost order), the mats array index auto-match
+ * would spend to pay it — the pre-fill the payment takeover shows before the player
+ * overrides a wildcard slot. Mirrors {@link matchRewardCost}'s greedy assignment
+ * (specific requirements claim their mats before wildcards) so the pre-fill never
+ * disagrees with what an un-chosen resolve actually consumes. An entry is `null` when
+ * the cost cannot currently be paid (no mat left for that slot). Returns `[]` for a
+ * free (no-cost) row.
+ */
+export function autoPickCostSlots(cost: CostRequirement[], mats: MatSlotSnapshot[]): (number | null)[] {
+	const picks: (number | null)[] = cost.map(() => null);
+	if (cost.length === 0) return picks;
+
+	const used = new Set<number>();
+	// Assign specific requirements before wildcards (same priority as matchRewardCost),
+	// but record each pick against its ORIGINAL cost index so the caller sees cost order.
+	const order = cost
+		.map((req, costIndex) => ({ req, costIndex }))
+		.sort((a, b) => Number(isWildcardCost(a.req)) - Number(isWildcardCost(b.req)));
+
+	for (const { req, costIndex } of order) {
+		for (let arrayIndex = 0; arrayIndex < mats.length; arrayIndex += 1) {
+			const slot = mats[arrayIndex];
+			if (!slot?.hasRune || used.has(arrayIndex)) continue;
+			if (!slotSatisfies(slot, req)) continue;
+			used.add(arrayIndex);
+			picks[costIndex] = arrayIndex;
+			break;
+		}
+	}
+	return picks;
+}

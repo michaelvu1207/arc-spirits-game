@@ -1,7 +1,16 @@
 import { describe, expect, test } from 'vitest';
+import type { MatSlotSnapshot } from '$lib/types';
 import { applyGameCommand, buildSessionProjection, createLobbyState } from './runtime';
 import { seatHasResolutionWork } from './phases';
-import type { GameActor, GameCommand, GamePhase, PlayCatalog, PublicGameState } from './types';
+import { buildLocationInteractions, matchRewardCost } from './locationInteractions';
+import type {
+	GameActor,
+	GameCommand,
+	GamePhase,
+	PlayCatalog,
+	PrivatePlayerState,
+	PublicGameState
+} from './types';
 import {
 	buildRoomViewV2,
 	computeAffordances,
@@ -272,5 +281,175 @@ describe('computeAffordances', () => {
 		giveSpirit(state, 'Red');
 		state.players.Red!.pendingCorruptionDiscard = { count: 1 };
 		expect(computeAffordances(state, 'Red', CATALOG).hasResolutionWork).toBe(true);
+	});
+});
+
+// ── §5.2 location-interaction affordances + §5.4 passBlockedReason ─────────────────────
+
+// Real reward-row icon ids (mirror locationInteractions.test.ts / the live DB).
+const ANY_RELIC_ICON = '6a85e06a-52cc-483c-aa59-38395a377307';
+const CYBER_TOKEN = '87d1f1ad-9c0a-4a65-bb2b-16acebc2d019';
+const CYBER_ORIGIN = 'fa7db249-d99d-4c1d-a37d-9027c9f5a31e';
+const CYBER_RUNE = '356f3ad2-4cac-4b69-a3cc-7559f8891d8e';
+const MAGNET_RUNE = 'ee1486a0-8b61-499c-809b-b4de9920aa8f';
+const MAGNET_TOKEN = 'ca4df196-67fb-4507-973d-1dfac277953d';
+const BARRIER = '6746f875-a1bc-453c-94b5-718d6ebeb025';
+const SORCERER = 'c9b3225f-c8a9-4aa8-8e43-56c39cf68974';
+const STRATEGIST = '88facdb6-3374-4891-af8a-fca2e81b79ef';
+
+const LOC = 'Cyber City';
+const LOC_CATALOG: PlayCatalog = {
+	...CATALOG,
+	locations: [
+		{
+			name: LOC,
+			originId: CYBER_ORIGIN,
+			rewardRows: [
+				// row 0: SPECIFIC-rune cost (Cyber ×2) → Magnet + 2 barrier restore.
+				{ type: 'trade', cost_icon_ids: [CYBER_TOKEN, CYBER_TOKEN], gain_icon_ids: [MAGNET_TOKEN, BARRIER, BARRIER] },
+				// row 1: WILDCARD cost (any relic) → an "or" augment (a choice group, no default).
+				{ type: 'trade', cost_icon_ids: [ANY_RELIC_ICON], gain_icon_ids: [{ kind: 'or', icon_ids: [SORCERER, STRATEGIST] }] },
+				// row 2: free gain of barrier restore (for the noEffectNow check).
+				{ type: 'gain', gain_icon_ids: [BARRIER] }
+			]
+		}
+	]
+};
+
+function mat(slotIndex: number, over: Partial<MatSlotSnapshot> = {}): MatSlotSnapshot {
+	return { slotIndex, hasRune: true, type: 'rune', ...over } as MatSlotSnapshot;
+}
+
+/** A started game parked in the Location phase at LOC, with all resolution-work
+ *  fields cleared so a scenario sets only what it means to. */
+function locationState(mats: MatSlotSnapshot[], patch: Partial<PrivatePlayerState> = {}): PublicGameState {
+	const state = startedGame();
+	state.phase = 'location';
+	const red = state.players.Red!;
+	red.navigationDestination = LOC;
+	red.mats = mats;
+	red.actionsUsedThisRound = [];
+	red.extraActions = {};
+	red.brokenBarrier = 0;
+	red.pendingDraw = null;
+	red.handDraws = [];
+	red.pendingDrawQueue = [];
+	red.pendingReward = null;
+	red.pendingCorruptionDiscard = null;
+	red.spirits = [];
+	Object.assign(red, patch);
+	return state;
+}
+
+describe('computeAffordances — location interactions (§5.2)', () => {
+	test('a specific-rune trade lists only the matching mat slots; autoPick = auto-match', () => {
+		const state = locationState([
+			mat(1, { id: CYBER_RUNE, originId: CYBER_ORIGIN, name: 'Cyber City Rune' }),
+			mat(2, { id: CYBER_RUNE, originId: CYBER_ORIGIN, name: 'Cyber City Rune' }),
+			mat(3, { id: MAGNET_RUNE, name: 'Magnet', type: 'relic' })
+		]);
+		const rows = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!;
+		const row0 = rows.find((r) => r.rowIndex === 0)!;
+		expect(row0.affordable).toBe(true);
+		expect(row0.costSlots).toHaveLength(2);
+		expect(row0.costSlots.every((s) => s.wildcard === false)).toBe(true);
+		// Only the two Cyber runes (array indexes 0,1) can pay; the Magnet relic (2) can't.
+		expect(row0.costSlots[0].eligibleMatSlotIndexes).toEqual([0, 1]);
+		expect(row0.costSlots[1].eligibleMatSlotIndexes).toEqual([0, 1]);
+		// autoPick pre-fill == exactly what matchRewardCost (auto-match) would spend.
+		const interaction = buildLocationInteractions(LOC_CATALOG.locations![0].rewardRows).find(
+			(i) => i.rowIndex === 0
+		)!;
+		const expected = matchRewardCost(interaction.cost, state.players.Red!.mats)
+			.consumedArrayIndexes.slice()
+			.sort();
+		expect(row0.costSlots.map((s) => s.autoPick).sort()).toEqual(expected);
+	});
+
+	test('a wildcard trade lists ALL held relics (never a rune); its "or" gain is a choice group', () => {
+		const state = locationState([
+			mat(1, { id: MAGNET_RUNE, name: 'Magnet', type: 'relic' }),
+			mat(2, { id: 'fairy', name: 'Fairy', type: 'relic' }),
+			mat(3, { id: CYBER_RUNE, originId: CYBER_ORIGIN, type: 'rune' })
+		]);
+		const row1 = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!.find(
+			(r) => r.rowIndex === 1
+		)!;
+		expect(row1.costSlots).toHaveLength(1);
+		expect(row1.costSlots[0].wildcard).toBe(true);
+		// Both relics (array indexes 0,1) are eligible; the rune (2) is not.
+		expect(row1.costSlots[0].eligibleMatSlotIndexes).toEqual([0, 1]);
+		// The "or" augment gain surfaces as a choice group with no pre-selected default (S6).
+		expect(row1.choiceGroups).toHaveLength(1);
+		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Sorcerer', 'Strategist']);
+	});
+
+	test('affordability + usesRemaining reflect held mats and per-row allowance', () => {
+		// No mats → the two costed trades are unaffordable, the free gain is not.
+		const broke = computeAffordances(locationState([]), 'Red', LOC_CATALOG).locationInteractions!;
+		expect(broke.find((r) => r.rowIndex === 0)!.affordable).toBe(false);
+		expect(broke.find((r) => r.rowIndex === 2)!.affordable).toBe(true);
+
+		// Child Prodigy allowance (2) minus one recorded use of row 2 → 1 remaining.
+		const rows = computeAffordances(
+			locationState([], { extraActions: { locationInteraction: 1 }, actionsUsedThisRound: ['row:2'] }),
+			'Red',
+			LOC_CATALOG
+		).locationInteractions!;
+		expect(rows.find((r) => r.rowIndex === 2)!.usesRemaining).toBe(1);
+	});
+
+	test('noEffectNow flags a barrier restore only while barrier is full', () => {
+		const full = computeAffordances(locationState([], { brokenBarrier: 0 }), 'Red', LOC_CATALOG)
+			.locationInteractions!.find((r) => r.rowIndex === 2)!;
+		expect(full.noEffectNow).toBe(true);
+		const broken = computeAffordances(locationState([], { brokenBarrier: 3 }), 'Red', LOC_CATALOG)
+			.locationInteractions!.find((r) => r.rowIndex === 2)!;
+		expect(broken.noEffectNow).toBeUndefined();
+	});
+
+	test('a Mod Injector waives an augment trade (affordable with no relics held)', () => {
+		const state = locationState([], {
+			spirits: [
+				{ slotIndex: 1, id: 'mi', name: 'Mod Injector', cost: 2, classes: { 'Mod Injector': 1 }, origins: {}, isFaceDown: false }
+			]
+		});
+		const row1 = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!.find(
+			(r) => r.rowIndex === 1
+		)!;
+		expect(row1.freeTrade).toBe('modInjector');
+		expect(row1.affordable).toBe(true);
+	});
+
+	test('absent outside the Location phase', () => {
+		const nav = locationState([]);
+		nav.phase = 'navigation';
+		expect(computeAffordances(nav, 'Red', LOC_CATALOG).locationInteractions).toBeUndefined();
+	});
+});
+
+describe('computeAffordances — passBlockedReason (§5.4, F3)', () => {
+	test('a payable corruption debt blocks endLocationActions with a reason', () => {
+		const state = locationState([], {
+			pendingCorruptionDiscard: { count: 1 },
+			spirits: [
+				{ slotIndex: 1, id: 'x', name: 'X', cost: 2, classes: {}, origins: {}, isFaceDown: false }
+			]
+		});
+		const aff = computeAffordances(state, 'Red', LOC_CATALOG);
+		expect(aff.canPass).toBe(false);
+		expect(aff.passBlockedReason).toBe('Discard your corrupted spirits first.');
+	});
+
+	test('a clear seat can pass with no blocked reason', () => {
+		const aff = computeAffordances(locationState([]), 'Red', LOC_CATALOG);
+		expect(aff.canPass).toBe(true);
+		expect(aff.passBlockedReason).toBeUndefined();
+	});
+
+	test('navigation has no pass command → no blocked reason', () => {
+		const nav = locationState([]);
+		nav.phase = 'navigation';
+		expect(computeAffordances(nav, 'Red', LOC_CATALOG).passBlockedReason).toBeUndefined();
 	});
 });

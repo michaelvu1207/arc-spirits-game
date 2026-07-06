@@ -82,6 +82,16 @@ function wildcardMatch(req: AwakenMatRequirement, mat: SpendableMat): boolean {
 }
 
 /**
+ * Does a held mat legally satisfy ONE requirement (named or wildcard)? The single
+ * predicate the offer builder uses to list a cost slot's eligible payers, so the
+ * "which mats can fill this slot" answer never drifts from what {@link matchMatCost}
+ * actually accepts.
+ */
+export function matSatisfiesRequirement(req: AwakenMatRequirement, mat: SpendableMat): boolean {
+	return req.wildcard ? wildcardMatch(req, mat) : namedMatch(req, mat);
+}
+
+/**
  * Try to satisfy every requirement from `available`, preferring an explicit
  * `preferIds` ordering (instance ids the caller asked to spend first). Returns
  * the chosen array indices, or `ok:false` if the cost cannot be met.
@@ -89,12 +99,23 @@ function wildcardMatch(req: AwakenMatRequirement, mat: SpendableMat): boolean {
  * Strategy: assign NAMED requirements first (so exact-name matches are consumed
  * before being eaten by a wildcard), then assign wildcard requirements from
  * whatever remains. No held mat is ever assigned to two requirements.
+ *
+ * STRICT MODE (`opts.strict`) — the F1 fix: the caller's `preferIds` become a
+ * BINDING selection rather than a preference. The pool is restricted to exactly
+ * those instance ids and the cost must be satisfiable using ONLY them; a wrong,
+ * short, over-long, or duplicated selection is rejected (`ok:false`) instead of
+ * silently falling back to auto-picked mats. Callers gate strict on a
+ * COMPLETE selection (see payAwakenCondition) so a partial pick keeps preference
+ * behavior for bots/old clients.
  */
 export function matchMatCost(
 	requirements: AwakenMatRequirement[],
 	available: SpendableMat[],
-	preferIds?: string[]
+	preferIds?: string[],
+	opts?: { strict?: boolean }
 ): MatMatchResult {
+	if (opts?.strict) return matchMatCostStrict(requirements, available, preferIds ?? []);
+
 	const used = new Set<number>(); // array indices already consumed
 	const consumedIndices: number[] = [];
 
@@ -140,5 +161,65 @@ export function matchMatCost(
 		}
 	}
 
+	return { ok: true, consumedIndices };
+}
+
+/**
+ * Strict binding match (F1): resolve `wanted` (instance ids the player explicitly
+ * chose) to a distinct spendable mat each, then require that exact pool to fully
+ * satisfy the cost — no auto-pick fallback. Rejected when the selection is the
+ * wrong count, references an unknown/unspendable id, repeats an id, or contains an
+ * item that can't fill any remaining requirement (e.g. a Fairy Relic offered for a
+ * Flower cost). Assignment order mirrors the non-strict path (named before wildcard)
+ * so a valid selection consumes what the player expects.
+ */
+function matchMatCostStrict(
+	requirements: AwakenMatRequirement[],
+	available: SpendableMat[],
+	wanted: string[]
+): MatMatchResult {
+	const totalRequired = requirements.reduce((sum, r) => sum + r.count, 0);
+	if (wanted.length !== totalRequired) return { ok: false, consumedIndices: [] };
+
+	const byInstance = new Map<string, SpendableMat>();
+	for (const mat of available) {
+		if (mat.instanceId) byInstance.set(mat.instanceId, mat);
+	}
+	const pool: SpendableMat[] = [];
+	const seen = new Set<string>();
+	for (const id of wanted) {
+		if (seen.has(id)) return { ok: false, consumedIndices: [] }; // same copy picked twice
+		seen.add(id);
+		const mat = byInstance.get(id);
+		if (!mat) return { ok: false, consumedIndices: [] }; // unknown / not spendable
+		pool.push(mat);
+	}
+
+	const used = new Set<number>();
+	const consumedIndices: number[] = [];
+	const take = (predicate: (mat: SpendableMat) => boolean): boolean => {
+		for (const mat of pool) {
+			if (used.has(mat.arrayIndex)) continue;
+			if (!predicate(mat)) continue;
+			used.add(mat.arrayIndex);
+			consumedIndices.push(mat.arrayIndex);
+			return true;
+		}
+		return false;
+	};
+
+	for (const req of requirements) {
+		if (req.wildcard) continue;
+		for (let n = 0; n < req.count; n += 1) {
+			if (!take((mat) => namedMatch(req, mat))) return { ok: false, consumedIndices: [] };
+		}
+	}
+	for (const req of requirements) {
+		if (!req.wildcard) continue;
+		for (let n = 0; n < req.count; n += 1) {
+			if (!take((mat) => wildcardMatch(req, mat))) return { ok: false, consumedIndices: [] };
+		}
+	}
+	// Counts are equal and every requirement was filled ⇒ the whole pool is consumed.
 	return { ok: true, consumedIndices };
 }
