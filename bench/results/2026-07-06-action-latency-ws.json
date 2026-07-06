@@ -2,19 +2,19 @@
   "metric": "action-latency-ws",
   "description": "command → server ack round-trip over the deployed WS room server",
   "target": "ws-room-server",
-  "base": "wss://gpu.simforge.ai/arcrooms",
+  "base": "wss://arc-spirits-rooms.onrender.com",
   "command": "setNavigationTimer (lobby, always-legal, revision-bumping)",
-  "samples": 50,
-  "p50": 28,
-  "p95": 29.6,
-  "min": 26.5,
-  "max": 31.2,
-  "mean": 28,
+  "samples": 200,
+  "p50": 32.9,
+  "p95": 36.4,
+  "min": 31.4,
+  "max": 38.9,
+  "mean": 33.4,
   "unit": "ms",
   "failures": 0,
   "notes": [
     "same command + room-creation path as action-latency.mjs; only the transport differs",
     "includes real network RTT client → gpu.simforge.ai; in-process compute is ~0.1ms"
   ],
-  "capturedAt": "2026-07-06T06:12:24.077Z"
+  "capturedAt": "2026-07-06T07:14:13.407Z"
 }
