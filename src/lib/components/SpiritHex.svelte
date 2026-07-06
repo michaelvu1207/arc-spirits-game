@@ -23,6 +23,13 @@
 		/** Discard mode: this occupied hex is clickable to discard its spirit. */
 		discardable?: boolean;
 		onDiscard?: (slotIndex: number) => void;
+		/** Staged for discard (W2c): the red mark persists until a commit bar
+		 *  confirms; clicking again un-stages. */
+		staged?: boolean;
+		/** Ineligible for the active mode (engine verdict): content dims + locks. */
+		dimmed?: boolean;
+		/** Why this hex is locked — revealed as a chip on hover/tap while dimmed. */
+		lockedReason?: string | null;
 		/** Spirit augments attached to this hex (rendered in the bottom-right corner). */
 		augments?: AugmentBadge[];
 		/** Augment-placement mode: this occupied hex accepts a dragged augment. */
@@ -43,6 +50,9 @@
 		externalImage = false,
 		discardable = false,
 		onDiscard,
+		staged = false,
+		dimmed = false,
+		lockedReason = null,
 		augments = [],
 		augmentDroppable = false,
 		onDropAugment,
@@ -82,9 +92,21 @@
 	const augX = $derived(bounds.minX + hexWidth * 0.68);
 	const augY = $derived(bounds.minY + hexHeight * 0.7);
 	const augmentNames = $derived(augments.map((a) => a.name).join(', '));
+
+	// Tap reveals the locked-reason chip (hover shows it too, see CSS).
+	let reasonRevealed = $state(false);
+	let reasonTimer: ReturnType<typeof setTimeout> | null = null;
+	function revealReason() {
+		if (!lockedReason) return;
+		reasonRevealed = true;
+		if (reasonTimer) clearTimeout(reasonTimer);
+		reasonTimer = setTimeout(() => (reasonRevealed = false), 2200);
+	}
+	// Approximate chip metrics — SVG text doesn't self-size a background rect.
+	const reasonW = $derived((lockedReason?.length ?? 0) * 6.4 + 18);
 </script>
 
-<g class="spirit-hex" data-slot={slotIndex}>
+<g class="spirit-hex" class:dimmed-hex={dimmed} data-slot={slotIndex}>
 	<!-- Define clipPath and gradients -->
 	<defs>
 		<clipPath id={clipId}>
@@ -181,9 +203,13 @@
 	{#if discardable}
 		<g
 			class="discard-hit"
+			class:staged
 			role="button"
 			tabindex="0"
-			aria-label={`Discard ${spirit?.name ?? 'spirit'}`}
+			aria-label={staged
+				? `Keep ${spirit?.name ?? 'spirit'}`
+				: `Discard ${spirit?.name ?? 'spirit'}`}
+			aria-pressed={staged}
 			onclick={() => onDiscard?.(slotIndex)}
 			onkeydown={(e) => {
 				if (e.key === 'Enter' || e.key === ' ') {
@@ -198,7 +224,49 @@
 				y={center.y}
 				text-anchor="middle"
 				dominant-baseline="middle"
-				class="discard-glyph">🗑</text>
+				class="discard-glyph">{staged ? '✕' : '🗑'}</text>
+		</g>
+	{/if}
+
+	{#if dimmed && spirit}
+		<!-- Locked for the active mode: the hex stays visible (dim-and-lock beats
+		     hiding) and tapping reveals the engine's reason. -->
+		<g
+			class="locked-hit"
+			role="button"
+			tabindex="0"
+			aria-disabled="true"
+			aria-label={lockedReason ?? 'Not eligible'}
+			onclick={revealReason}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					revealReason();
+				}
+			}}
+		>
+			<title>{lockedReason ?? 'Not eligible'}</title>
+			<polygon points={polygonPoints} class="locked-tint" />
+			<g
+				class="lock-badge-g"
+				transform={`translate(${bounds.minX + hexWidth * 0.72} ${bounds.minY + hexHeight * 0.74})`}
+			>
+				<circle r="10" class="lock-bg" />
+				<path d="M-3 -1 v-2.2 a3 3 0 0 1 6 0 v2.2" class="lock-arc" />
+				<rect x="-4.5" y="-1" width="9" height="7" rx="1.6" class="lock-body" />
+			</g>
+			{#if lockedReason}
+				<g
+					class="reason-g"
+					class:revealed={reasonRevealed}
+					transform={`translate(${center.x} ${center.y})`}
+				>
+					<rect x={-reasonW / 2} y="-11" width={reasonW} height="22" rx="6" class="reason-bg" />
+					<text x="0" y="0.5" text-anchor="middle" dominant-baseline="central" class="reason-text"
+						>{lockedReason}</text
+					>
+				</g>
+			{/if}
 		</g>
 	{/if}
 
@@ -379,6 +447,70 @@
 	}
 	.discard-hit:focus-visible .discard-glyph {
 		opacity: 1;
+	}
+	/* Staged for discard: the mark holds without hover — this hex WILL be lost
+	   when the commit bar confirms. Clicking again un-stages. */
+	.discard-hit.staged .discard-tint {
+		fill: rgba(180, 20, 30, 0.5);
+		stroke-opacity: 1;
+	}
+	.discard-hit.staged .discard-glyph {
+		opacity: 1;
+		font-size: 26px;
+		fill: #fff;
+	}
+
+	/* Locked for the active mode: dim the art, keep the object on stage. */
+	.spirit-hex.dimmed-hex .spirit-image {
+		opacity: 0.38;
+		filter: grayscale(0.85) saturate(0.5);
+	}
+	.locked-hit {
+		cursor: not-allowed;
+	}
+	.locked-hit:focus {
+		outline: none;
+	}
+	.locked-tint {
+		fill: rgba(8, 5, 16, 0.25);
+		pointer-events: all;
+	}
+	.lock-bg {
+		fill: rgba(10, 6, 20, 0.92);
+		stroke: rgba(255, 255, 255, 0.22);
+		stroke-width: 1.5;
+	}
+	.lock-arc {
+		fill: none;
+		stroke: #b9b4cc;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+	}
+	.lock-body {
+		fill: #b9b4cc;
+	}
+	.reason-g {
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.15s ease;
+	}
+	.reason-g.revealed {
+		opacity: 1;
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.locked-hit:hover .reason-g {
+			opacity: 1;
+		}
+	}
+	.reason-bg {
+		fill: rgba(10, 6, 20, 0.95);
+		stroke: rgba(255, 112, 77, 0.55);
+		stroke-width: 1;
+	}
+	.reason-text {
+		fill: #ff9a80;
+		font-size: 11px;
+		font-family: inherit;
 	}
 
 	/* Spirit augment badge (bottom-right of the hex) — purely decorative, so it never

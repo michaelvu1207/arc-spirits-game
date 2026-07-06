@@ -816,11 +816,26 @@
 	) {
 		send('infiltrator-swap', { type: 'infiltratorSwap', swaps });
 	}
+	// Scout-inspector discard (CompositionStage) — single, immediate.
 	function discardSpirit(slotIndex: number) {
 		send('discard-spirit', { type: 'discardSpirit', slotIndex });
 	}
-	function discardRune(slotIndex: number) {
-		send('discard-rune', { type: 'discardRune', slotIndex });
+	// W2c staged batches: the commit bar confirms N discards at once. Sent
+	// SEQUENTIALLY (each awaited) so the reducer sees them in pick order and the
+	// obligation count decrements deterministically.
+	function discardSpirits(slotIndexes: number[]) {
+		return runAction('discard-spirits', async () => {
+			for (const slotIndex of slotIndexes) {
+				await sendPlayCommand({ type: 'discardSpirit', slotIndex });
+			}
+		});
+	}
+	function discardRunes(slotIndexes: number[]) {
+		return runAction('discard-runes', async () => {
+			for (const slotIndex of slotIndexes) {
+				await sendPlayCommand({ type: 'discardRune', slotIndex });
+			}
+		});
 	}
 	function resolveDecision(decisionId: string, optionId: string, selectedInstanceIds?: string[]) {
 		send('resolve-decision', {
@@ -1363,7 +1378,7 @@
 							onRedraw={redrawDraws}
 							onContinue={continueAction}
 							onAwaken={awakenSpirit}
-							onDiscardRune={discardRune}
+							onDiscardRunes={discardRunes}
 							onInfiltratorSwap={infiltratorSwap}
 							onAttackGroup={attackGroup}
 							onPass={holdEncounter}
@@ -1372,7 +1387,7 @@
 							onDismissManual={dismissManual}
 							onPlaceAugment={placeAugment}
 							onDiscardAugments={discardAugments}
-							onDiscardSpirit={discardSpirit}
+							onDiscardSpirits={discardSpirits}
 							onSceneControls={(controls) => (navSceneControls = controls)}
 							{busy}
 							seatAffordances={myAffordances}

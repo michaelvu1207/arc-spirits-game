@@ -6,18 +6,15 @@
 		SpectatorProjection,
 		SeatColor,
 		NavigationDestination,
+		PendingDecision,
 		PlayerProjection,
 		DiceTier
 	} from '$lib/play/types';
 	import { RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
-	import {
-		SPIRIT_AUGMENT_CLASSES,
-		augmentCapacityForSpirit,
-		isSpiritAugmentClass
-	} from '$lib/play/augments';
+	import { SPIRIT_AUGMENT_CLASSES, isSpiritAugmentClass } from '$lib/play/augments';
 	import { getLocationConfig, LOCATION_ACCENT, splatFor } from '$lib/play/locations';
 	import { relicOptions } from '$lib/play/locationInteractions';
-	import { buildMonsterRewards, type MonsterRewardOption } from '$lib/play/monsterRewards';
+	import { decisionPickerSpec } from '$lib/play/decisionPicker';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
 	import { augmentIconForClass, runeIconUrl, seatAccent, spiritBackImageUrl, storageUrl } from './helpers';
 	import HexGrid from '$lib/components/HexGrid.svelte';
@@ -34,6 +31,11 @@
 	import CandidateRack from './takeover/CandidateRack.svelte';
 	import CommitBar from './takeover/CommitBar.svelte';
 	import type { MeterSlot, RackCandidate } from './takeover/types';
+	import MonsterRewardTakeover from './MonsterRewardTakeover.svelte';
+	import DecisionCard from './DecisionCard.svelte';
+	import ManualPromptCard from './ManualPromptCard.svelte';
+	import InfiltratorSwap from './InfiltratorSwap.svelte';
+	import EncounterStage from './EncounterStage.svelte';
 	import type { SeatAffordances } from '$lib/play/viewV2';
 	import { iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
 
@@ -76,8 +78,9 @@
 		/** Awaken a face-down spirit; `discardRefs` names which items pay a discard
 		 *  cost when the owner chose (omitted ⇒ engine auto-picks). */
 		onAwaken: (slotIndex: number, discardRefs?: AwakenDiscardRef[]) => void;
-		/** Discard a held rune/relic during Cleanup to get under the carry limit. */
-		onDiscardRune: (slotIndex: number) => void;
+		/** Discard held runes/relics during Cleanup to get under the carry limit —
+		 *  the whole staged batch commits at once (W2c). */
+		onDiscardRunes: (slotIndexes: number[]) => void;
 		/** Infiltrator: swap one attack die with each co-located player. */
 		onInfiltratorSwap: (
 			swaps: { targetSeat: SeatColor; myInstanceId: string; theirInstanceId: string }[]
@@ -107,8 +110,9 @@
 		) => void;
 		/** Finish augment placement — forfeit any that remain unplaced. */
 		onDiscardAugments: () => void;
-		/** Discard a spirit by slot index (forced corruption discard). */
-		onDiscardSpirit: (slotIndex: number) => void;
+		/** Discard spirits by slot index (forced corruption discard) — the whole
+		 *  staged batch commits at once (W2c). */
+		onDiscardSpirits: (slotIndexes: number[]) => void;
 		busy?: boolean;
 		/** This seat's engine-computed action surface (RoomView v2). Null for
 		 *  spectators / when the projection predates affordances. */
@@ -143,7 +147,7 @@
 		onRedraw,
 		onContinue,
 		onAwaken,
-		onDiscardRune,
+		onDiscardRunes,
 		onInfiltratorSwap,
 		onAttackGroup,
 		onPass,
@@ -152,7 +156,7 @@
 		onDismissManual,
 		onPlaceAugment,
 		onDiscardAugments,
-		onDiscardSpirit,
+		onDiscardSpirits,
 		busy = false,
 		seatAffordances = null,
 		onTakeoverOpenChange
@@ -275,6 +279,20 @@
 	});
 
 	const awakeningChoices = $derived(myPlayer?.pendingDecisions ?? []);
+	// W2b: engine picker requirements (§5.4), keyed by decisionId — ship on the
+	// 'decision' pendingWork descriptor. That descriptor exists only in Awakening
+	// (pendingWork mirrors seatHasResolutionWork), but decisions also fire in the
+	// Location phase (Arc Mage's onCultivate) — there we call the engine's OWN
+	// decisionPickerSpec helper directly, the same single source the reducer
+	// validates against, so eligibility still cannot drift.
+	const decisionPickerSpecs = $derived(
+		seatAffordances?.pendingWork?.find((w) => w.kind === 'decision')?.pickerSpecs ?? []
+	);
+	function pickerSpecFor(decision: PendingDecision) {
+		const wired = decisionPickerSpecs.find((s) => s.decisionId === decision.id);
+		if (wired) return wired;
+		return myPlayer ? decisionPickerSpec(decision, myPlayer) : null;
+	}
 	const awakenOffers = $derived(myPlayer?.awakenOffers ?? []);
 	const awakenLocked = $derived(myPlayer?.awakenLocked ?? []);
 	const manualPrompts = $derived(myPlayer?.manualPrompts ?? []);
@@ -459,41 +477,127 @@
 
 	// The board parks pass-turn while a takeover is staging a decision.
 	let interactionArmed = $state(false);
-	const takeoverOpen = $derived(pickingSlot !== null || interactionArmed);
+	let showInfiltrator = $state(false);
+	const takeoverOpen = $derived(pickingSlot !== null || interactionArmed || showInfiltrator);
 	$effect(() => {
 		onTakeoverOpenChange?.(takeoverOpen);
 	});
 
-	// Arc Mage convert: the owner clicks exactly 4 attack dice to spend, then confirms
-	// → gain 1 Arcane. A picker embedded in the decision card so an Arcane is never
-	// spent by accident. Done once per cultivate.
-	const ARC_MAGE_CONVERT_COST = 4;
-	let arcMagePick = $state<string[]>([]);
-	function isArcMageDecision(kind: string): boolean {
-		return kind === 'arcMageTrade';
+	// W2b: a decision's class (for the ability-card art header) is recovered from
+	// its `kind` ("arcMageTrade" → "Arc Mage") by prefix-matching the class-trait
+	// catalog. Purely cosmetic — never a rules derivation.
+	function decisionClassName(kind: string): string | null {
+		const norm = kind.toLowerCase();
+		let best: string | null = null;
+		for (const cls of assets.classTraits.values()) {
+			const name = cls.name;
+			if (!name) continue;
+			const flat = name.toLowerCase().replace(/[^a-z]/g, '');
+			if (flat && norm.startsWith(flat) && (!best || name.length > best.length)) best = name;
+		}
+		return best;
 	}
-	function toggleArcMageDie(instanceId: string) {
-		if (arcMagePick.includes(instanceId))
-			arcMagePick = arcMagePick.filter((id) => id !== instanceId);
-		else if (arcMagePick.length < ARC_MAGE_CONVERT_COST) arcMagePick = [...arcMagePick, instanceId];
-	}
-	function confirmArcMage(decisionId: string) {
-		if (arcMagePick.length !== ARC_MAGE_CONVERT_COST) return;
-		onResolveDecision(decisionId, 'yes', arcMagePick);
-		arcMagePick = [];
-	}
-	function declineArcMage(decisionId: string) {
-		onResolveDecision(decisionId, 'no');
-		arcMagePick = [];
-	}
-	// Drop stale selections if the decision clears or dice change out from under it.
-	$effect(() => {
-		const owned = new Set((myPlayer?.attackDice ?? []).map((d) => d.instanceId));
-		if (arcMagePick.some((id) => !owned.has(id)))
-			arcMagePick = arcMagePick.filter((id) => owned.has(id));
-	});
+
 	const heldRunes = $derived((myPlayer?.mats ?? []).filter((r) => r.hasRune));
 	const runeOverLimit = $derived(heldRunes.length > RUNE_CARRY_LIMIT);
+
+	// ── W2c staged rune-overflow discard (commit bar, undo before Confirm) ────
+	const overflowCount = $derived(Math.max(0, heldRunes.length - RUNE_CARRY_LIMIT));
+	/** §5.4 overflow extension: engine-owned held-slot list (fallback = own mats). */
+	const overflowWork = $derived(
+		seatAffordances?.pendingWork?.find((w) => w.kind === 'overflow') ?? null
+	);
+	const overflowRunes = $derived.by(() => {
+		const engineSlots = overflowWork?.heldRuneSlotIndexes;
+		if (!engineSlots) return heldRunes;
+		const bySlot = new Map(heldRunes.map((r) => [r.slotIndex, r]));
+		return engineSlots
+			.map((s) => bySlot.get(s))
+			.filter((r): r is (typeof heldRunes)[number] => !!r);
+	});
+	let stagedRunes = $state<number[]>([]);
+	function toggleRuneStage(slotIndex: number) {
+		if (busy) return;
+		if (stagedRunes.includes(slotIndex)) {
+			stagedRunes = stagedRunes.filter((s) => s !== slotIndex);
+		} else if (stagedRunes.length < overflowCount) {
+			stagedRunes = [...stagedRunes, slotIndex];
+		}
+	}
+	const overflowMeter = $derived<MeterSlot[]>(
+		Array.from({ length: overflowCount }, (_, i) => {
+			const rune = stagedRunes[i] !== undefined
+				? heldRunes.find((r) => r.slotIndex === stagedRunes[i])
+				: null;
+			return {
+				need: 'Rune',
+				needIcon: null,
+				filled: rune ? { label: rune.name ?? 'Rune', icon: runeIconUrl(assets, rune) } : null
+			};
+		})
+	);
+	function confirmRuneDiscard() {
+		if (busy || stagedRunes.length !== overflowCount) return;
+		onDiscardRunes([...stagedRunes]);
+		stagedRunes = [];
+	}
+	// Drop stale stages if the rack changes out from under the selection.
+	$effect(() => {
+		const held = new Set(heldRunes.map((r) => r.slotIndex));
+		if (stagedRunes.some((s) => !held.has(s)))
+			stagedRunes = stagedRunes.filter((s) => held.has(s));
+		if (stagedRunes.length > overflowCount) stagedRunes = stagedRunes.slice(0, overflowCount);
+	});
+
+	// ── W2c staged corruption discard (commit bar, undo before Confirm) ───────
+	const corruptionCount = $derived(myPlayer?.pendingCorruptionDiscard?.count ?? 0);
+	const corruptionReason = $derived(myPlayer?.pendingCorruptionDiscard?.reason ?? null);
+	/** §5.4 corruptionDiscard extension: engine-owned eligible slots + reason copy. */
+	const corruptionWork = $derived(
+		seatAffordances?.pendingWork?.find((w) => w.kind === 'corruptionDiscard') ?? null
+	);
+	const corruptionEligibleSlots = $derived(corruptionWork?.eligibleSpiritSlots);
+	let stagedCorruption = $state<number[]>([]);
+	function toggleCorruptionStage(slotIndex: number) {
+		if (busy) return;
+		if (stagedCorruption.includes(slotIndex)) {
+			stagedCorruption = stagedCorruption.filter((s) => s !== slotIndex);
+		} else if (stagedCorruption.length < corruptionCount) {
+			stagedCorruption = [...stagedCorruption, slotIndex];
+		}
+	}
+	function spiritMeterIcon(slotIndex: number): string | null {
+		const spirit = myPlayer?.spirits.find((s) => s.slotIndex === slotIndex);
+		if (!spirit) return null;
+		if (spirit.isFaceDown) return spiritBackImageUrl(spirit.id);
+		return spiritImages.get(spirit.id) ?? spiritBackImageUrl(spirit.id);
+	}
+	const corruptionMeter = $derived<MeterSlot[]>(
+		Array.from({ length: corruptionCount }, (_, i) => {
+			const slot = stagedCorruption[i];
+			const spirit =
+				slot !== undefined ? myPlayer?.spirits.find((s) => s.slotIndex === slot) : null;
+			return {
+				need: 'Spirit',
+				needIcon: null,
+				filled: spirit
+					? { label: spirit.name, icon: slot !== undefined ? spiritMeterIcon(slot) : null }
+					: null
+			};
+		})
+	);
+	function confirmCorruptionDiscard() {
+		if (busy || stagedCorruption.length !== corruptionCount) return;
+		onDiscardSpirits([...stagedCorruption]);
+		stagedCorruption = [];
+	}
+	$effect(() => {
+		const owned = new Set((myPlayer?.spirits ?? []).map((s) => s.slotIndex));
+		if (stagedCorruption.some((s) => !owned.has(s)))
+			stagedCorruption = stagedCorruption.filter((s) => owned.has(s));
+		if (stagedCorruption.length > corruptionCount)
+			stagedCorruption = stagedCorruption.slice(0, corruptionCount);
+	});
 
 	// At the Abyss, monster combat is once per round (plus any extra-action credits).
 	// Once it's spent, the "Fight the Monster" card becomes a passive prompt.
@@ -504,57 +608,6 @@
 		(myPlayer?.actionsUsedThisRound ?? []).filter((a) => a === 'combat').length
 	);
 	const combatAllowance = $derived(1 + (myPlayer?.extraActions?.combat ?? 0));
-	const monsterRewardOptions = $derived(buildMonsterRewards(pendingReward?.rewardTrack));
-	const monsterRewardMax = $derived(pendingReward?.chooseAmount ?? 0);
-	let monsterRewardSelected = $state<number[]>([]);
-	let monsterRuneChoice = $state<Record<number, number>>({});
-	const monsterRewardAtMax = $derived(monsterRewardSelected.length >= monsterRewardMax);
-	function monsterRewardIconUrl(id: string): string | null {
-		return storageUrl(assets.iconPool.get(id)?.file_path ?? null);
-	}
-	function isMonsterRewardSelected(opt: MonsterRewardOption): boolean {
-		return monsterRewardSelected.includes(opt.index);
-	}
-	function toggleMonsterReward(opt: MonsterRewardOption) {
-		if (busy) return;
-		if (isMonsterRewardSelected(opt)) {
-			monsterRewardSelected = monsterRewardSelected.filter((i) => i !== opt.index);
-		} else if (!monsterRewardAtMax) {
-			monsterRewardSelected = [...monsterRewardSelected, opt.index];
-		}
-	}
-	function chooseMonsterRune(opt: MonsterRewardOption, optionIndex: number) {
-		if (busy) return;
-		monsterRuneChoice = { ...monsterRuneChoice, [opt.index]: optionIndex };
-		if (!isMonsterRewardSelected(opt) && !monsterRewardAtMax) {
-			monsterRewardSelected = [...monsterRewardSelected, opt.index];
-		}
-	}
-	function selectedMonsterRune(opt: MonsterRewardOption): number {
-		return monsterRuneChoice[opt.index] ?? 0;
-	}
-	function claimMonsterRewards() {
-		if (busy || monsterRewardSelected.length === 0) return;
-		const byIndex = new Map(monsterRewardOptions.map((o) => [o.index, o]));
-		const choices: number[] = [];
-		for (const idx of monsterRewardSelected) {
-			const opt = byIndex.get(idx);
-			if (opt?.effect.type === 'chooseRune') choices.push(monsterRuneChoice[idx] ?? 0);
-		}
-		onClaimReward([...monsterRewardSelected], choices);
-	}
-	$effect(() => {
-		if (!pendingReward) {
-			monsterRewardSelected = [];
-			monsterRuneChoice = {};
-			return;
-		}
-		const valid = new Set(monsterRewardOptions.map((o) => o.index));
-		if (monsterRewardSelected.some((idx) => !valid.has(idx))) {
-			monsterRewardSelected = monsterRewardSelected.filter((idx) => valid.has(idx));
-		}
-	});
-
 	const spiritAugmentsBySlot = $derived.by(() => {
 		const map = new Map<number, { runeId: string; name: string; icon: string | null }[]>();
 		for (const att of myPlayer?.spiritAugmentAttachments ?? []) {
@@ -580,136 +633,101 @@
 
 	const pendingAugments = $derived(myPlayer?.unplacedAugments ?? []);
 	const currentAugment = $derived(pendingAugments[0] ?? null);
+	// ── W2e: placement eligibility is ENGINE-OWNED (§5.4 augment extension) — the
+	// client `isAugmentEligible` re-derivation is gone (S5). One entry per unplaced
+	// augment, order-matched to `unplacedAugments` (runeId re-checked defensively).
+	const augmentWork = $derived(
+		seatAffordances?.pendingWork?.find((w) => w.kind === 'augment') ?? null
+	);
+	const engineAugment = $derived.by(() => {
+		const list = augmentWork?.augments;
+		if (!list?.length || !currentAugment) return null;
+		return list.find((a) => a.runeId === currentAugment.runeId) ?? list[0];
+	});
 	const designatedAugmentClass = $derived.by(() => {
 		const id = currentAugment?.classId;
 		if (!id) return null;
 		const name = assets.classTraits.get(id)?.name;
 		return name && isSpiritAugmentClass(name) ? name : null;
 	});
+	const augmentClassNames = $derived(
+		engineAugment?.classChoices ??
+			(designatedAugmentClass ? [designatedAugmentClass] : [...SPIRIT_AUGMENT_CLASSES])
+	);
 	const augmentChoices = $derived(
-		(designatedAugmentClass ? [designatedAugmentClass] : [...SPIRIT_AUGMENT_CLASSES]).map(
-			(className) => ({
-				className,
-				icon: augmentIconForClass(assets, className)
-			})
-		)
+		augmentClassNames.map((className) => ({
+			className,
+			icon: augmentIconForClass(assets, className)
+		}))
 	);
 	let pickedAugmentClass = $state<string | null>(null);
-	const armedAugmentClass = $derived(designatedAugmentClass ?? pickedAugmentClass);
-
-	function placedAugmentsOn(slotIndex: number): number {
-		return (myPlayer?.spiritAugmentAttachments ?? []).filter(
-			(a) => a.spiritSlotIndex === slotIndex && typeof a.className === 'string'
-		).length;
-	}
-	function isAugmentEligible(slotIndex: number): boolean {
-		if (!currentAugment) return false;
-		if (currentAugment.boundSlotIndex != null) return slotIndex === currentAugment.boundSlotIndex;
-		const spirit = (myPlayer?.spirits ?? []).find((s) => s.slotIndex === slotIndex);
-		if (!spirit) return false;
-		if (currentAugment.hostClass != null && (spirit.classes?.[currentAugment.hostClass] ?? 0) <= 0) return false;
-		const cap = Math.max(augmentCapacityForSpirit(spirit), currentAugment.hostCapacity ?? 0);
-		return placedAugmentsOn(slotIndex) < cap;
-	}
-	const augmentEligibleSlots = $derived(
-		(myPlayer?.spirits ?? []).map((s) => s.slotIndex).filter((slot) => isAugmentEligible(slot))
+	const armedAugmentClass = $derived(
+		augmentClassNames.length === 1 ? augmentClassNames[0] : pickedAugmentClass
 	);
+
+	const augmentEligibleSlots = $derived(engineAugment?.eligibleSpiritSlots ?? []);
+	const augmentSlotReasons = $derived(engineAugment?.slotReasons ?? {});
 	const noAugmentTarget = $derived(pendingAugments.length > 0 && augmentEligibleSlots.length === 0);
 	function dropAugmentOn(slotIndex: number) {
-		if (busy || !currentAugment || !armedAugmentClass || !isAugmentEligible(slotIndex)) return;
+		if (busy || !currentAugment || !armedAugmentClass || !augmentEligibleSlots.includes(slotIndex))
+			return;
 		onPlaceAugment(0, currentAugment.runeId, slotIndex, armedAugmentClass);
 		pickedAugmentClass = null;
 	}
-	function discardCorruptedSpirit(slotIndex: number) {
-		if (!busy) onDiscardSpirit(slotIndex);
+	// Button honesty (F6): forfeiting live augments takes a confirm beat; the
+	// no-target state admits what it does in one step (there is nothing to place).
+	let forfeitArmed = $state(false);
+	$effect(() => {
+		if (pendingAugments.length === 0) forfeitArmed = false;
+	});
+	function forfeitAugments() {
+		if (busy) return;
+		if (!noAugmentTarget && !forfeitArmed) {
+			forfeitArmed = true;
+			return;
+		}
+		forfeitArmed = false;
+		onDiscardAugments();
 	}
 
-	// ── Infiltrator: Location-phase dice swap in the main scene ────────────────
-	// Eligible when the local player has an awakened Infiltrator, hasn't swapped
-	// this round, holds ≥1 attack die, and shares a location with players who have
-	// dice to swap. Targets carry each co-located player's (public) attack pool.
-	const TIER_LABEL: Record<DiceTier, string> = {
-		basic: 'Basic',
-		enchanted: 'Enchanted',
-		exalted: 'Exalted',
-		arcane: 'Arcane'
-	};
-	const TIER_COLOR: Record<DiceTier, string> = {
-		basic: '#8d8aa1',
-		enchanted: '#4d8bf0',
-		exalted: '#b06bff',
-		arcane: '#ff2bc7'
-	};
-	let infiltratorPick = $state<Record<string, { mine?: string; theirs?: string }>>({});
-	const infiltratorTargets = $derived.by(() => {
-		const dest = myPlayer?.navigationDestination;
-		if (!dest || dest === 'Arcane Abyss') return [];
-		return room.activeSeats
-			.filter((s) => s !== mySeat && room.players[s]?.navigationDestination === dest)
-			.map((s) => ({
-				seat: s,
-				name: room.players[s]?.playerColor ?? s,
-				accent: seatAccent(s),
-				dice: room.players[s]?.attackDice ?? []
+	// ── Infiltrator: Location-phase dice swap (W2d — InfiltratorSwap takeover) ──
+	// The opportunity is ENGINE-OWNED (§5.4 `SeatAffordances.infiltratorSwap`,
+	// voluntary so it rides beside pendingWork): present exactly when the seat has
+	// an awakened, unused Infiltrator sharing a location. The client only decorates
+	// seats with names/accents.
+	const infiltratorWork = $derived(seatAffordances?.infiltratorSwap ?? null);
+	const infiltratorTargets = $derived(
+		(infiltratorWork?.targets ?? [])
+			.map((t) => ({
+				seat: t.seat,
+				name: room.players[t.seat]?.displayName ?? t.seat,
+				accent: seatAccent(t.seat),
+				dice: t.dice
 			}))
-			.filter((t) => t.dice.length > 0);
-	});
+			.filter((t) => t.dice.length > 0)
+	);
 	const canInfiltrate = $derived(
-		(myPlayer?.spirits ?? []).some((s) => !s.isFaceDown && (s.classes?.Infiltrator ?? 0) > 0) &&
-			!(myPlayer?.actionsUsedThisRound ?? []).includes('infiltratorSwap') &&
-			(myPlayer?.attackDice.length ?? 0) > 0 &&
+		infiltratorWork != null &&
+			(infiltratorWork.myDice.length ?? 0) > 0 &&
 			infiltratorTargets.length > 0
 	);
-	let showInfiltrator = $state(false);
 	$effect(() => {
 		// Auto-close the swap screen if eligibility lapses (swap done / left location).
 		if (showInfiltrator && !canInfiltrate) showInfiltrator = false;
 	});
-	function mineDieUsedElsewhere(seat: SeatColor, instanceId: string): boolean {
-		return Object.entries(infiltratorPick).some(([s, p]) => s !== seat && p.mine === instanceId);
-	}
-	function setInfiltratorMine(seat: SeatColor, instanceId: string) {
-		const cur = infiltratorPick[seat] ?? {};
-		infiltratorPick = {
-			...infiltratorPick,
-			[seat]: { ...cur, mine: cur.mine === instanceId ? undefined : instanceId }
-		};
-	}
-	function setInfiltratorTheirs(seat: SeatColor, instanceId: string) {
-		const cur = infiltratorPick[seat] ?? {};
-		infiltratorPick = {
-			...infiltratorPick,
-			[seat]: { ...cur, theirs: cur.theirs === instanceId ? undefined : instanceId }
-		};
-	}
-	const infiltratorSwaps = $derived(
-		infiltratorTargets
-			.map((t) => ({
-				targetSeat: t.seat,
-				myInstanceId: infiltratorPick[t.seat]?.mine,
-				theirInstanceId: infiltratorPick[t.seat]?.theirs
-			}))
-			.filter((s): s is { targetSeat: SeatColor; myInstanceId: string; theirInstanceId: string } =>
-				Boolean(s.myInstanceId && s.theirInstanceId)
-			)
-	);
-	function confirmInfiltratorSwap() {
-		if (infiltratorSwaps.length === 0) return;
-		onInfiltratorSwap(infiltratorSwaps);
-		infiltratorPick = {};
-		showInfiltrator = false;
-	}
-	function cancelInfiltratorSwap() {
-		infiltratorPick = {};
-		showInfiltrator = false;
-	}
 
 	// Spectators always see the read-only destination board.
 	const showNavBoard = $derived(room.phase === 'navigation' || !mySeat);
 
 	const myDestination = $derived(myPlayer?.navigationDestination ?? null);
 	const amEvil = $derived(myPlayer ? isEvilAlignment(myPlayer.statusLevel) : false);
+	// ── W2d encounter surface. Targets/votes are ENGINE-OWNED (§5.4
+	// `SeatAffordances.encounter`, voluntary so it rides beside pendingWork); the
+	// fallback mirrors the projection-derived set the old chips used, for views
+	// that predate the affordance (spectator-style renders never take this branch).
+	const encounterWork = $derived(seatAffordances?.encounter ?? null);
 	const encounterTargets = $derived.by(() => {
+		if (encounterWork) return encounterWork.eligibleTargets;
 		if (!amEvil || !myDestination || myDestination === 'Arcane Abyss') return [] as SeatColor[];
 		return room.activeSeats.filter(
 			(s) =>
@@ -717,6 +735,40 @@
 				room.players[s]?.navigationDestination === myDestination &&
 				!isEvilAlignment(room.players[s]?.statusLevel ?? 0)
 		);
+	});
+	function guardianArt(seat: SeatColor): string | null {
+		const name = room.players[seat]?.selectedGuardian;
+		const g = name ? assets.guardianAssets.get(name) : null;
+		return storageUrl(g?.icon_image_path ?? g?.chibi_image_path ?? null);
+	}
+	const encounterTargetCards = $derived(
+		encounterTargets.map((seat) => ({
+			seat,
+			name: room.players[seat]?.displayName ?? seat,
+			accent: seatAccent(seat),
+			art: guardianArt(seat)
+		}))
+	);
+	const myEncounterVote = $derived(myPlayer?.encounterVote ?? null);
+	/** Every Evil player here (me included) — the set whose unanimous "attack"
+	 *  fires the strike; `voted` = has cast the attack vote. */
+	const encounterVoters = $derived.by(() => {
+		if (!myDestination) return [];
+		const evilHere = room.activeSeats.filter(
+			(s) =>
+				room.players[s]?.navigationDestination === myDestination &&
+				isEvilAlignment(room.players[s]?.statusLevel ?? 0)
+		);
+		const pending = encounterWork?.votesPending;
+		return evilHere.map((seat) => ({
+			seat,
+			name: room.players[seat]?.displayName ?? seat,
+			accent: seatAccent(seat),
+			voted: pending
+				? !pending.includes(seat)
+				: (room.players[seat]?.encounterVote ?? null) === 'attack',
+			isMe: seat === mySeat
+		}));
 	});
 
 	const needsCorruptionDiscard = $derived(
@@ -739,8 +791,10 @@
 		if (needsAugmentPlacement) return 'Place Augments.';
 		if (needsAbilityDecision) return 'Resolve Ability.';
 		if (room.phase === 'encounter') {
+			if (encounterTargets.length > 0) {
+				return myEncounterVote === 'attack' ? 'Waiting for Allies.' : 'Choose Encounter Action.';
+			}
 			if (myReady) return 'Waiting for Players.';
-			if (encounterTargets.length > 0) return 'Choose Encounter Action.';
 			return 'Resolving Encounters.';
 		}
 		if (room.phase === 'location') {
@@ -814,13 +868,15 @@
 					/>
 				{/if}
 			{:else if needsCorruptionDiscard}
-				<!-- Forced corruption discard — a sacrifice owed the moment you corrupt; surfaced
-		     in-stage in whatever phase it's pending (combat sets it in location/encounter). -->
+				<!-- W2c: forced corruption discard, STAGED — marks accumulate on the hex board
+		     and nothing is sent back to the bag until the commit bar confirms (undo by
+		     tapping a marked hex again). Surfaced in-stage in whatever phase it's
+		     pending (combat sets it in location/encounter). -->
 				<div class="scene-flow board-decision corruption-decision" data-testid="corruption-discard">
 					<p class="scene-prompt danger">
-						You were corrupted — tap {myPlayer?.pendingCorruptionDiscard?.count ?? 0}
-						spirit{(myPlayer?.pendingCorruptionDiscard?.count ?? 0) === 1 ? '' : 's'} to send
-						back to the bag.
+						{corruptionReason ?? corruptionWork?.reason ?? 'You were corrupted'} — mark
+						{corruptionCount}
+						spirit{corruptionCount === 1 ? '' : 's'} to send back to the bag.
 					</p>
 					<div class="scene-hex-wrap" data-testid="corruption-discard-hexes">
 						<HexGrid
@@ -829,9 +885,20 @@
 							backImageBySlot={faceDownBackImageBySlot}
 							augmentsBySlot={spiritAugmentsBySlot}
 							discardMode={!busy}
-							onDiscard={discardCorruptedSpirit}
+							stagedSlots={stagedCorruption}
+							discardEligibleSlots={corruptionEligibleSlots}
+							onDiscard={toggleCorruptionStage}
 						/>
 					</div>
+					<CommitBar
+						slots={corruptionMeter}
+						confirmLabel={`Discard ${stagedCorruption.length}/${corruptionCount} spirit${corruptionCount === 1 ? '' : 's'}`}
+						confirmDisabled={stagedCorruption.length !== corruptionCount}
+						confirmTestid="corruption-confirm"
+						onConfirm={confirmCorruptionDiscard}
+						{busy}
+						accent="var(--color-blood, #e05858)"
+					/>
 				</div>
 				{:else if needsAugmentPlacement}
 					<!-- Spirit Augment placement — in-stage (pick an augment icon, click a spirit). -->
@@ -847,7 +914,7 @@
 									type="button"
 									class="aug-icon"
 									class:armed={armedAugmentClass === a.className}
-									disabled={busy || designatedAugmentClass != null}
+									disabled={busy || augmentClassNames.length === 1}
 									title={a.className}
 									aria-pressed={armedAugmentClass === a.className}
 									data-testid={`augment-icon-${a.className}`}
@@ -877,6 +944,7 @@
 								augmentsBySlot={spiritAugmentsBySlot}
 								augmentDropMode={!busy && armedAugmentClass !== null}
 								augmentEligibleSlots={augmentEligibleSlots}
+								slotReasons={augmentSlotReasons}
 								onDropAugment={dropAugmentOn}
 							/>
 						</div>
@@ -885,109 +953,70 @@
 								<span class="scene-note" data-testid="augment-no-target">
 									No spirit can hold {pendingAugments.length === 1 ? 'this augment' : 'these augments'}.
 								</span>
+							{:else if forfeitArmed}
+								<span class="scene-note" data-testid="augment-forfeit-warning">
+									{pendingAugments.length === 1 ? 'This augment' : `These ${pendingAugments.length} augments`}
+									will be destroyed, not saved.
+								</span>
+								<button
+									type="button"
+									class="ghost-btn"
+									disabled={busy}
+									data-testid="augment-keep-placing"
+									onclick={() => (forfeitArmed = false)}>Keep placing</button
+								>
 							{/if}
+							<!-- Button honesty (F6): "Done" never silently destroys augments — the
+							     label says forfeit, and forfeiting live targets takes a confirm beat. -->
 							<button
 								type="button"
 								class="primary-btn"
-								class:urgent={noAugmentTarget}
+								class:urgent={noAugmentTarget || forfeitArmed}
 								disabled={busy}
 								data-testid="augment-done"
-								onclick={() => onDiscardAugments()}
+								onclick={forfeitAugments}
 								>{noAugmentTarget
 									? `Discard ${pendingAugments.length} & continue`
-									: 'Done'}</button
+									: forfeitArmed
+										? `Really forfeit ${pendingAugments.length}?`
+										: `Forfeit ${pendingAugments.length} unplaced`}</button
 							>
 						</div>
 					</div>
 				{:else if needsAbilityDecision}
+					<!-- W2b: decisions as ability cards — class art header, prompt headline,
+					     full-width choice rows; pickers (Arc Mage dice) live inside the card. -->
 					<div class="scene-flow decision-flow" data-testid="decision-cards">
 						{#each awakeningChoices as choice (choice.id)}
-							<section class="scene-panel decision-panel" data-testid={`decision-${choice.id}`}>
-								<p class="scene-prompt">{choice.prompt}</p>
-								{#if isArcMageDecision(choice.kind)}
-									<div class="arc-convert" data-testid={`arc-convert-${choice.id}`}>
-										<div class="infil-dice" class:hasPick={arcMagePick.length > 0}>
-											{#if (myPlayer?.attackDice.length ?? 0) === 0}
-												<span class="scene-note">No attack dice</span>
-											{/if}
-											{#each myPlayer?.attackDice ?? [] as die (die.instanceId)}
-												<button
-													type="button"
-													class="die-token"
-													class:selected={arcMagePick.includes(die.instanceId)}
-													style="--tier: {TIER_COLOR[die.tier]}"
-													disabled={busy}
-													data-testid={`arc-die-${die.instanceId}`}
-													onclick={() => toggleArcMageDie(die.instanceId)}
-												>
-													{TIER_LABEL[die.tier]}
-												</button>
-											{/each}
-										</div>
-										<div class="choice-opts" role="group" aria-label="Convert dice">
-											<button
-												type="button"
-												class="opt-btn"
-												data-testid={`decision-${choice.id}-yes`}
-												disabled={busy || arcMagePick.length !== ARC_MAGE_CONVERT_COST}
-												onclick={() => confirmArcMage(choice.id)}
-												>Convert ({arcMagePick.length}/{ARC_MAGE_CONVERT_COST}) → 1 Arcane</button
-											>
-											<button
-												type="button"
-												class="opt-btn decline"
-												data-testid={`decision-${choice.id}-no`}
-												disabled={busy}
-												onclick={() => declineArcMage(choice.id)}>No</button
-											>
-										</div>
-									</div>
-								{:else}
-									<div class="choice-opts" role="group" aria-label="Choose an option">
-										{#each choice.options as option (option.id)}
-											<button
-												type="button"
-												class="opt-btn"
-												class:decline={option.id === 'no'}
-												data-testid={`decision-${choice.id}-${option.id}`}
-												disabled={busy}
-												onclick={() => onResolveDecision(choice.id, option.id)}
-												>{option.label}</button
-											>
-										{/each}
-									</div>
-								{/if}
-							</section>
+							{@const cls = decisionClassName(choice.kind)}
+							<DecisionCard
+								decision={choice}
+								pickerSpec={pickerSpecFor(choice)}
+								attackDice={myPlayer?.attackDice ?? []}
+								classIcon={cls ? classIconFor(cls) : null}
+								sourceLabel={cls}
+								{busy}
+								testidPrefix="decision"
+								onResolve={onResolveDecision}
+							/>
 						{/each}
 					</div>
 			{:else if room.phase === 'encounter'}
-				{#if myReady}
+				{#if encounterTargets.length > 0}
+					<!-- W2d: targets as guardian-portrait cards, Attack/Hold in the commit bar,
+					     the unanimity requirement shown as live per-seat vote chips. Stays on
+					     stage AFTER voting (readiness flips then) so the aggressor watches the
+					     ally votes come in instead of a blank waiting screen. -->
+					<EncounterStage
+						targets={encounterTargetCards}
+						voters={encounterVoters}
+						myVote={myEncounterVote}
+						{busy}
+						onAttack={onAttackGroup}
+						onHold={onPass}
+					/>
+				{:else if myReady}
 					<div class="waiting" data-testid="stage-waiting">Waiting for other players…</div>
-				{:else if encounterTargets.length > 0}
-					<div class="enc-sub">
-						Attack the Good players here for +2 VP. Every Evil player at this location must agree.
-					</div>
-					<div class="encounter-targets" data-testid="encounter-targets">
-						{#each encounterTargets as target (target)}
-							<span class="enc-target" style={`--c:${seatAccent(target)}`}>{target}</span>
-						{/each}
-					</div>
-					<div class="encounter-actions">
-						<button
-							type="button"
-							class="enc-btn attack"
-							data-testid="encounter-attack"
-							disabled={busy}
-							onclick={() => onAttackGroup()}>⚔ Attack together</button
-						>
-						<button
-							type="button"
-							class="enc-btn hold"
-							data-testid="encounter-hold"
-							disabled={busy}
-							onclick={() => onPass()}>Hold</button
-						>
-					</div>
 				{:else}
 					<div class="waiting">Resolving encounters…</div>
 				{/if}
@@ -1016,77 +1045,15 @@
 						</button>
 					</div>
 				{:else if pendingReward}
-					<div
-						class="scene-flow reward-scene"
-						style="--accent: {myAccent}"
-						data-testid="monster-reward-menu"
-					>
-						<p class="scene-prompt">{pendingReward.monsterName} defeated</p>
-						<p class="scene-hint" data-testid="reward-pick-count">
-							Claim {monsterRewardMax} reward{monsterRewardMax === 1 ? '' : 's'} — selected
-							{monsterRewardSelected.length}/{monsterRewardMax}
-						</p>
-						<div class="reward-grid" data-testid="reward-grid">
-							{#each monsterRewardOptions as opt (opt.index)}
-								{@const chosen = isMonsterRewardSelected(opt)}
-								{@const isChoice = opt.effect.type === 'chooseRune'}
-								{@const full = monsterRewardAtMax && !chosen}
-								<div
-									class="reward-card"
-									class:selected={chosen}
-									class:disabled={busy || full}
-									role="button"
-									tabindex={busy || full ? -1 : 0}
-									data-testid={`reward-${opt.index}`}
-									aria-pressed={chosen}
-									onclick={() => toggleMonsterReward(opt)}
-									onkeydown={(e) => {
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											toggleMonsterReward(opt);
-										}
-									}}
-								>
-									<span class="reward-check" aria-hidden="true">✓</span>
-									<span class="reward-icon">
-										{#if monsterRewardIconUrl(opt.token)}
-											<img src={monsterRewardIconUrl(opt.token)} alt="" loading="lazy" />
-										{/if}
-									</span>
-									<span class="reward-label">{opt.label}</span>
-									{#if isChoice && opt.effect.type === 'chooseRune'}
-										<div class="rune-chooser" role="group" aria-label="Choose a rune">
-											{#each opt.effect.options as runeOpt, oi (runeOpt.runeId + oi)}
-												<button
-													type="button"
-													class="rune-choice"
-													class:active={selectedMonsterRune(opt) === oi}
-													disabled={busy || full}
-													onclick={(e) => {
-														e.stopPropagation();
-														chooseMonsterRune(opt, oi);
-													}}
-												>
-													{runeOpt.name}
-												</button>
-											{/each}
-										</div>
-									{/if}
-								</div>
-							{/each}
-						</div>
-						<button
-							type="button"
-							class="primary-btn"
-							data-testid="reward-claim"
-							disabled={busy || monsterRewardSelected.length === 0}
-							onclick={claimMonsterRewards}
-						>
-							{monsterRewardSelected.length === 0
-								? 'Select a reward'
-								: `Claim ${monsterRewardSelected.length} reward${monsterRewardSelected.length === 1 ? '' : 's'}`}
-						</button>
-					</div>
+					<!-- W2a: the loot moment as a stage takeover (medallion fan + pick meter). -->
+					<MonsterRewardTakeover
+						reward={pendingReward}
+						resolved={seatAffordances?.pendingReward ?? null}
+						{assets}
+						accent={myAccent}
+						{busy}
+						onClaim={onClaimReward}
+					/>
 				{:else if activeAction === 'rest' || activeAction === 'cultivate' || activeAction === 'reward'}
 					<ActionResult result={myPlayer?.lastAction ?? null} {onContinue} />
 				{:else if myReady}
@@ -1133,71 +1100,18 @@
 									/>
 								</div>
 							{:else if showInfiltrator}
-								<div class="scene-flow infiltrator-flow" data-testid="infiltrator-swap">
-									<p class="scene-prompt">
-										Choose one of their attack dice to take, and one of yours to give back.
-									</p>
-									<div class="infil-targets">
-										{#each infiltratorTargets as t (t.seat)}
-											<section class="infil-target" style="--seat: {t.accent}">
-												<div class="infil-name">{t.name}</div>
-												<div class="infil-line">
-													<span class="infil-label">Take</span>
-													<div class="infil-dice" class:hasPick={!!infiltratorPick[t.seat]?.theirs}>
-														{#each t.dice as die (die.instanceId)}
-															<button
-																type="button"
-																class="die-token"
-																class:selected={infiltratorPick[t.seat]?.theirs === die.instanceId}
-																style="--tier: {TIER_COLOR[die.tier]}"
-																disabled={busy}
-																data-testid={`infil-theirs-${t.seat}-${die.instanceId}`}
-																onclick={() => setInfiltratorTheirs(t.seat, die.instanceId)}
-															>
-																{TIER_LABEL[die.tier]}
-															</button>
-														{/each}
-													</div>
-												</div>
-												<div class="infil-line">
-													<span class="infil-label">Give</span>
-													<div class="infil-dice" class:hasPick={!!infiltratorPick[t.seat]?.mine}>
-														{#if (myPlayer?.attackDice.length ?? 0) === 0}
-															<span class="scene-note">No attack dice</span>
-														{/if}
-														{#each (myPlayer?.attackDice ?? []) as die (die.instanceId)}
-															<button
-																type="button"
-																class="die-token"
-																class:selected={infiltratorPick[t.seat]?.mine === die.instanceId}
-																style="--tier: {TIER_COLOR[die.tier]}"
-																disabled={busy || mineDieUsedElsewhere(t.seat, die.instanceId)}
-																data-testid={`infil-mine-${t.seat}-${die.instanceId}`}
-																onclick={() => setInfiltratorMine(t.seat, die.instanceId)}
-															>
-																{TIER_LABEL[die.tier]}
-															</button>
-														{/each}
-													</div>
-												</div>
-											</section>
-										{/each}
-									</div>
-									<div class="scene-actions">
-										<button
-											type="button"
-											class="primary-btn"
-											disabled={busy || infiltratorSwaps.length === 0}
-											data-testid="infil-confirm"
-											onclick={confirmInfiltratorSwap}
-										>
-											Swap {infiltratorSwaps.length} {infiltratorSwaps.length === 1 ? 'die' : 'dice'}
-										</button>
-										<button type="button" class="ghost-btn" disabled={busy} onclick={cancelInfiltratorSwap}
-											>Cancel</button
-										>
-									</div>
-								</div>
+								<!-- W2d: real gem-token dice in facing rows, staged pairs, commit bar. -->
+								<InfiltratorSwap
+									targets={infiltratorTargets}
+									myDice={infiltratorWork?.myDice ?? []}
+									classIcon={classIconFor('Infiltrator')}
+									{busy}
+									onConfirm={(swaps) => {
+										onInfiltratorSwap(swaps);
+										showInfiltrator = false;
+									}}
+									onCancel={() => (showInfiltrator = false)}
+								/>
 							{:else}
 								{#if canInfiltrate}
 									<button
@@ -1389,21 +1303,17 @@
 							</TakeoverStage>
 						{:else}
 							{#each awakeningChoices as choice (choice.id)}
-								<section class="scene-panel choice" data-testid={`ability-choice-${choice.id}`}>
-									<p class="scene-prompt">{choice.prompt}</p>
-									<div class="choice-opts">
-										{#each choice.options as option (option.id)}
-											<button
-												type="button"
-												class="opt-btn"
-												class:decline={option.id === 'no'}
-												data-testid={`ability-choice-${choice.id}-${option.id}`}
-												disabled={busy}
-												onclick={() => onResolveDecision(choice.id, option.id)}>{option.label}</button
-											>
-										{/each}
-									</div>
-								</section>
+								{@const cls = decisionClassName(choice.kind)}
+								<DecisionCard
+									decision={choice}
+									pickerSpec={pickerSpecFor(choice)}
+									attackDice={myPlayer?.attackDice ?? []}
+									classIcon={cls ? classIconFor(cls) : null}
+									sourceLabel={cls}
+									{busy}
+									testidPrefix="ability-choice"
+									onResolve={onResolveDecision}
+								/>
 							{/each}
 
 							{#if awakenOffers.length > 0 || awakenLocked.length > 0}
@@ -1476,46 +1386,57 @@
 							{/if}
 
 							{#each manualPrompts as prompt (prompt.id)}
-								<section class="scene-panel manual" data-testid={`ability-manual-${prompt.id}`}>
-									<p class="scene-prompt">{prompt.text}</p>
-									<button
-										type="button"
-										class="ghost-btn"
-										disabled={busy}
-										onclick={() => onDismissManual(prompt.id)}
-									>
-										Done
-									</button>
-								</section>
+								<ManualPromptCard
+									{prompt}
+									classIcon={classIconFor(prompt.source)}
+									{busy}
+									onDismiss={onDismissManual}
+								/>
 							{/each}
 						{/if}
 					</div>
 				{/if}
 				{:else if room.phase === 'cleanup'}
 					{#if runeOverLimit}
+						<!-- W2c: overflow trimming is STAGED — crossed runes accumulate and nothing
+						     is discarded until the commit bar confirms (tap again to keep). -->
 						<section class="scene-panel overflow" data-testid="rune-discard">
 							<p class="scene-prompt overflow-note">
-								Only {RUNE_CARRY_LIMIT} runes carry over — discard {heldRunes.length -
-									RUNE_CARRY_LIMIT} more.
-						</p>
-						<div class="rune-grid">
-							{#each heldRunes as rune (rune.slotIndex)}
-								{@const url = runeIconUrl(assets, rune)}
-								<button
-									type="button"
-									class="rune-pick"
-									disabled={busy}
-									title={`Discard ${rune.name ?? 'rune'}`}
-									data-testid={`discard-rune-${rune.slotIndex}`}
-									onclick={() => onDiscardRune(rune.slotIndex)}
-								>
-									{#if url}<img src={url} alt={rune.name ?? 'Rune'} />{/if}
-									<span class="x" aria-hidden="true">✕</span>
-								</button>
-							{/each}
-						</div>
-					</section>
-				{/if}
+								Only {RUNE_CARRY_LIMIT} runes carry over — mark {overflowCount} to discard.
+							</p>
+							<!-- The grid scrolls; the commit bar stays pinned below it. -->
+							<div class="rune-scroll">
+								<div class="rune-grid">
+									{#each overflowRunes as rune (rune.slotIndex)}
+										{@const url = runeIconUrl(assets, rune)}
+										{@const isStaged = stagedRunes.includes(rune.slotIndex)}
+										<button
+											type="button"
+											class="rune-pick"
+											class:staged={isStaged}
+											disabled={busy}
+											aria-pressed={isStaged}
+											title={isStaged ? `Keep ${rune.name ?? 'rune'}` : `Discard ${rune.name ?? 'rune'}`}
+											data-testid={`discard-rune-${rune.slotIndex}`}
+											onclick={() => toggleRuneStage(rune.slotIndex)}
+										>
+											{#if url}<img src={url} alt={rune.name ?? 'Rune'} />{/if}
+											<span class="x" aria-hidden="true">✕</span>
+										</button>
+									{/each}
+								</div>
+							</div>
+							<CommitBar
+								slots={overflowMeter}
+								confirmLabel={`Discard ${stagedRunes.length}/${overflowCount} rune${overflowCount === 1 ? '' : 's'}`}
+								confirmDisabled={stagedRunes.length !== overflowCount}
+								confirmTestid="rune-discard-confirm"
+								onConfirm={confirmRuneDiscard}
+								{busy}
+								accent="var(--brand-coral, #ff704d)"
+							/>
+						</section>
+					{/if}
 			{/if}
 		</div>
 	</div>
@@ -1667,14 +1588,13 @@
 		max-height: 100%;
 		min-height: 0;
 	}
+	/* Takeover-rooted views (monster rewards, infiltrator swap) scroll inside their
+	   own rack column — they are NOT in this overflow list. */
 	.view-body :global([data-testid='confirmed-destination']),
-	.view-body :global([data-testid='monster-reward-menu']),
 	.view-body :global([data-testid='draw-tray']),
 	.view-body :global([data-testid='action-result']),
 	.view-body :global([data-testid='awaken-claim']),
-	.view-body :global([data-testid='awakening-actions']),
-	.view-body :global([data-testid='rune-discard']),
-	.view-body :global([data-testid='infiltrator-swap']) {
+	.view-body :global([data-testid='awakening-actions']) {
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		-webkit-overflow-scrolling: touch;
@@ -1855,240 +1775,6 @@
 		line-height: 1;
 		text-align: center;
 		color: var(--brand-amber-soft, #ffd56a);
-	}
-	.infiltrator-flow {
-		width: min(820px, 100%);
-	}
-	.infil-targets {
-		width: min(760px, 100%);
-		display: flex;
-		flex-direction: column;
-		gap: clamp(0.45rem, 1.5vh, 0.75rem);
-	}
-	.infil-target {
-		display: grid;
-		grid-template-columns: minmax(5rem, 0.45fr) minmax(0, 1fr);
-		gap: 0.45rem 0.8rem;
-		align-items: center;
-		width: 100%;
-		padding-block: 0.45rem;
-		border-top: 1px solid color-mix(in srgb, var(--seat) 45%, transparent);
-	}
-	.infil-target:last-child {
-		border-bottom: 1px solid color-mix(in srgb, var(--seat) 28%, transparent);
-	}
-	.infil-name {
-		grid-row: span 2;
-		font-family: var(--font-display);
-		font-size: clamp(0.82rem, 1.4vw, 1rem);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--seat);
-		text-align: right;
-	}
-	.infil-line {
-		min-width: 0;
-		display: grid;
-		grid-template-columns: 3.4rem minmax(0, 1fr);
-		align-items: center;
-		gap: 0.55rem;
-	}
-	.infil-label {
-		font-family: var(--font-display);
-		font-size: 0.68rem;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: rgba(255, 255, 255, 0.7);
-		text-align: right;
-	}
-	.infil-dice {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: 0.38rem;
-	}
-	.die-token {
-		position: relative;
-		min-height: 34px;
-		padding: 0.34rem 0.68rem;
-		border: 0;
-		border-radius: 4px;
-		background: color-mix(in srgb, var(--tier) 22%, rgba(8, 5, 16, 0.45));
-		color: #fff;
-		font: inherit;
-		font-family: var(--font-display);
-		font-size: 0.72rem;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		cursor: pointer;
-		transition:
-			transform 140ms ease,
-			filter 140ms ease,
-			opacity 140ms ease;
-	}
-	.die-token:not(:disabled):hover {
-		transform: translateY(-2px);
-		filter: drop-shadow(0 0 10px color-mix(in srgb, var(--tier) 54%, transparent));
-	}
-	.infil-dice.hasPick .die-token:not(.selected) {
-		opacity: 0.32;
-	}
-	.die-token.selected {
-		transform: translateY(-3px);
-		filter: drop-shadow(0 0 14px color-mix(in srgb, var(--tier) 68%, transparent));
-	}
-	.die-token.selected::after {
-		content: '✓';
-		position: absolute;
-		top: -0.45rem;
-		left: 50%;
-		width: 1.1rem;
-		height: 1.1rem;
-		border-radius: 50%;
-		display: grid;
-		place-items: center;
-		transform: translateX(-50%);
-		background: var(--tier);
-		color: #fff;
-		font-size: 0.72rem;
-		box-shadow: 0 0 0 2px rgba(8, 5, 16, 0.78);
-	}
-	.die-token:disabled {
-		opacity: 0.32;
-		cursor: not-allowed;
-	}
-	.reward-scene {
-		width: min(1100px, 100%);
-	}
-	.reward-grid {
-		display: flex;
-		flex-wrap: nowrap;
-		gap: clamp(0.7rem, 1.8vw, 1.1rem);
-		justify-content: center;
-		align-items: flex-start;
-		width: 100%;
-	}
-	.reward-card {
-		position: relative;
-		display: flex;
-		flex: 1 1 0;
-		min-width: 0;
-		max-width: 12rem;
-		flex-direction: column;
-		align-items: center;
-		justify-content: flex-start;
-		gap: 0.55rem;
-		min-height: 8.5rem;
-		padding: 0.8rem 0.35rem 0.35rem;
-		text-align: center;
-		border: 0;
-		background: transparent;
-		cursor: pointer;
-		touch-action: manipulation;
-		-webkit-tap-highlight-color: transparent;
-		user-select: none;
-		contain: layout;
-		transition:
-			transform 140ms ease,
-			filter 140ms ease,
-			opacity 140ms ease;
-	}
-	@media (hover: hover) and (pointer: fine) {
-		.reward-card:not(.disabled):hover {
-			transform: translateY(-4px);
-			filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 45%, transparent));
-		}
-	}
-	.reward-card.selected {
-		transform: translateY(-4px);
-		filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 58%, transparent));
-	}
-	.reward-grid:has(.reward-card.selected) .reward-card:not(.selected) {
-		opacity: 0.36;
-	}
-	.reward-card.disabled {
-		cursor: not-allowed;
-		opacity: 0.4;
-	}
-	.reward-card:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-	}
-	.reward-check {
-		position: absolute;
-		top: -0.35rem;
-		left: 50%;
-		width: 1.35rem;
-		height: 1.35rem;
-		border-radius: 50%;
-		display: grid;
-		place-items: center;
-		transform: translateX(-50%);
-		font-family: var(--font-display);
-		font-size: 0.8rem;
-		color: var(--color-void, #0c0518);
-		background: var(--accent);
-		opacity: 0;
-		box-shadow:
-			0 0 0 2px rgba(8, 5, 16, 0.78),
-			0 0 14px color-mix(in srgb, var(--accent) 64%, transparent);
-		transition: opacity 120ms ease;
-	}
-	.reward-card.selected .reward-check {
-		opacity: 1;
-	}
-	.reward-icon {
-		width: clamp(52px, 8vw, 72px);
-		height: clamp(52px, 8vw, 72px);
-		display: grid;
-		place-items: center;
-	}
-	.reward-icon img {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.48));
-	}
-	.reward-label {
-		font-family: var(--font-display);
-		font-size: 0.96rem;
-		letter-spacing: 0.03em;
-		color: #fff;
-		line-height: 1.15;
-		text-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
-	}
-	.rune-chooser {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-		justify-content: center;
-		margin-top: auto;
-	}
-	.rune-choice {
-		min-height: 38px;
-		padding: 4px 10px;
-		border-radius: 4px;
-		border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-		background: rgba(0, 0, 0, 0.3);
-		color: var(--color-fog, #b9b4cc);
-		font-family: var(--font-display);
-		font-size: 0.72rem;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		cursor: pointer;
-		transition:
-			background 120ms ease,
-			color 120ms ease,
-			border-color 120ms ease;
-	}
-	.rune-choice.active {
-		background: var(--accent);
-		border-color: var(--accent);
-		color: var(--color-void, #0c0518);
-	}
-	.rune-choice:disabled {
-		cursor: not-allowed;
-		opacity: 0.45;
 	}
 	/* ── W1c benefits claim: full-width grant cards + commit bar ─────────────── */
 	.claim-stage {
@@ -2319,53 +2005,12 @@
 				0 0 16px color-mix(in srgb, var(--brand-violet, #5a2bff) 62%, transparent),
 				0 2px 14px rgba(0, 0, 0, 0.55);
 		}
-		.choice-opts {
-			display: flex;
-			flex-wrap: wrap;
-			justify-content: center;
-			gap: 0.5rem;
+		.decision-flow {
+			gap: clamp(0.6rem, 1.6vh, 1rem);
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			-webkit-overflow-scrolling: touch;
 		}
-		.arc-convert {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			gap: 0.7rem;
-		}
-		.arc-convert .infil-dice {
-			justify-content: center;
-		}
-		.opt-btn {
-			flex: 0 1 auto;
-			min-height: 40px;
-		padding: 0.5rem 0.95rem;
-		font-family: var(--font-display);
-		font-size: 0.78rem;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		border: 1px solid var(--brand-cyan, #24d4ff);
-		border-radius: 6px;
-		background: rgba(0, 0, 0, 0.3);
-		color: var(--color-parchment, #d8cfee);
-			cursor: pointer;
-			transition:
-				background 140ms ease,
-				color 140ms ease,
-				transform 140ms ease,
-				opacity 140ms ease;
-		}
-		.opt-btn:not(:disabled):hover {
-			background: color-mix(in srgb, var(--brand-cyan, #24d4ff) 25%, transparent);
-			color: #fff;
-			transform: translateY(-2px);
-		}
-	.opt-btn.decline {
-		border-color: rgba(255, 255, 255, 0.25);
-		color: var(--color-fog, #9a8fb8);
-	}
-	.opt-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
 		.offer-grid {
 			display: flex;
 			gap: 1.4rem;
@@ -2621,6 +2266,47 @@
 	.rune-pick:not(:disabled):hover .x {
 		opacity: 1;
 	}
+	/* Staged for discard (W2c): the cross holds without hover and the art recedes —
+	   this rune WILL be lost when the commit bar confirms. Tap again to keep it. */
+	.rune-pick.staged .x {
+		opacity: 1;
+		box-shadow: 0 0 0 2px rgba(8, 5, 16, 0.8);
+	}
+	.rune-pick.staged img {
+		opacity: 0.45;
+		filter: grayscale(0.6) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+	}
+	.rune-pick.staged {
+		filter: drop-shadow(0 0 12px color-mix(in srgb, var(--brand-coral, #ff704d) 45%, transparent));
+	}
+	.scene-panel.overflow {
+		width: min(860px, 100%);
+		height: 100%;
+		gap: clamp(0.65rem, 1.7vh, 1rem);
+	}
+	.rune-scroll {
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-y;
+	}
+	.rune-scroll .rune-grid {
+		max-height: 100%;
+		margin-block: auto;
+	}
+	.scene-panel.overflow :global(.commit-bar),
+	.scene-panel.overflow .overflow-note {
+		flex: none;
+	}
+	.corruption-decision :global(.commit-bar) {
+		flex: none;
+	}
 	@keyframes summon-in {
 		0% {
 			opacity: 0;
@@ -2865,73 +2551,6 @@
 		background: var(--brand-magenta-soft, #ff7fd9);
 	}
 
-	/* ── Encounter (group PvP) decision ─────────────────────────────────────── */
-	.enc-sub {
-		font-size: clamp(0.95rem, 1.6vw, 1.15rem);
-		color: var(--color-parchment, #d8d2e8);
-		text-align: center;
-		max-width: 34rem;
-		line-height: 1.5;
-	}
-	.encounter-targets {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.6rem;
-		justify-content: center;
-	}
-	.enc-target {
-		font-family: var(--font-display);
-		font-size: 1.1rem;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: #fff;
-		padding: 0.3rem 0.85rem;
-		border-radius: 999px;
-		border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
-		background: color-mix(in srgb, var(--c) 16%, rgba(10, 7, 24, 0.6));
-	}
-	.encounter-actions {
-		display: flex;
-		gap: 0.85rem;
-		justify-content: center;
-		flex-wrap: wrap;
-	}
-	.enc-btn {
-		padding: 12px 26px;
-		font-family: var(--font-display);
-		font-size: 1rem;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		border-radius: 4px;
-		border: 1px solid transparent;
-		cursor: pointer;
-		transition:
-			background 140ms ease,
-			border-color 140ms ease,
-			color 140ms ease;
-	}
-	.enc-btn.attack {
-		border: none;
-		background: var(--color-blood, #e05858);
-		color: #fff;
-	}
-	.enc-btn.attack:not(:disabled):hover {
-		background: #ff7373;
-	}
-	.enc-btn.hold {
-		background: rgba(10, 7, 24, 0.6);
-		border-color: var(--color-mist, #3a2670);
-		color: var(--color-fog, #b9b2cf);
-	}
-	.enc-btn.hold:not(:disabled):hover {
-		border-color: var(--color-fog, #b9b2cf);
-		color: #fff;
-	}
-	.enc-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
 	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
 		.view {
 			gap: 0;
@@ -2961,17 +2580,42 @@
 		.waiting {
 			font-size: 1rem;
 		}
-		.enc-sub {
-			font-size: 0.82rem;
-			line-height: 1.3;
-			max-width: 24rem;
+		/* Augment placement must keep the hex board alive at ~390px height: compress
+		   the icon row + prompts so the board owns the remaining space. */
+		.aug-list {
+			gap: 0.35rem;
 		}
-		.encounter-actions {
-			gap: 0.5rem;
+		.aug-icon {
+			width: 2.3rem;
+			height: 2.3rem;
 		}
-		.enc-btn {
-			padding: 8px 18px;
+		.board-decision {
+			gap: 0.3rem;
+		}
+		.board-decision .scene-prompt {
 			font-size: 0.82rem;
+			line-height: 1.2;
+		}
+		.board-decision .scene-hint {
+			font-size: 0.68rem;
+		}
+		.scene-hex-wrap {
+			min-height: 7.5rem;
+		}
+		/* Rune overflow: smaller tokens + tighter panel so grid AND commit bar fit. */
+		.scene-panel.overflow {
+			gap: 0.4rem;
+		}
+		.rune-grid {
+			gap: 0.4rem;
+		}
+		.rune-pick {
+			width: 2.7rem;
+			height: 2.7rem;
+			padding: 0.2rem;
+		}
+		.overflow-note {
+			font-size: 0.8rem;
 		}
 		.infil-open {
 			margin-bottom: 0.35rem;

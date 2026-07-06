@@ -16,6 +16,14 @@
 		/** Discard mode: occupied hexes become clickable to discard their spirit. */
 		discardMode?: boolean;
 		onDiscard?: (slotIndex: number) => void;
+		/** Slots staged for discard (W2c): marked persistently until commit/unstage. */
+		stagedSlots?: number[];
+		/** When set, ONLY these slots may be discarded (engine eligibility); other
+		 *  occupied hexes dim + lock. Unset = every occupied hex (the default). */
+		discardEligibleSlots?: number[];
+		/** Why a locked slot is ineligible (engine copy) — a chip on hover/tap. Applies
+		 *  to whichever mode locked the slot (discard or augment placement). */
+		slotReasons?: Record<number, string>;
 		/** Augments attached to each spirit, keyed by slotIndex (rendered as badges). */
 		augmentsBySlot?: Map<number, { runeId: string; name: string; icon: string | null }[]>;
 		/** Augment-placement mode: occupied hexes accept a dragged augment. */
@@ -43,6 +51,9 @@
 		class: className = '',
 		discardMode = false,
 		onDiscard,
+		stagedSlots,
+		discardEligibleSlots,
+		slotReasons,
 		augmentsBySlot,
 		augmentDropMode = false,
 		augmentEligibleSlots,
@@ -315,18 +326,26 @@
 					/>
 				</g>
 			{:else}
+				{@const discardEligible =
+					discardEligibleSlots == null || discardEligibleSlots.includes(slotIndex)}
+				{@const augmentEligible =
+					augmentEligibleSlots == null || augmentEligibleSlots.includes(slotIndex)}
+				{@const lockedOut =
+					!!baseSpirit &&
+					((discardMode && !discardEligible) || (augmentDropMode && !augmentEligible))}
 				<SpiritHex
 					{hex}
 					{spirit}
 					imageUrl={usesHeroOverlay ? null : getImageUrl(spirit)}
 					{slotIndex}
 					externalImage={usesHeroOverlay}
-					discardable={discardMode && !!baseSpirit}
+					discardable={discardMode && !!baseSpirit && discardEligible}
 					{onDiscard}
+					staged={stagedSlots?.includes(slotIndex) ?? false}
+					dimmed={lockedOut}
+					lockedReason={lockedOut ? (slotReasons?.[slotIndex] ?? null) : null}
 					augments={augmentsBySlot?.get(slotIndex) ?? []}
-					augmentDroppable={augmentDropMode &&
-						!!baseSpirit &&
-						(augmentEligibleSlots == null || augmentEligibleSlots.includes(slotIndex))}
+					augmentDroppable={augmentDropMode && !!baseSpirit && augmentEligible}
 					{onDropAugment}
 					selectable={selectable && !!baseSpirit}
 					selected={selectedSlot === slotIndex}

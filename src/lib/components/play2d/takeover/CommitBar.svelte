@@ -15,6 +15,7 @@
 		/** Omit to hide Cancel (mandatory claims). */
 		onCancel?: (() => void) | null;
 		cancelLabel?: string;
+		cancelTestid?: string;
 		busy?: boolean;
 		accent?: string;
 	}
@@ -29,6 +30,7 @@
 		onConfirm,
 		onCancel = null,
 		cancelLabel = 'Cancel',
+		cancelTestid = undefined,
 		busy = false,
 		accent = 'var(--brand-magenta, #ff2bc7)'
 	}: Props = $props();
@@ -65,7 +67,9 @@
 			{confirmLabel}
 		</button>
 		{#if onCancel}
-			<button type="button" class="cancel" disabled={busy} onclick={onCancel}>{cancelLabel}</button>
+			<button type="button" class="cancel" data-testid={cancelTestid} disabled={busy} onclick={onCancel}
+				>{cancelLabel}</button
+			>
 		{/if}
 	</div>
 </div>
