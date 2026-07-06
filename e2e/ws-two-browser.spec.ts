@@ -347,8 +347,12 @@ test.describe('M0 gate — two-browser WS game', () => {
 	});
 
 	test.afterEach(async () => {
-		await hostCtx.close();
-		await guestCtx.close();
+		// Close defensively: after the fallback kills the server, both pages are in WS
+		// reconnect loops against a dead port — tearing those down can race, and a teardown
+		// hiccup must not fail an otherwise-passing test.
+		for (const p of [host, guest]) await p.close({ runBeforeUnload: false }).catch(() => {});
+		await hostCtx.close().catch(() => {});
+		await guestCtx.close().catch(() => {});
 	});
 
 	test('two browsers play over WS, cross-propagate < 2s, and fall back to HTTP', async () => {
@@ -358,20 +362,25 @@ test.describe('M0 gate — two-browser WS game', () => {
 		const code = await seatTwoPlayers(host, guest);
 		const hostObs = observeViaEvents(host, 'host');
 		const guestObs = observeViaEvents(guest, 'guest');
-		// Serialize the two first-joins: the room server materializes the room on the FIRST
-		// WS join, and two truly-simultaneous first-joins race (the second lands in an
-		// orphaned room entry that never receives broadcasts). Host joins + settles first.
-		await host.goto(roomUrl(code));
-		await waitRoomAttached(host, code);
+
+		// (2) CONCURRENT first-joins — a browser-level regression probe for the getOrLoadRoom
+		// cold-join race (fixed in 7f4509b: the in-flight load promise is registered
+		// synchronously). Both truly-simultaneous first joins must dedupe onto ONE room entry:
+		// the room is loaded from Supabase exactly once (roomLoads +1) and BOTH sockets attach
+		// to the same entry (connections=2). Before the fix, the second join orphaned itself
+		// (its own entry, no broadcasts, connections=1).
+		const loadsBefore = (await fetch(`${HTTP_BASE}/healthz`).then((r) => r.json())).roomLoads;
+		await Promise.all([host.goto(roomUrl(code)), guest.goto(roomUrl(code))]);
+		await Promise.all([waitRoomAttached(host, code), waitRoomAttached(guest, code)]);
 		await expect.poll(() => hostObs.opened && hostObs.joined, { timeout: 30_000 }).toBe(true);
-		await guest.goto(roomUrl(code));
-		await waitRoomAttached(guest, code);
 		await expect.poll(() => guestObs.opened && guestObs.joined, { timeout: 30_000 }).toBe(true);
 
-		// (2) Both clients actually connect over WS (joined frame received on each socket).
-		console.log('[ws] both browsers connected + joined over WS');
+		console.log('[ws] both browsers connected + joined over WS (concurrent first-joins)');
 		const health = await fetch(`${HTTP_BASE}/healthz`).then((r) => r.json());
-		console.log(`[healthz] rooms=${health.rooms} connections=${health.connections}`);
+		const loadDelta = health.roomLoads - loadsBefore;
+		console.log(`[healthz] rooms=${health.rooms} connections=${health.connections} roomLoads Δ=${loadDelta}`);
+		expect(health.connections, 'both concurrent first-joins share one room entry').toBe(2);
+		expect(loadDelta, 'cold room loaded from Supabase exactly once under concurrent joins').toBe(1);
 		await host.waitForTimeout(1_500); // brief settle before measuring
 		console.log('[ws] pages settled; beginning measured play');
 
