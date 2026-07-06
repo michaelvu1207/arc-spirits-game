@@ -3,6 +3,7 @@
 	import { playSfx } from '$lib/stores/gameAudio.svelte';
 	import { mergeCombatLog } from '$lib/play/combatLog';
 	import type { CombatState, SeatColor } from '$lib/play/types';
+	import { displayName } from './helpers';
 
 	interface Props {
 		combats: CombatState[];
@@ -126,7 +127,7 @@
 		</header>
 		{#if myCombat.monster}
 			<div class="verdict">
-				{myCombat.monster.name} — {myCombat.killed
+				{displayName(myCombat.monster.name)} — {myCombat.killed
 					? 'Defeated!'
 					: 'Not enough damage to defeat it'}
 			</div>

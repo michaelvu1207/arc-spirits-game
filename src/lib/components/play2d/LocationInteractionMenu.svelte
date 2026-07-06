@@ -80,6 +80,11 @@
 	function iconUrl(id: string): string | null {
 		return storageUrl(iconPool.get(id)?.file_path ?? null);
 	}
+	// Display label for a reward token — drives the placeholder (and its tooltip)
+	// when the icon pool has no art for it. Presentation only.
+	function tokenLabel(id: string): string | null {
+		return meaningFor(id)?.label ?? null;
+	}
 	// Icon sizing: a consistent set size for every icon, larger when an icon stands
 	// alone, and much larger for game-action tokens (Summon / Cultivate / Rest).
 	function iconSize(token: string, soloRow: boolean): 'act' | 'solo' | 'base' {
@@ -421,9 +426,18 @@
 	}
 </script>
 
-{#snippet icon(url: string | null, size: 'act' | 'solo' | 'base')}
-	<span class="ico {size}">
-		{#if url}<img src={url} alt="" loading="lazy" />{/if}
+{#snippet icon(url: string | null, size: 'act' | 'solo' | 'base', label: string | null = null)}
+	<span class="ico {size}" title={label ?? undefined}>
+		{#if url}
+			<img src={url} alt="" loading="lazy" />
+		{:else}
+			<!-- Themed placeholder for tokens with no art — never a blank hole. The big
+			     action size carries its label; small sizes tooltip it instead. -->
+			<span class="ico-fb" role="img" aria-label={label ?? 'Reward'}>
+				<span class="fb-glyph" aria-hidden="true">✦</span>
+				{#if size === 'act' && label}<span class="fb-label">{label}</span>{/if}
+			</span>
+		{/if}
 	</span>
 {/snippet}
 
@@ -448,7 +462,7 @@
 					{#if it.costTokens.length > 0}
 						<span class="armed-side">
 							{#each it.costTokens as token, ci (ci)}
-								{#if !isOr(token)}{@render icon(iconUrl(token), 'base')}{/if}
+								{#if !isOr(token)}{@render icon(iconUrl(token), 'base', tokenLabel(token))}{/if}
 							{/each}
 						</span>
 						<span class="armed-arrow">→</span>
@@ -457,10 +471,10 @@
 						{#each it.gainTokens as token, ti (ti)}
 							{#if isOr(token)}
 								{#each token.icon_ids as optId, oi (optId + oi)}
-									{@render icon(iconUrl(optId), 'base')}
+									{@render icon(iconUrl(optId), 'base', tokenLabel(optId))}
 								{/each}
 							{:else}
-								{@render icon(iconUrl(token), iconSize(token, false))}
+								{@render icon(iconUrl(token), iconSize(token, false), tokenLabel(token))}
 							{/if}
 						{/each}
 					</span>
@@ -579,7 +593,7 @@
 										<div class="row cost">
 											{#each interaction.costTokens as token, ci (ci)}
 												{#if !isOr(token)}
-													{@render icon(iconUrl(token), iconSize(token, soloCost))}
+													{@render icon(iconUrl(token), iconSize(token, soloCost), tokenLabel(token))}
 												{/if}
 											{/each}
 										</div>
@@ -606,12 +620,12 @@
 													</span>
 													<span class="or-opts">
 														{#each token.icon_ids as optId, oi (optId + oi)}
-															{@render icon(iconUrl(optId), 'base')}
+															{@render icon(iconUrl(optId), 'base', tokenLabel(optId))}
 														{/each}
 													</span>
 												</span>
 											{:else}
-												{@render icon(iconUrl(token), iconSize(token, soloGain))}
+												{@render icon(iconUrl(token), iconSize(token, soloGain), tokenLabel(token))}
 											{/if}
 										{/each}
 									</div>
@@ -887,6 +901,36 @@
 		transition:
 			transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
 			filter 200ms ease;
+	}
+	/* Placeholder for a token with no art — a sigil in a hairline tile, so a missing
+	   asset reads as a designed token rather than a hole in the card. */
+	.ico-fb {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.2rem;
+		border-radius: 22%;
+		background: rgba(255, 255, 255, 0.05);
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+	}
+	.fb-glyph {
+		font-size: calc(var(--icon) * 0.42);
+		line-height: 1;
+		color: color-mix(in srgb, var(--accent) 45%, #fff 35%);
+		text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+	}
+	.fb-label {
+		max-width: calc(var(--icon) * 0.92);
+		font-family: var(--font-display);
+		font-size: 0.62rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		text-align: center;
+		line-height: 1.15;
+		color: var(--color-parchment, #d8cfee);
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.int-card:not(.disabled):hover .ico img {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { MonsterState } from '$lib/play/types';
 	import type { MonsterAsset } from '$lib/types';
-	import { storageUrl } from './helpers';
+	import { displayName, storageUrl } from './helpers';
 
 	interface Props {
 		monster: MonsterState | null;
@@ -32,12 +32,12 @@
 	{#if monster}
 		<div class="card">
 			{#if imageUrl}
-				<img src={imageUrl} alt={monster.name} loading="lazy" />
+				<img src={imageUrl} alt={displayName(monster.name)} loading="lazy" />
 			{:else}
-				<div class="card-fallback">{monster.name}</div>
+				<div class="card-fallback">{displayName(monster.name)}</div>
 			{/if}
 		</div>
-		<div class="name">{monster.name}</div>
+		<div class="name">{displayName(monster.name)}</div>
 		<!-- Monster health is a fixed kill threshold — the damage needed to slay it in one
 		     combat. There is no shared/depleting pool: HP never persists between fights. -->
 		<div class="hp">

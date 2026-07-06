@@ -104,6 +104,14 @@
 	// Clicking a hex opens that spirit's detail card. Re-clicking the same hex (or
 	// switching to another viewed player) closes it.
 	let selectedSlot = $state<number | null>(null);
+	// Discard is destructive (the spirit + its augments go back to a bag), so the
+	// button arms a confirm beat instead of firing immediately. Any selection change
+	// disarms it.
+	let confirmingDiscard = $state(false);
+	$effect(() => {
+		void selectedSlot;
+		confirmingDiscard = false;
+	});
 	$effect(() => {
 		// Reset the selection whenever we switch to a different player's board.
 		void viewedSeat;
@@ -184,6 +192,11 @@
 		}
 		return map;
 	});
+	// The augments riding on the selected spirit are destroyed with it — the discard
+	// confirm copy calls that out.
+	const selectedAugmentCount = $derived(
+		selectedSlot != null ? (augmentsBySlot.get(selectedSlot)?.length ?? 0) : 0
+	);
 	// Unawakened (face-down) spirits show their back face on the hex board, keyed by slot.
 	const backImageBySlot = $derived.by(() => {
 		const map = new Map<number, string>();
@@ -281,15 +294,52 @@
 			</div>
 
 			{#if isMe}
-				<button
-					type="button"
-					class="dc-discard"
-					data-testid="spirit-detail-discard"
-					disabled={busy}
-					onclick={discardSelected}
-				>
-					<span aria-hidden="true">🗑</span> Discard
-				</button>
+				<!-- Sticky action footer: pinned under the scrolling body so it can never
+				     sit over the text, and the destructive discard needs a confirm beat. -->
+				<footer class="dc-actions" class:confirming={confirmingDiscard}>
+					{#if confirmingDiscard}
+						<span class="dc-confirm-copy" role="alert">
+							Discard {selectedSpirit.name}?
+							{#if selectedAugmentCount > 0}
+								Its {selectedAugmentCount === 1
+									? 'augment is'
+									: `${selectedAugmentCount} augments are`} destroyed with it.
+							{:else}
+								It returns to its bag.
+							{/if}
+						</span>
+						<div class="dc-confirm-row">
+							<button
+								type="button"
+								class="dc-discard confirm"
+								data-testid="spirit-discard-confirm"
+								disabled={busy}
+								onclick={discardSelected}
+							>
+								<span aria-hidden="true">🗑</span> Discard
+							</button>
+							<button
+								type="button"
+								class="dc-keep"
+								data-testid="spirit-discard-cancel"
+								disabled={busy}
+								onclick={() => (confirmingDiscard = false)}
+							>
+								Keep
+							</button>
+						</div>
+					{:else}
+						<button
+							type="button"
+							class="dc-discard"
+							data-testid="spirit-detail-discard"
+							disabled={busy}
+							onclick={() => (confirmingDiscard = true)}
+						>
+							<span aria-hidden="true">🗑</span> Discard
+						</button>
+					{/if}
+				</footer>
 			{/if}
 		</aside>
 		{:else}
@@ -511,12 +561,14 @@
 		width: 100%;
 	}
 
-	/* ── Spirit detail card (now in-flow inside the info slot) ───────────────── */
+	/* ── Spirit detail card (in-flow inside the info slot). The BODY is the scroll
+	   region — header and action footer stay pinned, so a long class description
+	   scrolls between them and the discard controls never cover the text. ── */
 	.detail-card {
 		flex: 0 1 auto;
 		width: 100%;
 		max-height: 100%;
-		overflow-y: auto;
+		overflow: hidden;
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
@@ -587,7 +639,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.9rem;
+		flex: 1 1 auto;
 		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		scrollbar-width: thin;
 	}
 	.dc-section {
 		display: flex;
@@ -675,6 +731,63 @@
 		font-size: 0.9rem;
 		color: #fff;
 	}
+	/* Action footer — pinned under the scrolling body, hairline-separated. */
+	.dc-actions {
+		flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		padding-top: 0.7rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.12);
+	}
+	.dc-confirm-copy {
+		font-size: 0.9rem;
+		line-height: 1.35;
+		color: var(--color-parchment, #e7e0cf);
+	}
+	.dc-confirm-row {
+		display: flex;
+		gap: 0.55rem;
+	}
+	.dc-confirm-row > * {
+		flex: 1;
+	}
+	.dc-keep {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 9px 14px;
+		border-radius: 8px;
+		border: 1px solid rgba(255, 255, 255, 0.22);
+		background: rgba(255, 255, 255, 0.04);
+		color: var(--color-parchment, #e7e0cf);
+		font-family: var(--font-display);
+		font-size: 0.8rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		cursor: pointer;
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
+		transition: border-color 140ms ease, background 140ms ease;
+	}
+	.dc-keep:not(:disabled):hover {
+		border-color: rgba(255, 255, 255, 0.45);
+		background: rgba(255, 255, 255, 0.08);
+	}
+	.dc-keep:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.dc-keep:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	/* The armed discard reads hotter than the entry button — it commits for real. */
+	.dc-discard.confirm {
+		background: color-mix(in srgb, var(--color-blood, #e05858) 30%, transparent);
+		border-color: var(--color-blood, #e05858);
+		color: #fff;
+	}
 	.dc-discard {
 		flex-shrink: 0;
 		display: inline-flex;
@@ -751,6 +864,41 @@
 		.composition,
 		.detail-card {
 			animation: none;
+		}
+	}
+
+	/* ── Short landscape (phone): the 40% info slot leaves the detail body a sliver,
+	   so give the card more of the column and slim its chrome — the hex board
+	   shrinks to make room (it's the flexible row). ── */
+	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+		.info-slot {
+			max-height: 60%;
+		}
+		.detail-card {
+			padding: 0.6rem 0.8rem;
+			gap: 0.5rem;
+		}
+		.dc-name {
+			font-size: 1.05rem;
+		}
+		.dc-label {
+			font-size: 0.68rem;
+		}
+		.dc-desc,
+		.dc-confirm-copy {
+			font-size: 0.82rem;
+			line-height: 1.3;
+		}
+		.dc-body {
+			gap: 0.55rem;
+		}
+		.dc-actions {
+			padding-top: 0.45rem;
+			gap: 0.4rem;
+		}
+		.dc-discard,
+		.dc-keep {
+			padding: 6px 10px;
 		}
 	}
 

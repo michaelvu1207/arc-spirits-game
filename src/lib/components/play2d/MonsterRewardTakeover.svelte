@@ -13,7 +13,7 @@
 	import type { PendingRewardState } from '$lib/play/types';
 	import type { ResolvedPendingReward } from '$lib/play/viewV2';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
-	import { storageUrl } from './helpers';
+	import { displayName, storageUrl } from './helpers';
 	import TakeoverStage from './takeover/TakeoverStage.svelte';
 	import SourcePanel from './takeover/SourcePanel.svelte';
 	import CommitBar from './takeover/CommitBar.svelte';
@@ -125,10 +125,10 @@
 <TakeoverStage {accent} testid="monster-reward-menu">
 	{#snippet source()}
 		<SourcePanel
-			title={reward.monsterName}
+			title={displayName(reward.monsterName)}
 			subtitle={`Defeated — claim ${max} reward${max === 1 ? '' : 's'}`}
 			image={monsterArt}
-			imageAlt={reward.monsterName}
+			imageAlt={displayName(reward.monsterName)}
 			{accent}
 		>
 			<span class="victory-chip">Victory</span>

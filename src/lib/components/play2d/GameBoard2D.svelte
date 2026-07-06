@@ -11,7 +11,8 @@
 		SeatColor,
 		SpectatorProjection
 	} from '$lib/play/types';
-	import { RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
+	import { GAME_PHASES, RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
+	import { PHASE_LABELS } from '$lib/play/viewV2';
 	import { buildLocationInteractions } from '$lib/play/locationInteractions';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
 	import {
@@ -1009,18 +1010,10 @@
 		else if (room.phase === 'cleanup') send('cleanup', { type: 'commitCleanup' });
 		else if (room.phase === 'encounter') send('pass', { type: 'passEncounter' });
 	}
-	const PHASE_RAIL_STEPS = [
-		{ key: 'navigation', label: 'Navigation', phases: ['navigation'] },
-		{ key: 'encounter', label: 'Encounter', phases: ['encounter'] },
-		{ key: 'location', label: 'Location', phases: ['location'] },
-		{ key: 'cleanup', label: 'Cleanup', phases: ['benefits', 'awakening', 'cleanup'] }
-	] as const;
-	const railPhaseIndex = $derived.by(() =>
-		Math.max(
-			0,
-			PHASE_RAIL_STEPS.findIndex((step) => (step.phases as readonly string[]).includes(room.phase))
-		)
-	);
+	// All six REAL engine phases — one rail node each, so the lit node/label is the
+	// true phase (Benefits/Awakening no longer read as "Cleanup"). Matches PhaseBar.
+	const PHASE_RAIL_STEPS = GAME_PHASES.map((p) => ({ key: p, label: PHASE_LABELS[p] }));
+	const railPhaseIndex = $derived(Math.max(0, GAME_PHASES.indexOf(room.phase)));
 	const railPhaseLabel = $derived(PHASE_RAIL_STEPS[railPhaseIndex]?.label ?? 'Navigation');
 	const railProgressPct = $derived(
 		PHASE_RAIL_STEPS.length <= 1 ? 100 : (railPhaseIndex / (PHASE_RAIL_STEPS.length - 1)) * 100

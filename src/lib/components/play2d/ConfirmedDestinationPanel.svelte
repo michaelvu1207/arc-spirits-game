@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { NavigationDestination, MonsterState } from '$lib/play/types';
 	import type { GameLocationAsset, IconPoolEntry, RewardIconToken } from '$lib/types';
-	import { storageUrl } from './helpers';
+	import { displayName, storageUrl } from './helpers';
 
 	interface Props {
 		destination: NavigationDestination;
@@ -43,7 +43,7 @@
 	{#if isAbyss}
 		{#if monster}
 			<div class="monster">
-				<span class="m-name">{monster.name}</span>
+				<span class="m-name">{displayName(monster.name)}</span>
 				<span class="m-stat">HP {monster.maxHp}</span>
 			</div>
 		{:else}
@@ -60,7 +60,7 @@
 							{#each row.gain_icon_ids as token, ti (ti)}
 								{#each tokenIcons(token) as ic, k (ic.id + k)}
 									{#if k > 0}<span class="or">/</span>{/if}
-									<span class="ico">{#if ic.url}<img src={ic.url} alt="" loading="lazy" />{/if}</span>
+									<span class="ico">{#if ic.url}<img src={ic.url} alt="" loading="lazy" />{:else}<span class="ico-fb" aria-hidden="true">✦</span>{/if}</span>
 								{/each}
 							{/each}
 						</span>
@@ -69,7 +69,7 @@
 							{#each row.cost_icon_ids as token, ti (ti)}
 								{#each tokenIcons(token) as ic, k (ic.id + k)}
 									{#if k > 0}<span class="or">/</span>{/if}
-									<span class="ico">{#if ic.url}<img src={ic.url} alt="" loading="lazy" />{/if}</span>
+									<span class="ico">{#if ic.url}<img src={ic.url} alt="" loading="lazy" />{:else}<span class="ico-fb" aria-hidden="true">✦</span>{/if}</span>
 								{/each}
 							{/each}
 						</span>
@@ -78,7 +78,7 @@
 							{#each row.gain_icon_ids as token, ti (ti)}
 								{#each tokenIcons(token) as ic, k (ic.id + k)}
 									{#if k > 0}<span class="or">/</span>{/if}
-									<span class="ico">{#if ic.url}<img src={ic.url} alt="" loading="lazy" />{/if}</span>
+									<span class="ico">{#if ic.url}<img src={ic.url} alt="" loading="lazy" />{:else}<span class="ico-fb" aria-hidden="true">✦</span>{/if}</span>
 								{/each}
 							{/each}
 						</span>
@@ -168,6 +168,18 @@
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
+	}
+	/* Placeholder sigil for tokens with no art — a designed tile, not a hole. */
+	.ico-fb {
+		width: 100%;
+		height: 100%;
+		display: grid;
+		place-items: center;
+		border-radius: 22%;
+		background: rgba(255, 255, 255, 0.05);
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+		font-size: 0.78rem;
+		color: color-mix(in srgb, var(--accent) 45%, #fff 35%);
 	}
 	.or {
 		margin: 0 -4px;

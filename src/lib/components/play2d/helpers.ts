@@ -119,6 +119,26 @@ export function spiritBackImageUrl(id: string): string {
 	return `${STORAGE_BASE_URL}/hex_spirits/${id}_back_side_export.png`;
 }
 
+/**
+ * Presentation-only cleanup for raw catalog names that leak internal ids into the
+ * UI (the seeded monsters are literally named "S1Monster"). Never used for
+ * matching/lookups — those stay on the raw name.
+ */
+export function displayName(raw: string | null | undefined, fallback = 'Unknown'): string {
+	const name = raw?.trim();
+	if (!name) return fallback;
+	// The monster catalog's "S<stage>Monster" code names.
+	const staged = /^s(\d+)monster$/i.exec(name);
+	if (staged) return `Stage ${staged[1]} Monster`;
+	// Other un-spaced code names (camelCase / letter-digit runs) split into words;
+	// anything already containing a space is human-authored and passes through.
+	if (/\s/.test(name)) return name;
+	return name
+		.replace(/([a-z])([A-Z])/g, '$1 $2')
+		.replace(/([A-Za-z])(\d)/g, '$1 $2')
+		.replace(/(\d)([A-Za-z])/g, '$1 $2');
+}
+
 const ACCENT_FALLBACK = '#8d8aa1';
 
 export function seatAccent(seat: SeatColor | string | null | undefined): string {

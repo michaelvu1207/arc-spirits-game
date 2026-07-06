@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { GamePhase } from '$lib/play/types';
-	import { NAVIGATION_SECONDS } from '$lib/play/types';
+	import { GAME_PHASES, NAVIGATION_SECONDS } from '$lib/play/types';
+	import { PHASE_LABELS } from '$lib/play/viewV2';
 
 	interface Props {
 		phase: GamePhase;
@@ -20,26 +21,16 @@
 		onNavExpire
 	}: Props = $props();
 
-	// Collapse the post-location resolution (benefits → awakening → cleanup) into ONE
-	// "Cleanup" node, matching the desktop PhaseBar. MainStage owns the action prompt.
-	const DISPLAY_STEPS: { key: string; label: string; phases: GamePhase[] }[] = [
-		{ key: 'navigation', label: 'Navigation', phases: ['navigation'] },
-		{ key: 'encounter', label: 'Encounter', phases: ['encounter'] },
-		{ key: 'location', label: 'Location', phases: ['location'] },
-		{ key: 'cleanup', label: 'Cleanup', phases: ['benefits', 'awakening', 'cleanup'] }
-	];
-
-	// Show only the CURRENT display step and the one that follows it (wrapping cleanup →
-	// next round's navigation) so the banner never runs off a narrow screen.
+	// All six REAL engine phases, matching the desktop PhaseBar — the banner shows
+	// only the CURRENT phase and the one that follows it (wrapping cleanup → next
+	// round's navigation) so it never runs off a narrow screen, but the label is
+	// always the true phase (Benefits/Awakening no longer read as "Cleanup").
 	const visibleSteps = $derived.by(() => {
-		const idx = Math.max(
-			0,
-			DISPLAY_STEPS.findIndex((s) => s.phases.includes(phase))
-		);
-		const next = (idx + 1) % DISPLAY_STEPS.length;
+		const idx = Math.max(0, GAME_PHASES.indexOf(phase));
+		const next = (idx + 1) % GAME_PHASES.length;
 		return [
-			{ key: DISPLAY_STEPS[idx].key, label: DISPLAY_STEPS[idx].label, active: true },
-			{ key: DISPLAY_STEPS[next].key, label: DISPLAY_STEPS[next].label, active: false }
+			{ key: GAME_PHASES[idx], label: PHASE_LABELS[GAME_PHASES[idx]], active: true },
+			{ key: GAME_PHASES[next], label: PHASE_LABELS[GAME_PHASES[next]], active: false }
 		];
 	});
 

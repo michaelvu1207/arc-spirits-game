@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { GamePhase } from '$lib/play/types';
 	import { GAME_PHASES } from '$lib/play/types';
+	import { PHASE_LABELS } from '$lib/play/viewV2';
 	import NavTimer from './NavTimer.svelte';
 
 	interface Props {
@@ -25,19 +26,10 @@
 		phase === 'navigation' && !revealedDestinations && navigationDeadline != null
 	);
 
-	// The nav bar shows the post-location resolution (benefits → awakening → cleanup) as
-	// ONE collapsed node; MainStage owns the per-phase instruction and action content.
-	type DisplayStep = { key: string; label: string; phases: GamePhase[] };
-	const DISPLAY_STEPS: DisplayStep[] = [
-		{ key: 'navigation', label: 'Navigation', phases: ['navigation'] },
-		{ key: 'encounter', label: 'Encounter', phases: ['encounter'] },
-		{ key: 'location', label: 'Location', phases: ['location'] },
-		{ key: 'cleanup', label: 'Cleanup', phases: ['benefits', 'awakening', 'cleanup'] }
-	];
-
+	// One node per engine phase — all six, so the lit node is always the REAL phase
+	// (Benefits/Awakening no longer hide under a collapsed "Cleanup" group). MainStage
+	// owns the per-phase instruction and action content.
 	const currentIndex = $derived(GAME_PHASES.indexOf(phase));
-	// A display step is "done" once the current phase is past its last engine phase.
-	const lastIndexOf = (s: DisplayStep) => Math.max(...s.phases.map((p) => GAME_PHASES.indexOf(p)));
 
 	// Small status shown in the second row of the bar. MainStage owns instruction copy;
 	// this bar stays as phase/timer chrome so it never competes with the scene prompt.
@@ -60,13 +52,10 @@
 	<span class="divider"></span>
 	<div class="middle">
 		<ol class="steps">
-			{#each DISPLAY_STEPS as step (step.key)}
-				<li
-					class:active={step.phases.includes(phase)}
-					class:done={currentIndex > lastIndexOf(step)}
-				>
+			{#each GAME_PHASES as p, i (p)}
+				<li class:active={p === phase} class:done={currentIndex > i}>
 					<span class="node"></span>
-					<span class="step-label">{step.label}</span>
+					<span class="step-label">{PHASE_LABELS[p]}</span>
 				</li>
 			{/each}
 		</ol>
@@ -154,24 +143,27 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	/* Six steps on ONE row, always — the type is sized so all six labels fit the
+	   desktop bar; narrower screens collapse inactive labels instead of wrapping. */
 	.steps {
 		display: flex;
 		align-items: center;
-		gap: 0.85rem;
+		gap: 0.7rem;
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		min-width: 0;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 	}
 	.steps li {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.45rem;
 		font-family: var(--font-display);
-		font-size: 1rem;
-		letter-spacing: 0.16em;
+		font-size: 0.88rem;
+		letter-spacing: 0.12em;
 		text-transform: uppercase;
+		white-space: nowrap;
 		color: rgba(255, 255, 255, 0.38);
 		transition:
 			color 200ms ease,
@@ -180,7 +172,7 @@
 	/* Thin hairline connector trailing each step (except the last). */
 	.steps li:not(:last-child)::after {
 		content: '';
-		width: 12px;
+		width: 10px;
 		height: 1px;
 		background: rgba(255, 255, 255, 0.16);
 	}
@@ -209,6 +201,21 @@
 		border-color: transparent;
 		box-shadow: 0 0 10px rgba(255, 255, 255, 0.75);
 	}
+	/* ── Mid widths (tablet / phone-landscape, where the full bar still shows):
+	   six labelled steps don't fit, so inactive steps collapse to their nodes and
+	   only the CURRENT phase keeps its label — same language, denser. ── */
+	@media (max-width: 1149px) {
+		.steps {
+			gap: 0.55rem;
+		}
+		.steps li:not(.active) .step-label {
+			display: none;
+		}
+		.steps li:not(:last-child)::after {
+			width: 8px;
+		}
+	}
+
 	/* ── Mobile (≤600px): trim the backdrop blur and lean on a more opaque base
 	   so the bar stays legible without the GPU cost of a wide blur. ── */
 	@media (max-width: 600px) {
