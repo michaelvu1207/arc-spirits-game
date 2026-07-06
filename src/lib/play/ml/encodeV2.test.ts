@@ -293,7 +293,8 @@ describe('encodeV2 information safety', () => {
 });
 
 describe('encodeV2 full-game smoke', () => {
-	it('encodes every decision point of seeded 4p games without throwing; caps hold', () => {
+	// Seeded full-game encode sweep brushes the 5s default under parallel vitest load.
+	it('encodes every decision point of seeded 4p games without throwing; caps hold', { timeout: 30_000 }, () => {
 		const dims = obsV2Dims(buildObsV2Vocab(catalog));
 		const flatLen = obsV2FlatLength(buildObsV2Vocab(catalog));
 		let decisions = 0;

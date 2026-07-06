@@ -13,7 +13,9 @@ import { playRecordingGame } from './driver';
 import { loadOrSnapshotCatalog } from './nodeIo';
 
 describe('allFallen terminal stamping (ladder8-C collapse-is-loss)', () => {
-	it('stamps allFallen on every terminal row iff the game ended all-Fallen (no 30-VP finish)', async () => {
+	// Full-game sim runs ~5-6s alone (more under parallel vitest load) — needs headroom
+	// over the 5s default or it flakes on every full-suite run.
+	it('stamps allFallen on every terminal row iff the game ended all-Fallen (no 30-VP finish)', { timeout: 30_000 }, async () => {
 		const catalog = await loadOrSnapshotCatalog();
 		const seats = SEAT_COLORS.slice(0, 4) as SeatColor[];
 		// pvphunter tables reliably collapse to all-Fallen (mutual PvP damage forces everyone
