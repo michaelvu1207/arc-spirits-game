@@ -1167,9 +1167,14 @@ export async function createDebugRoom(
 
 	// 4. Land directly on the Awakening step (run Benefits first so the awakeningPhase
 	//    grants fire + any reward is computed, then advance to where the awaken offers
-	//    live — what the debug flow is here to test) and persist.
+	//    live — what the debug flow is here to test) and persist. enterBenefits may
+	//    already have chained into awakening on its own (seats with no benefits work
+	//    auto-ready and the phase collapses forward), so only step forward if it hasn't.
 	enterBenefits(state, catalog);
-	enterAwakening(state, catalog);
+	if (state.phase === 'benefits') enterAwakening(state, catalog);
+	if (state.phase !== 'awakening') {
+		throw kitError(500, `Debug room expected to land on awakening, got ${state.phase}.`);
+	}
 	state.revision += 1;
 	state.phaseDeadline = Date.now() + DEBUG_AWAKENING_DEADLINE_MS;
 

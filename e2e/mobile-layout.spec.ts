@@ -253,36 +253,90 @@ async function makeHostEvilWithoutPendingDiscard(page: Page): Promise<void> {
 	}
 }
 
+/**
+ * Commit whatever resolution step (benefits/awakening/cleanup) the room is stopped
+ * on until the sequence ends. The engine now auto-readies seats with no work and
+ * collapses empty steps server-side, so blind per-phase commits would race a phase
+ * that has already moved on — check the live phase before each commit instead.
+ * Stops once the room leaves the resolution sequence (or the game finishes).
+ */
+async function drainResolutionPhases(pages: Page[]): Promise<void> {
+	const commitFor: Record<string, string> = {
+		benefits: 'commitBenefits',
+		awakening: 'commitAwakening',
+		cleanup: 'commitCleanup'
+	};
+	for (let i = 0; i < 20; i += 1) {
+		let progressed = false;
+		for (const page of pages) {
+			const view = await getRoomView(page);
+			const phase = view.projection.phase as string;
+			if (view.projection.status !== 'active' || !(phase in commitFor)) return;
+			try {
+				await runRoomCommand(page, { type: commitFor[phase] });
+				progressed = true;
+			} catch {
+				// The phase advanced between the view read and the commit — loop re-reads.
+			}
+		}
+		if (!progressed) break;
+	}
+}
+
 async function finishGameWithHostVp(host: Page, guest: Page): Promise<void> {
 	await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
-	await runRoomCommand(host, { type: 'endLocationActions' });
-	await runRoomCommand(guest, { type: 'endLocationActions' });
+	// Grant the winning VP BEFORE the round wraps: seats with no resolution work are
+	// auto-readied by the engine, so the benefits→awakening→cleanup sequence may
+	// collapse the moment both seats end their location actions.
 	await runRoomCommand(host, {
 		type: 'debugGrant',
 		grant: { kind: 'vp', amount: 30 }
 	});
-	await runRoomCommand(host, { type: 'commitBenefits' });
-	await runRoomCommand(guest, { type: 'commitBenefits' });
-	await runRoomCommand(host, { type: 'commitAwakening' });
-	await runRoomCommand(guest, { type: 'commitAwakening' });
-	await runRoomCommand(host, { type: 'commitCleanup' });
-	await runRoomCommand(guest, { type: 'commitCleanup' });
+	await runRoomCommand(host, { type: 'endLocationActions' });
+	await runRoomCommand(guest, { type: 'endLocationActions' });
+	await drainResolutionPhases([host, guest]);
+	await expect
+		.poll(async () => (await getRoomView(host)).projection.status, {
+			timeout: 20_000,
+			message: 'Expected the game to finish once cleanup closed with 30 VP'
+		})
+		.toBe('finished');
 	await host.reload({ waitUntil: 'domcontentloaded' });
 	await expect(host.getByTestId('postgame')).toBeVisible({ timeout: 30_000 });
 }
 
 async function enterCleanupPhase(host: Page, guest: Page): Promise<void> {
 	await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+	// Overflow the host's runes BEFORE the round wraps — cleanup only stops for seats
+	// with housekeeping to do, and a no-work cleanup is now skipped entirely.
+	for (let i = 0; i < 6; i += 1) {
+		await runRoomCommand(host, {
+			type: 'debugGrant',
+			grant: { kind: 'rune', runeId: TEAPOT_RUNE_ID }
+		});
+	}
 	await runRoomCommand(host, { type: 'endLocationActions' });
 	await runRoomCommand(guest, { type: 'endLocationActions' });
-	await runRoomCommand(host, { type: 'commitBenefits' });
-	await runRoomCommand(guest, { type: 'commitBenefits' });
-	await runRoomCommand(host, { type: 'commitAwakening' });
-	await runRoomCommand(guest, { type: 'commitAwakening' });
+	// Walk only benefits/awakening forward; the host's rune overflow pins cleanup open.
+	for (let i = 0; i < 10; i += 1) {
+		const view = await getRoomView(host);
+		const phase = view.projection.phase as string;
+		if (phase !== 'benefits' && phase !== 'awakening') break;
+		const cmd = phase === 'benefits' ? 'commitBenefits' : 'commitAwakening';
+		for (const page of [host, guest]) {
+			const fresh = await getRoomView(page);
+			if (fresh.projection.phase !== phase) break;
+			try {
+				await runRoomCommand(page, { type: cmd });
+			} catch {
+				// Phase advanced under us — outer loop re-reads.
+			}
+		}
+	}
 	await expect
 		.poll(async () => (await getRoomView(host)).projection.phase, {
 			timeout: 20_000,
-			message: 'Expected room to reach cleanup before adding overflow runes'
+			message: 'Expected room to hold in cleanup on the host rune overflow'
 		})
 		.toBe('cleanup');
 }
@@ -583,13 +637,9 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 
 	test('cleanup rune discard panel stays clear', async () => {
 		await setupTwoPlayerGame(host, guest);
+		// enterCleanupPhase overflows the host's runes up front (that's what pins the
+		// room in cleanup now that empty steps auto-skip), so the panel is ready here.
 		await enterCleanupPhase(host, guest);
-		for (let i = 0; i < 6; i += 1) {
-			await runRoomCommand(host, {
-				type: 'debugGrant',
-				grant: { kind: 'rune', runeId: TEAPOT_RUNE_ID }
-			});
-		}
 		await refreshRoomPage(host);
 		await expectMobileLayoutClear(host, 'cleanup rune discard', ['rune-discard']);
 	});

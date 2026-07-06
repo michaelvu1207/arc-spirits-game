@@ -295,12 +295,15 @@ describe('monster-kill reward flow (engine)', () => {
 
 	test('a host force-advance auto-claims an unclaimed reward (no silent forfeit)', () => {
 		const s = killMonster();
+		const round = s.round;
 		const advanced = apply(s, RED, { type: 'forceAdvancePhase' });
 		// Auto-claim took the first two tokens (1 VP + 3 VP) before leaving the phase.
 		expect(advanced.players.Red!.pendingReward).toBeNull();
 		expect(advanced.players.Red!.victoryPoints).toBe(4);
-		// Location now advances into the first resolution step (Benefits), not straight to cleanup.
-		expect(advanced.phase).toBe('benefits');
+		// With the reward drained no seat has resolution work, so the forced advance
+		// chains through the empty benefits/awakening/cleanup steps to the next round.
+		expect(advanced.phase).toBe('navigation');
+		expect(advanced.round).toBe(round + 1);
 	});
 
 	test('the pending reward is owner-only in the spectator projection', () => {
@@ -333,38 +336,38 @@ describe('bots claim monster rewards', () => {
 });
 
 describe('rune carry limit (cleanup)', () => {
-	function atCleanup(): PublicGameState {
-		let s = apply(atAbyss(), RED, { type: 'endLocationActions' });
-		s = apply(s, BLUE, { type: 'endLocationActions' });
-		// Walk the new benefits → awakening → cleanup sequence (no grants to claim here).
-		s = apply(s, RED, { type: 'commitBenefits' });
-		s = apply(s, BLUE, { type: 'commitBenefits' });
-		s = apply(s, RED, { type: 'commitAwakening' });
-		s = apply(s, BLUE, { type: 'commitAwakening' });
-		if (s.phase !== 'cleanup') throw new Error(`expected cleanup, got ${s.phase}`);
-		return s;
-	}
-
-	test('overflow blocks cleanup until runes are discarded down to the limit', () => {
-		let s = atCleanup();
-		// Give Red 6 held runes — over the carry limit of 4.
-		s.players.Red!.mats = Array.from({ length: 6 }, (_, i) => ({
+	// Overflow Red's runes BEFORE the round wraps: cleanup only stops for seats with
+	// housekeeping, and a workless resolution sequence collapses to the next round.
+	function atCleanup(overflow: number): PublicGameState {
+		const start = atAbyss();
+		start.players.Red!.mats = Array.from({ length: overflow }, (_, i) => ({
 			slotIndex: i + 1,
 			hasRune: true,
 			name: `R${i}`,
 			type: 'rune'
 		}));
+		let s = apply(start, RED, { type: 'endLocationActions' });
+		s = apply(s, BLUE, { type: 'endLocationActions' });
+		// Benefits/awakening had no work → skipped; cleanup holds on Red's overflow.
+		if (s.phase !== 'cleanup') throw new Error(`expected cleanup, got ${s.phase}`);
+		return s;
+	}
+
+	test('overflow blocks cleanup until runes are discarded down to the limit', () => {
+		let s = atCleanup(6);
 
 		const blocked = tryApply(s, RED, { type: 'commitCleanup' });
 		expect(blocked.ok).toBe(false);
 		if (!blocked.ok) expect(blocked.error.code).toBe('runes_overflow');
+		expect(s.players.Blue!.phaseReady).toBe(true); // workless seat idles ready
 
-		// Discard two → exactly the limit, then cleanup commits.
+		// Discard down to the limit; shedding the last overflow is the seat's final
+		// piece of work, so the round rolls automatically — no commit needed.
 		s = apply(s, RED, { type: 'discardRune', slotIndex: 6 });
+		expect(s.phase).toBe('cleanup'); // still one over the limit
 		s = apply(s, RED, { type: 'discardRune', slotIndex: 5 });
+		expect(s.phase).toBe('navigation');
 		expect(s.players.Red!.mats.filter((r) => r.hasRune).length).toBe(4);
-		s = apply(s, RED, { type: 'commitCleanup' });
-		expect(s.players.Red!.phaseReady).toBe(true);
 	});
 
 	test('discardRune is rejected outside the cleanup phase', () => {
@@ -375,14 +378,8 @@ describe('rune carry limit (cleanup)', () => {
 	});
 
 	test('the carry limit is enforced into the next round (compaction backstop)', () => {
-		let s = atCleanup();
 		// Overflow that survives to the next round (e.g. via a host force-advance):
-		s.players.Red!.mats = Array.from({ length: 7 }, (_, i) => ({
-			slotIndex: i + 1,
-			hasRune: true,
-			name: `R${i}`,
-			type: 'rune'
-		}));
+		let s = atCleanup(7);
 		// Host force-advances cleanup (bypasses the per-seat discard gate).
 		s = apply(s, RED, { type: 'forceAdvancePhase' });
 		expect(s.phase).toBe('navigation');

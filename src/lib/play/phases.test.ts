@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { applyGameCommand, buildSessionProjection, createLobbyState } from './runtime';
+import { RUNE_CARRY_LIMIT } from './types';
 import type { GameActor, GameCommand, PlayCatalog, PublicGameState } from './types';
 
 const HOST: GameActor = { memberId: 'm-host', displayName: 'Host', role: 'host', seatColor: null };
@@ -81,7 +82,7 @@ describe('phase machine', () => {
 		expect(redView.players.Red?.pendingDestination).toBe('Cyber City');
 	});
 
-	test('full round: navigation → location → benefits → awakening → cleanup → next round', () => {
+	test('full round: with no resolution work, ending location collapses straight to the next round', () => {
 		let state = startedGame();
 		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
 		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
@@ -91,44 +92,28 @@ describe('phase machine', () => {
 		state = apply(state, RED, { type: 'endLocationActions' });
 		expect(state.phase).toBe('location'); // still waiting on Blue
 		state = apply(state, BLUE, { type: 'endLocationActions' });
-		expect(state.phase).toBe('benefits');
-
-		state = apply(state, RED, { type: 'commitBenefits' });
-		expect(state.phase).toBe('benefits'); // waiting on Blue
-		state = apply(state, BLUE, { type: 'commitBenefits' });
-		expect(state.phase).toBe('awakening');
-
-		state = apply(state, RED, { type: 'commitAwakening' });
-		expect(state.phase).toBe('awakening'); // waiting on Blue
-		state = apply(state, BLUE, { type: 'commitAwakening' });
-		expect(state.phase).toBe('cleanup');
-
-		state = apply(state, RED, { type: 'commitCleanup' });
-		expect(state.phase).toBe('cleanup'); // waiting on Blue
-		state = apply(state, BLUE, { type: 'commitCleanup' });
+		// Neither seat has a benefits claim, an awaken offer, or cleanup housekeeping,
+		// so the whole benefits → awakening → cleanup sequence auto-collapses inside
+		// this one command: clients never see the empty steps.
 		expect(state.round).toBe(2);
 		expect(state.phase).toBe('navigation');
 		expect(state.revealedDestinations).toBe(false);
 		expect(state.players.Red?.navigationDestination ?? null).toBeNull();
 		expect(state.players.Red?.phaseReady).toBe(false);
+		// The round boundary still ran its bookkeeping (per-round VP snapshot).
+		expect(state.players.Red?.vpHistory).toHaveLength(1);
 	});
 
-	test('reaching the VP target finishes the game at cleanup', () => {
+	test('reaching the VP target finishes the game when cleanup closes', () => {
 		let state = startedGame();
 		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
 		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		state = apply(state, RED, { type: 'endLocationActions' });
-		state = apply(state, BLUE, { type: 'endLocationActions' });
-		// Simulate Red having amassed enough VP this round.
+		// Simulate Red having amassed enough VP this round — set BEFORE the round wraps,
+		// since the workless resolution sequence collapses on the last location pass.
 		state.players.Red!.victoryPoints = 30;
-
-		state = apply(state, RED, { type: 'commitBenefits' });
-		state = apply(state, BLUE, { type: 'commitBenefits' });
-		state = apply(state, RED, { type: 'commitAwakening' });
-		state = apply(state, BLUE, { type: 'commitAwakening' });
-		state = apply(state, RED, { type: 'commitCleanup' });
-		state = apply(state, BLUE, { type: 'commitCleanup' });
+		state = apply(state, BLUE, { type: 'endLocationActions' });
 		expect(state.status).toBe('finished');
 		expect(state.winnerSeat).toBe('Red');
 	});
@@ -230,24 +215,14 @@ const lockBoth = (state: PublicGameState): PublicGameState => {
 	return s;
 };
 
-// End location → the Benefits step (first of the benefits → awakening → cleanup
-// resolution sequence). Awakening-Phase grants fire on entry; any reward is claimed
-// here by the test before advancing.
+// End location → the resolution sequence (benefits → awakening → cleanup). The engine
+// auto-readies workless seats, so the sequence stops ONLY where a seat has real work
+// (e.g. a claimable Benefits reward) and otherwise collapses through to the round
+// boundary. Any per-test `resolveAwakenReward` runs right after this — and claiming
+// the last piece of work rolls the round over automatically (no commits needed).
 const toCleanup = (state: PublicGameState): PublicGameState => {
 	let s = apply(state, RED, { type: 'endLocationActions' });
 	s = apply(s, BLUE, { type: 'endLocationActions' });
-	return s;
-};
-
-// Walk both seats through benefits → awakening → cleanup and end the round. Call any
-// per-test `resolveAwakenReward` BEFORE this (it must run in the Benefits step).
-const finishRound = (state: PublicGameState): PublicGameState => {
-	let s = apply(state, RED, { type: 'commitBenefits' });
-	s = apply(s, BLUE, { type: 'commitBenefits' });
-	s = apply(s, RED, { type: 'commitAwakening' });
-	s = apply(s, BLUE, { type: 'commitAwakening' });
-	s = apply(s, RED, { type: 'commitCleanup' });
-	s = apply(s, BLUE, { type: 'commitCleanup' });
 	return s;
 };
 
@@ -314,14 +289,14 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		let state = startedGame();
 		giveSpirit(state, 'Red', { 'World Guardian': 1 });
 		state = lockBoth(state);
-		// 24 + 6 (World Guardian) = 30 = VP_TO_WIN. The +6 is a Cleanup CLAIM now;
-		// commitCleanup is blocked until claimed, so the VP lands before findWinner runs.
+		// 24 + 6 (World Guardian) = 30 = VP_TO_WIN. The +6 is a Benefits CLAIM; the
+		// sequence holds open on it, and claiming (the last outstanding work) rolls the
+		// round through cleanup where findWinner runs.
 		state.players.Red!.victoryPoints = 24;
 		state = toCleanup(state);
+		expect(state.phase).toBe('benefits'); // held open by Red's unclaimed reward
 		state = apply(state, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
 		expect(state.players.Red!.victoryPoints).toBe(30);
-		// Both seats walk benefits → awakening → cleanup; findWinner runs AFTER the reward is claimed.
-		state = finishRound(state);
 		expect(state.status).toBe('finished');
 		expect(state.winnerSeat).toBe('Red');
 	});
@@ -332,7 +307,6 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		state = lockBoth(state);
 		state.players.Red!.victoryPoints = 24;
 		state = toCleanup(state);
-		state = finishRound(state);
 		expect(state.status).toBe('active'); // rolled into the next round, no winner
 		expect(state.round).toBe(2);
 	});
@@ -352,6 +326,103 @@ describe('P5 determinism', () => {
 	});
 });
 
+// ── Resolution-sequence auto-skip (benefits → awakening → cleanup) ────────────
+// Engine-side twin of the client's old per-phase auto-pass: seats with no work are
+// auto-readied at each step, so the sequence stops ONLY where a seat has something
+// real to do — and resolving that work rolls the sequence forward with no commits.
+
+describe('resolution sequence auto-skip', () => {
+	const overflowRunes = (state: PublicGameState, seat: 'Red' | 'Blue', count: number): void => {
+		state.players[seat]!.mats = Array.from({ length: count }, (_, i) => ({
+			slotIndex: i + 1,
+			hasRune: true,
+			guid: `rune-${i}`,
+			name: `Rune ${i}`
+		}));
+	};
+
+	test('awakening holds open for a seat with an eligible face-down spirit; the flip rolls the round', () => {
+		let state = startedGame();
+		giveSpirit(state, 'Red', {});
+		state.players.Red!.spirits[0]!.isFaceDown = true; // free flip → awaken-eligible
+		state = lockBoth(state);
+		state = toCleanup(state);
+		// Benefits had no claims → skipped; awakening stops for Red's eligible spirit.
+		expect(state.phase).toBe('awakening');
+		expect(state.players.Blue!.phaseReady).toBe(true); // Blue idles, already ready
+		expect(state.players.Red!.phaseReady).toBe(false);
+
+		state = apply(state, RED, { type: 'awakenSpirit', slotIndex: 1 });
+		// The flip was Red's last piece of work → the rest of the sequence collapses.
+		expect(state.players.Red!.spirits[0]!.isFaceDown).toBe(false);
+		expect(state.round).toBe(2);
+		expect(state.phase).toBe('navigation');
+	});
+
+	test('commitAwakening still lets a seat decline its pending awaken offers', () => {
+		let state = startedGame();
+		giveSpirit(state, 'Red', {});
+		state.players.Red!.spirits[0]!.isFaceDown = true;
+		state = lockBoth(state);
+		state = toCleanup(state);
+		expect(state.phase).toBe('awakening');
+
+		state = apply(state, RED, { type: 'commitAwakening' });
+		expect(state.players.Red!.spirits[0]!.isFaceDown).toBe(true); // left dormant
+		expect(state.round).toBe(2);
+		expect(state.phase).toBe('navigation');
+	});
+
+	test('cleanup holds open on rune overflow; trimming to the carry limit rolls the round', () => {
+		let state = startedGame();
+		state = lockBoth(state);
+		overflowRunes(state, 'Red', RUNE_CARRY_LIMIT + 2);
+		state = toCleanup(state);
+		// Benefits + awakening had no work → skipped; cleanup stops on the overflow.
+		expect(state.phase).toBe('cleanup');
+		expect(state.players.Blue!.phaseReady).toBe(true);
+
+		state = apply(state, RED, { type: 'discardRune', slotIndex: 1 });
+		expect(state.phase).toBe('cleanup'); // still one over the limit
+		state = apply(state, RED, { type: 'discardRune', slotIndex: 2 });
+		expect(state.round).toBe(2);
+		expect(state.phase).toBe('navigation');
+	});
+
+	test('cleanup holds open on a payable corruption debt; paying it rolls the round', () => {
+		let state = startedGame();
+		giveSpirit(state, 'Red', {}); // face-up spirit — the sacrifice on the hook
+		state = lockBoth(state);
+		state = apply(state, RED, { type: 'endLocationActions' });
+		// Corruption strikes after Red passed but before the round wraps.
+		state.players.Red!.pendingCorruptionDiscard = { count: 1, reason: 'test' };
+		state = apply(state, BLUE, { type: 'endLocationActions' });
+		expect(state.phase).toBe('cleanup');
+		expect(state.players.Red!.phaseReady).toBe(false);
+
+		state = apply(state, RED, { type: 'discardSpirit', slotIndex: 1 });
+		expect(state.players.Red!.pendingCorruptionDiscard).toBeNull();
+		expect(state.round).toBe(2);
+		expect(state.phase).toBe('navigation');
+	});
+
+	test('benefits holds open on an unclaimed reward while workless seats idle ready', () => {
+		let state = startedGame();
+		giveSpirit(state, 'Red', { 'Golden Ruler': 1 });
+		state = lockBoth(state);
+		state = toCleanup(state);
+		expect(state.phase).toBe('benefits');
+		expect(state.players.Red!.phaseReady).toBe(false); // must claim
+		expect(state.players.Blue!.phaseReady).toBe(true); // idles silently
+
+		state = apply(state, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
+		// Claim was the last work anywhere → whole sequence collapses to round 2.
+		expect(state.players.Red!.victoryPoints).toBe(1);
+		expect(state.round).toBe(2);
+		expect(state.phase).toBe('navigation');
+	});
+});
+
 describe('all-Fallen end condition', () => {
 	test('the game ends once every player has Fallen — the highest VP wins', () => {
 		let state = startedGame();
@@ -361,7 +432,6 @@ describe('all-Fallen end condition', () => {
 		state.players.Red!.victoryPoints = 5;
 		state.players.Blue!.victoryPoints = 8;
 		state = toCleanup(state);
-		state = finishRound(state);
 		expect(state.status).toBe('finished');
 		expect(state.winnerSeat).toBe('Blue'); // most Victory Points
 	});
@@ -374,7 +444,6 @@ describe('all-Fallen end condition', () => {
 		state.players.Red!.victoryPoints = 30; // reached the win target outright
 		state.players.Blue!.victoryPoints = 8;
 		state = toCleanup(state);
-		state = finishRound(state);
 		expect(state.status).toBe('finished');
 		expect(state.winnerSeat).toBe('Red');
 	});
@@ -385,7 +454,6 @@ describe('all-Fallen end condition', () => {
 		state.players.Red!.statusLevel = 3; // Fallen
 		state.players.Blue!.statusLevel = 2; // Corrupt — not yet Fallen
 		state = toCleanup(state);
-		state = finishRound(state);
 		expect(state.status).toBe('active');
 		expect(state.round).toBe(2);
 	});

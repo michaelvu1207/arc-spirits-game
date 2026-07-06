@@ -910,13 +910,11 @@ describe('play runtime', () => {
 		);
 		if (!paid.ok) throw new Error(paid.error.message);
 		expect(paid.state.players.Red!.pendingCorruptionDiscard).toBeNull();
-		const committed = applyGameCommand(
-			paid.state,
-			{ ...HOST, seatColor: 'Red' },
-			{ type: 'commitCleanup' },
-			CATALOG
-		);
-		expect(committed.ok).toBe(true);
+		// Paying the debt was the seat's last piece of cleanup work — the engine
+		// auto-readies it, and with every other seat workless the round rolls over
+		// immediately (no explicit commitCleanup needed anymore).
+		expect(paid.state.phase).toBe('navigation');
+		expect(paid.state.round).toBe(2);
 	});
 
 	test('commitCleanup settles an UNPAYABLE corruption debt as VP loss instead of freezing the seat', () => {

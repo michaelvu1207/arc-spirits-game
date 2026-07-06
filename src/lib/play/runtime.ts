@@ -44,6 +44,7 @@ import {
 	tryAdvanceFromCleanup,
 	tryAdvanceFromEncounter,
 	recomputeAwakenEligibility,
+	autoAdvanceResolution,
 	forceAdvancePhase as forceAdvancePhaseMachine
 } from './phases';
 import { fightMonster, resolveEncounterCombat } from './combat';
@@ -1000,6 +1001,22 @@ export function applyGameCommand(
 		? ensureStateShape(currentState)
 		: ensureStateShape(cloneState(currentState));
 
+	const result = reduceCommand(state, actor, command, catalog);
+	// Whenever a command resolves the last piece of a seat's resolution-phase work
+	// (claimed the benefits grant, awakened the last eligible spirit, trimmed the last
+	// overflow rune, paid off the corruption debt, …), silently ready that seat — and
+	// advance the phase if that was everyone. This keeps players from ever facing an
+	// empty "Continue" step; phase entry does the same via the enter* helpers.
+	if (result.ok) autoAdvanceResolution(result.state, catalog);
+	return result;
+}
+
+function reduceCommand(
+	state: PublicGameState,
+	actor: GameActor,
+	command: GameCommand,
+	catalog: PlayCatalog
+): CommandResult {
 	switch (command.type) {
 		case 'claimSeat': {
 			if (state.status !== 'lobby') {

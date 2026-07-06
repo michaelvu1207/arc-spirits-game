@@ -36,6 +36,70 @@ function clearPhaseReady(state: PublicGameState): void {
 	}
 }
 
+/**
+ * Does this seat have anything REAL to do in the current resolution phase
+ * (`benefits` / `awakening` / `cleanup`)?
+ *
+ * This is the engine-side twin of the client's old per-phase auto-pass gates: a
+ * seat with no work here is auto-readied at phase entry (and re-checked whenever
+ * mid-phase work resolves), so players never sit through — or even SEE — empty
+ * resolution steps. A seat with work keeps `phaseReady === false` and the phase
+ * stops for it exactly as before.
+ */
+export function seatHasResolutionWork(state: PublicGameState, seat: SeatColor): boolean {
+	const player = state.players[seat];
+	if (!player) return false;
+	// An in-flight draw/reward or an unplaced Spirit Augment holds the seat in ANY
+	// resolution step (advancing would abandon/forfeit it).
+	if (player.pendingDraw || player.pendingReward) return true;
+	if ((player.pendingDrawQueue?.length ?? 0) > 0) return true;
+	if ((player.unplacedAugments?.length ?? 0) > 0) return true;
+	switch (state.phase) {
+		case 'benefits':
+			// The round's class grants must be claimed before Benefits can pass.
+			return !!player.pendingAwakenReward;
+		case 'awakening': {
+			// Anything the awakening stage surfaces: offers, still-eligible face-down
+			// flips, hand-resolved effects, or decision cards.
+			if ((player.awakenOffers?.length ?? 0) > 0) return true;
+			if ((player.manualPrompts?.length ?? 0) > 0) return true;
+			if ((player.pendingDecisions?.length ?? 0) > 0) return true;
+			return (player.awakenEligible ?? []).some(
+				(slot) => player.spirits.find((s) => s.slotIndex === slot)?.isFaceDown
+			);
+		}
+		case 'cleanup': {
+			// Rune overflow must be trimmed; a payable corruption debt must be paid.
+			if ((player.mats ?? []).filter((r) => r.hasRune).length > RUNE_CARRY_LIMIT) return true;
+			return !!(player.pendingCorruptionDiscard && player.spirits.length > 0);
+		}
+		default:
+			return false;
+	}
+}
+
+/**
+ * Auto-ready every seat with no work in the current resolution phase, then advance
+ * if that turns out to be everyone. Because each `enter*` step calls this at the end
+ * of its setup, a round where NOBODY has resolution work collapses the whole
+ * `benefits → awakening → cleanup` sequence inside one reducer step — clients go
+ * straight from the location phase to the next round's navigation and never render
+ * the empty steps (same pattern as the encounter phase's no-aggressors skip).
+ */
+export function autoAdvanceResolution(state: PublicGameState, catalog?: PlayCatalog): void {
+	const phase = state.phase;
+	if (phase !== 'benefits' && phase !== 'awakening' && phase !== 'cleanup') return;
+	if (state.status !== 'active') return;
+	for (const seat of state.activeSeats) {
+		const player = state.players[seat];
+		if (!player || player.phaseReady) continue;
+		if (!seatHasResolutionWork(state, seat)) player.phaseReady = true;
+	}
+	if (phase === 'benefits') tryAdvanceFromBenefits(state, catalog);
+	else if (phase === 'awakening') tryAdvanceFromAwakening(state, catalog);
+	else tryAdvanceFromCleanup(state, catalog);
+}
+
 function allActiveSeatsReady(state: PublicGameState): boolean {
 	if (state.activeSeats.length === 0) return false;
 	return state.activeSeats.every((seat) => state.players[seat]?.phaseReady === true);
@@ -236,6 +300,10 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 	// to drive it off. Done here (not mid-fight) so every player faces the same listed
 	// monster all round and excess kills never carry over.
 	advanceMonsterIfDefeated(state, catalog);
+
+	// Seats with nothing to claim skip the step silently; if that's everyone the whole
+	// resolution sequence collapses here (see autoAdvanceResolution).
+	autoAdvanceResolution(state, catalog);
 }
 
 /**
@@ -330,6 +398,8 @@ export function enterAwakening(state: PublicGameState, catalog?: PlayCatalog): v
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
 	clearPhaseReady(state);
 	recomputeAwakenEligibility(state, catalog);
+	// Seats with nothing to awaken/resolve skip the step silently.
+	autoAdvanceResolution(state, catalog);
 }
 
 /** Advance to the Cleanup step once every seat has confirmed its awakenings. */
@@ -350,6 +420,8 @@ export function enterCleanup(state: PublicGameState, catalog?: PlayCatalog): voi
 	// Keep offers/eligibility coherent for any UI that still reads them (no new flips
 	// happen here, but a spirit may have been left face-down).
 	recomputeAwakenEligibility(state, catalog);
+	// Seats with no overflow/corruption housekeeping skip the step silently.
+	autoAdvanceResolution(state, catalog);
 }
 
 /**

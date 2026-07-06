@@ -103,21 +103,13 @@ describe('deadline enforcement (applyDeadlineAdvance)', () => {
 		expect(state.phaseDeadline).toBeNull();
 	});
 
-	test('location timeout advances to the benefits step', () => {
+	test('location timeout rolls the whole workless round (resolution steps auto-skip)', () => {
 		const state = locationPhase();
 		expect(state.phase).toBe('location');
-		applyDeadlineAdvance(state, CATALOG);
-		expect(state.phase).toBe('benefits');
-	});
-
-	test('stepping the resolution sequence rolls into the next round', () => {
-		const state = locationPhase();
-		applyDeadlineAdvance(state, CATALOG); // location → benefits
-		expect(state.phase).toBe('benefits');
 		const round = state.round;
-		applyDeadlineAdvance(state, CATALOG); // benefits → awakening
-		applyDeadlineAdvance(state, CATALOG); // awakening → cleanup
-		applyDeadlineAdvance(state, CATALOG); // cleanup → next round navigation
+		applyDeadlineAdvance(state, CATALOG);
+		// Neither seat has benefits/awakening/cleanup work, so the forced advance
+		// chains through the empty resolution steps straight into the next round.
 		expect(state.phase).toBe('navigation');
 		expect(state.round).toBe(round + 1);
 	});
@@ -126,6 +118,7 @@ describe('deadline enforcement (applyDeadlineAdvance)', () => {
 		// RED stands at Tidal Cove, whose row 0 is a free Spirit World Summon.
 		const state = locationPhase();
 		const before = state.bags.hexSpirits.count;
+		const round = state.round;
 
 		const drawn = apply(state, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] });
 		expect(drawn.players.Red?.handDraws.length ?? 0).toBeGreaterThan(0);
@@ -133,7 +126,10 @@ describe('deadline enforcement (applyDeadlineAdvance)', () => {
 
 		applyDeadlineAdvance(drawn, CATALOG);
 
-		expect(drawn.phase).toBe('benefits');
+		// The abandoned draw is returned FIRST, leaving no resolution work — so the
+		// advance rolls the whole round rather than parking in an empty benefits step.
+		expect(drawn.phase).toBe('navigation');
+		expect(drawn.round).toBe(round + 1);
 		expect(drawn.players.Red?.pendingDraw ?? null).toBeNull();
 		expect(drawn.players.Red?.handDraws ?? []).toEqual([]);
 		// Bag total is conserved — the in-progress summon did NOT leak spirits.

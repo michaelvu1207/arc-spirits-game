@@ -462,7 +462,13 @@ describe('bot policy — Phase 7 integration sweep (effects + awakening ON)', ()
 				'cleanup'
 			]).toContain(phase);
 		}
-		for (const core of ['navigation', 'location', 'benefits', 'awakening', 'cleanup']) {
+		// The resolution steps (benefits/awakening/cleanup) now only REST when a seat
+		// has real work there — a workless sequence collapses inside one command and
+		// is never observed between commands. Navigation/location always rest;
+		// awakening reliably appears across a long sweep because the bots keep
+		// summoning face-down spirits whose eligible flips hold the step open (also
+		// asserted via the awakenSpirit command count in (c) below).
+		for (const core of ['navigation', 'location', 'awakening']) {
 			expect(phasesSeen.has(core)).toBe(true);
 		}
 

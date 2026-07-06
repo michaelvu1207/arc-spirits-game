@@ -1000,40 +1000,13 @@
 		send('force', { type: 'forceAdvancePhase' });
 	}
 
-	// ── Resolution-sequence auto-pass (benefits → awakening → cleanup) ─────────
-	// Awaken-eligible slots that are still face-down (mirrors the MainStage list).
-	const cleanupAwakenSlots = $derived(
-		(myPlayer?.awakenEligible ?? []).filter(
-			(slot) => myPlayer?.spirits.find((s) => s.slotIndex === slot)?.isFaceDown
-		)
-	);
-	// If the local player reaches one of the three post-location steps with nothing to
-	// do in it, commit it for them automatically — no empty "Continue" clicks. The step
-	// still STOPS in the main scene the moment it has a real decision (a reward to
-	// claim, a spirit to awaken, a rune to trim, …). Re-armed per phase so each of
-	// benefits/awakening/cleanup can auto-pass at most once.
-	let autoPassedPhase = $state<string | null>(null);
-	$effect(() => {
-		const phase = room.phase;
-		if (phase !== 'benefits' && phase !== 'awakening' && phase !== 'cleanup') {
-			autoPassedPhase = null; // re-arm for the next round's sequence
-			return;
-		}
-		if (e2eMode) return;
-		if (autoPassedPhase === phase || busy) return;
-		// canPassTurn already covers: seated · active · !ready · !pendingDraw/reward ·
-		// !pendingAwakenReward · no open action · rune/corruption gates.
-		if (!canPassTurn) return;
-		if ((myPlayer?.unplacedAugments?.length ?? 0) > 0) return; // an augment is waiting to be placed
-		if (phase === 'awakening') {
-			if ((myPlayer?.awakenOffers?.length ?? 0) > 0) return; // the main stage is showing awaken offers
-			if (cleanupAwakenSlots.length > 0) return; // there's still something to awaken
-			if ((myPlayer?.manualPrompts?.length ?? 0) > 0) return; // a hand-resolved effect is waiting
-			if ((myPlayer?.pendingDecisions?.length ?? 0) > 0) return; // a decision card is waiting
-		}
-		autoPassedPhase = phase;
-		passTurn(); // → commitBenefits / commitAwakening / commitCleanup
-	});
+	// ── Resolution sequence (benefits → awakening → cleanup) ───────────────────
+	// The ENGINE now auto-readies any seat with nothing to do in these steps and
+	// collapses the whole sequence server-side when that's everyone (phases.ts
+	// seatHasResolutionWork / autoAdvanceResolution). The client never needs to
+	// rubber-stamp empty steps: a player with no resolution work arrives already
+	// phaseReady and simply idles on the stable "Waiting for Players." view until
+	// the round rolls over; a player WITH work still gets that step's UI.
 
 	// ── Location auto-pass ───────────────────────────────────────────────────
 	// Combat is once per round (plus any extra-action credits).
