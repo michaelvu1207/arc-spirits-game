@@ -1,0 +1,28 @@
+{
+  "metric": "payload-size",
+  "description": "bytes of the full /view projection refetched by each client per revision",
+  "target": "prod-http",
+  "base": "https://arcspirits.com",
+  "unit": "bytes",
+  "samples": 2,
+  "measurements": {
+    "lobby": {
+      "rawBytes": 1592,
+      "gzipBytes": 577,
+      "revision": 0
+    },
+    "activeGame": {
+      "rawBytes": 14990,
+      "gzipBytes": 3753,
+      "revision": 14,
+      "round": 1,
+      "phase": "location"
+    }
+  },
+  "p50": 14990,
+  "p95": 14990,
+  "min": 1592,
+  "max": 14990,
+  "notes": "Captured against production. This is the OWNER (member-header) view — includes private per-seat detail, which is what the real client refetches. Every revision today re-sends this entire JSON; a delta WS protocol is the win.",
+  "capturedAt": "2026-07-06T05:17:36.713Z"
+}

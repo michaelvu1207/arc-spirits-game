@@ -1,0 +1,54 @@
+{
+  "metric": "bot-game",
+  "description": "server-side per-tick processing for a 4-neural-bot game driven headlessly via /bots/tick",
+  "target": "prod-http",
+  "base": "https://arcspirits.com",
+  "fullGameMeasuredHeadlessly": true,
+  "finding": "Full 4-bot game IS drivable headlessly (phases auto-advance when all bots act; no per-phase deadline wait). Wall-clock is dominated by SERVER PER-TICK PROCESSING — each tick runs the neural policy for up to 4 seats and writes each command as its own sequential Supabase CAS round-trip — not by the network. perTickMs is the transport-relevant figure.",
+  "perTickMs": {
+    "samples": 199,
+    "p50": 1557,
+    "p95": 12381.1,
+    "min": 1401.6,
+    "max": 15698.3,
+    "mean": 3488.7
+  },
+  "unit": "ms",
+  "samples": 199,
+  "p50": 1557,
+  "p95": 12381.1,
+  "min": 1401.6,
+  "max": 15698.3,
+  "mean": 3488.7,
+  "run": {
+    "capSeconds": 900,
+    "intervalMs": 0,
+    "navMs": 2000,
+    "elapsedSeconds": 695.2,
+    "fullGameSeconds": 695.2,
+    "ticks": 199,
+    "commandsIssued": 531,
+    "maxRoundReached": 30,
+    "phasesSeen": [
+      "location",
+      "benefits",
+      "cleanup",
+      "awakening",
+      "navigation",
+      "encounter"
+    ],
+    "finalStatus": "finished",
+    "finalPhase": "cleanup",
+    "finished": true
+  },
+  "phaseDeadlineSeconds": {
+    "navigation": 2,
+    "encounter": 90,
+    "location": 120,
+    "benefits": 45,
+    "awakening": 60,
+    "cleanup": 45
+  },
+  "notes": "Captured against production. Ticks driven at the browser host cadence (1300ms) by default. perTickMs is the transport-relevant figure: server bot-compute + command writes per tick.",
+  "capturedAt": "2026-07-06T05:15:38.423Z"
+}

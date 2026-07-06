@@ -1,0 +1,17 @@
+{
+  "metric": "update-propagation",
+  "description": "client A commit-ack → client B Realtime broadcast + /view refetch parsed (revision ≥ committed)",
+  "target": "prod-http",
+  "base": "https://arcspirits.com",
+  "transport": "Supabase Realtime broadcast (room:<CODE>, event sync) + HTTP /view refetch",
+  "samples": 100,
+  "p50": 202.9,
+  "p95": 327.1,
+  "min": 90.3,
+  "max": 428.4,
+  "mean": 213.1,
+  "unit": "ms",
+  "timeouts": 0,
+  "notes": "Captured against production. Client B subscribed OK: true. Excludes the 80ms store refresh-debounce (measured single-commit, not bursty). 8s per-sample timeout; timeouts counted, excluded from percentiles.",
+  "capturedAt": "2026-07-06T04:59:25.796Z"
+}

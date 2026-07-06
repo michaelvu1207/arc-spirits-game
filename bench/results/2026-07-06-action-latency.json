@@ -1,0 +1,17 @@
+{
+  "metric": "action-latency",
+  "description": "command → server ack round-trip (HTTP + Supabase CAS write + broadcast trigger)",
+  "target": "prod-http",
+  "base": "https://arcspirits.com",
+  "command": "setNavigationTimer (lobby, always-legal, revision-bumping)",
+  "samples": 200,
+  "p50": 720,
+  "p95": 826.2,
+  "min": 653.5,
+  "max": 2289.5,
+  "mean": 741.2,
+  "unit": "ms",
+  "failures": 0,
+  "notes": "Captured against production HTTP path. Lobby-state write path; mid-game public_state is larger, so this is a lower bound. Sequential requests, single client — no concurrency.",
+  "capturedAt": "2026-07-06T04:57:34.392Z"
+}
