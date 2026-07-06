@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { env } from '$env/dynamic/public';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '$lib/supabase';
 import type { RoomView } from '$lib/play/server/service';
@@ -6,6 +7,8 @@ import { isStaleRoomUpdate } from '$lib/play/roomView';
 import { reconcile } from '$lib/play/reconcile';
 import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
 import { auth } from '$lib/auth/auth.svelte';
+import type { RoomViewV2, SeatAffordances } from '$lib/play/viewV2';
+import { WsTransport, WsCommandRejected } from '$lib/stores/wsTransport';
 import type {
 	GameCommand,
 	RoomChatMessage,
@@ -26,6 +29,9 @@ let chatError = $state<string | null>(null);
 let chatLoading = $state(false);
 let chatOpen = $state(false);
 let chatRoomCode = $state<string | null>(null);
+// Per-seat action surface from RoomView v2 (WS transport only). Additive: not yet consumed
+// by components — exposed via getPlayState() for future affordance-driven UI. Empty in HTTP mode.
+let affordances = $state<Partial<Record<SeatColor, SeatAffordances>>>({});
 
 // Live transport: a Supabase Realtime broadcast channel (push) backed by a slow
 // safety/enforcement poll. The DB trigger broadcasts a tiny `{revision}` signal on
@@ -40,6 +46,38 @@ let refreshing = false;
 let refreshQueued = false;
 let lastOkAt = 0;
 let lifecycleBound = false;
+
+// Optional long-lived WebSocket transport (server/protocol.ts). When enabled it layers ON TOP
+// of the Supabase broadcast + poll machinery below — that path stays fully live as the HTTP
+// fallback and safety net. WS just gives optimistic-feel command acks (the ack IS the fresh
+// view) and server-pushed deltas. `wsConnected` (plain, non-reactive) only gates command
+// routing; the disconnect banner remains owned by the poll/watchdog so a WS blip never flaps it.
+let transport: WsTransport | null = null;
+let wsConnected = false;
+const WS_URL_STORAGE_KEY = 'arc-play-ws-url';
+
+/**
+ * The room WebSocket URL, or null to stay on pure HTTP. WS is enabled when any of:
+ *   - `?ws=<wss://url>` query param (explicit URL), or `?ws=1` to use the env default;
+ *     `?ws=0` force-disables even if the env var is set (fallback testing);
+ *   - `localStorage['arc-play-ws-url']` holds a URL;
+ *   - the `PUBLIC_WS_SERVER_URL` public env var is set.
+ */
+function resolveWsUrl(): string | null {
+	if (browser) {
+		try {
+			const q = new URLSearchParams(window.location.search).get('ws');
+			if (q === '0' || q === 'false') return null;
+			if (q === '1' || q === 'true') return env.PUBLIC_WS_SERVER_URL || null;
+			if (q) return q;
+			const stored = localStorage.getItem(WS_URL_STORAGE_KEY);
+			if (stored) return stored;
+		} catch {
+			// URL/storage access denied — fall through to the env default.
+		}
+	}
+	return env.PUBLIC_WS_SERVER_URL || null;
+}
 
 // Safety/enforcement poll cadence. Realtime broadcasts cover the responsive path
 // (≈150ms after any commit); this slower pull is the fallback that converges state
@@ -136,6 +174,53 @@ function setRoomView(view: RoomView) {
 	member = view.member;
 	if (view.member?.id) persistMemberId(view.projection.roomCode, view.member.id);
 	error = null;
+}
+
+/**
+ * Apply an authoritative RoomView v2 delivered over the WebSocket transport (joined / ack /
+ * delta). Reuses setRoomView (so the same-room staleness guard + reconcile path apply), then
+ * stores affordances only when the view was actually applied (not a stale, board-regressing
+ * one). WS activity also refreshes the liveness clock so the poll/watchdog stays quiet while
+ * the socket is healthy.
+ */
+function applyServerView(view: RoomViewV2) {
+	const stale = isStaleRoomUpdate(room, view.projection);
+	setRoomView({ projection: view.projection, member: view.member });
+	if (!stale) affordances = view.affordances ?? {};
+	lastOkAt = Date.now();
+	isConnected = true;
+	isReconnecting = false;
+}
+
+/** Tear down the WS transport (leaves the HTTP poll/channel machinery untouched). */
+function stopTransport() {
+	if (transport) {
+		transport.close();
+		transport = null;
+	}
+	wsConnected = false;
+}
+
+/** Start (or restart) the WS transport for the current room when a URL is configured. Additive
+ *  to the existing broadcast/poll path — never replaces it. */
+function startTransport() {
+	if (!browser || !room?.roomCode || room.status === 'closed') return;
+	const url = resolveWsUrl();
+	if (!url) return;
+	stopTransport();
+	const roomCode = room.roomCode;
+	const memberToken = memberIdForRoom(roomCode) ?? undefined;
+	transport = new WsTransport({
+		onView: (view) => applyServerView(view),
+		onStatus: ({ connected }) => {
+			wsConnected = connected;
+		},
+		onFatal: () => {
+			// Bad join / room gone — drop to the HTTP path, which will surface any real error.
+			stopTransport();
+		}
+	});
+	transport.connect(url, roomCode, memberToken);
 }
 
 /**
@@ -314,6 +399,9 @@ function bindLifecycle() {
 		if (!room?.roomCode || room.status === 'closed') return;
 		openChannel();
 		void refresh();
+		// Nudge the WS transport too: if its socket died silently while backgrounded, ask for a
+		// fresh full view (the transport also drives its own backoff reconnect independently).
+		if (wsConnected) transport?.resync();
 	};
 	window.addEventListener('online', wake);
 	document.addEventListener('visibilitychange', () => {
@@ -324,6 +412,7 @@ function bindLifecycle() {
 function disconnect() {
 	clearTimers();
 	closeChannel();
+	stopTransport();
 	isConnected = false;
 	isReconnecting = false;
 }
@@ -339,6 +428,7 @@ function connect() {
 	isConnected = true;
 	lastOkAt = Date.now();
 	openChannel();
+	startTransport();
 	void refresh();
 	void loadRoomChat(room.roomCode, { countUnread: false });
 	pollTimer = setInterval(() => void refresh(), POLL_MS);
@@ -558,8 +648,20 @@ export async function startPlayGame() {
 	return view;
 }
 
-export async function sendPlayCommand(command: GameCommand) {
+export async function sendPlayCommand(command: GameCommand): Promise<RoomView> {
 	if (!room) throw new Error('No room is loaded.');
+	// WS path: the ack IS the fresh view (applied immediately via onView — the optimistic-feel
+	// fix, no /view refetch). A server REJECTION propagates to the caller (HTTP would reject
+	// identically); a transport DROP falls through to HTTP so the command still lands.
+	if (transport && wsConnected) {
+		try {
+			const ack = await transport.sendCommand(command, room.revision);
+			return { projection: ack.view.projection, member: ack.view.member };
+		} catch (err) {
+			if (err instanceof WsCommandRejected) throw new Error(err.message);
+			// WsTransportUnavailable (socket dropped) → fall back to HTTP below.
+		}
+	}
 	const view = await postPlayJson<RoomView>(
 		`/api/play/sessions/${encodeURIComponent(room.roomCode)}/commands`,
 		{
@@ -605,6 +707,11 @@ export function getPlayState() {
 		},
 		get chatOpen() {
 			return chatOpen;
+		},
+		/** Per-seat action surface from RoomView v2 (WS mode only; empty on HTTP). Additive —
+		 *  not yet consumed by components. */
+		get affordances() {
+			return affordances;
 		},
 		connect,
 		disconnect,
