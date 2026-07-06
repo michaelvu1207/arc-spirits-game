@@ -28,8 +28,14 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 
 const httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
 	if (req.method === 'GET' && req.url === '/healthz') {
-		const { rooms, connections } = registry.stats();
-		sendJson(res, 200, { ok: true, rooms, connections, uptime: Math.floor((Date.now() - START) / 1000) });
+		const { rooms, connections, roomLoads } = registry.stats();
+		sendJson(res, 200, {
+			ok: true,
+			rooms,
+			connections,
+			roomLoads,
+			uptime: Math.floor((Date.now() - START) / 1000)
+		});
 		return;
 	}
 	// Dev-only room seeding for the smoke (never on in production).

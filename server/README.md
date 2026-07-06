@@ -37,8 +37,10 @@ Secrets are only ever read into `process.env`; nothing is logged.
 ## Architecture
 
 ```
-index.ts        http server (GET /healthz, dev POST /debug/seed[-bots]) + WS upgrade + shutdown
+index.ts        http server (GET /healthz → {ok,rooms,connections,roomLoads,uptime},
+                dev POST /debug/seed[-bots]) + WS upgrade + shutdown
 connections.ts  RoomRegistry: socket lifecycle, per-connection viewer-filtered views,
+                single-load dedup for concurrent cold joins (in-flight promise map),
                 join auth, delta broadcast, heartbeat-timeout, snapshot/evict sweep
 roomHost.ts     RoomHost: in-memory state, serialized command queue, deadline stamping,
                 snapshot persistence, and the live tick loop (deadline + bots)

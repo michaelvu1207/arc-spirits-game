@@ -48,8 +48,6 @@ function parseCookies(header: string | undefined): Map<string, string> {
 interface RoomEntry {
 	host: RoomHost;
 	connections: Set<Connection>;
-	/** Serializes concurrent first-join loads for the same room. */
-	loading?: Promise<RoomHost | null>;
 }
 
 /** One live socket + its resolved identity. */
@@ -84,8 +82,15 @@ class Connection {
 
 export class RoomRegistry {
 	private rooms = new Map<string, RoomEntry>();
+	/** In-flight cold-room loads, keyed by room code, so truly-simultaneous first joins
+	 *  await the SAME entry instead of each loading their own host (double timers +
+	 *  orphaned connection). Registered synchronously before the first await. */
+	private loading = new Map<string, Promise<RoomEntry | null>>();
 	private sweepTimer: NodeJS.Timeout | null = null;
 	private lastSnapshotAt = 0;
+	/** Count of actual RoomHost.load calls — exposed on /healthz so the concurrent-cold-join
+	 *  regression test can assert exactly ONE load happens (the old double-load path did two). */
+	private loadCount = 0;
 
 	start(): void {
 		if (this.sweepTimer) return;
@@ -93,10 +98,10 @@ export class RoomRegistry {
 		this.sweepTimer.unref?.();
 	}
 
-	stats(): { rooms: number; connections: number } {
+	stats(): { rooms: number; connections: number; roomLoads: number } {
 		let connections = 0;
 		for (const entry of this.rooms.values()) connections += entry.connections.size;
-		return { rooms: this.rooms.size, connections };
+		return { rooms: this.rooms.size, connections, roomLoads: this.loadCount };
 	}
 
 	/** Wire a freshly-upgraded socket into the protocol handlers. */
@@ -283,28 +288,48 @@ export class RoomRegistry {
 		return null; // spectator
 	}
 
-	private async getOrLoadRoom(roomCode: string): Promise<RoomEntry | null> {
+	/**
+	 * Get the room's entry, loading it (once) on the first join. NOT async: it registers
+	 * the in-flight load promise in `this.loading` SYNCHRONOUSLY before any await, so two
+	 * truly-simultaneous first joins to a cold room both await the SAME promise — exactly
+	 * one RoomHost is loaded, one timer starts, one entry holds both connections. On failure
+	 * (null / throw) the pending entry is evicted so a later join can retry cleanly.
+	 */
+	/**
+	 * Get the room's entry, loading it (once) on the first join. NOT async: it registers
+	 * the in-flight load promise in `this.loading` SYNCHRONOUSLY before any await, so two
+	 * truly-simultaneous first joins to a cold room both await the SAME promise — exactly
+	 * one RoomHost is loaded, one timer starts, one entry holds both connections. On failure
+	 * (null / throw) the pending entry is evicted so a later join can retry cleanly.
+	 */
+	private getOrLoadRoom(roomCode: string): Promise<RoomEntry | null> {
 		const existing = this.rooms.get(roomCode);
-		if (existing) return existing;
-		// Deduplicate concurrent first-join loads.
-		const placeholder: RoomEntry = { host: null as unknown as RoomHost, connections: new Set() };
-		placeholder.loading = RoomHost.load(roomCode);
-		const host = await placeholder.loading;
-		if (!host) return null;
-		// Another join may have populated it while we awaited.
-		const raced = this.rooms.get(roomCode);
-		if (raced && raced.host) return raced;
-		const entry: RoomEntry = { host, connections: placeholder.connections };
-		let lastBroadcastRev = entry.host.getRevision();
-		entry.host.onServerAdvance = () => {
-			// Server-driven advances (deadline enforcement / bot moves) broadcast to everyone.
-			const to = entry.host.getRevision();
-			this.broadcast(entry, lastBroadcastRev, to);
-			lastBroadcastRev = to;
-		};
-		this.rooms.set(roomCode, entry);
-		entry.host.start(); // begin the in-process tick loop (deadline enforcement + bots)
-		return entry;
+		if (existing) return Promise.resolve(existing);
+		const inFlight = this.loading.get(roomCode);
+		if (inFlight) return inFlight;
+
+		const load = (async (): Promise<RoomEntry | null> => {
+			try {
+				this.loadCount += 1;
+				const host = await RoomHost.load(roomCode);
+				if (!host) return null;
+				const entry: RoomEntry = { host, connections: new Set() };
+				let lastBroadcastRev = host.getRevision();
+				host.onServerAdvance = () => {
+					// Server-driven advances (deadline enforcement / bot moves) broadcast to everyone.
+					const to = host.getRevision();
+					this.broadcast(entry, lastBroadcastRev, to);
+					lastBroadcastRev = to;
+				};
+				this.rooms.set(roomCode, entry);
+				host.start(); // begin the in-process tick loop (deadline enforcement + bots)
+				return entry;
+			} finally {
+				this.loading.delete(roomCode); // clear the in-flight marker (success, null, or throw)
+			}
+		})();
+		this.loading.set(roomCode, load);
+		return load;
 	}
 
 	private async sweep(): Promise<void> {

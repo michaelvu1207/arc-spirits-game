@@ -237,6 +237,47 @@ async function main() {
 	check('deadline enforcement fires with ZERO connected sockets', zsRejoined.revision > zsJoined.revision, `rev ${zsJoined.revision} → ${zsRejoined.revision} while unwatched`);
 	zsSock2.close();
 
+	// ── Concurrent cold-join race (regression for the getOrLoadRoom double-load bug) ──
+	// 12) Two clients join a COLD (never-loaded) room simultaneously. They must land in the
+	//     SAME room entry — one host, one connection set — so /healthz counts both and a
+	//     subsequent command broadcasts to both. On the buggy path one join is orphaned into
+	//     a second entry (never in the rooms map): /healthz undercounts and the orphan never
+	//     gets broadcasts.
+	const raceSeed = await (await fetch(`${BASE}/debug/seed`, { method: 'POST' })).json();
+	const h0 = await (await fetch(`${BASE}/healthz`)).json();
+	const [ra, rb] = await Promise.all([openSocket(), openSocket()]);
+	const joinFrame = JSON.stringify({ t: 'join', roomCode: raceSeed.roomCode });
+	const joinedA = nextMessage(ra, (m) => m.t === 'joined');
+	const joinedB = nextMessage(rb, (m) => m.t === 'joined');
+	ra.send(joinFrame); // fired back-to-back so both hit the cold-load window
+	rb.send(joinFrame);
+	await Promise.all([joinedA, joinedB]);
+	const h1 = await (await fetch(`${BASE}/healthz`)).json();
+	// Deterministic regression signal: the cold room is loaded exactly ONCE for both joins.
+	// The old double-load path loads it twice (two hosts, two tick timers) before the
+	// recheck discards one — this asserts the single-load invariant.
+	check('concurrent cold joins load the room exactly once', h1.roomLoads - h0.roomLoads === 1, `roomLoads ${h0.roomLoads} → ${h1.roomLoads} (old path = +2)`);
+	check('concurrent cold joins share one room (healthz +2, not +1)', h1.connections - h0.connections === 2, `connections ${h0.connections} → ${h1.connections}`);
+
+	// A subsequent command must broadcast to BOTH concurrently-joined sockets.
+	const deltaA = nextMessage(ra, (m) => m.t === 'delta', 6000);
+	const deltaB = nextMessage(rb, (m) => m.t === 'delta', 6000);
+	const owner2 = await openSocket();
+	owner2.send(JSON.stringify({ t: 'join', roomCode: raceSeed.roomCode, memberToken: raceSeed.memberId }));
+	await nextMessage(owner2, (m) => m.t === 'joined');
+	owner2.send(JSON.stringify({ t: 'command', cmdId: 'race-cmd', command: raceSeed.sampleCommand }));
+	let bothDeltas = false;
+	try {
+		const [dA, dB] = await Promise.all([deltaA, deltaB]);
+		bothDeltas = dA.t === 'delta' && dB.t === 'delta';
+	} catch {
+		bothDeltas = false; // a timeout means an orphaned socket never got the broadcast
+	}
+	check('both concurrent sockets receive the broadcast delta', bothDeltas);
+	ra.close();
+	rb.close();
+	owner2.close();
+
 	console.log(`\ncommand → ack latency: ${ackMs.toFixed(1)}ms`);
 	console.log(`bot first-move latency (join → autonomous delta): ${botFirstDeltaMs.toFixed(0)}ms`);
 }
