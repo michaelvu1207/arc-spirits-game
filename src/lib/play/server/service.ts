@@ -2,7 +2,7 @@ import { error as kitError } from '@sveltejs/kit';
 import {
 	createLobbyState,
 	applyGameCommand,
-	locationDeadlineBlockingSeats,
+	deadlineBlockingSeats,
 	resolvePassedDeadline,
 	buildHistorySnapshotRows,
 	buildSessionProjection
@@ -571,14 +571,16 @@ async function maybeEnforceDeadline(session: PlaySessionRow): Promise<PlaySessio
 
 	const catalog = await loadPlayCatalog();
 
-	// A present human still mid-obligation (unclaimed monster reward / in-flight draw / owed
-	// corruption discard) EXTENDS the Location deadline rather than being force-advanced —
-	// a forced advance would silently auto-claim (incl. `chooseRune` picks). Bots are excluded
-	// (they claim during their own tick), and the extension is bounded so a disconnected seat
-	// can't stall the room: after the budget the backstop advance below fires. `botSeats` is
-	// loaded ONLY when an obligation is actually open (the rare path), never on the hot no-op.
+	// A present human still mid-obligation in an extendable phase (an unclaimed Location
+	// reward / in-flight draw, the round's Benefits grants, an un-flipped Awakening spirit or
+	// decision, a Cleanup corruption sacrifice / rune overflow) EXTENDS the deadline rather
+	// than being force-advanced — a forced advance would silently resolve it FOR them (incl.
+	// `chooseRune` and Benefits split/relic picks). Bots are excluded (they resolve during
+	// their own tick), and the extension is bounded so a disconnected seat can't stall the
+	// room: after the budget the backstop advance below fires. `botSeats` is loaded ONLY when
+	// an obligation is actually open (the rare path), never on the hot no-op.
 	let botSeats: SeatColor[] = [];
-	if (locationDeadlineBlockingSeats(state).length > 0) {
+	if (deadlineBlockingSeats(state).length > 0) {
 		const botMembers = await loadBotMembers(session.id);
 		botSeats = state.activeSeats.filter((seat) => {
 			const memberId = state.seats[seat]?.memberId;

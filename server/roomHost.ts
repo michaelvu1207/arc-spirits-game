@@ -215,9 +215,10 @@ export class RoomHost {
 		const startRev = this.state.revision;
 
 		// 1. Wall-clock deadline enforcement — fires with zero connected sockets too. A present
-		//    human still holding a Location obligation EXTENDS instead of being force-advanced
-		//    (which would silently auto-claim their reward); bots are excluded so bot games never
-		//    stall, and the extension is bounded (backstop advance once the budget is spent).
+		//    human still holding an obligation in an extendable phase (Location reward/draw,
+		//    Benefits grants, Awakening flip/decision, Cleanup sacrifice/overflow) EXTENDS instead
+		//    of being force-advanced (which would silently resolve it for them); bots are excluded
+		//    so bot games never stall, and the extension is bounded (backstop advance once spent).
 		await this.enqueue(() => {
 			if (deadlinePassed(this.state)) {
 				const botSeats = seatedBotSeats(this.state, this.botMembers);

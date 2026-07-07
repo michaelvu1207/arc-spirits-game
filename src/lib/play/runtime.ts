@@ -27,8 +27,8 @@ import {
 	ALL_DESTINATIONS,
 	RUNE_CARRY_LIMIT,
 	DEFAULT_NAVIGATION_DURATION_MS,
-	LOCATION_DEADLINE_EXTENSION_MS,
-	LOCATION_DEADLINE_MAX_EXTENSIONS
+	DEADLINE_EXTENSION_MS,
+	DEADLINE_MAX_EXTENSIONS
 } from './types';
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import {
@@ -47,6 +47,7 @@ import {
 	tryAdvanceFromEncounter,
 	recomputeAwakenEligibility,
 	autoAdvanceResolution,
+	seatHasResolutionWork,
 	forceAdvancePhase as forceAdvancePhaseMachine
 } from './phases';
 import { fightMonster, resolveEncounterCombat } from './combat';
@@ -774,10 +775,11 @@ export function applyDeadlineAdvance(state: PublicGameState, catalog: PlayCatalo
  * auto-resolve. Mirrors the `endLocationActions` legality guard (`legality.ts`) EXACTLY —
  * "the deadline can't advance past it" is the server-side twin of "the player can't end
  * their turn with it open": an unclaimed monster reward (whose auto-claim silently makes
- * `chooseRune` picks), an in-flight draw / summon, or a payable corruption discard. Empty
- * outside the Location phase. Pure — the caller decides who among these is a present human.
+ * `chooseRune` picks), an in-flight draw / summon, unresolved combat, or a payable
+ * corruption discard. Empty outside the Location phase. Pure — the caller decides who among
+ * these is a present human.
  */
-export function locationDeadlineBlockingSeats(state: PublicGameState): SeatColor[] {
+function locationDeadlineBlockingSeats(state: PublicGameState): SeatColor[] {
 	if (state.phase !== 'location') return [];
 	const inUnresolvedCombat = new Set<SeatColor>();
 	for (const combat of state.combats) {
@@ -799,16 +801,37 @@ export function locationDeadlineBlockingSeats(state: PublicGameState): SeatColor
 }
 
 /**
- * Resolve a Location deadline that has PASSED (the caller owns the clock comparison, so
+ * Seats that still hold an honest-choice obligation a forced advance would silently
+ * resolve, for whichever phase can be extended. Dispatches per phase:
+ *   - Location → {@link locationDeadlineBlockingSeats} (endLocationActions legality twin).
+ *   - Benefits / Awakening / Cleanup → {@link seatHasResolutionWork}, the exact engine-side
+ *     definition of "this seat has real resolution work" (phases.ts) that already gates
+ *     auto-ready — so extending mirrors each phase's own commit/holdout guards: an unclaimed
+ *     Benefits reward (auto-defaulted split + relic picks), an un-flipped Awakening spirit /
+ *     decision / augment, or a Cleanup rune overflow / payable corruption sacrifice.
+ * Empty in navigation/encounter (no silent-pick obligation — a missed nav lock just gets a
+ * random destination, encounter is pass/initiate). Pure — the caller decides who is present.
+ */
+export function deadlineBlockingSeats(state: PublicGameState): SeatColor[] {
+	if (state.phase === 'location') return locationDeadlineBlockingSeats(state);
+	if (state.phase === 'benefits' || state.phase === 'awakening' || state.phase === 'cleanup')
+		return state.activeSeats.filter((seat) => seatHasResolutionWork(state, seat));
+	return [];
+}
+
+/**
+ * Resolve a phase deadline that has PASSED (the caller owns the clock comparison, so
  * the reducer stays clock-free — `now` is injected). If a present, non-bot seat still
- * holds a blocking obligation and the grace budget remains, re-stamp a short extension
- * ({@link LOCATION_DEADLINE_EXTENSION_MS}) instead of advancing — an active player
- * mid-choice is never yanked and their reward is never silently auto-picked. Otherwise
- * force-advance (the anti-deadlock backstop; auto-claim allowed — deadlock beats hostage).
+ * holds a blocking obligation for an extendable phase and the grace budget remains,
+ * re-stamp a short extension ({@link DEADLINE_EXTENSION_MS}) instead of advancing — an
+ * active player mid-choice is never yanked and nothing is silently picked for them.
+ * Otherwise force-advance (the anti-deadlock backstop; auto-resolve allowed — deadlock
+ * beats hostage). The budget ({@link PublicGameState.phaseDeadlineExtensions}) is
+ * per-phase-entry, so each extendable phase gets its own fresh grace.
  *
- * `botSeats` are excluded from the "present human" set: bots claim their rewards during
- * their own tick, so a bot-held obligation must advance immediately (extending would stall
- * bot games). Returns whether it `extended` (deadline moved, no advance) or `advanced`.
+ * `botSeats` are excluded from the "present human" set: bots resolve their obligations
+ * during their own tick, so a bot-held obligation must advance immediately (extending would
+ * stall bot games). Returns whether it `extended` (deadline moved, no advance) or `advanced`.
  */
 export function resolvePassedDeadline(
 	state: PublicGameState,
@@ -817,15 +840,12 @@ export function resolvePassedDeadline(
 	botSeats: readonly SeatColor[]
 ): 'extended' | 'advanced' {
 	if (state.status === 'active') {
-		const humanBlocking = locationDeadlineBlockingSeats(state).filter(
+		const humanBlocking = deadlineBlockingSeats(state).filter(
 			(seat) => !botSeats.includes(seat)
 		);
-		if (
-			humanBlocking.length > 0 &&
-			state.locationDeadlineExtensions < LOCATION_DEADLINE_MAX_EXTENSIONS
-		) {
-			state.locationDeadlineExtensions += 1;
-			state.phaseDeadline = now + LOCATION_DEADLINE_EXTENSION_MS;
+		if (humanBlocking.length > 0 && state.phaseDeadlineExtensions < DEADLINE_MAX_EXTENSIONS) {
+			state.phaseDeadlineExtensions += 1;
+			state.phaseDeadline = now + DEADLINE_EXTENSION_MS;
 			state.revision += 1;
 			return 'extended';
 		}
@@ -931,7 +951,7 @@ function ensureStateShape(state: PublicGameState): PublicGameState {
 	state.navigationDeadline ??= null;
 	state.navigationFullDeadline ??= null;
 	state.phaseDeadline ??= null;
-	state.locationDeadlineExtensions ??= 0;
+	state.phaseDeadlineExtensions ??= 0;
 	state.locationOccupancy ??= {};
 	state.monster ??= null;
 	state.combats ??= [];
@@ -1046,7 +1066,7 @@ export function createLobbyState(input: {
 		navigationDeadline: null,
 		navigationFullDeadline: null,
 		phaseDeadline: null,
-		locationDeadlineExtensions: 0,
+		phaseDeadlineExtensions: 0,
 		locationOccupancy: {},
 		monster: null,
 		combats: [],

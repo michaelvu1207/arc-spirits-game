@@ -22,7 +22,8 @@ import type {
 	PlayCatalog,
 	PublicGameState
 } from './types';
-import { LOCATION_DEADLINE_EXTENSION_MS, LOCATION_DEADLINE_MAX_EXTENSIONS } from './types';
+import { DEADLINE_EXTENSION_MS, DEADLINE_MAX_EXTENSIONS } from './types';
+import { enterBenefits, enterAwakening, enterCleanup } from './phases';
 import type { GameLocationRewardRow } from '$lib/types';
 
 const HOST: GameActor = { memberId: 'm-host', displayName: 'Host', role: 'host', seatColor: null };
@@ -180,7 +181,7 @@ describe('location deadline extension (resolvePassedDeadline)', () => {
 	}
 
 	test('a fresh Location phase starts with a zero extension budget', () => {
-		expect(locationPhase().locationDeadlineExtensions).toBe(0);
+		expect(locationPhase().phaseDeadlineExtensions).toBe(0);
 	});
 
 	test('the raw force-advance silently auto-claims a held reward (the surviving backstop)', () => {
@@ -203,8 +204,8 @@ describe('location deadline extension (resolvePassedDeadline)', () => {
 		expect(outcome).toBe('extended');
 		expect(state.phase).toBe('location'); // did NOT advance past the active player
 		expect(state.players.Red?.pendingReward ?? null).not.toBeNull(); // reward untouched, not auto-picked
-		expect(state.locationDeadlineExtensions).toBe(1);
-		expect(state.phaseDeadline).toBe(now + LOCATION_DEADLINE_EXTENSION_MS); // re-stamped forward
+		expect(state.phaseDeadlineExtensions).toBe(1);
+		expect(state.phaseDeadline).toBe(now + DEADLINE_EXTENSION_MS); // re-stamped forward
 	});
 
 	test('a seat mid-combat (unresolved CombatState) extends — no yank between roll and reward', () => {
@@ -267,7 +268,7 @@ describe('location deadline extension (resolvePassedDeadline)', () => {
 		const outcome = resolvePassedDeadline(state, CATALOG, 5000, ['Red']); // Red seated by a bot
 
 		expect(outcome).toBe('advanced');
-		expect(state.locationDeadlineExtensions).toBe(0);
+		expect(state.phaseDeadlineExtensions).toBe(0);
 		expect(state.phase).not.toBe('location');
 	});
 
@@ -283,16 +284,192 @@ describe('location deadline extension (resolvePassedDeadline)', () => {
 		state.players.Red!.pendingReward = fakeReward();
 		let now = 1000;
 
-		for (let i = 0; i < LOCATION_DEADLINE_MAX_EXTENSIONS; i += 1) {
-			now += LOCATION_DEADLINE_EXTENSION_MS + 1;
+		for (let i = 0; i < DEADLINE_MAX_EXTENSIONS; i += 1) {
+			now += DEADLINE_EXTENSION_MS + 1;
 			expect(resolvePassedDeadline(state, CATALOG, now, [])).toBe('extended');
 		}
-		expect(state.locationDeadlineExtensions).toBe(LOCATION_DEADLINE_MAX_EXTENSIONS);
+		expect(state.phaseDeadlineExtensions).toBe(DEADLINE_MAX_EXTENSIONS);
 		expect(state.phase).toBe('location'); // still protected up to the cap
 
-		now += LOCATION_DEADLINE_EXTENSION_MS + 1;
+		now += DEADLINE_EXTENSION_MS + 1;
 		expect(resolvePassedDeadline(state, CATALOG, now, [])).toBe('advanced'); // hostage cap reached
 		expect(state.players.Red?.pendingReward ?? null).toBeNull(); // backstop auto-claim (deadlock beats hostage)
 		expect(state.phase).not.toBe('location');
+	});
+});
+
+/**
+ * Extension coverage for the three post-location resolution phases (Benefits, Awakening,
+ * Cleanup), the twin of the Location bug: a forced advance past their deadline silently
+ * resolves an open obligation FOR the player — Benefits auto-claims the round's grants with
+ * default Tainted-split + relic picks, Awakening abandons an un-resolved decision / flip,
+ * Cleanup auto-sacrifices spirits for a corruption debt. `resolvePassedDeadline` now extends
+ * for a present, non-bot seat in ANY of these phases (blocking work mirrors
+ * `seatHasResolutionWork`), bounded by the same per-phase grace budget.
+ *
+ * Each "extends" case is a regression that FAILS against the pre-fix engine, whose
+ * `resolvePassedDeadline` extended for the Location phase ONLY and unconditionally advanced
+ * (auto-resolving the obligation) in every resolution phase — the exact opposite of these
+ * assertions. The paired "backstop" case characterizes that surviving force-resolve.
+ */
+describe('resolution-phase deadline extension (resolvePassedDeadline)', () => {
+	/** A location-phase game re-pointed at a resolution phase with a fresh grace budget —
+	 *  the state the server holds when a resolution step opens. */
+	function resolutionPhase(phase: 'benefits' | 'awakening' | 'cleanup'): PublicGameState {
+		const state = locationPhase();
+		state.phase = phase;
+		state.phaseDeadlineExtensions = 0;
+		state.phaseDeadline = 1000;
+		return state;
+	}
+
+	// ── Benefits ────────────────────────────────────────────────────────────────
+	describe('benefits', () => {
+		// A minimal unclaimed grant. `resolveAwakenReward` is the only honest way to clear it;
+		// a forced advance drains it via applyAwakenRewardClaim with default picks.
+		function grantReward(state: PublicGameState) {
+			state.players.Red!.pendingAwakenReward = {
+				grants: [{ kind: 'vp', amount: 1, source: 'World Guardian' }]
+			};
+		}
+
+		test('the raw force-advance silently auto-claims the round grants (surviving backstop)', () => {
+			const state = resolutionPhase('benefits');
+			grantReward(state);
+			applyDeadlineAdvance(state, CATALOG);
+			// Claimed FOR the player (default picks) — the bug, kept only as the deadlock backstop.
+			expect(state.players.Red?.pendingAwakenReward ?? null).toBeNull();
+			expect(state.phase).not.toBe('benefits');
+		});
+
+		test('a present human with an unclaimed grant EXTENDS — grant left intact, not auto-picked', () => {
+			const state = resolutionPhase('benefits');
+			grantReward(state);
+
+			const outcome = resolvePassedDeadline(state, CATALOG, 5000, []);
+
+			expect(outcome).toBe('extended');
+			expect(state.phase).toBe('benefits'); // did NOT advance past the deliberating player
+			expect(state.players.Red?.pendingAwakenReward ?? null).not.toBeNull(); // grant untouched
+			expect(state.phaseDeadlineExtensions).toBe(1);
+			expect(state.phaseDeadline).toBe(5000 + DEADLINE_EXTENSION_MS);
+		});
+
+		test('a bot-held grant advances immediately — bots are never extended for', () => {
+			const state = resolutionPhase('benefits');
+			grantReward(state);
+			const outcome = resolvePassedDeadline(state, CATALOG, 5000, ['Red']);
+			expect(outcome).toBe('advanced');
+			expect(state.phaseDeadlineExtensions).toBe(0);
+			expect(state.phase).not.toBe('benefits');
+		});
+	});
+
+	// ── Awakening ───────────────────────────────────────────────────────────────
+	describe('awakening', () => {
+		// A pending decision card — a real choice `seatHasResolutionWork` reports for awakening;
+		// a forced advance drops it unresolved (the abandonment harm).
+		function pendDecision(state: PublicGameState) {
+			state.players.Red!.pendingDecisions = [
+				{
+					id: 'dec1',
+					source: 'class',
+					kind: 'test',
+					prompt: 'Choose one',
+					options: [
+						{ id: 'a', label: 'A' },
+						{ id: 'b', label: 'B' }
+					]
+				}
+			];
+		}
+
+		test('the raw force-advance abandons the pending decision (surviving backstop)', () => {
+			const state = resolutionPhase('awakening');
+			pendDecision(state);
+			applyDeadlineAdvance(state, CATALOG);
+			expect(state.phase).not.toBe('awakening'); // advanced past the unresolved choice
+		});
+
+		test('a present human mid-decision EXTENDS — the choice is not dropped', () => {
+			const state = resolutionPhase('awakening');
+			pendDecision(state);
+
+			const outcome = resolvePassedDeadline(state, CATALOG, 5000, []);
+
+			expect(outcome).toBe('extended');
+			expect(state.phase).toBe('awakening');
+			expect(state.players.Red?.pendingDecisions?.length ?? 0).toBe(1); // choice kept
+			expect(state.phaseDeadlineExtensions).toBe(1);
+		});
+
+		test('a bot-held decision advances immediately — bots are never extended for', () => {
+			const state = resolutionPhase('awakening');
+			pendDecision(state);
+			const outcome = resolvePassedDeadline(state, CATALOG, 5000, ['Red']);
+			expect(outcome).toBe('advanced');
+			expect(state.phase).not.toBe('awakening');
+		});
+	});
+
+	// ── Cleanup ─────────────────────────────────────────────────────────────────
+	describe('cleanup', () => {
+		// A payable corruption debt (owed count + a spirit to pay it) — the Cleanup obligation
+		// a forced advance auto-sacrifices highest-slot spirits to settle.
+		function oweCorruption(state: PublicGameState) {
+			state.players.Red!.spirits = [
+				{ slotIndex: 1, id: 's-x', name: 'Keeper', cost: 2, classes: {}, origins: {}, isFaceDown: false }
+			];
+			state.players.Red!.pendingCorruptionDiscard = { count: 1, reason: 'combat' };
+		}
+
+		test('the raw force-advance silently sacrifices a spirit for the debt (surviving backstop)', () => {
+			const state = resolutionPhase('cleanup');
+			oweCorruption(state);
+			applyDeadlineAdvance(state, CATALOG);
+			// Debt auto-paid by discarding the spirit — the silent choice, kept as the backstop.
+			expect(state.players.Red?.pendingCorruptionDiscard ?? null).toBeNull();
+			expect(state.players.Red?.spirits.length ?? 0).toBe(0);
+			expect(state.phase).not.toBe('cleanup');
+		});
+
+		test('a present human owing a payable debt EXTENDS — no spirit auto-sacrificed', () => {
+			const state = resolutionPhase('cleanup');
+			oweCorruption(state);
+
+			const outcome = resolvePassedDeadline(state, CATALOG, 5000, []);
+
+			expect(outcome).toBe('extended');
+			expect(state.phase).toBe('cleanup');
+			expect(state.players.Red?.pendingCorruptionDiscard?.count ?? 0).toBe(1); // debt kept
+			expect(state.players.Red?.spirits.length ?? 0).toBe(1); // spirit not sacrificed
+			expect(state.phaseDeadlineExtensions).toBe(1);
+		});
+
+		test('a bot-owed debt advances immediately — bots are never extended for', () => {
+			const state = resolutionPhase('cleanup');
+			oweCorruption(state);
+			const outcome = resolvePassedDeadline(state, CATALOG, 5000, ['Red']);
+			expect(outcome).toBe('advanced');
+			expect(state.phase).not.toBe('cleanup');
+		});
+	});
+
+	// ── Shared budget bookkeeping ─────────────────────────────────────────────────
+	test('each protected phase entry resets the grace budget to zero', () => {
+		const state = locationPhase();
+		for (const enter of [enterBenefits, enterAwakening, enterCleanup]) {
+			state.phaseDeadlineExtensions = 3; // pretend a prior phase spent grace
+			enter(state, CATALOG);
+			expect(state.phaseDeadlineExtensions).toBe(0);
+		}
+	});
+
+	test('an idle resolution phase (no work) advances at the deadline — bots unaffected', () => {
+		for (const phase of ['benefits', 'awakening', 'cleanup'] as const) {
+			const state = resolutionPhase(phase);
+			expect(resolvePassedDeadline(state, CATALOG, 5000, [])).toBe('advanced');
+			expect(state.phase).not.toBe(phase);
+		}
 	});
 });

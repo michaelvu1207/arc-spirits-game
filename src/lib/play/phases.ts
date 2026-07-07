@@ -240,7 +240,7 @@ export function tryAdvanceFromEncounter(state: PublicGameState): void {
 export function enterLocation(state: PublicGameState): void {
 	state.phase = 'location';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
-	state.locationDeadlineExtensions = 0; // fresh grace budget for this Location phase
+	state.phaseDeadlineExtensions = 0; // fresh grace budget for this phase
 	clearPhaseReady(state);
 }
 
@@ -268,6 +268,7 @@ export function tryAdvanceFromLocation(state: PublicGameState, catalog?: PlayCat
 export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): void {
 	state.phase = 'benefits';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
+	state.phaseDeadlineExtensions = 0; // fresh grace budget for this phase
 	clearPhaseReady(state);
 
 	for (const seat of state.activeSeats) {
@@ -397,6 +398,7 @@ export function tryAdvanceFromBenefits(state: PublicGameState, catalog?: PlayCat
 export function enterAwakening(state: PublicGameState, catalog?: PlayCatalog): void {
 	state.phase = 'awakening';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
+	state.phaseDeadlineExtensions = 0; // fresh grace budget for this phase
 	clearPhaseReady(state);
 	recomputeAwakenEligibility(state, catalog);
 	// Seats with nothing to awaken/resolve skip the step silently.
@@ -417,6 +419,7 @@ export function tryAdvanceFromAwakening(state: PublicGameState, catalog?: PlayCa
 export function enterCleanup(state: PublicGameState, catalog?: PlayCatalog): void {
 	state.phase = 'cleanup';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
+	state.phaseDeadlineExtensions = 0; // fresh grace budget for this phase
 	clearPhaseReady(state);
 	// Keep offers/eligibility coherent for any UI that still reads them (no new flips
 	// happen here, but a spirit may have been left face-down).
