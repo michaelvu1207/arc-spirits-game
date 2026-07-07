@@ -446,7 +446,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 		}
 	});
 
-	test('06+07 combat overlay + reward claim', async ({ browser }) => {
+	test('06 combat overlay', async ({ browser }) => {
 		test.setTimeout(600_000);
 		const hostCtx = await newDesktop(browser);
 		const guestCtx = await newDesktop(browser);
@@ -471,12 +471,42 @@ test.describe('capture parity fixtures + web goldens', () => {
 				'both lockNavigation Arcane Abyss → location',
 				'click action-monsterCombat → combat-overlay'
 			]);
+		} finally {
+			await hostCtx.close();
+			await guestCtx.close();
+		}
+	});
 
-			// Advance combat to its reward: continue past the dice resolution, then capture the
-			// monster-reward takeover if the monster was defeated (8 arcane dice make a kill
-			// likely). W2 replaced the old monster-reward-menu with the MonsterRewardTakeover
-			// (reward-grid / reward-pick-count testids).
-			await host.getByTestId('combat-continue').click({ force: true });
+	// 07 runs its own lean room: the reward exists server-side the moment startCombat
+	// resolves, but the location deadline's extension budget (120s + 4×30s) is wall-clock —
+	// the combined 06+07 flow used to burn the whole budget on page loads and the 06 capture,
+	// so the backstop advance auto-claimed the reward before the 07 shot (probe-proven; the
+	// extension engine itself works). Path here: minimal legs, no 06 capture, straight to
+	// the takeover.
+	test('07 reward claim', async ({ browser }) => {
+		test.setTimeout(600_000);
+		const hostCtx = await newDesktop(browser);
+		const guestCtx = await newDesktop(browser);
+		try {
+			const host = await hostCtx.newPage();
+			const guest = await guestCtx.newPage();
+			await setupTwoPlayerGame(host, guest);
+			await runRoomCommand(host, {
+				type: 'debugGrant',
+				grant: { kind: 'attackDice', tier: 'arcane', amount: 8 }
+			});
+			await runRoomCommand(host, { type: 'lockNavigation', destination: 'Arcane Abyss' });
+			await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Arcane Abyss' });
+			await runRoomCommand(host, { type: 'forceAdvancePhase' });
+			// startCombat via API (no page click legs); combat resolves server-side immediately.
+			await runRoomCommand(host, { type: 'startCombat' });
+			await refreshRoomPage(host);
+			// The page opens onto the resolved combat; continue is client-side dismissal that
+			// reveals the reward takeover (routing falls through to pendingReward).
+			const continueBtn = host.getByTestId('combat-continue');
+			if (await continueBtn.isVisible().catch(() => false)) {
+				await continueBtn.click({ force: true });
+			}
 			const rewardVisible = await host
 				.getByTestId('reward-grid')
 				.isVisible({ timeout: 20_000 })
@@ -488,8 +518,9 @@ test.describe('capture parity fixtures + web goldens', () => {
 					'reward-claim',
 					'Red',
 					[
-						'…continue from 06 combat-overlay',
-						'click combat-continue → reward takeover (monster defeated)'
+						'setupTwoPlayerGame + debugGrant 8 arcane dice',
+						'both lockNavigation Arcane Abyss → location',
+						'startCombat via API (monster defeated) → reward takeover'
 					],
 					{ anchorTestId: 'reward-grid' }
 				);
