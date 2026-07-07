@@ -207,6 +207,44 @@ describe('location deadline extension (resolvePassedDeadline)', () => {
 		expect(state.phaseDeadline).toBe(now + LOCATION_DEADLINE_EXTENSION_MS); // re-stamped forward
 	});
 
+	test('a seat mid-combat (unresolved CombatState) extends — no yank between roll and reward', () => {
+		const state = locationPhase();
+		state.combats = [
+			{
+				id: 'c1',
+				kind: 'monster',
+				step: 'roll',
+				sides: [{ seat: 'Red', initiative: 0, rolled: false, damageDealt: 0 }],
+				monster: null,
+				log: [],
+				killed: false
+			}
+		];
+		state.phaseDeadline = 1000;
+
+		const outcome = resolvePassedDeadline(state, CATALOG, 5000, []);
+
+		expect(outcome).toBe('extended');
+		expect(state.phase).toBe('location'); // combat not abandoned mid-roll
+		expect(state.combats.length).toBe(1);
+
+		// A RESOLVED combat no longer blocks: same shape with step 'resolved' advances.
+		const done = locationPhase();
+		done.combats = [
+			{
+				id: 'c2',
+				kind: 'monster',
+				step: 'resolved',
+				sides: [{ seat: 'Red', initiative: 0, rolled: true, damageDealt: 3 }],
+				monster: null,
+				log: [],
+				killed: true
+			}
+		];
+		done.phaseDeadline = 1000;
+		expect(resolvePassedDeadline(done, CATALOG, 5000, [])).toBe('advanced');
+	});
+
 	test('an in-flight summon (draw obligation) also extends rather than being returned', () => {
 		const state = apply(locationPhase(), RED, {
 			type: 'resolveLocationInteraction',

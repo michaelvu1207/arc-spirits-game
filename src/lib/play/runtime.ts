@@ -779,10 +779,18 @@ export function applyDeadlineAdvance(state: PublicGameState, catalog: PlayCatalo
  */
 export function locationDeadlineBlockingSeats(state: PublicGameState): SeatColor[] {
 	if (state.phase !== 'location') return [];
+	const inUnresolvedCombat = new Set<SeatColor>();
+	for (const combat of state.combats) {
+		if (combat.step === 'resolved') continue;
+		for (const side of combat.sides) {
+			if (side.seat) inUnresolvedCombat.add(side.seat);
+		}
+	}
 	return state.activeSeats.filter((seat) => {
 		const p = state.players[seat];
 		if (!p) return false;
 		if (p.pendingReward) return true;
+		if (inUnresolvedCombat.has(seat)) return true;
 		if (p.pendingDraw || (p.handDraws?.length ?? 0) > 0 || (p.pendingDrawQueue?.length ?? 0) > 0)
 			return true;
 		if (p.pendingCorruptionDiscard && p.spirits.length > 0) return true;
