@@ -759,15 +759,23 @@ export function computeInfiltratorSwap(
  * a payable corruption debt blocks endLocationActions too, legality.ts). Only called when
  * a pass command exists and canPass is false.
  */
+// Voluntary work never blocks a pass by itself, so it must never be NAMED as the
+// blocker: with a mandatory corruption discard and an optional augment placement both
+// pending, the reason must be the discard (audit: pendingWork[0] said "Place Spirit
+// Augment" while the discard was the binding obligation).
+const VOLUNTARY_WORK_KINDS: ReadonlySet<string> = new Set(['augment', 'awaken']);
+
 function passBlockedReasonFor(
 	phase: GamePhase,
 	player: PrivatePlayerState,
 	pendingWork: PendingWorkDescriptor[]
 ): string {
-	if (pendingWork.length > 0) return pendingWork[0].label;
+	const binding = pendingWork.find((w) => !VOLUNTARY_WORK_KINDS.has(w.kind));
+	if (binding) return binding.label;
 	if (phase === 'location' && player.pendingCorruptionDiscard && player.spirits.length > 0) {
 		return 'Discard your corrupted spirits first.';
 	}
+	if (pendingWork.length > 0) return pendingWork[0].label;
 	return 'Resolve your pending actions first.';
 }
 
