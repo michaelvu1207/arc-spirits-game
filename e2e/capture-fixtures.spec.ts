@@ -213,30 +213,92 @@ async function capture(
 	seq: string,
 	name: string,
 	seatPerspective: string,
-	howReached: string[]
+	howReached: string[],
+	opts: { anchorTestId?: string } = {}
 ): Promise<void> {
-	await settle(page);
-
+	// The fixture (server view) and the golden (page pixels) must describe the SAME
+	// state. Live rooms can advance between the view fetch and the screenshot (07's
+	// reward takeover auto-advanced to round-2 navigation mid-capture), so capture
+	// under a stability contract: revision identical before/after the screenshot and
+	// the anchor element still visible — else retry.
 	const code = roomCodeOf(page);
-	const res = await page.context().request.get(`/api/play/sessions/${code}/view`);
-	const text = await res.text();
-	expect(res.ok(), `view fetch for ${name}: ${text.slice(0, 200)}`).toBe(true);
-	const view = JSON.parse(text);
-	const revision = view?.projection?.revision;
-	expect(typeof revision, `${name}: revision present`).toBe('number');
+	let lastDetail = '';
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		await settle(page);
 
-	const meta: Meta = {
-		name,
-		capturedAt: new Date().toISOString(),
-		revision,
-		seatPerspective,
-		howReached
-	};
-	const fixturePath = resolve(FIXTURES_DIR, `${seq}-${name}.json`);
-	writeFileSync(fixturePath, JSON.stringify({ _meta: meta, view }, null, 2) + '\n');
+		// Every <img> must be fetched AND decoded before the shot — 05's golden once
+		// captured a half-decoded trait emblem (8% ink vs 37% in a sibling capture).
+		await page
+			.evaluate(() =>
+				Promise.all(
+					Array.from(document.images)
+						.filter((img) => img.src)
+						.map((img) => (img.complete ? img.decode().catch(() => {}) : new Promise((r) => {
+							img.addEventListener('load', () => img.decode().then(r, r), { once: true });
+							img.addEventListener('error', r, { once: true });
+						})))
+				)
+			)
+			.catch(() => {});
+
+		const res = await page.context().request.get(`/api/play/sessions/${code}/view`);
+		const text = await res.text();
+		expect(res.ok(), `view fetch for ${name}: ${text.slice(0, 200)}`).toBe(true);
+		const view = JSON.parse(text);
+		const revision = view?.projection?.revision;
+		expect(typeof revision, `${name}: revision present`).toBe('number');
+
+		if (opts.anchorTestId) {
+			const anchored = await page
+				.getByTestId(opts.anchorTestId)
+				.isVisible()
+				.catch(() => false);
+			if (!anchored) {
+				const pw = JSON.stringify(
+					view?.projection?.players?.[seatPerspective]?.pendingWork ??
+						view?.affordances?.[seatPerspective]?.pendingWork ??
+						null
+				).slice(0, 200);
+				lastDetail = `anchor ${opts.anchorTestId} not visible pre-shot (rev ${revision}, phase ${view?.projection?.phase}, round ${view?.projection?.round}, pendingWork ${pw})`;
+				await page.screenshot({
+					path: resolve(GOLDENS_DIR, `${seq}-${name}.attempt${attempt}.debug.png`)
+				});
+				continue;
+			}
+		}
+
+		const goldenPath = resolve(GOLDENS_DIR, `${seq}-${name}.png`);
+		await page.screenshot({ path: goldenPath });
+
+		const res2 = await page.context().request.get(`/api/play/sessions/${code}/view`);
+		const after = JSON.parse(await res2.text());
+		const revisionAfter = after?.projection?.revision;
+		const anchorHeld = opts.anchorTestId
+			? await page
+					.getByTestId(opts.anchorTestId)
+					.isVisible()
+					.catch(() => false)
+			: true;
+		if (revisionAfter !== revision || !anchorHeld) {
+			lastDetail = `state moved during shot (rev ${revision}→${revisionAfter}, anchor ${anchorHeld})`;
+			continue;
+		}
+
+		const meta: Meta = {
+			name,
+			capturedAt: new Date().toISOString(),
+			revision,
+			seatPerspective,
+			howReached
+		};
+		const fixturePath = resolve(FIXTURES_DIR, `${seq}-${name}.json`);
+		writeFileSync(fixturePath, JSON.stringify({ _meta: meta, view }, null, 2) + '\n');
+		lastDetail = '';
+		break;
+	}
+	expect(lastDetail, `${name}: stable capture within 3 attempts (${lastDetail})`).toBe('');
 
 	const goldenPath = resolve(GOLDENS_DIR, `${seq}-${name}.png`);
-	await page.screenshot({ path: goldenPath });
 
 	// Sanity: PNG exists, is non-empty, and its IHDR reports exactly 1280x720.
 	const st = statSync(goldenPath);
@@ -385,6 +447,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 	});
 
 	test('06+07 combat overlay + reward claim', async ({ browser }) => {
+		test.setTimeout(600_000);
 		const hostCtx = await newDesktop(browser);
 		const guestCtx = await newDesktop(browser);
 		try {
@@ -419,10 +482,17 @@ test.describe('capture parity fixtures + web goldens', () => {
 				.isVisible({ timeout: 20_000 })
 				.catch(() => false);
 			if (rewardVisible) {
-				await capture(host, '07', 'reward-claim', 'Red', [
-					'…continue from 06 combat-overlay',
-					'click combat-continue → reward takeover (monster defeated)'
-				]);
+				await capture(
+					host,
+					'07',
+					'reward-claim',
+					'Red',
+					[
+						'…continue from 06 combat-overlay',
+						'click combat-continue → reward takeover (monster defeated)'
+					],
+					{ anchorTestId: 'reward-grid' }
+				);
 			} else {
 				test.info().annotations.push({
 					type: 'skip-note',

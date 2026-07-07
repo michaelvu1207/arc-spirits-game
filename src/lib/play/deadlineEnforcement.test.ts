@@ -8,14 +8,21 @@
  * drawn spirits are returned to their bag instead of leaking.
  */
 import { describe, expect, test } from 'vitest';
-import { applyGameCommand, applyDeadlineAdvance, createLobbyState } from './runtime';
+import {
+	applyGameCommand,
+	applyDeadlineAdvance,
+	resolvePassedDeadline,
+	createLobbyState
+} from './runtime';
 import type {
 	GameActor,
 	GameCommand,
 	NavigationDestination,
+	PendingRewardState,
 	PlayCatalog,
 	PublicGameState
 } from './types';
+import { LOCATION_DEADLINE_EXTENSION_MS, LOCATION_DEADLINE_MAX_EXTENSIONS } from './types';
 import type { GameLocationRewardRow } from '$lib/types';
 
 const HOST: GameActor = { memberId: 'm-host', displayName: 'Host', role: 'host', seatColor: null };
@@ -149,5 +156,105 @@ describe('deadline enforcement (applyDeadlineAdvance)', () => {
 		applyDeadlineAdvance(lobby, CATALOG);
 		expect(lobby.status).toBe('lobby');
 		expect(lobby.revision).toBe(rev);
+	});
+});
+
+/**
+ * Regression for the "reward yanked at the deadline" bug: the raw force-advance
+ * (`applyDeadlineAdvance`) silently auto-claims an unclaimed monster reward — making its
+ * `chooseRune` picks for the player — even when a present human is mid-choice in the reward
+ * takeover. `resolvePassedDeadline` fixes it: a present, non-bot seat holding a
+ * blocking obligation EXTENDS the deadline instead, bounded so a disconnected seat can't
+ * hold the room hostage (the backstop still auto-claims once the budget is spent).
+ *
+ * These tests would FAIL if `resolvePassedDeadline` were the old unconditional advance:
+ * the "extends" cases assert the phase does NOT advance and the reward stays intact — the
+ * exact opposite of what a plain `applyDeadlineAdvance` does (see the first test, which
+ * characterizes that buggy behavior as the surviving backstop).
+ */
+describe('location deadline extension (resolvePassedDeadline)', () => {
+	// A minimal monster reward. An empty track claims nothing, so the backstop auto-claim is
+	// observable purely as `pendingReward → null` without needing a real reward-token id.
+	function fakeReward(): PendingRewardState {
+		return { monsterId: 'm1', monsterName: 'Wraith', rewardTrack: [], chooseAmount: 0 };
+	}
+
+	test('a fresh Location phase starts with a zero extension budget', () => {
+		expect(locationPhase().locationDeadlineExtensions).toBe(0);
+	});
+
+	test('the raw force-advance silently auto-claims a held reward (the surviving backstop)', () => {
+		const state = locationPhase();
+		state.players.Red!.pendingReward = fakeReward();
+		applyDeadlineAdvance(state, CATALOG);
+		// This IS the bug when applied to a present player — retained ONLY as the deadlock backstop.
+		expect(state.players.Red?.pendingReward ?? null).toBeNull();
+		expect(state.phase).not.toBe('location');
+	});
+
+	test('a present human holding a reward EXTENDS instead of advancing — reward left intact', () => {
+		const state = locationPhase();
+		state.players.Red!.pendingReward = fakeReward();
+		state.phaseDeadline = 1000;
+		const now = 5000;
+
+		const outcome = resolvePassedDeadline(state, CATALOG, now, []);
+
+		expect(outcome).toBe('extended');
+		expect(state.phase).toBe('location'); // did NOT advance past the active player
+		expect(state.players.Red?.pendingReward ?? null).not.toBeNull(); // reward untouched, not auto-picked
+		expect(state.locationDeadlineExtensions).toBe(1);
+		expect(state.phaseDeadline).toBe(now + LOCATION_DEADLINE_EXTENSION_MS); // re-stamped forward
+	});
+
+	test('an in-flight summon (draw obligation) also extends rather than being returned', () => {
+		const state = apply(locationPhase(), RED, {
+			type: 'resolveLocationInteraction',
+			rowIndex: 0,
+			choices: []
+		});
+		expect(state.players.Red?.handDraws.length ?? 0).toBeGreaterThan(0);
+
+		const outcome = resolvePassedDeadline(state, CATALOG, 5000, []);
+
+		expect(outcome).toBe('extended');
+		expect(state.phase).toBe('location');
+		expect(state.players.Red?.handDraws.length ?? 0).toBeGreaterThan(0); // draw kept, not drained
+	});
+
+	test('a bot-held reward advances immediately — bots are never extended for', () => {
+		const state = locationPhase();
+		state.players.Red!.pendingReward = fakeReward();
+
+		const outcome = resolvePassedDeadline(state, CATALOG, 5000, ['Red']); // Red seated by a bot
+
+		expect(outcome).toBe('advanced');
+		expect(state.locationDeadlineExtensions).toBe(0);
+		expect(state.phase).not.toBe('location');
+	});
+
+	test('an idle seat with no obligation advances at the deadline (existing behavior kept)', () => {
+		const state = locationPhase();
+		const outcome = resolvePassedDeadline(state, CATALOG, 5000, []);
+		expect(outcome).toBe('advanced');
+		expect(state.phase).not.toBe('location');
+	});
+
+	test('extensions are bounded: after the budget the backstop advances + auto-claims', () => {
+		const state = locationPhase();
+		state.players.Red!.pendingReward = fakeReward();
+		let now = 1000;
+
+		for (let i = 0; i < LOCATION_DEADLINE_MAX_EXTENSIONS; i += 1) {
+			now += LOCATION_DEADLINE_EXTENSION_MS + 1;
+			expect(resolvePassedDeadline(state, CATALOG, now, [])).toBe('extended');
+		}
+		expect(state.locationDeadlineExtensions).toBe(LOCATION_DEADLINE_MAX_EXTENSIONS);
+		expect(state.phase).toBe('location'); // still protected up to the cap
+
+		now += LOCATION_DEADLINE_EXTENSION_MS + 1;
+		expect(resolvePassedDeadline(state, CATALOG, now, [])).toBe('advanced'); // hostage cap reached
+		expect(state.players.Red?.pendingReward ?? null).toBeNull(); // backstop auto-claim (deadlock beats hostage)
+		expect(state.phase).not.toBe('location');
 	});
 });

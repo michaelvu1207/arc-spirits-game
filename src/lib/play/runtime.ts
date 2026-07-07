@@ -26,7 +26,9 @@ import {
 	SPIRIT_WORLD_LOCATIONS,
 	ALL_DESTINATIONS,
 	RUNE_CARRY_LIMIT,
-	DEFAULT_NAVIGATION_DURATION_MS
+	DEFAULT_NAVIGATION_DURATION_MS,
+	LOCATION_DEADLINE_EXTENSION_MS,
+	LOCATION_DEADLINE_MAX_EXTENSIONS
 } from './types';
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import {
@@ -767,6 +769,63 @@ export function applyDeadlineAdvance(state: PublicGameState, catalog: PlayCatalo
 	state.revision += 1;
 }
 
+/**
+ * Location-phase seats that still hold an obligation a forced advance would silently
+ * auto-resolve. Mirrors the `endLocationActions` legality guard (`legality.ts`) EXACTLY —
+ * "the deadline can't advance past it" is the server-side twin of "the player can't end
+ * their turn with it open": an unclaimed monster reward (whose auto-claim silently makes
+ * `chooseRune` picks), an in-flight draw / summon, or a payable corruption discard. Empty
+ * outside the Location phase. Pure — the caller decides who among these is a present human.
+ */
+export function locationDeadlineBlockingSeats(state: PublicGameState): SeatColor[] {
+	if (state.phase !== 'location') return [];
+	return state.activeSeats.filter((seat) => {
+		const p = state.players[seat];
+		if (!p) return false;
+		if (p.pendingReward) return true;
+		if (p.pendingDraw || (p.handDraws?.length ?? 0) > 0 || (p.pendingDrawQueue?.length ?? 0) > 0)
+			return true;
+		if (p.pendingCorruptionDiscard && p.spirits.length > 0) return true;
+		return false;
+	});
+}
+
+/**
+ * Resolve a Location deadline that has PASSED (the caller owns the clock comparison, so
+ * the reducer stays clock-free — `now` is injected). If a present, non-bot seat still
+ * holds a blocking obligation and the grace budget remains, re-stamp a short extension
+ * ({@link LOCATION_DEADLINE_EXTENSION_MS}) instead of advancing — an active player
+ * mid-choice is never yanked and their reward is never silently auto-picked. Otherwise
+ * force-advance (the anti-deadlock backstop; auto-claim allowed — deadlock beats hostage).
+ *
+ * `botSeats` are excluded from the "present human" set: bots claim their rewards during
+ * their own tick, so a bot-held obligation must advance immediately (extending would stall
+ * bot games). Returns whether it `extended` (deadline moved, no advance) or `advanced`.
+ */
+export function resolvePassedDeadline(
+	state: PublicGameState,
+	catalog: PlayCatalog,
+	now: number,
+	botSeats: readonly SeatColor[]
+): 'extended' | 'advanced' {
+	if (state.status === 'active') {
+		const humanBlocking = locationDeadlineBlockingSeats(state).filter(
+			(seat) => !botSeats.includes(seat)
+		);
+		if (
+			humanBlocking.length > 0 &&
+			state.locationDeadlineExtensions < LOCATION_DEADLINE_MAX_EXTENSIONS
+		) {
+			state.locationDeadlineExtensions += 1;
+			state.phaseDeadline = now + LOCATION_DEADLINE_EXTENSION_MS;
+			state.revision += 1;
+			return 'extended';
+		}
+	}
+	applyDeadlineAdvance(state, catalog);
+	return 'advanced';
+}
+
 function firstOpenSpiritSlot(player: PrivatePlayerState) {
 	return Array.from({ length: 7 }, (_, index) => index + 1).find(
 		(index) => !player.spirits.some((candidate) => candidate.slotIndex === index)
@@ -864,6 +923,7 @@ function ensureStateShape(state: PublicGameState): PublicGameState {
 	state.navigationDeadline ??= null;
 	state.navigationFullDeadline ??= null;
 	state.phaseDeadline ??= null;
+	state.locationDeadlineExtensions ??= 0;
 	state.locationOccupancy ??= {};
 	state.monster ??= null;
 	state.combats ??= [];
@@ -978,6 +1038,7 @@ export function createLobbyState(input: {
 		navigationDeadline: null,
 		navigationFullDeadline: null,
 		phaseDeadline: null,
+		locationDeadlineExtensions: 0,
 		locationOccupancy: {},
 		monster: null,
 		combats: [],

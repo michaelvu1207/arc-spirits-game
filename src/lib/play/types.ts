@@ -82,6 +82,20 @@ export const NAVIGATION_TIMER_OPTIONS: { label: string; ms: number | null }[] = 
  */
 export const ENCOUNTER_SECONDS = 90;
 export const LOCATION_SECONDS = 120;
+
+/**
+ * Activity-based deadline extension for the Location phase (the P2 floor promised
+ * above). A forced advance past the Location deadline auto-resolves any open
+ * obligation — auto-claiming a monster reward (silently making its `chooseRune`
+ * picks), returning an in-flight draw, or auto-discarding for corruption. When a
+ * PRESENT (non-bot) seat still holds such an obligation we re-stamp a short grace
+ * instead of advancing, so an active player mid-choice is never yanked. Bounded so a
+ * disconnected/idle seat can't hold the room hostage: after
+ * {@link LOCATION_DEADLINE_MAX_EXTENSIONS} graces the backstop advance fires (auto-claim
+ * allowed — deadlock beats hostage). Total extra time ≤ MAX × EXTENSION (~2 min).
+ */
+export const LOCATION_DEADLINE_EXTENSION_MS = 30_000;
+export const LOCATION_DEADLINE_MAX_EXTENSIONS = 4;
 /** The post-location resolution sequence is split into three short steps. */
 export const BENEFITS_SECONDS = 45;
 export const AWAKENING_SECONDS = 60;
@@ -967,6 +981,13 @@ export interface PublicGameState {
 	 * with the SERVER clock only; the client copy is display-only.
 	 */
 	phaseDeadline: number | null;
+	/**
+	 * How many activity-based graces the CURRENT Location phase has already been
+	 * granted (see {@link LOCATION_DEADLINE_MAX_EXTENSIONS}). Reset to 0 on Location
+	 * entry; only read while `phase === 'location'`. Bounds the extension so a
+	 * disconnected seat can't hold the room hostage forever.
+	 */
+	locationDeadlineExtensions: number;
 	/** Which seats are at each destination (computed at reveal). */
 	locationOccupancy: Partial<Record<NavigationDestination, SeatColor[]>>;
 	/** The monster currently invading the Abyss, if any. */

@@ -2,7 +2,8 @@ import { error as kitError } from '@sveltejs/kit';
 import {
 	createLobbyState,
 	applyGameCommand,
-	applyDeadlineAdvance,
+	locationDeadlineBlockingSeats,
+	resolvePassedDeadline,
 	buildHistorySnapshotRows,
 	buildSessionProjection
 } from '../runtime';
@@ -569,8 +570,26 @@ async function maybeEnforceDeadline(session: PlaySessionRow): Promise<PlaySessio
 	if (state.phaseDeadline == null || Date.now() <= state.phaseDeadline) return session;
 
 	const catalog = await loadPlayCatalog();
-	applyDeadlineAdvance(state, catalog); // advances exactly one phase + bumps revision
-	stampPhaseDeadline(state); // stamp the newly-entered phase with the server clock
+
+	// A present human still mid-obligation (unclaimed monster reward / in-flight draw / owed
+	// corruption discard) EXTENDS the Location deadline rather than being force-advanced —
+	// a forced advance would silently auto-claim (incl. `chooseRune` picks). Bots are excluded
+	// (they claim during their own tick), and the extension is bounded so a disconnected seat
+	// can't stall the room: after the budget the backstop advance below fires. `botSeats` is
+	// loaded ONLY when an obligation is actually open (the rare path), never on the hot no-op.
+	let botSeats: SeatColor[] = [];
+	if (locationDeadlineBlockingSeats(state).length > 0) {
+		const botMembers = await loadBotMembers(session.id);
+		botSeats = state.activeSeats.filter((seat) => {
+			const memberId = state.seats[seat]?.memberId;
+			return memberId != null && botMembers.has(memberId);
+		});
+	}
+
+	const outcome = resolvePassedDeadline(state, catalog, Date.now(), botSeats);
+	// On a backstop advance the phase changed and phaseDeadline was nulled — re-stamp the new
+	// phase against the server clock. An extension already re-stamped phaseDeadline itself.
+	if (outcome === 'advanced') stampPhaseDeadline(state);
 
 	const persisted = await persistSessionUpdate({
 		session,

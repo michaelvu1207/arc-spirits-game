@@ -10,7 +10,11 @@
  * advances — the browser-timer /bots/tick POST and HTTP deadline drain, moved server-side.
  */
 
-import { applyGameCommand, applyDeadlineAdvance } from '../src/lib/play/runtime';
+import {
+	applyGameCommand,
+	applyDeadlineAdvance,
+	resolvePassedDeadline
+} from '../src/lib/play/runtime';
 import type {
 	CommandResult,
 	GameActor,
@@ -32,6 +36,7 @@ import {
 	hasBotSeats,
 	phaseHoldoutSeats,
 	seatIsBot,
+	seatedBotSeats,
 	stepBotSeats,
 	type BotTuning,
 	type NeuralPolicy
@@ -209,11 +214,15 @@ export class RoomHost {
 		if (this.state.status !== 'active') return false;
 		const startRev = this.state.revision;
 
-		// 1. Wall-clock deadline enforcement — fires with zero connected sockets too.
+		// 1. Wall-clock deadline enforcement — fires with zero connected sockets too. A present
+		//    human still holding a Location obligation EXTENDS instead of being force-advanced
+		//    (which would silently auto-claim their reward); bots are excluded so bot games never
+		//    stall, and the extension is bounded (backstop advance once the budget is spent).
 		await this.enqueue(() => {
 			if (deadlinePassed(this.state)) {
-				applyDeadlineAdvance(this.state, this.catalog);
-				stampPhaseDeadline(this.state);
+				const botSeats = seatedBotSeats(this.state, this.botMembers);
+				const outcome = resolvePassedDeadline(this.state, this.catalog, Date.now(), botSeats);
+				if (outcome === 'advanced') stampPhaseDeadline(this.state);
 				this.dirty = true;
 			}
 		});

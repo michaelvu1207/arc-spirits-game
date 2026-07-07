@@ -240,6 +240,7 @@ export function tryAdvanceFromEncounter(state: PublicGameState): void {
 export function enterLocation(state: PublicGameState): void {
 	state.phase = 'location';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
+	state.locationDeadlineExtensions = 0; // fresh grace budget for this Location phase
 	clearPhaseReady(state);
 }
 
