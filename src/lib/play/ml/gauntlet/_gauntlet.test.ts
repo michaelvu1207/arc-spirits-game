@@ -86,6 +86,15 @@ describe('gauntlet-v1', () => {
 			// ('policy' = self-model hybridIndex rollouts instead of the medium heuristic).
 			const searchNavTemp = parseFloat(process.env.GAUNTLET_SEARCH_TEMP ?? '0.8');
 			const searchRollout = process.env.GAUNTLET_SEARCH_ROLLOUT ?? 'heuristic';
+			// GAUNTLET_TEMP=<t>: the candidate SAMPLES its hybrid picks at this temperature
+			// instead of argmax — the live serving configuration (botSim plays at
+			// ARC_LIVE_BOT_TEMP, default 0.65). Composes with GAUNTLET_SEARCH (non-searched
+			// nodes sample, searched nodes keep the Gumbel pick — same as live expert).
+			// Distinct candidate kind, same frozen measure; anchors stay greedy.
+			const candTemp = parseFloat(process.env.GAUNTLET_TEMP ?? '0');
+			// GAUNTLET_NAV_TEMP=<t>: sample ONLY navigation picks at t, argmax everywhere
+			// else — isolates the anti-clone-collision mixing from encounter/reward noise.
+			const navTemp = parseFloat(process.env.GAUNTLET_NAV_TEMP ?? '0');
 			const policyObsVersion = parseInt(process.env.GAUNTLET_POLICY_OBS_VERSION ?? '1', 10);
 			if (policyObsVersion !== 1 && policyObsVersion !== 2) {
 				throw new Error(`gauntlet: GAUNTLET_POLICY_OBS_VERSION must be 1 or 2`);
@@ -162,6 +171,18 @@ describe('gauntlet-v1', () => {
 				candidateRef = `${candidateRef}+${variant}`;
 				slug = `${slug}--${variant.replace(/[^a-z0-9._-]+/g, '-')}`;
 			}
+			if (candTemp > 0) {
+				if (!candidatePolicy) throw new Error('gauntlet: GAUNTLET_TEMP needs a weights/socket candidate');
+				const variant = `temp${candTemp}`;
+				candidateRef = `${candidateRef}+${variant}`;
+				slug = `${slug}--${variant.replace(/[^a-z0-9._-]+/g, '-')}`;
+			}
+			if (navTemp > 0) {
+				if (!candidatePolicy) throw new Error('gauntlet: GAUNTLET_NAV_TEMP needs a weights/socket candidate');
+				const variant = `navtemp${navTemp}`;
+				candidateRef = `${candidateRef}+${variant}`;
+				slug = `${slug}--${variant.replace(/[^a-z0-9._-]+/g, '-')}`;
+			}
 
 			const seats = SEAT_COLORS.slice(0, GAUNTLET_SEATS) as SeatColor[];
 			// GAUNTLET_SHARD="k/n": play only this shard of the frozen schedule, keyed by
@@ -234,8 +255,13 @@ describe('gauntlet-v1', () => {
 					// Search candidate: the chooser drives ONLY the candidate seat (the driver
 					// skips it for opponentPolicies seats). Deterministic per (game, decision).
 					let decisionN = 0;
+					// Per-decision temperature: navTemp (nav-phase-only mixing — the clone-
+					// collision fix without encounter noise) overrides candTemp at navigation
+					// nodes; all other phases use candTemp (0 = argmax).
+					const tempFor = (phase: PublicGameState['phase']): number =>
+						phase === 'navigation' && navTemp > 0 ? navTemp : candTemp;
 					const chooser =
-						searchSims > 0
+						searchSims > 0 || navTemp > 0
 							? (
 									_o: number[],
 									_f: number[][],
@@ -245,7 +271,11 @@ describe('gauntlet-v1', () => {
 									withNext: LegalAction[]
 								): number => {
 									decisionN += 1;
-									if ((st.phase === 'navigation' || st.phase === 'encounter') && withNext.length > 1) {
+									if (
+										searchSims > 0 &&
+										(st.phase === 'navigation' || st.phase === 'encounter') &&
+										withNext.length > 1
+									) {
 										const res = planDecisionGumbel(st, seat, catalog, candidatePolicy!, withNext, {
 											simulations: searchSims,
 											horizonRounds: 6,
@@ -261,11 +291,20 @@ describe('gauntlet-v1', () => {
 										});
 										if (res) return res.index;
 									}
-									return hybridIndex(candidatePolicy!, st, seat, withNext, { sample: false }, catalog);
+									const t = tempFor(st.phase);
+									return hybridIndex(
+										candidatePolicy!,
+										st,
+										seat,
+										withNext,
+										t > 0 ? { sample: true, temperature: t } : { sample: false },
+										catalog
+									);
 								}
 							: undefined;
 					const r = playRecordingGame(catalog, {
 						...(chooser ? { chooser } : {}),
+						...(candTemp > 0 && !chooser ? { sample: true, temperature: candTemp } : {}),
 						seed: g.seed,
 						profiles,
 						maxRounds: GAUNTLET_MAX_ROUNDS,

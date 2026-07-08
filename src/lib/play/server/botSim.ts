@@ -440,17 +440,26 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		);
 		// ARC_EXPERT_BOTS=1 upgrades every neural bot to the expert (search) tier —
 		// the dev-server switch for playtesting the searched bot without UI work.
+		// WARNING (measured 2026-07-08, v13-2 on gauntlet-v10): search16 scores BELOW
+		// the raw policy (399 vs 453 argmax; 374 vs 385 at temp 0.65) — the heuristic
+		// rollout policy misevaluates rules-v1.3 positions and poisons the search
+		// values. Don't enable for strength until the rollout policy is fixed.
 		const expert =
 			profileKey === EXPERT_BOT_PROFILE_KEY ||
 			(profileKey === NEURAL_PROFILE_KEY && process.env.ARC_EXPERT_BOTS === '1');
 		// Live sampling temperature (default 0.65, ARC_LIVE_BOT_TEMP overrides; 0 = argmax).
-		// The tempo champions train entirely on temperature-1.0 self-play, so greedy live
-		// play is out-of-distribution — and multiple greedy clones in one room chase the
-		// same plan and split the shared monster ladder. See NeuralPlanOptions.temperature.
+		// Multiple greedy clones in one room chase the same plan and split the shared
+		// monster ladder — but that collision happens at ROUTE choice, so the temperature
+		// applies to navigation picks only by default (ARC_LIVE_BOT_TEMP_SCOPE=all restores
+		// all-phase sampling). Measured (v13-2, gauntlet-v10 + 4-copy mirror): nav-only 0.65
+		// = Elo 432 / reach-30 43.5% vs all-phase 0.65 = 385 / 41.3% vs argmax = 453 / 19.5%.
+		// See NeuralPlanOptions.temperature/temperatureScope.
 		const liveTemp =
 			process.env.ARC_LIVE_BOT_TEMP !== undefined
 				? parseFloat(process.env.ARC_LIVE_BOT_TEMP)
 				: 0.65;
+		const liveTempScope: 'all' | 'navigation' =
+			process.env.ARC_LIVE_BOT_TEMP_SCOPE === 'all' ? 'all' : 'navigation';
 		// A planner exception must never escape: it would abort the whole tick (HTTP 500) and
 		// strand this seat AND every seat after it, forever (ticks re-plan seats in order, so a
 		// deterministic throw repeats every poll). Degrade to uniform-legal for the seat; if
@@ -461,7 +470,8 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 				(profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && neuralPolicy
 					? planNeuralPhaseActions(state, seat, catalog, neuralPolicy, {
 							search: expert,
-							temperature: liveTemp
+							temperature: liveTemp,
+							temperatureScope: liveTempScope
 						})
 					: planUniformLegalPhaseActions(state, seat, catalog);
 		} catch (err) {

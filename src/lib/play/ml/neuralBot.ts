@@ -608,6 +608,16 @@ export interface NeuralPlanOptions {
 	 * breaks the clone symmetry, and makes bots less predictable to humans.
 	 */
 	temperature?: number;
+	/**
+	 * Where `temperature` applies. 'navigation' (default): sample ONLY the
+	 * navigation pick, argmax everywhere else — the clone collision happens at
+	 * route choice, and sampling the other phases is pure noise. Measured on the
+	 * frozen gauntlet-v10 (v13-2, 800 games) + 4-copy mirror probe (400 games):
+	 * all-phase t=0.65 → Elo 385 / reach-30 41.3%; nav-only t=0.65 → Elo 432 /
+	 * reach-30 43.5%; argmax → Elo 453 / reach-30 19.5% (clones starve). 'all'
+	 * is the legacy behavior, kept for the training/eval paths that want it.
+	 */
+	temperatureScope?: 'all' | 'navigation';
 }
 
 /** Synchronous variant when the caller already holds a policy (e.g. self-play / eval).
@@ -642,17 +652,20 @@ export function planNeuralPhaseActions(
 			});
 			if (res) idx = res.index;
 		}
-		if (idx < 0)
+		if (idx < 0) {
+			const tempApplies =
+				(opts.temperatureScope ?? 'navigation') === 'all' || s.phase === 'navigation';
 			idx = hybridIndex(
 				policy,
 				s,
 				seat,
 				withNext,
-				opts.temperature && opts.temperature > 0
+				opts.temperature && opts.temperature > 0 && tempApplies
 					? { sample: true, temperature: opts.temperature }
 					: { sample: false },
 				catalog
 			);
+		}
 		out.push(withNext[idx].cmd);
 		s = withNext[idx].next;
 	}
