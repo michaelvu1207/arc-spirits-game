@@ -44,10 +44,11 @@
 			<span class="hp-num">HP {monster.maxHp}</span>
 		</div>
 		<!-- Tier = escalation rung (climbs as monsters are defeated). Dots = lives left:
-		     one kill per player drives it off, then the next, stronger monster comes out. -->
+		     kills scale with player count (1p→1, 2-3p→2, 4+p→3), then the next, stronger
+		     monster comes out. -->
 		<div class="horde">
 			<span class="horde-label">Tier {monster.ladderIndex + 1}</span>
-			<div class="lives" title="Kills needed to drive it off — one per player">
+			<div class="lives" title="Kills needed to drive it off — scales with player count">
 				{#each Array.from({ length: monster.livesTotal }, (_, i) => i) as i (i)}
 					<span class="life-dot" class:spent={i >= monster.livesRemaining}></span>
 				{/each}

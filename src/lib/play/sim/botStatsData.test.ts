@@ -23,7 +23,7 @@ const num = (v: string | undefined, d: number) => (v != null && v !== '' ? Numbe
  *  specialized-location model. Win rate is vs a field of the standard `medium` bot. */
 const STRATEGIES: { key: string; label: string; group: string; blurb: string }[] = [
 	// The aggressive PvP line + its no-PvP cousin.
-	{ key: 'pvphunter', label: 'PvP Hunter', group: 'Aggressive / PvP', blurb: 'Corrupt→Fallen→camp Rest→+3 VP/round PvP.' },
+	{ key: 'pvphunter', label: 'PvP Hunter', group: 'Aggressive / PvP', blurb: 'Corrupt→Fallen→camp Rest→PvP VP every round PvP.' },
 	{ key: 'cursed', label: 'Cursed (no PvP)', group: 'Aggressive / PvP', blurb: 'Stack Cursed, descend for rewards — no PvP.' },
 	// Economy safe-scaler family.
 	{ key: 'hard', label: 'Hard', group: 'Economy safe-scaler', blurb: 'Safe-scaler + fight-urgency.' },

@@ -304,6 +304,7 @@ export function resolveEncounterCombat(
 
 	const dealt = new Map<SeatColor, number>();
 	const rolledSeats = new Set<SeatColor>();
+	const corruptedSeats = new Set<SeatColor>();
 
 	const rollSide = (group: EncounterCombatant[]): number => {
 		let total = 0;
@@ -334,6 +335,7 @@ export function resolveEncounterCombat(
 				{ state, seat, catalog, opponent: attackerRep, opponentInitiative: attackerInit },
 				log
 			);
+			if (corrupted) corruptedSeats.add(seat);
 			// Deflected damage is dealt BACK to the attacking side's representative.
 			// Applied without a trigger context so it cannot chain (a reflection is
 			// never itself deflected — takeDamage only reports; callers reflect).
@@ -341,6 +343,7 @@ export function resolveEncounterCombat(
 				const attacker = state.players[attackerRep];
 				if (attacker) {
 					const bounce = takeDamage(attacker, deflected, undefined, log);
+					if (bounce.corrupted) corruptedSeats.add(attackerRep);
 					log.push(
 						`${seat} deflects ${deflected} damage back at ${attackerRep}` +
 							(bounce.corrupted ? ` — ${attackerRep} is corrupted!` : '.')
@@ -392,7 +395,8 @@ export function resolveEncounterCombat(
 			initiative: player.initiative ?? 0,
 			rolled: rolledSeats.has(seat),
 			damageDealt: dealt.get(seat) ?? 0,
-			stunned: !!player.stunned
+			stunned: !!player.stunned,
+			corrupted: corruptedSeats.has(seat)
 		}));
 
 	return {
@@ -514,10 +518,27 @@ export function fightMonster(
 	};
 }
 
+/** VP an Evil attacker earns from a PvP exchange: 2 for engaging, plus 2 per opposing
+ *  player corrupted during the exchange. (Michael's ruling, 2026-07-07 — flat engage
+ *  fee + corruption bounty; no roll-scaling, no target-VP scaling.) */
+export function pvpVpForAttack(corruptedOpponents: number): number {
+	return 2 + 2 * Math.max(0, corruptedOpponents);
+}
+
+/** Kills needed to defeat a monster — every rung of the ladder, including the final one —
+ *  scaled by player count: 1 player → 1 life, 2-3 players → 2 lives, 4+ players → 3 lives.
+ *  (Michael's rulings, 2026-07-07: the 2p bump keeps the monster pool rich enough that
+ *  someone can reach 30 VP without PvP at every table size.) */
+export function monsterLivesForPlayerCount(playerCount: number): number {
+	if (playerCount >= 4) return 3;
+	if (playerCount >= 2) return 2;
+	return 1;
+}
+
 /**
  * At the round boundary, if the Arcane Abyss monster's lives are spent (all the kills it
  * needed have landed), bring out the next, stronger rung of the ladder — full HP, its own
- * damage + reward track, and a fresh kill requirement (one per active player). The ladder
+ * damage + reward track, and a fresh kill requirement (scaled by player count). The ladder
  * is `catalog.monsters` (sorted weakest-first by stage then order). At the top of the
  * ladder (or with no catalog) the strongest returns at full strength so combat never
  * stalls. No-op while the monster still has lives, or when there is no monster. Called
@@ -526,11 +547,11 @@ export function fightMonster(
 export function advanceMonsterIfDefeated(state: PublicGameState, catalog?: PlayCatalog): void {
 	const cur = state.monster;
 	if (!cur || cur.livesRemaining > 0) return;
-	const lives = Math.max(1, state.activeSeats.length);
 	const ladder = catalog?.monsters ?? [];
 	const idx = ladder.findIndex((m) => m.id === cur.id);
 	const next = idx >= 0 ? ladder[idx + 1] : undefined;
 	if (next) {
+		const lives = monsterLivesForPlayerCount(state.activeSeats.length);
 		state.monster = {
 			id: next.id,
 			name: next.name,
@@ -544,11 +565,16 @@ export function advanceMonsterIfDefeated(state: PublicGameState, catalog?: PlayC
 			ladderIndex: idx + 1,
 			ladderMax: ladder.length
 		};
-	} else {
-		// Top of the ladder (or catalog missing): the strongest returns at full strength.
+	} else if (ladder.length === 0) {
+		// No catalog (bare unit-test states): keep combat alive — return at full strength.
 		cur.hp = cur.maxHp;
-		cur.livesRemaining = lives;
-		cur.livesTotal = lives;
+		cur.livesRemaining = 1;
+		cur.livesTotal = 1;
 		cur.ladderIndex = Math.min(cur.ladderIndex + 1, Math.max(0, cur.ladderMax - 1));
+	} else {
+		// The FINAL monster is defeated — the spirit world is saved. Clear the Abyss and
+		// flag the game to end at this cleanup with final scoring (tryAdvanceFromCleanup).
+		state.monster = null;
+		state.spiritWorldSaved = true;
 	}
 }

@@ -49,7 +49,7 @@
 	<section class="insights">
 		<div class="insight">
 			<div class="insight-k">PvP</div>
-			<div class="insight-t">The <b>Evil-hunter line dominates at 4+ players</b> — corrupt to Fallen, then camp the Rest chokepoint for <b>+3 VP/round</b>. It loses heads-up (2P) and stalls if everyone copies it.</div>
+			<div class="insight-t">The <b>Evil-hunter line dominates at 4+ players</b> — corrupt to Fallen, then camp the Rest chokepoint for <b>PvP VP every round</b>. It loses heads-up (2P) and stalls if everyone copies it.</div>
 		</div>
 		<div class="insight">
 			<div class="insight-k">≥7</div>

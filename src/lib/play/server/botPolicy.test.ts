@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { applyGameCommand, applyDeadlineAdvance, createLobbyState } from '../runtime';
+import { monsterLivesForPlayerCount } from '../combat';
 import { createRng, nextInt, type RngState } from '../rng';
 import {
 	botActorFor,
@@ -51,6 +52,19 @@ const CATALOG: PlayCatalog = {
 			chooseAmount: 2,
 			stage: 1,
 			order: 0
+		},
+		// Unkillable apex keeps m-1 NON-final: defeating the final monster now saves the
+		// spirit world and ends the game, which would cut the multi-round sweeps short.
+		{
+			id: 'm-apex',
+			name: 'Abyss Apex',
+			damage: 9,
+			barrier: 99,
+			rewardTrack: ['icon-a', 'icon-b'],
+			dicePool: [],
+			chooseAmount: 2,
+			stage: 1,
+			order: 1
 		}
 	]
 };
@@ -135,9 +149,11 @@ describe('monster horde size', () => {
 			if (!started.ok) throw new Error(started.error.message);
 			expect(started.state.monster?.ladderIndex).toBe(0);
 			expect(started.state.monster?.ladderMax).toBe((CATALOG.monsters ?? []).length);
-			// One kill per active player to defeat the monster (1p→1, 2p→2, …).
-			expect(started.state.monster?.livesTotal).toBe(players);
-			expect(started.state.monster?.livesRemaining).toBe(players);
+			// The opening rung is non-final (the apex sits above it), so kills needed
+			// scale with player count: 1-2p→1, 3p→2, 4+p→3.
+			const expectedLives = monsterLivesForPlayerCount(players);
+			expect(started.state.monster?.livesTotal).toBe(expectedLives);
+			expect(started.state.monster?.livesRemaining).toBe(expectedLives);
 		}
 	});
 });

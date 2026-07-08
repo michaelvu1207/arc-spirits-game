@@ -629,7 +629,7 @@ export interface BotProfile {
 	 * Pursue the EVIL-HUNTER / PvP line: build a small Cursed-Spirit + Sharpshooter core, then
 	 * deliberately corrupt all the way to Fallen at the Abyss (each crossing pays out the held
 	 * Cursed Spirits — max barrier → relic → augment), and from then on co-locate with the Good
-	 * players every round to launch the unanimous group attack for a flat +3 VP each. The
+	 * players every round to launch the unanimous group attack for +2 VP each, +2 per corruption. The
 	 * aggressive line the design wants to dominate. Implies corruption-aware play.
 	 */
 	pursuePvp?: boolean;
@@ -966,7 +966,7 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 	// PVPHUNTER — the aggressive Evil line the design wants to be dominant. Build a small Cursed +
 	// Sharpshooter core, descend to Fallen at the Abyss (each crossing pays the Cursed Spirits out:
 	// max barrier → relic → augment), then co-locate with the Good players every round and launch the
-	// unanimous group attack for a flat +3 VP each (Sharpshooter lets it strike through the
+	// unanimous group attack for +2 VP each, +2 per corruption (Sharpshooter lets it strike through the
 	// corrupting descent hits). Low max barrier — it corrupts on purpose, so over-building is wasted.
 	pvphunter: {
 		kind: 'medium',

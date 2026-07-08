@@ -175,7 +175,10 @@ describe('encounter / PvP', () => {
 
 		const blueBarrierBefore = state.players.Blue!.barrier;
 		state = apply(state, RED, { type: 'initiatePvp' });
-		expect(state.players.Red!.victoryPoints).toBe(3);
+		// 2 VP for engaging + 2 per corrupted Good player.
+		const pvp = state.combats.find((c) => c.kind === 'pvp')!;
+		const corruptedGood = pvp.sides.filter((s) => s.side === 'good' && s.corrupted).length;
+		expect(state.players.Red!.victoryPoints).toBe(2 + 2 * corruptedGood);
 		expect(state.players.Blue!.barrier).toBeLessThan(blueBarrierBefore);
 		expect(state.phase).toBe('location');
 	});

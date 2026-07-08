@@ -1030,6 +1030,33 @@ describe('play runtime', () => {
 		expect(hist[hist.length - 1]).toBe(31);
 	});
 
+	test('spirit world saved: final-monster defeat ends the game at cleanup with final scoring', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = started.state;
+		state.phase = 'cleanup';
+		state.round = 12; // well before the round cap — the save ends it early
+		state.spiritWorldSaved = true; // set by advanceMonsterIfDefeated at cleanup entry
+		state.monster = null;
+		state.players.Red!.victoryPoints = 22;
+		state.players.Blue!.victoryPoints = 17;
+		for (const seat of state.activeSeats) {
+			if (seat !== 'Red') state.players[seat]!.phaseReady = true;
+		}
+
+		const committed = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'commitCleanup' },
+			CATALOG
+		);
+		expect(committed.ok).toBe(true);
+		if (!committed.ok) return;
+		expect(committed.state.status).toBe('finished');
+		expect(committed.state.winnerSeat).toBe('Red'); // highest VP when the world is saved
+	});
+
 	test('final scoring does NOT run before the round cap', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);

@@ -5,6 +5,8 @@ import {
 	rollAttack,
 	resetCombatFlags,
 	advanceMonsterIfDefeated,
+	monsterLivesForPlayerCount,
+	pvpVpForAttack,
 	DICE_TIER_FACES
 } from './combat';
 import { createRng } from './rng';
@@ -468,6 +470,23 @@ describe('fightMonster', () => {
 		]
 	} as unknown as PlayCatalog;
 
+	const LADDER3 = {
+		monsters: [
+			...(LADDER as unknown as { monsters: unknown[] }).monsters,
+			{
+				id: 'm3',
+				name: 'Apex',
+				damage: 12,
+				barrier: 20,
+				rewardTrack: ['r', 'r'],
+				dicePool: [],
+				chooseAmount: 2,
+				stage: 1,
+				order: 2
+			}
+		]
+	} as unknown as PlayCatalog;
+
 	it('advanceMonsterIfDefeated: a spent monster climbs to the next, stronger rung at full HP', () => {
 		const p = makePlayer({});
 		const monster = makeMonster({
@@ -488,6 +507,87 @@ describe('fightMonster', () => {
 		expect(state.monster?.ladderIndex).toBe(1);
 		expect(state.monster?.livesTotal).toBe(1); // one active seat → one kill needed
 		expect(state.monster?.livesRemaining).toBe(1);
+	});
+
+	it('pvpVpForAttack: 2 VP for engaging, +2 per corrupted opponent', () => {
+		expect(pvpVpForAttack(0)).toBe(2);
+		expect(pvpVpForAttack(1)).toBe(4);
+		expect(pvpVpForAttack(2)).toBe(6);
+		expect(pvpVpForAttack(-1)).toBe(2); // defensive clamp
+	});
+
+	it('monsterLivesForPlayerCount: 1 player → 1 life, 2-3 → 2, 4+ → 3', () => {
+		expect(monsterLivesForPlayerCount(1)).toBe(1);
+		expect(monsterLivesForPlayerCount(2)).toBe(2);
+		expect(monsterLivesForPlayerCount(3)).toBe(2);
+		expect(monsterLivesForPlayerCount(4)).toBe(3);
+		expect(monsterLivesForPlayerCount(5)).toBe(3);
+	});
+
+	it('advanceMonsterIfDefeated: the next rung gets lives scaled by player count (4 seats → 3)', () => {
+		const p = makePlayer({});
+		const monster = makeMonster({
+			id: 'm1',
+			hp: 5,
+			maxHp: 5,
+			livesRemaining: 0,
+			livesTotal: 3,
+			ladderIndex: 0,
+			ladderMax: 3
+		});
+		const state = makeState(p, monster, 5);
+		state.activeSeats = ['Red', 'Blue', 'Green', 'Yellow'] as SeatColor[];
+		advanceMonsterIfDefeated(state, LADDER3);
+		expect(state.monster?.id).toBe('m2');
+		expect(state.monster?.livesTotal).toBe(3);
+		expect(state.monster?.livesRemaining).toBe(3);
+	});
+
+	it('the FINAL rung gets the same player-count lives as every other rung', () => {
+		const p = makePlayer({});
+		const monster = makeMonster({
+			id: 'm2',
+			hp: 14,
+			maxHp: 14,
+			livesRemaining: 0,
+			livesTotal: 3,
+			ladderIndex: 1,
+			ladderMax: 3
+		});
+		const state = makeState(p, monster, 5);
+		state.activeSeats = ['Red', 'Blue', 'Green', 'Yellow'] as SeatColor[];
+		advanceMonsterIfDefeated(state, LADDER3);
+		expect(state.monster?.id).toBe('m3');
+		expect(state.monster?.livesTotal).toBe(3);
+		expect(state.monster?.livesRemaining).toBe(3);
+	});
+
+	it('defeating the FINAL monster saves the spirit world: Abyss cleared, end flag set', () => {
+		const p = makePlayer({});
+		const monster = makeMonster({
+			id: 'm3',
+			hp: 0,
+			maxHp: 20,
+			livesRemaining: 0,
+			livesTotal: 1,
+			ladderIndex: 2,
+			ladderMax: 3
+		});
+		const state = makeState(p, monster, 5);
+		state.activeSeats = ['Red', 'Blue', 'Green', 'Yellow'] as SeatColor[];
+		advanceMonsterIfDefeated(state, LADDER3);
+		expect(state.monster).toBeNull(); // the Abyss is clear
+		expect(state.spiritWorldSaved).toBe(true); // game ends at this cleanup
+	});
+
+	it('without a catalog the defeated monster returns at full strength (bare-state safety)', () => {
+		const p = makePlayer({});
+		const monster = makeMonster({ hp: 0, maxHp: 5, livesRemaining: 0, livesTotal: 1 });
+		const state = makeState(p, monster, 5);
+		advanceMonsterIfDefeated(state); // no catalog
+		expect(state.monster?.hp).toBe(5);
+		expect(state.monster?.livesRemaining).toBe(1);
+		expect(state.spiritWorldSaved).toBeUndefined();
 	});
 
 	it('advanceMonsterIfDefeated: no-op while the monster still has lives left', () => {

@@ -507,6 +507,16 @@ export function tryAdvanceFromCleanup(state: PublicGameState, catalog?: PlayCata
 		return;
 	}
 
+	// End condition: the FINAL ladder monster was defeated this round — the spirit world
+	// is saved. Run final scoring (same cash-out pass as the round cap) and end; the
+	// player with the most Victory Points wins (ties → seat order).
+	if (state.spiritWorldSaved) {
+		applyFinalScoring(state, catalog);
+		state.winnerSeat = highestVpSeat(state);
+		state.status = 'finished';
+		return;
+	}
+
 	// End condition: once every player has Fallen (the deepest corruption), the game
 	// ends — the player with the most Victory Points wins (ties broken by seat order).
 	if (allPlayersFallen(state)) {

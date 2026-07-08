@@ -50,7 +50,12 @@ import {
 	seatHasResolutionWork,
 	forceAdvancePhase as forceAdvancePhaseMachine
 } from './phases';
-import { fightMonster, resolveEncounterCombat } from './combat';
+import {
+	fightMonster,
+	monsterLivesForPlayerCount,
+	pvpVpForAttack,
+	resolveEncounterCombat
+} from './combat';
 import { applyTrigger, applyCultivate, awakenedClassCounts } from './effects/apply';
 import { runAction, GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 import { augmentCapacityForSpirit, isSpiritAugmentClass } from './augments';
@@ -1017,14 +1022,14 @@ function makeGameId(rng: RngState, now = new Date()): string {
 	return `game_${y}${m}${d}_${hh}${mm}${ss}_${random}`;
 }
 
-/** Build the opening monster: the weakest rung of the ladder. It takes one kill per
- *  active player to defeat (1p→1, 2p→2, …); only then does the next, stronger monster
- *  come out (at the round boundary). Null when the catalog has no monsters. */
+/** Build the opening monster: the weakest rung of the ladder. Kills needed to defeat it
+ *  scale with player count (1p→1, 2-3p→2, 4+p→3); only then does the next, stronger
+ *  monster come out (at the round boundary). Null when the catalog has no monsters. */
 function spawnMonster(catalog: PlayCatalog, playerCount: number): PublicGameState['monster'] {
 	const ladder = catalog.monsters ?? [];
 	const monster = ladder[0];
 	if (!monster) return null;
-	const lives = Math.max(1, playerCount);
+	const lives = monsterLivesForPlayerCount(playerCount);
 	return {
 		id: monster.id,
 		name: monster.name,
@@ -2871,9 +2876,10 @@ export function encounterEvilAggressorsAt(state: PublicGameState, dest: string |
 
 /**
  * Resolve the group Encounter at `dest` once every Evil aggressor there has voted.
- * Unanimous `'attack'` → run the group combat (+3 VP and awaken progress per Evil
- * attacker); any `'decline'` → no combat. Idempotent: a PvP combat already recorded
- * for these seats this round short-circuits, so it never resolves twice.
+ * Unanimous `'attack'` → run the group combat (each Evil attacker scores VP from their
+ * own roll + corruptions — see pvpVpForAttack — plus awaken progress); any `'decline'`
+ * → no combat. Idempotent: a PvP combat already recorded for these seats this round
+ * short-circuits, so it never resolves twice.
  */
 function resolveEncounterLocationIfReady(
 	state: PublicGameState,
@@ -2901,16 +2907,18 @@ function resolveEncounterLocationIfReady(
 	const combat = resolveEncounterCombat(state, catalog, evilSeats, goodSeats);
 	state.combats.push(combat);
 
-	// +3 VP per Evil attacker (a flat, unconditional reward for initiating PvP — no roll/kill
-	// needed), plus combat-event awaken progress: Hollow Eyes (Evil side dealt > 3 to a
-	// player). (Arcane Huntress is now a cultivate condition, armed in applyCultivate.)
+	// Each Evil attacker scores 2 VP for engaging plus 2 VP per Good player
+	// corrupted in the exchange — see pvpVpForAttack. Also combat-event awaken progress:
+	// Hollow Eyes (Evil side dealt > 3 to a player). (Arcane Huntress is now a cultivate
+	// condition, armed in applyCultivate.)
 	const evilDamage = combat.sides
 		.filter((s) => s.side === 'evil')
 		.reduce((sum, s) => sum + s.damageDealt, 0);
+	const corruptedGood = combat.sides.filter((s) => s.side === 'good' && s.corrupted).length;
 	for (const s of evilSeats) {
 		const p = state.players[s];
 		if (!p) continue;
-		p.victoryPoints += 3;
+		p.victoryPoints += pvpVpForAttack(corruptedGood);
 		p.awakenProgress ??= {};
 		if (evilDamage > 3) p.awakenProgress[AWAKEN_PROGRESS_KEYS.hollowEyes] = true;
 	}

@@ -99,11 +99,15 @@ describe('group Encounter (PvP) combat', () => {
 		// Same full damage applied to BOTH goods — identical resulting barrier, both hit.
 		expect(blue.barrier).toBe(orange.barrier);
 		expect(blue.barrier).toBeLessThan(12);
-		expect(after.players.Red!.victoryPoints).toBe(3);
-		expect(after.combats.some((c) => c.kind === 'pvp')).toBe(true);
+		// 2 VP for engaging (goods' barrier is above the max roll here, so no
+		// corruption bonus is in play).
+		const pvp = after.combats.find((c) => c.kind === 'pvp')!;
+		const redSide = pvp.sides.find((s) => s.seat === 'Red')!;
+		expect(redSide.damageDealt).toBeGreaterThan(0);
+		expect(after.players.Red!.victoryPoints).toBe(2);
 	});
 
-	test('two Evil attackers: unanimous → both fire, +3 VP each, pooled damage', () => {
+	test('two Evil attackers: unanimous → both fire, +2 VP each (+2/corruption), pooled damage', () => {
 		const state = intoEncounter(7, (s) => {
 			for (const seat of ['Red', 'Orange'] as const) {
 				const e = s.players[seat]!;
@@ -124,12 +128,44 @@ describe('group Encounter (PvP) combat', () => {
 		expect(after.combats.some((c) => c.kind === 'pvp')).toBe(false);
 		expect(after.players.Blue!.barrier).toBe(blueBefore);
 
-		// Second Evil votes → unanimous → group strike resolves.
+		// Second Evil votes → unanimous → group strike resolves. Each attacker scores
+		// 2 VP for engaging, plus 2 per corrupted Good player.
 		after = apply(after, ORANGE, { type: 'initiatePvp' });
-		expect(after.combats.some((c) => c.kind === 'pvp')).toBe(true);
-		expect(after.players.Blue!.barrier).toBeLessThan(blueBefore);
-		expect(after.players.Red!.victoryPoints).toBe(3);
-		expect(after.players.Orange!.victoryPoints).toBe(3);
+		const pvp = after.combats.find((c) => c.kind === 'pvp')!;
+		expect(pvp).toBeTruthy();
+		const corruptedGood = pvp.sides.filter((s) => s.side === 'good' && s.corrupted).length;
+		for (const seat of ['Red', 'Orange'] as const) {
+			const side = pvp.sides.find((s) => s.seat === seat)!;
+			expect(side.damageDealt).toBeGreaterThan(0);
+			expect(after.players[seat]!.victoryPoints).toBe(2 + 2 * corruptedGood);
+		}
+		// Blue either took the pooled hit or was corrupted (barrier reset to full).
+		const bluePvp = pvp.sides.find((s) => s.seat === 'Blue')!;
+		if (bluePvp.corrupted) expect(after.players.Blue!.barrier).toBe(14);
+		else expect(after.players.Blue!.barrier).toBeLessThan(blueBefore);
+	});
+
+	test('corrupting Good players grants +2 VP each on top of the engage VP', () => {
+		const state = intoEncounter(99, (s) => {
+			const red = s.players.Red!;
+			red.statusLevel = 3;
+			red.statusToken = 'Fallen';
+			red.attackDice = arcane(3); // rolls at least 3 — always corrupts a 2-barrier Good
+			for (const seat of ['Blue', 'Orange'] as const) {
+				const g = s.players[seat]!;
+				g.statusLevel = 0;
+				g.maxBarrier = 2;
+				g.barrier = 2;
+				g.brokenBarrier = 0;
+				g.attackDice = [];
+			}
+		});
+
+		const after = apply(state, RED, { type: 'initiatePvp' });
+		const pvp = after.combats.find((c) => c.kind === 'pvp')!;
+		// Both Good players corrupt (roll ≥ 3 vs barrier 2) → +4 on top of the engage 2.
+		expect(pvp.sides.filter((s) => s.side === 'good' && s.corrupted)).toHaveLength(2);
+		expect(after.players.Red!.victoryPoints).toBe(2 + 4);
 	});
 
 	test('non-unanimous: one Evil holds → no combat, no VP, no damage', () => {

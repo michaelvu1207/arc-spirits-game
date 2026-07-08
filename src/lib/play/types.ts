@@ -536,6 +536,9 @@ export interface CombatSide {
 	side?: 'evil' | 'good';
 	/** Knocked out of the exchange (zero barrier / corrupted, not stun-immune). */
 	stunned?: boolean;
+	/** Corrupted at any point during this exchange — direct hit or deflected bounce
+	 *  (drives the Evil side's per-corruption PvP VP bonus). */
+	corrupted?: boolean;
 }
 
 export interface CombatState {
@@ -1001,6 +1004,9 @@ export interface PublicGameState {
 	combats: CombatState[];
 	/** Set when a player reaches the VP target; game then finishes. */
 	winnerSeat: SeatColor | null;
+	/** Set when the FINAL ladder monster is defeated — the spirit world is saved and the
+	 *  game ends at that cleanup with final scoring (Michael's ruling, 2026-07-07). */
+	spiritWorldSaved?: boolean;
 }
 
 export interface PlayerProjection extends Omit<PrivatePlayerState, 'displayName'> {

@@ -39,7 +39,7 @@
 
 <TakeoverStage accent="var(--color-blood, #e05858)" testid="encounter-stage">
 	<p class="enc-sub">
-		Attack the Good players here for +2 VP.
+		Attack the Good players here for +2 VP, +2 more per player you corrupt.
 		{#if needsAllies}Every Evil player at this location must agree.{/if}
 	</p>
 	<div class="targets" data-testid="encounter-targets">

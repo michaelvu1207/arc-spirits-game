@@ -70,8 +70,11 @@ const CATALOG: PlayCatalog = {
 		origins: { Forest: 1 }
 	})),
 	// barrier 1 + damage 1 ⇒ a player with arcane dice one-shots it without corrupting.
+	// A second, unkillable apex rung keeps m-1 NON-final: defeating the final monster now
+	// saves the spirit world and ends the game, which these reward-flow tests don't want.
 	monsters: [
-		{ id: 'm-1', name: 'Abyss Maw', damage: 1, barrier: 1, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 1, order: 0 }
+		{ id: 'm-1', name: 'Abyss Maw', damage: 1, barrier: 1, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 1, order: 0 },
+		{ id: 'm-apex', name: 'Abyss Apex', damage: 9, barrier: 99, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 1, order: 1 }
 	],
 	locations: []
 };
