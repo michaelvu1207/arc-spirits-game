@@ -1,0 +1,12 @@
+[1m[31mThe following Vite config options will be overridden by SvelteKit:[22m[39m
+  - base
+[1m[31mENOENT: no such file or directory, stat '/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/.svelte-kit/types/src/routes/proxy+layout.ts'[22m[39m
+
+ RUN  v4.1.5 /Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  16:37:36
+   Duration  39.38s (transform 410ms, setup 0ms, import 537ms, tests 38.69s, environment 0ms)
+

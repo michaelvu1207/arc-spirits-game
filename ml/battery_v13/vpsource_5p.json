@@ -1,0 +1,99 @@
+[
+  {
+    "name": "cultivator",
+    "avgVP": 7.21,
+    "winPct": 18,
+    "reach30": 0,
+    "status": 0.24,
+    "barrier": 9.9,
+    "dice": 10,
+    "monsterKillsPerGame": 2.73,
+    "combatAttemptsPerGame": 3.18,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.21
+    },
+    "games": 33
+  },
+  {
+    "name": "survivor",
+    "avgVP": 6.59,
+    "winPct": 24,
+    "reach30": 0,
+    "status": 0.12,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.53,
+    "combatAttemptsPerGame": 2.85,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 6.59
+    },
+    "games": 34
+  },
+  {
+    "name": "rushpatient",
+    "avgVP": 6.55,
+    "winPct": 21,
+    "reach30": 0,
+    "status": 0.12,
+    "barrier": 9.9,
+    "dice": 10,
+    "monsterKillsPerGame": 2.52,
+    "combatAttemptsPerGame": 2.88,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 6.55
+    },
+    "games": 33
+  },
+  {
+    "name": "medium",
+    "avgVP": 6.03,
+    "winPct": 21,
+    "reach30": 0,
+    "status": 0.15,
+    "barrier": 10,
+    "dice": 9.8,
+    "monsterKillsPerGame": 2.33,
+    "combatAttemptsPerGame": 2.79,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 6.03
+    },
+    "games": 33
+  },
+  {
+    "name": "hard",
+    "avgVP": 4.76,
+    "winPct": 12,
+    "reach30": 0,
+    "status": 0.15,
+    "barrier": 9.6,
+    "dice": 9.7,
+    "monsterKillsPerGame": 1.91,
+    "combatAttemptsPerGame": 2.24,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 4.76
+    },
+    "games": 34
+  },
+  {
+    "name": "pvphunter",
+    "avgVP": 3.91,
+    "winPct": 24,
+    "reach30": 0,
+    "status": 2.82,
+    "barrier": 5.8,
+    "dice": 6,
+    "monsterKillsPerGame": 3.58,
+    "combatAttemptsPerGame": 8,
+    "pvpAttacksPerGame": 8.82,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 9.97,
+      "initiatePvp": -6.06
+    },
+    "games": 33
+  }
+]

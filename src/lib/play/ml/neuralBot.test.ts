@@ -291,6 +291,10 @@ describe('neural value action scoring', () => {
 		state = apply(state, BLUE, { type: 'selectGuardian', guardianName: 'Blue Guard' });
 		state = apply(state, RED, { type: 'startGame', seed: 11 });
 		state.players.Red!.attackDice = [{ instanceId: 'd-arcane', tier: 'arcane' }];
+		// Force a multi-life monster (2 players now spawn a single-life one) — this test
+		// exercises farm-value scoring across remaining lives, not the spawn rule.
+		state.monster!.livesRemaining = 2;
+		state.monster!.livesTotal = 2;
 
 		expect(claimableMonsterRewardVp(CATALOG.monsters![0].rewardTrack, 2)).toBe(4);
 		const farm = evaluateFarmValue(state, 'Red', CATALOG, { threshold: 0.5 });

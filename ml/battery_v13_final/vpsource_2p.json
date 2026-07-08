@@ -1,0 +1,99 @@
+[
+  {
+    "name": "cultivator",
+    "avgVP": 8.57,
+    "winPct": 64,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 3,
+    "combatAttemptsPerGame": 3,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 8.57
+    },
+    "games": 14
+  },
+  {
+    "name": "survivor",
+    "avgVP": 8.07,
+    "winPct": 50,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.86,
+    "combatAttemptsPerGame": 2.93,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 8.07
+    },
+    "games": 14
+  },
+  {
+    "name": "rushpatient",
+    "avgVP": 8,
+    "winPct": 58,
+    "reach30": 0,
+    "status": 0.33,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.92,
+    "combatAttemptsPerGame": 3.08,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 8
+    },
+    "games": 12
+  },
+  {
+    "name": "hard",
+    "avgVP": 7.38,
+    "winPct": 38,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 9.7,
+    "dice": 10,
+    "monsterKillsPerGame": 2.54,
+    "combatAttemptsPerGame": 2.62,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.38
+    },
+    "games": 13
+  },
+  {
+    "name": "medium",
+    "avgVP": 7.07,
+    "winPct": 64,
+    "reach30": 0,
+    "status": 0.36,
+    "barrier": 9.6,
+    "dice": 10,
+    "monsterKillsPerGame": 2.64,
+    "combatAttemptsPerGame": 2.93,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.07
+    },
+    "games": 14
+  },
+  {
+    "name": "pvphunter",
+    "avgVP": 5.31,
+    "winPct": 23,
+    "reach30": 0,
+    "status": 2.54,
+    "barrier": 5.7,
+    "dice": 6.5,
+    "monsterKillsPerGame": 3.54,
+    "combatAttemptsPerGame": 7.38,
+    "pvpAttacksPerGame": 5.69,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 9.77,
+      "initiatePvp": -4.46
+    },
+    "games": 13
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "name": "cultivator",
+    "avgVP": 7.71,
+    "winPct": 100,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.71,
+    "combatAttemptsPerGame": 2.71,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.71
+    },
+    "games": 7
+  },
+  {
+    "name": "medium",
+    "avgVP": 7.57,
+    "winPct": 100,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.71,
+    "combatAttemptsPerGame": 2.71,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.57
+    },
+    "games": 7
+  },
+  {
+    "name": "survivor",
+    "avgVP": 7.43,
+    "winPct": 100,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.57,
+    "combatAttemptsPerGame": 2.57,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.43
+    },
+    "games": 7
+  },
+  {
+    "name": "pvphunter",
+    "avgVP": 7.29,
+    "winPct": 100,
+    "reach30": 0,
+    "status": 2.43,
+    "barrier": 5.9,
+    "dice": 8.6,
+    "monsterKillsPerGame": 2.71,
+    "combatAttemptsPerGame": 6.71,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.29
+    },
+    "games": 7
+  },
+  {
+    "name": "hard",
+    "avgVP": 6.83,
+    "winPct": 100,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.33,
+    "combatAttemptsPerGame": 2.33,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 6.83
+    },
+    "games": 6
+  },
+  {
+    "name": "rushpatient",
+    "avgVP": 5.83,
+    "winPct": 100,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2,
+    "combatAttemptsPerGame": 2,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 5.83
+    },
+    "games": 6
+  }
+]

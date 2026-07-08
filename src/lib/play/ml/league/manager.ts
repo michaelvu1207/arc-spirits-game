@@ -116,6 +116,15 @@ export function defaultConfig(root = DEFAULT_LEAGUE_ROOT): LeagueConfig {
 		sample: true,
 		temperature: 1.0,
 		train: { epochs: 4, beta: 1.0 },
+		// True gauntlet-v10 baselines for the seeded checkpoint anchors (800-game full
+		// runs, 2026-07-08). Stamped via config because the shipped policy-weights.json
+		// no longer byte-matches either anchor after the v13-2 promotion, so the
+		// results-scan/byte-identity fallback can't provide the first promotion bar
+		// (see stampBaselineElos docstring).
+		baselineElos: {
+			'frozen-v13-1-gen48-champion': 439,
+			'frozen-ladder8c2-gen60-champion': 136
+		},
 		initFrom: firstActiveCkpt,
 		pythonBin: 'ml/.venv/bin/python',
 		gauntletCmd: ['bash', 'scripts/nightly-gauntlet.sh'],

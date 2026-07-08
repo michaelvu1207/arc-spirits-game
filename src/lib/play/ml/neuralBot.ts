@@ -479,7 +479,7 @@ export function hybridIndex(
 	if (bestVpIdx >= 0 && bestVpGain > 0) return bestVpIdx;
 	// 1b) Always launch the Fallen group attack when it's available. `initiatePvp` is ONLY
 	// legal when this seat is Fallen and co-located with Good players — i.e. exactly the
-	// winning condition — but its +3 VP is applied at encounter RESOLUTION (next phase), so
+	// winning condition — but its VP payout is applied at encounter RESOLUTION (next phase), so
 	// the immediate-VP check above can't see it and behaviour-cloning skips the rare action.
 	const pvp = withNext.findIndex((x) => x.cmd.type === 'initiatePvp');
 	if (pvp >= 0) return pvp;

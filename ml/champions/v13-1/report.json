@@ -1,0 +1,23 @@
+{
+	"_readme": "RULES v1.3 champion (2026-07-08). From-scratch seed (league_v13s, PPO, ladder8c2 recipe, initFrom=random), frozen at gen 48. Chosen over the warm-seed finalists (v13w gen20 Elo 643 / gen28 Elo 649) despite a lower anchor-pool Elo: in mixed fields CONTAINING those finalists it wins 100% with 27.1 avg VP and 49% true reach-30 (they manage 87-94% / ~14.5 VP / <3% reach-30 in the same fields) — head-to-head dominance beats placement-vs-weak-anchors. The warm seed validated warm-start viability but anchored to slower play. DESIGN FLAG for Michael: ALL finalists play Fallen-aggro (avg end status 3.0) — trained play rediscovers corruption-PvP as the dominant line under the 2-engage/+2-corruption payout; the -3.0 collapse-is-loss penalty did not prevent it. See ml/META_IMPACT_V13.md §5.",
+	"rules": "v1.3: monster lives 1/2/2/3 by player count (every rung); finite deck — final kill saves the spirit world and ends the game (final scoring, highest VP); PvP = 2 VP engage + 2 per corruption",
+	"source": "GPU box ml/league_v13s/checkpoints/frozen-main-0-gen48.json (byte-identical copy)",
+	"gauntlet": {
+		"version": "gauntlet-v9",
+		"elo": 592,
+		"winRate": 0.93625,
+		"meanVP": 28.99625,
+		"meanPlacement": 1.09125,
+		"baselineBeaten": "ladder8c2-gen60 at v9 Elo 195 (the shipped champion re-baselined under rules v1.3)"
+	},
+	"mixedFieldProbe": {
+		"harness": "_diversity.test.ts, 200 games, 4p, maxRounds 120, field = {v13w-gen20, v13w-gen28, old champion, self}",
+		"winPct": 100,
+		"avgVP": 27.1,
+		"reach30Pct": 48.5,
+		"avgRounds": 24.3,
+		"avgStatus": 3.0,
+		"line": "Fallen-aggro"
+	},
+	"pending_human_layers": ["michael-live-playtest", "exploiter-probe", "collusion-probe"]
+}

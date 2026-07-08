@@ -13,7 +13,7 @@ softmax → pick one action now. It has no lookahead beyond an optional 1-ply va
 The game's value is in **multi-round sequences whose payoff is invisible to a greedy scorer**:
 - Monster farm: navigate to the Abyss → survive the monster's first strike → deal its full
   barrier in one combat → claim the reward track → repeat every round as the monster escalates.
-  (The monster has `livesRemaining = player count`; a weak rung dies to ~1 damage and is killable
+  (The monster's `livesRemaining` scales with player count — 1-2p→1, 3p→2, 4+p→3; a weak rung dies to ~1 damage and is killable
   repeatedly — a fight-every-round bot farms ~12+ VP trivially, but the heuristics fight ~3×/30r
   and the 1-step net fights ~0.)
 - maxBarrier via the Cultivator breakpoint (collect 2→3→4→5 Cultivators for +1/+2/+5/+10): the

@@ -1,0 +1,11 @@
+[1m[31mThe following Vite config options will be overridden by SvelteKit:[22m[39m
+  - base
+
+ RUN  v4.1.5 /Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  16:38:17
+   Duration  367.54s (transform 235ms, setup 0ms, import 276ms, tests 367.19s, environment 0ms)
+

@@ -1,0 +1,99 @@
+[
+  {
+    "name": "hard",
+    "avgVP": 8.26,
+    "winPct": 33,
+    "reach30": 0,
+    "status": 0.11,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 3.07,
+    "combatAttemptsPerGame": 3.11,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 8.26
+    },
+    "games": 27
+  },
+  {
+    "name": "survivor",
+    "avgVP": 7.79,
+    "winPct": 36,
+    "reach30": 0,
+    "status": 0.04,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.75,
+    "combatAttemptsPerGame": 2.89,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.79
+    },
+    "games": 28
+  },
+  {
+    "name": "medium",
+    "avgVP": 7.42,
+    "winPct": 31,
+    "reach30": 0,
+    "status": 0.31,
+    "barrier": 9.8,
+    "dice": 9.8,
+    "monsterKillsPerGame": 2.85,
+    "combatAttemptsPerGame": 3.12,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.42
+    },
+    "games": 26
+  },
+  {
+    "name": "cultivator",
+    "avgVP": 7.26,
+    "winPct": 19,
+    "reach30": 0,
+    "status": 0.37,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.81,
+    "combatAttemptsPerGame": 3.15,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.26
+    },
+    "games": 27
+  },
+  {
+    "name": "rushpatient",
+    "avgVP": 5.81,
+    "winPct": 12,
+    "reach30": 0,
+    "status": 0.08,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.12,
+    "combatAttemptsPerGame": 2.38,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 5.81
+    },
+    "games": 26
+  },
+  {
+    "name": "pvphunter",
+    "avgVP": 4.65,
+    "winPct": 19,
+    "reach30": 0,
+    "status": 2.73,
+    "barrier": 5.8,
+    "dice": 5.6,
+    "monsterKillsPerGame": 3.58,
+    "combatAttemptsPerGame": 7.81,
+    "pvpAttacksPerGame": 9.15,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 9.54,
+      "initiatePvp": -4.88
+    },
+    "games": 26
+  }
+]

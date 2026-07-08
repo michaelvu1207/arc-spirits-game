@@ -1,0 +1,99 @@
+[
+  {
+    "name": "hard",
+    "avgVP": 6.03,
+    "winPct": 28,
+    "reach30": 0,
+    "status": 0.13,
+    "barrier": 9.6,
+    "dice": 9.7,
+    "monsterKillsPerGame": 2.35,
+    "combatAttemptsPerGame": 2.55,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 6.03
+    },
+    "games": 40
+  },
+  {
+    "name": "cultivator",
+    "avgVP": 5.33,
+    "winPct": 13,
+    "reach30": 0,
+    "status": 0.2,
+    "barrier": 9.5,
+    "dice": 9.3,
+    "monsterKillsPerGame": 2.13,
+    "combatAttemptsPerGame": 2.73,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 5.33
+    },
+    "games": 40
+  },
+  {
+    "name": "medium",
+    "avgVP": 5.22,
+    "winPct": 23,
+    "reach30": 0,
+    "status": 0.1,
+    "barrier": 9.8,
+    "dice": 9.5,
+    "monsterKillsPerGame": 2.02,
+    "combatAttemptsPerGame": 2.58,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 5.22
+    },
+    "games": 40
+  },
+  {
+    "name": "survivor",
+    "avgVP": 4.9,
+    "winPct": 13,
+    "reach30": 0,
+    "status": 0.1,
+    "barrier": 9.8,
+    "dice": 9.4,
+    "monsterKillsPerGame": 1.93,
+    "combatAttemptsPerGame": 2.33,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 4.9
+    },
+    "games": 40
+  },
+  {
+    "name": "rushpatient",
+    "avgVP": 4.2,
+    "winPct": 8,
+    "reach30": 0,
+    "status": 0.07,
+    "barrier": 9.1,
+    "dice": 9.7,
+    "monsterKillsPerGame": 1.63,
+    "combatAttemptsPerGame": 2.1,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 4.2
+    },
+    "games": 40
+  },
+  {
+    "name": "pvphunter",
+    "avgVP": 3.95,
+    "winPct": 18,
+    "reach30": 3,
+    "status": 2.5,
+    "barrier": 5.7,
+    "dice": 5.3,
+    "monsterKillsPerGame": 2.98,
+    "combatAttemptsPerGame": 7.3,
+    "pvpAttacksPerGame": 8.28,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 8.35,
+      "initiatePvp": -4.4
+    },
+    "games": 40
+  }
+]

@@ -1,0 +1,26 @@
+[1m[31mThe following Vite config options will be overridden by SvelteKit:[22m[39m
+  - base
+
+ RUN  v4.1.5 /Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game
+
+
+[vpsrc] 6 profiles, 40 games, 1p, maxRounds=30 (sorted by VP):
+[vpsrc] cultivator  VP=  7.7 win%=100 r30%=  0 status=0.00 barrier=10.0 dice=10.0 | kills/g=2.71 combat/g=2.71 pvp/g=0.00
+[vpsrc]     VP source: {"resolveMonsterReward":7.71}
+[vpsrc] medium      VP=  7.6 win%=100 r30%=  0 status=0.00 barrier=10.0 dice=10.0 | kills/g=2.71 combat/g=2.71 pvp/g=0.00
+[vpsrc]     VP source: {"resolveMonsterReward":7.57}
+[vpsrc] survivor    VP=  7.4 win%=100 r30%=  0 status=0.00 barrier=10.0 dice=10.0 | kills/g=2.57 combat/g=2.57 pvp/g=0.00
+[vpsrc]     VP source: {"resolveMonsterReward":7.43}
+[vpsrc] pvphunter   VP=  7.3 win%=100 r30%=  0 status=2.43 barrier=5.9 dice=8.6 | kills/g=2.71 combat/g=6.71 pvp/g=0.00
+[vpsrc]     VP source: {"resolveMonsterReward":7.29}
+[vpsrc] hard        VP=  6.8 win%=100 r30%=  0 status=0.00 barrier=10.0 dice=10.0 | kills/g=2.33 combat/g=2.33 pvp/g=0.00
+[vpsrc]     VP source: {"resolveMonsterReward":6.83}
+[vpsrc] rushpatient VP=  5.8 win%=100 r30%=  0 status=0.00 barrier=10.0 dice=10.0 | kills/g=2.00 combat/g=2.00 pvp/g=0.00
+[vpsrc]     VP source: {"resolveMonsterReward":5.83}
+[vpsrc] DONE → ml/vpsource_result.json
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  15:39:28
+   Duration  611ms (transform 208ms, setup 0ms, import 241ms, tests 290ms, environment 0ms)
+

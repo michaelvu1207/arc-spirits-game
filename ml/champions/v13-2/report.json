@@ -1,0 +1,21 @@
+{
+	"_readme": "RULES v1.3 champion, DOSE 3 (2026-07-08). Scratch variance seed (league_v13y2, seedBase 150M, ladder8c2 recipe, 120 gens, PFSP field with v13-1 + ladder8c2 frozen at true v10 Elos, NO exploiters), best checkpoint gen 44. Chosen by head-to-head probe over the formally-promoted v13y1-gen96 (v10 Elo 474 but only 15.7 VP / 1% reach-30 in direct play — the third and most extreme case of anchor-pool placement Elo diverging from direct-play strength; the probe is the deciding test, the gauntlet the qualifying bar). Dose findings: exploiter lanes suppress rather than harden (v13x negative); LR-protected warm start avoids the crater but tops out at the parent's level (v13y3); from-scratch remains the winning strategy. Meta note: ALL strong nets across all doses play Fallen-aggro — the corruption line is confirmed dominant under rules v1.3.",
+	"rules": "v1.3: monster lives 1/2/2/3 by player count (every rung); finite deck — final kill saves the spirit world and ends the game (final scoring, highest VP); PvP = 2 VP engage + 2 per corruption",
+	"source": "GPU box ml/league_v13y2/checkpoints/main-0-gen44.json (byte-identical copy)",
+	"gauntlet": {
+		"version": "gauntlet-v10",
+		"elo": 453,
+		"note": "above the v13-1 baseline (439), below the formal +25 promotion margin — promoted on head-to-head dominance instead (see probe)"
+	},
+	"mixedFieldProbe": {
+		"harness": "_diversity.test.ts, 200 games, 4p, maxRounds 120, field = {v13y1-gen96, v13y3-gen56, v13-1, self}",
+		"winPct": 100,
+		"avgVP": 30.6,
+		"reach30Pct": 84,
+		"avgRounds": 17.9,
+		"avgStatus": 3.0,
+		"line": "Fallen-aggro",
+		"vsPriorChampion": "v13-1: 27.3 VP / 57% reach-30 / r23.5 in the same fields"
+	},
+	"pending_human_layers": ["michael-live-playtest", "exploiter-probe", "collusion-probe"]
+}

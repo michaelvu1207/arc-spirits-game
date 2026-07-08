@@ -1,0 +1,99 @@
+[
+  {
+    "name": "cultivator",
+    "avgVP": 7.86,
+    "winPct": 71,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.86,
+    "combatAttemptsPerGame": 2.86,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.86
+    },
+    "games": 14
+  },
+  {
+    "name": "survivor",
+    "avgVP": 7.36,
+    "winPct": 50,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.71,
+    "combatAttemptsPerGame": 2.93,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.36
+    },
+    "games": 14
+  },
+  {
+    "name": "hard",
+    "avgVP": 7.23,
+    "winPct": 38,
+    "reach30": 0,
+    "status": 0,
+    "barrier": 9.7,
+    "dice": 10,
+    "monsterKillsPerGame": 2.54,
+    "combatAttemptsPerGame": 2.54,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 7.23
+    },
+    "games": 13
+  },
+  {
+    "name": "rushpatient",
+    "avgVP": 6.75,
+    "winPct": 67,
+    "reach30": 0,
+    "status": 0.42,
+    "barrier": 10,
+    "dice": 10,
+    "monsterKillsPerGame": 2.58,
+    "combatAttemptsPerGame": 3.17,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 6.75
+    },
+    "games": 12
+  },
+  {
+    "name": "medium",
+    "avgVP": 5.86,
+    "winPct": 43,
+    "reach30": 0,
+    "status": 0.29,
+    "barrier": 9.9,
+    "dice": 10,
+    "monsterKillsPerGame": 2.07,
+    "combatAttemptsPerGame": 2.57,
+    "pvpAttacksPerGame": 0,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 5.86
+    },
+    "games": 14
+  },
+  {
+    "name": "pvphunter",
+    "avgVP": 4.46,
+    "winPct": 31,
+    "reach30": 0,
+    "status": 2.38,
+    "barrier": 5.7,
+    "dice": 6.5,
+    "monsterKillsPerGame": 2.15,
+    "combatAttemptsPerGame": 6.46,
+    "pvpAttacksPerGame": 6.46,
+    "vpBySourcePerGame": {
+      "resolveMonsterReward": 5.85,
+      "initiatePvp": -1.38
+    },
+    "games": 13
+  }
+]

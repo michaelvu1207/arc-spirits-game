@@ -1,0 +1,706 @@
+{
+  "seedBase": 101,
+  "ffaGames": 100,
+  "muGames": 30,
+  "maxRounds": 150,
+  "seatCounts": [
+    2,
+    3,
+    4,
+    6
+  ],
+  "entrants": [
+    "pvphunter",
+    "cursed",
+    "corruption",
+    "sim5",
+    "sim6",
+    "hard",
+    "rushpatient",
+    "culrush",
+    "cullean",
+    "cultivator",
+    "flexorigin",
+    "survivor",
+    "aggressive",
+    "fighter"
+  ],
+  "baselines": [
+    "hard",
+    "rushpatient",
+    "culrush",
+    "cullean",
+    "cultivator",
+    "flexorigin",
+    "aggressive",
+    "fighter"
+  ],
+  "aggressors": [
+    "pvphunter",
+    "cursed"
+  ],
+  "ffa": {
+    "2p": {
+      "pvphunter": {
+        "games": 15,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 146,
+        "fallen": 9,
+        "pvpAttacks": 80,
+        "pvpGames": 9
+      },
+      "cursed": {
+        "games": 15,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 118,
+        "fallen": 4,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "corruption": {
+        "games": 15,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 95,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim5": {
+        "games": 15,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 90,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim6": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 105,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "hard": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 122,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "rushpatient": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 99,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "culrush": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 85,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cullean": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 96,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cultivator": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 102,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "flexorigin": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 106,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "survivor": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 110,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "aggressive": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 96,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "fighter": {
+        "games": 14,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 39,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      }
+    },
+    "3p": {
+      "pvphunter": {
+        "games": 22,
+        "wins": 1,
+        "winRoundSum": 21,
+        "vpSum": 217,
+        "fallen": 15,
+        "pvpAttacks": 165,
+        "pvpGames": 14
+      },
+      "cursed": {
+        "games": 22,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 162,
+        "fallen": 5,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "corruption": {
+        "games": 22,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 155,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim5": {
+        "games": 22,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 116,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim6": {
+        "games": 22,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 145,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "hard": {
+        "games": 22,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 144,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "rushpatient": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 151,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "culrush": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 146,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cullean": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 154,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cultivator": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 143,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "flexorigin": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 145,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "survivor": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 162,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "aggressive": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 161,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "fighter": {
+        "games": 21,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 63,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      }
+    },
+    "4p": {
+      "pvphunter": {
+        "games": 29,
+        "wins": 3,
+        "winRoundSum": 66,
+        "vpSum": 213,
+        "fallen": 21,
+        "pvpAttacks": 233,
+        "pvpGames": 21
+      },
+      "cursed": {
+        "games": 29,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 219,
+        "fallen": 4,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "corruption": {
+        "games": 29,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 211,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim5": {
+        "games": 29,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 179,
+        "fallen": 3,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim6": {
+        "games": 29,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 178,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "hard": {
+        "games": 29,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 174,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "rushpatient": {
+        "games": 29,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 192,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "culrush": {
+        "games": 29,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 182,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cullean": {
+        "games": 28,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 204,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cultivator": {
+        "games": 28,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 197,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "flexorigin": {
+        "games": 28,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 180,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "survivor": {
+        "games": 28,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 182,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "aggressive": {
+        "games": 28,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 163,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "fighter": {
+        "games": 28,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 66,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      }
+    },
+    "6p": {
+      "pvphunter": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 170,
+        "fallen": 36,
+        "pvpAttacks": 493,
+        "pvpGames": 36
+      },
+      "cursed": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 200,
+        "fallen": 4,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "corruption": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 237,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim5": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 258,
+        "fallen": 2,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "sim6": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 281,
+        "fallen": 3,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "hard": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 221,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "rushpatient": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 260,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "culrush": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 246,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cullean": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 197,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cultivator": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 183,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "flexorigin": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 203,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "survivor": {
+        "games": 43,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 239,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "aggressive": {
+        "games": 42,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 227,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "fighter": {
+        "games": 42,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 87,
+        "fallen": 0,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      }
+    }
+  },
+  "matchup": {
+    "pvphunter": {
+      "hard": {
+        "games": 30,
+        "wins": 1,
+        "winRoundSum": 22,
+        "vpSum": 165,
+        "fallen": 22,
+        "pvpAttacks": 248,
+        "pvpGames": 22
+      },
+      "rushpatient": {
+        "games": 30,
+        "wins": 1,
+        "winRoundSum": 29,
+        "vpSum": 132,
+        "fallen": 25,
+        "pvpAttacks": 293,
+        "pvpGames": 25
+      },
+      "culrush": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 126,
+        "fallen": 25,
+        "pvpAttacks": 293,
+        "pvpGames": 25
+      },
+      "cullean": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 173,
+        "fallen": 21,
+        "pvpAttacks": 234,
+        "pvpGames": 21
+      },
+      "cultivator": {
+        "games": 30,
+        "wins": 1,
+        "winRoundSum": 22,
+        "vpSum": 165,
+        "fallen": 22,
+        "pvpAttacks": 248,
+        "pvpGames": 22
+      },
+      "flexorigin": {
+        "games": 30,
+        "wins": 1,
+        "winRoundSum": 20,
+        "vpSum": 154,
+        "fallen": 20,
+        "pvpAttacks": 244,
+        "pvpGames": 20
+      },
+      "aggressive": {
+        "games": 30,
+        "wins": 1,
+        "winRoundSum": 22,
+        "vpSum": 161,
+        "fallen": 22,
+        "pvpAttacks": 251,
+        "pvpGames": 22
+      },
+      "fighter": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 142,
+        "fallen": 25,
+        "pvpAttacks": 354,
+        "pvpGames": 25
+      }
+    },
+    "cursed": {
+      "hard": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 211,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "rushpatient": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 251,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "culrush": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 251,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cullean": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 247,
+        "fallen": 2,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "cultivator": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 211,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "flexorigin": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 228,
+        "fallen": 2,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "aggressive": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 211,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      },
+      "fighter": {
+        "games": 30,
+        "wins": 0,
+        "winRoundSum": 0,
+        "vpSum": 226,
+        "fallen": 1,
+        "pvpAttacks": 0,
+        "pvpGames": 0
+      }
+    }
+  }
+}

@@ -165,14 +165,23 @@ describe('promotion bar + baseline elos', () => {
 		try {
 			const { state } = initLeague(root);
 			const frozen = state.members.filter((m) => m.kind === 'frozen');
-			// gauntlet-v5 (obs v1.1, OBS_DIM 62→77): EVERY 62-dim checkpoint anchor went
-			// dim-incompatible, so initLeague seeds no frozen checkpoint members at all.
-			// The first promotion bar comes from extraFrozen/baselineElos (test below) —
-			// exactly the -Infinity-bar gotcha documented in the Phase 2 league runs.
-			expect(frozen).toHaveLength(0);
+			// gauntlet-v10: two ACTIVE (83-dim) checkpoint anchors — the ladder8c2-gen60
+			// champion (v8 era) and the v13-1 rules-v1.3 champion. Since the v13-2
+			// promotion re-shipped policy-weights.json, neither anchor byte-matches a
+			// scanned result file anymore; both are stamped from defaultConfig's
+			// baselineElos (their true 800-game gauntlet-v10 scores), so the first
+			// promotion bar is real (not the -Infinity gotcha).
+			expect(frozen).toHaveLength(2);
+			expect(frozen.map((m) => m.id).sort()).toEqual([
+				'frozen-ladder8c2-gen60-champion',
+				'frozen-v13-1-gen48-champion'
+			]);
 			// Heuristic anchors do NOT participate in the promotion bar and stay unstamped.
 			expect(state.members.find((m) => m.id === 'heur-pvphunter')!.eloVsAnchors).toBeUndefined();
-			expect(promotionBar(state.members)).toBe(-Infinity);
+			expect(
+				state.members.find((m) => m.id === 'frozen-ladder8c2-gen60-champion')!.eloVsAnchors
+			).toBe(136);
+			expect(promotionBar(state.members)).toBe(439);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -259,14 +268,14 @@ describe('promotion bar + baseline elos', () => {
 		try {
 			const { state } = initLeague(root, {
 				extraFrozen: [
-					{ id: 'frozen-champion-run1', weightsPath: 'ml/champions/league-run1-main0-gen8-elo268.json', elo: 268 },
+					{ id: 'frozen-champion-run1', weightsPath: 'ml/champions/league-run1-main0-gen8-elo268.json', elo: 500 },
 					{ id: 'frozen-unscored', weightsPath: 'ml/champions/nonexistent-for-scan.json' } // no elo, fake path
 				]
 			});
 			const champ = state.members.find((m) => m.id === 'frozen-champion-run1')!;
 			expect(champ.kind).toBe('frozen');
 			expect(champ.weightsPath).toBe('ml/champions/league-run1-main0-gen8-elo268.json');
-			expect(champ.eloVsAnchors).toBe(268); // explicit elo stamps directly
+			expect(champ.eloVsAnchors).toBe(500); // explicit elo stamps directly
 
 			// PFSP-eligible: the main lane's opponent pool contains the champion…
 			const main = state.members.find((m) => m.id === 'main-0')!;
@@ -276,8 +285,9 @@ describe('promotion bar + baseline elos', () => {
 			const lx = state.members.find((m) => m.id === 'league_exploiter-0')!;
 			expect(opponentPool(lx, state.members).map((m) => m.id)).toContain('frozen-champion-run1');
 
-			// Promotion bar rises to the champion's stamped elo (268 > routeexecq's 192).
-			expect(promotionBar(state.members)).toBe(268);
+			// Promotion bar rises to the champion's stamped elo (500 > the default
+			// config's 439 v13-1 anchor baseline).
+			expect(promotionBar(state.members)).toBe(500);
 
 			// No explicit elo + nothing matching in the scan ⇒ stays unscored (no bar
 			// contribution) but remains a playable .json opponent.
@@ -303,10 +313,9 @@ describe('league init + state round-trip', () => {
 				return acc;
 			}, {});
 			// 8 gauntlet heuristic anchors + the active frozen checkpoint anchors + 3 lanes.
-			// (0 frozen since gauntlet-v5: obs v1.1 made every 62-dim checkpoint anchor
-			// dim-incompatible; frozen PFSP peers now come from extraFrozen.)
+			// (2 frozen since gauntlet-v10: ladder8c2-gen60 + the v13-1 rules-v1.3 champion.)
 			expect(kinds['heuristic']).toBe(8);
-			expect(kinds['frozen']).toBeUndefined();
+			expect(kinds['frozen']).toBe(2);
 			expect(kinds['main']).toBe(1);
 			expect(kinds['main_exploiter']).toBe(1);
 			expect(kinds['league_exploiter']).toBe(1);

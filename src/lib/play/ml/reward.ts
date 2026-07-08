@@ -14,7 +14,7 @@ import { VP_TO_WIN, type SeatColor } from '../types';
  * Blend of placement and absolute VP progress. Placement is the true objective (first to
  * 30 wins), but under the current rules outright wins are rare, so a pure placement signal
  * is coarse. We add a VP-progress term so the value head and AWR get a denser gradient —
- * crucially this rewards the PvP line (which racks up VP via +3/round group attacks), the
+ * crucially this rewards the PvP line (which racks up VP via +3-per-attack group attacks), the
  * only line that actually reaches 30 under current rules. winnerSeat (reached 30) is pinned
  * to 1.0 so winning always dominates.
  */

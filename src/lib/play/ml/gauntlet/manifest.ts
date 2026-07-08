@@ -55,7 +55,25 @@ import { createRng, nextInt } from '../../rng';
 // the obs v1.2 encoder (OBS_DIM 77 → 83, own-location block): every 77-dim anchor
 // became dim-incompatible (same fate as the 62→78 bump at v5), so the pool is the
 // heuristics until an 83-dim champion is promoted in. NEW SCALE vs v7.
-export const GAUNTLET_VERSION = 'gauntlet-v8';
+// v9 = rules v1.3 (2026-07-07, Michael's design rulings): (a) monster lives scale with
+// player count on EVERY rung including the final one (1p→1, 2-3p→2, 4+p→3; was one per
+// player) — sized so someone can reach 30 VP from the monster pool alone at any table
+// size; (b) each Evil PvP attacker scores 2 VP for engaging + 2 per Good player
+// corrupted in the exchange (was flat +3; roll-scaling and target-VP bounties were
+// considered and rejected);
+// and (c) the deck is FINITE: when the final monster's last life is spent the SPIRIT
+// WORLD IS SAVED — the game ends at that cleanup with final scoring (highest VP wins),
+// so the deck can never run out with play left hanging.
+// All change outcomes engine-wide → NEW SCALE vs v8. The
+// ladder8c2-gen60 champion (83-dim, shipped live 2026-07-04, v8 Elo 727) joins the
+// checkpoint anchor pool — the first 83-dim champion, restoring post-heuristic headroom
+// (the v3 precedent). The anchor-field draw shifts with the pool.
+// v10 = SATURATION fork (2026-07-08): the first rules-v1.3 champion (v13-1, scratch-seed
+// league gen48; v9 Elo 592, 93.6% win, dominant head-to-head over all v9-era finalists)
+// joins the anchor pool — v9 stopped discriminating once every finalist beat its field
+// ~94%. Rules unchanged from v9; the anchor-field draw shifts with the pool → NEW SCALE
+// vs v9 (v9 result files remain the historical record).
+export const GAUNTLET_VERSION = 'gauntlet-v10';
 
 export const BASE_SEED_FIRST = 9_000_000;
 export const N_BASE_SEEDS = 200;
@@ -117,6 +135,18 @@ export interface CheckpointAnchor {
  *     rather than silently dropped.
  */
 export const CHECKPOINT_ANCHORS: readonly CheckpointAnchor[] = [
+	{
+		name: 'v13-1-gen48-champion',
+		path: 'ml/champions/v13-1/main-0-gen48.json',
+		status: 'active',
+		note: '[v10] first rules-v1.3 champion (scratch-seed league_v13s gen48): v9 Elo 592 / 93.6% win / 29.0 meanVP; byte-identical to the live policy-weights.json shipped 2026-07-08. Added at the v10 saturation fork.'
+	},
+	{
+		name: 'ladder8c2-gen60-champion',
+		path: 'ml/champions/ladder8c2/main-0-gen60.json',
+		status: 'active',
+		note: '[v9] first 83-dim champion (obs v1.2): v8 Elo 727 / 96.1% win / 27.4 meanVP; byte-identical to the live policy-weights.json shipped 2026-07-04. Added at the v9 fork (rules v1.3) to restore post-heuristic headroom.'
+	},
 	{
 		name: 'fair-gen24-champion',
 		path: 'ml/champions/fair/main-0-gen24.json',
