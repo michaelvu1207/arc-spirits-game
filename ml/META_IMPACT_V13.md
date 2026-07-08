@@ -138,3 +138,33 @@ slower play — from-scratch won.
 - Full unit suites: arc-spirits-game 985 passed; arc-league-run2 816 passed.
 - gauntlet-v9 fork committed in `src/lib/play/ml/gauntlet/manifest.ts`; re-baseline
   appended to `ml/gauntlet_results/history.jsonl`.
+
+## 7. Serving-config study (2026-07-08, post-v13-2)
+
+All numbers: v13-2 champion, 800-game frozen gauntlet-v10 (Elo) + 400-game 4-copy
+mirror probe (`_mirror.test.ts`, reach-30 = % of games where anyone hits 30 VP).
+
+| config                     | Elo | mirror reach-30 | note |
+|----------------------------|-----|-----------------|------|
+| argmax                     | 453 | 19.5%           | eval ceiling; clones starve |
+| nav-only t=0.3             | 445 | 35.8%           | |
+| nav-only t=0.65            | 432 | 43.5%           | SHIPPED live default |
+| all-phase t=0.3            | 412 | 32.8%           | |
+| search16 argmax            | 399 | —               | search REGRESSES: stale heuristic rollouts |
+| all-phase t=0.65           | 385 | 41.3%           | old live default |
+| search16 t=0.65            | 374 | —               | ARC_EXPERT_BOTS=1 config — do not enable |
+| all-phase t=1.0            | 341 | —               | training distribution |
+
+Findings: (1) the ~70-Elo live-serving cost was almost entirely NON-navigation
+sampling noise; clone collision is a route-choice problem, so nav-only temperature
+keeps the mirror-health benefit at near-argmax strength (+47 Elo shipped, config
+`ARC_LIVE_BOT_TEMP_SCOPE`). (2) The Gumbel search tier scores BELOW the raw policy
+under rules v1.3 — its heuristic rollout policy misevaluates the new economy; fix
+the rollout policy before re-enabling ARC_EXPERT_BOTS.
+
+## 8. V14 push (in flight)
+
+4 fresh scratch seeds (`ml/league_v14a-d`, y2 recipe, 120 gens, workers 30 ea) with
+v13-2 in the frozen PFSP field at its true Elo 453 (extraFrozen) — learners face the
+live champion from gen 0; promotion bar 453+25. Selection = head-to-head probe first,
+gauntlet as qualifier (three prior anchor-Elo/direct-play divergences).
