@@ -166,9 +166,29 @@ it: 399→447), but even policy rollouts at 2× sims never beat raw argmax (431/
 vs 453) — the net's own one-step values outperform 6-round rollout estimates, so
 search is a dead end at this net size; don't enable ARC_EXPERT_BOTS for strength.
 
-## 8. V14 push (in flight)
+## 8. V14 push (2026-07-08/09) — NO PROMOTION; champion survives, exploiter archived
 
 4 fresh scratch seeds (`ml/league_v14a-d`, y2 recipe, 120 gens, workers 30 ea) with
-v13-2 in the frozen PFSP field at its true Elo 453 (extraFrozen) — learners face the
-live champion from gen 0; promotion bar 453+25. Selection = head-to-head probe first,
-gauntlet as qualifier (three prior anchor-Elo/direct-play divergences).
+v13-2 in the frozen PFSP field at its true Elo 453 (extraFrozen). Best candidate:
+**v14b-gen120** (finals pool: 14.5 VP/33% vs incumbent 12.5/24%; direct h2h vs 3×
+v13-2: 27% win as focus, holds v13-2 to 22%).
+
+BUT the general-strength measures both favor the incumbent:
+- gauntlet-v10: v14b **394** vs v13-2 **453** (win 78.6% vs 83.1%)
+- heuristic-field probe (400 games, human proxy): v14b 27.6 VP/91%/77% r30 vs
+  v13-2 **29.4/96%/82%**, and ~2 rounds slower.
+
+Verdict: v14b's h2h edge is LEARNED EXPLOITATION of its frozen training target,
+not general superiority — the mirror image of the anchor-specialist lesson (4th
+anchor/direct divergence; the probe decides, but only against opponents the
+candidate did NOT train on). v13-2 stays champion. v14b archived at
+`ml/exploiters/v14b-gen120.json`: (a) frozen exploiter-anchor for future leagues
+(v15 field = heuristics + v13-1 + v13-2 + v14b), (b) evidence the champion has an
+exploitable seam — the v13-2 exploiter-probe human layer is now MEASURED (a
+dedicated net gains ~+5% win vs it).
+
+Design note: line choice is FIELD-CONDITIONAL. Both nets play Fallen-aggro
+(status ~3.0) vs weak heuristic fields but soften to 'mixed' (status ~2.0-2.4) in
+all-strong pools — and v14b beat v13-2 head-to-head with the LESS corrupted line.
+The corruption monoculture is the optimal answer to exploitable opponents, not
+an unconditional dominant strategy.
