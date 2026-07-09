@@ -150,6 +150,8 @@ mirror probe (`_mirror.test.ts`, reach-30 = % of games where anyone hits 30 VP).
 | nav-only t=0.3             | 445 | 35.8%           | |
 | nav-only t=0.65            | 432 | 43.5%           | SHIPPED live default |
 | all-phase t=0.3            | 412 | 32.8%           | |
+| search16 policy-rollout    | 447 | —               | rollout fix recovers the regression, still ≤ argmax |
+| search32 policy-rollout    | 431 | —               | more sims do NOT help |
 | search16 argmax            | 399 | —               | search REGRESSES: stale heuristic rollouts |
 | all-phase t=0.65           | 385 | 41.3%           | old live default |
 | search16 t=0.65            | 374 | —               | ARC_EXPERT_BOTS=1 config — do not enable |
@@ -159,8 +161,10 @@ Findings: (1) the ~70-Elo live-serving cost was almost entirely NON-navigation
 sampling noise; clone collision is a route-choice problem, so nav-only temperature
 keeps the mirror-health benefit at near-argmax strength (+47 Elo shipped, config
 `ARC_LIVE_BOT_TEMP_SCOPE`). (2) The Gumbel search tier scores BELOW the raw policy
-under rules v1.3 — its heuristic rollout policy misevaluates the new economy; fix
-the rollout policy before re-enabling ARC_EXPERT_BOTS.
+under rules v1.3. The stale medium-heuristic rollout policy was most of it (fixing
+it: 399→447), but even policy rollouts at 2× sims never beat raw argmax (431/447
+vs 453) — the net's own one-step values outperform 6-round rollout estimates, so
+search is a dead end at this net size; don't enable ARC_EXPERT_BOTS for strength.
 
 ## 8. V14 push (in flight)
 
