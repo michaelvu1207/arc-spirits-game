@@ -221,3 +221,20 @@ champion. Final certification also passed: a fresh 16-generation exploiter score
 an estimated -814 Elo relative gain (failure threshold +50), and the candidate's
 seat-normalized score did not drop in the two-hunter collusion probe (0.993 vs
 0.990 with one hunter). Human play remains the next external layer.
+
+## 10. Direct entity-transformer follow-up (2026-07-11)
+
+Because h512 failed to improve the mixed field, v2 was reopened under the named
+representation/capacity exception. A d128/l3/h4 entity transformer behavior-cloned
+109,352 paired v15-1 decisions and scored 466 Elo in a 200-game direct socket
+screen. Conservative v2 PPO at LR 1e-4 regressed to 456. Restarting from the BC
+seed at LR 3e-5 avoided sustained KL early-stops and screened at 538 after ten
+generations, but the full 800-game direct-v2 gauntlet resolved to 477 Elo, 86.25%
+wins, 27.11 VP, and 19.69 rounds.
+
+That is effectively tied with v15-1's 476 greedy / 474 exact-live scores and does
+not justify GPU-socket serving complexity, distillation risk, or promotion. The
+v2 branch is therefore closed pending a concrete human-play representation
+failure. Wider v1, current search, combined/single auxiliary heads, aggressive
+warm-start PPO, and direct v2 have now all failed to provide a verified gain over
+the conservative v15-1 recipe.
