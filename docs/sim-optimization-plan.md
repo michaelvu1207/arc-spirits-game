@@ -35,6 +35,22 @@ The repeatable actor and learner probes are `npm run bot:bench:actors` and
 `npm run bot:bench:models`; the latter includes ragged collation, transfer, gradient
 clipping, optimizer update, finite checks, and random-vs-bucketed padding.
 
+### July 11, 2026 SimForge measurement
+
+Commit `ddf5301` was benchmarked on a fresh corrected-contract h128 generation. The
+isolated production-shaped actor scaled from about 5.8 games/s at two workers to
+32.9 games/s at sixteen workers. For the actual 16-matchup league scheduler with a
+40-worker budget, four concurrent matchups was the best tested setting: the same
+512 games and 45,075 samples took 25.1 seconds, versus 27.0 seconds at six, 30.1
+seconds at eight, and 34.9 seconds at sixteen. The fair-v15 configs therefore use
+`matchupConcurrency: 4`.
+
+On one A100-40GB, candidate-count bucketing raised the best replay learner throughput
+to roughly 248k rows/s for h128, 279k for h256, and 240k for h512. In the real trainer,
+batch 1024 shortened a four-epoch h128 update only from 8.74 to 7.47 seconds; batch
+4096 took 8.10 seconds. Simulation remains the bottleneck, and fair-v15 keeps batch
+256 so the systems change does not also change PPO optimization dynamics.
+
 ## Diagnosis (measured)
 
 - Single core, 4-player full games: **~1.6 games/s, ~144 rounds/s, ~912 command-applies/s, ~622 ms/game.**

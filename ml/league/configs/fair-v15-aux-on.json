@@ -64,7 +64,7 @@
 	"pythonBin": "ml/.venv/bin/python",
 	"gauntletCmd": ["bash", "scripts/league-gauntlet.sh"],
 	"workers": 40,
-	"matchupConcurrency": 8,
+	"matchupConcurrency": 4,
 	"seedBase": 260000000,
 	"initFrom": "random",
 	"laneInit": { "main-0": "random" },
