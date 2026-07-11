@@ -197,3 +197,27 @@ Design note: line choice is FIELD-CONDITIONAL. Both nets play Fallen-aggro
 all-strong pools — and v14b beat v13-2 head-to-head with the LESS corrupted line.
 The corruption monoculture is the optimal answer to exploitable opponents, not
 an unconditional dominant strategy.
+
+## 9. v15 corrected-contract successor (2026-07-11)
+
+The July v15 campaign found and fixed a PPO no-op caused by `0 * -inf` entropy
+terms on post-filtered behavior support, then reran the corrected public-information
+contract. Public monster stats and deterministic reward/drop previews remain visible;
+only uncommitted RNG outcomes are hidden.
+
+Matched aux-off/aux-on seeds, isolated farm/reward/route heads, h256/h512 width,
+and the existing rollout-search settings all failed to beat v13-2 across full and
+mixed-field gates. Aggressive warm-start PPO also regressed. The successful arm
+warm-started v13-2 but reduced update drift (LR 1e-4, two epochs, clip 0.1,
+entropy 0.002, cosine schedule, target KL 0.01, KL-reference coefficient 0.05),
+with self-play reduced to 0.1 for more PFSP/frozen-field exposure.
+
+`ml/champions/v15-1/main-0-gen10.json` scored 476 Elo over the 800-game
+gauntlet-v10 versus v13-2's 453. In the direct learned field it produced 48% wins,
+14.9 VP, and 12% reach-30 versus v13-2's 35.5%, 12.74 VP, and 8.5%. The exact
+live nav-only temperature-0.65 configuration scored 474 Elo, and the candidate
+led a held-out historical neural field at 57% wins. It is therefore the new bundled
+champion. Final certification also passed: a fresh 16-generation exploiter scored
+an estimated -814 Elo relative gain (failure threshold +50), and the candidate's
+seat-normalized score did not drop in the two-hunter collusion probe (0.993 vs
+0.990 with one hunter). Human play remains the next external layer.

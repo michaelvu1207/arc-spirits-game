@@ -28,18 +28,20 @@ per-step bridge; both languages do what they're best at.
   dry-run each through the pure reducer, keep the `ok` ones. The bot can take _any_ real
   in-game action (full rules action set; manual/sandbox/debug commands excluded).
 
-## Current status (verified July 10, 2026)
+## Current status (verified July 11, 2026)
 
-- The bundled champion is **v13-2 / v13y2-gen44**
-  (`ml/champions/v13-2/main-0-gen44.json`), with an **83-float observation** and
-  **52-float action** contract. Live serving samples navigation decisions at temperature
-  0.65; the evaluated search tier remains disabled because it regressed strength.
+- The bundled champion is **v15-1 / conservative-gen10**
+  (`ml/champions/v15-1/main-0-gen10.json`), with an **83-float observation** and
+  **52-float action** contract. It scored **476 Elo** over the frozen 800-game
+  gauntlet-v10 (+23 over v13-2), then beat v13-2 in the mixed learned field
+  (48% vs 35.5% wins; 14.9 vs 12.74 VP). The exact live navigation-temperature
+  configuration scored 474 Elo. See `ml/champions/v15-1/report.json`.
 - The v14 push did not promote: its best candidate exploited v13-2 head-to-head but lost
   the broad gauntlet and heuristic-field gates. See `META_IMPACT_V13.md`.
-- Current corrective work separates public action information from hidden RNG outcomes,
-  records exact PPO behavior probabilities, and removes the unconditional delayed-PvP
-  override. Those changes require a fresh aux-off reproduction and fixed-seed A/B before
-  any new checkpoint can replace v13-2.
+- The corrected v15 study keeps public action information while excluding hidden RNG,
+  records exact PPO behavior probabilities, and preserves complete trajectories. Combined
+  farm/reward/route auxiliaries and wider h256/h512 models did not improve held-out strength.
+  Conservative incumbent adaptation (LR 1e-4, two epochs, tight clip/KL) was the winning lever.
 - Strong checkpoints still lean heavily on corruption/PvP pressure. Human play, a
   held-out exploiter field, and strategy-diversity checks remain important promotion
   layers; a single Elo or heuristic result is not enough.

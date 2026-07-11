@@ -1,0 +1,58 @@
+[
+  {
+    "name": "main-0-gen10",
+    "params": 90057,
+    "winPct": 57,
+    "reach30Pct": 12.5,
+    "avgVP": 17.2,
+    "avgStatus": 2.615,
+    "avgBarrier": 7.04,
+    "avgDice": 2.025,
+    "avgSpirits": 5.47,
+    "avgRounds": 27.29,
+    "fieldBestVP": 15.685,
+    "line": "Fallen-aggro"
+  },
+  {
+    "name": "v13y3-gen56",
+    "params": 90057,
+    "winPct": 54,
+    "reach30Pct": 12.5,
+    "avgVP": 17.085,
+    "avgStatus": 2.655,
+    "avgBarrier": 7.17,
+    "avgDice": 2.3,
+    "avgSpirits": 5.975,
+    "avgRounds": 27.41,
+    "fieldBestVP": 15.58,
+    "line": "Fallen-aggro"
+  },
+  {
+    "name": "v13w-gen28",
+    "params": 90057,
+    "winPct": 6.5,
+    "reach30Pct": 0,
+    "avgVP": 5.13,
+    "avgStatus": 0.88,
+    "avgBarrier": 6.93,
+    "avgDice": 1.09,
+    "avgSpirits": 6.31,
+    "avgRounds": 26.555,
+    "fieldBestVP": 22.73,
+    "line": "Good-lean"
+  },
+  {
+    "name": "v13y1-gen96",
+    "params": 90057,
+    "winPct": 6.5,
+    "reach30Pct": 0.5,
+    "avgVP": 4.515,
+    "avgStatus": 1.255,
+    "avgBarrier": 6.885,
+    "avgDice": 3.91,
+    "avgSpirits": 6.115,
+    "avgRounds": 26.91,
+    "fieldBestVP": 21.16,
+    "line": "mixed"
+  }
+]

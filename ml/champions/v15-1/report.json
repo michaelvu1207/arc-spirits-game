@@ -1,0 +1,103 @@
+{
+	"_readme": "RULES v1.3 champion v15-1 (2026-07-11). This is the v13-2 incumbent adapted for 10 generations with corrected PPO trajectories/probabilities and a conservative optimizer. The aggressive warm-start, combined auxiliary heads, h256, and h512 arms all failed their full or mixed-field gates. The winning arm used a 10x lower learning rate, two epochs, tighter clipping, lower entropy, cosine decay, target-KL restraint, and a PFSP-heavy field. No farm/reward/route auxiliary loss was enabled.",
+	"rules": "v1.3: monster lives 1/2/2/3 by player count; finite deck; final kill ends the game with final scoring; PvP pays 2 VP engage + 2 per corruption",
+	"source": "SimForge ml/league_v15_incumbent_conservative_s0/checkpoints/main-0-gen10.json",
+	"sha256": "3d9b553dddcb030f5965a2a4b1b29b8433d6b27ab917a2f8fc78371015b1bc46",
+	"architecture": {
+		"format": "arc-cand-scorer-v1",
+		"obsDim": 83,
+		"actDim": 52,
+		"trunkHidden": [128, 128],
+		"valueHidden": [64],
+		"params": 90057
+	},
+	"training": {
+		"initFrom": "ml/champions/v13-2/main-0-gen44.json",
+		"generations": 10,
+		"gamesPerGeneration": 512,
+		"selfPlayFraction": 0.1,
+		"temperature": 0.65,
+		"learningRate": 0.0001,
+		"epochs": 2,
+		"clipEpsilon": 0.1,
+		"entropyCoefficient": 0.002,
+		"learningRateSchedule": "cosine",
+		"targetKl": 0.01,
+		"klReferenceCoefficient": 0.05,
+		"observedApproxKl": "approximately 0.0006-0.0007",
+		"auxiliaryObjectives": "placement only; farm/reward/route disabled"
+	},
+	"gauntlet": {
+		"version": "gauntlet-v10",
+		"games": 800,
+		"elo": 476,
+		"incumbentElo": 453,
+		"winPct": 85.5,
+		"avgVP": 26.36375,
+		"avgPlacement": 1.17375,
+		"avgRounds": 20.66,
+		"artifact": "gauntlet-v10-full.json"
+	},
+	"liveServingGate": {
+		"configuration": "navigation-only sampling at temperature 0.65; all other phases greedy",
+		"games": 800,
+		"elo": 474,
+		"winPct": 85.25,
+		"avgVP": 27.1875,
+		"avgPlacement": 1.17625,
+		"avgRounds": 20.09375,
+		"artifact": "live-nav065-full.json"
+	},
+	"mixedFieldGate": {
+		"field": ["v15-1", "v13-2", "v13-1", "ladder8c2"],
+		"gamesPerFocusBot": 200,
+		"candidateWinPct": 48,
+		"incumbentWinPct": 35.5,
+		"candidateAvgVP": 14.9,
+		"incumbentAvgVP": 12.74,
+		"candidateReach30Pct": 12,
+		"incumbentReach30Pct": 8.5,
+		"artifact": "mixed-field.json"
+	},
+	"heldoutNeuralGate": {
+		"field": ["v15-1", "v13y1-gen96", "v13y3-gen56", "v13w-gen28"],
+		"gamesPerFocusBot": 200,
+		"candidateWinPct": 57,
+		"candidateAvgVP": 17.2,
+		"strongestOpponentWinPct": 54,
+		"strongestOpponentAvgVP": 17.085,
+		"artifact": "heldout-field.json"
+	},
+	"correctnessGates": {
+		"typecheck": "0 errors",
+		"engineTests": "1012 passed, 65 skipped",
+		"reducerParityTests": "3/3",
+		"ppoTests": "17/17",
+		"finiteGuardTests": "6/6",
+		"typescriptContractTests": "9 passed, 1 skipped",
+		"publicInformationContract": "visible monster/reward outcomes allowed; hidden RNG outcomes excluded",
+		"checkpointFinite": true
+	},
+	"certification": {
+		"freshExploiter": {
+			"budgetGenerations": 16,
+			"eloGainEstimate": -814,
+			"failureThresholdElo": 50,
+			"verdict": "PASS"
+		},
+		"collusion": {
+			"scoreVsTwoHunters": 0.9933333333333333,
+			"scoreVsOneHunter": 0.99,
+			"drop": -0.0033333333333332993,
+			"gamesPerField": 200,
+			"verdict": "PASS"
+		},
+		"mirror": {
+			"redSeatScore": 0.5733333333333334,
+			"games": 200,
+			"note": "mild first-seat edge; no collapse or pathological asymmetry"
+		},
+		"artifact": "certification.json"
+	},
+	"pendingHumanLayers": ["michael-live-playtest", "bc-of-human-response-training"]
+}

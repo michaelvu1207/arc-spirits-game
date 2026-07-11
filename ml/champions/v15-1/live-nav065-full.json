@@ -1,0 +1,133 @@
+{
+  "gauntletVersion": "gauntlet-v10",
+  "candidate": {
+    "kind": "weights",
+    "ref": "ml/league_v15_incumbent_conservative_s0/checkpoints/main-0-gen10.json+navtemp0.65",
+    "slug": "checkpoints--main-0-gen10--navtemp0.65"
+  },
+  "via": "in-process",
+  "policyObsVersion": 1,
+  "games": 800,
+  "smoke": false,
+  "mergedFromShards": 16,
+  "raw": {
+    "wins": 682,
+    "sumPlace": 941,
+    "sumVP": 21750,
+    "sumRounds": 16075,
+    "finished": 800,
+    "agg": {
+      "games": 2400,
+      "scoreSum": 2253
+    },
+    "perAnchor": {
+      "v13-1-gen48-champion": {
+        "games": 208,
+        "scoreSum": 98
+      },
+      "hard": {
+        "games": 240,
+        "scoreSum": 238
+      },
+      "rushpatient": {
+        "games": 284,
+        "scoreSum": 278
+      },
+      "cultivator": {
+        "games": 256,
+        "scoreSum": 249
+      },
+      "ladder8c2-gen60-champion": {
+        "games": 228,
+        "scoreSum": 226
+      },
+      "medium": {
+        "games": 196,
+        "scoreSum": 193
+      },
+      "insane": {
+        "games": 288,
+        "scoreSum": 282
+      },
+      "pvphunter": {
+        "games": 220,
+        "scoreSum": 218
+      },
+      "paragon": {
+        "games": 260,
+        "scoreSum": 254
+      },
+      "survivor": {
+        "games": 220,
+        "scoreSum": 217
+      }
+    }
+  },
+  "eloVsAnchors": {
+    "aggregate": {
+      "games": 2400,
+      "score": 0.93875,
+      "elo": 474
+    },
+    "perAnchor": {
+      "cultivator": {
+        "games": 256,
+        "score": 0.97265625,
+        "elo": 609
+      },
+      "hard": {
+        "games": 240,
+        "score": 0.9916666666666667,
+        "elo": 792
+      },
+      "insane": {
+        "games": 288,
+        "score": 0.9791666666666666,
+        "elo": 655
+      },
+      "ladder8c2-gen60-champion": {
+        "games": 228,
+        "score": 0.9912280701754386,
+        "elo": 783
+      },
+      "medium": {
+        "games": 196,
+        "score": 0.9846938775510204,
+        "elo": 697
+      },
+      "paragon": {
+        "games": 260,
+        "score": 0.9769230769230769,
+        "elo": 637
+      },
+      "pvphunter": {
+        "games": 220,
+        "score": 0.990909090909091,
+        "elo": 777
+      },
+      "rushpatient": {
+        "games": 284,
+        "score": 0.9788732394366197,
+        "elo": 653
+      },
+      "survivor": {
+        "games": 220,
+        "score": 0.9863636363636363,
+        "elo": 717
+      },
+      "v13-1-gen48-champion": {
+        "games": 208,
+        "score": 0.47115384615384615,
+        "elo": -20
+      }
+    }
+  },
+  "meanPlacement": 1.17625,
+  "winRate": 0.8525,
+  "meanVP": 27.1875,
+  "meanRounds": 20.09375,
+  "finishedRate": 1,
+  "wallClockMs": 83137,
+  "msPerGame": 103.92125,
+  "timestamp": "2026-07-11T12:17:29.523Z"
+}
