@@ -816,8 +816,14 @@ def train_ppo(
             else:
                 value_loss = F.mse_loss(value, ret)
 
-            # Entropy over the legal candidates only; padded slots contribute 0.
-            plogp = torch.where(behavior_mask, probs * log_probs, torch.zeros_like(probs))
+            # Entropy over the actor's exact post-filter support only. Do not form
+            # `0 * -inf` on filtered candidates and then hide it with torch.where:
+            # the forward value looks finite, but autograd can still propagate a
+            # NaN from the unselected branch (and the finite-weight guard then
+            # restores the entire update). Mask log-probs to a finite value before
+            # multiplying so both the forward and backward graphs are finite.
+            support_log_probs = log_probs.masked_fill(~behavior_mask, 0.0)
+            plogp = probs * support_log_probs
             entropy_per_row = -plogp.sum(dim=-1)
             entropy = (
                 entropy_per_row[policy_mask].mean()
@@ -833,11 +839,11 @@ def train_ppo(
                         ref_logits, behavior_mask, behavior_temperature
                     )
                 # KL(new || ref) over legal candidates only.
-                kl_terms = torch.where(
-                    behavior_mask,
-                    probs * (log_probs - ref_logp),
-                    torch.zeros_like(probs),
-                )
+                # As above, avoid `-inf - -inf` on candidates excluded from the
+                # behavior support. Mask each operand before the subtraction so
+                # the inactive branch never contains a NaN in the autograd graph.
+                support_ref_logp = ref_logp.masked_fill(~behavior_mask, 0.0)
+                kl_terms = probs * (support_log_probs - support_ref_logp)
                 kl_ref_per_row = kl_terms.sum(dim=-1)
                 kl_ref = (
                     kl_ref_per_row[policy_mask].mean()

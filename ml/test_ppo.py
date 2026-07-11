@@ -414,6 +414,74 @@ def test_singleton_policy_minibatch_has_finite_nonzero_advantage_and_update():
     assert all(torch.isfinite(p).all() for p in model.parameters())
 
 
+def test_filtered_behavior_support_has_finite_entropy_kl_and_parameter_update():
+    """A real actor row often removes a candidate after legal enumeration.
+
+    PPO must keep `-inf` log-probability for that candidate when reconstructing
+    the behavior distribution, without letting the entropy or reference-KL
+    backward pass create `0 * -inf` / `-inf - -inf` NaNs.
+    """
+    rng = np.random.default_rng(191)
+    obs = rng.standard_normal(OBS_DIM).astype(np.float32)
+    cands = rng.standard_normal((N_CANDS, ACT_DIM)).astype(np.float32)
+    behavior_mask = np.array([True, False, True])
+    chosen = 2
+    model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+    with torch.no_grad():
+        logits, _, _ = model(
+            torch.from_numpy(obs).unsqueeze(0),
+            torch.from_numpy(cands).unsqueeze(0),
+            torch.from_numpy(behavior_mask).unsqueeze(0),
+        )
+        logp_old = float(
+            behavior_log_probs(
+                logits,
+                torch.from_numpy(behavior_mask).unsqueeze(0),
+                torch.tensor([0.7]),
+            )[0, chosen]
+        )
+    row = {
+        "obs": obs.tolist(),
+        "cands": cands.tolist(),
+        "chosen": chosen,
+        "gameId": "filtered-support-g0",
+        "stepIdx": 0,
+        "rStep": 1.0,
+        "done": True,
+        "policyMask": 1,
+        "logpOld": logp_old,
+        "behaviorMask": behavior_mask.astype(int).tolist(),
+        "behaviorTemperature": 0.7,
+        "vPred": 0.0,
+    }
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, [row])
+        buf = load_trajectory_buffer(
+            d, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+        )
+        before = [parameter.detach().clone() for parameter in model.parameters()]
+        history = train_ppo(
+            model,
+            buf,
+            torch.device("cpu"),
+            epochs=1,
+            batch_size=1,
+            lr=1e-4,
+            entropy_coef=0.01,
+            kl_ref_coef=0.1,
+            seed=5,
+        )
+    assert len(history) == 1
+    assert math.isfinite(history[0]["entropy"])
+    assert math.isfinite(history[0]["kl_ref"])
+    assert all(torch.isfinite(parameter).all() for parameter in model.parameters())
+    assert any(
+        not torch.equal(old, new)
+        for old, new in zip(before, model.parameters())
+    )
+
+
 def test_route_auxiliary_warns_when_enabled_without_real_labels():
     rng = np.random.default_rng(20)
     row = {

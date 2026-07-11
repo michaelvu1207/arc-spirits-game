@@ -951,9 +951,30 @@ function runTrainer(
 	if (config.train.extraArgs?.length) args.push(...config.train.extraArgs);
 	const t0 = performance.now();
 	const r = spawnSync(config.pythonBin, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+	const trainerOutput = [r.stdout, r.stderr].filter(Boolean).join('\n');
+	// Persist the learner diagnostics per generation. The manager previously
+	// swallowed successful-process stdout/stderr, which hid PPO's finite-weight
+	// rollback warning and made a byte-identical no-op checkpoint look healthy.
+	writeFileSync(join(dataDir, 'train.log'), trainerOutput);
 	if (r.status !== 0) {
-		const tail = (r.stderr || r.stdout || '').split('\n').slice(-25).join('\n');
+		const tail = trainerOutput.split('\n').slice(-25).join('\n');
 		throw new Error(`league: train.py failed (status ${r.status}):\n${tail}`);
+	}
+	if (/non-finite weights after a PPO step/i.test(trainerOutput)) {
+		const tail = trainerOutput.split('\n').slice(-25).join('\n');
+		throw new Error(`league: trainer rolled back a non-finite PPO update:\n${tail}`);
+	}
+	if (
+		model === 'v1' &&
+		initFrom &&
+		existsSync(initFrom) &&
+		existsSync(outCkpt) &&
+		readFileSync(initFrom).equals(readFileSync(outCkpt))
+	) {
+		throw new Error(
+			`league: trainer produced a byte-identical no-op checkpoint: ${outCkpt}; ` +
+				`see ${join(dataDir, 'train.log')}`
+		);
 	}
 	return performance.now() - t0;
 }
@@ -1006,7 +1027,8 @@ export function lastGauntletElo(
 		} catch {
 			continue;
 		}
-		if (expected && (typeof row.weights !== 'string' || resolve(row.weights) !== expected)) continue;
+		if (expected && (typeof row.weights !== 'string' || resolve(row.weights) !== expected))
+			continue;
 		if (typeof row.elo === 'number') return row.elo;
 	}
 	return undefined;
