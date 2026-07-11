@@ -27,7 +27,8 @@ import {
 	type BotProfile,
 	type BotRandom
 } from '../server/botPolicy';
-import { VP_TO_WIN,
+import {
+	VP_TO_WIN,
 	SEAT_COLORS,
 	type GameActor,
 	type GameCommand,
@@ -37,9 +38,19 @@ import { VP_TO_WIN,
 } from '../types';
 import { encodeAction, encodeObs } from './encode';
 import { encodeEntityObsV2, flattenObsV2 } from './encodeV2';
-import { legalActionsWithNext, commandMatches, type LegalAction } from './actions';
+import {
+	legalActionsWithNext,
+	commandMatches,
+	policyPreviewState,
+	type LegalAction
+} from './actions';
 import { sampleAuxTargets } from './auxTargets';
-import { valueGuidedIndex, hybridIndex, policyIndexWithProgressGuard } from './neuralBot';
+import {
+	valueGuidedIndex,
+	hybridIndex,
+	policyIndexWithProgressGuard,
+	selectableCandidateIndices
+} from './neuralBot';
 import {
 	buildPotential,
 	vpOf,
@@ -54,7 +65,7 @@ import type { NeuralPolicy } from './net';
 export interface Sample {
 	obs: number[];
 	/** Paired v2 observation (arc-obs-v2 flat array), present when recorded at obsVersion 2.
-	 *  `obs` stays the v1 62-float vector on EVERY row — the pinned paired-row contract
+	 *  `obs` stays the current v1 83-float vector on EVERY row — the pinned paired-row contract
 	 *  (docs/encoder-v2.md): v1 consumers read obs, v2 trainers read obsV2, and
 	 *  distillation reads both views of the same decision. */
 	obsV2?: number[];
@@ -81,10 +92,10 @@ export interface Sample {
 	/**
 	 * PPO trajectory fields (consumed by ml/ppo.py via train.py --mode ppo). The episode key
 	 * is per (game, seat) — ml/ppo.py groups rows by gameId alone, so two seats sharing one
-	 * id would interleave into a single bogus episode. Heuristic-teacher and custom-chooser
-	 * rows carry the trajectory stamps but omit logpOld/vPred (no softmax behavior
-	 * distribution exists for them); the PPO loader skips such rows by design while
-	 * AWR/AlphaZero modes keep training on them unchanged.
+	 * id would interleave into a single bogus episode. Every policy-backed row carries vPred
+	 * and an explicit policyMask. Deterministic hybrid/search/custom/greedy rows use mask 0:
+	 * they stay in the complete episode for rewards, GAE, value, and auxiliary losses, but
+	 * never enter the PPO policy-ratio surrogate. Only an exact sampled-policy row uses mask 1.
 	 */
 	gameId?: string;
 	stepIdx?: number;
@@ -103,9 +114,15 @@ export interface Sample {
 	 *  (tempo signal): the PPO trainer's --win-bonus-halflife decays the win bonus by how late the
 	 *  win landed, so a round-18 30-VP finish is rewarded more than a round-28 one. */
 	endRound?: number;
-	/** Behavior log-prob of the chosen candidate under the acting policy's temp-1 softmax. */
+	/** Behavior log-prob of the chosen candidate under the exact sampled distribution. */
 	logpOld?: number;
-	/** Value-head output at decision time. */
+	/** Effective softmax temperature used by the sampled acting policy. */
+	behaviorTemperature?: number;
+	/** 1 for candidates in the sampled policy's support, 0 for progress-filtered candidates. */
+	behaviorMask?: number[];
+	/** 1 only when logpOld is the exact stochastic learned-policy behavior probability. */
+	policyMask?: number;
+	/** Value-head output at decision time. Present on every policy-backed trajectory row. */
 	vPred?: number;
 	/** Final placement 1..seats (ties share the better place), on rows of finished games. */
 	placement?: number;
@@ -230,7 +247,7 @@ export interface RecordGameOptions {
 	/**
 	 * Observation schema recorded on samples (default 1). At 2, every recorded Sample
 	 * ADDITIONALLY carries obsV2 = flattenObsV2 (3,419 floats for the frozen catalog);
-	 * Sample.obs remains the v1 62-float vector on every row and Sample.cands stay v1
+	 * Sample.obs remains the current v1 83-float vector on every row and Sample.cands stay v1
 	 * encodeAction rows — the pinned paired-row contract (docs/encoder-v2.md), which is
 	 * exactly what v1<-v2 distillation needs (both views of the same decision). The
 	 * ACTING policy runs on v1 obs regardless: selection, logpOld and vPred come from
@@ -246,7 +263,7 @@ export interface RecordGameOptions {
 	 * the in-process TS NeuralPolicy is v1-only and rejected. Selection must be 'hybrid'
 	 * or 'policy' — 'value' does 1-ply lookahead on per-candidate NEXT-state observations,
 	 * which the root-obs substitution cannot express. Opponent seats and the heuristic
-	 * unstick path stay v1. Candidates stay v1 52f and Sample.obs stays v1 62f throughout;
+	 * unstick path stay v1. Candidates stay v1 52f and Sample.obs stays v1 83f throughout;
 	 * at obsVersion 2 the flat array is computed once per decision and shared with obsV2.
 	 */
 	policyObsVersion?: 1 | 2;
@@ -300,7 +317,7 @@ const RECORDABLE_TYPES = new Set<GameCommand['type']>([
 	'discardSpirit'
 ]);
 
-function filterConstrainedActions(
+export function filterConstrainedActions(
 	withNext: LegalAction[],
 	seat: SeatColor,
 	forbidTypes?: Set<GameCommand['type']>,
@@ -309,7 +326,10 @@ function filterConstrainedActions(
 	if (!forbidTypes?.size && maxStatusLevel === undefined) return withNext;
 	const filtered = withNext.filter((x) => {
 		if (forbidTypes?.has(x.cmd.type)) return false;
-		if (maxStatusLevel !== undefined && (x.next.players[seat]?.statusLevel ?? 0) > maxStatusLevel) {
+		if (
+			maxStatusLevel !== undefined &&
+			(policyPreviewState(x).players[seat]?.statusLevel ?? 0) > maxStatusLevel
+		) {
 			return false;
 		}
 		return true;
@@ -355,9 +375,102 @@ function withFixedObs(policy: NeuralPolicy, obs: number[]): NeuralPolicy {
 	return shim as unknown as NeuralPolicy;
 }
 
+interface PolicyPickTrace {
+	chosen: number;
+	candidateCount: number;
+	sample: boolean;
+	temperature?: number;
+}
+
+/** The learner is float32. Quantize before acting so the exact values written to JSONL are
+ * also the values whose behavior probability and value prediction were evaluated. */
+function float32Numbers(values: number[]): number[] {
+	return Array.from(Float32Array.from(values));
+}
+
+function float32Matrix(values: number[][]): number[][] {
+	return values.map(float32Numbers);
+}
+
+/** Observe whether a selection helper actually delegated to the learned policy. Hybrid/value
+ * selectors can take deterministic branches before `policy.pick`; those rows are not on-policy
+ * PPO samples and must not receive fabricated behavior probabilities. */
+function withPickObserver(
+	policy: NeuralPolicy,
+	onPick: (trace: PolicyPickTrace) => void
+): NeuralPolicy {
+	return new Proxy(policy, {
+		get(target, prop) {
+			if (prop === 'pick') {
+				return (
+					obs: number[],
+					cands: number[][],
+					opts?: { sample?: boolean; temperature?: number; rand?: () => number }
+				): number => {
+					// neuralBot builds these arrays internally. Re-quantizing here closes the final
+					// TS-double -> JSON-rounded -> torch-float mismatch in PPO's initial ratio.
+					const exactObs = float32Numbers(obs);
+					const exactCands = float32Matrix(cands);
+					const chosen = target.pick(exactObs, exactCands, opts);
+					onPick({
+						chosen,
+						candidateCount: cands.length,
+						sample: opts?.sample === true,
+						temperature: opts?.temperature
+					});
+					return chosen;
+				};
+			}
+			const value = Reflect.get(target, prop, target) as unknown;
+			return typeof value === 'function' ? value.bind(target) : value;
+		}
+	}) as NeuralPolicy;
+}
+
+export interface SampledPolicyBehavior {
+	logpOld: number;
+	behaviorTemperature: number;
+	behaviorMask: number[];
+}
+
+/** Reconstruct the exact softmax distribution used for a sampled learned-policy action.
+ * `supportIndices` is the post-progress-filter support in full-candidate order. Returning null
+ * makes the caller omit PPO fields rather than train on an invalid importance ratio. */
+export function sampledPolicyBehavior(
+	policy: NeuralPolicy,
+	obs: number[],
+	cands: number[][],
+	supportIndices: number[],
+	chosenFullIndex: number,
+	temperature?: number
+): SampledPolicyBehavior | null {
+	const effectiveTemperature = temperature ?? 1;
+	if (!Number.isFinite(effectiveTemperature)) return null;
+	const t = Math.max(1e-6, effectiveTemperature);
+	if (supportIndices.length === 0 || new Set(supportIndices).size !== supportIndices.length)
+		return null;
+	if (supportIndices.some((i) => !Number.isInteger(i) || i < 0 || i >= cands.length)) return null;
+	const chosenLocalIndex = supportIndices.indexOf(chosenFullIndex);
+	if (chosenLocalIndex < 0) return null;
+	const supportCands = supportIndices.map((i) => cands[i]);
+	const probs = policy.probs(obs, supportCands, t);
+	if (
+		probs.length !== supportCands.length ||
+		probs.some((p) => !Number.isFinite(p) || p < 0) ||
+		!(probs[chosenLocalIndex] > 0)
+	) {
+		return null;
+	}
+	return {
+		logpOld: Math.log(probs[chosenLocalIndex]),
+		behaviorTemperature: t,
+		behaviorMask: cands.map((_, i) => (supportIndices.includes(i) ? 1 : 0))
+	};
+}
+
 export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions): RecordGameResult {
 	if (opts.policyObsVersion === 2) {
-		// The in-process TS net is v1-only: local weights (a `.w` blob) mean 62-float obs.
+		// The in-process TS net is v1-only: local weights (a `.w` blob) mean 83-float obs.
 		if (opts.policy && (opts.policy as unknown as { w?: unknown }).w) {
 			throw new Error(
 				'driver: policyObsVersion 2 requires a v2-capable policy (RemotePolicy over an infer socket serving arc-entity-scorer-v2); the in-process NeuralPolicy is v1-only'
@@ -491,14 +604,16 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 						samples.push({
 							obs,
 							...(recordObsV2 ? { obsV2: recordObsV2(seat) } : {}),
-							cands: withNextH.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
+							cands: withNextH.map((x) =>
+								encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)
+							),
 							chosen: mi,
 							ret: 0,
 							seat,
 							vp: vpOf(state.players[seat]),
 							phi: buildPotential(state.players[seat], shaping),
 							kill: decisionKills(state, withNextH[mi].next, seat, cmd) ? 1 : 0,
-							...sampleAuxTargets(state, seat, catalog, withNextH)
+							...sampleAuxTargets(state, seat, catalog, withNextH, withNextH[mi])
 						});
 					}
 				}
@@ -531,81 +646,112 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			opts.maxStatusLevel
 		);
 		const cands = withNext.map((x) => x.cmd);
-		const obs = encodeObs(state, seat, catalog);
+		const obs = float32Numbers(encodeObs(state, seat, catalog));
 		// One flatten per decision, shared by the v2-driven policy and the recorded obsV2.
-		const flatV2 =
+		const flatV2Raw =
 			opts.policyObsVersion === 2 || recordObsV2
 				? flattenObsV2(encodeEntityObsV2(state, seat, catalog), catalog)
 				: null;
+		const flatV2 = flatV2Raw ? float32Numbers(flatV2Raw) : null;
 		const policyObs = opts.policyObsVersion === 2 ? flatV2! : obs;
-		const feats = withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog));
+		const feats = float32Matrix(
+			withNext.map((x) => encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog))
+		);
 		// League opponents play their own checkpoint greedily (no exploration, no recording);
 		// the learner seat uses the configured selection + exploration and is recorded.
 		const oppPolicy = opts.opponentPolicies?.[seat];
-		const seatPolicy = oppPolicy ?? opts.policy!;
+		const seatPolicy = oppPolicy ?? opts.policy;
+		let observedPick: PolicyPickTrace | null = null;
 		// Learner at policyObsVersion 2: neuralBot re-encodes v1 obs internally, so wrap the
 		// policy to substitute this decision's flat v2 obs. Opponents keep v1 nets + v1 obs.
-		const activePolicy =
-			opts.policyObsVersion === 2 && !oppPolicy && opts.policy
+		const fixedObsPolicy =
+			seatPolicy && opts.policyObsVersion === 2 && !oppPolicy && opts.policy
 				? withFixedObs(seatPolicy, flatV2!)
 				: seatPolicy;
+		const activePolicy = fixedObsPolicy
+			? withPickObserver(fixedObsPolicy, (trace) => {
+					observedPick = trace;
+				})
+			: undefined;
 		// Opponents: greedy by default (opponentTemperature 0), else sample at opponentTemperature.
 		const oppTemp = opts.opponentTemperature ?? 0;
 		const sample = oppPolicy ? oppTemp > 0 : opts.sample;
 		const pickTemperature = oppPolicy ? oppTemp : opts.temperature;
 		const willRecord = cands.length > 1 && recordSet.has(seat) && !oppPolicy;
-		// PPO behavior probs are fetched BEFORE selection: for a RemotePolicy this makes
-		// the FULL candidate set the cached response, so selection's (possibly progress-
-		// filtered) pick derives its logits from the same reply — one socket roundtrip per
-		// decision instead of two. Pure-function nets are order-indifferent.
-		const behaviorProbs =
-			willRecord && opts.policy && !opts.chooser ? opts.policy.probs(policyObs, feats) : null;
 		const searched =
 			opts.searcher && !oppPolicy && cands.length > 1 ? opts.searcher(state, seat, withNext) : null;
+		const behaviorSupport = selectableCandidateIndices(state, seat, withNext);
+		// Prime RemotePolicy's per-decision cache with the full candidate set. A subsequent
+		// progress-filtered pick derives its subset logits from this same response.
+		if (
+			willRecord &&
+			opts.policy &&
+			!opts.chooser &&
+			!searched &&
+			sample === true &&
+			opts.selection !== 'value'
+		) {
+			opts.policy.scoreCandidates(policyObs, feats);
+		}
 		const idx =
 			cands.length === 1
 				? 0
 				: searched
 					? searched.index
 					: opts.chooser && !oppPolicy
-					? opts.chooser(policyObs, feats, cands, seat, state, withNext)
-					: opts.selection === 'policy'
-						? policyIndexWithProgressGuard(
-								activePolicy,
-								state,
-								seat,
-								withNext,
-								{ sample, temperature: pickTemperature, rand },
-								catalog
-							)
-						: opts.selection === 'value'
-							? valueGuidedIndex(
-									activePolicy,
+						? opts.chooser(policyObs, feats, cands, seat, state, withNext)
+						: opts.selection === 'policy'
+							? policyIndexWithProgressGuard(
+									activePolicy!,
 									state,
 									seat,
 									withNext,
 									{ sample, temperature: pickTemperature, rand },
 									catalog
 								)
-							: hybridIndex(
-									activePolicy,
-									state,
-									seat,
-									withNext,
-									{ sample, temperature: pickTemperature, rand },
-									catalog
-								);
+							: opts.selection === 'value'
+								? valueGuidedIndex(
+										activePolicy!,
+										state,
+										seat,
+										withNext,
+										{ sample, temperature: pickTemperature, rand },
+										catalog
+									)
+								: hybridIndex(
+										activePolicy!,
+										state,
+										seat,
+										withNext,
+										{ sample, temperature: pickTemperature, rand },
+										catalog
+									);
 		if (willRecord) {
-			// PPO behavior stats, only when a real softmax policy made this decision (not a
-			// custom chooser). logpOld is the temp-1 softmax — the distribution the trainer's
-			// log_softmax reproduces — regardless of the exploration temperature used to act.
-			// At policyObsVersion 2 these come from the v2 net on the v2 obs: on-policy v2 data.
-			let ppo: { logpOld: number; vPred: number } | undefined;
-			if (behaviorProbs) {
-				ppo = {
-					logpOld: Math.log(Math.max(behaviorProbs[idx], 1e-12)),
-					vPred: opts.policy!.value(policyObs)
-				};
+			// Every policy-backed decision remains in the PPO trajectory. Only an exact sampled
+			// policy decision gets policyMask=1 and behavior fields; deterministic branches still
+			// supply vPred for complete-episode GAE/value/auxiliary training.
+			const vPred = opts.policy?.value(policyObs);
+			const valueFields =
+				typeof vPred === 'number' && Number.isFinite(vPred) ? { vPred, policyMask: 0 } : undefined;
+			let behaviorFields: (SampledPolicyBehavior & { policyMask: 1 }) | undefined;
+			// The observer callback runs synchronously inside policy.pick, but TypeScript does not
+			// model assignments made through callbacks in its control-flow analysis.
+			const policyPick = observedPick as PolicyPickTrace | null;
+			if (
+				opts.policy &&
+				policyPick?.sample === true &&
+				policyPick.candidateCount === behaviorSupport.length &&
+				behaviorSupport[policyPick.chosen] === idx
+			) {
+				const behavior = sampledPolicyBehavior(
+					opts.policy,
+					policyObs,
+					feats,
+					behaviorSupport,
+					idx,
+					policyPick.temperature
+				);
+				if (behavior && valueFields) behaviorFields = { ...behavior, policyMask: 1 };
 			}
 			samples.push({
 				obs,
@@ -618,8 +764,9 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				vp: vpOf(state.players[seat]),
 				phi: buildPotential(state.players[seat], shaping),
 				kill: decisionKills(state, withNext[idx].next, seat, cands[idx]) ? 1 : 0,
-				...ppo,
-				...sampleAuxTargets(state, seat, catalog, withNext)
+				...valueFields,
+				...behaviorFields,
+				...sampleAuxTargets(state, seat, catalog, withNext, withNext[idx])
 			});
 		}
 		state = withNext[idx].next;
@@ -661,9 +808,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	// every player Fallen (phases.tryAdvanceFromCleanup's second branch). Stamped on every seat's
 	// terminal row so the trainer can price the degenerate mutual-corruption ending as a loss.
 	const allFallenEnd =
-		finished &&
-		(finalVP[state.winnerSeat ?? ''] ?? 0) < VP_TO_WIN &&
-		allPlayersFallen(state);
+		finished && (finalVP[state.winnerSeat ?? ''] ?? 0) < VP_TO_WIN && allPlayersFallen(state);
 	for (const seat of seats) {
 		const seatSamples = samples.filter((s) => s.seat === seat); // already in play order
 		if (seatSamples.length === 0) continue;
@@ -700,6 +845,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			s.gameId = gameId;
 			s.stepIdx = i;
 			s.rStep = rSteps?.[i] ?? dense?.[i] ?? 0;
+			// New trajectory rows always state policy eligibility explicitly. Pure heuristic
+			// episodes have no vPred and are rejected as whole episodes by the PPO loader, while
+			// remaining valid AWR/teacher data.
+			s.policyMask ??= 0;
 			s.done = finished && i === seatSamples.length - 1;
 			if (finished) s.placement = placement;
 			if (s.done) {

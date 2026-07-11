@@ -48,38 +48,50 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 	if (samples.length === 0) return;
 	ensureDir(file);
 	const lines = samples
-		.map((s) =>
-			JSON.stringify({
-				obs: round4(s.obs),
-				...(s.obsV2 ? { obsV2: round4(s.obsV2) } : {}),
-				cands: s.cands.map(round4),
+		.map((s) => {
+			// PPO behavior/value predictions were evaluated on float32-quantized inputs in
+			// driver.ts. Preserve those exact floats: rounding them to 4 decimals makes the
+			// learner's reconstructed initial policy ratio differ from 1 before any update.
+			const exactPolicyInput = typeof s.vPred === 'number';
+			const encodeVector = exactPolicyInput ? float32Numbers : round4;
+			return JSON.stringify({
+				obs: encodeVector(s.obs),
+				...(s.obsV2 ? { obsV2: encodeVector(s.obsV2) } : {}),
+				cands: s.cands.map(encodeVector),
 				chosen: s.chosen,
 				ret: r4(s.ret),
 				...(s.pi ? { pi: round4(s.pi) } : {}),
 				...(typeof s.farmValue === 'number' ? { farmValue: r4(s.farmValue) } : {}),
-					...(s.rewardPi ? { rewardPi: round4(s.rewardPi) } : {}),
-					...(typeof s.policyWeight === 'number' ? { policyWeight: r4(s.policyWeight) } : {}),
-					...(typeof s.routeMode === 'number' ? { routeMode: r4(s.routeMode) } : {}),
-					...(typeof s.teacherKind === 'string' ? { teacherKind: s.teacherKind } : {}),
-					// PPO trajectory fields (ml/ppo.py); optional so old-format consumers see no change.
-					...(typeof s.gameId === 'string' ? { gameId: s.gameId } : {}),
-					...(typeof s.stepIdx === 'number' ? { stepIdx: s.stepIdx } : {}),
-					...(typeof s.rStep === 'number' ? { rStep: r4(s.rStep) } : {}),
-					...(typeof s.done === 'boolean' ? { done: s.done } : {}),
-					...(typeof s.logpOld === 'number' ? { logpOld: r4(s.logpOld) } : {}),
-					...(typeof s.vPred === 'number' ? { vPred: r4(s.vPred) } : {}),
-					...(typeof s.placement === 'number' ? { placement: s.placement } : {}),
-					// True 30-VP win flag + final round (done rows only): the PPO --win-bonus
-					// reads `won`, and --win-bonus-halflife reads `endRound`. These were stamped
-					// on the Sample but never serialized before (win bonus was silently inert).
-					...(typeof s.won === 'number' ? { won: s.won } : {}),
-					// All-Fallen collapse terminal (done rows): the PPO --all-fallen-loss stamps a
-					// terminal loss on these rows for every seat.
-					...(typeof s.allFallen === 'number' ? { allFallen: s.allFallen } : {}),
-					...(typeof s.endRound === 'number' ? { endRound: s.endRound } : {}),
-					iter
-				})
-			)
+				...(s.rewardPi ? { rewardPi: round4(s.rewardPi) } : {}),
+				...(typeof s.policyWeight === 'number' ? { policyWeight: r4(s.policyWeight) } : {}),
+				...(typeof s.routeMode === 'number' ? { routeMode: r4(s.routeMode) } : {}),
+				...(typeof s.teacherKind === 'string' ? { teacherKind: s.teacherKind } : {}),
+				// PPO trajectory fields (ml/ppo.py); optional so old-format consumers see no change.
+				...(typeof s.gameId === 'string' ? { gameId: s.gameId } : {}),
+				...(typeof s.stepIdx === 'number' ? { stepIdx: s.stepIdx } : {}),
+				...(typeof s.rStep === 'number' ? { rStep: r4(s.rStep) } : {}),
+				...(typeof s.done === 'boolean' ? { done: s.done } : {}),
+				// Behavior scalars stay full precision: rounding logpOld perturbs PPO's
+				// new/old ratio before the first optimizer step.
+				...(typeof s.logpOld === 'number' ? { logpOld: s.logpOld } : {}),
+				...(typeof s.behaviorTemperature === 'number'
+					? { behaviorTemperature: s.behaviorTemperature }
+					: {}),
+				...(s.behaviorMask ? { behaviorMask: s.behaviorMask } : {}),
+				...(typeof s.policyMask === 'number' ? { policyMask: s.policyMask } : {}),
+				...(typeof s.vPred === 'number' ? { vPred: s.vPred } : {}),
+				...(typeof s.placement === 'number' ? { placement: s.placement } : {}),
+				// True 30-VP win flag + final round (done rows only): the PPO --win-bonus
+				// reads `won`, and --win-bonus-halflife reads `endRound`. These were stamped
+				// on the Sample but never serialized before (win bonus was silently inert).
+				...(typeof s.won === 'number' ? { won: s.won } : {}),
+				// All-Fallen collapse terminal (done rows): the PPO --all-fallen-loss stamps a
+				// terminal loss on these rows for every seat.
+				...(typeof s.allFallen === 'number' ? { allFallen: s.allFallen } : {}),
+				...(typeof s.endRound === 'number' ? { endRound: s.endRound } : {}),
+				iter
+			});
+		})
 		.join('\n');
 	appendFileSync(file, lines + '\n');
 }
@@ -95,10 +107,23 @@ function round4(a: number[]): number[] {
 	return a.map(r4);
 }
 
-export function writeMeta(samples: number, games: number, extra: Record<string, unknown> = {}): void {
-	const file = process.env.ML_META_PATH ? resolve(process.cwd(), process.env.ML_META_PATH) : mlPath('data', 'meta.json');
+function float32Numbers(a: number[]): number[] {
+	return a.map(Math.fround);
+}
+
+export function writeMeta(
+	samples: number,
+	games: number,
+	extra: Record<string, unknown> = {}
+): void {
+	const file = process.env.ML_META_PATH
+		? resolve(process.cwd(), process.env.ML_META_PATH)
+		: mlPath('data', 'meta.json');
 	ensureDir(file);
-	writeFileSync(file, JSON.stringify({ obs_dim: OBS_DIM, act_dim: ACT_DIM, samples, games, ...extra }, null, 2));
+	writeFileSync(
+		file,
+		JSON.stringify({ obs_dim: OBS_DIM, act_dim: ACT_DIM, samples, games, ...extra }, null, 2)
+	);
 }
 
 /** Load an exported policy weights file (ml/weights/policy.json), or null if absent. */
@@ -123,7 +148,7 @@ export function loadPolicyForEval(file = mlPath('weights', 'policy.json')): Neur
 /** A small-random-weight net at the CURRENT obs/act dims — the AlphaZero iteration-0 bootstrap
  *  (the planner leans on its heuristic-playout leaf until the value net is trained). */
 export function randomPolicy(seed = 1, trunkHidden = [128, 128], valueHidden = [64]): NeuralPolicy {
-	const rng = createRng((seed >>> 0) || 1);
+	const rng = createRng(seed >>> 0 || 1);
 	const g = (): number => (nextInt(rng, 20001) / 10000 - 1) * 0.1;
 	const lin = (out: number, inn: number): LinearLayer => ({
 		W: Array.from({ length: out }, () => Array.from({ length: inn }, g)),
@@ -144,7 +169,10 @@ export function randomPolicy(seed = 1, trunkHidden = [128, 128], valueHidden = [
 }
 
 /** Load weights if present AND dims match the current encoder; otherwise a random bootstrap net. */
-export function loadOrRandomPolicy(file = mlPath('weights', 'policy.json'), seed = 1): NeuralPolicy {
+export function loadOrRandomPolicy(
+	file = mlPath('weights', 'policy.json'),
+	seed = 1
+): NeuralPolicy {
 	if (existsSync(file)) {
 		const w = JSON.parse(readFileSync(file, 'utf8')) as PolicyWeights;
 		if (w.obs_dim === OBS_DIM && w.act_dim === ACT_DIM) return loadPolicyWeights(w);

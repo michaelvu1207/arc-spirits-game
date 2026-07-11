@@ -139,7 +139,7 @@ export const CHECKPOINT_ANCHORS: readonly CheckpointAnchor[] = [
 		name: 'v13-1-gen48-champion',
 		path: 'ml/champions/v13-1/main-0-gen48.json',
 		status: 'active',
-		note: '[v10] first rules-v1.3 champion (scratch-seed league_v13s gen48): v9 Elo 592 / 93.6% win / 29.0 meanVP; byte-identical to the live policy-weights.json shipped 2026-07-08. Added at the v10 saturation fork.'
+		note: '[v10] first rules-v1.3 champion (scratch-seed league_v13s gen48): v9 Elo 592 / 93.6% win / 29.0 meanVP. Added at the frozen v10 saturation fork; later superseded in the live bundle by v13-2-gen44.'
 	},
 	{
 		name: 'ladder8c2-gen60-champion',

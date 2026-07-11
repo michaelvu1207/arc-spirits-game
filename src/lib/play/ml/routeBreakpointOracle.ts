@@ -1,15 +1,9 @@
 import { expectedAttack } from '../combat';
 import { awakenedClassCounts } from '../effects/apply';
-import {
-	computeKillProbability,
-	firepowerKillProbability
-} from '../server/botPolicy';
-import {
-	type PlayCatalog,
-	type PublicGameState,
-	type SeatColor
-} from '../types';
-import type { LegalAction } from './actions';
+import { computeKillProbability, firepowerKillProbability } from '../server/botPolicy';
+import { type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
+import { policyPreviewState, type LegalAction } from './actions';
+import { combatActionExpectation } from './encode';
 
 export interface RouteBreakpointOracleOptions {
 	cleanThreshold?: number;
@@ -44,9 +38,7 @@ function routeBreakpointStateScore(
 	const cleanProb = state.monster
 		? computeKillProbability(state, seat, catalog, { allowCorruptKill: false })
 		: 0;
-	const firepowerProb = state.monster
-		? firepowerKillProbability(state, seat, catalog)
-		: 0;
+	const firepowerProb = state.monster ? firepowerKillProbability(state, seat, catalog) : 0;
 	const survivalTarget = damage + 1;
 	const damageGap = hp > 0 ? Math.max(0, hp + 0.5 - attack) : 0;
 	const maxBarrierGap = survivalTarget > 0 ? Math.max(0, survivalTarget - maxBarrier) : 0;
@@ -85,13 +77,14 @@ function commandProgressBonus(
 	opts: RouteBreakpointOracleOptions
 ): number {
 	const before = state.players[seat];
-	const after = action.next.players[seat];
+	const preview = policyPreviewState(action);
+	const after = preview.players[seat];
 	const vpDelta = (after?.victoryPoints ?? 0) - (before?.victoryPoints ?? 0);
 	let score = vpDelta * 180;
 	switch (action.cmd.type) {
 		case 'startCombat': {
-			const killed = action.next.combats.some((x) => x.kind === 'monster' && x.sides[0]?.seat === seat && x.killed);
-			score += killed ? 160 : -30;
+			const expected = combatActionExpectation(state, seat, catalog);
+			score += expected.killProbability * 190 - 30 + expected.expectedRewardVp * 20;
 			break;
 		}
 		case 'resolveMonsterReward':
@@ -102,20 +95,28 @@ function commandProgressBonus(
 			const cleanProb = state.monster
 				? computeKillProbability(state, seat, catalog, { allowCorruptKill: false })
 				: 0;
-			const firepowerProb = state.monster
-				? firepowerKillProbability(state, seat, catalog)
-				: 0;
+			const firepowerProb = state.monster ? firepowerKillProbability(state, seat, catalog) : 0;
 			const player = state.players[seat];
 			const attack = player ? expectedAttack(player) : 0;
-			const needsDamage = hp > 0 && (firepowerProb < (opts.firepowerThreshold ?? 0.5) || attack < hp + 0.5);
-			const needsRestore = !!player && !!state.monster && (
-				(player.barrier ?? 0) < Math.min(player.maxBarrier ?? 0, (state.monster.damage ?? 0) + 1) ||
-				(player.maxBarrier ?? 0) < (state.monster.damage ?? 0) + 1
-			);
+			const needsDamage =
+				hp > 0 && (firepowerProb < (opts.firepowerThreshold ?? 0.5) || attack < hp + 0.5);
+			const needsRestore =
+				!!player &&
+				!!state.monster &&
+				((player.barrier ?? 0) <
+					Math.min(player.maxBarrier ?? 0, (state.monster.damage ?? 0) + 1) ||
+					(player.maxBarrier ?? 0) < (state.monster.damage ?? 0) + 1);
 			const destination = action.cmd.destination;
-			if (destination === 'Arcane Abyss' && (cleanProb >= (opts.cleanThreshold ?? 0.5) || firepowerProb >= (opts.firepowerThreshold ?? 0.5))) score += 70;
-			if (needsDamage && (destination === 'Cyber City' || destination === 'Tidal Cove')) score += 35;
-			if (needsRestore && (destination === 'Lantern Canyon' || destination === 'Floral Patch')) score += 35;
+			if (
+				destination === 'Arcane Abyss' &&
+				(cleanProb >= (opts.cleanThreshold ?? 0.5) ||
+					firepowerProb >= (opts.firepowerThreshold ?? 0.5))
+			)
+				score += 70;
+			if (needsDamage && (destination === 'Cyber City' || destination === 'Tidal Cove'))
+				score += 35;
+			if (needsRestore && (destination === 'Lantern Canyon' || destination === 'Floral Patch'))
+				score += 35;
 			if (!needsDamage && !needsRestore && destination === 'Arcane Abyss') score += 20;
 			break;
 		}
@@ -146,8 +147,10 @@ export function routeBreakpointActionScore(
 	action: LegalAction,
 	opts: RouteBreakpointOracleOptions = {}
 ): number {
-	return routeBreakpointStateScore(action.next, seat, catalog, opts) +
-		commandProgressBonus(state, seat, action, catalog, opts);
+	return (
+		routeBreakpointStateScore(policyPreviewState(action), seat, catalog, opts) +
+		commandProgressBonus(state, seat, action, catalog, opts)
+	);
 }
 
 export function chooseRouteBreakpointOracleAction(
@@ -175,10 +178,6 @@ function monsterKillDelta(before: PublicGameState, after: PublicGameState): numb
 	return Math.max(0, beforeLives - afterLives);
 }
 
-function killedMonsterForSeat(action: LegalAction, seat: SeatColor): boolean {
-	return action.next.combats.some((x) => x.kind === 'monster' && x.sides[0]?.seat === seat && x.killed);
-}
-
 export function routeFinishLoopActionScore(
 	state: PublicGameState,
 	seat: SeatColor,
@@ -187,7 +186,8 @@ export function routeFinishLoopActionScore(
 	opts: RouteBreakpointOracleOptions = {}
 ): number {
 	const before = state.players[seat];
-	const after = action.next.players[seat];
+	const preview = policyPreviewState(action);
+	const after = preview.players[seat];
 	if (!before || !after) return -1_000_000;
 	const beforeStatus = before.statusLevel ?? 0;
 	const afterStatus = after.statusLevel ?? 0;
@@ -211,17 +211,25 @@ export function routeFinishLoopActionScore(
 		? computeKillProbability(state, seat, catalog, { allowCorruptKill: false })
 		: 0;
 	const beforeFirepower = state.monster ? firepowerKillProbability(state, seat, catalog) : 0;
-	const afterClean = action.next.monster
-		? computeKillProbability(action.next, seat, catalog, { allowCorruptKill: false })
+	const afterClean = preview.monster
+		? computeKillProbability(preview, seat, catalog, { allowCorruptKill: false })
 		: beforeClean;
-	const afterFirepower = action.next.monster
-		? firepowerKillProbability(action.next, seat, catalog)
+	const afterFirepower = preview.monster
+		? firepowerKillProbability(preview, seat, catalog)
 		: beforeFirepower;
 	const beforeSurvivalReady = survivalTarget <= 0 || beforeBarrier >= survivalTarget;
 	const afterSurvivalReady = survivalTarget <= 0 || afterBarrier >= survivalTarget;
-	const beforeFirepowerReady = beforeClean >= cleanThreshold || beforeFirepower >= firepowerThreshold || beforeAttack >= hp - 0.01;
-	const afterFirepowerReady = afterClean >= cleanThreshold || afterFirepower >= firepowerThreshold || afterAttack >= hp - 0.01;
-	const livesDelta = monsterKillDelta(state, action.next);
+	const beforeFirepowerReady =
+		beforeClean >= cleanThreshold ||
+		beforeFirepower >= firepowerThreshold ||
+		beforeAttack >= hp - 0.01;
+	const afterFirepowerReady =
+		afterClean >= cleanThreshold ||
+		afterFirepower >= firepowerThreshold ||
+		afterAttack >= hp - 0.01;
+	const combatExpected =
+		action.cmd.type === 'startCombat' ? combatActionExpectation(state, seat, catalog) : null;
+	const livesDelta = combatExpected?.killProbability ?? monsterKillDelta(state, preview);
 	const barrierTarget = survivalTarget > 0 ? survivalTarget : beforeMaxBarrier;
 
 	let score = afterVp * 600 + vpDelta * 4000;
@@ -242,8 +250,8 @@ export function routeFinishLoopActionScore(
 			score += 8000 + Math.max(0, vpDelta) * 8000;
 			break;
 		case 'startCombat':
-			score += killedMonsterForSeat(action, seat) ? 9000 : -2500;
-			if (after.pendingReward) score += 2500;
+			score += (combatExpected?.killProbability ?? 0) * 11_500 - 2_500;
+			score += (combatExpected?.expectedRewardVp ?? 0) * 2_500;
 			break;
 		case 'resolveLocationInteraction':
 			score += 700;
@@ -260,7 +268,12 @@ export function routeFinishLoopActionScore(
 			break;
 	}
 
-	if (beforeSurvivalReady && beforeFirepowerReady && action.cmd.type !== 'startCombat' && action.cmd.type !== 'resolveMonsterReward') {
+	if (
+		beforeSurvivalReady &&
+		beforeFirepowerReady &&
+		action.cmd.type !== 'startCombat' &&
+		action.cmd.type !== 'resolveMonsterReward'
+	) {
 		score -= 600;
 	}
 

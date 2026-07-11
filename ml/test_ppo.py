@@ -8,6 +8,8 @@ Run with pytest if available, or directly (the venv has no pytest):
 from __future__ import annotations
 
 import json
+import contextlib
+import io
 import math
 import os
 import sys
@@ -25,7 +27,14 @@ import torch
 import train as train_mod
 import verify_export
 from model import build_model
-from ppo import compute_gae, load_trajectory_buffer, parse_placement_rewards, train_ppo
+from ppo import (
+    behavior_log_probs,
+    compute_gae,
+    load_trajectory_buffer,
+    normalize_policy_advantages,
+    parse_placement_rewards,
+    train_ppo,
+)
 
 OBS_DIM = 8
 ACT_DIM = 4
@@ -116,6 +125,329 @@ def test_gae_truncated_episode_bootstraps_last_value():
     adv, ret = compute_gae([0.0], [0.5], [False], gamma=0.9, lam=0.8, last_value=1.0)
     assert np.allclose(adv, [0.4]), adv
     assert np.allclose(ret, [0.9]), ret
+
+
+def test_v1_size_controls_parse_and_build_explicit_architecture():
+    assert train_mod.parse_hidden_sizes("256, 128") == (256, 128)
+    try:
+        train_mod.parse_hidden_sizes("128,0")
+    except Exception as exc:
+        assert "positive integers" in str(exc)
+    else:
+        raise AssertionError("zero-width layer was accepted")
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        model = train_mod.build_policy_model(
+            OBS_DIM,
+            ACT_DIM,
+            torch.device("cpu"),
+            td_path / "new-policy.json",
+            init_from=None,
+            warm_start=False,
+            trunk_hidden=(32, 16),
+            value_hidden=(12,),
+        )
+        # A checkpoint whose first layer matches but deeper layer differs used to
+        # leave a partially copied model after reporting "skipped (mismatch)".
+        source = build_model(
+            OBS_DIM,
+            ACT_DIM,
+            torch.device("cpu"),
+            trunk_hidden=(32, 32),
+            value_hidden=(12,),
+        )
+        checkpoint = td_path / "source.json"
+        train_mod.export_weights(source, OBS_DIM, ACT_DIM, checkpoint)
+        torch.manual_seed(123)
+        expected_fresh = build_model(
+            OBS_DIM,
+            ACT_DIM,
+            torch.device("cpu"),
+            trunk_hidden=(32, 16),
+            value_hidden=(12,),
+        )
+        torch.manual_seed(123)
+        mismatched = train_mod.build_policy_model(
+            OBS_DIM,
+            ACT_DIM,
+            torch.device("cpu"),
+            td_path / "different-out.json",
+            init_from=checkpoint,
+            warm_start=True,
+            trunk_hidden=(32, 16),
+            value_hidden=(12,),
+        )
+    assert model.trunk_hidden == (32, 16)
+    assert model.value_hidden == (12,)
+    assert all(
+        torch.equal(actual, expected)
+        for actual, expected in zip(mismatched.parameters(), expected_fresh.parameters())
+    )
+
+
+def test_behavior_temperature_and_filter_give_unit_ratio_at_update_start():
+    """The learner must reconstruct the actor's filtered, temperature-scaled softmax exactly."""
+    torch.manual_seed(11)
+    model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+    obs = torch.randn(1, OBS_DIM)
+    cands = torch.randn(1, N_CANDS, ACT_DIM)
+    mask = torch.tensor([[True, False, True]])
+    temperature = torch.tensor([0.35])
+    chosen = torch.tensor([2])
+
+    with torch.no_grad():
+        logits, _, _ = model(obs, cands, mask)
+        log_probs = behavior_log_probs(logits, mask, temperature)
+        logp_old = log_probs.gather(1, chosen.unsqueeze(1)).squeeze(1).clone()
+        ratio = torch.exp(
+            behavior_log_probs(logits, mask, temperature)
+            .gather(1, chosen.unsqueeze(1))
+            .squeeze(1)
+            - logp_old
+        )
+
+        valid_logits = logits[0, [0, 2]] / temperature[0]
+        expected = torch.log_softmax(valid_logits, dim=0)[1]
+
+    assert ratio.item() == 1.0
+    assert torch.equal(logp_old[0], expected)
+    assert torch.isneginf(log_probs[0, 1])
+
+
+def test_loader_preserves_behavior_temperature_and_filter_and_rejects_bad_support():
+    rng = np.random.default_rng(13)
+    base = {
+        "obs": rng.standard_normal(OBS_DIM).tolist(),
+        "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+        "ret": 0.0,
+        "gameId": "g0",
+        "rStep": 0.0,
+        "done": True,
+        "logpOld": -0.25,
+        "vPred": 0.0,
+        "behaviorTemperature": 0.35,
+        "behaviorMask": [1, 0, 1],
+        "farmValue": 0.7,
+        "rewardPi": [0.2, 0.3, 0.5],
+        "routeMode": 1.0,
+    }
+    valid = {**base, "stepIdx": 0, "chosen": 2}
+    invalid = {**base, "gameId": "bad", "stepIdx": 0, "chosen": 1}
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, [valid, invalid])
+        buf = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+        )
+    assert len(buf) == 1
+    assert np.array_equal(buf.behavior_mask[0], [True, False, True])
+    assert math.isclose(float(buf.behavior_temperature[0]), 0.35, abs_tol=1e-6)
+    assert bool(buf.farm_mask[0]) and math.isclose(float(buf.farm_value[0]), 0.7, abs_tol=1e-6)
+    assert bool(buf.reward_mask[0]) and np.allclose(buf.reward_pi[0], [0.2, 0.3, 0.5])
+    assert bool(buf.route_mask[0]) and float(buf.route_mode[0]) == 1.0
+
+
+def test_complete_episode_keeps_dense_rewards_and_deterministic_terminal_override():
+    """A hybrid tactical override has no behavior probability, but it is still the
+    terminal transition. Dropping it would lose its dense reward, placement, done,
+    value target, and auxiliary labels and would splice GAE across the wrong tail."""
+    rng = np.random.default_rng(15)
+    rows = []
+    dense_rewards = [0.2, 0.3, 0.4]
+    policy_masks = [1, 1, 0]
+    for t, (reward, policy_mask) in enumerate(zip(dense_rewards, policy_masks)):
+        row = {
+            "obs": rng.standard_normal(OBS_DIM).astype(np.float32).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).astype(np.float32).tolist(),
+            "chosen": t % N_CANDS,
+            "ret": 0.0,
+            "gameId": "hybrid-terminal-g0",
+            "stepIdx": t,
+            "rStep": reward,
+            "done": t == 2,
+            "policyMask": policy_mask,
+            "vPred": 0.0,
+            "farmValue": 0.25 * (t + 1),
+        }
+        if policy_mask:
+            row["logpOld"] = math.log(1.0 / N_CANDS)
+            row["behaviorTemperature"] = 1.0
+            row["behaviorMask"] = [1, 1, 1]
+        if t == 2:
+            row["placement"] = 1
+            row["routeMode"] = 0.0
+        rows.append(row)
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(
+            d, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+        )
+
+    assert len(buf) == 3
+    assert np.array_equal(buf.policy_mask, [True, True, False])
+    # Terminal placement adds 1.0 to the final 0.4 dense reward.
+    assert np.allclose(buf.returns, [1.9, 1.7, 1.4]), buf.returns
+    assert np.allclose(buf.advantages, [1.9, 1.7, 1.4]), buf.advantages
+    assert np.array_equal(buf.farm_mask, [True, True, True])
+    assert np.array_equal(buf.route_mask, [False, False, True])
+    assert float(buf.route_mode[-1]) == 0.0
+
+
+def test_malformed_middle_row_rejects_complete_episode_instead_of_splicing_gae():
+    rng = np.random.default_rng(16)
+    rows = []
+    for t in range(3):
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": "broken-g0",
+            "stepIdx": t,
+            "rStep": 1.0,
+            "done": t == 2,
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "vPred": 0.0,
+        })
+    del rows[1]["vPred"]
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        try:
+            load_trajectory_buffer(
+                d, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+            )
+        except ValueError as exc:
+            assert "No complete PPO trajectories" in str(exc)
+        else:
+            raise AssertionError("malformed episode was silently spliced")
+
+
+def test_ppo_trains_configured_farm_reward_and_route_auxiliary_heads():
+    rng = np.random.default_rng(17)
+    rows = []
+    for t in range(12):
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": t % N_CANDS,
+            "ret": 0.0,
+            "gameId": "aux-g0",
+            "stepIdx": t,
+            "rStep": float(t % 2),
+            "done": t == 11,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "vPred": 0.0,
+            "farmValue": (t % 3) / 2,
+            "rewardPi": [1.0 if i == (t + 1) % N_CANDS else 0.0 for i in range(N_CANDS)],
+            "routeMode": float(t % 2),
+        })
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td) / "data"
+        out = Path(td) / "weights" / "policy_aux_ppo.json"
+        _write_rows(d, rows)
+        history = train_mod.train(
+            data_dir=d,
+            out_path=out,
+            epochs=1,
+            batch_size=12,
+            mode="ppo",
+            warm_start=False,
+            placement_coef=0.0,
+            farm_value_coef=1.0,
+            reward_pick_coef=1.0,
+            route_mode_coef=1.0,
+        )
+    assert len(history) == 1
+    assert history[0]["farm_value_loss"] > 0
+    assert history[0]["reward_pick_loss"] > 0
+    assert history[0]["route_mode_loss"] > 0
+
+
+def test_singleton_policy_minibatch_has_finite_nonzero_advantage_and_update():
+    normalized = normalize_policy_advantages(
+        np.array([1.25], dtype=np.float32), np.array([True])
+    )
+    assert np.array_equal(normalized, [1.25])
+
+    rng = np.random.default_rng(19)
+    row = {
+        "obs": rng.standard_normal(OBS_DIM).tolist(),
+        "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+        "chosen": 1,
+        "gameId": "singleton-g0",
+        "stepIdx": 0,
+        "rStep": 1.25,
+        "done": True,
+        "policyMask": 1,
+        "logpOld": math.log(1.0 / N_CANDS),
+        "behaviorMask": [1, 1, 1],
+        "behaviorTemperature": 1.0,
+        "vPred": 0.0,
+    }
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, [row])
+        buf = load_trajectory_buffer(
+            d, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+        )
+        model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        history = train_ppo(
+            model,
+            buf,
+            torch.device("cpu"),
+            epochs=1,
+            batch_size=1,
+            lr=1e-4,
+            entropy_coef=0.0,
+            seed=3,
+        )
+    assert len(history) == 1
+    assert history[0]["policy_steps"] == 1
+    assert math.isfinite(history[0]["policy_loss"])
+    assert all(torch.isfinite(p).all() for p in model.parameters())
+
+
+def test_route_auxiliary_warns_when_enabled_without_real_labels():
+    rng = np.random.default_rng(20)
+    row = {
+        "obs": rng.standard_normal(OBS_DIM).tolist(),
+        "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+        "chosen": 0,
+        "gameId": "no-route-g0",
+        "stepIdx": 0,
+        "rStep": 0.0,
+        "done": True,
+        "policyMask": 0,
+        "vPred": 0.0,
+    }
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, [row])
+        buf = load_trajectory_buffer(
+            d, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+        )
+        model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            train_ppo(
+                model,
+                buf,
+                torch.device("cpu"),
+                epochs=1,
+                batch_size=1,
+                policy_coef=0.0,
+                route_mode_coef=1.0,
+                entropy_coef=0.0,
+                seed=4,
+            )
+    assert "contains no routeMode labels" in stderr.getvalue()
 
 
 def test_placement_reward_lands_on_terminal_step():

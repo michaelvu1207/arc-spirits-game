@@ -163,10 +163,11 @@ AZ=1 \
 clean_samples=$(wc -l < "$DATA/cleanfarm_curriculum.jsonl" | awk '{ print $1 + 0 }')
 az_samples=$(wc -l < "$DATA/pure_az.jsonl" | awk '{ print $1 + 0 }')
 total_samples=$((clean_samples + az_samples))
+read -r obs_dim act_dim < <(node scripts/read-ml-sample-dims.mjs "$DATA")
 cat > "$DATA/meta.json" <<JSON
 {
-  "obs_dim": 62,
-  "act_dim": 52,
+  "obs_dim": $obs_dim,
+  "act_dim": $act_dim,
   "samples": $total_samples,
   "mode": "pure-economy-mixed-lane",
   "cleanFarmCurriculumSamples": $clean_samples,

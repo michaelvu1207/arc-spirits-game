@@ -134,10 +134,12 @@ fi
 write_training_meta() {
   local samples="$1"
   local iter="$2"
+  local obs_dim act_dim
+  read -r obs_dim act_dim < <(node scripts/read-ml-sample-dims.mjs "$DATA")
   cat > "$DATA/meta.json" <<JSON
 {
-  "obs_dim": 62,
-  "act_dim": 52,
+  "obs_dim": $obs_dim,
+  "act_dim": $act_dim,
   "samples": $samples,
   "iter": $iter,
   "mode": "alphazero",

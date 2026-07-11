@@ -15,7 +15,7 @@
  * so this never breaks a build or a live game.
  */
 
-import { botSeatNeedsToAct } from '../server/botPolicy';
+import { botSeatNeedsToAct, computeKillProbability } from '../server/botPolicy';
 import {
 	VP_TO_WIN,
 	type GameCommand,
@@ -26,7 +26,8 @@ import {
 import { buildBotObservation, type BotObservationV1 } from '../bots/contract';
 import { buildMonsterRewards } from '../monsterRewards';
 import { ACT_DIM, OBS_DIM, encodeAction, encodeObs } from './encode';
-import { legalActionsWithNext, type LegalAction } from './actions';
+import { legalActionsWithNext, policyPreviewState, type LegalAction } from './actions';
+import { claimableMonsterRewardVp } from './farmValue';
 import { planDecisionGumbel } from './gumbelPlanner';
 import { loadPolicyWeights, type NeuralPolicy } from './net';
 
@@ -52,27 +53,47 @@ const NOOP_PENALTY = 0.5;
 const REFILL_MARKET_PENALTY = 1.0;
 const PENDING_REWARD_VP_SHAPE = 1.0;
 const FARM_VALUE_AUX_SHAPE =
-	process.env.ARC_FARM_VALUE_AUX_SHAPE !== undefined ? parseFloat(process.env.ARC_FARM_VALUE_AUX_SHAPE) : 0.25;
+	process.env.ARC_FARM_VALUE_AUX_SHAPE !== undefined
+		? parseFloat(process.env.ARC_FARM_VALUE_AUX_SHAPE)
+		: 0.25;
 const FARM_NAV_AUX_SHAPE =
-	process.env.ARC_FARM_NAV_AUX_SHAPE !== undefined ? parseFloat(process.env.ARC_FARM_NAV_AUX_SHAPE) : 0;
+	process.env.ARC_FARM_NAV_AUX_SHAPE !== undefined
+		? parseFloat(process.env.ARC_FARM_NAV_AUX_SHAPE)
+		: 0;
 const FARM_NAV_AUX_THRESHOLD =
-	process.env.ARC_FARM_NAV_AUX_THRESHOLD !== undefined ? parseFloat(process.env.ARC_FARM_NAV_AUX_THRESHOLD) : 0;
+	process.env.ARC_FARM_NAV_AUX_THRESHOLD !== undefined
+		? parseFloat(process.env.ARC_FARM_NAV_AUX_THRESHOLD)
+		: 0;
 const FARM_NAV_AUX_MIN_MONSTER_HP =
-	process.env.ARC_FARM_NAV_AUX_MIN_MONSTER_HP !== undefined ? parseFloat(process.env.ARC_FARM_NAV_AUX_MIN_MONSTER_HP) : 4;
+	process.env.ARC_FARM_NAV_AUX_MIN_MONSTER_HP !== undefined
+		? parseFloat(process.env.ARC_FARM_NAV_AUX_MIN_MONSTER_HP)
+		: 4;
 const FARM_NAV_AUX_MAX_MONSTER_HP =
-	process.env.ARC_FARM_NAV_AUX_MAX_MONSTER_HP !== undefined ? parseFloat(process.env.ARC_FARM_NAV_AUX_MAX_MONSTER_HP) : 5;
+	process.env.ARC_FARM_NAV_AUX_MAX_MONSTER_HP !== undefined
+		? parseFloat(process.env.ARC_FARM_NAV_AUX_MAX_MONSTER_HP)
+		: 5;
 const FARM_NAV_AUX_MAX_STATUS =
-	process.env.ARC_FARM_NAV_AUX_MAX_STATUS !== undefined ? parseInt(process.env.ARC_FARM_NAV_AUX_MAX_STATUS, 10) : 2;
+	process.env.ARC_FARM_NAV_AUX_MAX_STATUS !== undefined
+		? parseInt(process.env.ARC_FARM_NAV_AUX_MAX_STATUS, 10)
+		: 2;
 const REWARD_PICK_AUX_SHAPE =
-	process.env.ARC_REWARD_PICK_AUX_SHAPE !== undefined ? parseFloat(process.env.ARC_REWARD_PICK_AUX_SHAPE) : 0.5;
+	process.env.ARC_REWARD_PICK_AUX_SHAPE !== undefined
+		? parseFloat(process.env.ARC_REWARD_PICK_AUX_SHAPE)
+		: 0.5;
 const REWARD_PICK_AUX_TEMP =
-	process.env.ARC_REWARD_PICK_AUX_TEMP !== undefined ? parseFloat(process.env.ARC_REWARD_PICK_AUX_TEMP) : 0.5;
+	process.env.ARC_REWARD_PICK_AUX_TEMP !== undefined
+		? parseFloat(process.env.ARC_REWARD_PICK_AUX_TEMP)
+		: 0.5;
 const LOOKAHEAD_DISCOUNT =
-	process.env.ARC_LOOKAHEAD_DISCOUNT !== undefined ? parseFloat(process.env.ARC_LOOKAHEAD_DISCOUNT) : 0.95;
+	process.env.ARC_LOOKAHEAD_DISCOUNT !== undefined
+		? parseFloat(process.env.ARC_LOOKAHEAD_DISCOUNT)
+		: 0.95;
 const DEFAULT_LOOKAHEAD_BEAM =
 	process.env.ARC_LOOKAHEAD_BEAM !== undefined ? parseInt(process.env.ARC_LOOKAHEAD_BEAM, 10) : 8;
 const DEFAULT_LOOKAHEAD_ROOT_BEAM =
-	process.env.ARC_LOOKAHEAD_ROOT_BEAM !== undefined ? parseInt(process.env.ARC_LOOKAHEAD_ROOT_BEAM, 10) : 24;
+	process.env.ARC_LOOKAHEAD_ROOT_BEAM !== undefined
+		? parseInt(process.env.ARC_LOOKAHEAD_ROOT_BEAM, 10)
+		: 24;
 
 function entriesSig(obj: Record<string, number> | undefined): string {
 	return Object.entries(obj ?? {})
@@ -97,7 +118,10 @@ function materialSig(state: PublicGameState, seat: SeatColor): string {
 		.join(',');
 	const mats = [...(p.mats ?? [])]
 		.sort((a, b) => a.slotIndex - b.slotIndex)
-		.map((m) => `${m.slotIndex}:${m.id ?? ''}:${m.type ?? ''}:${m.classId ?? ''}:${m.originId ?? ''}:${m.special ? 1 : 0}`)
+		.map(
+			(m) =>
+				`${m.slotIndex}:${m.id ?? ''}:${m.type ?? ''}:${m.classId ?? ''}:${m.originId ?? ''}:${m.special ? 1 : 0}`
+		)
 		.join(',');
 	const dice = [...(p.attackDice ?? [])]
 		.map((d) => d.tier)
@@ -169,7 +193,11 @@ function nonProgressPenalty(cmd: GameCommand): number {
 	return cmd.type === 'refillMarket' ? REFILL_MARKET_PENALTY : NOOP_PENALTY;
 }
 
-function isProgressTransition(state: PublicGameState, seat: SeatColor, next: PublicGameState): boolean {
+function isProgressTransition(
+	state: PublicGameState,
+	seat: SeatColor,
+	next: PublicGameState
+): boolean {
 	return materialSig(next, seat) !== materialSig(state, seat);
 }
 
@@ -180,12 +208,16 @@ function progressCandidateIndices(
 ): number[] {
 	const out: number[] = [];
 	for (let i = 0; i < withNext.length; i++) {
-		if (isProgressTransition(state, seat, withNext[i].next)) out.push(i);
+		const action = withNext[i];
+		// A hidden roll/draw is a real committed action even though policyNext intentionally
+		// masks its realized result by retaining the pre-action public state.
+		if (action.hasHiddenOutcome || isProgressTransition(state, seat, policyPreviewState(action)))
+			out.push(i);
 	}
 	return out;
 }
 
-function selectableCandidateIndices(
+export function selectableCandidateIndices(
 	state: PublicGameState,
 	seat: SeatColor,
 	withNext: LegalAction[]
@@ -200,7 +232,10 @@ function pickMappedIndexFromScores(
 	opts?: { sample?: boolean; temperature?: number; rand?: () => number }
 ): number {
 	if (indices.length <= 1) return indices[0] ?? 0;
-	const local = pickFromScores(indices.map((i) => scores[i]), opts);
+	const local = pickFromScores(
+		indices.map((i) => scores[i]),
+		opts
+	);
 	return indices[local] ?? 0;
 }
 
@@ -212,6 +247,25 @@ function pendingRewardVpPotential(state: PublicGameState, seat: SeatColor): numb
 		.sort((a, b) => b - a)
 		.slice(0, pending.chooseAmount)
 		.reduce((sum, vp) => sum + vp, 0);
+}
+
+/** Public expectation for a hidden combat roll. This replaces realized pending-reward/VP
+ * deltas in value/lookahead scoring without making combat indistinguishable from passing. */
+function expectedHiddenOutcomeReward(
+	state: PublicGameState,
+	seat: SeatColor,
+	action: LegalAction,
+	catalog: PlayCatalog
+): number {
+	if (!action.hasHiddenOutcome || action.cmd.type !== 'startCombat') return 0;
+	const monster = state.monster;
+	if (!monster) return 0;
+	const killProbability = Math.max(
+		computeKillProbability(state, seat, catalog),
+		computeKillProbability(state, seat, catalog, { allowCorruptKill: true })
+	);
+	const rewardVp = claimableMonsterRewardVp(monster.rewardTrack, monster.chooseAmount);
+	return (PENDING_REWARD_VP_SHAPE * (killProbability * rewardVp)) / VP_TO_WIN;
 }
 
 function farmValueBonus(policy: NeuralPolicy, obs: number[]): number {
@@ -236,7 +290,12 @@ function farmNavigationActionBonus(
 	cmd: GameCommand,
 	catalog: PlayCatalog
 ): number {
-	if (FARM_NAV_AUX_SHAPE <= 0 || cmd.type !== 'lockNavigation' || cmd.destination !== 'Arcane Abyss') return 0;
+	if (
+		FARM_NAV_AUX_SHAPE <= 0 ||
+		cmd.type !== 'lockNavigation' ||
+		cmd.destination !== 'Arcane Abyss'
+	)
+		return 0;
 	const player = state.players[seat];
 	const monster = state.monster;
 	if (!player || !monster || monster.livesRemaining <= 0) return 0;
@@ -258,8 +317,16 @@ function policyStateValue(
 	return policy.value(obs) + farmValueBonus(policy, obs);
 }
 
-function rewardPickAuxProbs(policy: NeuralPolicy, obs: number[], cands: number[][]): number[] | null {
-	const fn = (policy as unknown as { rewardPickProbs?: (obs: number[], cands: number[][], temperature?: number) => number[] | null }).rewardPickProbs;
+function rewardPickAuxProbs(
+	policy: NeuralPolicy,
+	obs: number[],
+	cands: number[][]
+): number[] | null {
+	const fn = (
+		policy as unknown as {
+			rewardPickProbs?: (obs: number[], cands: number[][], temperature?: number) => number[] | null;
+		}
+	).rewardPickProbs;
 	if (REWARD_PICK_AUX_SHAPE <= 0 || typeof fn !== 'function') return null;
 	return fn.call(policy, obs, cands, REWARD_PICK_AUX_TEMP);
 }
@@ -281,30 +348,64 @@ export function scoreByValue(
 	const curPendingRewardVp = pendingRewardVpPotential(state, seat);
 	const rootObs = encodeObs(state, seat, catalog);
 	const rewardPickProbs = state.players[seat]?.pendingReward
-		? rewardPickAuxProbs(policy, rootObs, withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)))
+		? rewardPickAuxProbs(
+				policy,
+				rootObs,
+				withNext.map((x) => encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog))
+			)
 		: null;
 	return withNext.map((action, i) => {
-		const next = action.next;
+		const next = policyPreviewState(action);
 		if (next.winnerSeat === seat) return WIN_SCORE;
 		const v = policyStateValue(policy, next, seat, catalog);
 		const dVP = ((next.players[seat]?.victoryPoints ?? 0) - curVP) / VP_TO_WIN;
-		const dPendingRewardVP = Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
-		const noop = materialSig(next, seat) === curSig ? nonProgressPenalty(action.cmd) : 0;
-		const rewardPickBonus = action.cmd.type === 'resolveMonsterReward' ? REWARD_PICK_AUX_SHAPE * (rewardPickProbs?.[i] ?? 0) : 0;
+		const dPendingRewardVP =
+			Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
+		const noop =
+			!action.hasHiddenOutcome && materialSig(next, seat) === curSig
+				? nonProgressPenalty(action.cmd)
+				: 0;
+		const rewardPickBonus =
+			action.cmd.type === 'resolveMonsterReward'
+				? REWARD_PICK_AUX_SHAPE * (rewardPickProbs?.[i] ?? 0)
+				: 0;
 		const farmNavBonus = farmNavigationActionBonus(policy, state, seat, action.cmd, catalog);
-		return v + VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP + rewardPickBonus + farmNavBonus - noop;
+		const hiddenOutcomeReward = expectedHiddenOutcomeReward(state, seat, action, catalog);
+		return (
+			v +
+			VP_SHAPE * dVP +
+			PENDING_REWARD_VP_SHAPE * dPendingRewardVP +
+			hiddenOutcomeReward +
+			rewardPickBonus +
+			farmNavBonus -
+			noop
+		);
 	});
 }
 
-function transitionReward(state: PublicGameState, seat: SeatColor, action: LegalAction): number {
-	const next = action.next;
+function transitionReward(
+	state: PublicGameState,
+	seat: SeatColor,
+	action: LegalAction,
+	catalog: PlayCatalog
+): number {
+	const next = policyPreviewState(action);
 	if (next.winnerSeat === seat) return WIN_SCORE;
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
 	const curPendingRewardVp = pendingRewardVpPotential(state, seat);
 	const dVP = ((next.players[seat]?.victoryPoints ?? 0) - curVP) / VP_TO_WIN;
-	const dPendingRewardVP = Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
-	const noop = isProgressTransition(state, seat, next) ? 0 : nonProgressPenalty(action.cmd);
-	return VP_SHAPE * dVP + PENDING_REWARD_VP_SHAPE * dPendingRewardVP - noop;
+	const dPendingRewardVP =
+		Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
+	const noop =
+		action.hasHiddenOutcome || isProgressTransition(state, seat, next)
+			? 0
+			: nonProgressPenalty(action.cmd);
+	return (
+		VP_SHAPE * dVP +
+		PENDING_REWARD_VP_SHAPE * dPendingRewardVP +
+		expectedHiddenOutcomeReward(state, seat, action, catalog) -
+		noop
+	);
 }
 
 function leafValue(
@@ -370,22 +471,33 @@ function lookaheadActionScore(
 	depth: number,
 	beam: number
 ): number {
-	const next = action.next;
-	const reward = transitionReward(state, seat, action) + farmNavigationActionBonus(policy, state, seat, action.cmd, catalog);
+	const next = policyPreviewState(action);
+	const reward =
+		transitionReward(state, seat, action, catalog) +
+		farmNavigationActionBonus(policy, state, seat, action.cmd, catalog);
 	if (reward >= WIN_SCORE / 2) return reward;
-	if (depth <= 0 || next.status !== 'active' || !botSeatNeedsToAct(next, seat)) {
+	if (
+		action.hasHiddenOutcome ||
+		depth <= 0 ||
+		next.status !== 'active' ||
+		!botSeatNeedsToAct(next, seat)
+	) {
 		return reward + leafValue(policy, next, seat, catalog);
 	}
 	const children = legalActionsWithNext(next, seat, catalog);
 	if (children.length === 0) return reward + leafValue(policy, next, seat, catalog);
-	const shallow = children.map((child) =>
-		transitionReward(next, seat, child) +
+	const shallow = children.map(
+		(child) =>
+			transitionReward(next, seat, child, catalog) +
 			farmNavigationActionBonus(policy, next, seat, child.cmd, catalog) +
-			leafValue(policy, child.next, seat, catalog)
+			leafValue(policy, policyPreviewState(child), seat, catalog)
 	);
 	let best = -Infinity;
 	for (const i of topIndices(shallow, beam)) {
-		best = Math.max(best, lookaheadActionScore(policy, next, seat, children[i], catalog, depth - 1, beam));
+		best = Math.max(
+			best,
+			lookaheadActionScore(policy, next, seat, children[i], catalog, depth - 1, beam)
+		);
 	}
 	return reward + LOOKAHEAD_DISCOUNT * best;
 }
@@ -434,9 +546,9 @@ export function scoreByLookahead(
 	const rootBeam = Math.max(1, opts?.rootBeam ?? DEFAULT_LOOKAHEAD_ROOT_BEAM);
 	const scores = withNext.map(
 		(action) =>
-			transitionReward(state, seat, action) +
+			transitionReward(state, seat, action, catalog) +
 			farmNavigationActionBonus(policy, state, seat, action.cmd, catalog) +
-			leafValue(policy, action.next, seat, catalog)
+			leafValue(policy, policyPreviewState(action), seat, catalog)
 	);
 	if (depth > 0) {
 		for (const i of topIndices(scores, rootBeam)) {
@@ -447,12 +559,10 @@ export function scoreByLookahead(
 }
 
 /**
- * HYBRID selection — the production policy. Combines the imitation policy (which learned the
- * champion's strategic POSITIONING: camp the Rest chokepoint, fight to corrupt → Fallen) with
- * a hard "never pass up VP" rule via 1-ply lookahead. The decisive winning action — the
- * Fallen group-attack `initiatePvp` (+3 VP) — is RARE in the data, so behaviour-cloning skips
- * it; but it gives immediate VP, so the lookahead always grabs it. This fixes the "sets up the
- * hunt but never pulls the trigger" failure that left BC-only at ~0 VP.
+ * HYBRID selection — the production policy. Immediate, deterministic VP/win conversions remain
+ * tactical safeguards; every delayed or strategic choice (including whether to initiate PvP)
+ * belongs to the learned policy. Keeping PvP in the candidate distribution lets league/exploiter
+ * training discover when passing is the stronger response instead of exposing a hard-coded attack.
  */
 export function hybridIndex(
 	policy: NeuralPolicy,
@@ -468,7 +578,7 @@ export function hybridIndex(
 	let bestVpIdx = -1;
 	let bestVpGain = 0;
 	for (let i = 0; i < withNext.length; i++) {
-		const n = withNext[i].next;
+		const n = policyPreviewState(withNext[i]);
 		if (n.winnerSeat === seat) return i;
 		const gain = (n.players[seat]?.victoryPoints ?? 0) - curVP;
 		if (gain > bestVpGain) {
@@ -477,15 +587,7 @@ export function hybridIndex(
 		}
 	}
 	if (bestVpIdx >= 0 && bestVpGain > 0) return bestVpIdx;
-	// 1b) Always launch the Fallen group attack when it's available. `initiatePvp` is ONLY
-	// legal when this seat is Fallen and co-located with Good players — i.e. exactly the
-	// winning condition — but its VP payout is applied at encounter RESOLUTION (next phase), so
-	// the immediate-VP check above can't see it and behaviour-cloning skips the rare action.
-	const pvp = withNext.findIndex((x) => x.cmd.type === 'initiatePvp');
-	if (pvp >= 0) return pvp;
-	// 2) No immediate VP → the learned POLICY head positions (distilled by AWR self-play from
-	// the agent's OWN winning trajectories). Tactical VP/PvP grabs above are deterministic; the
-	// policy handles the strategic positioning (go to the Abyss, corrupt, camp the chokepoint).
+	// No immediate VP → the learned policy owns positioning and delayed-payoff decisions.
 	return policyIndexWithProgressGuard(policy, state, seat, withNext, opts, catalog);
 }
 
@@ -497,7 +599,8 @@ export function policyIndexWithProgressGuard(
 	opts?: { sample?: boolean; temperature?: number; rand?: () => number },
 	catalog?: PlayCatalog
 ): number {
-	if (!catalog) throw new Error('policyIndexWithProgressGuard: catalog is required (obs v1.1 ladder features)');
+	if (!catalog)
+		throw new Error('policyIndexWithProgressGuard: catalog is required (obs v1.1 ladder features)');
 	const progress = progressCandidateIndices(state, seat, withNext);
 	const filtered =
 		progress.length > 0 && progress.length < withNext.length
@@ -505,7 +608,7 @@ export function policyIndexWithProgressGuard(
 			: withNext;
 	const picked = policy.pick(
 		encodeObs(state, seat, catalog),
-		filtered.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
+		filtered.map((x) => encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)),
 		{
 			sample: opts?.sample,
 			temperature: opts?.temperature,
@@ -589,8 +692,7 @@ export interface NeuralPlanOptions {
 	/**
 	 * Expert tier: Gumbel root search at the STRATEGIC nodes — navigation
 	 * (sampled from π': the simultaneous hidden pick must mix, a deterministic
-	 * lock is exploitable) and encounter (argmax: replaces the hand-coded
-	 * "always initiatePvp" rule with real lookahead, which can also veto).
+	 * lock is exploitable) and encounter (argmax search over the learned policy/value).
 	 * All other phases stay hybridIndex.
 	 */
 	search?: boolean;
@@ -636,13 +738,15 @@ export function planNeuralPhaseActions(
 		guard += 1;
 		const withNext = legalActionsWithNext(s, seat, catalog);
 		if (withNext.length === 0) break;
-		// Production baseline = champion-imitation POLICY head (hunter-style positioning),
-		// plus the hard "always fire the Fallen group attack when legal" rule (rare in data,
-		// but the win condition). NOTE: this is a BASELINE — it positions like the hunter but
-		// does not reliably execute the deliberate corruption→Fallen setup; beating the
-		// heuristics needs the RL scale-up (see ml/README.md "Status").
+		// Production baseline = champion-imitation policy head with only immediate,
+		// deterministic VP/win conversions retained as tactical safeguards. Delayed PvP
+		// initiation is a learned choice, so passing remains available when it is stronger.
 		let idx = -1;
-		if (opts.search && (s.phase === 'navigation' || s.phase === 'encounter') && withNext.length > 1) {
+		if (
+			opts.search &&
+			(s.phase === 'navigation' || s.phase === 'encounter') &&
+			withNext.length > 1
+		) {
 			const res = planDecisionGumbel(s, seat, catalog, policy, withNext, {
 				simulations: opts.searchSims ?? 16,
 				horizonRounds: 6,

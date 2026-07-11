@@ -1,0 +1,72 @@
+{
+	"_readme": "Corrected-contract reproduction lane. Public monster/reward information is visible, hidden roll/draw outcomes are not; PPO keeps complete trajectories and applies the policy surrogate only to exact learned-policy samples. Aux objectives added in July 2026 are OFF so this is the control for the fixed-seed A/B. Do not promote until fairness/ratio gates and a 3-seed reproduction pass succeed.",
+	"version": "league-v1",
+	"mode": "ppo",
+	"seats": 4,
+	"maxRounds": 120,
+	"gamesPerGen": 512,
+	"matchupGames": 32,
+	"evalGames": 24,
+	"evalOpponents": ["heur-medium", "heur-hard", "heur-pvphunter"],
+	"lanes": { "main": 1, "mainExploiter": 0, "leagueExploiter": 0 },
+	"seedCheckpointAnchors": true,
+	"baselineElos": {
+		"frozen-v13-1-gen48-champion": 439,
+		"frozen-ladder8c2-gen60-champion": 136
+	},
+	"extraFrozen": [
+		{
+			"id": "frozen-v13-2-gen44-champion",
+			"weightsPath": "ml/champions/v13-2/main-0-gen44.json",
+			"elo": 453
+		},
+		{
+			"id": "frozen-v14b-gen120-exploiter",
+			"weightsPath": "ml/exploiters/v14b-gen120.json",
+			"elo": 394
+		}
+	],
+	"denseVpReward": true,
+	"shapingPreset": "ascend3",
+	"selfPlayFraction": 0.35,
+	"opponentTemperature": 0.65,
+	"pfsp": { "p": 2, "variant": "squared" },
+	"promoteEvery": 4,
+	"promoteMarginElo": 25,
+	"selection": "hybrid",
+	"sample": true,
+	"temperature": 1.0,
+	"temperatureAnneal": { "from": 1.0, "to": 0.65, "overGens": 80 },
+	"train": {
+		"epochs": 4,
+		"batchSize": 256,
+		"hidden": [128, 128],
+		"valueHidden": [64],
+		"extraArgs": [
+			"--placement-coef",
+			"0.3",
+			"--farm-value-coef",
+			"0",
+			"--reward-pick-coef",
+			"0",
+			"--route-mode-coef",
+			"0",
+			"--gamma",
+			"0.999",
+			"--win-bonus",
+			"1.0",
+			"--win-bonus-halflife",
+			"8",
+			"--all-fallen-loss",
+			"-3.0"
+		]
+	},
+	"pythonBin": "ml/.venv/bin/python",
+	"gauntletCmd": ["bash", "scripts/league-gauntlet.sh"],
+	"workers": 40,
+	"matchupConcurrency": 8,
+	"seedBase": 260000000,
+	"initFrom": "random",
+	"laneInit": { "main-0": "random" },
+	"paths": { "root": "ml/league_v15_aux_off" }
+}

@@ -146,9 +146,7 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 		...(base.laneModel || over.laneModel
 			? { laneModel: { ...base.laneModel, ...over.laneModel } }
 			: {}),
-		...(base.laneInit || over.laneInit
-			? { laneInit: { ...base.laneInit, ...over.laneInit } }
-			: {}),
+		...(base.laneInit || over.laneInit ? { laneInit: { ...base.laneInit, ...over.laneInit } } : {}),
 		...(base.v2 || over.v2 ? { v2: { ...base.v2, ...over.v2 } } : {}),
 		...(base.v1Infer || over.v1Infer ? { v1Infer: { ...base.v1Infer, ...over.v1Infer } } : {})
 	};
@@ -191,12 +189,24 @@ export function loadLeague(root: string): { config: LeagueConfig; state: LeagueS
 export function seedRoster(config: LeagueConfig): LeagueMember[] {
 	const members: LeagueMember[] = [];
 	for (const name of HEURISTIC_ANCHORS) {
-		members.push({ id: `heur-${name}`, kind: 'heuristic', profile: name, createdGen: 0, matchStats: {} });
+		members.push({
+			id: `heur-${name}`,
+			kind: 'heuristic',
+			profile: name,
+			createdGen: 0,
+			matchStats: {}
+		});
 	}
 	if (config.seedCheckpointAnchors !== false) {
 		for (const c of CHECKPOINT_ANCHORS) {
 			if (c.status !== 'active') continue;
-			members.push({ id: `frozen-${c.name}`, kind: 'frozen', weightsPath: c.path, createdGen: 0, matchStats: {} });
+			members.push({
+				id: `frozen-${c.name}`,
+				kind: 'frozen',
+				weightsPath: c.path,
+				createdGen: 0,
+				matchStats: {}
+			});
 		}
 	}
 	// Extra frozen members (e.g. a promoted champion kept in the field as the
@@ -213,13 +223,29 @@ export function seedRoster(config: LeagueConfig): LeagueMember[] {
 		});
 	}
 	for (let i = 0; i < config.lanes.main; i++) {
-		members.push({ id: `main-${i}`, kind: 'main', initFrom: config.initFrom, createdGen: 0, matchStats: {} });
+		members.push({
+			id: `main-${i}`,
+			kind: 'main',
+			initFrom: config.initFrom,
+			createdGen: 0,
+			matchStats: {}
+		});
 	}
 	for (let i = 0; i < config.lanes.mainExploiter; i++) {
-		members.push({ id: `main_exploiter-${i}`, kind: 'main_exploiter', createdGen: 0, matchStats: {} });
+		members.push({
+			id: `main_exploiter-${i}`,
+			kind: 'main_exploiter',
+			createdGen: 0,
+			matchStats: {}
+		});
 	}
 	for (let i = 0; i < config.lanes.leagueExploiter; i++) {
-		members.push({ id: `league_exploiter-${i}`, kind: 'league_exploiter', createdGen: 0, matchStats: {} });
+		members.push({
+			id: `league_exploiter-${i}`,
+			kind: 'league_exploiter',
+			createdGen: 0,
+			matchStats: {}
+		});
 	}
 	for (const m of members) {
 		const model = config.laneModel?.[m.id];
@@ -363,7 +389,9 @@ export function stampBaselineElos(
 		const elo =
 			config.baselineElos?.[m.id] ??
 			(m.weightsPath
-				? (config.baselineElos?.[m.weightsPath] ?? scanned[m.weightsPath] ?? byIdentity(m.weightsPath))
+				? (config.baselineElos?.[m.weightsPath] ??
+					scanned[m.weightsPath] ??
+					byIdentity(m.weightsPath))
 				: undefined);
 		if (typeof elo === 'number') m.eloVsAnchors = elo;
 	}
@@ -536,11 +564,16 @@ export async function ensureInferServer(
 		config.pythonBin,
 		[
 			'ml/infer_server.py',
-			'--weights', livePt,
-			'--socket', socket,
-			'--device', knobs.device ?? 'auto',
-			'--window-ms', String(knobs.windowMs ?? 2),
-			'--max-batch', String(knobs.maxBatch ?? 512)
+			'--weights',
+			livePt,
+			'--socket',
+			socket,
+			'--device',
+			knobs.device ?? 'auto',
+			'--window-ms',
+			String(knobs.windowMs ?? 2),
+			'--max-batch',
+			String(knobs.maxBatch ?? 512)
 		],
 		{ stdio: ['ignore', logFd, logFd] }
 	);
@@ -751,7 +784,9 @@ export function matchupSlotKind(
 	if (nonMirror <= 0) return 'pfsp';
 	const target = Math.min(nonMirror, Math.floor(matchups * hf));
 	const j = m - Math.floor(m * sp);
-	return Math.floor(((j + 1) * target) / nonMirror) > Math.floor((j * target) / nonMirror) ? 'heuristic' : 'pfsp';
+	return Math.floor(((j + 1) * target) / nonMirror) > Math.floor((j * target) / nonMirror)
+		? 'heuristic'
+		: 'pfsp';
 }
 
 /**
@@ -790,7 +825,13 @@ export function heuristicFieldOpponents(config: LeagueConfig, count: number): Le
 		: DEFAULT_HEURISTIC_FIELD;
 	return Array.from({ length: count }, (_, i) => {
 		const profile = profiles[i % profiles.length];
-		return { id: `heur-field-${profile}`, kind: 'heuristic' as const, profile, createdGen: 0, matchStats: {} };
+		return {
+			id: `heur-field-${profile}`,
+			kind: 'heuristic' as const,
+			profile,
+			createdGen: 0,
+			matchStats: {}
+		};
 	});
 }
 
@@ -822,15 +863,28 @@ export function matchupOpponents(
 	const count = config.seats - 1 - (blocker ? 1 : 0);
 	const withBlocker = (r: { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean }) =>
 		blocker ? { ...r, opponents: [...r.opponents, blocker] } : r;
-	const kind = matchupSlotKind(m, matchups, config.selfPlayFraction ?? 0, config.heuristicOpponentFraction ?? 0);
+	const kind = matchupSlotKind(
+		m,
+		matchups,
+		config.selfPlayFraction ?? 0,
+		config.heuristicOpponentFraction ?? 0
+	);
 	if (kind === 'mirror') {
 		const mir = mirrorOpponents(learner, count);
 		if (mir) return withBlocker({ opponents: mir, mirror: true, heuristic: false });
 		// Fresh-net bootstrap gen: no checkpoint to mirror yet → ordinary PFSP.
 	} else if (kind === 'heuristic') {
-		return withBlocker({ opponents: heuristicFieldOpponents(config, count), mirror: false, heuristic: true });
+		return withBlocker({
+			opponents: heuristicFieldOpponents(config, count),
+			mirror: false,
+			heuristic: true
+		});
 	}
-	return withBlocker({ opponents: sampleOpponents(learner, members, count, config.pfsp, rand), mirror: false, heuristic: false });
+	return withBlocker({
+		opponents: sampleOpponents(learner, members, count, config.pfsp, rand),
+		mirror: false,
+		heuristic: false
+	});
 }
 
 /** Fold a pool run's summaries into the learner's matchStats; returns pairwise (score, n). */
@@ -852,7 +906,8 @@ function foldSummaries(
 			if (!theirs) continue;
 			recordPairwise(learner, opp.id, mine.placement, theirs.placement);
 			opponentsFaced[opp.id] = (opponentsFaced[opp.id] ?? 0) + 1;
-			scoreSum += mine.placement < theirs.placement ? 1 : mine.placement === theirs.placement ? 0.5 : 0;
+			scoreSum +=
+				mine.placement < theirs.placement ? 1 : mine.placement === theirs.placement ? 0.5 : 0;
 			encounters += 1;
 		}
 	}
@@ -868,10 +923,14 @@ function runTrainer(
 ): number {
 	const args = [
 		'ml/train.py',
-		'--data', dataDir,
-		'--out', outCkpt,
-		'--mode', config.mode,
-		'--epochs', String(config.train.epochs)
+		'--data',
+		dataDir,
+		'--out',
+		outCkpt,
+		'--mode',
+		config.mode,
+		'--epochs',
+		String(config.train.epochs)
 	];
 	if (model === 'v2') {
 		args.push('--model', 'v2');
@@ -883,7 +942,11 @@ function runTrainer(
 		}
 	}
 	if (config.train.beta !== undefined) args.push('--beta', String(config.train.beta));
-	if (config.train.batchSize !== undefined) args.push('--batch-size', String(config.train.batchSize));
+	if (config.train.batchSize !== undefined)
+		args.push('--batch-size', String(config.train.batchSize));
+	if (config.train.hidden?.length) args.push('--hidden', config.train.hidden.join(','));
+	if (config.train.valueHidden?.length)
+		args.push('--value-hidden', config.train.valueHidden.join(','));
 	if (initFrom) args.push('--init-from', resolve(initFrom));
 	if (config.train.extraArgs?.length) args.push(...config.train.extraArgs);
 	const t0 = performance.now();
@@ -904,10 +967,14 @@ function runDistiller(
 ): number {
 	const args = [
 		'ml/distill.py',
-		'--data', dataDir,
-		'--teacher', resolve(teacherPt),
-		'--out', resolve(outJson),
-		'--epochs', String(config.v2?.distillEpochs ?? 6)
+		'--data',
+		dataDir,
+		'--teacher',
+		resolve(teacherPt),
+		'--out',
+		resolve(outJson),
+		'--epochs',
+		String(config.v2?.distillEpochs ?? 6)
 	];
 	const t0 = performance.now();
 	const r = spawnSync(config.pythonBin, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -961,9 +1028,23 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		// through the lane's server. Otherwise (fresh net) the bootstrap gen is heuristic.
 		let laneServer =
 			model === 'v2' && lanePt(learner)
-				? await ensureInferServer(config, root, laneIdx, learner.id, lanePt(learner)!, config.v2 ?? {})
+				? await ensureInferServer(
+						config,
+						root,
+						laneIdx,
+						learner.id,
+						lanePt(learner)!,
+						config.v2 ?? {}
+					)
 				: v1SocketWeights
-					? await ensureInferServer(config, root, laneIdx, learner.id, v1SocketWeights, config.v1Infer!)
+					? await ensureInferServer(
+							config,
+							root,
+							laneIdx,
+							learner.id,
+							v1SocketWeights,
+							config.v1Infer!
+						)
 					: undefined;
 		const v2Arg = model === 'v2' ? { socket: laneServer?.socket } : undefined;
 		const v1SocketArg = v1SocketWeights ? laneServer!.socket : undefined;
@@ -986,7 +1067,14 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		let mirrorMatchups = 0;
 		let heuristicMatchups = 0;
 		const plans = Array.from({ length: matchups }, (_, m) => {
-			const { opponents, mirror, heuristic } = matchupOpponents(config, learner, state.members, m, matchups, rand);
+			const { opponents, mirror, heuristic } = matchupOpponents(
+				config,
+				learner,
+				state.members,
+				m,
+				matchups,
+				rand
+			);
 			if (mirror) mirrorMatchups += 1;
 			if (heuristic) heuristicMatchups += 1;
 			const plan = buildMatchup(config, learner, opponents, m, gen, v2Arg, v1SocketArg);
@@ -1044,7 +1132,15 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			: {};
 		writeFileSync(
 			metaPath,
-			JSON.stringify({ obs_dim: OBS_DIM, act_dim: ACT_DIM, ...poolMeta, gen, lane: learner.id, games, samples })
+			JSON.stringify({
+				obs_dim: OBS_DIM,
+				act_dim: ACT_DIM,
+				...poolMeta,
+				gen,
+				lane: learner.id,
+				games,
+				samples
+			})
 		);
 
 		// ── 3: train ─────────────────────────────────────────────────────────
@@ -1109,8 +1205,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			plan.config.sample = false;
 			// Eval measures the RAW net (what ships/promotes) — never the searched agent.
 			plan.config.search = undefined;
-			const seed0 =
-				config.seedBase + 500_000_000 + gen * 1_000_000 + laneIdx * 100_000 + r * 1000;
+			const seed0 = config.seedBase + 500_000_000 + gen * 1_000_000 + laneIdx * 100_000 + r * 1000;
 			const res = await runActorPool({
 				seeds: Array.from({ length: count }, (_, i) => seed0 + i),
 				outDir: evalDir,
@@ -1142,14 +1237,18 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			state.phase = `gen${gen}:${learner.id}:gauntlet`;
 			saveStateAtomic(root, state);
 			const [cmd, ...cmdArgs] = config.gauntletCmd;
-			const g = spawnSync(cmd, [...cmdArgs, gauntletTarget], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+			const g = spawnSync(cmd, [...cmdArgs, gauntletTarget], {
+				encoding: 'utf8',
+				maxBuffer: 64 * 1024 * 1024
+			});
 			if (g.status !== 0) {
-				throw new Error(`league: gauntlet failed (status ${g.status}): ${(g.stderr || '').slice(-2000)}`);
+				throw new Error(
+					`league: gauntlet failed (status ${g.status}): ${(g.stderr || '').slice(-2000)}`
+				);
 			}
 			gauntletElo = lastGauntletElo();
 			const bestFrozen = promotionBar(state.members);
-			promoted =
-				gauntletElo !== undefined && gauntletElo > bestFrozen + config.promoteMarginElo;
+			promoted = gauntletElo !== undefined && gauntletElo > bestFrozen + config.promoteMarginElo;
 			if (promoted) {
 				const frozenId = `frozen-${learner.id}-gen${gen}`;
 				const frozenJson = join(p.checkpoints, `${frozenId}.json`);

@@ -81,8 +81,9 @@ for it in $(seq 1 "$OUTER"); do
   # ── 2. PRUNE replay buffer to the last $WINDOW iterations ──────────────────
   old=$((it - WINDOW))
   if [ "$old" -ge 1 ]; then rm -f "$DATA"/iter${old}_shard*.jsonl; fi
-  # dims for the trainer (encoder is 62/52; meta lets train.py skip inference)
-  printf '{"obs_dim":62,"act_dim":52}' > "$DATA/meta.json"
+  # Derive dimensions from the generated rows so encoder bumps cannot poison training.
+  read -r OBS_DIM ACT_DIM < <(node scripts/read-ml-sample-dims.mjs "$DATA")
+  printf '{"obs_dim":%s,"act_dim":%s}' "$OBS_DIM" "$ACT_DIM" > "$DATA/meta.json"
 
   # ── 3. TRAIN (alphazero: pi cross-entropy + outcome value MSE) ─────────────
   echo "[az_loop] train: epochs=$EPOCHS hidden=$HIDDEN value=$VHIDDEN"

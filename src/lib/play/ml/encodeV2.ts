@@ -1,13 +1,14 @@
 /**
  * encodeV2 — entity-level observation encoder (`arc-obs-v2`) for the set-transformer bot.
  *
- * Replaces the lossy 62-float summary in encode.ts (v1) with per-entity token sets:
+ * Replaces the lossy fixed-width summary in encode.ts (v1; currently 83 floats)
+ * with per-entity token sets:
  * one global token, one token per seat, one per spirit on ANY board, one per market
  * slot, one per held rune/relic of the acting seat, and one monster token. Token
  * counts are variable in-game, so every token family is emitted PADDED to a fixed
  * cap with an explicit 0/1 mask — dims are constant for a given catalog.
  *
- * v1 (encode.ts) stays untouched: the live distilled net consumes OBS_DIM=62 and the
+ * v1 (encode.ts) stays untouched: the live distilled net consumes OBS_DIM=83 and the
  * 52-float encodeAction, which v2 deliberately does NOT duplicate — action features
  * remain v1's encodeAction.
  *
@@ -368,7 +369,9 @@ function seatToken(
 
 	const heldMats = (p.mats ?? []).filter((m) => m.hasRune);
 	f.push(clamp01(heldMats.filter((m) => matKind(m, catalog) === 'rune').length / RUNE_CARRY_LIMIT));
-	f.push(clamp01(heldMats.filter((m) => matKind(m, catalog) === 'relic').length / RUNE_CARRY_LIMIT));
+	f.push(
+		clamp01(heldMats.filter((m) => matKind(m, catalog) === 'relic').length / RUNE_CARRY_LIMIT)
+	);
 	f.push(clamp01((p.relics ?? 0) / 10));
 	f.push(clamp01((p.spiritAugments ?? 0) / 10));
 	f.push(clamp01((p.spiritAugmentAttachments?.length ?? 0) / MAX_SPIRITS));
@@ -395,9 +398,7 @@ function seatToken(
 		f.push(clamp01((p.handDraws?.length ?? 0) / 5));
 		f.push(p.pendingDraw ? 1 : 0);
 		f.push(
-			p.pendingDraw
-				? clamp01((p.pendingDraw.summonLimit - p.pendingDraw.summonedCount) / 5)
-				: 0
+			p.pendingDraw ? clamp01((p.pendingDraw.summonLimit - p.pendingDraw.summonedCount) / 5) : 0
 		);
 		f.push(clamp01((p.pendingDrawQueue?.length ?? 0) / 3));
 		f.push(p.pendingReward ? 1 : 0);
@@ -458,11 +459,7 @@ function spiritToken(
 	return f;
 }
 
-function marketToken(
-	slotIndex: number,
-	spiritId: string | null,
-	vocab: ObsV2Vocab
-): number[] {
+function marketToken(slotIndex: number, spiritId: string | null, vocab: ObsV2Vocab): number[] {
 	const f: number[] = [];
 	const spirit = spiritId ? vocab.spiritById.get(spiritId) : undefined;
 	f.push(1);
@@ -610,12 +607,24 @@ export function obsV2FlatHeader(vocab: ObsV2Vocab): number[] {
 	return [
 		OBS_V2_VERSION_CODE,
 		OBS_V2_TOKEN_TYPES.length,
-		0, 1, d.global,
-		1, SEATS_CAP, d.seat,
-		2, SPIRITS_CAP, d.spirit,
-		3, MARKET_CAP, d.market,
-		4, RUNES_CAP, d.rune,
-		5, 1, d.monster
+		0,
+		1,
+		d.global,
+		1,
+		SEATS_CAP,
+		d.seat,
+		2,
+		SPIRITS_CAP,
+		d.spirit,
+		3,
+		MARKET_CAP,
+		d.market,
+		4,
+		RUNES_CAP,
+		d.rune,
+		5,
+		1,
+		d.monster
 	];
 }
 
@@ -647,7 +656,13 @@ export function flattenObsV2(obs: EntityObsV2, catalog: PlayCatalog): number[] {
 	for (const row of obs.market) out.push(...row);
 	for (const row of obs.runes) out.push(...row);
 	out.push(...obs.monster);
-	out.push(...obs.masks.seats, ...obs.masks.spirits, ...obs.masks.market, ...obs.masks.runes, ...obs.masks.monster);
+	out.push(
+		...obs.masks.seats,
+		...obs.masks.spirits,
+		...obs.masks.market,
+		...obs.masks.runes,
+		...obs.masks.monster
+	);
 	return out;
 }
 

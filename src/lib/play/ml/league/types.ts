@@ -97,6 +97,10 @@ export interface LeagueTrainConfig {
 	epochs: number;
 	beta?: number;
 	batchSize?: number;
+	/** v1 CandidateScorer trunk widths, forwarded to train.py --hidden (scratch sweeps). */
+	hidden?: number[];
+	/** v1 value/aux-head widths, forwarded to train.py --value-hidden. */
+	valueHidden?: number[];
 	/** Extra raw CLI args appended to the train.py invocation. */
 	extraArgs?: string[];
 }

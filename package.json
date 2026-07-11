@@ -40,6 +40,8 @@
 		"test:bot:all": "node scripts/bot-test-gate.mjs engine ml-smoke az-smoke clean-farm clean-farm-curriculum farm-counterfactual clean-route-beam clean-route-proof survival-counterfactual route-execution-counterfactual scaling-navigation-counterfactual hp4-wall-counterfactual hp4-wall-oracle trace-state-counterfactual contract-audit route-imitation strict-constraints browser",
 		"bot:gpu:preflight": "bash scripts/arc-bot-gpu-preflight.sh",
 		"bot:gpu:sync": "bash scripts/sync-arc-bot-to-gpu.sh",
+		"bot:bench:actors": "node scripts/benchmark-actor-workers.mjs",
+		"bot:bench:models": "ml/.venv/bin/python ml/benchmark_model_sizes.py",
 		"bot:meta:evaluate": "bash scripts/run-arc-meta-eval-suite.sh",
 		"bot:clean-route-proof": "bash scripts/run-arc-clean-route-proof-suite.sh",
 		"bot:route-trace:analyze": "node scripts/analyze-route-trace.mjs",

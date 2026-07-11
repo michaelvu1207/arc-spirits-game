@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { runActorPool } from './actorPool';
+import { DynamicSeedScheduler, runActorPool } from './actorPool';
+import { runActorGames } from './actorWorker';
 import { mlPath } from './nodeIo';
 import type { ActorGameConfig, GameSummary } from './poolTypes';
 
@@ -31,7 +32,9 @@ const RUN_BENCH = process.env.POOL === '1';
 function neuralFixture(): string | undefined {
 	if (!existsSync(WEIGHTS)) return undefined;
 	try {
-		return (JSON.parse(readFileSync(WEIGHTS, 'utf8')) as { obs_dim?: number }).obs_dim === OBS_DIM ? WEIGHTS : undefined;
+		return (JSON.parse(readFileSync(WEIGHTS, 'utf8')) as { obs_dim?: number }).obs_dim === OBS_DIM
+			? WEIGHTS
+			: undefined;
 	} catch {
 		return undefined;
 	}
@@ -55,6 +58,46 @@ function tempDir(label: string): string {
 }
 
 describe('actor pool', () => {
+	it('dynamic scheduler gives fast workers more jobs without changing seed coverage', () => {
+		const seeds = [10, 11, 11, 13, 14];
+		const scheduler = new DynamicSeedScheduler(seeds);
+		const assignments: Array<[number, number, number]> = [];
+		const take = (worker: number) => {
+			const job = scheduler.next(worker);
+			if (job) assignments.push([worker, job.jobIndex, job.seed]);
+			return job;
+		};
+
+		const slow = take(0)!;
+		let fast = take(1)!;
+		expect(() => scheduler.next(0)).toThrow(/while busy/);
+		// Worker 1 completes three games while worker 0 is still on its first. The
+		// central queue assigns work by completion, not by a static round-robin slice.
+		scheduler.complete(1, fast.jobIndex);
+		fast = take(1)!;
+		scheduler.complete(1, fast.jobIndex);
+		fast = take(1)!;
+		scheduler.complete(1, fast.jobIndex);
+		fast = take(1)!;
+		scheduler.complete(1, fast.jobIndex);
+		expect(take(1)).toBeNull();
+
+		scheduler.complete(0, slow.jobIndex);
+		expect(take(0)).toBeNull();
+
+		expect(assignments).toEqual([
+			[0, 0, 10],
+			[1, 1, 11],
+			[1, 2, 11],
+			[1, 3, 13],
+			[1, 4, 14]
+		]);
+		expect(assignments.map(([, jobIndex]) => jobIndex).sort((a, b) => a - b)).toEqual([
+			0, 1, 2, 3, 4
+		]);
+		expect(scheduler.completedCount).toBe(seeds.length);
+	});
+
 	it('determinism: 1 worker and 4 workers produce identical per-seed outcomes', async () => {
 		const seeds = Array.from({ length: 16 }, (_, i) => 41_000 + i);
 		const config: ActorGameConfig = {
@@ -78,6 +121,7 @@ describe('actor pool', () => {
 			const mapOf = (summaries: GameSummary[]): Record<number, string> =>
 				Object.fromEntries(summaries.map((s) => [s.seed, outcomeKey(s)]));
 			expect(mapOf(four.summaries)).toEqual(mapOf(one.summaries));
+			expect(four.summaries.map((s) => s.seed)).toEqual(seeds);
 			expect(four.samples).toBe(one.samples);
 
 			// The games-<i>.jsonl feed must cover every seed exactly once.
@@ -117,7 +161,7 @@ describe('actor pool', () => {
 				expect(s0.perSeat.every((p) => p.policy === 'neural')).toBe(true);
 			}
 
-			// Pinned paired-row contract (docs/encoder-v2.md): obs stays v1 62-float,
+			// Pinned paired-row contract (docs/encoder-v2.md): obs stays v1 83-float,
 			// obsV2 carries the flat array, meta nests obsV2Meta under "obs_v2".
 			const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
 			expect(meta.obs_version).toBe(2);
@@ -165,6 +209,29 @@ describe('actor pool', () => {
 				expect(s.neuralSeats).toEqual([]);
 				expect(s.perSeat.every((p) => p.policy === 'heuristic')).toBe(true);
 			}
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
+
+	it('preserves the synchronous runActorGames API and callback order', () => {
+		const seeds = [63_000, 63_001];
+		const seen: number[] = [];
+		const dir = tempDir('sync-api');
+		try {
+			const result = runActorGames(
+				{
+					workerIndex: 0,
+					seeds,
+					config: { seats: 4, maxRounds: 30, profiles: ['medium'] },
+					outDir: dir,
+					catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+				},
+				(summary) => seen.push(summary.seed)
+			);
+			expect(result.games).toBe(seeds.length);
+			expect(result.samples).toBeGreaterThan(0);
+			expect(seen).toEqual(seeds);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

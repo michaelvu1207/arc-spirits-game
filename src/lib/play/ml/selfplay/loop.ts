@@ -32,9 +32,22 @@ import {
 import { encodeObs, encodeAction } from '../encode';
 import type { NeuralPolicy } from '../net';
 import { neuralPlanNavigation, type PlanOptions } from '../planner';
-import { legalActionsWithNext, type LegalAction } from '../actions';
+import {
+	legalActionsWithNext,
+	policyPreviewState,
+	policySafeAction,
+	type LegalAction
+} from '../actions';
 import { sampleAuxTargets } from '../auxTargets';
-import { hybridIndex, lookaheadIndex, policyIndexWithProgressGuard, scoreByLookahead, scoresToPolicyTarget, scoreByValue, valueGuidedIndex } from '../neuralBot';
+import {
+	hybridIndex,
+	lookaheadIndex,
+	policyIndexWithProgressGuard,
+	scoreByLookahead,
+	scoresToPolicyTarget,
+	scoreByValue,
+	valueGuidedIndex
+} from '../neuralBot';
 import { evaluateFarmValue } from '../farmValue';
 import {
 	chooseRouteBreakpointOracleAction,
@@ -340,7 +353,12 @@ function outcomeFor(state: PublicGameState, seat: SeatColor): number {
 }
 
 /** Sample an index ∝ visits^(1/τ); argmax when !sample or τ→0. */
-function chooseIndex(visits: number[], sample: boolean, temperature: number, rng: RngState): number {
+function chooseIndex(
+	visits: number[],
+	sample: boolean,
+	temperature: number,
+	rng: RngState
+): number {
 	if (!sample || temperature <= 1e-3) {
 		let best = 0;
 		for (let i = 1; i < visits.length; i++) if (visits[i] > visits[best]) best = i;
@@ -374,10 +392,19 @@ export function chooseFullActionDecision(
 	if (withNext.length <= 1) return { idx: 0, pi: [1] };
 	const rand = (): number => nextInt(rng, 1_000_000) / 1_000_000;
 	const obs = encodeObs(state, seat, catalog);
-	const cands = withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog));
+	const cands = withNext.map((x) =>
+		encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)
+	);
 	if (selection === 'policy') {
 		return {
-			idx: policyIndexWithProgressGuard(policy, state, seat, withNext, { sample, temperature, rand }, catalog),
+			idx: policyIndexWithProgressGuard(
+				policy,
+				state,
+				seat,
+				withNext,
+				{ sample, temperature, rand },
+				catalog
+			),
 			pi: policy.probs(obs, cands, targetTemperature)
 		};
 	}
@@ -431,19 +458,37 @@ export function filterPlannerActions(
 		!preserveRouteSurvival &&
 		!abyssRouteDiscipline &&
 		!goodTargetActionDiscipline
-	) return withNext;
-	let filtered = withNext.filter((x) => {
+	)
+		return withNext;
+	// Archived route-discipline predicates use the conventional `action.next` field.
+	// Feed them centralized policy-safe views, then map accepted commands back to the
+	// authoritative actions so execution and post-action labels commit the real result.
+	const actualByCommand = new Map(withNext.map((action) => [action.cmd, action]));
+	const policyActions = withNext.map(policySafeAction);
+	let filtered = policyActions.filter((x) => {
 		if (forbidTypes?.has(x.cmd.type)) return false;
-		if (maxStatusLevel !== undefined && (x.next.players[seat]?.statusLevel ?? 0) > maxStatusLevel) {
+		if (
+			maxStatusLevel !== undefined &&
+			(policyPreviewState(x).players[seat]?.statusLevel ?? 0) > maxStatusLevel
+		) {
 			return false;
 		}
-		if (preserveRouteFirepower && !preservesRouteFirepower(state, seat, catalog, x, firepowerThreshold)) {
+		if (
+			preserveRouteFirepower &&
+			!preservesRouteFirepower(state, seat, catalog, x, firepowerThreshold)
+		) {
 			return false;
 		}
-		if (preserveRouteSurvival && !preservesRouteSurvival(state, seat, catalog, x, firepowerThreshold)) {
+		if (
+			preserveRouteSurvival &&
+			!preservesRouteSurvival(state, seat, catalog, x, firepowerThreshold)
+		) {
 			return false;
 		}
-		if ((preserveRouteFirepower || preserveRouteSurvival) && !preservesRouteHandDrawOpportunity(state, seat, catalog, x, withNext, firepowerThreshold)) {
+		if (
+			(preserveRouteFirepower || preserveRouteSurvival) &&
+			!preservesRouteHandDrawOpportunity(state, seat, catalog, x, policyActions, firepowerThreshold)
+		) {
 			return false;
 		}
 		return true;
@@ -466,10 +511,14 @@ export function filterPlannerActions(
 			firepowerThreshold
 		);
 	}
-	return filtered.length > 0 || hardConstraints ? filtered : withNext;
+	if (filtered.length === 0) return hardConstraints ? [] : withNext;
+	return filtered.map((action) => actualByCommand.get(action.cmd)!);
 }
 
-export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOptions): SelfPlayResult {
+export function playPlannerSelfPlayGame(
+	catalog: PlayCatalog,
+	opts: SelfPlayOptions
+): SelfPlayResult {
 	const profiles = opts.profiles;
 	const n = Math.min(profiles.length, SEAT_COLORS.length, catalog.guardians.length);
 	const seats = SEAT_COLORS.slice(0, n) as SeatColor[];
@@ -506,25 +555,62 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		opts.goodTargetActionDisciplineBySeat?.[seat] ?? opts.goodTargetActionDiscipline ?? false;
 	const navigationPolicyGate = opts.navigationPolicyGate ?? 'all';
 	const scalingNavigationPolicyGate = opts.scalingNavigationPolicyGate ?? 'route-option-scaling';
-	const buildOptionDestinations: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch', 'Cyber City', 'Tidal Cove'];
-	const scalingOptionDestinations: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
+	const buildOptionDestinations: NavigationDestination[] = [
+		'Lantern Canyon',
+		'Floral Patch',
+		'Cyber City',
+		'Tidal Cove'
+	];
+	const scalingOptionDestinations: NavigationDestination[] = [
+		'Tidal Cove',
+		'Cyber City',
+		'Lantern Canyon'
+	];
 	const restoreOptionDestinations: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
-	const hp4FirstWallDestinations: NavigationDestination[] = ['Arcane Abyss', 'Lantern Canyon', 'Floral Patch'];
-	const closerDamageDestinations: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
-	const closerMaxBarrierDestinations: NavigationDestination[] = ['Floral Patch', 'Lantern Canyon', 'Cyber City'];
+	const hp4FirstWallDestinations: NavigationDestination[] = [
+		'Arcane Abyss',
+		'Lantern Canyon',
+		'Floral Patch'
+	];
+	const closerDamageDestinations: NavigationDestination[] = [
+		'Tidal Cove',
+		'Cyber City',
+		'Lantern Canyon'
+	];
+	const closerMaxBarrierDestinations: NavigationDestination[] = [
+		'Floral Patch',
+		'Lantern Canyon',
+		'Cyber City'
+	];
 	const closerRestoreDestinations: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
-	const survivalRebuildDestinations: NavigationDestination[] = ['Floral Patch', 'Lantern Canyon', 'Cyber City', 'Tidal Cove'];
-	const survivalDamageDestinations: NavigationDestination[] = ['Cyber City', 'Tidal Cove', 'Lantern Canyon'];
+	const survivalRebuildDestinations: NavigationDestination[] = [
+		'Floral Patch',
+		'Lantern Canyon',
+		'Cyber City',
+		'Tidal Cove'
+	];
+	const survivalDamageDestinations: NavigationDestination[] = [
+		'Cyber City',
+		'Tidal Cove',
+		'Lantern Canyon'
+	];
 	const survivalRestoreDestinations: NavigationDestination[] = ['Floral Patch', 'Lantern Canyon'];
 	const pureDamageBuildDestinations: NavigationDestination[] = ['Tidal Cove', 'Cyber City'];
-	const pureEconomyBuildDestinations: NavigationDestination[] = ['Lantern Canyon', 'Tidal Cove', 'Cyber City'];
-	const fallenHuntMemory: Record<string, {
-		lastDestination?: NavigationDestination;
-		lastPvpVp: number;
-		dryStreak: number;
-		lastChoiceRound: number;
-		lastCheckedRound: number;
-	}> = {};
+	const pureEconomyBuildDestinations: NavigationDestination[] = [
+		'Lantern Canyon',
+		'Tidal Cove',
+		'Cyber City'
+	];
+	const fallenHuntMemory: Record<
+		string,
+		{
+			lastDestination?: NavigationDestination;
+			lastPvpVp: number;
+			dryStreak: number;
+			lastChoiceRound: number;
+			lastCheckedRound: number;
+		}
+	> = {};
 	const shouldUseNavigationPolicyGate = (
 		gate: NavigationPolicyGate,
 		policy: NeuralPolicy | undefined,
@@ -559,7 +645,8 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const attack = expectedAttack(player);
 			const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
-			const needsDamage = monsterHp > 0 && (firepowerProb < farmNavigationThreshold || attack < monsterHp + 1);
+			const needsDamage =
+				monsterHp > 0 && (firepowerProb < farmNavigationThreshold || attack < monsterHp + 1);
 			if (needsDamage) return true;
 			if (combatReadyButNeedsRestore(state, seat, catalog, farmNavigationThreshold)) return true;
 			if ((player.barrier ?? 0) < (player.maxBarrier ?? 0)) return false;
@@ -568,65 +655,73 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 				attackDice < 2 ||
 				attack < 5 ||
 				(counts.Cultivator ?? 0) < 2 ||
-					(player.maxBarrier ?? 0) < 6;
-				return needsDamage || underScaled;
-			}
-			if (gate === 'clean-farm-q') {
-				const player = state.players[seat];
-				if (!player || (player.statusLevel ?? 0) !== 0) return false;
-				const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
-				return farm.valid && farm.farmable && farm.opportunityVp >= 1;
-			}
-			if (gate === 'pure-farm-build') {
-				const player = state.players[seat];
-				return !!player && (player.statusLevel ?? 0) === 0 && !!state.monster;
-			}
-			if (gate === 'good-nonfallen-farm-build') {
-				const player = state.players[seat];
-				return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
-			}
-			if (gate === 'good-nonfallen-farm-target-pivot') {
-				const player = state.players[seat];
-				return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
-			}
-			if (gate === 'good-target-exposure' || gate === 'good-target-rendezvous-exposure') {
-				return isGoodTargetExposureNavigationState(state, seat, catalog, farmNavigationThreshold);
-			}
-				if (gate === 'good-nonfallen-farm-target-evade') {
-					const player = state.players[seat];
-					return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
-				}
-				if (gate === 'good-nonfallen-score-floor') {
-					const player = state.players[seat];
-					return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
-				}
-				if (gate === 'good-builder-oracle') {
-					const player = state.players[seat];
-					return !!player && (player.statusLevel ?? 0) === 0;
-				}
-			if (
-				gate === 'good-builder-farmer-oracle' ||
-				gate === 'good-builder-support-oracle' ||
-				gate === 'good-builder-noncontest-support-oracle'
-			) {
-				const player = state.players[seat];
-				return !!player && !isEvilAlignment(player.statusLevel ?? 0);
-			}
-			if (gate === 'hp2-survival-deficit') {
-				const player = state.players[seat];
-				const monster = state.monster;
+				(player.maxBarrier ?? 0) < 6;
+			return needsDamage || underScaled;
+		}
+		if (gate === 'clean-farm-q') {
+			const player = state.players[seat];
+			if (!player || (player.statusLevel ?? 0) !== 0) return false;
+			const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
+			return farm.valid && farm.farmable && farm.opportunityVp >= 1;
+		}
+		if (gate === 'pure-farm-build') {
+			const player = state.players[seat];
+			return !!player && (player.statusLevel ?? 0) === 0 && !!state.monster;
+		}
+		if (gate === 'good-nonfallen-farm-build') {
+			const player = state.players[seat];
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+		}
+		if (gate === 'good-nonfallen-farm-target-pivot') {
+			const player = state.players[seat];
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+		}
+		if (gate === 'good-target-exposure' || gate === 'good-target-rendezvous-exposure') {
+			return isGoodTargetExposureNavigationState(state, seat, catalog, farmNavigationThreshold);
+		}
+		if (gate === 'good-nonfallen-farm-target-evade') {
+			const player = state.players[seat];
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+		}
+		if (gate === 'good-nonfallen-score-floor') {
+			const player = state.players[seat];
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+		}
+		if (gate === 'good-builder-oracle') {
+			const player = state.players[seat];
+			return !!player && (player.statusLevel ?? 0) === 0;
+		}
+		if (
+			gate === 'good-builder-farmer-oracle' ||
+			gate === 'good-builder-support-oracle' ||
+			gate === 'good-builder-noncontest-support-oracle'
+		) {
+			const player = state.players[seat];
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0);
+		}
+		if (gate === 'hp2-survival-deficit') {
+			const player = state.players[seat];
+			const monster = state.monster;
 			if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 			const vp = player.victoryPoints ?? 0;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
-			if (state.round < 6 || state.round > 18 || vp < 9 || vp > 18 || Math.abs(monsterHp - 2) > 0.01) {
+			if (
+				state.round < 6 ||
+				state.round > 18 ||
+				vp < 9 ||
+				vp > 18 ||
+				Math.abs(monsterHp - 2) > 0.01
+			) {
 				return false;
 			}
 			const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 			if (cleanProb >= farmNavigationThreshold) return false;
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
 			if (expectedAttack(player) >= 3.25) return false;
-			return firepowerProb >= farmNavigationThreshold &&
-				combatReadyButNeedsRestore(state, seat, catalog, farmNavigationThreshold);
+			return (
+				firepowerProb >= farmNavigationThreshold &&
+				combatReadyButNeedsRestore(state, seat, catalog, farmNavigationThreshold)
+			);
 		}
 		if (gate === 'hp4-first-wall') {
 			const player = state.players[seat];
@@ -634,7 +729,15 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 			const vp = player.victoryPoints ?? 0;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
-			if (state.round < 9 || state.round > 22 || vp < 12 || vp > 22 || monsterHp < 4 || monsterHp > 5) return false;
+			if (
+				state.round < 9 ||
+				state.round > 22 ||
+				vp < 12 ||
+				vp > 22 ||
+				monsterHp < 4 ||
+				monsterHp > 5
+			)
+				return false;
 			const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
 			if (farm.valid && farm.farmable && farm.opportunityVp > 0) return false;
 			const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
@@ -645,9 +748,11 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const barrier = player.barrier ?? 0;
 			const maxBarrier = player.maxBarrier ?? 0;
 			const attack = expectedAttack(player);
-			return firepowerProb >= 0.35 ||
+			return (
+				firepowerProb >= 0.35 ||
 				attack >= monsterHp - 0.75 ||
-				(survivalTarget > 0 && (barrier < survivalTarget || maxBarrier < survivalTarget + 1));
+				(survivalTarget > 0 && (barrier < survivalTarget || maxBarrier < survivalTarget + 1))
+			);
 		}
 		if (gate === 'route-closer') {
 			const player = state.players[seat];
@@ -665,12 +770,11 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const survivalTarget = monsterDamage + 1;
 			const maxBarrier = player.maxBarrier ?? 0;
 			const barrier = player.barrier ?? 0;
-			const damageDeficit = monsterHp > 0 && (
-				attack < monsterHp + 0.5 ||
-				firepowerProb < farmNavigationThreshold
-			);
+			const damageDeficit =
+				monsterHp > 0 && (attack < monsterHp + 0.5 || firepowerProb < farmNavigationThreshold);
 			const maxBarrierDeficit = survivalTarget > 0 && maxBarrier < survivalTarget;
-			const restoreDeficit = survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget;
+			const restoreDeficit =
+				survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget;
 			return damageDeficit || maxBarrierDeficit || restoreDeficit;
 		}
 		if (gate === 'route-finish-loop') {
@@ -689,7 +793,8 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			if (cleanProb >= farmNavigationThreshold) return false;
 			const attack = expectedAttack(player);
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
-			const barrierDeficit = (player.barrier ?? 0) < Math.min(player.maxBarrier ?? 0, monsterDamage + 1);
+			const barrierDeficit =
+				(player.barrier ?? 0) < Math.min(player.maxBarrier ?? 0, monsterDamage + 1);
 			const maxBarrierDeficit = (player.maxBarrier ?? 0) < monsterDamage + 2;
 			const damageDeficit = attack < monsterHp + 0.5 || firepowerProb < farmNavigationThreshold;
 			return monsterHp >= 4 || barrierDeficit || maxBarrierDeficit || damageDeficit;
@@ -698,26 +803,36 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			return isPvpPivotState(state, seat, catalog, farmNavigationThreshold);
 		}
 		if (gate === 'pvp-predictive-pivot') {
-			return isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
-				shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold);
+			return (
+				isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
+				shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold)
+			);
 		}
-			if (gate === 'pvp-predictive-mode-pivot') {
-				return isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
-					shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold);
-			}
-			if (gate === 'pvp-predictive-mode-hunt-fallback-pivot') {
-				return isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
-					shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold);
-			}
-			if (gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot') {
-				return isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
-					shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold) ||
-					shouldFallenRebuildRoute(state, seat, catalog, farmNavigationThreshold);
-			}
-			if (gate === 'pvp-predictive-flex-pivot') {
-				return isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
-					shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold);
-			}
+		if (gate === 'pvp-predictive-mode-pivot') {
+			return (
+				isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
+				shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold)
+			);
+		}
+		if (gate === 'pvp-predictive-mode-hunt-fallback-pivot') {
+			return (
+				isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
+				shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold)
+			);
+		}
+		if (gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot') {
+			return (
+				isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
+				shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold) ||
+				shouldFallenRebuildRoute(state, seat, catalog, farmNavigationThreshold)
+			);
+		}
+		if (gate === 'pvp-predictive-flex-pivot') {
+			return (
+				isPvpPivotState(state, seat, catalog, farmNavigationThreshold) ||
+				shouldPredictivePvpHunt(state, seat, catalog, farmNavigationThreshold)
+			);
+		}
 		if (gate === 'pvp-predictive-value-pivot') {
 			const player = state.players[seat];
 			if ((player?.statusLevel ?? 0) >= 3) {
@@ -766,38 +881,55 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			if (!player || !monster) return pureEconomyBuildDestinations;
 			const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
 			if (farm.valid && farm.farmable && farm.opportunityVp >= 1) return ['Arcane Abyss'];
-			if (combatReadyButNeedsRestore(state, seat, catalog, farmNavigationThreshold)) return restoreOptionDestinations;
+			if (combatReadyButNeedsRestore(state, seat, catalog, farmNavigationThreshold))
+				return restoreOptionDestinations;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 			const attack = expectedAttack(player);
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
 			const counts = awakenedClassCounts(player);
 			const needsDamage = attack < monsterHp + 0.5 || firepowerProb < farmNavigationThreshold;
 			const spiritAnimal = counts['Spirit Animal'] ?? 0;
-			if (needsDamage || spiritAnimal < 2 || (player.attackDice?.length ?? 0) < 2) return pureDamageBuildDestinations;
+			if (needsDamage || spiritAnimal < 2 || (player.attackDice?.length ?? 0) < 2)
+				return pureDamageBuildDestinations;
 			if ((player.maxBarrier ?? 0) < (monster.damage ?? 0) + 2) return pureEconomyBuildDestinations;
 			return scalingOptionDestinations;
 		}
-			if (gate === 'good-nonfallen-farm-build') {
-				return goodNonfallenFarmBuildDestinations(state, seat, catalog, farmNavigationThreshold);
-			}
-			if (gate === 'good-nonfallen-farm-target-pivot') {
-				return goodNonfallenFarmTargetPivotDestinations(state, seat, catalog, farmNavigationThreshold);
-			}
-			if (gate === 'good-target-exposure') {
-				return goodTargetExposureDestinations(state, seat, catalog);
-			}
-			if (gate === 'good-target-rendezvous-exposure') {
-				return goodTargetRendezvousExposureDestinations(state, seat, catalog, farmNavigationThreshold);
-			}
-				if (gate === 'good-nonfallen-farm-target-evade') {
-					return goodNonfallenFarmTargetEvadeDestinations(state, seat, catalog, farmNavigationThreshold);
-				}
-				if (gate === 'good-nonfallen-score-floor') {
-					return goodNonfallenScoreFloorDestinations(state, seat, catalog, farmNavigationThreshold);
-				}
-				if (gate === 'good-builder-oracle') {
-					return goodBuilderOracleDestinations(state, seat, catalog, farmNavigationThreshold);
-				}
+		if (gate === 'good-nonfallen-farm-build') {
+			return goodNonfallenFarmBuildDestinations(state, seat, catalog, farmNavigationThreshold);
+		}
+		if (gate === 'good-nonfallen-farm-target-pivot') {
+			return goodNonfallenFarmTargetPivotDestinations(
+				state,
+				seat,
+				catalog,
+				farmNavigationThreshold
+			);
+		}
+		if (gate === 'good-target-exposure') {
+			return goodTargetExposureDestinations(state, seat, catalog);
+		}
+		if (gate === 'good-target-rendezvous-exposure') {
+			return goodTargetRendezvousExposureDestinations(
+				state,
+				seat,
+				catalog,
+				farmNavigationThreshold
+			);
+		}
+		if (gate === 'good-nonfallen-farm-target-evade') {
+			return goodNonfallenFarmTargetEvadeDestinations(
+				state,
+				seat,
+				catalog,
+				farmNavigationThreshold
+			);
+		}
+		if (gate === 'good-nonfallen-score-floor') {
+			return goodNonfallenScoreFloorDestinations(state, seat, catalog, farmNavigationThreshold);
+		}
+		if (gate === 'good-builder-oracle') {
+			return goodBuilderOracleDestinations(state, seat, catalog, farmNavigationThreshold);
+		}
 		if (gate === 'good-builder-farmer-oracle') {
 			return goodBuilderFarmerOracleDestinations(state, seat, catalog, farmNavigationThreshold);
 		}
@@ -805,7 +937,12 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			return goodBuilderSupportOracleDestinations(state, seat, catalog, farmNavigationThreshold);
 		}
 		if (gate === 'good-builder-noncontest-support-oracle') {
-			return goodBuilderNoncontestSupportDestinations(state, seat, catalog, farmNavigationThreshold);
+			return goodBuilderNoncontestSupportDestinations(
+				state,
+				seat,
+				catalog,
+				farmNavigationThreshold
+			);
 		}
 		if (gate === 'hp4-first-wall') {
 			return hp4FirstWallDestinations;
@@ -821,10 +958,8 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const survivalTarget = monsterDamage + 1;
 			const maxBarrier = player.maxBarrier ?? 0;
 			const barrier = player.barrier ?? 0;
-			const damageDeficit = monsterHp > 0 && (
-				attack < monsterHp + 0.5 ||
-				firepowerProb < farmNavigationThreshold
-			);
+			const damageDeficit =
+				monsterHp > 0 && (attack < monsterHp + 0.5 || firepowerProb < farmNavigationThreshold);
 			if (damageDeficit) return closerDamageDestinations;
 			if (survivalTarget > 0 && maxBarrier < survivalTarget) return closerMaxBarrierDestinations;
 			if (survivalTarget > 0 && barrier < survivalTarget) return closerRestoreDestinations;
@@ -861,10 +996,8 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 			const attack = expectedAttack(player);
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
-			const damageDeficit = monsterHp > 0 && (
-				attack < monsterHp + 0.5 ||
-				firepowerProb < farmNavigationThreshold
-			);
+			const damageDeficit =
+				monsterHp > 0 && (attack < monsterHp + 0.5 || firepowerProb < farmNavigationThreshold);
 			return damageDeficit ? survivalDamageDestinations : survivalRestoreDestinations;
 		}
 		if (gate === 'pvp-pivot') {
@@ -882,33 +1015,33 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			}
 			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
 		}
-			if (gate === 'pvp-predictive-mode-pivot') {
-				const player = state.players[seat];
-				if ((player?.statusLevel ?? 0) >= 3) {
-					const huntProb = routeModeHuntProbability(policy, state, seat, catalog);
-					if (huntProb !== null && huntProb < routeModeThreshold) return ['Arcane Abyss'];
+		if (gate === 'pvp-predictive-mode-pivot') {
+			const player = state.players[seat];
+			if ((player?.statusLevel ?? 0) >= 3) {
+				const huntProb = routeModeHuntProbability(policy, state, seat, catalog);
+				if (huntProb !== null && huntProb < routeModeThreshold) return ['Arcane Abyss'];
 				const visible = visiblePvpHuntDestinations(state, seat);
 				return visible.length > 0
 					? visible
 					: predictedGoodTargetDestinations(state, seat, catalog, farmNavigationThreshold);
-				}
-				return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
 			}
-			if (
-				gate === 'pvp-predictive-mode-hunt-fallback-pivot' ||
-				gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot'
-			) {
-				const player = state.players[seat];
-				if ((player?.statusLevel ?? 0) >= 3) {
-					const huntProb = routeModeHuntProbability(policy, state, seat, catalog);
-					if (huntProb !== null && huntProb < routeModeThreshold) {
-						return gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot'
-							? fallenRebuildDestinations(state, seat, catalog, farmNavigationThreshold)
-							: ['Arcane Abyss'];
-					}
-					const memory = fallenHuntMemory[seat];
+			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+		}
+		if (
+			gate === 'pvp-predictive-mode-hunt-fallback-pivot' ||
+			gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot'
+		) {
+			const player = state.players[seat];
+			if ((player?.statusLevel ?? 0) >= 3) {
+				const huntProb = routeModeHuntProbability(policy, state, seat, catalog);
+				if (huntProb !== null && huntProb < routeModeThreshold) {
 					return gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot'
-						? fallenPredictedHuntDestinationsWithFallbackAndRebuild(
+						? fallenRebuildDestinations(state, seat, catalog, farmNavigationThreshold)
+						: ['Arcane Abyss'];
+				}
+				const memory = fallenHuntMemory[seat];
+				return gate === 'pvp-predictive-mode-hunt-fallback-rebuild-pivot'
+					? fallenPredictedHuntDestinationsWithFallbackAndRebuild(
 							state,
 							seat,
 							catalog,
@@ -916,7 +1049,7 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 							memory?.dryStreak ?? 0,
 							memory?.lastDestination
 						)
-						: fallenPredictedHuntDestinationsWithFallback(
+					: fallenPredictedHuntDestinationsWithFallback(
 							state,
 							seat,
 							catalog,
@@ -924,13 +1057,13 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 							memory?.dryStreak ?? 0,
 							memory?.lastDestination
 						);
-				}
-				return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
 			}
-			if (gate === 'pvp-predictive-flex-pivot') {
-				const player = state.players[seat];
-				if ((player?.statusLevel ?? 0) >= 3) {
-					return pvpHuntOrAbyssDestinations(state, seat, catalog, farmNavigationThreshold);
+			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+		}
+		if (gate === 'pvp-predictive-flex-pivot') {
+			const player = state.players[seat];
+			if ((player?.statusLevel ?? 0) >= 3) {
+				return pvpHuntOrAbyssDestinations(state, seat, catalog, farmNavigationThreshold);
 			}
 			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
 		}
@@ -954,53 +1087,74 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			}
 			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
 		}
-			if (gate === 'pvp-good-target-value-pivot') {
-				const player = state.players[seat];
-				if ((player?.statusLevel ?? 0) >= 3) {
-					const memory = fallenHuntMemory[seat];
-					const lowTailHunt = shouldGoodTargetLowTailHunt(state, seat, catalog, farmNavigationThreshold);
-					const hunt = goodTargetValuePivotDestinations(
-						state,
-						seat,
-						catalog,
-						farmNavigationThreshold,
-						memory?.dryStreak ?? 0,
-						memory?.lastDestination,
-						lowTailHunt
-					);
-					return hunt.length > 0 ? hunt : ['Arcane Abyss'];
-				}
-				return ['Arcane Abyss'];
+		if (gate === 'pvp-good-target-value-pivot') {
+			const player = state.players[seat];
+			if ((player?.statusLevel ?? 0) >= 3) {
+				const memory = fallenHuntMemory[seat];
+				const lowTailHunt = shouldGoodTargetLowTailHunt(
+					state,
+					seat,
+					catalog,
+					farmNavigationThreshold
+				);
+				const hunt = goodTargetValuePivotDestinations(
+					state,
+					seat,
+					catalog,
+					farmNavigationThreshold,
+					memory?.dryStreak ?? 0,
+					memory?.lastDestination,
+					lowTailHunt
+				);
+				return hunt.length > 0 ? hunt : ['Arcane Abyss'];
+			}
+			return ['Arcane Abyss'];
 		}
 		return undefined;
 	};
 	const navigationSelectionForSeat = (
 		state: PublicGameState,
 		seat: SeatColor
-	): { policy: NeuralPolicy; rootDestinations?: NavigationDestination[]; activeGate?: NavigationPolicyGate } => {
+	): {
+		policy: NeuralPolicy;
+		rootDestinations?: NavigationDestination[];
+		activeGate?: NavigationPolicyGate;
+	} => {
 		const seatPatchPolicy = opts.seatPatchNavigationPolicies?.[seat];
 		const patchPolicy = seatPatchPolicy ?? opts.patchNavigationPolicy;
-		const patchGate = opts.seatPatchNavigationPolicyGates?.[seat] ?? opts.patchNavigationPolicyGate ?? 'all';
+		const patchGate =
+			opts.seatPatchNavigationPolicyGates?.[seat] ?? opts.patchNavigationPolicyGate ?? 'all';
 		if (
 			(seatPatchPolicy || seatEnabled(opts.patchNavigationSeats, seat)) &&
 			shouldUseNavigationPolicyGate(patchGate, patchPolicy, state, seat)
 		) {
 			return {
 				policy: patchPolicy ?? policyForSeat(seat),
-				rootDestinations: rootDestinationsForGate(patchGate, state, seat, patchPolicy ?? policyForSeat(seat)),
+				rootDestinations: rootDestinationsForGate(
+					patchGate,
+					state,
+					seat,
+					patchPolicy ?? policyForSeat(seat)
+				),
 				activeGate: patchGate
 			};
 		}
 		const seatPatch2Policy = opts.seatPatch2NavigationPolicies?.[seat];
 		const patch2Policy = seatPatch2Policy ?? opts.patch2NavigationPolicy;
-		const patch2Gate = opts.seatPatch2NavigationPolicyGates?.[seat] ?? opts.patch2NavigationPolicyGate ?? 'all';
+		const patch2Gate =
+			opts.seatPatch2NavigationPolicyGates?.[seat] ?? opts.patch2NavigationPolicyGate ?? 'all';
 		if (
 			(seatPatch2Policy || seatEnabled(opts.patch2NavigationSeats, seat)) &&
 			shouldUseNavigationPolicyGate(patch2Gate, patch2Policy, state, seat)
 		) {
 			return {
 				policy: patch2Policy ?? policyForSeat(seat),
-				rootDestinations: rootDestinationsForGate(patch2Gate, state, seat, patch2Policy ?? policyForSeat(seat)),
+				rootDestinations: rootDestinationsForGate(
+					patch2Gate,
+					state,
+					seat,
+					patch2Policy ?? policyForSeat(seat)
+				),
 				activeGate: patch2Gate
 			};
 		}
@@ -1009,16 +1163,28 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		if (shouldUseNavigationPolicyGate(primaryGate, primary, state, seat)) {
 			return {
 				policy: primary ?? policyForSeat(seat),
-				rootDestinations: rootDestinationsForGate(primaryGate, state, seat, primary ?? policyForSeat(seat)),
+				rootDestinations: rootDestinationsForGate(
+					primaryGate,
+					state,
+					seat,
+					primary ?? policyForSeat(seat)
+				),
 				activeGate: primaryGate
 			};
 		}
-		const scalingPolicy = opts.seatScalingNavigationPolicies?.[seat] ?? opts.scalingNavigationPolicy;
-		const scalingGate = opts.seatScalingNavigationPolicyGates?.[seat] ?? scalingNavigationPolicyGate;
+		const scalingPolicy =
+			opts.seatScalingNavigationPolicies?.[seat] ?? opts.scalingNavigationPolicy;
+		const scalingGate =
+			opts.seatScalingNavigationPolicyGates?.[seat] ?? scalingNavigationPolicyGate;
 		if (shouldUseNavigationPolicyGate(scalingGate, scalingPolicy, state, seat)) {
 			return {
 				policy: scalingPolicy ?? policyForSeat(seat),
-				rootDestinations: rootDestinationsForGate(scalingGate, state, seat, scalingPolicy ?? policyForSeat(seat)),
+				rootDestinations: rootDestinationsForGate(
+					scalingGate,
+					state,
+					seat,
+					scalingPolicy ?? policyForSeat(seat)
+				),
 				activeGate: scalingGate
 			};
 		}
@@ -1036,18 +1202,21 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const player = state.players[seat];
 			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
 		}
-			if (
-				gate === 'good-builder-hp4-conversion-oracle' ||
-				gate === 'good-builder-hp4-scorefloor-oracle'
-			) {
-				const player = state.players[seat];
-				const hp = state.monster?.maxHp ?? state.monster?.hp ?? 0;
-				return !!player && !isEvilAlignment(player.statusLevel ?? 0) && hp >= 4;
-			}
-			if (gate === 'good-builder-hp4-conversion-overlay') {
-				return isGoodBuilderHp4ConversionOverlayState(state, seat);
-			}
-		if (gate === 'good-builder-score-pick-oracle' || gate === 'good-builder-score-conversion-oracle') {
+		if (
+			gate === 'good-builder-hp4-conversion-oracle' ||
+			gate === 'good-builder-hp4-scorefloor-oracle'
+		) {
+			const player = state.players[seat];
+			const hp = state.monster?.maxHp ?? state.monster?.hp ?? 0;
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && hp >= 4;
+		}
+		if (gate === 'good-builder-hp4-conversion-overlay') {
+			return isGoodBuilderHp4ConversionOverlayState(state, seat);
+		}
+		if (
+			gate === 'good-builder-score-pick-oracle' ||
+			gate === 'good-builder-score-conversion-oracle'
+		) {
 			const player = state.players[seat];
 			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
 		}
@@ -1055,19 +1224,19 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			return (state.players[seat]?.statusLevel ?? 0) === 0;
 		}
 		if (gate === 'location-interactions') return state.phase === 'location';
+		if (
+			gate === 'pvp-pivot' ||
+			gate === 'pvp-pivot-encounter-force' ||
+			gate === 'pvp-high-value-encounter-force'
+		) {
 			if (
-				gate === 'pvp-pivot' ||
-				gate === 'pvp-pivot-encounter-force' ||
-				gate === 'pvp-high-value-encounter-force'
+				gate === 'pvp-pivot-encounter-force' &&
+				shouldForceHardMonsterPvpAttack(state, seat, pvpEncounterTargets(state, seat, true))
 			) {
-				if (
-					gate === 'pvp-pivot-encounter-force' &&
-					shouldForceHardMonsterPvpAttack(state, seat, pvpEncounterTargets(state, seat, true))
-				) {
-					return true;
-				}
-				return isPvpPivotState(state, seat, catalog, farmNavigationThreshold);
+				return true;
 			}
+			return isPvpPivotState(state, seat, catalog, farmNavigationThreshold);
+		}
 		if (gate === 'route-closer-full') {
 			return isRouteCloserFullActionState(state, seat, catalog, farmNavigationThreshold);
 		}
@@ -1088,13 +1257,22 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 	const microPolicyForSeat = (state: PublicGameState, seat: SeatColor): NeuralPolicy => {
 		const seatMicroPolicy = opts.seatMicroPolicies?.[seat];
 		if (seatMicroPolicy && useSeatMicroPolicy(state, seat)) return seatMicroPolicy;
-		if (opts.routeCloserMicroPolicy && isRouteCloserRestoreFinishState(state, seat, catalog, farmNavigationThreshold)) {
+		if (
+			opts.routeCloserMicroPolicy &&
+			isRouteCloserRestoreFinishState(state, seat, catalog, farmNavigationThreshold)
+		) {
 			return opts.routeCloserMicroPolicy;
 		}
-		return opts.seatPolicies?.[seat] ??
-			(useGlobalMicroPolicy(state, seat) ? opts.microPolicy! : opts.policy);
+		return (
+			opts.seatPolicies?.[seat] ??
+			(useGlobalMicroPolicy(state, seat) ? opts.microPolicy! : opts.policy)
+		);
 	};
-	const activeMicroGateForSeat = (state: PublicGameState, seat: SeatColor, policy: NeuralPolicy): MicroPolicyGate | undefined => {
+	const activeMicroGateForSeat = (
+		state: PublicGameState,
+		seat: SeatColor,
+		policy: NeuralPolicy
+	): MicroPolicyGate | undefined => {
 		const seatMicroPolicy = opts.seatMicroPolicies?.[seat];
 		if (seatMicroPolicy && policy === seatMicroPolicy && useSeatMicroPolicy(state, seat)) {
 			return seatMicroPolicyGateForSeat(seat);
@@ -1104,7 +1282,11 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		}
 		return undefined;
 	};
-	const microDecisionSet = (state: PublicGameState, seat: SeatColor, withNext: LegalAction[]): {
+	const microDecisionSet = (
+		state: PublicGameState,
+		seat: SeatColor,
+		withNext: LegalAction[]
+	): {
 		policy: NeuralPolicy;
 		withNext: LegalAction[];
 		indexMap?: number[];
@@ -1113,34 +1295,33 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		const activeMicroGate = activeMicroGateForSeat(state, seat, policy);
 		if (
 			!activeMicroGate ||
-			(
-				activeMicroGate !== 'abyss-farm-actions' &&
+			(activeMicroGate !== 'abyss-farm-actions' &&
 				activeMicroGate !== 'abyss-reward-actions' &&
 				activeMicroGate !== 'location-interactions' &&
 				activeMicroGate !== 'pvp-pivot' &&
 				activeMicroGate !== 'pvp-pivot-encounter-force' &&
-				activeMicroGate !== 'pvp-high-value-encounter-force'
-			)
+				activeMicroGate !== 'pvp-high-value-encounter-force')
 		) {
 			return { policy, withNext };
 		}
-		const allowedTypes = activeMicroGate === 'abyss-reward-actions'
-			? REWARD_ACTION_TYPES
-			: activeMicroGate === 'location-interactions'
-				? new Set<GameCommand['type']>(['resolveLocationInteraction'])
-				: activeMicroGate === 'pvp-pivot' ||
-						activeMicroGate === 'pvp-pivot-encounter-force' ||
-						activeMicroGate === 'pvp-high-value-encounter-force'
-					? new Set<GameCommand['type']>([
-						'takeSpirit',
-						'replaceSpirit',
-						'spawnHandSpirit',
-						'resolveLocationInteraction',
-						'startCombat',
-						'initiatePvp',
-						'passEncounter'
-					])
-					: FARM_ACTION_TYPES;
+		const allowedTypes =
+			activeMicroGate === 'abyss-reward-actions'
+				? REWARD_ACTION_TYPES
+				: activeMicroGate === 'location-interactions'
+					? new Set<GameCommand['type']>(['resolveLocationInteraction'])
+					: activeMicroGate === 'pvp-pivot' ||
+						  activeMicroGate === 'pvp-pivot-encounter-force' ||
+						  activeMicroGate === 'pvp-high-value-encounter-force'
+						? new Set<GameCommand['type']>([
+								'takeSpirit',
+								'replaceSpirit',
+								'spawnHandSpirit',
+								'resolveLocationInteraction',
+								'startCombat',
+								'initiatePvp',
+								'passEncounter'
+							])
+						: FARM_ACTION_TYPES;
 		const indexMap: number[] = [];
 		const filtered: LegalAction[] = [];
 		for (let i = 0; i < withNext.length; i++) {
@@ -1162,7 +1343,10 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		seat: SeatColor,
 		withNext: LegalAction[]
 	): { idx: number; pi: number[] } => {
-		if (opts.routeFinishOracle && isRouteCloserRestoreFinishState(state, seat, catalog, farmNavigationThreshold)) {
+		if (
+			opts.routeFinishOracle &&
+			isRouteCloserRestoreFinishState(state, seat, catalog, farmNavigationThreshold)
+		) {
 			const chosen = chooseRouteFinishLoopOracleAction(state, seat, catalog, withNext, {
 				cleanThreshold: farmNavigationThreshold,
 				firepowerThreshold: farmNavigationThreshold
@@ -1170,7 +1354,10 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const idx = Math.max(0, chosen ? withNext.indexOf(chosen) : 0);
 			return { idx, pi: oneHot(withNext.length, idx) };
 		}
-		if (microPolicyGate === 'route-closer-oracle' && isRouteCloserFullActionState(state, seat, catalog, farmNavigationThreshold)) {
+		if (
+			microPolicyGate === 'route-closer-oracle' &&
+			isRouteCloserFullActionState(state, seat, catalog, farmNavigationThreshold)
+		) {
 			const chosen = chooseRouteBreakpointOracleAction(state, seat, catalog, withNext, {
 				cleanThreshold: farmNavigationThreshold,
 				firepowerThreshold: farmNavigationThreshold
@@ -1178,7 +1365,10 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const idx = Math.max(0, chosen ? withNext.indexOf(chosen) : 0);
 			return { idx, pi: oneHot(withNext.length, idx) };
 		}
-		if (microPolicyGate === 'route-finish-oracle' && isRouteCloserRestoreFinishState(state, seat, catalog, farmNavigationThreshold)) {
+		if (
+			microPolicyGate === 'route-finish-oracle' &&
+			isRouteCloserRestoreFinishState(state, seat, catalog, farmNavigationThreshold)
+		) {
 			const chosen = chooseRouteFinishLoopOracleAction(state, seat, catalog, withNext, {
 				cleanThreshold: farmNavigationThreshold,
 				firepowerThreshold: farmNavigationThreshold
@@ -1186,18 +1376,13 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const idx = Math.max(0, chosen ? withNext.indexOf(chosen) : 0);
 			return { idx, pi: oneHot(withNext.length, idx) };
 		}
-			const arbitrationPolicy = microPolicyForSeat(state, seat);
-			const activeMicroGate = activeMicroGateForSeat(state, seat, arbitrationPolicy);
-			const hardMonsterPvpIdx = withNext.findIndex((x) => x.cmd.type === 'initiatePvp');
-			if (
-				hardMonsterPvpIdx >= 0 &&
-				shouldForceHardMonsterPvpAttack(state, seat, pvpEncounterTargets(state, seat, true))
-			) {
-				return { idx: hardMonsterPvpIdx, pi: oneHot(withNext.length, hardMonsterPvpIdx) };
-			}
-			if (activeMicroGate === 'pvp-pivot-encounter-force') {
-				const idx = withNext.findIndex((x) => x.cmd.type === 'initiatePvp');
-				if (idx >= 0) return { idx, pi: oneHot(withNext.length, idx) };
+		const arbitrationPolicy = microPolicyForSeat(state, seat);
+		const activeMicroGate = activeMicroGateForSeat(state, seat, arbitrationPolicy);
+		// Normal league/self-play paths do not manufacture an initiatePvp target. The
+		// explicitly named force gates below remain available as teacher/ablation modes.
+		if (activeMicroGate === 'pvp-pivot-encounter-force') {
+			const idx = withNext.findIndex((x) => x.cmd.type === 'initiatePvp');
+			if (idx >= 0) return { idx, pi: oneHot(withNext.length, idx) };
 		}
 		if (activeMicroGate === 'pvp-high-value-encounter-force') {
 			const attackIdx = withNext.findIndex((x) => x.cmd.type === 'initiatePvp');
@@ -1211,7 +1396,13 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			}
 		}
 		if (activeMicroGate === 'good-builder-oracle') {
-			const chosen = chooseGoodBuilderOracleAction(state, seat, catalog, withNext, farmNavigationThreshold);
+			const chosen = chooseGoodBuilderOracleAction(
+				state,
+				seat,
+				catalog,
+				withNext,
+				farmNavigationThreshold
+			);
 			const idx = Math.max(0, chosen ? withNext.indexOf(chosen) : 0);
 			return { idx, pi: oneHot(withNext.length, idx) };
 		}
@@ -1242,7 +1433,7 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 					}
 				);
 				const idx = chosen
-					? filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index
+					? (filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index)
 					: filtered[0].index;
 				return { idx, pi: oneHot(withNext.length, idx) };
 			}
@@ -1263,16 +1454,16 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 					farmNavigationThreshold
 				);
 				const idx = chosen
-					? filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index
+					? (filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index)
 					: filtered[0].index;
 				return { idx, pi: oneHot(withNext.length, idx) };
 			}
 		}
-			if (activeMicroGate === 'good-builder-score-conversion-oracle') {
-				const filtered: { action: LegalAction; index: number }[] = [];
-				for (let i = 0; i < withNext.length; i++) {
-					if (GOOD_BUILDER_SCORE_CONVERSION_ACTION_TYPES.has(withNext[i].cmd.type)) {
-						filtered.push({ action: withNext[i], index: i });
+		if (activeMicroGate === 'good-builder-score-conversion-oracle') {
+			const filtered: { action: LegalAction; index: number }[] = [];
+			for (let i = 0; i < withNext.length; i++) {
+				if (GOOD_BUILDER_SCORE_CONVERSION_ACTION_TYPES.has(withNext[i].cmd.type)) {
+					filtered.push({ action: withNext[i], index: i });
 				}
 			}
 			if (filtered.length > 0) {
@@ -1284,34 +1475,34 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 					farmNavigationThreshold
 				);
 				const idx = chosen
-					? filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index
+					? (filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index)
 					: filtered[0].index;
-					return { idx, pi: oneHot(withNext.length, idx) };
+				return { idx, pi: oneHot(withNext.length, idx) };
+			}
+		}
+		if (activeMicroGate === 'good-builder-hp4-scorefloor-oracle') {
+			const filtered: { action: LegalAction; index: number }[] = [];
+			for (let i = 0; i < withNext.length; i++) {
+				if (GOOD_BUILDER_HP4_SCOREFLOOR_ACTION_TYPES.has(withNext[i].cmd.type)) {
+					filtered.push({ action: withNext[i], index: i });
 				}
 			}
-			if (activeMicroGate === 'good-builder-hp4-scorefloor-oracle') {
-				const filtered: { action: LegalAction; index: number }[] = [];
-				for (let i = 0; i < withNext.length; i++) {
-					if (GOOD_BUILDER_HP4_SCOREFLOOR_ACTION_TYPES.has(withNext[i].cmd.type)) {
-						filtered.push({ action: withNext[i], index: i });
-					}
-				}
-				if (filtered.length > 0) {
-					const chosen = chooseGoodBuilderHp4ScoreFloorOracleAction(
-						state,
-						seat,
-						catalog,
-						filtered.map((x) => x.action),
-						farmNavigationThreshold
-					);
-					const idx = chosen
-						? filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index
-						: filtered[0].index;
-					return { idx, pi: oneHot(withNext.length, idx) };
-				}
+			if (filtered.length > 0) {
+				const chosen = chooseGoodBuilderHp4ScoreFloorOracleAction(
+					state,
+					seat,
+					catalog,
+					filtered.map((x) => x.action),
+					farmNavigationThreshold
+				);
+				const idx = chosen
+					? (filtered.find((x) => x.action === chosen)?.index ?? filtered[0].index)
+					: filtered[0].index;
+				return { idx, pi: oneHot(withNext.length, idx) };
 			}
-			if (activeMicroGate === 'good-builder-hp4-conversion-overlay') {
-				const mainDecision = chooseFullActionDecision(
+		}
+		if (activeMicroGate === 'good-builder-hp4-conversion-overlay') {
+			const mainDecision = chooseFullActionDecision(
 				policyForSeat(seat),
 				state,
 				seat,
@@ -1350,89 +1541,98 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 				moveRng
 			);
 			const overlayIdx = indexMap[overlayDecision.idx] ?? mainDecision.idx;
-				const scoreOpts = {
-					cleanThreshold: farmNavigationThreshold,
-					firepowerThreshold: farmNavigationThreshold
-				};
-				const mainScore = goodBuilderHp4ScoreFloorActionScore(
-					state,
-					seat,
-					catalog,
-					withNext[mainDecision.idx],
-					scoreOpts.cleanThreshold
-				);
-				const overlayScore = goodBuilderHp4ScoreFloorActionScore(
-					state,
-					seat,
-					catalog,
-					withNext[overlayIdx],
-					scoreOpts.cleanThreshold
-				);
-				if (overlayScore < mainScore) return mainDecision;
+			const scoreOpts = {
+				cleanThreshold: farmNavigationThreshold,
+				firepowerThreshold: farmNavigationThreshold
+			};
+			const mainScore = goodBuilderHp4ScoreFloorActionScore(
+				state,
+				seat,
+				catalog,
+				withNext[mainDecision.idx],
+				scoreOpts.cleanThreshold
+			);
+			const overlayScore = goodBuilderHp4ScoreFloorActionScore(
+				state,
+				seat,
+				catalog,
+				withNext[overlayIdx],
+				scoreOpts.cleanThreshold
+			);
+			if (overlayScore < mainScore) return mainDecision;
 			return {
 				idx: overlayIdx,
 				pi: withNext.map((_, i) => {
 					const local = indexMap.indexOf(i);
 					return local >= 0 ? (overlayDecision.pi[local] ?? 0) : 0;
 				})
-				};
+			};
+		}
+		if (activeMicroGate === 'good-builder-hp4-conversion-oracle') {
+			const mainDecision = chooseFullActionDecision(
+				policyForSeat(seat),
+				state,
+				seat,
+				withNext,
+				catalog,
+				fullSelection,
+				fullLookaheadDepth,
+				fullLookaheadBeam,
+				fullLookaheadRootBeam,
+				fullTargetTemperature,
+				opts.sampleMoves ?? false,
+				opts.temperature ?? 1,
+				moveRng
+			);
+			const indexMap: number[] = [];
+			const conversionActions: LegalAction[] = [];
+			for (let i = 0; i < withNext.length; i++) {
+				if (!isGoodBuilderHp4ConversionOverlayAction(state, seat, withNext[i])) continue;
+				indexMap.push(i);
+				conversionActions.push(withNext[i]);
 			}
-			if (activeMicroGate === 'good-builder-hp4-conversion-oracle') {
-				const mainDecision = chooseFullActionDecision(
-					policyForSeat(seat),
-					state,
-					seat,
-					withNext,
-					catalog,
-					fullSelection,
-					fullLookaheadDepth,
-					fullLookaheadBeam,
-					fullLookaheadRootBeam,
-					fullTargetTemperature,
-					opts.sampleMoves ?? false,
-					opts.temperature ?? 1,
-					moveRng
-				);
-				const indexMap: number[] = [];
-				const conversionActions: LegalAction[] = [];
-				for (let i = 0; i < withNext.length; i++) {
-					if (!isGoodBuilderHp4ConversionOverlayAction(state, seat, withNext[i])) continue;
-					indexMap.push(i);
-					conversionActions.push(withNext[i]);
-				}
-				if (conversionActions.length === 0) return mainDecision;
-				const scoreOpts = {
-					cleanThreshold: farmNavigationThreshold,
-					firepowerThreshold: farmNavigationThreshold
-				};
-					const chosen = chooseGoodBuilderHp4ScoreFloorOracleAction(
-						state,
-						seat,
-						catalog,
-						conversionActions,
-						scoreOpts.cleanThreshold
-					);
-					const localIdx = chosen ? conversionActions.indexOf(chosen) : -1;
-					const oracleIdx = localIdx >= 0 ? indexMap[localIdx] : indexMap[0];
-					const mainScore = goodBuilderHp4ScoreFloorActionScore(
-						state,
-						seat,
-						catalog,
-						withNext[mainDecision.idx],
-						scoreOpts.cleanThreshold
-					);
-					const oracleScore = goodBuilderHp4ScoreFloorActionScore(
-						state,
-						seat,
-						catalog,
-						withNext[oracleIdx],
-						scoreOpts.cleanThreshold
-					);
-				if (oracleScore < mainScore) return mainDecision;
-				return { idx: oracleIdx, pi: oneHot(withNext.length, oracleIdx) };
-			}
-			if (activeMicroGate === 'good-builder-farmer-oracle' || activeMicroGate === 'good-builder-support-oracle') {
-				const chosen = chooseGoodBuilderOracleAction(state, seat, catalog, withNext, farmNavigationThreshold);
+			if (conversionActions.length === 0) return mainDecision;
+			const scoreOpts = {
+				cleanThreshold: farmNavigationThreshold,
+				firepowerThreshold: farmNavigationThreshold
+			};
+			const chosen = chooseGoodBuilderHp4ScoreFloorOracleAction(
+				state,
+				seat,
+				catalog,
+				conversionActions,
+				scoreOpts.cleanThreshold
+			);
+			const localIdx = chosen ? conversionActions.indexOf(chosen) : -1;
+			const oracleIdx = localIdx >= 0 ? indexMap[localIdx] : indexMap[0];
+			const mainScore = goodBuilderHp4ScoreFloorActionScore(
+				state,
+				seat,
+				catalog,
+				withNext[mainDecision.idx],
+				scoreOpts.cleanThreshold
+			);
+			const oracleScore = goodBuilderHp4ScoreFloorActionScore(
+				state,
+				seat,
+				catalog,
+				withNext[oracleIdx],
+				scoreOpts.cleanThreshold
+			);
+			if (oracleScore < mainScore) return mainDecision;
+			return { idx: oracleIdx, pi: oneHot(withNext.length, oracleIdx) };
+		}
+		if (
+			activeMicroGate === 'good-builder-farmer-oracle' ||
+			activeMicroGate === 'good-builder-support-oracle'
+		) {
+			const chosen = chooseGoodBuilderOracleAction(
+				state,
+				seat,
+				catalog,
+				withNext,
+				farmNavigationThreshold
+			);
 			const idx = Math.max(0, chosen ? withNext.indexOf(chosen) : 0);
 			return { idx, pi: oneHot(withNext.length, idx) };
 		}
@@ -1457,9 +1657,9 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const idx = decisionSet.indexMap?.[decision.idx] ?? decision.idx;
 			const pi = decisionSet.indexMap
 				? withNext.map((_, i) => {
-					const local = decisionSet.indexMap!.indexOf(i);
-					return local >= 0 ? (decision.pi[local] ?? 0) : 0;
-				})
+						const local = decisionSet.indexMap!.indexOf(i);
+						return local >= 0 ? (decision.pi[local] ?? 0) : 0;
+					})
 				: decision.pi;
 			return { idx, pi };
 		}
@@ -1486,7 +1686,7 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		const indexMap: number[] = [];
 		const payoffActions: LegalAction[] = [];
 		for (let i = 0; i < withNext.length; i++) {
-			if (abyssFarmPayoffScore(state, seat, withNext[i]) <= 0) continue;
+			if (abyssFarmPayoffScore(state, seat, catalog, withNext[i]) <= 0) continue;
 			indexMap.push(i);
 			payoffActions.push(withNext[i]);
 		}
@@ -1508,8 +1708,8 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			moveRng
 		);
 		const overlayIdx = indexMap[overlayDecision.idx] ?? mainDecision.idx;
-		const overlayPayoff = abyssFarmPayoffScore(state, seat, withNext[overlayIdx]);
-		const mainPayoff = abyssFarmPayoffScore(state, seat, withNext[mainDecision.idx]);
+		const overlayPayoff = abyssFarmPayoffScore(state, seat, catalog, withNext[overlayIdx]);
+		const mainPayoff = abyssFarmPayoffScore(state, seat, catalog, withNext[mainDecision.idx]);
 		if (overlayPayoff <= 0 || overlayPayoff < mainPayoff) return mainDecision;
 
 		return {
@@ -1518,8 +1718,8 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 				const local = indexMap.indexOf(i);
 				return local >= 0 ? (overlayDecision.pi[local] ?? 0) : 0;
 			})
-			};
 		};
+	};
 
 	let state = createLobbyState({ roomCode: 'AZSP', guardianNames });
 	const host: GameActor = { memberId: 'host', displayName: 'host', role: 'host', seatColor: null };
@@ -1531,8 +1731,22 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 	seats.forEach((seat, i) => {
 		profileBySeat[seat] = profiles[i] ?? profileFor('medium');
 		const memberId = `bot-${seat}`;
-		expectOk(applyGameCommand(state, { memberId, displayName: seat, role: 'player', seatColor: null }, { type: 'claimSeat', seatColor: seat }, catalog));
-		expectOk(applyGameCommand(state, { memberId, displayName: seat, role: 'player', seatColor: seat }, { type: 'selectGuardian', guardianName: guardianNames[i] }, catalog));
+		expectOk(
+			applyGameCommand(
+				state,
+				{ memberId, displayName: seat, role: 'player', seatColor: null },
+				{ type: 'claimSeat', seatColor: seat },
+				catalog
+			)
+		);
+		expectOk(
+			applyGameCommand(
+				state,
+				{ memberId, displayName: seat, role: 'player', seatColor: seat },
+				{ type: 'selectGuardian', guardianName: guardianNames[i] },
+				catalog
+			)
+		);
 	});
 	expectOk(applyGameCommand(state, host, { type: 'startGame', seed: opts.seed }, catalog));
 
@@ -1567,49 +1781,53 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		routeModeThreshold,
 		tracePlannerActions: opts.tracePlannerActions ?? false
 	});
-		const updateFallenHuntMemoryBeforeNavigation = (seat: SeatColor): void => {
-			const mem = fallenHuntMemory[seat] ?? {
-				lastPvpVp: 0,
-				dryStreak: 0,
-				lastChoiceRound: -1,
-				lastCheckedRound: -1
-			};
-			fallenHuntMemory[seat] = mem;
-			const player = state.players[seat];
-			if (!player || (player.statusLevel ?? 0) < 3) {
-				mem.lastDestination = undefined;
-				mem.lastPvpVp = pstat[seat]?.pvpVp ?? 0;
-				mem.dryStreak = 0;
-				mem.lastCheckedRound = state.round;
-				return;
-			}
-			if (mem.lastChoiceRound >= 0 && mem.lastChoiceRound < state.round && mem.lastCheckedRound !== state.round) {
-				const pvpVp = pstat[seat]?.pvpVp ?? 0;
-				if (mem.lastDestination && mem.lastDestination !== 'Arcane Abyss' && pvpVp <= mem.lastPvpVp) {
-					mem.dryStreak += 1;
-				} else {
-					mem.dryStreak = 0;
-				}
-				mem.lastPvpVp = pvpVp;
-				mem.lastCheckedRound = state.round;
-			}
+	const updateFallenHuntMemoryBeforeNavigation = (seat: SeatColor): void => {
+		const mem = fallenHuntMemory[seat] ?? {
+			lastPvpVp: 0,
+			dryStreak: 0,
+			lastChoiceRound: -1,
+			lastCheckedRound: -1
 		};
-		const noteNavigationChoice = (seat: SeatColor, destination: NavigationDestination): void => {
-			const mem = fallenHuntMemory[seat] ?? {
-				lastPvpVp: 0,
-				dryStreak: 0,
-				lastChoiceRound: -1,
-				lastCheckedRound: -1
-			};
-			fallenHuntMemory[seat] = mem;
-			if ((state.players[seat]?.statusLevel ?? 0) < 3 || destination === 'Arcane Abyss') {
-				mem.dryStreak = 0;
-			}
-			mem.lastDestination = destination;
+		fallenHuntMemory[seat] = mem;
+		const player = state.players[seat];
+		if (!player || (player.statusLevel ?? 0) < 3) {
+			mem.lastDestination = undefined;
 			mem.lastPvpVp = pstat[seat]?.pvpVp ?? 0;
-			mem.lastChoiceRound = state.round;
+			mem.dryStreak = 0;
 			mem.lastCheckedRound = state.round;
+			return;
+		}
+		if (
+			mem.lastChoiceRound >= 0 &&
+			mem.lastChoiceRound < state.round &&
+			mem.lastCheckedRound !== state.round
+		) {
+			const pvpVp = pstat[seat]?.pvpVp ?? 0;
+			if (mem.lastDestination && mem.lastDestination !== 'Arcane Abyss' && pvpVp <= mem.lastPvpVp) {
+				mem.dryStreak += 1;
+			} else {
+				mem.dryStreak = 0;
+			}
+			mem.lastPvpVp = pvpVp;
+			mem.lastCheckedRound = state.round;
+		}
+	};
+	const noteNavigationChoice = (seat: SeatColor, destination: NavigationDestination): void => {
+		const mem = fallenHuntMemory[seat] ?? {
+			lastPvpVp: 0,
+			dryStreak: 0,
+			lastChoiceRound: -1,
+			lastCheckedRound: -1
 		};
+		fallenHuntMemory[seat] = mem;
+		if ((state.players[seat]?.statusLevel ?? 0) < 3 || destination === 'Arcane Abyss') {
+			mem.dryStreak = 0;
+		}
+		mem.lastDestination = destination;
+		mem.lastPvpVp = pstat[seat]?.pvpVp ?? 0;
+		mem.lastChoiceRound = state.round;
+		mem.lastCheckedRound = state.round;
+	};
 	for (const s of plannerSeats) recordBuildSnapshot(s);
 	const fullActionCounter = new Map<string, number>();
 	let ticks = 0;
@@ -1619,24 +1837,29 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 		for (const seat of state.activeSeats) {
 			if (!botSeatNeedsToAct(state, seat)) continue;
 
-				// Planner steers the navigation decision for planner seats; record the search target.
-				if (plannerSeats.has(seat) && state.phase === 'navigation') {
-					const farmNav = cleanFarmableFlags(state, seat, catalog, farmNavigationThreshold);
-					updateFallenHuntMemoryBeforeNavigation(seat);
-					// Diagnostic override: force a fixed destination (e.g. Arcane Abyss) when legal.
-					if (opts.forceDest) {
-						const legal = legalDestinations(state, seat, catalog);
-						if (legal.includes(opts.forceDest as (typeof legal)[number])) {
-							const cmd: GameCommand = { type: 'lockNavigation', destination: opts.forceDest as (typeof legal)[number] };
-							if (opts.forceDest === 'Arcane Abyss') pstat[seat].abyss++;
-							noteNavigationChoice(seat, cmd.destination);
-							recordFarmNavigation(seat, farmNav, cmd.destination);
-							recordTrace(seat, 'force', cmd, {
-								farmable: farmNav.farmable,
+			// Planner steers the navigation decision for planner seats; record the search target.
+			if (plannerSeats.has(seat) && state.phase === 'navigation') {
+				const farmNav = cleanFarmableFlags(state, seat, catalog, farmNavigationThreshold);
+				updateFallenHuntMemoryBeforeNavigation(seat);
+				// Diagnostic override: force a fixed destination (e.g. Arcane Abyss) when legal.
+				if (opts.forceDest) {
+					const legal = legalDestinations(state, seat, catalog);
+					if (legal.includes(opts.forceDest as (typeof legal)[number])) {
+						const cmd: GameCommand = {
+							type: 'lockNavigation',
+							destination: opts.forceDest as (typeof legal)[number]
+						};
+						if (opts.forceDest === 'Arcane Abyss') pstat[seat].abyss++;
+						noteNavigationChoice(seat, cmd.destination);
+						recordFarmNavigation(seat, farmNav, cmd.destination);
+						recordTrace(seat, 'force', cmd, {
+							farmable: farmNav.farmable,
 							farmOpportunityVp: +farmNav.farmOpportunityVp.toFixed(2),
 							usedNavigationPrior: false
 						});
-						const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, { mutate: true });
+						const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, {
+							mutate: true
+						});
 						if (r.ok) {
 							state = r.state;
 							progressed = true;
@@ -1656,17 +1879,19 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 						maxRounds
 					);
 					if (oracleDestination) {
-							const cmd: GameCommand = { type: 'lockNavigation', destination: oracleDestination };
-							pstat[seat].navigationPriorUses++;
-							if (oracleDestination === 'Arcane Abyss') pstat[seat].abyss++;
-							noteNavigationChoice(seat, cmd.destination);
-							recordFarmNavigation(seat, farmNav, cmd.destination);
-							recordTrace(seat, 'force', cmd, {
-								farmable: farmNav.farmable,
+						const cmd: GameCommand = { type: 'lockNavigation', destination: oracleDestination };
+						pstat[seat].navigationPriorUses++;
+						if (oracleDestination === 'Arcane Abyss') pstat[seat].abyss++;
+						noteNavigationChoice(seat, cmd.destination);
+						recordFarmNavigation(seat, farmNav, cmd.destination);
+						recordTrace(seat, 'force', cmd, {
+							farmable: farmNav.farmable,
 							farmOpportunityVp: +farmNav.farmOpportunityVp.toFixed(2),
 							usedNavigationPrior: true
 						});
-						const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, { mutate: true });
+						const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, {
+							mutate: true
+						});
 						if (r.ok) {
 							state = r.state;
 							progressed = true;
@@ -1684,25 +1909,50 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 						activePvpPivotOracle === 'late-descend-predictive-hunt';
 					const oracleDestination =
 						activePvpPivotOracle === 'status2-target-descend'
-							? pvpStatus2TargetDescendOracleDestination(state, seat, catalog, farmNavigationThreshold)
+							? pvpStatus2TargetDescendOracleDestination(
+									state,
+									seat,
+									catalog,
+									farmNavigationThreshold
+								)
 							: activePvpPivotOracle === 'status2-conversion-descend'
-								? pvpStatus2ConversionDescendOracleDestination(state, seat, catalog, farmNavigationThreshold)
-							: activePvpPivotOracle === 'late-descend-hunt' || activePvpPivotOracle === 'late-descend-predictive-hunt'
-								? pvpLateDescendOracleDestination(state, seat, catalog, farmNavigationThreshold, predictive)
-								: pvpPivotOracleDestination(state, seat, catalog, farmNavigationThreshold, predictive);
-						if (oracleDestination) {
-							const cmd: GameCommand = { type: 'lockNavigation', destination: oracleDestination };
-							pstat[seat].navigationPriorUses++;
-							pstat[seat].pvpPivotOracleUses++;
-							noteNavigationChoice(seat, cmd.destination);
-							recordFarmNavigation(seat, farmNav, cmd.destination);
-							recordForcedNavigationSample(seat, oracleDestination);
-							recordTrace(seat, 'force', cmd, {
+								? pvpStatus2ConversionDescendOracleDestination(
+										state,
+										seat,
+										catalog,
+										farmNavigationThreshold
+									)
+								: activePvpPivotOracle === 'late-descend-hunt' ||
+									  activePvpPivotOracle === 'late-descend-predictive-hunt'
+									? pvpLateDescendOracleDestination(
+											state,
+											seat,
+											catalog,
+											farmNavigationThreshold,
+											predictive
+										)
+									: pvpPivotOracleDestination(
+											state,
+											seat,
+											catalog,
+											farmNavigationThreshold,
+											predictive
+										);
+					if (oracleDestination) {
+						const cmd: GameCommand = { type: 'lockNavigation', destination: oracleDestination };
+						pstat[seat].navigationPriorUses++;
+						pstat[seat].pvpPivotOracleUses++;
+						noteNavigationChoice(seat, cmd.destination);
+						recordFarmNavigation(seat, farmNav, cmd.destination);
+						recordForcedNavigationSample(seat, oracleDestination);
+						recordTrace(seat, 'force', cmd, {
 							farmable: farmNav.farmable,
 							farmOpportunityVp: +farmNav.farmOpportunityVp.toFixed(2),
 							usedNavigationPrior: true
 						});
-						const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, { mutate: true });
+						const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, {
+							mutate: true
+						});
 						if (r.ok) {
 							state = r.state;
 							progressed = true;
@@ -1722,14 +1972,27 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 					rootDestinations: navSelection.rootDestinations,
 					seed: (opts.seed * 31 + state.round * 7 + 1) >>> 0
 				});
-					if (res) {
-						const obs = encodeObs(state, seat, catalog);
-						const cands = res.destinations.map((d) =>
-							encodeAction(state, seat, { type: 'lockNavigation', destination: d }, undefined, catalog)
-						);
-					let idx = chooseIndex(res.visits, opts.sampleMoves ?? false, opts.temperature ?? 1, moveRng);
+				if (res) {
+					const obs = encodeObs(state, seat, catalog);
+					const cands = res.destinations.map((d) =>
+						encodeAction(
+							state,
+							seat,
+							{ type: 'lockNavigation', destination: d },
+							undefined,
+							catalog
+						)
+					);
+					let idx = chooseIndex(
+						res.visits,
+						opts.sampleMoves ?? false,
+						opts.temperature ?? 1,
+						moveRng
+					);
 					let pi = res.pi;
-					const abyssIndex = res.destinations.indexOf('Arcane Abyss' as (typeof res.destinations)[number]);
+					const abyssIndex = res.destinations.indexOf(
+						'Arcane Abyss' as (typeof res.destinations)[number]
+					);
 					if (farmNavigationOracle === 'force' && farmNav.farmable && abyssIndex >= 0) {
 						idx = abyssIndex;
 						pi = oneHot(res.destinations.length, abyssIndex);
@@ -1750,13 +2013,16 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 						farmPriorScore: res.farmPriorScore,
 						farmPriorBonus: res.farmPriorBonus
 					});
-						const cmd: GameCommand = { type: 'lockNavigation', destination: res.destinations[idx] };
+					const cmd: GameCommand = { type: 'lockNavigation', destination: res.destinations[idx] };
 					if ((cmd as { destination?: string }).destination === 'Arcane Abyss') pstat[seat].abyss++;
 					if (res.farmPriorApplied) {
 						pstat[seat].farmPriorApplications++;
 						pstat[seat].farmPriorScoreSum += res.farmPriorScore;
 						pstat[seat].farmPriorBonusSum += res.farmPriorBonus;
-						pstat[seat].farmPriorMaxScore = Math.max(pstat[seat].farmPriorMaxScore, res.farmPriorScore);
+						pstat[seat].farmPriorMaxScore = Math.max(
+							pstat[seat].farmPriorMaxScore,
+							res.farmPriorScore
+						);
 						if (cmd.destination === 'Arcane Abyss') pstat[seat].farmPriorAbyssChoices++;
 					}
 					noteNavigationChoice(seat, cmd.destination);
@@ -1790,7 +2056,9 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 						});
 						countDecision(seat, cmd);
 					}
-					const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, { mutate: true });
+					const r = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, {
+						mutate: true
+					});
 					if (r.ok) {
 						state = r.state;
 						progressed = true;
@@ -1840,7 +2108,9 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 							const obs = encodeObs(state, seat, catalog);
 							samples.push({
 								obs,
-								cands: withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog)),
+								cands: withNext.map((x) =>
+									encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)
+								),
 								chosen: idx,
 								pi: decision.pi,
 								ret: 0,
@@ -1854,7 +2124,9 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 						}
 						if (chosen.cmd.type === 'startCombat') {
 							pstat[seat].combat++;
-							const mc = chosen.next.combats.find((x) => x.kind === 'monster' && x.sides[0]?.seat === seat);
+							const mc = chosen.next.combats.find(
+								(x) => x.kind === 'monster' && x.sides[0]?.seat === seat
+							);
 							if (mc?.killed) pstat[seat].kills++;
 						} else if (chosen.cmd.type === 'initiatePvp') {
 							pstat[seat].pvpAttacks++;
@@ -1869,24 +2141,25 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 						} else if (pvpOpportunity.legal) {
 							pstat[seat].missedPvpOpportunities++;
 							if (pvpOpportunity.hardMonsterWindow) pstat[seat].missedPvpHardMonsterOpportunities++;
-							if (pvpOpportunity.goodTargetPivotWindow) pstat[seat].missedPvpGoodTargetPivotOpportunities++;
+							if (pvpOpportunity.goodTargetPivotWindow)
+								pstat[seat].missedPvpGoodTargetPivotOpportunities++;
 						} else if (combatOpportunity.legalCombat) {
 							if (combatOpportunity.clean) pstat[seat].missedCleanCombatOpportunities++;
 							if (combatOpportunity.firepower) pstat[seat].missedFirepowerCombatOpportunities++;
 						}
-							recordLocationInteraction(seat, chosen.cmd);
-							recordTrace(seat, 'full', chosen.cmd, {
-								pvpOpportunity: pvpOpportunity.legal,
-								pvpTargetCount: pvpOpportunity.targetCount,
-								pvpTargetVp: pvpOpportunity.targetVp,
-								pvpBestTargetVp: pvpOpportunity.bestTargetVp,
-								pvpTargets: pvpOpportunity.targets,
-								pvpHardMonsterWindow: pvpOpportunity.hardMonsterWindow,
-								pvpGoodTargetPivotWindow: pvpOpportunity.goodTargetPivotWindow,
-								combatOpportunity: combatOpportunity.legalCombat,
-								cleanCombatOpportunity: combatOpportunity.clean,
-								firepowerCombatOpportunity: combatOpportunity.firepower
-							});
+						recordLocationInteraction(seat, chosen.cmd);
+						recordTrace(seat, 'full', chosen.cmd, {
+							pvpOpportunity: pvpOpportunity.legal,
+							pvpTargetCount: pvpOpportunity.targetCount,
+							pvpTargetVp: pvpOpportunity.targetVp,
+							pvpBestTargetVp: pvpOpportunity.bestTargetVp,
+							pvpTargets: pvpOpportunity.targets,
+							pvpHardMonsterWindow: pvpOpportunity.hardMonsterWindow,
+							pvpGoodTargetPivotWindow: pvpOpportunity.goodTargetPivotWindow,
+							combatOpportunity: combatOpportunity.legalCombat,
+							cleanCombatOpportunity: combatOpportunity.clean,
+							firepowerCombatOpportunity: combatOpportunity.firepower
+						});
 						state = chosen.next;
 						recordResolvedPvpCombats();
 						recordAllPlannerStatus({ kind: 'command', actorSeat: seat, cmdType: chosen.cmd.type });
@@ -1902,21 +2175,19 @@ export function playPlannerSelfPlayGame(catalog: PlayCatalog, opts: SelfPlayOpti
 			const trackSeat = plannerSeats.has(seat);
 			const plan = trackSeat
 				? filterConstrainedPlan(
-					state,
-					seat,
-					catalog,
-					planBotPhaseActions(state, seat, catalog, heurRng, profileBySeat[seat]),
-					forbidTypesForSeat(seat),
-					maxStatusLevelForSeat(seat)
-				)
-			: planBotPhaseActions(state, seat, catalog, heurRng, profileBySeat[seat]);
+						state,
+						seat,
+						catalog,
+						planBotPhaseActions(state, seat, catalog, heurRng, profileBySeat[seat]),
+						forbidTypesForSeat(seat),
+						maxStatusLevelForSeat(seat)
+					)
+				: planBotPhaseActions(state, seat, catalog, heurRng, profileBySeat[seat]);
 			for (const c of plan) {
 				if (trackSeat) recordLocationInteraction(seat, c);
 				if (trackSeat) recordTrace(seat, 'heuristic', c);
 				const heuristicPvpOpportunity =
-					trackSeat && c.type === 'initiatePvp'
-						? pvpEncounterTargets(state, seat, true)
-						: null;
+					trackSeat && c.type === 'initiatePvp' ? pvpEncounterTargets(state, seat, true) : null;
 				const r = applyGameCommand(state, botActorFor(state, seat), c, catalog, { mutate: true });
 				if (!r.ok) break;
 				state = r.state;

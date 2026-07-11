@@ -11,8 +11,8 @@ per-step bridge; both languages do what they're best at.
 ```
  TS self-play (native speed)            Python training (PyTorch / Apple MPS)
  ─────────────────────────────         ─────────────────────────────────────
- legalActions + encode + reward         model.py   candidate-scorer + value head
- driver.ts  → ml/data/*.jsonl   ──────▶ train.py   AWR / behaviour-cloning
+ legalActions + encode + reward         model.py   candidate scorer + auxiliary heads
+ driver.ts  → ml/data/*.jsonl   ──────▶ train.py   league PPO / BC / AlphaZero targets
  net.ts     ← ml/weights/*.json ◀────── export     weights → JSON
  arena/eval (win-rate gate)
 ```
@@ -28,24 +28,32 @@ per-step bridge; both languages do what they're best at.
   dry-run each through the pure reducer, keep the `ok` ones. The bot can take _any_ real
   in-game action (full rules action set; manual/sandbox/debug commands excluded).
 
-## Current meta (measured, June 2026)
+## Current status (verified July 10, 2026)
 
-Under the current measured rules, the strongest learned checkpoints still lean heavily on
-corruption/PvP pressure, while clean monster/economy play is not yet solved. The success
-bar is no longer "beat one heuristic field"; use `docs/bot-testing-criteria.md` for the
-current promotion gates, including learned-policy duels, population league, forced-Abyss
-diagnostics, and Pure-only ablations.
+- The bundled champion is **v13-2 / v13y2-gen44**
+  (`ml/champions/v13-2/main-0-gen44.json`), with an **83-float observation** and
+  **52-float action** contract. Live serving samples navigation decisions at temperature
+  0.65; the evaluated search tier remains disabled because it regressed strength.
+- The v14 push did not promote: its best candidate exploited v13-2 head-to-head but lost
+  the broad gauntlet and heuristic-field gates. See `META_IMPACT_V13.md`.
+- Current corrective work separates public action information from hidden RNG outcomes,
+  records exact PPO behavior probabilities, and removes the unconditional delayed-PvP
+  override. Those changes require a fresh aux-off reproduction and fixed-seed A/B before
+  any new checkpoint can replace v13-2.
+- Strong checkpoints still lean heavily on corruption/PvP pressure. Human play, a
+  held-out exploiter field, and strategy-diversity checks remain important promotion
+  layers; a single Elo or heuristic result is not enough.
 
 ## Files
 
 **TypeScript (`src/lib/play/ml/`)**
 | File | Role |
 |---|---|
-| `encode.ts` | `encodeObs` (OBS_DIM=62) + `encodeAction` (ACT_DIM=52) — the feature contract |
+| `encode.ts` | `encodeObs` (OBS_DIM=83) + `encodeAction` (ACT_DIM=52) — the feature contract |
 | `actions.ts` | `legalActions` — full legal candidate set (dry-run filtered) + `commandMatches` |
 | `reward.ts` | `computeReturns` — placement blended with VP progress; winner pinned to 1.0 |
 | `net.ts` | pure-TS forward pass of the exported weights (`NeuralPolicy`) |
-| `driver.ts` | `playRecordingGame` — headless self-play; heuristic (BC) or neural (AWR) seats |
+| `driver.ts` | `playRecordingGame` — headless self-play plus exact behavior/trajectory recording |
 | `../bots/contract.ts` | `arc-bot-v1` observation/action-id contract and the live `neural` profile key |
 | `neuralBot.ts` | `planNeuralPhaseActions` / `getNeuralPolicy` — production planner for `botSim` |
 | `nodeIo.ts` | catalog snapshot + JSONL/weights IO (node-only, test-runner use) |
@@ -53,8 +61,9 @@ diagnostics, and Pure-only ablations.
 | `_eval.test.ts` | win-rate evaluation vs heuristic fields (`EVAL=1 …`) |
 | `_health.test.ts` | engine/heuristic finish-rate probe (`HEALTH=1 …`) |
 
-**Python (`ml/`)**: `model.py`, `train.py`, `verify_export.py`, `make_synthetic_data.py`
-(see `README_train.md`). Plus shell orchestration: `run_gen.sh`, `train.sh`, `pipeline.sh`.
+**Python (`ml/`)**: `model.py`, `ppo.py`, `train.py`, `verify_export.py`, and
+`benchmark_model_sizes.py` (see `README_train.md`). League orchestration lives under
+`src/lib/play/ml/league/`; shell launchers remain for legacy and meta-discovery runs.
 
 ## Run it
 
@@ -100,9 +109,12 @@ obvious in evaluation.
 cp ml/weights/policy.json src/lib/play/ml/policy-weights.json
 ```
 
-## Results (M4, ~1-hour training budget) — the bot beats every heuristic
+## Historical AWR result (superseded; not a current promotion result)
 
-Trained end-to-end on the M4 (Apple MPS) via `ml/overnight.sh`. Deployable **hybrid**
+The following table records the earlier June AWR-era result. It predates the 83-feature
+encoder, rules v1.3, league-PPO champions, and the corrected stochastic/PPO contracts;
+do not compare these numbers directly with v13/v14 or use this recipe for promotion.
+It was trained end-to-end on the M4 (Apple MPS) via `ml/overnight.sh`. Deployable **hybrid**
 selection, 24 games per opponent, **25% = fair share** in a 4-player game:
 
 | Neural bot vs                       | Win rate    | avg place | avg VP |
@@ -115,7 +127,7 @@ selection, 24 games per opponent, **25% = fair share** in a 4-player game:
 iterations. The bot learns the only winning line under current rules: descend to **Fallen**
 and farm the +3-VP group attack.
 
-### The recipe that worked (and the dead ends)
+### The historical recipe (and its dead ends)
 
 The win came from making three things line up — see `neuralBot.ts` / `ml/overnight.sh`:
 
@@ -124,7 +136,7 @@ The win came from making three things line up — see `neuralBot.ts` / `ml/overn
 2. **AWR self-play, hard-filtered to winners (β=4)** — explore with value-lookahead + sampling
    (a Fallen-seeking shaping term + a no-op penalty get it to ~20–27% self-play wins), then
    advantage-weight so only the _winning_ trajectories shape the policy.
-3. **Hybrid deployment selection** — outright win > fire `initiatePvp` when legal (the +3 VP is
+3. **Historical hybrid deployment selection** — outright win > fire `initiatePvp` when legal (the +3 VP is
    credited at encounter _resolution_, so pure BC/value miss this rare decisive action) >
    grab immediate VP > learned-policy positioning.
 
@@ -138,6 +150,8 @@ _incoherent_ loop that explored with one policy and trained/evaluated another. C
 The same pipeline scales to the SimForge A100 box. Use
 `/data/share8/michaelvuaprilexperimentation/arc-bot` on `ubuntu@216.151.21.122`, check GPU
 occupancy first, and run the smoke command in `../docs/bot-testing-criteria.md` before any
-medium or long training run. For current AlphaZero/meta discovery, prefer
-`ml/discover_meta.sh`; older AWR scripts are useful for comparison but should not be the only
-promotion evidence for a new best bot.
+medium or long training run. The current v1 architecture is CPU-actor/GPU-learner: local
+TypeScript inference is faster than the measured A100 socket path for this tiny network.
+Use `npm run bot:bench:actors` for worker/serialization sweeps and
+`npm run bot:bench:models` for full learner-step model/batch/bucketing sweeps. Older AWR
+scripts are historical comparisons only and must not be the sole promotion evidence.

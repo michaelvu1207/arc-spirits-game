@@ -25,7 +25,7 @@ fields still train under awr/alphazero, and trajectory rows still load here.
 
 --model v2 trains the entity set-transformer (ml/model_v2.py) instead of the
 v1 MLP, on the PAIRED-ROW contract (authoritative, see bc_warmstart_v2.py):
-rows keep `obs` = the 62-float v1 summary AND carry the flat arc-obs-v2 array
+rows keep `obs` = the current 83-float v1 summary AND carry the flat arc-obs-v2 array
 (3419 floats for the frozen catalog) under `obsV2`. --model v2 reads obsV2 and
 skips rows without it (counted); the layout is resolved from meta.json's
 "obs_v2" obsV2Meta block or the row's self-describing header. v2 checkpoints
@@ -51,7 +51,13 @@ from torch.utils.data import DataLoader, Dataset
 
 # Add ml/ parent to path so we can import model regardless of cwd
 sys.path.insert(0, str(Path(__file__).parent))
-from model import CandidateScorer, build_model, get_device, load_dims_from_meta
+from model import (
+    CandidateScorer,
+    build_model,
+    get_device,
+    load_dims_from_meta,
+    model_parameters_are_finite,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +78,7 @@ class DecisionDataset(Dataset):
     Stores all decisions from JSONL files as numpy arrays.
     Padding is done at collation time (per-batch).
 
-    obs_key selects which field feeds the model: "obs" (v1 62-float summary)
+    obs_key selects which field feeds the model: "obs" (current v1 83-float summary)
     or "obsV2" (flat arc-obs-v2, paired-row contract). Rows lacking obs_key
     are skipped and counted (v1-only rows mixed into a v2 dataset).
     """
@@ -382,6 +388,21 @@ def hidden_sizes_from_checkpoint(path: Path) -> tuple[tuple[int, ...], tuple[int
         return None
 
 
+def parse_hidden_sizes(spec: str) -> tuple[int, ...]:
+    """Argparse type for comma-separated positive MLP widths."""
+    try:
+        widths = tuple(int(part.strip()) for part in spec.split(",") if part.strip())
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"hidden widths must be comma-separated integers, got {spec!r}"
+        ) from exc
+    if not widths or any(width <= 0 for width in widths):
+        raise argparse.ArgumentTypeError(
+            f"hidden widths must be one or more positive integers, got {spec!r}"
+        )
+    return widths
+
+
 def build_policy_model(
     obs_dim: int,
     act_dim: int,
@@ -389,19 +410,43 @@ def build_policy_model(
     out_path: Path,
     init_from: Path | None,
     warm_start: bool,
+    trunk_hidden: tuple[int, ...] | None = None,
+    value_hidden: tuple[int, ...] | None = None,
 ) -> CandidateScorer:
-    """Build the model, inferring widths from and warm-starting on a checkpoint if available."""
+    """Build v1, then optionally warm-start it.
+
+    Explicit widths win over checkpoint inference and ARC_HIDDEN defaults. If they
+    differ from a warm-start checkpoint, loading is visibly skipped as an
+    architecture mismatch; this is intentional for controlled size sweeps.
+    """
     init_path = init_from if init_from is not None else (out_path if out_path.exists() else None)
     inferred_hidden = hidden_sizes_from_checkpoint(init_path) if init_path is not None else None
+    resolved_trunk = trunk_hidden if trunk_hidden is not None else (
+        inferred_hidden[0] if inferred_hidden else None
+    )
+    resolved_value = value_hidden if value_hidden is not None else (
+        inferred_hidden[1] if inferred_hidden else None
+    )
     model = build_model(
         obs_dim,
         act_dim,
         device,
-        trunk_hidden=inferred_hidden[0] if inferred_hidden else None,
-        value_hidden=inferred_hidden[1] if inferred_hidden else None,
+        trunk_hidden=resolved_trunk,
+        value_hidden=resolved_value,
+    )
+    print(
+        f"v1 architecture: trunk={model.trunk_hidden}, value={model.value_hidden} "
+        f"(explicit trunk={trunk_hidden is not None}, value={value_hidden is not None})"
     )
     if warm_start and init_path is not None and init_path.exists():
+        # load_json_weights_into is intentionally best-effort and may discover a
+        # deeper-layer mismatch after copying an earlier layer. Restore the fresh
+        # initialization on any mismatch so a size-sweep run is never a silent
+        # partially warm-started hybrid.
+        fresh_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
         ok = load_json_weights_into(model, init_path)
+        if not ok:
+            model.load_state_dict(fresh_state)
         print(f"warm-start from {init_path}: {'OK' if ok else 'skipped (mismatch)'}")
     return model
 
@@ -522,7 +567,7 @@ def build_policy_model_v2(
 # ---------------------------------------------------------------------------
 
 def model_is_finite(model: torch.nn.Module) -> bool:
-    return all(torch.isfinite(p).all() for p in model.parameters())
+    return model_parameters_are_finite(model)
 
 
 def snapshot_state(model: torch.nn.Module) -> dict:
@@ -571,6 +616,8 @@ def train(
     win_bonus_halflife: float = 0.0,
     all_fallen_loss: float = 0.0,
     model_version: str = "v1",
+    hidden: tuple[int, ...] | None = None,
+    value_hidden: tuple[int, ...] | None = None,
     placement_coef: float = 0.1,
     v2_d_model: int = 128,
     v2_layers: int = 3,
@@ -581,12 +628,13 @@ def train(
     device = get_device()
     print(f"Device: {device}  mode={mode}  model={model_version}")
     check_out_format(model_version, out_path, init_from)
-    # The placement aux head only exists on v2.
-    # v1 gained a 4-way placement head (KataGo outcome aux) — the coef now applies
-    # to both model versions; train_ppo dispatches to the right aux loss.
+    if model_version != "v1" and (hidden is not None or value_hidden is not None):
+        raise ValueError("--hidden/--value-hidden configure only --model v1; use --v2-* for v2")
+    # Both models expose placement auxiliaries with different contracts: v1 has
+    # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
     # Paired-row contract: v2 reads the flat arc-obs-v2 array from `obsV2`;
-    # `obs` stays the v1 62-float summary for the v1 net / distillation.
+    # `obs` stays the current v1 83-float summary for the v1 net / distillation.
     obs_key = "obsV2" if model_version == "v2" else "obs"
 
     def export_model(model, obs_dim: int, act_dim: int) -> None:
@@ -622,7 +670,16 @@ def train(
             obs_dim = spec.flat_length
         else:
             obs_dim, act_dim = load_dims_from_meta(data_dir)
-            model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
+            model = build_policy_model(
+                obs_dim,
+                act_dim,
+                device,
+                out_path,
+                init_from,
+                warm_start,
+                trunk_hidden=hidden,
+                value_hidden=value_hidden,
+            )
         print(f"obs_dim={obs_dim}, act_dim={act_dim}")
         history = train_ppo(
             model,
@@ -634,6 +691,9 @@ def train(
             clip_eps=clip_eps,
             policy_coef=policy_coef,
             value_coef=value_coef,
+            farm_value_coef=farm_value_coef,
+            reward_pick_coef=reward_pick_coef,
+            route_mode_coef=route_mode_coef,
             entropy_coef=entropy_coef,
             entropy_anneal=entropy_anneal,
             value_clip_eps=value_clip_eps,
@@ -658,7 +718,16 @@ def train(
         obs_dim = spec.flat_length
     else:
         obs_dim, act_dim = load_dims_from_meta(data_dir)
-        model = build_policy_model(obs_dim, act_dim, device, out_path, init_from, warm_start)
+        model = build_policy_model(
+            obs_dim,
+            act_dim,
+            device,
+            out_path,
+            init_from,
+            warm_start,
+            trunk_hidden=hidden,
+            value_hidden=value_hidden,
+        )
     print(f"obs_dim={obs_dim}, act_dim={act_dim}")
 
     loader = DataLoader(
@@ -744,8 +813,9 @@ def train(
 
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
             if effective_placement_coef > 0 and placement_mask.any():
-                # v1 (4-way CE on placement_head) vs v2 (per-seat-token regression).
-                if hasattr(model, "placement_head"):
+                # v1 (4-way CE) vs v2 (per-seat-token regression). Dispatch on the
+                # public prediction method: v2 also owns a module named placement_head.
+                if hasattr(model, "placement_head_logits"):
                     placement_loss = placement_aux_loss_v1(model, obs, placement, placement_mask)
                 elif hasattr(model, "placement_logits"):
                     placement_loss = placement_aux_loss(model, obs, placement, placement_mask)
@@ -972,6 +1042,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model", dest="model_version", choices=["v1", "v2"], default="v1",
                    help="v1 = CandidateScorer MLP (JSON export); v2 = EntityCandidateScorer "
                         "set-transformer on flat arc-obs-v2 rows (.pt + manifest checkpoints)")
+    p.add_argument(
+        "--hidden",
+        type=parse_hidden_sizes,
+        default=None,
+        help="v1 trunk hidden widths, comma-separated (for example 256,256). Explicit values "
+             "override checkpoint-inferred and ARC_HIDDEN widths; a mismatched warm start is skipped.",
+    )
+    p.add_argument(
+        "--value-hidden",
+        type=parse_hidden_sizes,
+        default=None,
+        help="v1 value/aux hidden widths, comma-separated (for example 128). Explicit values "
+             "override checkpoint-inferred and ARC_VALUE_HIDDEN widths.",
+    )
     p.add_argument("--placement-coef", type=float, default=0.1,
                    help="Weight on the v2 placement aux loss (rows with `placement`; v1 ignores)")
     p.add_argument("--v2-d-model", type=int, default=128, help="v2 width (fresh models only)")
@@ -1018,6 +1102,8 @@ if __name__ == "__main__":
         win_bonus_halflife=args.win_bonus_halflife,
         all_fallen_loss=args.all_fallen_loss,
         model_version=args.model_version,
+        hidden=args.hidden,
+        value_hidden=args.value_hidden,
         placement_coef=args.placement_coef,
         v2_d_model=args.v2_d_model,
         v2_layers=args.v2_layers,

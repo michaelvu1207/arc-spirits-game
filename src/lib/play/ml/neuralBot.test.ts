@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { applyGameCommand, createLobbyState } from '../runtime';
 import type { GameActor, GameCommand, PlayCatalog, PublicGameState } from '../types';
 import { computeKillProbability } from '../server/botPolicy';
-import { legalActionsWithNext } from './actions';
+import { legalActionsWithNext, type LegalAction } from './actions';
 import { rewardPickTarget } from './auxTargets';
 import { ACT_DIM, COMMAND_VOCAB, OBS_DIM, encodeAction, encodeObs } from './encode';
 import { claimableMonsterRewardVp, evaluateFarmValue } from './farmValue';
-import { hybridIndex, lookaheadIndex, policyIndexWithProgressGuard, scoreByValue, valueGuidedIndex } from './neuralBot';
+import {
+	hybridIndex,
+	lookaheadIndex,
+	policyIndexWithProgressGuard,
+	scoreByValue,
+	valueGuidedIndex
+} from './neuralBot';
 import { neuralPlanNavigation } from './planner';
 import type { NeuralPolicy } from './net';
 
@@ -23,7 +29,9 @@ const CATALOG: PlayCatalog = {
 	],
 	mats: [],
 	classes: [],
-	dice: [{ id: 'arcane_attack', name: 'Arcane Attack', diceType: 'attack', sides: [1, 2, 2, 2, 2, 3] }],
+	dice: [
+		{ id: 'arcane_attack', name: 'Arcane Attack', diceType: 'attack', sides: [1, 2, 2, 2, 2, 3] }
+	],
 	spirits: [],
 	monsters: [
 		{
@@ -42,7 +50,12 @@ const CATALOG: PlayCatalog = {
 };
 
 const RED: GameActor = { memberId: 'm-red', displayName: 'Red', role: 'host', seatColor: 'Red' };
-const BLUE: GameActor = { memberId: 'm-blue', displayName: 'Blue', role: 'player', seatColor: 'Blue' };
+const BLUE: GameActor = {
+	memberId: 'm-blue',
+	displayName: 'Blue',
+	role: 'player',
+	seatColor: 'Blue'
+};
 
 const neutralPolicy = {
 	value: () => 0,
@@ -93,7 +106,9 @@ describe('neural value action scoring', () => {
 			.filter((a) => a.cmd.type === 'resolveMonsterReward')
 			.map((a) => a.cmd as Extract<GameCommand, { type: 'resolveMonsterReward' }>);
 		const pickSets = new Set(actions.map((cmd) => [...cmd.picks].sort((a, b) => a - b).join(',')));
-		expect(pickSets).toEqual(new Set(['0', '1', '2', '3', '0,1', '0,2', '0,3', '1,2', '1,3', '2,3']));
+		expect(pickSets).toEqual(
+			new Set(['0', '1', '2', '3', '0,1', '0,2', '0,3', '1,2', '1,3', '2,3'])
+		);
 		for (const cmd of actions) {
 			const result = applyGameCommand(state, RED, cmd, CATALOG);
 			expect(result.ok, JSON.stringify(cmd)).toBe(true);
@@ -145,8 +160,16 @@ describe('neural value action scoring', () => {
 		expect(runeChoices).toEqual([0, 1, 2, 3]);
 		expect(actions.some((cmd) => cmd.picks.length === 1 && cmd.picks[0] === 1)).toBe(true);
 
-		const encodedA = encodeAction(state, 'Red', { type: 'resolveMonsterReward', picks: [0], choices: [0] });
-		const encodedB = encodeAction(state, 'Red', { type: 'resolveMonsterReward', picks: [0], choices: [1] });
+		const encodedA = encodeAction(state, 'Red', {
+			type: 'resolveMonsterReward',
+			picks: [0],
+			choices: [0]
+		});
+		const encodedB = encodeAction(state, 'Red', {
+			type: 'resolveMonsterReward',
+			picks: [0],
+			choices: [1]
+		});
 		expect(encodedA).toHaveLength(ACT_DIM);
 		expect(encodedB).toHaveLength(ACT_DIM);
 		expect(encodedA).not.toEqual(encodedB);
@@ -180,8 +203,20 @@ describe('neural value action scoring', () => {
 
 		const p = COMMAND_VOCAB.length;
 		const blind = encodeAction(state, 'Red', { type: 'takeSpirit', marketIndex: 0 });
-		const animal = encodeAction(state, 'Red', { type: 'takeSpirit', marketIndex: 0 }, undefined, catalog);
-		const cultivator = encodeAction(state, 'Red', { type: 'takeSpirit', marketIndex: 1 }, undefined, catalog);
+		const animal = encodeAction(
+			state,
+			'Red',
+			{ type: 'takeSpirit', marketIndex: 0 },
+			undefined,
+			catalog
+		);
+		const cultivator = encodeAction(
+			state,
+			'Red',
+			{ type: 'takeSpirit', marketIndex: 1 },
+			undefined,
+			catalog
+		);
 
 		expect(blind[p + 3]).toBe(0);
 		expect(animal[p + 2]).toBeCloseTo(2 / 8);
@@ -311,11 +346,16 @@ describe('neural value action scoring', () => {
 		expect(plan).not.toBeNull();
 		const abyssIndex = plan!.destinations.indexOf('Arcane Abyss');
 		expect(abyssIndex).toBeGreaterThanOrEqual(0);
-		expect(plan!.priors[abyssIndex]).toBeGreaterThan(Math.max(...plan!.priors.filter((_, i) => i !== abyssIndex)));
+		expect(plan!.priors[abyssIndex]).toBeGreaterThan(
+			Math.max(...plan!.priors.filter((_, i) => i !== abyssIndex))
+		);
 	});
 
 	it('can boost Abyss navigation priors from the learned farm-value head', () => {
-		const state = createLobbyState({ roomCode: 'FARMH', guardianNames: ['Red Guard', 'Blue Guard'] });
+		const state = createLobbyState({
+			roomCode: 'FARMH',
+			guardianNames: ['Red Guard', 'Blue Guard']
+		});
 		let s = apply(state, RED, { type: 'claimSeat', seatColor: 'Red' });
 		s = apply(s, BLUE, { type: 'claimSeat', seatColor: 'Blue' });
 		s = apply(s, RED, { type: 'selectGuardian', guardianName: 'Red Guard' });
@@ -338,7 +378,9 @@ describe('neural value action scoring', () => {
 		expect(plan).not.toBeNull();
 		const abyssIndex = plan!.destinations.indexOf('Arcane Abyss');
 		expect(abyssIndex).toBeGreaterThanOrEqual(0);
-		expect(plan!.priors[abyssIndex]).toBeGreaterThan(Math.max(...plan!.priors.filter((_, i) => i !== abyssIndex)));
+		expect(plan!.priors[abyssIndex]).toBeGreaterThan(
+			Math.max(...plan!.priors.filter((_, i) => i !== abyssIndex))
+		);
 	});
 
 	it('offers no market commands (rules v1.1) and treats ending location actions as progress', () => {
@@ -355,12 +397,17 @@ describe('neural value action scoring', () => {
 		expect(endLocation).toBeGreaterThanOrEqual(0);
 		expect(actions[endLocation].next.players.Red!.phaseReady).toBe(true);
 
-		const endFeatures = encodeAction(state, 'Red', actions[endLocation].cmd, actions[endLocation].next);
+		const endFeatures = encodeAction(
+			state,
+			'Red',
+			actions[endLocation].cmd,
+			actions[endLocation].next
+		);
 		expect(endFeatures).toHaveLength(ACT_DIM);
 		expect(endFeatures.slice(-5)[2]).toBe(1);
-		expect(actions[valueGuidedIndex(neutralPolicy, state, 'Red', actions, undefined, CATALOG)].cmd.type).toBe(
-			'endLocationActions'
-		);
+		expect(
+			actions[valueGuidedIndex(neutralPolicy, state, 'Red', actions, undefined, CATALOG)].cmd.type
+		).toBe('endLocationActions');
 		expect(actions[lookaheadIndex(neutralPolicy, state, 'Red', actions, CATALOG)].cmd.type).toBe(
 			'endLocationActions'
 		);
@@ -373,8 +420,48 @@ describe('neural value action scoring', () => {
 		} as unknown as NeuralPolicy;
 		const idx = hybridIndex(policyThatWouldPickFirst, state, 'Red', actions, undefined, CATALOG);
 		expect(actions[idx].cmd.type).toBe('endLocationActions');
-		expect(actions[policyIndexWithProgressGuard(policyThatWouldPickFirst, state, 'Red', actions, undefined, CATALOG)].cmd.type).toBe(
-			'endLocationActions'
-		);
+		expect(
+			actions[
+				policyIndexWithProgressGuard(
+					policyThatWouldPickFirst,
+					state,
+					'Red',
+					actions,
+					undefined,
+					CATALOG
+				)
+			].cmd.type
+		).toBe('endLocationActions');
+	});
+
+	it('lets the learned policy decline delayed PvP instead of forcing every legal attack', () => {
+		const state = atQuietLocation();
+		state.phase = 'encounter';
+		const pvpNext = structuredClone(state);
+		const passNext = structuredClone(state);
+		passNext.players.Red!.phaseReady = true;
+		const actions: LegalAction[] = [
+			{
+				cmd: { type: 'initiatePvp' },
+				next: pvpNext,
+				policyNext: state,
+				hasHiddenOutcome: true
+			},
+			{
+				cmd: { type: 'passEncounter' },
+				next: passNext,
+				policyNext: passNext,
+				hasHiddenOutcome: false
+			}
+		];
+		const policyThatPasses = {
+			value: neutralPolicy.value,
+			scoreCandidates: neutralPolicy.scoreCandidates,
+			probs: neutralPolicy.probs,
+			pick: (_obs: number[], cands: number[][]) => cands.length - 1
+		} as unknown as NeuralPolicy;
+
+		const idx = hybridIndex(policyThatPasses, state, 'Red', actions, undefined, CATALOG);
+		expect(actions[idx].cmd.type).toBe('passEncounter');
 	});
 });

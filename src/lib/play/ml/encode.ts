@@ -30,7 +30,8 @@ import {
 } from '../types';
 import { awakenedClassCounts } from '../effects/apply';
 import { buildMonsterRewards } from '../monsterRewards';
-import { computeKillProbability } from '../server/botPolicy';
+import { expectedAttack } from '../combat';
+import { computeKillProbability, firepowerKillProbability } from '../server/botPolicy';
 import { claimableMonsterRewardVp } from './farmValue';
 
 /** Rough horizon used to normalize the round counter. */
@@ -39,8 +40,71 @@ const ROUND_NORM = 36;
 const POOL_NORM = 10;
 const BARRIER_NORM = 20;
 
+// `catalog` was optional in the original action-encoder API. Production callers pass it,
+// but retaining a minimal fallback keeps old diagnostics/tests information-safe without
+// falling back to a realized combat result when they omit it.
+const EMPTY_CATALOG: PlayCatalog = {
+	guardians: [],
+	spirits: [],
+	mats: [],
+	classes: [],
+	dice: [],
+	monsters: [],
+	locations: []
+};
+
 function clamp01(x: number): number {
 	return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+function clampProbability(x: number): number {
+	const p = clamp01(x);
+	if (p < 1e-12) return 0;
+	if (p > 1 - 1e-12) return 1;
+	return p;
+}
+
+export interface CombatActionExpectation {
+	killProbability: number;
+	cleanKillProbability: number;
+	rawFirepowerProbability: number;
+	expectedAttackDamage: number;
+	claimableRewardVp: number;
+	expectedRewardVp: number;
+}
+
+/** Public, RNG-free combat facts shared by policy features and fair search leaves. */
+export function combatActionExpectation(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog = EMPTY_CATALOG
+): CombatActionExpectation {
+	const player = state.players[seat];
+	const monster = state.monster;
+	if (!player || !monster) {
+		return {
+			killProbability: 0,
+			cleanKillProbability: 0,
+			rawFirepowerProbability: 0,
+			expectedAttackDamage: 0,
+			claimableRewardVp: 0,
+			expectedRewardVp: 0
+		};
+	}
+	const cleanKillProbability = clampProbability(computeKillProbability(state, seat, catalog));
+	const killAllowingPublicSimultaneous = clampProbability(
+		computeKillProbability(state, seat, catalog, { allowCorruptKill: true })
+	);
+	const killProbability = Math.max(cleanKillProbability, killAllowingPublicSimultaneous);
+	const claimableRewardVp = claimableMonsterRewardVp(monster.rewardTrack, monster.chooseAmount);
+	return {
+		killProbability,
+		cleanKillProbability,
+		rawFirepowerProbability: clampProbability(firepowerKillProbability(state, seat, catalog)),
+		expectedAttackDamage: expectedAttack(player),
+		claimableRewardVp,
+		expectedRewardVp: killProbability * claimableRewardVp
+	};
 }
 
 function diceCountByTier(p: PrivatePlayerState): Record<string, number> {
@@ -67,7 +131,10 @@ function classFeature(classes: Record<string, number> | undefined, name: string,
 	return clamp01((classes?.[name] ?? 0) / norm);
 }
 
-function catalogSpiritClasses(catalog: PlayCatalog | undefined, spiritId: string | null | undefined): Record<string, number> | undefined {
+function catalogSpiritClasses(
+	catalog: PlayCatalog | undefined,
+	spiritId: string | null | undefined
+): Record<string, number> | undefined {
 	if (!catalog || !spiritId) return undefined;
 	return catalog.spirits.find((spirit) => spirit.id === spiritId)?.classes;
 }
@@ -85,11 +152,7 @@ function placementFraction(state: PublicGameState, seat: SeatColor): number {
  * State features from `seat`'s point of view: global tempo, my resources, the field
  * (best opponent), and relative standing. ORDER IS PART OF THE CONTRACT — see header.
  */
-export function encodeObs(
-	state: PublicGameState,
-	seat: SeatColor,
-	catalog: PlayCatalog
-): number[] {
+export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): number[] {
 	const f: number[] = [];
 	const me = state.players[seat];
 
@@ -130,7 +193,9 @@ export function encodeObs(
 		f.push(clamp01((me.spiritAugments ?? 0) / POOL_NORM));
 		f.push(clamp01((me.unplacedAugments?.length ?? 0) / POOL_NORM));
 		f.push(me.pendingDraw ? 1 : 0);
-		f.push(me.pendingDraw ? clamp01((me.pendingDraw.summonLimit - me.pendingDraw.summonedCount) / 5) : 0);
+		f.push(
+			me.pendingDraw ? clamp01((me.pendingDraw.summonLimit - me.pendingDraw.summonedCount) / 5) : 0
+		);
 		f.push((me.handDraws?.length ?? 0) > 0 ? 1 : 0);
 		f.push(me.pendingReward ? 1 : 0);
 		f.push((me.pendingCorruptionDiscard?.count ?? 0) > 0 ? 1 : 0);
@@ -141,7 +206,10 @@ export function encodeObs(
 	}
 
 	// ── Field (best opponent) + relative standing ────────────────────
-	const opps = state.activeSeats.filter((s) => s !== seat).map((s) => state.players[s]).filter(Boolean) as PrivatePlayerState[];
+	const opps = state.activeSeats
+		.filter((s) => s !== seat)
+		.map((s) => state.players[s])
+		.filter(Boolean) as PrivatePlayerState[];
 	const myVp = me?.victoryPoints ?? 0;
 	let maxOppVp = 0;
 	let sumOppVp = 0;
@@ -211,7 +279,11 @@ export function encodeObs(
 	const nextRung = ladderIdx >= 0 ? ladder[ladderIdx + 1] : undefined;
 	f.push(nextRung ? clamp01(nextRung.barrier / 20) : 0);
 	f.push(nextRung ? clamp01(nextRung.damage / 20) : 0);
-	f.push(nextRung ? clamp01(claimableMonsterRewardVp(nextRung.rewardTrack, nextRung.chooseAmount) / 10) : 0);
+	f.push(
+		nextRung
+			? clamp01(claimableMonsterRewardVp(nextRung.rewardTrack, nextRung.chooseAmount) / 10)
+			: 0
+	);
 	// Face-down dice-class counts: awakening ONE of these crosses the super-linear dice
 	// breakpoints (Fighter/Elementalist 2/3/4/5 → +1/+2/+5/+10) — invisible until now.
 	const fdClass = (cls: string): number =>
@@ -236,7 +308,9 @@ export function encodeObs(
 	// ordinary market row). This mirrors the lockNavigation destination one-hot in encodeAction.
 	// Append-only per the header rule.
 	const myDest = me?.navigationDestination ?? null;
-	const myDestIdx = myDest ? ALL_DESTINATIONS.indexOf(myDest as (typeof ALL_DESTINATIONS)[number]) : -1;
+	const myDestIdx = myDest
+		? ALL_DESTINATIONS.indexOf(myDest as (typeof ALL_DESTINATIONS)[number])
+		: -1;
 	for (let i = 0; i < 5; i++) f.push(myDestIdx === i ? 1 : 0); // destination one-hot across ALL_DESTINATIONS
 	f.push(myDest === 'Arcane Abyss' ? 1 : 0); // at-Abyss flag (mirrors lockNavigation encoding)
 
@@ -311,7 +385,8 @@ export function encodeAction(
 			f[p + 6] = isAbyss && state.monster ? clamp01(state.monster.damage / BARRIER_NORM) : 0;
 			// How crowded the destination already is (other seats whose secret choice we can't
 			// see pre-reveal → 0; post-reveal occupancy if available).
-			const occ = state.locationOccupancy?.[cmd.destination as (typeof ALL_DESTINATIONS)[number]] ?? [];
+			const occ =
+				state.locationOccupancy?.[cmd.destination as (typeof ALL_DESTINATIONS)[number]] ?? [];
 			f[p + 7] = clamp01(occ.length / SEAT_COLORS.length);
 			break;
 		}
@@ -369,6 +444,28 @@ export function encodeAction(
 			f[p + 6] = clamp01((choices[2] ?? 0) / 6);
 			break;
 		}
+		case 'startCombat': {
+			// The monster card, reward track, player build, and combat odds are public.
+			// Encode those EXPECTATIONS here, never facts read from the dry-run `next`
+			// state: that state has already consumed the upcoming attack roll.
+			const mon = state.monster;
+			if (me && mon) {
+				const expected = combatActionExpectation(state, seat, catalog);
+				f[p] = expected.killProbability;
+				f[p + 1] = expected.cleanKillProbability;
+				f[p + 2] = expected.rawFirepowerProbability;
+				f[p + 3] = clamp01(expected.expectedAttackDamage / BARRIER_NORM);
+				f[p + 4] = clamp01(mon.maxHp / BARRIER_NORM);
+				f[p + 5] = clamp01(mon.damage / BARRIER_NORM);
+				f[p + 6] = clamp01(mon.livesRemaining / Math.max(1, mon.livesTotal));
+				f[p + 7] = clamp01(mon.ladderIndex / Math.max(1, mon.ladderMax));
+				f[p + 8] = clamp01(expected.claimableRewardVp / 10);
+				f[p + 9] = clamp01(expected.expectedRewardVp / 10);
+				f[p + 10] = clamp01(mon.chooseAmount / 4);
+				f[p + 11] = clamp01(buildMonsterRewards(mon.rewardTrack).length / 8);
+			}
+			break;
+		}
 		case 'initiatePvp': {
 			f[p] = me ? clamp01((me.attackDice?.length ?? 0) / POOL_NORM) : 0;
 			break;
@@ -384,6 +481,31 @@ export function encodeAction(
 	// Append-only; counted in ACTION_EFFECT_SLOTS.
 	const a = state.players[seat];
 	const b = next?.players[seat];
+	if (cmd.type === 'startCombat') {
+		// Preserve the existing 12-slot effect contract with EXPECTED values. Combat
+		// itself grants no immediate VP and cannot directly win; a successful roll opens
+		// the public reward track and consumes one monster life. The continuous values are
+		// probabilities/expectations, not a peek at whether this particular roll succeeds.
+		const expected = combatActionExpectation(state, seat, catalog);
+		const previewPlayer = next?.players[seat];
+		const knownBarrierLoss =
+			a && previewPlayer ? Math.max(0, a.barrier - previewPlayer.barrier) : 0;
+		const knownStatusStep =
+			a && previewPlayer ? Math.max(0, previewPlayer.statusLevel - a.statusLevel) : 0;
+		f.push(0); // expected ΔmaxBarrier
+		f.push(0); // expected immediate ΔVP (rewards are selected afterward)
+		f.push(0); // expected Δdice
+		f.push(clamp01(knownBarrierLoss / 10)); // guaranteed opening-hit barrier loss
+		f.push(clamp01(knownStatusStep / 3)); // guaranteed opening-hit corruption step
+		f.push(0); // expected Δawakened spirits
+		f.push(0); // combat cannot directly win before reward selection
+		f.push(clamp01(expected.expectedRewardVp / 10)); // expected claimable reward VP
+		f.push(expected.killProbability); // probability that combat creates a reward choice
+		f.push(1); // committing combat always consumes the combat action
+		f.push(clamp01(expected.killProbability / 4)); // expected monster-life progress
+		f.push(0); // not table churn
+		return f;
+	}
 	if (next && a && b) {
 		const faceUp = (p: PrivatePlayerState) => (p.spirits ?? []).filter((s) => !s.isFaceDown).length;
 		const deltaMaxBarrier = b.maxBarrier - a.maxBarrier;
@@ -397,13 +519,12 @@ export function encodeAction(
 		const deltaPendingRewardVp = Math.max(0, pendingVpAfter - pendingVpBefore);
 		const createdMonsterReward = !a.pendingReward && !!b.pendingReward;
 		const advancedPhaseOrReady =
-			next.phase !== state.phase ||
-			next.round !== state.round ||
-			(!a.phaseReady && b.phaseReady);
+			next.phase !== state.phase || next.round !== state.round || (!a.phaseReady && b.phaseReady);
 		const monsterProgress = state.monster
 			? Math.max(
 					0,
-					(state.monster.livesRemaining - (next.monster?.livesRemaining ?? 0)) +
+					state.monster.livesRemaining -
+						(next.monster?.livesRemaining ?? 0) +
 						((next.monster?.ladderIndex ?? state.monster.ladderIndex) - state.monster.ladderIndex)
 				)
 			: 0;

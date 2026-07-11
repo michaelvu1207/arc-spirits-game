@@ -25,10 +25,20 @@
  */
 
 import { applyGameCommand } from '../runtime';
-import { botActorFor } from '../server/botPolicy';
+import { resetCombatFlags, takeDamage, pvpVpForAttack } from '../combat';
+import { applyTrigger } from '../effects/apply';
+import { botActorFor, computeKillProbability } from '../server/botPolicy';
 import { canApply } from '../legality';
-import { buildMonsterRewards, type MonsterRewardOption } from '../monsterRewards';
-import { ALL_DESTINATIONS, type GameActor, type GameCommand, type PendingRewardState, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
+import { buildMonsterRewards, rewardClaimCount, type MonsterRewardOption } from '../monsterRewards';
+import {
+	ALL_DESTINATIONS,
+	type GameActor,
+	type GameCommand,
+	type PendingRewardState,
+	type PlayCatalog,
+	type PublicGameState,
+	type SeatColor
+} from '../types';
 
 const MAX_LOCATION_ROWS = 10;
 /** How many distinct "or"-option choices to expand per location reward row. */
@@ -38,10 +48,264 @@ const MAX_MONSTER_REWARD_PICK_SIZE = 3;
 const MAX_MONSTER_REWARD_CHOICE_VARIANTS = 6;
 const MAX_MONSTER_REWARD_COMMANDS = 160;
 
-/** A legal candidate command paired with the state it produces (from the dry-run). */
+/**
+ * A legal candidate command paired with two deliberately different state views.
+ *
+ * `next` is the authoritative dry-run result. It may contain dice rolls, shuffled bag
+ * order, drawn spirit identities, or a resolved PvP exchange. It is retained so the
+ * caller can commit the chosen action without running the reducer a second time, and so
+ * post-action training labels can describe what actually happened.
+ *
+ * `policyNext` is the only next-state a policy/search scorer may inspect before choosing
+ * the action. For deterministic commands it is the same object as `next`. For commands
+ * that reveal a hidden stochastic outcome it is a redacted post-action preview: guaranteed
+ * effects (monster damage, action consumption, fixed VP, phase progress, draw count) remain,
+ * while roll faces, draw identities, shuffled order, and stochastic PvP damage are removed.
+ * Expected/public combat facts are encoded separately by `encodeAction`.
+ */
 export interface LegalAction {
 	cmd: GameCommand;
 	next: PublicGameState;
+	policyNext: PublicGameState;
+	hasHiddenOutcome: boolean;
+}
+
+function rngAdvanced(before: PublicGameState, after: PublicGameState): boolean {
+	return before.rng.seed !== after.rng.seed || before.rng.cursor !== after.rng.cursor;
+}
+
+function bagContentsChanged(before: PublicGameState, after: PublicGameState): boolean {
+	const sig = (contents: PublicGameState['bags']['hexSpirits']['contents']): string =>
+		contents.map((entry) => `${entry.guid}:${entry.id ?? ''}:${entry.cost ?? ''}`).join('|');
+	return (
+		sig(before.bags.hexSpirits.contents) !== sig(after.bags.hexSpirits.contents) ||
+		sig(before.bags.abyssFallen.contents) !== sig(after.bags.abyssFallen.contents)
+	);
+}
+
+function handDrawsChanged(before: PublicGameState, after: PublicGameState): boolean {
+	const sig = (state: PublicGameState): string =>
+		Object.entries(state.players)
+			.map(
+				([seat, player]) =>
+					`${seat}:${(player?.handDraws ?? []).map((draw) => draw.guid).join(',')}`
+			)
+			.sort()
+			.join('|');
+	return sig(before) !== sig(after);
+}
+
+function marketChanged(before: PublicGameState, after: PublicGameState): boolean {
+	return before.market.some(
+		(slot, index) => slot.spiritId !== (after.market[index]?.spiritId ?? null)
+	);
+}
+
+function revealsNewHandDraw(before: PublicGameState, after: PublicGameState): boolean {
+	const known = new Set<string>();
+	for (const player of Object.values(before.players)) {
+		for (const draw of player?.handDraws ?? []) known.add(draw.guid);
+	}
+	for (const player of Object.values(after.players)) {
+		for (const draw of player?.handDraws ?? []) {
+			if (!known.has(draw.guid)) return true;
+		}
+	}
+	return false;
+}
+
+function resolvedNewPvpCombat(before: PublicGameState, after: PublicGameState): boolean {
+	const priorIds = new Set(
+		before.combats.filter((combat) => combat.kind === 'pvp').map((combat) => combat.id)
+	);
+	return after.combats.some((combat) => combat.kind === 'pvp' && !priorIds.has(combat.id));
+}
+
+/**
+ * True when a reducer dry-run contains information the acting player did not know at
+ * commitment time. This is intentionally outcome-based rather than a coarse command
+ * allowlist: location/reward/spawn commands are stochastic only when they actually open
+ * a hidden draw or reshuffle a bag, and `initiatePvp` is stochastic only when that vote
+ * resolves the exchange.
+ *
+ * RNG used solely for opaque instance ids is not classified as a hidden outcome. Those
+ * ids do not change the public/deterministic value of the command. A changed bag plus an
+ * advanced RNG cursor, by contrast, is a real hidden shuffle and must be masked.
+ */
+export function commandHasHiddenOutcome(
+	before: PublicGameState,
+	cmd: GameCommand,
+	after: PublicGameState
+): boolean {
+	if (cmd.type === 'startCombat') return true;
+	if (resolvedNewPvpCombat(before, after)) return true;
+	if (revealsNewHandDraw(before, after)) return true;
+	if (marketChanged(before, after) && bagContentsChanged(before, after)) return true;
+	return (
+		rngAdvanced(before, after) &&
+		(bagContentsChanged(before, after) || handDrawsChanged(before, after))
+	);
+}
+
+/** Selection helpers use this instead of inferring progress from a realized random result. */
+export function isStochasticLegalAction(action: LegalAction): boolean {
+	return action.hasHiddenOutcome;
+}
+
+/** Single policy-facing access point. Selection code must never inspect `action.next`. */
+export function policyPreviewState(action: LegalAction): PublicGameState {
+	return action.policyNext;
+}
+
+/** Compatibility view for archived predicates that still name their state field `next`. */
+export function policySafeAction(action: LegalAction): LegalAction {
+	return action.next === action.policyNext ? action : { ...action, next: action.policyNext };
+}
+
+function buildCombatPolicyPreview(
+	before: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): PublicGameState {
+	const preview = structuredClone(before) as PublicGameState;
+	const player = preview.players[seat];
+	const monster = preview.monster;
+	if (!player || !monster) return preview;
+
+	// Monster initiative is infinite, so this opening hit is known before commitment.
+	// Re-run only the deterministic pre-roll half of fightMonster.
+	resetCombatFlags(player);
+	applyTrigger(preview, seat, 'inCombat', [], { catalog });
+	takeDamage(player, monster.damage, { state: preview, seat, catalog }, []);
+	player.actionsUsedThisRound.push('combat');
+	const guaranteedKillProbability = Math.max(
+		computeKillProbability(before, seat, catalog),
+		computeKillProbability(before, seat, catalog, { allowCorruptKill: true })
+	);
+	if (guaranteedKillProbability >= 1 - 1e-12) {
+		monster.livesRemaining = Math.max(0, monster.livesRemaining - 1);
+		const claim = rewardClaimCount(monster.rewardTrack, monster.chooseAmount);
+		if (claim > 0) {
+			player.pendingReward = {
+				monsterId: monster.id,
+				monsterName: monster.name,
+				rewardTrack: [...monster.rewardTrack],
+				chooseAmount: claim
+			};
+		}
+	} else if (guaranteedKillProbability <= 1e-12) {
+		// Adaptive Fighter's no-kill branch is deterministic when every roll misses.
+		applyTrigger(preview, seat, 'onMonsterKill', [], {
+			catalog,
+			combat: { dealt: 0, overkill: 0, killed: false }
+		});
+	}
+	// Starting a fresh fight replaces the prior overlay for this seat, but the new
+	// overlay contains the hidden roll and therefore is not part of the preview.
+	preview.combats = preview.combats.filter((entry) => entry.sides[0]?.seat !== seat);
+	preview.rng = structuredClone(before.rng);
+	return preview;
+}
+
+function buildPvpPolicyPreview(before: PublicGameState, after: PublicGameState): PublicGameState {
+	const priorIds = new Set(
+		before.combats.filter((combat) => combat.kind === 'pvp').map((combat) => combat.id)
+	);
+	const resolved = after.combats.find(
+		(combat) => combat.kind === 'pvp' && !priorIds.has(combat.id)
+	);
+	if (!resolved) return structuredClone(before) as PublicGameState;
+
+	// Keep deterministic encounter -> location progress, then restore participants to
+	// their pre-roll material state. Readiness/votes are public consequences of the vote.
+	const preview = structuredClone(after) as PublicGameState;
+	for (const seat of before.activeSeats) {
+		const prior = before.players[seat];
+		const post = after.players[seat];
+		if (!prior || !post) continue;
+		const phaseReady = post.phaseReady;
+		const encounterVote = post.encounterVote;
+		preview.players[seat] = structuredClone(prior);
+		preview.players[seat]!.phaseReady = phaseReady;
+		preview.players[seat]!.encounterVote = encounterVote;
+	}
+	// The engagement award is fixed and public; corruption bounties depend on rolls.
+	for (const side of resolved.sides) {
+		if (side.side !== 'evil') continue;
+		const player = preview.players[side.seat];
+		const priorVp = before.players[side.seat]?.victoryPoints ?? 0;
+		if (player) player.victoryPoints = priorVp + pvpVpForAttack(0);
+	}
+	preview.combats = structuredClone(before.combats);
+	preview.bags = structuredClone(before.bags);
+	preview.rng = structuredClone(before.rng);
+	preview.status = before.status;
+	preview.winnerSeat = before.winnerSeat;
+	preview.spiritWorldSaved = before.spiritWorldSaved;
+	return preview;
+}
+
+function hiddenBagContents(label: string, count: number) {
+	return Array.from({ length: count }, (_, index) => ({
+		name: 'Hidden Spirit',
+		guid: `__hidden_${label}_${index}`
+	}));
+}
+
+function buildRedactedOutcomePreview(
+	before: PublicGameState,
+	after: PublicGameState
+): PublicGameState {
+	const preview = structuredClone(after) as PublicGameState;
+	preview.rng = structuredClone(before.rng);
+
+	for (const seat of before.activeSeats) {
+		const prior = before.players[seat];
+		const post = after.players[seat];
+		const shown = preview.players[seat];
+		if (!prior || !post || !shown) continue;
+		const beforeSig = prior.handDraws.map((draw) => draw.guid).join('|');
+		const afterSig = post.handDraws.map((draw) => draw.guid).join('|');
+		if (beforeSig !== afterSig && post.handDraws.length > 0) {
+			shown.handDraws = post.handDraws.map((draw, index) => ({
+				guid: `__hidden_draw_${seat}_${index}`,
+				sourceBag: draw.sourceBag
+			}));
+		}
+	}
+
+	for (const [label, key] of [
+		['world', 'hexSpirits'],
+		['abyss', 'abyssFallen']
+	] as const) {
+		const prior = before.bags[key];
+		const post = after.bags[key];
+		const priorSig = prior.contents.map((entry) => entry.guid).join('|');
+		const postSig = post.contents.map((entry) => entry.guid).join('|');
+		if (priorSig !== postSig) {
+			preview.bags[key].contents = hiddenBagContents(label, post.count);
+		}
+	}
+	// Per-spirit history deltas would identify which hidden card left the bag.
+	preview.bags.history = structuredClone(before.bags.history);
+	for (let i = 0; i < preview.market.length; i++) {
+		if (before.market[i]?.spiritId !== after.market[i]?.spiritId) {
+			preview.market[i].spiritId = `__hidden_market_${i}`;
+		}
+	}
+	return preview;
+}
+
+function buildPolicyPreview(
+	before: PublicGameState,
+	seat: SeatColor,
+	cmd: GameCommand,
+	after: PublicGameState,
+	catalog: PlayCatalog
+): PublicGameState {
+	if (cmd.type === 'startCombat') return buildCombatPolicyPreview(before, seat, catalog);
+	if (resolvedNewPvpCombat(before, after)) return buildPvpPolicyPreview(before, after);
+	return buildRedactedOutcomePreview(before, after);
 }
 
 function rewardChoiceVariants(option: MonsterRewardOption): number[] {
@@ -147,7 +411,7 @@ export function enumerateCandidates(
 		case 'location': {
 			const dest = me?.navigationDestination ?? null;
 			const rowCount = dest
-				? catalog.locations?.find((l) => l.name === dest)?.rewardRows.length ?? MAX_LOCATION_ROWS
+				? (catalog.locations?.find((l) => l.name === dest)?.rewardRows.length ?? MAX_LOCATION_ROWS)
 				: MAX_LOCATION_ROWS;
 			// Resolve a reward row — default choices, plus expand the discrete "or"-gain options
 			// so the bot can pick WHICH benefit (a real strategic choice, not just which row).
@@ -165,11 +429,13 @@ export function enumerateCandidates(
 			tryAdd({ type: 'startCombat' });
 			if (me?.pendingReward) emitMonsterRewardCommands(me.pendingReward, tryAdd);
 			// Spirit/rune management actions that exist in real play.
-			for (let s = 0; s < (me?.spirits?.length ?? 0); s++) tryAdd({ type: 'absorbSpirit', slotIndex: s });
+			for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
+				tryAdd({ type: 'absorbSpirit', slotIndex: s });
 			for (const mat of me?.mats ?? []) {
 				const runeId = (mat as { runeId?: string }).runeId;
 				if (!runeId) continue;
-				for (let s = 0; s < (me?.spirits?.length ?? 0); s++) tryAdd({ type: 'attachRuneToSpirit', runeId, spiritSlotIndex: s });
+				for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
+					tryAdd({ type: 'attachRuneToSpirit', runeId, spiritSlotIndex: s });
 			}
 			for (let s = 0; s < (me?.spirits?.length ?? 0); s++) {
 				for (const att of me?.spiritAugmentAttachments ?? []) {
@@ -200,23 +466,35 @@ export function enumerateCandidates(
 			// Flip & pay for face-down spirits — including discard-cost variants per offer.
 			for (const off of me?.awakenOffers ?? []) {
 				tryAdd({ type: 'awakenSpirit', slotIndex: off.slotIndex });
-				for (const opt of off.options ?? []) tryAdd({ type: 'awakenSpirit', slotIndex: off.slotIndex, discardRefs: [opt.ref] });
+				for (const opt of off.options ?? [])
+					tryAdd({ type: 'awakenSpirit', slotIndex: off.slotIndex, discardRefs: [opt.ref] });
 			}
-			for (let s = 0; s < (me?.spirits?.length ?? 0); s++) tryAdd({ type: 'manualAwaken', slotIndex: s });
+			for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
+				tryAdd({ type: 'manualAwaken', slotIndex: s });
 			// Resolve class decision cards (every option).
 			for (const dec of me?.pendingDecisions ?? [])
-				for (const o of dec.options) tryAdd({ type: 'resolveDecision', decisionId: dec.id, optionId: o.id });
+				for (const o of dec.options)
+					tryAdd({ type: 'resolveDecision', decisionId: dec.id, optionId: o.id });
 			// Place unplaced augments onto spirits (every augment × every spirit).
 			for (let a = 0; a < (me?.unplacedAugments?.length ?? 0); a++) {
 				const aug = me!.unplacedAugments![a];
 				for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
-					tryAdd({ type: 'placeAugmentOnSpirit', augmentIndex: a, augmentRuneId: aug.runeId, spiritSlotIndex: s });
+					tryAdd({
+						type: 'placeAugmentOnSpirit',
+						augmentIndex: a,
+						augmentRuneId: aug.runeId,
+						spiritSlotIndex: s
+					});
 			}
 			if (me?.pendingAwakenReward) {
 				tryAdd({ type: 'resolveAwakenReward' });
 				const grants = me.pendingAwakenReward.grants ?? [];
-				const tainted = grants.find((g) => g.kind === 'taintedChoice') as { amount: number } | undefined;
-				if (tainted) for (let t = 0; t <= tainted.amount; t++) tryAdd({ type: 'resolveAwakenReward', taintedMaxBarrier: t });
+				const tainted = grants.find((g) => g.kind === 'taintedChoice') as
+					| { amount: number }
+					| undefined;
+				if (tainted)
+					for (let t = 0; t <= tainted.amount; t++)
+						tryAdd({ type: 'resolveAwakenReward', taintedMaxBarrier: t });
 			}
 			for (const mp of me?.manualPrompts ?? []) tryAdd({ type: 'dismissManualPrompt', id: mp.id });
 			tryAdd({ type: 'commitAwakening' }); // yield
@@ -224,8 +502,10 @@ export function enumerateCandidates(
 		}
 
 		case 'cleanup': {
-			for (let i = 0; i < (me?.spirits?.length ?? 0); i++) tryAdd({ type: 'discardSpirit', slotIndex: i });
-			for (let i = 0; i < (me?.mats?.length ?? 0); i++) tryAdd({ type: 'discardRune', slotIndex: i });
+			for (let i = 0; i < (me?.spirits?.length ?? 0); i++)
+				tryAdd({ type: 'discardSpirit', slotIndex: i });
+			for (let i = 0; i < (me?.mats?.length ?? 0); i++)
+				tryAdd({ type: 'discardRune', slotIndex: i });
 			tryAdd({ type: 'commitCleanup' }); // yield — the cleanup-phase yield a real bot/player issues
 			// NOTE: `commitRound` is intentionally NOT offered. It is a server/host-level
 			// round-advance + history-snapshot command (service.ts), which botSim "never calls"
@@ -245,13 +525,27 @@ export function enumerateCandidates(
  * because this function needs its next-state — the win for `legalActionsWithNext` is skipping the
  * illegal majority. (The zero-clone win is in `legalActions`, which needs no next-states.)
  */
-export function legalActionsWithNext(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): LegalAction[] {
+export function legalActionsWithNext(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): LegalAction[] {
 	const actor: GameActor = botActorFor(state, seat);
 	const out: LegalAction[] = [];
 	enumerateCandidates(state, seat, catalog, (cmd) => {
 		if (canApply(state, actor, cmd, catalog) === false) return; // provably illegal — no clone
 		const r = applyGameCommand(state, actor, cmd, catalog);
-		if (r.ok) out.push({ cmd, next: r.state });
+		if (r.ok) {
+			const hasHiddenOutcome = commandHasHiddenOutcome(state, cmd, r.state);
+			out.push({
+				cmd,
+				next: r.state,
+				policyNext: hasHiddenOutcome
+					? buildPolicyPreview(state, seat, cmd, r.state, catalog)
+					: r.state,
+				hasHiddenOutcome
+			});
+		}
 	});
 	return out;
 }
@@ -262,7 +556,11 @@ export function legalActionsWithNext(state: PublicGameState, seat: SeatColor, ca
  * oracle. Candidate order matches `legalActionsWithNext` exactly (shared enumerator) so the recorded
  * BC `chosen` index is stable.
  */
-export function legalActions(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): GameCommand[] {
+export function legalActions(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): GameCommand[] {
 	const actor: GameActor = botActorFor(state, seat);
 	const out: GameCommand[] = [];
 	enumerateCandidates(state, seat, catalog, (cmd) => {
@@ -289,13 +587,18 @@ export function commandMatches(a: GameCommand, b: GameCommand): boolean {
 		case 'selectNavigationDestination':
 			return a.destination === (b as typeof a).destination;
 		case 'resolveLocationInteraction':
-			return a.rowIndex === (b as typeof a).rowIndex && (a.choices?.[0] ?? 0) === ((b as typeof a).choices?.[0] ?? 0);
+			return (
+				a.rowIndex === (b as typeof a).rowIndex &&
+				(a.choices?.[0] ?? 0) === ((b as typeof a).choices?.[0] ?? 0)
+			);
 		case 'spawnHandSpirit':
 			return a.guid === (b as typeof a).guid;
 		case 'takeSpirit':
 			return a.marketIndex === (b as typeof a).marketIndex;
 		case 'replaceSpirit':
-			return a.marketIndex === (b as typeof a).marketIndex && a.slotIndex === (b as typeof a).slotIndex;
+			return (
+				a.marketIndex === (b as typeof a).marketIndex && a.slotIndex === (b as typeof a).slotIndex
+			);
 		case 'awakenSpirit':
 		case 'discardSpirit':
 		case 'discardRune':
@@ -305,7 +608,10 @@ export function commandMatches(a: GameCommand, b: GameCommand): boolean {
 		case 'resolveDecision':
 			return a.decisionId === (b as typeof a).decisionId && a.optionId === (b as typeof a).optionId;
 		case 'placeAugmentOnSpirit':
-			return a.augmentIndex === (b as typeof a).augmentIndex && a.spiritSlotIndex === (b as typeof a).spiritSlotIndex;
+			return (
+				a.augmentIndex === (b as typeof a).augmentIndex &&
+				a.spiritSlotIndex === (b as typeof a).spiritSlotIndex
+			);
 		default:
 			return true; // type-only commands: passEncounter, initiatePvp, commit*, refillMarket, etc.
 	}

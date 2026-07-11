@@ -93,6 +93,7 @@ const catalogPath = argValue('--catalog', 'ml/catalog.json');
 const notes = argValue('--notes', '');
 const packageJson = readJson(resolve('package.json')) ?? {};
 const weights = readJson(resolve(weightsPath));
+const liveWeights = readJson(resolve('src/lib/play/ml/policy-weights.json'));
 const evalSummary = readJson(resolve(evalSummaryPath));
 const statusShort = runGit(['status', '--short']) ?? '';
 
@@ -127,8 +128,13 @@ const manifest = {
 	},
 	checkpoints: argValues('--checkpoint').map(checkpointRecord),
 	gates: {
-		current_dims: weights ? { obs_dim: weights.obs_dim, act_dim: weights.act_dim } : null,
-		dims_are_current_62_52: weights ? weights.obs_dim === 62 && weights.act_dim === 52 : false,
+		current_dims: liveWeights
+			? { obs_dim: liveWeights.obs_dim, act_dim: liveWeights.act_dim }
+			: null,
+		dims_match_live_contract:
+			weights && liveWeights
+				? weights.obs_dim === liveWeights.obs_dim && weights.act_dim === liveWeights.act_dim
+				: false,
 		full_control: evalSummary ? evalSummary.control === 'full' : null,
 		verdict: evalSummary?.verdict ?? null
 	}

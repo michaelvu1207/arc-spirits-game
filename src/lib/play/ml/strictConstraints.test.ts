@@ -68,7 +68,12 @@ function stateWith(statusLevel: number, spirits: PlaySpirit[]): PublicGameState 
 		round: 9,
 		guardianPool: [],
 		seats: {
-			Red: { seatColor: 'Red', memberId: 'red', displayName: 'Red', selectedGuardian: 'Test Guardian' },
+			Red: {
+				seatColor: 'Red',
+				memberId: 'red',
+				displayName: 'Red',
+				selectedGuardian: 'Test Guardian'
+			},
 			Blue: { seatColor: 'Blue', memberId: null, displayName: null, selectedGuardian: null },
 			Orange: { seatColor: 'Orange', memberId: null, displayName: null, selectedGuardian: null },
 			Green: { seatColor: 'Green', memberId: null, displayName: null, selectedGuardian: null }
@@ -112,18 +117,16 @@ function stateWith(statusLevel: number, spirits: PlaySpirit[]): PublicGameState 
 }
 
 function action(cmd: LegalAction['cmd'], next: PublicGameState): LegalAction {
-	return { cmd, next };
+	return { cmd, next, policyNext: next, hasHiddenOutcome: false };
 }
 
 describe('planner hard-constraint attribution', () => {
 	it('attributes status-cap crossings to own, external, and deadline sources', () => {
-		const own = statusCapTransitionAttribution(
-			'Red',
-			0,
-			1,
-			0,
-			{ kind: 'command', actorSeat: 'Red', cmdType: 'startCombat' }
-		);
+		const own = statusCapTransitionAttribution('Red', 0, 1, 0, {
+			kind: 'command',
+			actorSeat: 'Red',
+			cmdType: 'startCombat'
+		});
 		expect(own).toEqual({
 			events: 1,
 			ownEvents: 1,
@@ -132,13 +135,11 @@ describe('planner hard-constraint attribution', () => {
 			sources: { 'own:Red:startCombat': 1 }
 		});
 
-		const external = statusCapTransitionAttribution(
-			'Blue',
-			0,
-			3,
-			0,
-			{ kind: 'command', actorSeat: 'Green', cmdType: 'initiatePvp' }
-		);
+		const external = statusCapTransitionAttribution('Blue', 0, 3, 0, {
+			kind: 'command',
+			actorSeat: 'Green',
+			cmdType: 'initiatePvp'
+		});
 		expect(external).toEqual({
 			events: 3,
 			ownEvents: 0,
@@ -147,13 +148,10 @@ describe('planner hard-constraint attribution', () => {
 			sources: { 'external:Green:initiatePvp': 3 }
 		});
 
-		const deadline = statusCapTransitionAttribution(
-			'Orange',
-			0,
-			1,
-			0,
-			{ kind: 'deadline', cmdType: 'deadline' }
-		);
+		const deadline = statusCapTransitionAttribution('Orange', 0, 1, 0, {
+			kind: 'deadline',
+			cmdType: 'deadline'
+		});
 		expect(deadline).toEqual({
 			events: 1,
 			ownEvents: 0,
@@ -164,13 +162,13 @@ describe('planner hard-constraint attribution', () => {
 	});
 
 	it('does not emit a new event while already above the cap without a status increase', () => {
-		expect(statusCapTransitionAttribution(
-			'Red',
-			1,
-			1,
-			0,
-			{ kind: 'command', actorSeat: 'Red', cmdType: 'passEncounter' }
-		).events).toBe(0);
+		expect(
+			statusCapTransitionAttribution('Red', 1, 1, 0, {
+				kind: 'command',
+				actorSeat: 'Red',
+				cmdType: 'passEncounter'
+			}).events
+		).toBe(0);
 	});
 
 	it('preserves route-critical Spirit Animal for non-Fallen status-2 Good builders', () => {
@@ -226,6 +224,9 @@ describe('planner hard-constraint attribution', () => {
 			false
 		);
 
-		expect(filtered.map((candidate) => candidate.cmd.type)).toEqual(['discardSpirit', 'commitCleanup']);
+		expect(filtered.map((candidate) => candidate.cmd.type)).toEqual([
+			'discardSpirit',
+			'commitCleanup'
+		]);
 	});
 });

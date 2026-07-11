@@ -13,11 +13,11 @@ re-baseline of the shipped champion. Raw shards: `ml/battery_v13/` (interim),
 
 ## 1. Champion re-baseline (the number that matters)
 
-| ladder8c2-gen60 (live net) | Elo | win | meanVP |
-|---|---|---|---|
-| gauntlet-v8 (old rules) | **727** | 96.1% | 27.4 |
-| v9 interim (roll-scaled PvP, 1-life 2p) | 158 | 51.8% | 11.5 |
-| **v9 FINAL ruleset** | **195** | **60.9%** | **16.4** |
+| ladder8c2-gen60 (live net)              | Elo     | win       | meanVP   |
+| --------------------------------------- | ------- | --------- | -------- |
+| gauntlet-v8 (old rules)                 | **727** | 96.1%     | 27.4     |
+| v9 interim (roll-scaled PvP, 1-life 2p) | 158     | 51.8%     | 11.5     |
+| **v9 FINAL ruleset**                    | **195** | **60.9%** | **16.4** |
 
 The old champion still beats every heuristic (Elo 177–309 pairwise) but is far from its
 v8 saturation, and its mirror vs itself is ~fair. **The v9 number to beat is Elo 195.**
@@ -34,12 +34,12 @@ for the retrained net to exploit.
 
 pvphunter (the only heuristic that PvPs) — its VP roughly halves at every table size:
 
-| table | old rules | rules v1.3 |
-|---|---|---|
-| 2p | 6.7% / 11.5 VP | 0.0% / 4.9 VP |
-| 3p | 0.0% / 7.2 VP | 1.1% / 5.1 VP |
-| 4p | 0.0% / 5.4 VP | 0.9% / 3.3 VP |
-| 6p | 0.0% / 5.3 VP | 0.0% / 2.6 VP |
+| table | old rules      | rules v1.3    |
+| ----- | -------------- | ------------- |
+| 2p    | 6.7% / 11.5 VP | 0.0% / 4.9 VP |
+| 3p    | 0.0% / 7.2 VP  | 1.1% / 5.1 VP |
+| 4p    | 0.0% / 5.4 VP  | 0.9% / 3.3 VP |
+| 6p    | 0.0% / 5.3 VP  | 0.0% / 2.6 VP |
 
 Economy lines (hard/rushpatient/cultivator/etc.): essentially unchanged, ~5–7 avgVP,
 0% win at all table sizes under both rule sets.
@@ -47,12 +47,12 @@ Economy lines (hard/rushpatient/cultivator/etc.): essentially unchanged, ~5–7 
 ## 3. Interpretation
 
 - **DIVERSITY_FINDINGS' "85% pvphunter" world is long gone** — the v1.2 corruption-debt
-  rule already killed the flat-+3 faucet for the *heuristic* implementation (it corrupts
+  rule already killed the flat-+3 faucet for the _heuristic_ implementation (it corrupts
   itself into VP-bleed). v1.3 halves its take again: it spams weak-roll attacks
   (7–10/game) that now pay floor(roll/2) ≈ 1–2 VP each, minus corruption debt.
 - **No heuristic reaches 30 VP under v1.3** (nor under current old rules, save 6.7%
   pvphunter at 2p). Heuristics are not the meta ceiling — the neural champion converts
-  the same rules into 11.5 meanVP, so the interesting question is what a *retrained* net
+  the same rules into 11.5 meanVP, so the interesting question is what a _retrained_ net
   can reach. If a strong retrained net ALSO plateaus far below 30, the win condition may
   be out of reach under v1.3 and the design knobs (PvP divisor, corruption bonus,
   monster reward VP) should be revisited — flag for Michael after Phase 3.
@@ -71,29 +71,30 @@ monster's last life SAVES THE SPIRIT WORLD, ending the game with final scoring):
 ladder pays 3/3/2/2/3/4/6/10 = 33 VP per traversal, so the total pool is 33 × lives(p):
 
 | players | lives | pool | share one player needs for 30 |
-|---|---|---|---|
-| 1 | 1 | 33 | 91% (solo) ✓ |
-| 2 | 2 | 66 | 45% ✓ |
-| 3 | 2 | 66 | 45% ✓ |
-| 4 | 3 | 99 | 30% ✓ |
-| 5 | 3 | 99 | 30% ✓ |
-| 6 | 3 | 99 | 30% ✓ |
+| ------- | ----- | ---- | ----------------------------- |
+| 1       | 1     | 33   | 91% (solo) ✓                  |
+| 2       | 2     | 66   | 45% ✓                         |
+| 3       | 2     | 66   | 45% ✓                         |
+| 4       | 3     | 99   | 30% ✓                         |
+| 5       | 3     | 99   | 30% ✓                         |
+| 6       | 3     | 99   | 30% ✓                         |
 
 Michael's invariant — someone must be able to reach 30 VP from monsters alone — now
 holds at every table size.
 
 **Realized** (VP-by-source audit, heuristic field, 40 games/table size, 30r):
 
-| seats | avgVP | monster share of gains | PvP share | target monster share |
-|---|---|---|---|---|
-| 1 | 7.1 | 100% | 0% | 100% |
-| 2 | 6.6 | 100% | **net negative** | 85% |
-| 3 | 6.3 | 100% | net negative | 70% |
-| 4 | 6.9 | 100% | net negative (pvphunter −4.9 VP/game) | 60% |
-| 5 | 5.8 | 100% | net negative | 60% |
-| 6 | 4.9 | 100% | net negative | 50% |
+| seats | avgVP | monster share of gains | PvP share                             | target monster share |
+| ----- | ----- | ---------------------- | ------------------------------------- | -------------------- |
+| 1     | 7.1   | 100%                   | 0%                                    | 100%                 |
+| 2     | 6.6   | 100%                   | **net negative**                      | 85%                  |
+| 3     | 6.3   | 100%                   | net negative                          | 70%                  |
+| 4     | 6.9   | 100%                   | net negative (pvphunter −4.9 VP/game) | 60%                  |
+| 5     | 5.8   | 100%                   | net negative                          | 60%                  |
+| 6     | 4.9   | 100%                   | net negative                          | 50%                  |
 
 Two structural gaps vs the curve:
+
 1. **PvP contributes nothing at any table size** — for the only line that uses it, the
    roll-scaled payout (weak pools → 1–2 VP/attack) is outweighed by Fallen corruption
    debt. The non-monster share the curve wants at 3p+ (30–50%) has no working faucet.
@@ -106,20 +107,23 @@ Two 60-gen league-PPO runs (ladder8c2 recipe, promotion via gauntlet-v9, frozen 
 champion stamped at its v9 Elo 195): `league_v13w` warm-started from the old champion,
 `league_v13s` from scratch. Both trained in ~80 minutes wall clock on the box.
 
-| candidate | v9 Elo (800g) | real win% | meanVP | mixed-field probe |
-|---|---|---|---|---|
-| old champion (baseline) | 195 | 60.9% | 16.4 | 9.9 VP / 65% / 0% reach-30 |
-| v13w gen20 (warm) | 643 | 94.3% | 28.2 | 14.9 VP / 94% / 3% reach-30 |
-| v13w gen28 (warm) | 649 | 94.0% | 28.7 | 14.4 VP / 87% / 1% reach-30 |
-| **v13s gen48 (scratch) → CHAMPION** | 592 | 93.6% | 29.0 | **27.1 VP / 100% / 49% reach-30, ends ~r24** |
+| candidate                           | v9 Elo (800g) | real win% | meanVP | mixed-field probe                            |
+| ----------------------------------- | ------------- | --------- | ------ | -------------------------------------------- |
+| old champion (baseline)             | 195           | 60.9%     | 16.4   | 9.9 VP / 65% / 0% reach-30                   |
+| v13w gen20 (warm)                   | 643           | 94.3%     | 28.2   | 14.9 VP / 94% / 3% reach-30                  |
+| v13w gen28 (warm)                   | 649           | 94.0%     | 28.7   | 14.4 VP / 87% / 1% reach-30                  |
+| **v13s gen48 (scratch) → CHAMPION** | 592           | 93.6%     | 29.0   | **27.1 VP / 100% / 49% reach-30, ends ~r24** |
 
-**Champion: v13s-gen48** (`ml/champions/v13-1/`, bundled to the live
-policy-weights.json). Rationale: head-to-head dominance over the other finalists and the
+**Phase-4 champion: v13s-gen48** (`ml/champions/v13-1/`). This was the first
+rules-v1.3 champion and became the frozen gauntlet-v10 anchor; it was superseded later
+the same day by v13-2-gen44, which is the current live bundle (see sections 7-8).
+Rationale at this phase: head-to-head dominance over the other finalists and the
 healthiest win profile (races to 30 rather than grinding all-Fallen cap endings); its
 lower anchor-pool Elo is a placement artifact. Warm-start proved viable but anchored to
 slower play — from-scratch won.
 
 **Balance readout (the design question):**
+
 - The game is dramatically more winnable: trained play reaches 30 VP in ~half of games
   (vs ~0% for anything under the old rules' realized play), and games END (round ~24 or
   all-Fallen/cap), thanks to the finite deck + save-the-world ending.
@@ -144,18 +148,18 @@ slower play — from-scratch won.
 All numbers: v13-2 champion, 800-game frozen gauntlet-v10 (Elo) + 400-game 4-copy
 mirror probe (`_mirror.test.ts`, reach-30 = % of games where anyone hits 30 VP).
 
-| config                     | Elo | mirror reach-30 | note |
-|----------------------------|-----|-----------------|------|
-| argmax                     | 453 | 19.5%           | eval ceiling; clones starve |
-| nav-only t=0.3             | 445 | 35.8%           | |
-| nav-only t=0.65            | 432 | 43.5%           | SHIPPED live default |
-| all-phase t=0.3            | 412 | 32.8%           | |
-| search16 policy-rollout    | 447 | —               | rollout fix recovers the regression, still ≤ argmax |
-| search32 policy-rollout    | 431 | —               | more sims do NOT help |
-| search16 argmax            | 399 | —               | search REGRESSES: stale heuristic rollouts |
-| all-phase t=0.65           | 385 | 41.3%           | old live default |
-| search16 t=0.65            | 374 | —               | ARC_EXPERT_BOTS=1 config — do not enable |
-| all-phase t=1.0            | 341 | —               | training distribution |
+| config                  | Elo | mirror reach-30 | note                                                |
+| ----------------------- | --- | --------------- | --------------------------------------------------- |
+| argmax                  | 453 | 19.5%           | eval ceiling; clones starve                         |
+| nav-only t=0.3          | 445 | 35.8%           |                                                     |
+| nav-only t=0.65         | 432 | 43.5%           | SHIPPED live default                                |
+| all-phase t=0.3         | 412 | 32.8%           |                                                     |
+| search16 policy-rollout | 447 | —               | rollout fix recovers the regression, still ≤ argmax |
+| search32 policy-rollout | 431 | —               | more sims do NOT help                               |
+| search16 argmax         | 399 | —               | search REGRESSES: stale heuristic rollouts          |
+| all-phase t=0.65        | 385 | 41.3%           | old live default                                    |
+| search16 t=0.65         | 374 | —               | ARC_EXPERT_BOTS=1 config — do not enable            |
+| all-phase t=1.0         | 341 | —               | training distribution                               |
 
 Findings: (1) the ~70-Elo live-serving cost was almost entirely NON-navigation
 sampling noise; clone collision is a route-choice problem, so nav-only temperature
@@ -174,6 +178,7 @@ v13-2 in the frozen PFSP field at its true Elo 453 (extraFrozen). Best candidate
 v13-2: 27% win as focus, holds v13-2 to 22%).
 
 BUT the general-strength measures both favor the incumbent:
+
 - gauntlet-v10: v14b **394** vs v13-2 **453** (win 78.6% vs 83.1%)
 - heuristic-field probe (400 games, human proxy): v14b 27.6 VP/91%/77% r30 vs
   v13-2 **29.4/96%/82%**, and ~2 rounds slower.

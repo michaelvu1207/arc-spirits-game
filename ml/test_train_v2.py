@@ -27,7 +27,7 @@ from model_v2 import build_model_v2, load_checkpoint, save_checkpoint
 from obs_v2 import ObsV2Spec
 
 ACT_DIM = 52
-OBS_V1_DIM = 62
+OBS_V1_DIM = 83
 FIXTURE = Path(__file__).parent / "data_fixtures" / "obsv2_fixture.json"
 
 
@@ -39,7 +39,7 @@ def load_fixture() -> tuple[ObsV2Spec, np.ndarray, dict]:
 
 def write_dataset(data_dir: Path, n_rows: int, n_v1_only: int = 0, seed: int = 11) -> dict:
     """
-    PINNED-contract rows (docs/encoder-v2.md): obs = v1 62-float ALWAYS,
+    PINNED-contract rows (docs/encoder-v2.md): obs = current v1 83-float ALWAYS,
     obsV2 = real flat v2 encoding, cands random with a learnable signal
     (chosen = argmax(cands[:, 0])). `n_v1_only` extra rows omit obsV2 to
     exercise the skip-and-count path.

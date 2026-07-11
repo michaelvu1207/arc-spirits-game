@@ -21,6 +21,32 @@ Run the smallest gate that matches the change, then record the exact command, ru
 
 Do not treat a long run as valid if the smoke gate fails.
 
+## Fairness and PPO correctness gates
+
+These are blocking gates for every new PPO checkpoint generated after July 10,
+2026:
+
+- **Public information stays public.** A candidate may expose the selected
+  monster's visible stats, remaining lives, public reward track/options, expected
+  incoming damage, and kill/reward probabilities. It must not expose the die roll
+  that will occur, the identity of a not-yet-drawn Spirit, a future bag order, or
+  a stochastic PvP resolution before the action is committed.
+- **Hidden-seed invariance.** Changing only the hidden RNG stream must leave the
+  policy observation, candidate features, candidate support, logits/search values,
+  and selected action identical before commitment. Cover constrained driver play,
+  search, and enabled self-play gates/oracles, not only base action encoding.
+- **Exact behavior probabilities.** PPO policy rows must retain the exact mask,
+  temperature, and serialized float32 inputs used by the actor. At learner start,
+  the sampled-row ratio must be numerically 1 within a tight end-to-end tolerance.
+- **Complete trajectories.** Deterministic hybrid/search overrides remain in the
+  episode for reward, terminal, value, placement, and auxiliary targets. They carry
+  `policyMask=false`; only the policy surrogate/entropy/KL terms exclude them. A
+  terminal override must not erase placement/win reward or intervening dense reward.
+- **Auxiliary objectives are an A/B, not a repair claim.** Reproduce the corrected
+  h128 baseline with farm/reward/route coefficients off, then compare fixed seeds
+  with them on. Report label coverage, auxiliary gradient scale, KL, clip fraction,
+  entropy, and effective learning rate.
+
 ## Promotion Philosophy
 
 Do not promote a checkpoint because it wins one local metric. The desired bot
@@ -49,6 +75,39 @@ program is population + league + curriculum + search:
 Heuristic bots remain valid test fixtures, teachers, and sparring partners. They
 are not the live product target, but a learned bot that cannot beat them has not
 earned promotion.
+
+## Capacity and systems experiment gates
+
+- Sweep v1 trunk widths `64,128,256,512` (h320 is an optional bridge), three
+  scratch seeds each, at equal environment steps and equal wall-clock budgets.
+  Larger is not automatically better reasoning: width adds function capacity but
+  not memory, search, or missing entity information.
+- A wider model promotes only if at least two of three seeds beat h128 in both the
+  held-out gauntlet and heuristic-field probe, without an exploiter/collusion
+  regression and with acceptable TypeScript serving latency.
+- Benchmark learner batches `256,512,1024,2048,4096` on actual ragged replay.
+  Compare random padding with candidate-count buckets and report padding ratio,
+  optimizer-update count, KL, clip fraction, entropy, gradient norm, and wall time.
+  Do not adopt a larger batch only because a fixed-width synthetic benchmark is fast.
+- Benchmark actor workers with one learner seat, the real opponent mix, sampling
+  and temperature enabled, three repetitions, and randomized trial order. Report
+  p50/p90 games and valid-policy rows per second. Keep v1 inference local unless a
+  fresh end-to-end socket benchmark beats it.
+- Reopen the v2/entity model only for a named representation/capacity failure that
+  h512 cannot solve. Start with d64/l2 or d128/l3 and evaluate the model directly,
+  not only through a distilled proxy.
+
+Repeatable systems probes:
+
+```bash
+npm run bot:bench:actors -- --games 128 --repeats 3 \
+  --workers 16,24,32,48,60 --sample --temperature 1 \
+  --neural-seats Red --record-seats Red
+
+npm run bot:bench:models -- --replay ml/league_v14b/data/gen120/main-0 \
+  --widths 64,128,256,512 --batches 256,512,1024,2048,4096 \
+  --bucketing random,bucketed --precision fp32
+```
 
 July 1, 2026 pivot diagnostic:
 
@@ -257,12 +316,12 @@ combat, reward claims, corruption, cleanup, and win conditions.
 
 Current June 27, 2026 prebuilt result over 12 games / 48 seat-games per setting:
 
-| Build                                     | Avg VP | Avg status | Kills/seat-game | Reward VP/seat-game |
-| ----------------------------------------- | ------ | ---------- | --------------- | ------------------- |
-| 0 dice, 2 Spirit Animal, default barrier  | 4.08   | 3.00       | 1.36            | 4.08                |
-| 6 dice, 2 Spirit Animal, 12 max barrier   | 23.48  | 2.83       | 7.54            | 23.48               |
-| 10 dice, 2 Spirit Animal, 16 max barrier  | 28.44  | 2.04       | 8.10            | 28.44               |
-| 10 dice, 2 Spirit Animal, 20 max barrier  | 29.63  | 1.52       | 8.10            | 29.63               |
+| Build                                    | Avg VP | Avg status | Kills/seat-game | Reward VP/seat-game |
+| ---------------------------------------- | ------ | ---------- | --------------- | ------------------- |
+| 0 dice, 2 Spirit Animal, default barrier | 4.08   | 3.00       | 1.36            | 4.08                |
+| 6 dice, 2 Spirit Animal, 12 max barrier  | 23.48  | 2.83       | 7.54            | 23.48               |
+| 10 dice, 2 Spirit Animal, 16 max barrier | 28.44  | 2.04       | 8.10            | 28.44               |
+| 10 dice, 2 Spirit Animal, 20 max barrier | 29.63  | 1.52       | 8.10            | 29.63               |
 
 Interpretation: one or two Spirit Animal traits by themselves do not create the
 owner's expected 15-30 VP line. A mature monster-farm build with damage and
@@ -631,10 +690,10 @@ counterfactual samples, then fine-tuned from
 Do **not** promote this checkpoint. In the matched 16-game strict-Pure
 route-proof comparison at 32 iterations / horizon 16:
 
-| Checkpoint | Avg VP | Win % | Max status | Cap violations | Kills/game | Clean fights/game | Firepower fights/game |
-| ---------- | ------ | ----- | ---------- | -------------- | ---------- | ----------------- | --------------------- |
-| Baseline aux-head | 5.63 | 50.0 | 1 | 82 | 1.88 | 2.13 | 30.19 |
-| Survival-Q fine-tune | 5.25 | 56.3 | 1 | 86 | 1.75 | 1.81 | 35.06 |
+| Checkpoint           | Avg VP | Win % | Max status | Cap violations | Kills/game | Clean fights/game | Firepower fights/game |
+| -------------------- | ------ | ----- | ---------- | -------------- | ---------- | ----------------- | --------------------- |
+| Baseline aux-head    | 5.63   | 50.0  | 1          | 82             | 1.88       | 2.13              | 30.19                 |
+| Survival-Q fine-tune | 5.25   | 56.3  | 1          | 86             | 1.75       | 1.81              | 35.06                 |
 
 The fine-tune increased attack-dice tendency but lowered VP, kills, clean fight
 windows, and farm-opportunity VP. A follow-up strict-cap repro showed the
@@ -745,10 +804,10 @@ Current June 28, 2026 results with
 `NAV_WEIGHTS=ml/meta_runs/routeq-nav-specialist-20260628T0305Z/best_policy.json`
 and `NAV_GATE=unsafe-firepower`:
 
-| Eval | Games | Avg VP | Win % | Kills/game | Missed farm VP % | Max status | Owned cap events | External cap events |
-| ---- | ----- | ------ | ----- | ---------- | ---------------- | ---------- | ---------------- | ------------------- |
-| mixed field with `pvphunter` | 32 | 10.41 | 81.3 | 3.47 | 4.0 | 1 | 0 | 2 |
-| no-`pvphunter` field | 32 | 10.59 | 96.9 | 3.53 | 3.9 | 0 | 0 | 0 |
+| Eval                         | Games | Avg VP | Win % | Kills/game | Missed farm VP % | Max status | Owned cap events | External cap events |
+| ---------------------------- | ----- | ------ | ----- | ---------- | ---------------- | ---------- | ---------------- | ------------------- |
+| mixed field with `pvphunter` | 32    | 10.41  | 81.3  | 3.47       | 4.0              | 1          | 0                | 2                   |
+| no-`pvphunter` field         | 32    | 10.59  | 96.9  | 3.53       | 3.9              | 0          | 0                | 0                   |
 
 Artifacts:
 
@@ -834,10 +893,10 @@ trainer, so it is effectively a scratch specialist. Even so, when gated only to
 `resolveLocationInteraction` candidates and paired with the gated route-Q
 navigation prior, it improved the 32-game no-`pvphunter` strict-Pure proof:
 
-| Eval | Games | Avg VP | Win % | Reach30 % | Status | Kills/game | Missed farm VP % |
-| ---- | ----- | ------ | ----- | --------- | ------ | ---------- | ---------------- |
-| gated route-Q only | 32 | 10.59 | 96.9 | 0.0 | 0 | 3.53 | 3.9 |
-| + location-row micro gate | 32 | 13.69 | 96.9 | 0.0 | 0 | 4.56 | 0.0 |
+| Eval                      | Games | Avg VP | Win % | Reach30 % | Status | Kills/game | Missed farm VP % |
+| ------------------------- | ----- | ------ | ----- | --------- | ------ | ---------- | ---------------- |
+| gated route-Q only        | 32    | 10.59  | 96.9  | 0.0       | 0      | 3.53       | 3.9              |
+| + location-row micro gate | 32    | 13.69  | 96.9  | 0.0       | 0      | 4.56       | 0.0              |
 
 Artifact:
 `ml/meta_runs/route-proof-routeexecq-micro-no-pvphunter-32g-20260628T044654Z/summary.json`.
@@ -888,10 +947,11 @@ Trainer fix and follow-up checks:
   trains a warm-started row specialist with `TRAIN=1`, and rsyncs the run back
   locally. Set `POSITIVE_ONLY_DATA=1` only when the goal is a correction-only
   training slice.
+
 - First full-control artifact:
   `ml/meta_runs/routeexecq-fullcontrol-20260628T052738Z/summary.json`. It scanned
   32 full-control location windows from 16 games: 22 `Lantern Canyon`, 6 `Floral
-  Patch`, and 4 `Cyber City`. Three windows were positive corrections under the
+Patch`, and 4 `Cyber City`. Three windows were positive corrections under the
   new label definition. The largest miss was `Cyber City` row 0
   `spiritWorldSummon+abyssSummon` beating the source rune row by `+11.43` score
   and `+6` VP at the label horizon. This is positive evidence for more
@@ -900,7 +960,7 @@ Trainer fix and follow-up checks:
   `ml/meta_runs/routeexecq-fullcontrol-20260628T0540Z/summary.json`. It reached
   128/128 windows after about 17 minutes, with 10 teachable corrections
   (`7.8%`) and 128 exported samples. The window distribution was `Lantern
-  Canyon` 81, `Cyber City` 29, `Floral Patch` 17, `Tidal Cove` 1. The correction
+Canyon` 81, `Cyber City` 29, `Floral Patch` 17, `Tidal Cove` 1. The correction
   set was mostly `Cyber City` row 0
   `spiritWorldSummon+abyssSummon` over the source rune row, plus a few Lantern
   choice corrections. Heldout route imitation passed on the full-control data:
@@ -1060,10 +1120,10 @@ firepower to kill but cannot survive cleanly, and filters root navigation away
 from Arcane Abyss toward `Lantern Canyon`, `Floral Patch`, `Cyber City`, or
 `Tidal Cove`. This is the first trace-derived average lift:
 
-| Eval | Artifact | Avg VP | Kills/game | Status | Reach30 | 20+ VP traces |
-| ---- | -------- | ------ | ---------- | ------ | ------- | ------------- |
-| no-`pvphunter` | `ml/meta_runs/route-proof-routeq-buildoption-plus-scaleq-trace-no-pvphunter-16g-20260628T0800Z/summary.json` | 16.56 | 5.56 | 0 | 0% | 5 |
-| mixed field | `ml/meta_runs/route-proof-routeq-buildoption-plus-scaleq-trace-mixed-16g-20260628T0810Z/summary.json` | 15.19 | 5.13 | 0 | 0% | 4 |
+| Eval           | Artifact                                                                                                     | Avg VP | Kills/game | Status | Reach30 | 20+ VP traces |
+| -------------- | ------------------------------------------------------------------------------------------------------------ | ------ | ---------- | ------ | ------- | ------------- |
+| no-`pvphunter` | `ml/meta_runs/route-proof-routeq-buildoption-plus-scaleq-trace-no-pvphunter-16g-20260628T0800Z/summary.json` | 16.56  | 5.56       | 0      | 0%      | 5             |
+| mixed field    | `ml/meta_runs/route-proof-routeq-buildoption-plus-scaleq-trace-mixed-16g-20260628T0810Z/summary.json`        | 15.19  | 5.13       | 0      | 0%      | 4             |
 
 The best no-`pvphunter` trace reached 28 VP cleanly by restoring at Lantern
 Canyon until current barrier reached 5/10, then farming the HP-4 rung twice.
@@ -1088,17 +1148,17 @@ below threshold.
 
 Firepower-preservation baseline:
 
-| Eval | Artifact | Avg VP | Kills/game | Status | Reach30 | Note |
-| ---- | -------- | ------ | ---------- | ------ | ------- | ---- |
-| no-`pvphunter` | `ml/meta_runs/route-proof-buildoption-preservefire-no-pvphunter-16g-20260628T0840Z/summary.json` | 17.31 | 5.81 | 0 | 0% | six 20+ VP traces |
-| mixed field | `ml/meta_runs/route-proof-buildoption-preservefire-mixed-16g-20260628T0830Z/summary.json` | 17.25 | 5.81 | 0 | 0% | former 3 VP failure became 24 VP |
+| Eval           | Artifact                                                                                         | Avg VP | Kills/game | Status | Reach30 | Note                             |
+| -------------- | ------------------------------------------------------------------------------------------------ | ------ | ---------- | ------ | ------- | -------------------------------- |
+| no-`pvphunter` | `ml/meta_runs/route-proof-buildoption-preservefire-no-pvphunter-16g-20260628T0840Z/summary.json` | 17.31  | 5.81       | 0      | 0%      | six 20+ VP traces                |
+| mixed field    | `ml/meta_runs/route-proof-buildoption-preservefire-mixed-16g-20260628T0830Z/summary.json`        | 17.25  | 5.81       | 0      | 0%      | former 3 VP failure became 24 VP |
 
 Current best strict-Pure proof:
 
-| Eval | Artifact | Avg VP | Kills/game | Status | Reach30 | Note |
-| ---- | -------- | ------ | ---------- | ------ | ------- | ---- |
-| mixed field | `ml/meta_runs/route-proof-restoreguard-v2-preservefire-survivaldamage-16g-20260628T0917Z/summary.json` | 21.25 | 7.38 | 0 | 0% | clean status, 87.5% win, no owned/external cap events |
-| no-`pvphunter` | `ml/meta_runs/route-proof-restoreguard-v2-preservefire-survivaldamage-16g-20260628T0917Z/summary.json` | 22.31 | 7.75 | 0 | 0% | clean status, 100% win |
+| Eval           | Artifact                                                                                               | Avg VP | Kills/game | Status | Reach30 | Note                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------ | ------ | ---------- | ------ | ------- | ----------------------------------------------------- |
+| mixed field    | `ml/meta_runs/route-proof-restoreguard-v2-preservefire-survivaldamage-16g-20260628T0917Z/summary.json` | 21.25  | 7.38       | 0      | 0%      | clean status, 87.5% win, no owned/external cap events |
+| no-`pvphunter` | `ml/meta_runs/route-proof-restoreguard-v2-preservefire-survivaldamage-16g-20260628T0917Z/summary.json` | 22.31  | 7.75       | 0      | 0%      | clean status, 100% win                                |
 
 `PRESERVE_ROUTE_SURVIVAL=1` plus the restore/build split is now the promoted
 route-proof diagnostic. The v1 artifact
@@ -1138,10 +1198,10 @@ phase plan after the sampled branch.
 
 Current June 28, 2026 local full-control HP-4 slices:
 
-| Slice | Artifact | Windows | Corrections | Read |
-| ----- | -------- | ------- | ----------- | ---- |
-| scaling navigation | `ml/hp4wall_scalingq_fullcontrol_v2_summary.json` | 16/29 | 0 | source is always `Tidal Cove`, branch score prefers `Cyber City` in 15/16 windows, but VP/score/reach30 deltas stay 0 |
-| route execution | `ml/hp4wall_routeexecq_fullcontrol_v2_summary.json` | 16/84 | 0 | source is already the best row in all sampled HP-4 windows |
+| Slice              | Artifact                                            | Windows | Corrections | Read                                                                                                                  |
+| ------------------ | --------------------------------------------------- | ------- | ----------- | --------------------------------------------------------------------------------------------------------------------- |
+| scaling navigation | `ml/hp4wall_scalingq_fullcontrol_v2_summary.json`   | 16/29   | 0           | source is always `Tidal Cove`, branch score prefers `Cyber City` in 15/16 windows, but VP/score/reach30 deltas stay 0 |
+| route execution    | `ml/hp4wall_routeexecq_fullcontrol_v2_summary.json` | 16/84   | 0           | source is already the best row in all sampled HP-4 windows                                                            |
 
 Interpretation: after fixing rollout parity, the HP-4 wall is not just an
 artifact of losing Spirit Animals during branch evaluation. The current route
@@ -1170,10 +1230,10 @@ eval result.
 
 Current June 28, 2026 full-control breakpoint-oracle HP-4 result:
 
-| Slice | Artifact | Windows | Corrections | Read |
-| ----- | -------- | ------- | ----------- | ---- |
-| scaling navigation | `ml/hp4wall_scalingq_oracle_fullcontrol_v2_64w_summary.json` | 64/161 | 3 score-positive, 2 VP-positive | sparse but real route signal: `Lantern Canyon` or `Cyber City` can convert a stuck HP-4 window into one extra kill / +2 VP |
-| route execution | `ml/hp4wall_routeexecq_oracle_fullcontrol_v2_summary.json` | 16/84 | 0 | still flat; row choices are not the main HP-4 bottleneck |
+| Slice              | Artifact                                                     | Windows | Corrections                     | Read                                                                                                                       |
+| ------------------ | ------------------------------------------------------------ | ------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| scaling navigation | `ml/hp4wall_scalingq_oracle_fullcontrol_v2_64w_summary.json` | 64/161  | 3 score-positive, 2 VP-positive | sparse but real route signal: `Lantern Canyon` or `Cyber City` can convert a stuck HP-4 window into one extra kill / +2 VP |
+| route execution    | `ml/hp4wall_routeexecq_oracle_fullcontrol_v2_summary.json`   | 16/84   | 0                               | still flat; row choices are not the main HP-4 bottleneck                                                                   |
 
 The wider scaling-oracle slice wrote 64 samples to
 `ml/data_hp4_wall_oracle_fullcontrol_64w/scaling/scalingq.jsonl`. Only two
@@ -1203,10 +1263,10 @@ The trained specialist is **not promoted**. Used as
 `SCALE_NAV_WEIGHTS` with `SCALE_NAV_GATE=route-option-scaling`, it tied the
 current best strict-Pure proof instead of improving it:
 
-| Eval | Avg VP | Win % | Kills/game | Missed farm VP % | Status | Reach30 |
-| ---- | ------ | ----- | ---------- | ---------------- | ------ | ------- |
-| mixed field | 21.25 | 87.5 | 7.38 | 1.8 | 0 | 0% |
-| no-`pvphunter` | 22.31 | 100.0 | 7.75 | 2.7 | 0 | 0% |
+| Eval           | Avg VP | Win % | Kills/game | Missed farm VP % | Status | Reach30 |
+| -------------- | ------ | ----- | ---------- | ---------------- | ------ | ------- |
+| mixed field    | 21.25  | 87.5  | 7.38       | 1.8              | 0      | 0%      |
+| no-`pvphunter` | 22.31  | 100.0 | 7.75       | 2.7              | 0      | 0%      |
 
 Interpretation: the positive-VP HP-4 oracle labels are real and learnable, but
 37 sparse samples do not raise the normal-start proof above the restore/firepower
@@ -1228,10 +1288,10 @@ a clean farm. Its root destinations are selected by the current deficit:
 Current June 28, 2026 SimForge result:
 `ml/meta_runs/route-proof-routecloser-16g-20260628T105859Z/summary.json`.
 
-| Eval | Avg VP | Win % | Kills/game | Status | Reach30 | Read |
-| ---- | ------ | ----- | ---------- | ------ | ------- | ---- |
-| mixed field | 21.00 | 87.5 | 7.25 | 0.06 / max 1 | 0% | regressed below the 21.25 clean baseline and allowed one external `pvphunter` status event |
-| no-`pvphunter` | 22.06 | 100.0 | 7.63 | 0 / max 0 | 0% | regressed below the 22.31 no-`pvphunter` baseline |
+| Eval           | Avg VP | Win % | Kills/game | Status       | Reach30 | Read                                                                                       |
+| -------------- | ------ | ----- | ---------- | ------------ | ------- | ------------------------------------------------------------------------------------------ |
+| mixed field    | 21.00  | 87.5  | 7.25       | 0.06 / max 1 | 0%      | regressed below the 21.25 clean baseline and allowed one external `pvphunter` status event |
+| no-`pvphunter` | 22.06  | 100.0 | 7.63       | 0 / max 0    | 0%      | regressed below the 22.31 no-`pvphunter` baseline                                          |
 
 Do **not** promote `route-closer` as a route-proof setting. It is useful
 instrumentation because it increases targeted late Cyber/restore pressure, but
@@ -1254,12 +1314,12 @@ Current June 28, 2026 SimForge results:
 - Matched proof artifact:
   `ml/meta_runs/route-proof-routecloser-microoracle-16g-20260628T111920Z/summary.json`
 
-| Eval | Avg VP | Win % | Kills/game | Status | Reach30 | Read |
-| ---- | ------ | ----- | ---------- | ------ | ------- | ---- |
-| 8-game smoke, mixed field | 22.00 | 100.0 | 7.50 | 0 / max 0 | 0% | lifted one low-tail trace but did not close |
-| 8-game smoke, no-`pvphunter` | 23.25 | 100.0 | 8.00 | 0 / max 0 | 0% | promising but unstable |
-| 16-game proof, mixed field | 20.75 | 93.8 | 7.13 | 0 / max 0 | 0% | regressed below the 21.25 clean baseline |
-| 16-game proof, no-`pvphunter` | 21.75 | 100.0 | 7.50 | 0 / max 0 | 0% | regressed below the 22.31 no-`pvphunter` baseline |
+| Eval                          | Avg VP | Win % | Kills/game | Status    | Reach30 | Read                                              |
+| ----------------------------- | ------ | ----- | ---------- | --------- | ------- | ------------------------------------------------- |
+| 8-game smoke, mixed field     | 22.00  | 100.0 | 7.50       | 0 / max 0 | 0%      | lifted one low-tail trace but did not close       |
+| 8-game smoke, no-`pvphunter`  | 23.25  | 100.0 | 8.00       | 0 / max 0 | 0%      | promising but unstable                            |
+| 16-game proof, mixed field    | 20.75  | 93.8  | 7.13       | 0 / max 0 | 0%      | regressed below the 21.25 clean baseline          |
+| 16-game proof, no-`pvphunter` | 21.75  | 100.0 | 7.50       | 0 / max 0 | 0%      | regressed below the 22.31 no-`pvphunter` baseline |
 
 Do **not** promote `route-closer-oracle` as a route-proof setting. The smoke
 signal confirms that full-action control matters after the HP-4 stall, but the
@@ -1304,10 +1364,10 @@ passed easily: train top-1 `1.000`, validation top-1 `1.000`, validation top-3
 was therefore learnable, but it only learned behavior the current route-proof
 source was already choosing.
 
-| Eval | No-micro VP | Closer VP | No-micro kills | Closer kills | Reach30 | Read |
-| ---- | ----------- | --------- | -------------- | ------------ | ------- | ---- |
-| mixed field, 8g/i32 | 18.63 | 18.63 | 6.25 | 6.25 | 0% / 0% | exact VP tie |
-| no-`pvphunter`, 8g/i32 | 21.50 | 21.50 | 7.25 | 7.25 | 0% / 0% | exact VP tie |
+| Eval                   | No-micro VP | Closer VP | No-micro kills | Closer kills | Reach30 | Read         |
+| ---------------------- | ----------- | --------- | -------------- | ------------ | ------- | ------------ |
+| mixed field, 8g/i32    | 18.63       | 18.63     | 6.25           | 6.25         | 0% / 0% | exact VP tie |
+| no-`pvphunter`, 8g/i32 | 21.50       | 21.50     | 7.25           | 7.25         | 0% / 0% | exact VP tie |
 
 Do **not** promote `route-closer-full`. The useful conclusion is that the
 current 6-round full-action branch scorer does not expose a hidden closer
@@ -1351,10 +1411,10 @@ averaged `-0.13` VP delta overall and `+2.00` VP on correction rows, and produce
 The trained checkpoint is not promotable. In route proof with the exact
 clean-suite gates it scored:
 
-| Eval | Avg VP | Win % | Kills/game | Status | Reach30 | Read |
-| ---- | ------ | ----- | ---------- | ------ | ------- | ---- |
-| mixed field, 16g/i64/h24 | 21.06 | 93.8 | 7.25 | 0 / max 0 | 0% | tiny lift over the prior narrow-gate run, baseline-level overall |
-| no-`pvphunter`, 16g/i64/h24 | 21.94 | 100.0 | 7.56 | 0 / max 0 | 0% | below the 32-game clean-route no-`pvphunter` baseline |
+| Eval                        | Avg VP | Win % | Kills/game | Status    | Reach30 | Read                                                             |
+| --------------------------- | ------ | ----- | ---------- | --------- | ------- | ---------------------------------------------------------------- |
+| mixed field, 16g/i64/h24    | 21.06  | 93.8  | 7.25       | 0 / max 0 | 0%      | tiny lift over the prior narrow-gate run, baseline-level overall |
+| no-`pvphunter`, 16g/i64/h24 | 21.94  | 100.0 | 7.56       | 0 / max 0 | 0%      | below the 32-game clean-route no-`pvphunter` baseline            |
 
 Do **not** promote
 `ml/meta_runs/traceq-finishline-hp4-clean-inclusive-20260629T063436Z/best_policy.json`.
@@ -1415,10 +1475,10 @@ only 0.400 after 12 epochs.
 
 Behaviorally, the trained scaling checkpoint tied the matched no-micro baseline:
 
-| Eval | Baseline VP | Scaling VP | Baseline kills | Scaling kills | Reach30 | Read |
-| ---- | ----------- | ---------- | -------------- | ------------- | ------- | ---- |
-| mixed field, 8g/i32 | 18.63 | 18.63 | 6.25 | 6.25 | 0% / 0% | exact tie |
-| no-`pvphunter`, 8g/i32 | 21.50 | 21.50 | 7.25 | 7.25 | 0% / 0% | exact tie |
+| Eval                   | Baseline VP | Scaling VP | Baseline kills | Scaling kills | Reach30 | Read      |
+| ---------------------- | ----------- | ---------- | -------------- | ------------- | ------- | --------- |
+| mixed field, 8g/i32    | 18.63       | 18.63      | 6.25           | 6.25          | 0% / 0% | exact tie |
+| no-`pvphunter`, 8g/i32 | 21.50       | 21.50      | 7.25           | 7.25          | 0% / 0% | exact tie |
 
 Do **not** promote
 `ml/meta_runs/scalingq-reach15-currenthp4-128w-20260628T124112Z/best_policy.json`.
@@ -1462,10 +1522,10 @@ The fair current-stack proof, with the proven route-exec micro restored via
 and `MICRO_GATE=location-interactions`, tied the current best strict-Pure proof
 exactly:
 
-| Eval | Current best VP | Warm160 current-stack VP | Kills/game | Missed farm VP % | Missed firepower % | Reach30 |
-| ---- | --------------- | ------------------------ | ---------- | ---------------- | ------------------ | ------- |
-| mixed field, 16g/i64/h24 | 21.25 | 21.25 | 7.38 | 1.8 | 30.6 | 0% |
-| no-`pvphunter`, 16g/i64/h24 | 22.31 | 22.31 | 7.75 | 2.7 | 30.9 | 0% |
+| Eval                        | Current best VP | Warm160 current-stack VP | Kills/game | Missed farm VP % | Missed firepower % | Reach30 |
+| --------------------------- | --------------- | ------------------------ | ---------- | ---------------- | ------------------ | ------- |
+| mixed field, 16g/i64/h24    | 21.25           | 21.25                    | 7.38       | 1.8              | 30.6               | 0%      |
+| no-`pvphunter`, 16g/i64/h24 | 22.31           | 22.31                    | 7.75       | 2.7              | 30.9               | 0%      |
 
 Do **not** promote the 256-window scaling checkpoint. The correct read is that
 late scaling-root labels can be represented and learned, but destination
@@ -1503,10 +1563,10 @@ needed.
 The fair route-proof rejected the checkpoint:
 `ml/meta_runs/route-proof-routecloserhp4-typed96-16g-20260628T143113Z/summary.json`.
 
-| Eval | Current best VP | Route-closer VP | Kills/game | Missed farm VP % | Missed firepower % | Reach30 |
-| ---- | --------------- | --------------- | ---------- | ---------------- | ------------------ | ------- |
-| mixed field, 16g/i64/h24 | 21.25 | 20.50 | 7.00 | 0.0 | 31.3 | 0% |
-| no-`pvphunter`, 16g/i64/h24 | 22.31 | 21.56 | 7.38 | 1.1 | 30.8 | 0% |
+| Eval                        | Current best VP | Route-closer VP | Kills/game | Missed farm VP % | Missed firepower % | Reach30 |
+| --------------------------- | --------------- | --------------- | ---------- | ---------------- | ------------------ | ------- |
+| mixed field, 16g/i64/h24    | 21.25           | 20.50           | 7.00       | 0.0              | 31.3               | 0%      |
+| no-`pvphunter`, 16g/i64/h24 | 22.31           | 21.56           | 7.38       | 1.1              | 30.8               | 0%      |
 
 Do **not** promote this route-closer full-action checkpoint. It proves the
 bot-contract can layer a second micro specialist, but the target was not the
@@ -1563,10 +1623,10 @@ The checkpoint is **not promoted**. The matched strict route proof
 `ml/meta_runs/route-proof-damagedeficit-scaleq-16g-20260628T153453Z/summary.json`
 tied the current best exactly:
 
-| Eval | Avg VP | Win % | Kills/game | Status | Reach30 | Read |
-| ---- | ------ | ----- | ---------- | ------ | ------- | ---- |
-| mixed field | 21.25 | 93.8 | 7.38 | 0 / max 0 | 0% | no improvement over current best |
-| no-`pvphunter` | 22.31 | 100.0 | 7.75 | 0 / max 0 | 0% | no improvement over current best |
+| Eval           | Avg VP | Win % | Kills/game | Status    | Reach30 | Read                             |
+| -------------- | ------ | ----- | ---------- | --------- | ------- | -------------------------------- |
+| mixed field    | 21.25  | 93.8  | 7.38       | 0 / max 0 | 0%      | no improvement over current best |
+| no-`pvphunter` | 22.31  | 100.0 | 7.75       | 0 / max 0 | 0%      | no improvement over current best |
 
 A diagnostic probe that widened the live `route-option-scaling` root set to
 allow Floral Patch also failed:
@@ -1595,10 +1655,10 @@ baseline was already high at 0.829.
 
 Two early integration proofs rejected this checkpoint:
 
-| Integration | Artifact | Mixed VP | No-`pvphunter` VP | Status | Read |
-| ----------- | -------- | -------- | ----------------- | ------ | ---- |
-| broad replacement for `unsafe-firepower-build-option` | `ml/meta_runs/route-proof-hp2-survival-nav-16g-20260628T164217Z/summary.json` | 11.94 | 12.00 | mixed max 1 | catastrophic over-resting: 20+ Floral Patch visits/game and only 4 kills/game |
-| narrow `hp2-survival-deficit` gate, with old route-Q handling broad firepower states | `ml/meta_runs/route-proof-hp2-survival-narrow-16g-20260628T165350Z/summary.json` | 20.31 | 21.13 | mixed max 1 | less bad, but still below current best 21.25 / 22.31 and not strict-Pure safe |
+| Integration                                                                          | Artifact                                                                         | Mixed VP | No-`pvphunter` VP | Status      | Read                                                                          |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- | -------- | ----------------- | ----------- | ----------------------------------------------------------------------------- |
+| broad replacement for `unsafe-firepower-build-option`                                | `ml/meta_runs/route-proof-hp2-survival-nav-16g-20260628T164217Z/summary.json`    | 11.94    | 12.00             | mixed max 1 | catastrophic over-resting: 20+ Floral Patch visits/game and only 4 kills/game |
+| narrow `hp2-survival-deficit` gate, with old route-Q handling broad firepower states | `ml/meta_runs/route-proof-hp2-survival-narrow-16g-20260628T165350Z/summary.json` | 20.31    | 21.13             | mixed max 1 | less bad, but still below current best 21.25 / 22.31 and not strict-Pure safe |
 
 A later low-attack-only patch made the HP2 idea safe enough to keep as a
 candidate overlay. The implementation adds ordered navigation patch layers,
@@ -1609,13 +1669,13 @@ rounds 6-18, VP 9-18, firepower-capable but not clean killable, needing
 restore/survival, and with expected attack below 3.25. `clean-farm-q` fires only
 on strict-Pure clean-farmable monster windows with at least 1 expected reward VP.
 
-| Integration | Artifact | Mixed VP | No-`pvphunter` VP | Status | Read |
-| ----------- | -------- | -------- | ----------------- | ------ | ---- |
-| low-attack HP2 patch + route-Q + scale-Q, 16 games | `ml/meta_runs/route-proof-hp2patch-routeq-scaleq-16g-20260628T173108Z/summary.json` | 21.63 | 22.50 | 0 / max 0 | clean 16-game lift over 21.25 / 22.31 |
-| low-attack HP2 patch + route-Q + scale-Q, 32 games | `ml/meta_runs/route-proof-hp2patch-routeq-scaleq-32g-20260628T174111Z/summary.json` | 20.97 | 22.41 | 0 / max 0 | clean but tiny matched-sample lift; reach30 remains 0% |
-| farm-Q patch + low-attack HP2 patch + route-Q + scale-Q, 16 games | `ml/meta_runs/route-proof-farmq-hp2patch-routeq-scaleq-16g-20260628T183529Z/summary.json` | 21.75 | 22.50 | 0 / max 0 | best 16-game mixed result so far; zero mixed missed-farm navs |
-| farm-Q patch + low-attack HP2 patch + route-Q + scale-Q, 32 games | `ml/meta_runs/route-proof-farmq-hp2patch-routeq-scaleq-32g-20260628T184548Z/summary.json` | 20.94 | 22.41 | 0 / max 0 | clean, but does not beat HP2-only 32-game proof |
-| previous current stack, matched 32 games | `ml/meta_runs/route-proof-currentstack-32g-20260628T180202Z/summary.json` | 20.78 | 22.31 | 0 / max 0 | comparison baseline for the patch |
+| Integration                                                       | Artifact                                                                                  | Mixed VP | No-`pvphunter` VP | Status    | Read                                                          |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------- | ----------------- | --------- | ------------------------------------------------------------- |
+| low-attack HP2 patch + route-Q + scale-Q, 16 games                | `ml/meta_runs/route-proof-hp2patch-routeq-scaleq-16g-20260628T173108Z/summary.json`       | 21.63    | 22.50             | 0 / max 0 | clean 16-game lift over 21.25 / 22.31                         |
+| low-attack HP2 patch + route-Q + scale-Q, 32 games                | `ml/meta_runs/route-proof-hp2patch-routeq-scaleq-32g-20260628T174111Z/summary.json`       | 20.97    | 22.41             | 0 / max 0 | clean but tiny matched-sample lift; reach30 remains 0%        |
+| farm-Q patch + low-attack HP2 patch + route-Q + scale-Q, 16 games | `ml/meta_runs/route-proof-farmq-hp2patch-routeq-scaleq-16g-20260628T183529Z/summary.json` | 21.75    | 22.50             | 0 / max 0 | best 16-game mixed result so far; zero mixed missed-farm navs |
+| farm-Q patch + low-attack HP2 patch + route-Q + scale-Q, 32 games | `ml/meta_runs/route-proof-farmq-hp2patch-routeq-scaleq-32g-20260628T184548Z/summary.json` | 20.94    | 22.41             | 0 / max 0 | clean, but does not beat HP2-only 32-game proof               |
+| previous current stack, matched 32 games                          | `ml/meta_runs/route-proof-currentstack-32g-20260628T180202Z/summary.json`                 | 20.78    | 22.31             | 0 / max 0 | comparison baseline for the patch                             |
 
 Interpretation: the low-attack HP2 patch is a clean candidate layer, not a
 solution. It improves the 32-game mixed field by +0.19 VP and the no-`pvphunter`
@@ -1635,13 +1695,13 @@ Fresh HP2-patch low-tail trace:
 ran the HP2 patch stack with `TRACE=1 TRACE_MIN_VP=0`. The proof averaged 21.63
 VP, 7.50 kills/game, 0 status, and 0% reach30. The trace analysis found:
 
-| Signal | Value |
-| ------ | ----- |
-| low tail | 3/16 games below 18 VP |
-| HP4 wall | 16/16 games |
-| HP4 current-barrier deficit | 15/16 games |
-| HP4 max-barrier/Cultivator deficit | 8/16 games |
-| missed farm games | 3/16, only 0.37 missed farm VP/game |
+| Signal                             | Value                               |
+| ---------------------------------- | ----------------------------------- |
+| low tail                           | 3/16 games below 18 VP              |
+| HP4 wall                           | 16/16 games                         |
+| HP4 current-barrier deficit        | 15/16 games                         |
+| HP4 max-barrier/Cultivator deficit | 8/16 games                          |
+| missed farm games                  | 3/16, only 0.37 missed farm VP/game |
 
 The low games were not primarily reward-pick or farm-now failures. They were
 post-low-rung extension failures. The 12 VP low game reached HP4 with 7/8
@@ -1681,11 +1741,11 @@ more deterministic root patches.
 
 Latest HP4/re-entry negative evidence:
 
-| Experiment | Artifact | Result | Verdict |
-| ---------- | -------- | ------ | ------- |
-| full-action HP4 wall/re-entry collector | `ml/meta_runs/routeexecq-hp4-wall-reentry-oracle-20260628T214500Z/summary.json` | 192 windows, 8 corrections, avg VP delta 0.09, no reach30 delta, below train threshold | too sparse/noisy to train |
-| scaling HP4 re-entry collector | `ml/meta_runs/scalingq-hp4-reentry-oracle-20260628T220000Z/summary.json` | 256 windows, 2 corrections, avg VP delta 0.02, no checkpoint | no useful broad navigation signal |
-| route-closer micro oracle | `ml/meta_runs/route-proof-routecloser-oracle-currentstack-16g-20260628T222500Z/summary.json` | strict Pure 20.75 VP, no-`pvphunter` 21.75 VP, both 0% reach30 | underperforms current stack |
+| Experiment                              | Artifact                                                                                     | Result                                                                                 | Verdict                           |
+| --------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
+| full-action HP4 wall/re-entry collector | `ml/meta_runs/routeexecq-hp4-wall-reentry-oracle-20260628T214500Z/summary.json`              | 192 windows, 8 corrections, avg VP delta 0.09, no reach30 delta, below train threshold | too sparse/noisy to train         |
+| scaling HP4 re-entry collector          | `ml/meta_runs/scalingq-hp4-reentry-oracle-20260628T220000Z/summary.json`                     | 256 windows, 2 corrections, avg VP delta 0.02, no checkpoint                           | no useful broad navigation signal |
+| route-closer micro oracle               | `ml/meta_runs/route-proof-routecloser-oracle-currentstack-16g-20260628T222500Z/summary.json` | strict Pure 20.75 VP, no-`pvphunter` 21.75 VP, both 0% reach30                         | underperforms current stack       |
 
 Do **not** promote a route-closer checkpoint from these lanes, and do not run a
 larger version of the same generic HP4 branch collectors without changing the
@@ -1744,27 +1804,26 @@ same captured route state, with no status-cap regression.
 
 Latest trace-state result, June 28, 2026:
 
-| Experiment | Artifact | Result | Verdict |
-| ---------- | -------- | ------ | ------- |
-| HP2-to-HP4 transition baseline | `ml/meta_runs/tracestateq-hp2hp4-transition-data-20260628T230500Z/summary.json` | 64 windows, 12 restore-loop corrections, avg VP delta 0.89, correction VP delta 5.0 | trainable restore/re-entry miss |
-| TraceQ restore specialist training | `ml/meta_runs/tracestateq-hp2hp4-restore-train-20260628T231500Z/summary.json` | 128 windows, 28 samples, checkpoint top-1 0.821 on the small correction shard | produced `best_policy.json` for gated eval |
-| TraceQ restore specialist eval | `ml/meta_runs/tracestateq-hp2hp4-restore-eval-20260628T233000Z/summary.json` | 64 windows, corrections dropped from 12 to 2, avg VP delta dropped from 0.89 to 0.05 | fixed the diagnosed HP2 restore-loop miss |
-| Normal-start route proof with TraceQ patch | `ml/meta_runs/route-proof-tracestate-restore-patch-32g-20260628T234000Z/summary.json` | strict Pure 20.81 VP, no-`pvphunter` 22.34 VP, both status 0 and 0% reach30 | route is meaningful but not closed to 30 |
+| Experiment                                 | Artifact                                                                              | Result                                                                               | Verdict                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------ |
+| HP2-to-HP4 transition baseline             | `ml/meta_runs/tracestateq-hp2hp4-transition-data-20260628T230500Z/summary.json`       | 64 windows, 12 restore-loop corrections, avg VP delta 0.89, correction VP delta 5.0  | trainable restore/re-entry miss            |
+| TraceQ restore specialist training         | `ml/meta_runs/tracestateq-hp2hp4-restore-train-20260628T231500Z/summary.json`         | 128 windows, 28 samples, checkpoint top-1 0.821 on the small correction shard        | produced `best_policy.json` for gated eval |
+| TraceQ restore specialist eval             | `ml/meta_runs/tracestateq-hp2hp4-restore-eval-20260628T233000Z/summary.json`          | 64 windows, corrections dropped from 12 to 2, avg VP delta dropped from 0.89 to 0.05 | fixed the diagnosed HP2 restore-loop miss  |
+| Normal-start route proof with TraceQ patch | `ml/meta_runs/route-proof-tracestate-restore-patch-32g-20260628T234000Z/summary.json` | strict Pure 20.81 VP, no-`pvphunter` 22.34 VP, both status 0 and 0% reach30          | route is meaningful but not closed to 30   |
 
-Conclusion: the simulator/reward flow is not the reason the bots score below
-30. The current clean route harvests real multi-life monster VP, but the learned
+Conclusion: the simulator/reward flow is not the reason the bots score below 30. The current clean route harvests real multi-life monster VP, but the learned
 stack still has a low-tail/late-closure problem after the HP2 restore miss is
 patched.
 
 Low-tail trace and HP4 first-wall follow-up, June 29, 2026:
 
-| Experiment | Artifact | Result | Verdict |
-| ---------- | -------- | ------ | ------- |
-| Low-tail route trace with HP2 TraceQ patch | `ml/meta_runs/route-proof-tracestate-restore-lowtail-trace-32g-20260629T000000Z/route-proof/strict-pure.trace-analysis.json` | 11 traced games at VP 12-18; 0 missed farm VP; all 11 hit HP4 wall and post-VP plateau churn | the next failure is HP4 execution/closure, not missed low-rung farm |
-| First-HP4 wall counterfactual, breakpoint continuation | `ml/meta_runs/tracestateq-lowtail-firsthp4-breakpoint-20260629T001000Z/summary.json` | 63 windows, 13 restore-loop corrections, avg VP delta 0.60 | trainable but oracle-assisted signal |
-| HP4 first-wall gate, oracle-shard checkpoint | `ml/meta_runs/route-proof-hp2-hp4-traceq-patches-32g-20260629T012000Z/summary.json` | strict Pure 20.44 VP, no-`pvphunter` 22.09 VP, both below HP2-only route proof | do not promote; over-triggers Abyss/restore and reduces kills |
-| First-HP4 wall counterfactual, policy continuation | `ml/meta_runs/tracestateq-lowtail-firsthp4-policy-20260629T013500Z/summary.json` | 63 windows, 15 restore-loop corrections, avg VP delta 0.63 | real-policy signal exists |
-| HP4 first-wall gate, policy-shard checkpoint | `ml/meta_runs/route-proof-hp2-hp4-policytraceq-strict-32g-20260629T021000Z/summary.json` | strict Pure 20.63 VP, still below HP2-only 20.81 | do not promote; local diagnostic fix is not route-level improvement |
+| Experiment                                             | Artifact                                                                                                                     | Result                                                                                       | Verdict                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Low-tail route trace with HP2 TraceQ patch             | `ml/meta_runs/route-proof-tracestate-restore-lowtail-trace-32g-20260629T000000Z/route-proof/strict-pure.trace-analysis.json` | 11 traced games at VP 12-18; 0 missed farm VP; all 11 hit HP4 wall and post-VP plateau churn | the next failure is HP4 execution/closure, not missed low-rung farm |
+| First-HP4 wall counterfactual, breakpoint continuation | `ml/meta_runs/tracestateq-lowtail-firsthp4-breakpoint-20260629T001000Z/summary.json`                                         | 63 windows, 13 restore-loop corrections, avg VP delta 0.60                                   | trainable but oracle-assisted signal                                |
+| HP4 first-wall gate, oracle-shard checkpoint           | `ml/meta_runs/route-proof-hp2-hp4-traceq-patches-32g-20260629T012000Z/summary.json`                                          | strict Pure 20.44 VP, no-`pvphunter` 22.09 VP, both below HP2-only route proof               | do not promote; over-triggers Abyss/restore and reduces kills       |
+| First-HP4 wall counterfactual, policy continuation     | `ml/meta_runs/tracestateq-lowtail-firsthp4-policy-20260629T013500Z/summary.json`                                             | 63 windows, 15 restore-loop corrections, avg VP delta 0.63                                   | real-policy signal exists                                           |
+| HP4 first-wall gate, policy-shard checkpoint           | `ml/meta_runs/route-proof-hp2-hp4-policytraceq-strict-32g-20260629T021000Z/summary.json`                                     | strict Pure 20.63 VP, still below HP2-only 20.81                                             | do not promote; local diagnostic fix is not route-level improvement |
 
 The new `hp4-first-wall` gate is available for diagnostics, but current HP4
 first-wall checkpoints are **not** part of the promoted clean-route stack. They
@@ -1788,11 +1847,11 @@ navigation, scale-Q navigation, and full-control micro policy; they filtered for
 normal-start VP 12-22, rounds 9-22, monster HP 4-5, and non-clean-killable
 states.
 
-| Experiment | Artifact | Result | Verdict |
-| ---------- | -------- | ------ | ------- |
-| HP4 full-action, policy continuation | `ml/meta_runs/routeexecq-hp4-fullaction-hp2stack-20260629T020332Z/summary.json` | 64 windows from 964 scanned, 4 corrections, 4 samples, avg VP delta 0.13, no reach30 delta | sparse local micro signal; below training threshold |
-| HP4 full-action, breakpoint-oracle continuation | `ml/meta_runs/routeexecq-hp4-fullaction-hp2stack-oracle-20260629T021217Z/summary.json` | 64 windows, 8 corrections, 8 samples, avg VP delta 0.03, no reach30 delta; tiny imitation pass on 8 samples | oracle finds setup choices, not route payoff |
-| HP4 full-action, VP-positive scoring | `ml/meta_runs/routeexecq-hp4-fullaction-hp2stack-vppos-20260629T021952Z/summary.json` | 64 windows, 3 corrections, 3 samples, avg VP delta 0.13, no reach30 delta | true point-paying corrections exist but are too rare |
+| Experiment                                      | Artifact                                                                               | Result                                                                                                      | Verdict                                              |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| HP4 full-action, policy continuation            | `ml/meta_runs/routeexecq-hp4-fullaction-hp2stack-20260629T020332Z/summary.json`        | 64 windows from 964 scanned, 4 corrections, 4 samples, avg VP delta 0.13, no reach30 delta                  | sparse local micro signal; below training threshold  |
+| HP4 full-action, breakpoint-oracle continuation | `ml/meta_runs/routeexecq-hp4-fullaction-hp2stack-oracle-20260629T021217Z/summary.json` | 64 windows, 8 corrections, 8 samples, avg VP delta 0.03, no reach30 delta; tiny imitation pass on 8 samples | oracle finds setup choices, not route payoff         |
+| HP4 full-action, VP-positive scoring            | `ml/meta_runs/routeexecq-hp4-fullaction-hp2stack-vppos-20260629T021952Z/summary.json`  | 64 windows, 3 corrections, 3 samples, avg VP delta 0.13, no reach30 delta                                   | true point-paying corrections exist but are too rare |
 
 The correction rows are mostly build/micro choices: Fish Guide spawns, Cursed
 Spirit augment placement, and rune-choice resolution. They are not a dense
@@ -1814,12 +1873,12 @@ older trace-Q navigation diagnostics stay comparable.
 
 Small strict-Pure low-tail shards did not produce trainable route-closing data:
 
-| Experiment | Artifact | Result | Verdict |
-| ---------- | -------- | ------ | ------- |
-| Trace-state DAgger, policy continuation | `ml/meta_runs/traceq-lowtail-hp4-dagger-both-smoke-20260629T031033Z/summary.json` | 12 low-tail HP4 windows, 0 corrections, 0 samples, avg VP delta 0; best raw scripts were max-barrier-loop/abyss-probe | scripts improve shaping/firepower only, not points |
-| Trace-state DAgger, breakpoint-oracle continuation | `ml/meta_runs/traceq-lowtail-hp4-dagger-both-oracle-smoke-20260629T031340Z/summary.json` | same 12 windows, 0 corrections, 0 samples, avg VP delta 0 | oracle micro does not turn these states into VP |
-| Trace-state DAgger, status-3/no-PvP ablation | `ml/meta_runs/traceq-lowtail-hp4-dagger-status3-smoke-20260629T031615Z/summary.json` | 12 windows, 0 corrections, 0 samples, avg VP delta 0; policy was already best in 11/12 | relaxing status did not expose a hidden scripted closer |
-| Trace-state DAgger, alternate source seed | `ml/meta_runs/traceq-lowtail-hp4-dagger-both-seed6500100-smoke-20260629T031931Z/summary.json` | 12 windows, 0 corrections, 0 samples, avg VP delta 0 | repeated on a different seed slice |
+| Experiment                                         | Artifact                                                                                      | Result                                                                                                                | Verdict                                                 |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Trace-state DAgger, policy continuation            | `ml/meta_runs/traceq-lowtail-hp4-dagger-both-smoke-20260629T031033Z/summary.json`             | 12 low-tail HP4 windows, 0 corrections, 0 samples, avg VP delta 0; best raw scripts were max-barrier-loop/abyss-probe | scripts improve shaping/firepower only, not points      |
+| Trace-state DAgger, breakpoint-oracle continuation | `ml/meta_runs/traceq-lowtail-hp4-dagger-both-oracle-smoke-20260629T031340Z/summary.json`      | same 12 windows, 0 corrections, 0 samples, avg VP delta 0                                                             | oracle micro does not turn these states into VP         |
+| Trace-state DAgger, status-3/no-PvP ablation       | `ml/meta_runs/traceq-lowtail-hp4-dagger-status3-smoke-20260629T031615Z/summary.json`          | 12 windows, 0 corrections, 0 samples, avg VP delta 0; policy was already best in 11/12                                | relaxing status did not expose a hidden scripted closer |
+| Trace-state DAgger, alternate source seed          | `ml/meta_runs/traceq-lowtail-hp4-dagger-both-seed6500100-smoke-20260629T031931Z/summary.json` | 12 windows, 0 corrections, 0 samples, avg VP delta 0                                                                  | repeated on a different seed slice                      |
 
 In the strict shards, scripts often created firepower opportunities or attack
 dice, but not clean combat, kills, reward claims, or reach30 movement. Do not
@@ -1880,12 +1939,12 @@ aux-head policy as warm start. Three 16-game SimForge route proofs tested the
 checkpoint as a route-closer navigation patch, a late route-closer micro patch,
 and both together:
 
-| Eval | Artifact | Strict Pure | No-`pvphunter` | Verdict |
-| ---- | -------- | ----------- | -------------- | ------- |
-| nav+micro HP4 specialist | `ml/meta_runs/route-proof-hp4-survival-specialist-20260629T113600Z/summary.json` | 19.88 VP, 0% reach30, one external status event | 21.00 VP, 0% reach30 | regresses; do not promote |
-| micro-only route-closer patch | `ml/meta_runs/route-proof-hp4-survival-microonly-20260629T114636Z/summary.json` | 20.94 VP, 0% reach30 | 21.81 VP, 0% reach30 | roughly baseline, no closure |
-| nav-only route-closer patch | `ml/meta_runs/route-proof-hp4-survival-navonly-20260629T115643Z/summary.json` | 21.06 VP, 0% reach30, max 28 | 21.56 VP, 0% reach30, max 28 | raises ceiling to 28 but not finish |
-| route-finish-loop nav guard | `ml/meta_runs/route-proof-route-finish-loop-20260629T120741Z/summary.json` | 21.56 VP, 0% reach30 | 22.44 VP, 0% reach30 | best strict slice here, still not solved |
+| Eval                          | Artifact                                                                         | Strict Pure                                     | No-`pvphunter`               | Verdict                                  |
+| ----------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------- | ---------------------------------------- |
+| nav+micro HP4 specialist      | `ml/meta_runs/route-proof-hp4-survival-specialist-20260629T113600Z/summary.json` | 19.88 VP, 0% reach30, one external status event | 21.00 VP, 0% reach30         | regresses; do not promote                |
+| micro-only route-closer patch | `ml/meta_runs/route-proof-hp4-survival-microonly-20260629T114636Z/summary.json`  | 20.94 VP, 0% reach30                            | 21.81 VP, 0% reach30         | roughly baseline, no closure             |
+| nav-only route-closer patch   | `ml/meta_runs/route-proof-hp4-survival-navonly-20260629T115643Z/summary.json`    | 21.06 VP, 0% reach30, max 28                    | 21.56 VP, 0% reach30, max 28 | raises ceiling to 28 but not finish      |
+| route-finish-loop nav guard   | `ml/meta_runs/route-proof-route-finish-loop-20260629T120741Z/summary.json`       | 21.56 VP, 0% reach30                            | 22.44 VP, 0% reach30         | best strict slice here, still not solved |
 
 Near-success traces show the remaining miss precisely: in 28 VP games the bot
 can reach HP4 with remaining reward lives and enough max barrier, but it either
@@ -1910,9 +1969,9 @@ therefore a valid narrow diagnostic checkpoint.
 
 Normal-start route proof still rejected that checkpoint as a promotion:
 
-| Eval | Artifact | Strict Pure | No-`pvphunter` | Verdict |
-| ---- | -------- | ----------- | -------------- | ------- |
-| finish-line specialist, prior Lantern root | `ml/meta_runs/route-proof-finishline-specialist-20260629T124508Z/summary.json` | 20.94 VP, 0% reach30 | 22.06 VP, 0% reach30 | no route-level transfer; do not promote |
+| Eval                                                             | Artifact                                                                       | Strict Pure                                     | No-`pvphunter`       | Verdict                                 |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------- | -------------------- | --------------------------------------- |
+| finish-line specialist, prior Lantern root                       | `ml/meta_runs/route-proof-finishline-specialist-20260629T124508Z/summary.json` | 20.94 VP, 0% reach30                            | 22.06 VP, 0% reach30 | no route-level transfer; do not promote |
 | finish-line specialist, Floral-first large-deficit root ablation | `ml/meta_runs/route-proof-finishline-floralroot-20260629T125751Z/summary.json` | 21.19 VP, 0% reach30, one external status event | 22.06 VP, 0% reach30 | failed ablation; do not keep as default |
 
 The 28 VP trace from the first run showed a concrete stall: after a VP26 kill,
@@ -1940,8 +1999,8 @@ The matched 64-game normal-start proof
 changes the route status from "existence unproven" to "existence proven but
 inconsistent":
 
-| Eval | Strict Pure | No-`pvphunter` | Read |
-| ---- | ----------- | -------------- | ---- |
+| Eval                        | Strict Pure                                                        | No-`pvphunter`                                                    | Read                                                                  |
+| --------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
 | current stacked route proof | 21.95 VP, 95.3% win, status 0/max 0, 7.64 kills/game, 6.3% reach30 | 23.27 VP, 100% win, status 0/max 0, 8.06 kills/game, 3.1% reach30 | strict clean normal-start route can reach 30, but consistency is poor |
 
 Route-trace analysis is now part of the route-proof artifact loop via
@@ -2003,9 +2062,9 @@ current stack. The 64-game proof
 `ml/meta_runs/route-proof-successcontrast-gated-closer-20260629T155715Z/summary.json`
 rejected this as a promotion:
 
-| Eval | Strict Pure | No-`pvphunter` | Verdict |
-| ---- | ----------- | -------------- | ------- |
-| current base stack | 21.95 VP, 6.3% reach30, 7.64 kills/game | 23.27 VP, 3.1% reach30, 8.06 kills/game | current reference |
+| Eval                                           | Strict Pure                             | No-`pvphunter`                          | Verdict                               |
+| ---------------------------------------------- | --------------------------------------- | --------------------------------------- | ------------------------------------- |
+| current base stack                             | 21.95 VP, 6.3% reach30, 7.64 kills/game | 23.27 VP, 3.1% reach30, 8.06 kills/game | current reference                     |
 | success-contrast as route-closer micro overlay | 21.52 VP, 3.1% reach30, 7.42 kills/game | 22.95 VP, 1.6% reach30, 7.91 kills/game | regresses both fields; do not promote |
 
 Interpretation: the success-contrast specialist's useful signal is not captured
@@ -2036,10 +2095,10 @@ npm run bot:route-proof
 Two 16-game SimForge proof attempts tested whether a sparse survival/scaling
 navigation prior can fix the HP-4 stall. Both are diagnostic, not promoted:
 
-| Variant | Artifact | Mixed VP | No-`pvphunter` VP | Status | Reach30 | Read |
-| ------- | -------- | -------- | ----------------- | ------ | ------- | ---- |
-| broad survival roots | `ml/meta_runs/route-proof-survivalrebuild-preserve-16g-20260628T0813Z/summary.json` | 16.31 | 17.63 | mixed 0.13, no-`pvphunter` 0 | 0% | slight no-`pvphunter` lift, but too many Floral Patch rest loops |
-| damage/restore split roots | `ml/meta_runs/route-proof-survivalrebuild-v2-preserve-16g-20260628T0828Z/summary.json` | 16.50 | 17.25 | 0 | 0% | removed Floral loops but over-shifted to Tidal Cove summon loops |
+| Variant                    | Artifact                                                                               | Mixed VP | No-`pvphunter` VP | Status                       | Reach30 | Read                                                             |
+| -------------------------- | -------------------------------------------------------------------------------------- | -------- | ----------------- | ---------------------------- | ------- | ---------------------------------------------------------------- |
+| broad survival roots       | `ml/meta_runs/route-proof-survivalrebuild-preserve-16g-20260628T0813Z/summary.json`    | 16.31    | 17.63             | mixed 0.13, no-`pvphunter` 0 | 0%      | slight no-`pvphunter` lift, but too many Floral Patch rest loops |
+| damage/restore split roots | `ml/meta_runs/route-proof-survivalrebuild-v2-preserve-16g-20260628T0828Z/summary.json` | 16.50    | 17.25             | 0                            | 0%      | removed Floral loops but over-shifted to Tidal Cove summon loops |
 
 Conclusion: destination gating can certify a meaningful clean monster-economy
 route, but it does not yet solve the route. The missing piece is a stronger
@@ -2146,12 +2205,12 @@ also report farmable navigation counts and missed farmable-Abyss rates.
 
 Current June 27, 2026 Act52 smoke result:
 
-| Probe                         | Avg VP | Status | Abyss navs/seat-game | Kills/seat-game | Farmable navs/seat-game | Missed farmable navs |
-| ----------------------------- | ------ | ------ | -------------------- | --------------- | ----------------------- | -------------------- |
-| Act52 all-planner             | 0.00   | 0.00   | 0.00                 | 0.00            | 22.00                   | 100.0%               |
-| Act52 + force oracle          | 3.38   | 0.19   | 1.13                 | 1.13            | 1.13                    | 0.0%                 |
-| Act52 + 2-epoch oracle smoke fine-tune | 6.19 | 0.63 | 2.31 | 1.94 | 2.75 | 59.1% |
-| Act52 replay + 10x oracle slice        | 5.44 | 0.25 | 1.94 | 1.81 | 2.63 | 54.8% |
+| Probe                                  | Avg VP | Status | Abyss navs/seat-game | Kills/seat-game | Farmable navs/seat-game | Missed farmable navs |
+| -------------------------------------- | ------ | ------ | -------------------- | --------------- | ----------------------- | -------------------- |
+| Act52 all-planner                      | 0.00   | 0.00   | 0.00                 | 0.00            | 22.00                   | 100.0%               |
+| Act52 + force oracle                   | 3.38   | 0.19   | 1.13                 | 1.13            | 1.13                    | 0.0%                 |
+| Act52 + 2-epoch oracle smoke fine-tune | 6.19   | 0.63   | 2.31                 | 1.94            | 2.75                    | 59.1%                |
+| Act52 replay + 10x oracle slice        | 5.44   | 0.25   | 1.94                 | 1.81            | 2.63                    | 54.8%                |
 
 The same fine-tune regressed the 8-game heuristic-field arena from Act52's
 23.13 VP / 62.5% win to 15.00 VP / 50.0% win. Treat this as positive evidence
@@ -2252,13 +2311,13 @@ when the game rule is correct.
 
 Post-fix Act52 smoke, June 27, 2026:
 
-| Probe | Avg VP | Win% | Status | Farmable navs | Missed farmable navs | Notes |
-| ----- | ------ | ---- | ------ | ------------- | -------------------- | ----- |
-| Act52 all-planner meta, 4 games / 12 iters | 0.00 | n/a | 0.00 | 22.00/seat-game | 100.0% | Reward surface fix alone does not make Act52 farm. |
-| Act52 vs heuristic field, 8 games / 16 iters | 23.13 | 62.5% | 2.75 | 0.75/game | 0.0% | Arena strength unchanged, still corruption-heavy. |
-| Act52 + mixed10 nav prior, all-planner meta | 6.56 | n/a | 0.81 | 2.38/seat-game | 55.3% | Navigation split fixes part of all-planner collapse. |
-| Act52 + mixed10 nav prior, arena 4 games / 12 iters | 8.25 | 0.0% | 1.00 | 2.25/game | 22.2% | Cleaner but loses to `pvphunter`. |
-| Act52 + force farmable-nav oracle, arena 4 games / 12 iters | 6.75 | 0.0% | 1.00 | 1.75/game | 0.0% | Hard farm-now rule is too local for field play. |
+| Probe                                                       | Avg VP | Win%  | Status | Farmable navs   | Missed farmable navs | Notes                                                |
+| ----------------------------------------------------------- | ------ | ----- | ------ | --------------- | -------------------- | ---------------------------------------------------- |
+| Act52 all-planner meta, 4 games / 12 iters                  | 0.00   | n/a   | 0.00   | 22.00/seat-game | 100.0%               | Reward surface fix alone does not make Act52 farm.   |
+| Act52 vs heuristic field, 8 games / 16 iters                | 23.13  | 62.5% | 2.75   | 0.75/game       | 0.0%                 | Arena strength unchanged, still corruption-heavy.    |
+| Act52 + mixed10 nav prior, all-planner meta                 | 6.56   | n/a   | 0.81   | 2.38/seat-game  | 55.3%                | Navigation split fixes part of all-planner collapse. |
+| Act52 + mixed10 nav prior, arena 4 games / 12 iters         | 8.25   | 0.0%  | 1.00   | 2.25/game       | 22.2%                | Cleaner but loses to `pvphunter`.                    |
+| Act52 + force farmable-nav oracle, arena 4 games / 12 iters | 6.75   | 0.0%  | 1.00   | 1.75/game       | 0.0%                 | Hard farm-now rule is too local for field play.      |
 
 Conclusion: fixing reward choices was necessary, but it does not solve the
 navigation policy. A pure "if clean-farmable then Abyss" rule underperforms
@@ -2307,13 +2366,13 @@ shortcut.
 
 June 27, 2026 smoke:
 
-| Probe | Avg VP / Win | Status | Kills | Missed farm opp VP |
-| ----- | ------------ | ------ | ----- | ------------------ |
-| Act52 meta, no farm-value bonus, `cultivator` profile | 0.00 VP | 0.00 | 0.00/seat-game | 100.0% |
-| Act52 meta, rollout value only (`AZMETA_VALUEW=0`) | 3.19 VP | 0.25 | 1.06/seat-game | 92.2% |
-| Act52 meta, farm-value bonus 20 | 2.06 VP | 0.00 | 0.69/seat-game | 0.0% |
-| Act52 arena 4g/12i, no bonus | 0.0% / 2.25 VP | 0.25 | 0.75/game | 93.8% |
-| Act52 arena 4g/12i, farm-value bonus 20 | 25.0% / 8.25 VP | 0.25 | 2.75/game | 0.0% |
+| Probe                                                 | Avg VP / Win    | Status | Kills          | Missed farm opp VP |
+| ----------------------------------------------------- | --------------- | ------ | -------------- | ------------------ |
+| Act52 meta, no farm-value bonus, `cultivator` profile | 0.00 VP         | 0.00   | 0.00/seat-game | 100.0%             |
+| Act52 meta, rollout value only (`AZMETA_VALUEW=0`)    | 3.19 VP         | 0.25   | 1.06/seat-game | 92.2%              |
+| Act52 meta, farm-value bonus 20                       | 2.06 VP         | 0.00   | 0.69/seat-game | 0.0%               |
+| Act52 arena 4g/12i, no bonus                          | 0.0% / 2.25 VP  | 0.25   | 0.75/game      | 93.8%              |
+| Act52 arena 4g/12i, farm-value bonus 20               | 25.0% / 8.25 VP | 0.25   | 2.75/game      | 0.0%               |
 
 Interpretation: the farm-value prior fixes the specific "skip clean low-rung
 farm" miss in these tiny probes, but it still does not create a solved bot.
@@ -2395,12 +2454,11 @@ round counts; that means the run is replaying duplicate games. The current
 `ml/discover_meta.sh` and `ml/az_loop.sh` wrappers offset seeds as
 `4000000 + iter * 1000000 + shard * 100000`.
 
-AWR/BC data wrappers must write the current encoder dimensions. The current
-contract is `obs_dim=62`, `act_dim=52`; older `55/52`, `55/47`, or `48/40`
-metadata poisons training or exports incompatible checkpoints. The June 29
-contract bump added current damage-class composition to `encodeObs` and
-catalog-aware market spirit class features to `encodeAction` so the model can
-learn Spirit Animal / dice-scaling damage assembly.
+AWR/BC data wrappers must derive encoder dimensions from the generated rows. The
+current contract is `obs_dim=83`, `act_dim=52`; hard-coding the June 29 `62/52`
+contract (or older `55/52`, `55/47`, `48/40` values) poisons training or exports
+incompatible checkpoints. The June 29 bump to 62 added damage-class composition
+and catalog-aware market features; subsequent encoder revisions brought v1 to 83.
 
 Current damage-contract route-proof reference:
 
@@ -2687,14 +2745,14 @@ Treat it as the current league leader, not a final champion.
 
 Current unrestricted comparison:
 
-| Checkpoint        | Gate artifact                                                   | Deterministic meta VP | Sampled meta VP | Arena win | Arena VP | Direct AZ duel win |
-| ----------------- | --------------------------------------------------------------- | --------------------- | --------------- | --------- | -------- | ------------------ |
-| champion          | `full-control-final-eval-20260627T093347Z/summary.json`         | 9.21                  | 5.85            | 75.0%     | 19.05    | 14.6%              |
-| softpi            | `softpi-full-gate-20260627T120901Z/summary.json`                | 9.31                  | 5.11            | 82.5%     | 16.88    | 16.7%              |
-| softpi-continued  | `softpi-continue-full-gate-20260627T125749Z/summary.json`       | 7.78                  | 4.67            | 82.5%     | 19.63    | 43.8%              |
-| policy-pool best  | `policy-pool-g7-20260627T134916Z/best_meta.json`                | 8.73                  | n/a             | 87.5%     | 18.88    | 27.5%              |
-| pool conservative | `policy-pool-conservative-g6-20260627T141543Z/best_meta.json`   | 7.98                  | n/a             | 87.5%     | 20.00    | n/a                |
-| pool/self mix     | `policy-pool-mix-g6-20260627T142617Z/best_meta.json`            | 9.13                  | n/a             | 75.0%     | 16.81    | 40.0% four-way; lost focused |
+| Checkpoint        | Gate artifact                                                 | Deterministic meta VP | Sampled meta VP | Arena win | Arena VP | Direct AZ duel win           |
+| ----------------- | ------------------------------------------------------------- | --------------------- | --------------- | --------- | -------- | ---------------------------- |
+| champion          | `full-control-final-eval-20260627T093347Z/summary.json`       | 9.21                  | 5.85            | 75.0%     | 19.05    | 14.6%                        |
+| softpi            | `softpi-full-gate-20260627T120901Z/summary.json`              | 9.31                  | 5.11            | 82.5%     | 16.88    | 16.7%                        |
+| softpi-continued  | `softpi-continue-full-gate-20260627T125749Z/summary.json`     | 7.78                  | 4.67            | 82.5%     | 19.63    | 43.8%                        |
+| policy-pool best  | `policy-pool-g7-20260627T134916Z/best_meta.json`              | 8.73                  | n/a             | 87.5%     | 18.88    | 27.5%                        |
+| pool conservative | `policy-pool-conservative-g6-20260627T141543Z/best_meta.json` | 7.98                  | n/a             | 87.5%     | 20.00    | n/a                          |
+| pool/self mix     | `policy-pool-mix-g6-20260627T142617Z/best_meta.json`          | 9.13                  | n/a             | 75.0%     | 16.81    | 40.0% four-way; lost focused |
 
 Direct duel artifact:
 
@@ -2735,13 +2793,13 @@ This matrix ran 10 focused pairwise matchups, 8 games per pair, across
 `champion`, `softpi`, `softpi-continued`, `policy-pool best`, and `pool/self mix`.
 Rating result:
 
-| Rank | Checkpoint | Elo | Team VP win | Avg VP | Notes |
-| ---- | ---------- | --- | ----------- | ------ | ----- |
-| 1 | softpi-continued | 1074 | 65.6% | 8.92 | Beat champion, poolbest, and mix; split softpi in the small pair |
-| 2 | softpi | 999 | 48.4% | 9.16 | Beat champion, edged mix, lost to poolbest |
-| 3 | pool/self mix | 996 | 50.0% | 9.16 | Beat champion, lost to softcont, close with softpi/poolbest |
-| 4 | policy-pool best | 987 | 50.0% | 9.33 | Countered softpi, lost hard to softcont |
-| 5 | champion | 944 | 35.9% | 6.69 | Clearly below newer learned checkpoints |
+| Rank | Checkpoint       | Elo  | Team VP win | Avg VP | Notes                                                            |
+| ---- | ---------------- | ---- | ----------- | ------ | ---------------------------------------------------------------- |
+| 1    | softpi-continued | 1074 | 65.6%       | 8.92   | Beat champion, poolbest, and mix; split softpi in the small pair |
+| 2    | softpi           | 999  | 48.4%       | 9.16   | Beat champion, edged mix, lost to poolbest                       |
+| 3    | pool/self mix    | 996  | 50.0%       | 9.16   | Beat champion, lost to softcont, close with softpi/poolbest      |
+| 4    | policy-pool best | 987  | 50.0%       | 9.33   | Countered softpi, lost hard to softcont                          |
+| 5    | champion         | 944  | 35.9%       | 6.69   | Clearly below newer learned checkpoints                          |
 
 Interpretation: `softpi-continued` is the current population leader, but the
 counter-matchups below it mean the meta is not mathematically solved. The next
@@ -2820,6 +2878,7 @@ June 27, 2026 owner-question recovery check:
   round 6. Reward labels were only `2 Victory Points` and `1 Victory Point`
   in this slice. Under current rules, one or two Spirit Animal traits do not
   make a 15 VP early-Abyss line by themselves.
+
 - The same reducer supports the high-scoring line when the build exists:
   `10x arcane dice + 2 Spirit Animal + 20 max barrier` scored 31.19 VP with
   8.25 kills/seat-game in 10 rounds. This separates "engine cannot score" from
@@ -2890,13 +2949,13 @@ the current encoder.
 Current Act52 full-suite baseline, copied locally from the SimForge GPU box:
 `ml/meta_runs/act52-current-meta-eval-20260627T210828Z/summary.json`.
 
-| Gate | Result |
-| ---- | ------ |
-| Deterministic all-planner meta | 7.93 VP, 0% reach30, status 3.00, `fallen-corruption` |
-| Sampled all-planner meta | 4.11 VP, 0% reach30, status 1.98, `cursed-spirit-corruption` |
-| Heuristic-field arena | 75.0% win, 19.68 VP, status 2.85 |
-| Forced Abyss | 70.8% win, 13.25 VP, status 2.96 |
-| Pure forced Abyss | 4.2% win, 2.88 VP, status 0.00 |
+| Gate                           | Result                                                       |
+| ------------------------------ | ------------------------------------------------------------ |
+| Deterministic all-planner meta | 7.93 VP, 0% reach30, status 3.00, `fallen-corruption`        |
+| Sampled all-planner meta       | 4.11 VP, 0% reach30, status 1.98, `cursed-spirit-corruption` |
+| Heuristic-field arena          | 75.0% win, 19.68 VP, status 2.85                             |
+| Forced Abyss                   | 70.8% win, 13.25 VP, status 2.96                             |
+| Pure forced Abyss              | 4.2% win, 2.88 VP, status 0.00                               |
 
 Verdict: `not-yet`. This checkpoint can beat fixed heuristic opponents via a
 corruption-heavy route, but it does not solve normal-start all-planner play and
@@ -3502,12 +3561,12 @@ Follow-up PvP opportunity audit:
   `frombase_target_field_eval_headprior4_diag_16g.json` scored 9.94 VP. Its
   diagnostics showed 2.31 prior applications/game, average score 0.553, and
   average Arcane logit bonus 2.21; the 4-game trace showed 100% of applications
-	already chose Arcane, so this signal is mostly redundant. Acceptance rule: do
-	not promote FarmQ auxiliary heads through global leaf value, full-action
-	Arcane bonuses, or the tested HP4/HP5 root-prior bonus. Future improvement
-	should target stronger Good-builder field strength and post-farm conversion,
-	while still reporting direct target VP, cap cleanliness, hunter VP, HP4+ PvP
-	VP, best target VP, and high-value Good window gates.
+  already chose Arcane, so this signal is mostly redundant. Acceptance rule: do
+  not promote FarmQ auxiliary heads through global leaf value, full-action
+  Arcane bonuses, or the tested HP4/HP5 root-prior bonus. Future improvement
+  should target stronger Good-builder field strength and post-farm conversion,
+  while still reporting direct target VP, cap cleanliness, hunter VP, HP4+ PvP
+  VP, best target VP, and high-value Good window gates.
 - Post-farm PvP-target pivot is now an explicit test lane. The gate
   `good-nonfallen-farm-target-pivot` and stack
   `ml/stacks/neural-field-good-nonfallen-pivot-targets.json` model the intended
@@ -4257,10 +4316,10 @@ A bot checkpoint can be treated as a candidate best bot only when:
   6.00 PvP VP/game, 2.00 PvP attacks/game, 0 missed PvP), but every planner role
   stayed below the 15 VP floor and `solvedPortfolio=false`. Field roles remained
   weak: `status2-conversion-descend-hunter` 13.70 VP, `current-champion-hunter`
-	  11.25 VP, `good-nonfallen-scorefloor-target` 9.38 VP,
-	  `allseat-goodbuilder-scorefloor` 8.78 VP, and `pure-scorefloor-farmer` 6.46 VP.
-	  Do not treat navigation-only score-floor gating as the target-quality answer;
-	  the next gate is action-level HP4/HP5 conversion and reward-continuation labels.
+  11.25 VP, `good-nonfallen-scorefloor-target` 9.38 VP,
+  `allseat-goodbuilder-scorefloor` 8.78 VP, and `pure-scorefloor-farmer` 6.46 VP.
+  Do not treat navigation-only score-floor gating as the target-quality answer;
+  the next gate is action-level HP4/HP5 conversion and reward-continuation labels.
 - The follow-up HP4 score-floor action oracle
   `ml/meta_runs/hp4-scorefloor-role-portfolio-20260701Tremote/summary.json` is
   also rejected as a meta solution. A controlled one-game trace proved the oracle
@@ -4362,8 +4421,7 @@ A bot checkpoint can be treated as a candidate best bot only when:
   `hp4-survival-oracle`. Training all labels as a broad conversion overlay
   collapsed target-field scoring to 6.00 VP; direct hunter pressure still reached
   23.88 VP with 7.13 strict Good-pivot VP/game and best Good target 17, but mixed
-  league fell to 13.25 VP, 0.38 strict Good-pivot VP/game, and best Good target
-  12. Filtering the train set to cash/restore/re-entry labels in
+  league fell to 13.25 VP, 0.38 strict Good-pivot VP/game, and best Good target 12. Filtering the train set to cash/restore/re-entry labels in
   `ml/meta_runs/nonfallen-hp4-conversion-scorefloor-cashrestore-20260701Tremote/summary.json`
   kept 447/886 samples but did not fix target quality: target-field stayed 6.00
   VP, mixed hunter improved only to 15.13 VP, and best Good target stayed 12.
@@ -4548,8 +4606,7 @@ A bot checkpoint can be treated as a candidate best bot only when:
   `HUNTER_MICRO_GATE=pvp-high-value-encounter-force`,
   `HUNTER_PVP_ORACLE=status2-target-descend`, and 18-VP hunter target thresholds.
   It is rejected harder: direct hunter-vs-candidate fell to 14.13 VP with 0 PvP
-  VP, mixed hunter fell to 8.63 VP with 0 PvP VP, and best Good target stayed
-  12. Because the mixed Good carries still averaged only 8.75 and 8.63 VP with
+  VP, mixed hunter fell to 8.63 VP with 0 PvP VP, and best Good target stayed 12. Because the mixed Good carries still averaged only 8.75 and 8.63 VP with
   zero PvP target combats, hard target protection does not create the valuable
   Good target. The next accepted lane must handle contested monster-resource
   pressure and paired target/hunter timing, not merely delay PvP until 18+ VP.

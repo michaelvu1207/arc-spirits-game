@@ -16,7 +16,7 @@
 import { describe, it } from 'vitest';
 import { profileFor } from '../server/botPolicy';
 import { SEAT_COLORS, type SeatColor, type PublicGameState } from '../types';
-import type { LegalAction } from '../legal';
+import type { LegalAction } from './actions';
 import { playRecordingGame } from './driver';
 import { hybridIndex } from './neuralBot';
 import { loadOrSnapshotCatalog, loadWeightsIfPresent } from './nodeIo';

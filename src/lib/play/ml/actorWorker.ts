@@ -1,10 +1,11 @@
 /**
  * Worker-thread entry for the self-play actor pool.
  *
- * Runs its assigned seed slice through `playRecordingGame`, appending training samples
- * to <outDir>/shard-<workerIndex>.jsonl and one summary line per game to
- * <outDir>/games-<workerIndex>.jsonl (each worker owns its two files — no write
- * contention), while streaming the same summaries to the pool via parentPort.
+ * Loads its catalog and policies once, then runs seeds assigned by the parent through
+ * `playRecordingGame`, appending training samples to
+ * <outDir>/shard-<workerIndex>.jsonl and one summary line per game to
+ * <outDir>/games-<workerIndex>.jsonl. Each worker owns its two files, so there is no
+ * write contention; completed summaries stream to the pool via parentPort.
  *
  * Spawned by actorPool.ts through an inline CJS bootstrap that registers jiti and
  * imports this module (this repo ships no tsx/vite-node; jiti is the only TS loader
@@ -28,7 +29,12 @@ import { hybridIndex } from './neuralBot';
 import { appendSamples, loadWeightsIfPresent } from './nodeIo';
 import { asNeuralPolicy, RemotePolicy } from './inferenceClient';
 import type { NeuralPolicy } from './net';
-import type { ActorWorkerData, ActorWorkerMessage, GameSummary } from './poolTypes';
+import type {
+	ActorWorkerCommand,
+	ActorWorkerData,
+	ActorWorkerMessage,
+	GameSummary
+} from './poolTypes';
 
 function loadPolicyStrict(file: string): NeuralPolicy {
 	const policy = loadWeightsIfPresent(file);
@@ -36,12 +42,18 @@ function loadPolicyStrict(file: string): NeuralPolicy {
 	return policy;
 }
 
-/** Play every seed in `data.seeds`, writing this worker's shard + summary files. */
-export function runActorGames(
-	data: ActorWorkerData,
-	onGame?: (summary: GameSummary) => void
-): { games: number; samples: number } {
-	const { workerIndex, seeds, config, outDir, catalogPath } = data;
+interface ActorGameRunner {
+	run(seed: number): { summary: GameSummary; samples: number };
+	close(): void;
+}
+
+/**
+ * Load the immutable catalog, policies and profiles once, then expose a per-seed
+ * runner. Both the synchronous runActorGames API and the persistent worker protocol
+ * use this session, so dynamic scheduling never reloads a model between games.
+ */
+function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
+	const { workerIndex, config, outDir, catalogPath } = data;
 	const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as PlayCatalog;
 	if (config.policyObsVersion === 2 && !config.inferSocket) {
 		throw new Error(
@@ -92,13 +104,20 @@ export function runActorGames(
 	const isLearnerSeat = (seat: SeatColor): boolean =>
 		isNeuralSeat(seat) && !opponentSeats.has(seat);
 
-	let samplesTotal = 0;
-	try {
-		for (const seed of seeds) {
+	let closed = false;
+	return {
+		run(seed) {
+			if (closed) throw new Error('actorWorker: cannot run a seed after the worker session closed');
 			const t0 = performance.now();
 			// Expert-iteration searcher: deterministic per (seed, decision index); the
 			// frac draw shares the stream, so runs are exactly reproducible.
-			let searcher: ((st: Parameters<typeof planDecisionGumbel>[0], seat: SeatColor, withNext: Parameters<typeof planDecisionGumbel>[4]) => { index: number; pi: number[] } | null) | undefined;
+			let searcher:
+				| ((
+						st: Parameters<typeof planDecisionGumbel>[0],
+						seat: SeatColor,
+						withNext: Parameters<typeof planDecisionGumbel>[4]
+				  ) => { index: number; pi: number[] } | null)
+				| undefined;
 			if (config.search && policy) {
 				const sc = config.search;
 				const frac = sc.frac ?? 1;
@@ -149,7 +168,6 @@ export function runActorGames(
 			});
 			const wallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);
-			samplesTotal += r.samples.length;
 
 			const seatList = Object.keys(r.finalVP) as SeatColor[];
 			const summary: GameSummary = {
@@ -175,40 +193,129 @@ export function runActorGames(
 				wallMs: Math.round(wallMs * 10) / 10
 			};
 			appendFileSync(gamesFile, JSON.stringify(summary) + '\n');
-			onGame?.(summary);
+			return { summary, samples: r.samples.length };
+		},
+		close() {
+			if (closed) return;
+			closed = true;
+			remote?.close(); // the bridge's IO thread would otherwise outlive the run
 		}
-	} finally {
-		remote?.close(); // the bridge's IO thread would otherwise outlive the run
-	}
-	return { games: seeds.length, samples: samplesTotal };
+	};
 }
 
-// Spawned-thread path: run the assigned slice and stream results to the pool.
-const wd = workerData as (ActorWorkerData & { __actorPool?: boolean }) | null;
+/** Play every seed in `data.seeds`, writing this worker's shard + summary files. */
+export function runActorGames(
+	data: ActorWorkerData,
+	onGame?: (summary: GameSummary) => void
+): { games: number; samples: number } {
+	const runner = createActorGameRunner(data);
+	let samples = 0;
+	try {
+		for (const seed of data.seeds) {
+			const result = runner.run(seed);
+			samples += result.samples;
+			onGame?.(result.summary);
+		}
+	} finally {
+		runner.close();
+	}
+	return { games: data.seeds.length, samples };
+}
+
+// Spawned-thread path. The pool uses a persistent session and assigns a new seed
+// whenever this worker announces readiness; the static branch remains for backwards
+// compatibility with direct workerData callers.
+const wd = workerData as
+	| (ActorWorkerData & { __actorPool?: boolean; __dynamicSeeds?: boolean })
+	| null;
 if (parentPort && wd?.__actorPool) {
 	const port = parentPort;
 	const t0 = performance.now();
-	try {
-		const { games, samples } = runActorGames(wd, (summary) =>
+	if (wd.__dynamicSeeds) {
+		let runner: ActorGameRunner | null = null;
+		let games = 0;
+		let samples = 0;
+		let stopped = false;
+		const fail = (err: unknown): void => {
+			if (stopped) return;
+			stopped = true;
+			try {
+				runner?.close();
+			} finally {
+				port.postMessage({
+					type: 'error',
+					workerIndex: wd.workerIndex,
+					message: err instanceof Error ? (err.stack ?? err.message) : String(err)
+				} satisfies ActorWorkerMessage);
+				port.close();
+				process.exitCode = 1;
+			}
+		};
+		try {
+			runner = createActorGameRunner(wd);
+			const handleCommand = (command: ActorWorkerCommand): void => {
+				if (stopped) return;
+				try {
+					if (command.type === 'run') {
+						const result = runner!.run(command.seed);
+						games += 1;
+						samples += result.samples;
+						port.postMessage({
+							type: 'game',
+							workerIndex: wd.workerIndex,
+							jobIndex: command.jobIndex,
+							summary: result.summary
+						} satisfies ActorWorkerMessage);
+						return;
+					}
+					runner!.close();
+					stopped = true;
+					port.off('message', handleCommand);
+					port.postMessage({
+						type: 'done',
+						workerIndex: wd.workerIndex,
+						games,
+						samples,
+						wallMs: performance.now() - t0
+					} satisfies ActorWorkerMessage);
+					port.close();
+				} catch (err) {
+					fail(err);
+				}
+			};
+			port.on('message', handleCommand);
 			port.postMessage({
-				type: 'game',
+				type: 'ready',
+				workerIndex: wd.workerIndex
+			} satisfies ActorWorkerMessage);
+		} catch (err) {
+			fail(err);
+		}
+	} else {
+		try {
+			let jobIndex = 0;
+			const { games, samples } = runActorGames(wd, (summary) =>
+				port.postMessage({
+					type: 'game',
+					workerIndex: wd.workerIndex,
+					jobIndex: jobIndex++,
+					summary
+				} satisfies ActorWorkerMessage)
+			);
+			port.postMessage({
+				type: 'done',
 				workerIndex: wd.workerIndex,
-				summary
-			} satisfies ActorWorkerMessage)
-		);
-		port.postMessage({
-			type: 'done',
-			workerIndex: wd.workerIndex,
-			games,
-			samples,
-			wallMs: performance.now() - t0
-		} satisfies ActorWorkerMessage);
-	} catch (err) {
-		port.postMessage({
-			type: 'error',
-			workerIndex: wd.workerIndex,
-			message: err instanceof Error ? (err.stack ?? err.message) : String(err)
-		} satisfies ActorWorkerMessage);
-		process.exitCode = 1;
+				games,
+				samples,
+				wallMs: performance.now() - t0
+			} satisfies ActorWorkerMessage);
+		} catch (err) {
+			port.postMessage({
+				type: 'error',
+				workerIndex: wd.workerIndex,
+				message: err instanceof Error ? (err.stack ?? err.message) : String(err)
+			} satisfies ActorWorkerMessage);
+			process.exitCode = 1;
+		}
 	}
 }

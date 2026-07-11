@@ -44,8 +44,8 @@ import {
 	type BotRandom
 } from '../server/botPolicy';
 import type { PlayCatalog, PublicGameState, SeatColor } from '../types';
-import { legalActionsWithNext, type LegalAction } from './actions';
-import { encodeObs, encodeAction } from './encode';
+import { legalActionsWithNext, policyPreviewState, type LegalAction } from './actions';
+import { combatActionExpectation, encodeObs, encodeAction } from './encode';
 import type { NeuralPolicy } from './net';
 
 export interface GumbelPlanOptions {
@@ -223,11 +223,13 @@ export function planDecisionGumbel(
 		ismctsIterations: 0,
 		searchRollouts: 0
 	};
-	const baseSeed = (opts.seed ?? (state.round * 7919 + 977)) >>> 0 || 1;
+	const baseSeed = (opts.seed ?? state.round * 7919 + 977) >>> 0 || 1;
 
 	// Priors over ALL candidates from the policy net.
 	const obs = encodeObs(state, seat, catalog);
-	const feats = withNext.map((x) => encodeAction(state, seat, x.cmd, x.next, catalog));
+	const feats = withNext.map((x) =>
+		encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)
+	);
 	const logits = policy.scoreCandidates(obs, feats);
 
 	// Seed-derived uniform stream: Gumbel noise + the π' sample stay reproducible.
@@ -245,8 +247,28 @@ export function planDecisionGumbel(
 	const qMean = (i: number): number => (visits[i] > 0 ? qSum[i] / visits[i] : 0);
 
 	const simulate = (i: number): void => {
+		const action = withNext[i];
+		if (action.hasHiddenOutcome) {
+			// A root search must not descend from the dry-run's already-realized roll/draw.
+			// Score the masked public state as a leaf, adding only analytically expected
+			// monster-reward value. Other hidden outcomes remain represented by the policy
+			// prior/value until they have an explicit public expectation model.
+			const publicState = policyPreviewState(action);
+			const vNet = clamp01(policy.value(encodeObs(publicState, seat, catalog)));
+			const publicOutcome = outcomeForSeat(publicState, seat);
+			const baseValue =
+				valueWeight >= 1 ? vNet : valueWeight * vNet + (1 - valueWeight) * publicOutcome;
+			const combatExpectedVp =
+				action.cmd.type === 'startCombat'
+					? combatActionExpectation(state, seat, catalog).expectedRewardVp
+					: 0;
+			const value = clamp01(baseValue + (0.3 * combatExpectedVp) / 30);
+			visits[i] += 1;
+			qSum[i] += value;
+			return;
+		}
 		const simSeed = (baseSeed + (visits[i] + 1) * 2654435761 + i * 40503) >>> 0 || 1;
-		let s = determinize(withNext[i].next, seat, simSeed);
+		let s = determinize(policyPreviewState(action), seat, simSeed);
 		const botRng: BotRandom = {
 			int: (mm: number) => nextInt(s.rng, mm),
 			chance: () => nextInt(s.rng, 2) === 0
@@ -277,7 +299,9 @@ export function planDecisionGumbel(
 		}
 		survivors = [...survivors].sort(
 			(a, b) =>
-				g[b] + logits[b] + sigmaQ(qMean(b), visits, cVisit, cScale) -
+				g[b] +
+				logits[b] +
+				sigmaQ(qMean(b), visits, cVisit, cScale) -
 				(g[a] + logits[a] + sigmaQ(qMean(a), visits, cVisit, cScale))
 		);
 		survivors = survivors.slice(0, Math.max(1, Math.ceil(survivors.length / 2)));

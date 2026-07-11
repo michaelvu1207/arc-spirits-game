@@ -123,7 +123,10 @@ export interface GameSummary {
 /** workerData payload for one spawned actor worker. */
 export interface ActorWorkerData {
 	workerIndex: number;
-	/** This worker's slice of the pool's seed set. */
+	/**
+	 * Seeds for the synchronous runActorGames API. Dynamic pool workers receive an
+	 * empty list here, then accept one ActorWorkerCommand.run job at a time.
+	 */
 	seeds: number[];
 	config: ActorGameConfig;
 	/** Directory receiving shard-<i>.jsonl (samples) and games-<i>.jsonl (summaries). */
@@ -132,7 +135,17 @@ export interface ActorWorkerData {
 	catalogPath: string;
 }
 
+/** A single pool job. jobIndex preserves input order and disambiguates duplicate seeds. */
+export interface ActorSeedJob {
+	jobIndex: number;
+	seed: number;
+}
+
+/** Commands sent to a persistent actor worker after it has loaded its catalog/policies. */
+export type ActorWorkerCommand = ({ type: 'run' } & ActorSeedJob) | { type: 'stop' };
+
 export type ActorWorkerMessage =
-	| { type: 'game'; workerIndex: number; summary: GameSummary }
+	| { type: 'ready'; workerIndex: number }
+	| { type: 'game'; workerIndex: number; jobIndex: number; summary: GameSummary }
 	| { type: 'done'; workerIndex: number; games: number; samples: number; wallMs: number }
 	| { type: 'error'; workerIndex: number; message: string };

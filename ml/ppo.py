@@ -9,16 +9,23 @@ rows. On top of obs/cands/chosen/ret, each row carries:
   rStep     (float)  per-step shaping reward
   done      (bool)   True on the terminal decision row of the game
   logpOld   (float)  behavior-policy log-prob of the chosen candidate at decision time
+  policyMask (0|1)   1 only when logpOld came from the exact learned stochastic policy;
+                     deterministic hybrid/search/custom rows remain in the trajectory with 0
+  behaviorTemperature (float, optional) sampled softmax temperature (default 1 for old data)
+  behaviorMask (list[0|1], optional) post-filter candidate support (default all candidates)
   vPred     (float)  value estimate at decision time (GAE baseline + value clipping)
   placement (int)    final placement 1-4 (terminal rows / per-game meta); mapped to a
                      terminal reward added to rStep on the done step
 
-Rows missing the PPO fields are skipped here (with a count) — such old-format
-rows still train normally under train.py --mode awr / alphazero.
+All rows of a policy-backed episode are retained for reward accumulation, GAE,
+value, and auxiliary losses. Only policyMask=1 rows enter the clipped policy
+surrogate. A malformed row rejects its complete episode instead of silently
+splicing time and terminal rewards around the missing transition.
 
-The policy is the masked softmax over per-candidate logits from CandidateScorer,
-so the PPO ratio is exp(logp_new(chosen) - logpOld) with logp_new taken from
-log_softmax over the legal candidates only.
+The policy is the temperature-scaled masked softmax over per-candidate logits
+from CandidateScorer, so the PPO ratio is exp(logp_new(chosen) - logpOld) with
+the new distribution using the exact candidate support and temperature that
+the actor used.
 """
 
 from __future__ import annotations
@@ -34,7 +41,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from model import CandidateScorer
+from model import CandidateScorer, model_parameters_are_finite
 
 DEFAULT_PLACEMENT_REWARDS = "1.0,0.3,-0.3,-1.0"
 
@@ -95,10 +102,19 @@ class TrajectoryBuffer:
     obs: np.ndarray                 # (N, obs_dim) float32
     cands: list[np.ndarray]         # N x (n_cands_i, act_dim) float32
     chosen: np.ndarray              # (N,) int64
+    policy_mask: np.ndarray         # (N,) bool; exact learned stochastic behavior only
     logp_old: np.ndarray            # (N,) float32
+    behavior_temperature: np.ndarray # (N,) float32
+    behavior_mask: list[np.ndarray] # N x (n_cands_i,) bool
     v_pred: np.ndarray              # (N,) float32
     advantages: np.ndarray          # (N,) float32
     returns: np.ndarray             # (N,) float32
+    farm_value: np.ndarray          # (N,) float32
+    farm_mask: np.ndarray           # (N,) bool
+    reward_pi: list[np.ndarray]     # N x (n_cands_i,) float32
+    reward_mask: np.ndarray         # (N,) bool
+    route_mode: np.ndarray          # (N,) float32
+    route_mask: np.ndarray          # (N,) bool
     # Game placement broadcast to every step of the game (0 = unknown): the
     # placement-aux target "final placement given this state" is defined at
     # every decision, not just on the terminal row.
@@ -130,6 +146,60 @@ def _coerce_end_round(raw: Any) -> int | None:
     return None
 
 
+def _coerce_behavior_mask(raw: Any, n_cands: int) -> np.ndarray | None:
+    """Parse the actor's post-filter support without truthy-string coercions.
+
+    Missing masks are the legacy contract: every recorded candidate was in support.
+    Malformed, empty, or non-binary masks reject the PPO row instead of silently
+    changing its behavior-policy denominator.
+    """
+    if raw is None:
+        return np.ones(n_cands, dtype=bool)
+    if not isinstance(raw, list) or len(raw) != n_cands:
+        return None
+    vals: list[bool] = []
+    for value in raw:
+        if isinstance(value, (bool, np.bool_)):
+            vals.append(bool(value))
+        elif isinstance(value, (int, float)) and not isinstance(value, bool) and value in (0, 1):
+            vals.append(bool(value))
+        else:
+            return None
+    mask = np.asarray(vals, dtype=bool)
+    return mask if mask.any() else None
+
+
+def _coerce_binary_flag(raw: Any) -> bool | None:
+    """Strict 0/1 parser used for policyMask (truthy strings are rejected)."""
+    if isinstance(raw, (bool, np.bool_)):
+        return bool(raw)
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and raw in (0, 1):
+        return bool(raw)
+    return None
+
+
+def _coerce_unit_target(raw: Any) -> tuple[float, bool]:
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool) and math.isfinite(float(raw)):
+        return float(np.clip(float(raw), 0.0, 1.0)), True
+    return 0.0, False
+
+
+def _coerce_policy_target(raw: Any, n_cands: int) -> tuple[np.ndarray, bool]:
+    empty = np.zeros(n_cands, dtype=np.float32)
+    if not isinstance(raw, list) or len(raw) != n_cands:
+        return empty, False
+    try:
+        target = np.asarray(raw, dtype=np.float32)
+    except (TypeError, ValueError):
+        return empty, False
+    if not np.isfinite(target).all() or np.any(target < 0):
+        return empty, False
+    total = float(target.sum())
+    if total <= 0:
+        return empty, False
+    return target / total, True
+
+
 def load_trajectory_buffer(
     data_dir: Path,
     gamma: float,
@@ -143,8 +213,10 @@ def load_trajectory_buffer(
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
     GAE advantages + returns learner-side.
 
-    obs_key: "obs" (v1 62-float summary) or "obsV2" (flat arc-obs-v2,
-    paired-row contract); rows lacking it are skipped and counted."""
+    obs_key: "obs" (current v1 83-float summary) or "obsV2" (flat arc-obs-v2,
+    paired-row contract). A missing/malformed row rejects its entire episode:
+    silently dropping one row would move dense rewards, done, and GAE across a
+    transition that the learner can no longer represent."""
     data_dir = Path(data_dir)
     # Skip the actor pool's games-*.jsonl per-game summaries (no obs/cands keys).
     jsonl_files = sorted(
@@ -155,7 +227,9 @@ def load_trajectory_buffer(
         raise FileNotFoundError(f"No *.jsonl files found in {data_dir}")
 
     episodes: dict[str, list[dict]] = {}
-    n_skipped = 0
+    invalid_episodes: set[str] = set()
+    n_nontrajectory = 0
+    n_invalid_rows = 0
     n_missing_obs = 0
     for fpath in jsonl_files:
         with open(fpath) as f:
@@ -169,22 +243,111 @@ def load_trajectory_buffer(
                     continue
                 if not isinstance(rec, dict):
                     continue
+                # AWR/AlphaZero teacher rows are intentionally not PPO trajectories.
+                # Once gameId exists, however, every row is part of an episode and a
+                # malformed member must invalidate the whole episode rather than vanish.
+                if "gameId" not in rec:
+                    n_nontrajectory += 1
+                    continue
+                game_id = str(rec["gameId"])
                 if obs_key not in rec:
                     n_missing_obs += 1
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
                     continue
                 try:
                     obs = np.array(rec[obs_key], dtype=np.float32)
                     cands = np.array(rec["cands"], dtype=np.float32)
                     chosen = int(rec["chosen"])
                 except (KeyError, ValueError, TypeError):
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
+                    continue
+                if (
+                    obs.ndim != 1
+                    or cands.ndim != 2
+                    or cands.shape[0] < 1
+                    or not np.isfinite(obs).all()
+                    or not np.isfinite(cands).all()
+                    or chosen < 0
+                    or chosen >= cands.shape[0]
+                ):
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
+                    continue
+
+                # New rows are explicit. Legacy rows with logpOld are the old exact-policy
+                # contract and remain readable as policyMask=1; a no-logp legacy row cannot
+                # safely be placed in a complete PPO trajectory.
+                if "policyMask" in rec:
+                    policy_mask = _coerce_binary_flag(rec.get("policyMask"))
+                else:
+                    policy_mask = True if "logpOld" in rec else None
+                if policy_mask is None:
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
+                    continue
+
+                if policy_mask:
+                    behavior_mask = _coerce_behavior_mask(
+                        rec.get("behaviorMask"), cands.shape[0]
+                    )
+                    if behavior_mask is None or not behavior_mask[chosen]:
+                        n_invalid_rows += 1
+                        invalid_episodes.add(game_id)
+                        continue
+                    try:
+                        logp_old = float(rec["logpOld"])
+                        behavior_temperature = float(rec.get("behaviorTemperature", 1.0))
+                    except (KeyError, ValueError, TypeError):
+                        n_invalid_rows += 1
+                        invalid_episodes.add(game_id)
+                        continue
+                    if (
+                        not math.isfinite(logp_old)
+                        or not math.isfinite(behavior_temperature)
+                        or behavior_temperature <= 0
+                    ):
+                        n_invalid_rows += 1
+                        invalid_episodes.add(game_id)
+                        continue
+                else:
+                    # No behavior distribution exists for a deterministic override. These
+                    # placeholders are never consumed by the policy surrogate.
+                    behavior_mask = np.ones(cands.shape[0], dtype=bool)
+                    behavior_temperature = 1.0
+                    logp_old = 0.0
+
+                farm_value, farm_mask = _coerce_unit_target(
+                    rec.get("farmValue", rec.get("farm_value"))
+                )
+                reward_pi, reward_mask = _coerce_policy_target(
+                    rec.get("rewardPi", rec.get("reward_pi")), cands.shape[0]
+                )
+                route_mode, route_mask = _coerce_unit_target(
+                    rec.get("routeMode", rec.get("route_mode"))
+                )
+                done = _coerce_binary_flag(rec.get("done"))
+                if done is None:
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
                     continue
                 try:
                     step = {
-                        "game_id": str(rec["gameId"]),
+                        "game_id": game_id,
                         "step_idx": int(rec["stepIdx"]),
                         "r_step": float(rec["rStep"]),
-                        "done": bool(rec["done"]),
-                        "logp_old": float(rec["logpOld"]),
+                        "done": done,
+                        "policy_mask": policy_mask,
+                        "logp_old": logp_old,
+                        "behavior_temperature": behavior_temperature,
+                        "behavior_mask": behavior_mask,
+                        "farm_value": farm_value,
+                        "farm_mask": farm_mask,
+                        "reward_pi": reward_pi,
+                        "reward_mask": reward_mask,
+                        "route_mode": route_mode,
+                        "route_mask": route_mask,
                         "v_pred": float(rec["vPred"]),
                         "placement": _coerce_placement(rec.get("placement")),
                         "won": 1 if rec.get("won") else 0,
@@ -192,27 +355,63 @@ def load_trajectory_buffer(
                         "end_round": _coerce_end_round(rec.get("endRound")),
                         "obs": obs,
                         "cands": cands,
-                        "chosen": min(max(chosen, 0), cands.shape[0] - 1),
+                        "chosen": chosen,
                     }
                 except (KeyError, ValueError, TypeError):
-                    n_skipped += 1  # old-format row without PPO fields
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
                     continue
-                if not all(math.isfinite(step[k]) for k in ("r_step", "logp_old", "v_pred")):
-                    n_skipped += 1
+                if (
+                    step["step_idx"] < 0
+                    or not all(
+                        math.isfinite(step[k])
+                        for k in ("r_step", "logp_old", "v_pred", "behavior_temperature")
+                    )
+                ):
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
                     continue
-                episodes.setdefault(step["game_id"], []).append(step)
+                episodes.setdefault(game_id, []).append(step)
+
+    for game_id in invalid_episodes:
+        episodes.pop(game_id, None)
+
+    # The actor emits contiguous 0..T-1 indices and done only on T-1. Enforce that
+    # contract so duplicated shards or a missing terminal override cannot become a
+    # superficially valid but temporally spliced episode.
+    invalid_structure: set[str] = set()
+    for game_id, raw_steps in episodes.items():
+        steps = sorted(raw_steps, key=lambda s: s["step_idx"])
+        if [s["step_idx"] for s in steps] != list(range(len(steps))):
+            invalid_structure.add(game_id)
+            continue
+        done_indices = [i for i, s in enumerate(steps) if s["done"]]
+        if done_indices and done_indices != [len(steps) - 1]:
+            invalid_structure.add(game_id)
+    for game_id in invalid_structure:
+        episodes.pop(game_id, None)
 
     if not episodes:
         raise ValueError(
-            f"No PPO trajectory rows in {data_dir} "
-            f"({n_skipped} rows lacked gameId/stepIdx/rStep/done/logpOld/vPred)"
+            f"No complete PPO trajectories in {data_dir} "
+            f"({len(invalid_episodes) + len(invalid_structure)} episode(s) rejected, "
+            f"{n_nontrajectory} non-trajectory row(s))"
         )
 
     obs_list: list[np.ndarray] = []
     cands_list: list[np.ndarray] = []
     chosen_list: list[int] = []
+    policy_mask_list: list[bool] = []
     logp_old_list: list[float] = []
+    behavior_temperature_list: list[float] = []
+    behavior_mask_list: list[np.ndarray] = []
     v_pred_list: list[float] = []
+    farm_value_list: list[float] = []
+    farm_mask_list: list[bool] = []
+    reward_pi_list: list[np.ndarray] = []
+    reward_mask_list: list[bool] = []
+    route_mode_list: list[float] = []
+    route_mask_list: list[bool] = []
     placement_list: list[int] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
@@ -268,8 +467,17 @@ def load_trajectory_buffer(
             obs_list.append(s["obs"])
             cands_list.append(s["cands"])
             chosen_list.append(s["chosen"])
+            policy_mask_list.append(s["policy_mask"])
             logp_old_list.append(s["logp_old"])
+            behavior_temperature_list.append(s["behavior_temperature"])
+            behavior_mask_list.append(s["behavior_mask"])
             v_pred_list.append(s["v_pred"])
+            farm_value_list.append(s["farm_value"])
+            farm_mask_list.append(s["farm_mask"])
+            reward_pi_list.append(s["reward_pi"])
+            reward_mask_list.append(s["reward_mask"])
+            route_mode_list.append(s["route_mode"])
+            route_mask_list.append(s["route_mask"])
             placement_list.append(placement if placement is not None else 0)
         adv_list.append(adv)
         ret_list.append(ret)
@@ -278,18 +486,31 @@ def load_trajectory_buffer(
     returns = np.concatenate(ret_list).astype(np.float32)
     print(
         f"Loaded {len(cands_list)} PPO steps from {len(episodes)} game(s) "
-        f"({n_with_placement} with terminal placement reward, {n_truncated} truncated, "
-        f"{n_skipped} rows without PPO fields skipped, "
-        f"{n_missing_obs} skipped without {obs_key!r})"
+        f"({sum(policy_mask_list)} exact policy step(s), "
+        f"{n_with_placement} with terminal placement reward, {n_truncated} truncated, "
+        f"{sum(farm_mask_list)} with farmValue, {sum(reward_mask_list)} with rewardPi, "
+        f"{sum(route_mask_list)} with routeMode, "
+        f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "
+        f"{n_invalid_rows} malformed row(s), {n_nontrajectory} non-trajectory row(s), "
+        f"{n_missing_obs} missing {obs_key!r})"
     )
     return TrajectoryBuffer(
         obs=np.stack(obs_list),
         cands=cands_list,
         chosen=np.array(chosen_list, dtype=np.int64),
+        policy_mask=np.array(policy_mask_list, dtype=bool),
         logp_old=np.array(logp_old_list, dtype=np.float32),
+        behavior_temperature=np.array(behavior_temperature_list, dtype=np.float32),
+        behavior_mask=behavior_mask_list,
         v_pred=np.array(v_pred_list, dtype=np.float32),
         advantages=advantages,
         returns=returns,
+        farm_value=np.array(farm_value_list, dtype=np.float32),
+        farm_mask=np.array(farm_mask_list, dtype=bool),
+        reward_pi=reward_pi_list,
+        reward_mask=np.array(reward_mask_list, dtype=bool),
+        route_mode=np.array(route_mode_list, dtype=np.float32),
+        route_mask=np.array(route_mask_list, dtype=bool),
         placement=np.array(placement_list, dtype=np.int64),
     )
 
@@ -362,30 +583,87 @@ def placement_aux_loss(
 # PPO update loop
 # ---------------------------------------------------------------------------
 
+def normalize_policy_advantages(
+    advantages: np.ndarray, policy_mask: np.ndarray
+) -> np.ndarray:
+    """Normalize once over the rollout's exact-policy rows.
+
+    Per-minibatch ``torch.std()`` uses Bessel correction by default and becomes
+    NaN for a singleton tail minibatch. Global normalization is also the usual
+    PPO contract. If the entire rollout has one policy row, preserve its raw
+    advantage so the only valid policy sample still has a learning signal.
+    Non-policy entries are zero because they never enter the surrogate.
+    """
+    advantages = np.asarray(advantages, dtype=np.float32)
+    policy_mask = np.asarray(policy_mask, dtype=bool)
+    out = np.zeros_like(advantages, dtype=np.float32)
+    values = advantages[policy_mask]
+    if values.size == 0:
+        return out
+    if values.size == 1:
+        out[policy_mask] = values
+        return out
+    centered = values - values.mean()
+    std = float(values.std(ddof=0))
+    out[policy_mask] = centered / (std + 1e-8) if std > 0 else centered
+    return out
+
+
 def _minibatch_tensors(
-    buffer: TrajectoryBuffer, idx: np.ndarray, device: torch.device
+    buffer: TrajectoryBuffer,
+    idx: np.ndarray,
+    device: torch.device,
+    normalized_advantages: np.ndarray,
 ) -> tuple[torch.Tensor, ...]:
     """Pad the candidate lists of the selected steps to a common length."""
     B = len(idx)
     max_cands = max(buffer.cands[i].shape[0] for i in idx)
     act_dim = buffer.cands[idx[0]].shape[1]
     cands = np.zeros((B, max_cands, act_dim), dtype=np.float32)
-    mask = np.zeros((B, max_cands), dtype=bool)
+    candidate_mask = np.zeros((B, max_cands), dtype=bool)
+    behavior_mask = np.zeros((B, max_cands), dtype=bool)
+    reward_pi = np.zeros((B, max_cands), dtype=np.float32)
     for j, i in enumerate(idx):
         c = buffer.cands[i]
         cands[j, : c.shape[0]] = c
-        mask[j, : c.shape[0]] = True
+        candidate_mask[j, : c.shape[0]] = True
+        behavior_mask[j, : c.shape[0]] = buffer.behavior_mask[i]
+        reward_pi[j, : c.shape[0]] = buffer.reward_pi[i]
     return (
         torch.from_numpy(buffer.obs[idx]).to(device),
         torch.from_numpy(cands).to(device),
-        torch.from_numpy(mask).to(device),
+        torch.from_numpy(candidate_mask).to(device),
+        torch.from_numpy(behavior_mask).to(device),
         torch.from_numpy(buffer.chosen[idx]).to(device),
+        torch.from_numpy(buffer.policy_mask[idx]).to(device),
         torch.from_numpy(buffer.logp_old[idx]).to(device),
+        torch.from_numpy(buffer.behavior_temperature[idx]).to(device),
         torch.from_numpy(buffer.v_pred[idx]).to(device),
-        torch.from_numpy(buffer.advantages[idx]).to(device),
+        torch.from_numpy(normalized_advantages[idx]).to(device),
         torch.from_numpy(buffer.returns[idx]).to(device),
+        torch.from_numpy(buffer.farm_value[idx]).to(device),
+        torch.from_numpy(buffer.farm_mask[idx]).to(device),
+        torch.from_numpy(reward_pi).to(device),
+        torch.from_numpy(buffer.reward_mask[idx]).to(device),
+        torch.from_numpy(buffer.route_mode[idx]).to(device),
+        torch.from_numpy(buffer.route_mask[idx]).to(device),
         torch.from_numpy(buffer.placement[idx]).to(device),
     )
+
+
+def behavior_log_probs(
+    logits: torch.Tensor,
+    behavior_mask: torch.Tensor,
+    behavior_temperature: torch.Tensor,
+) -> torch.Tensor:
+    """Apply the actor's exact support and per-row sampling temperature.
+
+    This transformation is shared by PPO ratios, entropy, KL anchoring, and the
+    ratio-at-rollout-start invariant tests.
+    """
+    scaled = logits / behavior_temperature.unsqueeze(1)
+    scaled = scaled.masked_fill(~behavior_mask, float("-inf"))
+    return F.log_softmax(scaled, dim=-1)
 
 
 def train_ppo(
@@ -399,6 +677,9 @@ def train_ppo(
     clip_eps: float = 0.2,
     policy_coef: float = 1.0,
     value_coef: float = 0.5,
+    farm_value_coef: float = 0.0,
+    reward_pick_coef: float = 0.0,
+    route_mode_coef: float = 0.0,
     entropy_coef: float = 0.01,
     entropy_anneal: bool = False,
     value_clip_eps: float = 0.0,
@@ -430,6 +711,22 @@ def train_ppo(
     n = len(buffer)
     rng = np.random.default_rng(seed)
     indices = np.arange(n)
+    normalized_advantages = normalize_policy_advantages(
+        buffer.advantages, buffer.policy_mask
+    )
+    n_policy_total = int(buffer.policy_mask.sum())
+    if policy_coef > 0 and n_policy_total == 0:
+        print(
+            "WARNING: PPO policy coefficient is nonzero but the rollout has no "
+            "policyMask=1 rows; training value/auxiliary heads only",
+            file=sys.stderr,
+        )
+    if route_mode_coef > 0 and not bool(buffer.route_mask.any()):
+        print(
+            "WARNING: route_mode_coef is nonzero but the rollout contains no routeMode "
+            "labels; the route auxiliary head receives no training signal",
+            file=sys.stderr,
+        )
     # v2 (per-seat-token regression) and v1 (4-way CE) placement aux heads.
     use_placement = placement_coef > 0 and hasattr(model, "placement_logits")
     use_placement_v1 = placement_coef > 0 and hasattr(model, "placement_head")
@@ -449,39 +746,69 @@ def train_ppo(
         model.train()
 
         tot_policy = tot_value = tot_entropy = tot_kl = tot_clip = tot_prob = 0.0
+        tot_farm = tot_reward = tot_route = 0.0
         tot_placement = 0.0
         tot_kl_ref = 0.0
         n_seen = 0
+        n_policy_seen = 0
         stop = False
 
         for start in range(0, n, batch_size):
             mb = indices[start : start + batch_size]
-            obs, cands, mask, chosen, logp_old, v_pred, adv, ret, placement = _minibatch_tensors(
-                buffer, mb, device
-            )
-            adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+            (
+                obs,
+                cands,
+                candidate_mask,
+                behavior_mask,
+                chosen,
+                policy_mask,
+                logp_old,
+                behavior_temperature,
+                v_pred,
+                adv,
+                ret,
+                farm_value,
+                farm_mask,
+                reward_pi,
+                reward_mask,
+                route_mode,
+                route_mask,
+                placement,
+            ) = _minibatch_tensors(buffer, mb, device, normalized_advantages)
 
-            logits, probs, value = model(obs, cands, mask)
-            log_probs = F.log_softmax(logits, dim=-1)
+            logits, _, value = model(obs, cands, behavior_mask)
+            log_probs = behavior_log_probs(logits, behavior_mask, behavior_temperature)
+            probs = log_probs.exp()
             logp_new = log_probs.gather(1, chosen.unsqueeze(1)).squeeze(1)
             log_ratio = (logp_new - logp_old).clamp(-20.0, 20.0)
             ratio = log_ratio.exp()
 
-            with torch.no_grad():
-                # k3 estimator of KL(old || new): nonnegative, low variance.
-                approx_kl = ((ratio - 1.0) - log_ratio).mean().item()
-                clip_frac = ((ratio - 1.0).abs() > clip_eps).float().mean().item()
-            if target_kl is not None and approx_kl > target_kl:
+            policy_count = int(policy_mask.sum().item())
+            if policy_count:
+                with torch.no_grad():
+                    # k3 estimator of KL(old || new): nonnegative, low variance.
+                    approx_kl = (
+                        (ratio[policy_mask] - 1.0) - log_ratio[policy_mask]
+                    ).mean().item()
+                    clip_frac = (
+                        (ratio[policy_mask] - 1.0).abs() > clip_eps
+                    ).float().mean().item()
+                surr1 = ratio[policy_mask] * adv[policy_mask]
+                surr2 = ratio[policy_mask].clamp(
+                    1.0 - clip_eps, 1.0 + clip_eps
+                ) * adv[policy_mask]
+                policy_loss = -torch.min(surr1, surr2).mean()
+            else:
+                approx_kl = 0.0
+                clip_frac = 0.0
+                policy_loss = torch.zeros((), dtype=torch.float32, device=device)
+            if target_kl is not None and policy_count and approx_kl > target_kl:
                 print(
                     f"  PPO early stop in epoch {epoch}: "
                     f"approx_kl={approx_kl:.4f} > target_kl={target_kl}"
                 )
                 stop = True
                 break
-
-            surr1 = ratio * adv
-            surr2 = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * adv
-            policy_loss = -torch.min(surr1, surr2).mean()
 
             if value_clip_eps > 0:
                 v_clipped = v_pred + (value - v_pred).clamp(-value_clip_eps, value_clip_eps)
@@ -490,17 +817,52 @@ def train_ppo(
                 value_loss = F.mse_loss(value, ret)
 
             # Entropy over the legal candidates only; padded slots contribute 0.
-            plogp = torch.where(mask, probs * log_probs, torch.zeros_like(probs))
-            entropy = -plogp.sum(dim=-1).mean()
+            plogp = torch.where(behavior_mask, probs * log_probs, torch.zeros_like(probs))
+            entropy_per_row = -plogp.sum(dim=-1)
+            entropy = (
+                entropy_per_row[policy_mask].mean()
+                if policy_count
+                else torch.zeros((), dtype=torch.float32, device=device)
+            )
 
             kl_ref = torch.zeros((), dtype=torch.float32, device=device)
             if ref_model is not None:
                 with torch.no_grad():
-                    ref_logits, _, _ = ref_model(obs, cands, mask)
-                    ref_logp = F.log_softmax(ref_logits, dim=-1)
+                    ref_logits, _, _ = ref_model(obs, cands, behavior_mask)
+                    ref_logp = behavior_log_probs(
+                        ref_logits, behavior_mask, behavior_temperature
+                    )
                 # KL(new || ref) over legal candidates only.
-                kl_terms = torch.where(mask, probs * (log_probs - ref_logp), torch.zeros_like(probs))
-                kl_ref = kl_terms.sum(dim=-1).mean()
+                kl_terms = torch.where(
+                    behavior_mask,
+                    probs * (log_probs - ref_logp),
+                    torch.zeros_like(probs),
+                )
+                kl_ref_per_row = kl_terms.sum(dim=-1)
+                kl_ref = (
+                    kl_ref_per_row[policy_mask].mean()
+                    if policy_count
+                    else torch.zeros((), dtype=torch.float32, device=device)
+                )
+
+            farm_loss = torch.zeros((), dtype=torch.float32, device=device)
+            if farm_value_coef > 0 and farm_mask.any():
+                pred_farm = model.farm_value(obs)
+                farm_loss = F.mse_loss(pred_farm[farm_mask], farm_value[farm_mask])
+
+            reward_loss = torch.zeros((), dtype=torch.float32, device=device)
+            if reward_pick_coef > 0 and reward_mask.any():
+                reward_logits = model.reward_pick_logits(obs, cands, candidate_mask)
+                reward_log_probs = F.log_softmax(reward_logits, dim=-1)
+                reward_per_row = -(reward_pi * reward_log_probs).sum(dim=-1)
+                reward_loss = reward_per_row[reward_mask].mean()
+
+            route_loss = torch.zeros((), dtype=torch.float32, device=device)
+            if route_mode_coef > 0 and route_mask.any():
+                route_logits = model.route_mode_logits(obs)
+                route_loss = F.binary_cross_entropy_with_logits(
+                    route_logits[route_mask], route_mode[route_mask]
+                )
 
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
             if use_placement:
@@ -511,6 +873,9 @@ def train_ppo(
             loss = (
                 policy_coef * policy_loss
                 + value_coef * value_loss
+                + farm_value_coef * farm_loss
+                + reward_pick_coef * reward_loss
+                + route_mode_coef * route_loss
                 - ent_coef * entropy
                 + placement_coef * placement_loss
                 + kl_ref_coef * kl_ref
@@ -520,7 +885,7 @@ def train_ppo(
             if max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
-            if not all(torch.isfinite(p).all() for p in model.parameters()):
+            if not model_parameters_are_finite(model):
                 print(
                     f"WARNING: non-finite weights after a PPO step in epoch {epoch} — "
                     "halting and restoring the last finite snapshot",
@@ -532,38 +897,55 @@ def train_ppo(
 
             bs = len(mb)
             n_seen += bs
-            tot_policy += policy_loss.item() * bs
+            n_policy_seen += policy_count
+            tot_policy += policy_loss.item() * policy_count
             tot_value += value_loss.item() * bs
-            tot_entropy += entropy.item() * bs
-            tot_kl += approx_kl * bs
-            tot_clip += clip_frac * bs
-            tot_prob += logp_new.detach().exp().mean().item() * bs
+            tot_farm += farm_loss.item() * bs
+            tot_reward += reward_loss.item() * bs
+            tot_route += route_loss.item() * bs
+            tot_entropy += entropy.item() * policy_count
+            tot_kl += approx_kl * policy_count
+            tot_clip += clip_frac * policy_count
+            if policy_count:
+                tot_prob += (
+                    logp_new.detach().exp()[policy_mask].mean().item() * policy_count
+                )
             tot_placement += placement_loss.item() * bs
-            tot_kl_ref += kl_ref.item() * bs
+            tot_kl_ref += kl_ref.item() * policy_count
 
         if halted:
             break
         if n_seen:
+            policy_denom = max(1, n_policy_seen)
             print(
                 f"PPO epoch {epoch}/{epochs} | "
-                f"policy_loss={tot_policy / n_seen:.4f} | "
+                f"policy_loss={tot_policy / policy_denom:.4f} | "
                 f"value_loss={tot_value / n_seen:.4f} | "
-                f"entropy={tot_entropy / n_seen:.4f} (coef={ent_coef:.4f}) | "
-                f"approx_kl={tot_kl / n_seen:.4f} | "
-                f"clip_frac={tot_clip / n_seen:.3f} | "
+                f"farm_value_loss={tot_farm / n_seen:.4f} | "
+                f"reward_pick_loss={tot_reward / n_seen:.4f} | "
+                f"route_mode_loss={tot_route / n_seen:.4f} | "
+                f"entropy={tot_entropy / policy_denom:.4f} (coef={ent_coef:.4f}) | "
+                f"approx_kl={tot_kl / policy_denom:.4f} | "
+                f"clip_frac={tot_clip / policy_denom:.3f} | "
                 f"placement_loss={tot_placement / n_seen:.4f} | "
-                f"kl_ref={tot_kl_ref / n_seen:.4f} | "
-                f"mean_p_chosen={tot_prob / n_seen:.3f}"
+                f"kl_ref={tot_kl_ref / policy_denom:.4f} | "
+                f"mean_p_chosen={tot_prob / policy_denom:.3f} | "
+                f"policy_steps={n_policy_seen}/{n_seen}"
             )
             history.append({
-                "policy_loss": tot_policy / n_seen,
+                "policy_loss": tot_policy / policy_denom,
                 "value_loss": tot_value / n_seen,
-                "entropy": tot_entropy / n_seen,
-                "approx_kl": tot_kl / n_seen,
-                "clip_frac": tot_clip / n_seen,
+                "farm_value_loss": tot_farm / n_seen,
+                "reward_pick_loss": tot_reward / n_seen,
+                "route_mode_loss": tot_route / n_seen,
+                "entropy": tot_entropy / policy_denom,
+                "approx_kl": tot_kl / policy_denom,
+                "clip_frac": tot_clip / policy_denom,
                 "placement_loss": tot_placement / n_seen,
-                "kl_ref": tot_kl_ref / n_seen,
-                "mean_p_chosen": tot_prob / n_seen,
+                "kl_ref": tot_kl_ref / policy_denom,
+                "mean_p_chosen": tot_prob / policy_denom,
+                "policy_steps": n_policy_seen,
+                "total_steps": n_seen,
             })
             last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
         if stop:

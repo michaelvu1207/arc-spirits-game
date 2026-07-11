@@ -37,7 +37,7 @@ from ppo import load_trajectory_buffer, parse_placement_rewards
 
 FIXTURE_PATH = Path(__file__).parent / "data_fixtures" / "obsv2_fixture.json"
 ACT_DIM = 52
-OBS_V1_DIM = 62
+OBS_V1_DIM = 83
 N_CANDS = 3
 
 _fixture_cache: dict | None = None
@@ -63,7 +63,7 @@ def make_v2_dataset(
 ) -> None:
     """
     PAIRED trajectory rows (authoritative contract, commit 2b4ef69): `obs` = a
-    62-float v1 stub AND `obsV2` = a real flat arc-obs-v2 array; usable by
+    current 83-float v1 stub AND `obsV2` = a real flat arc-obs-v2 array; usable by
     awr/alphazero AND ppo. Each game reuses ONE fixture obsV2 row for all its
     steps and gets placement = (pool_idx % 4) + 1, so the placement target is
     a deterministic function of the obs (overfit-able). The policy rule is

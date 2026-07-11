@@ -23,8 +23,9 @@ for k in $(seq 0 $((SHARDS-1))); do
 done
 echo "launched ${SHARDS} shards: ${pids[*]}"
 for p in "${pids[@]}"; do wait "$p"; done
-# Merge per-shard sample counts; write a single meta.json (dims are fixed by the encoder).
+# Merge per-shard sample counts and derive dimensions from the generated contract.
 TOTAL=$(cat "$ROOT"/ml/data/${PREFIX}_*.jsonl 2>/dev/null | wc -l | tr -d ' ')
-node -e "require('fs').writeFileSync('ml/data/meta.json', JSON.stringify({obs_dim:62,act_dim:52,samples:$TOTAL,prefix:'$PREFIX',mode:'$MODE'},null,2))"
+read -r OBS_DIM ACT_DIM < <(node scripts/read-ml-sample-dims.mjs "$ROOT/ml/data/${PREFIX}_0.jsonl")
+node -e "require('fs').writeFileSync('ml/data/meta.json', JSON.stringify({obs_dim:$OBS_DIM,act_dim:$ACT_DIM,samples:$TOTAL,prefix:'$PREFIX',mode:'$MODE'},null,2))"
 echo "ALL_SHARDS_DONE total_samples=$TOTAL"
 grep -h "\[gen\] DONE" /tmp/gen_${PREFIX}_*.log

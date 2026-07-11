@@ -5,6 +5,23 @@ import { evaluateFarmValue } from './farmValue';
 export interface SampleAuxTargets {
 	farmValue: number;
 	rewardPi?: number[];
+	routeMode?: number;
+}
+
+/** Behavior label for the real Fallen navigation decision. At status 3, returning to
+ * Arcane Abyss is route mode 0; choosing a Spirit World location to seek PvP is mode 1.
+ * This is intentionally attached only to an actually chosen navigation action, rather
+ * than fabricating route supervision on unrelated states. */
+export function fallenRouteModeTarget(
+	state: PublicGameState,
+	seat: SeatColor,
+	chosen?: LegalAction
+): number | undefined {
+	if ((state.players[seat]?.statusLevel ?? 0) < 3 || !chosen) return undefined;
+	if (chosen.cmd.type !== 'lockNavigation' && chosen.cmd.type !== 'selectNavigationDestination') {
+		return undefined;
+	}
+	return chosen.cmd.destination === 'Arcane Abyss' ? 0 : 1;
 }
 
 export function rewardPickTarget(
@@ -25,11 +42,14 @@ export function sampleAuxTargets(
 	state: PublicGameState,
 	seat: SeatColor,
 	catalog: PlayCatalog,
-	withNext?: LegalAction[]
+	withNext?: LegalAction[],
+	chosen?: LegalAction
 ): SampleAuxTargets {
 	const rewardPi = withNext ? rewardPickTarget(state, seat, withNext) : undefined;
+	const routeMode = fallenRouteModeTarget(state, seat, chosen);
 	return {
 		farmValue: evaluateFarmValue(state, seat, catalog, { threshold: 0 }).score,
-		...(rewardPi ? { rewardPi } : {})
+		...(rewardPi ? { rewardPi } : {}),
+		...(typeof routeMode === 'number' ? { routeMode } : {})
 	};
 }

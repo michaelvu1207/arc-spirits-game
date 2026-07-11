@@ -39,6 +39,21 @@ def get_device() -> torch.device:
     return torch.device("cpu")
 
 
+def model_parameters_are_finite(model: nn.Module) -> bool:
+    """Check every parameter with one device reduction/synchronization.
+
+    The trainers run this guard after every optimizer step.  Reducing each
+    parameter separately forces many tiny CUDA synchronizations; flattening the
+    small Arc policy once preserves the strict guard while being substantially
+    cheaper on A100-class devices.
+    """
+    parameters = [parameter.detach() for parameter in model.parameters()]
+    if not parameters:
+        return True
+    flat = torch.nn.utils.parameters_to_vector(parameters)
+    return bool(torch.isfinite(flat).all().item())
+
+
 class CandidateScorer(nn.Module):
     """
     Scores each candidate action given the obs context.
