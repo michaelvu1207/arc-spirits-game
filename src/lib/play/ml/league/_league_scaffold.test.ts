@@ -48,6 +48,7 @@ import {
 	mirrorOpponents,
 	matchupOpponents,
 	initLeague,
+	lastGauntletElo,
 	laneModelOf,
 	leaguePaths,
 	loadLeague,
@@ -69,6 +70,29 @@ const SMOKE_V2 = process.env.SMOKE_V2 === '1';
 const LIVE_WEIGHTS = resolve(process.cwd(), 'src/lib/play/ml/policy-weights.json');
 /** Random-init tests spawn the python util — skip cleanly where the venv is absent. */
 const HAVE_VENV = existsSync(resolve(process.cwd(), 'ml/.venv/bin/python'));
+
+describe('concurrent gauntlet attribution', () => {
+	it('finds the newest Elo for the requested checkpoint instead of taking the shared last line', () => {
+		const root = mkdtempSync(join(tmpdir(), 'league-gauntlet-history-'));
+		try {
+			const history = join(root, 'history.jsonl');
+			const ours = join(root, 'ours.json');
+			writeFileSync(
+				history,
+				[
+					JSON.stringify({ weights: ours, elo: 123 }),
+					JSON.stringify({ weights: join(root, 'other.json'), elo: 999 }),
+					JSON.stringify({ weights: ours, elo: 456 })
+				].join('\n') + '\n'
+			);
+			expect(lastGauntletElo(ours, history)).toBe(456);
+			expect(lastGauntletElo(join(root, 'other.json'), history)).toBe(999);
+			expect(lastGauntletElo(join(root, 'missing.json'), history)).toBeUndefined();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
 
 function member(id: string, kind: LeagueMember['kind'], extra: Partial<LeagueMember> = {}): LeagueMember {
 	return { id, kind, createdGen: 0, matchStats: {}, ...extra };

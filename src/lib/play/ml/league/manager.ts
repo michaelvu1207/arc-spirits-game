@@ -985,14 +985,31 @@ function runDistiller(
 	return performance.now() - t0;
 }
 
-/** Last line of ml/gauntlet_results/history.jsonl (the nightly-gauntlet append). */
-function lastGauntletElo(): number | undefined {
-	const file = resolve('ml/gauntlet_results/history.jsonl');
+/** Most recent matching line from the shared gauntlet history.
+ *
+ * Multiple league processes may finish gauntlets concurrently. Reading only the
+ * final line can attribute another league's Elo to this checkpoint, so match the
+ * immutable weights path and scan backward instead.
+ */
+export function lastGauntletElo(
+	weightsPath?: string,
+	file = resolve('ml/gauntlet_results/history.jsonl')
+): number | undefined {
 	if (!existsSync(file)) return undefined;
 	const lines = readFileSync(file, 'utf8').trim().split('\n');
-	if (lines.length === 0) return undefined;
-	const last = JSON.parse(lines[lines.length - 1]) as { elo?: number };
-	return typeof last.elo === 'number' ? last.elo : undefined;
+	const expected = weightsPath ? resolve(weightsPath) : undefined;
+	for (let i = lines.length - 1; i >= 0; i -= 1) {
+		if (!lines[i]) continue;
+		let row: { elo?: number; weights?: string };
+		try {
+			row = JSON.parse(lines[i]) as { elo?: number; weights?: string };
+		} catch {
+			continue;
+		}
+		if (expected && (typeof row.weights !== 'string' || resolve(row.weights) !== expected)) continue;
+		if (typeof row.elo === 'number') return row.elo;
+	}
+	return undefined;
 }
 
 export interface GenerationReport {
@@ -1246,7 +1263,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 					`league: gauntlet failed (status ${g.status}): ${(g.stderr || '').slice(-2000)}`
 				);
 			}
-			gauntletElo = lastGauntletElo();
+			gauntletElo = lastGauntletElo(gauntletTarget);
 			const bestFrozen = promotionBar(state.members);
 			promoted = gauntletElo !== undefined && gauntletElo > bestFrozen + config.promoteMarginElo;
 			if (promoted) {

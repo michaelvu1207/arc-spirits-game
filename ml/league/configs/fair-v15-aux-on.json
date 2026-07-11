@@ -31,7 +31,7 @@
 	"selfPlayFraction": 0.35,
 	"opponentTemperature": 0.65,
 	"pfsp": { "p": 2, "variant": "squared" },
-	"promoteEvery": 4,
+	"promoteEvery": 0,
 	"promoteMarginElo": 25,
 	"selection": "hybrid",
 	"sample": true,

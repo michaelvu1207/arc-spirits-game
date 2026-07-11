@@ -51,6 +51,12 @@ batch 1024 shortened a four-epoch h128 update only from 8.74 to 7.47 seconds; ba
 4096 took 8.10 seconds. Simulation remains the bottleneck, and fair-v15 keeps batch
 256 so the systems change does not also change PPO optimization dynamics.
 
+The fair-v15 reproduction configs also set `promoteEvery: 0`: checkpoints are
+evaluated and promoted only after the fixed-seed experiment, rather than spending
+training time on correlated intermediate gauntlets. The manager now matches a
+gauntlet-history result by checkpoint path, so unrelated concurrent league runs
+cannot accidentally consume one another's Elo line.
+
 ## Diagnosis (measured)
 
 - Single core, 4-player full games: **~1.6 games/s, ~144 rounds/s, ~912 command-applies/s, ~622 ms/game.**
