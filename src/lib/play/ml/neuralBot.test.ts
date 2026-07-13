@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { applyGameCommand, createLobbyState } from '../runtime';
 import type { GameActor, GameCommand, PlayCatalog, PublicGameState } from '../types';
 import { computeKillProbability } from '../server/botPolicy';
-import { legalActionsWithNext, type LegalAction } from './actions';
+import {
+	enumerateCandidates,
+	legalActions,
+	legalActionsWithNext,
+	type LegalAction
+} from './actions';
 import { rewardPickTarget } from './auxTargets';
 import { ACT_DIM, COMMAND_VOCAB, OBS_DIM, encodeAction, encodeObs } from './encode';
 import { claimableMonsterRewardVp, evaluateFarmValue } from './farmValue';
@@ -97,6 +102,212 @@ function atQuietLocation(): PublicGameState {
 }
 
 describe('neural value action scoring', () => {
+	it('distinguishes exact same-cost hand spirit identities inside one strategic route', () => {
+		const state = atQuietLocation();
+		const catalog: PlayCatalog = {
+			...CATALOG,
+			spirits: [
+				{
+					id: 'world-ender-a',
+					name: 'World Ender',
+					cost: 9,
+					classes: { 'World Ender': 1 },
+					origins: {}
+				},
+				{
+					id: 'golden-ruler-b',
+					name: 'Golden Ruler',
+					cost: 9,
+					classes: { 'Golden Ruler': 1 },
+					origins: {}
+				}
+			]
+		};
+		state.players.Red!.handDraws = [
+			{ guid: 'draw-a', id: 'world-ender-a', name: 'World Ender', cost: 9 },
+			{ guid: 'draw-b', id: 'golden-ruler-b', name: 'Golden Ruler', cost: 9 }
+		];
+
+		const ender = encodeAction(
+			state,
+			'Red',
+			{ type: 'spawnHandSpirit', guid: 'draw-a' },
+			undefined,
+			catalog
+		);
+		const ruler = encodeAction(
+			state,
+			'Red',
+			{ type: 'spawnHandSpirit', guid: 'draw-b' },
+			undefined,
+			catalog
+		);
+		expect(ender).not.toEqual(ruler);
+		expect(ender.slice(COMMAND_VOCAB.length + 10, COMMAND_VOCAB.length + 12)).not.toEqual(
+			ruler.slice(COMMAND_VOCAB.length + 10, COMMAND_VOCAB.length + 12)
+		);
+	});
+
+	it('enumerates distinct four-die payment compositions without fungible duplicates', () => {
+		const state = atQuietLocation();
+		state.phase = 'awakening';
+		state.players.Red!.spirits = [
+			{
+				slotIndex: 6,
+				id: 'dark-fighter',
+				name: 'Dark Fighter',
+				cost: 4,
+				classes: { 'Dark Fighter': 1 },
+				origins: {},
+				isFaceDown: true
+			}
+		];
+		state.players.Red!.attackDice = [
+			{ instanceId: 'basic-a', tier: 'basic' },
+			{ instanceId: 'basic-b', tier: 'basic' },
+			{ instanceId: 'enchanted', tier: 'enchanted' },
+			{ instanceId: 'exalted', tier: 'exalted' },
+			{ instanceId: 'arcane', tier: 'arcane' }
+		];
+		state.players.Red!.awakenOffers = [
+			{
+				slotIndex: 6,
+				spiritName: 'Dark Fighter',
+				requirement: 'Discard 4 Attack Dice',
+				discardCount: 4,
+				requiresSelection: true,
+				options: state.players.Red!.attackDice.map((die) => ({
+					ref: { kind: 'attackDie' as const, instanceId: die.instanceId },
+					label: die.tier
+				}))
+			}
+		];
+		const candidates: GameCommand[] = [];
+		enumerateCandidates(state, 'Red', CATALOG, (command) => candidates.push(command));
+		const payments = candidates.filter(
+			(command): command is Extract<GameCommand, { type: 'awakenSpirit' }> =>
+				command.type === 'awakenSpirit' && !!command.discardRefs
+		);
+
+		// C(5,4)=5 physical subsets, but excluding either Basic die has the same
+		// strategic result, so the policy receives four semantic branches.
+		expect(payments).toHaveLength(4);
+		expect(payments.every((command) => command.discardRefs?.length === 4)).toBe(true);
+		const encodings = payments.map((command) =>
+			JSON.stringify(encodeAction(state, 'Red', command, undefined, CATALOG))
+		);
+		expect(new Set(encodings).size).toBe(4);
+	});
+
+	it('offers every generic augment class on real slot indexes plus a discard escape', () => {
+		const state = atQuietLocation();
+		state.phase = 'awakening';
+		state.players.Red!.spirits = [
+			{
+				slotIndex: 2,
+				id: 'host-a',
+				name: 'Host A',
+				cost: 2,
+				classes: {},
+				origins: {},
+				isFaceDown: false
+			},
+			{
+				slotIndex: 6,
+				id: 'host-b',
+				name: 'Host B',
+				cost: 2,
+				classes: {},
+				origins: {},
+				isFaceDown: false
+			}
+		];
+		state.players.Red!.unplacedAugments = [{ runeId: 'generic-augment', name: 'Augment' }];
+
+		const actions = legalActions(state, 'Red', CATALOG);
+		const placements = actions.filter(
+			(command): command is Extract<GameCommand, { type: 'placeAugmentOnSpirit' }> =>
+				command.type === 'placeAugmentOnSpirit'
+		);
+		expect(placements).toHaveLength(12);
+		expect(new Set(placements.map((command) => command.spiritSlotIndex))).toEqual(new Set([2, 6]));
+		expect(new Set(placements.map((command) => command.className))).toEqual(
+			new Set([
+				'Fighter',
+				'Elementalist',
+				'Cultivator',
+				'Soul Weaver',
+				'Spirit Animal',
+				'Cursed Spirit'
+			])
+		);
+		const discard = actions.find((command) => command.type === 'discardUnplacedAugments');
+		expect(discard).toBeDefined();
+		expect(
+			encodeAction(state, 'Red', discard!, undefined, CATALOG).some((value) => value === 1)
+		).toBe(true);
+	});
+
+	it('encodes only held mats and enumerates non-contiguous cleanup slots', () => {
+		const state = atQuietLocation();
+		state.players.Red!.mats = [
+			{ slotIndex: 1, hasRune: true, id: 'held-rune', name: 'Held Rune', type: 'rune' },
+			{ slotIndex: 4, hasRune: false, id: 'spent-rune', name: 'Spent Rune', type: 'rune' }
+		];
+		const oneHeld = encodeObs(state, 'Red', CATALOG);
+		state.players.Red!.mats[1].hasRune = true;
+		const twoHeld = encodeObs(state, 'Red', CATALOG);
+		expect(oneHeld).not.toEqual(twoHeld);
+
+		state.phase = 'cleanup';
+		state.players.Red!.spirits = [
+			{
+				slotIndex: 2,
+				id: 'spirit-2',
+				name: 'Spirit 2',
+				cost: 2,
+				classes: {},
+				origins: {},
+				isFaceDown: false
+			},
+			{
+				slotIndex: 7,
+				id: 'spirit-7',
+				name: 'Spirit 7',
+				cost: 2,
+				classes: {},
+				origins: {},
+				isFaceDown: false
+			}
+		];
+		const candidates: GameCommand[] = [];
+		enumerateCandidates(state, 'Red', CATALOG, (command) => candidates.push(command));
+		expect(
+			candidates
+				.filter((command) => command.type === 'discardSpirit')
+				.map((command) => command.slotIndex)
+		).toEqual([2, 7]);
+		expect(
+			candidates
+				.filter((command) => command.type === 'discardRune')
+				.map((command) => command.slotIndex)
+		).toEqual([1, 4]);
+	});
+
+	it('enumerates every two-relic multiset reward choice', () => {
+		const state = atQuietLocation();
+		state.phase = 'benefits';
+		state.players.Red!.pendingAwakenReward = {
+			grants: [{ kind: 'relicChoice', amount: 2, source: 'Stellar Songbird' }]
+		};
+		const rewards = legalActions(state, 'Red', CATALOG).filter(
+			(command): command is Extract<GameCommand, { type: 'resolveAwakenReward' }> =>
+				command.type === 'resolveAwakenReward'
+		);
+		expect(rewards).toHaveLength(15); // C(5 + 2 - 1, 2)
+		expect(rewards.every((command) => command.relicPicks?.length === 2)).toBe(true);
+	});
+
 	it('exposes every small monster reward pick combination to the ML candidate surface', () => {
 		let state = atAbyss();
 		state = apply(state, RED, { type: 'startCombat' });

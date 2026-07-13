@@ -27,11 +27,20 @@
 import { applyGameCommand } from '../runtime';
 import { resetCombatFlags, takeDamage, pvpVpForAttack } from '../combat';
 import { applyTrigger } from '../effects/apply';
+import { augmentClassChoices } from '../augments';
+import { decisionPickerSpec } from '../decisionPicker';
 import { botActorFor, computeKillProbability } from '../server/botPolicy';
 import { canApply } from '../legality';
+import {
+	buildLocationInteractions,
+	eligibleCostSlots,
+	isWildcardCost,
+	relicOptions
+} from '../locationInteractions';
 import { buildMonsterRewards, rewardClaimCount, type MonsterRewardOption } from '../monsterRewards';
 import {
 	ALL_DESTINATIONS,
+	DICE_TIER_ORDER,
 	type GameActor,
 	type GameCommand,
 	type PendingRewardState,
@@ -47,6 +56,70 @@ const MAX_MONSTER_REWARD_OPTIONS = 8;
 const MAX_MONSTER_REWARD_PICK_SIZE = 3;
 const MAX_MONSTER_REWARD_CHOICE_VARIANTS = 6;
 const MAX_MONSTER_REWARD_COMMANDS = 160;
+const MAX_ENGINE_CHOICE_COMMANDS = 512;
+
+/** Deterministic combinations without replacement. The game caps attack dice at ten, mats at
+ * four and relic variants at five, so the bounded surfaces below stay small enough to dry-run. */
+function combinations<T>(
+	items: readonly T[],
+	count: number,
+	limit = MAX_ENGINE_CHOICE_COMMANDS
+): T[][] {
+	if (count <= 0) return [[]];
+	if (count > items.length) return [];
+	const out: T[][] = [];
+	const chosen: T[] = [];
+	const visit = (start: number): void => {
+		if (out.length >= limit) return;
+		if (chosen.length === count) {
+			out.push([...chosen]);
+			return;
+		}
+		for (let i = start; i <= items.length - (count - chosen.length); i += 1) {
+			chosen.push(items[i]);
+			visit(i + 1);
+			chosen.pop();
+			if (out.length >= limit) return;
+		}
+	};
+	visit(0);
+	return out;
+}
+
+/** Multiset choices (combinations with repetition), used for N independently chosen relic grants.
+ * Order is irrelevant to the reducer, so this emits C(N+K-1,K-1), not K^N duplicates. */
+function multisetPicks(optionCount: number, count: number): number[][] {
+	if (count <= 0) return [[]];
+	const out: number[][] = [];
+	const chosen: number[] = [];
+	const visit = (minimum: number): void => {
+		if (out.length >= MAX_ENGINE_CHOICE_COMMANDS) return;
+		if (chosen.length === count) {
+			out.push([...chosen]);
+			return;
+		}
+		for (let pick = minimum; pick < optionCount; pick += 1) {
+			chosen.push(pick);
+			visit(pick);
+			chosen.pop();
+			if (out.length >= MAX_ENGINE_CHOICE_COMMANDS) return;
+		}
+	};
+	visit(0);
+	return out;
+}
+
+function uniqueBy<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+	const seen = new Set<string>();
+	const out: T[] = [];
+	for (const item of items) {
+		const key = keyOf(item);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push(item);
+	}
+	return out;
+}
 
 /**
  * A legal candidate command paired with two deliberately different state views.
@@ -410,15 +483,46 @@ export function enumerateCandidates(
 
 		case 'location': {
 			const dest = me?.navigationDestination ?? null;
-			const rowCount = dest
-				? (catalog.locations?.find((l) => l.name === dest)?.rewardRows.length ?? MAX_LOCATION_ROWS)
-				: MAX_LOCATION_ROWS;
+			const rewardRows = dest
+				? catalog.locations?.find((l) => l.name === dest)?.rewardRows
+				: undefined;
+			const rowCount = rewardRows?.length ?? MAX_LOCATION_ROWS;
+			const interactions = new Map(
+				buildLocationInteractions(rewardRows).map((interaction) => [
+					interaction.rowIndex,
+					interaction
+				])
+			);
+			const emitLocationInteraction = (rowIndex: number, choices?: number[]): void => {
+				const interaction = interactions.get(rowIndex);
+				const wildcards = interaction?.cost.filter(isWildcardCost) ?? [];
+				if (!me || wildcards.length === 0) {
+					tryAdd({ type: 'resolveLocationInteraction', rowIndex, ...(choices ? { choices } : {}) });
+					return;
+				}
+				const eligible = [
+					...new Set(wildcards.flatMap((requirement) => eligibleCostSlots(requirement, me.mats)))
+				];
+				const selections = combinations(eligible, wildcards.length);
+				if (selections.length === 0) {
+					tryAdd({ type: 'resolveLocationInteraction', rowIndex, ...(choices ? { choices } : {}) });
+					return;
+				}
+				for (const costChoices of selections) {
+					tryAdd({
+						type: 'resolveLocationInteraction',
+						rowIndex,
+						...(choices ? { choices } : {}),
+						costChoices
+					});
+				}
+			};
 			// Resolve a reward row — default choices, plus expand the discrete "or"-gain options
-			// so the bot can pick WHICH benefit (a real strategic choice, not just which row).
+			// and wildcard payments so the bot can choose both what it gains and what it preserves.
 			for (let r = 0; r < rowCount; r++) {
-				tryAdd({ type: 'resolveLocationInteraction', rowIndex: r });
+				emitLocationInteraction(r);
 				for (let c = 1; c < MAX_ROW_CHOICES; c++) {
-					tryAdd({ type: 'resolveLocationInteraction', rowIndex: r, choices: [c] });
+					emitLocationInteraction(r, [c]);
 				}
 			}
 			// Summoning: which drawn spirit to keep, redraw, or discard the draw.
@@ -429,19 +533,22 @@ export function enumerateCandidates(
 			tryAdd({ type: 'startCombat' });
 			if (me?.pendingReward) emitMonsterRewardCommands(me.pendingReward, tryAdd);
 			// Spirit/rune management actions that exist in real play.
-			for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
-				tryAdd({ type: 'absorbSpirit', slotIndex: s });
+			for (const spirit of me?.spirits ?? [])
+				tryAdd({ type: 'absorbSpirit', slotIndex: spirit.slotIndex });
 			for (const mat of me?.mats ?? []) {
 				const runeId = (mat as { runeId?: string }).runeId;
 				if (!runeId) continue;
-				for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
-					tryAdd({ type: 'attachRuneToSpirit', runeId, spiritSlotIndex: s });
+				for (const spirit of me?.spirits ?? [])
+					tryAdd({ type: 'attachRuneToSpirit', runeId, spiritSlotIndex: spirit.slotIndex });
 			}
-			for (let s = 0; s < (me?.spirits?.length ?? 0); s++) {
-				for (const att of me?.spiritAugmentAttachments ?? []) {
-					const rId = (att as { runeId?: string }).runeId;
-					if (rId) tryAdd({ type: 'detachRuneFromSpirit', runeId: rId, spiritSlotIndex: s });
-				}
+			for (const att of me?.spiritAugmentAttachments ?? []) {
+				const rId = (att as { runeId?: string }).runeId;
+				if (rId)
+					tryAdd({
+						type: 'detachRuneFromSpirit',
+						runeId: rId,
+						spiritSlotIndex: att.spiritSlotIndex
+					});
 			}
 			// Pay down a forced corruption-discard obligation (from fighting the Abyss
 			// monster, or a lost PvP strike). It blocks `endLocationActions` until paid, so
@@ -464,14 +571,29 @@ export function enumerateCandidates(
 			// Location turn correctly, then have zero legal moves here until the deadline
 			// force-advanced the room.
 			if (me?.pendingAwakenReward) {
-				tryAdd({ type: 'resolveAwakenReward' });
 				const grants = me.pendingAwakenReward.grants ?? [];
 				const tainted = grants.find((g) => g.kind === 'taintedChoice') as
 					| { amount: number }
 					| undefined;
-				if (tainted)
-					for (let t = 0; t <= tainted.amount; t++)
-						tryAdd({ type: 'resolveAwakenReward', taintedMaxBarrier: t });
+				const relicCount = grants
+					.filter(
+						(grant): grant is Extract<(typeof grants)[number], { kind: 'relicChoice' }> =>
+							grant.kind === 'relicChoice'
+					)
+					.reduce((sum, grant) => sum + grant.amount, 0);
+				const taintedChoices: Array<number | undefined> = tainted
+					? Array.from({ length: tainted.amount + 1 }, (_, amount) => amount)
+					: [undefined];
+				const relicPicks = multisetPicks(relicOptions().length, relicCount);
+				for (const taintedMaxBarrier of taintedChoices) {
+					for (const picks of relicPicks) {
+						tryAdd({
+							type: 'resolveAwakenReward',
+							...(taintedMaxBarrier === undefined ? {} : { taintedMaxBarrier }),
+							...(picks.length === 0 ? {} : { relicPicks: picks })
+						});
+					}
+				}
 			}
 			tryAdd({ type: 'commitBenefits' }); // yield
 			break;
@@ -480,37 +602,102 @@ export function enumerateCandidates(
 		case 'awakening': {
 			// Flip & pay for face-down spirits — including discard-cost variants per offer.
 			for (const off of me?.awakenOffers ?? []) {
-				tryAdd({ type: 'awakenSpirit', slotIndex: off.slotIndex });
-				for (const opt of off.options ?? [])
-					tryAdd({ type: 'awakenSpirit', slotIndex: off.slotIndex, discardRefs: [opt.ref] });
+				const orderedOptions = [...(off.options ?? [])].sort((a, b) => {
+					const aRef = a.ref;
+					const bRef = b.ref;
+					if (aRef.kind !== 'attackDie' || bRef.kind !== 'attackDie') return 0;
+					const aDie = me?.attackDice.find((die) => die.instanceId === aRef.instanceId);
+					const bDie = me?.attackDice.find((die) => die.instanceId === bRef.instanceId);
+					return (
+						DICE_TIER_ORDER.indexOf(aDie?.tier ?? 'basic') -
+						DICE_TIER_ORDER.indexOf(bDie?.tier ?? 'basic')
+					);
+				});
+				const selections = off.requiresSelection
+					? uniqueBy(
+							combinations(
+								orderedOptions.map((option) => option.ref),
+								off.discardCount
+							),
+							(refs) =>
+								refs
+									.map((ref) => {
+										if (ref.kind !== 'attackDie') return JSON.stringify(ref);
+										return `attackDie:${
+											me?.attackDice.find((die) => die.instanceId === ref.instanceId)?.tier ??
+											'unknown'
+										}`;
+									})
+									.sort()
+									.join('|')
+						)
+					: [];
+				if (selections.length > 0) {
+					for (const discardRefs of selections)
+						tryAdd({ type: 'awakenSpirit', slotIndex: off.slotIndex, discardRefs });
+				} else {
+					tryAdd({ type: 'awakenSpirit', slotIndex: off.slotIndex });
+				}
 			}
-			for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
-				tryAdd({ type: 'manualAwaken', slotIndex: s });
+			for (const spirit of me?.spirits ?? [])
+				tryAdd({ type: 'manualAwaken', slotIndex: spirit.slotIndex });
 			// Resolve class decision cards (every option).
-			for (const dec of me?.pendingDecisions ?? [])
-				for (const o of dec.options)
-					tryAdd({ type: 'resolveDecision', decisionId: dec.id, optionId: o.id });
-			// Place unplaced augments onto spirits (every augment × every spirit).
+			for (const dec of me?.pendingDecisions ?? []) {
+				const picker = me ? decisionPickerSpec(dec, me) : null;
+				for (const o of dec.options) {
+					if (picker && o.id === 'yes') {
+						const tierById = new Map(
+							(me?.attackDice ?? []).map((die) => [die.instanceId, die.tier] as const)
+						);
+						const eligible = [...picker.eligibleInstanceIds].sort(
+							(a, b) =>
+								DICE_TIER_ORDER.indexOf(tierById.get(a) ?? 'basic') -
+								DICE_TIER_ORDER.indexOf(tierById.get(b) ?? 'basic')
+						);
+						const selections = uniqueBy(combinations(eligible, picker.count), (ids) =>
+							ids
+								.map((id) => tierById.get(id) ?? 'unknown')
+								.sort()
+								.join('|')
+						);
+						for (const selectedInstanceIds of selections) {
+							tryAdd({
+								type: 'resolveDecision',
+								decisionId: dec.id,
+								optionId: o.id,
+								selectedInstanceIds
+							});
+						}
+					} else {
+						tryAdd({ type: 'resolveDecision', decisionId: dec.id, optionId: o.id });
+					}
+				}
+			}
+			// Place unplaced augments onto spirits (every augment × every legal class × spirit).
 			for (let a = 0; a < (me?.unplacedAugments?.length ?? 0); a++) {
 				const aug = me!.unplacedAugments![a];
-				for (let s = 0; s < (me?.spirits?.length ?? 0); s++)
-					tryAdd({
-						type: 'placeAugmentOnSpirit',
-						augmentIndex: a,
-						augmentRuneId: aug.runeId,
-						spiritSlotIndex: s
-					});
+				for (const spirit of me?.spirits ?? []) {
+					for (const className of augmentClassChoices(aug, catalog)) {
+						tryAdd({
+							type: 'placeAugmentOnSpirit',
+							augmentIndex: a,
+							augmentRuneId: aug.runeId,
+							spiritSlotIndex: spirit.slotIndex,
+							className
+						});
+					}
+				}
 			}
+			if ((me?.unplacedAugments?.length ?? 0) > 0) tryAdd({ type: 'discardUnplacedAugments' });
 			for (const mp of me?.manualPrompts ?? []) tryAdd({ type: 'dismissManualPrompt', id: mp.id });
 			tryAdd({ type: 'commitAwakening' }); // yield
 			break;
 		}
 
 		case 'cleanup': {
-			for (let i = 0; i < (me?.spirits?.length ?? 0); i++)
-				tryAdd({ type: 'discardSpirit', slotIndex: i });
-			for (let i = 0; i < (me?.mats?.length ?? 0); i++)
-				tryAdd({ type: 'discardRune', slotIndex: i });
+			for (const spirit of me?.spirits ?? [])
+				tryAdd({ type: 'discardSpirit', slotIndex: spirit.slotIndex });
+			for (const mat of me?.mats ?? []) tryAdd({ type: 'discardRune', slotIndex: mat.slotIndex });
 			tryAdd({ type: 'commitCleanup' }); // yield — the cleanup-phase yield a real bot/player issues
 			// NOTE: `commitRound` is intentionally NOT offered. It is a server/host-level
 			// round-advance + history-snapshot command (service.ts), which botSim "never calls"
@@ -587,14 +774,32 @@ export function legalActions(
  */
 export function commandMatches(a: GameCommand, b: GameCommand): boolean {
 	if (a.type !== b.type) return false;
+	const sameStrings = (left: readonly string[] | undefined, right: readonly string[] | undefined) =>
+		JSON.stringify([...(left ?? [])].sort()) === JSON.stringify([...(right ?? [])].sort());
+	const sameNumbers = (left: readonly number[] | undefined, right: readonly number[] | undefined) =>
+		JSON.stringify([...(left ?? [])].sort((x, y) => x - y)) ===
+		JSON.stringify([...(right ?? [])].sort((x, y) => x - y));
+	const sameRefs = (
+		left: Extract<GameCommand, { type: 'awakenSpirit' }>['discardRefs'],
+		right: Extract<GameCommand, { type: 'awakenSpirit' }>['discardRefs']
+	) =>
+		JSON.stringify([...(left ?? [])].map((ref) => JSON.stringify(ref)).sort()) ===
+		JSON.stringify([...(right ?? [])].map((ref) => JSON.stringify(ref)).sort());
 	switch (a.type) {
 		case 'lockNavigation':
 		case 'selectNavigationDestination':
 			return a.destination === (b as typeof a).destination;
 		case 'resolveLocationInteraction':
+			if (
+				!(
+					a.rowIndex === (b as typeof a).rowIndex &&
+					(a.choices?.[0] ?? 0) === ((b as typeof a).choices?.[0] ?? 0)
+				)
+			)
+				return false;
 			return (
-				a.rowIndex === (b as typeof a).rowIndex &&
-				(a.choices?.[0] ?? 0) === ((b as typeof a).choices?.[0] ?? 0)
+				!(b as typeof a).costChoices?.length ||
+				sameNumbers(a.costChoices, (b as typeof a).costChoices)
 			);
 		case 'spawnHandSpirit':
 			return a.guid === (b as typeof a).guid;
@@ -604,19 +809,40 @@ export function commandMatches(a: GameCommand, b: GameCommand): boolean {
 			return (
 				a.marketIndex === (b as typeof a).marketIndex && a.slotIndex === (b as typeof a).slotIndex
 			);
-		case 'awakenSpirit':
+		case 'awakenSpirit': {
+			const other = b as typeof a;
+			if (a.slotIndex !== other.slotIndex) return false;
+			if (other.runeInstanceIds?.length && !sameStrings(a.runeInstanceIds, other.runeInstanceIds))
+				return false;
+			if (other.discardRefs?.length && !sameRefs(a.discardRefs, other.discardRefs)) return false;
+			return true;
+		}
 		case 'discardSpirit':
 		case 'discardRune':
 		case 'manualAwaken':
 		case 'absorbSpirit':
 			return a.slotIndex === (b as typeof a).slotIndex;
-		case 'resolveDecision':
-			return a.decisionId === (b as typeof a).decisionId && a.optionId === (b as typeof a).optionId;
+		case 'resolveDecision': {
+			const other = b as typeof a;
+			return (
+				a.decisionId === other.decisionId &&
+				a.optionId === other.optionId &&
+				(!other.selectedInstanceIds?.length ||
+					sameStrings(a.selectedInstanceIds, other.selectedInstanceIds))
+			);
+		}
 		case 'placeAugmentOnSpirit':
 			return (
 				a.augmentIndex === (b as typeof a).augmentIndex &&
-				a.spiritSlotIndex === (b as typeof a).spiritSlotIndex
+				a.spiritSlotIndex === (b as typeof a).spiritSlotIndex &&
+				(!(b as typeof a).className || a.className === (b as typeof a).className)
 			);
+		case 'resolveAwakenReward': {
+			const other = b as typeof a;
+			if (other.taintedMaxBarrier !== undefined && a.taintedMaxBarrier !== other.taintedMaxBarrier)
+				return false;
+			return !other.relicPicks?.length || sameNumbers(a.relicPicks, other.relicPicks);
+		}
 		default:
 			return true; // type-only commands: passEncounter, initiatePvp, commit*, refillMarket, etc.
 	}

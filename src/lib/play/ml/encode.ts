@@ -139,6 +139,40 @@ function catalogSpiritClasses(
 	return catalog.spirits.find((spirit) => spirit.id === spiritId)?.classes;
 }
 
+function sumClasses(classes: Record<string, number> | undefined, names: readonly string[]): number {
+	return names.reduce((sum, name) => sum + (classes?.[name] ?? 0), 0);
+}
+
+/** Compact, strategy-facing identity for a spirit candidate. These ten slots cover the
+ * build/convert/finish routes that were previously invisible for hand summons. */
+function spiritRouteFeatures(classes: Record<string, number> | undefined): number[] {
+	return [
+		classFeature(classes, 'Spirit Animal'),
+		classFeature(classes, 'Elementalist', 5),
+		classFeature(classes, 'Arc Mage'),
+		clamp01(sumClasses(classes, ['Fighter', 'Adaptive Fighter']) / 5),
+		clamp01(sumClasses(classes, ['Dragon Warrior', 'Fairy', 'Dark Fighter']) / 3),
+		classFeature(classes, 'Cultivator', 5),
+		clamp01(sumClasses(classes, ['World Ender', 'Golden Ruler', 'World Guardian', 'Healer']) / 3),
+		clamp01(sumClasses(classes, ['Cursed Spirit', 'The Corruptor', 'Dark Assassin']) / 3),
+		clamp01(sumClasses(classes, ['Soul Weaver', 'Sharpshooter', 'Ironmane']) / 3),
+		clamp01(sumClasses(classes, ['Abyss Summoner', 'Purifier', 'Strategist', 'Rune Mage']) / 3)
+	];
+}
+
+/** Stable content fingerprint for finite catalog/decision identities. It is not treated as a
+ * hidden outcome: every input is already public to the acting player. Two salted coordinates
+ * avoid making a single arbitrary lexical ordering the only identity signal. */
+function stableTextFeature(value: string | null | undefined, salt = 0): number {
+	if (!value) return 0;
+	let hash = (0x811c9dc5 ^ salt) >>> 0;
+	for (let i = 0; i < value.length; i += 1) {
+		hash ^= value.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193) >>> 0;
+	}
+	return hash / 0xffffffff;
+}
+
 /** 1 = leading, 0 = last. Placement of `seat` among active seats by VP (ties → better). */
 function placementFraction(state: PublicGameState, seat: SeatColor): number {
 	const me = state.players[seat]?.victoryPoints ?? 0;
@@ -188,7 +222,9 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 		f.push(clamp01(dice.arcane / POOL_NORM));
 		f.push(clamp01((me.spirits?.length ?? 0) / 7));
 		f.push(clamp01(faceDownCount(me) / 7));
-		f.push(clamp01((me.mats?.length ?? 0) / POOL_NORM));
+		// Spent/discarded mats remain in their tableau slots until round compaction.
+		// Count only inventory the player can still spend this round.
+		f.push(clamp01((me.mats?.filter((mat) => mat.hasRune).length ?? 0) / POOL_NORM));
 		f.push(clamp01((me.relics ?? 0) / POOL_NORM));
 		f.push(clamp01((me.spiritAugments ?? 0) / POOL_NORM));
 		f.push(clamp01((me.unplacedAugments?.length ?? 0) / POOL_NORM));
@@ -353,6 +389,10 @@ export const COMMAND_VOCAB: GameCommand['type'][] = [
 ];
 const VOCAB_INDEX: Partial<Record<GameCommand['type'], number>> = {};
 COMMAND_VOCAB.forEach((t, i) => (VOCAB_INDEX[t] = i));
+// `commitRound` is an obsolete host-only command that is deliberately never offered to a bot.
+// Reuse its frozen v1 command bit for the real player command that clears otherwise-unplaceable
+// augments. This keeps every parameter/effect offset and old checkpoint dimension unchanged.
+VOCAB_INDEX.discardUnplacedAugments = VOCAB_INDEX.commitRound;
 
 /** Number of generic numeric slots appended after the command one-hot. */
 const ACTION_PARAM_SLOTS = 12;
@@ -393,14 +433,46 @@ export function encodeAction(
 		case 'resolveLocationInteraction': {
 			f[p] = clamp01(cmd.rowIndex / 8);
 			f[p + 1] = cmd.choices && cmd.choices.length ? clamp01((cmd.choices[0] ?? 0) / 3) : 0;
+			const selected = (cmd.costChoices ?? [])
+				.map((index) => ({ index, mat: me?.mats?.[index] }))
+				.filter((entry) => entry.mat?.hasRune);
+			f[p + 2] = clamp01(selected.length / 4);
+			f[p + 3] = clamp01(selected.filter((entry) => entry.mat?.type === 'relic').length / 4);
+			f[p + 4] = clamp01(
+				selected.filter((entry) => entry.mat?.originId != null && entry.mat?.type !== 'relic')
+					.length / 4
+			);
+			f[p + 5] = clamp01(selected.filter((entry) => entry.mat?.special === true).length / 4);
+			for (let i = 0; i < Math.min(4, selected.length); i += 1) {
+				const mat = selected[i].mat;
+				f[p + 6 + i] = stableTextFeature(mat?.id ?? mat?.name, i + 1);
+			}
+			f[p + 10] = selected.length
+				? clamp01(selected.reduce((sum, entry) => sum + entry.index, 0) / (selected.length * 4))
+				: 0;
+			f[p + 11] = stableTextFeature(
+				selected
+					.map((entry) => entry.mat?.id ?? entry.mat?.name ?? String(entry.index))
+					.sort()
+					.join('|'),
+				17
+			);
 			break;
 		}
 		case 'spawnHandSpirit': {
-			// Featurize the drawn spirit being summoned (cost / face-down nature).
+			// Featurize the actual drawn spirit. Cost alone made same-cost engine pieces
+			// feature-identical, forcing the policy to choose them randomly.
 			const draw = me?.handDraws?.find((h) => h.guid === cmd.guid);
 			if (draw) {
 				f[p] = clamp01((draw.cost ?? 0) / 8);
 				f[p + 1] = 1; // marker: a known draw
+				const classes = catalogSpiritClasses(catalog, draw.id);
+				const route = spiritRouteFeatures(classes);
+				for (let i = 0; i < 8; i += 1) f[p + 2 + i] = route[i];
+				// Route groups generalize across related builds; the two public catalog-id
+				// coordinates disambiguate different same-cost finishers within a group.
+				f[p + 10] = stableTextFeature(draw.id, 71);
+				f[p + 11] = stableTextFeature(draw.id, 73);
 			}
 			break;
 		}
@@ -422,14 +494,174 @@ export function encodeAction(
 			f[p + 9] = classFeature(classes, 'Cultivator', 5); // max-barrier route support
 			break;
 		}
-		case 'awakenSpirit':
+		case 'awakenSpirit': {
+			const spirit = me?.spirits?.find((entry) => entry.slotIndex === cmd.slotIndex);
+			f[p] = clamp01(cmd.slotIndex / 7);
+			f[p + 1] = spirit?.isFaceDown ? 1 : 0;
+			f[p + 2] = spirit ? clamp01((spirit.cost ?? 0) / 8) : 0;
+			const route = spiritRouteFeatures(spirit?.classes);
+			f[p + 3] = clamp01(route[0] + route[1] + route[2] + route[3] + route[4]);
+			f[p + 4] = route[5];
+			f[p + 5] = route[6];
+			f[p + 6] = route[7];
+			f[p + 7] = clamp01(route[8] + route[9]);
+			const refs = cmd.discardRefs ?? [];
+			const runeRefs = refs.filter((ref) => ref.kind === 'rune');
+			const spiritRefs = refs.filter((ref) => ref.kind === 'spirit');
+			const attackRefs = refs.filter((ref) => ref.kind === 'attackDie');
+			if (attackRefs.length > 0) {
+				// A scalar tier sum aliases materially different payments. Conditional tier
+				// counts retain the full composition while staying within the frozen v1 tail.
+				const tierIndex = { basic: 0, enchanted: 1, exalted: 2, arcane: 3 } as const;
+				for (const ref of attackRefs) {
+					const die = me?.attackDice?.find((entry) => entry.instanceId === ref.instanceId);
+					if (die) f[p + 8 + tierIndex[die.tier]] += 0.1;
+				}
+			} else {
+				const runeIdentity = runeRefs
+					.map((ref) => {
+						const mat = me?.mats?.find((entry) => entry.slotIndex === ref.slotIndex);
+						return mat?.id ?? mat?.name ?? String(ref.slotIndex);
+					})
+					.sort()
+					.join('|');
+				const spiritIdentity = spiritRefs
+					.map((ref) => {
+						const selected = me?.spirits?.find((entry) => entry.slotIndex === ref.slotIndex);
+						return selected?.id ?? String(ref.slotIndex);
+					})
+					.sort()
+					.join('|');
+				f[p + 8] = stableTextFeature(runeIdentity, 31);
+				f[p + 9] = stableTextFeature(spiritIdentity, 37);
+				f[p + 10] = refs.some((ref) => ref.kind === 'augment') ? 1 : 0;
+				f[p + 11] = stableTextFeature(`${runeIdentity}|${spiritIdentity}`, 41);
+			}
+			break;
+		}
 		case 'flipSpirit':
 		case 'discardSpirit': {
 			const si = (cmd as { slotIndex: number }).slotIndex;
 			f[p] = clamp01(si / 7);
-			const sp = me?.spirits?.[si];
+			const sp = me?.spirits?.find((entry) => entry.slotIndex === si);
 			f[p + 1] = sp?.isFaceDown ? 1 : 0;
 			f[p + 2] = sp ? clamp01((sp.cost ?? 0) / 8) : 0;
+			const route = spiritRouteFeatures(sp?.classes);
+			f[p + 3] = clamp01(route[0] + route[1] + route[2]);
+			f[p + 4] = clamp01(route[3] + route[4]);
+			f[p + 5] = route[5];
+			f[p + 6] = route[6];
+			f[p + 7] = route[7];
+			f[p + 8] = clamp01(route[8] + route[9]);
+			f[p + 9] = stableTextFeature(sp?.id, 79);
+			f[p + 10] = stableTextFeature(sp?.id, 83);
+			f[p + 11] = stableTextFeature(
+				Object.entries(sp?.origins ?? {})
+					.sort(([left], [right]) => left.localeCompare(right))
+					.map(([origin, count]) => `${origin}:${count}`)
+					.join('|'),
+				89
+			);
+			break;
+		}
+		case 'resolveDecision': {
+			const decision = me?.pendingDecisions?.find((entry) => entry.id === cmd.decisionId);
+			f[p] = cmd.optionId === 'yes' ? 1 : 0;
+			f[p + 1] = cmd.optionId === 'no' ? 1 : 0;
+			const selected = new Set(cmd.selectedInstanceIds ?? []);
+			f[p + 2] = clamp01(selected.size / 10);
+			const tierIndex = { basic: 0, enchanted: 1, exalted: 2, arcane: 3 } as const;
+			for (const die of me?.attackDice ?? []) {
+				if (selected.has(die.instanceId)) f[p + 3 + tierIndex[die.tier]] += 0.1;
+			}
+			const before = me;
+			const after = next?.players?.[seat];
+			f[p + 7] = clamp01(
+				0.5 + ((after?.attackDice?.length ?? 0) - (before?.attackDice?.length ?? 0)) / 20
+			);
+			f[p + 8] = clamp01(
+				0.5 +
+					((after?.mats?.filter((m) => m.hasRune).length ?? 0) -
+						(before?.mats?.filter((m) => m.hasRune).length ?? 0)) /
+						8
+			);
+			f[p + 9] = clamp01(
+				0.5 + ((after?.unplacedAugments?.length ?? 0) - (before?.unplacedAugments?.length ?? 0)) / 8
+			);
+			f[p + 10] = stableTextFeature(decision?.kind, 47);
+			f[p + 11] = stableTextFeature(cmd.optionId, 53);
+			break;
+		}
+		case 'placeAugmentOnSpirit': {
+			const spirit = me?.spirits?.find((entry) => entry.slotIndex === cmd.spiritSlotIndex);
+			f[p] = clamp01(cmd.spiritSlotIndex / 7);
+			f[p + 1] = spirit && !spirit.isFaceDown ? 1 : 0;
+			f[p + 2] = spirit ? clamp01(spirit.cost / 8) : 0;
+			f[p + 3] = clamp01(
+				(me?.spiritAugmentAttachments ?? []).filter(
+					(attachment) => attachment.spiritSlotIndex === cmd.spiritSlotIndex
+				).length / 5
+			);
+			const augmentClasses = [
+				'Fighter',
+				'Elementalist',
+				'Cultivator',
+				'Soul Weaver',
+				'Spirit Animal',
+				'Cursed Spirit'
+			];
+			const classIndex = cmd.className ? augmentClasses.indexOf(cmd.className) : -1;
+			if (classIndex >= 0) f[p + 4 + classIndex] = 1;
+			f[p + 10] = clamp01(
+				Object.values(spirit?.classes ?? {}).reduce((sum, count) => sum + count, 0) / 10
+			);
+			const augment = me?.unplacedAugments?.[cmd.augmentIndex];
+			f[p + 11] =
+				augment?.boundSlotIndex != null || augment?.hostClass != null || augment?.classId != null
+					? 1
+					: 0;
+			break;
+		}
+		case 'resolveAwakenReward': {
+			const grants = me?.pendingAwakenReward?.grants ?? [];
+			const tainted = grants
+				.filter((grant) => grant.kind === 'taintedChoice')
+				.reduce((sum, grant) => sum + grant.amount, 0);
+			f[p] = clamp01((cmd.taintedMaxBarrier ?? 0) / 10);
+			f[p + 1] = clamp01(tainted / 10);
+			const relicCounts = [0, 0, 0, 0, 0];
+			for (const pick of cmd.relicPicks ?? []) {
+				if (pick >= 0 && pick < relicCounts.length) relicCounts[pick] += 1;
+			}
+			for (let i = 0; i < relicCounts.length; i += 1) f[p + 2 + i] = clamp01(relicCounts[i] / 7);
+			f[p + 7] = clamp01(
+				grants
+					.filter((grant) => grant.kind === 'vp')
+					.reduce((sum, grant) => sum + grant.amount, 0) / 10
+			);
+			f[p + 8] = clamp01(
+				grants
+					.filter((grant) => grant.kind === 'attackDice')
+					.reduce((sum, grant) => sum + grant.amount, 0) / 10
+			);
+			f[p + 9] = clamp01(
+				grants
+					.filter((grant) => grant.kind === 'augment')
+					.reduce((sum, grant) => sum + grant.amount, 0) / 7
+			);
+			f[p + 10] = clamp01((cmd.relicPicks?.length ?? 0) / 7);
+			f[p + 11] = clamp01(new Set(cmd.relicPicks ?? []).size / 5);
+			break;
+		}
+		case 'discardRune': {
+			const mat = me?.mats?.find((entry) => entry.slotIndex === cmd.slotIndex);
+			f[p] = clamp01(cmd.slotIndex / 4);
+			f[p + 1] = mat?.type === 'relic' ? 1 : 0;
+			f[p + 2] = mat?.originId != null && mat?.type !== 'relic' ? 1 : 0;
+			f[p + 3] = mat?.special ? 1 : 0;
+			f[p + 4] = mat?.classId ? 1 : 0;
+			f[p + 5] = stableTextFeature(mat?.id ?? mat?.name, 61);
+			f[p + 6] = stableTextFeature(mat?.id ?? mat?.name, 67);
 			break;
 		}
 		case 'resolveMonsterReward': {
