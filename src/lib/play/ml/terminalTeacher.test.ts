@@ -127,6 +127,12 @@ describe('V24 terminal reward teacher', () => {
 		expect(() => sanitizeSoloTerminalState(state, 'Red')).toThrow(/exactly one/);
 	});
 
+	it('fails closed if a legacy purge bag could preserve hidden order', () => {
+		const state = rewardState();
+		state.bags.purgeBags = [{ contents: [] }] as never;
+		expect(() => sanitizeSoloTerminalState(state, 'Red')).toThrow(/purge bag/);
+	});
+
 	it('derives common rollout seeds without candidate identity', () => {
 		expect(terminalRolloutSeed('state-7', 3, 'audit')).toBe(
 			terminalRolloutSeed('state-7', 3, 'audit')
@@ -134,6 +140,16 @@ describe('V24 terminal reward teacher', () => {
 		expect(terminalRolloutSeed('state-7', 3, 'audit')).not.toBe(
 			terminalRolloutSeed('state-7', 4, 'audit')
 		);
+	});
+
+	it("signs compact reward choices in the reducer's exact pick order", () => {
+		expect(
+			canonicalCommandSignature({
+				type: 'resolveMonsterReward',
+				picks: [2, 0, 2],
+				choices: [3]
+			})
+		).toBe('{"type":"resolveMonsterReward","picks":[2,0],"choices":[3]}');
 	});
 
 	it('detects ambiguous reward support even when other Location actions coexist', () => {
@@ -229,6 +245,29 @@ describe('V24 terminal reward teacher', () => {
 			second.stats[second.bestIndex].commandSignature
 		);
 		expect(first.decisive).toBe(true);
+	});
+
+	it('masks stalled candidates and gives utility-decisive equal-win labels a preference', () => {
+		const commands: GameCommand[] = [
+			{ type: 'resolveMonsterReward', picks: [0] },
+			{ type: 'resolveMonsterReward', picks: [1] },
+			{ type: 'resolveMonsterReward', picks: [2] }
+		];
+		const stalled = { ...outcome(false, 0), stalled: true };
+		const label = labelTerminalOutcomes(
+			commands,
+			[
+				Array.from({ length: 8 }, () => outcome(false, 27)),
+				Array.from({ length: 8 }, () => outcome(false, 25)),
+				[stalled, ...Array.from({ length: 7 }, () => outcome(false, 29))]
+			],
+			{ stateId: 'stalled-mask', rollouts: 8 }
+		);
+		expect(label.evaluatedMask).toEqual([1, 1, 0]);
+		expect(label.stats[2].stalls).toBe(1);
+		expect(label.terminalPi[2]).toBe(0);
+		expect(label.decisive).toBe(true);
+		expect(label.terminalPi[0]).toBeGreaterThan(label.terminalPi[1]);
 	});
 
 	it('emits only the exact normalized collector schema', () => {

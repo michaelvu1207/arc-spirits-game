@@ -78,8 +78,11 @@ terminal reach-30 count, then mean final VP, post-15 VP/round, and earlier first
 states where the best action beats the runner-up by at least two of eight wins or by a preregistered
 paired utility margin. For every evaluated candidate, set
 `q=(reach30Wins+0.5)/(rollouts+1)` and `terminalPi=softmax(q/0.10)` over the evaluated mask; the VP
-and tempo tie-breaks decide only exact equal-win cases. The student CE is renormalized over the same
-mask. Store that normalized `terminalPi` over only evaluated legal candidates;
+and tempo tie-breaks decide only exact equal-win cases. If an equal-win best action clears the
+utility margin, add a bounded half-win pseudocount `0.5/(rollouts+1)` to that action's label-only
+`q`; this prevents a utility-decisive state from emitting a useless uniform target while ensuring
+one observed reach-30 win always dominates the tie-break. The student CE is renormalized over the
+same mask. Store that normalized `terminalPi` over only evaluated legal candidates;
 unevaluated/truncated candidates are masked, never treated as losses.
 
 Before any PPO run, regenerate a disjoint 512-state audit with 16 discovery determinizations and
@@ -127,6 +130,10 @@ measurement is mandatory. If it regresses more than 2 points versus the historic
 **both** arms the same short behavior-cloning warm-start on historical VP choices, stop at the first
 checkpoint within 1 point of the incumbent, and only then begin the paired experiment. Record the
 warm-start as a shared initialization, not a V24 treatment effect.
+
+Generation zero was run on seeds 2,401,000,001–2,401,001,024 after exact checkpoint surgery. The
+historical override scored 59.86% and the learnable support 59.57% (paired delta -0.29 points, zero
+stalls), so the shared behavior-cloning contingency is not triggered.
 
 Run five generations of 1,024 solo games per arm. Evaluate every checkpoint on one fixed,
 preregistered 1,024-game development block and select each arm's checkpoint by Wilson lower bound

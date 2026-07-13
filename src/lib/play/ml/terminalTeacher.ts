@@ -106,15 +106,15 @@ function stableValue(value: unknown): unknown {
 /** Stable identity for a command, independent of object key order. */
 export function canonicalCommandSignature(command: GameCommand): string {
 	if (command.type === 'resolveMonsterReward') {
-		const pairs = command.picks.map((pick, index) => ({
-			pick,
-			choice: command.choices?.[index]
-		}));
-		pairs.sort((a, b) => a.pick - b.pick || (a.choice ?? -1) - (b.choice ?? -1));
+		// Match the reducer contract exactly: picks are deduplicated in first-seen
+		// order, while choices compactly correspond only to chooseRune picks in
+		// that order. Sorting or pairing choices positionally would change meaning.
+		const picks: number[] = [];
+		for (const pick of command.picks) if (!picks.includes(pick)) picks.push(pick);
 		return JSON.stringify({
 			type: command.type,
-			picks: pairs.map((pair) => pair.pick),
-			...(command.choices ? { choices: pairs.map((pair) => pair.choice ?? 0) } : {})
+			picks,
+			...(command.choices ? { choices: [...command.choices] } : {})
 		});
 	}
 	return JSON.stringify(stableValue(command));
@@ -179,6 +179,9 @@ function validateSoloState(state: PublicGameState, seat: SeatColor): void {
 	// Fail closed if that contract changes instead of accidentally leaking a deck order.
 	if (state.bags.monsters.contents.length > 0 || state.bags.stageDeck.contents.length > 0) {
 		throw new Error('terminalTeacher: unsupported ordered monster/stage bag');
+	}
+	if (!Array.isArray(state.bags.purgeBags) || state.bags.purgeBags.length > 0) {
+		throw new Error('terminalTeacher: unsupported nonempty purge bag');
 	}
 }
 
@@ -393,19 +396,20 @@ export function labelTerminalOutcomes(
 		throw new Error('terminalTeacher: duplicate canonical command signatures');
 	}
 	const stats = outcomes.map((candidateOutcomes, index): TerminalCandidateStats => {
-		const valid = candidateOutcomes.filter((x): x is TerminalRolloutOutcome => x !== null);
-		const evaluated = valid.length === rollouts && candidateOutcomes.length === rollouts;
-		const first30 = valid.flatMap((x) => (x.first30Round === null ? [] : [x.first30Round]));
-		const wins = valid.filter((x) => x.reached30).length;
+		const returned = candidateOutcomes.filter((x): x is TerminalRolloutOutcome => x !== null);
+		const completed = returned.filter((x) => !x.stalled);
+		const evaluated = completed.length === rollouts && candidateOutcomes.length === rollouts;
+		const first30 = completed.flatMap((x) => (x.first30Round === null ? [] : [x.first30Round]));
+		const wins = completed.filter((x) => x.reached30).length;
 		return {
 			commandSignature: signatures[index],
 			evaluated,
 			reach30Wins: wins,
-			meanFinalVP: mean(valid.map((x) => x.finalVP)),
-			meanPost15VpPerRound: mean(valid.map((x) => x.post15VpPerRound)),
+			meanFinalVP: mean(completed.map((x) => x.finalVP)),
+			meanPost15VpPerRound: mean(completed.map((x) => x.post15VpPerRound)),
 			meanFirst30Round: first30.length > 0 ? mean(first30) : null,
-			meanUtility: mean(valid.map(utility)),
-			stalls: valid.filter((x) => x.stalled).length,
+			meanUtility: mean(completed.map(utility)),
+			stalls: returned.filter((x) => x.stalled).length,
 			q: evaluated ? (wins + 0.5) / (rollouts + 1) : 0
 		};
 	});
@@ -420,11 +424,18 @@ export function labelTerminalOutcomes(
 	const decisive =
 		best.stat.reach30Wins - runnerUp.stat.reach30Wins >= 2 ||
 		best.stat.meanUtility - runnerUp.stat.meanUtility >= margin;
-	const terminalPi = maskedSoftmax(
-		stats.map((x) => x.q),
-		evaluatedMask,
-		temperature
-	);
+	const labelQ = stats.map((x) => x.q);
+	if (
+		decisive &&
+		best.stat.reach30Wins === runnerUp.stat.reach30Wins &&
+		best.stat.meanUtility - runnerUp.stat.meanUtility >= margin
+	) {
+		// A utility-decisive equal-win state would otherwise produce a uniform
+		// target despite having a selected teacher action. Add less than one
+		// observed win (half a Jeffreys count), preserving reach-30 precedence.
+		labelQ[best.index] += 0.5 / (rollouts + 1);
+	}
+	const terminalPi = maskedSoftmax(labelQ, evaluatedMask, temperature);
 	return {
 		version: TERMINAL_TEACHER_VERSION,
 		stateId: options.stateId,

@@ -3,7 +3,8 @@
  *
  * Generate balanced natural states + JSONL labels:
  *   V24_TERMINAL_TEACHER=1 V24_TERMINAL_MODE=collect \
- *   V24_TERMINAL_WEIGHTS=ml/v23_finalists/control-gen5.json \
+ *   V24_TERMINAL_SOURCE_COMMIT=17a237a \
+ *   V24_TERMINAL_WEIGHTS=ml/warmstart/v24/v23-control-gen5-obs199-act104.json \
  *   V24_TERMINAL_GAMES=2048 V24_TERMINAL_MAX_STATES=4096 \
  *   npx vitest run src/lib/play/ml/_terminalteacher.test.ts --disable-console-intercept
  *
@@ -16,7 +17,8 @@
  *   npx vitest run src/lib/play/ml/_terminalteacher.test.ts --disable-console-intercept
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { describe, it } from 'vitest';
 import { profileFor } from '../server/botPolicy';
@@ -24,6 +26,7 @@ import type { GameCommand, PublicGameState, SeatColor } from '../types';
 import { hybridIndex } from './neuralBot';
 import { loadOrSnapshotCatalog, loadPolicyForEval, mlPath } from './nodeIo';
 import { playRecordingGame, type RecordGameResult } from './driver';
+import type { NeuralPolicy } from './net';
 import {
 	canonicalCommandSignature,
 	evaluateTerminalTeacher,
@@ -76,6 +79,34 @@ function writeJsonl(file: string, rows: readonly unknown[]): void {
 		file,
 		rows.map((row) => JSON.stringify(row)).join('\n') + (rows.length ? '\n' : '')
 	);
+}
+
+function sha256File(file: string): string {
+	return createHash('sha256').update(readFileSync(file)).digest('hex');
+}
+
+function float32DecisionPolicy(policy: NeuralPolicy): NeuralPolicy {
+	if (policy.optionDim !== 0) {
+		throw new Error('terminalTeacher: harness requires a stripped option_dim=0 checkpoint');
+	}
+	return new Proxy(policy, {
+		get(target, prop) {
+			if (prop === 'pick') {
+				return (
+					obs: number[],
+					cands: number[][],
+					opts?: { sample?: boolean; temperature?: number; rand?: () => number }
+				): number =>
+					target.pick(
+						Array.from(Float32Array.from(obs)),
+						cands.map((cand) => Array.from(Float32Array.from(cand))),
+						opts
+					);
+			}
+			const value = Reflect.get(target, prop, target) as unknown;
+			return typeof value === 'function' ? value.bind(target) : value;
+		}
+	}) as NeuralPolicy;
 }
 
 function roundBand(round: number): string {
@@ -137,11 +168,22 @@ describe('V24 terminal reward teacher harness', () => {
 	(RUN ? it : it.skip)(
 		'generates labels or runs the teacher-in-loop ceiling audit',
 		async () => {
+			const startedAt = Date.now();
 			const catalog = await loadOrSnapshotCatalog();
-			const weightPath = process.env.V24_TERMINAL_WEIGHTS
-				? resolve(process.cwd(), process.env.V24_TERMINAL_WEIGHTS)
-				: undefined;
-			const policy = loadPolicyForEval(weightPath);
+			const configuredWeights = process.env.V24_TERMINAL_WEIGHTS;
+			const sourceCommit = process.env.V24_TERMINAL_SOURCE_COMMIT?.trim();
+			if (!configuredWeights) throw new Error('V24_TERMINAL_WEIGHTS is required');
+			if (!sourceCommit) throw new Error('V24_TERMINAL_SOURCE_COMMIT is required');
+			const weightPath = resolve(process.cwd(), configuredWeights);
+			const catalogPath = mlPath('catalog.json');
+			const policy = float32DecisionPolicy(loadPolicyForEval(weightPath));
+			const provenance = {
+				sourceCommit,
+				checkpointPath: weightPath,
+				checkpointSha256: sha256File(weightPath),
+				catalogPath,
+				catalogSha256: sha256File(catalogPath)
+			};
 			const games = envInt(
 				'V24_TERMINAL_GAMES',
 				MODE === 'loop' ? 512 : MODE === 'validate' ? 1024 : 2048
@@ -208,12 +250,14 @@ describe('V24 terminal reward teacher harness', () => {
 				}
 				const summary = {
 					mode: MODE,
+					...provenance,
 					games,
 					rollouts,
 					baselineReach30: paired.filter((row) => row.baseline.reached30).length / games,
 					teacherReach30: paired.filter((row) => row.teacher.reached30).length / games,
 					baselineStalls: paired.filter((row) => row.baseline.stalled).length,
 					teacherStalls: paired.filter((row) => row.teacher.stalled).length,
+					wallMs: Date.now() - startedAt,
 					paired
 				};
 				mkdirSync(dirname(outputPath('.summary.json')), { recursive: true });
@@ -413,12 +457,14 @@ describe('V24 terminal reward teacher harness', () => {
 				JSON.stringify(
 					{
 						mode: MODE,
+						...provenance,
 						games,
 						captured: captured.length,
 						selected: selected.length,
 						decisive: collector.length,
 						rollouts,
 						maxStatusLevel,
+						wallMs: Date.now() - startedAt,
 						...(MODE === 'validate'
 							? {
 									topActionAgreement:
