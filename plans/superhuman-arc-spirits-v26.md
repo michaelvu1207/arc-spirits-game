@@ -320,3 +320,10 @@ result that reaches the token/compute/time limit is incomplete, not successful.
   fail-closed behavior. This preserves equal optimizer work across arms instead of silently clamping
   each arm to a potentially different data-dependent size. Generation 1 is regenerated from the same
   paired seeds; the failed pre-optimization attempt is retained in each root's log and provenance.
+- The completed three-seed, five-generation comparison rejected the lexicographic performance
+  treatment. At generation 5 it reached 30 VP in 420/768 games versus 418/768 for legacy: a paired
+  +0.26 percentage-point difference with exact McNemar p=0.939. It also lost 0.36 final VP, finished
+  0.07 censored rounds later, and scored 0.054 fewer post-15 VP per round on average. All 30 training
+  blocks and 30 evaluation blocks had zero stalls, malformed rows, or truncated episodes. Do not
+  promote or spend more scaling compute on this objective; proceed to representation and
+  multi-horizon value work as specified by the below-70% branch.

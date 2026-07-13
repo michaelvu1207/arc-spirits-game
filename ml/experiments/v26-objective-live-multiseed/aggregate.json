@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "experiment": "v26-solo-terminal-objective-live-multiseed",
+  "status": "complete-rejected",
+  "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+  "design": {
+    "matchedSeeds": 3,
+    "generationsPerSeed": 5,
+    "trainingGamesPerArmGeneration": 1024,
+    "evaluationGamesPerArmGeneration": 256,
+    "ppoRowsPerEpoch": 100000,
+    "optimizerStepsPerEpoch": 391,
+    "optimizerStepsPerGeneration": 1564
+  },
+  "finalGeneration": {
+    "pairedGames": 768,
+    "legacy": {
+      "reach30": 418,
+      "reach30Rate": 0.5442708333333334
+    },
+    "lexicographic": {
+      "reach30": 420,
+      "reach30Rate": 0.546875
+    },
+    "pairedReach30RateDelta": 0.0026041666666666665,
+    "discordant": {
+      "legacyOnly": 85,
+      "lexicographicOnly": 87,
+      "mcnemarExactTwoSidedP": 0.9392502353738346
+    },
+    "meanDeltasLexicographicMinusLegacy": {
+      "finalVP": -0.3567708333333333,
+      "censoredFirst30Round": 0.06901041666666667,
+      "post15VpPerRound": -0.05438078506706965
+    }
+  },
+  "allGenerationDevelopmentBlocks": {
+    "pairedGames": 3840,
+    "legacyReach30": 2010,
+    "lexicographicReach30": 2013,
+    "legacyReach30Rate": 0.5234375,
+    "lexicographicReach30Rate": 0.52421875,
+    "pairedReach30RateDelta": 0.00078125,
+    "discordant": {
+      "legacyOnly": 356,
+      "lexicographicOnly": 359,
+      "mcnemarExactTwoSidedP": 0.9403841271548192
+    },
+    "meanDeltasLexicographicMinusLegacy": {
+      "finalVP": -0.08828125,
+      "censoredFirst30Round": 0.02109375,
+      "post15VpPerRound": -0.020748785826880594
+    },
+    "note": "These repeated development blocks measure training-curve behavior, not an independent final held-out estimate."
+  },
+  "finalBySeed": [
+    {
+      "seed": "s0",
+      "legacyReach30": 140,
+      "lexicographicReach30": 146,
+      "pairedRateDelta": 0.0234375,
+      "finalVpDelta": 0.0,
+      "censoredFirst30RoundDelta": -0.02734375,
+      "post15VpPerRoundDelta": -0.05785223571873388
+    },
+    {
+      "seed": "s1",
+      "legacyReach30": 133,
+      "lexicographicReach30": 133,
+      "pairedRateDelta": 0.0,
+      "finalVpDelta": -0.34765625,
+      "censoredFirst30RoundDelta": 0.05078125,
+      "post15VpPerRoundDelta": -0.04665529727343412
+    },
+    {
+      "seed": "s2",
+      "legacyReach30": 145,
+      "lexicographicReach30": 141,
+      "pairedRateDelta": -0.015625,
+      "finalVpDelta": -0.72265625,
+      "censoredFirst30RoundDelta": 0.18359375,
+      "post15VpPerRoundDelta": -0.058634822209040954
+    }
+  ],
+  "curves": {
+    "s0": [
+      {"gen": 1, "legacy": 0.5234375, "lexicographic": 0.55859375},
+      {"gen": 2, "legacy": 0.53125, "lexicographic": 0.53125},
+      {"gen": 3, "legacy": 0.50390625, "lexicographic": 0.484375},
+      {"gen": 4, "legacy": 0.49609375, "lexicographic": 0.5078125},
+      {"gen": 5, "legacy": 0.546875, "lexicographic": 0.5703125}
+    ],
+    "s1": [
+      {"gen": 1, "legacy": 0.4921875, "lexicographic": 0.4921875},
+      {"gen": 2, "legacy": 0.515625, "lexicographic": 0.51171875},
+      {"gen": 3, "legacy": 0.5390625, "lexicographic": 0.51171875},
+      {"gen": 4, "legacy": 0.55078125, "lexicographic": 0.55078125},
+      {"gen": 5, "legacy": 0.51953125, "lexicographic": 0.51953125}
+    ],
+    "s2": [
+      {"gen": 1, "legacy": 0.53515625, "lexicographic": 0.515625},
+      {"gen": 2, "legacy": 0.50390625, "lexicographic": 0.5234375},
+      {"gen": 3, "legacy": 0.51171875, "lexicographic": 0.50390625},
+      {"gen": 4, "legacy": 0.515625, "lexicographic": 0.53125},
+      {"gen": 5, "legacy": 0.56640625, "lexicographic": 0.55078125}
+    ]
+  },
+  "integrity": {
+    "leagueRootsAtGeneration5Idle": 6,
+    "historyRows": 30,
+    "trainingGames": 30720,
+    "evaluationGames": 7680,
+    "malformedEpisodes": 0,
+    "malformedRows": 0,
+    "truncatedEpisodes": 0,
+    "stalls": 0,
+    "rawJsonlRemaining": 0,
+    "compressedFilesPassedZstdIntegrity": true,
+    "catalogRecordedOnEveryHistoryRow": true
+  },
+  "finalCheckpointSha256": {
+    "legacyS0": "f0c21553eb0aae41df937c0ebed0c2b7764c6154358a4c4fcbabb7b2068163fb",
+    "legacyS1": "5c6bcca7eb61a7d44c4c8fbbad0a69be7a424a72de414c38d4b03df5140ffec0",
+    "legacyS2": "6b9114dd88aa72d80dd3556e02dc3b2db53ae77f2049d3527de4580a9f9eb145",
+    "lexicographicS0": "6536cab1265614baf4fc8fb4299a6da49b42ca339c84c3f6c15115bfbe3121ab",
+    "lexicographicS1": "53e04ebc02373b2edc293f55e50c2f320fdd4f9aef6b56c3b4c8c31decea5ffc",
+    "lexicographicS2": "9c84cbba49cda9fd024723053fdd2065a7deac8c91f3b576e8a653a7e8453fe9"
+  },
+  "decision": {
+    "lexicographicTreatmentPasses": false,
+    "reason": "No reproducible reach-30 improvement; final paired delta was only +0.26 percentage points with p=0.939, while final VP, censored finish round, and late-game scoring all moved in the wrong direction.",
+    "promotionEligible": false,
+    "nextGate": "Prioritize representation and multi-horizon value improvements before additional environment-step scaling or search."
+  }
+}
