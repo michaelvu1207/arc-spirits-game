@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "arc-human-solo-reference-v1",
+  "roomCode": "7RPYHU",
+  "gameId": "game_20260713_201748_0191",
+  "role": "heldout_human_strategy_reference",
+  "trainingEligible": false,
+  "informationContract": "Only commands accepted from the player's public projection may become observations. Keep this game disjoint from training and evaluation unless it is explicitly reclassified with a multi-game human corpus.",
+  "replay": {
+    "events": 119,
+    "exact": true,
+    "rejectedCommands": 0,
+    "engineSeed": 1138992776,
+    "rngCursor": 657,
+    "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "human": {
+    "guardian": "Pixia",
+    "finishedRound": 17,
+    "finalVP": 33,
+    "first15Round": 11,
+    "post15VpPerRound": 3.0,
+    "vpAfterRound": [0, 3, 3, 6, 6, 8, 10, 13, 13, 13, 17, 17, 17, 17, 23, 23, 33],
+    "destinations": [
+      "Tidal Cove",
+      "Arcane Abyss",
+      "Lantern Canyon",
+      "Arcane Abyss",
+      "Arcane Abyss",
+      "Arcane Abyss",
+      "Arcane Abyss",
+      "Arcane Abyss",
+      "Lantern Canyon",
+      "Tidal Cove",
+      "Arcane Abyss",
+      "Lantern Canyon",
+      "Tidal Cove",
+      "Lantern Canyon",
+      "Arcane Abyss",
+      "Floral Patch",
+      "Arcane Abyss"
+    ],
+    "actions": {
+      "locationInteractions": 15,
+      "summons": 9,
+      "awakens": 1,
+      "combats": 10,
+      "monsterRewards": 8,
+      "augmentPlacements": 3
+    },
+    "finalBuild": {
+      "spirits": [
+        "Florality",
+        "Dandelion",
+        "Firefox",
+        "SUPERBUG",
+        "Cyberwolf",
+        "Firefox",
+        "Golem of Embers"
+      ],
+      "attackDice": {
+        "enchanted": 4
+      },
+      "maxBarrier": 4,
+      "augments": 3
+    }
+  },
+  "frozenPolicyExactSeed": {
+    "sourceCommit": "23ec221",
+    "checkpointSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+    "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+    "finishedRound": 30,
+    "finalVP": 25,
+    "reached30": false,
+    "stalled": false,
+    "first15Round": 23,
+    "post15VpPerRound": 1.4285714285714286,
+    "actions": {
+      "locationInteractions": 41,
+      "summons": 9,
+      "awakens": 1,
+      "combats": 7,
+      "monsterRewards": 5,
+      "optionalYieldDecisions": 15
+    },
+    "finalBuild": {
+      "spirits": 7,
+      "attackDice": 3,
+      "maxBarrier": 10
+    }
+  },
+  "diagnosis": [
+    "The policy matched the human's spirit count but over-invested in location rows and barrier instead of converting through the Arcane Abyss.",
+    "The largest divergence begins in the middle game: the human reached 17 VP by round 11 while the policy did not reach 15 VP until round 23.",
+    "Use this as an exact-replay and build-to-convert regression case, not as a one-game behavior-cloning dataset."
+  ]
+}
