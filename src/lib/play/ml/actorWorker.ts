@@ -31,6 +31,7 @@ import {
 import { shapingFor } from './shaping';
 import { planDecisionGumbel } from './gumbelPlanner';
 import { hybridIndex } from './neuralBot';
+import { guardianIndexForSeed } from './evalSchedule';
 import { appendOptionEvents, appendSamples, loadWeightsIfPresent } from './nodeIo';
 import { asNeuralPolicy, RemotePolicy } from './inferenceClient';
 import type { NeuralPolicy } from './net';
@@ -172,6 +173,18 @@ function shuffledGuardianNames(catalog: PlayCatalog, seats: number, seed: number
 	return names.slice(0, seats);
 }
 
+function absoluteBalancedGuardianNames(
+	catalog: PlayCatalog,
+	seats: number,
+	seed: number
+): string[] {
+	const names = catalog.guardians.map((guardian) => guardian.name);
+	const first = guardianIndexForSeed(seed, names.length);
+	return Array.from({ length: Math.min(seats, names.length) }, (_, offset) =>
+		names[(first + offset) % names.length]
+	);
+}
+
 /**
  * Load the immutable catalog, policies and profiles once, then expose a per-seed
  * runner. Both the synchronous runActorGames API and the persistent worker protocol
@@ -285,9 +298,12 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 					return res ? { index: res.index, pi: res.pi } : null;
 				};
 			}
-			const guardianNames = config.shuffleGuardians
-				? shuffledGuardianNames(catalog, config.seats, seed)
-				: undefined;
+			const guardianNames =
+				config.guardianSchedule === 'absolute-balanced'
+					? absoluteBalancedGuardianNames(catalog, config.seats, seed)
+					: config.shuffleGuardians
+						? shuffledGuardianNames(catalog, config.seats, seed)
+						: undefined;
 			const gameOptions: RecordGameOptions = {
 				seed,
 				...(continuationCurriculum || duplicateSeed

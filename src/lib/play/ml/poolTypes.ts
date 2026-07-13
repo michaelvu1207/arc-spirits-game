@@ -53,6 +53,9 @@ export interface ActorGameConfig {
 	profiles: string[];
 	/** Deterministically shuffle catalog guardians per seed instead of always using the first seats. */
 	shuffleGuardians?: boolean;
+	/** Evaluation-only absolute-seed schedule. Unlike a seeded shuffle, this assigns each guardian
+	 * exactly once per contiguous guardianCount-sized seed block and is invariant to sharding. */
+	guardianSchedule?: 'absolute-balanced';
 	/** Learner policy weights file. Omit for heuristic-only (BC/cold-start) generation. */
 	weightsPath?: string;
 	/**

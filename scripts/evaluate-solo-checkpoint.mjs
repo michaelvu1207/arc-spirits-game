@@ -117,7 +117,6 @@ const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src',
 const { runActorPool } = await jiti.import(
 	path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts')
 );
-const { createRng, nextInt } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'rng.ts'));
 const { MAX_ROUNDS } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'types.ts'));
 const effectiveMaxRounds = Math.min(maxRounds, MAX_ROUNDS);
 if (effectiveMaxRounds !== maxRounds) {
@@ -135,12 +134,7 @@ const weightsBytes = readFileSync(weights);
 
 const guardianForSeed = (seed) => {
 	const names = catalog.guardians.map((guardian) => guardian.name);
-	const rng = createRng((seed ^ 0x6a09e667) >>> 0 || 1);
-	for (let index = names.length - 1; index > 0; index -= 1) {
-		const swap = nextInt(rng, index + 1);
-		[names[index], names[swap]] = [names[swap], names[index]];
-	}
-	return names[0];
+	return names[seed % names.length];
 };
 
 try {
@@ -160,7 +154,7 @@ try {
 			temperature,
 			recordSeats: [],
 			maxStatusLevel,
-			shuffleGuardians: true,
+			guardianSchedule: 'absolute-balanced',
 			...(searchSims > 0
 				? {
 						search: {
