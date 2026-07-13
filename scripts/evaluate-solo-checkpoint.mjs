@@ -12,6 +12,7 @@
  *     --sample --temperature 0.65 --out ml/heldout/solo.json
  */
 import { createJiti } from 'jiti';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -24,6 +25,8 @@ process.chdir(root);
 const { values: args } = parseArgs({
 	options: {
 		weights: { type: 'string' },
+		catalog: { type: 'string', default: 'ml/catalog.json' },
+		'source-commit': { type: 'string' },
 		games: { type: 'string', default: '1024' },
 		workers: { type: 'string', default: '16' },
 		seed0: { type: 'string', default: '900000000' },
@@ -46,7 +49,7 @@ const { values: args } = parseArgs({
 
 if (args.help || !args.weights) {
 	console.log(
-		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--games N] [--workers N] ' +
+		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--catalog FILE] [--source-commit SHA] [--games N] [--workers N] ' +
 			'[--seed0 N] [--learn-monster-reward-choices] [--sample --temperature T] ' +
 			'[--search-sims N] [--include-games] [--out FILE]'
 	);
@@ -68,6 +71,7 @@ const quantile = (sorted, q) => {
 	const hi = Math.ceil(index);
 	return sorted[lo] + (sorted[hi] - sorted[lo]) * (index - lo);
 };
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const wilson95 = (wins, games) => {
 	if (games === 0) return { lower: 0, upper: 1 };
 	const z = 1.959963984540054;
@@ -122,10 +126,12 @@ if (effectiveMaxRounds !== maxRounds) {
 			`${MAX_ROUNDS}; reporting the effective ${effectiveMaxRounds}-round horizon`
 	);
 }
-const catalogPath = path.join(root, 'ml', 'catalog.json');
-const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+const catalogPath = path.resolve(args.catalog);
+const catalogBytes = readFileSync(catalogPath);
+const catalog = JSON.parse(catalogBytes.toString('utf8'));
 const workDir = mkdtempSync(path.join(tmpdir(), 'arc-solo-heldout-'));
 const weights = path.resolve(args.weights);
+const weightsBytes = readFileSync(weights);
 
 const guardianForSeed = (seed) => {
 	const names = catalog.guardians.map((guardian) => guardian.name);
@@ -252,8 +258,12 @@ try {
 		).length
 	};
 	const report = {
-		schemaVersion: 'solo-heldout-v1',
+		schemaVersion: 'solo-heldout-v2',
+		...(args['source-commit'] ? { sourceCommit: args['source-commit'] } : {}),
 		weights: path.relative(root, weights),
+		weightsSha256: sha256(weightsBytes),
+		catalog: path.relative(root, catalogPath),
+		catalogSha256: sha256(catalogBytes),
 		seed0,
 		games,
 		maxRounds: effectiveMaxRounds,
