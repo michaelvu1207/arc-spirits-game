@@ -203,8 +203,7 @@ export function validateLeagueConfig(config: LeagueConfig): void {
 		if (
 			rounds.length === 0 ||
 			rounds.some(
-				(round) =>
-					!Number.isInteger(round) || round < 12 || round > 20 || round > config.maxRounds
+				(round) => !Number.isInteger(round) || round < 12 || round > 20 || round > config.maxRounds
 			)
 		) {
 			throw new Error('league: continuation rounds must be integers in 12..20 within maxRounds');
@@ -1193,8 +1192,10 @@ function runTrainer(
 	if (config.train.ppoRowsPerEpoch !== undefined) {
 		const batchSize = config.train.batchSize ?? 256;
 		optimizerStepsPerEpoch = Math.ceil(config.train.ppoRowsPerEpoch / batchSize);
-		const reported = [...trainerOutput.matchAll(/optimizer_steps=(\d+)/g)].map((match) =>
-			Number.parseInt(match[1], 10)
+		// Anchor to the low-level PPO line. Option-enabled runs also report a separately
+		// preregistered `option_optimizer_steps` budget; it must not inflate this guard.
+		const reported = [...trainerOutput.matchAll(/^PPO epoch .*optimizer_steps=(\d+)$/gm)].map(
+			(match) => Number.parseInt(match[1], 10)
 		);
 		if (
 			reported.length !== config.train.epochs ||
@@ -1206,6 +1207,29 @@ function runTrainer(
 			);
 		}
 		optimizerStepsTotal = optimizerStepsPerEpoch * config.train.epochs;
+		const extra = config.train.extraArgs ?? [];
+		const optionRowsAt = extra.lastIndexOf('--option-rows-per-epoch');
+		if (optionRowsAt >= 0) {
+			const optionBatchAt = extra.lastIndexOf('--option-batch-size');
+			const optionRows = Number.parseInt(extra[optionRowsAt + 1] ?? '', 10);
+			const optionBatch = Number.parseInt(extra[optionBatchAt + 1] ?? '', 10);
+			if (!(optionRows > 0) || optionBatchAt < 0 || !(optionBatch > 0)) {
+				throw new Error('league: option fixed-update budget requires positive row and batch sizes');
+			}
+			const expectedOptionSteps = Math.ceil(optionRows / optionBatch);
+			const reportedOption = [
+				...trainerOutput.matchAll(/^Option PPO epoch .*option_optimizer_steps=(\d+)$/gm)
+			].map((match) => Number.parseInt(match[1], 10));
+			if (
+				reportedOption.length !== config.train.epochs ||
+				reportedOption.some((steps) => steps !== expectedOptionSteps)
+			) {
+				throw new Error(
+					`league: option fixed-update trainer reported optimizer steps ${JSON.stringify(reportedOption)}, ` +
+						`expected ${expectedOptionSteps} for each of ${config.train.epochs} epochs`
+				);
+			}
+		}
 	}
 	let selfImitationDiagnostics: Omit<
 		TrainerRunResult,

@@ -2723,7 +2723,6 @@ def train_ppo(
                 if max_grad_norm > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
                 optimizer.step()
-                optimizer_steps += 1
                 option_updates += 1
                 if not model_parameters_are_finite(model):
                     model.load_state_dict(last_finite)
@@ -2815,7 +2814,7 @@ def train_ppo(
                     f"entropy={option_entropy_total / max(1, option_seen):.4f} | "
                     f"approx_kl={option_kl_total / max(1, option_seen):.4f} | "
                     f"clip_frac={option_clip_total / max(1, option_seen):.4f} | "
-                    f"events={option_seen} | optimizer_steps={option_updates} | "
+                    f"events={option_seen} | option_optimizer_steps={option_updates} | "
                     f"support_violations={buffer.option_events.support_violations} | "
                     f"rejected_episodes={buffer.option_events.rejected_episodes}"
                 )
