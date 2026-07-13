@@ -166,11 +166,60 @@ describe('driver PPO behavior distribution', () => {
 		expect(result.finalState!.players.Red!.statusLevel).toBeLessThanOrEqual(2);
 	}, 30_000);
 
+	it('records actor-time reach30 predictions and resolves a clean solo cap failure', async () => {
+		const catalog = await loadOrSnapshotCatalog();
+		const policy = randomPolicy(9130);
+		policy.w.reach30 = [{ W: [new Array<number>(policy.w.obs_dim).fill(0)], b: [Math.log(3)] }]; // sigmoid(log(3)) = 0.75
+		policy.w.reach30_horizon = 1;
+		const result = playRecordingGame(catalog, {
+			seed: 77130,
+			profiles: [profileFor('medium')],
+			maxRounds: 1,
+			policy,
+			neuralSeats: ['Red'],
+			recordSeats: ['Red'],
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			denseVpReward: true,
+			maxStatusLevel: 2,
+			strategicDecisionScope: 'engine-cycle'
+		});
+		expect(result.stalled).toBe(false);
+		expect(result.samples.length).toBeGreaterThan(0);
+		for (const row of result.samples) expect(row.reach30Pred).toBeCloseTo(0.75, 12);
+		expect(result.samples.slice(0, -1).every((row) => row.reach30Target === undefined)).toBe(true);
+		expect(result.samples.at(-1)!.reach30Target).toBe(0);
+		expect(result.samples.at(-1)!.reach30Horizon).toBe(1);
+		expect(result.samples.at(-1)!.done).toBe(false);
+	}, 30_000);
+
+	it('rejects a reach30 behavior baseline trained for a different horizon', async () => {
+		const catalog = await loadOrSnapshotCatalog();
+		const policy = randomPolicy(9131);
+		policy.w.reach30 = [{ W: [new Array<number>(policy.w.obs_dim).fill(0)], b: [0] }];
+		policy.w.reach30_horizon = 35;
+		expect(() =>
+			playRecordingGame(catalog, {
+				seed: 77131,
+				profiles: [profileFor('medium')],
+				maxRounds: 1,
+				policy,
+				neuralSeats: ['Red'],
+				recordSeats: ['Red'],
+				selection: 'policy',
+				sample: true,
+				temperature: 0.65,
+				denseVpReward: true
+			})
+		).toThrow(/does not match effective rollout horizon 1/);
+	}, 30_000);
+
 	it('retains a real terminal row with exact behavior metadata and intermediate dense rewards', async () => {
 		const catalog = await loadOrSnapshotCatalog();
 		const policy = randomPolicy(9123);
 		const result = playRecordingGame(catalog, {
-		// Seed 11 exercises a complete game with the full Benefits action surface.
+			// Seed 11 exercises a complete game with the full Benefits action surface.
 			seed: 11,
 			profiles: SEAT_COLORS.map(() => profileFor('medium')),
 			maxRounds: 80,
@@ -190,6 +239,7 @@ describe('driver PPO behavior distribution', () => {
 		);
 
 		const terminal = result.samples.at(-1)!;
+		expect(result.samples.every((row) => row.reach30Target === undefined)).toBe(true);
 		expect(terminal.done).toBe(true);
 		expect(terminal.policyMask === 0 || terminal.policyMask === 1).toBe(true);
 		expect(terminal.logpOld === undefined).toBe(terminal.policyMask === 0);
@@ -222,7 +272,11 @@ describe('driver PPO behavior distribution', () => {
 				done: true,
 				decisionType: 'lockNavigation',
 				strategic: 1,
+				playerCount: 1,
 				placementProbs: [0.6, 0.25, 0.1, 0.05],
+				reach30Pred: 0.42,
+				reach30Target: 0,
+				reach30Horizon: 35,
 				policyMask: 1,
 				vPred: 0,
 				...behavior
@@ -236,6 +290,9 @@ describe('driver PPO behavior distribution', () => {
 					decisionType: string;
 					strategic: number;
 					placementProbs: number[];
+					reach30Pred: number;
+					reach30Target: number;
+					reach30Horizon: number;
 				};
 				expect(serialized.obs).toEqual(obs);
 				expect(serialized.cands).toEqual(cands);
@@ -243,6 +300,9 @@ describe('driver PPO behavior distribution', () => {
 				expect(serialized.decisionType).toBe('lockNavigation');
 				expect(serialized.strategic).toBe(1);
 				expect(serialized.placementProbs).toEqual([0.6, 0.25, 0.1, 0.05]);
+				expect(serialized.reach30Pred).toBe(0.42);
+				expect(serialized.reach30Target).toBe(0);
+				expect(serialized.reach30Horizon).toBe(35);
 
 				const code = [
 					'import math, sys, torch',

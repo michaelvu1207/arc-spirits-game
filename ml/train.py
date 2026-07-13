@@ -313,9 +313,33 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
         value_linears = [m for m in model.value_head if isinstance(m, torch.nn.Linear)]
         farm_value_linears = [m for m in model.farm_value_head if isinstance(m, torch.nn.Linear)]
         route_mode_linears = [m for m in model.route_mode_head if isinstance(m, torch.nn.Linear)]
+        reach30_linears = [m for m in model.reach30_head if isinstance(m, torch.nn.Linear)]
         reward_pick_linears = [m for m in model.reward_pick_head if isinstance(m, torch.nn.Linear)]
         if len(trunk_linears) != len(w["trunk"]) or len(value_linears) != len(w["value"]):
             return False
+        reach30_tensors: list[tuple[torch.Tensor, torch.Tensor]] | None = None
+        if "reach30" in w:
+            horizon = w.get("reach30_horizon")
+            if (
+                len(reach30_linears) != len(w["reach30"])
+                or not isinstance(horizon, (int, float))
+                or isinstance(horizon, bool)
+                or not float(horizon).is_integer()
+                or int(horizon) < 1
+            ):
+                return False
+            reach30_tensors = []
+            for lin, layer in zip(reach30_linears, w["reach30"]):
+                W = torch.tensor(layer["W"], dtype=torch.float32)
+                b = torch.tensor(layer["b"], dtype=torch.float32)
+                if (
+                    lin.weight.shape != W.shape
+                    or lin.bias.shape != b.shape
+                    or not torch.isfinite(W).all()
+                    or not torch.isfinite(b).all()
+                ):
+                    return False
+                reach30_tensors.append((W, b))
         with torch.no_grad():
             for lin, d in zip(trunk_linears, w["trunk"]):
                 W = torch.tensor(d["W"], dtype=torch.float32)
@@ -357,6 +381,13 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
                         break
                     lin.weight.copy_(W)
                     lin.bias.copy_(b)
+            if "reach30" in w:
+                loaded_reach30 = reach30_tensors is not None
+                for lin, (W, b) in zip(reach30_linears, reach30_tensors or []):
+                    lin.weight.copy_(W)
+                    lin.bias.copy_(b)
+                model.reach30_trained = loaded_reach30
+                model.reach30_horizon = int(w["reach30_horizon"]) if loaded_reach30 else None
             if "reward_pick" in w and len(reward_pick_linears) == len(w["reward_pick"]):
                 for lin, d in zip(reward_pick_linears, w["reward_pick"]):
                     W = torch.tensor(d["W"], dtype=torch.float32)
@@ -600,6 +631,7 @@ def train(
     farm_value_coef: float = 0.0,
     reward_pick_coef: float = 0.0,
     route_mode_coef: float = 0.0,
+    reach30_value_coef: float = 0.0,
     warm_start: bool = True,
     init_from: Path | None = None,
     gamma: float = 0.997,
@@ -618,6 +650,7 @@ def train(
     strategic_mc_coef: float = 0.0,
     solo_strategic_mc_coef: float = 0.0,
     solo_outcome_coef: float = 0.0,
+    solo_reach30_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     model_version: str = "v1",
@@ -641,6 +674,10 @@ def train(
     check_out_format(model_version, out_path, init_from)
     if model_version != "v1" and (hidden is not None or value_hidden is not None):
         raise ValueError("--hidden/--value-hidden configure only --model v1; use --v2-* for v2")
+    if model_version != "v1" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
+        raise ValueError("reach-30 critic training currently requires --model v1")
+    if mode != "ppo" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
+        raise ValueError("reach-30 critic training currently requires --mode ppo")
     # Both models expose placement auxiliaries with different contracts: v1 has
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
@@ -675,6 +712,7 @@ def train(
             strategic_mc_coef=strategic_mc_coef,
             solo_strategic_mc_coef=solo_strategic_mc_coef,
             solo_outcome_coef=solo_outcome_coef,
+            solo_reach30_coef=solo_reach30_coef,
             strategic_mc_gamma=strategic_mc_gamma,
             strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
@@ -710,6 +748,7 @@ def train(
             farm_value_coef=farm_value_coef,
             reward_pick_coef=reward_pick_coef,
             route_mode_coef=route_mode_coef,
+            reach30_value_coef=reach30_value_coef,
             entropy_coef=entropy_coef,
             entropy_anneal=entropy_anneal,
             value_clip_eps=value_clip_eps,
@@ -956,6 +995,17 @@ def export_weights(
         for layer in model.route_mode_head
         if isinstance(layer, torch.nn.Linear)
     ]
+    reach30_linears = (
+        [
+            _linear_to_dict(layer)
+            for layer in model.reach30_head
+            if isinstance(layer, torch.nn.Linear)
+        ]
+        if model.reach30_trained
+        else []
+    )
+    if reach30_linears and model.reach30_horizon is None:
+        raise ValueError("trained reach30 head is missing its objective horizon")
     reward_pick_linears = [
         _linear_to_dict(layer)
         for layer in model.reward_pick_head
@@ -968,7 +1018,7 @@ def export_weights(
     ]
     all_linears = (
         trunk_linears + value_linears + farm_value_linears + route_mode_linears
-        + reward_pick_linears + placement_linears
+        + reward_pick_linears + placement_linears + reach30_linears
     )
 
     payload = {
@@ -988,10 +1038,16 @@ def export_weights(
             "farm_value": "obs -> scalar clean farm opportunity target",
             "reward_pick": "obs + candidate -> reward-pick target logits",
             "route_mode": "obs -> Fallen route mode logit, sigmoid=probability to hunt Good player",
-            "placement": "obs -> 4-way final-placement logits (KataGo outcome aux)"
+            "placement": "obs -> 4-way final-placement logits (KataGo outcome aux)",
         },
         "params": sum(len(l["W"]) * len(l["W"][0]) + len(l["b"]) for l in all_linears),
     }
+    if reach30_linears:
+        payload["reach30"] = reach30_linears
+        payload["reach30_horizon"] = model.reach30_horizon
+        payload["aux_heads"]["reach30"] = (
+            "obs -> scalar logit for reaching 30 VP by the configured solo round cap"
+        )
 
     with open(out_path, "w") as f:
         json.dump(payload, f)
@@ -1020,6 +1076,8 @@ def parse_args() -> argparse.Namespace:
                    help="Weight on the auxiliary reward-pick policy cross-entropy loss")
     p.add_argument("--route-mode-coef", type=float, default=0.0,
                    help="Weight on the auxiliary Fallen route-mode BCE loss")
+    p.add_argument("--reach30-value-coef", type=float, default=0.0,
+                   help="Weight on the solo reach-30 critic BCE loss")
     # PPO flags (used only with --mode ppo). --epochs is the K passes over the
     # rollout buffer; --batch-size the minibatch size; --policy-coef/--value-coef
     # weight the surrogate and value losses as in the other modes.
@@ -1038,6 +1096,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--solo-outcome-coef", type=float, default=0.0,
                    help="Blend [0,1] from the current advantage toward a batch-centered pure "
                         "true-30-VP-win advantage on solo strategic rows")
+    p.add_argument("--solo-reach30-coef", type=float, default=0.0,
+                   help="Blend [0,1] toward true-win minus the behavior checkpoint's "
+                        "state-dependent reach-30 probability on solo strategic rows")
     p.add_argument("--strategic-mc-gamma", type=float, default=1.0,
                    help="Discount for strategic full-episode Monte Carlo returns (default 1)")
     p.add_argument("--strategic-outcome-coef", type=float, default=0.0,
@@ -1120,6 +1181,7 @@ if __name__ == "__main__":
         farm_value_coef=args.farm_value_coef,
         reward_pick_coef=args.reward_pick_coef,
         route_mode_coef=args.route_mode_coef,
+        reach30_value_coef=args.reach30_value_coef,
         warm_start=args.warm_start,
         init_from=args.init_from,
         gamma=args.gamma,
@@ -1138,6 +1200,7 @@ if __name__ == "__main__":
         strategic_mc_coef=args.strategic_mc_coef,
         solo_strategic_mc_coef=args.solo_strategic_mc_coef,
         solo_outcome_coef=args.solo_outcome_coef,
+        solo_reach30_coef=args.solo_reach30_coef,
         strategic_mc_gamma=args.strategic_mc_gamma,
         strategic_outcome_coef=args.strategic_outcome_coef,
         model_version=args.model_version,

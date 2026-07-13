@@ -145,9 +145,16 @@ class TrajectoryBuffer:
     strategic_mc_coef: float        # loader blend; 0 preserves ordinary PPO bit behavior
     solo_strategic_mc_coef: float   # solo-only full-episode blend; may coexist with PvP outcome
     solo_outcome_coef: float        # pure true-win advantage blend on solo strategic rows
+    solo_reach30_coef: float        # true-win minus behavior p30(s) blend on solo strategic rows
     strategic_outcome_coef: float   # pure placement-outcome advantage blend on strategic rows
     placement_probs: np.ndarray     # (N, 4) behavior outcome-head probabilities
     placement_prob_mask: np.ndarray # (N,) bool; behavior checkpoint exposed the outcome head
+    reach30_pred: np.ndarray        # (N,) behavior checkpoint P(reach30 | state)
+    reach30_pred_mask: np.ndarray   # (N,) behavior checkpoint exposed the reach30 head
+    reach30_target: np.ndarray      # (N,) final solo true-win label broadcast over the episode
+    reach30_target_mask: np.ndarray # (N,) completed solo episode rows only
+    reach30_weight: np.ndarray      # (N,) inverse episode length; each solo game has equal weight
+    reach30_horizon: int | None     # one explicit round cap for all labeled episodes
     farm_value: np.ndarray          # (N,) float32
     farm_mask: np.ndarray           # (N,) bool
     reward_pi: list[np.ndarray]     # N x (n_cands_i,) float32
@@ -260,6 +267,7 @@ def load_trajectory_buffer(
     strategic_mc_coef: float = 0.0,
     solo_strategic_mc_coef: float = 0.0,
     solo_outcome_coef: float = 0.0,
+    solo_reach30_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     obs_key: str = "obs",
@@ -277,12 +285,16 @@ def load_trajectory_buffer(
         raise ValueError("solo_strategic_mc_coef must be in [0, 1]")
     if not 0.0 <= solo_outcome_coef <= 1.0:
         raise ValueError("solo_outcome_coef must be in [0, 1]")
+    if not 0.0 <= solo_reach30_coef <= 1.0:
+        raise ValueError("solo_reach30_coef must be in [0, 1]")
     if not 0.0 <= strategic_mc_gamma <= 1.0:
         raise ValueError("strategic_mc_gamma must be in [0, 1]")
     if not 0.0 <= strategic_outcome_coef <= 1.0:
         raise ValueError("strategic_outcome_coef must be in [0, 1]")
     if strategic_mc_coef > 0 and strategic_outcome_coef > 0:
         raise ValueError("strategic_mc_coef and strategic_outcome_coef are mutually exclusive")
+    if solo_outcome_coef > 0 and solo_reach30_coef > 0:
+        raise ValueError("solo_outcome_coef and solo_reach30_coef are mutually exclusive")
     data_dir = Path(data_dir)
     # Skip the actor pool's games-*.jsonl per-game summaries (no obs/cands keys).
     jsonl_files = sorted(
@@ -396,6 +408,20 @@ def load_trajectory_buffer(
                 placement_probs, placement_prob_mask = _coerce_policy_target(
                     rec.get("placementProbs", rec.get("placement_probs")), 4
                 )
+                reach30_pred, reach30_pred_mask = _coerce_unit_target(
+                    rec.get("reach30Pred", rec.get("reach30_pred"))
+                )
+                reach30_target_raw = rec.get("reach30Target", rec.get("reach30_target"))
+                reach30_target = _coerce_binary_flag(reach30_target_raw)
+                reach30_horizon_raw = rec.get("reach30Horizon", rec.get("reach30_horizon"))
+                reach30_horizon = _coerce_end_round(reach30_horizon_raw)
+                if (
+                    (reach30_target_raw is not None and reach30_target is None)
+                    or (reach30_horizon_raw is not None and reach30_horizon is None)
+                ):
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
+                    continue
                 done = _coerce_binary_flag(rec.get("done"))
                 if done is None:
                     n_invalid_rows += 1
@@ -424,6 +450,10 @@ def load_trajectory_buffer(
                         "route_mask": route_mask,
                         "placement_probs": placement_probs,
                         "placement_prob_mask": placement_prob_mask,
+                        "reach30_pred": reach30_pred,
+                        "reach30_pred_mask": reach30_pred_mask,
+                        "reach30_target": reach30_target,
+                        "reach30_horizon": reach30_horizon,
                         "v_pred": float(rec["vPred"]),
                         "placement": _coerce_placement(rec.get("placement")),
                         "won": 1 if rec.get("won") else 0,
@@ -467,6 +497,20 @@ def load_trajectory_buffer(
         done_indices = [i for i, s in enumerate(steps) if s["done"]]
         if done_indices and done_indices != [len(steps) - 1]:
             invalid_structure.add(game_id)
+            continue
+        # The outcome is post-game training metadata, never an observation. Keep
+        # its contract strict: target+horizon are a pair, appear only on the final
+        # row, and only belong to a solo trajectory.
+        for index, step in enumerate(steps):
+            has_target = step["reach30_target"] is not None
+            has_horizon = step["reach30_horizon"] is not None
+            if (
+                has_target != has_horizon
+                or (has_target and index != len(steps) - 1)
+                or (has_target and step["player_count"] != 1)
+            ):
+                invalid_structure.add(game_id)
+                break
     for game_id in invalid_structure:
         episodes.pop(game_id, None)
 
@@ -494,15 +538,24 @@ def load_trajectory_buffer(
     placement_list: list[int] = []
     placement_probs_list: list[np.ndarray] = []
     placement_prob_mask_list: list[bool] = []
+    reach30_pred_list: list[float] = []
+    reach30_pred_mask_list: list[bool] = []
+    reach30_target_list: list[float] = []
+    reach30_target_mask_list: list[bool] = []
+    reach30_weight_list: list[float] = []
     strategic_mask_list: list[bool] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
     solo_outcome_adv_list: list[np.ndarray] = []
     solo_outcome_mask_list: list[np.ndarray] = []
+    reach30_adv_list: list[np.ndarray] = []
+    reach30_mask_list: list[np.ndarray] = []
     n_truncated = 0
     n_with_placement = 0
     n_outcome_credit = 0
     n_solo_outcome_credit = 0
+    n_solo_reach30_credit = 0
+    reach30_horizons: set[int] = set()
 
     # Batch-mean control variate for the true solo objective. A solo seat is always
     # placement 1 at the round cap, so only the actor's explicit `won` bit (30 VP)
@@ -533,6 +586,10 @@ def load_trajectory_buffer(
                 placement = s["placement"]
             if s["end_round"] is not None:
                 end_round = s["end_round"]
+        resolved_reach30_target = None
+        if player_count == 1 and steps[-1]["reach30_target"] is not None:
+            resolved_reach30_target = float(steps[-1]["reach30_target"])
+            reach30_horizons.add(int(steps[-1]["reach30_horizon"]))
         if dones[-1]:
             # All-Fallen collapse (driver stamps allFallen=1 on EVERY seat's done row when the game
             # ended via mutual corruption with no 30-VP finish): a uniform LOSS terminal for every
@@ -568,6 +625,8 @@ def load_trajectory_buffer(
         strategic = np.array([s["strategic"] for s in steps], dtype=bool)
         episode_solo_outcome_adv = np.zeros(len(steps), dtype=np.float64)
         episode_solo_outcome_mask = np.zeros(len(steps), dtype=bool)
+        episode_reach30_adv = np.zeros(len(steps), dtype=np.float64)
+        episode_reach30_mask = np.zeros(len(steps), dtype=bool)
         # Only completed episodes have a realized complete-game outcome. Truncated rows retain
         # ordinary GAE instead of pretending the actor's tail bootstrap is a terminal result.
         # When an explicit solo coefficient is set it owns solo rows; the legacy/global knob
@@ -615,6 +674,24 @@ def load_trajectory_buffer(
             episode_solo_outcome_adv[strategic] = outcome_adv
             episode_solo_outcome_mask[strategic] = True
             n_solo_outcome_credit += int(strategic.sum())
+        # State-dependent threshold credit. The actor records p30(s) from the frozen
+        # behavior checkpoint, so y30-p30(s) is an action-independent control variate.
+        # This is strictly more informative than one batch-wide baseline while keeping
+        # the dense-return value target on its original scale.
+        if (
+            solo_reach30_coef > 0
+            and resolved_reach30_target is not None
+            and strategic.any()
+        ):
+            outcome = resolved_reach30_target
+            behavior_p30 = np.array([s["reach30_pred"] for s in steps], dtype=np.float64)
+            p30_mask = strategic & np.array(
+                [s["reach30_pred_mask"] for s in steps], dtype=bool
+            )
+            if p30_mask.any():
+                episode_reach30_adv[p30_mask] = outcome - behavior_p30[p30_mask]
+                episode_reach30_mask[p30_mask] = True
+                n_solo_reach30_credit += int(p30_mask.sum())
         # Pure long-horizon outcome credit. Unlike strategic MC, this deliberately excludes
         # dense VP, build shaping, and the tactical value target: navigation receives only the
         # realized placement consequence, baselined by the behavior checkpoint's separately
@@ -666,14 +743,28 @@ def load_trajectory_buffer(
             placement_list.append(placement if placement is not None and player_count > 1 else 0)
             placement_probs_list.append(s["placement_probs"])
             placement_prob_mask_list.append(s["placement_prob_mask"])
+            reach30_pred_list.append(s["reach30_pred"])
+            reach30_pred_mask_list.append(s["reach30_pred_mask"])
+            resolved_solo = resolved_reach30_target is not None
+            reach30_target_list.append(resolved_reach30_target if resolved_solo else 0.0)
+            reach30_target_mask_list.append(resolved_solo)
+            reach30_weight_list.append(1.0 / len(steps) if resolved_solo else 0.0)
             strategic_mask_list.append(s["strategic"])
         adv_list.append(adv)
         ret_list.append(ret)
         solo_outcome_adv_list.append(episode_solo_outcome_adv)
         solo_outcome_mask_list.append(episode_solo_outcome_mask)
+        reach30_adv_list.append(episode_reach30_adv)
+        reach30_mask_list.append(episode_reach30_mask)
 
     advantages = np.concatenate(adv_list).astype(np.float32)
     returns = np.concatenate(ret_list).astype(np.float32)
+    if len(reach30_horizons) > 1:
+        raise ValueError(
+            "PPO data mixes reach30Horizon values "
+            f"{sorted(reach30_horizons)}; train one objective horizon at a time"
+        )
+    reach30_horizon = next(iter(reach30_horizons), None)
     solo_outcome_base_std = 0.0
     solo_outcome_signal_std = 0.0
     if solo_outcome_coef > 0:
@@ -698,6 +789,25 @@ def load_trajectory_buffer(
                 (1.0 - solo_outcome_coef) * standardize(base_component)
                 + solo_outcome_coef * standardize(outcome_component)
             ).astype(np.float32)
+    elif solo_reach30_coef > 0:
+        reach30_mask = np.concatenate(reach30_mask_list)
+        reach30_advantages = np.concatenate(reach30_adv_list)
+        if reach30_mask.any():
+            base_component = advantages[reach30_mask].astype(np.float64)
+            reach30_component = reach30_advantages[reach30_mask]
+            solo_outcome_base_std = float(base_component.std())
+            solo_outcome_signal_std = float(reach30_component.std())
+
+            def standardize_reach30(component: np.ndarray) -> np.ndarray:
+                std = float(component.std())
+                if std < 1e-8:
+                    return np.zeros_like(component)
+                return (component - float(component.mean())) / std
+
+            advantages[reach30_mask] = (
+                (1.0 - solo_reach30_coef) * standardize_reach30(base_component)
+                + solo_reach30_coef * standardize_reach30(reach30_component)
+            ).astype(np.float32)
     print(
         f"Loaded {len(cands_list)} PPO steps from {len(episodes)} game(s) "
         f"({sum(policy_mask_list)} exact policy step(s), "
@@ -706,9 +816,11 @@ def load_trajectory_buffer(
         f"{sum(route_mask_list)} with routeMode, "
         f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
         f"solo MC coef={solo_strategic_mc_coef:g}, gamma={strategic_mc_gamma:g}; "
-        f"solo outcome coef={solo_outcome_coef:g}, baseline={solo_outcome_baseline:.3f}, "
+        f"solo outcome coef={solo_outcome_coef:g}, reach30 coef={solo_reach30_coef:g}, "
+        f"reach30 horizon={reach30_horizon}, "
+        f"baseline={solo_outcome_baseline:.3f}, "
         f"component stds={solo_outcome_base_std:.3f}/{solo_outcome_signal_std:.3f}, "
-        f"applied={n_solo_outcome_credit}; "
+        f"applied={n_solo_outcome_credit}/{n_solo_reach30_credit}; "
         f"outcome coef={strategic_outcome_coef:g}, "
         f"applied={n_outcome_credit}), "
         f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "
@@ -730,9 +842,16 @@ def load_trajectory_buffer(
         strategic_mc_coef=float(strategic_mc_coef),
         solo_strategic_mc_coef=float(solo_strategic_mc_coef),
         solo_outcome_coef=float(solo_outcome_coef),
+        solo_reach30_coef=float(solo_reach30_coef),
         strategic_outcome_coef=float(strategic_outcome_coef),
         placement_probs=np.stack(placement_probs_list),
         placement_prob_mask=np.array(placement_prob_mask_list, dtype=bool),
+        reach30_pred=np.array(reach30_pred_list, dtype=np.float32),
+        reach30_pred_mask=np.array(reach30_pred_mask_list, dtype=bool),
+        reach30_target=np.array(reach30_target_list, dtype=np.float32),
+        reach30_target_mask=np.array(reach30_target_mask_list, dtype=bool),
+        reach30_weight=np.array(reach30_weight_list, dtype=np.float32),
+        reach30_horizon=reach30_horizon,
         farm_value=np.array(farm_value_list, dtype=np.float32),
         farm_mask=np.array(farm_mask_list, dtype=bool),
         reward_pi=reward_pi_list,
@@ -894,7 +1013,165 @@ def _minibatch_tensors(
         torch.from_numpy(buffer.reward_mask[idx]).to(device),
         torch.from_numpy(buffer.route_mode[idx]).to(device),
         torch.from_numpy(buffer.route_mask[idx]).to(device),
+        torch.from_numpy(buffer.reach30_target[idx]).to(device),
+        torch.from_numpy(buffer.reach30_target_mask[idx]).to(device),
+        torch.from_numpy(buffer.reach30_weight[idx]).to(device),
         torch.from_numpy(buffer.placement[idx]).to(device),
+    )
+
+
+def binary_auc(
+    targets: np.ndarray, scores: np.ndarray, weights: np.ndarray | None = None
+) -> float:
+    """Tie-aware weighted AUROC; returns NaN when either class has zero weight."""
+    targets = np.asarray(targets, dtype=np.int8)
+    scores = np.asarray(scores, dtype=np.float64)
+    weights = (
+        np.ones(targets.size, dtype=np.float64)
+        if weights is None
+        else np.asarray(weights, dtype=np.float64)
+    )
+    positive_weight = float(weights[targets == 1].sum())
+    negative_weight = float(weights[targets == 0].sum())
+    if positive_weight <= 0 or negative_weight <= 0:
+        return float("nan")
+    order = np.argsort(scores, kind="mergesort")
+    concordant = 0.0
+    lower_negative_weight = 0.0
+    start = 0
+    while start < order.size:
+        end = start + 1
+        while end < order.size and scores[order[end]] == scores[order[start]]:
+            end += 1
+        group = order[start:end]
+        group_positive = float(weights[group][targets[group] == 1].sum())
+        group_negative = float(weights[group][targets[group] == 0].sum())
+        concordant += group_positive * (lower_negative_weight + 0.5 * group_negative)
+        lower_negative_weight += group_negative
+        start = end
+    return concordant / (positive_weight * negative_weight)
+
+
+def binary_average_precision(
+    targets: np.ndarray, scores: np.ndarray, weights: np.ndarray | None = None
+) -> float:
+    """Tie-grouped weighted average precision; NaN when there are no positives."""
+    targets = np.asarray(targets, dtype=np.int8)
+    scores = np.asarray(scores, dtype=np.float64)
+    weights = (
+        np.ones(targets.size, dtype=np.float64)
+        if weights is None
+        else np.asarray(weights, dtype=np.float64)
+    )
+    total_positive = float(weights[targets == 1].sum())
+    if total_positive <= 0:
+        return float("nan")
+    order = np.argsort(-scores, kind="mergesort")
+    seen_positive = seen_total = ap = 0.0
+    start = 0
+    while start < order.size:
+        end = start + 1
+        while end < order.size and scores[order[end]] == scores[order[start]]:
+            end += 1
+        group = order[start:end]
+        group_positive = float(weights[group][targets[group] == 1].sum())
+        group_total = float(weights[group].sum())
+        seen_positive += group_positive
+        seen_total += group_total
+        if group_positive > 0:
+            ap += (group_positive / total_positive) * (seen_positive / seen_total)
+        start = end
+    return ap
+
+
+def binary_ece(
+    targets: np.ndarray,
+    scores: np.ndarray,
+    bins: int = 10,
+    weights: np.ndarray | None = None,
+) -> float:
+    targets = np.asarray(targets, dtype=np.float64)
+    scores = np.asarray(scores, dtype=np.float64)
+    if targets.size == 0:
+        return float("nan")
+    weights = (
+        np.ones(targets.size, dtype=np.float64)
+        if weights is None
+        else np.asarray(weights, dtype=np.float64)
+    )
+    total_weight = float(weights.sum())
+    if total_weight <= 0:
+        return float("nan")
+    indices = np.minimum((scores * bins).astype(np.int64), bins - 1)
+    ece = 0.0
+    for index in range(bins):
+        mask = indices == index
+        if mask.any():
+            bin_weight = float(weights[mask].sum())
+            if bin_weight <= 0:
+                continue
+            score_mean = float(np.average(scores[mask], weights=weights[mask]))
+            target_mean = float(np.average(targets[mask], weights=weights[mask]))
+            ece += (bin_weight / total_weight) * abs(score_mean - target_mean)
+    return ece
+
+
+def reach30_training_metrics(
+    model: CandidateScorer,
+    buffer: TrajectoryBuffer,
+    device: torch.device,
+    batch_size: int,
+) -> dict[str, float]:
+    """Frozen post-epoch, episode-weighted diagnostics on the training buffer.
+
+    These are optimization diagnostics only, never held-out promotion evidence.
+    """
+    labelled = np.flatnonzero(buffer.reach30_target_mask)
+    if labelled.size == 0:
+        return {key: float("nan") for key in ("nll", "brier", "auc", "auprc", "ece")}
+    was_training = model.training
+    model.eval()
+    score_chunks: list[np.ndarray] = []
+    with torch.no_grad():
+        for start in range(0, labelled.size, batch_size):
+            idx = labelled[start : start + batch_size]
+            logits = model.reach30_logits(torch.from_numpy(buffer.obs[idx]).to(device))
+            score_chunks.append(torch.sigmoid(logits).cpu().numpy())
+    if was_training:
+        model.train()
+    scores = np.concatenate(score_chunks).astype(np.float64)
+    targets = buffer.reach30_target[labelled].astype(np.float64)
+    weights = buffer.reach30_weight[labelled].astype(np.float64)
+    clipped = np.clip(scores, 1e-7, 1.0 - 1e-7)
+    nll = float(np.average(-(targets * np.log(clipped) + (1 - targets) * np.log(1 - clipped)), weights=weights))
+    brier = float(np.average((scores - targets) ** 2, weights=weights))
+    return {
+        "nll": nll,
+        "brier": brier,
+        "auc": binary_auc(targets, scores, weights),
+        "auprc": binary_average_precision(targets, scores, weights),
+        "ece": binary_ece(targets, scores, weights=weights),
+    }
+
+
+def reach30_minibatch_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    mask: torch.Tensor,
+    weights: torch.Tensor,
+    *,
+    total_rows: int,
+    total_episode_weight: float,
+) -> torch.Tensor:
+    """Unbiased SGD estimator for the equal-episode reach-30 BCE objective."""
+    if not bool(mask.any()) or total_episode_weight <= 0:
+        return torch.zeros((), dtype=logits.dtype, device=logits.device)
+    per_row = F.binary_cross_entropy_with_logits(
+        logits[mask], targets[mask], reduction="none"
+    )
+    return (
+        per_row.mul(weights[mask]).sum()
+        * (total_rows / (logits.shape[0] * total_episode_weight))
     )
 
 
@@ -927,6 +1204,7 @@ def train_ppo(
     farm_value_coef: float = 0.0,
     reward_pick_coef: float = 0.0,
     route_mode_coef: float = 0.0,
+    reach30_value_coef: float = 0.0,
     entropy_coef: float = 0.01,
     entropy_anneal: bool = False,
     value_clip_eps: float = 0.0,
@@ -966,6 +1244,7 @@ def train_ppo(
             buffer.strategic_mc_coef > 0
             or buffer.solo_strategic_mc_coef > 0
             or buffer.solo_outcome_coef > 0
+            or buffer.solo_reach30_coef > 0
             or buffer.strategic_outcome_coef > 0
         )
         else None,
@@ -983,11 +1262,35 @@ def train_ppo(
             "labels; the route auxiliary head receives no training signal",
             file=sys.stderr,
         )
+    if reach30_value_coef > 0 and not bool(buffer.reach30_target_mask.any()):
+        print(
+            "WARNING: reach30_value_coef is nonzero but the rollout has no resolved solo labels; "
+            "the reach-30 head receives no training signal",
+            file=sys.stderr,
+        )
+    if reach30_value_coef > 0 and buffer.reach30_horizon is not None:
+        existing_horizon = getattr(model, "reach30_horizon", None)
+        if getattr(model, "reach30_trained", False) and existing_horizon != buffer.reach30_horizon:
+            raise ValueError(
+                f"reach30 checkpoint horizon {existing_horizon} does not match "
+                f"training data horizon {buffer.reach30_horizon}"
+            )
+    if buffer.solo_reach30_coef > 0:
+        if not getattr(model, "reach30_trained", False):
+            raise ValueError("solo_reach30_coef requires a trained behavior reach30 head")
+        if getattr(model, "reach30_horizon", None) != buffer.reach30_horizon:
+            raise ValueError(
+                f"reach30 checkpoint horizon {getattr(model, 'reach30_horizon', None)} "
+                f"does not match rollout horizon {buffer.reach30_horizon}"
+            )
+    reach30_total_weight = float(buffer.reach30_weight.sum())
     # v2 (per-seat-token regression) and v1 (4-way CE) placement aux heads.
     use_placement = placement_coef > 0 and hasattr(model, "placement_logits")
     use_placement_v1 = placement_coef > 0 and hasattr(model, "placement_head")
     history: list[dict] = []
     last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    last_finite_reach30_trained = bool(getattr(model, "reach30_trained", False))
+    last_finite_reach30_horizon = getattr(model, "reach30_horizon", None)
     halted = False
 
     for epoch in range(1, epochs + 1):
@@ -1002,7 +1305,7 @@ def train_ppo(
         model.train()
 
         tot_policy = tot_value = tot_entropy = tot_kl = tot_clip = tot_prob = 0.0
-        tot_farm = tot_reward = tot_route = 0.0
+        tot_farm = tot_reward = tot_route = tot_reach30 = 0.0
         tot_placement = 0.0
         tot_kl_ref = 0.0
         tot_strategic_value = tot_tactical_value = 0.0
@@ -1010,6 +1313,7 @@ def train_ppo(
         n_policy_seen = 0
         n_strategic_seen = n_tactical_seen = 0
         stop = False
+        epoch_reach30_updated = False
 
         for start in range(0, n, batch_size):
             mb = indices[start : start + batch_size]
@@ -1032,6 +1336,9 @@ def train_ppo(
                 reward_mask,
                 route_mode,
                 route_mask,
+                reach30_target,
+                reach30_target_mask,
+                reach30_weight,
                 placement,
             ) = _minibatch_tensors(buffer, mb, device, normalized_advantages)
 
@@ -1141,6 +1448,23 @@ def train_ppo(
                     route_logits[route_mask], route_mode[route_mask]
                 )
 
+            reach30_loss = torch.zeros((), dtype=torch.float32, device=device)
+            reach30_active = bool(reach30_value_coef > 0 and reach30_target_mask.any())
+            if reach30_active:
+                reach30_logits = model.reach30_logits(obs)
+                # Unbiased minibatch estimator of the fixed full-buffer objective:
+                #   sum_i (BCE_i / episode_length_i) / labelled_episodes.
+                # A per-minibatch weight normalization would cancel 1/L in small
+                # batches and overtrain long episodes.
+                reach30_loss = reach30_minibatch_loss(
+                    reach30_logits,
+                    reach30_target,
+                    reach30_target_mask,
+                    reach30_weight,
+                    total_rows=n,
+                    total_episode_weight=reach30_total_weight,
+                )
+
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
             if use_placement:
                 placement_loss = placement_aux_loss(model, obs, placement, placement > 0)
@@ -1153,6 +1477,7 @@ def train_ppo(
                 + farm_value_coef * farm_loss
                 + reward_pick_coef * reward_loss
                 + route_mode_coef * route_loss
+                + reach30_value_coef * reach30_loss
                 - ent_coef * entropy
                 + placement_coef * placement_loss
                 + kl_ref_coef * kl_ref
@@ -1169,8 +1494,12 @@ def train_ppo(
                     file=sys.stderr,
                 )
                 model.load_state_dict(last_finite)
+                model.reach30_trained = last_finite_reach30_trained
+                model.reach30_horizon = last_finite_reach30_horizon
                 halted = True
                 break
+            if reach30_active:
+                epoch_reach30_updated = True
 
             bs = len(mb)
             n_seen += bs
@@ -1180,6 +1509,7 @@ def train_ppo(
             tot_farm += farm_loss.item() * bs
             tot_reward += reward_loss.item() * bs
             tot_route += route_loss.item() * bs
+            tot_reach30 += reach30_loss.item() * bs
             tot_entropy += entropy.item() * policy_count
             tot_kl += approx_kl * policy_count
             tot_clip += clip_frac * policy_count
@@ -1197,7 +1527,11 @@ def train_ppo(
         if halted:
             break
         if n_seen:
+            if epoch_reach30_updated:
+                model.reach30_trained = True
+                model.reach30_horizon = buffer.reach30_horizon
             policy_denom = max(1, n_policy_seen)
+            p30_metrics = reach30_training_metrics(model, buffer, device, batch_size)
             print(
                 f"PPO epoch {epoch}/{epochs} | "
                 f"policy_loss={tot_policy / policy_denom:.4f} | "
@@ -1209,6 +1543,9 @@ def train_ppo(
                 f"farm_value_loss={tot_farm / n_seen:.4f} | "
                 f"reward_pick_loss={tot_reward / n_seen:.4f} | "
                 f"route_mode_loss={tot_route / n_seen:.4f} | "
+                f"reach30_train_nll={p30_metrics['nll']:.4f} "
+                f"(brier={p30_metrics['brier']:.4f}, auc={p30_metrics['auc']:.4f}, "
+                f"auprc={p30_metrics['auprc']:.4f}, ece={p30_metrics['ece']:.4f}) | "
                 f"entropy={tot_entropy / policy_denom:.4f} (coef={ent_coef:.4f}) | "
                 f"approx_kl={tot_kl / policy_denom:.4f} | "
                 f"clip_frac={tot_clip / policy_denom:.3f} | "
@@ -1227,6 +1564,11 @@ def train_ppo(
                 "farm_value_loss": tot_farm / n_seen,
                 "reward_pick_loss": tot_reward / n_seen,
                 "route_mode_loss": tot_route / n_seen,
+                "reach30_loss": p30_metrics["nll"],
+                "reach30_brier": p30_metrics["brier"],
+                "reach30_auc": p30_metrics["auc"],
+                "reach30_auprc": p30_metrics["auprc"],
+                "reach30_ece": p30_metrics["ece"],
                 "entropy": tot_entropy / policy_denom,
                 "approx_kl": tot_kl / policy_denom,
                 "clip_frac": tot_clip / policy_denom,
@@ -1237,6 +1579,8 @@ def train_ppo(
                 "total_steps": n_seen,
             })
             last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            last_finite_reach30_trained = bool(getattr(model, "reach30_trained", False))
+            last_finite_reach30_horizon = getattr(model, "reach30_horizon", None)
         if stop:
             break
     return history

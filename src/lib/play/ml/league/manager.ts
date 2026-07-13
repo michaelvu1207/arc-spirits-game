@@ -1291,14 +1291,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		saveStateAtomic(root, state);
 		const ckpt = join(p.checkpoints, `${learner.id}-gen${gen}.${model === 'v2' ? 'pt' : 'json'}`);
 		const trainInit = model === 'v2' ? lanePt(learner) : playWeights(learner);
-		const trainMs = runTrainer(
-			config,
-			laneDir,
-			ckpt,
-			trainInit,
-			trainerSeed,
-			model
-		);
+		const trainMs = runTrainer(config, laneDir, ckpt, trainInit, trainerSeed, model);
 
 		// Socket-served lanes (v2, or v1Infer): hot-swap the lane server onto the fresh
 		// checkpoint (or first-start it for a lane that just trained its first net —
@@ -1376,9 +1369,9 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				const learnerSummary = summary.perSeat.find((seat) => seat.seat === plan.learnerSeat);
 				if (!learnerSummary) continue;
 				evalVpSum += learnerSummary.finalVP;
-				if (learnerSummary.finalVP >= 30) evalReach30 += 1;
+				if (learnerSummary.finalVP >= 30 && !summary.stalled) evalReach30 += 1;
 				const first30Round = learnerSummary.cycle?.first30Round;
-				if (first30Round !== null && first30Round !== undefined) {
+				if (!summary.stalled && first30Round !== null && first30Round !== undefined) {
 					evalFirst30RoundSum += first30Round;
 					evalFirst30Count += 1;
 				}
@@ -1459,8 +1452,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			evalWinRate: evalGames > 0 ? evalWins / evalGames : 0,
 			evalReach30Rate: evalGames > 0 ? evalReach30 / evalGames : 0,
 			evalMeanVP: evalGames > 0 ? evalVpSum / evalGames : 0,
-			evalMeanFirst30Round:
-				evalFirst30Count > 0 ? evalFirst30RoundSum / evalFirst30Count : null,
+			evalMeanFirst30Round: evalFirst30Count > 0 ? evalFirst30RoundSum / evalFirst30Count : null,
 			evalStallRate: evalGames > 0 ? evalStalls / evalGames : 0,
 			evalPairwiseScore: evalEncounters > 0 ? evalScore / evalEncounters : 0,
 			eloEstimate: eloFromScore(evalScore, evalEncounters),

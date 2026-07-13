@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 CANDIDATE_HEADS = ("trunk", "reward_pick")
-OBS_HEADS = ("value", "farm_value", "route_mode", "placement")
+OBS_HEADS = ("value", "farm_value", "route_mode", "placement", "reach30")
 
 
 def parse_widths(raw: str) -> tuple[int, ...]:

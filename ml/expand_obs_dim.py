@@ -8,7 +8,7 @@ keeps the original 52 features as a strict prefix and appends its identity/cost 
 Observation revisions append features at the END of the obs vector.
 In every head's FIRST Linear the obs block is the leading `obs_dim` input columns
 (trunk/reward_pick then concatenate the `act_dim` action columns after it; value/
-farm_value/route_mode/placement are obs-only). So the insertion index is ALWAYS the
+farm_value/route_mode/placement/reach30 are obs-only). So the insertion index is ALWAYS the
 OLD obs_dim, for every head. New columns are zero => the net's outputs are byte-identical
 to the original on any obs whose new features are appended after the old ones. That is a
 TRUE warm start: gen-1 eval should be as strong as the source champion immediately.
@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 
 # Heads whose first Linear takes the obs block as its leading input columns.
-HEADS = ["trunk", "value", "farm_value", "route_mode", "reward_pick", "placement"]
+HEADS = ["trunk", "value", "farm_value", "route_mode", "reward_pick", "placement", "reach30"]
 
 
 def insert_zero_cols(W: list[list[float]], at: int, n: int) -> list[list[float]]:
@@ -117,7 +117,7 @@ def verify_parity(old: dict, new: dict, n_samples: int = 8, seed: int = 0) -> No
         n_val = _mlp(obs_new, new["value"])
         max_abs = max(max_abs, float(np.max(np.abs(o_val - n_val))))
         # optional heads present on both.
-        for head in ["farm_value", "route_mode", "placement"]:
+        for head in ["farm_value", "route_mode", "placement", "reach30"]:
             if head in old and head in new:
                 max_abs = max(max_abs, float(np.max(np.abs(_mlp(obs, old[head]) - _mlp(obs_new, new[head])))))
         if "reward_pick" in old and "reward_pick" in new:

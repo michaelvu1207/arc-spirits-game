@@ -52,7 +52,8 @@ if (args.help || !args.weights) {
 
 const integer = (value, label) => {
 	const parsed = Number.parseInt(value, 10);
-	if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${label} must be a positive integer`);
+	if (!Number.isSafeInteger(parsed) || parsed <= 0)
+		throw new Error(`${label} must be a positive integer`);
 	return parsed;
 };
 const mean = (values) =>
@@ -71,8 +72,7 @@ const wilson95 = (wins, games) => {
 	const z2 = z * z;
 	const denominator = 1 + z2 / games;
 	const center = (p + z2 / (2 * games)) / denominator;
-	const radius =
-		(z * Math.sqrt((p * (1 - p) + z2 / (4 * games)) / games)) / denominator;
+	const radius = (z * Math.sqrt((p * (1 - p) + z2 / (4 * games)) / games)) / denominator;
 	return { lower: center - radius, upper: center + radius };
 };
 
@@ -107,7 +107,9 @@ if (!Number.isFinite(temperature) || temperature <= 0) {
 }
 
 const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src', 'lib') } });
-const { runActorPool } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts'));
+const { runActorPool } = await jiti.import(
+	path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts')
+);
 const { createRng, nextInt } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'rng.ts'));
 const catalogPath = path.join(root, 'ml', 'catalog.json');
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
@@ -177,10 +179,12 @@ try {
 		const guardianStat = guardianStats.get(guardian) ?? { guardian, games: 0, trueWins: 0, vp: [] };
 		guardianStat.games += 1;
 		guardianStat.vp.push(seat.finalVP);
-		if (seat.finalVP >= 30) guardianStat.trueWins += 1;
+		if (seat.finalVP >= 30 && !game.stalled) guardianStat.trueWins += 1;
 		guardianStats.set(guardian, guardianStat);
 		vp.push(seat.finalVP);
-		if (seat.finalVP >= 30) trueWins += 1;
+		// A deadlocked bot has not completed a valid solo win even if it happened to
+		// cross the score threshold first; stalls are always promotion failures.
+		if (seat.finalVP >= 30 && !game.stalled) trueWins += 1;
 		if (seat.finalVP >= 15) reach15 += 1;
 		if (seat.finalVP >= 27 && seat.finalVP < 30) nearMisses += 1;
 		if (game.winnerSeat === seat.seat) namedWins += 1;
@@ -203,7 +207,10 @@ try {
 			trueWinRate: stat.trueWins / stat.games,
 			trueWinWilson95: wilson95(stat.trueWins, stat.games),
 			meanVP: mean(stat.vp),
-			medianVP: quantile([...stat.vp].sort((a, b) => a - b), 0.5)
+			medianVP: quantile(
+				[...stat.vp].sort((a, b) => a - b),
+				0.5
+			)
 		}))
 		.sort((left, right) => left.trueWinRate - right.trueWinRate || left.meanVP - right.meanVP);
 	const vpBuckets = {
@@ -212,7 +219,10 @@ try {
 		from20To24: vp.filter((value) => value >= 20 && value < 25).length,
 		from25To26: vp.filter((value) => value >= 25 && value < 27).length,
 		from27To29: vp.filter((value) => value >= 27 && value < 30).length,
-		atLeast30: trueWins
+		atLeast30WithoutStall: trueWins,
+		stalledAtLeast30: result.summaries.filter(
+			(game) => game.stalled && (game.perSeat[0]?.finalVP ?? 0) >= 30
+		).length
 	};
 	const report = {
 		schemaVersion: 'solo-heldout-v1',
@@ -256,7 +266,10 @@ try {
 		guardianBreakdown,
 		first30Round: {
 			mean: mean(first30Rounds),
-			median: quantile([...first30Rounds].sort((a, b) => a - b), 0.5)
+			median: quantile(
+				[...first30Rounds].sort((a, b) => a - b),
+				0.5
+			)
 		},
 		engine: {
 			meanPost15VpPerRound: mean(post15),

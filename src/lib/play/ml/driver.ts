@@ -29,6 +29,7 @@ import {
 } from '../server/botPolicy';
 import {
 	VP_TO_WIN,
+	MAX_ROUNDS,
 	SEAT_COLORS,
 	type GameActor,
 	type GameCommand,
@@ -132,8 +133,16 @@ export interface Sample {
 	/** Behavior checkpoint's 4-way final-placement probabilities. This is a separate
 	 * state-only baseline for pure strategic outcome credit; absent on old/v2 checkpoints. */
 	placementProbs?: number[];
+	/** Frozen behavior checkpoint's P(reach 30 VP by the solo round cap), before this action. */
+	reach30Pred?: number;
+	/** Final solo objective label, present only on the last row when the outcome is resolved. */
+	reach30Target?: number;
+	/** Configured round limit for reach30Target; paired with it to prevent horizon mixing. */
+	reach30Horizon?: number;
 	/** Final placement 1..seats (ties share the better place), on rows of finished games. */
 	placement?: number;
+	/** Public round at decision time, retained for held-out calibration slices. */
+	round?: number;
 	/** Chosen command type, persisted for strategy-cycle diagnostics and training masks. */
 	decisionType?: GameCommand['type'];
 	/** 1 when this row commits a round-level route, engine, combat, conversion, or yield choice.
@@ -562,6 +571,9 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	}
 	const profiles = opts.profiles;
 	const maxRounds = opts.maxRounds ?? 300;
+	// The engine itself ends after cleanup on MAX_ROUNDS. A larger driver safety
+	// limit cannot extend the game, so critic metadata uses the effective horizon.
+	const reach30Horizon = Math.min(maxRounds, MAX_ROUNDS);
 	const n = Math.min(profiles.length, SEAT_COLORS.length, catalog.guardians.length);
 	const seats = SEAT_COLORS.slice(0, n) as SeatColor[];
 	// Seat guardians: honor an explicit (per-game shuffled) lineup, keeping only valid catalog
@@ -905,6 +917,24 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				placementProbs.every((probability) => Number.isFinite(probability) && probability >= 0)
 					? { placementProbs }
 					: undefined;
+			const reach30Policy = opts.policy as unknown as {
+				reach30Probability?: (input: number[]) => number | null;
+				reach30Horizon?: () => number | null;
+			};
+			const reach30Pred = reach30Policy?.reach30Probability?.(policyObs);
+			if (typeof reach30Pred === 'number' && reach30Policy.reach30Horizon?.() !== reach30Horizon) {
+				throw new Error(
+					`reach30 critic horizon ${String(reach30Policy.reach30Horizon?.())} ` +
+						`does not match effective rollout horizon ${reach30Horizon}`
+				);
+			}
+			const reach30Fields =
+				typeof reach30Pred === 'number' &&
+				Number.isFinite(reach30Pred) &&
+				reach30Pred >= 0 &&
+				reach30Pred <= 1
+					? { reach30Pred }
+					: undefined;
 			let behaviorFields: (SampledPolicyBehavior & { policyMask: 1 }) | undefined;
 			// The observer callback runs synchronously inside policy.pick, but TypeScript does not
 			// model assignments made through callbacks in its control-flow analysis.
@@ -934,6 +964,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				ret: 0,
 				seat,
 				vp: vpOf(state.players[seat]),
+				round: state.round,
 				phi: buildPotential(state.players[seat], shaping),
 				kill: decisionKills(state, withNext[idx].next, seat, cands[idx]) ? 1 : 0,
 				decisionType: cands[idx].type,
@@ -941,6 +972,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				strategic: isStrategicDecision(cands, opts.strategicDecisionScope) ? 1 : 0,
 				...valueFields,
 				...outcomeFields,
+				...reach30Fields,
 				...behaviorFields,
 				...sampleAuxTargets(state, seat, catalog, withNext, withNext[idx])
 			});
@@ -1057,6 +1089,13 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				// The game's final round — the tempo trainer decays the win bonus by how late
 				// it landed. state.round is the terminal round for both finished and capped games.
 				s.endRound = state.round;
+			}
+			// Round-cap and deterministic deadlock failures are resolved losses for the
+			// solo objective even though PPO keeps done=false for dense-return bootstrapping.
+			// Infrastructure exceptions never reach this point and therefore remain unlabeled.
+			if (opts.profiles.length === 1 && i === seatSamples.length - 1) {
+				s.reach30Target = !stalled && finalVP[seat] >= VP_TO_WIN ? 1 : 0;
+				s.reach30Horizon = reach30Horizon;
 			}
 		});
 	}

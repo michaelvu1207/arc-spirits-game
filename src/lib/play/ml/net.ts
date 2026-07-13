@@ -25,6 +25,8 @@ export interface PolicyWeights {
 	placement?: LinearLayer[];
 	reward_pick?: LinearLayer[];
 	route_mode?: LinearLayer[];
+	reach30?: LinearLayer[];
+	reach30_horizon?: number;
 }
 
 export interface PolicyLoadOptions {
@@ -95,6 +97,18 @@ export class NeuralPolicy {
 		const exps = logits.map((x) => Math.exp(x - max));
 		const sum = exps.reduce((a, b) => a + b, 0) || 1;
 		return exps.map((e) => e / sum);
+	}
+
+	/** Optional solo-objective critic. Missing until the head has actually been trained. */
+	reach30Probability(obs: number[]): number | null {
+		if (!this.w.reach30) return null;
+		const raw = mlp(obs, this.w.reach30)[0];
+		return 1 / (1 + Math.exp(-raw));
+	}
+
+	/** Objective horizon attached to the optional reach-30 critic. */
+	reach30Horizon(): number | null {
+		return this.w.reach30 ? (this.w.reach30_horizon ?? null) : null;
 	}
 
 	/** Optional Fallen route-mode probability. Missing on older checkpoints. */
@@ -180,7 +194,7 @@ function validateLinear(layer: LinearLayer | undefined, name: string): void {
 	}
 }
 
-const OBS_ONLY_HEADS = ['value', 'farm_value', 'placement', 'route_mode'] as const;
+const OBS_ONLY_HEADS = ['value', 'farm_value', 'placement', 'route_mode', 'reach30'] as const;
 const OBS_ACTION_HEADS = ['trunk', 'reward_pick'] as const;
 
 function cloneLayers(layers: LinearLayer[] | undefined): LinearLayer[] | undefined {
@@ -218,7 +232,8 @@ export function expandPolicyObsDim(weights: PolicyWeights, newObsDim: number): P
 		farm_value: cloneLayers(weights.farm_value),
 		placement: cloneLayers(weights.placement),
 		reward_pick: cloneLayers(weights.reward_pick),
-		route_mode: cloneLayers(weights.route_mode)
+		route_mode: cloneLayers(weights.route_mode),
+		reach30: cloneLayers(weights.reach30)
 	};
 	const zeroCount = newObsDim - oldObsDim;
 	for (const head of OBS_ONLY_HEADS) {
@@ -285,7 +300,8 @@ export function expandPolicyActDim(weights: PolicyWeights, newActDim: number): P
 		farm_value: cloneLayers(weights.farm_value),
 		placement: cloneLayers(weights.placement),
 		reward_pick: cloneLayers(weights.reward_pick),
-		route_mode: cloneLayers(weights.route_mode)
+		route_mode: cloneLayers(weights.route_mode),
+		reach30: cloneLayers(weights.reach30)
 	};
 	const zeroCount = newActDim - oldActDim;
 	for (const head of OBS_ACTION_HEADS) {
@@ -332,6 +348,11 @@ export function loadPolicyWeights(json: unknown, opts: PolicyLoadOptions = {}): 
 	if (w.route_mode)
 		for (let i = 0; i < w.route_mode.length; i++)
 			validateLinear(w.route_mode[i], `route_mode[${i}]`);
+	if (w.reach30)
+		for (let i = 0; i < w.reach30.length; i++) validateLinear(w.reach30[i], `reach30[${i}]`);
+	if (w.reach30 && (!Number.isInteger(w.reach30_horizon) || (w.reach30_horizon as number) < 1)) {
+		throw new Error('Invalid policy weights: reach30 head requires a positive reach30_horizon');
+	}
 	if (opts.expectedObsDim !== undefined && w.obs_dim !== opts.expectedObsDim) {
 		throw new Error(
 			`Invalid policy weights: obs_dim ${w.obs_dim} does not match encoder ${opts.expectedObsDim}`
@@ -373,6 +394,10 @@ export function loadPolicyWeights(json: unknown, opts: PolicyLoadOptions = {}): 
 		throw new Error(
 			`Invalid policy weights: route_mode input ${routeModeInput} does not match obs_dim`
 		);
+	}
+	const reach30Input = w.reach30?.[0]?.W[0]?.length;
+	if (reach30Input !== undefined && reach30Input !== w.obs_dim) {
+		throw new Error(`Invalid policy weights: reach30 input ${reach30Input} does not match obs_dim`);
 	}
 	return new NeuralPolicy(w);
 }

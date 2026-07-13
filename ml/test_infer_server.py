@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import numpy as np
 import torch
 
+from model import build_model
 from infer_server import (
     InferClient,
     decode_binary_response,
@@ -37,6 +38,7 @@ from infer_server import (
     load_scorer,
     read_payload,
 )
+from train import export_weights
 
 ML_DIR = Path(__file__).parent
 REPO_ROOT = ML_DIR.parent
@@ -63,6 +65,20 @@ def make_v2_checkpoint(out_dir: Path, name: str = "v2.pt") -> Path:
     model = build_model_v2(spec, 52, torch.device("cpu"), seed=0)
     path = Path(out_dir) / name
     save_checkpoint(model, path)
+    return path
+
+
+def make_v1_reach30_checkpoint(out_dir: Path, name: str = "p30.json") -> Path:
+    """Small v1 fixture whose optional reach-30 head is explicitly trained/advertised."""
+    path = Path(out_dir) / name
+    torch.manual_seed(17)
+    model = build_model(7, 5, torch.device("cpu"), trunk_hidden=(8,), value_hidden=(4,))
+    model.reach30_trained = True
+    model.reach30_horizon = 35
+    with torch.no_grad():
+        # Keep the fixture deterministic and make the auxiliary output easy to distinguish.
+        model.reach30_head[-1].bias.fill_(0.375)
+    export_weights(model, 7, 5, path)
     return path
 
 
@@ -171,8 +187,10 @@ def test_correctness_matches_in_process_forward():
     finally:
         server.stop()
     print(f"correctness: max_logit_diff={max_logit_diff:.2e} max_value_diff={max_value_diff:.2e}")
-    assert max_logit_diff < 1e-5, max_logit_diff
-    assert max_value_diff < 1e-5, max_value_diff
+    # Batched GEMM and one-row GEMV can accumulate float32 products in a different
+    # order. This bounds the numerical difference without requiring bit identity.
+    assert max_logit_diff < 5e-5, max_logit_diff
+    assert max_value_diff < 5e-5, max_value_diff
 
 
 def test_want_field_and_bad_request_error():
@@ -317,6 +335,9 @@ def test_info_handshake_and_aux_heads():
                             torch.ones(1, c.shape[0], dtype=torch.bool),
                         ).squeeze(0).numpy()
                         assert np.allclose(resp["reward_pick"][i], logits, atol=1e-5)
+                if "reach30" in available:
+                    ref = model.reach30_logits(obs_t).numpy()
+                    assert np.allclose(resp["reach30"], ref, atol=1e-5)
         # A head the checkpoint doesn't carry must be refused, not served from random init.
         if missing:
             resp = await client.request(obs_l, cands_l, want=[missing[0]])
@@ -383,6 +404,38 @@ def test_binary_matches_json_and_malformed_frame():
     print(f"binary==json on v1 for want={want}")
 
 
+def test_reach30_head_json_binary_and_capability():
+    with tempfile.TemporaryDirectory() as td:
+        ckpt = make_v1_reach30_checkpoint(Path(td))
+        model, obs_dim, act_dim, aux, fmt = load_scorer(ckpt, torch.device("cpu"))
+        assert fmt == "arc-cand-scorer-v1" and aux["reach30"] is True
+        rng = np.random.default_rng(57)
+        obs, cands = _random_request(rng, obs_dim, act_dim)
+        server = ServerProc(device="cpu", weights=ckpt)
+
+        async def run():
+            await server.wait_ready()
+            client = await InferClient.connect(server.socket_path)
+            info = (await client.info())["info"]
+            assert info["aux"]["reach30"] is True, info
+            assert info["reach30_horizon"] == 35, info
+            json_resp = await client.request(
+                obs.tolist(), [c.tolist() for c in cands], want=["reach30"]
+            )
+            binary_resp = await client.request_binary(obs, cands, want=["reach30"])
+            assert "error" not in json_resp and "error" not in binary_resp
+            _assert_same_response(json_resp, binary_resp, ["reach30"])
+            with torch.no_grad():
+                expected = model.reach30_logits(torch.from_numpy(obs)).numpy()
+            assert np.allclose(json_resp["reach30"], expected, atol=1e-6)
+            await client.close()
+
+        try:
+            asyncio.run(run())
+        finally:
+            server.stop()
+
+
 def test_binary_and_json_clients_mixed():
     _, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     server = ServerProc(device="cpu")
@@ -423,7 +476,12 @@ def test_v2_correctness_handshake_and_aux():
         ckpt = make_v2_checkpoint(Path(td))
         model, obs_dim, act_dim, aux, fmt = load_scorer(ckpt, torch.device("cpu"))
         assert fmt == "arc-entity-scorer-v2" and obs_dim == 3419 and act_dim == 52
-        assert aux == {"farm_value": True, "route_mode": True, "reward_pick": True}
+        assert aux == {
+            "farm_value": True,
+            "route_mode": True,
+            "reward_pick": True,
+            "reach30": False,
+        }
         pool = v2_obs_pool()
         rng = np.random.default_rng(21)
         server = ServerProc(device="cpu", weights=ckpt)
@@ -435,6 +493,7 @@ def test_v2_correctness_handshake_and_aux():
             assert info["format"] == "arc-entity-scorer-v2", info
             assert info["obs_dim"] == 3419 and info["act_dim"] == 52, info
             assert info["aux"] == aux, info
+            assert info["reach30_horizon"] is None, info
 
             max_ld = max_vd = 0.0
             obs = cands = None
@@ -506,9 +565,15 @@ def test_sighup_swaps_v1_to_v2():
             await server.wait_ready()
             client = await InferClient.connect(server.socket_path)
             info1 = (await client.info())["info"]
-            assert info1["format"] == "arc-cand-scorer-v1" and info1["obs_dim"] == 62, info1
+            live_obs_dim = int(json.loads(current.read_text())["obs_dim"])
+            live_act_dim = int(json.loads(current.read_text())["act_dim"])
+            assert (
+                info1["format"] == "arc-cand-scorer-v1"
+                and info1["obs_dim"] == live_obs_dim
+            ), info1
             r1 = await client.request(
-                rng.standard_normal((1, 62)).tolist(), [rng.standard_normal((3, 52)).tolist()]
+                rng.standard_normal((1, live_obs_dim)).tolist(),
+                [rng.standard_normal((3, live_act_dim)).tolist()],
             )
             assert "error" not in r1
 
@@ -529,11 +594,17 @@ def test_sighup_swaps_v1_to_v2():
 
             info2 = (await client.info())["info"]
             assert info2["format"] == "arc-entity-scorer-v2" and info2["obs_dim"] == 3419, info2
-            assert info2["aux"] == {"farm_value": True, "route_mode": True, "reward_pick": True}
+            assert info2["aux"] == {
+                "farm_value": True,
+                "route_mode": True,
+                "reward_pick": True,
+                "reach30": False,
+            }
             ok = await client.request(pool[:1].tolist(), [rng.standard_normal((3, 52)).tolist()])
             assert "error" not in ok and len(ok["logits"][0]) == 3, ok
             stale = await client.request(
-                rng.standard_normal((1, 62)).tolist(), [rng.standard_normal((3, 52)).tolist()]
+                rng.standard_normal((1, live_obs_dim)).tolist(),
+                [rng.standard_normal((3, live_act_dim)).tolist()],
             )
             assert "error" in stale, stale  # old-format rows are refused after the swap
             await client.close()
@@ -676,6 +747,7 @@ def main() -> int:
         test_sighup_reload_keeps_serving,
         test_info_handshake_and_aux_heads,
         test_binary_matches_json_and_malformed_frame,
+        test_reach30_head_json_binary_and_capability,
         test_binary_and_json_clients_mixed,
         test_v2_correctness_handshake_and_aux,
         test_sighup_swaps_v1_to_v2,

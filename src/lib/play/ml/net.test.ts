@@ -35,7 +35,9 @@ function fixture(): PolicyWeights {
 				b: [0, 0, 0, 0]
 			}
 		],
-		reward_pick: [{ W: [[0.1, 0.2, 0.3]], b: [-0.4] }]
+		reward_pick: [{ W: [[0.1, 0.2, 0.3]], b: [-0.4] }],
+		reach30: [{ W: [[0.2, -0.4]], b: [0.1] }],
+		reach30_horizon: 35
 	};
 }
 
@@ -55,6 +57,7 @@ describe('observation-prefix checkpoint compatibility', () => {
 		expect(expandedPolicy.farmValue(newObs)).toBe(oldPolicy.farmValue(oldObs));
 		expect(expandedPolicy.routeMode(newObs)).toBe(oldPolicy.routeMode(oldObs));
 		expect(expandedPolicy.placementProbs(newObs)).toEqual(oldPolicy.placementProbs(oldObs));
+		expect(expandedPolicy.reach30Probability(newObs)).toBe(oldPolicy.reach30Probability(oldObs));
 		expect(expandedPolicy.rewardPickScores(newObs, cands)).toEqual(
 			oldPolicy.rewardPickScores(oldObs, cands)
 		);
@@ -81,9 +84,20 @@ describe('observation-prefix checkpoint compatibility', () => {
 			oldPolicy.rewardPickScores(obs, oldCands)
 		);
 		expect(expandedPolicy.value(obs)).toBe(oldPolicy.value(obs));
+		expect(expandedPolicy.reach30Probability(obs)).toBe(oldPolicy.reach30Probability(obs));
 		expect(raw.act_dim).toBe(1);
 		expect(raw.trunk[0].W[0]).toHaveLength(3);
 		expect(expandedPolicy.w.trunk[0].W[0]).toEqual([1, 2, 3, 0, 0]);
+	});
+
+	it('keeps the reach-30 head optional and rejects malformed dimensions', () => {
+		const without = fixture();
+		delete without.reach30;
+		expect(loadPolicyWeights(without).reach30Probability([0, 0])).toBeNull();
+
+		const malformed = fixture();
+		malformed.reach30![0].W[0].push(99);
+		expect(() => loadPolicyWeights(malformed)).toThrow(/reach30 input/);
 	});
 
 	it('rejects shrinking or malformed head widths', () => {

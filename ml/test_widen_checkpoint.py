@@ -29,6 +29,7 @@ def checkpoint() -> dict:
         "value": copy.deepcopy(obs),
         "farm_value": copy.deepcopy(obs),
         "route_mode": copy.deepcopy(obs),
+        "reach30": copy.deepcopy(obs),
         "placement": [layer(2, 3, rng), layer(4, 2, rng)],
     }
 

@@ -42,7 +42,8 @@ export interface RemotePolicyInfo {
 	act_dim: number;
 	device: string;
 	weights: string;
-	aux: { farm_value: boolean; route_mode: boolean; reward_pick: boolean };
+	aux: { farm_value: boolean; route_mode: boolean; reward_pick: boolean; reach30: boolean };
+	reach30_horizon: number | null;
 }
 
 interface InferResponse {
@@ -54,12 +55,13 @@ interface InferResponse {
 	farm_value?: number[];
 	route_mode?: number[];
 	reward_pick?: number[][];
+	reach30?: number[];
 }
 
 /** Sections a scoring request can ask for (subset of InferResponse). */
 type ScoreResponse = Pick<
 	InferResponse,
-	'logits' | 'value' | 'farm_value' | 'route_mode' | 'reward_pick'
+	'logits' | 'value' | 'farm_value' | 'route_mode' | 'reward_pick' | 'reach30'
 >;
 
 // Binary wire constants — MUST mirror ml/infer_server.py (BIN_* there).
@@ -67,9 +69,23 @@ const BIN_MAGIC_REQUEST = 0xb1;
 const BIN_MAGIC_RESPONSE = 0xb2;
 const BIN_ERROR_FLAG = 0x80;
 const JSON_MAGIC = 0x7b; // '{'
-const WANT = { logits: 1, value: 2, farm_value: 4, route_mode: 8, reward_pick: 16 } as const;
+const WANT = {
+	logits: 1,
+	value: 2,
+	farm_value: 4,
+	route_mode: 8,
+	reward_pick: 16,
+	reach30: 32
+} as const;
 /** Response/flag section order is fixed; bit i of the flags byte = SECTION_ORDER[i]. */
-const SECTION_ORDER = ['logits', 'value', 'farm_value', 'route_mode', 'reward_pick'] as const;
+const SECTION_ORDER = [
+	'logits',
+	'value',
+	'farm_value',
+	'route_mode',
+	'reward_pick',
+	'reach30'
+] as const;
 
 /**
  * Request = [0xB1 u8][want u8][id_len u32][B u32][obs_dim u32][act_dim u32]
@@ -301,6 +317,7 @@ export class RemotePolicy {
 	private lastCands: number[][] | null = null;
 	private lastLogits: number[] | null = null;
 	private lastValue = 0;
+	private lastReach30: number | null = null;
 
 	/**
 	 * `expectObsDim` pins the server's observation width at handshake time (OBS_DIM for
@@ -406,11 +423,16 @@ export class RemotePolicy {
 			const derived = this.deriveFromCache(cands);
 			if (derived) return derived; // cache keeps the superset — don't overwrite
 		}
-		const resp = this.score(obs, cands, WANT.logits | WANT.value);
+		const resp = this.score(
+			obs,
+			cands,
+			WANT.logits | WANT.value | (this.info.aux.reach30 ? WANT.reach30 : 0)
+		);
 		this.lastObs = obs;
 		this.lastCands = cands;
 		this.lastLogits = resp.logits![0];
 		this.lastValue = resp.value![0];
+		this.lastReach30 = resp.reach30?.[0] ?? null;
 		return this.lastLogits;
 	}
 
@@ -433,6 +455,18 @@ export class RemotePolicy {
 	rewardPickScores(obs: number[], cands: number[][]): number[] | null {
 		if (!this.info.aux.reward_pick) return null;
 		return this.score(obs, cands, WANT.reward_pick).reward_pick![0];
+	}
+
+	reach30Probability(obs: number[]): number | null {
+		if (!this.info.aux.reach30) return null;
+		let raw: number;
+		if (obs === this.lastObs && this.lastReach30 !== null) raw = this.lastReach30;
+		else raw = this.score(obs, [this.zeroCand], WANT.reach30).reach30![0];
+		return 1 / (1 + Math.exp(-raw));
+	}
+
+	reach30Horizon(): number | null {
+		return this.info.aux.reach30 ? this.info.reach30_horizon : null;
 	}
 
 	rewardPickProbs(obs: number[], cands: number[][], temperature = 1): number[] | null {

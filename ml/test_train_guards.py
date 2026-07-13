@@ -67,7 +67,11 @@ def _weights_all_finite(path: Path) -> bool:
         if isinstance(x, (int, float)):
             return math.isfinite(x)
         return True
-    return all(walk(w[k]) for k in ("trunk", "value", "farm_value", "route_mode", "reward_pick"))
+    return all(
+        walk(w[k])
+        for k in ("trunk", "value", "farm_value", "route_mode", "reward_pick", "reach30")
+        if k in w
+    )
 
 
 # ---------------------------------------------------------------------------

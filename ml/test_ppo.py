@@ -8,6 +8,7 @@ Run with pytest if available, or directly (the venv has no pytest):
 from __future__ import annotations
 
 import json
+import copy
 import contextlib
 import io
 import math
@@ -34,6 +35,7 @@ from ppo import (
     load_trajectory_buffer,
     normalize_policy_advantages,
     parse_placement_rewards,
+    reach30_minibatch_loss,
     train_ppo,
 )
 
@@ -365,6 +367,232 @@ def test_solo_outcome_coef_must_be_a_probability():
             assert "solo_outcome_coef" in str(exc)
         else:
             raise AssertionError("solo_outcome_coef > 1 must be rejected")
+
+
+def test_reach30_critic_labels_cap_failures_and_uses_behavior_state_baseline():
+    rng = np.random.default_rng(1030)
+    specs = [
+        ("a-cap", 0, 0.9, False),
+        ("b-loss", 0, 0.1, True),
+        ("c-win-hard", 1, 0.9, True),
+        ("d-win-easy", 1, 0.1, True),
+    ]
+    rows = []
+    for game_id, target, pred, done in specs:
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": game_id,
+            "stepIdx": 0,
+            "rStep": 0.0,
+            "done": done,
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "behaviorMask": [1, 1, 1],
+            "behaviorTemperature": 1.0,
+            "vPred": 0.0,
+            "strategic": 1,
+            "playerCount": 1,
+            "won": target if done else 0,
+            "reach30Pred": pred,
+            "reach30Target": target,
+            "reach30Horizon": 35,
+        })
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            solo_reach30_coef=1.0,
+        )
+    raw = np.array([-0.9, -0.1, 0.1, 0.9])
+    expected = (raw - raw.mean()) / raw.std()
+    assert np.allclose(buf.advantages, expected, atol=1e-6)
+    assert np.array_equal(buf.reach30_target, [0, 0, 1, 1])
+    assert np.array_equal(buf.reach30_target_mask, [True, True, True, True])
+    # The cap failure remains a truncated dense-return episode, but is resolved
+    # for the separate reach-30 objective and gets critic/policy supervision.
+    assert not rows[0]["done"] and bool(buf.reach30_target_mask[0])
+
+
+def test_reach30_head_learns_masked_solo_targets():
+    rng = np.random.default_rng(1031)
+    rows = []
+    for game in range(40):
+        target = game % 2
+        obs = np.zeros(OBS_DIM, dtype=np.float32)
+        obs[0] = 1.0 if target else -1.0
+        rows.append({
+            "obs": obs.tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": f"p30-{game:03d}",
+            "stepIdx": 0,
+            "rStep": 0.0,
+            "done": True,
+            "policyMask": 0,
+            "vPred": 0.0,
+            "strategic": 0,
+            "playerCount": 1,
+            "won": target,
+            "reach30Target": target,
+            "reach30Horizon": 35,
+        })
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(
+            d, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+        )
+        torch.manual_seed(1031)
+        model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        history = train_ppo(
+            model,
+            buf,
+            torch.device("cpu"),
+            epochs=8,
+            batch_size=20,
+            lr=3e-3,
+            policy_coef=0.0,
+            value_coef=0.0,
+            reach30_value_coef=1.0,
+            entropy_coef=0.0,
+            seed=1031,
+        )
+        with torch.no_grad():
+            probs = torch.sigmoid(model.reach30_logits(torch.from_numpy(buf.obs))).numpy()
+    assert history[-1]["reach30_loss"] < history[0]["reach30_loss"]
+    assert probs[buf.reach30_target == 1].mean() > probs[buf.reach30_target == 0].mean() + 0.1
+    assert model.reach30_trained and model.reach30_horizon == 35
+
+
+def test_reach30_minibatch_objective_weights_episodes_equally():
+    # Episode A has one row, episode B has three. Averaging the four singleton
+    # unbiased estimators must equal the full equal-episode objective exactly.
+    logits = torch.tensor([0.3, -0.7, 0.1, 1.2])
+    targets = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    mask = torch.ones(4, dtype=torch.bool)
+    weights = torch.tensor([1.0, 1 / 3, 1 / 3, 1 / 3])
+    full = reach30_minibatch_loss(
+        logits,
+        targets,
+        mask,
+        weights,
+        total_rows=4,
+        total_episode_weight=2.0,
+    )
+    singleton = []
+    for index in range(4):
+        singleton.append(
+            reach30_minibatch_loss(
+                logits[index : index + 1],
+                targets[index : index + 1],
+                mask[index : index + 1],
+                weights[index : index + 1],
+                total_rows=4,
+                total_episode_weight=2.0,
+            )
+        )
+    assert torch.allclose(torch.stack(singleton).mean(), full, atol=1e-7)
+
+
+def test_reach30_horizon_contract_rejects_mixing_and_nonterminal_labels():
+    rng = np.random.default_rng(1032)
+
+    def row(game: str, step: int, horizon: int, *, final: bool) -> dict:
+        return {
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": game,
+            "stepIdx": step,
+            "rStep": 0.0,
+            "done": final,
+            "policyMask": 0,
+            "vPred": 0.0,
+            "strategic": 0,
+            "playerCount": 1,
+            "reach30Target": 0,
+            "reach30Horizon": horizon,
+        }
+
+    with tempfile.TemporaryDirectory() as td:
+        mixed = Path(td) / "mixed"
+        _write_rows(mixed, [row("h30", 0, 30, final=True), row("h35", 0, 35, final=True)])
+        try:
+            load_trajectory_buffer(
+                mixed, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+            )
+        except ValueError as exc:
+            assert "mixes reach30Horizon" in str(exc)
+        else:
+            raise AssertionError("mixed horizons were accepted")
+
+        nonterminal = Path(td) / "nonterminal"
+        bad_first = row("bad", 0, 35, final=False)
+        good_last = row("bad", 1, 35, final=True)
+        good_last.pop("reach30Target")
+        good_last.pop("reach30Horizon")
+        _write_rows(nonterminal, [bad_first, good_last])
+        try:
+            load_trajectory_buffer(
+                nonterminal, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+            )
+        except ValueError as exc:
+            assert "No complete PPO trajectories" in str(exc)
+        else:
+            raise AssertionError("nonterminal reach30 label was accepted")
+
+
+def test_train_cli_marks_and_exports_reach30_only_after_real_update():
+    rng = np.random.default_rng(1033)
+    rows = []
+    for game in range(12):
+        target = game % 2
+        obs = np.zeros(OBS_DIM, dtype=np.float32)
+        obs[0] = 1 if target else -1
+        rows.append(
+            {
+                "obs": obs.tolist(),
+                "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+                "chosen": 0,
+                "gameId": f"cli-p30-{game}",
+                "stepIdx": 0,
+                "rStep": 0.0,
+                "done": True,
+                "policyMask": 0,
+                "vPred": 0.0,
+                "strategic": 0,
+                "playerCount": 1,
+                "reach30Target": target,
+                "reach30Horizon": 30,
+            }
+        )
+    with tempfile.TemporaryDirectory() as td:
+        data = Path(td) / "data"
+        output = Path(td) / "p30.json"
+        _write_rows(data, rows)
+        train_mod.train(
+            data_dir=data,
+            out_path=output,
+            mode="ppo",
+            epochs=1,
+            batch_size=12,
+            lr=1e-3,
+            policy_coef=0.0,
+            value_coef=0.0,
+            entropy_coef=0.0,
+            reach30_value_coef=1.0,
+            warm_start=False,
+            seed=1033,
+        )
+        payload = json.loads(output.read_text())
+    assert payload["reach30_horizon"] == 30
+    assert len(payload["reach30"]) == 2
 
 
 def test_strategic_outcome_credit_requires_recorded_behavior_outcome_head():
@@ -945,6 +1173,41 @@ def test_train_seed_reproduces_model_and_minibatch_order():
         train_mod.train(out_path=out_a, **kwargs)
         train_mod.train(out_path=out_b, **kwargs)
         assert out_a.read_bytes() == out_b.read_bytes()
+
+
+def test_reach30_head_is_exported_only_after_training_and_round_trips():
+    with tempfile.TemporaryDirectory() as td:
+        legacy = Path(td) / "legacy.json"
+        trained = Path(td) / "trained.json"
+        model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        train_mod.export_weights(model, OBS_DIM, ACT_DIM, legacy)
+        assert "reach30" not in json.loads(legacy.read_text())
+
+        model.reach30_trained = True
+        model.reach30_horizon = 35
+        train_mod.export_weights(model, OBS_DIM, ACT_DIM, trained)
+        payload = json.loads(trained.read_text())
+        assert "reach30" in payload and payload["aux_heads"]["reach30"]
+
+        restored = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        assert train_mod.load_json_weights_into(restored, trained)
+        assert restored.reach30_trained
+        obs = torch.randn(5, OBS_DIM)
+        with torch.no_grad():
+            assert torch.equal(model.reach30_logits(obs), restored.reach30_logits(obs))
+
+        malformed = copy.deepcopy(payload)
+        malformed["reach30"][-1]["W"][0].append(0.0)
+        malformed_path = Path(td) / "malformed.json"
+        malformed_path.write_text(json.dumps(malformed))
+        untouched = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        before = [parameter.detach().clone() for parameter in untouched.reach30_head.parameters()]
+        assert not train_mod.load_json_weights_into(untouched, malformed_path)
+        assert not untouched.reach30_trained
+        assert all(
+            torch.equal(actual, expected)
+            for actual, expected in zip(untouched.reach30_head.parameters(), before)
+        )
 
 
 def test_old_format_rows_still_train_in_awr_mode():

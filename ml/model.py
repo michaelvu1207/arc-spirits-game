@@ -7,6 +7,7 @@ Architecture:
   - Farm-value head: obs -> 64 -> 1 (auxiliary state target for clean farm opportunity)
   - Reward-pick head: concat(obs, cand_feat) -> 128 -> 128 -> 1 (auxiliary candidate target for reward picks)
   - Route-mode head: obs -> 64 -> 1 (auxiliary Fallen route mode target: hunt vs return Abyss)
+  - Reach-30 head: obs -> 64 -> 1 (logit for reaching 30 VP by a fixed solo round cap)
 
 Policy: softmax over per-candidate logits (with padding mask).
 """
@@ -71,6 +72,10 @@ class CandidateScorer(nn.Module):
         self.act_dim = act_dim
         self.trunk_hidden = tuple(int(h) for h in trunk_hidden)
         self.value_hidden = tuple(int(h) for h in value_hidden)
+        # Capability marker: the module always exists so a legacy checkpoint can
+        # begin training it, but exporters/servers must not advertise random logits.
+        self.reach30_trained = False
+        self.reach30_horizon: int | None = None
 
         def mlp(in_dim: int, hidden, out_dim: int) -> nn.Sequential:
             dims = [in_dim, *hidden, out_dim]
@@ -86,6 +91,7 @@ class CandidateScorer(nn.Module):
         self.value_head = mlp(obs_dim, self.value_hidden, 1)
         self.farm_value_head = mlp(obs_dim, self.value_hidden, 1)
         self.route_mode_head = mlp(obs_dim, self.value_hidden, 1)
+        self.reach30_head = mlp(obs_dim, self.value_hidden, 1)
         self.reward_pick_head = mlp(obs_dim + act_dim, self.trunk_hidden, 1)
         # KataGo-style outcome aux: 4-way final-placement logits from the obs.
         # Distinct name from model_v2's placement_logits — the v2 aux loss has a
@@ -130,6 +136,10 @@ class CandidateScorer(nn.Module):
     def route_mode_logits(self, obs: torch.Tensor) -> torch.Tensor:
         """Auxiliary Fallen route-mode logits from obs only: (batch,)."""
         return self.route_mode_head(obs).squeeze(-1)
+
+    def reach30_logits(self, obs: torch.Tensor) -> torch.Tensor:
+        """Solo objective critic logits: P(reach 30 VP by its trained cap), shape (batch,)."""
+        return self.reach30_head(obs).squeeze(-1)
 
     def reward_pick_logits(
         self,

@@ -23,7 +23,7 @@ Request:  {"id": <any>, "obs": [B x obs_dim], "cands": [B x C_i x act_dim],
           Aux heads are served only when the weights file carries them.
           Handshake: {"id": <any>, "want": ["info"]} needs no obs/cands and
           returns {"id", "info": {format, obs_dim, act_dim, device, weights,
-          aux: {farm_value, route_mode, reward_pick}}}.
+          aux: {farm_value, route_mode, reward_pick, reach30}}}.
 Response: {"id": <same>, "logits": [B x C_i], "value": [B], ...}
           logits are raw masked scores (softmax NOT applied), ragged like cands.
           On a bad request: {"id": <same>, "error": "<message>"}.
@@ -110,15 +110,19 @@ async def read_frame(reader: asyncio.StreamReader) -> dict:
 #            if flags & 0x80 (error): [msg_len u32][msg utf8]
 #            else: [B u32][C_i u32 x B] + one section per set flag bit, in
 #            BIN_SECTION_ORDER: logits f32 x sum(C_i), value f32 x B,
-#            farm_value f32 x B, route_mode f32 x B, reward_pick f32 x sum(C_i)
-# want bitmask: 1=logits 2=value 4=farm_value 8=route_mode 16=reward_pick;
+#            farm_value f32 x B, route_mode f32 x B, reward_pick f32 x sum(C_i),
+#            reach30 f32 x B
+# want bitmask: 1=logits 2=value 4=farm_value 8=route_mode 16=reward_pick 32=reach30;
 # 0 = default (logits|value). Binary ids are UTF-8 strings, echoed verbatim.
 
 BIN_MAGIC_REQUEST = 0xB1
 BIN_MAGIC_RESPONSE = 0xB2
 BIN_ERROR_FLAG = 0x80
-BIN_WANT_BITS = {"logits": 1, "value": 2, "farm_value": 4, "route_mode": 8, "reward_pick": 16}
-BIN_SECTION_ORDER = ("logits", "value", "farm_value", "route_mode", "reward_pick")
+BIN_WANT_BITS = {
+    "logits": 1, "value": 2, "farm_value": 4, "route_mode": 8,
+    "reward_pick": 16, "reach30": 32,
+}
+BIN_SECTION_ORDER = ("logits", "value", "farm_value", "route_mode", "reward_pick", "reach30")
 _BIN_REQ_HEADER = struct.Struct("<BBIIII")  # magic, want, id_len, B, obs_dim, act_dim
 
 
@@ -246,7 +250,7 @@ def decode_binary_response(payload: bytes) -> dict:
 # Model loading
 # ---------------------------------------------------------------------------
 
-AUX_HEADS = ("farm_value", "route_mode", "reward_pick")
+AUX_HEADS = ("farm_value", "route_mode", "reward_pick", "reach30")
 FORMAT_V1 = "arc-cand-scorer-v1"
 FORMAT_V2 = "arc-entity-scorer-v2"
 
@@ -278,7 +282,8 @@ def load_scorer(
                 f"!= checkpoint flat length {obs_dim}"
             )
         # v2 checkpoints carry every aux head in the state_dict (trained together).
-        aux = {k: True for k in AUX_HEADS}
+        # v2 has the legacy auxiliary heads but no dedicated solo reach-30 critic.
+        aux = {k: k != "reach30" for k in AUX_HEADS}
         return model, obs_dim, model.act_dim, aux, FORMAT_V2
     if weights_path.suffix == ".pt":
         raise ValueError(
@@ -351,6 +356,7 @@ class InferServer:
         self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = load_scorer(
             weights_path, device
         )
+        self.reach30_horizon = getattr(self.model, "reach30_horizon", None)
         self._v2_header = self._expected_header()
         self.queue: asyncio.Queue[_Job] = asyncio.Queue()
         self.n_reqs = 0
@@ -455,6 +461,8 @@ class InferServer:
                 flat["route_mode"] = model.route_mode_logits(obs_t).cpu().numpy()
             if "reward_pick" in wanted:
                 flat["reward_pick"] = model.reward_pick_logits(obs_t, cands_t, mask_t).cpu().numpy()
+            if "reach30" in wanted:
+                flat["reach30"] = model.reach30_logits(obs_t).cpu().numpy()
 
         out: list[dict[str, list]] = []
         row = 0
@@ -551,6 +559,7 @@ class InferServer:
                                 "device": str(self.device),
                                 "weights": str(self.weights_path),
                                 "aux": dict(self.aux),
+                                "reach30_horizon": self.reach30_horizon,
                             }
                         }
                     else:
@@ -602,6 +611,7 @@ class InferServer:
         self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = (
             model, obs_dim, act_dim, aux, fmt
         )
+        self.reach30_horizon = getattr(model, "reach30_horizon", None)
         self._v2_header = self._expected_header()
         print(
             f"[infer] reloaded weights from {self.weights_path} "

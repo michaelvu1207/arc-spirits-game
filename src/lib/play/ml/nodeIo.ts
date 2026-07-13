@@ -60,6 +60,8 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				cands: s.cands.map(encodeVector),
 				chosen: s.chosen,
 				ret: r4(s.ret),
+				...(typeof s.round === 'number' ? { round: s.round } : {}),
+				vp: r4(s.vp),
 				...(s.pi ? { pi: round4(s.pi) } : {}),
 				...(typeof s.farmValue === 'number' ? { farmValue: r4(s.farmValue) } : {}),
 				...(s.rewardPi ? { rewardPi: round4(s.rewardPi) } : {}),
@@ -86,11 +88,14 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				...(typeof s.policyMask === 'number' ? { policyMask: s.policyMask } : {}),
 				...(typeof s.vPred === 'number' ? { vPred: s.vPred } : {}),
 				...(s.placementProbs ? { placementProbs: round4(s.placementProbs) } : {}),
+				...(typeof s.reach30Pred === 'number' ? { reach30Pred: s.reach30Pred } : {}),
 				...(typeof s.placement === 'number' ? { placement: s.placement } : {}),
 				// True 30-VP win flag + final round (done rows only): the PPO --win-bonus
 				// reads `won`, and --win-bonus-halflife reads `endRound`. These were stamped
 				// on the Sample but never serialized before (win bonus was silently inert).
 				...(typeof s.won === 'number' ? { won: s.won } : {}),
+				...(typeof s.reach30Target === 'number' ? { reach30Target: s.reach30Target } : {}),
+				...(typeof s.reach30Horizon === 'number' ? { reach30Horizon: s.reach30Horizon } : {}),
 				// All-Fallen collapse terminal (done rows): the PPO --all-fallen-loss stamps a
 				// terminal loss on these rows for every seat.
 				...(typeof s.allFallen === 'number' ? { allFallen: s.allFallen } : {}),
