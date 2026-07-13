@@ -1,6 +1,8 @@
 {
 	"_readme": "V26 preregistered solo terminal-objective treatment. Pair with fair-v26-solo-terminal-legacy-s0 on the identical seed, guardian schedule, live catalog, stripped V23 checkpoint, actor budget, architecture, optimizer, and evaluation budget. This arm treats the round-30 objective as terminal and replaces dense solo rStep with the strict reach-30, earlier-finish, final-margin lexicographic reward. Initial stop: five generations; continue only after provenance, zero-malformed-row, zero-stall, and matched-curve review. No checkpoint is promotion-eligible without every held-out gate.",
 	"version": "league-v1",
+	"catalogPath": "ml/catalogs/live-20260713-5f4ad348.json",
+	"catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
 	"mode": "ppo",
 	"seats": 1,
 	"soloMaxStatusLevel": 2,
@@ -68,5 +70,5 @@
 	"laneInit": {
 		"main-0": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json"
 	},
-	"paths": { "root": "ml/league_v26_terminal_lexicographic_s0" }
+	"paths": { "root": "ml/league_v26_terminal_lexicographic_live_s0" }
 }

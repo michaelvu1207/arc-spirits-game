@@ -133,6 +133,11 @@ export interface LeagueTrainConfig {
 
 export interface LeagueConfig {
 	version: 'league-v1';
+	/** Immutable catalog used by every training and evaluation actor. Omit both fields only for
+	 * historical configs that intentionally use ml/catalog.json. New qualification runs should
+	 * pin both so catalog drift fails before actor generation. */
+	catalogPath?: string;
+	catalogSha256?: string;
 	/** train.py --mode. Default awr until the PPO recording fields land (task #8). */
 	mode: 'awr' | 'alphazero' | 'ppo';
 	/** Ranked/evaluation seat count and maximum seat count available to training curricula. */
@@ -341,6 +346,9 @@ export interface LeagueState {
 /** One JSONL line appended to <root>/history.jsonl per (generation, lane). */
 export interface HistoryLine {
 	ts: string;
+	/** Exact catalog provenance for pinned-catalog runs. */
+	catalogPath?: string;
+	catalogSha256?: string;
 	gen: number;
 	lane: string;
 	kind: LeagueMemberKind;

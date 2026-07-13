@@ -27,6 +27,7 @@ import {
 	writeFileSync
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -195,6 +196,27 @@ describe('trainer RNG pairing', () => {
 		expect(trainerSeedForGeneration(cfg, 21, 0)).toBe(trainerSeedForGeneration(cfg, 21, 0));
 		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(trainerSeedForGeneration(cfg, 22, 0));
 		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(trainerSeedForGeneration(cfg, 21, 1));
+	});
+});
+
+describe('frozen catalog provenance', () => {
+	it('requires a matching path/hash pair and accepts the exact frozen bytes', () => {
+		const root = mkdtempSync(join(tmpdir(), 'league-catalog-contract-'));
+		try {
+			const catalogPath = join(root, 'catalog.json');
+			writeFileSync(catalogPath, '{"version":"test"}\n');
+			const hash = createHash('sha256').update(readFileSync(catalogPath)).digest('hex');
+			const config = { ...defaultConfig('unused'), catalogPath, catalogSha256: hash };
+			expect(() => validateLeagueConfig(config)).not.toThrow();
+			expect(() => validateLeagueConfig({ ...config, catalogSha256: '0'.repeat(64) })).toThrow(
+				/catalog hash mismatch/
+			);
+			expect(() =>
+				validateLeagueConfig({ ...config, catalogSha256: undefined })
+			).toThrow(/configured together/);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
 

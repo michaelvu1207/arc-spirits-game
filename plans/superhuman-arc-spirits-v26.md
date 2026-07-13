@@ -57,6 +57,13 @@ training opponents or a single ladder population.
   differed from V23, but none passed the preregistered decisiveness margin. The exact bot line still
   ended at 25 VP. These labels are diagnostic only and must not be trained; the next causal screen is
   the corrected terminal objective against a compute-matched legacy control.
+- The first V26 objective smoke exposed that the league manager and actor-pool CLI still defaulted
+  silently to `ml/catalog.json` (hash `62203e...`) even when the experiment intended the frozen live
+  catalog (hash `5f4ad3...`). Both partial roots were stopped and permanently marked invalid before a
+  generation completed. The league config now pins `catalogPath` plus `catalogSha256`, validates the
+  bytes before actor generation, passes the same path to training and evaluation pools, and records
+  both fields in every history row. The V26 chain independently checks the same hash and refuses any
+  root carrying an `INVALID` marker.
 - Production catalog drift proved that every result must carry exact source, checkpoint, and catalog
   hashes. Historical results remain valid only in their recorded environment.
 

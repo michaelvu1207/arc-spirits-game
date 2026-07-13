@@ -46,6 +46,7 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
 	appendFileSync,
 	copyFileSync,
@@ -156,9 +157,31 @@ function hasExtraArg(args: readonly string[] | undefined, name: string): boolean
 	return !!args?.some((arg) => arg === name || arg.startsWith(`${name}=`));
 }
 
+function sha256File(path: string): string {
+	return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
 /** Fail before actor generation when a fixed-budget/curriculum experiment cannot satisfy its
  * statistical or runtime contract. Ordinary historical configs remain unaffected. */
 export function validateLeagueConfig(config: LeagueConfig): void {
+	const hasCatalogPath = config.catalogPath !== undefined;
+	const hasCatalogHash = config.catalogSha256 !== undefined;
+	if (hasCatalogPath !== hasCatalogHash) {
+		throw new Error('league: catalogPath and catalogSha256 must be configured together');
+	}
+	if (hasCatalogPath) {
+		const catalogPath = resolve(config.catalogPath!);
+		if (!existsSync(catalogPath)) throw new Error(`league: catalogPath not found: ${catalogPath}`);
+		if (!/^[0-9a-f]{64}$/.test(config.catalogSha256!)) {
+			throw new Error('league: catalogSha256 must be a lowercase SHA-256 hex digest');
+		}
+		const actual = sha256File(catalogPath);
+		if (actual !== config.catalogSha256) {
+			throw new Error(
+				`league: catalog hash mismatch for ${catalogPath}: expected ${config.catalogSha256}, got ${actual}`
+			);
+		}
+	}
 	const rows = config.train.ppoRowsPerEpoch;
 	const fraction = config.train.ppoContinuationFraction;
 	const curriculum = config.continuationCurriculum;
@@ -1492,7 +1515,8 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 						seeds: job.seeds,
 						outDir: join(laneDir, `m-${job.m}`),
 						config: job.plan.config,
-						workers: Math.max(1, Math.ceil(totalWorkers / concurrency))
+						workers: Math.max(1, Math.ceil(totalWorkers / concurrency)),
+						...(config.catalogPath ? { catalogPath: config.catalogPath } : {})
 					});
 				}
 			})
@@ -1653,7 +1677,8 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				outDir: evalDir,
 				config: plan.config,
 				workers: config.workers,
-				append: r > 0
+				append: r > 0,
+				...(config.catalogPath ? { catalogPath: config.catalogPath } : {})
 			});
 			const fold = foldSummaries(learner, plan, res.summaries, opponentsFaced);
 			evalScore += fold.scoreSum;
@@ -1728,6 +1753,9 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		// ── 6: history line + state save ─────────────────────────────────────
 		const line: HistoryLine = {
 			ts: new Date().toISOString(),
+			...(config.catalogPath
+				? { catalogPath: config.catalogPath, catalogSha256: config.catalogSha256! }
+				: {}),
 			gen,
 			lane: learner.id,
 			kind: learner.kind,

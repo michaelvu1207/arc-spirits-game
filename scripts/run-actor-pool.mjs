@@ -27,6 +27,7 @@ const { values: args } = parseArgs({
 		seats: { type: 'string', default: '4' },
 		'max-rounds': { type: 'string', default: '90' },
 		weights: { type: 'string' },
+		catalog: { type: 'string' },
 		'infer-socket': { type: 'string' },
 		out: { type: 'string', default: 'ml/data/poolrun' },
 		profiles: { type: 'string', default: 'pvphunter,medium,aggressive,hard' },
@@ -52,7 +53,7 @@ const { values: args } = parseArgs({
 if (args.help) {
 	console.log(
 		'usage: node scripts/run-actor-pool.mjs [--games N] [--workers N] [--seed0 N] [--seats N]\n' +
-			'         [--max-rounds N] [--weights FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
+			'         [--max-rounds N] [--weights FILE] [--catalog FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
 			'         [--selection hybrid|value|policy] [--learn-monster-reward-choices] [--sample] [--temperature X]\n' +
 			'         [--neural-seats Red,Blue] [--record-seats Red] [--forbid type1,type2]\n' +
 			'         [--max-status-level N] [--shuffle-guardians] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
@@ -128,7 +129,7 @@ const res = await runActorPool({
 	outDir: path.resolve(args.out),
 	workers,
 	config,
-	catalogPath: path.join(root, 'ml', 'catalog.json'),
+	catalogPath: args.catalog ? path.resolve(args.catalog) : path.join(root, 'ml', 'catalog.json'),
 	append: args.append,
 	onGame: args.quiet
 		? undefined

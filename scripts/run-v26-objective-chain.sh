@@ -16,6 +16,22 @@ if [[ ! -f "$root/config.json" || ! -f "$root/state.json" ]]; then
 	echo "league must be initialized before chain run: $root" >&2
 	exit 2
 fi
+if [[ -f "$root/INVALID" ]]; then
+	echo "refusing invalidated root: $root" >&2
+	exit 4
+fi
+read -r catalog_path catalog_hash < <(
+	node -e 'const c=require("./'"$root"'/config.json"); console.log(c.catalogPath ?? "", c.catalogSha256 ?? "")'
+)
+if [[ -z "$catalog_path" || -z "$catalog_hash" || ! -f "$catalog_path" ]]; then
+	echo "missing pinned catalogPath/catalogSha256 in $root/config.json" >&2
+	exit 4
+fi
+actual_catalog_hash="$(sha256sum "$catalog_path" | cut -d ' ' -f1)"
+if [[ "$actual_catalog_hash" != "$catalog_hash" ]]; then
+	echo "catalog hash mismatch: expected $catalog_hash got $actual_catalog_hash" >&2
+	exit 4
+fi
 
 for ((step = 1; step <= generations; step += 1)); do
 	available_kb="$(df --output=avail -k "$root" | tail -1 | tr -d ' ')"
