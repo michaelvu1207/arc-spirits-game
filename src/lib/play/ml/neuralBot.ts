@@ -193,7 +193,7 @@ function nonProgressPenalty(cmd: GameCommand): number {
 	return cmd.type === 'refillMarket' ? REFILL_MARKET_PENALTY : NOOP_PENALTY;
 }
 
-function isProgressTransition(
+export function isProgressTransition(
 	state: PublicGameState,
 	seat: SeatColor,
 	next: PublicGameState

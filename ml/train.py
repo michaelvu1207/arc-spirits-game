@@ -615,6 +615,8 @@ def train(
     win_bonus: float = 0.0,
     win_bonus_halflife: float = 0.0,
     all_fallen_loss: float = 0.0,
+    strategic_mc_coef: float = 0.0,
+    strategic_mc_gamma: float = 1.0,
     model_version: str = "v1",
     hidden: tuple[int, ...] | None = None,
     value_hidden: tuple[int, ...] | None = None,
@@ -661,6 +663,8 @@ def train(
             win_bonus=win_bonus,
             win_bonus_halflife=win_bonus_halflife,
             all_fallen_loss=all_fallen_loss,
+            strategic_mc_coef=strategic_mc_coef,
+            strategic_mc_gamma=strategic_mc_gamma,
             obs_key=obs_key,
         )
         if model_version == "v2":
@@ -1005,12 +1009,17 @@ def parse_args() -> argparse.Namespace:
     # PPO flags (used only with --mode ppo). --epochs is the K passes over the
     # rollout buffer; --batch-size the minibatch size; --policy-coef/--value-coef
     # weight the surrogate and value losses as in the other modes.
-    # gamma default 0.997: effective horizon 1/(1-gamma) ~ 333 steps. Games run
-    # ~200-1000 decisions, so the terminal placement reward still reaches
-    # early-game decisions (0.997^300 ~ 0.41) without washing out per-step
-    # shaping credit on short games.
+    # gamma alone has a long horizon, but ordinary GAE policy credit also carries
+    # lambda (default gamma*lambda ~= 0.947). --strategic-mc-coef selectively restores
+    # complete-game credit on route/engine/conversion rows without applying noisy
+    # Monte Carlo targets to every tactical decision.
     p.add_argument("--gamma", type=float, default=0.997, help="PPO discount factor")
     p.add_argument("--gae-lambda", type=float, default=0.95, help="GAE lambda")
+    p.add_argument("--strategic-mc-coef", type=float, default=0.0,
+                   help="Blend [0,1] from ordinary GAE toward full-episode Monte Carlo "
+                        "advantages/value targets on rows marked strategic; 0 preserves PPO")
+    p.add_argument("--strategic-mc-gamma", type=float, default=1.0,
+                   help="Discount for strategic full-episode Monte Carlo returns (default 1)")
     p.add_argument("--clip-eps", type=float, default=0.2, help="PPO surrogate clip epsilon")
     p.add_argument("--entropy-coef", type=float, default=0.01, help="PPO entropy bonus coefficient")
     p.add_argument("--entropy-anneal", action="store_true",
@@ -1101,6 +1110,8 @@ if __name__ == "__main__":
         win_bonus=args.win_bonus,
         win_bonus_halflife=args.win_bonus_halflife,
         all_fallen_loss=args.all_fallen_loss,
+        strategic_mc_coef=args.strategic_mc_coef,
+        strategic_mc_gamma=args.strategic_mc_gamma,
         model_version=args.model_version,
         hidden=args.hidden,
         value_hidden=args.value_hidden,

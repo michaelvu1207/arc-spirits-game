@@ -709,6 +709,7 @@ export function buildMatchup(
 			seats: config.seats,
 			maxRounds: config.maxRounds,
 			profiles,
+			...(config.shuffleGuardians ? { shuffleGuardians: true } : {}),
 			weightsPath: learnerWeights ? resolve(learnerWeights) : undefined,
 			// policyObsVersion 2 supports only hybrid/policy selection (actorWorker); the
 			// v1 socket serves the same obs version as in-process, so value stays valid.
@@ -843,7 +844,7 @@ export function heuristicFieldOpponents(config: LeagueConfig, count: number): Le
  * so a would-be mirror slot falls back to PFSP.
  */
 /** The fixed non-corrupting seat (config.terminationBlocker) — same shape as a heuristic-field
- *  member, so buildMatchup seats it by profile. Present in EVERY matchup; never recorded. */
+ *  member, so buildMatchup seats it by profile. Present in a deterministic matchup fraction. */
 function blockerMember(profile: string): LeagueMember {
 	return { id: `blocker-${profile}`, kind: 'heuristic', profile, createdGen: 0, matchStats: {} };
 }
@@ -856,10 +857,13 @@ export function matchupOpponents(
 	matchups: number,
 	rand: () => number
 ): { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean } {
-	// Termination blocker (option c): reserve ONE opponent slot for a fixed non-corrupting profile in
-	// every matchup — mirror, heuristic, and PFSP alike — so the all-Fallen terminal can't fire in
-	// training. The remaining slots use the normal mirror/heuristic/PFSP selection.
-	const blocker = config.terminationBlocker ? blockerMember(config.terminationBlocker) : null;
+	// Termination blocker: reserve one opponent slot in a deterministic fraction of matchups. This
+	// creates real late-game data without letting the learner assume another seat always keeps the
+	// table alive. The remaining slots use the normal mirror/heuristic/PFSP selection.
+	const blockerFraction = Math.max(0, Math.min(1, config.terminationBlockerFraction ?? 1));
+	const blockerSlot = Math.floor((m + 1) * blockerFraction) > Math.floor(m * blockerFraction);
+	const blocker =
+		config.terminationBlocker && blockerSlot ? blockerMember(config.terminationBlocker) : null;
 	const count = config.seats - 1 - (blocker ? 1 : 0);
 	const withBlocker = (r: { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean }) =>
 		blocker ? { ...r, opponents: [...r.opponents, blocker] } : r;

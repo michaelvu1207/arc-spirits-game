@@ -22,7 +22,7 @@ ML_DIR = Path(__file__).parent
 
 
 def game_row(seed, labels, placements, statuses, vps=None, rounds=20, finished=True,
-             neural_seats=None):
+             neural_seats=None, cycles=None):
     """One GameSummary row. labels: per-seat weightsOrProfiles list or single str.
     neural_seats: LEARNER-seat attribution (GameSummary.neuralSeats); None = old-format
     row without the field."""
@@ -47,6 +47,9 @@ def game_row(seed, labels, placements, statuses, vps=None, rounds=20, finished=T
     }
     if neural_seats is not None:
         row["neuralSeats"] = neural_seats
+    if cycles is not None:
+        for seat, cycle in zip(row["perSeat"], cycles):
+            seat["cycle"] = cycle
     return row
 
 
@@ -93,6 +96,47 @@ def test_summary_cli_back_compat():
         assert r.returncode == 0, r.stderr
         rep = json.loads(r.stdout)
         assert rep["games"] == 1 and rep["candidates"]["solo"]["games"] == 2
+
+
+def test_summary_late_game_cycle_metrics():
+    a1 = {
+        "vpAfterRound": {"8": 12, "12": 18, "20": 35},
+        "first15Round": 10, "first30Round": 18,
+        "decisions": 20, "productiveDecisions": 15,
+        "optionalYieldsWithAlternatives": 2, "post15VpPerRound": 1.5,
+        "interactions": 6, "summons": 3, "awakens": 1, "combats": 4,
+        "rewards": 2, "pvp": 1, "finalAttackDice": 7, "finalSpirits": 4,
+        "maxBarrier": 2,
+    }
+    a2 = {
+        "vpAfterRound": {"8": 8, "12": 15, "20": 22},
+        "first15Round": 12, "first30Round": None,
+        "decisions": 30, "productiveDecisions": 20,
+        "optionalYieldsWithAlternatives": 3, "post15VpPerRound": 0.5,
+        "interactions": 4, "summons": 1, "awakens": 1, "combats": 2,
+        "rewards": 1, "pvp": 0, "finalAttackDice": 5, "finalSpirits": 2,
+        "maxBarrier": 0,
+    }
+    b = {"vpAfterRound": {"8": 5}, "first15Round": None, "first30Round": None,
+         "decisions": 10, "productiveDecisions": 5, "optionalYieldsWithAlternatives": 1}
+    rows = [
+        game_row(1, ["A", "B"], [1, 2], [0, 0], cycles=[a1, b]),
+        game_row(2, ["A", "B"], [1, 2], [0, 0], cycles=[a2, b]),
+    ]
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        write_games(d, rows)
+        rep = summarize_games(str(d))
+    late = rep["candidates"]["A"]["lateGame"]
+    assert late["observedSeatGames"] == 2
+    assert late["reach15Pct"] == 100.0 and late["reach30Pct"] == 50.0
+    assert late["conversion15To30Pct"] == 50.0 and late["meanRounds15To30"] == 8.0
+    assert late["meanVpAfterRound"]["8"] == 10.0
+    assert late["productiveDecisionPct"] == 70.0
+    assert late["optionalYieldDecisionPct"] == 10.0
+    assert late["meanPost15VpPerRound"] == 1.0
+    assert late["meanActionsPerGame"]["summons"] == 2.0
+    assert late["meanFinalEngine"]["finalAttackDice"] == 6.0
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +315,7 @@ def main() -> int:
     tests = [
         test_summary_math,
         test_summary_cli_back_compat,
+        test_summary_late_game_cycle_metrics,
         test_league_tables,
         test_gauntlet_tables,
         test_report_rolls_up_everything,

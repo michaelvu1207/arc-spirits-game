@@ -1,0 +1,82 @@
+{
+	"_readme": "Fixed-seed twin of fair-v16-long-horizon-control. The only objective difference is strategic MC coefficient 0.5 on navigation rows. Full-game return discount is 1; tactical decisions keep ordinary GAE. Require late-game and held-out gains before extending.",
+	"version": "league-v1",
+	"mode": "ppo",
+	"seats": 4,
+	"maxRounds": 120,
+	"gamesPerGen": 512,
+	"matchupGames": 32,
+	"evalGames": 48,
+	"evalOpponents": ["heur-medium", "heur-hard", "heur-pvphunter"],
+	"lanes": { "main": 1, "mainExploiter": 0, "leagueExploiter": 0 },
+	"seedCheckpointAnchors": true,
+	"baselineElos": {
+		"frozen-v13-1-gen48-champion": 439,
+		"frozen-ladder8c2-gen60-champion": 136
+	},
+	"extraFrozen": [
+		{
+			"id": "frozen-v13-2-gen44-champion",
+			"weightsPath": "ml/champions/v13-2/main-0-gen44.json",
+			"elo": 453
+		},
+		{
+			"id": "frozen-v14b-gen120-exploiter",
+			"weightsPath": "ml/exploiters/v14b-gen120.json",
+			"elo": 394
+		},
+		{
+			"id": "frozen-v15-1-gen10-champion",
+			"weightsPath": "ml/champions/v15-1/main-0-gen10.json",
+			"elo": 476
+		}
+	],
+	"denseVpReward": true,
+	"shapingPreset": "ascend3",
+	"shuffleGuardians": true,
+	"selfPlayFraction": 0.1,
+	"heuristicOpponentFraction": 0.2,
+	"heuristicOpponentProfiles": ["paragon", "insane"],
+	"terminationBlocker": "paragon",
+	"terminationBlockerFraction": 0.5,
+	"opponentTemperature": 0.65,
+	"pfsp": { "p": 2, "variant": "squared" },
+	"promoteEvery": 0,
+	"promoteMarginElo": 25,
+	"selection": "hybrid",
+	"sample": true,
+	"temperature": 0.65,
+	"train": {
+		"epochs": 2,
+		"batchSize": 256,
+		"hidden": [128, 128],
+		"valueHidden": [64],
+		"extraArgs": [
+			"--lr", "0.0001",
+			"--clip-eps", "0.1",
+			"--entropy-coef", "0.002",
+			"--lr-schedule", "cosine",
+			"--target-kl", "0.01",
+			"--kl-ref-coef", "0.05",
+			"--placement-coef", "0.3",
+			"--farm-value-coef", "0",
+			"--reward-pick-coef", "0",
+			"--route-mode-coef", "0",
+			"--gamma", "0.999",
+			"--gae-lambda", "0.95",
+			"--strategic-mc-coef", "0.5",
+			"--strategic-mc-gamma", "1",
+			"--win-bonus", "1.0",
+			"--win-bonus-halflife", "0",
+			"--all-fallen-loss", "-3.0"
+		]
+	},
+	"pythonBin": "ml/.venv/bin/python",
+	"gauntletCmd": ["bash", "scripts/league-gauntlet.sh"],
+	"workers": 32,
+	"matchupConcurrency": 4,
+	"seedBase": 270000000,
+	"initFrom": "ml/champions/v15-1/main-0-gen10.json",
+	"laneInit": { "main-0": "ml/champions/v15-1/main-0-gen10.json" },
+	"paths": { "root": "ml/league_v16_long_horizon_mc050_s0" }
+}

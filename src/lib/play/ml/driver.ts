@@ -48,6 +48,7 @@ import { sampleAuxTargets } from './auxTargets';
 import {
 	valueGuidedIndex,
 	hybridIndex,
+	isProgressTransition,
 	policyIndexWithProgressGuard,
 	selectableCandidateIndices
 } from './neuralBot';
@@ -59,6 +60,7 @@ import {
 	type ShapingWeights
 } from './shaping';
 import type { NeuralPolicy } from './net';
+import type { SeatCycleSummary } from './poolTypes';
 
 /** One recorded decision. `vp`/`phi` (VP and build-potential at decision time) are used to
  *  compute `ret` (VP-maximizing return-to-go) once the game's VP trajectory is known. */
@@ -126,6 +128,22 @@ export interface Sample {
 	vPred?: number;
 	/** Final placement 1..seats (ties share the better place), on rows of finished games. */
 	placement?: number;
+	/** Chosen command type, persisted for strategy-cycle diagnostics and training masks. */
+	decisionType?: GameCommand['type'];
+	/** 1 when this row commits a round-level route, engine, combat, conversion, or yield choice.
+	 * PPO may blend these rows toward full-episode Monte Carlo credit; omitted/0 stays tactical. */
+	strategic?: number;
+}
+
+/** Decisions whose consequences commonly span several phases or rounds. This is a credit-assignment
+ * mask, not a strategy oracle: it does not say which action is good and never changes legality. */
+// First controlled ablation: navigation only. It is the round-level strategy skeleton and gives
+// the cleanest causal test of long-horizon credit. Expand to engine/conversion commands only after
+// the matched pilot establishes a positive effect.
+const STRATEGIC_COMMAND_TYPES = new Set<GameCommand['type']>(['lockNavigation']);
+
+export function isStrategicCommand(cmd: GameCommand): boolean {
+	return STRATEGIC_COMMAND_TYPES.has(cmd.type);
 }
 
 /**
@@ -276,9 +294,20 @@ export interface RecordGameResult {
 	stalled: boolean;
 	finalVP: Record<string, number>;
 	samples: Sample[];
+	/** Per-seat build-convert-finish diagnostics. Evaluation-only; never used as reward. */
+	cycleBySeat: Record<string, SeatCycleSummary>;
 	/** The terminal game state (for diagnostics/strategy tracing — final builds, status, etc.). */
 	finalState?: PublicGameState;
 }
+
+const CYCLE_ROUNDS = [8, 12, 16, 20] as const;
+const OPTIONAL_YIELD_TYPES = new Set<GameCommand['type']>([
+	'endLocationActions',
+	'commitBenefits',
+	'commitAwakening',
+	'commitCleanup',
+	'passEncounter'
+]);
 
 function seededBotRandom(rng: RngState): BotRandom {
 	return {
@@ -565,6 +594,45 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	const rand = (): number => nextInt(pickRng, 1_000_000) / 1_000_000;
 
 	const samples: Sample[] = [];
+	const cycleBySeat: Record<string, SeatCycleSummary> = {};
+	for (const seat of seats) {
+		cycleBySeat[seat] = {
+			vpAfterRound: {},
+			first15Round: null,
+			first30Round: null,
+			decisions: 0,
+			productiveDecisions: 0,
+			optionalYieldDecisions: 0,
+			locationInteractions: 0,
+			summons: 0,
+			awakens: 0,
+			combats: 0,
+			rewards: 0,
+			pvpAttacks: 0,
+			finalAttackDice: 0,
+			finalSpirits: 0,
+			finalMaxBarrier: 0,
+			post15VpPerRound: 0
+		};
+	}
+	let observedRound = state.round;
+	const captureCycle = (terminal = false): void => {
+		for (const seat of seats) {
+			const cycle = cycleBySeat[seat];
+			const vp = vpOf(state.players[seat]);
+			if (cycle.first15Round === null && vp >= 15) cycle.first15Round = state.round;
+			if (cycle.first30Round === null && vp >= VP_TO_WIN) cycle.first30Round = state.round;
+			for (const round of CYCLE_ROUNDS) {
+				const crossed = observedRound <= round && state.round > round;
+				const endedOnRound = terminal && state.round === round;
+				if (cycle.vpAfterRound[String(round)] === undefined && (crossed || endedOnRound)) {
+					cycle.vpAfterRound[String(round)] = vp;
+				}
+			}
+		}
+		observedRound = Math.max(observedRound, state.round);
+	};
+	captureCycle();
 	const actionCounter = new Map<string, number>();
 	let ticks = 0;
 	let stalled = false;
@@ -601,7 +669,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 					const mi = withNextH.findIndex((x) => commandMatches(x.cmd, cmd));
 					if (mi >= 0) {
 						const obs = encodeObs(state, seat, catalog);
-						samples.push({
+							samples.push({
 							obs,
 							...(recordObsV2 ? { obsV2: recordObsV2(seat) } : {}),
 							cands: withNextH.map((x) =>
@@ -612,8 +680,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 							seat,
 							vp: vpOf(state.players[seat]),
 							phi: buildPotential(state.players[seat], shaping),
-							kill: decisionKills(state, withNextH[mi].next, seat, cmd) ? 1 : 0,
-							...sampleAuxTargets(state, seat, catalog, withNextH, withNextH[mi])
+								kill: decisionKills(state, withNextH[mi].next, seat, cmd) ? 1 : 0,
+								decisionType: cmd.type,
+								strategic: isStrategicCommand(cmd) ? 1 : 0,
+								...sampleAuxTargets(state, seat, catalog, withNextH, withNextH[mi])
 						});
 					}
 				}
@@ -724,8 +794,26 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 										seat,
 										withNext,
 										{ sample, temperature: pickTemperature, rand },
-										catalog
+									catalog
 									);
+		const chosenAction = withNext[idx];
+		const cycle = cycleBySeat[seat];
+		cycle.decisions += 1;
+		if (
+			chosenAction.hasHiddenOutcome ||
+			isProgressTransition(state, seat, policyPreviewState(chosenAction))
+		) {
+			cycle.productiveDecisions += 1;
+		}
+		if (cands.length > 1 && OPTIONAL_YIELD_TYPES.has(cands[idx].type)) {
+			cycle.optionalYieldDecisions += 1;
+		}
+		if (cands[idx].type === 'resolveLocationInteraction') cycle.locationInteractions += 1;
+		if (cands[idx].type === 'spawnHandSpirit') cycle.summons += 1;
+		if (cands[idx].type === 'awakenSpirit') cycle.awakens += 1;
+		if (cands[idx].type === 'startCombat') cycle.combats += 1;
+		if (cands[idx].type === 'resolveMonsterReward') cycle.rewards += 1;
+		if (cands[idx].type === 'initiatePvp') cycle.pvpAttacks += 1;
 		if (willRecord) {
 			// Every policy-backed decision remains in the PPO trajectory. Only an exact sampled
 			// policy decision gets policyMask=1 and behavior fields; deterministic branches still
@@ -764,6 +852,8 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				vp: vpOf(state.players[seat]),
 				phi: buildPotential(state.players[seat], shaping),
 				kill: decisionKills(state, withNext[idx].next, seat, cands[idx]) ? 1 : 0,
+				decisionType: cands[idx].type,
+				strategic: isStrategicCommand(cands[idx]) ? 1 : 0,
 				...valueFields,
 				...behaviorFields,
 				...sampleAuxTargets(state, seat, catalog, withNext, withNext[idx])
@@ -787,6 +877,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			progressed = progressed || did;
 			if (state.status !== 'active') break;
 		}
+		captureCycle(state.status !== 'active');
 		if (state.status !== 'active') break;
 		if (!progressed) {
 			const before = `${state.phase}:${state.round}`;
@@ -795,11 +886,24 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				stalled = true;
 				break;
 			}
+			captureCycle(false);
 		}
 	}
+	captureCycle(state.status !== 'active');
 
 	const finalVP: Record<string, number> = {};
 	for (const seat of seats) finalVP[seat] = state.players[seat]?.victoryPoints ?? 0;
+	for (const seat of seats) {
+		const player = state.players[seat];
+		const cycle = cycleBySeat[seat];
+		cycle.finalAttackDice = player?.attackDice.length ?? 0;
+		cycle.finalSpirits = player?.spirits.filter(Boolean).length ?? 0;
+		cycle.finalMaxBarrier = player?.maxBarrier ?? 0;
+		cycle.post15VpPerRound =
+			cycle.first15Round === null
+				? 0
+				: Math.max(0, (finalVP[seat] - 15) / Math.max(1, state.round - cycle.first15Round));
+	}
 
 	// VP-maximizing return-to-go: per seat, credit each decision with its discounted future VP
 	// (plus potential-based build shaping). γ<1 trades total-VP vs VP/turn — a harness knob.
@@ -868,6 +972,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		stalled,
 		finalVP,
 		samples,
+		cycleBySeat,
 		finalState: state
 	};
 }

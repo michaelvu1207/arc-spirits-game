@@ -838,11 +838,12 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		expect(mir.mirror).toBe(true);
 		expect(mir.opponents.map((o) => o.weightsPath)).toEqual(['ckpt/cur.json', 'ckpt/cur.json', 'ckpt/cur.json']);
 		// buildMatchup resolves them into opponentWeights all equal to the learner net.
-		const plan = buildMatchup(config, learner, mir.opponents, 1, 5);
+		const plan = buildMatchup({ ...config, shuffleGuardians: true }, learner, mir.opponents, 1, 5);
 		const oppW = Object.values(plan.config.opponentWeights ?? {});
 		expect(oppW).toHaveLength(3);
 		expect(new Set(oppW)).toEqual(new Set([resolve('ckpt/cur.json')]));
 		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]); // still learner-only recording
+		expect(plan.config.shuffleGuardians).toBe(true);
 		// m=0 is a PFSP slot: opponents come from the field (heuristics), not the mirror.
 		const pf = matchupOpponents(config, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
 		expect(pf.mirror).toBe(false);
@@ -861,7 +862,7 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		expect(boot.opponents.every((o) => o.kind === 'heuristic')).toBe(true);
 	});
 
-	it('matchupOpponents: terminationBlocker seats one fixed non-corruptor in EVERY matchup (mirror + pfsp)', () => {
+	it('matchupOpponents: terminationBlocker defaults to every matchup and supports a deterministic fraction', () => {
 		const config = {
 			...defaultConfig('unused'),
 			seats: 4,
@@ -886,6 +887,27 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		const pf = matchupOpponents(config, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
 		expect(pf.opponents).toHaveLength(config.seats - 1);
 		expect(blockers(pf)).toHaveLength(1);
+		// Fable-review guard: a partial blocker mix creates late-game data without teaching
+		// the learner that another seat always keeps the table alive. f=0.5 alternates.
+		const partial = { ...config, terminationBlockerFraction: 0.5 };
+		const partialOff = matchupOpponents(
+			partial,
+			learner,
+			members,
+			0,
+			6,
+			randFrom([0.1, 0.5, 0.9])
+		);
+		const partialOn = matchupOpponents(
+			partial,
+			learner,
+			members,
+			1,
+			6,
+			randFrom([0.1, 0.5, 0.9])
+		);
+		expect(blockers(partialOff)).toHaveLength(0);
+		expect(blockers(partialOn)).toHaveLength(1);
 		// buildMatchup seats the blocker as a heuristic (profile), NOT a checkpoint or neural seat.
 		const plan = buildMatchup(config, learner, mir.opponents, 1, 5);
 		const paragonSeat = plan.oppBySeat.find(([, mm]) => mm.profile === 'paragon')![0];

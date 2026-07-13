@@ -179,6 +179,8 @@ export interface LeagueConfig {
 	/** BOT_PROFILES names cycled across the opponent seats of a heuristic-field matchup
 	 *  (default ['paragon','insane']). Only used when heuristicOpponentFraction > 0. */
 	heuristicOpponentProfiles?: string[];
+	/** Deterministically shuffle guardian identities per game seed (default false for old-run parity). */
+	shuffleGuardians?: boolean;
 	/** Sampling temperature for checkpoint opponent seats (mirror/PFSP/exploiter fields), default
 	 *  0 = greedy (historical, bit-parity). > 0 (e.g. 0.65) makes them sample, which breaks the
 	 *  argmax-clone-collision artifact where several opponent seats sharing one checkpoint make
@@ -187,16 +189,19 @@ export interface LeagueConfig {
 	opponentTemperature?: number;
 	/**
 	 * TERMINATION BLOCKER (default undefined = off): a BOT_PROFILES name (e.g. 'paragon') seated in
-	 * EVERY matchup — mirror, heuristic, and PFSP alike — replacing one opponent slot. A non-corrupting
+	 * matchup slots selected by terminationBlockerFraction — mirror, heuristic, and PFSP alike —
+	 * replacing one opponent slot. A non-corrupting
 	 * profile that never Falls makes the all-Fallen early-termination (phases.ts tryAdvanceFromCleanup)
 	 * unreachable in training, so games must run to the real VP target or the round cap. This removes the
 	 * degenerate all-bot collapse (every seat racing to Fallen ends the game at ~round 8 / ~12 VP) that
 	 * poisons the reach-30 signal — matching deployment, where a human opponent never Falls. It is NOT
 	 * the heuristicOpponentFraction field lever (paragon as a punisher); it is paragon as a structural
-	 * termination blocker (one guaranteed non-corruptor per table). Whether the profile truly never Falls
+	 * termination blocker. Whether the profile truly never Falls
 	 * (forced corruption via damage overflow) is verified empirically, not assumed.
 	 */
 	terminationBlocker?: string;
+	/** Fraction of matchup slots that receive terminationBlocker (default 1 for old blocker configs). */
+	terminationBlockerFraction?: number;
 	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
 	shapingPreset?: string;
 	selection: 'hybrid' | 'value' | 'policy';

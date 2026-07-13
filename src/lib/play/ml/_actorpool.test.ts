@@ -104,6 +104,7 @@ describe('actor pool', () => {
 			seats: 4,
 			maxRounds: 60,
 			profiles: ['pvphunter', 'medium', 'aggressive', 'hard'],
+			shuffleGuardians: true,
 			// Exercise the neural path when a checkpoint is available (the shipping config);
 			// fall back to heuristic-only so the guarantee is still tested without weights.
 			...(NEURAL_WEIGHTS ? { weightsPath: NEURAL_WEIGHTS, selection: 'hybrid' as const } : {})
@@ -123,6 +124,15 @@ describe('actor pool', () => {
 			expect(mapOf(four.summaries)).toEqual(mapOf(one.summaries));
 			expect(four.summaries.map((s) => s.seed)).toEqual(seeds);
 			expect(four.samples).toBe(one.samples);
+			expect(
+				four.summaries.every((summary) =>
+					summary.perSeat.every((seat) =>
+						seat.cycle !== undefined &&
+						seat.cycle.decisions >= seat.cycle.productiveDecisions &&
+						seat.cycle.post15VpPerRound >= 0
+					)
+				)
+			).toBe(true);
 
 			// The games-<i>.jsonl feed must cover every seed exactly once.
 			const lines = four.gameFiles.flatMap((f) =>

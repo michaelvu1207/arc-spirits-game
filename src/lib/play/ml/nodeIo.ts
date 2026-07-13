@@ -71,6 +71,10 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				...(typeof s.stepIdx === 'number' ? { stepIdx: s.stepIdx } : {}),
 				...(typeof s.rStep === 'number' ? { rStep: r4(s.rStep) } : {}),
 				...(typeof s.done === 'boolean' ? { done: s.done } : {}),
+				// Long-horizon credit assignment labels. `decisionType` is retained for
+				// auditability; PPO consumes the compact binary strategic mask.
+				...(typeof s.decisionType === 'string' ? { decisionType: s.decisionType } : {}),
+				...(typeof s.strategic === 'number' ? { strategic: s.strategic } : {}),
 				// Behavior scalars stay full precision: rounding logpOld perturbs PPO's
 				// new/old ratio before the first optimizer step.
 				...(typeof s.logpOld === 'number' ? { logpOld: s.logpOld } : {}),

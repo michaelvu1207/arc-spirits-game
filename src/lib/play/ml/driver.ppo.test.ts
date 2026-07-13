@@ -5,8 +5,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { profileFor } from '../server/botPolicy';
 import { SEAT_COLORS, type SeatColor } from '../types';
-import { sampledPolicyBehavior, type Sample } from './driver';
-import { playRecordingGame } from './driver';
+import { isStrategicCommand, playRecordingGame, sampledPolicyBehavior, type Sample } from './driver';
 import { NeuralPolicy } from './net';
 import { appendSamples, loadOrSnapshotCatalog, randomPolicy } from './nodeIo';
 
@@ -22,6 +21,12 @@ function scalarPolicy(): NeuralPolicy {
 }
 
 describe('driver PPO behavior distribution', () => {
+	it('marks only the navigation strategy skeleton in the first MC ablation', () => {
+		expect(isStrategicCommand({ type: 'lockNavigation', destination: 'Arcane Abyss' })).toBe(true);
+		expect(isStrategicCommand({ type: 'startCombat' })).toBe(false);
+		expect(isStrategicCommand({ type: 'spawnHandSpirit', guid: 'x' })).toBe(false);
+		expect(isStrategicCommand({ type: 'passEncounter' })).toBe(false);
+	});
 	it('records the sampled temperature and post-progress-filter denominator exactly', () => {
 		const policy = scalarPolicy();
 		const behavior = sampledPolicyBehavior(policy, [0], [[0], [1], [2]], [0, 2], 2, 0.5);
@@ -77,6 +82,7 @@ describe('driver PPO behavior distribution', () => {
 			expect(row.behaviorTemperature).toBe(0.4);
 			expect(row.behaviorMask).toHaveLength(row.cands.length);
 			expect(row.behaviorMask![row.chosen]).toBe(1);
+			expect(row.strategic).toBe(row.decisionType === 'lockNavigation' ? 1 : 0);
 		}
 
 		const greedy = playRecordingGame(catalog, { ...base, sample: false });
@@ -174,6 +180,8 @@ describe('driver PPO behavior distribution', () => {
 				stepIdx: 0,
 				rStep: 0,
 				done: true,
+				decisionType: 'lockNavigation',
+				strategic: 1,
 				policyMask: 1,
 				vPred: 0,
 				...behavior
@@ -184,10 +192,14 @@ describe('driver PPO behavior distribution', () => {
 					obs: number[];
 					cands: number[][];
 					policyMask: number;
+					decisionType: string;
+					strategic: number;
 				};
 				expect(serialized.obs).toEqual(obs);
 				expect(serialized.cands).toEqual(cands);
 				expect(serialized.policyMask).toBe(1);
+				expect(serialized.decisionType).toBe('lockNavigation');
+				expect(serialized.strategic).toBe(1);
 
 				const code = [
 					'import math, sys, torch',

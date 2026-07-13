@@ -17,6 +17,8 @@ export interface ActorGameConfig {
 	 * unstick fallback profiles; in heuristic mode (no weightsPath) they play the game.
 	 */
 	profiles: string[];
+	/** Deterministically shuffle catalog guardians per seed instead of always using the first seats. */
+	shuffleGuardians?: boolean;
 	/** Learner policy weights file. Omit for heuristic-only (BC/cold-start) generation. */
 	weightsPath?: string;
 	/**
@@ -95,6 +97,27 @@ export interface SeatSummary {
 	 * random fallback); the pool never emits it. Optional: absent on old rows.
 	 */
 	policy?: 'neural' | 'heuristic' | 'uniform';
+	/** Evaluation-only build-convert-finish diagnostics; absent on historical rows. */
+	cycle?: SeatCycleSummary;
+}
+
+export interface SeatCycleSummary {
+	vpAfterRound: Record<string, number>;
+	first15Round: number | null;
+	first30Round: number | null;
+	decisions: number;
+	productiveDecisions: number;
+	optionalYieldDecisions: number;
+	locationInteractions: number;
+	summons: number;
+	awakens: number;
+	combats: number;
+	rewards: number;
+	pvpAttacks: number;
+	finalAttackDice: number;
+	finalSpirits: number;
+	finalMaxBarrier: number;
+	post15VpPerRound: number;
 }
 
 /** One line of games-<workerIndex>.jsonl — the league-manager / balance-dashboard feed. */

@@ -47,6 +47,16 @@ interface ActorGameRunner {
 	close(): void;
 }
 
+function shuffledGuardianNames(catalog: PlayCatalog, seats: number, seed: number): string[] {
+	const names = catalog.guardians.map((guardian) => guardian.name);
+	const rng = createRng((seed ^ 0x6a09e667) >>> 0 || 1);
+	for (let i = names.length - 1; i > 0; i--) {
+		const j = nextInt(rng, i + 1);
+		[names[i], names[j]] = [names[j], names[i]];
+	}
+	return names.slice(0, seats);
+}
+
 /**
  * Load the immutable catalog, policies and profiles once, then expose a per-seed
  * runner. Both the synchronous runActorGames API and the persistent worker protocol
@@ -159,6 +169,9 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				opponentTemperature: config.opponentTemperature,
 				forbidTypes,
 				maxStatusLevel: config.maxStatusLevel,
+				guardianNames: config.shuffleGuardians
+					? shuffledGuardianNames(catalog, config.seats, seed)
+					: undefined,
 				gamma: config.gamma,
 				obsVersion: config.obsVersion,
 				policyObsVersion: config.policyObsVersion,
@@ -188,7 +201,8 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 						seatList.filter((o) => o !== seat && (r.finalVP[o] ?? 0) > (r.finalVP[seat] ?? 0))
 							.length,
 					finalStatus: r.finalState?.players[seat]?.statusLevel ?? 0,
-					policy: isNeuralSeat(seat) ? ('neural' as const) : ('heuristic' as const)
+					policy: isNeuralSeat(seat) ? ('neural' as const) : ('heuristic' as const),
+					cycle: r.cycleBySeat[seat]
 				})),
 				wallMs: Math.round(wallMs * 10) / 10
 			};

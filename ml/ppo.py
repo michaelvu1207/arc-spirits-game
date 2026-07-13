@@ -14,6 +14,8 @@ rows. On top of obs/cands/chosen/ret, each row carries:
   behaviorTemperature (float, optional) sampled softmax temperature (default 1 for old data)
   behaviorMask (list[0|1], optional) post-filter candidate support (default all candidates)
   vPred     (float)  value estimate at decision time (GAE baseline + value clipping)
+  strategic (0|1)   round-level route/engine/conversion decision eligible for optional
+                     full-episode Monte Carlo credit (default 0 for legacy rows)
   placement (int)    final placement 1-4 (terminal rows / per-game meta); mapped to a
                      terminal reward added to rStep on the done step
 
@@ -93,6 +95,32 @@ def compute_gae(
     return adv, returns
 
 
+def compute_discounted_returns(
+    rewards,
+    dones,
+    gamma: float,
+    last_value: float = 0.0,
+) -> np.ndarray:
+    """Full-return Monte Carlo target over one episode.
+
+    Completed episodes propagate the realized terminal outcome all the way back without
+    GAE(lambda)'s additional attenuation. Truncated episodes bootstrap from ``last_value``.
+    ``gamma=1`` is the undiscounted build-convert-finish objective.
+    """
+    rewards = np.asarray(rewards, dtype=np.float64)
+    dones = np.asarray(dones, dtype=bool)
+    if rewards.shape != dones.shape:
+        raise ValueError("rewards and dones must have the same shape")
+    out = np.zeros_like(rewards, dtype=np.float64)
+    running = float(last_value)
+    for t in range(rewards.shape[0] - 1, -1, -1):
+        if dones[t]:
+            running = 0.0
+        running = float(rewards[t]) + gamma * running
+        out[t] = running
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Trajectory loading
 # ---------------------------------------------------------------------------
@@ -109,6 +137,8 @@ class TrajectoryBuffer:
     v_pred: np.ndarray              # (N,) float32
     advantages: np.ndarray          # (N,) float32
     returns: np.ndarray             # (N,) float32
+    strategic_mask: np.ndarray      # (N,) bool; long-horizon credit group
+    strategic_mc_coef: float        # loader blend; 0 preserves ordinary PPO bit behavior
     farm_value: np.ndarray          # (N,) float32
     farm_mask: np.ndarray           # (N,) bool
     reward_pi: list[np.ndarray]     # N x (n_cands_i,) float32
@@ -208,6 +238,8 @@ def load_trajectory_buffer(
     win_bonus: float = 0.0,
     win_bonus_halflife: float = 0.0,
     all_fallen_loss: float = 0.0,
+    strategic_mc_coef: float = 0.0,
+    strategic_mc_gamma: float = 1.0,
     obs_key: str = "obs",
 ) -> TrajectoryBuffer:
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
@@ -217,6 +249,10 @@ def load_trajectory_buffer(
     paired-row contract). A missing/malformed row rejects its entire episode:
     silently dropping one row would move dense rewards, done, and GAE across a
     transition that the learner can no longer represent."""
+    if not 0.0 <= strategic_mc_coef <= 1.0:
+        raise ValueError("strategic_mc_coef must be in [0, 1]")
+    if not 0.0 <= strategic_mc_gamma <= 1.0:
+        raise ValueError("strategic_mc_gamma must be in [0, 1]")
     data_dir = Path(data_dir)
     # Skip the actor pool's games-*.jsonl per-game summaries (no obs/cands keys).
     jsonl_files = sorted(
@@ -332,6 +368,11 @@ def load_trajectory_buffer(
                     n_invalid_rows += 1
                     invalid_episodes.add(game_id)
                     continue
+                strategic = _coerce_binary_flag(rec.get("strategic", 0))
+                if strategic is None:
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
+                    continue
                 try:
                     step = {
                         "game_id": game_id,
@@ -353,6 +394,7 @@ def load_trajectory_buffer(
                         "won": 1 if rec.get("won") else 0,
                         "all_fallen": 1 if rec.get("allFallen") else 0,
                         "end_round": _coerce_end_round(rec.get("endRound")),
+                        "strategic": strategic,
                         "obs": obs,
                         "cands": cands,
                         "chosen": chosen,
@@ -413,6 +455,7 @@ def load_trajectory_buffer(
     route_mode_list: list[float] = []
     route_mask_list: list[bool] = []
     placement_list: list[int] = []
+    strategic_mask_list: list[bool] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
     n_truncated = 0
@@ -463,6 +506,22 @@ def load_trajectory_buffer(
             n_truncated += 1
 
         adv, ret = compute_gae(rewards, values, dones, gamma, gae_lambda, last_value)
+        strategic = np.array([s["strategic"] for s in steps], dtype=bool)
+        # Only completed episodes have a realized complete-game outcome. Truncated rows retain
+        # ordinary GAE instead of pretending the actor's tail bootstrap is a terminal result.
+        if strategic_mc_coef > 0 and dones[-1] and strategic.any():
+            mc_ret = compute_discounted_returns(
+                rewards, dones, strategic_mc_gamma, last_value=0.0
+            )
+            mc_adv = mc_ret - values
+            adv[strategic] = (
+                (1.0 - strategic_mc_coef) * adv[strategic]
+                + strategic_mc_coef * mc_adv[strategic]
+            )
+            ret[strategic] = (
+                (1.0 - strategic_mc_coef) * ret[strategic]
+                + strategic_mc_coef * mc_ret[strategic]
+            )
         for s in steps:
             obs_list.append(s["obs"])
             cands_list.append(s["cands"])
@@ -479,6 +538,7 @@ def load_trajectory_buffer(
             route_mode_list.append(s["route_mode"])
             route_mask_list.append(s["route_mask"])
             placement_list.append(placement if placement is not None else 0)
+            strategic_mask_list.append(s["strategic"])
         adv_list.append(adv)
         ret_list.append(ret)
 
@@ -490,6 +550,8 @@ def load_trajectory_buffer(
         f"{n_with_placement} with terminal placement reward, {n_truncated} truncated, "
         f"{sum(farm_mask_list)} with farmValue, {sum(reward_mask_list)} with rewardPi, "
         f"{sum(route_mask_list)} with routeMode, "
+        f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
+        f"gamma={strategic_mc_gamma:g}), "
         f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "
         f"{n_invalid_rows} malformed row(s), {n_nontrajectory} non-trajectory row(s), "
         f"{n_missing_obs} missing {obs_key!r})"
@@ -505,6 +567,8 @@ def load_trajectory_buffer(
         v_pred=np.array(v_pred_list, dtype=np.float32),
         advantages=advantages,
         returns=returns,
+        strategic_mask=np.array(strategic_mask_list, dtype=bool),
+        strategic_mc_coef=float(strategic_mc_coef),
         farm_value=np.array(farm_value_list, dtype=np.float32),
         farm_mask=np.array(farm_mask_list, dtype=bool),
         reward_pi=reward_pi_list,
@@ -584,7 +648,9 @@ def placement_aux_loss(
 # ---------------------------------------------------------------------------
 
 def normalize_policy_advantages(
-    advantages: np.ndarray, policy_mask: np.ndarray
+    advantages: np.ndarray,
+    policy_mask: np.ndarray,
+    strategic_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """Normalize once over the rollout's exact-policy rows.
 
@@ -593,19 +659,35 @@ def normalize_policy_advantages(
     PPO contract. If the entire rollout has one policy row, preserve its raw
     advantage so the only valid policy sample still has a learning signal.
     Non-policy entries are zero because they never enter the surrogate.
+
+    When ``strategic_mask`` is supplied, normalize strategic and tactical policy
+    rows independently. Full-episode strategic returns have intentionally higher
+    variance; group normalization prevents either population from washing out the
+    other's policy gradient. Omitting the mask preserves historical bit behavior.
     """
     advantages = np.asarray(advantages, dtype=np.float32)
     policy_mask = np.asarray(policy_mask, dtype=bool)
     out = np.zeros_like(advantages, dtype=np.float32)
-    values = advantages[policy_mask]
-    if values.size == 0:
-        return out
-    if values.size == 1:
-        out[policy_mask] = values
-        return out
-    centered = values - values.mean()
-    std = float(values.std(ddof=0))
-    out[policy_mask] = centered / (std + 1e-8) if std > 0 else centered
+
+    def normalize_group(mask: np.ndarray) -> None:
+        values = advantages[mask]
+        if values.size == 0:
+            return
+        if values.size == 1:
+            out[mask] = values
+            return
+        centered = values - values.mean()
+        std = float(values.std(ddof=0))
+        out[mask] = centered / (std + 1e-8) if std > 0 else centered
+
+    if strategic_mask is None:
+        normalize_group(policy_mask)
+    else:
+        strategic_mask = np.asarray(strategic_mask, dtype=bool)
+        if strategic_mask.shape != policy_mask.shape:
+            raise ValueError("strategic_mask and policy_mask must have the same shape")
+        normalize_group(policy_mask & strategic_mask)
+        normalize_group(policy_mask & ~strategic_mask)
     return out
 
 
@@ -641,6 +723,7 @@ def _minibatch_tensors(
         torch.from_numpy(buffer.v_pred[idx]).to(device),
         torch.from_numpy(normalized_advantages[idx]).to(device),
         torch.from_numpy(buffer.returns[idx]).to(device),
+        torch.from_numpy(buffer.strategic_mask[idx]).to(device),
         torch.from_numpy(buffer.farm_value[idx]).to(device),
         torch.from_numpy(buffer.farm_mask[idx]).to(device),
         torch.from_numpy(reward_pi).to(device),
@@ -712,7 +795,9 @@ def train_ppo(
     rng = np.random.default_rng(seed)
     indices = np.arange(n)
     normalized_advantages = normalize_policy_advantages(
-        buffer.advantages, buffer.policy_mask
+        buffer.advantages,
+        buffer.policy_mask,
+        buffer.strategic_mask if buffer.strategic_mc_coef > 0 else None,
     )
     n_policy_total = int(buffer.policy_mask.sum())
     if policy_coef > 0 and n_policy_total == 0:
@@ -749,8 +834,10 @@ def train_ppo(
         tot_farm = tot_reward = tot_route = 0.0
         tot_placement = 0.0
         tot_kl_ref = 0.0
+        tot_strategic_value = tot_tactical_value = 0.0
         n_seen = 0
         n_policy_seen = 0
+        n_strategic_seen = n_tactical_seen = 0
         stop = False
 
         for start in range(0, n, batch_size):
@@ -767,6 +854,7 @@ def train_ppo(
                 v_pred,
                 adv,
                 ret,
+                strategic_mask,
                 farm_value,
                 farm_mask,
                 reward_pi,
@@ -815,6 +903,18 @@ def train_ppo(
                 value_loss = torch.max((value - ret) ** 2, (v_clipped - ret) ** 2).mean()
             else:
                 value_loss = F.mse_loss(value, ret)
+
+            # Diagnostics split by credit group. These do not change the loss; they make noisy
+            # strategic Monte Carlo targets visible instead of hiding them in one global MSE.
+            value_sqerr = (value - ret) ** 2
+            strategic_count = int(strategic_mask.sum().item())
+            tactical_count = int((~strategic_mask).sum().item())
+            strategic_value_loss = (
+                value_sqerr[strategic_mask].mean().item() if strategic_count else 0.0
+            )
+            tactical_value_loss = (
+                value_sqerr[~strategic_mask].mean().item() if tactical_count else 0.0
+            )
 
             # Entropy over the actor's exact post-filter support only. Do not form
             # `0 * -inf` on filtered candidates and then hide it with torch.where:
@@ -918,6 +1018,10 @@ def train_ppo(
                 )
             tot_placement += placement_loss.item() * bs
             tot_kl_ref += kl_ref.item() * policy_count
+            tot_strategic_value += strategic_value_loss * strategic_count
+            tot_tactical_value += tactical_value_loss * tactical_count
+            n_strategic_seen += strategic_count
+            n_tactical_seen += tactical_count
 
         if halted:
             break
@@ -927,6 +1031,10 @@ def train_ppo(
                 f"PPO epoch {epoch}/{epochs} | "
                 f"policy_loss={tot_policy / policy_denom:.4f} | "
                 f"value_loss={tot_value / n_seen:.4f} | "
+                f"strategic_value_loss={tot_strategic_value / max(1, n_strategic_seen):.4f} "
+                f"(n={n_strategic_seen}) | "
+                f"tactical_value_loss={tot_tactical_value / max(1, n_tactical_seen):.4f} "
+                f"(n={n_tactical_seen}) | "
                 f"farm_value_loss={tot_farm / n_seen:.4f} | "
                 f"reward_pick_loss={tot_reward / n_seen:.4f} | "
                 f"route_mode_loss={tot_route / n_seen:.4f} | "
@@ -941,6 +1049,10 @@ def train_ppo(
             history.append({
                 "policy_loss": tot_policy / policy_denom,
                 "value_loss": tot_value / n_seen,
+                "strategic_value_loss": tot_strategic_value / max(1, n_strategic_seen),
+                "tactical_value_loss": tot_tactical_value / max(1, n_tactical_seen),
+                "strategic_steps": n_strategic_seen,
+                "tactical_steps": n_tactical_seen,
                 "farm_value_loss": tot_farm / n_seen,
                 "reward_pick_loss": tot_reward / n_seen,
                 "route_mode_loss": tot_route / n_seen,

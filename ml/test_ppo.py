@@ -29,6 +29,7 @@ import verify_export
 from model import build_model
 from ppo import (
     behavior_log_probs,
+    compute_discounted_returns,
     compute_gae,
     load_trajectory_buffer,
     normalize_policy_advantages,
@@ -125,6 +126,108 @@ def test_gae_truncated_episode_bootstraps_last_value():
     adv, ret = compute_gae([0.0], [0.5], [False], gamma=0.9, lam=0.8, last_value=1.0)
     assert np.allclose(adv, [0.4]), adv
     assert np.allclose(ret, [0.9]), ret
+
+
+def test_discounted_returns_propagate_terminal_outcome_without_gae_lambda():
+    ret = compute_discounted_returns(
+        rewards=[0.0, 0.0, 1.0],
+        dones=[False, False, True],
+        gamma=1.0,
+    )
+    assert np.array_equal(ret, [1.0, 1.0, 1.0]), ret
+
+
+def test_strategic_mc_blend_reaches_early_strategy_but_not_tactical_rows():
+    rng = np.random.default_rng(1001)
+    rows = []
+    for t in range(3):
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": "strategic-g0",
+            "stepIdx": t,
+            "rStep": 0.0,
+            "done": t == 2,
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "behaviorMask": [1, 1, 1],
+            "behaviorTemperature": 1.0,
+            "vPred": 0.0,
+            "strategic": 1 if t == 0 else 0,
+        })
+    rows[-1]["placement"] = 1
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        ordinary = load_trajectory_buffer(
+            d, gamma=0.9, gae_lambda=0.5, placement_rewards=PLACEMENT_REWARDS,
+            strategic_mc_coef=0.0,
+        )
+        strategic = load_trajectory_buffer(
+            d, gamma=0.9, gae_lambda=0.5, placement_rewards=PLACEMENT_REWARDS,
+            strategic_mc_coef=1.0, strategic_mc_gamma=1.0,
+        )
+    # GAE reaches the first decision through (gamma*lambda)^2 = 0.2025.
+    assert math.isclose(float(ordinary.advantages[0]), 0.2025, abs_tol=1e-6)
+    # Full-return credit gives the strategic first decision the complete terminal outcome.
+    assert math.isclose(float(strategic.advantages[0]), 1.0, abs_tol=1e-6)
+    # The tactical middle decision remains ordinary GAE.
+    assert math.isclose(
+        float(strategic.advantages[1]), float(ordinary.advantages[1]), abs_tol=1e-7
+    )
+    assert np.array_equal(strategic.strategic_mask, [True, False, False])
+
+
+def test_strategic_mc_zero_is_bit_identical_and_truncated_episode_does_not_blend():
+    rng = np.random.default_rng(1002)
+    base_rows = []
+    for t in range(2):
+        base_rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": "truncated-g0",
+            "stepIdx": t,
+            "rStep": 0.25 if t == 0 else 0.0,
+            "done": False,
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "behaviorMask": [1, 1, 1],
+            "behaviorTemperature": 1.0,
+            "vPred": 0.4,
+        })
+    strategic_rows = [{**row, "strategic": 1} for row in base_rows]
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        legacy_dir = root / "legacy"
+        strategic_dir = root / "strategic"
+        _write_rows(legacy_dir, base_rows)
+        _write_rows(strategic_dir, strategic_rows)
+        legacy = load_trajectory_buffer(
+            legacy_dir, gamma=0.9, gae_lambda=0.5, placement_rewards=PLACEMENT_REWARDS,
+            strategic_mc_coef=0.0,
+        )
+        zero = load_trajectory_buffer(
+            strategic_dir, gamma=0.9, gae_lambda=0.5, placement_rewards=PLACEMENT_REWARDS,
+            strategic_mc_coef=0.0,
+        )
+        truncated = load_trajectory_buffer(
+            strategic_dir, gamma=0.9, gae_lambda=0.5, placement_rewards=PLACEMENT_REWARDS,
+            strategic_mc_coef=1.0,
+        )
+    assert np.array_equal(legacy.advantages, zero.advantages)
+    assert np.array_equal(legacy.returns, zero.returns)
+    assert np.array_equal(zero.advantages, truncated.advantages)
+    assert np.array_equal(zero.returns, truncated.returns)
+
+
+def test_strategic_and_tactical_advantages_normalize_separately():
+    advantages = np.array([10.0, 20.0, 1.0, 3.0], dtype=np.float32)
+    policy = np.array([True, True, True, True])
+    strategic = np.array([True, True, False, False])
+    grouped = normalize_policy_advantages(advantages, policy, strategic)
+    assert np.allclose(grouped, [-1.0, 1.0, -1.0, 1.0]), grouped
 
 
 def test_v1_size_controls_parse_and_build_explicit_architecture():
