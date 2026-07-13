@@ -31,6 +31,12 @@ const { values: args } = parseArgs({
 		'max-status-level': { type: 'string', default: '2' },
 		sample: { type: 'boolean', default: false },
 		temperature: { type: 'string', default: '0.65' },
+		'search-sims': { type: 'string', default: '0' },
+		'search-horizon': { type: 'string', default: '6' },
+		'search-frac': { type: 'string', default: '1' },
+		'search-value-weight': { type: 'string', default: '0.5' },
+		'search-rollout': { type: 'string', default: 'policy' },
+		'search-nav-temperature': { type: 'string', default: '0' },
 		out: { type: 'string' },
 		help: { type: 'boolean', default: false }
 	}
@@ -39,7 +45,7 @@ const { values: args } = parseArgs({
 if (args.help || !args.weights) {
 	console.log(
 		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--games N] [--workers N] ' +
-			'[--seed0 N] [--sample --temperature T] [--out FILE]'
+			'[--seed0 N] [--sample --temperature T] [--search-sims N] [--out FILE]'
 	);
 	process.exit(args.help ? 0 : 1);
 }
@@ -75,6 +81,26 @@ const workers = integer(args.workers, '--workers');
 const seed0 = integer(args.seed0, '--seed0');
 const maxRounds = integer(args['max-rounds'], '--max-rounds');
 const maxStatusLevel = integer(args['max-status-level'], '--max-status-level');
+const searchSims = Number.parseInt(args['search-sims'], 10);
+if (!Number.isSafeInteger(searchSims) || searchSims < 0) {
+	throw new Error('--search-sims must be a non-negative integer');
+}
+const searchHorizon = integer(args['search-horizon'], '--search-horizon');
+const searchFrac = Number.parseFloat(args['search-frac']);
+const searchValueWeight = Number.parseFloat(args['search-value-weight']);
+const searchNavTemperature = Number.parseFloat(args['search-nav-temperature']);
+if (!Number.isFinite(searchFrac) || searchFrac <= 0 || searchFrac > 1) {
+	throw new Error('--search-frac must be in (0, 1]');
+}
+if (!Number.isFinite(searchValueWeight) || searchValueWeight < 0) {
+	throw new Error('--search-value-weight must be non-negative');
+}
+if (!Number.isFinite(searchNavTemperature) || searchNavTemperature < 0) {
+	throw new Error('--search-nav-temperature must be non-negative');
+}
+if (args['search-rollout'] !== 'policy' && args['search-rollout'] !== 'heuristic') {
+	throw new Error('--search-rollout must be policy or heuristic');
+}
 const temperature = Number.parseFloat(args.temperature);
 if (!Number.isFinite(temperature) || temperature <= 0) {
 	throw new Error('--temperature must be a positive number');
@@ -115,6 +141,18 @@ try {
 			recordSeats: [],
 			maxStatusLevel,
 			shuffleGuardians: true,
+			...(searchSims > 0
+				? {
+						search: {
+							sims: searchSims,
+							horizonRounds: searchHorizon,
+							frac: searchFrac,
+							valueWeight: searchValueWeight,
+							rollout: args['search-rollout'],
+							navTemperature: searchNavTemperature
+						}
+					}
+				: {}),
 			obsVersion: 1,
 			policyObsVersion: 1
 		}
@@ -183,7 +221,21 @@ try {
 		games,
 		maxRounds,
 		maxStatusLevel,
-		decode: args.sample ? { sample: true, temperature } : { sample: false },
+		decode: {
+			...(args.sample ? { sample: true, temperature } : { sample: false }),
+			...(searchSims > 0
+				? {
+						search: {
+							sims: searchSims,
+							horizonRounds: searchHorizon,
+							frac: searchFrac,
+							valueWeight: searchValueWeight,
+							rollout: args['search-rollout'],
+							navTemperature: searchNavTemperature
+						}
+					}
+				: {})
+		},
 		trueWins,
 		trueWinRate: trueWins / games,
 		trueWinWilson95: interval,
