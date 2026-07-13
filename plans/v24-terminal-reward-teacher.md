@@ -106,6 +106,13 @@ does not regress VP/post-15 pace, and has zero stalls. If it fails, the next aud
 branching over navigation and meaningful yield-versus-act decisions; do not spend a five-generation
 PPO screen on an intervention without a game-level ceiling.
 
+The corrected full-game gate failed. On seeds 8,000,001–8,000,512 with 16 rollouts per candidate,
+the historical arm won 292/512 (57.03%) and the teacher arm won 288/512 (56.25%): delta -0.78
+percentage points, paired bootstrap 95% interval -2.93 to +1.37. The teacher also slightly reduced
+mean final VP (25.629 to 25.592) and post-15 VP/round (1.209 to 1.203); both arms had zero stalls.
+All 512 games exercised the teacher for 1,528 total decisions, so this is a causal rejection rather
+than a support-wiring failure. V24 label collection and PPO are therefore permanently gate-closed.
+
 ## 3. Compute-matched training screen
 
 Both arms start from the same function-preserving expanded checkpoint and enable learnable
@@ -131,9 +138,11 @@ measurement is mandatory. If it regresses more than 2 points versus the historic
 checkpoint within 1 point of the incumbent, and only then begin the paired experiment. Record the
 warm-start as a shared initialization, not a V24 treatment effect.
 
-Generation zero was run on seeds 2,401,000,001–2,401,001,024 after exact checkpoint surgery. The
-historical override scored 59.86% and the learnable support 59.57% (paired delta -0.29 points, zero
-stalls), so the shared behavior-cloning contingency is not triggered.
+An early generation-zero run on seeds 2,401,000,001–2,401,001,024 used the subsequently rejected
+"all legal commands are rewards" support predicate. Its 59.86% versus 59.57% result is retained only
+as an invalid instrumentation artifact and cannot decide the behavior-cloning contingency. Because
+the corrected teacher ceiling failed before training, no corrected generation-zero or warm-start is
+needed for V24.
 
 Run five generations of 1,024 solo games per arm. Evaluate every checkpoint on one fixed,
 preregistered 1,024-game development block and select each arm's checkpoint by Wilson lower bound

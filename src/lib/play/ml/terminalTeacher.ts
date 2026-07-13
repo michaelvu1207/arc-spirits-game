@@ -23,7 +23,7 @@ import {
 } from '../types';
 import { policyPreviewState, type LegalAction } from './actions';
 import { rolloutPolicyToRound } from './gumbelPlanner';
-import { hybridIndex } from './neuralBot';
+import { hybridIndex, selectableCandidateIndices } from './neuralBot';
 import type { NeuralPolicy } from './net';
 
 export const TERMINAL_TEACHER_VERSION = 1;
@@ -88,6 +88,16 @@ export interface TerminalTeacherDecision {
 	index: number;
 	label: TerminalTeacherLabel;
 }
+
+const MEANINGFUL_LOCATION_ACTION_TYPES = new Set<GameCommand['type']>([
+	'resolveLocationInteraction',
+	'attachRuneToSpirit',
+	'detachRuneFromSpirit',
+	'absorbSpirit',
+	'infiltratorSwap',
+	'placeAugmentOnSpirit',
+	'startCombat'
+]);
 
 function stableValue(value: unknown): unknown {
 	if (Array.isArray(value)) return value.map(stableValue);
@@ -453,6 +463,87 @@ export function isAmbiguousMonsterRewardDecision(commands: readonly GameCommand[
 	return commands.filter((command) => command.type === 'resolveMonsterReward').length > 1;
 }
 
+/** Exact full-command indices for an ambiguous navigation lock. */
+export function navigationDecisionSupport(commands: readonly GameCommand[]): number[] {
+	const support = commands.flatMap((command, index) =>
+		command.type === 'lockNavigation' ? [index] : []
+	);
+	return support.length >= 2 ? support : [];
+}
+
+/**
+ * Full policy-selectable support for a genuine Location act-vs-yield decision.
+ * Mandatory reward/draw/corruption/decision work is excluded so a teacher can
+ * never learn to pass instead of resolving an obligation.
+ */
+export function meaningfulLocationYieldSupport(
+	state: PublicGameState,
+	seat: SeatColor,
+	withNext: readonly LegalAction[]
+): number[] {
+	if (state.phase !== 'location') return [];
+	const player = state.players[seat];
+	if (
+		!player ||
+		player.pendingDraw !== null ||
+		player.handDraws.length > 0 ||
+		player.pendingDrawQueue.length > 0 ||
+		player.pendingReward !== null ||
+		player.pendingAwakenReward !== null ||
+		!!player.pendingCorruptionDiscard ||
+		(player.unplacedAugments?.length ?? 0) > 0 ||
+		player.pendingDecisions.length > 0 ||
+		player.manualPrompts.length > 0
+	) {
+		return [];
+	}
+	const support = selectableCandidateIndices(state, seat, [...withNext]);
+	if (!support.some((index) => withNext[index]?.cmd.type === 'endLocationActions')) return [];
+	if (
+		!support.some((index) =>
+			MEANINGFUL_LOCATION_ACTION_TYPES.has(withNext[index]?.cmd.type ?? 'endLocationActions')
+		)
+	) {
+		return [];
+	}
+	return support;
+}
+
+/** Evaluate an explicit subset of legal root commands with common random numbers. */
+export function evaluateTerminalDecision(
+	state: PublicGameState,
+	seat: SeatColor,
+	commands: readonly GameCommand[],
+	supportIndices: readonly number[],
+	policy: NeuralPolicy,
+	catalog: PlayCatalog,
+	options: TerminalTeacherOptions
+): TerminalTeacherDecision {
+	if (
+		supportIndices.length < 2 ||
+		new Set(supportIndices).size !== supportIndices.length ||
+		supportIndices.some(
+			(index) => !Number.isInteger(index) || index < 0 || index >= commands.length
+		)
+	) {
+		throw new Error('terminalTeacher: invalid explicit command support');
+	}
+	const entries = supportIndices.map((index) => ({ command: commands[index], index }));
+	const sanitized = sanitizeSoloTerminalState(state, seat);
+	const rollouts = options.rollouts ?? DEFAULT_TERMINAL_ROLLOUTS;
+	const outcomes = entries.map(({ command }) =>
+		Array.from({ length: rollouts }, (_, rolloutIndex) =>
+			rolloutTerminalCandidate(sanitized, seat, command, policy, catalog, options, rolloutIndex)
+		)
+	);
+	const label = labelTerminalOutcomes(
+		entries.map(({ command }) => command),
+		outcomes,
+		{ ...options, rollouts }
+	);
+	return { index: entries[label.bestIndex].index, label };
+}
+
 /** Evaluate all root commands with common random numbers, independent of root ordering. */
 export function evaluateTerminalTeacher(
 	state: PublicGameState,
@@ -462,24 +553,12 @@ export function evaluateTerminalTeacher(
 	catalog: PlayCatalog,
 	options: TerminalTeacherOptions
 ): TerminalTeacherDecision {
-	const rewardEntries = commands.flatMap((command, index) =>
-		command.type === 'resolveMonsterReward' ? [{ command, index }] : []
+	const rewardIndices = commands.flatMap((command, index) =>
+		command.type === 'resolveMonsterReward' ? [index] : []
 	);
-	if (rewardEntries.length < 2)
+	if (rewardIndices.length < 2)
 		throw new Error('terminalTeacher: expected an ambiguous resolveMonsterReward support');
-	const sanitized = sanitizeSoloTerminalState(state, seat);
-	const rollouts = options.rollouts ?? DEFAULT_TERMINAL_ROLLOUTS;
-	const outcomes = rewardEntries.map(({ command }) =>
-		Array.from({ length: rollouts }, (_, rolloutIndex) =>
-			rolloutTerminalCandidate(sanitized, seat, command, policy, catalog, options, rolloutIndex)
-		)
-	);
-	const label = labelTerminalOutcomes(
-		rewardEntries.map(({ command }) => command),
-		outcomes,
-		{ ...options, rollouts }
-	);
-	return { index: rewardEntries[label.bestIndex].index, label };
+	return evaluateTerminalDecision(state, seat, commands, rewardIndices, policy, catalog, options);
 }
 
 /** Validate and build the exact minimal collector row expected by Python. */

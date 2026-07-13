@@ -5,9 +5,12 @@ import { legalActionsWithNext } from './actions';
 import {
 	applyTerminalRootCandidate,
 	canonicalCommandSignature,
+	evaluateTerminalDecision,
 	isAmbiguousMonsterRewardDecision,
 	evaluateTerminalTeacher,
 	labelTerminalOutcomes,
+	meaningfulLocationYieldSupport,
+	navigationDecisionSupport,
 	redeterminizeSoloTerminalState,
 	sanitizeSoloTerminalState,
 	terminalRolloutSeed,
@@ -78,12 +81,7 @@ function apply(state: PublicGameState, command: GameCommand): PublicGameState {
 }
 
 function rewardState(): PublicGameState {
-	let state = createLobbyState({ roomCode: 'V24T', guardianNames: ['Red Guard'] });
-	state = apply(state, { type: 'claimSeat', seatColor: 'Red' });
-	state = apply(state, { type: 'selectGuardian', guardianName: 'Red Guard' });
-	state = apply(state, { type: 'startGame', seed: 17 });
-	state = apply(state, { type: 'lockNavigation', destination: 'Arcane Abyss' });
-	state = apply(state, { type: 'forceAdvancePhase' });
+	let state = locationState();
 	const dice: AttackDie[] = Array.from({ length: 8 }, (_, i) => ({
 		instanceId: `arc-${i}`,
 		tier: 'arcane'
@@ -91,6 +89,21 @@ function rewardState(): PublicGameState {
 	state.players.Red!.attackDice = dice;
 	state = apply(state, { type: 'startCombat' });
 	if (!state.players.Red?.pendingReward) throw new Error('expected pending reward');
+	return state;
+}
+
+function navigationState(): PublicGameState {
+	let state = createLobbyState({ roomCode: 'V24T', guardianNames: ['Red Guard'] });
+	state = apply(state, { type: 'claimSeat', seatColor: 'Red' });
+	state = apply(state, { type: 'selectGuardian', guardianName: 'Red Guard' });
+	state = apply(state, { type: 'startGame', seed: 17 });
+	return state;
+}
+
+function locationState(): PublicGameState {
+	let state = navigationState();
+	state = apply(state, { type: 'lockNavigation', destination: 'Arcane Abyss' });
+	state = apply(state, { type: 'forceAdvancePhase' });
 	return state;
 }
 
@@ -160,6 +173,49 @@ describe('V24 terminal reward teacher', () => {
 				{ type: 'resolveMonsterReward', picks: [1] }
 			])
 		).toBe(true);
+	});
+
+	it('freezes navigation and meaningful Location yield supports', () => {
+		const navigation = navigationState();
+		const navActions = legalActionsWithNext(navigation, 'Red', CATALOG);
+		const navSupport = navigationDecisionSupport(navActions.map((action) => action.cmd));
+		expect(navSupport.length).toBeGreaterThanOrEqual(2);
+		expect(navSupport.every((index) => navActions[index].cmd.type === 'lockNavigation')).toBe(true);
+
+		const location = locationState();
+		const locationActions = legalActionsWithNext(location, 'Red', CATALOG);
+		const yieldSupport = meaningfulLocationYieldSupport(location, 'Red', locationActions);
+		expect(
+			yieldSupport.some((index) => locationActions[index].cmd.type === 'endLocationActions')
+		).toBe(true);
+		expect(yieldSupport.some((index) => locationActions[index].cmd.type === 'startCombat')).toBe(
+			true
+		);
+
+		const mandatoryReward = rewardState();
+		expect(
+			meaningfulLocationYieldSupport(
+				mandatoryReward,
+				'Red',
+				legalActionsWithNext(mandatoryReward, 'Red', CATALOG)
+			)
+		).toEqual([]);
+	});
+
+	it('rejects malformed explicit terminal supports before simulating', () => {
+		const state = navigationState();
+		const commands = legalActionsWithNext(state, 'Red', CATALOG).map((action) => action.cmd);
+		const policy = randomPolicy(23, [8], [4]);
+		expect(() =>
+			evaluateTerminalDecision(state, 'Red', commands, [0, 0], policy, CATALOG, {
+				stateId: 'bad-support'
+			})
+		).toThrow(/explicit command support/);
+		expect(() =>
+			evaluateTerminalDecision(state, 'Red', commands, [-1, 0], policy, CATALOG, {
+				stateId: 'bad-support'
+			})
+		).toThrow(/explicit command support/);
 	});
 
 	it('re-shuffles first and reapplies the root command through the reducer', () => {
