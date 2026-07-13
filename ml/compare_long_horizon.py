@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 from pathlib import Path
 
@@ -158,6 +159,62 @@ def generation_metrics(root: Path, lane: str, gen: int, history: dict) -> dict |
     }
 
 
+def indexed_learner_rows(root: Path, lane: str, gens: set[int]) -> dict[tuple, tuple[dict, dict]]:
+    out = {}
+    for gen in sorted(gens):
+        eval_dir = root / "data" / f"gen{gen}" / f"{lane}_eval"
+        for game, seat in learner_rows(eval_dir):
+            out[(gen, game.get("seed"), seat.get("seat"))] = (game, seat)
+    return out
+
+
+def bootstrap_delta(deltas: list[float], seed: int, samples: int = 4000) -> dict:
+    if not deltas:
+        return {"pairs": 0, "meanDelta": None, "ci95": [None, None]}
+    observed = sum(deltas) / len(deltas)
+    if len(deltas) == 1:
+        return {"pairs": 1, "meanDelta": round(observed, 4), "ci95": [None, None]}
+    rng = random.Random(seed)
+    n = len(deltas)
+    means = sorted(sum(rng.choices(deltas, k=n)) / n for _ in range(samples))
+    lo = means[int(0.025 * samples)]
+    hi = means[min(samples - 1, int(0.975 * samples))]
+    return {
+        "pairs": n,
+        "meanDelta": round(observed, 4),
+        "ci95": [round(lo, 4), round(hi, 4)],
+    }
+
+
+def paired_pooled(control: Path, treatment: Path, lane: str, common_gens: set[int]) -> dict:
+    control_rows = indexed_learner_rows(control, lane, common_gens)
+    treatment_rows = indexed_learner_rows(treatment, lane, common_gens)
+    keys = sorted(set(control_rows) & set(treatment_rows))
+
+    def optional_yield_rate(item):
+        cycle = item[1].get("cycle") or {}
+        decisions = int(cycle.get("decisions") or 0)
+        return float(cycle.get("optionalYieldDecisions") or 0) / decisions if decisions else 0.0
+
+    metrics = {
+        "win": lambda item: float(item[1].get("seat") == item[0].get("winnerSeat")),
+        "finalVP": lambda item: float(item[1].get("finalVP") or 0),
+        # Negative is better for placement because first place is 1.
+        "placement": lambda item: float(item[1].get("placement") or 0),
+        "reach30": lambda item: float((item[1].get("cycle") or {}).get("first30Round") is not None),
+        "post15VpPerRound": lambda item: float((item[1].get("cycle") or {}).get("post15VpPerRound") or 0),
+        "optionalYieldRate": optional_yield_rate,
+        "finalAttackDice": lambda item: float((item[1].get("cycle") or {}).get("finalAttackDice") or 0),
+        "finalSpirits": lambda item: float((item[1].get("cycle") or {}).get("finalSpirits") or 0),
+        "finalMaxBarrier": lambda item: float((item[1].get("cycle") or {}).get("finalMaxBarrier") or 0),
+    }
+    out = {"commonGenerations": sorted(common_gens), "pairedGames": len(keys), "metrics": {}}
+    for index, (name, fn) in enumerate(metrics.items()):
+        deltas = [fn(treatment_rows[key]) - fn(control_rows[key]) for key in keys]
+        out["metrics"][name] = bootstrap_delta(deltas, seed=0xA6C500 + index)
+    return out
+
+
 DELTA_FIELDS = (
     "winRatePct", "meanVP", "meanPlacement", "fallenPct", "reach15Pct", "reach30Pct",
     "conversion15To30Pct", "meanRounds15To30", "meanPost15VpPerRound",
@@ -183,9 +240,11 @@ def compare(control: Path, treatment: Path, lane: str = "main-0") -> dict:
         for key in DELTA_FIELDS:
             row[key] = round(t[key] - c[key], 3) if t.get(key) is not None and c.get(key) is not None else None
         deltas.append(row)
+    common_gens = set(c_by_gen) & set(t_by_gen)
     return {
         "controlRoot": str(control), "treatmentRoot": str(treatment), "lane": lane,
         "arms": arms, "treatmentMinusControl": deltas,
+        "pairedPooled": paired_pooled(control, treatment, lane, common_gens),
     }
 
 
