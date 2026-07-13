@@ -22,6 +22,15 @@ export function isWildcardRuneId(runeId: string): boolean {
 	return WILDCARD_MAT_ID_SET.has(runeId);
 }
 
+/** Wildcard kind is defined by the sentinel id, not by the sentinel row's FKs.
+ * Production's "Any Relic" asset currently carries an origin_id, which would
+ * otherwise misclassify it as a rune and suppress the relic payment picker. */
+function wildcardKind(runeId: string): MatItemKind | undefined {
+	if (runeId === WILDCARD_MAT_IDS.anyRune) return 'rune';
+	if (runeId === WILDCARD_MAT_IDS.anyRelic) return 'relic';
+	return undefined;
+}
+
 /** Minimal rune-lookup shape: just what awaken normalization needs (name + kind). */
 export interface AwakenRuneInfo {
 	name: string;
@@ -49,7 +58,7 @@ export function normalizeRuneCost(
 		byRune.set(runeId, {
 			runeId,
 			name: info?.name ?? runeId,
-			kind: info?.kind ?? 'relic',
+			kind: wildcardKind(runeId) ?? info?.kind ?? 'relic',
 			count: 1,
 			wildcard: isWildcardRuneId(runeId)
 		});

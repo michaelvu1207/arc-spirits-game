@@ -20,9 +20,11 @@ const SWORDSMAN = 'efa4b29a-06f0-43af-bd11-d60c180e793e'; // relic (no origin_id
 const FOREST = '34b2a963-f8c6-4fc0-8272-ddc50b0036a8'; // rune (origin_id set)
 
 // Mats mirroring the real `mat_items` table FK columns (drives kind resolution:
-// origin_id ⇒ 'rune', else 'relic').
+// origin_id ⇒ 'rune', else 'relic'). Both wildcard sentinel rows currently carry
+// an origin_id in production, so normalization must derive their semantic kind
+// from the sentinel id instead of those FKs.
 const RUNES: MatAsset[] = [
-	{ id: ANY_RELIC, name: 'Any Relic', origin_id: null, icon_path: null },
+	{ id: ANY_RELIC, name: 'Any Relic', origin_id: 'd459ae53-…', icon_path: null },
 	{ id: ANY_RUNE, name: 'Any Rune', origin_id: 'd459ae53-…', icon_path: null },
 	{ id: TEAPOT, name: 'Teapot', origin_id: null, icon_path: null },
 	{ id: FLOWER, name: 'Flower', origin_id: null, icon_path: null },
@@ -72,6 +74,13 @@ const ELEMENTALIST_CLASS: ClassTrait = {
 
 // Spirits exercising every awaken branch.
 const SPIRITS: HexSpiritAsset[] = [
+	// Production regression: Stellar Songbird pays one Any Relic. The sentinel's
+	// misleading origin_id must not turn this into an Any Rune requirement.
+	spirit({
+		id: 'e24e9f91-7333-44c0-968e-15b900af3385',
+		name: 'Stellar Songbird',
+		awaken_condition: { type: 'rune_cost', rune_ids: [ANY_RELIC] }
+	}),
 	// rune_cost with a repeated wildcard uuid → count 2, wildcard true.
 	spirit({
 		id: 'comet-caller',
@@ -135,6 +144,15 @@ function awakenOf(name: string): NormalizedAwaken | undefined {
 }
 
 describe('buildPlayCatalog — normalized awaken', () => {
+	test('Stellar Songbird keeps Any Relic as relic-kind despite the sentinel origin_id', () => {
+		expect(awakenOf('Stellar Songbird')).toEqual({
+			kind: 'rune_cost',
+			mats: [
+				{ runeId: ANY_RELIC, name: 'Any Relic', kind: 'relic', count: 1, wildcard: true }
+			]
+		});
+	});
+
 	test('repeated wildcard uuid groups into one requirement with count 2', () => {
 		const awaken = awakenOf('Comet Caller');
 		expect(awaken).toEqual({
