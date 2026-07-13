@@ -525,6 +525,48 @@ function validateContinuationSnapshot(
 	}
 }
 
+/**
+ * Automatic capture is opportunistic: navigation can be visible while a reward, draw, or
+ * decision from the preceding work is still unresolved.  Such a state must not abort the source
+ * game; keep advancing it and capture later in the same round once the true clean boundary is
+ * reached.  Explicitly supplied snapshots are still validated strictly above and fail closed.
+ */
+export function isContinuationCaptureBoundary(
+	state: PublicGameState,
+	seats: readonly SeatColor[]
+): boolean {
+	if (
+		state.status !== 'active' ||
+		state.phase !== 'navigation' ||
+		state.winnerSeat !== null ||
+		seats.length !== 1 ||
+		state.activeSeats.length !== 1 ||
+		state.activeSeats[0] !== seats[0] ||
+		state.revealedDestinations ||
+		state.combats.length > 0 ||
+		Object.keys(state.locationOccupancy).length > 0 ||
+		state.navigation[seats[0]]?.locked !== false
+	) {
+		return false;
+	}
+	const player = state.players[seats[0]];
+	return !!(
+		player &&
+		player.pendingDestination === null &&
+		player.navigationDestination === null &&
+		!player.phaseReady &&
+		player.pendingDraw === null &&
+		player.handDraws.length === 0 &&
+		player.pendingDrawQueue.length === 0 &&
+		player.pendingReward === null &&
+		player.pendingAwakenReward === null &&
+		!player.pendingCorruptionDiscard &&
+		(player.unplacedAugments?.length ?? 0) === 0 &&
+		player.pendingDecisions.length === 0 &&
+		player.manualPrompts.length === 0
+	);
+}
+
 function makeContinuationSnapshot(
 	state: PublicGameState,
 	botRng: RngState,
@@ -1201,7 +1243,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		if (
 			captureRounds.has(state.round) &&
 			!capturedRounds.has(state.round) &&
-			state.phase === 'navigation'
+			isContinuationCaptureBoundary(state, seats)
 		) {
 			continuationSnapshots.push(
 				makeContinuationSnapshot(

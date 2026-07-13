@@ -8,6 +8,7 @@ import { nextInt } from '../rng';
 import { SEAT_COLORS, type SeatColor } from '../types';
 import {
 	forkContinuationPickRng,
+	isContinuationCaptureBoundary,
 	isStrategicCommand,
 	isStrategicDecision,
 	playRecordingGame,
@@ -365,6 +366,8 @@ describe('driver PPO behavior distribution', () => {
 			prompt: 'test',
 			options: []
 		});
+		expect(isContinuationCaptureBoundary(snapshot.state, ['Red'])).toBe(true);
+		expect(isContinuationCaptureBoundary(unresolved.state, ['Red'])).toBe(false);
 		expect(() =>
 			playRecordingGame(catalog, { ...base, continuation: { snapshot: unresolved } })
 		).toThrow(/unresolved player work/);
