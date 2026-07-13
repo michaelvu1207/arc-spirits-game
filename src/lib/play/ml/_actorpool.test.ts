@@ -218,6 +218,8 @@ describe('actor pool', () => {
 			for (const s of res.summaries) {
 				expect(s.neuralSeats).toEqual([]);
 				expect(s.perSeat.every((p) => p.policy === 'heuristic')).toBe(true);
+				expect(s.weightsOrProfiles).toEqual(['medium', 'medium', 'medium', 'medium']);
+				expect(s.perSeat.every((p) => (p.cycle?.decisions ?? 0) > 0)).toBe(true);
 			}
 		} finally {
 			rmSync(dir, { recursive: true, force: true });

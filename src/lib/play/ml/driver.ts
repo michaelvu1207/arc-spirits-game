@@ -49,6 +49,7 @@ import {
 	valueGuidedIndex,
 	hybridIndex,
 	isProgressTransition,
+	progressSignature,
 	policyIndexWithProgressGuard,
 	selectableCandidateIndices
 } from './neuralBot';
@@ -636,6 +637,25 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	const actionCounter = new Map<string, number>();
 	let ticks = 0;
 	let stalled = false;
+	const recordCycleDecision = (
+		seat: SeatColor,
+		cmd: GameCommand,
+		productive: boolean,
+		hadAlternatives: boolean
+	): void => {
+		const cycle = cycleBySeat[seat];
+		cycle.decisions += 1;
+		if (productive) cycle.productiveDecisions += 1;
+		if (hadAlternatives && OPTIONAL_YIELD_TYPES.has(cmd.type)) {
+			cycle.optionalYieldDecisions += 1;
+		}
+		if (cmd.type === 'resolveLocationInteraction') cycle.locationInteractions += 1;
+		if (cmd.type === 'spawnHandSpirit') cycle.summons += 1;
+		if (cmd.type === 'awakenSpirit') cycle.awakens += 1;
+		if (cmd.type === 'startCombat') cycle.combats += 1;
+		if (cmd.type === 'resolveMonsterReward') cycle.rewards += 1;
+		if (cmd.type === 'initiatePvp') cycle.pvpAttacks += 1;
+	};
 
 	// v2 recording: samples gain a PAIRED obsV2 flat array next to the v1 obs (see the
 	// obsVersion option docs). Reads the live `state` binding, so call it exactly where
@@ -692,8 +712,20 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			// step (reassigned just below), exactly like sim/selfPlay, so the defensive deep clone
 			// is pure overhead here. Parity-tested fast path (sim/_parity.test.ts); the recording
 			// dry-runs above (legalActions) still clone, which is what preserves the candidate states.
+			const beforeProgress = progressSignature(state, seat);
+			// Computing the full legal surface is only needed for the avoidable-yield
+			// diagnostic, so normal heuristic actions retain the fast mutate path.
+			const hadAlternatives = OPTIONAL_YIELD_TYPES.has(cmd.type)
+				? legalActionsWithNext(state, seat, catalog).length > 1
+				: false;
 			const res = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, { mutate: true });
 			if (!res.ok) break;
+			recordCycleDecision(
+				seat,
+				cmd,
+				progressSignature(res.state, seat) !== beforeProgress,
+				hadAlternatives
+			);
 			state = res.state;
 			progressed = true;
 			if (state.status !== 'active') break;
@@ -797,23 +829,13 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 									catalog
 									);
 		const chosenAction = withNext[idx];
-		const cycle = cycleBySeat[seat];
-		cycle.decisions += 1;
-		if (
+		recordCycleDecision(
+			seat,
+			cands[idx],
 			chosenAction.hasHiddenOutcome ||
-			isProgressTransition(state, seat, policyPreviewState(chosenAction))
-		) {
-			cycle.productiveDecisions += 1;
-		}
-		if (cands.length > 1 && OPTIONAL_YIELD_TYPES.has(cands[idx].type)) {
-			cycle.optionalYieldDecisions += 1;
-		}
-		if (cands[idx].type === 'resolveLocationInteraction') cycle.locationInteractions += 1;
-		if (cands[idx].type === 'spawnHandSpirit') cycle.summons += 1;
-		if (cands[idx].type === 'awakenSpirit') cycle.awakens += 1;
-		if (cands[idx].type === 'startCombat') cycle.combats += 1;
-		if (cands[idx].type === 'resolveMonsterReward') cycle.rewards += 1;
-		if (cands[idx].type === 'initiatePvp') cycle.pvpAttacks += 1;
+				isProgressTransition(state, seat, policyPreviewState(chosenAction)),
+			cands.length > 1
+		);
 		if (willRecord) {
 			// Every policy-backed decision remains in the PPO trajectory. Only an exact sampled
 			// policy decision gets policyMask=1 and behavior fields; deterministic branches still

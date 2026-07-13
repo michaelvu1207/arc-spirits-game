@@ -106,7 +106,8 @@ function entriesSig(obj: Record<string, number> | undefined): string {
  * Cheap signature of a player's material/progression state; ignores table churn such as market
  * refills and object positions so only meaningful player/rules progress counts.
  */
-function materialSig(state: PublicGameState, seat: SeatColor): string {
+/** Compact signature used by the progress guard and evaluation diagnostics. */
+export function progressSignature(state: PublicGameState, seat: SeatColor): string {
 	const p = state.players[seat];
 	if (!p) return `${state.phase}:${state.round}`;
 	const spirits = [...(p.spirits ?? [])]
@@ -198,7 +199,7 @@ export function isProgressTransition(
 	seat: SeatColor,
 	next: PublicGameState
 ): boolean {
-	return materialSig(next, seat) !== materialSig(state, seat);
+	return progressSignature(next, seat) !== progressSignature(state, seat);
 }
 
 function progressCandidateIndices(
@@ -344,7 +345,7 @@ export function scoreByValue(
 	catalog: PlayCatalog
 ): number[] {
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
-	const curSig = materialSig(state, seat);
+	const curSig = progressSignature(state, seat);
 	const curPendingRewardVp = pendingRewardVpPotential(state, seat);
 	const rootObs = encodeObs(state, seat, catalog);
 	const rewardPickProbs = state.players[seat]?.pendingReward
@@ -362,7 +363,7 @@ export function scoreByValue(
 		const dPendingRewardVP =
 			Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
 		const noop =
-			!action.hasHiddenOutcome && materialSig(next, seat) === curSig
+			!action.hasHiddenOutcome && progressSignature(next, seat) === curSig
 				? nonProgressPenalty(action.cmd)
 				: 0;
 		const rewardPickBonus =

@@ -124,8 +124,8 @@ export interface SeatCycleSummary {
 export interface GameSummary {
 	seed: number;
 	seats: number;
-	/** weightsPath when neural, else the profile-name list — identifies who generated the game. */
-	weightsOrProfiles: string;
+	/** Per-seat learner/opponent checkpoint or heuristic profile. Historical rows may use one label. */
+	weightsOrProfiles: string | string[];
 	rounds: number;
 	winnerSeat: SeatColor | null;
 	finished: boolean;

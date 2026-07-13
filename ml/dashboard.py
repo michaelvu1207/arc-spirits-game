@@ -115,14 +115,14 @@ def summarize_games(spec: str) -> dict:
                         c["vp_after_round_count"][str(rnd)] += 1
                 c["decisions"] += int(cycle.get("decisions") or 0)
                 c["productive_decisions"] += int(cycle.get("productiveDecisions") or 0)
-                c["optional_yields"] += int(cycle.get("optionalYieldsWithAlternatives") or 0)
+                c["optional_yields"] += int(cycle.get("optionalYieldDecisions") or 0)
                 post15 = cycle.get("post15VpPerRound")
                 if isinstance(post15, (int, float)):
                     c["post15_vp_per_round_sum"] += post15
                     c["post15_vp_per_round_count"] += 1
-                for key in ("interactions", "summons", "awakens", "combats", "rewards", "pvp"):
+                for key in ("locationInteractions", "summons", "awakens", "combats", "rewards", "pvpAttacks"):
                     c["action_sum"][key] += float(cycle.get(key) or 0)
-                for key in ("finalAttackDice", "finalSpirits", "maxBarrier"):
+                for key in ("finalAttackDice", "finalSpirits", "finalMaxBarrier"):
                     c["engine_sum"][key] += float(cycle.get(key) or 0)
             for j, o in enumerate(seats):
                 if i == j:

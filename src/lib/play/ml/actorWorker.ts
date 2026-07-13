@@ -104,7 +104,10 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 	const gamesFile = join(outDir, `games-${workerIndex}.jsonl`);
 	// Identify the generator by the server's actual checkpoint when remote (the socket
 	// path says nothing about which weights produced the games).
-	const weightsOrProfiles = remote?.info.weights ?? config.weightsPath ?? config.profiles.join(',');
+	const learnerRef =
+		remote?.info.weights ??
+		config.weightsPath ??
+		(config.inferSocket ? `remote:${config.inferSocket}` : undefined);
 	// Per-seat policy attribution, mirroring the driver's seat routing: with a learner
 	// policy, neural seats = config.neuralSeats ?? all seats; opponentWeights seats play
 	// their OWN checkpoint and are excluded from the learner's neuralSeats list.
@@ -183,6 +186,12 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 			appendSamples(shardFile, r.samples, config.iter ?? 0);
 
 			const seatList = Object.keys(r.finalVP) as SeatColor[];
+			const weightsOrProfiles = seatList.map((seat, index) =>
+				config.opponentWeights?.[seat] ??
+				(isLearnerSeat(seat)
+					? learnerRef ?? 'learner-policy'
+					: config.profiles[index % config.profiles.length] ?? 'medium')
+			);
 			const summary: GameSummary = {
 				seed,
 				seats: seatList.length,

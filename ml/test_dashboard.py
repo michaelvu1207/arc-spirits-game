@@ -103,22 +103,22 @@ def test_summary_late_game_cycle_metrics():
         "vpAfterRound": {"8": 12, "12": 18, "20": 35},
         "first15Round": 10, "first30Round": 18,
         "decisions": 20, "productiveDecisions": 15,
-        "optionalYieldsWithAlternatives": 2, "post15VpPerRound": 1.5,
-        "interactions": 6, "summons": 3, "awakens": 1, "combats": 4,
-        "rewards": 2, "pvp": 1, "finalAttackDice": 7, "finalSpirits": 4,
-        "maxBarrier": 2,
+        "optionalYieldDecisions": 2, "post15VpPerRound": 1.5,
+        "locationInteractions": 6, "summons": 3, "awakens": 1, "combats": 4,
+        "rewards": 2, "pvpAttacks": 1, "finalAttackDice": 7, "finalSpirits": 4,
+        "finalMaxBarrier": 2,
     }
     a2 = {
         "vpAfterRound": {"8": 8, "12": 15, "20": 22},
         "first15Round": 12, "first30Round": None,
         "decisions": 30, "productiveDecisions": 20,
-        "optionalYieldsWithAlternatives": 3, "post15VpPerRound": 0.5,
-        "interactions": 4, "summons": 1, "awakens": 1, "combats": 2,
-        "rewards": 1, "pvp": 0, "finalAttackDice": 5, "finalSpirits": 2,
-        "maxBarrier": 0,
+        "optionalYieldDecisions": 3, "post15VpPerRound": 0.5,
+        "locationInteractions": 4, "summons": 1, "awakens": 1, "combats": 2,
+        "rewards": 1, "pvpAttacks": 0, "finalAttackDice": 5, "finalSpirits": 2,
+        "finalMaxBarrier": 0,
     }
     b = {"vpAfterRound": {"8": 5}, "first15Round": None, "first30Round": None,
-         "decisions": 10, "productiveDecisions": 5, "optionalYieldsWithAlternatives": 1}
+         "decisions": 10, "productiveDecisions": 5, "optionalYieldDecisions": 1}
     rows = [
         game_row(1, ["A", "B"], [1, 2], [0, 0], cycles=[a1, b]),
         game_row(2, ["A", "B"], [1, 2], [0, 0], cycles=[a2, b]),
