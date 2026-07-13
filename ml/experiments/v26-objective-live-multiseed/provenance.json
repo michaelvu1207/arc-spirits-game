@@ -43,17 +43,18 @@
         "root": "ml/league_v26_terminal_legacy_live_s2",
         "config": "ml/league/configs/fair-v26-solo-terminal-legacy-s2.json",
         "configSha256": "e85fa4453f605f6ffdc41e3a6c00170550323a433a330cb429339dd293b78540",
-        "gpu": 5
+        "gpu": 1
       },
       "lexicographic": {
         "root": "ml/league_v26_terminal_lexicographic_live_s2",
         "config": "ml/league/configs/fair-v26-solo-terminal-lexicographic-s2.json",
         "configSha256": "4bc943b2ab1445ea1f6d0569c8f8da521e9fd70ad727b218c8dedd9ae4787dfa",
-        "gpu": 6
+        "gpu": 2
       }
     }
   },
   "pairingContract": {
+    "executionWaves": "Run s1 first on GPUs 1/2, then s2 on the same GPUs. GPUs 0 and 3-7 had unrelated allocations at launch.",
     "generations": 5,
     "gamesPerGeneration": 1024,
     "evaluationGamesPerGeneration": 256,
