@@ -5,6 +5,7 @@
  *   V25_STRATEGIC_TEACHER=1 V25_STRATEGIC_MODE=audit V25_STRATEGIC_GAMES=512 \
  *   V25_STRATEGIC_SOURCE_COMMIT=<commit> \
  *   V25_STRATEGIC_WEIGHTS=ml/warmstart/v24/v23-control-gen5-obs199-act104.json \
+ *   V25_STRATEGIC_CATALOG=ml/catalogs/live-20260713-5f4ad348.json \
  *   npx vitest run src/lib/play/ml/_strategicteacher.test.ts --disable-console-intercept
  *
  * Paired family pilot:
@@ -18,7 +19,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { describe, it } from 'vitest';
 import { profileFor } from '../server/botPolicy';
-import type { GameCommand, PublicGameState, SeatColor } from '../types';
+import type { GameCommand, PlayCatalog, PublicGameState, SeatColor } from '../types';
 import { playRecordingGame, type RecordGameResult } from './driver';
 import { hybridIndex } from './neuralBot';
 import type { NeuralPolicy } from './net';
@@ -259,9 +260,14 @@ describe('V25 strategic terminal teacher harness', () => {
 			if (!['navigation', 'yield', 'combined'].includes(family)) {
 				throw new Error(`unknown V25_STRATEGIC_FAMILY=${family}`);
 			}
-			const catalog = await loadOrSnapshotCatalog();
+			const configuredCatalog = process.env.V25_STRATEGIC_CATALOG?.trim();
+			const catalogPath = configuredCatalog
+				? resolve(process.cwd(), configuredCatalog)
+				: mlPath('catalog.json');
+			const catalog = configuredCatalog
+				? (JSON.parse(readFileSync(catalogPath, 'utf8')) as PlayCatalog)
+				: await loadOrSnapshotCatalog();
 			const weightPath = resolve(process.cwd(), configuredWeights);
-			const catalogPath = mlPath('catalog.json');
 			const policy = float32DecisionPolicy(loadPolicyForEval(weightPath));
 			const provenance = {
 				sourceCommit,
