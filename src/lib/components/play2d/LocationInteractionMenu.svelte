@@ -11,6 +11,7 @@
 		canAfford,
 		eligibleCostSlots,
 		isWildcardCost,
+		locationCostRequiresSelection,
 		meaningFor,
 		type LocationInteraction
 	} from '$lib/play/locationInteractions';
@@ -155,10 +156,16 @@
 	function hasOrChoice(interaction: LocationInteraction): boolean {
 		return interaction.gains.some((g) => g.type === 'chooseRune');
 	}
+	function needsCostSelection(interaction: LocationInteraction): boolean {
+		return (
+			!freeTrade(interaction) &&
+			locationCostRequiresSelection(interaction.cost, player?.mats ?? [])
+		);
+	}
 	/** A row arms (stage takeover) when paying or choosing is involved; a plain
 	 *  free gain stays one-click. */
 	function needsArming(interaction: LocationInteraction): boolean {
-		return (interaction.cost.length > 0 && !freeTrade(interaction)) || hasOrChoice(interaction);
+		return needsCostSelection(interaction) || hasOrChoice(interaction);
 	}
 
 	// ── W1b armed trade (plans/ux-overhaul.md §4.2) ───────────────────────────
@@ -226,6 +233,9 @@
 			? armedInteraction.gains.filter((g) => g.type === 'chooseRune')
 			: []
 	);
+	const armedNeedsCostSelection = $derived(
+		armedInteraction ? needsCostSelection(armedInteraction) : false
+	);
 
 	function matIdentity(slot: MatSlotSnapshot): string {
 		return slot.id ?? `${slot.name ?? ''}|${slot.type ?? ''}|${slot.originId ?? ''}`;
@@ -233,7 +243,7 @@
 	/** Pre-fill the meter: specific slots take the auto-match pick (S1 — the spend
 	 *  is always visible); a wildcard slot pre-fills only when there is no real
 	 *  choice (a single distinct eligible item). No two slots share one mat. */
-	function initialFill(slots: ArmedCostSlot[]): (number | null)[] {
+	function initialFill(slots: ArmedCostSlot[], forceWildcardAutoPick = false): (number | null)[] {
 		const used = new Set<number>();
 		const take = (idx: number | null | undefined): number | null => {
 			if (idx == null || used.has(idx)) return null;
@@ -244,6 +254,9 @@
 			if (!slot.wildcard) {
 				const pick = take(slot.autoPick) ?? take(slot.eligible.find((i) => !used.has(i)));
 				return pick;
+			}
+			if (forceWildcardAutoPick) {
+				return take(slot.autoPick) ?? take(slot.eligible.find((i) => !used.has(i)));
 			}
 			const mats = player?.mats ?? [];
 			const distinct = new Set(
@@ -259,7 +272,7 @@
 			{ length: interaction.gains.filter((g) => g.type === 'chooseRune').length },
 			() => null
 		);
-		armedFill = initialFill(costSlotsFor(interaction));
+		armedFill = initialFill(costSlotsFor(interaction), !needsCostSelection(interaction));
 	}
 	function disarm() {
 		armedRow = null;
@@ -522,7 +535,7 @@
 			</div>
 		{/if}
 
-		{#if armedCostSlots.length > 0}
+		{#if armedCostSlots.length > 0 && armedNeedsCostSelection}
 			<p class="rack-hint">
 				Your rack — tap what you'll pay with. Dimmed items stay yours.
 			</p>

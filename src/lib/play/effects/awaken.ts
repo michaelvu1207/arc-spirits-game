@@ -33,6 +33,34 @@ import type { EffectContext } from './context';
 import { matchMatCost, matSatisfiesRequirement, spendableMats, type SpendableMat } from './matMatch';
 import { AWAKEN_HANDLERS, type AwakenHandlerContext } from './awakenHandlers';
 
+/** Named requirements are fungible and auto-pay. Owner input is needed only
+ * when a wildcard has surplus candidates of materially different identities. */
+function runeCostRequiresSelection(
+	requirements: Extract<NormalizedAwaken, { kind: 'rune_cost' }>['mats'],
+	spendable: SpendableMat[]
+): boolean {
+	const namedPayment = matchMatCost(
+		requirements.filter((requirement) => !requirement.wildcard),
+		spendable
+	);
+	const consumedByNamed = new Set(namedPayment.ok ? namedPayment.consumedIndices : []);
+	for (const kind of ['rune', 'relic'] as const) {
+		const wildcardCount = requirements
+			.filter((requirement) => requirement.wildcard && requirement.kind === kind)
+			.reduce((sum, requirement) => sum + requirement.count, 0);
+		if (wildcardCount === 0) continue;
+		const candidates = spendable.filter(
+			(mat) => mat.kind === kind && !consumedByNamed.has(mat.arrayIndex)
+		);
+		if (candidates.length <= wildcardCount) continue;
+		const identities = new Set(
+			candidates.map((mat) => mat.id ?? `${mat.name ?? ''}:${mat.kind}`)
+		);
+		if (identities.size > 1) return true;
+	}
+	return false;
+}
+
 /** Result of {@link checkAwakenCondition}: satisfiable + an optional reason. */
 export interface AwakenCheck {
 	ok: boolean;
@@ -285,7 +313,10 @@ export function buildAwakenOffer(ctx: EffectContext, target: AwakenTarget): Awak
 			discardCount,
 			options,
 			costSlots,
-			ineligible
+			ineligible,
+			...(runeCostRequiresSelection(awaken.mats, spendable)
+				? { requiresSelection: true as const }
+				: {})
 		};
 	}
 
@@ -294,7 +325,13 @@ export function buildAwakenOffer(ctx: EffectContext, target: AwakenTarget): Awak
 	const requirement = awaken.text || 'Awaken';
 	const choice = handler?.discardChoice?.({ ...ctx, spirit });
 	if (choice) {
-		return { ...base, requirement, discardCount: choice.count, options: choice.options };
+		return {
+			...base,
+			requirement,
+			discardCount: choice.count,
+			options: choice.options,
+			...(choice.requiresSelection ? { requiresSelection: true as const } : {})
+		};
 	}
 	return { ...base, requirement, discardCount: 0, options: [] };
 }

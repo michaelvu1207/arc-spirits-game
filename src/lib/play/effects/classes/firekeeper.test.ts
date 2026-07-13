@@ -30,6 +30,25 @@ describe('Firekeeper (awakeningPhase relic trade)', () => {
 		expect(decision?.options.map((o) => o.id)).toEqual(['potential', 'arcane', 'no']);
 	});
 
+	it('offers explicit relic choices only when held relics are materially different', () => {
+		const { player } = fire({ Firekeeper: 1 }, 'awakeningPhase', {
+			player: { mats: [relic(1, 'Flower'), relic(2, 'Teapot')], relics: 2 }
+		});
+		const decision = player.pendingDecisions.find((d) => d.kind === 'firekeeperRelicTrade')!;
+		expect(decision.options.map((option) => option.id)).toEqual([
+			'potential:1',
+			'arcane:1',
+			'potential:2',
+			'arcane:2',
+			'no'
+		]);
+
+		const ctx = ctxFor(player, { trigger: 'awakeningPhase' });
+		decisions.firekeeperRelicTrade(ctx, 'arcane:2');
+		expect(player.mats.find((mat) => mat.slotIndex === 1)?.hasRune).toBe(true);
+		expect(player.mats.find((mat) => mat.slotIndex === 2)?.hasRune).toBe(false);
+	});
+
 	it('surfaces the decision via the log (no silent no-op)', () => {
 		const { log } = fire({ Firekeeper: 1 }, 'awakeningPhase', {
 			player: { mats: [relic(1)], relics: 1 }

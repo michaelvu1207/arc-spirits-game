@@ -7,7 +7,7 @@
 	 * against, so UI-eligibility and acceptance cannot drift. Without a spec the
 	 * card is a plain option choice (an omitted selection keeps reducer auto-pick).
 	 */
-	import type { AttackDie, PendingDecision } from '$lib/play/types';
+	import type { AttackDie, DiceTier, PendingDecision } from '$lib/play/types';
 	import type { DecisionPickerSpec } from '$lib/play/decisionPicker';
 	import DieGem from './takeover/DieGem.svelte';
 
@@ -16,6 +16,7 @@
 		/** Engine picker requirement for this decision (matched by decisionId), if any. */
 		pickerSpec?: DecisionPickerSpec | null;
 		attackDice: AttackDie[];
+		dieImage?: (tier: DiceTier) => string | null;
 		/** Class art for the header (resolved by the parent from the decision kind). */
 		classIcon?: string | null;
 		/** Header eyebrow ("Arc Mage"); falls back to a generic label. */
@@ -31,6 +32,7 @@
 		decision,
 		pickerSpec = null,
 		attackDice,
+		dieImage = () => null,
 		classIcon = null,
 		sourceLabel = null,
 		busy = false,
@@ -94,6 +96,7 @@
 				{#each attackDice as die (die.instanceId)}
 					<DieGem
 						tier={die.tier}
+						image={dieImage(die.tier)}
 						selected={pick.includes(die.instanceId)}
 						locked={!eligibleIds.has(die.instanceId)}
 						reason="Not eligible"

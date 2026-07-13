@@ -31,6 +31,21 @@ describe('Rune Mage (awakeningPhase rune/relic trade)', () => {
 		expect(decision?.options.map((o) => o.id)).toEqual(['rune', 'relic', 'no']);
 	});
 
+	it('offers explicit slot choices for materially different runes and spends the selected one', () => {
+		const forest = { ...rune(1), id: 'forest', name: 'Forest Rune' };
+		const tidal = { ...rune(2), id: 'tidal', name: 'Tidal Rune' };
+		const { player } = fire({ 'Rune Mage': 1 }, 'awakeningPhase', {
+			player: { mats: [forest, tidal], relics: 0 }
+		});
+		const decision = player.pendingDecisions.find((d) => d.kind === 'runeMageTrade')!;
+		expect(decision.options.map((option) => option.id)).toEqual(['rune:1', 'rune:2', 'no']);
+
+		const ctx = ctxFor(player, { trigger: 'awakeningPhase' });
+		decisions.runeMageTrade(ctx, 'rune:2');
+		expect(player.mats[0].hasRune).toBe(true);
+		expect(player.mats[1].hasRune).toBe(false);
+	});
+
 	it('only offers the rune option when no relic is held', () => {
 		const { player } = fire({ 'Rune Mage': 1 }, 'awakeningPhase', {
 			player: { mats: [rune(1)], relics: 0 }

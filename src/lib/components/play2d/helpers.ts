@@ -2,7 +2,7 @@
 import { STORAGE_BASE_URL } from '$lib/supabase';
 import type { HexSpiritAsset, IconPoolEntry, MatAsset, MatSlotSnapshot } from '$lib/types';
 import { PLAYER_COLOR_HEX, type PlayerColor } from '$lib/types';
-import type { SeatColor } from '$lib/play/types';
+import type { DiceTier, SeatColor } from '$lib/play/types';
 import type { getAssetState } from '$lib/stores/assetStore.svelte';
 
 /** icon_pool ids for the core resource icons shown on the player bar. */
@@ -98,6 +98,29 @@ export function statusIconUrl(
 export function storageUrl(path: string | null | undefined): string | null {
 	if (!path) return null;
 	return path.startsWith('http') ? path : `${STORAGE_BASE_URL}/${path}`;
+}
+
+const ATTACK_DIE_ASSET_NAME: Record<DiceTier, string> = {
+	basic: 'Basic Attack',
+	enchanted: 'Enchanted Attack',
+	exalted: 'Exalted Attack',
+	arcane: 'Arcane Attack'
+};
+
+/** The same rendered custom-die face used by player info, pickers, and legends. */
+export function attackDieImageUrl(
+	assets: ReturnType<typeof getAssetState>,
+	tier: DiceTier
+): string | null {
+	const want = ATTACK_DIE_ASSET_NAME[tier].toLowerCase();
+	for (const die of assets.customDiceAssets.values()) {
+		if (die.name.toLowerCase() !== want) continue;
+		const firstFace = die.sides?.slice().sort((a, b) => a.side_number - b.side_number)[0];
+		return storageUrl(
+			firstFace?.image_path ?? die.background_image_path ?? die.exported_template_path
+		);
+	}
+	return null;
 }
 
 /** Build an id → image-url map for HexGrid from the spirit asset map. */

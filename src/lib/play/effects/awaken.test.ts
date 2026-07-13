@@ -34,6 +34,7 @@ import { createRng } from '../rng';
 import type {
 	AwakenDiscardRef,
 	GameActor,
+	GameCommand,
 	NormalizedAwaken,
 	PlayCatalog,
 	PlayCatalogSpirit,
@@ -112,7 +113,7 @@ function spirit(slotIndex: number, id: string, name: string, isFaceDown = true):
 
 /** The `slotIndex` of a rune/spirit discard ref (augment refs are slotless → -1). */
 function runeSlot(ref: AwakenDiscardRef): number {
-	return ref.kind === 'augment' ? -1 : ref.slotIndex;
+	return ref.kind === 'rune' || ref.kind === 'spirit' ? ref.slotIndex : -1;
 }
 
 /**
@@ -857,7 +858,9 @@ describe('runtime awakenSpirit gate', () => {
 		if (!paid.ok) throw new Error(paid.error.message);
 		const outPaid = paid.state.players.Red!;
 		expect(outPaid.spirits[0].isFaceDown).toBe(false);
-		expect(outPaid.mats.filter((r) => r.id === FLOWER).every((r) => r.hasRune === false)).toBe(true);
+		expect(outPaid.mats.filter((r) => r.id === FLOWER).every((r) => r.hasRune === false)).toBe(
+			true
+		);
 		expect(outPaid.mats.filter((r) => r.id === FAIRY).every((r) => r.hasRune === true)).toBe(true);
 
 		// No refs: auto-pick unchanged (spends the two Flowers, the only cost-eligible mats).
@@ -865,7 +868,9 @@ describe('runtime awakenSpirit gate', () => {
 		const autoRes = applyGameCommand(auto, RED_A, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
 		expect(autoRes.ok).toBe(true);
 		if (!autoRes.ok) throw new Error(autoRes.error.message);
-		expect(autoRes.state.players.Red!.mats.filter((r) => r.id === FLOWER).every((r) => !r.hasRune)).toBe(true);
+		expect(
+			autoRes.state.players.Red!.mats.filter((r) => r.id === FLOWER).every((r) => !r.hasRune)
+		).toBe(true);
 	});
 
 	// Bot / old-client compat: a PARTIAL selection (fewer refs than the cost needs) is a
@@ -880,10 +885,7 @@ describe('runtime awakenSpirit gate', () => {
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, 'sleeper', 'Sleeper')];
-		red.mats = [
-			rune(1, { id: FLOWER, name: 'Flower' }),
-			rune(2, { id: FLOWER, name: 'Flower' })
-		];
+		red.mats = [rune(1, { id: FLOWER, name: 'Flower' }), rune(2, { id: FLOWER, name: 'Flower' })];
 		const res = applyGameCommand(
 			state,
 			{ ...HOST, seatColor: 'Red' },
@@ -972,7 +974,7 @@ function relic(slotIndex: number, name: string, hasRune = true): MatSlotSnapshot
 }
 
 /** Build an awaken-handler context (effect context + the spirit being flipped). */
-function handlerCtx(player: PrivatePlayerState, spiritSlot: PlaySpirit) {
+function handlerCtx(player: PrivatePlayerState, spiritSlot: PlaySpirit, command?: GameCommand) {
 	return {
 		...buildEffectContext({
 			state: makeState(player),
@@ -981,7 +983,8 @@ function handlerCtx(player: PrivatePlayerState, spiritSlot: PlaySpirit) {
 			trigger: 'awakening' as const,
 			log: [],
 			traitCount: 0,
-			catalog: { guardians: [], spirits: [], mats: [], classes: [], dice: [], monsters: [] }
+			catalog: { guardians: [], spirits: [], mats: [], classes: [], dice: [], monsters: [] },
+			command
 		}),
 		spirit: spiritSlot
 	};
@@ -1127,6 +1130,7 @@ describe('AWAKEN_HANDLERS discard choice (let-me-choose)', () => {
 			{ kind: 'rune', slotIndex: 1 },
 			{ kind: 'rune', slotIndex: 2 }
 		]);
+		expect(offer.requiresSelection).toBeUndefined();
 		// options narrowed to the eligible Flowers — NOT the whole rack (S2 fix).
 		expect(offer.options.map((o) => runeSlot(o.ref)).sort()).toEqual([1, 2]);
 		// Fairy + Magnet are surfaced as ineligible with an engine-owned reason.
@@ -1154,6 +1158,7 @@ describe('AWAKEN_HANDLERS discard choice (let-me-choose)', () => {
 		// Wildcards have no named icon id.
 		expect(offer.costSlots![0].needRuneId).toBeUndefined();
 		expect(offer.costSlots![0].eligibleRefs.map(runeSlot)).toEqual([1, 2]);
+		expect(offer.requiresSelection).toBe(true);
 		// The origin rune can't pay an "Any Relic" cost → ineligible.
 		expect(offer.ineligible!.map((i) => runeSlot(i.ref))).toEqual([3]);
 	});
@@ -1274,11 +1279,63 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		const handler = AWAKEN_HANDLERS[IDS.spaceInvader];
 		const ctx = handlerCtx(player, sp);
 		expect(handler.check(ctx).ok).toBe(true);
+		const choice = handler.discardChoice?.(ctx);
+		expect(choice?.count).toBe(4);
+		expect(choice?.requiresSelection).toBe(true);
+		expect(choice?.options.map((option) => option.ref)).toEqual([
+			{ kind: 'attackDie', instanceId: 'a' },
+			{ kind: 'attackDie', instanceId: 'b' },
+			{ kind: 'attackDie', instanceId: 'c' },
+			{ kind: 'attackDie', instanceId: 'd' },
+			{ kind: 'attackDie', instanceId: 'e' }
+		]);
+		const exactCostPlayer = makePlayer({
+			spirits: [sp],
+			attackDice: player.attackDice.slice(0, 4)
+		});
+		expect(
+			handler.discardChoice?.(handlerCtx(exactCostPlayer, sp))?.requiresSelection
+		).toBeUndefined();
 		handler.pay(ctx);
 		expect(player.attackDice).toHaveLength(1); // 5 - 4 discarded
+		expect(player.attackDice[0]).toMatchObject({ instanceId: 'e', tier: 'arcane' });
 
 		const broke = makePlayer({ spirits: [sp], attackDice: [{ instanceId: 'a', tier: 'basic' }] });
 		expect(AWAKEN_HANDLERS[IDS.spaceInvader].check(handlerCtx(broke, sp)).ok).toBe(false);
+	});
+
+	it('Space Invader: awakenSpirit spends the exact four attack dice selected by the owner', () => {
+		const catalog = textCatalog(IDS.spaceInvader, 'Space Invader', 'Discard 4 of any attack dice.');
+		const state = startedGame(catalog);
+		const red = state.players.Red!;
+		red.spirits = [spirit(1, IDS.spaceInvader, 'Space Invader')];
+		red.attackDice = [
+			{ instanceId: 'basic-1', tier: 'basic' },
+			{ instanceId: 'enchanted-1', tier: 'enchanted' },
+			{ instanceId: 'exalted-1', tier: 'exalted' },
+			{ instanceId: 'arcane-1', tier: 'arcane' },
+			{ instanceId: 'arcane-keep', tier: 'arcane' }
+		];
+
+		const result = applyGameCommand(
+			state,
+			{ ...HOST, seatColor: 'Red' },
+			{
+				type: 'awakenSpirit',
+				slotIndex: 1,
+				discardRefs: ['basic-1', 'enchanted-1', 'exalted-1', 'arcane-1'].map((instanceId) => ({
+					kind: 'attackDie' as const,
+					instanceId
+				}))
+			},
+			catalog
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error(result.error.message);
+		expect(result.state.players.Red!.attackDice).toEqual([
+			{ instanceId: 'arcane-keep', tier: 'arcane' }
+		]);
+		expect(result.state.players.Red!.spirits[0].isFaceDown).toBe(false);
 	});
 
 	it('awakenSpirit command flips a scripted text spirit and pays the cost (Blood Hound)', () => {

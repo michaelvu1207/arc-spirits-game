@@ -20,6 +20,7 @@
 <script lang="ts">
 	interface Props {
 		tier: DiceTier;
+		image?: string | null;
 		selected?: boolean;
 		disabled?: boolean;
 		/** Ineligible (engine verdict): visible, dimmed + locked; tap reveals `reason`. */
@@ -32,6 +33,7 @@
 
 	let {
 		tier,
+		image = null,
 		selected = false,
 		disabled = false,
 		locked = false,
@@ -73,8 +75,8 @@
 	{#if locked && reason}
 		<span class="reason-chip" role="status">{reason}</span>
 	{/if}
-	<span class="gem" aria-hidden="true">
-		<span class="facet"></span>
+	<span class="gem" class:has-image={!!image} aria-hidden="true">
+		{#if image}<img class="die-art" src={image} alt="" />{:else}<span class="facet"></span>{/if}
 		{#if locked}
 			<span class="lock-badge">
 				<svg viewBox="0 0 24 24" width="9" height="9">
@@ -120,6 +122,20 @@
 		width: var(--gem, 1.9rem);
 		height: var(--gem, 1.9rem);
 	}
+	.gem.has-image {
+		width: var(--gem, 2.35rem);
+		height: var(--gem, 2.35rem);
+	}
+	.die-art {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		filter: drop-shadow(0 0 8px color-mix(in srgb, var(--tier) 55%, transparent));
+		transition:
+			transform 150ms ease,
+			filter 150ms ease;
+	}
 	.die.lg {
 		--gem: 2.4rem;
 	}
@@ -164,6 +180,10 @@
 			0 0 0 2px color-mix(in srgb, var(--tier) 70%, #fff 30%),
 			inset 0 1px 1px rgba(255, 255, 255, 0.65);
 	}
+	.die.selected .die-art {
+		transform: scale(1.1);
+		filter: drop-shadow(0 0 14px color-mix(in srgb, var(--tier) 85%, transparent));
+	}
 	.die:disabled:not(.locked) {
 		opacity: 0.32;
 		cursor: not-allowed;
@@ -174,6 +194,9 @@
 	}
 	.die.locked .facet {
 		filter: grayscale(0.8) saturate(0.4);
+	}
+	.die.locked .die-art {
+		filter: grayscale(0.85) saturate(0.35);
 	}
 	.die:focus-visible {
 		outline: none;

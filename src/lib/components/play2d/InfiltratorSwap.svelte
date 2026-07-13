@@ -5,7 +5,7 @@
 	 * an animated swap arrow lights between the chosen pair, and the commit bar
 	 * stages everything until Confirm.
 	 */
-	import type { AttackDie, SeatColor } from '$lib/play/types';
+	import type { AttackDie, DiceTier, SeatColor } from '$lib/play/types';
 	import TakeoverStage from './takeover/TakeoverStage.svelte';
 	import SourcePanel from './takeover/SourcePanel.svelte';
 	import CommitBar from './takeover/CommitBar.svelte';
@@ -22,6 +22,7 @@
 	interface Props {
 		targets: SwapTarget[];
 		myDice: AttackDie[];
+		dieImage?: (tier: DiceTier) => string | null;
 		classIcon?: string | null;
 		busy?: boolean;
 		onConfirm: (
@@ -30,7 +31,15 @@
 		onCancel: () => void;
 	}
 
-	let { targets, myDice, classIcon = null, busy = false, onConfirm, onCancel }: Props = $props();
+	let {
+		targets,
+		myDice,
+		dieImage = () => null,
+		classIcon = null,
+		busy = false,
+		onConfirm,
+		onCancel
+	}: Props = $props();
 
 	let pick = $state<Record<string, { mine?: string; theirs?: string }>>({});
 
@@ -125,6 +134,7 @@
 							{#each t.dice as die (die.instanceId)}
 								<DieGem
 									tier={die.tier}
+									image={dieImage(die.tier)}
 									selected={p.theirs === die.instanceId}
 									disabled={busy}
 									testid={`infil-theirs-${t.seat}-${die.instanceId}`}
@@ -154,6 +164,7 @@
 							{#each myDice as die (die.instanceId)}
 								<DieGem
 									tier={die.tier}
+									image={dieImage(die.tier)}
 									selected={p.mine === die.instanceId}
 									disabled={busy}
 									locked={mineUsedElsewhere(t.seat, die.instanceId)}

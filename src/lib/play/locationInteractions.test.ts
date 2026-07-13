@@ -4,6 +4,7 @@ import {
 	buildLocationInteractions,
 	canAfford,
 	eligibleCostSlots,
+	locationCostRequiresSelection,
 	matchRewardCost,
 	meaningFor,
 	type CostRequirement
@@ -341,5 +342,36 @@ describe('matchRewardCost — player discard choice for wildcard costs', () => {
 			rune({ type: 'relic', hasRune: false }) // 3 ✗ already spent
 		];
 		expect(eligibleCostSlots(anyRelicTrade.cost[0], runes)).toEqual([0, 2]);
+	});
+
+	test('opens a picker only for surplus, materially different wildcard payments', () => {
+		const anyRelic = anyRelicTrade.cost;
+		expect(
+			locationCostRequiresSelection(anyRelic, [
+				rune({ id: 'flower', name: 'Flower', type: 'relic' }),
+				rune({ id: 'teapot', name: 'Teapot', type: 'relic' })
+			])
+		).toBe(true);
+		expect(
+			locationCostRequiresSelection(anyRelic, [
+				rune({ id: 'flower', name: 'Flower', type: 'relic' })
+			])
+		).toBe(false);
+		expect(
+			locationCostRequiresSelection(anyRelic, [
+				rune({ id: 'flower', name: 'Flower', type: 'relic' }),
+				rune({ id: 'flower', name: 'Flower', type: 'relic' })
+			])
+		).toBe(false);
+
+		const specific: CostRequirement[] = [
+			{ match: 'specialRune', runeId: 'flower', runeName: 'Flower', label: 'Flower' }
+		];
+		expect(
+			locationCostRequiresSelection(specific, [
+				rune({ id: 'flower', name: 'Flower', type: 'relic' }),
+				rune({ id: 'flower', name: 'Flower', type: 'relic' })
+			])
+		).toBe(false);
 	});
 });

@@ -16,7 +16,7 @@
 	import { relicOptions } from '$lib/play/locationInteractions';
 	import { decisionPickerSpec } from '$lib/play/decisionPicker';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
-	import { augmentIconForClass, runeIconUrl, seatAccent, spiritBackImageUrl, storageUrl } from './helpers';
+	import { attackDieImageUrl, augmentIconForClass, runeIconUrl, seatAccent, spiritBackImageUrl, storageUrl } from './helpers';
 	import HexGrid from '$lib/components/HexGrid.svelte';
 	import SpiritWorldBoard from './SpiritWorldBoard.svelte';
 	import type { NavigationSceneControls } from './navigationSceneControls';
@@ -327,7 +327,9 @@
 	});
 
 	function refKey(ref: AwakenDiscardRef): string {
-		return ref.kind === 'augment' ? 'augment' : `${ref.kind}:${ref.slotIndex}`;
+		if (ref.kind === 'augment') return 'augment';
+		if (ref.kind === 'attackDie') return `attackDie:${ref.instanceId}`;
+		return `${ref.kind}:${ref.slotIndex}`;
 	}
 	function matIconById(runeId: string | undefined): string | null {
 		return runeId ? storageUrl(assets.matAssets.get(runeId)?.icon_path ?? null) : null;
@@ -359,6 +361,15 @@
 					type: mat?.type ?? (/relic/i.test(label) ? 'relic' : 'rune')
 				}),
 				group: runeId ?? `rune-name:${label}`
+			};
+		}
+		if (ref.kind === 'attackDie') {
+			const die = myPlayer?.attackDice.find((candidate) => candidate.instanceId === ref.instanceId);
+			const tier = die?.tier ?? 'basic';
+			return {
+				label: labelHint ?? opt?.label ?? `${tier[0].toUpperCase()}${tier.slice(1)} Attack die`,
+				image: attackDieImageUrl(assets, tier),
+				group: `attackDie:${ref.instanceId}`
 			};
 		}
 		return { label: labelHint ?? 'Augment', image: null, group: 'augment' };
@@ -454,7 +465,7 @@
 	const pickingArt = $derived(pickingSlot === null ? null : spiritArt(pickingSlot));
 
 	function clickOffer(offer: PlayerProjection['awakenOffers'][number]) {
-		if (offer.discardCount > 0 && (offer.costSlots?.length || offer.options.length >= offer.discardCount)) {
+		if (offer.requiresSelection) {
 			pickingSlot = offer.slotIndex;
 			awakenFilled = [];
 			return;
@@ -993,6 +1004,7 @@
 								decision={choice}
 								pickerSpec={pickerSpecFor(choice)}
 								attackDice={myPlayer?.attackDice ?? []}
+								dieImage={(tier) => attackDieImageUrl(assets, tier)}
 								classIcon={cls ? classIconFor(cls) : null}
 								sourceLabel={cls}
 								{busy}
@@ -1104,6 +1116,7 @@
 								<InfiltratorSwap
 									targets={infiltratorTargets}
 									myDice={infiltratorWork?.myDice ?? []}
+									dieImage={(tier) => attackDieImageUrl(assets, tier)}
 									classIcon={classIconFor('Infiltrator')}
 									{busy}
 									onConfirm={(swaps) => {
@@ -1308,6 +1321,7 @@
 									decision={choice}
 									pickerSpec={pickerSpecFor(choice)}
 									attackDice={myPlayer?.attackDice ?? []}
+									dieImage={(tier) => attackDieImageUrl(assets, tier)}
 									classIcon={cls ? classIconFor(cls) : null}
 									sourceLabel={cls}
 									{busy}

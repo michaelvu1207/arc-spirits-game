@@ -677,10 +677,39 @@ export function planUniformLegalPhaseActions(
 	const out: GameCommand[] = [];
 	let s = state;
 	let guard = 0;
+	let resolvingCorruption = !!s.players[seat]?.pendingCorruptionDiscard;
 	while (botSeatNeedsToAct(s, seat) && guard < MAX_ACTIONS_PER_PHASE) {
 		guard += 1;
-		const withNext = legalActionsWithNext(s, seat, catalog);
+		if (s.players[seat]?.pendingCorruptionDiscard) resolvingCorruption = true;
+		let withNext = legalActionsWithNext(s, seat, catalog);
 		if (withNext.length === 0) break;
+		if (resolvingCorruption) {
+			const debt = s.players[seat]?.pendingCorruptionDiscard;
+			if (debt && (s.players[seat]?.spirits.length ?? 0) > 0) {
+				// Let the configured random driver choose WHICH spirit to sacrifice, but never allow an
+				// optional action to postpone a mandatory corruption payment.
+				const discards = withNext.filter((action) => action.cmd.type === 'discardSpirit');
+				if (discards.length > 0) withNext = discards;
+			} else {
+				// The payment is complete (or its unpayable remainder must be settled).
+				// Immediately yield the phase so the bot cannot discard and then stall.
+				const yieldType =
+					s.phase === 'location'
+						? 'endLocationActions'
+						: s.phase === 'cleanup'
+							? 'commitCleanup'
+							: null;
+				const yieldAction = yieldType
+					? withNext.find((action) => action.cmd.type === yieldType)
+					: undefined;
+				if (yieldAction) {
+					out.push(yieldAction.cmd);
+					s = yieldAction.next;
+					resolvingCorruption = false;
+					continue;
+				}
+			}
+		}
 		const idx = Math.min(withNext.length - 1, Math.floor(rand() * withNext.length));
 		out.push(withNext[idx].cmd);
 		s = withNext[idx].next;
@@ -734,10 +763,39 @@ export function planNeuralPhaseActions(
 	const out: GameCommand[] = [];
 	let s = state;
 	let guard = 0;
+	let resolvingCorruption = !!s.players[seat]?.pendingCorruptionDiscard;
 	while (botSeatNeedsToAct(s, seat) && guard < MAX_ACTIONS_PER_PHASE) {
 		guard += 1;
-		const withNext = legalActionsWithNext(s, seat, catalog);
+		if (s.players[seat]?.pendingCorruptionDiscard) resolvingCorruption = true;
+		let withNext = legalActionsWithNext(s, seat, catalog);
 		if (withNext.length === 0) break;
+		if (resolvingCorruption) {
+			const debt = s.players[seat]?.pendingCorruptionDiscard;
+			if (debt && (s.players[seat]?.spirits.length ?? 0) > 0) {
+				// Let the policy choose WHICH spirit to sacrifice, but never allow an
+				// optional action to postpone a mandatory corruption payment.
+				const discards = withNext.filter((action) => action.cmd.type === 'discardSpirit');
+				if (discards.length > 0) withNext = discards;
+			} else {
+				// The payment is complete (or its unpayable remainder must be settled).
+				// Immediately yield the phase so the bot cannot discard and then stall.
+				const yieldType =
+					s.phase === 'location'
+						? 'endLocationActions'
+						: s.phase === 'cleanup'
+							? 'commitCleanup'
+							: null;
+				const yieldAction = yieldType
+					? withNext.find((action) => action.cmd.type === yieldType)
+					: undefined;
+				if (yieldAction) {
+					out.push(yieldAction.cmd);
+					s = yieldAction.next;
+					resolvingCorruption = false;
+					continue;
+				}
+			}
+		}
 		// Production baseline = champion-imitation policy head with only immediate,
 		// deterministic VP/win conversions retained as tactical safeguards. Delayed PvP
 		// initiation is a learned choice, so passing remains available when it is stronger.

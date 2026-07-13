@@ -49,11 +49,13 @@ export interface AwakenHandlerContext extends EffectContext {
 	spirit: PlaySpirit;
 }
 
-/** What a discard handler lets the owner choose: how many to spend + the
- *  candidate items (`options.length > count` ⇒ the player picks which). */
+/** What a discard handler may let the owner choose: how many to spend, the
+ * candidates, and whether those candidates are materially different. */
 export interface AwakenDiscardChoice {
 	count: number;
 	options: AwakenDiscardOption[];
+	/** True only when choosing changes which materially different items remain. */
+	requiresSelection?: true;
 }
 
 /** One scripted text-awaken: a read-only check + a state-mutating payment. */
@@ -68,7 +70,9 @@ export interface AwakenHandler {
 
 /** Stable identity for an {@link AwakenDiscardRef} (augment tokens are fungible). */
 function refKey(ref: AwakenDiscardRef): string {
-	return ref.kind === 'augment' ? 'augment' : `${ref.kind}:${ref.slotIndex}`;
+	if (ref.kind === 'augment') return 'augment';
+	if (ref.kind === 'attackDie') return `attackDie:${ref.instanceId}`;
+	return `${ref.kind}:${ref.slotIndex}`;
 }
 
 /** The owner's chosen discard items off the `awakenSpirit` command, if any. */
@@ -147,7 +151,10 @@ export interface DiscardAtLocationSpec {
 /** The candidate items that satisfy ONE spec branch (no `or` alternative). For a
  *  classTrait branch these are the matching spirits plus the player's augment
  *  tokens; otherwise the matching held rune/relic slots. */
-function optionsForBranch(player: PrivatePlayerState, spec: DiscardAtLocationSpec): AwakenDiscardOption[] {
+function optionsForBranch(
+	player: PrivatePlayerState,
+	spec: DiscardAtLocationSpec
+): AwakenDiscardOption[] {
 	if (spec.what === 'classTrait' && spec.className) {
 		const out: AwakenDiscardOption[] = [];
 		// Class traits = spirits of that class + spirit augments (Spirits/Augments).
@@ -189,10 +196,16 @@ function atRequiredLocation(player: PrivatePlayerState, spec: DiscardAtLocationS
 
 /** Every branch of `spec` (itself, then its `or`) the player can pay RIGHT NOW —
  *  i.e. at the required location with enough matching items. */
-function payableBranches(player: PrivatePlayerState, spec: DiscardAtLocationSpec): DiscardAtLocationSpec[] {
+function payableBranches(
+	player: PrivatePlayerState,
+	spec: DiscardAtLocationSpec
+): DiscardAtLocationSpec[] {
 	const out: DiscardAtLocationSpec[] = [];
 	for (let branch: DiscardAtLocationSpec | undefined = spec; branch; branch = branch.or) {
-		if (atRequiredLocation(player, branch) && optionsForBranch(player, branch).length >= branch.count) {
+		if (
+			atRequiredLocation(player, branch) &&
+			optionsForBranch(player, branch).length >= branch.count
+		) {
 			out.push(branch);
 		}
 	}
@@ -210,7 +223,10 @@ function canDiscard(player: PrivatePlayerState, spec: DiscardAtLocationSpec): bo
  * when nothing is payable. All shipped `or` branches share the primary count, so
  * one `count` covers the union.
  */
-function discardChoiceFor(player: PrivatePlayerState, spec: DiscardAtLocationSpec): AwakenDiscardChoice | null {
+function discardChoiceFor(
+	player: PrivatePlayerState,
+	spec: DiscardAtLocationSpec
+): AwakenDiscardChoice | null {
 	const branches = payableBranches(player, spec);
 	if (branches.length === 0) return null;
 	const count = branches[0].count;
@@ -225,19 +241,42 @@ function discardChoiceFor(player: PrivatePlayerState, spec: DiscardAtLocationSpe
 			options.push(opt);
 		}
 	}
-	return { count, options };
+	const identities = new Set(
+		options.map((option) =>
+			option.ref.kind === 'rune'
+				? (option.runeId ?? option.label)
+				: option.ref.kind === 'augment'
+					? option.label
+					: option.ref.kind === 'spirit'
+						? option.label
+						: refKey(option.ref)
+		)
+	);
+	const genericOrAlternative =
+		branches.length > 1 ||
+		branches.some((branch) => branch.what === 'classTrait' || branch.name == null);
+	const requiresSelection =
+		options.length > count && identities.size > 1 && genericOrAlternative;
+	return { count, options, ...(requiresSelection ? { requiresSelection: true as const } : {}) };
 }
 
 /** Are `refs` a legal, exact payment for `spec` (right count, all real candidates,
  *  no rune/spirit slot picked twice, augment picks within budget)? */
-function validRefs(player: PrivatePlayerState, spec: DiscardAtLocationSpec, refs: AwakenDiscardRef[]): boolean {
+function validRefs(
+	player: PrivatePlayerState,
+	spec: DiscardAtLocationSpec,
+	refs: AwakenDiscardRef[]
+): boolean {
 	const choice = discardChoiceFor(player, spec);
 	if (!choice || refs.length !== choice.count) return false;
-	const slotKeys = new Set(choice.options.filter((o) => o.ref.kind !== 'augment').map((o) => refKey(o.ref)));
+	const slotKeys = new Set(
+		choice.options.filter((o) => o.ref.kind !== 'augment').map((o) => refKey(o.ref))
+	);
 	const augmentBudget = choice.options.filter((o) => o.ref.kind === 'augment').length;
 	const usedSlots = new Set<string>();
 	let augmentsUsed = 0;
 	for (const ref of refs) {
+		if (ref.kind === 'attackDie') return false;
 		if (ref.kind === 'augment') {
 			if (++augmentsUsed > augmentBudget) return false;
 			continue;
@@ -262,10 +301,12 @@ function discardRefs(player: PrivatePlayerState, refs: AwakenDiscardRef[], log: 
 			if (idx < 0) return false;
 			const [removed] = player.spirits.splice(idx, 1);
 			log.push(`Discarded trait spirit ${removed.name}.`);
-		} else {
+		} else if (ref.kind === 'augment') {
 			if ((player.spiritAugments ?? 0) <= 0) return false;
 			player.spiritAugments -= 1;
 			log.push('Discarded an augment.');
+		} else {
+			return false;
 		}
 	}
 	return true;
@@ -342,21 +383,64 @@ function progressFlagHandler(key: string, reason: string): AwakenHandler {
  */
 const spaceInvaderHandler: AwakenHandler = {
 	check(ctx) {
-		return ctx.player.attackDice.length >= 4 ? { ok: true } : { ok: false, reason: 'need_4_attack_dice' };
+		if (ctx.player.attackDice.length < 4) return { ok: false, reason: 'need_4_attack_dice' };
+		const selected = selectionFrom(ctx);
+		if (selected !== undefined) {
+			const ids = selected
+				.filter(
+					(ref): ref is Extract<AwakenDiscardRef, { kind: 'attackDie' }> => ref.kind === 'attackDie'
+				)
+				.map((ref) => ref.instanceId);
+			const owned = new Set(ctx.player.attackDice.map((die) => die.instanceId));
+			if (
+				ids.length !== 4 ||
+				selected.length !== 4 ||
+				new Set(ids).size !== 4 ||
+				ids.some((id) => !owned.has(id))
+			) {
+				return { ok: false, reason: 'invalid_attack_dice' };
+			}
+		}
+		return { ok: true };
 	},
 	pay(ctx) {
-		let discarded = 0;
-		for (let i = 0; i < 4 && ctx.player.attackDice.length > 0; i += 1) {
-			ctx.player.attackDice.pop();
-			discarded += 1;
+		const selected = selectionFrom(ctx);
+		const selectedIds = selected?.every((ref) => ref.kind === 'attackDie')
+			? new Set(selected.map((ref) => ref.instanceId))
+			: null;
+		const before = ctx.player.attackDice.length;
+		if (selectedIds?.size === 4) {
+			ctx.player.attackDice = ctx.player.attackDice.filter(
+				(die) => !selectedIds.has(die.instanceId)
+			);
+		} else {
+			// Old clients and bots may omit a selection. Preserve that compatibility,
+			// but keep the strongest dice by auto-spending the four weakest tiers.
+			const rank = { basic: 0, enchanted: 1, exalted: 2, arcane: 3 } as const;
+			const autoIds = new Set(
+				[...ctx.player.attackDice]
+					.sort((a, b) => rank[a.tier] - rank[b.tier])
+					.slice(0, 4)
+					.map((die) => die.instanceId)
+			);
+			ctx.player.attackDice = ctx.player.attackDice.filter((die) => !autoIds.has(die.instanceId));
 		}
+		const discarded = before - ctx.player.attackDice.length;
 		if (discarded > 0) ctx.log.push(`Discarded ${discarded} attack dice to awaken Space Invader.`);
 	},
-	// A fixed cost (no per-item choice): report discardCount 4 with no options so the
-	// Cleanup card shows the real "Discard 4…" requirement instead of "Awaken (free)",
-	// and awakens on a single click (empty options ⇒ no picker).
 	discardChoice(ctx) {
-		return ctx.player.attackDice.length >= 4 ? { count: 4, options: [] } : null;
+		const distinctTiers = new Set(ctx.player.attackDice.map((die) => die.tier)).size;
+		const requiresSelection = ctx.player.attackDice.length > 4 && distinctTiers > 1;
+		return ctx.player.attackDice.length >= 4
+			? {
+					count: 4,
+					options: ctx.player.attackDice.map((die) => ({
+						ref: { kind: 'attackDie', instanceId: die.instanceId },
+						label: `${die.tier[0].toUpperCase()}${die.tier.slice(1)} Attack die`
+					})),
+					...(requiresSelection ? { requiresSelection: true as const } : {})
+				}
+			: null;
 	}
 };
 
@@ -373,20 +457,30 @@ function discardAbyssSpirits(count: number): AwakenHandler {
 		);
 	return {
 		check(ctx) {
-			return candidates(ctx).length >= count ? { ok: true } : { ok: false, reason: 'need_abyss_spirits' };
+			return candidates(ctx).length >= count
+				? { ok: true }
+				: { ok: false, reason: 'need_abyss_spirits' };
 		},
 		discardChoice(ctx) {
 			const opts: AwakenDiscardOption[] = candidates(ctx).map((s) => ({
 				ref: { kind: 'spirit', slotIndex: s.slotIndex },
 				label: s.name
 			}));
-			return opts.length >= count ? { count, options: opts } : null;
+			return opts.length >= count
+				? {
+						count,
+						options: opts,
+						...(opts.length > count ? { requiresSelection: true as const } : {})
+					}
+				: null;
 		},
 		pay(ctx) {
 			const valid = new Set(candidates(ctx).map((s) => s.slotIndex));
 			const sel = selectionFrom(ctx);
 			const refs: AwakenDiscardRef[] =
-				sel && sel.length === count && sel.every((r) => r.kind === 'spirit' && valid.has(r.slotIndex))
+				sel &&
+				sel.length === count &&
+				sel.every((r) => r.kind === 'spirit' && valid.has(r.slotIndex))
 					? sel
 					: candidates(ctx)
 							.slice(0, count)
@@ -444,7 +538,10 @@ export const AWAKEN_HANDLERS: Record<string, AwakenHandler> = {
 	// "Cultivate with no summoned spirits other than this spirit."
 	[IDS.shadowtaker]: progressFlagHandler(KEYS.shadowtaker, 'cultivate_alone_required'),
 	// "Cultivate with 10 max barrier, with status Fallen."
-	[IDS.arcaneHuntress]: progressFlagHandler(KEYS.arcaneHuntress, 'cultivate_fallen_10_max_barrier_required'),
+	[IDS.arcaneHuntress]: progressFlagHandler(
+		KEYS.arcaneHuntress,
+		'cultivate_fallen_10_max_barrier_required'
+	),
 	// "Rest with 10 Max Barrier."
 	[IDS.meteorShower]: progressFlagHandler(KEYS.meteorShower, 'rest_10_max_barrier_required'),
 

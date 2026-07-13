@@ -2184,7 +2184,7 @@ function reduceCommand(
 			if (!decision.options.some((o) => o.id === command.optionId)) {
 				return failure('invalid_option', 'That option is not available for this decision.');
 			}
-			// Picker decisions (Arc Mage's "convert 4 attack dice"): when the client SENDS a
+			// Picker decisions (Arc Mage / Strategist attack-die trades): when the client SENDS a
 			// non-empty selection it must be exactly the required count of eligible instances —
 			// a wrong-count / non-owned pick is rejected instead of silently auto-picking the 4
 			// lowest dice. An omitted or empty selection keeps the resolver's auto-pick (bots

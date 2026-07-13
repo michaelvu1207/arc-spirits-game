@@ -1,8 +1,10 @@
+import { DICE_TIER_ORDER } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Strategist — "On rest, you may discard 3 attack dice to gain 1 Spirit Augment."
 // Gated on holding ≥3 dice, then an opt-in Yes/No card resolved by `strategistTrade`.
+export const STRATEGIST_TRADE_COST = 3;
 export const ability: ClassAbility[] = [
 	{
 		on: 'onRest',
@@ -12,7 +14,7 @@ export const ability: ClassAbility[] = [
 				actions: [
 					{
 						kind: 'conditional',
-						when: { kind: 'hasAttackDice', amount: 3 },
+						when: { kind: 'hasAttackDice', amount: STRATEGIST_TRADE_COST },
 						then: [
 							{
 								kind: 'choose',
@@ -33,9 +35,23 @@ export const ability: ClassAbility[] = [
 
 // Colocated resolver for the opt-in Yes/No card.
 export const decisions: ClassDecisions = {
-	strategistTrade(ctx, optionId) {
+	strategistTrade(ctx, optionId, selectedInstanceIds) {
 		if (optionId === 'yes') {
-			runAction(ctx, { kind: 'discardAttackDice', amount: 3 });
+			const dice = ctx.player.attackDice;
+			if (dice.length < STRATEGIST_TRADE_COST) return;
+			const owned = new Set(dice.map((die) => die.instanceId));
+			const selected = [...new Set(selectedInstanceIds ?? [])].filter((id) => owned.has(id));
+			const ids =
+				selected.length === STRATEGIST_TRADE_COST
+					? selected
+					: [...dice]
+							.sort(
+								(a, b) =>
+									DICE_TIER_ORDER.indexOf(a.tier) - DICE_TIER_ORDER.indexOf(b.tier)
+							)
+							.slice(0, STRATEGIST_TRADE_COST)
+							.map((die) => die.instanceId);
+			runAction(ctx, { kind: 'discardAttackDiceByIds', instanceIds: ids });
 			runAction(ctx, { kind: 'gainAugment', amount: 1 });
 		}
 	}

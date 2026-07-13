@@ -69,6 +69,21 @@ describe('Strategist (onRest → discard 3 dice for 1 Spirit Augment)', () => {
 		expect(ctx.log.some((l) => /spirit augment/i.test(l))).toBe(true);
 	});
 
+	it('discards the exact three mixed-tier dice selected by the owner', () => {
+		const player = makePlayer({
+			spirits: [spirit(1, { Strategist: 1 })],
+			attackDice: [
+				{ instanceId: 'basic', tier: 'basic' },
+				{ instanceId: 'enchanted', tier: 'enchanted' },
+				{ instanceId: 'exalted', tier: 'exalted' },
+				{ instanceId: 'arcane', tier: 'arcane' }
+			]
+		});
+		const ctx = ctxFor(player);
+		decisions.strategistTrade(ctx, 'yes', ['basic', 'enchanted', 'arcane']);
+		expect(player.attackDice).toEqual([{ instanceId: 'exalted', tier: 'exalted' }]);
+	});
+
 	it('No does nothing (opt-out): dice and augments unchanged', () => {
 		const player = makePlayer({
 			spirits: [spirit(1, { Strategist: 1 })],

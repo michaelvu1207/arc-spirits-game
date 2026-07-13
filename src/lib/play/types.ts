@@ -404,13 +404,15 @@ export interface PendingAwakenRewardState {
  *   - `rune`    → a held rune/relic slot (`slotIndex` into `player.runes`).
  *   - `spirit`  → a class-trait spirit (`slotIndex` into `player.spirits`).
  *   - `augment` → one spirit-augment token from the player's pool.
+ *   - `attackDie` → one owned attack die, by its stable instance id.
  * Sent on `awakenSpirit` so the owner picks WHICH items satisfy a discard cost
  * (e.g. a Fairy Rune vs a Firecracker Relic) instead of the engine auto-choosing.
  */
 export type AwakenDiscardRef =
 	| { kind: 'rune'; slotIndex: number }
 	| { kind: 'spirit'; slotIndex: number }
-	| { kind: 'augment' };
+	| { kind: 'augment' }
+	| { kind: 'attackDie'; instanceId: string };
 
 /**
  * One candidate the player may pick to satisfy a discard-style awaken cost,
@@ -428,8 +430,8 @@ export interface AwakenDiscardOption {
  * A face-down spirit the player may awaken THIS Cleanup, with its cost spelled
  * out so the UI can label the card and (when there is a real choice) prompt for
  * which item(s) to discard. Built in `enterCleanup` for every awaken-eligible
- * slot; `options.length > discardCount` means the owner gets to choose which to
- * spend. Owner-derived from public tableau, so it carries no hidden info.
+ * slot; `requiresSelection` says whether choosing changes what materially remains.
+ * Owner-derived from public tableau, so it carries no hidden info.
  */
 export interface AwakenOffer {
 	/** The face-down spirit slot this offer awakens. */
@@ -441,6 +443,9 @@ export interface AwakenOffer {
 	requirement: string;
 	/** How many items the player must discard (0 for free/no-item flips). */
 	discardCount: number;
+	/** Present only when more than one materially different legal payment can remain.
+	 * Specific/fungible costs auto-pay and do not open a picker. */
+	requiresSelection?: true;
 	/** Candidate items to discard. Empty for free flips and event-flag conditions
 	 *  that need no per-item choice; populated for scripted discard handlers
 	 *  (Faeries, relic/trait discards) AND rune-cost flips (the cost-eligible mats

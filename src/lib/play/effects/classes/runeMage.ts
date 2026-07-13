@@ -23,12 +23,34 @@ const heldRune = (player: EffectContextLike['player']) =>
 const heldRelic = (player: EffectContextLike['player']) =>
 	player.mats.some((r) => r.type === 'relic' && r.hasRune);
 
+function materiallyDifferent(slots: EffectContextLike['player']['mats']): boolean {
+	return new Set(slots.map((slot) => slot.id ?? slot.name ?? slot.type ?? 'mat')).size > 1;
+}
+
 /** Build the decision options for whatever the player can currently afford. Always
  *  includes a "no" out. Returns null when neither item is held (nothing to offer). */
 function tradeOptions(player: EffectContextLike['player']) {
 	const options: { id: string; label: string }[] = [];
-	if (heldRune(player)) options.push({ id: 'rune', label: 'Discard rune → 1 Enchanted Attack' });
-	if (heldRelic(player)) options.push({ id: 'relic', label: 'Discard relic → 1 Exalted Attack' });
+	const runes = player.mats.filter((slot) => slot.type === 'rune' && slot.hasRune);
+	const relics = player.mats.filter((slot) => slot.type === 'relic' && slot.hasRune);
+	if (materiallyDifferent(runes)) {
+		for (const rune of runes)
+			options.push({
+				id: `rune:${rune.slotIndex}`,
+				label: `Discard ${rune.name ?? 'rune'} → 1 Enchanted Attack`
+			});
+	} else if (runes.length > 0) {
+		options.push({ id: 'rune', label: 'Discard rune → 1 Enchanted Attack' });
+	}
+	if (materiallyDifferent(relics)) {
+		for (const relic of relics)
+			options.push({
+				id: `relic:${relic.slotIndex}`,
+				label: `Discard ${relic.name ?? 'relic'} → 1 Exalted Attack`
+			});
+	} else if (relics.length > 0) {
+		options.push({ id: 'relic', label: 'Discard relic → 1 Exalted Attack' });
+	}
 	if (options.length === 0) return null;
 	options.push({ id: 'no', label: 'No' });
 	return options;
@@ -70,8 +92,10 @@ export const ability: ClassAbility[] = [
 
 /** Discard exactly one held rune (non-relic). Returns true if one was discarded.
  *  Matches awakenHandlers' discard semantics: flip the slot's `hasRune` off. */
-function discardOneRune(ctx: EffectContextLike): boolean {
-	const slot = ctx.player.mats.find((r) => r.type === 'rune' && r.hasRune);
+function discardOneRune(ctx: EffectContextLike, slotIndex?: number): boolean {
+	const slot = ctx.player.mats.find(
+		(r) => r.type === 'rune' && r.hasRune && (slotIndex === undefined || r.slotIndex === slotIndex)
+	);
 	if (!slot) return false;
 	slot.hasRune = false;
 	ctx.log.push('Discarded rune.');
@@ -80,8 +104,10 @@ function discardOneRune(ctx: EffectContextLike): boolean {
 
 /** Discard exactly one held relic; keeps the `relics` tally in sync. Returns true if
  *  one was discarded. */
-function discardOneRelic(ctx: EffectContextLike): boolean {
-	const slot = ctx.player.mats.find((r) => r.type === 'relic' && r.hasRune);
+function discardOneRelic(ctx: EffectContextLike, slotIndex?: number): boolean {
+	const slot = ctx.player.mats.find(
+		(r) => r.type === 'relic' && r.hasRune && (slotIndex === undefined || r.slotIndex === slotIndex)
+	);
 	if (!slot) return false;
 	slot.hasRune = false;
 	if (ctx.player.relics > 0) ctx.player.relics -= 1;
@@ -96,11 +122,13 @@ function discardOneRelic(ctx: EffectContextLike): boolean {
 // enqueued `runeMageTrade` (new id) survives and surfaces as the next decision card.
 export const decisions: ClassDecisions = {
 	runeMageTrade(ctx, optionId) {
-		if (optionId === 'rune') {
-			if (!discardOneRune(ctx)) return; // stale-card guard
+		const [kind, rawSlotIndex] = optionId.split(':');
+		const selectedSlot = rawSlotIndex === undefined ? undefined : Number(rawSlotIndex);
+		if (kind === 'rune') {
+			if (!discardOneRune(ctx, selectedSlot)) return; // stale-card guard
 			runAction(ctx, { kind: 'gainAttackDice', tier: 'enchanted', amount: 1 });
-		} else if (optionId === 'relic') {
-			if (!discardOneRelic(ctx)) return; // stale-card guard
+		} else if (kind === 'relic') {
+			if (!discardOneRelic(ctx, selectedSlot)) return; // stale-card guard
 			runAction(ctx, { kind: 'gainAttackDice', tier: 'exalted', amount: 1 });
 		} else {
 			return; // "no" / unknown — stop offering

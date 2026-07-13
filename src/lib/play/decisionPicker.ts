@@ -1,7 +1,7 @@
 /**
  * Picker-style decision specs — the SINGLE source of truth for which pending
- * decisions carry an instance picker (currently only Arc Mage's "convert 4 attack
- * dice") and, for those, exactly how many instances must be chosen and which are
+ * decisions carry an instance picker (Arc Mage and Strategist attack-die trades)
+ * and, for those, exactly how many instances must be chosen and which are
  * eligible.
  *
  * Both the view layer (viewV2 → PendingWorkDescriptor.pickerSpecs, so the UI lights
@@ -13,6 +13,7 @@
 
 import type { PendingDecision, PrivatePlayerState } from './types';
 import { ARC_MAGE_TRADE_COST } from './effects/classes/arcMage';
+import { STRATEGIST_TRADE_COST } from './effects/classes/strategist';
 
 /** A decision that requires the owner to pick a fixed number of their own instances
  *  (e.g. Arc Mage choosing WHICH 4 attack dice to convert). */
@@ -30,7 +31,7 @@ export interface DecisionPickerSpec {
 
 /**
  * The picker spec for one pending decision, or null when the decision is a plain
- * option choice (Yes/No) with no instance picker. Computed live from the owner's
+ * option choice or all eligible instances are materially fungible. Computed live from the owner's
  * current state so `eligibleInstanceIds` never goes stale between the card appearing
  * and being resolved.
  */
@@ -38,12 +39,22 @@ export function decisionPickerSpec(
 	decision: PendingDecision,
 	player: PrivatePlayerState
 ): DecisionPickerSpec | null {
-	if (decision.kind === 'arcMageTrade') {
+	const count =
+		decision.kind === 'arcMageTrade'
+			? ARC_MAGE_TRADE_COST
+			: decision.kind === 'strategistTrade'
+				? STRATEGIST_TRADE_COST
+				: null;
+	if (count !== null) {
+		const dice = player.attackDice ?? [];
+		// If every held die is consumed, or every possible payer has the same tier,
+		// the instances are fungible and the resolver can auto-spend without a picker.
+		if (dice.length <= count || new Set(dice.map((die) => die.tier)).size <= 1) return null;
 		return {
 			decisionId: decision.id,
 			kind: 'attackDice',
-			count: ARC_MAGE_TRADE_COST,
-			eligibleInstanceIds: (player.attackDice ?? []).map((d) => d.instanceId)
+			count,
+			eligibleInstanceIds: dice.map((d) => d.instanceId)
 		};
 	}
 	return null;

@@ -542,3 +542,32 @@ export function autoPickCostSlots(cost: CostRequirement[], mats: MatSlotSnapshot
 	}
 	return picks;
 }
+
+/** True only when a location cost has surplus wildcard payers with materially
+ * different identities. Named costs and fungible copies auto-pay without a picker. */
+export function locationCostRequiresSelection(
+	cost: CostRequirement[],
+	mats: MatSlotSnapshot[]
+): boolean {
+	const auto = autoPickCostSlots(cost, mats);
+	const consumedBySpecific = new Set(
+		auto.filter((pick, index): pick is number => pick !== null && !isWildcardCost(cost[index]))
+	);
+	for (const match of ['anyRelic', 'anyBasic'] as const) {
+		const wildcardCount = cost.filter((requirement) => requirement.match === match).length;
+		if (wildcardCount === 0) continue;
+		const requirement = cost.find((candidate) => candidate.match === match)!;
+		const candidates = eligibleCostSlots(requirement, mats).filter(
+			(index) => !consumedBySpecific.has(index)
+		);
+		if (candidates.length <= wildcardCount) continue;
+		const identities = new Set(
+			candidates.map((index) => {
+				const slot = mats[index];
+				return slot.id ?? `${slot.name ?? ''}|${slot.type ?? ''}|${slot.originId ?? ''}`;
+			})
+		);
+		if (identities.size > 1) return true;
+	}
+	return false;
+}

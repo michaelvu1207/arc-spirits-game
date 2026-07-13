@@ -25,6 +25,7 @@ import {
 } from '../server/botPolicy';
 import { SEAT_COLORS, type GameActor, type PublicGameState, type SeatColor } from '../types';
 import { legalActions } from './actions';
+import { getNeuralPolicy, planNeuralPhaseActions } from './neuralBot';
 import { canApply } from '../legality';
 import { hasCatalog, loadPlayCatalogSync } from '../sim/_catalogSync';
 
@@ -138,6 +139,45 @@ describe('neural bot corruption freeze', () => {
 				expect(after.pendingCorruptionDiscard).toBeNull();
 				expect(canApply(paid.state, actor, { type: 'endLocationActions' }, catalog)).toBe(true);
 			}
+		}
+	);
+
+	it.skipIf(!hasCatalog())(
+		'full neural plan discards the corrupted spirit and immediately passes the location phase',
+		async () => {
+			const catalog = loadPlayCatalogSync();
+			let found: { state: PublicGameState; seat: SeatColor } | null = null;
+			for (const seed of [5, 31, 77, 256, 909, 1234]) {
+				found = driveToLocationTurn(catalog, seed);
+				if (found) break;
+			}
+			expect(found, 'could not reach a location-phase turn with a spirit').not.toBeNull();
+			const { state, seat } = found!;
+			const player = state.players[seat]!;
+			// Keep one sacrifice so the regression has one unambiguous corruption payment.
+			player.spirits = [player.spirits[0]];
+			player.pendingCorruptionDiscard = { count: 1, reason: 'e2e-corruption' };
+			player.phaseReady = false;
+
+			const policy = await getNeuralPolicy();
+			expect(policy, 'bundled production policy should load').not.toBeNull();
+			const commands = planNeuralPhaseActions(state, seat, catalog, policy!);
+			expect(commands.map((command) => command.type)).toEqual([
+				'discardSpirit',
+				'endLocationActions'
+			]);
+
+			// Execute the entire planned batch through the real reducer, matching botSim.
+			let actual = state;
+			for (const command of commands) {
+				const result = applyGameCommand(actual, botActorFor(actual, seat), command, catalog);
+				expect(result.ok, command.type).toBe(true);
+				if (!result.ok) throw new Error(result.error.message);
+				actual = result.state;
+			}
+			expect(actual.players[seat]!.pendingCorruptionDiscard).toBeNull();
+			expect(actual.players[seat]!.spirits).toHaveLength(0);
+			expect(actual.phase !== 'location' || actual.players[seat]!.phaseReady).toBe(true);
 		}
 	);
 });

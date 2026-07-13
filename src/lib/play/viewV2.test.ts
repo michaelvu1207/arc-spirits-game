@@ -618,7 +618,8 @@ describe('decision pickerSpec (§5.4)', () => {
 			{ instanceId: 'x1', tier: 'basic' },
 			{ instanceId: 'x2', tier: 'basic' },
 			{ instanceId: 'x3', tier: 'enchanted' },
-			{ instanceId: 'x4', tier: 'exalted' }
+			{ instanceId: 'x4', tier: 'exalted' },
+			{ instanceId: 'x5', tier: 'arcane' }
 		];
 		red.pendingDecisions = [
 			{ id: 'd-arc', source: 'class', kind: 'arcMageTrade', prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] },
@@ -630,9 +631,30 @@ describe('decision pickerSpec (§5.4)', () => {
 			decisionId: 'd-arc',
 			kind: 'attackDice',
 			count: 4,
-			eligibleInstanceIds: ['x1', 'x2', 'x3', 'x4']
+			eligibleInstanceIds: ['x1', 'x2', 'x3', 'x4', 'x5']
 		});
 		expect(decisionPickerSpec(red.pendingDecisions[1], red)).toBeNull();
+
+		const strategist = {
+			id: 'd-strategist',
+			source: 'class' as const,
+			kind: 'strategistTrade',
+			prompt: 'p',
+			options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }]
+		};
+		expect(decisionPickerSpec(strategist, red)).toMatchObject({ count: 3, kind: 'attackDice' });
+		expect(
+			decisionPickerSpec(strategist, {
+				...red,
+				attackDice: red.attackDice.slice(0, 3)
+			})
+		).toBeNull();
+		expect(
+			decisionPickerSpec(strategist, {
+				...red,
+				attackDice: red.attackDice.map((die) => ({ ...die, tier: 'basic' as const }))
+			})
+		).toBeNull();
 	});
 });
 
