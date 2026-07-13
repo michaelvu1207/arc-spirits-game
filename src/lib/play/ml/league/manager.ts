@@ -1218,7 +1218,9 @@ function runTrainer(
 			}
 			const expectedOptionSteps = Math.ceil(optionRows / optionBatch);
 			const reportedOption = [
-				...trainerOutput.matchAll(/^Option PPO epoch .*option_optimizer_steps=(\d+)$/gm)
+				...trainerOutput.matchAll(
+					/^Option PPO epoch [^\n]*\boption_optimizer_steps=(\d+)\b[^\n]*$/gm
+				)
 			].map((match) => Number.parseInt(match[1], 10));
 			if (
 				reportedOption.length !== config.train.epochs ||
