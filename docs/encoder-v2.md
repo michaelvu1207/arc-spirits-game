@@ -3,7 +3,7 @@
 Source: `src/lib/play/ml/encodeV2.ts` · Tests: `src/lib/play/ml/encodeV2.test.ts`
 
 v2 replaces the lossy fixed-width summary observation (`encode.ts` v1,
-currently `OBS_DIM=188`)
+currently `OBS_DIM=199`)
 with **per-entity token sets** for a Python set-transformer. v1 stays live and
 untouched (the distilled net consumes it); **action encoding is NOT duplicated** —
 candidates keep using v1 `encodeAction` (52 floats, `ACT_DIM`).
@@ -282,7 +282,7 @@ spirit:58, market:49, rune:18, monster:10}`; flat length 3419; field-name lists
 
 One JSONL row format serves PPO-v2, BC warm start, AND v1<-v2 distillation:
 
-- `obs` = current v1 188-float vector (ALWAYS present, every row, all obs versions)
+- `obs` = current v1 199-float vector (ALWAYS present, every row, all obs versions)
 - `obsV2` = 3,419-float arc-obs-v2 flat array (present when recorded at
   obsVersion 2; absent on v1-only datasets)
 - `cands` = v1 encodeAction rows (52 floats) in every case

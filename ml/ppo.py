@@ -238,6 +238,36 @@ class TrajectoryBuffer:
         return len(self.cands)
 
 
+def apply_observation_feature_cutoff(
+    buffer: TrajectoryBuffer,
+    cutoff: int,
+) -> tuple[int, int]:
+    """Zero an append-only observation suffix for a compute-matched PPO control.
+
+    Both experiment arms retain the same tensor width and execute this assignment;
+    passing the full width masks an empty suffix. Optional self-imitation observations
+    are masked too so no auxiliary objective can bypass the control.
+    """
+    if isinstance(cutoff, bool) or not isinstance(cutoff, int):
+        raise ValueError("observation feature cutoff must be an integer")
+    if buffer.obs.ndim != 2:
+        raise ValueError(f"trajectory observations must be rank 2, got {buffer.obs.shape}")
+    obs_dim = int(buffer.obs.shape[1])
+    if cutoff < 1 or cutoff > obs_dim:
+        raise ValueError(
+            f"observation feature cutoff must be in [1, {obs_dim}], got {cutoff}"
+        )
+    buffer.obs[:, cutoff:] = 0.0
+    replay = buffer.self_imitation
+    if replay is not None:
+        if replay.obs.ndim != 2 or replay.obs.shape[1] != obs_dim:
+            raise ValueError(
+                "self-imitation observation width does not match trajectory observations"
+            )
+        replay.obs[:, cutoff:] = 0.0
+    return cutoff, obs_dim
+
+
 def _self_imitation_from_rows(rows: list[dict[str, Any]]) -> SelfImitationReplay | None:
     if not rows:
         return None
@@ -496,7 +526,7 @@ def load_trajectory_buffer(
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
     GAE advantages + returns learner-side.
 
-    obs_key: "obs" (current v1 188-float summary) or "obsV2" (flat arc-obs-v2,
+    obs_key: "obs" (current v1 199-float summary) or "obsV2" (flat arc-obs-v2,
     paired-row contract). A missing/malformed row rejects its entire episode:
     silently dropping one row would move dense rewards, done, and GAE across a
     transition that the learner can no longer represent."""

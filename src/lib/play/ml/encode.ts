@@ -21,6 +21,8 @@ import {
 	SEAT_COLORS,
 	VP_TO_WIN,
 	MAX_ROUNDS,
+	MAX_SPIRITS,
+	RUNE_CARRY_LIMIT,
 	ALL_DESTINATIONS,
 	isEvilAlignment,
 	type GameCommand,
@@ -472,11 +474,49 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	for (const name of FULL_ORIGIN_FEATURES) f.push(clamp01((activeOrigins[name] ?? 0) / 7));
 	for (const name of FULL_ORIGIN_FEATURES) f.push(clamp01((dormantOrigins[name] ?? 0) / 7));
 
+	// ── Late-game macro state (obs v1.4). The frozen v1.3 prefix can reconstruct some
+	// thresholds from VP/round/tableau counts, but it cannot see within-round scoring,
+	// a three-round pace window, or material overflow beyond its per-kind /4 saturation.
+	// Keep these public acting-seat features append-only: no outcome or future draw enters here.
+	const vp = me?.victoryPoints ?? 0;
+	f.push(me && vp >= VP_TO_WIN / 2 ? 1 : 0);
+	f.push(me ? clamp01((vp - VP_TO_WIN / 2) / (VP_TO_WIN / 2)) : 0);
+	// Active round r can have at most r-1 completed snapshots. Defensively ignore a
+	// terminal/stale extra point without changing the frozen v1.3 history feature above.
+	const completedHistory = history.slice(0, Math.max(0, state.round - 1));
+	let recentCompletedVp = 0;
+	if (completedHistory.length > 0) {
+		const first = Math.max(0, completedHistory.length - 3);
+		let totalGain = 0;
+		for (let i = first; i < completedHistory.length; i += 1) {
+			const prior = i > 0 ? completedHistory[i - 1] : 0;
+			totalGain += Math.max(0, completedHistory[i] - prior);
+		}
+		recentCompletedVp = totalGain / (completedHistory.length - first);
+	}
+	f.push(clamp01(recentCompletedVp / 5));
+	const lastCompletedVp =
+		completedHistory.length > 0 ? completedHistory[completedHistory.length - 1] : 0;
+	f.push(me ? clamp01(Math.max(0, vp - lastCompletedVp) / 10) : 0);
+	const remainingRoundsIncludingCurrent = Math.max(1, MAX_ROUNDS + 1 - state.round);
+	const requiredVpPerRemainingRound = Math.max(0, VP_TO_WIN - vp) / remainingRoundsIncludingCurrent;
+	f.push(me ? clamp01(requiredVpPerRemainingRound / 5) : 0);
+	const spiritCount = me?.spirits?.length ?? 0;
+	const faceUpCount = me?.spirits?.filter((spirit) => !spirit.isFaceDown).length ?? 0;
+	f.push(me ? clamp01(Math.max(0, MAX_SPIRITS - spiritCount) / MAX_SPIRITS) : 0);
+	f.push(me ? clamp01(faceUpCount / MAX_SPIRITS) : 0);
+	const spendableMats = me?.mats?.filter((mat) => mat.hasRune) ?? [];
+	const spendableCount = spendableMats.length;
+	f.push(me ? clamp01(Math.max(0, spendableCount - RUNE_CARRY_LIMIT) / RUNE_CARRY_LIMIT) : 0);
+	f.push(me ? clamp01(Math.max(0, RUNE_CARRY_LIMIT - spendableCount) / RUNE_CARRY_LIMIT) : 0);
+	f.push(me ? clamp01(spendableMats.filter((mat) => mat.type === 'rune').length / 8) : 0);
+	f.push(me ? clamp01(spendableMats.filter((mat) => mat.type === 'relic').length / 8) : 0);
+
 	return f;
 }
 
 /** Number of features encodeObs emits. Asserted in tests; also written to meta.json. */
-export const OBS_DIM = 188; // v1.3: 83 + 105 full engine-cycle/player-count features
+export const OBS_DIM = 199; // v1.4: 188 + 11 late-game pace/tableau/capacity features
 
 // Command-type vocabulary for the action one-hot. Append-only; index is the contract.
 export const COMMAND_VOCAB: GameCommand['type'][] = [

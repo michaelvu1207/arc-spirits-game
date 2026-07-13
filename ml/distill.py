@@ -2,7 +2,7 @@
 Distill the v2 set-transformer teacher into the live TS-format v1 net.
 
 The live TypeScript bot (src/lib/play/ml/net.ts) can only run the fixed-MLP
-`arc-cand-scorer-v1` JSON format on current v1 188-float observations. A transformer
+`arc-cand-scorer-v1` JSON format on current v1 199-float observations. A transformer
 cannot be exported to that format, so v2 knowledge reaches production via
 distillation: a frozen EntityCandidateScorer teacher (arc-entity-scorer-v2 .pt)
 supervises a fresh CandidateScorer student (ml/model.py), and the student is

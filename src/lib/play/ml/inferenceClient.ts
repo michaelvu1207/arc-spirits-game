@@ -7,7 +7,7 @@
  * their encoding from the served checkpoint: binary for arc-entity-scorer-v2
  * (3,419-float rows — binary skips the float→text→float round trip that
  * dominates JSON cost there, 6-9x measured server-side at batch shapes), JSON
- * for v1's 188-float rows (where text encode is cheap and pre-binary servers
+ * for v1's 199-float rows (where text encode is cheap and pre-binary servers
  * keep working by default). `wire: 'binary' | 'json'` overrides the cut.
  * Magic bytes are the protocol version: an unknown response magic is an
  * error, never a guess.

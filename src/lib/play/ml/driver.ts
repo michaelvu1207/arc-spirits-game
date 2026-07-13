@@ -71,7 +71,7 @@ import type { SeatCycleSummary, StrategicDecisionScope } from './poolTypes';
 export interface Sample {
 	obs: number[];
 	/** Paired v2 observation (arc-obs-v2 flat array), present when recorded at obsVersion 2.
-	 *  `obs` stays the current v1 188-float vector on EVERY row — the pinned paired-row contract
+	 *  `obs` stays the current v1 199-float vector on EVERY row — the pinned paired-row contract
 	 *  (docs/encoder-v2.md): v1 consumers read obs, v2 trainers read obsV2, and
 	 *  distillation reads both views of the same decision. */
 	obsV2?: number[];
@@ -334,7 +334,7 @@ export interface RecordGameOptions {
 	/**
 	 * Observation schema recorded on samples (default 1). At 2, every recorded Sample
 	 * ADDITIONALLY carries obsV2 = flattenObsV2 (3,419 floats for the frozen catalog);
-	 * Sample.obs remains the current v1 188-float vector on every row and Sample.cands stay v1
+	 * Sample.obs remains the current v1 199-float vector on every row and Sample.cands stay v1
 	 * encodeAction rows — the pinned paired-row contract (docs/encoder-v2.md), which is
 	 * exactly what v1<-v2 distillation needs (both views of the same decision). The
 	 * ACTING policy runs on v1 obs regardless: selection, logpOld and vPred come from
@@ -771,7 +771,7 @@ export function sampledPolicyBehavior(
 
 export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions): RecordGameResult {
 	if (opts.policyObsVersion === 2) {
-		// The in-process TS net is v1-only: local weights consume the current 188-float obs.
+		// The in-process TS net is v1-only: local weights consume the current 199-float obs.
 		if (opts.policy && (opts.policy as unknown as { w?: unknown }).w) {
 			throw new Error(
 				'driver: policyObsVersion 2 requires a v2-capable policy (RemotePolicy over an infer socket serving arc-entity-scorer-v2); the in-process NeuralPolicy is v1-only'
@@ -799,7 +799,9 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	const captureRounds = new Set(opts.captureContinuationRounds ?? []);
 	for (const round of captureRounds) assertLateRound(round, 'capture continuation round');
 	if ((opts.continuation || captureRounds.size > 0) && (opts.chooser || opts.searcher)) {
-		throw new Error('driver: continuation capture/replay does not support opaque chooser or searcher state');
+		throw new Error(
+			'driver: continuation capture/replay does not support opaque chooser or searcher state'
+		);
 	}
 	if (opts.continuation && Object.keys(opts.opponentPolicies ?? {}).length > 0) {
 		throw new Error('driver: continuation replay does not support opponent policies');
@@ -1246,14 +1248,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			isContinuationCaptureBoundary(state, seats)
 		) {
 			continuationSnapshots.push(
-				makeContinuationSnapshot(
-					state,
-					botRngState,
-					pickRng,
-					opts.seed,
-					reach30Horizon,
-					seats
-				)
+				makeContinuationSnapshot(state, botRngState, pickRng, opts.seed, reach30Horizon, seats)
 			);
 			capturedRounds.add(state.round);
 		}
@@ -1321,9 +1316,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		seatSamples.forEach((s, i) => (s.ret = g[i]));
 
 		// PPO trajectory stamps (per-seat episode; see the Sample field docs).
-		const gameId = opts.episodeId
-			? `${opts.episodeId}-${seat}`
-			: `${opts.seed}-${n}p-${seat}`;
+		const gameId = opts.episodeId ? `${opts.episodeId}-${seat}` : `${opts.seed}-${n}p-${seat}`;
 		const placement = 1 + seats.filter((o) => o !== seat && finalVP[o] > finalVP[seat]).length;
 		const rSteps = opts.stepRewards?.(seatSamples, seat, finalVP);
 		// Dense reward: ΔVP + ΔΦ between consecutive recorded decisions; the last

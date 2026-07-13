@@ -96,7 +96,11 @@ describe('concurrent gauntlet attribution', () => {
 		}
 	});
 });
-function member(id: string, kind: LeagueMember['kind'], extra: Partial<LeagueMember> = {}): LeagueMember {
+function member(
+	id: string,
+	kind: LeagueMember['kind'],
+	extra: Partial<LeagueMember> = {}
+): LeagueMember {
 	return { id, kind, createdGen: 0, matchStats: {}, ...extra };
 }
 
@@ -142,7 +146,10 @@ describe('pfsp math', () => {
 
 	it('league exploiters sample uniformly (weights all 1)', () => {
 		const lx = member('lx-0', 'league_exploiter');
-		const pool = [member('frozen-a', 'frozen', { weightsPath: 'a' }), member('heur-h', 'heuristic', { profile: 'hard' })];
+		const pool = [
+			member('frozen-a', 'frozen', { weightsPath: 'a' }),
+			member('heur-h', 'heuristic', { profile: 'hard' })
+		];
 		expect(opponentWeights(lx, pool, { p: 2, variant: 'squared' })).toEqual([1, 1]);
 	});
 
@@ -161,9 +168,15 @@ describe('pfsp math', () => {
 		expect(a.map((m) => m.id)).toEqual(b.map((m) => m.id)); // deterministic
 		// With weights ~{easy: 0.001, nemesis: 1}, every draw lands on the nemesis.
 		expect(a.every((m) => m.id === 'nemesis')).toBe(true);
-		expect(() => sampleOpponents(member('mx', 'main_exploiter'), [member('mx', 'main_exploiter')], 1, cfg, randFrom([0.5]))).toThrow(
-			/empty opponent pool/
-		);
+		expect(() =>
+			sampleOpponents(
+				member('mx', 'main_exploiter'),
+				[member('mx', 'main_exploiter')],
+				1,
+				cfg,
+				randFrom([0.5])
+			)
+		).toThrow(/empty opponent pool/);
 	});
 
 	it('recordPairwise: better/worse/tie accounting', () => {
@@ -179,15 +192,9 @@ describe('pfsp math', () => {
 describe('trainer RNG pairing', () => {
 	it('derives a stable, generation- and lane-specific seed', () => {
 		const cfg = { seedBase: 292_000_000 };
-		expect(trainerSeedForGeneration(cfg, 21, 0)).toBe(
-			trainerSeedForGeneration(cfg, 21, 0)
-		);
-		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(
-			trainerSeedForGeneration(cfg, 22, 0)
-		);
-		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(
-			trainerSeedForGeneration(cfg, 21, 1)
-		);
+		expect(trainerSeedForGeneration(cfg, 21, 0)).toBe(trainerSeedForGeneration(cfg, 21, 0));
+		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(trainerSeedForGeneration(cfg, 22, 0));
+		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(trainerSeedForGeneration(cfg, 21, 1));
 	});
 });
 
@@ -311,6 +318,32 @@ describe('conservative self-imitation config guards', () => {
 		const v2 = valid();
 		v2.laneModel = { main_0: 'v2' };
 		expect(() => validateLeagueConfig(v2)).toThrow(/requires v1/);
+	});
+});
+
+describe('late-game macro representation preregistration', () => {
+	it('keeps the V22 pair identical apart from the observation cutoff and metadata', () => {
+		type PreregisteredConfig = LeagueConfig & { _readme: string };
+		const read = (name: string) =>
+			JSON.parse(
+				readFileSync(resolve(process.cwd(), 'ml/league/configs', name), 'utf8')
+			) as PreregisteredConfig;
+		const control = read('fair-v22-solo-macro-control.json');
+		const treatment = read('fair-v22-solo-macro-treatment.json');
+		const cutoffIndex = control.train.extraArgs!.indexOf('--obs-feature-cutoff');
+
+		expect(() => validateLeagueConfig(control)).not.toThrow();
+		expect(() => validateLeagueConfig(treatment)).not.toThrow();
+		expect(OBS_DIM).toBe(199);
+		expect(cutoffIndex).toBeGreaterThanOrEqual(0);
+		expect(control.train.extraArgs![cutoffIndex + 1]).toBe('188');
+		expect(treatment.train.extraArgs![cutoffIndex + 1]).toBe(String(OBS_DIM));
+		expect(treatment.train.extraArgs![cutoffIndex]).toBe('--obs-feature-cutoff');
+
+		treatment._readme = control._readme;
+		treatment.train.extraArgs![cutoffIndex + 1] = control.train.extraArgs![cutoffIndex + 1];
+		treatment.paths.root = control.paths.root;
+		expect(treatment).toEqual(control);
 	});
 });
 
@@ -471,16 +504,28 @@ describe('promotion bar + baseline elos', () => {
 				// v5 pool has no checkpoint anchors; frozen peers enter via extraFrozen and
 				// are stamped through baselineElos exactly as before (by id or by path).
 				extraFrozen: [
-					{ id: 'frozen-traceq-damage-nearmiss', weightsPath: 'ml/meta_runs/traceq-damage-nearmiss-vp28-29-20260630T053132Z/best_policy.json' },
-					{ id: 'frozen-routeexecq-shared-allseat', weightsPath: 'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json' }
+					{
+						id: 'frozen-traceq-damage-nearmiss',
+						weightsPath:
+							'ml/meta_runs/traceq-damage-nearmiss-vp28-29-20260630T053132Z/best_policy.json'
+					},
+					{
+						id: 'frozen-routeexecq-shared-allseat',
+						weightsPath:
+							'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json'
+					}
 				],
 				baselineElos: {
 					'frozen-traceq-damage-nearmiss': 221, // by member id
 					'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json': 500 // by path, overrides scan
 				}
 			});
-			expect(state.members.find((m) => m.id === 'frozen-traceq-damage-nearmiss')!.eloVsAnchors).toBe(221);
-			expect(state.members.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors).toBe(500);
+			expect(
+				state.members.find((m) => m.id === 'frozen-traceq-damage-nearmiss')!.eloVsAnchors
+			).toBe(221);
+			expect(
+				state.members.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors
+			).toBe(500);
 			expect(promotionBar(state.members)).toBe(500);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
@@ -505,7 +550,11 @@ describe('promotion bar + baseline elos', () => {
 		try {
 			const { state } = initLeague(root, {
 				extraFrozen: [
-					{ id: 'frozen-champion-run1', weightsPath: 'ml/champions/league-run1-main0-gen8-elo268.json', elo: 500 },
+					{
+						id: 'frozen-champion-run1',
+						weightsPath: 'ml/champions/league-run1-main0-gen8-elo268.json',
+						elo: 500
+					},
 					{ id: 'frozen-unscored', weightsPath: 'ml/champions/nonexistent-for-scan.json' } // no elo, fake path
 				]
 			});
@@ -620,7 +669,10 @@ describe('league smoke generation (SMOKE=1)', () => {
 
 				// The trained checkpoint exists and matches the live encoder contract.
 				expect(existsSync(line.ckpt)).toBe(true);
-				const ckpt = JSON.parse(readFileSync(line.ckpt, 'utf8')) as { obs_dim: number; act_dim: number };
+				const ckpt = JSON.parse(readFileSync(line.ckpt, 'utf8')) as {
+					obs_dim: number;
+					act_dim: number;
+				};
 				expect(ckpt.obs_dim).toBe(OBS_DIM);
 				expect(ckpt.act_dim).toBe(ACT_DIM);
 
@@ -630,7 +682,10 @@ describe('league smoke generation (SMOKE=1)', () => {
 				expect(state.phase).toBe('idle');
 				expect(state.members.find((m) => m.id === 'main-0')!.weightsPath).toBe(line.ckpt);
 				const p = leaguePaths(root);
-				const hist = readFileSync(p.history, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as HistoryLine);
+				const hist = readFileSync(p.history, 'utf8')
+					.trim()
+					.split('\n')
+					.map((l) => JSON.parse(l) as HistoryLine);
 				expect(hist).toHaveLength(1);
 				expect(hist[0].gen).toBe(1);
 
@@ -657,7 +712,9 @@ describe('v2 lanes (unit)', () => {
 			const main = state.members.find((m) => m.id === 'main-0')!;
 			expect(main.model).toBe('v2');
 			expect(laneModelOf(config, main)).toBe('v2');
-			expect(laneModelOf(config, state.members.find((m) => m.id === 'main_exploiter-0')!)).toBe('v1');
+			expect(laneModelOf(config, state.members.find((m) => m.id === 'main_exploiter-0')!)).toBe(
+				'v1'
+			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -669,7 +726,9 @@ describe('v2 lanes (unit)', () => {
 		v2Learner.distilledPath = 'ckpt/main-0-gen3-distilled.json';
 		expect(isPlayable(v2Learner)).toBe(true);
 		// A v2 lane's initFrom .pt must never leak into opponent seats either.
-		expect(isPlayable(member('x', 'main_exploiter', { model: 'v2', initFrom: 'w/init.pt' }))).toBe(false);
+		expect(isPlayable(member('x', 'main_exploiter', { model: 'v2', initFrom: 'w/init.pt' }))).toBe(
+			false
+		);
 		expect(isPlayable(member('y', 'main_exploiter', { initFrom: 'w/init.json' }))).toBe(true);
 	});
 
@@ -744,7 +803,9 @@ describe('v2 lanes (unit)', () => {
 			member('heur-hard', 'heuristic', { profile: 'hard' }),
 			member('heur-insane', 'heuristic', { profile: 'insane' })
 		];
-		expect(buildMatchup(config, learner, opps, 0, 1, { socket: '/tmp/s' }).config.selection).toBe('hybrid');
+		expect(buildMatchup(config, learner, opps, 0, 1, { socket: '/tmp/s' }).config.selection).toBe(
+			'hybrid'
+		);
 		expect(buildMatchup(config, learner, opps, 0, 1).config.selection).toBe('value'); // v1 path untouched
 	});
 });
@@ -787,7 +848,15 @@ describe('v1 socket lanes (unit)', () => {
 		const config = defaultConfig('unused');
 		const learner = member('main-0', 'main', { model: 'v2', ptPath: 'x.pt' });
 		// Both provided: the v2 arg is authoritative, v1Socket is dropped.
-		const plan = buildMatchup(config, learner, opps(), 0, 1, { socket: '/tmp/v2.sock' }, '/tmp/v1.sock');
+		const plan = buildMatchup(
+			config,
+			learner,
+			opps(),
+			0,
+			1,
+			{ socket: '/tmp/v2.sock' },
+			'/tmp/v1.sock'
+		);
 		expect(plan.config.inferSocket).toBe('/tmp/v2.sock');
 		expect(plan.config.policyObsVersion).toBe(2);
 		expect(plan.config.obsVersion).toBe(2);
@@ -798,13 +867,23 @@ describe('v1 socket lanes (unit)', () => {
 		expect(annealedTemperature(flat, 1)).toBe(0.9);
 		expect(annealedTemperature(flat, 50)).toBe(0.9);
 
-		const cfg = { ...defaultConfig('unused'), temperature: 0.9, temperatureAnneal: { from: 1.0, to: 0.65, overGens: 40 } };
+		const cfg = {
+			...defaultConfig('unused'),
+			temperature: 0.9,
+			temperatureAnneal: { from: 1.0, to: 0.65, overGens: 40 }
+		};
 		expect(annealedTemperature(cfg, 1)).toBeCloseTo(1.0); // gen 1 = from (warm-start gate unaffected)
 		expect(annealedTemperature(cfg, 40)).toBeCloseTo(0.65); // reaches `to` at overGens
 		expect(annealedTemperature(cfg, 60)).toBeCloseTo(0.65); // holds after
 		expect(annealedTemperature(cfg, 20)).toBeCloseTo(1.0 + (0.65 - 1.0) * (19 / 39)); // linear midpoint
 		// It flows into the actor game config (both generation and eval matchups use buildMatchup).
-		const plan = buildMatchup(cfg, member('main-0', 'main', { weightsPath: 'w.json' }), opps(), 0, 40);
+		const plan = buildMatchup(
+			cfg,
+			member('main-0', 'main', { weightsPath: 'w.json' }),
+			opps(),
+			0,
+			40
+		);
 		expect(plan.config.temperature).toBeCloseTo(0.65);
 	});
 });
@@ -913,9 +992,9 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 
 				// Same config elsewhere reproduces the SAME zero-knowledge net.
 				const b = initLeague(rootB, template);
-				expect(readFileSync(b.state.members.find((m) => m.id === 'main-0')!.initFrom!, 'utf8')).toBe(
-					readFileSync(main.initFrom!, 'utf8')
-				);
+				expect(
+					readFileSync(b.state.members.find((m) => m.id === 'main-0')!.initFrom!, 'utf8')
+				).toBe(readFileSync(main.initFrom!, 'utf8'));
 			} finally {
 				rmSync(rootA, { recursive: true, force: true });
 				rmSync(rootB, { recursive: true, force: true });
@@ -940,7 +1019,14 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 					maxRounds: 15,
 					lanes: { main: 1, mainExploiter: 0, leagueExploiter: 0 },
 					laneModel: { 'main-0': 'v2' },
-					v2: { dModel: 32, layers: 1, heads: 2, device: 'cpu', distillEpochs: 1, distillEveryGen: true },
+					v2: {
+						dModel: 32,
+						layers: 1,
+						heads: 2,
+						device: 'cpu',
+						distillEpochs: 1,
+						distillEveryGen: true
+					},
 					train: { epochs: 1 },
 					initFrom: undefined, // fresh net — gen 1 bootstraps heuristically
 					promoteEvery: 0,
@@ -1005,14 +1091,20 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 describe('mirror-contention lane (selfPlayFraction)', () => {
 	it('isMirrorSlot: exactly floor(matchups·f) mirrors, evenly spread; off at f=0', () => {
 		const count = (matchups: number, f: number) =>
-			Array.from({ length: matchups }, (_, m) => isMirrorSlot(m, matchups, f)).filter(Boolean).length;
+			Array.from({ length: matchups }, (_, m) => isMirrorSlot(m, matchups, f)).filter(Boolean)
+				.length;
 		expect(count(16, 0)).toBe(0);
 		expect(count(16, 0.35)).toBe(Math.floor(16 * 0.35)); // 5
 		expect(count(20, 0.35)).toBe(7); // 20·0.35 = 7 exactly
 		expect(count(10, 1)).toBe(10);
 		// Spread, not clustered: with f=0.5 every other matchup is a mirror.
 		expect(Array.from({ length: 6 }, (_, m) => isMirrorSlot(m, 6, 0.5))).toEqual([
-			false, true, false, true, false, true
+			false,
+			true,
+			false,
+			true,
+			false,
+			true
 		]);
 		// Fraction is clamped into [0,1].
 		expect(count(8, -0.2)).toBe(0);
@@ -1029,9 +1121,9 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 			expect(o.id).toBe('main-0-mirror'); // distinct id: self-play stays out of real matchStats
 		}
 		// Warm-start-only learner (gen 1): mirrors its initFrom.
-		expect(mirrorOpponents(member('main-0', 'main', { initFrom: 'init.json' }), 3)![0].weightsPath).toBe(
-			'init.json'
-		);
+		expect(
+			mirrorOpponents(member('main-0', 'main', { initFrom: 'init.json' }), 3)![0].weightsPath
+		).toBe('init.json');
 		// Fresh net, no checkpoint yet → null (caller falls back to PFSP).
 		expect(mirrorOpponents(member('x', 'main_exploiter'), 3)).toBeNull();
 	});
@@ -1049,7 +1141,11 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		// m=1 is a mirror slot at f=0.5: three copies of the learner's current ckpt.
 		const mir = matchupOpponents(config, learner, members, 1, 6, rand);
 		expect(mir.mirror).toBe(true);
-		expect(mir.opponents.map((o) => o.weightsPath)).toEqual(['ckpt/cur.json', 'ckpt/cur.json', 'ckpt/cur.json']);
+		expect(mir.opponents.map((o) => o.weightsPath)).toEqual([
+			'ckpt/cur.json',
+			'ckpt/cur.json',
+			'ckpt/cur.json'
+		]);
 		// buildMatchup resolves them into opponentWeights all equal to the learner net.
 		const plan = buildMatchup({ ...config, shuffleGuardians: true }, learner, mir.opponents, 1, 5);
 		const oppW = Object.values(plan.config.opponentWeights ?? {});
@@ -1103,22 +1199,8 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		// Fable-review guard: a partial blocker mix creates late-game data without teaching
 		// the learner that another seat always keeps the table alive. f=0.5 alternates.
 		const partial = { ...config, terminationBlockerFraction: 0.5 };
-		const partialOff = matchupOpponents(
-			partial,
-			learner,
-			members,
-			0,
-			6,
-			randFrom([0.1, 0.5, 0.9])
-		);
-		const partialOn = matchupOpponents(
-			partial,
-			learner,
-			members,
-			1,
-			6,
-			randFrom([0.1, 0.5, 0.9])
-		);
+		const partialOff = matchupOpponents(partial, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
+		const partialOn = matchupOpponents(partial, learner, members, 1, 6, randFrom([0.1, 0.5, 0.9]));
 		expect(blockers(partialOff)).toHaveLength(0);
 		expect(blockers(partialOn)).toHaveLength(1);
 		// buildMatchup seats the blocker as a heuristic (profile), NOT a checkpoint or neural seat.
@@ -1176,14 +1258,21 @@ describe('heuristic-field contention (heuristicOpponentFraction)', () => {
 	});
 
 	it('heuristicFieldOpponents: cycles the configured profiles as scripted, weightless opponents', () => {
-		const config = { ...defaultConfig('unused'), seats: 4, heuristicOpponentProfiles: ['paragon', 'insane'] };
+		const config = {
+			...defaultConfig('unused'),
+			seats: 4,
+			heuristicOpponentProfiles: ['paragon', 'insane']
+		};
 		const opps = heuristicFieldOpponents(config, 3);
 		expect(opps).toHaveLength(3);
 		expect(opps.map((o) => o.profile)).toEqual(['paragon', 'insane', 'paragon']); // cycled over seats
 		expect(opps.every((o) => o.kind === 'heuristic' && !o.weightsPath)).toBe(true);
 		expect(opps.every((o) => o.id.startsWith('heur-field-'))).toBe(true); // distinct from roster anchors
 		// Default field when none configured.
-		expect(heuristicFieldOpponents(defaultConfig('unused'), 2).map((o) => o.profile)).toEqual(['paragon', 'insane']);
+		expect(heuristicFieldOpponents(defaultConfig('unused'), 2).map((o) => o.profile)).toEqual([
+			'paragon',
+			'insane'
+		]);
 	});
 
 	it('matchupOpponents: a heuristic slot seats the strong scripted field; learner still records alone', () => {

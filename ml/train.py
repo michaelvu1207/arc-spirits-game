@@ -25,7 +25,7 @@ fields still train under awr/alphazero, and trajectory rows still load here.
 
 --model v2 trains the entity set-transformer (ml/model_v2.py) instead of the
 v1 MLP, on the PAIRED-ROW contract (authoritative, see bc_warmstart_v2.py):
-rows keep `obs` = the current 188-float v1 summary AND carry the flat arc-obs-v2 array
+rows keep `obs` = the current 199-float v1 summary AND carry the flat arc-obs-v2 array
 (3419 floats for the frozen catalog) under `obsV2`. --model v2 reads obsV2 and
 skips rows without it (counted); the layout is resolved from meta.json's
 "obs_v2" obsV2Meta block or the row's self-describing header. v2 checkpoints
@@ -78,7 +78,7 @@ class DecisionDataset(Dataset):
     Stores all decisions from JSONL files as numpy arrays.
     Padding is done at collation time (per-batch).
 
-    obs_key selects which field feeds the model: "obs" (current v1 188-float summary)
+    obs_key selects which field feeds the model: "obs" (current v1 199-float summary)
     or "obsV2" (flat arc-obs-v2, paired-row contract). Rows lacking obs_key
     are skipped and counted (v1-only rows mixed into a v2 dataset).
     """
@@ -671,6 +671,7 @@ def train(
     self_imitation_generation: int = 0,
     self_imitation_max_age: int = 3,
     self_imitation_max_rows: int = 100_000,
+    obs_feature_cutoff: int | None = None,
 ) -> list[dict]:
     """Train and export; returns per-epoch metric dicts (used by tests)."""
     if seed is not None:
@@ -691,6 +692,8 @@ def train(
         raise ValueError("reach-30 critic training currently requires --mode ppo")
     if mode != "ppo" and (ppo_rows_per_epoch is not None or ppo_continuation_fraction is not None):
         raise ValueError("PPO row-budget controls require --mode ppo")
+    if obs_feature_cutoff is not None and (mode != "ppo" or model_version != "v1"):
+        raise ValueError("--obs-feature-cutoff requires --mode ppo --model v1")
     if ppo_rows_per_epoch is not None and target_kl is not None:
         raise ValueError(
             "--target-kl is incompatible with --ppo-rows-per-epoch fixed-update training"
@@ -724,7 +727,7 @@ def train(
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
     # Paired-row contract: v2 reads the flat arc-obs-v2 array from `obsV2`;
-    # `obs` stays the current v1 188-float summary for the v1 net / distillation.
+    # `obs` stays the current v1 199-float summary for the v1 net / distillation.
     obs_key = "obsV2" if model_version == "v2" else "obs"
 
     def export_model(model, obs_dim: int, act_dim: int) -> None:
@@ -741,7 +744,12 @@ def train(
             print(f"\nWeights exported to: {out_path}")
 
     if mode == "ppo":
-        from ppo import load_trajectory_buffer, parse_placement_rewards, train_ppo
+        from ppo import (
+            apply_observation_feature_cutoff,
+            load_trajectory_buffer,
+            parse_placement_rewards,
+            train_ppo,
+        )
 
         buffer = load_trajectory_buffer(
             data_dir,
@@ -764,6 +772,14 @@ def train(
             self_imitation_max_age=self_imitation_max_age,
             self_imitation_max_rows=self_imitation_max_rows,
         )
+        if obs_feature_cutoff is not None:
+            kept, loaded_obs_dim = apply_observation_feature_cutoff(
+                buffer, obs_feature_cutoff
+            )
+            print(
+                "Observation feature cutoff | "
+                f"kept={kept}/{loaded_obs_dim} | masked={loaded_obs_dim - kept}"
+            )
         if model_version == "v2":
             model, spec, act_dim = build_policy_model_v2(
                 data_dir, device, out_path, init_from, warm_start, v2_d_model, v2_layers, v2_heads
@@ -1161,6 +1177,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ppo-continuation-fraction", type=float, default=None,
                    help="Target share of selected PPO rows carrying continuationCurriculum=1; "
                         "requires --ppo-rows-per-epoch")
+    p.add_argument("--obs-feature-cutoff", type=int, default=None,
+                   help="PPO v1 compute-matched representation control: zero observation columns "
+                        "at and after this append-only index while retaining the full tensor width")
     p.add_argument("--self-imitation-coef", type=float, default=0.0,
                    help="Weight on conservative winning-action masked CE (default 0 = off)")
     p.add_argument("--self-imitation-replay-fraction", type=float, default=0.0,
@@ -1293,4 +1312,5 @@ if __name__ == "__main__":
         self_imitation_generation=args.self_imitation_generation,
         self_imitation_max_age=args.self_imitation_max_age,
         self_imitation_max_rows=args.self_imitation_max_rows,
+        obs_feature_cutoff=args.obs_feature_cutoff,
     )

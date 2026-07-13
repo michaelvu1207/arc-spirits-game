@@ -94,7 +94,7 @@ class EntityCandidateScorer(nn.Module):
 
     Drop-in interface match for CandidateScorer (ml/model.py): forward/score_single
     signatures and the aux-head methods are identical; only obs_dim differs
-    (flat v2 length instead of the current 188-float summary).
+    (flat v2 length instead of the current 199-float summary).
     """
 
     def __init__(

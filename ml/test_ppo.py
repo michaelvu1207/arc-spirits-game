@@ -29,6 +29,7 @@ import train as train_mod
 import verify_export
 from model import build_model
 from ppo import (
+    apply_observation_feature_cutoff,
     behavior_log_probs,
     compute_discounted_returns,
     compute_gae,
@@ -131,6 +132,41 @@ def test_gae_truncated_episode_bootstraps_last_value():
     adv, ret = compute_gae([0.0], [0.5], [False], gamma=0.9, lam=0.8, last_value=1.0)
     assert np.allclose(adv, [0.4]), adv
     assert np.allclose(ret, [0.9]), ret
+
+
+def test_observation_feature_cutoff_masks_only_append_only_suffix():
+    with tempfile.TemporaryDirectory() as td:
+        data = Path(td) / "data"
+        make_traj_dataset(data, n_games=2, steps=2, seed=17)
+        buffer = load_trajectory_buffer(
+            data,
+            gamma=0.997,
+            gae_lambda=0.95,
+            placement_rewards=PLACEMENT_REWARDS,
+        )
+        original = buffer.obs.copy()
+        kept, dim = apply_observation_feature_cutoff(buffer, OBS_DIM - 2)
+        assert (kept, dim) == (OBS_DIM - 2, OBS_DIM)
+        assert np.array_equal(buffer.obs[:, :kept], original[:, :kept])
+        assert np.array_equal(buffer.obs[:, kept:], np.zeros_like(buffer.obs[:, kept:]))
+
+        full_width = load_trajectory_buffer(
+            data,
+            gamma=0.997,
+            gae_lambda=0.95,
+            placement_rewards=PLACEMENT_REWARDS,
+        )
+        full_original = full_width.obs.copy()
+        assert apply_observation_feature_cutoff(full_width, OBS_DIM) == (OBS_DIM, OBS_DIM)
+        assert np.array_equal(full_width.obs, full_original)
+
+        for invalid in (True, 0, OBS_DIM + 1):
+            try:
+                apply_observation_feature_cutoff(full_width, invalid)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f"invalid cutoff {invalid!r} must fail closed")
 
 
 def test_discounted_returns_propagate_terminal_outcome_without_gae_lambda():

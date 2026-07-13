@@ -2,8 +2,8 @@
 """Dims-preserving warm-start surgery: expand an arc-cand-scorer-v1 JSON checkpoint
 from OLD obs_dim/act_dim to NEW dimensions by inserting ZERO input columns for
 strictly appended observation or action features. The current observation encoder
-v1.3 appends 105 engine-cycle/player-count features (83 -> 188), while action v1.4
-keeps the original 52 features as a strict prefix and appends its identity/cost tail.
+v1.4 appends 11 late-game macro features (188 -> 199), while action v1.4 keeps the
+original 52 features as a strict prefix and appends its identity/cost tail.
 
 Observation revisions append features at the END of the obs vector.
 In every head's FIRST Linear the obs block is the leading `obs_dim` input columns
@@ -19,8 +19,8 @@ logit/value parity via an independent numpy forward pass before writing.
 
 Usage:
   python ml/expand_obs_dim.py --in ml/champions/ladder3/main-0-gen60.json \
-      --out ml/warmstart/ladder4-main0-obs188-act84.json \
-      --new-obs-dim 188 --new-act-dim 84
+      --out ml/warmstart/v22-main0-obs199-act84.json \
+      --new-obs-dim 199 --new-act-dim 84
 """
 from __future__ import annotations
 
@@ -91,8 +91,11 @@ def _mlp(x: np.ndarray, layers: list[dict]) -> np.ndarray:
 
 
 def verify_parity(old: dict, new: dict, n_samples: int = 8, seed: int = 0) -> None:
-    """Assert the expanded net produces IDENTICAL logits/value to the source, where the new
-    obs features are zeros inserted at the old obs boundary (their real gen-1 encoded value)."""
+    """Assert appended inputs cannot change any source output before training.
+
+    The new observation/action values are deliberately random and nonzero. Exact parity
+    therefore proves every appended first-layer column is zero, including optional heads.
+    """
     rng = np.random.default_rng(seed)
     old_obs = int(old["obs_dim"])
     new_obs = int(new["obs_dim"])
@@ -104,9 +107,8 @@ def verify_parity(old: dict, new: dict, n_samples: int = 8, seed: int = 0) -> No
     for _ in range(n_samples):
         obs = rng.standard_normal(old_obs)
         cand = rng.standard_normal(old_act)
-        # obs padded exactly how encodeObs appends: old features, then the new features (=0 warm).
-        obs_new = np.concatenate([obs, np.zeros(n_new_obs)])
-        cand_new = np.concatenate([cand, np.zeros(n_new_act)])
+        obs_new = np.concatenate([obs, rng.standard_normal(n_new_obs)])
+        cand_new = np.concatenate([cand, rng.standard_normal(n_new_act)])
 
         # trunk: input is concat(obs, cand).
         o_trunk = _mlp(np.concatenate([obs, cand]), old["trunk"])
@@ -133,7 +135,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--in", dest="inp", required=True, type=Path)
     ap.add_argument("--out", dest="out", required=True, type=Path)
-    ap.add_argument("--new-obs-dim", type=int, default=188)
+    ap.add_argument("--new-obs-dim", type=int, required=True)
     ap.add_argument("--new-act-dim", type=int, help="strictly appended action width (default: unchanged)")
     ap.add_argument("--no-verify", action="store_true", help="skip the numpy parity self-check")
     args = ap.parse_args()

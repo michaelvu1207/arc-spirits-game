@@ -554,6 +554,81 @@ describe('neural value action scoring', () => {
 		expect(multiObs[83]).not.toBe(soloObs[83]);
 	});
 
+	it('appends public late-game pace, tableau, and overflow features at indices 188..198', () => {
+		const early = atQuietLocation();
+		early.players.Red!.mats = [];
+		early.players.Red!.spirits = [];
+		const earlyObs = encodeObs(early, 'Red', CATALOG);
+		expect(earlyObs).toHaveLength(199);
+		expect(earlyObs.slice(188)).toEqual([
+			0, // crossed 15
+			0, // post-15 progress
+			0, // no completed-round pace yet
+			0, // no current-round VP yet
+			1 / 5, // 30 VP / 30 inclusive remaining rounds / 5
+			1, // seven free spirit slots
+			0, // no awakened spirits
+			0, // no material overflow
+			1, // four slots of carry headroom
+			0, // runes
+			0 // relics
+		]);
+
+		const late = structuredClone(early);
+		late.round = 5;
+		const me = late.players.Red!;
+		me.victoryPoints = 15;
+		// The fifth entry is a defensive stale/terminal snapshot and must not leak into round 5.
+		me.vpHistory = [2, 5, 9, 12, 99];
+		me.spirits = Array.from({ length: 7 }, (_, index) => ({
+			slotIndex: index + 1,
+			id: `macro-spirit-${index}`,
+			name: `Macro Spirit ${index}`,
+			cost: 1,
+			classes: {},
+			origins: {},
+			isFaceDown: index >= 4
+		}));
+		me.mats = [
+			...Array.from({ length: 3 }, (_, index) => ({
+				slotIndex: index + 1,
+				hasRune: true,
+				name: `Rune ${index}`,
+				type: 'rune' as const
+			})),
+			...Array.from({ length: 2 }, (_, index) => ({
+				slotIndex: index + 4,
+				hasRune: true,
+				name: `Relic ${index}`,
+				type: 'relic' as const
+			})),
+			{ slotIndex: 6, hasRune: false, name: 'Spent Rune', type: 'rune' as const }
+		];
+
+		const tail = encodeObs(late, 'Red', CATALOG).slice(188);
+		expect(tail).toHaveLength(11);
+		expect(tail[0]).toBe(1);
+		expect(tail[1]).toBe(0);
+		expect(tail[2]).toBeCloseTo(10 / 3 / 5); // gains 3, 4, 3 across rounds 2..4
+		expect(tail[3]).toBeCloseTo(3 / 10);
+		expect(tail[4]).toBeCloseTo(15 / 26 / 5);
+		expect(tail[5]).toBe(0);
+		expect(tail[6]).toBeCloseTo(4 / 7);
+		expect(tail[7]).toBeCloseTo(1 / 4);
+		expect(tail[8]).toBe(0);
+		expect(tail[9]).toBeCloseTo(3 / 8);
+		expect(tail[10]).toBeCloseTo(2 / 8);
+
+		me.victoryPoints = 21;
+		expect(encodeObs(late, 'Red', CATALOG).slice(188, 193)).toEqual([
+			1,
+			2 / 5,
+			tail[2],
+			9 / 10,
+			9 / 26 / 5
+		]);
+	});
+
 	it('credits a monster kill for the VP pending in its reward claim', () => {
 		const state = atAbyss();
 		const actions = legalActionsWithNext(state, 'Red', CATALOG);

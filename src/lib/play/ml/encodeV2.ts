@@ -1,14 +1,14 @@
 /**
  * encodeV2 — entity-level observation encoder (`arc-obs-v2`) for the set-transformer bot.
  *
- * Replaces the fixed-width summary in encode.ts (v1; currently 188 floats)
+ * Replaces the fixed-width summary in encode.ts (v1; currently 199 floats)
  * with per-entity token sets:
  * one global token, one token per seat, one per spirit on ANY board, one per market
  * slot, one per held rune/relic of the acting seat, and one monster token. Token
  * counts are variable in-game, so every token family is emitted PADDED to a fixed
  * cap with an explicit 0/1 mask — dims are constant for a given catalog.
  *
- * v1 (encode.ts) remains the live fixed-width lane at OBS_DIM=188. V2 deliberately
+ * v1 (encode.ts) remains the live fixed-width lane at OBS_DIM=199. V2 deliberately
  * does NOT duplicate action features; it uses the current append-only v1 encodeAction.
  *
  * INFORMATION SAFETY — the contract that matters most here:
