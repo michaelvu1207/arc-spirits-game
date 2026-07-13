@@ -82,6 +82,21 @@ def make_v1_reach30_checkpoint(out_dir: Path, name: str = "p30.json") -> Path:
     return path
 
 
+def test_option_checkpoint_is_rejected_by_legacy_inference_wire():
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "options.json"
+        model = build_model(
+            7, 5, torch.device("cpu"), trunk_hidden=(8,), value_hidden=(4,), option_dim=4
+        )
+        export_weights(model, 7, 5, path)
+        try:
+            load_scorer(path, torch.device("cpu"))
+        except ValueError as exc:
+            assert "inference wire has no persistent round-option context" in str(exc)
+        else:
+            raise AssertionError("legacy inference wire accepted an option-enabled checkpoint")
+
+
 def v2_obs_pool() -> np.ndarray:
     """Real arc-obs-v2 rows: random floats would fail the embedded-header check."""
     return np.asarray(v2_fixture()["flat"], dtype=np.float32)
@@ -756,6 +771,7 @@ def main() -> int:
     meta = json.loads(LIVE_WEIGHTS.read_text())
     print(f"live weights: obs_dim={meta['obs_dim']} act_dim={meta['act_dim']}\n")
     tests = [
+        test_option_checkpoint_is_rejected_by_legacy_inference_wire,
         test_correctness_matches_in_process_forward,
         test_want_field_and_bad_request_error,
         test_concurrent_clients_no_drops,

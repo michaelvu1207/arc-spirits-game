@@ -153,6 +153,27 @@ export interface Sample {
 	/** Number of seats configured for this episode. Lets PPO apply solo objectives without
 	 * treating the automatic solo placement (always first) as a competitive win. */
 	playerCount?: number;
+	/** Persistent high-level option conditioning this policy decision. Present on every
+	 * option-aware low-level row and absent from bit-compatible legacy data. */
+	optionId?: number;
+}
+
+/** One high-level round-option behavior event. These are written to a separate options-*.jsonl
+ * stream so option PPO cannot accidentally count the same choice once per low-level action. */
+export interface RoundOptionEvent {
+	eventId: string;
+	gameId: string;
+	seat: SeatColor;
+	round: number;
+	obs: number[];
+	optionId: number;
+	behaviorMask: number[];
+	logpOld: number;
+	optionVPred: number;
+	playerCount: number;
+	/** Exact number of serialized low-level policy rows governed by this option. Zero is
+	 * legitimate for a round whose only policy decision was forced and therefore unrecorded. */
+	lowLevelDecisionCount: number;
 }
 
 /** Decisions whose consequences commonly span several phases or rounds. This is a credit-assignment
@@ -363,6 +384,8 @@ export interface RecordGameResult {
 	stalled: boolean;
 	finalVP: Record<string, number>;
 	samples: Sample[];
+	/** Exactly one event per option-aware recorded seat/round that needed a policy action. */
+	optionEvents: RoundOptionEvent[];
 	/** Per-seat build-convert-finish diagnostics. Evaluation-only; never used as reward. */
 	cycleBySeat: Record<string, SeatCycleSummary>;
 	/** The terminal game state (for diagnostics/strategy tracing — final builds, status, etc.). */
@@ -406,6 +429,16 @@ function seededBotRandom(rng: RngState): BotRandom {
 		int: (maxExclusive: number) => nextInt(rng, maxExclusive),
 		chance: () => nextInt(rng, 2) === 0
 	};
+}
+
+/** Random-access option draw keyed by public identity. It is independent across seats/rounds and
+ * cannot consume or perturb the engine, heuristic, or low-level policy RNG streams. */
+export function deterministicRoundOptionRandom(
+	seed: number,
+	seat: SeatColor,
+	round: number
+): number {
+	return hashString(`arc-round-option-v1:${seed}:${seat}:${round}`) / 0x1_0000_0000;
 }
 
 function jsonClone<T>(value: T): T {
@@ -676,6 +709,51 @@ function withFixedObs(policy: NeuralPolicy, obs: number[]): NeuralPolicy {
 	return shim as unknown as NeuralPolicy;
 }
 
+/** Bind the persistent round option once so existing low-level selection helpers keep their
+ * public API while every option-conditioned head sees the same one-hot vector. */
+function withFixedOption(policy: NeuralPolicy, option: number[]): NeuralPolicy {
+	return new Proxy(policy, {
+		get(target, prop) {
+			if (prop === 'scoreCandidates') {
+				return (obs: number[], cands: number[][]): number[] =>
+					target.scoreCandidates(obs, cands, option);
+			}
+			if (prop === 'probs') {
+				return (obs: number[], cands: number[][], temperature?: number): number[] =>
+					target.probs(obs, cands, temperature, option);
+			}
+			if (prop === 'pick') {
+				return (
+					obs: number[],
+					cands: number[][],
+					opts?: { sample?: boolean; temperature?: number; rand?: () => number }
+				): number => target.pick(obs, cands, { ...opts, option });
+			}
+			if (prop === 'value') return (obs: number[]): number => target.value(obs, option);
+			if (prop === 'farmValue') return (obs: number[]): number => target.farmValue(obs, option);
+			if (prop === 'placementProbs') {
+				return (obs: number[]): number[] | null => target.placementProbs(obs, option);
+			}
+			if (prop === 'reach30Probability') {
+				return (obs: number[]): number | null => target.reach30Probability(obs, option);
+			}
+			if (prop === 'routeMode') {
+				return (obs: number[]): number | null => target.routeMode(obs, option);
+			}
+			if (prop === 'rewardPickScores') {
+				return (obs: number[], cands: number[][]): number[] | null =>
+					target.rewardPickScores(obs, cands, option);
+			}
+			if (prop === 'rewardPickProbs') {
+				return (obs: number[], cands: number[][], temperature?: number): number[] | null =>
+					target.rewardPickProbs(obs, cands, temperature, option);
+			}
+			const value = Reflect.get(target, prop, target) as unknown;
+			return typeof value === 'function' ? value.bind(target) : value;
+		}
+	}) as NeuralPolicy;
+}
+
 interface PolicyPickTrace {
 	chosen: number;
 	candidateCount: number;
@@ -912,6 +990,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	const rand = (): number => nextInt(pickRng, 1_000_000) / 1_000_000;
 
 	const samples: Sample[] = [];
+	const optionEvents: RoundOptionEvent[] = [];
+	const optionBySeat = new Map<SeatColor, { round: number; optionId: number; oneHot: number[] }>();
+	const gameIdForSeat = (seat: SeatColor): string =>
+		opts.episodeId ? `${opts.episodeId}-${seat}` : `${opts.seed}-${n}p-${seat}`;
 	const continuationSnapshots: ContinuationSnapshot[] = [];
 	const capturedRounds = new Set<number>();
 	const cycleBySeat: Record<string, SeatCycleSummary> = {};
@@ -1088,6 +1170,50 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		// the learner seat uses the configured selection + exploration and is recorded.
 		const oppPolicy = opts.opponentPolicies?.[seat];
 		const seatPolicy = oppPolicy ?? opts.policy;
+		let roundOption = optionBySeat.get(seat);
+		if (seatPolicy?.optionDim === 4 && roundOption?.round !== state.round) {
+			const behaviorMask = n === 1 ? [1, 1, 1, 0] : [1, 1, 1, 1];
+			const optionSample = oppPolicy ? (opts.opponentTemperature ?? 0) > 0 : opts.sample === true;
+			const optionProbs = seatPolicy.optionProbs(policyObs, behaviorMask);
+			const optionId = seatPolicy.pickOption(policyObs, {
+				sample: optionSample,
+				behaviorMask,
+				rand: () => deterministicRoundOptionRandom(opts.seed, seat, state.round)
+			});
+			const optionVPred = seatPolicy.optionValue(policyObs);
+			if (
+				!optionProbs ||
+				optionId === null ||
+				optionVPred === null ||
+				!Number.isFinite(optionVPred) ||
+				!(optionProbs[optionId] > 0)
+			) {
+				throw new Error('driver: option-aware policy produced an invalid round-option event');
+			}
+			const oneHot = Array<number>(seatPolicy.optionDim).fill(0);
+			oneHot[optionId] = 1;
+			roundOption = { round: state.round, optionId, oneHot };
+			optionBySeat.set(seat, roundOption);
+			if (recordSet.has(seat) && !oppPolicy) {
+				const gameId = gameIdForSeat(seat);
+				optionEvents.push({
+					eventId: `${gameId}:r${state.round}`,
+					gameId,
+					seat,
+					round: state.round,
+					obs: policyObs,
+					optionId,
+					behaviorMask,
+					logpOld: optionSample ? Math.log(optionProbs[optionId]) : 0,
+					optionVPred,
+					playerCount: n,
+					lowLevelDecisionCount: 0
+				});
+			}
+		}
+		if (seatPolicy?.optionDim === 4 && !roundOption) {
+			throw new Error('driver: missing persistent option after option-aware selection');
+		}
 		let observedPick: PolicyPickTrace | null = null;
 		// Learner at policyObsVersion 2: neuralBot re-encodes v1 obs internally, so wrap the
 		// policy to substitute this decision's flat v2 obs. Opponents keep v1 nets + v1 obs.
@@ -1095,8 +1221,12 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			seatPolicy && opts.policyObsVersion === 2 && !oppPolicy && opts.policy
 				? withFixedObs(seatPolicy, flatV2!)
 				: seatPolicy;
-		const activePolicy = fixedObsPolicy
-			? withPickObserver(fixedObsPolicy, (trace) => {
+		const optionConditionedPolicy =
+			fixedObsPolicy && roundOption
+				? withFixedOption(fixedObsPolicy, roundOption.oneHot)
+				: fixedObsPolicy;
+		const activePolicy = optionConditionedPolicy
+			? withPickObserver(optionConditionedPolicy, (trace) => {
 					observedPick = trace;
 				})
 			: undefined;
@@ -1118,7 +1248,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			sample === true &&
 			opts.selection !== 'value'
 		) {
-			opts.policy.scoreCandidates(policyObs, feats);
+			optionConditionedPolicy!.scoreCandidates(policyObs, feats);
 		}
 		const idx =
 			cands.length === 1
@@ -1165,18 +1295,19 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			// Every policy-backed decision remains in the PPO trajectory. Only an exact sampled
 			// policy decision gets policyMask=1 and behavior fields; deterministic branches still
 			// supply vPred for complete-episode GAE/value/auxiliary training.
-			const vPred = opts.policy?.value(policyObs);
+			const learnerPolicy = optionConditionedPolicy;
+			const vPred = learnerPolicy?.value(policyObs);
 			const valueFields =
 				typeof vPred === 'number' && Number.isFinite(vPred) ? { vPred, policyMask: 0 } : undefined;
 			const placementProbs = (
-				opts.policy as unknown as { placementProbs?: (input: number[]) => number[] | null }
+				learnerPolicy as unknown as { placementProbs?: (input: number[]) => number[] | null }
 			)?.placementProbs?.(policyObs);
 			const outcomeFields =
 				placementProbs?.length === 4 &&
 				placementProbs.every((probability) => Number.isFinite(probability) && probability >= 0)
 					? { placementProbs }
 					: undefined;
-			const reach30Policy = opts.policy as unknown as {
+			const reach30Policy = learnerPolicy as unknown as {
 				reach30Probability?: (input: number[]) => number | null;
 				reach30Horizon?: () => number | null;
 			};
@@ -1205,7 +1336,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				behaviorSupport[policyPick.chosen] === idx
 			) {
 				const behavior = sampledPolicyBehavior(
-					opts.policy,
+					learnerPolicy!,
 					policyObs,
 					feats,
 					behaviorSupport,
@@ -1228,6 +1359,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				kill: decisionKills(state, withNext[idx].next, seat, cands[idx]) ? 1 : 0,
 				decisionType: cands[idx].type,
 				playerCount: opts.profiles.length,
+				...(roundOption ? { optionId: roundOption.optionId } : {}),
 				strategic: isStrategicDecision(cands, opts.strategicDecisionScope) ? 1 : 0,
 				...valueFields,
 				...outcomeFields,
@@ -1316,7 +1448,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		seatSamples.forEach((s, i) => (s.ret = g[i]));
 
 		// PPO trajectory stamps (per-seat episode; see the Sample field docs).
-		const gameId = opts.episodeId ? `${opts.episodeId}-${seat}` : `${opts.seed}-${n}p-${seat}`;
+		const gameId = gameIdForSeat(seat);
 		const placement = 1 + seats.filter((o) => o !== seat && finalVP[o] > finalVP[seat]).length;
 		const rSteps = opts.stepRewards?.(seatSamples, seat, finalVP);
 		// Dense reward: ΔVP + ΔΦ between consecutive recorded decisions; the last
@@ -1369,6 +1501,25 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		});
 	}
 
+	// Bind the separate high-level stream to the exact low-level rows it governed. This is
+	// finalized only after gameId/round/seat have been stamped on every recorded decision.
+	const lowLevelCounts = new Map<string, number>();
+	for (const sample of samples) {
+		if (
+			typeof sample.gameId !== 'string' ||
+			typeof sample.round !== 'number' ||
+			typeof sample.optionId !== 'number'
+		) {
+			continue;
+		}
+		const key = `${sample.gameId}\u0000${sample.seat}\u0000${sample.round}`;
+		lowLevelCounts.set(key, (lowLevelCounts.get(key) ?? 0) + 1);
+	}
+	for (const event of optionEvents) {
+		const key = `${event.gameId}\u0000${event.seat}\u0000${event.round}`;
+		event.lowLevelDecisionCount = lowLevelCounts.get(key) ?? 0;
+	}
+
 	return {
 		winnerSeat: state.winnerSeat ?? null,
 		finished: state.status === 'finished',
@@ -1376,6 +1527,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		stalled,
 		finalVP,
 		samples,
+		optionEvents,
 		cycleBySeat,
 		finalState: state,
 		continuationSnapshots

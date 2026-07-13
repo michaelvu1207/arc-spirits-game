@@ -62,6 +62,7 @@ export interface ActorPoolResult {
 	/** Train-only late-state suffix diagnostics; all zero when the curriculum is disabled. */
 	curriculum: ContinuationCurriculumDiagnostics;
 	shardFiles: string[];
+	optionFiles: string[];
 	gameFiles: string[];
 }
 
@@ -198,6 +199,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 			summaries: [],
 			curriculum,
 			shardFiles: [],
+			optionFiles: [],
 			gameFiles: []
 		};
 	}
@@ -208,7 +210,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 	if (!existsSync(catalogPath)) throw new Error(`actorPool: catalog not found: ${catalogPath}`);
 	if (!opts.append) {
 		for (const f of readdirSync(outDir)) {
-			if (/^(shard|games)-\d+\.jsonl$/.test(f)) rmSync(join(outDir, f));
+			if (/^(shard|options|games)-\d+\.jsonl$/.test(f)) rmSync(join(outDir, f));
 		}
 	}
 
@@ -370,6 +372,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 		summaries,
 		curriculum,
 		shardFiles: outFiles.filter((f) => /^shard-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
+		optionFiles: outFiles.filter((f) => /^options-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
 		gameFiles: outFiles.filter((f) => /^games-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f))
 	};
 }

@@ -14,7 +14,7 @@ import { dirname, resolve } from 'node:path';
 import type { PlayCatalog } from '../types';
 import { OBS_DIM, ACT_DIM } from './encode';
 import { loadPolicyWeights, NeuralPolicy, type PolicyWeights, type LinearLayer } from './net';
-import type { Sample } from './driver';
+import type { RoundOptionEvent, Sample } from './driver';
 import { createRng, nextInt } from '../rng';
 
 /** Repo-root-relative path (vitest runs with cwd = repo root). */
@@ -79,6 +79,7 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				...(typeof s.decisionType === 'string' ? { decisionType: s.decisionType } : {}),
 				...(typeof s.strategic === 'number' ? { strategic: s.strategic } : {}),
 				...(typeof s.playerCount === 'number' ? { playerCount: s.playerCount } : {}),
+				...(typeof s.optionId === 'number' ? { seat: s.seat, optionId: s.optionId } : {}),
 				// Behavior scalars stay full precision: rounding logpOld perturbs PPO's
 				// new/old ratio before the first optimizer step.
 				...(typeof s.logpOld === 'number' ? { logpOld: s.logpOld } : {}),
@@ -104,6 +105,23 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				iter
 			});
 		})
+		.join('\n');
+	appendFileSync(file, lines + '\n');
+}
+
+/** Append one row per persistent round-option selection. Keep this separate from low-level
+ * decision shards: option PPO must see one behavior event, not one copy per action. */
+export function appendOptionEvents(file: string, events: RoundOptionEvent[], iter = 0): void {
+	if (events.length === 0) return;
+	ensureDir(file);
+	const lines = events
+		.map((event) =>
+			JSON.stringify({
+				...event,
+				obs: float32Numbers(event.obs),
+				iter
+			})
+		)
 		.join('\n');
 	appendFileSync(file, lines + '\n');
 }

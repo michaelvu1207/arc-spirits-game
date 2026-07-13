@@ -13,10 +13,11 @@ import {
 	isStrategicDecision,
 	playRecordingGame,
 	sampledPolicyBehavior,
+	deterministicRoundOptionRandom,
 	type ContinuationSnapshot,
 	type Sample
 } from './driver';
-import { NeuralPolicy } from './net';
+import { loadPolicyWeights, NeuralPolicy, type PolicyWeights } from './net';
 import { appendSamples, loadOrSnapshotCatalog, randomPolicy } from './nodeIo';
 
 function scalarPolicy(): NeuralPolicy {
@@ -28,6 +29,31 @@ function scalarPolicy(): NeuralPolicy {
 		trunk: [{ W: [[0, 1]], b: [0] }],
 		value: [{ W: [[0]], b: [0] }]
 	});
+}
+
+function optionPolicy(seed = 1): NeuralPolicy {
+	const raw = jsonRoundTrip(randomPolicy(seed).w) as PolicyWeights;
+	raw.option_dim = 4;
+	raw.trunk[0].W = raw.trunk[0].W.map((row) => [...row, 0, 0, 0, 0]);
+	raw.value[0].W = raw.value[0].W.map((row) => [...row, 0, 0, 0, 0]);
+	raw.option = [
+		{
+			W: Array.from({ length: 64 }, () => Array(raw.obs_dim).fill(0)),
+			b: Array(64).fill(0)
+		},
+		{
+			W: Array.from({ length: 4 }, () => Array(64).fill(0)),
+			b: [0, 0, 0, 0]
+		}
+	];
+	raw.option_value = [
+		{
+			W: Array.from({ length: 64 }, () => Array(raw.obs_dim).fill(0)),
+			b: Array(64).fill(0)
+		},
+		{ W: [Array(64).fill(0)], b: [0] }
+	];
+	return loadPolicyWeights(raw);
 }
 
 function jsonRoundTrip<T>(value: T): T {
@@ -215,6 +241,78 @@ describe('driver PPO behavior distribution', () => {
 		expect(result.finalState!.players.Red!.statusLevel).toBeLessThanOrEqual(2);
 	}, 30_000);
 
+	it('samples one independent persistent option per recorded seat and round', async () => {
+		const catalog = await loadOrSnapshotCatalog();
+		const policy = optionPolicy(9150);
+		const run = (seats: SeatColor[], seed: number) =>
+			playRecordingGame(catalog, {
+				seed,
+				profiles: seats.map(() => profileFor('medium')),
+				maxRounds: 2,
+				policy,
+				neuralSeats: seats,
+				recordSeats: seats,
+				selection: 'policy',
+				sample: true,
+				temperature: 0.65
+			});
+
+		const solo = run(['Red'], 77150);
+		expect(solo.optionEvents.length).toBeGreaterThan(0);
+		expect(solo.optionEvents.every((event) => event.behaviorMask.join(',') === '1,1,1,0')).toBe(
+			true
+		);
+		expect(solo.optionEvents.every((event) => event.optionId >= 0 && event.optionId <= 2)).toBe(
+			true
+		);
+		expect(new Set(solo.optionEvents.map((event) => event.eventId)).size).toBe(
+			solo.optionEvents.length
+		);
+		for (const event of solo.optionEvents) {
+			const governedRows = solo.samples.filter(
+				(sample) =>
+					sample.gameId === event.gameId &&
+					sample.seat === event.seat &&
+					sample.round === event.round
+			).length;
+			expect(event.lowLevelDecisionCount).toBe(governedRows);
+		}
+		for (const row of solo.samples) {
+			const event = solo.optionEvents.find(
+				(candidate) => candidate.gameId === row.gameId && candidate.round === row.round
+			);
+			expect(event).toBeDefined();
+			expect(row.optionId).toBe(event!.optionId);
+		}
+		const serializedDir = mkdtempSync(join(tmpdir(), 'arc-option-seat-jsonl-'));
+		try {
+			const file = join(serializedDir, 'shard-0.jsonl');
+			appendSamples(file, solo.samples.slice(0, 1));
+			const serialized = JSON.parse(readFileSync(file, 'utf8')) as {
+				seat?: string;
+				optionId?: number;
+			};
+			expect(serialized.seat).toBe('Red');
+			expect(serialized.optionId).toBe(solo.samples[0].optionId);
+		} finally {
+			rmSync(serializedDir, { recursive: true, force: true });
+		}
+		const repeated = run(['Red'], 77150);
+		expect(repeated.optionEvents).toEqual(solo.optionEvents);
+		expect(repeated.samples).toEqual(solo.samples);
+
+		const twoSeat = run(['Red', 'Blue'], 77151);
+		expect(new Set(twoSeat.optionEvents.map((event) => event.seat))).toEqual(
+			new Set(['Red', 'Blue'])
+		);
+		expect(twoSeat.optionEvents.every((event) => event.behaviorMask.join(',') === '1,1,1,1')).toBe(
+			true
+		);
+		expect(deterministicRoundOptionRandom(77151, 'Red', 1)).not.toBe(
+			deterministicRoundOptionRandom(77151, 'Blue', 1)
+		);
+	}, 30_000);
+
 	it('JSON-restores an exact late-state suffix with all RNG cursors and fresh episode identity', async () => {
 		const { catalog, policy, source, snapshot } = await continuationFixture();
 		const restored = jsonRoundTrip(snapshot);
@@ -258,9 +356,9 @@ describe('driver PPO behavior distribution', () => {
 		expect(replay.samples.map((sample) => sample.stepIdx)).toEqual(
 			replay.samples.map((_, index) => index)
 		);
-		expect(replay.samples.every((sample) => sample.gameId === 'continuation-exact-r12-f0-Red')).toBe(
-			true
-		);
+		expect(
+			replay.samples.every((sample) => sample.gameId === 'continuation-exact-r12-f0-Red')
+		).toBe(true);
 		expect(replay.samples[0].round).toBe(12);
 		expect(replay.samples.slice(0, -1).every((sample) => sample.reach30Target === undefined)).toBe(
 			true
@@ -269,9 +367,7 @@ describe('driver PPO behavior distribution', () => {
 		expect(terminal.round).toBeLessThanOrEqual(30);
 		expect(terminal.endRound).toBe(replay.rounds);
 		expect(terminal.reach30Horizon).toBe(30);
-		expect(terminal.reach30Target).toBe(
-			!replay.stalled && replay.finalVP.Red >= 30 ? 1 : 0
-		);
+		expect(terminal.reach30Target).toBe(!replay.stalled && replay.finalVP.Red >= 30 ? 1 : 0);
 	}, 60_000);
 
 	it('creates deterministic independent pick-RNG forks and keeps continuation IDs distinct', async () => {

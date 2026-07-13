@@ -31,7 +31,7 @@ import {
 import { shapingFor } from './shaping';
 import { planDecisionGumbel } from './gumbelPlanner';
 import { hybridIndex } from './neuralBot';
-import { appendSamples, loadWeightsIfPresent } from './nodeIo';
+import { appendOptionEvents, appendSamples, loadWeightsIfPresent } from './nodeIo';
 import { asNeuralPolicy, RemotePolicy } from './inferenceClient';
 import type { NeuralPolicy } from './net';
 import type {
@@ -216,6 +216,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 		? new Set(config.forbidTypes as GameCommand['type'][])
 		: undefined;
 	const shardFile = join(outDir, `shard-${workerIndex}.jsonl`);
+	const optionsFile = join(outDir, `options-${workerIndex}.jsonl`);
 	const gamesFile = join(outDir, `games-${workerIndex}.jsonl`);
 	// Identify the generator by the server's actual checkpoint when remote (the socket
 	// path says nothing about which weights produced the games).
@@ -310,6 +311,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 			const r = playRecordingGame(catalog, gameOptions);
 			const sourceWallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);
+			appendOptionEvents(optionsFile, r.optionEvents, config.iter ?? 0);
 
 			const curriculum = emptyContinuationCurriculumDiagnostics();
 			let appendedSamples = r.samples.length;
@@ -356,6 +358,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 						});
 						for (const sample of suffix.samples as Sample[]) sample.continuationCurriculum = 1;
 						appendSamples(shardFile, suffix.samples, config.iter ?? 0);
+						appendOptionEvents(optionsFile, suffix.optionEvents, config.iter ?? 0);
 						appendedSamples += suffix.samples.length;
 						const forkSucceeded = !suffix.stalled && (suffix.finalVP[seat] ?? 0) >= 30;
 						curriculum.episodes = 1;
@@ -399,9 +402,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 					cycle: r.cycleBySeat[seat]
 				})),
 				wallMs:
-					Math.round(
-						(continuationCurriculum ? performance.now() - t0 : sourceWallMs) * 10
-					) / 10
+					Math.round((continuationCurriculum ? performance.now() - t0 : sourceWallMs) * 10) / 10
 			};
 			appendFileSync(gamesFile, JSON.stringify(summary) + '\n');
 			return { summary, samples: appendedSamples, curriculum };
@@ -473,11 +474,7 @@ if (parentPort && wd?.__actorPool) {
 				if (stopped) return;
 				try {
 					if (command.type === 'run') {
-						const result = runner!.run(
-							command.seed,
-							command.jobIndex,
-							command.duplicateSeed
-						);
+						const result = runner!.run(command.seed, command.jobIndex, command.duplicateSeed);
 						games += 1;
 						samples += result.samples;
 						addCurriculumDiagnostics(curriculum, result.curriculum);

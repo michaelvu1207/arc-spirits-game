@@ -193,6 +193,31 @@ class SelfImitationReplay:
     def __len__(self) -> int:
         return len(self.cands)
 
+
+@dataclass
+class OptionEventBuffer:
+    """One validated SMDP transition per active policy-controlled seat-round."""
+
+    obs: np.ndarray                 # (M, obs_dim) public round-start observations
+    chosen: np.ndarray              # (M,) option ids
+    behavior_mask: np.ndarray       # (M, option_dim) exact actor support
+    logp_old: np.ndarray            # (M,) exact behavior option log-probability
+    v_pred: np.ndarray              # (M,) behavior option-value prediction
+    advantages: np.ndarray          # (M,) duration-aware SMDP GAE
+    returns: np.ndarray             # (M,) option-value targets
+    durations: np.ndarray           # (M,) count of low-level transitions
+    rewards: np.ndarray             # (M,) within-interval discounted rewards
+    importance_weight: np.ndarray   # (M,) retained under fixed-budget resampling
+    game_id: list[str]
+    seat: list[str]
+    round: np.ndarray
+    option_dim: int
+    rejected_episodes: int = 0
+    support_violations: int = 0
+
+    def __len__(self) -> int:
+        return len(self.chosen)
+
 @dataclass
 class TrajectoryBuffer:
     obs: np.ndarray                 # (N, obs_dim) float32
@@ -230,6 +255,10 @@ class TrajectoryBuffer:
     # placement-aux target "final placement given this state" is defined at
     # every decision, not just on the terminal row.
     placement: np.ndarray           # (N,) int64
+    options: np.ndarray             # (N, option_dim) selected option one-hot
+    option_dim: int
+    option_events: OptionEventBuffer | None
+    option_rejected_episodes: int
     # Optional, default-off auxiliary dataset. It is deliberately separate from
     # every PPO tensor above so replay can never alter ratios or value targets.
     self_imitation: SelfImitationReplay | None = None
@@ -266,6 +295,140 @@ def apply_observation_feature_cutoff(
             )
         replay.obs[:, cutoff:] = 0.0
     return cutoff, obs_dim
+
+
+def apply_option_feature_cutoff(
+    buffer: TrajectoryBuffer,
+    cutoff: int,
+) -> tuple[int, int]:
+    """Zero an option suffix on every low-level input in both causal arms."""
+    if isinstance(cutoff, bool) or not isinstance(cutoff, int):
+        raise ValueError("option feature cutoff must be an integer")
+    if buffer.options.ndim != 2 or buffer.options.shape[1] != buffer.option_dim:
+        raise ValueError("trajectory option tensor is malformed")
+    if cutoff < 0 or cutoff > buffer.option_dim:
+        raise ValueError(
+            f"option feature cutoff must be in [0, {buffer.option_dim}], got {cutoff}"
+        )
+    buffer.options[:, cutoff:] = 0.0
+    return cutoff, buffer.option_dim
+
+
+_LOW_LEVEL_OPTION_HEADS = (
+    ("trunk", "trunk"),
+    ("value", "value_head"),
+    ("farm_value", "farm_value_head"),
+    ("placement", "placement_head"),
+    ("reward_pick", "reward_pick_head"),
+    ("route_mode", "route_mode_head"),
+    ("reach30", "reach30_head"),
+)
+
+
+def audit_low_level_option_columns(
+    model: CandidateScorer,
+    buffer: TrajectoryBuffer,
+    cutoff: int | None,
+    *,
+    active_heads: set[str] | None = None,
+) -> dict[str, list[float]]:
+    """Fail closed on the V23 control/treatment causal manipulation.
+
+    The expanded checkpoint starts with exact-zero option columns. The control must
+    preserve all of them exactly; a treatment epoch must connect every option that
+    actually appears on a low-level row to each active loss head. Options excluded by
+    behavior support (solo option 3) must remain exact zero in either arm.
+    """
+    if model.option_dim == 0:
+        if cutoff not in (None, 0):
+            raise ValueError("legacy model cannot expose low-level option features")
+        return {}
+    if cutoff is None:
+        return {}
+    if cutoff < 0 or cutoff > model.option_dim:
+        raise ValueError(
+            f"option feature cutoff must be in [0, {model.option_dim}], got {cutoff}"
+        )
+    if buffer.option_events is None:
+        raise ValueError("option-column audit requires validated option events")
+    supported = np.any(buffer.option_events.behavior_mask, axis=0)
+    observed_low = np.any(buffer.options != 0.0, axis=0)
+    active_heads = active_heads or set()
+    result: dict[str, list[float]] = {}
+    for public_name, attr in _LOW_LEVEL_OPTION_HEADS:
+        module = getattr(model, attr)
+        first = next(
+            (layer for layer in module if isinstance(layer, torch.nn.Linear)), None
+        )
+        if first is None or first.weight.shape[1] < model.option_dim:
+            raise ValueError(f"{public_name} has no valid option-conditioned input layer")
+        columns = first.weight[:, -model.option_dim :]
+        if not torch.isfinite(columns).all():
+            raise FloatingPointError(f"{public_name} option columns became non-finite")
+        norms = torch.linalg.vector_norm(columns.detach(), dim=0).cpu().tolist()
+        result[public_name] = [float(value) for value in norms]
+        if cutoff == 0:
+            if torch.count_nonzero(columns).item() != 0:
+                raise RuntimeError(
+                    f"control invariant failed: {public_name} option columns changed"
+                )
+            continue
+        unsupported_or_masked = (~supported) | (np.arange(model.option_dim) >= cutoff)
+        for option_id in np.flatnonzero(unsupported_or_masked):
+            if torch.count_nonzero(columns[:, int(option_id)]).item() != 0:
+                raise RuntimeError(
+                    f"treatment invariant failed: {public_name} unsupported/masked "
+                    f"option column {int(option_id)} changed"
+                )
+        if public_name in active_heads:
+            for option_id in np.flatnonzero(observed_low & ~unsupported_or_masked):
+                if torch.count_nonzero(columns[:, int(option_id)]).item() == 0:
+                    raise RuntimeError(
+                        f"treatment differentiation failed: active {public_name} "
+                        f"option column {int(option_id)} stayed zero"
+                    )
+    return result
+
+
+def compute_smdp_gae(
+    reward_sequences: list[np.ndarray] | list[list[float]],
+    values,
+    dones,
+    gamma: float = 0.999,
+    lam: float = 0.95,
+    last_value: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Duration-aware option GAE over one ordered seat episode.
+
+    R_k = sum_i gamma**i r[k,i]
+    delta_k = R_k + gamma**duration V(next) - V(k)
+    A_k = delta_k + gamma**duration lambda A_(k+1)
+    """
+    values = np.asarray(values, dtype=np.float64)
+    dones = np.asarray(dones, dtype=bool)
+    if len(reward_sequences) != len(values) or dones.shape != values.shape:
+        raise ValueError("SMDP rewards, values, and dones must have the same length")
+    if not 0 < gamma <= 1 or not 0 <= lam <= 1:
+        raise ValueError("SMDP gamma and lambda must be in (0,1] and [0,1]")
+    rewards = np.zeros(len(values), dtype=np.float64)
+    durations = np.zeros(len(values), dtype=np.int64)
+    for k, sequence in enumerate(reward_sequences):
+        seq = np.asarray(sequence, dtype=np.float64)
+        if seq.ndim != 1 or not np.isfinite(seq).all():
+            raise ValueError("every option interval needs a finite one-dimensional reward stream")
+        durations[k] = len(seq)
+        rewards[k] = float(np.dot(np.power(gamma, np.arange(len(seq))), seq))
+    advantages = np.zeros(len(values), dtype=np.float64)
+    next_advantage = 0.0
+    next_value = float(last_value)
+    for k in range(len(values) - 1, -1, -1):
+        discount = gamma ** int(durations[k])
+        nonterminal = 0.0 if dones[k] else 1.0
+        delta = rewards[k] + discount * next_value * nonterminal - values[k]
+        next_advantage = delta + discount * lam * nonterminal * next_advantage
+        advantages[k] = next_advantage
+        next_value = float(values[k])
+    return advantages, advantages + values, rewards, durations
 
 
 def _self_imitation_from_rows(rows: list[dict[str, Any]]) -> SelfImitationReplay | None:
@@ -502,6 +665,116 @@ def _coerce_policy_target(raw: Any, n_cands: int) -> tuple[np.ndarray, bool]:
     return target / total, True
 
 
+def _coerce_nonnegative_int(raw: Any) -> int | None:
+    if (
+        isinstance(raw, bool)
+        or not isinstance(raw, (int, float))
+        or not float(raw).is_integer()
+        or int(raw) < 0
+    ):
+        return None
+    return int(raw)
+
+
+def _coerce_seat(raw: Any) -> str | None:
+    if isinstance(raw, bool) or not isinstance(raw, (str, int)):
+        return None
+    seat = str(raw)
+    return seat if seat else None
+
+
+def _read_option_events(
+    data_dir: Path, obs_key: str
+) -> tuple[dict[str, list[dict]], set[str]]:
+    """Read strict high-level events; any malformed member rejects its game."""
+    events: dict[str, list[dict]] = {}
+    malformed_games: set[str] = set()
+    last_round: dict[tuple[str, str], int] = {}
+    seen_identity: set[tuple[str, str, int]] = set()
+    seen_event_ids: set[str] = set()
+    for path in sorted(p for p in data_dir.rglob("options-*.jsonl") if p.is_file()):
+        with path.open() as handle:
+            for line in handle:
+                try:
+                    raw = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(raw, dict) or "gameId" not in raw:
+                    continue
+                game_id = str(raw["gameId"])
+                try:
+                    obs = np.asarray(raw[obs_key], dtype=np.float32)
+                    option_id = _coerce_nonnegative_int(raw.get("optionId"))
+                    seat = _coerce_seat(raw.get("seat"))
+                    round_index = _coerce_nonnegative_int(raw.get("round"))
+                    behavior_mask_raw = raw.get("behaviorMask")
+                    behavior_mask = _coerce_behavior_mask(behavior_mask_raw, 4)
+                    logp_old = float(raw["logpOld"])
+                    value = float(raw["optionVPred"])
+                    player_count = _coerce_player_count(raw.get("playerCount"))
+                    low_level_decision_count = _coerce_nonnegative_int(
+                        raw.get("lowLevelDecisionCount")
+                    )
+                    event_id = raw.get("eventId")
+                    importance_weight = float(raw.get("importanceWeight", 1.0))
+                except (KeyError, TypeError, ValueError):
+                    malformed_games.add(game_id)
+                    continue
+                identity = (game_id, seat or "", round_index if round_index is not None else -1)
+                expected_support = (
+                    np.asarray([True, True, True, False])
+                    if player_count == 1
+                    else np.ones(4, dtype=bool)
+                )
+                if (
+                    obs.ndim != 1
+                    or not np.isfinite(obs).all()
+                    or option_id is None
+                    or option_id >= 4
+                    or seat is None
+                    or round_index is None
+                    or round_index < 1
+                    or behavior_mask is None
+                    or not isinstance(behavior_mask_raw, list)
+                    or not np.array_equal(behavior_mask, expected_support)
+                    or not behavior_mask[option_id]
+                    or not math.isfinite(logp_old)
+                    or not math.isfinite(value)
+                    or player_count is None
+                    or low_level_decision_count is None
+                    or not isinstance(event_id, str)
+                    or not event_id
+                    or not math.isfinite(importance_weight)
+                    or importance_weight <= 0
+                    or identity in seen_identity
+                    or event_id in seen_event_ids
+                    or round_index <= last_round.get((game_id, seat), 0)
+                ):
+                    malformed_games.add(game_id)
+                    continue
+                seen_identity.add(identity)
+                seen_event_ids.add(event_id)
+                last_round[(game_id, seat)] = round_index
+                events.setdefault(game_id, []).append(
+                    {
+                        "game_id": game_id,
+                        "seat": seat,
+                        "round": round_index,
+                        "obs": obs,
+                        "option_id": option_id,
+                        "behavior_mask": behavior_mask,
+                        "logp_old": logp_old,
+                        "v_pred": value,
+                        "player_count": player_count,
+                        "low_level_decision_count": low_level_decision_count,
+                        "importance_weight": importance_weight,
+                    }
+                )
+    for game_id in malformed_games:
+        events.pop(game_id, None)
+    return events, malformed_games
+
+
 def load_trajectory_buffer(
     data_dir: Path,
     gamma: float,
@@ -568,7 +841,9 @@ def load_trajectory_buffer(
     # Skip the actor pool's games-*.jsonl per-game summaries (no obs/cands keys).
     jsonl_files = sorted(
         p for p in data_dir.rglob("*.jsonl")
-        if p.is_file() and not p.name.startswith("games-")
+        if p.is_file()
+        and not p.name.startswith("games-")
+        and not p.name.startswith("options-")
     )
     if not jsonl_files:
         raise FileNotFoundError(f"No *.jsonl files found in {data_dir}")
@@ -708,6 +983,25 @@ def load_trajectory_buffer(
                     n_invalid_rows += 1
                     invalid_episodes.add(game_id)
                     continue
+                raw_option_id = rec.get("optionId")
+                if raw_option_id is None:
+                    option_id = None
+                    option_seat = None
+                    option_round = None
+                else:
+                    option_id = _coerce_nonnegative_int(raw_option_id)
+                    option_seat = _coerce_seat(rec.get("seat"))
+                    option_round = _coerce_nonnegative_int(rec.get("round"))
+                    if (
+                        option_id is None
+                        or option_id >= 4
+                        or option_seat is None
+                        or option_round is None
+                        or option_round < 1
+                    ):
+                        n_invalid_rows += 1
+                        invalid_episodes.add(game_id)
+                        continue
                 try:
                     step = {
                         "game_id": game_id,
@@ -741,6 +1035,9 @@ def load_trajectory_buffer(
                         else "",
                         "continuation_curriculum": continuation_curriculum,
                         "player_count": _coerce_player_count(rec.get("playerCount", 4)),
+                        "option_id": option_id,
+                        "seat": option_seat,
+                        "round": option_round,
                         "obs": obs,
                         "cands": cands,
                         "chosen": chosen,
@@ -784,6 +1081,10 @@ def load_trajectory_buffer(
         ):
             invalid_structure.add(game_id)
             continue
+        option_presence = [s["option_id"] is not None for s in steps]
+        if any(option_presence) and not all(option_presence):
+            invalid_structure.add(game_id)
+            continue
         # The outcome is post-game training metadata, never an observation. Keep
         # its contract strict: target+horizon are a pair, appear only on the final
         # row, and only belong to a solo trajectory.
@@ -800,10 +1101,60 @@ def load_trajectory_buffer(
     for game_id in invalid_structure:
         episodes.pop(game_id, None)
 
+    raw_option_events, malformed_option_event_games = _read_option_events(data_dir, obs_key)
+    option_mode = any(
+        step["option_id"] is not None
+        for raw_steps in episodes.values()
+        for step in raw_steps
+    )
+    option_invalid: set[str] = set()
+    if option_mode:
+        # An option-enabled generation is one causal dataset. Legacy episodes or
+        # unmatched/extra high-level events cannot silently enter low-level PPO.
+        for game_id, raw_steps in episodes.items():
+            steps = sorted(raw_steps, key=lambda s: s["step_idx"])
+            if any(step["option_id"] is None for step in steps):
+                option_invalid.add(game_id)
+                continue
+            low_groups: dict[tuple[str, int], list[dict]] = {}
+            for step in steps:
+                low_groups.setdefault((step["seat"], step["round"]), []).append(step)
+            event_groups = {
+                (event["seat"], event["round"]): event
+                for event in raw_option_events.get(game_id, [])
+            }
+            if not set(low_groups).issubset(set(event_groups)):
+                option_invalid.add(game_id)
+                continue
+            for identity, event in event_groups.items():
+                if len(low_groups.get(identity, [])) != event["low_level_decision_count"]:
+                    option_invalid.add(game_id)
+                    break
+            if game_id in option_invalid:
+                continue
+            for identity, group in low_groups.items():
+                event = event_groups[identity]
+                first = min(group, key=lambda step: step["step_idx"])
+                if (
+                    any(step["option_id"] != event["option_id"] for step in group)
+                    or any(step["player_count"] != event["player_count"] for step in group)
+                    or first["obs"].shape != event["obs"].shape
+                ):
+                    option_invalid.add(game_id)
+                    break
+        option_invalid.update(set(raw_option_events) - set(episodes))
+    elif raw_option_events:
+        option_invalid.update(raw_option_events)
+    for game_id in option_invalid:
+        episodes.pop(game_id, None)
+        raw_option_events.pop(game_id, None)
+    n_option_rejected = len(malformed_option_event_games | option_invalid)
+
     if not episodes:
         raise ValueError(
             f"No complete PPO trajectories in {data_dir} "
-            f"({len(invalid_episodes) + len(invalid_structure)} episode(s) rejected, "
+            f"({len(invalid_episodes) + len(invalid_structure) + n_option_rejected} "
+            "episode(s) rejected, "
             f"{n_nontrajectory} non-trajectory row(s))"
         )
 
@@ -831,6 +1182,7 @@ def load_trajectory_buffer(
     reach30_weight_list: list[float] = []
     strategic_mask_list: list[bool] = []
     continuation_mask_list: list[bool] = []
+    option_id_list: list[int] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
     solo_outcome_adv_list: list[np.ndarray] = []
@@ -845,6 +1197,7 @@ def load_trajectory_buffer(
     reach30_horizons: set[int] = set()
     self_imitation_current_rows: list[dict[str, Any]] = []
     self_imitation_source_episodes = 0
+    option_event_rows: list[dict[str, Any]] = []
 
     # Batch-mean control variate for the true solo objective. A solo seat is always
     # placement 1 at the round cap, so only the actor's explicit `won` bit (30 VP)
@@ -909,6 +1262,56 @@ def load_trajectory_buffer(
             # tails from reading as artificial zero-return endings.
             last_value = float(values[-1])
             n_truncated += 1
+
+        if option_mode:
+            event_lookup = {
+                (event["seat"], event["round"]): event
+                for event in raw_option_events[game_id]
+            }
+            for seat in sorted({step["seat"] for step in steps}):
+                identities = sorted(
+                    {
+                        (event["seat"], event["round"])
+                        for event in raw_option_events[game_id]
+                        if event["seat"] == seat
+                    },
+                    key=lambda identity: identity[1],
+                )
+                seat_events = [event_lookup[identity] for identity in identities]
+                reward_sequences: list[np.ndarray] = []
+                event_dones: list[bool] = []
+                for identity in identities:
+                    indices_for_round = [
+                        index
+                        for index, step in enumerate(steps)
+                        if (step["seat"], step["round"]) == identity
+                    ]
+                    reward_sequences.append(rewards[indices_for_round].copy())
+                    event_dones.append(
+                        bool(dones[indices_for_round].any()) if indices_for_round else False
+                    )
+                option_values = np.asarray(
+                    [event["v_pred"] for event in seat_events], dtype=np.float64
+                )
+                option_last_value = 0.0 if event_dones[-1] else float(option_values[-1])
+                option_adv, option_ret, option_rewards, option_durations = compute_smdp_gae(
+                    reward_sequences,
+                    option_values,
+                    np.asarray(event_dones, dtype=bool),
+                    gamma=0.999,
+                    lam=0.95,
+                    last_value=option_last_value,
+                )
+                for index, event in enumerate(seat_events):
+                    option_event_rows.append(
+                        {
+                            **event,
+                            "advantage": option_adv[index],
+                            "return": option_ret[index],
+                            "reward": option_rewards[index],
+                            "duration": option_durations[index],
+                        }
+                    )
 
         adv, ret = compute_gae(rewards, values, dones, gamma, gae_lambda, last_value)
         strategic = np.array([s["strategic"] for s in steps], dtype=bool)
@@ -1104,6 +1507,7 @@ def load_trajectory_buffer(
             reach30_weight_list.append(1.0 / len(steps) if resolved_solo else 0.0)
             strategic_mask_list.append(s["strategic"])
             continuation_mask_list.append(s["continuation_curriculum"])
+            option_id_list.append(int(s["option_id"]) if option_mode else 0)
         adv_list.append(adv)
         ret_list.append(ret)
         solo_outcome_adv_list.append(episode_solo_outcome_adv)
@@ -1203,6 +1607,32 @@ def load_trajectory_buffer(
             f"persisted_rows={len(persisted_rows)} | total_rows={len(replay_rows)} | "
             + " ".join(f"{phase}={phase_counts[phase]}" for phase in SELF_IMITATION_PHASES)
         )
+    option_dim = 4 if option_mode else 0
+    option_tensor = np.zeros((len(option_id_list), option_dim), dtype=np.float32)
+    if option_mode:
+        option_tensor[np.arange(len(option_id_list)), np.asarray(option_id_list)] = 1.0
+    option_events = None
+    if option_mode:
+        option_events = OptionEventBuffer(
+            obs=np.stack([event["obs"] for event in option_event_rows]),
+            chosen=np.asarray([event["option_id"] for event in option_event_rows], dtype=np.int64),
+            behavior_mask=np.stack([event["behavior_mask"] for event in option_event_rows]),
+            logp_old=np.asarray([event["logp_old"] for event in option_event_rows], dtype=np.float32),
+            v_pred=np.asarray([event["v_pred"] for event in option_event_rows], dtype=np.float32),
+            advantages=np.asarray([event["advantage"] for event in option_event_rows], dtype=np.float32),
+            returns=np.asarray([event["return"] for event in option_event_rows], dtype=np.float32),
+            durations=np.asarray([event["duration"] for event in option_event_rows], dtype=np.int64),
+            rewards=np.asarray([event["reward"] for event in option_event_rows], dtype=np.float32),
+            importance_weight=np.asarray(
+                [event["importance_weight"] for event in option_event_rows], dtype=np.float32
+            ),
+            game_id=[event["game_id"] for event in option_event_rows],
+            seat=[event["seat"] for event in option_event_rows],
+            round=np.asarray([event["round"] for event in option_event_rows], dtype=np.int64),
+            option_dim=option_dim,
+            rejected_episodes=n_option_rejected,
+            support_violations=0,
+        )
     print(
         f"Loaded {len(cands_list)} PPO steps from {len(episodes)} game(s) "
         f"({sum(policy_mask_list)} exact policy step(s), "
@@ -1220,6 +1650,7 @@ def load_trajectory_buffer(
         f"outcome coef={strategic_outcome_coef:g}, "
         f"applied={n_outcome_credit}), "
         f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "
+        f"{n_option_rejected} malformed option episode(s), "
         f"{n_invalid_rows} malformed row(s), {n_nontrajectory} non-trajectory row(s), "
         f"{n_missing_obs} missing {obs_key!r})"
     )
@@ -1256,6 +1687,10 @@ def load_trajectory_buffer(
         route_mode=np.array(route_mode_list, dtype=np.float32),
         route_mask=np.array(route_mask_list, dtype=bool),
         placement=np.array(placement_list, dtype=np.int64),
+        options=option_tensor,
+        option_dim=option_dim,
+        option_events=option_events,
+        option_rejected_episodes=n_option_rejected,
         self_imitation=self_imitation,
     )
 
@@ -1274,11 +1709,13 @@ def placement_aux_loss_v1(
     obs: torch.Tensor,            # (B, obs_dim) v1 obs
     placement: torch.Tensor,      # (B,) int, 1-4, 0 = unknown
     has_placement: torch.Tensor,  # (B,) bool
+    option: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """4-way CE on CandidateScorer.placement_head for rows carrying placement."""
     if not has_placement.any():
         return torch.zeros((), dtype=torch.float32, device=obs.device)
-    logits = model.placement_head_logits(obs[has_placement])
+    selected_option = option[has_placement] if option is not None else None
+    logits = model.placement_head_logits(obs[has_placement], selected_option)
     target = (placement[has_placement] - 1).long().clamp(0, 3)
     return F.cross_entropy(logits, target)
 
@@ -1469,6 +1906,7 @@ def _minibatch_tensors(
         torch.from_numpy(buffer.reach30_target_mask[idx]).to(device),
         torch.from_numpy(buffer.reach30_weight[idx]).to(device),
         torch.from_numpy(buffer.placement[idx]).to(device),
+        torch.from_numpy(buffer.options[idx]).to(device),
     )
 
 
@@ -1707,7 +2145,10 @@ def reach30_training_metrics(
     with torch.no_grad():
         for start in range(0, labelled.size, batch_size):
             idx = labelled[start : start + batch_size]
-            logits = model.reach30_logits(torch.from_numpy(buffer.obs[idx]).to(device))
+            logits = model.reach30_logits(
+                torch.from_numpy(buffer.obs[idx]).to(device),
+                torch.from_numpy(buffer.options[idx]).to(device),
+            )
             score_chunks.append(torch.sigmoid(logits).cpu().numpy())
     if was_training:
         model.train()
@@ -1791,6 +2232,12 @@ def train_ppo(
     self_imitation_coef: float = 0.0,
     self_imitation_replay_fraction: float = 0.0,
     self_imitation_staleness_logp: float = 1.0,
+    option_rows_per_epoch: int = 16_384,
+    option_batch_size: int = 256,
+    option_clip_eps: float = 0.15,
+    option_entropy_coef: float = 0.02,
+    option_value_coef: float = 0.5,
+    option_feature_cutoff: int | None = None,
 ) -> list[dict]:
     """K epochs of clipped-surrogate PPO over a fixed rollout buffer.
     Returns per-epoch metric dicts (used by tests).
@@ -1815,6 +2262,20 @@ def train_ppo(
         )
     if self_imitation_staleness_logp < 0 or not math.isfinite(self_imitation_staleness_logp):
         raise ValueError("self_imitation_staleness_logp must be finite and nonnegative")
+    if buffer.option_dim and self_imitation_replay_fraction > 0:
+        raise ValueError("option-enabled PPO does not accept legacy self-imitation rows")
+    if buffer.option_dim != model.option_dim:
+        raise ValueError(
+            f"rollout option_dim {buffer.option_dim} != model option_dim {model.option_dim}"
+        )
+    if buffer.option_dim and buffer.option_events is None:
+        raise ValueError("option-enabled PPO requires validated option events")
+    if buffer.option_rejected_episodes:
+        raise ValueError(
+            f"option contract rejected {buffer.option_rejected_episodes} episode(s)"
+        )
+    if option_feature_cutoff is not None and not buffer.option_dim:
+        raise ValueError("option_feature_cutoff requires an option-enabled rollout")
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # KL-to-reference anchor (piKL / AlphaStar KL-to-BC): penalize divergence from
     # the WARM-START policy. The reference is the state of `model` at entry.
@@ -1832,6 +2293,7 @@ def train_ppo(
     self_imitation_rng = np.random.default_rng(
         None if seed is None else (int(seed) ^ 0x53494C)
     )
+    option_rng = np.random.default_rng(None if seed is None else (int(seed) ^ 0x4F5054))
     indices = np.arange(n)
     global_normalized_advantages = normalize_policy_advantages(
         buffer.advantages,
@@ -1847,6 +2309,15 @@ def train_ppo(
         else None,
     )
     n_policy_total = int(buffer.policy_mask.sum())
+    normalized_option_advantages = None
+    if buffer.option_events is not None:
+        raw_adv = buffer.option_events.advantages.astype(np.float64)
+        weights = buffer.option_events.importance_weight.astype(np.float64)
+        mean = float(np.average(raw_adv, weights=weights))
+        variance = float(np.average((raw_adv - mean) ** 2, weights=weights))
+        normalized_option_advantages = (
+            (raw_adv - mean) / math.sqrt(variance + 1e-8)
+        ).astype(np.float32)
     if policy_coef > 0 and n_policy_total == 0:
         print(
             "WARNING: PPO policy coefficient is nonzero but the rollout has no "
@@ -1947,6 +2418,9 @@ def train_ppo(
         self_imitation_accepted = 0
         self_imitation_stale = 0
         self_imitation_phase_counts = {phase: 0 for phase in SELF_IMITATION_PHASES}
+        option_policy_total = option_value_total = option_entropy_total = 0.0
+        option_kl_total = option_clip_total = option_value_error_total = 0.0
+        option_seen = option_updates = 0
         stop = False
         epoch_reach30_updated = False
         epoch_reach30_total_weight = float(buffer.reach30_weight[epoch_indices].sum())
@@ -1976,9 +2450,10 @@ def train_ppo(
                 reach30_target_mask,
                 reach30_weight,
                 placement,
+                option,
             ) = _minibatch_tensors(buffer, mb, device, normalized_advantages)
 
-            logits, _, value = model(obs, cands, behavior_mask)
+            logits, _, value = model(obs, cands, behavior_mask, option)
             log_probs = behavior_log_probs(logits, behavior_mask, behavior_temperature)
             probs = log_probs.exp()
             logp_new = log_probs.gather(1, chosen.unsqueeze(1)).squeeze(1)
@@ -2048,7 +2523,7 @@ def train_ppo(
             kl_ref = torch.zeros((), dtype=torch.float32, device=device)
             if ref_model is not None:
                 with torch.no_grad():
-                    ref_logits, _, _ = ref_model(obs, cands, behavior_mask)
+                    ref_logits, _, _ = ref_model(obs, cands, behavior_mask, option)
                     ref_logp = behavior_log_probs(
                         ref_logits, behavior_mask, behavior_temperature
                     )
@@ -2067,19 +2542,19 @@ def train_ppo(
 
             farm_loss = torch.zeros((), dtype=torch.float32, device=device)
             if farm_value_coef > 0 and farm_mask.any():
-                pred_farm = model.farm_value(obs)
+                pred_farm = model.farm_value(obs, option)
                 farm_loss = F.mse_loss(pred_farm[farm_mask], farm_value[farm_mask])
 
             reward_loss = torch.zeros((), dtype=torch.float32, device=device)
             if reward_pick_coef > 0 and reward_mask.any():
-                reward_logits = model.reward_pick_logits(obs, cands, candidate_mask)
+                reward_logits = model.reward_pick_logits(obs, cands, candidate_mask, option)
                 reward_log_probs = F.log_softmax(reward_logits, dim=-1)
                 reward_per_row = -(reward_pi * reward_log_probs).sum(dim=-1)
                 reward_loss = reward_per_row[reward_mask].mean()
 
             route_loss = torch.zeros((), dtype=torch.float32, device=device)
             if route_mode_coef > 0 and route_mask.any():
-                route_logits = model.route_mode_logits(obs)
+                route_logits = model.route_mode_logits(obs, option)
                 route_loss = F.binary_cross_entropy_with_logits(
                     route_logits[route_mask], route_mode[route_mask]
                 )
@@ -2087,7 +2562,7 @@ def train_ppo(
             reach30_loss = torch.zeros((), dtype=torch.float32, device=device)
             reach30_active = bool(reach30_value_coef > 0 and reach30_target_mask.any())
             if reach30_active:
-                reach30_logits = model.reach30_logits(obs)
+                reach30_logits = model.reach30_logits(obs, option)
                 # Unbiased minibatch estimator of the fixed full-buffer objective:
                 #   sum_i (BCE_i / episode_length_i) / labelled_episodes.
                 # A per-minibatch weight normalization would cancel 1/L in small
@@ -2105,7 +2580,9 @@ def train_ppo(
             if use_placement:
                 placement_loss = placement_aux_loss(model, obs, placement, placement > 0)
             elif use_placement_v1:
-                placement_loss = placement_aux_loss_v1(model, obs, placement, placement > 0)
+                placement_loss = placement_aux_loss_v1(
+                    model, obs, placement, placement > 0, option
+                )
 
             self_imitation_loss = torch.zeros((), dtype=torch.float32, device=device)
             accepted = 0
@@ -2188,8 +2665,104 @@ def train_ppo(
             n_tactical_seen += tactical_count
             n_continuation_seen += int(buffer.continuation_mask[mb].sum())
 
+        # High-level SMDP PPO uses an independent deterministic row stream and
+        # exactly the preregistered fixed event budget each epoch.
+        events = buffer.option_events
+        if not halted and events is not None and normalized_option_advantages is not None:
+            event_count = len(events)
+            if event_count < 1 or option_rows_per_epoch < 1 or option_batch_size < 1:
+                raise ValueError("option PPO requires positive events and fixed row/batch budgets")
+            replace = event_count < option_rows_per_epoch
+            if replace:
+                option_indices = option_rng.choice(
+                    event_count, size=option_rows_per_epoch, replace=True
+                )
+            else:
+                option_indices = option_rng.permutation(event_count)[:option_rows_per_epoch]
+            for option_start in range(0, option_rows_per_epoch, option_batch_size):
+                oi = option_indices[option_start : option_start + option_batch_size]
+                option_obs = torch.from_numpy(events.obs[oi]).to(device)
+                option_chosen = torch.from_numpy(events.chosen[oi]).to(device)
+                option_mask = torch.from_numpy(events.behavior_mask[oi]).to(device)
+                old_logp = torch.from_numpy(events.logp_old[oi]).to(device)
+                old_value = torch.from_numpy(events.v_pred[oi]).to(device)
+                targets = torch.from_numpy(events.returns[oi]).to(device)
+                event_adv = torch.from_numpy(normalized_option_advantages[oi]).to(device)
+                event_weight = torch.from_numpy(events.importance_weight[oi]).to(device)
+                weight_sum = event_weight.sum().clamp_min(1e-8)
+
+                option_logits = model.option_logits(option_obs).masked_fill(
+                    ~option_mask, float("-inf")
+                )
+                option_log_probs = F.log_softmax(option_logits, dim=-1)
+                option_probs = option_log_probs.exp()
+                new_logp = option_log_probs.gather(1, option_chosen[:, None]).squeeze(1)
+                log_ratio = (new_logp - old_logp).clamp(-20.0, 20.0)
+                option_ratio = log_ratio.exp()
+                surrogate = torch.minimum(
+                    option_ratio * event_adv,
+                    option_ratio.clamp(1.0 - option_clip_eps, 1.0 + option_clip_eps)
+                    * event_adv,
+                )
+                option_policy_loss = -(surrogate * event_weight).sum() / weight_sum
+                finite_log_probs = option_log_probs.masked_fill(~option_mask, 0.0)
+                option_entropy = (
+                    (-(option_probs * finite_log_probs).sum(dim=1) * event_weight).sum()
+                    / weight_sum
+                )
+                predicted_value = model.option_value(option_obs)
+                squared_error = (predicted_value - targets) ** 2
+                option_value_loss = (squared_error * event_weight).sum() / weight_sum
+                option_loss = (
+                    option_policy_loss
+                    + option_value_coef * option_value_loss
+                    - option_entropy_coef * option_entropy
+                )
+                optimizer.zero_grad()
+                option_loss.backward()
+                if max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                optimizer.step()
+                optimizer_steps += 1
+                option_updates += 1
+                if not model_parameters_are_finite(model):
+                    model.load_state_dict(last_finite)
+                    halted = True
+                    break
+                bs_option = len(oi)
+                with torch.no_grad():
+                    k3 = ((option_ratio - 1.0) - log_ratio)
+                    clipped = (option_ratio - 1.0).abs() > option_clip_eps
+                    option_kl_total += float((k3 * event_weight).sum() / weight_sum) * bs_option
+                    option_clip_total += float((clipped.float() * event_weight).sum() / weight_sum) * bs_option
+                option_policy_total += option_policy_loss.detach().item() * bs_option
+                option_value_total += option_value_loss.detach().item() * bs_option
+                option_value_error_total += option_value_loss.detach().item() * bs_option
+                option_entropy_total += option_entropy.detach().item() * bs_option
+                option_seen += bs_option
         if halted:
             break
+        active_option_heads: set[str] = set()
+        if policy_coef > 0:
+            active_option_heads.add("trunk")
+        if value_coef > 0:
+            active_option_heads.add("value")
+        if farm_value_coef > 0:
+            active_option_heads.add("farm_value")
+        if reward_pick_coef > 0:
+            active_option_heads.add("reward_pick")
+        if route_mode_coef > 0:
+            active_option_heads.add("route_mode")
+        if reach30_value_coef > 0:
+            active_option_heads.add("reach30")
+        if placement_coef > 0 and use_placement_v1:
+            active_option_heads.add("placement")
+        option_column_norms = audit_low_level_option_columns(
+            model,
+            buffer,
+            option_feature_cutoff,
+            active_heads=active_option_heads,
+        )
         if n_seen:
             if epoch_reach30_updated:
                 model.reach30_trained = True
@@ -2234,6 +2807,18 @@ def train_ppo(
                 f"policy_steps={n_policy_seen}/{n_seen} | "
                 f"optimizer_steps={optimizer_steps}"
             )
+            if buffer.option_events is not None:
+                print(
+                    f"Option PPO epoch {epoch}/{epochs} | "
+                    f"policy_loss={option_policy_total / max(1, option_seen):.4f} | "
+                    f"value_loss={option_value_total / max(1, option_seen):.4f} | "
+                    f"entropy={option_entropy_total / max(1, option_seen):.4f} | "
+                    f"approx_kl={option_kl_total / max(1, option_seen):.4f} | "
+                    f"clip_frac={option_clip_total / max(1, option_seen):.4f} | "
+                    f"events={option_seen} | optimizer_steps={option_updates} | "
+                    f"support_violations={buffer.option_events.support_violations} | "
+                    f"rejected_episodes={buffer.option_events.rejected_episodes}"
+                )
             epoch_metrics = {
                 "policy_loss": tot_policy / policy_denom,
                 "value_loss": tot_value / n_seen,
@@ -2259,6 +2844,18 @@ def train_ppo(
                 "total_steps": n_seen,
                 "continuation_steps": n_continuation_seen,
                 "optimizer_steps": optimizer_steps,
+                "option_policy_loss": option_policy_total / max(1, option_seen),
+                "option_value_loss": option_value_total / max(1, option_seen),
+                "option_value_error": option_value_error_total / max(1, option_seen),
+                "option_entropy": option_entropy_total / max(1, option_seen),
+                "option_approx_kl": option_kl_total / max(1, option_seen),
+                "option_clip_frac": option_clip_total / max(1, option_seen),
+                "option_events": option_seen,
+                "option_optimizer_steps": option_updates,
+                "option_support_violations": (
+                    buffer.option_events.support_violations if buffer.option_events else 0
+                ),
+                "option_column_norms": option_column_norms,
             }
             if self_imitation_replay_fraction > 0:
                 epoch_metrics.update(

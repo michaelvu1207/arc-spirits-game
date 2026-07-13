@@ -109,4 +109,60 @@ describe('observation-prefix checkpoint compatibility', () => {
 			/placement\[0\].*ragged/
 		);
 	});
+
+	it('validates and evaluates the strict four-option checkpoint contract', () => {
+		const raw = fixture();
+		raw.option_dim = 4;
+		raw.trunk[0].W = raw.trunk[0].W.map((row) => [...row, 2, 0, 0, 0]);
+		raw.value[0].W = raw.value[0].W.map((row) => [...row, 3, 0, 0, 0]);
+		for (const head of ['farm_value', 'placement', 'route_mode', 'reach30'] as const) {
+			raw[head]![0].W = raw[head]![0].W.map((row) => [...row, 0, 0, 0, 0]);
+		}
+		raw.reward_pick![0].W = raw.reward_pick![0].W.map((row) => [...row, 0, 0, 0, 0]);
+		raw.option = [
+			{ W: Array.from({ length: 64 }, () => [0, 0]), b: Array(64).fill(0) },
+			{
+				W: Array.from({ length: 4 }, () => Array(64).fill(0)),
+				b: [0, 1, 2, 99]
+			}
+		];
+		raw.option_value = [
+			{ W: Array.from({ length: 64 }, () => [0, 0]), b: Array(64).fill(0) },
+			{ W: [Array(64).fill(0)], b: [0.25] }
+		];
+		const policy = loadPolicyWeights(raw);
+		const obs = [0.4, -0.7];
+		const cands = [[0.2]];
+
+		expect(policy.optionDim).toBe(4);
+		expect(policy.optionValue(obs)).toBe(0.25);
+		expect(policy.pickOption(obs, { behaviorMask: [1, 1, 1, 0] })).toBe(2);
+		expect(policy.optionProbs(obs, [1, 1, 1, 0])![3]).toBe(0);
+		expect(() => policy.scoreCandidates(obs, cands)).toThrow(/requires an option vector/);
+		expect(policy.scoreCandidates(obs, cands, [1, 0, 0, 0])[0]).not.toBe(
+			policy.scoreCandidates(obs, cands, [0, 1, 0, 0])[0]
+		);
+	});
+
+	it('fails closed on malformed or misleading option metadata', () => {
+		const legacyWithHead = fixture();
+		legacyWithHead.option = [{ W: [[0, 0]], b: [0] }];
+		expect(() => loadPolicyWeights(legacyWithHead)).toThrow(/legacy option_dim=0/);
+
+		const missing = fixture();
+		missing.option_dim = 4;
+		expect(() => loadPolicyWeights(missing)).toThrow(/requires option and option_value/);
+
+		const unsupported = fixture();
+		unsupported.option_dim = 3;
+		expect(() => loadPolicyWeights(unsupported)).toThrow(/exactly 4/);
+
+		const nonFinite = fixture();
+		nonFinite.trunk[0].W[0][0] = Number.NaN;
+		expect(() => loadPolicyWeights(nonFinite)).toThrow(/non-finite weights/);
+
+		const disconnected = fixture();
+		disconnected.trunk[1].W[0].pop();
+		expect(() => loadPolicyWeights(disconnected)).toThrow(/prior output/);
+	});
 });

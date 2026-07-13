@@ -307,6 +307,15 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
     try:
         with open(path) as f:
             w = json.load(f)
+        raw_option_dim = w.get("option_dim", 0)
+        if (
+            isinstance(raw_option_dim, bool)
+            or not isinstance(raw_option_dim, (int, float))
+            or not float(raw_option_dim).is_integer()
+            or int(raw_option_dim) < 0
+            or int(raw_option_dim) != model.option_dim
+        ):
+            return False
         if int(w.get("obs_dim", -1)) != model.obs_dim or int(w.get("act_dim", -1)) != model.act_dim:
             return False
         trunk_linears = [m for m in model.trunk if isinstance(m, torch.nn.Linear)]
@@ -315,8 +324,46 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
         route_mode_linears = [m for m in model.route_mode_head if isinstance(m, torch.nn.Linear)]
         reach30_linears = [m for m in model.reach30_head if isinstance(m, torch.nn.Linear)]
         reward_pick_linears = [m for m in model.reward_pick_head if isinstance(m, torch.nn.Linear)]
+        option_linears = (
+            [m for m in model.option_head if isinstance(m, torch.nn.Linear)]
+            if model.option_head is not None
+            else []
+        )
+        option_value_linears = (
+            [m for m in model.option_value_head if isinstance(m, torch.nn.Linear)]
+            if model.option_value_head is not None
+            else []
+        )
         if len(trunk_linears) != len(w["trunk"]) or len(value_linears) != len(w["value"]):
             return False
+        if model.option_dim:
+            required = {
+                "trunk": trunk_linears,
+                "value": value_linears,
+                "farm_value": farm_value_linears,
+                "route_mode": route_mode_linears,
+                "reward_pick": reward_pick_linears,
+                "placement": [m for m in model.placement_head if isinstance(m, torch.nn.Linear)],
+                "option": option_linears,
+                "option_value": option_value_linears,
+            }
+            for name, linears in required.items():
+                layers = w.get(name)
+                if not isinstance(layers, list) or len(layers) != len(linears):
+                    return False
+                for lin, layer in zip(linears, layers):
+                    try:
+                        W = torch.tensor(layer["W"], dtype=torch.float32)
+                        b = torch.tensor(layer["b"], dtype=torch.float32)
+                    except (KeyError, TypeError, ValueError):
+                        return False
+                    if (
+                        lin.weight.shape != W.shape
+                        or lin.bias.shape != b.shape
+                        or not torch.isfinite(W).all()
+                        or not torch.isfinite(b).all()
+                    ):
+                        return False
         reach30_tensors: list[tuple[torch.Tensor, torch.Tensor]] | None = None
         if "reach30" in w:
             horizon = w.get("reach30_horizon")
@@ -396,6 +443,13 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
                         break
                     lin.weight.copy_(W)
                     lin.bias.copy_(b)
+            if model.option_dim:
+                for lin, d in zip(option_linears, w["option"]):
+                    lin.weight.copy_(torch.tensor(d["W"], dtype=torch.float32))
+                    lin.bias.copy_(torch.tensor(d["b"], dtype=torch.float32))
+                for lin, d in zip(option_value_linears, w["option_value"]):
+                    lin.weight.copy_(torch.tensor(d["W"], dtype=torch.float32))
+                    lin.bias.copy_(torch.tensor(d["b"], dtype=torch.float32))
         return True
     except Exception as e:  # noqa: BLE001 — warm-start is best-effort
         print(f"warm-start skipped: {e}")
@@ -416,6 +470,27 @@ def hidden_sizes_from_checkpoint(path: Path) -> tuple[tuple[int, ...], tuple[int
         return trunk_hidden, value_hidden
     except Exception as e:  # noqa: BLE001 — architecture inference is best-effort
         print(f"checkpoint architecture inference skipped: {e}")
+        return None
+
+
+def option_dim_from_checkpoint(path: Path) -> int | None:
+    """Return a valid v1 option width, treating old checkpoints as option_dim=0."""
+    try:
+        with open(path) as f:
+            w = json.load(f)
+        raw = w.get("option_dim", 0)
+        if (
+            isinstance(raw, bool)
+            or not isinstance(raw, (int, float))
+            or not float(raw).is_integer()
+            or int(raw) < 0
+        ):
+            return None
+        dim = int(raw)
+        if dim and (not isinstance(w.get("option"), list) or not isinstance(w.get("option_value"), list)):
+            return None
+        return dim
+    except Exception:
         return None
 
 
@@ -443,6 +518,7 @@ def build_policy_model(
     warm_start: bool,
     trunk_hidden: tuple[int, ...] | None = None,
     value_hidden: tuple[int, ...] | None = None,
+    option_dim: int | None = None,
 ) -> CandidateScorer:
     """Build v1, then optionally warm-start it.
 
@@ -452,6 +528,10 @@ def build_policy_model(
     """
     init_path = init_from if init_from is not None else (out_path if out_path.exists() else None)
     inferred_hidden = hidden_sizes_from_checkpoint(init_path) if init_path is not None else None
+    inferred_option_dim = option_dim_from_checkpoint(init_path) if init_path is not None else 0
+    resolved_option_dim = inferred_option_dim if option_dim is None else option_dim
+    if resolved_option_dim is None:
+        raise ValueError(f"malformed option metadata in checkpoint {init_path}")
     resolved_trunk = trunk_hidden if trunk_hidden is not None else (
         inferred_hidden[0] if inferred_hidden else None
     )
@@ -464,9 +544,11 @@ def build_policy_model(
         device,
         trunk_hidden=resolved_trunk,
         value_hidden=resolved_value,
+        option_dim=resolved_option_dim,
     )
     print(
         f"v1 architecture: trunk={model.trunk_hidden}, value={model.value_hidden} "
+        f"option_dim={model.option_dim} "
         f"(explicit trunk={trunk_hidden is not None}, value={value_hidden is not None})"
     )
     if warm_start and init_path is not None and init_path.exists():
@@ -478,6 +560,10 @@ def build_policy_model(
         ok = load_json_weights_into(model, init_path)
         if not ok:
             model.load_state_dict(fresh_state)
+            if model.option_dim:
+                raise ValueError(
+                    f"option-enabled checkpoint {init_path} failed strict shape/metadata loading"
+                )
         print(f"warm-start from {init_path}: {'OK' if ok else 'skipped (mismatch)'}")
     return model
 
@@ -672,6 +758,9 @@ def train(
     self_imitation_max_age: int = 3,
     self_imitation_max_rows: int = 100_000,
     obs_feature_cutoff: int | None = None,
+    option_feature_cutoff: int | None = None,
+    option_rows_per_epoch: int = 16_384,
+    option_batch_size: int = 256,
 ) -> list[dict]:
     """Train and export; returns per-epoch metric dicts (used by tests)."""
     if seed is not None:
@@ -694,6 +783,8 @@ def train(
         raise ValueError("PPO row-budget controls require --mode ppo")
     if obs_feature_cutoff is not None and (mode != "ppo" or model_version != "v1"):
         raise ValueError("--obs-feature-cutoff requires --mode ppo --model v1")
+    if option_feature_cutoff is not None and (mode != "ppo" or model_version != "v1"):
+        raise ValueError("--option-feature-cutoff requires --mode ppo --model v1")
     if ppo_rows_per_epoch is not None and target_kl is not None:
         raise ValueError(
             "--target-kl is incompatible with --ppo-rows-per-epoch fixed-update training"
@@ -746,6 +837,7 @@ def train(
     if mode == "ppo":
         from ppo import (
             apply_observation_feature_cutoff,
+            apply_option_feature_cutoff,
             load_trajectory_buffer,
             parse_placement_rewards,
             train_ppo,
@@ -780,6 +872,14 @@ def train(
                 "Observation feature cutoff | "
                 f"kept={kept}/{loaded_obs_dim} | masked={loaded_obs_dim - kept}"
             )
+        if option_feature_cutoff is not None:
+            kept, loaded_option_dim = apply_option_feature_cutoff(
+                buffer, option_feature_cutoff
+            )
+            print(
+                "Option feature cutoff | "
+                f"kept={kept}/{loaded_option_dim} | masked={loaded_option_dim - kept}"
+            )
         if model_version == "v2":
             model, spec, act_dim = build_policy_model_v2(
                 data_dir, device, out_path, init_from, warm_start, v2_d_model, v2_layers, v2_heads
@@ -796,6 +896,7 @@ def train(
                 warm_start,
                 trunk_hidden=hidden,
                 value_hidden=value_hidden,
+                option_dim=buffer.option_dim,
             )
         print(f"obs_dim={obs_dim}, act_dim={act_dim}")
         history = train_ppo(
@@ -826,6 +927,9 @@ def train(
             self_imitation_coef=self_imitation_coef,
             self_imitation_replay_fraction=self_imitation_replay_fraction,
             self_imitation_staleness_logp=self_imitation_staleness_logp,
+            option_rows_per_epoch=option_rows_per_epoch,
+            option_batch_size=option_batch_size,
+            option_feature_cutoff=option_feature_cutoff,
         )
         export_model(model, obs_dim, act_dim)
         return history
@@ -1084,9 +1188,28 @@ def export_weights(
         for layer in model.placement_head
         if isinstance(layer, torch.nn.Linear)
     ]
+    option_linears = (
+        [
+            _linear_to_dict(layer)
+            for layer in model.option_head
+            if isinstance(layer, torch.nn.Linear)
+        ]
+        if model.option_head is not None
+        else []
+    )
+    option_value_linears = (
+        [
+            _linear_to_dict(layer)
+            for layer in model.option_value_head
+            if isinstance(layer, torch.nn.Linear)
+        ]
+        if model.option_value_head is not None
+        else []
+    )
     all_linears = (
         trunk_linears + value_linears + farm_value_linears + route_mode_linears
         + reward_pick_linears + placement_linears + reach30_linears
+        + option_linears + option_value_linears
     )
 
     payload = {
@@ -1116,6 +1239,14 @@ def export_weights(
         payload["aux_heads"]["reach30"] = (
             "obs -> scalar logit for reaching 30 VP by the configured solo round cap"
         )
+    if model.option_dim:
+        if not option_linears or not option_value_linears:
+            raise ValueError("option-enabled model is missing required high-level heads")
+        payload["option_dim"] = model.option_dim
+        payload["option"] = option_linears
+        payload["option_value"] = option_value_linears
+        payload["aux_heads"]["option"] = "obs -> persistent round-option logits"
+        payload["aux_heads"]["option_value"] = "obs -> SMDP round-start value"
 
     with open(out_path, "w") as f:
         json.dump(payload, f)
@@ -1180,6 +1311,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--obs-feature-cutoff", type=int, default=None,
                    help="PPO v1 compute-matched representation control: zero observation columns "
                         "at and after this append-only index while retaining the full tensor width")
+    p.add_argument("--option-feature-cutoff", type=int, default=None,
+                   help="PPO v1 causal control: retain this many low-level option columns; "
+                        "use 0 for control and 4 for treatment")
+    p.add_argument("--option-rows-per-epoch", type=int, default=16_384,
+                   help="Exact high-level option events consumed per PPO epoch")
+    p.add_argument("--option-batch-size", type=int, default=256,
+                   help="High-level SMDP PPO minibatch size")
     p.add_argument("--self-imitation-coef", type=float, default=0.0,
                    help="Weight on conservative winning-action masked CE (default 0 = off)")
     p.add_argument("--self-imitation-replay-fraction", type=float, default=0.0,
@@ -1313,4 +1451,7 @@ if __name__ == "__main__":
         self_imitation_max_age=args.self_imitation_max_age,
         self_imitation_max_rows=args.self_imitation_max_rows,
         obs_feature_cutoff=args.obs_feature_cutoff,
+        option_feature_cutoff=args.option_feature_cutoff,
+        option_rows_per_epoch=args.option_rows_per_epoch,
+        option_batch_size=args.option_batch_size,
     )

@@ -310,6 +310,19 @@ def load_scorer(
         payload = json.load(f)
     if payload.get("format") != FORMAT_V1:
         raise ValueError(f"{weights_path}: unexpected format {payload.get('format')!r}")
+    raw_option_dim = payload.get("option_dim", 0)
+    if (
+        isinstance(raw_option_dim, bool)
+        or not isinstance(raw_option_dim, (int, float))
+        or not float(raw_option_dim).is_integer()
+        or int(raw_option_dim) < 0
+    ):
+        raise ValueError(f"{weights_path}: malformed option_dim {raw_option_dim!r}")
+    if int(raw_option_dim) != 0:
+        raise ValueError(
+            f"{weights_path}: option-enabled checkpoints require in-process actors; "
+            "the inference wire has no persistent round-option context"
+        )
     obs_dim = int(payload["obs_dim"])
     act_dim = int(payload["act_dim"])
     hidden = hidden_sizes_from_checkpoint(weights_path)
