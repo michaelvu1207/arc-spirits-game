@@ -43,10 +43,10 @@ for ((step = 1; step <= generations; step += 1)); do
 	gen="$(node -e 'const s=require("./'"$root"'/state.json"); process.stdout.write(String(s.gen))')"
 	data_dir="$root/data/gen$gen"
 	if [[ -d "$data_dir" ]]; then
-		find "$data_dir" -maxdepth 1 -type f -name '*.jsonl' -print0 \
+		find "$data_dir" -type f -name '*.jsonl' -print0 \
 			| sort -z \
 			| xargs -0 -r sha256sum > "$data_dir/SHA256SUMS.uncompressed"
-		find "$data_dir" -maxdepth 1 -type f -name '*.jsonl' -print0 \
+		find "$data_dir" -type f -name '*.jsonl' -print0 \
 			| xargs -0 -r -n1 zstd -T1 -5 --rm --quiet
 	fi
 done
