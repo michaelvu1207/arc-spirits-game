@@ -37,9 +37,16 @@ export function resetCombatFlags(player: PrivatePlayerState): void {
 	player.attackRollAdvantage = false;
 	player.halveIncoming = false;
 	player.skipTakeDamage = false;
-	// `initiative` accumulates per combat (Disruptor compares stored values), so it
-	// also resets to a clean baseline at the start of each combat.
-	player.initiative = 0;
+	// Initiative granted by an in-combat effect must not accumulate between fights,
+	// but bonuses granted BEFORE combat must survive this reset. Rebuild that baseline
+	// from the active classes whose initiative text fires during Awakening/Navigation;
+	// the inCombat trigger below then layers Spirit Animal, Dragon Warrior, etc. on top.
+	// Numeric class breakpoints apply once even if duplicate trait stacks exist.
+	const classes = awakenedClassCounts(player);
+	player.initiative =
+		(classes.Fairy ? 3 : 0) +
+		(classes.Undercover ? 3 : 0) +
+		(classes['Deep Sea Hunter'] ? 4 : 0);
 	// `stunImmune` is a per-combat passive granted by inCombat effects (Sharpshooter);
 	// clear it so it does not persist into a later combat where the class is absent.
 	player.stunImmune = false;

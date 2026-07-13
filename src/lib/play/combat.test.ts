@@ -852,6 +852,27 @@ describe('per-combat flags reset between combats', () => {
 		expect(second!.barrierLost).toBe(4); // full damage now lands
 	});
 
+	it('combines Fairy +3 with +1 initiative for every Spirit Animal trait', () => {
+		const p = makePlayer({
+			// Simulate the stale pre-fix readout: combat reset must rebuild the real total,
+			// not preserve or increment this arbitrary value.
+			initiative: 4,
+			spirits: [
+				spirit(1, { Fairy: 1 }),
+				spirit(2, { 'Spirit Animal': 6 })
+			]
+		});
+		const state = makeState(p, makeMonster({ hp: 100, maxHp: 100, damage: 0 }), 1);
+
+		fightMonster(state, 'Red');
+
+		expect(p.initiative).toBe(9); // Fairy 3 + six Spirit Animal traits
+		expect(p.combatDamageBonus).toBe(6);
+
+		fightMonster(state, 'Red');
+		expect(p.initiative).toBe(9); // per-combat +6 does not accumulate to 15
+	});
+
 	it('resetCombatFlags zeroes every per-combat flag', () => {
 		const p = makePlayer({
 			combatDamageBonus: 9,
