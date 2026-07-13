@@ -220,7 +220,8 @@ try {
 				post15VpPerRound: seat.cycle?.post15VpPerRound ?? null,
 				finalAttackDice: seat.cycle?.finalAttackDice ?? null,
 				finalSpirits: seat.cycle?.finalSpirits ?? null,
-				finalMaxBarrier: seat.cycle?.finalMaxBarrier ?? null
+				finalMaxBarrier: seat.cycle?.finalMaxBarrier ?? null,
+				cycle: seat.cycle ?? null
 			});
 		}
 	}
