@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "experiment": "v26-solo-terminal-objective-live-s0",
+  "status": "preregistered",
+  "host": "ubuntu@216.151.21.122",
+  "remoteWorkspace": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+  "executableSourceCommit": "1ebb77dd4e11fc327df68905b78d61c49057b944",
+  "catalog": {
+    "path": "ml/catalogs/live-20260713-5f4ad348.json",
+    "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "warmStart": {
+    "path": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+    "sha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472"
+  },
+  "arms": {
+    "legacy": {
+      "root": "ml/league_v26_terminal_legacy_live_s0",
+      "config": "ml/league/configs/fair-v26-solo-terminal-legacy-s0.json",
+      "configSha256": "c28088a69971e0da34123e3d2917ce8616f2c36a8701f2a4fbaa5183f5e050e8",
+      "gpu": 0
+    },
+    "lexicographic": {
+      "root": "ml/league_v26_terminal_lexicographic_live_s0",
+      "config": "ml/league/configs/fair-v26-solo-terminal-lexicographic-s0.json",
+      "configSha256": "d48601120e940e120aa1e0fc00db64ee615d11b8b4766abbbfd3a75a94c8bb21",
+      "gpu": 1
+    }
+  },
+  "pairingContract": {
+    "matchedFields": [
+      "seed",
+      "guardian schedule",
+      "catalog",
+      "warm-start checkpoint",
+      "actor budget",
+      "architecture",
+      "optimizer",
+      "evaluation budget"
+    ],
+    "intentionalDifferences": [
+      "solo-terminal-objective",
+      "descriptive _readme",
+      "output root"
+    ],
+    "smokeGenerations": 1,
+    "initialStopGeneration": 5
+  },
+  "invalidPredecessors": [
+    {
+      "root": "ml/league_v26_terminal_legacy_s0",
+      "reason": "Actor launcher used the unpinned legacy ml/catalog.json. Stopped before generation completion and permanently marked INVALID."
+    },
+    {
+      "root": "ml/league_v26_terminal_lexicographic_s0",
+      "reason": "Actor launcher used the unpinned legacy ml/catalog.json. Stopped before generation completion and permanently marked INVALID."
+    }
+  ],
+  "preflight": {
+    "localPpoTests": "43 passed",
+    "localDriverTests": "15 passed",
+    "localLeagueTests": "48 passed, 2 skipped",
+    "remotePpoTests": "43 passed",
+    "remoteDriverTests": "15 passed",
+    "remoteLeagueTests": "48 passed, 2 skipped",
+    "chainScriptSha256": "5d10b0345ea8a5bfd717cb1dc532f0a23da49e8da8048a3fee67dd81ef07fdc8"
+  },
+  "promotionEligible": false
+}
