@@ -70,6 +70,8 @@ describe('actor pool', () => {
 
 		const slow = take(0)!;
 		let fast = take(1)!;
+		expect(slow.duplicateSeed).toBeUndefined();
+		expect(fast.duplicateSeed).toBe(true);
 		expect(() => scheduler.next(0)).toThrow(/while busy/);
 		// Worker 1 completes three games while worker 0 is still on its first. The
 		// central queue assigns work by completion, not by a static round-robin slice.
@@ -126,10 +128,11 @@ describe('actor pool', () => {
 			expect(four.samples).toBe(one.samples);
 			expect(
 				four.summaries.every((summary) =>
-					summary.perSeat.every((seat) =>
-						seat.cycle !== undefined &&
-						seat.cycle.decisions >= seat.cycle.productiveDecisions &&
-						seat.cycle.post15VpPerRound >= 0
+					summary.perSeat.every(
+						(seat) =>
+							seat.cycle !== undefined &&
+							seat.cycle.decisions >= seat.cycle.productiveDecisions &&
+							seat.cycle.post15VpPerRound >= 0
 					)
 				)
 			).toBe(true);
@@ -248,6 +251,191 @@ describe('actor pool', () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	}, 120_000);
+
+	it('keeps source trajectories byte-identical when the continuation curriculum is off', () => {
+		const dirAbsent = tempDir('continuation-off-absent');
+		const dirDisabled = tempDir('continuation-off-disabled');
+		const base: ActorGameConfig = {
+			seats: 1,
+			maxRounds: 30,
+			profiles: ['medium'],
+			weightsPath: WEIGHTS,
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			maxStatusLevel: 2
+		};
+		try {
+			const absent = runActorGames({
+				workerIndex: 0,
+				seeds: [77_140],
+				config: base,
+				outDir: dirAbsent,
+				catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+			});
+			const disabled = runActorGames({
+				workerIndex: 0,
+				seeds: [77_140],
+				config: { ...base, continuationCurriculum: { enabled: false } },
+				outDir: dirDisabled,
+				catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+			});
+			expect(readFileSync(join(dirDisabled, 'shard-0.jsonl'), 'utf8')).toBe(
+				readFileSync(join(dirAbsent, 'shard-0.jsonl'), 'utf8')
+			);
+			expect(disabled.samples).toBe(absent.samples);
+			expect(disabled.curriculum.episodes).toBe(0);
+			expect(disabled.curriculum.rows).toBe(0);
+		} finally {
+			rmSync(dirAbsent, { recursive: true, force: true });
+			rmSync(dirDisabled, { recursive: true, force: true });
+		}
+	}, 120_000);
+
+	it('appends one deterministic marked solo suffix without adding a game summary', () => {
+		const dirA = tempDir('continuation-a');
+		const dirB = tempDir('continuation-b');
+		const config: ActorGameConfig = {
+			seats: 1,
+			maxRounds: 30,
+			profiles: ['medium'],
+			weightsPath: WEIGHTS,
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			maxStatusLevel: 2,
+			continuationCurriculum: {
+				enabled: true,
+				rounds: [12],
+				sourceProbability: 1,
+				capFailureWeight: 1,
+				successWeight: 1
+			}
+		};
+		const run = (outDir: string) =>
+			runActorGames({
+				workerIndex: 0,
+				seeds: [77_140],
+				config,
+				outDir,
+				catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+			});
+		try {
+			const a = run(dirA);
+			const b = run(dirB);
+			const shardA = readFileSync(join(dirA, 'shard-0.jsonl'), 'utf8');
+			expect(readFileSync(join(dirB, 'shard-0.jsonl'), 'utf8')).toBe(shardA);
+			const rows = shardA
+				.trim()
+				.split('\n')
+				.map((line) => JSON.parse(line) as Record<string, unknown>);
+			const suffixRows = rows.filter((row) => row.continuationCurriculum === 1);
+			const suffixIds = new Set(suffixRows.map((row) => row.gameId));
+			const gameLines = readFileSync(join(dirA, 'games-0.jsonl'), 'utf8').trim().split('\n');
+
+			const { wallMs: _aWallMs, ...aDeterministic } = a.curriculum;
+			const { wallMs: _bWallMs, ...bDeterministic } = b.curriculum;
+			expect(aDeterministic).toEqual(bDeterministic);
+			expect(a.curriculum.wallMs).toBeGreaterThan(0);
+			expect(a.curriculum.eligibleSourceGames).toBe(1);
+			expect(a.curriculum.selectedSourceGames).toBe(1);
+			expect(a.curriculum.episodes).toBe(1);
+			expect(a.curriculum.rows).toBe(suffixRows.length);
+			expect(a.curriculum.sourceRoundCounts).toEqual({ '12': 1 });
+			expect(a.curriculum.forkRoundCounts).toEqual({ '12': 1 });
+			expect(a.samples).toBe(rows.length);
+			expect(suffixIds.size).toBe(1);
+			expect([...suffixIds][0]).toMatch(/^late-cont-v1-77140-j0-r12-f0-Red$/);
+			expect(suffixRows.map((row) => row.stepIdx)).toEqual(suffixRows.map((_, index) => index));
+			expect(gameLines).toHaveLength(1);
+			const summary = JSON.parse(gameLines[0]) as GameSummary;
+			expect(summary.samples).toBe(rows.length - suffixRows.length);
+			expect(summary.samples).toBeLessThan(a.samples);
+		} finally {
+			rmSync(dirA, { recursive: true, force: true });
+			rmSync(dirB, { recursive: true, force: true });
+		}
+	}, 180_000);
+
+	it('aggregates curriculum diagnostics and keeps duplicate-seed suffix IDs unique', async () => {
+		const dir = tempDir('continuation-pool');
+		try {
+			const result = await runActorPool({
+				seeds: [77_140, 77_140],
+				outDir: dir,
+				workers: 2,
+				config: {
+					seats: 1,
+					maxRounds: 30,
+					profiles: ['medium'],
+					weightsPath: WEIGHTS,
+					selection: 'policy',
+					sample: true,
+					temperature: 0.65,
+					maxStatusLevel: 2,
+					continuationCurriculum: {
+						enabled: true,
+						rounds: [12],
+						sourceProbability: 1,
+						capFailureWeight: 1,
+						successWeight: 1
+					}
+				}
+			});
+			const rows = result.shardFiles.flatMap((file) =>
+				readFileSync(file, 'utf8')
+					.trim()
+					.split('\n')
+					.map((line) => JSON.parse(line) as Record<string, unknown>)
+			);
+			const suffixIds = new Set(
+				rows.filter((row) => row.continuationCurriculum === 1).map((row) => String(row.gameId))
+			);
+			const sourceIds = new Set(
+				rows
+					.filter((row) => row.continuationCurriculum !== 1)
+					.map((row) => String(row.gameId))
+			);
+			const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
+			expect(result.games).toBe(2);
+			expect(result.curriculum.episodes).toBe(2);
+			expect(result.curriculum.rows).toBeGreaterThan(0);
+			expect(suffixIds).toEqual(
+				new Set(['late-cont-v1-77140-j0-r12-f0-Red', 'late-cont-v1-77140-j1-r12-f0-Red'])
+			);
+			expect(sourceIds).toEqual(
+				new Set(['actor-source-v1-77140-j0-Red', 'actor-source-v1-77140-j1-Red'])
+			);
+			expect(meta.continuation_curriculum).toEqual(result.curriculum);
+			expect(result.summaries.every((summary) => summary.samples < result.samples)).toBe(true);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 180_000);
+
+	it('fails closed when continuation generation is not sampled solo training', () => {
+		const dir = tempDir('continuation-invalid');
+		try {
+			expect(() =>
+				runActorGames({
+					workerIndex: 0,
+					seeds: [1],
+					config: {
+						seats: 4,
+						maxRounds: 30,
+						profiles: ['medium'],
+						weightsPath: WEIGHTS,
+						sample: true,
+						continuationCurriculum: { enabled: true }
+					},
+					outDir: dir,
+					catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+				})
+			).toThrow(/requires seats=1/);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 
 	it('policy-obs-version 2 without an infer socket is rejected with a clear error', async () => {
 		const dir = tempDir('pov2');

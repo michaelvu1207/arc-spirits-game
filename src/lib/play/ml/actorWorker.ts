@@ -18,11 +18,16 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { profileFor } from '../server/botPolicy';
-import { createRng, nextInt } from '../rng';
+import { createRng, hashString, nextInt } from '../rng';
 import type { GameCommand, PlayCatalog, SeatColor } from '../types';
 import { OBS_DIM } from './encode';
 import { obsV2Meta } from './encodeV2';
-import { playRecordingGame } from './driver';
+import {
+	forkContinuationPickRng,
+	playRecordingGame,
+	type RecordGameOptions,
+	type Sample
+} from './driver';
 import { shapingFor } from './shaping';
 import { planDecisionGumbel } from './gumbelPlanner';
 import { hybridIndex } from './neuralBot';
@@ -33,6 +38,7 @@ import type {
 	ActorWorkerCommand,
 	ActorWorkerData,
 	ActorWorkerMessage,
+	ContinuationCurriculumDiagnostics,
 	GameSummary
 } from './poolTypes';
 
@@ -43,8 +49,117 @@ function loadPolicyStrict(file: string): NeuralPolicy {
 }
 
 interface ActorGameRunner {
-	run(seed: number): { summary: GameSummary; samples: number };
+	run(
+		seed: number,
+		jobIndex: number,
+		duplicateSeed?: boolean
+	): { summary: GameSummary; samples: number; curriculum: ContinuationCurriculumDiagnostics };
 	close(): void;
+}
+
+interface NormalizedContinuationCurriculum {
+	rounds: number[];
+	sourceProbability: number;
+	capFailureWeight: number;
+	successWeight: number;
+}
+
+export function emptyContinuationCurriculumDiagnostics(): ContinuationCurriculumDiagnostics {
+	return {
+		eligibleSourceGames: 0,
+		selectedSourceGames: 0,
+		episodes: 0,
+		rows: 0,
+		wallMs: 0,
+		sourceCapFailures: 0,
+		sourceSuccesses: 0,
+		forkSuccesses: 0,
+		forkFailures: 0,
+		recoveries: 0,
+		skippedNoSnapshot: 0,
+		sourceRoundCounts: {},
+		forkRoundCounts: {}
+	};
+}
+
+function addCurriculumDiagnostics(
+	into: ContinuationCurriculumDiagnostics,
+	add: ContinuationCurriculumDiagnostics
+): void {
+	for (const key of [
+		'eligibleSourceGames',
+		'selectedSourceGames',
+		'episodes',
+		'rows',
+		'wallMs',
+		'sourceCapFailures',
+		'sourceSuccesses',
+		'forkSuccesses',
+		'forkFailures',
+		'recoveries',
+		'skippedNoSnapshot'
+	] as const) {
+		into[key] += add[key];
+	}
+	for (const key of ['sourceRoundCounts', 'forkRoundCounts'] as const) {
+		for (const [round, count] of Object.entries(add[key])) {
+			into[key][round] = (into[key][round] ?? 0) + count;
+		}
+	}
+}
+
+function normalizeContinuationCurriculum(
+	data: ActorWorkerData,
+	hasPolicy: boolean
+): NormalizedContinuationCurriculum | null {
+	const raw = data.config.continuationCurriculum;
+	if (!raw?.enabled) return null;
+	if (data.config.seats !== 1) {
+		throw new Error('actorWorker: continuation curriculum is train-only and requires seats=1');
+	}
+	if (!hasPolicy || data.config.recordSeats?.length === 0) {
+		throw new Error('actorWorker: continuation curriculum requires a recorded learner policy');
+	}
+	if (data.config.search) {
+		throw new Error('actorWorker: continuation curriculum does not support opaque search state');
+	}
+	if (data.config.sample !== true) {
+		throw new Error(
+			'actorWorker: continuation curriculum requires sample=true for policy RNG forks'
+		);
+	}
+	if (Object.keys(data.config.opponentWeights ?? {}).length > 0) {
+		throw new Error('actorWorker: continuation curriculum does not support opponent policies');
+	}
+	const rounds = [...new Set(raw.rounds ?? [12, 16, 20])].sort((a, b) => a - b);
+	if (
+		rounds.length === 0 ||
+		rounds.some((round) => !Number.isInteger(round) || round < 12 || round > 20)
+	) {
+		throw new Error('actorWorker: continuation curriculum rounds must be integers in 12..20');
+	}
+	if (rounds.some((round) => round > data.config.maxRounds)) {
+		throw new Error('actorWorker: continuation curriculum round exceeds maxRounds');
+	}
+	const sourceProbability = raw.sourceProbability ?? 1;
+	const capFailureWeight = raw.capFailureWeight ?? 1;
+	const successWeight = raw.successWeight ?? 0.25;
+	if (!Number.isFinite(sourceProbability) || sourceProbability < 0 || sourceProbability > 1) {
+		throw new Error('actorWorker: continuation sourceProbability must be in [0,1]');
+	}
+	for (const [label, value] of [
+		['capFailureWeight', capFailureWeight],
+		['successWeight', successWeight]
+	] as const) {
+		if (!Number.isFinite(value) || value < 0) {
+			throw new Error(`actorWorker: continuation ${label} must be finite and non-negative`);
+		}
+	}
+	return { rounds, sourceProbability, capFailureWeight, successWeight };
+}
+
+function deterministicUnitInterval(key: string): number {
+	return hashString(key) / 0x1_0000_0000;
 }
 
 function shuffledGuardianNames(catalog: PlayCatalog, seats: number, seed: number): string[] {
@@ -116,10 +231,11 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 		!!policy && (config.neuralSeats ? config.neuralSeats.includes(seat) : true);
 	const isLearnerSeat = (seat: SeatColor): boolean =>
 		isNeuralSeat(seat) && !opponentSeats.has(seat);
+	const continuationCurriculum = normalizeContinuationCurriculum(data, !!policy);
 
 	let closed = false;
 	return {
-		run(seed) {
+		run(seed, jobIndex, duplicateSeed = false) {
 			if (closed) throw new Error('actorWorker: cannot run a seed after the worker session closed');
 			const t0 = performance.now();
 			// Expert-iteration searcher: deterministic per (seed, decision index); the
@@ -158,8 +274,14 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 					return res ? { index: res.index, pi: res.pi } : null;
 				};
 			}
-			const r = playRecordingGame(catalog, {
+			const guardianNames = config.shuffleGuardians
+				? shuffledGuardianNames(catalog, config.seats, seed)
+				: undefined;
+			const gameOptions: RecordGameOptions = {
 				seed,
+				...(continuationCurriculum || duplicateSeed
+					? { episodeId: `actor-source-v1-${seed}-j${jobIndex}` }
+					: {}),
 				profiles,
 				maxRounds: config.maxRounds,
 				policy,
@@ -172,9 +294,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				opponentTemperature: config.opponentTemperature,
 				forbidTypes,
 				maxStatusLevel: config.maxStatusLevel,
-				guardianNames: config.shuffleGuardians
-					? shuffledGuardianNames(catalog, config.seats, seed)
-					: undefined,
+				guardianNames,
 				gamma: config.gamma,
 				obsVersion: config.obsVersion,
 				policyObsVersion: config.policyObsVersion,
@@ -182,10 +302,72 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				...(config.shapingPreset ? { shaping: shapingFor(config.shapingPreset) } : {}),
 				potentialShapingMode: config.potentialShapingMode,
 				strategicDecisionScope: config.strategicDecisionScope,
-				searcher
-			});
-			const wallMs = performance.now() - t0;
+				searcher,
+				...(continuationCurriculum
+					? { captureContinuationRounds: continuationCurriculum.rounds }
+					: {})
+			};
+			const r = playRecordingGame(catalog, gameOptions);
+			const sourceWallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);
+
+			const curriculum = emptyContinuationCurriculumDiagnostics();
+			let appendedSamples = r.samples.length;
+			if (continuationCurriculum) {
+				curriculum.eligibleSourceGames = 1;
+				const seat = 'Red' as SeatColor;
+				const sourceSucceeded = !r.stalled && (r.finalVP[seat] ?? 0) >= 30;
+				const outcomeWeight = sourceSucceeded
+					? continuationCurriculum.successWeight
+					: continuationCurriculum.capFailureWeight;
+				const selectionProbability = Math.min(
+					1,
+					continuationCurriculum.sourceProbability * outcomeWeight
+				);
+				const selectionKey = [
+					'arc-continuation-select-v1',
+					seed,
+					jobIndex,
+					continuationCurriculum.rounds.join(','),
+					sourceSucceeded ? 'success' : 'cap-failure'
+				].join(':');
+				if (deterministicUnitInterval(selectionKey) < selectionProbability) {
+					curriculum.selectedSourceGames = 1;
+					curriculum[sourceSucceeded ? 'sourceSuccesses' : 'sourceCapFailures'] = 1;
+					if (r.continuationSnapshots.length === 0) {
+						curriculum.skippedNoSnapshot = 1;
+					} else {
+						const snapshotIndex =
+							hashString(`arc-continuation-round-v1:${seed}:${jobIndex}`) %
+							r.continuationSnapshots.length;
+						const snapshot = r.continuationSnapshots[snapshotIndex];
+						const episodeId = `late-cont-v1-${seed}-j${jobIndex}-r${snapshot.round}-f0`;
+						const suffixT0 = performance.now();
+						const suffix = playRecordingGame(catalog, {
+							...gameOptions,
+							episodeId,
+							captureContinuationRounds: undefined,
+							searcher: undefined,
+							opponentPolicies: undefined,
+							continuation: {
+								snapshot,
+								pickRng: forkContinuationPickRng(snapshot, episodeId)
+							}
+						});
+						for (const sample of suffix.samples as Sample[]) sample.continuationCurriculum = 1;
+						appendSamples(shardFile, suffix.samples, config.iter ?? 0);
+						appendedSamples += suffix.samples.length;
+						const forkSucceeded = !suffix.stalled && (suffix.finalVP[seat] ?? 0) >= 30;
+						curriculum.episodes = 1;
+						curriculum.rows = suffix.samples.length;
+						curriculum.wallMs = performance.now() - suffixT0;
+						curriculum[forkSucceeded ? 'forkSuccesses' : 'forkFailures'] = 1;
+						if (!sourceSucceeded && forkSucceeded) curriculum.recoveries = 1;
+						curriculum.sourceRoundCounts[String(snapshot.round)] = 1;
+						curriculum.forkRoundCounts[String(snapshot.round)] = 1;
+					}
+				}
+			}
 
 			const seatList = Object.keys(r.finalVP) as SeatColor[];
 			const weightsOrProfiles = seatList.map(
@@ -216,10 +398,13 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 					policy: isNeuralSeat(seat) ? ('neural' as const) : ('heuristic' as const),
 					cycle: r.cycleBySeat[seat]
 				})),
-				wallMs: Math.round(wallMs * 10) / 10
+				wallMs:
+					Math.round(
+						(continuationCurriculum ? performance.now() - t0 : sourceWallMs) * 10
+					) / 10
 			};
 			appendFileSync(gamesFile, JSON.stringify(summary) + '\n');
-			return { summary, samples: r.samples.length };
+			return { summary, samples: appendedSamples, curriculum };
 		},
 		close() {
 			if (closed) return;
@@ -233,19 +418,23 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 export function runActorGames(
 	data: ActorWorkerData,
 	onGame?: (summary: GameSummary) => void
-): { games: number; samples: number } {
+): { games: number; samples: number; curriculum: ContinuationCurriculumDiagnostics } {
 	const runner = createActorGameRunner(data);
 	let samples = 0;
+	const curriculum = emptyContinuationCurriculumDiagnostics();
+	const seedCounts = new Map<number, number>();
+	for (const seed of data.seeds) seedCounts.set(seed, (seedCounts.get(seed) ?? 0) + 1);
 	try {
-		for (const seed of data.seeds) {
-			const result = runner.run(seed);
+		for (const [jobIndex, seed] of data.seeds.entries()) {
+			const result = runner.run(seed, jobIndex, (seedCounts.get(seed) ?? 0) > 1);
 			samples += result.samples;
+			addCurriculumDiagnostics(curriculum, result.curriculum);
 			onGame?.(result.summary);
 		}
 	} finally {
 		runner.close();
 	}
-	return { games: data.seeds.length, samples };
+	return { games: data.seeds.length, samples, curriculum };
 }
 
 // Spawned-thread path. The pool uses a persistent session and assigns a new seed
@@ -261,6 +450,7 @@ if (parentPort && wd?.__actorPool) {
 		let runner: ActorGameRunner | null = null;
 		let games = 0;
 		let samples = 0;
+		const curriculum = emptyContinuationCurriculumDiagnostics();
 		let stopped = false;
 		const fail = (err: unknown): void => {
 			if (stopped) return;
@@ -283,9 +473,14 @@ if (parentPort && wd?.__actorPool) {
 				if (stopped) return;
 				try {
 					if (command.type === 'run') {
-						const result = runner!.run(command.seed);
+						const result = runner!.run(
+							command.seed,
+							command.jobIndex,
+							command.duplicateSeed
+						);
 						games += 1;
 						samples += result.samples;
+						addCurriculumDiagnostics(curriculum, result.curriculum);
 						port.postMessage({
 							type: 'game',
 							workerIndex: wd.workerIndex,
@@ -302,7 +497,8 @@ if (parentPort && wd?.__actorPool) {
 						workerIndex: wd.workerIndex,
 						games,
 						samples,
-						wallMs: performance.now() - t0
+						wallMs: performance.now() - t0,
+						curriculum
 					} satisfies ActorWorkerMessage);
 					port.close();
 				} catch (err) {
@@ -320,7 +516,7 @@ if (parentPort && wd?.__actorPool) {
 	} else {
 		try {
 			let jobIndex = 0;
-			const { games, samples } = runActorGames(wd, (summary) =>
+			const { games, samples, curriculum } = runActorGames(wd, (summary) =>
 				port.postMessage({
 					type: 'game',
 					workerIndex: wd.workerIndex,
@@ -333,7 +529,8 @@ if (parentPort && wd?.__actorPool) {
 				workerIndex: wd.workerIndex,
 				games,
 				samples,
-				wallMs: performance.now() - t0
+				wallMs: performance.now() - t0,
+				curriculum
 			} satisfies ActorWorkerMessage);
 		} catch (err) {
 			port.postMessage({

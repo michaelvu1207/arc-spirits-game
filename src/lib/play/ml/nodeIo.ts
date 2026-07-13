@@ -68,6 +68,7 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				...(typeof s.policyWeight === 'number' ? { policyWeight: r4(s.policyWeight) } : {}),
 				...(typeof s.routeMode === 'number' ? { routeMode: r4(s.routeMode) } : {}),
 				...(typeof s.teacherKind === 'string' ? { teacherKind: s.teacherKind } : {}),
+				...(s.continuationCurriculum === 1 ? { continuationCurriculum: 1 } : {}),
 				// PPO trajectory fields (ml/ppo.py); optional so old-format consumers see no change.
 				...(typeof s.gameId === 'string' ? { gameId: s.gameId } : {}),
 				...(typeof s.stepIdx === 'number' ? { stepIdx: s.stepIdx } : {}),

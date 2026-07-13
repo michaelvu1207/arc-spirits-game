@@ -662,6 +662,8 @@ def train(
     v2_heads: int = 4,
     max_grad_norm: float = 1.0,
     seed: int | None = None,
+    ppo_rows_per_epoch: int | None = None,
+    ppo_continuation_fraction: float | None = None,
 ) -> list[dict]:
     """Train and export; returns per-epoch metric dicts (used by tests)."""
     if seed is not None:
@@ -678,6 +680,14 @@ def train(
         raise ValueError("reach-30 critic training currently requires --model v1")
     if mode != "ppo" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
         raise ValueError("reach-30 critic training currently requires --mode ppo")
+    if mode != "ppo" and (ppo_rows_per_epoch is not None or ppo_continuation_fraction is not None):
+        raise ValueError("PPO row-budget controls require --mode ppo")
+    if ppo_rows_per_epoch is not None and target_kl is not None:
+        raise ValueError(
+            "--target-kl is incompatible with --ppo-rows-per-epoch fixed-update training"
+        )
+    if ppo_continuation_fraction is not None and ppo_rows_per_epoch is None:
+        raise ValueError("--ppo-continuation-fraction requires --ppo-rows-per-epoch")
     # Both models expose placement auxiliaries with different contracts: v1 has
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
@@ -758,6 +768,8 @@ def train(
             placement_coef=effective_placement_coef,
             max_grad_norm=max_grad_norm,
             seed=seed,
+            rows_per_epoch=ppo_rows_per_epoch,
+            continuation_fraction=ppo_continuation_fraction,
         )
         export_model(model, obs_dim, act_dim)
         return history
@@ -1104,6 +1116,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--strategic-outcome-coef", type=float, default=0.0,
                    help="Blend [0,1] from GAE toward pure final-placement advantage on strategic "
                         "rows, baselined by recorded placementProbs; excludes dense/build rewards")
+    p.add_argument("--ppo-rows-per-epoch", type=int, default=None,
+                   help="Exact post-GAE trajectory rows consumed per PPO epoch")
+    p.add_argument("--ppo-continuation-fraction", type=float, default=None,
+                   help="Target share of selected PPO rows carrying continuationCurriculum=1; "
+                        "requires --ppo-rows-per-epoch")
     p.add_argument("--clip-eps", type=float, default=0.2, help="PPO surrogate clip epsilon")
     p.add_argument("--entropy-coef", type=float, default=0.01, help="PPO entropy bonus coefficient")
     p.add_argument("--entropy-anneal", action="store_true",
@@ -1212,4 +1229,6 @@ if __name__ == "__main__":
         v2_heads=args.v2_heads,
         max_grad_norm=args.max_grad_norm,
         seed=args.seed,
+        ppo_rows_per_epoch=args.ppo_rows_per_epoch,
+        ppo_continuation_fraction=args.ppo_continuation_fraction,
     )

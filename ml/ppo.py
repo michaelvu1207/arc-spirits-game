@@ -141,6 +141,7 @@ class TrajectoryBuffer:
     v_pred: np.ndarray              # (N,) float32
     advantages: np.ndarray          # (N,) float32
     returns: np.ndarray             # (N,) float32
+    continuation_mask: np.ndarray  # (N,) bool; train-only late-state suffix metadata
     strategic_mask: np.ndarray      # (N,) bool; long-horizon credit group
     strategic_mc_coef: float        # loader blend; 0 preserves ordinary PPO bit behavior
     solo_strategic_mc_coef: float   # solo-only full-episode blend; may coexist with PvP outcome
@@ -432,6 +433,13 @@ def load_trajectory_buffer(
                     n_invalid_rows += 1
                     invalid_episodes.add(game_id)
                     continue
+                continuation_curriculum = _coerce_binary_flag(
+                    rec.get("continuationCurriculum", 0)
+                )
+                if continuation_curriculum is None:
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
+                    continue
                 try:
                     step = {
                         "game_id": game_id,
@@ -460,6 +468,7 @@ def load_trajectory_buffer(
                         "all_fallen": 1 if rec.get("allFallen") else 0,
                         "end_round": _coerce_end_round(rec.get("endRound")),
                         "strategic": strategic,
+                        "continuation_curriculum": continuation_curriculum,
                         "player_count": _coerce_player_count(rec.get("playerCount", 4)),
                         "obs": obs,
                         "cands": cands,
@@ -496,6 +505,12 @@ def load_trajectory_buffer(
             continue
         done_indices = [i for i, s in enumerate(steps) if s["done"]]
         if done_indices and done_indices != [len(steps) - 1]:
+            invalid_structure.add(game_id)
+            continue
+        if any(
+            s["continuation_curriculum"] != steps[0]["continuation_curriculum"]
+            for s in steps
+        ):
             invalid_structure.add(game_id)
             continue
         # The outcome is post-game training metadata, never an observation. Keep
@@ -544,6 +559,7 @@ def load_trajectory_buffer(
     reach30_target_mask_list: list[bool] = []
     reach30_weight_list: list[float] = []
     strategic_mask_list: list[bool] = []
+    continuation_mask_list: list[bool] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
     solo_outcome_adv_list: list[np.ndarray] = []
@@ -750,6 +766,7 @@ def load_trajectory_buffer(
             reach30_target_mask_list.append(resolved_solo)
             reach30_weight_list.append(1.0 / len(steps) if resolved_solo else 0.0)
             strategic_mask_list.append(s["strategic"])
+            continuation_mask_list.append(s["continuation_curriculum"])
         adv_list.append(adv)
         ret_list.append(ret)
         solo_outcome_adv_list.append(episode_solo_outcome_adv)
@@ -811,6 +828,7 @@ def load_trajectory_buffer(
     print(
         f"Loaded {len(cands_list)} PPO steps from {len(episodes)} game(s) "
         f"({sum(policy_mask_list)} exact policy step(s), "
+        f"{sum(continuation_mask_list)} continuation step(s), "
         f"{n_with_placement} with terminal placement reward, {n_truncated} truncated, "
         f"{sum(farm_mask_list)} with farmValue, {sum(reward_mask_list)} with rewardPi, "
         f"{sum(route_mask_list)} with routeMode, "
@@ -838,6 +856,7 @@ def load_trajectory_buffer(
         v_pred=np.array(v_pred_list, dtype=np.float32),
         advantages=advantages,
         returns=returns,
+        continuation_mask=np.array(continuation_mask_list, dtype=bool),
         strategic_mask=np.array(strategic_mask_list, dtype=bool),
         strategic_mc_coef=float(strategic_mc_coef),
         solo_strategic_mc_coef=float(solo_strategic_mc_coef),
@@ -972,6 +991,60 @@ def normalize_policy_advantages(
         normalize_group(policy_mask & strategic_mask)
         normalize_group(policy_mask & ~strategic_mask)
     return out
+
+
+def select_ppo_epoch_indices(
+    continuation_mask: np.ndarray,
+    rng: np.random.Generator,
+    rows_per_epoch: int | None = None,
+    continuation_fraction: float | None = None,
+) -> np.ndarray:
+    """Deterministically select a fixed post-GAE training mixture.
+
+    Complete trajectories remain intact through loading and GAE. Only the optimizer's
+    per-epoch row order is capped/stratified, so treatment and control can consume the
+    exact same number of rows and minibatches without fabricating terminal transitions.
+    """
+    continuation_mask = np.asarray(continuation_mask, dtype=bool)
+    n = int(continuation_mask.size)
+    if rows_per_epoch is None:
+        if continuation_fraction is not None:
+            raise ValueError("continuation_fraction requires rows_per_epoch")
+        indices = np.arange(n)
+        rng.shuffle(indices)
+        return indices
+    if isinstance(rows_per_epoch, bool) or rows_per_epoch <= 0 or rows_per_epoch > n:
+        raise ValueError(f"rows_per_epoch must be in [1, {n}], got {rows_per_epoch}")
+    if continuation_fraction is None:
+        indices = np.arange(n)
+        rng.shuffle(indices)
+        return indices[:rows_per_epoch]
+    if not 0.0 <= continuation_fraction <= 1.0:
+        raise ValueError("continuation_fraction must be in [0, 1]")
+
+    target_continuation = int(math.floor(rows_per_epoch * continuation_fraction + 0.5))
+    target_normal = rows_per_epoch - target_continuation
+    continuation = np.flatnonzero(continuation_mask)
+    normal = np.flatnonzero(~continuation_mask)
+    if target_continuation > continuation.size or target_normal > normal.size:
+        raise ValueError(
+            "requested PPO row mixture is unavailable: "
+            f"need {target_continuation} continuation/{target_normal} normal rows, "
+            f"have {continuation.size}/{normal.size}"
+        )
+    # Draw fixed child seeds before touching either stratum. This keeps the normal-row
+    # permutation identical between a control (zero continuation rows selected) and a
+    # treatment using the same trainer seed; continuation sampling cannot advance the
+    # normal-row RNG. The third stream only interleaves the already-selected mixture.
+    child_seeds = rng.integers(0, np.iinfo(np.uint64).max, size=3, dtype=np.uint64)
+    continuation_rng = np.random.default_rng(int(child_seeds[0]))
+    normal_rng = np.random.default_rng(int(child_seeds[1]))
+    shuffle_rng = np.random.default_rng(int(child_seeds[2]))
+    continuation = continuation_rng.permutation(continuation)[:target_continuation]
+    normal = normal_rng.permutation(normal)[:target_normal]
+    selected = np.concatenate((continuation, normal))
+    shuffle_rng.shuffle(selected)
+    return selected
 
 
 def _minibatch_tensors(
@@ -1214,6 +1287,8 @@ def train_ppo(
     placement_coef: float = 0.0,
     max_grad_norm: float = 1.0,
     seed: int | None = None,
+    rows_per_epoch: int | None = None,
+    continuation_fraction: float | None = None,
 ) -> list[dict]:
     """K epochs of clipped-surrogate PPO over a fixed rollout buffer.
     Returns per-epoch metric dicts (used by tests).
@@ -1222,6 +1297,10 @@ def train_ppo(
     check after every optimizer step — on a non-finite step the run halts and
     the last finite epoch snapshot is restored, so the exported checkpoint is
     always finite (the fair-rules league diverged at gen ~13 without this)."""
+    if rows_per_epoch is not None and target_kl is not None:
+        raise ValueError(
+            "target_kl early stopping is incompatible with rows_per_epoch fixed-update training"
+        )
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # KL-to-reference anchor (piKL / AlphaStar KL-to-BC): penalize divergence from
     # the WARM-START policy. The reference is the state of `model` at entry.
@@ -1236,7 +1315,7 @@ def train_ppo(
     n = len(buffer)
     rng = np.random.default_rng(seed)
     indices = np.arange(n)
-    normalized_advantages = normalize_policy_advantages(
+    global_normalized_advantages = normalize_policy_advantages(
         buffer.advantages,
         buffer.policy_mask,
         buffer.strategic_mask
@@ -1283,7 +1362,6 @@ def train_ppo(
                 f"reach30 checkpoint horizon {getattr(model, 'reach30_horizon', None)} "
                 f"does not match rollout horizon {buffer.reach30_horizon}"
             )
-    reach30_total_weight = float(buffer.reach30_weight.sum())
     # v2 (per-seat-token regression) and v1 (4-way CE) placement aux heads.
     use_placement = placement_coef > 0 and hasattr(model, "placement_logits")
     use_placement_v1 = placement_coef > 0 and hasattr(model, "placement_head")
@@ -1301,7 +1379,33 @@ def train_ppo(
             lr_e = lr * (0.1 + 0.45 * (1.0 + math.cos(math.pi * frac)))
             for group in optimizer.param_groups:
                 group["lr"] = lr_e
-        rng.shuffle(indices)
+        if rows_per_epoch is None:
+            # Historical/default path: preserve the exact in-place shuffle sequence.
+            rng.shuffle(indices)
+            epoch_indices = indices
+            normalized_advantages = global_normalized_advantages
+        else:
+            epoch_indices = select_ppo_epoch_indices(
+                buffer.continuation_mask,
+                rng,
+                rows_per_epoch=rows_per_epoch,
+                continuation_fraction=continuation_fraction,
+            )
+            selected_mask = np.zeros(n, dtype=bool)
+            selected_mask[epoch_indices] = True
+            normalized_advantages = normalize_policy_advantages(
+                buffer.advantages,
+                buffer.policy_mask & selected_mask,
+                buffer.strategic_mask
+                if (
+                    buffer.strategic_mc_coef > 0
+                    or buffer.solo_strategic_mc_coef > 0
+                    or buffer.solo_outcome_coef > 0
+                    or buffer.solo_reach30_coef > 0
+                    or buffer.strategic_outcome_coef > 0
+                )
+                else None,
+            )
         model.train()
 
         tot_policy = tot_value = tot_entropy = tot_kl = tot_clip = tot_prob = 0.0
@@ -1312,11 +1416,14 @@ def train_ppo(
         n_seen = 0
         n_policy_seen = 0
         n_strategic_seen = n_tactical_seen = 0
+        n_continuation_seen = 0
+        optimizer_steps = 0
         stop = False
         epoch_reach30_updated = False
+        epoch_reach30_total_weight = float(buffer.reach30_weight[epoch_indices].sum())
 
-        for start in range(0, n, batch_size):
-            mb = indices[start : start + batch_size]
+        for start in range(0, len(epoch_indices), batch_size):
+            mb = epoch_indices[start : start + batch_size]
             (
                 obs,
                 cands,
@@ -1461,8 +1568,8 @@ def train_ppo(
                     reach30_target,
                     reach30_target_mask,
                     reach30_weight,
-                    total_rows=n,
-                    total_episode_weight=reach30_total_weight,
+                    total_rows=len(epoch_indices),
+                    total_episode_weight=epoch_reach30_total_weight,
                 )
 
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
@@ -1487,6 +1594,7 @@ def train_ppo(
             if max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
+            optimizer_steps += 1
             if not model_parameters_are_finite(model):
                 print(
                     f"WARNING: non-finite weights after a PPO step in epoch {epoch} — "
@@ -1523,6 +1631,7 @@ def train_ppo(
             tot_tactical_value += tactical_value_loss * tactical_count
             n_strategic_seen += strategic_count
             n_tactical_seen += tactical_count
+            n_continuation_seen += int(buffer.continuation_mask[mb].sum())
 
         if halted:
             break
@@ -1552,7 +1661,8 @@ def train_ppo(
                 f"placement_loss={tot_placement / n_seen:.4f} | "
                 f"kl_ref={tot_kl_ref / policy_denom:.4f} | "
                 f"mean_p_chosen={tot_prob / policy_denom:.3f} | "
-                f"policy_steps={n_policy_seen}/{n_seen}"
+                f"policy_steps={n_policy_seen}/{n_seen} | "
+                f"optimizer_steps={optimizer_steps}"
             )
             history.append({
                 "policy_loss": tot_policy / policy_denom,
@@ -1577,6 +1687,8 @@ def train_ppo(
                 "mean_p_chosen": tot_prob / policy_denom,
                 "policy_steps": n_policy_seen,
                 "total_steps": n_seen,
+                "continuation_steps": n_continuation_seen,
+                "optimizer_steps": optimizer_steps,
             })
             last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             last_finite_reach30_trained = bool(getattr(model, "reach30_trained", False))

@@ -10,6 +10,37 @@ import type { PotentialShapingMode } from './shaping';
 
 export type StrategicDecisionScope = 'navigation' | 'engine-cycle';
 
+/** Optional late-game suffix generation. Presence alone does not enable it: callers must set
+ * `enabled: true`, which keeps every historical/default actor config bit-for-bit unchanged. */
+export interface ContinuationCurriculumConfig {
+	enabled?: boolean;
+	/** Clean navigation rounds to capture. Default [12, 16, 20]. */
+	rounds?: number[];
+	/** Base deterministic selection probability per eligible source game. Default 1. */
+	sourceProbability?: number;
+	/** Probability multiplier when the source full game misses 30 VP. Default 1. */
+	capFailureWeight?: number;
+	/** Probability multiplier when the source full game reaches 30 VP. Default 0.25. */
+	successWeight?: number;
+}
+
+export interface ContinuationCurriculumDiagnostics {
+	eligibleSourceGames: number;
+	selectedSourceGames: number;
+	episodes: number;
+	rows: number;
+	/** Wall time spent only in continuation suffix rollouts on this worker/pool. */
+	wallMs: number;
+	sourceCapFailures: number;
+	sourceSuccesses: number;
+	forkSuccesses: number;
+	forkFailures: number;
+	recoveries: number;
+	skippedNoSnapshot: number;
+	sourceRoundCounts: Record<string, number>;
+	forkRoundCounts: Record<string, number>;
+}
+
 /** Per-game configuration shared by every game in a pool run. */
 export interface ActorGameConfig {
 	/** Seat count (profiles are cycled to fill it). */
@@ -88,6 +119,8 @@ export interface ActorGameConfig {
 	 * verified) and selection 'hybrid'/'policy'. logpOld/vPred become the v2 net's.
 	 */
 	policyObsVersion?: 1 | 2;
+	/** Train-only, solo late-state suffix generation. Default/off when absent or enabled=false. */
+	continuationCurriculum?: ContinuationCurriculumConfig;
 }
 
 export interface SeatSummary {
@@ -169,6 +202,9 @@ export interface ActorWorkerData {
 export interface ActorSeedJob {
 	jobIndex: number;
 	seed: number;
+	/** True when this seed appears more than once in the same pool. Duplicate sources need a
+	 * job-qualified episode ID or PPO would splice their trajectories together. */
+	duplicateSeed?: boolean;
 }
 
 /** Commands sent to a persistent actor worker after it has loaded its catalog/policies. */
@@ -177,5 +213,12 @@ export type ActorWorkerCommand = ({ type: 'run' } & ActorSeedJob) | { type: 'sto
 export type ActorWorkerMessage =
 	| { type: 'ready'; workerIndex: number }
 	| { type: 'game'; workerIndex: number; jobIndex: number; summary: GameSummary }
-	| { type: 'done'; workerIndex: number; games: number; samples: number; wallMs: number }
+	| {
+			type: 'done';
+			workerIndex: number;
+			games: number;
+			samples: number;
+			wallMs: number;
+			curriculum: ContinuationCurriculumDiagnostics;
+	  }
 	| { type: 'error'; workerIndex: number; message: string };

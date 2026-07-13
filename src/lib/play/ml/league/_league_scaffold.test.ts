@@ -62,6 +62,7 @@ import {
 	stopInferServers,
 	trainingSeatCountsForGeneration,
 	trainerSeedForGeneration,
+	validateLeagueConfig,
 	defaultConfig
 } from './manager';
 import { loadPolicyWeights } from '../net';
@@ -187,6 +188,52 @@ describe('trainer RNG pairing', () => {
 		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(
 			trainerSeedForGeneration(cfg, 21, 1)
 		);
+	});
+});
+
+describe('fixed-update continuation config guards', () => {
+	const valid = (): LeagueConfig => ({
+		...defaultConfig('ml/test-continuation-config'),
+		mode: 'ppo',
+		seats: 1,
+		maxRounds: 30,
+		sample: true,
+		search: undefined,
+		continuationCurriculum: {
+			enabled: true,
+			rounds: [12, 16, 20],
+			sourceProbability: 1,
+			capFailureWeight: 1,
+			successWeight: 1
+		},
+		train: {
+			...defaultConfig().train,
+			ppoRowsPerEpoch: 120_000,
+			ppoContinuationFraction: 0.25,
+			extraArgs: ['--clip-eps', '0.15']
+		}
+	});
+
+	it('accepts a solo PPO curriculum with a fixed row/update budget', () => {
+		expect(() => validateLeagueConfig(valid())).not.toThrow();
+	});
+
+	it('rejects expensive invalid experiments before actor generation', () => {
+		const targetKl = valid();
+		targetKl.train.extraArgs = ['--target-kl', '0.015'];
+		expect(() => validateLeagueConfig(targetKl)).toThrow(/forbids.*target-kl/);
+
+		const noRows = valid();
+		noRows.train.ppoRowsPerEpoch = undefined;
+		expect(() => validateLeagueConfig(noRows)).toThrow(/requires ppoRowsPerEpoch/);
+
+		const disabled = valid();
+		disabled.continuationCurriculum = { enabled: false };
+		expect(() => validateLeagueConfig(disabled)).toThrow(/requires an enabled continuation/);
+
+		const searched = valid();
+		searched.search = { sims: 4 };
+		expect(() => validateLeagueConfig(searched)).toThrow(/opaque search state/);
 	});
 });
 

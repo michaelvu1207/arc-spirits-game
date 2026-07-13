@@ -15,7 +15,11 @@
  * over the frozen historical pool), heuristic profiles seeding the initial pool.
  */
 
-import type { StrategicDecisionScope } from '../poolTypes';
+import type {
+	ContinuationCurriculumConfig,
+	ContinuationCurriculumDiagnostics,
+	StrategicDecisionScope
+} from '../poolTypes';
 
 export type LeagueMemberKind =
 	| 'main'
@@ -105,6 +109,12 @@ export interface LeagueTrainConfig {
 	valueHidden?: number[];
 	/** Extra raw CLI args appended to the train.py invocation. */
 	extraArgs?: string[];
+	/** PPO-only exact number of post-GAE trajectory rows consumed per epoch. Paired control and
+	 * treatment runs should use the same value to match optimizer-update count. */
+	ppoRowsPerEpoch?: number;
+	/** PPO-only target share of rows drawn from continuation suffixes. Requires ppoRowsPerEpoch.
+	 * Set 0 in the matched control and the desired fraction in treatment. */
+	ppoContinuationFraction?: number;
 }
 
 export interface LeagueConfig {
@@ -125,6 +135,8 @@ export interface LeagueConfig {
 	}>;
 	/** Status cap for solo curriculum games (default 2) to prevent the one-player all-Fallen exit. */
 	soloMaxStatusLevel?: number;
+	/** Train-generation-only late-game solo suffix curriculum. It is never propagated to eval. */
+	continuationCurriculum?: ContinuationCurriculumConfig;
 	maxRounds: number;
 	/** Learner games generated per lane per generation. */
 	gamesPerGen: number;
@@ -326,8 +338,14 @@ export interface HistoryLine {
 	heuristicMatchups?: number;
 	/** Player count -> matchup pools generated this generation (curriculum audit trail). */
 	trainingSeatMatchups?: Record<string, number>;
+	/** Aggregated late-state suffix diagnostics for this train generation. */
+	continuationCurriculum?: ContinuationCurriculumDiagnostics;
 	/** Deterministic model-initialization/minibatch-order seed passed to train.py. */
 	trainerSeed?: number;
+	/** Audited fixed-update count for each PPO epoch when ppoRowsPerEpoch is configured. */
+	optimizerStepsPerEpoch?: number;
+	/** Audited fixed-update count across all PPO epochs. */
+	optimizerStepsTotal?: number;
 	poolWallMs: number;
 	trainMs: number;
 	/** v2 lanes: wall time of the ml/distill.py student run, when one happened. */

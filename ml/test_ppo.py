@@ -36,6 +36,7 @@ from ppo import (
     normalize_policy_advantages,
     parse_placement_rewards,
     reach30_minibatch_loss,
+    select_ppo_epoch_indices,
     train_ppo,
 )
 
@@ -137,6 +138,125 @@ def test_discounted_returns_propagate_terminal_outcome_without_gae_lambda():
         gamma=1.0,
     )
     assert np.array_equal(ret, [1.0, 1.0, 1.0]), ret
+
+
+def test_post_gae_row_budget_is_deterministic_and_exactly_stratified():
+    continuation = np.array([False] * 12 + [True] * 8)
+
+    # With the new controls unset, selection remains the historical in-place shuffle.
+    historical = np.arange(len(continuation))
+    historical_rng = np.random.default_rng(918)
+    historical_rng.shuffle(historical)
+    default_path = select_ppo_epoch_indices(
+        continuation, np.random.default_rng(918)
+    )
+    assert np.array_equal(default_path, historical)
+
+    first = select_ppo_epoch_indices(
+        continuation,
+        np.random.default_rng(919),
+        rows_per_epoch=10,
+        continuation_fraction=0.3,
+    )
+    again = select_ppo_epoch_indices(
+        continuation,
+        np.random.default_rng(919),
+        rows_per_epoch=10,
+        continuation_fraction=0.3,
+    )
+    assert np.array_equal(first, again)
+    assert len(first) == 10
+    assert continuation[first].sum() == 3
+
+    # The treatment's normal rows are a deterministic prefix/subset of the control's
+    # normal permutation even though treatment also samples a continuation stratum.
+    control_mask = np.zeros(20, dtype=bool)
+    treatment_mask = np.array(
+        [value for _ in range(20) for value in (False,)] + [True] * 8,
+        dtype=bool,
+    )
+    control = select_ppo_epoch_indices(
+        control_mask,
+        np.random.default_rng(921),
+        rows_per_epoch=10,
+        continuation_fraction=0,
+    )
+    treatment = select_ppo_epoch_indices(
+        treatment_mask,
+        np.random.default_rng(921),
+        rows_per_epoch=10,
+        continuation_fraction=0.3,
+    )
+    selected_control_normal = set(control.tolist())
+    selected_treatment_normal = set(treatment[~treatment_mask[treatment]].tolist())
+    assert len(selected_treatment_normal) == 7
+    assert selected_treatment_normal.issubset(selected_control_normal)
+
+    try:
+        select_ppo_epoch_indices(
+            continuation,
+            np.random.default_rng(1),
+            rows_per_epoch=20,
+            continuation_fraction=0.5,
+        )
+    except ValueError as error:
+        assert "mixture is unavailable" in str(error)
+    else:
+        raise AssertionError("unavailable continuation mixture must fail closed")
+
+
+def test_row_budget_matches_training_rows_and_optimizer_updates():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        make_traj_dataset(d, n_games=5, steps=4, seed=920)
+        path = d / "traj.jsonl"
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        for row in rows:
+            if row["gameId"] in {"g0", "g1"}:
+                row["continuationCurriculum"] = 1
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(
+            d, gamma=0.99, gae_lambda=0.95, placement_rewards=PLACEMENT_REWARDS
+        )
+        assert int(buf.continuation_mask.sum()) == 8
+        model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        history = train_ppo(
+            model,
+            buf,
+            torch.device("cpu"),
+            epochs=2,
+            batch_size=4,
+            lr=1e-4,
+            rows_per_epoch=10,
+            continuation_fraction=0.3,
+            seed=920,
+        )
+    assert len(history) == 2
+    assert all(epoch["total_steps"] == 10 for epoch in history)
+    assert all(epoch["continuation_steps"] == 3 for epoch in history)
+    assert all(epoch["optimizer_steps"] == 3 for epoch in history)
+
+
+def test_fixed_row_budget_rejects_data_dependent_kl_early_stop():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        make_traj_dataset(d, n_games=3, steps=4, seed=922)
+        buf = load_trajectory_buffer(
+            d, gamma=0.99, gae_lambda=0.95, placement_rewards=PLACEMENT_REWARDS
+        )
+        model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+        try:
+            train_ppo(
+                model,
+                buf,
+                torch.device("cpu"),
+                rows_per_epoch=8,
+                target_kl=0.01,
+            )
+        except ValueError as error:
+            assert "fixed-update" in str(error)
+        else:
+            raise AssertionError("fixed row budgets must reject target-KL early stopping")
 
 
 def test_strategic_mc_blend_reaches_early_strategy_but_not_tactical_rows():

@@ -95,6 +95,8 @@ export interface Sample {
 	routeMode?: number;
 	/** Optional curriculum/source label used by lane scripts to filter narrow training slices. */
 	teacherKind?: string;
+	/** Training metadata only: 1 for a late-state continuation suffix row. Never encoded into obs. */
+	continuationCurriculum?: number;
 	/**
 	 * PPO trajectory fields (consumed by ml/ppo.py via train.py --mode ppo). The episode key
 	 * is per (game, seat) — ml/ppo.py groups rows by gameId alone, so two seats sharing one

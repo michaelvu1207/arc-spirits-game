@@ -66,7 +66,7 @@ import { SEAT_COLORS, type SeatColor } from '../../types';
 import { runActorPool } from '../actorPool';
 import { ACT_DIM, OBS_DIM } from '../encode';
 import { CHECKPOINT_ANCHORS, HEURISTIC_ANCHORS, eloFromScore } from '../gauntlet/manifest';
-import type { ActorGameConfig, GameSummary } from '../poolTypes';
+import type { ActorGameConfig, ContinuationCurriculumDiagnostics, GameSummary } from '../poolTypes';
 import { isPlayable, recordPairwise, sampleOpponents } from './pfsp';
 import type {
 	HistoryLine,
@@ -152,6 +152,65 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 	};
 }
 
+function hasExtraArg(args: readonly string[] | undefined, name: string): boolean {
+	return !!args?.some((arg) => arg === name || arg.startsWith(`${name}=`));
+}
+
+/** Fail before actor generation when a fixed-budget/curriculum experiment cannot satisfy its
+ * statistical or runtime contract. Ordinary historical configs remain unaffected. */
+export function validateLeagueConfig(config: LeagueConfig): void {
+	const rows = config.train.ppoRowsPerEpoch;
+	const fraction = config.train.ppoContinuationFraction;
+	const curriculum = config.continuationCurriculum;
+	if (rows !== undefined) {
+		if (config.mode !== 'ppo') {
+			throw new Error('league: ppoRowsPerEpoch requires mode=ppo');
+		}
+		if (!Number.isInteger(rows) || rows <= 0) {
+			throw new Error('league: ppoRowsPerEpoch must be a positive integer');
+		}
+		if (hasExtraArg(config.train.extraArgs, '--target-kl')) {
+			throw new Error(
+				'league: fixed ppoRowsPerEpoch forbids data-dependent --target-kl early stopping'
+			);
+		}
+	}
+	if (fraction !== undefined) {
+		if (rows === undefined) {
+			throw new Error('league: ppoContinuationFraction requires ppoRowsPerEpoch');
+		}
+		if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
+			throw new Error('league: ppoContinuationFraction must be in [0,1]');
+		}
+		if (fraction > 0 && !curriculum?.enabled) {
+			throw new Error(
+				'league: positive ppoContinuationFraction requires an enabled continuation curriculum'
+			);
+		}
+	}
+	if (curriculum?.enabled) {
+		if (config.mode !== 'ppo' || config.seats !== 1) {
+			throw new Error('league: continuation curriculum requires solo mode=ppo training');
+		}
+		if (config.sample !== true) {
+			throw new Error('league: continuation curriculum requires sample=true');
+		}
+		if (config.search) {
+			throw new Error('league: continuation curriculum cannot preserve opaque search state');
+		}
+		const rounds = curriculum.rounds ?? [12, 16, 20];
+		if (
+			rounds.length === 0 ||
+			rounds.some(
+				(round) =>
+					!Number.isInteger(round) || round < 12 || round > 20 || round > config.maxRounds
+			)
+		) {
+			throw new Error('league: continuation rounds must be integers in 12..20 within maxRounds');
+		}
+	}
+}
+
 // ── State IO (atomic) ────────────────────────────────────────────────────────
 
 export function saveStateAtomic(root: string, state: LeagueState): void {
@@ -172,6 +231,7 @@ export function loadLeague(root: string): { config: LeagueConfig; state: LeagueS
 		defaultConfig(root),
 		JSON.parse(readFileSync(p.config, 'utf8')) as Partial<LeagueConfig>
 	);
+	validateLeagueConfig(config);
 	const state = JSON.parse(readFileSync(p.state, 'utf8')) as LeagueState;
 	return { config, state };
 }
@@ -418,6 +478,7 @@ export function initLeague(
 		? (JSON.parse(readFileSync(p.config, 'utf8')) as Partial<LeagueConfig>)
 		: {};
 	const config = mergeConfig(mergeConfig(defaultConfig(root), fromDisk), overrides);
+	validateLeagueConfig(config);
 	mkdirSync(p.root, { recursive: true });
 	mkdirSync(p.checkpoints, { recursive: true });
 	if (!existsSync(p.config)) writeFileSync(p.config, JSON.stringify(config, null, '\t'));
@@ -986,6 +1047,12 @@ function foldSummaries(
 	return { scoreSum, encounters, wins };
 }
 
+interface TrainerRunResult {
+	ms: number;
+	optimizerStepsPerEpoch?: number;
+	optimizerStepsTotal?: number;
+}
+
 function runTrainer(
 	config: LeagueConfig,
 	dataDir: string,
@@ -993,7 +1060,7 @@ function runTrainer(
 	initFrom: string | undefined,
 	seed: number,
 	model: 'v1' | 'v2' = 'v1'
-): number {
+): TrainerRunResult {
 	const args = [
 		'ml/train.py',
 		'--data',
@@ -1019,6 +1086,10 @@ function runTrainer(
 	if (config.train.beta !== undefined) args.push('--beta', String(config.train.beta));
 	if (config.train.batchSize !== undefined)
 		args.push('--batch-size', String(config.train.batchSize));
+	if (config.train.ppoRowsPerEpoch !== undefined)
+		args.push('--ppo-rows-per-epoch', String(config.train.ppoRowsPerEpoch));
+	if (config.train.ppoContinuationFraction !== undefined)
+		args.push('--ppo-continuation-fraction', String(config.train.ppoContinuationFraction));
 	if (config.train.hidden?.length) args.push('--hidden', config.train.hidden.join(','));
 	if (config.train.valueHidden?.length)
 		args.push('--value-hidden', config.train.valueHidden.join(','));
@@ -1039,6 +1110,25 @@ function runTrainer(
 		const tail = trainerOutput.split('\n').slice(-25).join('\n');
 		throw new Error(`league: trainer rolled back a non-finite PPO update:\n${tail}`);
 	}
+	let optimizerStepsPerEpoch: number | undefined;
+	let optimizerStepsTotal: number | undefined;
+	if (config.train.ppoRowsPerEpoch !== undefined) {
+		const batchSize = config.train.batchSize ?? 256;
+		optimizerStepsPerEpoch = Math.ceil(config.train.ppoRowsPerEpoch / batchSize);
+		const reported = [...trainerOutput.matchAll(/optimizer_steps=(\d+)/g)].map((match) =>
+			Number.parseInt(match[1], 10)
+		);
+		if (
+			reported.length !== config.train.epochs ||
+			reported.some((steps) => steps !== optimizerStepsPerEpoch)
+		) {
+			throw new Error(
+				`league: fixed-update trainer reported optimizer steps ${JSON.stringify(reported)}, ` +
+					`expected ${optimizerStepsPerEpoch} for each of ${config.train.epochs} epochs`
+			);
+		}
+		optimizerStepsTotal = optimizerStepsPerEpoch * config.train.epochs;
+	}
 	if (
 		model === 'v1' &&
 		initFrom &&
@@ -1051,7 +1141,11 @@ function runTrainer(
 				`see ${join(dataDir, 'train.log')}`
 		);
 	}
-	return performance.now() - t0;
+	return {
+		ms: performance.now() - t0,
+		...(optimizerStepsPerEpoch !== undefined ? { optimizerStepsPerEpoch } : {}),
+		...(optimizerStepsTotal !== undefined ? { optimizerStepsTotal } : {})
+	};
 }
 
 /** Distill a v2 .pt teacher into a v1-JSON student on the lane's paired data. */
@@ -1219,6 +1313,9 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			const plan = buildMatchup(matchupConfig, learner, opponents, m, gen, v2Arg, v1SocketArg);
 			if (matchupConfig.seats === 1) {
 				plan.config.maxStatusLevel = config.soloMaxStatusLevel ?? 2;
+				if (config.continuationCurriculum?.enabled) {
+					plan.config.continuationCurriculum = config.continuationCurriculum;
+				}
 			}
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
 			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
@@ -1257,10 +1354,50 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		const poolWallMs = performance.now() - tPool;
 		let games = 0;
 		let samples = 0;
+		let continuationCurriculum: ContinuationCurriculumDiagnostics | undefined;
+		if (config.continuationCurriculum?.enabled) {
+			continuationCurriculum = {
+				eligibleSourceGames: 0,
+				selectedSourceGames: 0,
+				episodes: 0,
+				rows: 0,
+				wallMs: 0,
+				sourceCapFailures: 0,
+				sourceSuccesses: 0,
+				forkSuccesses: 0,
+				forkFailures: 0,
+				recoveries: 0,
+				skippedNoSnapshot: 0,
+				sourceRoundCounts: {},
+				forkRoundCounts: {}
+			};
+		}
 		for (const job of plans) {
 			const res = results[job.m];
 			games += res.games;
 			samples += res.samples;
+			if (continuationCurriculum) {
+				for (const key of [
+					'eligibleSourceGames',
+					'selectedSourceGames',
+					'episodes',
+					'rows',
+					'wallMs',
+					'sourceCapFailures',
+					'sourceSuccesses',
+					'forkSuccesses',
+					'forkFailures',
+					'recoveries',
+					'skippedNoSnapshot'
+				] as const) {
+					continuationCurriculum[key] += res.curriculum[key];
+				}
+				for (const key of ['sourceRoundCounts', 'forkRoundCounts'] as const) {
+					for (const [round, count] of Object.entries(res.curriculum[key])) {
+						continuationCurriculum[key][round] = (continuationCurriculum[key][round] ?? 0) + count;
+					}
+				}
+			}
 			foldSummaries(learner, job.plan, res.summaries, opponentsFaced);
 		}
 		// Each pool wrote meta.json in its OWN m-<i>/ dir (dims, obs_version, and
@@ -1282,7 +1419,8 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				lane: learner.id,
 				trainerSeed,
 				games,
-				samples
+				samples,
+				...(continuationCurriculum ? { continuation_curriculum: continuationCurriculum } : {})
 			})
 		);
 
@@ -1291,7 +1429,8 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		saveStateAtomic(root, state);
 		const ckpt = join(p.checkpoints, `${learner.id}-gen${gen}.${model === 'v2' ? 'pt' : 'json'}`);
 		const trainInit = model === 'v2' ? lanePt(learner) : playWeights(learner);
-		const trainMs = runTrainer(config, laneDir, ckpt, trainInit, trainerSeed, model);
+		const trainerRun = runTrainer(config, laneDir, ckpt, trainInit, trainerSeed, model);
+		const trainMs = trainerRun.ms;
 
 		// Socket-served lanes (v2, or v1Infer): hot-swap the lane server onto the fresh
 		// checkpoint (or first-start it for a lane that just trained its first net —
@@ -1443,7 +1582,14 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			...(mirrorMatchups > 0 ? { mirrorMatchups } : {}),
 			...(heuristicMatchups > 0 ? { heuristicMatchups } : {}),
 			trainingSeatMatchups,
+			...(continuationCurriculum ? { continuationCurriculum } : {}),
 			trainerSeed,
+			...(trainerRun.optimizerStepsPerEpoch !== undefined
+				? { optimizerStepsPerEpoch: trainerRun.optimizerStepsPerEpoch }
+				: {}),
+			...(trainerRun.optimizerStepsTotal !== undefined
+				? { optimizerStepsTotal: trainerRun.optimizerStepsTotal }
+				: {}),
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
 			...(distillMs > 0 ? { distillMs: Math.round(distillMs) } : {}),
