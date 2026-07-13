@@ -54,3 +54,7 @@ ml/azeval_*.json
 ml/gauntlet_results/
 ml/league_rediscovery/data/
 ml/warmstart/
+# Authoritative live replays can contain stable member identifiers. Keep raw streams local;
+# version only their hashes and redacted diagnostic reports.
+ml/human_reference/*/events.json
+ml/human_reference/*/snapshot.json

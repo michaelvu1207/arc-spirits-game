@@ -90,7 +90,10 @@ function mulberry32(seed: number): () => number {
 }
 
 function loadCatalog(): PlayCatalog {
-	return JSON.parse(readFileSync(join('ml', 'catalog.json'), 'utf8')) as PlayCatalog;
+	const configured = process.env.ARC_REPLAY_CATALOG;
+	return JSON.parse(
+		readFileSync(configured ? configured : join('ml', 'catalog.json'), 'utf8')
+	) as PlayCatalog;
 }
 
 /** member id → seat, learned from the recorded claimSeat rows. */

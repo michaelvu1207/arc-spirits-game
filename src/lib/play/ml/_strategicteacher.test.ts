@@ -88,6 +88,11 @@ function envNumber(name: string, fallback: number): number {
 	return value;
 }
 
+// Long pilots are deliberately SIGSTOP/SIGCONT-throttled around shared SimForge load.
+// Vitest measures stopped wall-clock time rather than active compute, so the wrapper
+// timeout is independent and configurable instead of invalidating complete artifacts.
+const TEST_TIMEOUT_MS = envInt('V25_STRATEGIC_TEST_TIMEOUT_MS', 24 * 60 * 60 * 1000);
+
 function outputPath(suffix = ''): string {
 	const configured = process.env.V25_STRATEGIC_OUT;
 	const base = configured
@@ -526,6 +531,6 @@ describe('V25 strategic terminal teacher harness', () => {
 				paired
 			});
 		},
-		60 * 60 * 1000
+		TEST_TIMEOUT_MS
 	);
 });

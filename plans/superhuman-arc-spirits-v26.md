@@ -38,6 +38,25 @@ training opponents or a single ladder population.
   establish reliable win-rate gains on the frozen catalog. Blind width, generic search, reward-choice
   labels, self-imitation, continuation replay, and macro/option experiments have also failed earlier
   controlled screens. They may only return with a new causal hypothesis and fresh control.
+- The completed 64-game live-catalog combined navigation+yield pilot also failed its causal screen:
+  baseline 39/64 versus teacher 38/64 (-1.56 points), mean VP 25.61 versus 24.95, zero stalls. The
+  intervention evaluated all games and changed 62/64, so this is an effect rejection rather than a
+  support failure. Do not distill or train this teacher; proceed to the late-state curriculum.
+- A learner-contract audit found that round-cap solo failures carried `reach30Target=0` but remained
+  PPO truncations, allowing the main value return to bootstrap instead of observing a resolved loss.
+  V26 adds an explicit resolved-horizon mode and an order-preserving lexicographic terminal mode;
+  legacy bootstrapping remains only as a controlled ablation.
+- The exact `7RPYHU` trajectory diagnostic scored 85 ambiguous Michael decisions under frozen V23.
+  Production V23 agreed with 25/85 (29.4%) and its raw policy top choice agreed with 17/85 (20.0%).
+  The reach-30 critic averaged only 0.276 on Michael's eventual round-17 win and fell below 0.05 for
+  much of the winning middle game. In the matched V23 line, the policy sacrificed all five spirits
+  during round 8, then remained at 11 VP through round 19 before ending at 25 VP in round 30. This is
+  direct evidence of policy/critic temporal-credit failure, not missing language-style reasoning.
+- A targeted live-catalog terminal audit evaluated 14 navigation, corruption-discard, relic-mix, and
+  awakening decisions with eight common-random-number rollouts per candidate. Nine teacher choices
+  differed from V23, but none passed the preregistered decisiveness margin. The exact bot line still
+  ended at 25 VP. These labels are diagnostic only and must not be trained; the next causal screen is
+  the corrected terminal objective against a compute-matched legacy control.
 - Production catalog drift proved that every result must carry exact source, checkpoint, and catalog
   hashes. Historical results remain valid only in their recorded environment.
 
