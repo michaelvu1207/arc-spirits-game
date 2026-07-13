@@ -617,6 +617,7 @@ def train(
     all_fallen_loss: float = 0.0,
     strategic_mc_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
+    strategic_outcome_coef: float = 0.0,
     model_version: str = "v1",
     hidden: tuple[int, ...] | None = None,
     value_hidden: tuple[int, ...] | None = None,
@@ -665,6 +666,7 @@ def train(
             all_fallen_loss=all_fallen_loss,
             strategic_mc_coef=strategic_mc_coef,
             strategic_mc_gamma=strategic_mc_gamma,
+            strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
         )
         if model_version == "v2":
@@ -1020,6 +1022,9 @@ def parse_args() -> argparse.Namespace:
                         "advantages/value targets on rows marked strategic; 0 preserves PPO")
     p.add_argument("--strategic-mc-gamma", type=float, default=1.0,
                    help="Discount for strategic full-episode Monte Carlo returns (default 1)")
+    p.add_argument("--strategic-outcome-coef", type=float, default=0.0,
+                   help="Blend [0,1] from GAE toward pure final-placement advantage on strategic "
+                        "rows, baselined by recorded placementProbs; excludes dense/build rewards")
     p.add_argument("--clip-eps", type=float, default=0.2, help="PPO surrogate clip epsilon")
     p.add_argument("--entropy-coef", type=float, default=0.01, help="PPO entropy bonus coefficient")
     p.add_argument("--entropy-anneal", action="store_true",
@@ -1112,6 +1117,7 @@ if __name__ == "__main__":
         all_fallen_loss=args.all_fallen_loss,
         strategic_mc_coef=args.strategic_mc_coef,
         strategic_mc_gamma=args.strategic_mc_gamma,
+        strategic_outcome_coef=args.strategic_outcome_coef,
         model_version=args.model_version,
         hidden=args.hidden,
         value_hidden=args.value_hidden,

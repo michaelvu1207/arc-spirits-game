@@ -222,6 +222,106 @@ def test_strategic_mc_zero_is_bit_identical_and_truncated_episode_does_not_blend
     assert np.array_equal(zero.returns, truncated.returns)
 
 
+def test_strategic_outcome_credit_uses_pure_placement_baseline_only():
+    rng = np.random.default_rng(1003)
+    probs = [0.1, 0.2, 0.3, 0.4]
+    rows = []
+    for t in range(3):
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": "outcome-g0",
+            "stepIdx": t,
+            "rStep": 0.25 if t == 1 else 0.0,
+            "done": t == 2,
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "behaviorMask": [1, 1, 1],
+            "behaviorTemperature": 1.0,
+            "vPred": 0.0,
+            "strategic": 1 if t == 0 else 0,
+            "placementProbs": probs,
+        })
+    rows[-1]["placement"] = 1
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        ordinary = load_trajectory_buffer(
+            d, gamma=0.9, gae_lambda=0.5, placement_rewards=PLACEMENT_REWARDS
+        )
+        outcome = load_trajectory_buffer(
+            d,
+            gamma=0.9,
+            gae_lambda=0.5,
+            placement_rewards=PLACEMENT_REWARDS,
+            strategic_outcome_coef=1.0,
+        )
+    baseline = float(np.dot(probs, PLACEMENT_REWARDS))
+    assert math.isclose(float(outcome.advantages[0]), 1.0 - baseline, abs_tol=1e-6)
+    assert math.isclose(
+        float(outcome.advantages[1]), float(ordinary.advantages[1]), abs_tol=1e-7
+    )
+    # The tactical critic is not trained toward the pure outcome target.
+    assert np.array_equal(outcome.returns, ordinary.returns)
+    assert bool(outcome.placement_prob_mask.all())
+    assert np.allclose(outcome.placement_probs[0], probs)
+
+
+def test_strategic_outcome_credit_requires_recorded_behavior_outcome_head():
+    rng = np.random.default_rng(1004)
+    row = {
+        "obs": rng.standard_normal(OBS_DIM).tolist(),
+        "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+        "chosen": 0,
+        "gameId": "legacy-outcome-g0",
+        "stepIdx": 0,
+        "rStep": 0.2,
+        "done": True,
+        "policyMask": 1,
+        "logpOld": math.log(1.0 / N_CANDS),
+        "behaviorMask": [1, 1, 1],
+        "behaviorTemperature": 1.0,
+        "vPred": 0.0,
+        "strategic": 1,
+        "placement": 1,
+    }
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, [row])
+        ordinary = load_trajectory_buffer(
+            d, gamma=1.0, gae_lambda=1.0, placement_rewards=PLACEMENT_REWARDS
+        )
+        missing = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            strategic_outcome_coef=1.0,
+        )
+    assert np.array_equal(missing.advantages, ordinary.advantages)
+    assert not bool(missing.placement_prob_mask.any())
+
+
+def test_strategic_credit_modes_are_mutually_exclusive():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, _win_row(12))
+        try:
+            load_trajectory_buffer(
+                d,
+                gamma=1.0,
+                gae_lambda=1.0,
+                placement_rewards=PLACEMENT_REWARDS,
+                strategic_mc_coef=0.5,
+                strategic_outcome_coef=0.5,
+            )
+        except ValueError as exc:
+            assert "mutually exclusive" in str(exc)
+        else:
+            raise AssertionError("incompatible strategic credit modes were accepted")
+
+
 def test_strategic_and_tactical_advantages_normalize_separately():
     advantages = np.array([10.0, 20.0, 1.0, 3.0], dtype=np.float32)
     policy = np.array([True, True, True, True])

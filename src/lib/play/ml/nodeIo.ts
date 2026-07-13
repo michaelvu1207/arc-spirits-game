@@ -84,6 +84,7 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				...(s.behaviorMask ? { behaviorMask: s.behaviorMask } : {}),
 				...(typeof s.policyMask === 'number' ? { policyMask: s.policyMask } : {}),
 				...(typeof s.vPred === 'number' ? { vPred: s.vPred } : {}),
+				...(s.placementProbs ? { placementProbs: round4(s.placementProbs) } : {}),
 				...(typeof s.placement === 'number' ? { placement: s.placement } : {}),
 				// True 30-VP win flag + final round (done rows only): the PPO --win-bonus
 				// reads `won`, and --win-bonus-halflife reads `endRound`. These were stamped

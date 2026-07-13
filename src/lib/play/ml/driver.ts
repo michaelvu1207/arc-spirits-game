@@ -129,6 +129,9 @@ export interface Sample {
 	policyMask?: number;
 	/** Value-head output at decision time. Present on every policy-backed trajectory row. */
 	vPred?: number;
+	/** Behavior checkpoint's 4-way final-placement probabilities. This is a separate
+	 * state-only baseline for pure strategic outcome credit; absent on old/v2 checkpoints. */
+	placementProbs?: number[];
 	/** Final placement 1..seats (ties share the better place), on rows of finished games. */
 	placement?: number;
 	/** Chosen command type, persisted for strategy-cycle diagnostics and training masks. */
@@ -852,6 +855,14 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			const vPred = opts.policy?.value(policyObs);
 			const valueFields =
 				typeof vPred === 'number' && Number.isFinite(vPred) ? { vPred, policyMask: 0 } : undefined;
+			const placementProbs = (
+				opts.policy as unknown as { placementProbs?: (input: number[]) => number[] | null }
+			)?.placementProbs?.(policyObs);
+			const outcomeFields =
+				placementProbs?.length === 4 &&
+				placementProbs.every((probability) => Number.isFinite(probability) && probability >= 0)
+					? { placementProbs }
+					: undefined;
 			let behaviorFields: (SampledPolicyBehavior & { policyMask: 1 }) | undefined;
 			// The observer callback runs synchronously inside policy.pick, but TypeScript does not
 			// model assignments made through callbacks in its control-flow analysis.
@@ -886,6 +897,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				decisionType: cands[idx].type,
 				strategic: isStrategicCommand(cands[idx]) ? 1 : 0,
 				...valueFields,
+				...outcomeFields,
 				...behaviorFields,
 				...sampleAuxTargets(state, seat, catalog, withNext, withNext[idx])
 			});

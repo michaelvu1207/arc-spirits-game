@@ -5,7 +5,12 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { profileFor } from '../server/botPolicy';
 import { SEAT_COLORS, type SeatColor } from '../types';
-import { isStrategicCommand, playRecordingGame, sampledPolicyBehavior, type Sample } from './driver';
+import {
+	isStrategicCommand,
+	playRecordingGame,
+	sampledPolicyBehavior,
+	type Sample
+} from './driver';
 import { NeuralPolicy } from './net';
 import { appendSamples, loadOrSnapshotCatalog, randomPolicy } from './nodeIo';
 
@@ -182,6 +187,7 @@ describe('driver PPO behavior distribution', () => {
 				done: true,
 				decisionType: 'lockNavigation',
 				strategic: 1,
+				placementProbs: [0.6, 0.25, 0.1, 0.05],
 				policyMask: 1,
 				vPred: 0,
 				...behavior
@@ -194,12 +200,14 @@ describe('driver PPO behavior distribution', () => {
 					policyMask: number;
 					decisionType: string;
 					strategic: number;
+					placementProbs: number[];
 				};
 				expect(serialized.obs).toEqual(obs);
 				expect(serialized.cands).toEqual(cands);
 				expect(serialized.policyMask).toBe(1);
 				expect(serialized.decisionType).toBe('lockNavigation');
 				expect(serialized.strategic).toBe(1);
+				expect(serialized.placementProbs).toEqual([0.6, 0.25, 0.1, 0.05]);
 
 				const code = [
 					'import math, sys, torch',

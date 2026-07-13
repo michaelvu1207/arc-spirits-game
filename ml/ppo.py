@@ -16,6 +16,8 @@ rows. On top of obs/cands/chosen/ret, each row carries:
   vPred     (float)  value estimate at decision time (GAE baseline + value clipping)
   strategic (0|1)   round-level route/engine/conversion decision eligible for optional
                      full-episode Monte Carlo credit (default 0 for legacy rows)
+  placementProbs    behavior checkpoint's 4-way placement-head probabilities, used as
+                     a state-only baseline for optional pure outcome credit
   placement (int)    final placement 1-4 (terminal rows / per-game meta); mapped to a
                      terminal reward added to rStep on the done step
 
@@ -139,6 +141,9 @@ class TrajectoryBuffer:
     returns: np.ndarray             # (N,) float32
     strategic_mask: np.ndarray      # (N,) bool; long-horizon credit group
     strategic_mc_coef: float        # loader blend; 0 preserves ordinary PPO bit behavior
+    strategic_outcome_coef: float   # pure placement-outcome advantage blend on strategic rows
+    placement_probs: np.ndarray     # (N, 4) behavior outcome-head probabilities
+    placement_prob_mask: np.ndarray # (N,) bool; behavior checkpoint exposed the outcome head
     farm_value: np.ndarray          # (N,) float32
     farm_mask: np.ndarray           # (N,) bool
     reward_pi: list[np.ndarray]     # N x (n_cands_i,) float32
@@ -240,6 +245,7 @@ def load_trajectory_buffer(
     all_fallen_loss: float = 0.0,
     strategic_mc_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
+    strategic_outcome_coef: float = 0.0,
     obs_key: str = "obs",
 ) -> TrajectoryBuffer:
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
@@ -253,6 +259,10 @@ def load_trajectory_buffer(
         raise ValueError("strategic_mc_coef must be in [0, 1]")
     if not 0.0 <= strategic_mc_gamma <= 1.0:
         raise ValueError("strategic_mc_gamma must be in [0, 1]")
+    if not 0.0 <= strategic_outcome_coef <= 1.0:
+        raise ValueError("strategic_outcome_coef must be in [0, 1]")
+    if strategic_mc_coef > 0 and strategic_outcome_coef > 0:
+        raise ValueError("strategic_mc_coef and strategic_outcome_coef are mutually exclusive")
     data_dir = Path(data_dir)
     # Skip the actor pool's games-*.jsonl per-game summaries (no obs/cands keys).
     jsonl_files = sorted(
@@ -363,6 +373,9 @@ def load_trajectory_buffer(
                 route_mode, route_mask = _coerce_unit_target(
                     rec.get("routeMode", rec.get("route_mode"))
                 )
+                placement_probs, placement_prob_mask = _coerce_policy_target(
+                    rec.get("placementProbs", rec.get("placement_probs")), 4
+                )
                 done = _coerce_binary_flag(rec.get("done"))
                 if done is None:
                     n_invalid_rows += 1
@@ -389,6 +402,8 @@ def load_trajectory_buffer(
                         "reward_mask": reward_mask,
                         "route_mode": route_mode,
                         "route_mask": route_mask,
+                        "placement_probs": placement_probs,
+                        "placement_prob_mask": placement_prob_mask,
                         "v_pred": float(rec["vPred"]),
                         "placement": _coerce_placement(rec.get("placement")),
                         "won": 1 if rec.get("won") else 0,
@@ -455,11 +470,14 @@ def load_trajectory_buffer(
     route_mode_list: list[float] = []
     route_mask_list: list[bool] = []
     placement_list: list[int] = []
+    placement_probs_list: list[np.ndarray] = []
+    placement_prob_mask_list: list[bool] = []
     strategic_mask_list: list[bool] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
     n_truncated = 0
     n_with_placement = 0
+    n_outcome_credit = 0
 
     for game_id in sorted(episodes):
         steps = sorted(episodes[game_id], key=lambda s: s["step_idx"])
@@ -522,6 +540,33 @@ def load_trajectory_buffer(
                 (1.0 - strategic_mc_coef) * ret[strategic]
                 + strategic_mc_coef * mc_ret[strategic]
             )
+        # Pure long-horizon outcome credit. Unlike strategic MC, this deliberately excludes
+        # dense VP, build shaping, and the tactical value target: navigation receives only the
+        # realized placement consequence, baselined by the behavior checkpoint's separately
+        # trained placement head. The ordinary value head remains a short-horizon GAE critic.
+        if strategic_outcome_coef > 0 and dones[-1] and placement is not None and strategic.any():
+            outcome_target = (
+                min(placement_rewards)
+                if any(s["all_fallen"] for s in steps)
+                else placement_rewards[placement - 1]
+            )
+            outcome_mask = strategic & np.array(
+                [s["placement_prob_mask"] for s in steps], dtype=bool
+            )
+            if outcome_mask.any():
+                behavior_outcome = np.array(
+                    [
+                        float(np.dot(s["placement_probs"], placement_rewards))
+                        for s in steps
+                    ],
+                    dtype=np.float64,
+                )
+                outcome_adv = outcome_target - behavior_outcome
+                adv[outcome_mask] = (
+                    (1.0 - strategic_outcome_coef) * adv[outcome_mask]
+                    + strategic_outcome_coef * outcome_adv[outcome_mask]
+                )
+                n_outcome_credit += int(outcome_mask.sum())
         for s in steps:
             obs_list.append(s["obs"])
             cands_list.append(s["cands"])
@@ -538,6 +583,8 @@ def load_trajectory_buffer(
             route_mode_list.append(s["route_mode"])
             route_mask_list.append(s["route_mask"])
             placement_list.append(placement if placement is not None else 0)
+            placement_probs_list.append(s["placement_probs"])
+            placement_prob_mask_list.append(s["placement_prob_mask"])
             strategic_mask_list.append(s["strategic"])
         adv_list.append(adv)
         ret_list.append(ret)
@@ -551,7 +598,8 @@ def load_trajectory_buffer(
         f"{sum(farm_mask_list)} with farmValue, {sum(reward_mask_list)} with rewardPi, "
         f"{sum(route_mask_list)} with routeMode, "
         f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
-        f"gamma={strategic_mc_gamma:g}), "
+        f"gamma={strategic_mc_gamma:g}; outcome coef={strategic_outcome_coef:g}, "
+        f"applied={n_outcome_credit}), "
         f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "
         f"{n_invalid_rows} malformed row(s), {n_nontrajectory} non-trajectory row(s), "
         f"{n_missing_obs} missing {obs_key!r})"
@@ -569,6 +617,9 @@ def load_trajectory_buffer(
         returns=returns,
         strategic_mask=np.array(strategic_mask_list, dtype=bool),
         strategic_mc_coef=float(strategic_mc_coef),
+        strategic_outcome_coef=float(strategic_outcome_coef),
+        placement_probs=np.stack(placement_probs_list),
+        placement_prob_mask=np.array(placement_prob_mask_list, dtype=bool),
         farm_value=np.array(farm_value_list, dtype=np.float32),
         farm_mask=np.array(farm_mask_list, dtype=bool),
         reward_pi=reward_pi_list,
@@ -797,7 +848,9 @@ def train_ppo(
     normalized_advantages = normalize_policy_advantages(
         buffer.advantages,
         buffer.policy_mask,
-        buffer.strategic_mask if buffer.strategic_mc_coef > 0 else None,
+        buffer.strategic_mask
+        if buffer.strategic_mc_coef > 0 or buffer.strategic_outcome_coef > 0
+        else None,
     )
     n_policy_total = int(buffer.policy_mask.sum())
     if policy_coef > 0 and n_policy_total == 0:
