@@ -47,6 +47,14 @@ Promotion requires all of:
 
 ### 2. Force training to contain the game phase that production exposes
 
+- Train a deterministic mixed player-count curriculum instead of a one-way 1->2->3->4 sequence
+  that would forget earlier skills. Generations 1-5 are 50% solo; generations 6-12 are balanced;
+  generation 13 onward is 62.5% four-player while retaining 12.5% each of solo, two-, and
+  three-player games. Ranked evaluation and every promotion gate remain four-player only.
+- Solo episodes use no placement reward or placement-head target because a lone bot is always
+  first by definition. They learn from actual VP progress and true 30-VP finishes, with a
+  solo-only full-episode Monte Carlo blend on engine-cycle decisions. Cap solo corruption below
+  Fallen so a one-seat all-Fallen ending cannot replace learning the build-convert-finish cycle.
 - Seat a verified non-Fallen termination blocker in a randomized portion of training matchups so
   all-neural collapse cannot erase the late game, while retaining no-blocker games so the learner
   cannot free-ride. Evaluate blocker and no-blocker completion separately.
@@ -85,6 +93,11 @@ Promotion requires all of:
 
 ### 5. Escalate only after the objective/data experiment has a verdict
 
+- The first outcome-credit pilots were seed-unstable and did not clear promotion. Before the next
+  matched runs, expand v1 from 83 to 187 observations: preserve the frozen prefix and append the
+  complete active/dormant 37-class and 8-origin engine, initiative/combat resources, held-material
+  composition, horizon/score pace, and public co-located threat state. Zero-expand the 500-Elo
+  warm start so all old outputs are exactly preserved until the new columns train.
 - If strategic credit improves conversion but plateaus on representation, reopen the v2 entity
   model with a named failure and train it directly (d64/l2 then d128/l3).
 - If the learned value becomes accurate enough, re-benchmark full-seat search. Existing Gumbel
