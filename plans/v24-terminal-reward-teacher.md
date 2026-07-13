@@ -28,11 +28,19 @@ human gates already specified in the V16 plan.
 Add an explicit hybrid-selection mode whose default preserves every historical checkpoint:
 
 - always take an action that immediately reaches the 30-VP win condition;
-- for an ambiguous decision containing only `resolveMonsterReward` candidates, do **not** force
-  the largest immediate VP reward when the new mode is enabled; route the full legal support to
-  `policyIndexWithProgressGuard` and record exact sampled behavior probabilities;
+- while `pendingReward` is active, restrict the opt-in learned support to the legal
+  `resolveMonsterReward` candidates (other Location actions can legally coexist), and do **not**
+  force the largest immediate VP reward; route that exact reward support to
+  `policyIndexWithProgressGuard` and record a full-length behavior mask with zero probability on
+  the coexisting non-reward actions;
 - retain the existing immediate-VP safeguard for all other decision families in this experiment;
 - forced one-candidate rewards remain deterministic and unrecorded, as before.
+
+An initial 512-game instrumentation pass exposed why the stricter "every legal command is a
+reward" predicate was wrong: only 20 games activated it even though pending rewards commonly
+coexist with combat/trade commands. That pass made zero game changes and is treated only as a
+failed support-wiring diagnostic. The corrected predicate above is frozen before rerunning any
+teacher-effect gate or collecting training labels.
 
 Strip V23 control's unused option heads and the four exactly-zero low-level option columns first;
 the resulting non-option checkpoint must have exactly the same logits, values, reach-30 predictions,

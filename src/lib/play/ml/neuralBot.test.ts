@@ -895,6 +895,8 @@ describe('neural value action scoring', () => {
 		const actions = legalActionsWithNext(state, 'Red', CATALOG).filter(
 			(action) => action.cmd.type === 'resolveMonsterReward'
 		);
+		const fullActions = legalActionsWithNext(state, 'Red', CATALOG);
+		expect(fullActions.some((action) => action.cmd.type !== 'resolveMonsterReward')).toBe(true);
 		let picks = 0;
 		const policyThatBuilds = {
 			...neutralPolicy,
@@ -919,6 +921,20 @@ describe('neural value action scoring', () => {
 		expect(actions[learned].cmd).toMatchObject({ type: 'resolveMonsterReward', picks: [1] });
 		expect(picks).toBe(1);
 
+		const learnedFromMixedSupport = hybridIndex(
+			policyThatBuilds,
+			state,
+			'Red',
+			fullActions,
+			{ learnMonsterRewardChoices: true },
+			CATALOG
+		);
+		expect(fullActions[learnedFromMixedSupport].cmd).toMatchObject({
+			type: 'resolveMonsterReward',
+			picks: [1]
+		});
+		expect(picks).toBe(2);
+
 		state.players.Red!.victoryPoints = 27;
 		const winningActions = legalActionsWithNext(state, 'Red', CATALOG).filter(
 			(action) => action.cmd.type === 'resolveMonsterReward'
@@ -932,6 +948,6 @@ describe('neural value action scoring', () => {
 			CATALOG
 		);
 		expect(winningActions[win].cmd).toMatchObject({ type: 'resolveMonsterReward', picks: [0] });
-		expect(picks).toBe(1); // immediate win never delegated to policy
+		expect(picks).toBe(2); // immediate win never delegated to policy
 	});
 });

@@ -439,9 +439,7 @@ export function labelTerminalOutcomes(
 }
 
 export function isAmbiguousMonsterRewardDecision(commands: readonly GameCommand[]): boolean {
-	return (
-		commands.length > 1 && commands.every((command) => command.type === 'resolveMonsterReward')
-	);
+	return commands.filter((command) => command.type === 'resolveMonsterReward').length > 1;
 }
 
 /** Evaluate all root commands with common random numbers, independent of root ordering. */
@@ -453,18 +451,24 @@ export function evaluateTerminalTeacher(
 	catalog: PlayCatalog,
 	options: TerminalTeacherOptions
 ): TerminalTeacherDecision {
-	if (!isAmbiguousMonsterRewardDecision(commands)) {
-		throw new Error('terminalTeacher: expected only ambiguous resolveMonsterReward commands');
-	}
+	const rewardEntries = commands.flatMap((command, index) =>
+		command.type === 'resolveMonsterReward' ? [{ command, index }] : []
+	);
+	if (rewardEntries.length < 2)
+		throw new Error('terminalTeacher: expected an ambiguous resolveMonsterReward support');
 	const sanitized = sanitizeSoloTerminalState(state, seat);
 	const rollouts = options.rollouts ?? DEFAULT_TERMINAL_ROLLOUTS;
-	const outcomes = commands.map((command) =>
+	const outcomes = rewardEntries.map(({ command }) =>
 		Array.from({ length: rollouts }, (_, rolloutIndex) =>
 			rolloutTerminalCandidate(sanitized, seat, command, policy, catalog, options, rolloutIndex)
 		)
 	);
-	const label = labelTerminalOutcomes(commands, outcomes, { ...options, rollouts });
-	return { index: label.bestIndex, label };
+	const label = labelTerminalOutcomes(
+		rewardEntries.map(({ command }) => command),
+		outcomes,
+		{ ...options, rollouts }
+	);
+	return { index: rewardEntries[label.bestIndex].index, label };
 }
 
 /** Validate and build the exact minimal collector row expected by Python. */

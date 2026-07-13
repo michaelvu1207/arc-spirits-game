@@ -221,8 +221,18 @@ function progressCandidateIndices(
 export function selectableCandidateIndices(
 	state: PublicGameState,
 	seat: SeatColor,
-	withNext: LegalAction[]
+	withNext: LegalAction[],
+	opts?: { learnMonsterRewardChoices?: boolean }
 ): number[] {
+	if (opts?.learnMonsterRewardChoices && state.players[seat]?.pendingReward) {
+		const rewards = withNext.flatMap((action, index) =>
+			action.cmd.type === 'resolveMonsterReward' ? [index] : []
+		);
+		// Reward resolution can coexist with other legal Location actions. V24
+		// learns the reward tradeoff on exactly this support; a single reward is
+		// forced, matching the historical non-ambiguous contract.
+		if (rewards.length > 0) return rewards;
+	}
 	const progress = progressCandidateIndices(state, seat, withNext);
 	return progress.length > 0 ? progress : withNext.map((_, i) => i);
 }
@@ -598,10 +608,20 @@ export function hybridIndex(
 		}
 	}
 	const learnableMonsterReward =
-		opts?.learnMonsterRewardChoices === true &&
-		withNext.every((action) => action.cmd.type === 'resolveMonsterReward');
+		opts?.learnMonsterRewardChoices === true && state.players[seat]?.pendingReward != null;
 	if (learnableMonsterReward) {
-		return policyIndexWithProgressGuard(policy, state, seat, withNext, opts, catalog);
+		const rewardSupport = selectableCandidateIndices(state, seat, withNext, {
+			learnMonsterRewardChoices: true
+		});
+		if (rewardSupport.length === 1) return rewardSupport[0];
+		return policyIndexWithProgressGuard(
+			policy,
+			state,
+			seat,
+			withNext,
+			{ ...opts, supportIndices: rewardSupport },
+			catalog
+		);
 	}
 	if (bestVpIdx >= 0 && bestVpGain > 0) return bestVpIdx;
 	// No immediate VP → the learned policy owns positioning and delayed-payoff decisions.
@@ -613,16 +633,29 @@ export function policyIndexWithProgressGuard(
 	state: PublicGameState,
 	seat: SeatColor,
 	withNext: LegalAction[],
-	opts?: { sample?: boolean; temperature?: number; rand?: () => number },
+	opts?: {
+		sample?: boolean;
+		temperature?: number;
+		rand?: () => number;
+		supportIndices?: number[];
+	},
 	catalog?: PlayCatalog
 ): number {
 	if (!catalog)
 		throw new Error('policyIndexWithProgressGuard: catalog is required (obs v1.1 ladder features)');
-	const progress = progressCandidateIndices(state, seat, withNext);
-	const filtered =
-		progress.length > 0 && progress.length < withNext.length
-			? progress.map((i) => withNext[i])
-			: withNext;
+	const requested = opts?.supportIndices;
+	if (
+		requested &&
+		(requested.length === 0 ||
+			new Set(requested).size !== requested.length ||
+			requested.some((index) => !Number.isInteger(index) || index < 0 || index >= withNext.length))
+	) {
+		throw new Error('policyIndexWithProgressGuard: invalid explicit support');
+	}
+	const naturalProgress = progressCandidateIndices(state, seat, withNext);
+	const support =
+		requested ?? (naturalProgress.length > 0 ? naturalProgress : withNext.map((_, index) => index));
+	const filtered = support.length < withNext.length ? support.map((i) => withNext[i]) : withNext;
 	const picked = policy.pick(
 		encodeObs(state, seat, catalog),
 		filtered.map((x) => encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)),
@@ -632,7 +665,7 @@ export function policyIndexWithProgressGuard(
 			rand: opts?.rand
 		}
 	);
-	return filtered === withNext ? picked : progress[picked];
+	return filtered === withNext ? picked : support[picked];
 }
 
 /** Pick a candidate index by value-lookahead. Greedy by default; softmax-sample for

@@ -1239,7 +1239,9 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		const willRecord = cands.length > 1 && recordSet.has(seat) && !oppPolicy;
 		const searched =
 			opts.searcher && !oppPolicy && cands.length > 1 ? opts.searcher(state, seat, withNext) : null;
-		const behaviorSupport = selectableCandidateIndices(state, seat, withNext);
+		const behaviorSupport = selectableCandidateIndices(state, seat, withNext, {
+			learnMonsterRewardChoices: opts.learnMonsterRewardChoices
+		});
 		// Prime RemotePolicy's per-decision cache with the full candidate set. A subsequent
 		// progress-filtered pick derives its subset logits from this same response.
 		if (

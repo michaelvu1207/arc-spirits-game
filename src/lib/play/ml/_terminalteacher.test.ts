@@ -241,7 +241,7 @@ describe('V24 terminal reward teacher harness', () => {
 					recordSeats: [],
 					sample: false,
 					chooser: (obs, features, commands, seat, state, withNext) => {
-						const historicalIndex = hybridIndex(
+						const historicalFullIndex = hybridIndex(
 							policy,
 							state,
 							seat,
@@ -250,6 +250,18 @@ describe('V24 terminal reward teacher harness', () => {
 							catalog
 						);
 						if (isAmbiguousMonsterRewardDecision(commands)) {
+							const rewardIndices = commands.flatMap((command, index) =>
+								command.type === 'resolveMonsterReward' ? [index] : []
+							);
+							const rewardActions = rewardIndices.map((index) => withNext[index]);
+							const historicalIndex = hybridIndex(
+								policy,
+								state,
+								seat,
+								rewardActions,
+								{ sample: false },
+								catalog
+							);
 							gameCaptures.push({
 								stateId: `source:${seed}:${ordinal++}`,
 								seed,
@@ -258,13 +270,13 @@ describe('V24 terminal reward teacher harness', () => {
 								round: state.round,
 								vp: state.players[seat]?.victoryPoints ?? 0,
 								obs: [...obs],
-								cands: features.map((cand) => [...cand]),
-								commands: commands.map((command) => structuredClone(command)),
+								cands: rewardIndices.map((index) => [...features[index]]),
+								commands: rewardActions.map((action) => structuredClone(action.cmd)),
 								historicalIndex,
 								state: sanitizeSoloTerminalState(state, seat)
 							});
 						}
-						return historicalIndex;
+						return historicalFullIndex;
 					}
 				});
 				const sourceReached30 = (result.finalVP.Red ?? 0) >= 30;

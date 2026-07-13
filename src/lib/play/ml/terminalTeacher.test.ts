@@ -5,6 +5,7 @@ import { legalActionsWithNext } from './actions';
 import {
 	applyTerminalRootCandidate,
 	canonicalCommandSignature,
+	isAmbiguousMonsterRewardDecision,
 	evaluateTerminalTeacher,
 	labelTerminalOutcomes,
 	redeterminizeSoloTerminalState,
@@ -133,6 +134,16 @@ describe('V24 terminal reward teacher', () => {
 		expect(terminalRolloutSeed('state-7', 3, 'audit')).not.toBe(
 			terminalRolloutSeed('state-7', 4, 'audit')
 		);
+	});
+
+	it('detects ambiguous reward support even when other Location actions coexist', () => {
+		expect(
+			isAmbiguousMonsterRewardDecision([
+				{ type: 'endLocationActions' },
+				{ type: 'resolveMonsterReward', picks: [0] },
+				{ type: 'resolveMonsterReward', picks: [1] }
+			])
+		).toBe(true);
 	});
 
 	it('re-shuffles first and reapplies the root command through the reducer', () => {
