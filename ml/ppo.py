@@ -38,6 +38,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import pickle
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,6 +131,68 @@ def compute_discounted_returns(
 # Trajectory loading
 # ---------------------------------------------------------------------------
 
+SELF_IMITATION_PHASES = ("route", "build", "convert", "yield")
+SELF_IMITATION_PHASE_QUOTAS = {
+    "route": 0.25,
+    "build": 0.35,
+    "convert": 0.30,
+    "yield": 0.10,
+}
+_SELF_IMITATION_YIELD_TYPES = {
+    "endLocationActions",
+    "commitBenefits",
+    "commitAwakening",
+    "commitCleanup",
+    "passEncounter",
+}
+_SELF_IMITATION_ROUTE_TYPES = {"lockNavigation", "selectNavigationDestination"}
+_SELF_IMITATION_BUILD_TYPES = {
+    "resolveLocationInteraction",
+    "spawnHandSpirit",
+    "absorbSpirit",
+    "placeAugmentOnSpirit",
+    "discardSpirit",
+    "discardRune",
+    "discardUnplacedAugments",
+}
+
+
+def self_imitation_phase(decision_type: str) -> str:
+    """Coarse strategy-cycle phase used for replay quotas and diagnostics."""
+    if decision_type in _SELF_IMITATION_YIELD_TYPES:
+        return "yield"
+    if decision_type in _SELF_IMITATION_ROUTE_TYPES:
+        return "route"
+    if decision_type in _SELF_IMITATION_BUILD_TYPES:
+        return "build"
+    return "convert"
+
+
+@dataclass
+class SelfImitationReplay:
+    """Winning-decision demonstrations kept outside PPO's ratio/value tensors.
+
+    ``weight`` is normalized to one within each source episode and phase. The
+    replay objective normalizes each sampled phase independently before applying
+    ``SELF_IMITATION_PHASE_QUOTAS`` exactly once. It is masked chosen-action CE
+    only; none of these fields can be consumed by GAE, the clipped surrogate, or
+    the value loss.
+    """
+
+    obs: np.ndarray
+    cands: list[np.ndarray]
+    chosen: np.ndarray
+    behavior_mask: list[np.ndarray]
+    logp_old: np.ndarray
+    behavior_temperature: np.ndarray
+    weight: np.ndarray
+    phase: np.ndarray
+    generation: np.ndarray
+    row_key: list[str]
+
+    def __len__(self) -> int:
+        return len(self.cands)
+
 @dataclass
 class TrajectoryBuffer:
     obs: np.ndarray                 # (N, obs_dim) float32
@@ -166,9 +230,160 @@ class TrajectoryBuffer:
     # placement-aux target "final placement given this state" is defined at
     # every decision, not just on the terminal row.
     placement: np.ndarray           # (N,) int64
+    # Optional, default-off auxiliary dataset. It is deliberately separate from
+    # every PPO tensor above so replay can never alter ratios or value targets.
+    self_imitation: SelfImitationReplay | None = None
 
     def __len__(self) -> int:
         return len(self.cands)
+
+
+def _self_imitation_from_rows(rows: list[dict[str, Any]]) -> SelfImitationReplay | None:
+    if not rows:
+        return None
+    return SelfImitationReplay(
+        obs=np.stack([row["obs"] for row in rows]).astype(np.float32, copy=False),
+        cands=[np.asarray(row["cands"], dtype=np.float32) for row in rows],
+        chosen=np.asarray([row["chosen"] for row in rows], dtype=np.int64),
+        behavior_mask=[np.asarray(row["behavior_mask"], dtype=bool) for row in rows],
+        logp_old=np.asarray([row["logp_old"] for row in rows], dtype=np.float32),
+        behavior_temperature=np.asarray(
+            [row["behavior_temperature"] for row in rows], dtype=np.float32
+        ),
+        weight=np.asarray([row["weight"] for row in rows], dtype=np.float32),
+        phase=np.asarray([row["phase"] for row in rows], dtype="U8"),
+        generation=np.asarray([row["generation"] for row in rows], dtype=np.int64),
+        row_key=[str(row["row_key"]) for row in rows],
+    )
+
+
+def _self_imitation_rows(replay: SelfImitationReplay | None) -> list[dict[str, Any]]:
+    if replay is None:
+        return []
+    return [
+        {
+            "obs": replay.obs[i],
+            "cands": replay.cands[i],
+            "chosen": int(replay.chosen[i]),
+            "behavior_mask": replay.behavior_mask[i],
+            "logp_old": float(replay.logp_old[i]),
+            "behavior_temperature": float(replay.behavior_temperature[i]),
+            "weight": float(replay.weight[i]),
+            "phase": str(replay.phase[i]),
+            "generation": int(replay.generation[i]),
+            "row_key": replay.row_key[i],
+        }
+        for i in range(len(replay))
+    ]
+
+
+def _valid_self_imitation_row(row: dict[str, Any]) -> bool:
+    try:
+        obs = np.asarray(row["obs"], dtype=np.float32)
+        cands = np.asarray(row["cands"], dtype=np.float32)
+        behavior_mask = np.asarray(row["behavior_mask"], dtype=bool)
+        chosen = int(row["chosen"])
+        logp_old = float(row["logp_old"])
+        temperature = float(row["behavior_temperature"])
+        weight = float(row["weight"])
+        generation = int(row["generation"])
+        phase = str(row["phase"])
+        row_key = str(row["row_key"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return bool(
+        obs.ndim == 1
+        and cands.ndim == 2
+        and cands.shape[0] >= 1
+        and behavior_mask.shape == (cands.shape[0],)
+        and 0 <= chosen < cands.shape[0]
+        and behavior_mask[chosen]
+        and behavior_mask.any()
+        and np.isfinite(obs).all()
+        and np.isfinite(cands).all()
+        and math.isfinite(logp_old)
+        and math.isfinite(temperature)
+        and temperature > 0
+        and math.isfinite(weight)
+        and weight > 0
+        and generation >= 0
+        and phase in SELF_IMITATION_PHASES
+        and bool(row_key)
+    )
+
+
+def _trim_self_imitation_rows(
+    rows: list[dict[str, Any]], max_rows: int
+) -> list[dict[str, Any]]:
+    """Bound persistence at episode granularity, preserving normalized weights."""
+    if len(rows) <= max_rows:
+        return rows
+    episodes: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        episode_key = str(row["row_key"]).rsplit(":", 1)[0]
+        episodes.setdefault(episode_key, []).append(row)
+    ordered = sorted(
+        episodes.items(),
+        key=lambda item: (-max(int(row["generation"]) for row in item[1]), item[0]),
+    )
+    kept: list[dict[str, Any]] = []
+    for _, episode_rows in ordered:
+        if len(kept) + len(episode_rows) <= max_rows:
+            kept.extend(episode_rows)
+    return kept
+
+
+def load_self_imitation_replay(
+    path: Path, *, generation: int, max_age: int
+) -> list[dict[str, Any]]:
+    """Read a trusted local league replay, rejecting malformed or future rows."""
+    if not path.exists():
+        return []
+    try:
+        payload = torch.load(path, map_location="cpu", weights_only=True)
+    except (OSError, RuntimeError, ValueError, TypeError, EOFError, pickle.UnpicklingError) as exc:
+        print(f"WARNING: ignoring unreadable self-imitation replay {path}: {exc}", file=sys.stderr)
+        return []
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        print(f"WARNING: ignoring unsupported self-imitation replay {path}", file=sys.stderr)
+        return []
+    raw_rows = payload.get("rows")
+    if not isinstance(raw_rows, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for raw in raw_rows:
+        if not isinstance(raw, dict):
+            continue
+        # weights_only=True returns tensors for array fields; numpy conversion is safe.
+        row = dict(raw)
+        if _valid_self_imitation_row(row):
+            age = generation - int(row["generation"])
+            if 0 <= age <= max_age:
+                rows.append(row)
+    return rows
+
+
+def save_self_imitation_replay(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Atomically persist tensor-only replay data beside a league lane."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    serializable = []
+    for row in rows:
+        serializable.append(
+            {
+                **row,
+                "obs": torch.from_numpy(np.asarray(row["obs"], dtype=np.float32)),
+                "cands": torch.from_numpy(np.asarray(row["cands"], dtype=np.float32)),
+                "behavior_mask": torch.from_numpy(
+                    np.asarray(row["behavior_mask"], dtype=bool)
+                ),
+            }
+        )
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        torch.save({"version": 1, "rows": serializable}, tmp)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _coerce_placement(raw: Any) -> int | None:
@@ -272,6 +487,11 @@ def load_trajectory_buffer(
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     obs_key: str = "obs",
+    collect_self_imitation: bool = False,
+    self_imitation_generation: int = 0,
+    self_imitation_replay_path: Path | None = None,
+    self_imitation_max_age: int = 3,
+    self_imitation_max_rows: int = 100_000,
 ) -> TrajectoryBuffer:
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
     GAE advantages + returns learner-side.
@@ -296,6 +516,24 @@ def load_trajectory_buffer(
         raise ValueError("strategic_mc_coef and strategic_outcome_coef are mutually exclusive")
     if solo_outcome_coef > 0 and solo_reach30_coef > 0:
         raise ValueError("solo_outcome_coef and solo_reach30_coef are mutually exclusive")
+    if (
+        isinstance(self_imitation_generation, bool)
+        or not isinstance(self_imitation_generation, int)
+        or self_imitation_generation < 0
+    ):
+        raise ValueError("self_imitation_generation must be a nonnegative integer")
+    if (
+        isinstance(self_imitation_max_age, bool)
+        or not isinstance(self_imitation_max_age, int)
+        or self_imitation_max_age < 0
+    ):
+        raise ValueError("self_imitation_max_age must be a nonnegative integer")
+    if (
+        isinstance(self_imitation_max_rows, bool)
+        or not isinstance(self_imitation_max_rows, int)
+        or self_imitation_max_rows <= 0
+    ):
+        raise ValueError("self_imitation_max_rows must be a positive integer")
     data_dir = Path(data_dir)
     # Skip the actor pool's games-*.jsonl per-game summaries (no obs/cands keys).
     jsonl_files = sorted(
@@ -468,6 +706,9 @@ def load_trajectory_buffer(
                         "all_fallen": 1 if rec.get("allFallen") else 0,
                         "end_round": _coerce_end_round(rec.get("endRound")),
                         "strategic": strategic,
+                        "decision_type": rec.get("decisionType")
+                        if isinstance(rec.get("decisionType"), str)
+                        else "",
                         "continuation_curriculum": continuation_curriculum,
                         "player_count": _coerce_player_count(rec.get("playerCount", 4)),
                         "obs": obs,
@@ -572,6 +813,8 @@ def load_trajectory_buffer(
     n_solo_outcome_credit = 0
     n_solo_reach30_credit = 0
     reach30_horizons: set[int] = set()
+    self_imitation_current_rows: list[dict[str, Any]] = []
+    self_imitation_source_episodes = 0
 
     # Batch-mean control variate for the true solo objective. A solo seat is always
     # placement 1 at the round cap, so only the actor's explicit `won` bit (30 VP)
@@ -643,6 +886,70 @@ def load_trajectory_buffer(
         episode_solo_outcome_mask = np.zeros(len(steps), dtype=bool)
         episode_reach30_adv = np.zeros(len(steps), dtype=np.float64)
         episode_reach30_mask = np.zeros(len(steps), dtype=bool)
+        # Conservative self-imitation source: only a naturally started, complete,
+        # non-stalled solo true win. In the actor contract a stalled/capped game has
+        # done=false, so a terminal done row is also the explicit non-stall proof.
+        if (
+            collect_self_imitation
+            and player_count == 1
+            and dones[-1]
+            and any(s["won"] for s in steps)
+            and not any(s["continuation_curriculum"] for s in steps)
+        ):
+            dense_mc_return = compute_discounted_returns(
+                rewards, dones, strategic_mc_gamma, last_value=0.0
+            )
+            dense_mc_advantage = dense_mc_return - values
+            episode_rows_by_phase: dict[str, list[dict[str, Any]]] = {
+                phase: [] for phase in SELF_IMITATION_PHASES
+            }
+            for index, s in enumerate(steps):
+                decision_type = s["decision_type"]
+                is_engine_cycle = bool(s["strategic"]) or decision_type in _SELF_IMITATION_YIELD_TYPES
+                if (
+                    not decision_type
+                    or not is_engine_cycle
+                    or not s["policy_mask"]
+                    or not s["behavior_mask"][s["chosen"]]
+                    or not s["reach30_pred_mask"]
+                    or dense_mc_advantage[index] <= 0
+                ):
+                    continue
+                phase = self_imitation_phase(decision_type)
+                # Prefer decisions made when the behavior critic still saw meaningful
+                # failure risk, while capping both factors against outliers.
+                raw_weight = min(float(dense_mc_advantage[index]), 5.0) * max(
+                    0.05, min(1.0, 1.0 - float(s["reach30_pred"]))
+                )
+                if raw_weight <= 0 or not math.isfinite(raw_weight):
+                    continue
+                episode_rows_by_phase[phase].append(
+                    {
+                        "obs": s["obs"],
+                        "cands": s["cands"],
+                        "chosen": s["chosen"],
+                        "behavior_mask": s["behavior_mask"],
+                        "logp_old": s["logp_old"],
+                        "behavior_temperature": s["behavior_temperature"],
+                        "weight": raw_weight,
+                        "phase": phase,
+                        "generation": self_imitation_generation,
+                        "row_key": f"{self_imitation_generation}:{game_id}:{s['step_idx']}",
+                    }
+                )
+            present = [phase for phase, rows in episode_rows_by_phase.items() if rows]
+            if present:
+                self_imitation_source_episodes += 1
+                for phase in present:
+                    rows = episode_rows_by_phase[phase]
+                    raw_total = sum(float(row["weight"]) for row in rows)
+                    for row in rows:
+                        # Row weights express only within-phase action quality.
+                        # The phase mixture belongs in the loss; embedding the
+                        # quota here as well would square it after phase-balanced
+                        # sampling and make the objective depend on pool size.
+                        row["weight"] = float(row["weight"]) / raw_total
+                        self_imitation_current_rows.append(row)
         # Only completed episodes have a realized complete-game outcome. Truncated rows retain
         # ordinary GAE instead of pretending the actor's tail bootstrap is a terminal result.
         # When an explicit solo coefficient is set it owns solo rows; the legacy/global knob
@@ -825,6 +1132,47 @@ def load_trajectory_buffer(
                 (1.0 - solo_reach30_coef) * standardize_reach30(base_component)
                 + solo_reach30_coef * standardize_reach30(reach30_component)
             ).astype(np.float32)
+    self_imitation = None
+    if collect_self_imitation:
+        persisted_rows = (
+            load_self_imitation_replay(
+                Path(self_imitation_replay_path),
+                generation=self_imitation_generation,
+                max_age=self_imitation_max_age,
+            )
+            if self_imitation_replay_path is not None
+            else []
+        )
+        # A retried generation replaces its own identical keys instead of growing
+        # replay. Current rows win so bug-fixed re-recordings cannot retain stale data.
+        merged = {str(row["row_key"]): row for row in persisted_rows}
+        merged.update({str(row["row_key"]): row for row in self_imitation_current_rows})
+        obs_dim = obs_list[0].shape[0]
+        act_dim = cands_list[0].shape[1]
+        replay_rows = [
+            row
+            for row in merged.values()
+            if _valid_self_imitation_row(row)
+            and np.asarray(row["obs"]).shape == (obs_dim,)
+            and np.asarray(row["cands"]).ndim == 2
+            and np.asarray(row["cands"]).shape[1] == act_dim
+            and 0 <= self_imitation_generation - int(row["generation"]) <= self_imitation_max_age
+        ]
+        replay_rows = _trim_self_imitation_rows(replay_rows, self_imitation_max_rows)
+        self_imitation = _self_imitation_from_rows(replay_rows)
+        if self_imitation_replay_path is not None:
+            save_self_imitation_replay(Path(self_imitation_replay_path), replay_rows)
+        phase_counts = {
+            phase: sum(row["phase"] == phase for row in replay_rows)
+            for phase in SELF_IMITATION_PHASES
+        }
+        print(
+            "Self-imitation replay | "
+            f"source_wins={self_imitation_source_episodes} | "
+            f"current_rows={len(self_imitation_current_rows)} | "
+            f"persisted_rows={len(persisted_rows)} | total_rows={len(replay_rows)} | "
+            + " ".join(f"{phase}={phase_counts[phase]}" for phase in SELF_IMITATION_PHASES)
+        )
     print(
         f"Loaded {len(cands_list)} PPO steps from {len(episodes)} game(s) "
         f"({sum(policy_mask_list)} exact policy step(s), "
@@ -878,6 +1226,7 @@ def load_trajectory_buffer(
         route_mode=np.array(route_mode_list, dtype=np.float32),
         route_mask=np.array(route_mask_list, dtype=bool),
         placement=np.array(placement_list, dtype=np.int64),
+        self_imitation=self_imitation,
     )
 
 
@@ -1093,6 +1442,126 @@ def _minibatch_tensors(
     )
 
 
+def select_self_imitation_indices(
+    replay: SelfImitationReplay,
+    rng: np.random.Generator,
+    batch_size: int,
+) -> np.ndarray:
+    """Draw a phase-balanced auxiliary batch without touching the PPO RNG."""
+    if isinstance(batch_size, bool) or batch_size <= 0:
+        raise ValueError("self-imitation batch_size must be positive")
+    pools = {
+        phase: np.flatnonzero(replay.phase == phase)
+        for phase in SELF_IMITATION_PHASES
+        if bool(np.any(replay.phase == phase))
+    }
+    if not pools:
+        return np.empty(0, dtype=np.int64)
+    quota_total = sum(SELF_IMITATION_PHASE_QUOTAS[phase] for phase in pools)
+    exact = {
+        phase: batch_size * SELF_IMITATION_PHASE_QUOTAS[phase] / quota_total
+        for phase in pools
+    }
+    counts = {phase: int(math.floor(value)) for phase, value in exact.items()}
+    remainder = batch_size - sum(counts.values())
+    for phase in sorted(pools, key=lambda name: (-(exact[name] - counts[name]), name))[:remainder]:
+        counts[phase] += 1
+    selected = [
+        rng.choice(pool, size=counts[phase], replace=counts[phase] > pool.size)
+        for phase, pool in pools.items()
+        if counts[phase] > 0
+    ]
+    out = np.concatenate(selected).astype(np.int64, copy=False)
+    rng.shuffle(out)
+    return out
+
+
+def _self_imitation_tensors(
+    replay: SelfImitationReplay,
+    idx: np.ndarray,
+    device: torch.device,
+) -> tuple[torch.Tensor, ...]:
+    batch = len(idx)
+    max_cands = max(replay.cands[i].shape[0] for i in idx)
+    act_dim = replay.cands[idx[0]].shape[1]
+    cands = np.zeros((batch, max_cands, act_dim), dtype=np.float32)
+    behavior_mask = np.zeros((batch, max_cands), dtype=bool)
+    for out_index, replay_index in enumerate(idx):
+        candidate_rows = replay.cands[replay_index]
+        count = candidate_rows.shape[0]
+        cands[out_index, :count] = candidate_rows
+        behavior_mask[out_index, :count] = replay.behavior_mask[replay_index]
+    return (
+        torch.from_numpy(replay.obs[idx]).to(device),
+        torch.from_numpy(cands).to(device),
+        torch.from_numpy(behavior_mask).to(device),
+        torch.from_numpy(replay.chosen[idx]).to(device),
+        torch.from_numpy(replay.logp_old[idx]).to(device),
+        torch.from_numpy(replay.behavior_temperature[idx]).to(device),
+        torch.from_numpy(replay.weight[idx]).to(device),
+    )
+
+
+def self_imitation_minibatch_loss(
+    model: CandidateScorer,
+    replay: SelfImitationReplay,
+    idx: np.ndarray,
+    device: torch.device,
+    *,
+    staleness_logp: float = 1.0,
+) -> tuple[torch.Tensor, int, int]:
+    """Masked CE on winning actions after a current-vs-behavior logp gate.
+
+    This intentionally has no PPO ratio, advantage surrogate, or value target.
+    It may be evaluated with a zero coefficient for compute-matched controls.
+    """
+    if staleness_logp < 0 or not math.isfinite(staleness_logp):
+        raise ValueError("staleness_logp must be finite and nonnegative")
+    if len(idx) == 0:
+        zero = next(model.parameters()).sum() * 0.0
+        return zero, 0, 0
+    (
+        obs,
+        cands,
+        behavior_mask,
+        chosen,
+        logp_old,
+        behavior_temperature,
+        weights,
+    ) = _self_imitation_tensors(replay, idx, device)
+    logits, _, _ = model(obs, cands, behavior_mask)
+    current_behavior_logp = behavior_log_probs(
+        logits, behavior_mask, behavior_temperature
+    ).gather(1, chosen.unsqueeze(1)).squeeze(1)
+    fresh = (current_behavior_logp.detach() - logp_old).abs() <= staleness_logp
+    accepted = int(fresh.sum().item())
+    if accepted == 0:
+        return logits.sum() * 0.0, 0, len(idx)
+    # The imitation target is a separate masked categorical CE at policy
+    # temperature 1. Behavior temperature is used only for the staleness proof.
+    masked_logits = logits.masked_fill(~behavior_mask, float("-inf"))
+    ce = -F.log_softmax(masked_logits, dim=-1).gather(
+        1, chosen.unsqueeze(1)
+    ).squeeze(1)
+    # Normalize action-quality weights separately within each phase, then apply
+    # the desired phase mixture exactly once. The sampler also uses the quotas to
+    # allocate variance efficiently, but sample counts cannot alter this mean.
+    weighted_phase_losses: list[torch.Tensor] = []
+    active_quota = 0.0
+    sampled_phases = replay.phase[idx]
+    for phase in SELF_IMITATION_PHASES:
+        phase_mask = torch.from_numpy(sampled_phases == phase).to(device) & fresh
+        if not bool(phase_mask.any()):
+            continue
+        phase_weights = weights[phase_mask]
+        phase_loss = (ce[phase_mask] * phase_weights).sum() / phase_weights.sum().clamp_min(1e-8)
+        quota = SELF_IMITATION_PHASE_QUOTAS[phase]
+        weighted_phase_losses.append(phase_loss * quota)
+        active_quota += quota
+    loss = torch.stack(weighted_phase_losses).sum() / max(active_quota, 1e-8)
+    return loss, accepted, len(idx) - accepted
+
+
 def binary_auc(
     targets: np.ndarray, scores: np.ndarray, weights: np.ndarray | None = None
 ) -> float:
@@ -1289,6 +1758,9 @@ def train_ppo(
     seed: int | None = None,
     rows_per_epoch: int | None = None,
     continuation_fraction: float | None = None,
+    self_imitation_coef: float = 0.0,
+    self_imitation_replay_fraction: float = 0.0,
+    self_imitation_staleness_logp: float = 1.0,
 ) -> list[dict]:
     """K epochs of clipped-surrogate PPO over a fixed rollout buffer.
     Returns per-epoch metric dicts (used by tests).
@@ -1301,6 +1773,18 @@ def train_ppo(
         raise ValueError(
             "target_kl early stopping is incompatible with rows_per_epoch fixed-update training"
         )
+    if self_imitation_coef < 0 or not math.isfinite(self_imitation_coef):
+        raise ValueError("self_imitation_coef must be finite and nonnegative")
+    if not 0.0 <= self_imitation_replay_fraction <= 1.0:
+        raise ValueError("self_imitation_replay_fraction must be in [0, 1]")
+    if self_imitation_coef > 0 and self_imitation_replay_fraction <= 0:
+        raise ValueError("self_imitation_coef requires a positive replay fraction")
+    if self_imitation_replay_fraction > 0 and target_kl is not None:
+        raise ValueError(
+            "self-imitation replay is incompatible with target_kl early stopping"
+        )
+    if self_imitation_staleness_logp < 0 or not math.isfinite(self_imitation_staleness_logp):
+        raise ValueError("self_imitation_staleness_logp must be finite and nonnegative")
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # KL-to-reference anchor (piKL / AlphaStar KL-to-BC): penalize divergence from
     # the WARM-START policy. The reference is the state of `model` at entry.
@@ -1314,6 +1798,10 @@ def train_ppo(
             p_.requires_grad_(False)
     n = len(buffer)
     rng = np.random.default_rng(seed)
+    # Independent stream: enabling replay cannot perturb PPO row selection/shuffling.
+    self_imitation_rng = np.random.default_rng(
+        None if seed is None else (int(seed) ^ 0x53494C)
+    )
     indices = np.arange(n)
     global_normalized_advantages = normalize_policy_advantages(
         buffer.advantages,
@@ -1345,6 +1833,12 @@ def train_ppo(
         print(
             "WARNING: reach30_value_coef is nonzero but the rollout has no resolved solo labels; "
             "the reach-30 head receives no training signal",
+            file=sys.stderr,
+        )
+    if self_imitation_replay_fraction > 0 and buffer.self_imitation is None:
+        print(
+            "WARNING: self-imitation replay is enabled but no eligible winning rows were found; "
+            "the auxiliary loss is zero",
             file=sys.stderr,
         )
     if reach30_value_coef > 0 and buffer.reach30_horizon is not None:
@@ -1412,12 +1906,17 @@ def train_ppo(
         tot_farm = tot_reward = tot_route = tot_reach30 = 0.0
         tot_placement = 0.0
         tot_kl_ref = 0.0
+        tot_self_imitation = 0.0
         tot_strategic_value = tot_tactical_value = 0.0
         n_seen = 0
         n_policy_seen = 0
         n_strategic_seen = n_tactical_seen = 0
         n_continuation_seen = 0
         optimizer_steps = 0
+        self_imitation_sampled = 0
+        self_imitation_accepted = 0
+        self_imitation_stale = 0
+        self_imitation_phase_counts = {phase: 0 for phase in SELF_IMITATION_PHASES}
         stop = False
         epoch_reach30_updated = False
         epoch_reach30_total_weight = float(buffer.reach30_weight[epoch_indices].sum())
@@ -1578,6 +2077,30 @@ def train_ppo(
             elif use_placement_v1:
                 placement_loss = placement_aux_loss_v1(model, obs, placement, placement > 0)
 
+            self_imitation_loss = torch.zeros((), dtype=torch.float32, device=device)
+            accepted = 0
+            if self_imitation_replay_fraction > 0 and buffer.self_imitation is not None:
+                replay_batch_size = max(
+                    1, int(math.ceil(len(mb) * self_imitation_replay_fraction))
+                )
+                replay_idx = select_self_imitation_indices(
+                    buffer.self_imitation, self_imitation_rng, replay_batch_size
+                )
+                self_imitation_loss, accepted, stale = self_imitation_minibatch_loss(
+                    model,
+                    buffer.self_imitation,
+                    replay_idx,
+                    device,
+                    staleness_logp=self_imitation_staleness_logp,
+                )
+                self_imitation_sampled += len(replay_idx)
+                self_imitation_accepted += accepted
+                self_imitation_stale += stale
+                for phase in SELF_IMITATION_PHASES:
+                    self_imitation_phase_counts[phase] += int(
+                        np.sum(buffer.self_imitation.phase[replay_idx] == phase)
+                    )
+
             loss = (
                 policy_coef * policy_loss
                 + value_coef * value_loss
@@ -1588,6 +2111,7 @@ def train_ppo(
                 - ent_coef * entropy
                 + placement_coef * placement_loss
                 + kl_ref_coef * kl_ref
+                + self_imitation_coef * self_imitation_loss
             )
             optimizer.zero_grad()
             loss.backward()
@@ -1627,6 +2151,7 @@ def train_ppo(
                 )
             tot_placement += placement_loss.item() * bs
             tot_kl_ref += kl_ref.item() * policy_count
+            tot_self_imitation += self_imitation_loss.item() * accepted
             tot_strategic_value += strategic_value_loss * strategic_count
             tot_tactical_value += tactical_value_loss * tactical_count
             n_strategic_seen += strategic_count
@@ -1641,6 +2166,20 @@ def train_ppo(
                 model.reach30_horizon = buffer.reach30_horizon
             policy_denom = max(1, n_policy_seen)
             p30_metrics = reach30_training_metrics(model, buffer, device, batch_size)
+            self_imitation_summary = ""
+            if self_imitation_replay_fraction > 0:
+                self_imitation_summary = (
+                    f"self_imitation_loss="
+                    f"{tot_self_imitation / max(1, self_imitation_accepted):.4f} "
+                    f"(coef={self_imitation_coef:g}, accepted={self_imitation_accepted}/"
+                    f"{self_imitation_sampled}, stale={self_imitation_stale}, "
+                    "phases(route/build/convert/yield)="
+                    + "/".join(
+                        str(self_imitation_phase_counts[phase])
+                        for phase in SELF_IMITATION_PHASES
+                    )
+                    + ") | "
+                )
             print(
                 f"PPO epoch {epoch}/{epochs} | "
                 f"policy_loss={tot_policy / policy_denom:.4f} | "
@@ -1660,11 +2199,12 @@ def train_ppo(
                 f"clip_frac={tot_clip / policy_denom:.3f} | "
                 f"placement_loss={tot_placement / n_seen:.4f} | "
                 f"kl_ref={tot_kl_ref / policy_denom:.4f} | "
-                f"mean_p_chosen={tot_prob / policy_denom:.3f} | "
+                + self_imitation_summary
+                + f"mean_p_chosen={tot_prob / policy_denom:.3f} | "
                 f"policy_steps={n_policy_seen}/{n_seen} | "
                 f"optimizer_steps={optimizer_steps}"
             )
-            history.append({
+            epoch_metrics = {
                 "policy_loss": tot_policy / policy_denom,
                 "value_loss": tot_value / n_seen,
                 "strategic_value_loss": tot_strategic_value / max(1, n_strategic_seen),
@@ -1689,7 +2229,20 @@ def train_ppo(
                 "total_steps": n_seen,
                 "continuation_steps": n_continuation_seen,
                 "optimizer_steps": optimizer_steps,
-            })
+            }
+            if self_imitation_replay_fraction > 0:
+                epoch_metrics.update(
+                    {
+                        "self_imitation_loss": tot_self_imitation
+                        / max(1, self_imitation_accepted),
+                        "self_imitation_coef": self_imitation_coef,
+                        "self_imitation_sampled": self_imitation_sampled,
+                        "self_imitation_accepted": self_imitation_accepted,
+                        "self_imitation_stale": self_imitation_stale,
+                        "self_imitation_phase_counts": dict(self_imitation_phase_counts),
+                    }
+                )
+            history.append(epoch_metrics)
             last_finite = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             last_finite_reach30_trained = bool(getattr(model, "reach30_trained", False))
             last_finite_reach30_horizon = getattr(model, "reach30_horizon", None)

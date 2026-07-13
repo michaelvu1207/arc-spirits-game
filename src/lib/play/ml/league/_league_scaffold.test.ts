@@ -237,6 +237,83 @@ describe('fixed-update continuation config guards', () => {
 	});
 });
 
+describe('conservative self-imitation config guards', () => {
+	const valid = (): LeagueConfig => ({
+		...defaultConfig('ml/test-self-imitation-config'),
+		mode: 'ppo',
+		seats: 1,
+		sample: true,
+		strategicDecisionScope: 'engine-cycle',
+		train: {
+			...defaultConfig().train,
+			selfImitation: {
+				coef: 0.05,
+				replayFraction: 0.1,
+				stalenessLogp: 1,
+				maxAge: 3,
+				maxRows: 100_000
+			}
+		}
+	});
+
+	it('accepts treatment and compute-matched coefficient-zero control configs', () => {
+		expect(() => validateLeagueConfig(valid())).not.toThrow();
+		const control = valid();
+		control.train.selfImitation!.coef = 0;
+		expect(() => validateLeagueConfig(control)).not.toThrow();
+	});
+
+	it('keeps the preregistered V21 pair identical apart from coefficient and metadata', () => {
+		type PreregisteredConfig = LeagueConfig & { _readme: string };
+		const read = (name: string) =>
+			JSON.parse(
+				readFileSync(resolve(process.cwd(), 'ml/league/configs', name), 'utf8')
+			) as PreregisteredConfig;
+		const control = read('fair-v21-solo-sil-control.json');
+		const treatment = read('fair-v21-solo-sil-treatment005.json');
+
+		expect(() => validateLeagueConfig(control)).not.toThrow();
+		expect(() => validateLeagueConfig(treatment)).not.toThrow();
+		expect(control.train.selfImitation?.coef).toBe(0);
+		expect(treatment.train.selfImitation?.coef).toBe(0.05);
+
+		treatment._readme = control._readme;
+		treatment.train.selfImitation!.coef = control.train.selfImitation!.coef;
+		treatment.paths.root = control.paths.root;
+		expect(treatment).toEqual(control);
+	});
+
+	it('requires exact sampled solo engine-cycle PPO data and bounded replay', () => {
+		const greedy = valid();
+		greedy.sample = false;
+		expect(() => validateLeagueConfig(greedy)).toThrow(/sample=true/);
+
+		const routeOnly = valid();
+		routeOnly.strategicDecisionScope = 'navigation';
+		expect(() => validateLeagueConfig(routeOnly)).toThrow(/engine-cycle/);
+
+		const multiplayerOnly = valid();
+		multiplayerOnly.seats = 4;
+		expect(() => validateLeagueConfig(multiplayerOnly)).toThrow(/solo source/);
+
+		const noReplay = valid();
+		noReplay.train.selfImitation!.replayFraction = 0;
+		expect(() => validateLeagueConfig(noReplay)).toThrow(/replayFraction/);
+
+		const old = valid();
+		old.train.selfImitation!.maxAge = -1;
+		expect(() => validateLeagueConfig(old)).toThrow(/maxAge/);
+
+		const earlyStop = valid();
+		earlyStop.train.extraArgs = ['--target-kl', '0.01'];
+		expect(() => validateLeagueConfig(earlyStop)).toThrow(/forbids.*target-kl/);
+
+		const v2 = valid();
+		v2.laneModel = { main_0: 'v2' };
+		expect(() => validateLeagueConfig(v2)).toThrow(/requires v1/);
+	});
+});
+
 describe('mixed player-count training curriculum', () => {
 	const curriculum = {
 		...defaultConfig('unused'),

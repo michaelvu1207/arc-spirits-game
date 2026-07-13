@@ -115,6 +115,20 @@ export interface LeagueTrainConfig {
 	/** PPO-only target share of rows drawn from continuation suffixes. Requires ppoRowsPerEpoch.
 	 * Set 0 in the matched control and the desired fraction in treatment. */
 	ppoContinuationFraction?: number;
+	/** Conservative, winning-episode self-imitation auxiliary. Omit for exact historical behavior.
+	 * The replay is lane-local and never enters PPO ratios or value targets. */
+	selfImitation?: {
+		/** Masked chosen-action CE coefficient. Use 0 for a compute-matched control. */
+		coef: number;
+		/** Auxiliary replay rows per natural PPO row (recommended 0.1). */
+		replayFraction: number;
+		/** Maximum |current chosen logp - behavior logp| (default 1). */
+		stalenessLogp?: number;
+		/** Persisted replay lifetime in generations (default 3). */
+		maxAge?: number;
+		/** Per-lane replay row cap (default 100,000). */
+		maxRows?: number;
+	};
 }
 
 export interface LeagueConfig {
@@ -346,6 +360,13 @@ export interface HistoryLine {
 	optimizerStepsPerEpoch?: number;
 	/** Audited fixed-update count across all PPO epochs. */
 	optimizerStepsTotal?: number;
+	/** Final-epoch self-imitation diagnostics (also retained in the lane train.log). */
+	selfImitationLoss?: number;
+	selfImitationSampled?: number;
+	selfImitationAccepted?: number;
+	selfImitationStale?: number;
+	/** route/build/convert/yield sampled counts, in that order. */
+	selfImitationPhaseCounts?: [number, number, number, number];
 	poolWallMs: number;
 	trainMs: number;
 	/** v2 lanes: wall time of the ml/distill.py student run, when one happened. */

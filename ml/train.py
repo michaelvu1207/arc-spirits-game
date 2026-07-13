@@ -664,6 +664,13 @@ def train(
     seed: int | None = None,
     ppo_rows_per_epoch: int | None = None,
     ppo_continuation_fraction: float | None = None,
+    self_imitation_coef: float = 0.0,
+    self_imitation_replay_fraction: float = 0.0,
+    self_imitation_staleness_logp: float = 1.0,
+    self_imitation_replay_path: Path | None = None,
+    self_imitation_generation: int = 0,
+    self_imitation_max_age: int = 3,
+    self_imitation_max_rows: int = 100_000,
 ) -> list[dict]:
     """Train and export; returns per-epoch metric dicts (used by tests)."""
     if seed is not None:
@@ -678,6 +685,8 @@ def train(
         raise ValueError("--hidden/--value-hidden configure only --model v1; use --v2-* for v2")
     if model_version != "v1" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
         raise ValueError("reach-30 critic training currently requires --model v1")
+    if model_version != "v1" and self_imitation_replay_fraction > 0:
+        raise ValueError("self-imitation currently requires --model v1 reach30Pred behavior rows")
     if mode != "ppo" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
         raise ValueError("reach-30 critic training currently requires --mode ppo")
     if mode != "ppo" and (ppo_rows_per_epoch is not None or ppo_continuation_fraction is not None):
@@ -688,6 +697,29 @@ def train(
         )
     if ppo_continuation_fraction is not None and ppo_rows_per_epoch is None:
         raise ValueError("--ppo-continuation-fraction requires --ppo-rows-per-epoch")
+    self_imitation_requested = (
+        self_imitation_coef != 0
+        or self_imitation_replay_fraction != 0
+        or self_imitation_replay_path is not None
+    )
+    if mode != "ppo" and self_imitation_requested:
+        raise ValueError("self-imitation controls require --mode ppo")
+    if self_imitation_coef < 0 or not math.isfinite(self_imitation_coef):
+        raise ValueError("--self-imitation-coef must be finite and nonnegative")
+    if not 0 <= self_imitation_replay_fraction <= 1:
+        raise ValueError("--self-imitation-replay-fraction must be in [0,1]")
+    if self_imitation_coef > 0 and self_imitation_replay_fraction <= 0:
+        raise ValueError("--self-imitation-coef requires a positive replay fraction")
+    if self_imitation_replay_fraction > 0 and target_kl is not None:
+        raise ValueError("self-imitation replay is incompatible with --target-kl early stopping")
+    if self_imitation_staleness_logp < 0 or not math.isfinite(self_imitation_staleness_logp):
+        raise ValueError("--self-imitation-staleness-logp must be finite and nonnegative")
+    if self_imitation_generation < 0:
+        raise ValueError("--self-imitation-generation must be nonnegative")
+    if self_imitation_max_age < 0:
+        raise ValueError("--self-imitation-max-age must be nonnegative")
+    if self_imitation_max_rows <= 0:
+        raise ValueError("--self-imitation-max-rows must be positive")
     # Both models expose placement auxiliaries with different contracts: v1 has
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
@@ -726,6 +758,11 @@ def train(
             strategic_mc_gamma=strategic_mc_gamma,
             strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
+            collect_self_imitation=self_imitation_replay_fraction > 0,
+            self_imitation_generation=self_imitation_generation,
+            self_imitation_replay_path=self_imitation_replay_path,
+            self_imitation_max_age=self_imitation_max_age,
+            self_imitation_max_rows=self_imitation_max_rows,
         )
         if model_version == "v2":
             model, spec, act_dim = build_policy_model_v2(
@@ -770,6 +807,9 @@ def train(
             seed=seed,
             rows_per_epoch=ppo_rows_per_epoch,
             continuation_fraction=ppo_continuation_fraction,
+            self_imitation_coef=self_imitation_coef,
+            self_imitation_replay_fraction=self_imitation_replay_fraction,
+            self_imitation_staleness_logp=self_imitation_staleness_logp,
         )
         export_model(model, obs_dim, act_dim)
         return history
@@ -1121,6 +1161,21 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ppo-continuation-fraction", type=float, default=None,
                    help="Target share of selected PPO rows carrying continuationCurriculum=1; "
                         "requires --ppo-rows-per-epoch")
+    p.add_argument("--self-imitation-coef", type=float, default=0.0,
+                   help="Weight on conservative winning-action masked CE (default 0 = off)")
+    p.add_argument("--self-imitation-replay-fraction", type=float, default=0.0,
+                   help="Auxiliary replay rows per natural PPO minibatch row; >0 also enables "
+                        "compute-matched coefficient-zero controls")
+    p.add_argument("--self-imitation-staleness-logp", type=float, default=1.0,
+                   help="Reject replay rows when |current chosen logp - behavior logp| exceeds this")
+    p.add_argument("--self-imitation-replay-path", type=Path, default=None,
+                   help="Optional trusted local replay file persisted across league generations")
+    p.add_argument("--self-imitation-generation", type=int, default=0,
+                   help="Generation stamped on newly admitted replay rows")
+    p.add_argument("--self-imitation-max-age", type=int, default=3,
+                   help="Maximum replay age in generations (default 3)")
+    p.add_argument("--self-imitation-max-rows", type=int, default=100_000,
+                   help="Maximum phase-balanced replay rows persisted per lane")
     p.add_argument("--clip-eps", type=float, default=0.2, help="PPO surrogate clip epsilon")
     p.add_argument("--entropy-coef", type=float, default=0.01, help="PPO entropy bonus coefficient")
     p.add_argument("--entropy-anneal", action="store_true",
@@ -1231,4 +1286,11 @@ if __name__ == "__main__":
         seed=args.seed,
         ppo_rows_per_epoch=args.ppo_rows_per_epoch,
         ppo_continuation_fraction=args.ppo_continuation_fraction,
+        self_imitation_coef=args.self_imitation_coef,
+        self_imitation_replay_fraction=args.self_imitation_replay_fraction,
+        self_imitation_staleness_logp=args.self_imitation_staleness_logp,
+        self_imitation_replay_path=args.self_imitation_replay_path,
+        self_imitation_generation=args.self_imitation_generation,
+        self_imitation_max_age=args.self_imitation_max_age,
+        self_imitation_max_rows=args.self_imitation_max_rows,
     )

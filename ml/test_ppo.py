@@ -36,7 +36,9 @@ from ppo import (
     normalize_policy_advantages,
     parse_placement_rewards,
     reach30_minibatch_loss,
+    select_self_imitation_indices,
     select_ppo_epoch_indices,
+    self_imitation_minibatch_loss,
     train_ppo,
 )
 
@@ -203,6 +205,229 @@ def test_post_gae_row_budget_is_deterministic_and_exactly_stratified():
         assert "mixture is unavailable" in str(error)
     else:
         raise AssertionError("unavailable continuation mixture must fail closed")
+
+
+def _sil_episode(
+    game_id: str,
+    *,
+    won: bool = True,
+    continuation: bool = False,
+    done: bool = True,
+    p30: bool = True,
+) -> list[dict]:
+    rng = np.random.default_rng(sum(map(ord, game_id)))
+    decision_types = [
+        "lockNavigation",
+        "spawnHandSpirit",
+        "startCombat",
+        "endLocationActions",
+    ]
+    rows = []
+    for step, decision_type in enumerate(decision_types):
+        terminal = step == len(decision_types) - 1
+        row = {
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": step % N_CANDS,
+            "gameId": game_id,
+            "stepIdx": step,
+            "rStep": 1.0 if terminal else 0.0,
+            "done": bool(done and terminal),
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "behaviorMask": [1, 1, 1],
+            "behaviorTemperature": 1.0,
+            "vPred": 0.0,
+            "strategic": 0 if decision_type == "endLocationActions" else 1,
+            "decisionType": decision_type,
+            "continuationCurriculum": int(continuation),
+            "playerCount": 1,
+        }
+        if p30:
+            row["reach30Pred"] = 0.25
+        if terminal and done:
+            row["won"] = int(won)
+            row["reach30Target"] = int(won)
+            row["reach30Horizon"] = 30
+        rows.append(row)
+    return rows
+
+
+def test_self_imitation_admission_is_conservative_and_phase_normalized():
+    rows = _sil_episode("eligible")
+    rows += _sil_episode("continuation", continuation=True)
+    rows += _sil_episode("loss", won=False)
+    rows += _sil_episode("truncated", done=False)
+    rows += _sil_episode("no-p30", p30=False)
+    deterministic = _sil_episode("deterministic")
+    for row in deterministic:
+        row["policyMask"] = 0
+    rows += deterministic
+    negative_advantage = _sil_episode("negative-advantage")
+    for row in negative_advantage:
+        row["vPred"] = 2.0
+    rows += negative_advantage
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buffer = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            collect_self_imitation=True,
+            self_imitation_generation=7,
+        )
+    replay = buffer.self_imitation
+    assert replay is not None
+    assert len(replay) == 4
+    assert replay.row_key == [f"7:eligible:{step}" for step in range(4)]
+    assert set(replay.phase.tolist()) == {"route", "build", "convert", "yield"}
+    # Admission weights only within-phase action quality. Phase quotas are applied
+    # once by the loss, not baked into these rows and then sampled a second time.
+    assert math.isclose(float(replay.weight.sum()), 4.0, abs_tol=1e-6)
+    for phase in {"route", "build", "convert", "yield"}:
+        assert math.isclose(float(replay.weight[replay.phase == phase].sum()), 1.0, abs_tol=1e-6)
+
+    selected = select_self_imitation_indices(replay, np.random.default_rng(11), 20)
+    counts = {phase: int(np.sum(replay.phase[selected] == phase)) for phase in set(replay.phase)}
+    assert counts == {"route": 5, "build": 7, "convert": 6, "yield": 2}
+
+
+def test_self_imitation_replay_persists_deduplicates_and_expires_by_age():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        replay_path = root / "replay.pt"
+        source = root / "source"
+        _write_rows(source, _sil_episode("winner"))
+        first = load_trajectory_buffer(
+            source,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            collect_self_imitation=True,
+            self_imitation_generation=5,
+            self_imitation_replay_path=replay_path,
+            self_imitation_max_age=3,
+        )
+        assert first.self_imitation is not None and len(first.self_imitation) == 4
+        # Retrying generation 5 replaces identical row keys.
+        retry = load_trajectory_buffer(
+            source,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            collect_self_imitation=True,
+            self_imitation_generation=5,
+            self_imitation_replay_path=replay_path,
+            self_imitation_max_age=3,
+        )
+        assert retry.self_imitation is not None and len(retry.self_imitation) == 4
+
+        failure = root / "failure"
+        _write_rows(failure, _sil_episode("failure", won=False))
+        age_three = load_trajectory_buffer(
+            failure,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            collect_self_imitation=True,
+            self_imitation_generation=8,
+            self_imitation_replay_path=replay_path,
+            self_imitation_max_age=3,
+        )
+        assert age_three.self_imitation is not None and len(age_three.self_imitation) == 4
+        expired = load_trajectory_buffer(
+            failure,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            collect_self_imitation=True,
+            self_imitation_generation=9,
+            self_imitation_replay_path=replay_path,
+            self_imitation_max_age=3,
+        )
+        assert expired.self_imitation is None
+
+
+def test_self_imitation_staleness_and_compute_matched_zero_coef_parity():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, _sil_episode("winner"))
+        buffer = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            collect_self_imitation=True,
+            self_imitation_generation=1,
+        )
+    replay = buffer.self_imitation
+    assert replay is not None
+    model = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+    idx = np.arange(len(replay))
+    loss, accepted, stale = self_imitation_minibatch_loss(
+        model, replay, idx, torch.device("cpu"), staleness_logp=100.0
+    )
+    assert accepted == 4 and stale == 0 and loss.detach().item() > 0
+    with torch.no_grad():
+        obs = torch.from_numpy(replay.obs)
+        cands = torch.from_numpy(np.stack(replay.cands))
+        mask = torch.from_numpy(np.stack(replay.behavior_mask))
+        logits, _, _ = model(obs, cands, mask)
+        per_row_ce = -torch.log_softmax(logits.masked_fill(~mask, float("-inf")), dim=-1).gather(
+            1, torch.from_numpy(replay.chosen).unsqueeze(1)
+        ).squeeze(1)
+        quota = {"route": 0.25, "build": 0.35, "convert": 0.30, "yield": 0.10}
+        expected = sum(
+            quota[str(replay.phase[i])] * float(per_row_ce[i]) for i in range(len(replay))
+        )
+    assert math.isclose(float(loss.detach()), expected, rel_tol=1e-6, abs_tol=1e-6)
+    loss.backward()
+    # The replay objective trains the candidate scorer only. It has no value,
+    # reach-30, or PPO-ratio target hidden in the auxiliary path.
+    for name, parameter in model.named_parameters():
+        if name.startswith(("value_head.", "reach30_head.")):
+            assert parameter.grad is None, name
+    replay.logp_old[:] -= 200.0
+    _, accepted, stale = self_imitation_minibatch_loss(
+        model, replay, idx, torch.device("cpu"), staleness_logp=1.0
+    )
+    assert accepted == 0 and stale == 4
+    replay.logp_old[:] += 200.0
+
+    base = build_model(OBS_DIM, ACT_DIM, torch.device("cpu"))
+    control = copy.deepcopy(base)
+    compute_matched = copy.deepcopy(base)
+    default_history = train_ppo(
+        control,
+        buffer,
+        torch.device("cpu"),
+        epochs=2,
+        batch_size=2,
+        lr=1e-4,
+        seed=41,
+    )
+    matched_history = train_ppo(
+        compute_matched,
+        buffer,
+        torch.device("cpu"),
+        epochs=2,
+        batch_size=2,
+        lr=1e-4,
+        seed=41,
+        self_imitation_coef=0.0,
+        self_imitation_replay_fraction=0.5,
+        self_imitation_staleness_logp=100.0,
+    )
+    assert [row["optimizer_steps"] for row in default_history] == [2, 2]
+    assert [row["optimizer_steps"] for row in matched_history] == [2, 2]
+    assert [row["total_steps"] for row in default_history] == [4, 4]
+    assert [row["total_steps"] for row in matched_history] == [4, 4]
+    assert "self_imitation_loss" not in default_history[0]
+    assert matched_history[0]["self_imitation_sampled"] > 0
+    for key, value in control.state_dict().items():
+        assert torch.equal(value, compute_matched.state_dict()[key]), key
 
 
 def test_row_budget_matches_training_rows_and_optimizer_updates():

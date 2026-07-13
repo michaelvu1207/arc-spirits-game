@@ -162,6 +162,7 @@ export function validateLeagueConfig(config: LeagueConfig): void {
 	const rows = config.train.ppoRowsPerEpoch;
 	const fraction = config.train.ppoContinuationFraction;
 	const curriculum = config.continuationCurriculum;
+	const selfImitation = config.train.selfImitation;
 	if (rows !== undefined) {
 		if (config.mode !== 'ppo') {
 			throw new Error('league: ppoRowsPerEpoch requires mode=ppo');
@@ -207,6 +208,57 @@ export function validateLeagueConfig(config: LeagueConfig): void {
 			)
 		) {
 			throw new Error('league: continuation rounds must be integers in 12..20 within maxRounds');
+		}
+	}
+	if (selfImitation !== undefined) {
+		if (config.mode !== 'ppo') {
+			throw new Error('league: selfImitation requires mode=ppo');
+		}
+		if (config.sample !== true) {
+			throw new Error('league: selfImitation requires sample=true exact-policy rows');
+		}
+		if (config.strategicDecisionScope !== 'engine-cycle') {
+			throw new Error('league: selfImitation requires strategicDecisionScope=engine-cycle');
+		}
+		if (Object.values(config.laneModel ?? {}).some((model) => model === 'v2')) {
+			throw new Error('league: selfImitation currently requires v1 reach30Pred behavior rows');
+		}
+		if (hasExtraArg(config.train.extraArgs, '--target-kl')) {
+			throw new Error('league: selfImitation forbids data-dependent --target-kl early stopping');
+		}
+		const hasSoloSource =
+			config.seats === 1 ||
+			!!config.trainingSeatCurriculum?.some((stage) => Number(stage.weights['1'] ?? 0) > 0);
+		if (!hasSoloSource) {
+			throw new Error('league: selfImitation requires solo source games');
+		}
+		if (!Number.isFinite(selfImitation.coef) || selfImitation.coef < 0) {
+			throw new Error('league: selfImitation.coef must be finite and nonnegative');
+		}
+		if (
+			!Number.isFinite(selfImitation.replayFraction) ||
+			selfImitation.replayFraction <= 0 ||
+			selfImitation.replayFraction > 1
+		) {
+			throw new Error('league: selfImitation.replayFraction must be in (0,1]');
+		}
+		if (
+			selfImitation.stalenessLogp !== undefined &&
+			(!Number.isFinite(selfImitation.stalenessLogp) || selfImitation.stalenessLogp < 0)
+		) {
+			throw new Error('league: selfImitation.stalenessLogp must be finite and nonnegative');
+		}
+		if (
+			selfImitation.maxAge !== undefined &&
+			(!Number.isInteger(selfImitation.maxAge) || selfImitation.maxAge < 0)
+		) {
+			throw new Error('league: selfImitation.maxAge must be a nonnegative integer');
+		}
+		if (
+			selfImitation.maxRows !== undefined &&
+			(!Number.isInteger(selfImitation.maxRows) || selfImitation.maxRows <= 0)
+		) {
+			throw new Error('league: selfImitation.maxRows must be a positive integer');
 		}
 	}
 }
@@ -1051,6 +1103,11 @@ interface TrainerRunResult {
 	ms: number;
 	optimizerStepsPerEpoch?: number;
 	optimizerStepsTotal?: number;
+	selfImitationLoss?: number;
+	selfImitationSampled?: number;
+	selfImitationAccepted?: number;
+	selfImitationStale?: number;
+	selfImitationPhaseCounts?: [number, number, number, number];
 }
 
 function runTrainer(
@@ -1059,7 +1116,9 @@ function runTrainer(
 	outCkpt: string,
 	initFrom: string | undefined,
 	seed: number,
-	model: 'v1' | 'v2' = 'v1'
+	model: 'v1' | 'v2' = 'v1',
+	generation = 0,
+	laneId = 'learner'
 ): TrainerRunResult {
 	const args = [
 		'ml/train.py',
@@ -1090,6 +1149,25 @@ function runTrainer(
 		args.push('--ppo-rows-per-epoch', String(config.train.ppoRowsPerEpoch));
 	if (config.train.ppoContinuationFraction !== undefined)
 		args.push('--ppo-continuation-fraction', String(config.train.ppoContinuationFraction));
+	if (config.train.selfImitation) {
+		const sil = config.train.selfImitation;
+		args.push(
+			'--self-imitation-coef',
+			String(sil.coef),
+			'--self-imitation-replay-fraction',
+			String(sil.replayFraction),
+			'--self-imitation-staleness-logp',
+			String(sil.stalenessLogp ?? 1),
+			'--self-imitation-generation',
+			String(generation),
+			'--self-imitation-max-age',
+			String(sil.maxAge ?? 3),
+			'--self-imitation-max-rows',
+			String(sil.maxRows ?? 100_000),
+			'--self-imitation-replay-path',
+			join(config.paths.root, 'self-imitation', `${laneId}.pt`)
+		);
+	}
 	if (config.train.hidden?.length) args.push('--hidden', config.train.hidden.join(','));
 	if (config.train.valueHidden?.length)
 		args.push('--value-hidden', config.train.valueHidden.join(','));
@@ -1129,6 +1207,36 @@ function runTrainer(
 		}
 		optimizerStepsTotal = optimizerStepsPerEpoch * config.train.epochs;
 	}
+	let selfImitationDiagnostics: Omit<
+		TrainerRunResult,
+		'ms' | 'optimizerStepsPerEpoch' | 'optimizerStepsTotal'
+	> = {};
+	if (config.train.selfImitation) {
+		const matches = [
+			...trainerOutput.matchAll(
+				/self_imitation_loss=([^ ]+) \(coef=[^,]+, accepted=(\d+)\/(\d+), stale=(\d+), phases\(route\/build\/convert\/yield\)=(\d+)\/(\d+)\/(\d+)\/(\d+)\)/g
+			)
+		];
+		if (matches.length !== config.train.epochs) {
+			throw new Error(
+				`league: self-imitation trainer diagnostics missing epochs: ` +
+					`reported ${matches.length}, expected ${config.train.epochs}`
+			);
+		}
+		const last = matches.at(-1)!;
+		selfImitationDiagnostics = {
+			selfImitationLoss: Number(last[1]),
+			selfImitationAccepted: Number.parseInt(last[2], 10),
+			selfImitationSampled: Number.parseInt(last[3], 10),
+			selfImitationStale: Number.parseInt(last[4], 10),
+			selfImitationPhaseCounts: [
+				Number.parseInt(last[5], 10),
+				Number.parseInt(last[6], 10),
+				Number.parseInt(last[7], 10),
+				Number.parseInt(last[8], 10)
+			]
+		};
+	}
 	if (
 		model === 'v1' &&
 		initFrom &&
@@ -1144,7 +1252,8 @@ function runTrainer(
 	return {
 		ms: performance.now() - t0,
 		...(optimizerStepsPerEpoch !== undefined ? { optimizerStepsPerEpoch } : {}),
-		...(optimizerStepsTotal !== undefined ? { optimizerStepsTotal } : {})
+		...(optimizerStepsTotal !== undefined ? { optimizerStepsTotal } : {}),
+		...selfImitationDiagnostics
 	};
 }
 
@@ -1429,7 +1538,16 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		saveStateAtomic(root, state);
 		const ckpt = join(p.checkpoints, `${learner.id}-gen${gen}.${model === 'v2' ? 'pt' : 'json'}`);
 		const trainInit = model === 'v2' ? lanePt(learner) : playWeights(learner);
-		const trainerRun = runTrainer(config, laneDir, ckpt, trainInit, trainerSeed, model);
+		const trainerRun = runTrainer(
+			config,
+			laneDir,
+			ckpt,
+			trainInit,
+			trainerSeed,
+			model,
+			gen,
+			learner.id
+		);
 		const trainMs = trainerRun.ms;
 
 		// Socket-served lanes (v2, or v1Infer): hot-swap the lane server onto the fresh
@@ -1589,6 +1707,15 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				: {}),
 			...(trainerRun.optimizerStepsTotal !== undefined
 				? { optimizerStepsTotal: trainerRun.optimizerStepsTotal }
+				: {}),
+			...(trainerRun.selfImitationLoss !== undefined
+				? {
+						selfImitationLoss: trainerRun.selfImitationLoss,
+						selfImitationSampled: trainerRun.selfImitationSampled,
+						selfImitationAccepted: trainerRun.selfImitationAccepted,
+						selfImitationStale: trainerRun.selfImitationStale,
+						selfImitationPhaseCounts: trainerRun.selfImitationPhaseCounts
+					}
 				: {}),
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
