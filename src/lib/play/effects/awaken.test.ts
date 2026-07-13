@@ -1163,6 +1163,32 @@ describe('AWAKEN_HANDLERS discard choice (let-me-choose)', () => {
 		expect(offer.ineligible!.map((i) => runeSlot(i.ref))).toEqual([3]);
 	});
 
+	it('Any Rune excludes relics and includes eligible overflow beyond carry capacity', () => {
+		const sp = spirit(1, 'rc', 'Rune Cost');
+		const player = makePlayer({
+			spirits: [sp],
+			mats: [
+				rune(1, { id: 'fairy-id', name: 'Fairy' }), // relic — excluded
+				rune(2, { id: 'forest-id', name: 'Forest', originId: 'o-forest' }),
+				rune(3, { id: 'teapot-id', name: 'Teapot' }), // relic — excluded
+				rune(4, { id: 'cyber-id', name: 'Cyber', originId: 'o-cyber' }),
+				rune(5, { id: 'tidal-id', name: 'Tidal', originId: 'o-tidal' }), // overflow
+				rune(6, { id: 'lantern-id', name: 'Lantern', originId: 'o-lantern' }) // overflow
+			]
+		});
+		const awaken: NormalizedAwaken = {
+			kind: 'rune_cost',
+			mats: [{ runeId: ANY_RUNE, name: 'Any Rune', kind: 'rune', count: 2, wildcard: true }]
+		};
+		const offer = buildAwakenOffer(ctxFor(player, catalogWith('rc', awaken)), { spirit: sp })!;
+
+		expect(offer.costSlots).toHaveLength(2);
+		expect(offer.costSlots![0].eligibleRefs.map(runeSlot)).toEqual([2, 4, 5, 6]);
+		expect(offer.costSlots![1].eligibleRefs.map(runeSlot)).toEqual([2, 4, 5, 6]);
+		expect(offer.options.map((option) => runeSlot(option.ref))).toEqual([2, 4, 5, 6]);
+		expect(offer.requiresSelection).toBe(true);
+	});
+
 	// Discoverability: a Faerie the player CANNOT yet pay for produces no clickable
 	// offer, but DOES produce a passive locked hint spelling out what it needs — so
 	// the Cleanup UI can always show "Tidal Fairy — Discard 1 Fairy Rune or …".

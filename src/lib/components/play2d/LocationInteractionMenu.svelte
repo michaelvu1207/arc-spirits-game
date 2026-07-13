@@ -280,13 +280,16 @@
 		armedChoiceSel = [];
 	}
 
-	// Group the FULL held rack (real objects, S1: you always see what you keep and
-	// what you lose). Identical copies collapse to one card + count.
+	// Group only items that can satisfy at least one armed cost slot. This keeps
+	// opposite item kinds out of wildcard pickers ("Any Rune" never shows relics),
+	// while still including eligible overflow items because the cost slots index the
+	// player's complete mats array, including entries beyond carry capacity.
 	type MatGroup = { key: string; label: string; image: string | null; indexes: number[] };
 	const heldGroups = $derived.by<MatGroup[]>(() => {
 		const groups = new Map<string, MatGroup>();
+		const visibleIndexes = new Set(armedCostSlots.flatMap((slot) => slot.eligible));
 		(player?.mats ?? []).forEach((slot, arrayIndex) => {
-			if (!slot.hasRune) return;
+			if (!slot.hasRune || !visibleIndexes.has(arrayIndex)) return;
 			const key = matIdentity(slot);
 			const existing = groups.get(key);
 			if (existing) {
@@ -537,7 +540,7 @@
 
 		{#if armedCostSlots.length > 0 && armedNeedsCostSelection}
 			<p class="rack-hint">
-				Your rack — tap what you'll pay with. Dimmed items stay yours.
+				Tap what you'll pay with — only items that can satisfy this cost are shown.
 			</p>
 			<CandidateRack
 				candidates={armedCandidates}

@@ -298,9 +298,11 @@
 	const manualPrompts = $derived(myPlayer?.manualPrompts ?? []);
 
 	// ── W1a payment takeover (plans/ux-overhaul.md §4.2) ─────────────────────
-	// Eligibility is engine-owned: `offer.costSlots` (per-required-item eligible
-	// refs) + `offer.ineligible` (dim + reason chips). Scripted handlers ship no
-	// costSlots — their `options` are already precise, so every option is eligible.
+	// Eligibility is engine-owned: `offer.costSlots` lists every held item that can
+	// satisfy each required unit. The payment rack renders ONLY that union — an
+	// "Any Rune" cost must not show relics, even as dimmed cards. Because costSlots
+	// scan the full held-mat array, eligible overflow runes beyond carry capacity are
+	// still selectable. Scripted handlers ship no costSlots; their `options` are precise.
 	let pickingSlot = $state<number | null>(null);
 	/** The staged discard per cost-meter slot; nothing mutates until Confirm. */
 	let awakenFilled = $state<(AwakenDiscardRef | null)[]>([]);
@@ -405,7 +407,6 @@
 		};
 		if (awakenCostSlots) {
 			for (const slot of awakenCostSlots) for (const ref of slot.eligibleRefs) add(ref, true);
-			for (const inel of offer.ineligible ?? []) add(inel.ref, false, inel.label, inel.reason);
 		} else {
 			for (const opt of offer.options) add(opt.ref, true, opt.label);
 		}

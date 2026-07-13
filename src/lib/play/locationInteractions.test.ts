@@ -313,6 +313,7 @@ describe('matchRewardCost / canAfford', () => {
 
 describe('matchRewardCost — player discard choice for wildcard costs', () => {
 	const anyRelicTrade = buildLocationInteractions(CYBER_CITY_ROWS)[0]; // pay any relic
+	const anyBasicTrade = buildLocationInteractions(LANTERN_CANYON_ROWS)[0]; // pay any basic rune
 
 	test('honors the chosen held-slot index for a wildcard cost', () => {
 		const runes = [
@@ -342,6 +343,18 @@ describe('matchRewardCost — player discard choice for wildcard costs', () => {
 			rune({ type: 'relic', hasRune: false }) // 3 ✗ already spent
 		];
 		expect(eligibleCostSlots(anyRelicTrade.cost[0], runes)).toEqual([0, 2]);
+	});
+
+	test('Any Rune excludes relics and includes runes held beyond carry capacity', () => {
+		const runes = [
+			rune({ name: 'Fairy Relic', type: 'relic' }), // 0 excluded
+			rune({ id: 'forest', name: 'Forest Rune', originId: 'forest' }), // 1
+			rune({ name: 'Teapot', type: 'relic' }), // 2 excluded
+			rune({ id: 'cyber', name: 'Cyber Rune', originId: 'cyber' }), // 3
+			rune({ id: 'tidal', name: 'Tidal Rune', originId: 'tidal' }), // 4 overflow
+			rune({ id: 'lantern', name: 'Lantern Rune', originId: 'lantern' }) // 5 overflow
+		];
+		expect(eligibleCostSlots(anyBasicTrade.cost[0], runes)).toEqual([1, 3, 4, 5]);
 	});
 
 	test('opens a picker only for surplus, materially different wildcard payments', () => {
