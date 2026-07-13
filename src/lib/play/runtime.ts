@@ -28,7 +28,8 @@ import {
 	RUNE_CARRY_LIMIT,
 	DEFAULT_NAVIGATION_DURATION_MS,
 	DEADLINE_EXTENSION_MS,
-	DEADLINE_MAX_EXTENSIONS
+	DEADLINE_MAX_EXTENSIONS,
+	phaseDurationMs
 } from './types';
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import {
@@ -822,6 +823,29 @@ export function deadlineBlockingSeats(state: PublicGameState): SeatColor[] {
 	if (state.phase === 'benefits' || state.phase === 'awakening' || state.phase === 'cleanup')
 		return state.activeSeats.filter((seat) => seatHasResolutionWork(state, seat));
 	return [];
+}
+
+/**
+ * Give an actively responding player a fresh clock whenever their accepted command leaves
+ * an honest-choice obligation open. The Location deadline/extension budget belongs to the
+ * whole phase, but combat can consume most of it before a kill opens `pendingReward`; claiming
+ * an Abyss Summon then replaces that reward with `pendingDraw`. Without refreshing here, the
+ * next server poll can exhaust the OLD budget and force-advance before the player can click the
+ * reward or choose a spirit. Empty summons create no pending draw and therefore do not refresh
+ * (there is genuinely nothing left to interact with).
+ *
+ * Pure with an injected clock. It does not bump revision because it is called while persisting
+ * an already-successful command, whose reducer result has bumped revision itself.
+ */
+export function refreshActiveChoiceDeadline(
+	state: PublicGameState,
+	seat: SeatColor,
+	now: number
+): boolean {
+	if (!deadlineBlockingSeats(state).includes(seat)) return false;
+	state.phaseDeadlineExtensions = 0;
+	state.phaseDeadline = now + phaseDurationMs(state.phase);
+	return true;
 }
 
 /**

@@ -3,6 +3,7 @@ import {
 	createLobbyState,
 	applyGameCommand,
 	deadlineBlockingSeats,
+	refreshActiveChoiceDeadline,
 	resolvePassedDeadline,
 	buildHistorySnapshotRows,
 	buildSessionProjection
@@ -1774,6 +1775,11 @@ export async function runRoomCommand(params: {
 		// we stamp the FINAL phase here after the whole command resolves.
 		const next = commandResult.state;
 		stampPhaseDeadline(next);
+		// A successful player action that opens/leaves a real choice pending (monster
+		// reward, summon draw, Benefits claim, etc.) earns a fresh phase window. Otherwise
+		// a long fight can consume the Location phase's entire grace budget and the next
+		// poll force-passes a just-opened Arcane Summon before its owner can click it.
+		if (actor.seatColor) refreshActiveChoiceDeadline(next, actor.seatColor, Date.now());
 		// Early-finish grace: collapse the deadline to ~5s once everyone has locked
 		// (restored if a seat backs out). Drives the navigation reveal via enforcement.
 		applyNavLockDeadline(next);

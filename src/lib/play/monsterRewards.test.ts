@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { applyGameCommand, createLobbyState } from './runtime';
+import { applyGameCommand, createLobbyState, refreshActiveChoiceDeadline } from './runtime';
 import { planBotPhaseActions, type BotRandom } from './server/botPolicy';
 import { buildMonsterRewards, monsterGainFor, rewardClaimCount } from './monsterRewards';
 import type {
@@ -10,6 +10,7 @@ import type {
 	PlayCatalog,
 	PublicGameState
 } from './types';
+import { DEADLINE_MAX_EXTENSIONS, phaseDurationMs } from './types';
 
 // Live monster-reward icon ids. The app loads monsters from the `monsters_v2`
 // table (supabase.ts MONSTERS = 'monsters_v2'); its full reward vocabulary is the
@@ -215,6 +216,24 @@ describe('monster-kill reward flow (engine)', () => {
 		expect(s.players.Red!.pendingDraw).not.toBeNull();
 		expect(s.players.Red!.pendingDraw?.sourceBag).toBe('Arcane Abyss Bag');
 		expect(s.players.Red!.pendingReward).toBeNull();
+	});
+
+	test('a newly opened Abyss summon gets a fresh choice window and cannot auto-pass', () => {
+		let s = killMonster();
+		// Reproduce a long Location turn whose shared grace was already spent fighting.
+		s.phaseDeadline = 1;
+		s.phaseDeadlineExtensions = DEADLINE_MAX_EXTENSIONS;
+		s = apply(s, RED, { type: 'resolveMonsterReward', picks: [0, 2] });
+		expect(s.players.Red!.pendingDraw?.sourceBag).toBe('Arcane Abyss Bag');
+
+		const now = 50_000;
+		expect(refreshActiveChoiceDeadline(s, 'Red', now)).toBe(true);
+		expect(s.phaseDeadlineExtensions).toBe(0);
+		expect(s.phaseDeadline).toBe(now + phaseDurationMs('location'));
+
+		const pass = tryApply(s, RED, { type: 'endLocationActions' });
+		expect(pass.ok).toBe(false);
+		if (!pass.ok) expect(pass.error.code).toBe('draw_pending');
 	});
 
 	test('claiming a fixed rune adds it to the rune slots', () => {
