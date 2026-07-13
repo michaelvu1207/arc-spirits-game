@@ -17,13 +17,13 @@
     "legacy": {
       "root": "ml/league_v26_terminal_legacy_live_s0",
       "config": "ml/league/configs/fair-v26-solo-terminal-legacy-s0.json",
-      "configSha256": "c28088a69971e0da34123e3d2917ce8616f2c36a8701f2a4fbaa5183f5e050e8",
+      "configSha256": "1967fff61c153bc784f555f67c2ca5111551a56cb69e2feca0d3a495f76b18e6",
       "gpu": 0
     },
     "lexicographic": {
       "root": "ml/league_v26_terminal_lexicographic_live_s0",
       "config": "ml/league/configs/fair-v26-solo-terminal-lexicographic-s0.json",
-      "configSha256": "d48601120e940e120aa1e0fc00db64ee615d11b8b4766abbbfd3a75a94c8bb21",
+      "configSha256": "991028072f7d08cf20b8981a8e978b601c0b073282483a74b966a093cf9242af",
       "gpu": 1
     }
   },
@@ -43,6 +43,7 @@
       "descriptive _readme",
       "output root"
     ],
+    "ppoRowsPerEpoch": 100000,
     "smokeGenerations": 1,
     "initialStopGeneration": 5
   },
@@ -63,7 +64,9 @@
     "remotePpoTests": "43 passed",
     "remoteDriverTests": "15 passed",
     "remoteLeagueTests": "48 passed, 2 skipped",
-    "chainScriptSha256": "5d10b0345ea8a5bfd717cb1dc532f0a23da49e8da8048a3fee67dd81ef07fdc8"
+    "chainScriptSha256": "5d10b0345ea8a5bfd717cb1dc532f0a23da49e8da8048a3fee67dd81ef07fdc8",
+    "firstSmokeFailure": "Both arms generated 119717 usable rows from the same 1024 games with zero malformed data, then failed before optimization because the original exact row budget was 120000.",
+    "repair": "Reduced both fixed compute-matched row budgets to 100000. The trainer remains fail-closed instead of silently clamping unequal arm sizes. Generation 1 is deterministically regenerated from the same paired seeds."
   },
   "promotionEligible": false
 }

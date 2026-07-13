@@ -33,7 +33,7 @@
 		"batchSize": 256,
 		"hidden": [256, 256],
 		"valueHidden": [128],
-		"ppoRowsPerEpoch": 120000,
+		"ppoRowsPerEpoch": 100000,
 		"ppoContinuationFraction": 0,
 		"extraArgs": [
 			"--obs-feature-cutoff", "188",

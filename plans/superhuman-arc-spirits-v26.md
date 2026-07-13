@@ -305,3 +305,18 @@ larger model had lower loss.
 
 The active goal stays open until the bot passes all stated gates and is verified in production. A
 result that reaches the token/compute/time limit is incomplete, not successful.
+
+## Live execution log
+
+- The first generation-1 objective smoke was stopped and permanently marked invalid when the league
+  launcher was found to use the legacy `ml/catalog.json` instead of the pinned live catalog. No
+  checkpoint from those roots is valid.
+- Catalog path and SHA-256 are now mandatory, validated before actor generation, passed through every
+  actor pool, and recorded in league history.
+- The replacement paired roots generated the same 1,024 games and 119,717 usable PPO rows per arm on
+  the live catalog, with zero malformed episodes or rows. Both failed before any optimizer step
+  because the preregistered fixed row budget was 120,000.
+- The repaired protocol uses exactly 100,000 rows per epoch in both arms and keeps the trainer's
+  fail-closed behavior. This preserves equal optimizer work across arms instead of silently clamping
+  each arm to a potentially different data-dependent size. Generation 1 is regenerated from the same
+  paired seeds; the failed pre-optimization attempt is retained in each root's log and provenance.
