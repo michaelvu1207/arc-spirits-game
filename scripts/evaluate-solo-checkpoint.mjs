@@ -12,7 +12,7 @@
  *     --sample --temperature 0.65 --out ml/heldout/solo.json
  */
 import { createJiti } from 'jiti';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -82,15 +82,28 @@ if (!Number.isFinite(temperature) || temperature <= 0) {
 
 const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src', 'lib') } });
 const { runActorPool } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts'));
+const { createRng, nextInt } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'rng.ts'));
+const catalogPath = path.join(root, 'ml', 'catalog.json');
+const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
 const workDir = mkdtempSync(path.join(tmpdir(), 'arc-solo-heldout-'));
 const weights = path.resolve(args.weights);
+
+const guardianForSeed = (seed) => {
+	const names = catalog.guardians.map((guardian) => guardian.name);
+	const rng = createRng((seed ^ 0x6a09e667) >>> 0 || 1);
+	for (let index = names.length - 1; index > 0; index -= 1) {
+		const swap = nextInt(rng, index + 1);
+		[names[index], names[swap]] = [names[swap], names[index]];
+	}
+	return names[0];
+};
 
 try {
 	const result = await runActorPool({
 		seeds: Array.from({ length: games }, (_, index) => seed0 + index),
 		outDir: workDir,
 		workers,
-		catalogPath: path.join(root, 'ml', 'catalog.json'),
+		catalogPath,
 		config: {
 			seats: 1,
 			maxRounds,
@@ -118,9 +131,16 @@ try {
 	let stalls = 0;
 	let reach15 = 0;
 	let nearMisses = 0;
+	const guardianStats = new Map();
 	for (const game of result.summaries) {
 		const seat = game.perSeat[0];
 		if (!seat) throw new Error(`heldout seed ${game.seed} has no solo seat summary`);
+		const guardian = guardianForSeed(game.seed);
+		const guardianStat = guardianStats.get(guardian) ?? { guardian, games: 0, trueWins: 0, vp: [] };
+		guardianStat.games += 1;
+		guardianStat.vp.push(seat.finalVP);
+		if (seat.finalVP >= 30) guardianStat.trueWins += 1;
+		guardianStats.set(guardian, guardianStat);
 		vp.push(seat.finalVP);
 		if (seat.finalVP >= 30) trueWins += 1;
 		if (seat.finalVP >= 15) reach15 += 1;
@@ -137,6 +157,25 @@ try {
 	}
 	const sortedVp = [...vp].sort((a, b) => a - b);
 	const interval = wilson95(trueWins, games);
+	const guardianBreakdown = [...guardianStats.values()]
+		.map((stat) => ({
+			guardian: stat.guardian,
+			games: stat.games,
+			trueWins: stat.trueWins,
+			trueWinRate: stat.trueWins / stat.games,
+			trueWinWilson95: wilson95(stat.trueWins, stat.games),
+			meanVP: mean(stat.vp),
+			medianVP: quantile([...stat.vp].sort((a, b) => a - b), 0.5)
+		}))
+		.sort((left, right) => left.trueWinRate - right.trueWinRate || left.meanVP - right.meanVP);
+	const vpBuckets = {
+		under15: vp.filter((value) => value < 15).length,
+		from15To19: vp.filter((value) => value >= 15 && value < 20).length,
+		from20To24: vp.filter((value) => value >= 20 && value < 25).length,
+		from25To26: vp.filter((value) => value >= 25 && value < 27).length,
+		from27To29: vp.filter((value) => value >= 27 && value < 30).length,
+		atLeast30: trueWins
+	};
 	const report = {
 		schemaVersion: 'solo-heldout-v1',
 		weights: path.relative(root, weights),
@@ -161,6 +200,8 @@ try {
 			min: sortedVp[0] ?? null,
 			max: sortedVp.at(-1) ?? null
 		},
+		vpBuckets,
+		guardianBreakdown,
 		first30Round: {
 			mean: mean(first30Rounds),
 			median: quantile([...first30Rounds].sort((a, b) => a - b), 0.5)
