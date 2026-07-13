@@ -144,6 +144,7 @@ class TrajectoryBuffer:
     strategic_mask: np.ndarray      # (N,) bool; long-horizon credit group
     strategic_mc_coef: float        # loader blend; 0 preserves ordinary PPO bit behavior
     solo_strategic_mc_coef: float   # solo-only full-episode blend; may coexist with PvP outcome
+    solo_outcome_coef: float        # pure true-win advantage blend on solo strategic rows
     strategic_outcome_coef: float   # pure placement-outcome advantage blend on strategic rows
     placement_probs: np.ndarray     # (N, 4) behavior outcome-head probabilities
     placement_prob_mask: np.ndarray # (N,) bool; behavior checkpoint exposed the outcome head
@@ -258,6 +259,7 @@ def load_trajectory_buffer(
     all_fallen_loss: float = 0.0,
     strategic_mc_coef: float = 0.0,
     solo_strategic_mc_coef: float = 0.0,
+    solo_outcome_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     obs_key: str = "obs",
@@ -273,6 +275,8 @@ def load_trajectory_buffer(
         raise ValueError("strategic_mc_coef must be in [0, 1]")
     if not 0.0 <= solo_strategic_mc_coef <= 1.0:
         raise ValueError("solo_strategic_mc_coef must be in [0, 1]")
+    if not 0.0 <= solo_outcome_coef <= 1.0:
+        raise ValueError("solo_outcome_coef must be in [0, 1]")
     if not 0.0 <= strategic_mc_gamma <= 1.0:
         raise ValueError("strategic_mc_gamma must be in [0, 1]")
     if not 0.0 <= strategic_outcome_coef <= 1.0:
@@ -496,6 +500,20 @@ def load_trajectory_buffer(
     n_truncated = 0
     n_with_placement = 0
     n_outcome_credit = 0
+    n_solo_outcome_credit = 0
+
+    # Batch-mean control variate for the true solo objective. A solo seat is always
+    # placement 1 at the round cap, so only the actor's explicit `won` bit (30 VP)
+    # is a real success label. Centering by the on-policy batch rate preserves the
+    # REINFORCE expectation while sharply reducing variance across 1,024 episodes.
+    completed_solo_outcomes = []
+    for raw_steps in episodes.values():
+        steps = sorted(raw_steps, key=lambda s: s["step_idx"])
+        if steps[-1]["done"] and steps[0]["player_count"] == 1:
+            completed_solo_outcomes.append(float(any(s["won"] for s in steps)))
+    solo_outcome_baseline = (
+        float(np.mean(completed_solo_outcomes)) if completed_solo_outcomes else 0.0
+    )
 
     for game_id in sorted(episodes):
         steps = sorted(episodes[game_id], key=lambda s: s["step_idx"])
@@ -584,6 +602,17 @@ def load_trajectory_buffer(
                 (1.0 - solo_strategic_mc_coef) * ret[strategic]
                 + solo_strategic_mc_coef * solo_ret[strategic]
             )
+        # Pure threshold credit for the actual solo objective P(finalVP >= 30). This
+        # deliberately changes only the policy advantage: the ordinary value head
+        # continues to predict dense score/build return instead of a mixed-scale target.
+        if solo_outcome_coef > 0 and player_count == 1 and dones[-1] and strategic.any():
+            outcome = float(any(s["won"] for s in steps))
+            outcome_adv = outcome - solo_outcome_baseline
+            adv[strategic] = (
+                (1.0 - solo_outcome_coef) * adv[strategic]
+                + solo_outcome_coef * outcome_adv
+            )
+            n_solo_outcome_credit += int(strategic.sum())
         # Pure long-horizon outcome credit. Unlike strategic MC, this deliberately excludes
         # dense VP, build shaping, and the tactical value target: navigation receives only the
         # realized placement consequence, baselined by the behavior checkpoint's separately
@@ -649,6 +678,8 @@ def load_trajectory_buffer(
         f"{sum(route_mask_list)} with routeMode, "
         f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
         f"solo MC coef={solo_strategic_mc_coef:g}, gamma={strategic_mc_gamma:g}; "
+        f"solo outcome coef={solo_outcome_coef:g}, baseline={solo_outcome_baseline:.3f}, "
+        f"applied={n_solo_outcome_credit}; "
         f"outcome coef={strategic_outcome_coef:g}, "
         f"applied={n_outcome_credit}), "
         f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "
@@ -669,6 +700,7 @@ def load_trajectory_buffer(
         strategic_mask=np.array(strategic_mask_list, dtype=bool),
         strategic_mc_coef=float(strategic_mc_coef),
         solo_strategic_mc_coef=float(solo_strategic_mc_coef),
+        solo_outcome_coef=float(solo_outcome_coef),
         strategic_outcome_coef=float(strategic_outcome_coef),
         placement_probs=np.stack(placement_probs_list),
         placement_prob_mask=np.array(placement_prob_mask_list, dtype=bool),

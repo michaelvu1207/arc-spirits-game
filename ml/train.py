@@ -617,6 +617,7 @@ def train(
     all_fallen_loss: float = 0.0,
     strategic_mc_coef: float = 0.0,
     solo_strategic_mc_coef: float = 0.0,
+    solo_outcome_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     model_version: str = "v1",
@@ -667,6 +668,7 @@ def train(
             all_fallen_loss=all_fallen_loss,
             strategic_mc_coef=strategic_mc_coef,
             solo_strategic_mc_coef=solo_strategic_mc_coef,
+            solo_outcome_coef=solo_outcome_coef,
             strategic_mc_gamma=strategic_mc_gamma,
             strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
@@ -1025,6 +1027,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--solo-strategic-mc-coef", type=float, default=0.0,
                    help="Solo-only full-episode Monte Carlo blend on strategic rows. Solo uses "
                         "score progress and true 30-VP wins, never its automatic first place")
+    p.add_argument("--solo-outcome-coef", type=float, default=0.0,
+                   help="Blend [0,1] from the current advantage toward a batch-centered pure "
+                        "true-30-VP-win advantage on solo strategic rows")
     p.add_argument("--strategic-mc-gamma", type=float, default=1.0,
                    help="Discount for strategic full-episode Monte Carlo returns (default 1)")
     p.add_argument("--strategic-outcome-coef", type=float, default=0.0,
@@ -1122,6 +1127,7 @@ if __name__ == "__main__":
         all_fallen_loss=args.all_fallen_loss,
         strategic_mc_coef=args.strategic_mc_coef,
         solo_strategic_mc_coef=args.solo_strategic_mc_coef,
+        solo_outcome_coef=args.solo_outcome_coef,
         strategic_mc_gamma=args.strategic_mc_gamma,
         strategic_outcome_coef=args.strategic_outcome_coef,
         model_version=args.model_version,

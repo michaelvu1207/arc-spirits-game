@@ -311,6 +311,62 @@ def test_solo_uses_score_and_win_progress_not_automatic_first_place():
     assert math.isclose(float(solo.advantages[0]), 0.4, abs_tol=1e-6)
 
 
+def test_solo_outcome_credit_uses_true_win_and_batch_mean_baseline():
+    rng = np.random.default_rng(1005)
+    rows = []
+    for episode, won in (("win", 1), ("loss", 0)):
+        for t in range(2):
+            rows.append({
+                "obs": rng.standard_normal(OBS_DIM).tolist(),
+                "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+                "chosen": 0,
+                "gameId": f"solo-{episode}",
+                "stepIdx": t,
+                "rStep": 0.0,
+                "done": t == 1,
+                "policyMask": 1,
+                "logpOld": math.log(1.0 / N_CANDS),
+                "behaviorMask": [1, 1, 1],
+                "behaviorTemperature": 1.0,
+                "vPred": 0.0,
+                "strategic": 1 if t == 0 else 0,
+                "playerCount": 1,
+                "won": won if t == 1 else 0,
+            })
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            solo_outcome_coef=1.0,
+        )
+    # Sorted episode order is loss then win. Only strategic rows get pure outcome
+    # credit; their batch-centered advantages are -0.5 and +0.5 respectively.
+    assert np.allclose(buf.advantages, [-0.5, 0.0, 0.5, 0.0])
+    assert np.array_equal(buf.returns, [0.0, 0.0, 0.0, 0.0])
+    assert math.isclose(buf.solo_outcome_coef, 1.0)
+
+
+def test_solo_outcome_coef_must_be_a_probability():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        try:
+            load_trajectory_buffer(
+                d,
+                gamma=1.0,
+                gae_lambda=1.0,
+                placement_rewards=PLACEMENT_REWARDS,
+                solo_outcome_coef=1.01,
+            )
+        except ValueError as exc:
+            assert "solo_outcome_coef" in str(exc)
+        else:
+            raise AssertionError("solo_outcome_coef > 1 must be rejected")
+
+
 def test_strategic_outcome_credit_requires_recorded_behavior_outcome_head():
     rng = np.random.default_rng(1004)
     row = {
