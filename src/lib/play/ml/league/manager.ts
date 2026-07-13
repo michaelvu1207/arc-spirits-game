@@ -1316,6 +1316,11 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		let evalEncounters = 0;
 		let evalWins = 0;
 		let evalGames = 0;
+		let evalReach30 = 0;
+		let evalVpSum = 0;
+		let evalFirst30RoundSum = 0;
+		let evalFirst30Count = 0;
+		let evalStalls = 0;
 		const trained: LeagueMember =
 			model === 'v2' ? { ...learner, ptPath: ckpt } : { ...learner, weightsPath: ckpt };
 		for (let r = 0; r < config.seats && evalGames < config.evalGames; r++) {
@@ -1340,6 +1345,18 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			evalScore += fold.scoreSum;
 			evalEncounters += fold.encounters;
 			evalWins += fold.wins;
+			for (const summary of res.summaries) {
+				const learnerSummary = summary.perSeat.find((seat) => seat.seat === plan.learnerSeat);
+				if (!learnerSummary) continue;
+				evalVpSum += learnerSummary.finalVP;
+				if (learnerSummary.finalVP >= 30) evalReach30 += 1;
+				const first30Round = learnerSummary.cycle?.first30Round;
+				if (first30Round !== null && first30Round !== undefined) {
+					evalFirst30RoundSum += first30Round;
+					evalFirst30Count += 1;
+				}
+				if (summary.stalled) evalStalls += 1;
+			}
 			evalGames += res.games;
 		}
 		const evalMs = performance.now() - tEval;
@@ -1412,6 +1429,11 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			evalMs: Math.round(evalMs),
 			evalGames,
 			evalWinRate: evalGames > 0 ? evalWins / evalGames : 0,
+			evalReach30Rate: evalGames > 0 ? evalReach30 / evalGames : 0,
+			evalMeanVP: evalGames > 0 ? evalVpSum / evalGames : 0,
+			evalMeanFirst30Round:
+				evalFirst30Count > 0 ? evalFirst30RoundSum / evalFirst30Count : null,
+			evalStallRate: evalGames > 0 ? evalStalls / evalGames : 0,
 			evalPairwiseScore: evalEncounters > 0 ? evalScore / evalEncounters : 0,
 			eloEstimate: eloFromScore(evalScore, evalEncounters),
 			ckpt,

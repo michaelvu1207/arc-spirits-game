@@ -67,11 +67,15 @@ if (cmd === 'init') {
 		console.log(`  ${m.kind.padEnd(16)} ${m.id.padEnd(28)} games=${m.games}${model}${elo}${ckpt}`);
 	}
 	for (const l of s.lastLines) {
+		const reach30 =
+			l.evalReach30Rate === undefined
+				? ''
+				: ` reach30=${(100 * l.evalReach30Rate).toFixed(0)}% meanVP=${(l.evalMeanVP ?? 0).toFixed(1)}`;
 		console.log(
 			`  [gen ${l.gen}] ${l.lane}: games=${l.games} samples=${l.samples} ` +
 				`evalWin=${(100 * l.evalWinRate).toFixed(0)}% eloEst=${l.eloEstimate} ` +
 				`pool=${(l.poolWallMs / 1000).toFixed(1)}s train=${(l.trainMs / 1000).toFixed(1)}s ` +
-				`promoted=${l.promoted}`
+				`promoted=${l.promoted}${reach30}`
 		);
 	}
 } else if (cmd === 'state') {
@@ -81,12 +85,17 @@ if (cmd === 'init') {
 	const reports = await manager.runGenerations(leagueRoot, n);
 	for (const rep of reports) {
 		for (const l of rep.lanes) {
+			const reach30 =
+				l.evalReach30Rate === undefined
+					? ''
+					: ` reach30=${(100 * l.evalReach30Rate).toFixed(0)}% meanVP=${(l.evalMeanVP ?? 0).toFixed(1)}`;
 			console.log(
 				`[gen ${rep.gen}] ${l.lane}: games=${l.games} samples=${l.samples} ` +
 					`evalWin=${(100 * l.evalWinRate).toFixed(0)}% eloEst=${l.eloEstimate} ` +
 					`pool=${(l.poolWallMs / 1000).toFixed(1)}s train=${(l.trainMs / 1000).toFixed(1)}s ` +
 					`eval=${(l.evalMs / 1000).toFixed(1)}s promoted=${l.promoted}` +
-					(l.gauntletElo !== undefined ? ` gauntletElo=${l.gauntletElo}` : '')
+					(l.gauntletElo !== undefined ? ` gauntletElo=${l.gauntletElo}` : '') +
+					reach30
 			);
 		}
 	}

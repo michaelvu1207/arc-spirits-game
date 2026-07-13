@@ -334,6 +334,16 @@ export interface HistoryLine {
 	evalGames: number;
 	/** Placement-1 share of the eval games. */
 	evalWinRate: number;
+	/** Share of eval games where the learner actually reached the 30-VP target.
+	 *  Unlike evalWinRate, this is meaningful in solo games: the lone seat is always
+	 *  placement 1 at the round cap even when it failed to reach 30. */
+	evalReach30Rate?: number;
+	/** Learner's mean final VP over the quick-eval games. */
+	evalMeanVP?: number;
+	/** Mean first-30 round among successful eval games; null when none reached 30. */
+	evalMeanFirst30Round?: number | null;
+	/** Share of quick-eval games that exhausted the driver's unstick budget. */
+	evalStallRate?: number;
 	/** Mean pairwise placement score (win 1 / tie 0.5 / loss 0) over eval games. */
 	evalPairwiseScore: number;
 	/** eloFromScore over the eval pairwise encounters (quick estimate, NOT gauntlet). */
