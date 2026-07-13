@@ -31,6 +31,7 @@ const { values: args } = parseArgs({
 		out: { type: 'string', default: 'ml/data/poolrun' },
 		profiles: { type: 'string', default: 'pvphunter,medium,aggressive,hard' },
 		selection: { type: 'string', default: 'hybrid' },
+		'learn-monster-reward-choices': { type: 'boolean', default: false },
 		sample: { type: 'boolean', default: false },
 		temperature: { type: 'string' },
 		'neural-seats': { type: 'string' },
@@ -52,7 +53,7 @@ if (args.help) {
 	console.log(
 		'usage: node scripts/run-actor-pool.mjs [--games N] [--workers N] [--seed0 N] [--seats N]\n' +
 			'         [--max-rounds N] [--weights FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
-			'         [--selection hybrid|value|policy] [--sample] [--temperature X]\n' +
+			'         [--selection hybrid|value|policy] [--learn-monster-reward-choices] [--sample] [--temperature X]\n' +
 			'         [--neural-seats Red,Blue] [--record-seats Red] [--forbid type1,type2]\n' +
 			'         [--max-status-level N] [--shuffle-guardians] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
 			'         [--policy-obs-version 1|2 (2 needs --infer-socket)] [--append] [--quiet]'
@@ -80,6 +81,7 @@ const config = {
 	weightsPath: args.weights ? path.resolve(args.weights) : undefined,
 	inferSocket: args['infer-socket'],
 	selection: args.selection,
+	learnMonsterRewardChoices: args['learn-monster-reward-choices'] || undefined,
 	sample: args.sample || undefined,
 	temperature: num(args.temperature),
 	neuralSeats: csv(args['neural-seats']),

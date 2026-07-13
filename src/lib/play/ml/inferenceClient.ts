@@ -377,16 +377,33 @@ export class RemotePolicy {
 		return resp;
 	}
 
+	/**
+	 * Candidate schemas are append-only. An older remote checkpoint can therefore
+	 * consume the exact prefix it was trained on, matching the in-process
+	 * zero-expanded checkpoint behavior. A server wider than the client still
+	 * fails closed because the missing columns have no defined meaning.
+	 */
+	private candidatesForServer(cands: number[][]): number[][] {
+		if (cands.every((cand) => cand.length === this.info.act_dim)) return cands;
+		if (cands.every((cand) => cand.length > this.info.act_dim)) {
+			return cands.map((cand) => cand.slice(0, this.info.act_dim));
+		}
+		throw new Error(
+			`RemotePolicy: candidate width is incompatible with server act_dim ${this.info.act_dim}`
+		);
+	}
+
 	/** One B=1 scoring roundtrip for this decision's obs + candidate set. */
 	private score(obs: number[], cands: number[][], wantBits: number): ScoreResponse {
 		this.scoringRequests += 1;
+		const serverCands = this.candidatesForServer(cands);
 		if (this.wire === 'json') {
 			const want = SECTION_ORDER.filter((_, bit) => wantBits & (1 << bit));
-			return this.requestJson({ obs: [obs], cands: [cands], want });
+			return this.requestJson({ obs: [obs], cands: [serverCands], want });
 		}
 		const id = String(++this.nextId);
 		const resp = decodeBinaryResponse(
-			this.bridge.roundtrip(encodeBinaryRequest(id, wantBits, [obs], [cands]))
+			this.bridge.roundtrip(encodeBinaryRequest(id, wantBits, [obs], [serverCands]))
 		);
 		if (resp.error) throw new Error(`RemotePolicy: server error: ${resp.error}`);
 		if (resp.id !== id) throw new Error(`RemotePolicy: response id ${resp.id} != request id ${id}`);

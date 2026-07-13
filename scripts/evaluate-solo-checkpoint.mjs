@@ -29,6 +29,7 @@ const { values: args } = parseArgs({
 		seed0: { type: 'string', default: '900000000' },
 		'max-rounds': { type: 'string', default: '30' },
 		'max-status-level': { type: 'string', default: '2' },
+		'learn-monster-reward-choices': { type: 'boolean', default: false },
 		sample: { type: 'boolean', default: false },
 		temperature: { type: 'string', default: '0.65' },
 		'search-sims': { type: 'string', default: '0' },
@@ -46,7 +47,8 @@ const { values: args } = parseArgs({
 if (args.help || !args.weights) {
 	console.log(
 		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--games N] [--workers N] ' +
-			'[--seed0 N] [--sample --temperature T] [--search-sims N] [--include-games] [--out FILE]'
+			'[--seed0 N] [--learn-monster-reward-choices] [--sample --temperature T] ' +
+			'[--search-sims N] [--include-games] [--out FILE]'
 	);
 	process.exit(args.help ? 0 : 1);
 }
@@ -147,6 +149,7 @@ try {
 			profiles: ['medium'],
 			weightsPath: weights,
 			selection: 'hybrid',
+			learnMonsterRewardChoices: args['learn-monster-reward-choices'] || undefined,
 			sample: args.sample,
 			temperature,
 			recordSeats: [],
@@ -257,6 +260,7 @@ try {
 		...(effectiveMaxRounds !== maxRounds ? { requestedMaxRounds: maxRounds } : {}),
 		maxStatusLevel,
 		decode: {
+			learnMonsterRewardChoices: args['learn-monster-reward-choices'],
 			...(args.sample ? { sample: true, temperature } : { sample: false }),
 			...(searchSims > 0
 				? {

@@ -156,4 +156,33 @@ describe.skipIf(!existsSync(PYTHON))('RemotePolicy decision memo and wire contra
 			}
 		}, 30_000);
 	}
+
+	it('serves an older action-prefix checkpoint when the client appends zero-default semantics', () => {
+		const weights = JSON.parse(readFileSync(fixtureWeights, 'utf8')) as PolicyWeights;
+		const local = new NeuralPolicy(weights);
+		const remote = new RemotePolicy(socketPath, {
+			expectObsDim: weights.obs_dim,
+			wire: 'json'
+		});
+		try {
+			const obs = Array.from({ length: weights.obs_dim }, (_, i) => Math.fround(i / 100));
+			const prefix = Array.from({ length: 3 }, (_, row) =>
+				Array.from({ length: weights.act_dim }, (_, col) => Math.fround((row - col) / 50))
+			);
+			const widened = prefix.map((row, index) => [
+				...row,
+				...Array.from({ length: 20 }, (_, tail) => Math.fround((index + tail + 1) / 20))
+			]);
+			const remoteLogits = remote.scoreCandidates(obs, widened);
+			const prefixLogits = local.scoreCandidates(obs, prefix);
+			for (let i = 0; i < remoteLogits.length; i++) {
+				expect(remoteLogits[i]).toBeCloseTo(prefixLogits[i], 4);
+			}
+			expect(remote.scoringRequests).toBe(1);
+			expect(remote.probs(obs, widened)).toHaveLength(widened.length);
+			expect(remote.scoringRequests).toBe(1);
+		} finally {
+			remote.close();
+		}
+	}, 30_000);
 });

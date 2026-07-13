@@ -163,6 +163,16 @@ export function validateLeagueConfig(config: LeagueConfig): void {
 	const fraction = config.train.ppoContinuationFraction;
 	const curriculum = config.continuationCurriculum;
 	const selfImitation = config.train.selfImitation;
+	if (config.learnMonsterRewardChoices && config.selection !== 'hybrid') {
+		throw new Error(
+			"league: learnMonsterRewardChoices requires selection='hybrid' so the V24 intervention is active"
+		);
+	}
+	if (config.learnMonsterRewardChoices && config.mode === 'ppo' && config.sample !== true) {
+		throw new Error(
+			'league: PPO learnMonsterRewardChoices requires sample=true for exact on-policy reward rows'
+		);
+	}
 	if (rows !== undefined) {
 		if (config.mode !== 'ppo') {
 			throw new Error('league: ppoRowsPerEpoch requires mode=ppo');
@@ -889,6 +899,7 @@ export function buildMatchup(
 			// policyObsVersion 2 supports only hybrid/policy selection (actorWorker); the
 			// v1 socket serves the same obs version as in-process, so value stays valid.
 			selection: viaV2Socket && config.selection === 'value' ? 'hybrid' : config.selection,
+			...(config.learnMonsterRewardChoices ? { learnMonsterRewardChoices: true } : {}),
 			sample: config.sample,
 			temperature: annealedTemperature(config, iter),
 			// Checkpoint-opponent seats must be neural too, else the driver routes them to

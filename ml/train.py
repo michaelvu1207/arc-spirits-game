@@ -757,6 +757,9 @@ def train(
     self_imitation_generation: int = 0,
     self_imitation_max_age: int = 3,
     self_imitation_max_rows: int = 100_000,
+    terminal_teacher_data: Path | None = None,
+    terminal_teacher_coef: float = 0.0,
+    terminal_teacher_batch_size: int = 256,
     obs_feature_cutoff: int | None = None,
     option_feature_cutoff: int | None = None,
     option_rows_per_epoch: int = 16_384,
@@ -814,6 +817,38 @@ def train(
         raise ValueError("--self-imitation-max-age must be nonnegative")
     if self_imitation_max_rows <= 0:
         raise ValueError("--self-imitation-max-rows must be positive")
+    terminal_teacher_requested = (
+        terminal_teacher_data is not None or terminal_teacher_coef != 0
+    )
+    if terminal_teacher_requested and (mode != "ppo" or model_version != "v1"):
+        raise ValueError("terminal-teacher controls require --mode ppo --model v1")
+    if terminal_teacher_coef < 0 or not math.isfinite(terminal_teacher_coef):
+        raise ValueError("--terminal-teacher-coef must be finite and nonnegative")
+    if terminal_teacher_coef > 0 and terminal_teacher_data is None:
+        raise ValueError("--terminal-teacher-coef requires --terminal-teacher-data")
+    if (
+        isinstance(terminal_teacher_batch_size, bool)
+        or not isinstance(terminal_teacher_batch_size, int)
+        or terminal_teacher_batch_size <= 0
+    ):
+        raise ValueError("--terminal-teacher-batch-size must be a positive integer")
+    if terminal_teacher_data is not None and target_kl is not None:
+        raise ValueError(
+            "terminal-teacher batches are incompatible with --target-kl early stopping"
+        )
+    if terminal_teacher_requested and option_feature_cutoff is not None:
+        raise ValueError("terminal-teacher training rejects option-enabled checkpoints")
+    teacher_init_path = (
+        init_from
+        if init_from is not None
+        else (out_path if warm_start and out_path.exists() else None)
+    )
+    if terminal_teacher_requested and teacher_init_path is not None:
+        checkpoint_option_dim = option_dim_from_checkpoint(teacher_init_path)
+        if checkpoint_option_dim is not None and checkpoint_option_dim > 0:
+            raise ValueError(
+                f"terminal-teacher training rejects option-enabled checkpoint {teacher_init_path}"
+            )
     # Both models expose placement auxiliaries with different contracts: v1 has
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
@@ -838,6 +873,7 @@ def train(
         from ppo import (
             apply_observation_feature_cutoff,
             apply_option_feature_cutoff,
+            load_terminal_teacher_replay,
             load_trajectory_buffer,
             parse_placement_rewards,
             train_ppo,
@@ -864,9 +900,27 @@ def train(
             self_imitation_max_age=self_imitation_max_age,
             self_imitation_max_rows=self_imitation_max_rows,
         )
+        if terminal_teacher_requested and buffer.option_dim:
+            raise ValueError("terminal-teacher training rejects option-enabled rollout data")
+        terminal_teacher = (
+            load_terminal_teacher_replay(
+                terminal_teacher_data,
+                expected_obs_dim=int(buffer.obs.shape[1]),
+                expected_act_dim=int(buffer.cands[0].shape[1]),
+            )
+            if terminal_teacher_data is not None
+            else None
+        )
+        if terminal_teacher is not None:
+            print(
+                "Terminal teacher | "
+                f"rows={len(terminal_teacher)} | obs_dim={terminal_teacher.obs_dim} | "
+                f"act_dim={terminal_teacher.act_dim} | batch={terminal_teacher_batch_size} | "
+                f"coef={terminal_teacher_coef:g}"
+            )
         if obs_feature_cutoff is not None:
             kept, loaded_obs_dim = apply_observation_feature_cutoff(
-                buffer, obs_feature_cutoff
+                buffer, obs_feature_cutoff, terminal_teacher
             )
             print(
                 "Observation feature cutoff | "
@@ -927,6 +981,9 @@ def train(
             self_imitation_coef=self_imitation_coef,
             self_imitation_replay_fraction=self_imitation_replay_fraction,
             self_imitation_staleness_logp=self_imitation_staleness_logp,
+            terminal_teacher=terminal_teacher,
+            terminal_teacher_coef=terminal_teacher_coef,
+            terminal_teacher_batch_size=terminal_teacher_batch_size,
             option_rows_per_epoch=option_rows_per_epoch,
             option_batch_size=option_batch_size,
             option_feature_cutoff=option_feature_cutoff,
@@ -1333,6 +1390,13 @@ def parse_args() -> argparse.Namespace:
                    help="Maximum replay age in generations (default 3)")
     p.add_argument("--self-imitation-max-rows", type=int, default=100_000,
                    help="Maximum phase-balanced replay rows persisted per lane")
+    p.add_argument("--terminal-teacher-data", type=Path, default=None,
+                   help="Immutable V24 terminal-teacher JSONL file or shard directory")
+    p.add_argument("--terminal-teacher-coef", type=float, default=0.0,
+                   help="Weight on masked soft terminal-teacher policy CE; coefficient-zero "
+                        "controls still load and forward batches when data is provided")
+    p.add_argument("--terminal-teacher-batch-size", type=int, default=256,
+                   help="Fixed deterministic terminal-teacher rows injected per PPO minibatch")
     p.add_argument("--clip-eps", type=float, default=0.2, help="PPO surrogate clip epsilon")
     p.add_argument("--entropy-coef", type=float, default=0.01, help="PPO entropy bonus coefficient")
     p.add_argument("--entropy-anneal", action="store_true",
@@ -1450,6 +1514,9 @@ if __name__ == "__main__":
         self_imitation_generation=args.self_imitation_generation,
         self_imitation_max_age=args.self_imitation_max_age,
         self_imitation_max_rows=args.self_imitation_max_rows,
+        terminal_teacher_data=args.terminal_teacher_data,
+        terminal_teacher_coef=args.terminal_teacher_coef,
+        terminal_teacher_batch_size=args.terminal_teacher_batch_size,
         obs_feature_cutoff=args.obs_feature_cutoff,
         option_feature_cutoff=args.option_feature_cutoff,
         option_rows_per_epoch=args.option_rows_per_epoch,

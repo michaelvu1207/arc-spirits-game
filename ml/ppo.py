@@ -52,6 +52,7 @@ import torch.nn.functional as F
 from model import CandidateScorer, model_parameters_are_finite
 
 DEFAULT_PLACEMENT_REWARDS = "1.0,0.3,-0.3,-1.0"
+TERMINAL_TEACHER_MAX_ROWS = 4_096
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +196,28 @@ class SelfImitationReplay:
 
 
 @dataclass
+class TerminalTeacherReplay:
+    """Fixed offline terminal-rollout targets for ambiguous reward choices.
+
+    This dataset is deliberately separate from the on-policy trajectory buffer:
+    it has no behavior log-probability, advantage, return, value, or reach-30
+    target.  It can therefore contribute only a masked categorical policy loss.
+    """
+
+    obs: np.ndarray
+    cands: list[np.ndarray]
+    evaluated_mask: list[np.ndarray]
+    terminal_pi: list[np.ndarray]
+    weight: np.ndarray
+    state_id: list[str]
+    obs_dim: int
+    act_dim: int
+
+    def __len__(self) -> int:
+        return len(self.cands)
+
+
+@dataclass
 class OptionEventBuffer:
     """One validated SMDP transition per active policy-controlled seat-round."""
 
@@ -270,12 +293,13 @@ class TrajectoryBuffer:
 def apply_observation_feature_cutoff(
     buffer: TrajectoryBuffer,
     cutoff: int,
+    terminal_teacher: TerminalTeacherReplay | None = None,
 ) -> tuple[int, int]:
     """Zero an append-only observation suffix for a compute-matched PPO control.
 
     Both experiment arms retain the same tensor width and execute this assignment;
-    passing the full width masks an empty suffix. Optional self-imitation observations
-    are masked too so no auxiliary objective can bypass the control.
+    passing the full width masks an empty suffix. Optional self-imitation and terminal-
+    teacher observations are masked too so no auxiliary objective can bypass the control.
     """
     if isinstance(cutoff, bool) or not isinstance(cutoff, int):
         raise ValueError("observation feature cutoff must be an integer")
@@ -294,6 +318,16 @@ def apply_observation_feature_cutoff(
                 "self-imitation observation width does not match trajectory observations"
             )
         replay.obs[:, cutoff:] = 0.0
+    if terminal_teacher is not None:
+        if (
+            terminal_teacher.obs.ndim != 2
+            or terminal_teacher.obs.shape[1] != obs_dim
+            or terminal_teacher.obs_dim != obs_dim
+        ):
+            raise ValueError(
+                "terminal-teacher observation width does not match trajectory observations"
+            )
+        terminal_teacher.obs[:, cutoff:] = 0.0
     return cutoff, obs_dim
 
 
@@ -681,6 +715,185 @@ def _coerce_seat(raw: Any) -> str | None:
         return None
     seat = str(raw)
     return seat if seat else None
+
+
+def load_terminal_teacher_replay(
+    source: Path,
+    *,
+    expected_obs_dim: int | None = None,
+    expected_act_dim: int | None = None,
+) -> TerminalTeacherReplay:
+    """Load the immutable V24 terminal-reward teacher dataset fail-closed.
+
+    A directory contains one or more ``terminal-teacher-*.jsonl`` shards.  A
+    direct JSONL path is also accepted for focused audits/tests.  Unlike actor
+    files, these labels are not written concurrently, so malformed JSON is an
+    error rather than a tolerated partial tail.
+    """
+    source = Path(source)
+    if source.is_dir():
+        paths = sorted(
+            path
+            for path in source.rglob("terminal-teacher-*.jsonl")
+            if path.is_file()
+        )
+    elif source.is_file() and source.suffix == ".jsonl":
+        paths = [source]
+    else:
+        raise FileNotFoundError(
+            f"terminal-teacher source {source} is not a JSONL file or directory"
+        )
+    if not paths:
+        raise FileNotFoundError(
+            f"No terminal-teacher-*.jsonl files found in {source}"
+        )
+    if (
+        expected_obs_dim is not None
+        and (
+            isinstance(expected_obs_dim, bool)
+            or not isinstance(expected_obs_dim, int)
+            or expected_obs_dim <= 0
+        )
+    ):
+        raise ValueError("expected terminal-teacher obs_dim must be positive")
+    if (
+        expected_act_dim is not None
+        and (
+            isinstance(expected_act_dim, bool)
+            or not isinstance(expected_act_dim, int)
+            or expected_act_dim <= 0
+        )
+    ):
+        raise ValueError("expected terminal-teacher act_dim must be positive")
+
+    obs_rows: list[np.ndarray] = []
+    cand_rows: list[np.ndarray] = []
+    mask_rows: list[np.ndarray] = []
+    target_rows: list[np.ndarray] = []
+    weights: list[float] = []
+    state_ids: list[str] = []
+    seen_ids: set[str] = set()
+    obs_dim = expected_obs_dim
+    act_dim = expected_act_dim
+
+    for path in paths:
+        with path.open() as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                context = f"{path}:{line_number}"
+                try:
+                    raw = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"{context}: malformed terminal-teacher JSON") from exc
+                if not isinstance(raw, dict):
+                    raise ValueError(f"{context}: terminal-teacher row must be an object")
+                state_id = raw.get("stateId")
+                if not isinstance(state_id, str) or not state_id:
+                    raise ValueError(f"{context}: stateId must be a nonempty string")
+                if state_id in seen_ids:
+                    raise ValueError(f"{context}: duplicate terminal-teacher stateId {state_id!r}")
+                try:
+                    obs = np.asarray(raw["obs"], dtype=np.float32)
+                    cands = np.asarray(raw["cands"], dtype=np.float32)
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"{context}: obs/cands must be finite numeric arrays"
+                    ) from exc
+                if obs.ndim != 1 or obs.size < 1 or not np.isfinite(obs).all():
+                    raise ValueError(f"{context}: obs must be a finite nonempty vector")
+                if (
+                    cands.ndim != 2
+                    or cands.shape[0] < 2
+                    or cands.shape[1] < 1
+                    or not np.isfinite(cands).all()
+                ):
+                    raise ValueError(
+                        f"{context}: cands must be a finite matrix with at least two rows"
+                    )
+                if obs_dim is None:
+                    obs_dim = int(obs.shape[0])
+                if act_dim is None:
+                    act_dim = int(cands.shape[1])
+                if obs.shape != (obs_dim,):
+                    raise ValueError(
+                        f"{context}: obs width {obs.shape} does not match ({obs_dim},)"
+                    )
+                if cands.shape[1] != act_dim:
+                    raise ValueError(
+                        f"{context}: action width {cands.shape[1]} does not match {act_dim}"
+                    )
+
+                mask_raw = raw.get("evaluatedMask")
+                evaluated_mask = _coerce_behavior_mask(mask_raw, cands.shape[0])
+                if evaluated_mask is None or not isinstance(mask_raw, list):
+                    raise ValueError(
+                        f"{context}: evaluatedMask must be a nonempty strict binary list"
+                    )
+                if int(evaluated_mask.sum()) < 2:
+                    raise ValueError(
+                        f"{context}: evaluatedMask must contain at least two candidates"
+                    )
+                target_raw = raw.get("terminalPi")
+                if not isinstance(target_raw, list) or len(target_raw) != cands.shape[0]:
+                    raise ValueError(
+                        f"{context}: terminalPi length must match the candidate count"
+                    )
+                try:
+                    target = np.asarray(target_raw, dtype=np.float32)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"{context}: terminalPi must be numeric") from exc
+                if (
+                    target.ndim != 1
+                    or not np.isfinite(target).all()
+                    or np.any(target < 0)
+                    or np.any(target[~evaluated_mask] != 0)
+                    or np.any(target[evaluated_mask] <= 0)
+                ):
+                    raise ValueError(
+                        f"{context}: terminalPi must be finite, positive exactly on "
+                        "evaluatedMask, and zero elsewhere"
+                    )
+                total = float(target[evaluated_mask].sum(dtype=np.float64))
+                if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=1e-6):
+                    raise ValueError(
+                        f"{context}: terminalPi must sum to 1 over evaluatedMask, got {total}"
+                    )
+                weight_raw = raw.get("teacherWeight", 1.0)
+                if (
+                    isinstance(weight_raw, bool)
+                    or not isinstance(weight_raw, (int, float))
+                    or not math.isfinite(float(weight_raw))
+                    or float(weight_raw) <= 0
+                ):
+                    raise ValueError(f"{context}: teacherWeight must be finite and positive")
+
+                seen_ids.add(state_id)
+                state_ids.append(state_id)
+                obs_rows.append(obs)
+                cand_rows.append(cands)
+                mask_rows.append(evaluated_mask)
+                # Remove harmless decimal-rounding drift after the strict sum check.
+                target_rows.append((target / total).astype(np.float32, copy=False))
+                weights.append(float(weight_raw))
+                if len(obs_rows) > TERMINAL_TEACHER_MAX_ROWS:
+                    raise ValueError(
+                        f"terminal-teacher dataset exceeds V24 cap of "
+                        f"{TERMINAL_TEACHER_MAX_ROWS} rows"
+                    )
+
+    if not obs_rows or obs_dim is None or act_dim is None:
+        raise ValueError(f"terminal-teacher dataset {source} contains no rows")
+    return TerminalTeacherReplay(
+        obs=np.stack(obs_rows).astype(np.float32, copy=False),
+        cands=cand_rows,
+        evaluated_mask=mask_rows,
+        terminal_pi=target_rows,
+        weight=np.asarray(weights, dtype=np.float32),
+        state_id=state_ids,
+        obs_dim=int(obs_dim),
+        act_dim=int(act_dim),
+    )
 
 
 def _read_option_events(
@@ -2030,6 +2243,110 @@ def self_imitation_minibatch_loss(
     return loss, accepted, len(idx) - accepted
 
 
+def select_terminal_teacher_indices(
+    replay_size: int,
+    batch_size: int,
+    *,
+    seed: int | None,
+    epoch: int,
+    minibatch: int,
+) -> np.ndarray:
+    """Select one fixed teacher batch without advancing any PPO RNG stream.
+
+    The selection is a pure function of trainer seed and minibatch coordinates,
+    so coefficient-zero controls and treatments see exactly the same examples
+    even after their model parameters diverge.
+    """
+    if (
+        isinstance(replay_size, bool)
+        or isinstance(batch_size, bool)
+        or not isinstance(replay_size, int)
+        or not isinstance(batch_size, int)
+        or replay_size <= 0
+        or batch_size <= 0
+    ):
+        raise ValueError("terminal-teacher replay and batch sizes must be positive")
+    if (
+        isinstance(epoch, bool)
+        or not isinstance(epoch, int)
+        or epoch < 1
+        or isinstance(minibatch, bool)
+        or not isinstance(minibatch, int)
+        or minibatch < 0
+    ):
+        raise ValueError("terminal-teacher epoch/minibatch coordinates are invalid")
+    base_seed = 0 if seed is None else int(seed)
+    # SeedSequence accepts a vector and is stable across processes/platforms.
+    rng = np.random.default_rng(
+        np.random.SeedSequence(
+            [base_seed & 0xFFFFFFFF, 0x54454143, int(epoch), int(minibatch)]
+        )
+    )
+    if replay_size < batch_size:
+        return rng.choice(replay_size, size=batch_size, replace=True).astype(
+            np.int64, copy=False
+        )
+    return rng.permutation(replay_size)[:batch_size].astype(np.int64, copy=False)
+
+
+def _terminal_teacher_tensors(
+    replay: TerminalTeacherReplay,
+    idx: np.ndarray,
+    device: torch.device,
+) -> tuple[torch.Tensor, ...]:
+    batch = len(idx)
+    max_cands = max(replay.cands[int(i)].shape[0] for i in idx)
+    cands = np.zeros((batch, max_cands, replay.act_dim), dtype=np.float32)
+    evaluated_mask = np.zeros((batch, max_cands), dtype=bool)
+    terminal_pi = np.zeros((batch, max_cands), dtype=np.float32)
+    for output_index, replay_index_raw in enumerate(idx):
+        replay_index = int(replay_index_raw)
+        candidate_rows = replay.cands[replay_index]
+        count = candidate_rows.shape[0]
+        cands[output_index, :count] = candidate_rows
+        evaluated_mask[output_index, :count] = replay.evaluated_mask[replay_index]
+        terminal_pi[output_index, :count] = replay.terminal_pi[replay_index]
+    return (
+        torch.from_numpy(replay.obs[idx]).to(device),
+        torch.from_numpy(cands).to(device),
+        torch.from_numpy(evaluated_mask).to(device),
+        torch.from_numpy(terminal_pi).to(device),
+        torch.from_numpy(replay.weight[idx]).to(device),
+    )
+
+
+def terminal_teacher_minibatch_loss(
+    model: CandidateScorer,
+    replay: TerminalTeacherReplay,
+    idx: np.ndarray,
+    device: torch.device,
+) -> tuple[torch.Tensor, float]:
+    """Soft-target CE renormalized over exactly the evaluated action support."""
+    if model.option_dim:
+        raise ValueError("terminal-teacher loss rejects option-enabled checkpoints")
+    if len(idx) == 0:
+        raise ValueError("terminal-teacher minibatch must not be empty")
+    obs, cands, evaluated_mask, terminal_pi, weights = _terminal_teacher_tensors(
+        replay, idx, device
+    )
+    logits, _, _ = model(obs, cands, evaluated_mask)
+    log_probs = F.log_softmax(
+        logits.masked_fill(~evaluated_mask, float("-inf")), dim=-1
+    )
+    # Avoid 0 * -inf on unevaluated/padded candidates in both forward/backward.
+    finite_log_probs = log_probs.masked_fill(~evaluated_mask, 0.0)
+    per_row = -(terminal_pi * finite_log_probs).sum(dim=-1)
+    weight_sum = weights.sum().clamp_min(1e-8)
+    loss = (per_row * weights).sum() / weight_sum
+    with torch.no_grad():
+        student_top = logits.masked_fill(~evaluated_mask, float("-inf")).argmax(dim=1)
+        teacher_top = terminal_pi.argmax(dim=1)
+        agreement = float(
+            (((student_top == teacher_top).float() * weights).sum() / weight_sum).item()
+        )
+    return loss, agreement
+
+
 def binary_auc(
     targets: np.ndarray, scores: np.ndarray, weights: np.ndarray | None = None
 ) -> float:
@@ -2232,6 +2549,9 @@ def train_ppo(
     self_imitation_coef: float = 0.0,
     self_imitation_replay_fraction: float = 0.0,
     self_imitation_staleness_logp: float = 1.0,
+    terminal_teacher: TerminalTeacherReplay | None = None,
+    terminal_teacher_coef: float = 0.0,
+    terminal_teacher_batch_size: int = 256,
     option_rows_per_epoch: int = 16_384,
     option_batch_size: int = 256,
     option_clip_eps: float = 0.15,
@@ -2262,6 +2582,31 @@ def train_ppo(
         )
     if self_imitation_staleness_logp < 0 or not math.isfinite(self_imitation_staleness_logp):
         raise ValueError("self_imitation_staleness_logp must be finite and nonnegative")
+    if terminal_teacher_coef < 0 or not math.isfinite(terminal_teacher_coef):
+        raise ValueError("terminal_teacher_coef must be finite and nonnegative")
+    if terminal_teacher_coef > 0 and terminal_teacher is None:
+        raise ValueError("terminal_teacher_coef requires terminal-teacher data")
+    if terminal_teacher is not None:
+        if (
+            isinstance(terminal_teacher_batch_size, bool)
+            or not isinstance(terminal_teacher_batch_size, int)
+            or terminal_teacher_batch_size <= 0
+        ):
+            raise ValueError("terminal_teacher_batch_size must be a positive integer")
+        if target_kl is not None:
+            raise ValueError(
+                "terminal-teacher batches are incompatible with target_kl early stopping"
+            )
+        if buffer.option_dim or model.option_dim:
+            raise ValueError("terminal-teacher PPO rejects option-enabled checkpoints")
+        if terminal_teacher.obs_dim != model.obs_dim:
+            raise ValueError(
+                f"terminal-teacher obs_dim {terminal_teacher.obs_dim} != model {model.obs_dim}"
+            )
+        if terminal_teacher.act_dim != model.act_dim:
+            raise ValueError(
+                f"terminal-teacher act_dim {terminal_teacher.act_dim} != model {model.act_dim}"
+            )
     if buffer.option_dim and self_imitation_replay_fraction > 0:
         raise ValueError("option-enabled PPO does not accept legacy self-imitation rows")
     if buffer.option_dim != model.option_dim:
@@ -2408,6 +2753,8 @@ def train_ppo(
         tot_placement = 0.0
         tot_kl_ref = 0.0
         tot_self_imitation = 0.0
+        tot_terminal_teacher = 0.0
+        tot_terminal_teacher_agreement = 0.0
         tot_strategic_value = tot_tactical_value = 0.0
         n_seen = 0
         n_policy_seen = 0
@@ -2418,6 +2765,8 @@ def train_ppo(
         self_imitation_accepted = 0
         self_imitation_stale = 0
         self_imitation_phase_counts = {phase: 0 for phase in SELF_IMITATION_PHASES}
+        terminal_teacher_rows = 0
+        terminal_teacher_batches = 0
         option_policy_total = option_value_total = option_entropy_total = 0.0
         option_kl_total = option_clip_total = option_value_error_total = 0.0
         option_seen = option_updates = 0
@@ -2608,6 +2957,25 @@ def train_ppo(
                         np.sum(buffer.self_imitation.phase[replay_idx] == phase)
                     )
 
+            terminal_teacher_loss = torch.zeros(
+                (), dtype=torch.float32, device=device
+            )
+            terminal_teacher_agreement = 0.0
+            teacher_idx: np.ndarray | None = None
+            if terminal_teacher is not None:
+                teacher_idx = select_terminal_teacher_indices(
+                    len(terminal_teacher),
+                    terminal_teacher_batch_size,
+                    seed=seed,
+                    epoch=epoch,
+                    minibatch=start // batch_size,
+                )
+                terminal_teacher_loss, terminal_teacher_agreement = (
+                    terminal_teacher_minibatch_loss(
+                        model, terminal_teacher, teacher_idx, device
+                    )
+                )
+
             loss = (
                 policy_coef * policy_loss
                 + value_coef * value_loss
@@ -2620,6 +2988,10 @@ def train_ppo(
                 + kl_ref_coef * kl_ref
                 + self_imitation_coef * self_imitation_loss
             )
+            if terminal_teacher is not None:
+                # The coefficient-zero control still executes the exact same
+                # teacher forward graph and batches, but contributes exact zero.
+                loss = loss + terminal_teacher_coef * terminal_teacher_loss
             optimizer.zero_grad()
             loss.backward()
             if max_grad_norm > 0:
@@ -2659,6 +3031,15 @@ def train_ppo(
             tot_placement += placement_loss.item() * bs
             tot_kl_ref += kl_ref.item() * policy_count
             tot_self_imitation += self_imitation_loss.item() * accepted
+            if teacher_idx is not None:
+                terminal_teacher_rows += len(teacher_idx)
+                terminal_teacher_batches += 1
+                tot_terminal_teacher += (
+                    terminal_teacher_loss.detach().item() * len(teacher_idx)
+                )
+                tot_terminal_teacher_agreement += (
+                    terminal_teacher_agreement * len(teacher_idx)
+                )
             tot_strategic_value += strategic_value_loss * strategic_count
             tot_tactical_value += tactical_value_loss * tactical_count
             n_strategic_seen += strategic_count
@@ -2782,6 +3163,15 @@ def train_ppo(
                     )
                     + ") | "
                 )
+            terminal_teacher_summary = ""
+            if terminal_teacher is not None:
+                terminal_teacher_summary = (
+                    "terminal_teacher_loss="
+                    f"{tot_terminal_teacher / max(1, terminal_teacher_rows):.4f} "
+                    f"(coef={terminal_teacher_coef:g}, agreement="
+                    f"{tot_terminal_teacher_agreement / max(1, terminal_teacher_rows):.3f}, "
+                    f"rows={terminal_teacher_rows}, batches={terminal_teacher_batches}) | "
+                )
             print(
                 f"PPO epoch {epoch}/{epochs} | "
                 f"policy_loss={tot_policy / policy_denom:.4f} | "
@@ -2802,6 +3192,7 @@ def train_ppo(
                 f"placement_loss={tot_placement / n_seen:.4f} | "
                 f"kl_ref={tot_kl_ref / policy_denom:.4f} | "
                 + self_imitation_summary
+                + terminal_teacher_summary
                 + f"mean_p_chosen={tot_prob / policy_denom:.3f} | "
                 f"policy_steps={n_policy_seen}/{n_seen} | "
                 f"optimizer_steps={optimizer_steps}"
@@ -2866,6 +3257,18 @@ def train_ppo(
                         "self_imitation_accepted": self_imitation_accepted,
                         "self_imitation_stale": self_imitation_stale,
                         "self_imitation_phase_counts": dict(self_imitation_phase_counts),
+                    }
+                )
+            if terminal_teacher is not None:
+                epoch_metrics.update(
+                    {
+                        "terminal_teacher_loss": tot_terminal_teacher
+                        / max(1, terminal_teacher_rows),
+                        "terminal_teacher_coef": terminal_teacher_coef,
+                        "terminal_teacher_agreement": tot_terminal_teacher_agreement
+                        / max(1, terminal_teacher_rows),
+                        "terminal_teacher_rows": terminal_teacher_rows,
+                        "terminal_teacher_batches": terminal_teacher_batches,
                     }
                 )
             history.append(epoch_metrics)

@@ -575,6 +575,113 @@ const ACTION_EXTENSION_COMMANDS: GameCommand['type'][] = [
 ];
 const ACTION_EXTENSION_SLOTS = 32;
 
+/**
+ * Append-only v1.5 public monster-reward semantics. The frozen 84-float action
+ * vector remains an exact prefix, so historical checkpoints can be zero-expanded.
+ * Every non-reward command gets an all-zero suffix.
+ *
+ * Slots:
+ *   0 total VP; 1..5 action/barrier effects; 6..10 rune/relic effect kinds;
+ *   11..14 resolved origin-rune identity; 15..19 resolved relic identity.
+ */
+export const MONSTER_REWARD_SEMANTIC_SLOTS = 20;
+// Stable rules identities. Never derive this ordering from catalog/track serialization.
+const REWARD_ORIGIN_RUNE_IDS = [
+	'356f3ad2-4cac-4b69-a3cc-7559f8891d8e', // Cyber City
+	'34b2a963-f8c6-4fc0-8272-ddc50b0036a8', // Forest / Floral Patch
+	'480cd5f7-adea-481d-8ea9-aad776599d7b', // Lantern Lights
+	'5eba8681-16b8-4563-b017-22c80a84b35b' // Tidal Tribe / Moon Tide
+] as const;
+const REWARD_RELIC_IDS = [
+	'e02af831-e599-4676-9e37-820d19bfc3e1', // Fairy
+	'a6111d01-2c55-4b1f-854a-32887d92b8e1', // Teapot
+	'8a0d54ca-aeab-405c-9e5c-1c1425d1aa86', // Firecracker
+	'690a7e3b-5737-4494-bb8a-b58bee13f473', // Flower
+	'ee1486a0-8b61-499c-809b-b4de9920aa8f' // Magnet
+] as const;
+const MAX_MONSTER_REWARD_VP_PER_PICK = 5;
+
+function appendMonsterRewardSemantics(
+	f: number[],
+	state: PublicGameState,
+	seat: SeatColor,
+	cmd: GameCommand
+): void {
+	const x = new Array<number>(MONSTER_REWARD_SEMANTIC_SLOTS).fill(0);
+	if (cmd.type !== 'resolveMonsterReward') {
+		f.push(...x);
+		return;
+	}
+	const pending = state.players[seat]?.pendingReward;
+	if (!pending) {
+		f.push(...x);
+		return;
+	}
+	const byIndex = new Map(
+		buildMonsterRewards(pending.rewardTrack).map((option) => [option.index, option])
+	);
+	const maxClaims = Math.max(1, pending.chooseAmount);
+	const countScale = 1 / maxClaims;
+	let vp = 0;
+	let choiceCursor = 0;
+	for (const pick of [...new Set(cmd.picks ?? [])]) {
+		const effect = byIndex.get(pick)?.effect;
+		if (!effect) continue;
+		switch (effect.type) {
+			case 'vp':
+				vp += effect.amount;
+				break;
+			case 'action': {
+				const slot = {
+					spiritWorldSummon: 1,
+					abyssSummon: 2,
+					cultivate: 3,
+					rest: 4
+				}[effect.action];
+				x[slot] += countScale;
+				break;
+			}
+			case 'restoreBarrier':
+				x[5] += clamp01(effect.amount * countScale);
+				break;
+			case 'rune': {
+				x[effect.rune.type === 'rune' ? 6 : effect.rune.type === 'augment' ? 7 : 8] += countScale;
+				const ids: readonly string[] =
+					effect.rune.type === 'rune'
+						? REWARD_ORIGIN_RUNE_IDS
+						: effect.rune.type === 'relic'
+							? REWARD_RELIC_IDS
+							: [];
+				const identity = ids.findIndex((id) => id === effect.rune.runeId);
+				if (identity >= 0) x[(effect.rune.type === 'rune' ? 11 : 15) + identity] += countScale;
+				break;
+			}
+			case 'chooseRune': {
+				const isRelicChoice =
+					effect.options.length > 0 && effect.options.every((rune) => rune.type === 'relic');
+				const isOriginChoice =
+					effect.options.length > 0 && effect.options.every((rune) => rune.type === 'rune');
+				if (isOriginChoice) x[9] += countScale;
+				if (isRelicChoice) x[10] += countScale;
+				const choice = cmd.choices?.[choiceCursor++] ?? 0;
+				const chosen = effect.options[choice] ?? effect.options[0];
+				if (!chosen) break;
+				const ids: readonly string[] = isOriginChoice
+					? REWARD_ORIGIN_RUNE_IDS
+					: isRelicChoice
+						? REWARD_RELIC_IDS
+						: [];
+				const identity = ids.findIndex((id) => id === chosen.runeId);
+				if (identity >= 0) x[(isOriginChoice ? 11 : 15) + identity] += countScale;
+				break;
+			}
+		}
+	}
+	x[0] = clamp01(vp / (maxClaims * MAX_MONSTER_REWARD_VP_PER_PICK));
+	for (let i = 1; i < x.length; i++) x[i] = clamp01(x[i]);
+	f.push(...x);
+}
+
 function actionEntityIds(
 	state: PublicGameState,
 	seat: SeatColor,
@@ -1073,6 +1180,7 @@ export function encodeAction(
 		f.push(clamp01(expected.killProbability / 4)); // expected monster-life progress
 		f.push(0); // not table churn
 		appendActionExtension(f, state, seat, cmd, next);
+		appendMonsterRewardSemantics(f, state, seat, cmd);
 		return f;
 	}
 	if (next && a && b) {
@@ -1125,6 +1233,7 @@ export function encodeAction(
 		for (let i = 0; i < ACTION_EFFECT_SLOTS; i++) f.push(0);
 	}
 	appendActionExtension(f, state, seat, cmd, next);
+	appendMonsterRewardSemantics(f, state, seat, cmd);
 
 	return f;
 }
@@ -1135,6 +1244,14 @@ export const ACTION_EFFECT_SLOTS = 12;
 /** Frozen start index of the original 12 effect slots. */
 export const ACTION_EFFECT_OFFSET = COMMAND_VOCAB.length + ACTION_PARAM_SLOTS;
 
+/** Frozen start index of the v1.5 public monster-reward semantic suffix. */
+export const MONSTER_REWARD_SEMANTIC_OFFSET =
+	COMMAND_VOCAB.length + ACTION_PARAM_SLOTS + ACTION_EFFECT_SLOTS + ACTION_EXTENSION_SLOTS;
+
 /** Number of features encodeAction emits. */
 export const ACT_DIM =
-	COMMAND_VOCAB.length + ACTION_PARAM_SLOTS + ACTION_EFFECT_SLOTS + ACTION_EXTENSION_SLOTS;
+	COMMAND_VOCAB.length +
+	ACTION_PARAM_SLOTS +
+	ACTION_EFFECT_SLOTS +
+	ACTION_EXTENSION_SLOTS +
+	MONSTER_REWARD_SEMANTIC_SLOTS;

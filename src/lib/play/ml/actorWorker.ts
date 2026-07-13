@@ -269,7 +269,17 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 							? {}
 							: {
 									rolloutChoose: (rs, rSeat, rWithNext) =>
-										hybridIndex(policy!, rs, rSeat, rWithNext, { sample: false }, catalog)
+										hybridIndex(
+											policy!,
+											rs,
+											rSeat,
+											rWithNext,
+											{
+												sample: false,
+												learnMonsterRewardChoices: config.learnMonsterRewardChoices
+											},
+											catalog
+										)
 								})
 					});
 					return res ? { index: res.index, pi: res.pi } : null;
@@ -291,6 +301,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				sample: config.sample,
 				temperature: config.temperature,
 				selection: config.selection,
+				learnMonsterRewardChoices: config.learnMonsterRewardChoices,
 				opponentPolicies,
 				opponentTemperature: config.opponentTemperature,
 				forbidTypes,

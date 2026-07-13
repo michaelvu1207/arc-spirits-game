@@ -136,7 +136,7 @@ function determinize(state: PublicGameState, seat: SeatColor, simSeed: number): 
 /** Advance a determinized state with every seat played by `profile` (or the
  *  self-model `choose` callback) until game end / stopRound. Same drain shape
  *  as advanceAfterNav (botPolicy.ts). */
-function rollout(
+export function rolloutPolicyToRound(
 	s: PublicGameState,
 	catalog: PlayCatalog,
 	profile: BotProfile,
@@ -273,7 +273,14 @@ export function planDecisionGumbel(
 			int: (mm: number) => nextInt(s.rng, mm),
 			chance: () => nextInt(s.rng, 2) === 0
 		};
-		s = rollout(s, catalog, profile, botRng, state.round + horizon, opts.rolloutChoose);
+		s = rolloutPolicyToRound(
+			s,
+			catalog,
+			profile,
+			botRng,
+			state.round + horizon,
+			opts.rolloutChoose
+		);
 		const vNet = clamp01(policy.value(encodeObs(s, seat, catalog)));
 		const value =
 			valueWeight >= 1 || s.status !== 'active'

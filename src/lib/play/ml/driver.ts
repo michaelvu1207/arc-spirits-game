@@ -259,6 +259,8 @@ export interface RecordGameOptions {
 	/** How neural seats choose actions: 'hybrid' (default) = learned policy for positioning +
 	 *  always grab immediate VP; 'policy' = imitation head only; 'value' = 1-ply value-lookahead. */
 	selection?: 'hybrid' | 'value' | 'policy';
+	/** Opt-in V24 hybrid mode: policy-select ambiguous monster rewards except immediate wins. */
+	learnMonsterRewardChoices?: boolean;
 	/** Which seats to record decisions for. Default: neural seats (or all, heuristic mode). */
 	recordSeats?: SeatColor[];
 	/**
@@ -1280,7 +1282,12 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 										state,
 										seat,
 										withNext,
-										{ sample, temperature: pickTemperature, rand },
+										{
+											sample,
+											temperature: pickTemperature,
+											rand,
+											learnMonsterRewardChoices: opts.learnMonsterRewardChoices
+										},
 										catalog
 									);
 		const chosenAction = withNext[idx];

@@ -2,8 +2,9 @@
 """Dims-preserving warm-start surgery: expand an arc-cand-scorer-v1 JSON checkpoint
 from OLD obs_dim/act_dim to NEW dimensions by inserting ZERO input columns for
 strictly appended observation or action features. The current observation encoder
-v1.4 appends 11 late-game macro features (188 -> 199), while action v1.4 keeps the
-original 52 features as a strict prefix and appends its identity/cost tail.
+v1.4 appends 11 late-game macro features (188 -> 199). Action v1.5 keeps all 84
+v1.4 features as a strict prefix and appends 20 public monster-reward semantic
+features (84 -> 104).
 
 Observation revisions append features at the END of the obs vector.
 In every head's FIRST Linear the obs block is the leading `obs_dim` input columns
@@ -18,9 +19,12 @@ Only the first Linear of each head changes (its input width); deeper layers are 
 logit/value parity via an independent numpy forward pass before writing.
 
 Usage:
+  # V23 option checkpoints must first pass the exact-zero strip gate:
+  python ml/strip_options.py --in ml/v23-control-gen5.json \
+      --out ml/warmstart/v24-control-gen5-no-options.json
   python ml/expand_obs_dim.py --in ml/champions/ladder3/main-0-gen60.json \
-      --out ml/warmstart/v22-main0-obs199-act84.json \
-      --new-obs-dim 199 --new-act-dim 84
+      --out ml/warmstart/v24-main0-obs199-act104.json \
+      --new-obs-dim 199 --new-act-dim 104
 """
 from __future__ import annotations
 

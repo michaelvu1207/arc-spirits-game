@@ -199,14 +199,14 @@ export function randomPolicy(seed = 1, trunkHidden = [128, 128], valueHidden = [
 }
 
 /** Load weights if present and compatible with the current encoder. Strict-prefix observation
- * checkpoints are zero-expanded; incompatible action/newer-observation nets fall back to random. */
+ * and action checkpoints are zero-expanded; newer/incompatible nets fall back to random. */
 export function loadOrRandomPolicy(
 	file = mlPath('weights', 'policy.json'),
 	seed = 1
 ): NeuralPolicy {
 	if (existsSync(file)) {
 		const w = JSON.parse(readFileSync(file, 'utf8')) as PolicyWeights;
-		if (w.obs_dim <= OBS_DIM && w.act_dim === ACT_DIM) {
+		if (w.obs_dim <= OBS_DIM && w.act_dim <= ACT_DIM) {
 			return loadPolicyWeights(w, { expectedObsDim: OBS_DIM, expectedActDim: ACT_DIM });
 		}
 	}

@@ -20,6 +20,8 @@ import {
 	ACTION_EFFECT_OFFSET,
 	ACTION_EFFECT_SLOTS,
 	COMMAND_VOCAB,
+	MONSTER_REWARD_SEMANTIC_OFFSET,
+	MONSTER_REWARD_SEMANTIC_SLOTS,
 	OBS_DIM,
 	encodeAction,
 	encodeObs
@@ -40,6 +42,13 @@ const VP3 = '54a61c34-6e05-44df-a4d1-115e004af31e';
 const ABYSS_SUMMON = '12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e';
 const TEAPOT = 'c8ef5d48-2289-4fee-a34d-b041d3e8bea6';
 const ANY_RUNE = '36aab6c9-b98c-4e84-b097-e743f45dde82';
+const ANY_RELIC = '6a85e06a-52cc-483c-aa59-38395a377307';
+const SPIRIT_WORLD_SUMMON = '76e58219-e805-4b94-acf4-6d62dfe4c515';
+const CULTIVATE = '60e40dd5-c3cc-4f26-9aa3-2043b4106ade';
+const REST = 'bdded3f5-e405-4b68-b63a-9f5c2139beea';
+const BARRIER = '6746f875-a1bc-453c-94b5-718d6ebeb025';
+const FOREST_RUNE = '8dd2b283-122b-4965-9184-f1f84e1216f4';
+const ANIMAL_AUGMENT = '40934631-35fc-4936-943a-c607a9c607be';
 
 const CATALOG: PlayCatalog = {
 	guardians: [
@@ -398,6 +407,85 @@ describe('neural value action scoring', () => {
 		expect(encodedA).toHaveLength(ACT_DIM);
 		expect(encodedB).toHaveLength(ACT_DIM);
 		expect(encodedA).not.toEqual(encodedB);
+	});
+
+	it('appends only public monster-reward semantics and resolves wildcard identities', () => {
+		expect(MONSTER_REWARD_SEMANTIC_OFFSET).toBe(84);
+		expect(ACT_DIM).toBe(MONSTER_REWARD_SEMANTIC_OFFSET + MONSTER_REWARD_SEMANTIC_SLOTS);
+		const state = atAbyss();
+		state.players.Red!.pendingReward = {
+			monsterId: 'semantic-maw',
+			monsterName: 'Semantic Maw',
+			rewardTrack: [
+				VP3,
+				SPIRIT_WORLD_SUMMON,
+				ABYSS_SUMMON,
+				CULTIVATE,
+				REST,
+				BARRIER,
+				FOREST_RUNE,
+				ANIMAL_AUGMENT,
+				TEAPOT,
+				ANY_RUNE,
+				ANY_RELIC
+			],
+			chooseAmount: 2
+		};
+		const semantic = (command: Extract<GameCommand, { type: 'resolveMonsterReward' }>) =>
+			encodeAction(state, 'Red', command, undefined, CATALOG).slice(MONSTER_REWARD_SEMANTIC_OFFSET);
+
+		expect(semantic({ type: 'resolveMonsterReward', picks: [0, 2] }).slice(0, 3)).toEqual([
+			3 / 10,
+			0,
+			1 / 2
+		]);
+		expect(semantic({ type: 'resolveMonsterReward', picks: [1, 3] }).slice(1, 5)).toEqual([
+			1 / 2,
+			0,
+			1 / 2,
+			0
+		]);
+		expect(semantic({ type: 'resolveMonsterReward', picks: [4, 5] }).slice(4, 6)).toEqual([
+			1 / 2,
+			1 / 2
+		]);
+		expect(semantic({ type: 'resolveMonsterReward', picks: [6, 7] }).slice(6, 9)).toEqual([
+			1 / 2,
+			1 / 2,
+			0
+		]);
+		expect(semantic({ type: 'resolveMonsterReward', picks: [6] }).slice(11, 15)).toEqual([
+			0,
+			1 / 2,
+			0,
+			0
+		]); // fixed Forest rune
+		expect(semantic({ type: 'resolveMonsterReward', picks: [8] }).slice(6, 9)).toEqual([
+			0,
+			0,
+			1 / 2
+		]);
+		expect(semantic({ type: 'resolveMonsterReward', picks: [8] }).slice(15, 20)).toEqual([
+			0,
+			1 / 2,
+			0,
+			0,
+			0
+		]); // fixed Teapot relic
+		const wildcard = semantic({
+			type: 'resolveMonsterReward',
+			picks: [9, 10],
+			choices: [1, 3]
+		});
+		expect(wildcard.slice(9, 11)).toEqual([1 / 2, 1 / 2]);
+		expect(wildcard.slice(11, 15)).toEqual([0, 1 / 2, 0, 0]); // Forest
+		expect(wildcard.slice(15, 20)).toEqual([0, 0, 0, 1 / 2, 0]); // Flower relic
+
+		const nonReward = encodeAction(state, 'Red', { type: 'endLocationActions' }).slice(
+			MONSTER_REWARD_SEMANTIC_OFFSET
+		);
+		expect(nonReward).toEqual(Array(MONSTER_REWARD_SEMANTIC_SLOTS).fill(0));
+		expect(nonReward).toHaveLength(MONSTER_REWARD_SEMANTIC_SLOTS);
 	});
 
 	it('encodes market spirit class identity when the catalog is supplied', () => {
@@ -794,5 +882,56 @@ describe('neural value action scoring', () => {
 
 		const idx = hybridIndex(policyThatPasses, state, 'Red', actions, undefined, CATALOG);
 		expect(actions[idx].cmd.type).toBe('passEncounter');
+	});
+
+	it('keeps immediate monster VP by default but makes the ambiguity learnable when opted in', () => {
+		const state = atAbyss();
+		state.players.Red!.pendingReward = {
+			monsterId: 'choice-maw',
+			monsterName: 'Choice Maw',
+			rewardTrack: [VP3, ANY_RUNE],
+			chooseAmount: 1
+		};
+		const actions = legalActionsWithNext(state, 'Red', CATALOG).filter(
+			(action) => action.cmd.type === 'resolveMonsterReward'
+		);
+		let picks = 0;
+		const policyThatBuilds = {
+			...neutralPolicy,
+			pick: (_obs: number[], cands: number[][]) => {
+				picks += 1;
+				return cands.length - 1;
+			}
+		} as unknown as NeuralPolicy;
+
+		const historical = hybridIndex(policyThatBuilds, state, 'Red', actions, undefined, CATALOG);
+		expect(actions[historical].cmd).toMatchObject({ type: 'resolveMonsterReward', picks: [0] });
+		expect(picks).toBe(0);
+
+		const learned = hybridIndex(
+			policyThatBuilds,
+			state,
+			'Red',
+			actions,
+			{ learnMonsterRewardChoices: true },
+			CATALOG
+		);
+		expect(actions[learned].cmd).toMatchObject({ type: 'resolveMonsterReward', picks: [1] });
+		expect(picks).toBe(1);
+
+		state.players.Red!.victoryPoints = 27;
+		const winningActions = legalActionsWithNext(state, 'Red', CATALOG).filter(
+			(action) => action.cmd.type === 'resolveMonsterReward'
+		);
+		const win = hybridIndex(
+			policyThatBuilds,
+			state,
+			'Red',
+			winningActions,
+			{ learnMonsterRewardChoices: true },
+			CATALOG
+		);
+		expect(winningActions[win].cmd).toMatchObject({ type: 'resolveMonsterReward', picks: [0] });
+		expect(picks).toBe(1); // immediate win never delegated to policy
 	});
 });

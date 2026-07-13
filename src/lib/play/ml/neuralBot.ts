@@ -570,22 +570,38 @@ export function hybridIndex(
 	state: PublicGameState,
 	seat: SeatColor,
 	withNext: LegalAction[],
-	opts?: { sample?: boolean; temperature?: number; rand?: () => number },
+	opts?: {
+		sample?: boolean;
+		temperature?: number;
+		rand?: () => number;
+		/** Opt-in V24 mode: let the policy trade immediate VP for engine rewards. */
+		learnMonsterRewardChoices?: boolean;
+	},
 	catalog?: PlayCatalog
 ): number {
 	if (withNext.length <= 1) return 0;
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
-	// 1) Take an outright win immediately; otherwise the largest immediate VP gain (if any).
+	// Take an outright win immediately in every mode. V24 changes only ambiguous
+	// all-monster-reward decisions; every other historical VP safeguard is retained.
 	let bestVpIdx = -1;
 	let bestVpGain = 0;
 	for (let i = 0; i < withNext.length; i++) {
 		const n = policyPreviewState(withNext[i]);
-		if (n.winnerSeat === seat) return i;
+		// Some resolution commands cross the public VP threshold before phase
+		// advancement stamps winnerSeat. Treat the rules objective itself as the
+		// immediate-win guard, not only the derived terminal marker.
+		if (n.winnerSeat === seat || (n.players[seat]?.victoryPoints ?? 0) >= VP_TO_WIN) return i;
 		const gain = (n.players[seat]?.victoryPoints ?? 0) - curVP;
 		if (gain > bestVpGain) {
 			bestVpGain = gain;
 			bestVpIdx = i;
 		}
+	}
+	const learnableMonsterReward =
+		opts?.learnMonsterRewardChoices === true &&
+		withNext.every((action) => action.cmd.type === 'resolveMonsterReward');
+	if (learnableMonsterReward) {
+		return policyIndexWithProgressGuard(policy, state, seat, withNext, opts, catalog);
 	}
 	if (bestVpIdx >= 0 && bestVpGain > 0) return bestVpIdx;
 	// No immediate VP → the learned policy owns positioning and delayed-payoff decisions.
@@ -750,6 +766,12 @@ export interface NeuralPlanOptions {
 	 * is the legacy behavior, kept for the training/eval paths that want it.
 	 */
 	temperatureScope?: 'all' | 'navigation';
+	/**
+	 * Opt-in V24 behavior. Ambiguous all-monster-reward decisions go through the
+	 * learned policy (except an action that wins immediately). Default false keeps
+	 * historical/live checkpoint behavior exactly unchanged.
+	 */
+	learnMonsterRewardChoices?: boolean;
 }
 
 /** Synchronous variant when the caller already holds a policy (e.g. self-play / eval).
@@ -824,8 +846,15 @@ export function planNeuralPhaseActions(
 				seat,
 				withNext,
 				opts.temperature && opts.temperature > 0 && tempApplies
-					? { sample: true, temperature: opts.temperature }
-					: { sample: false },
+					? {
+							sample: true,
+							temperature: opts.temperature,
+							learnMonsterRewardChoices: opts.learnMonsterRewardChoices
+						}
+					: {
+							sample: false,
+							learnMonsterRewardChoices: opts.learnMonsterRewardChoices
+						},
 				catalog
 			);
 		}

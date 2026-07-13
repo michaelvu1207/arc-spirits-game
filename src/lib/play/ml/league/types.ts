@@ -250,6 +250,8 @@ export interface LeagueConfig {
 	/** Decision surfaces eligible for strategic MC/outcome credit. Default navigation. */
 	strategicDecisionScope?: StrategicDecisionScope;
 	selection: 'hybrid' | 'value' | 'policy';
+	/** Opt-in V24 hybrid mode: policy-select ambiguous monster rewards except immediate wins. */
+	learnMonsterRewardChoices?: boolean;
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;
 	temperature?: number;

@@ -225,6 +225,26 @@ describe('fixed-update continuation config guards', () => {
 		expect(() => validateLeagueConfig(valid())).not.toThrow();
 	});
 
+	it('plumbs the opt-in V24 monster-reward mode and rejects inactive configurations', () => {
+		const config = {
+			...defaultConfig('unused'),
+			mode: 'ppo' as const,
+			seats: 1,
+			selection: 'hybrid' as const,
+			sample: true,
+			learnMonsterRewardChoices: true
+		};
+		expect(() => validateLeagueConfig(config)).not.toThrow();
+		const learner = member('main-0', 'main', { weightsPath: 'w.json' });
+		expect(buildMatchup(config, learner, [], 0, 1).config.learnMonsterRewardChoices).toBe(true);
+		expect(() => validateLeagueConfig({ ...config, selection: 'policy' })).toThrow(
+			/requires selection='hybrid'/
+		);
+		expect(() => validateLeagueConfig({ ...config, sample: false })).toThrow(
+			/requires sample=true/
+		);
+	});
+
 	it('rejects expensive invalid experiments before actor generation', () => {
 		const targetKl = valid();
 		targetKl.train.extraArgs = ['--target-kl', '0.015'];

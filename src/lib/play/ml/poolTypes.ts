@@ -63,6 +63,8 @@ export interface ActorGameConfig {
 	 */
 	inferSocket?: string;
 	selection?: 'hybrid' | 'value' | 'policy';
+	/** Opt-in V24 hybrid mode: policy-select ambiguous monster rewards except immediate wins. */
+	learnMonsterRewardChoices?: boolean;
 	sample?: boolean;
 	temperature?: number;
 	/** Seats driven by the learner policy (driver default: all seats when weightsPath set). */
