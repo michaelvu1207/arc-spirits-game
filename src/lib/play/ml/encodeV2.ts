@@ -8,9 +8,8 @@
  * counts are variable in-game, so every token family is emitted PADDED to a fixed
  * cap with an explicit 0/1 mask — dims are constant for a given catalog.
  *
- * v1 (encode.ts) remains the live fixed-width lane at OBS_DIM=188 and the
- * 52-float encodeAction, which v2 deliberately does NOT duplicate — action features
- * remain v1's encodeAction.
+ * v1 (encode.ts) remains the live fixed-width lane at OBS_DIM=188. V2 deliberately
+ * does NOT duplicate action features; it uses the current append-only v1 encodeAction.
  *
  * INFORMATION SAFETY — the contract that matters most here:
  * The encoder emits strictly the ACTING seat's information set. The authority for

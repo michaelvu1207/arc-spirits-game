@@ -161,7 +161,12 @@ export class NeuralPolicy {
 }
 
 function validateLinear(layer: LinearLayer | undefined, name: string): void {
-	if (!layer || !Array.isArray(layer.W) || !Array.isArray(layer.b) || layer.W.length !== layer.b.length) {
+	if (
+		!layer ||
+		!Array.isArray(layer.W) ||
+		!Array.isArray(layer.b) ||
+		layer.W.length !== layer.b.length
+	) {
 		throw new Error(`Invalid policy weights: ${name} layer has inconsistent W/b`);
 	}
 	const width = layer.W[0]?.length;
@@ -192,13 +197,16 @@ function cloneLayers(layers: LinearLayer[] | undefined): LinearLayer[] | undefin
  */
 export function expandPolicyObsDim(weights: PolicyWeights, newObsDim: number): PolicyWeights {
 	const oldObsDim = weights.obs_dim;
-	if (!Number.isInteger(oldObsDim) || oldObsDim <= 0 || !Number.isInteger(weights.act_dim) || weights.act_dim <= 0) {
+	if (
+		!Number.isInteger(oldObsDim) ||
+		oldObsDim <= 0 ||
+		!Number.isInteger(weights.act_dim) ||
+		weights.act_dim <= 0
+	) {
 		throw new Error('Invalid policy weights: obs_dim and act_dim must be positive integers');
 	}
 	if (!Number.isInteger(newObsDim) || newObsDim < oldObsDim) {
-		throw new Error(
-			`Invalid policy weights: cannot expand obs_dim ${oldObsDim} to ${newObsDim}`
-		);
+		throw new Error(`Invalid policy weights: cannot expand obs_dim ${oldObsDim} to ${newObsDim}`);
 	}
 	if (newObsDim === oldObsDim) return weights;
 
@@ -249,6 +257,53 @@ export function expandPolicyObsDim(weights: PolicyWeights, newObsDim: number): P
 	return expanded;
 }
 
+/**
+ * Zero-expand an older checkpoint whose action encoder is a strict prefix of the
+ * current one. Action columns trail observation columns in action-aware heads, so
+ * appending zero columns preserves every old-checkpoint output exactly.
+ */
+export function expandPolicyActDim(weights: PolicyWeights, newActDim: number): PolicyWeights {
+	const oldActDim = weights.act_dim;
+	if (
+		!Number.isInteger(weights.obs_dim) ||
+		weights.obs_dim <= 0 ||
+		!Number.isInteger(oldActDim) ||
+		oldActDim <= 0
+	) {
+		throw new Error('Invalid policy weights: obs_dim and act_dim must be positive integers');
+	}
+	if (!Number.isInteger(newActDim) || newActDim < oldActDim) {
+		throw new Error(`Invalid policy weights: cannot expand act_dim ${oldActDim} to ${newActDim}`);
+	}
+	if (newActDim === oldActDim) return weights;
+
+	const expanded: PolicyWeights = {
+		...weights,
+		act_dim: newActDim,
+		trunk: cloneLayers(weights.trunk) ?? [],
+		value: cloneLayers(weights.value) ?? [],
+		farm_value: cloneLayers(weights.farm_value),
+		placement: cloneLayers(weights.placement),
+		reward_pick: cloneLayers(weights.reward_pick),
+		route_mode: cloneLayers(weights.route_mode)
+	};
+	const zeroCount = newActDim - oldActDim;
+	for (const head of OBS_ACTION_HEADS) {
+		const layers = expanded[head];
+		if (!layers) continue;
+		validateLinear(layers[0], `${head}[0]`);
+		const expectedWidth = weights.obs_dim + oldActDim;
+		const width = layers[0].W[0].length;
+		if (width !== expectedWidth) {
+			throw new Error(
+				`Invalid policy weights: ${head}[0] input ${width} does not match obs_dim + act_dim ${expectedWidth}`
+			);
+		}
+		layers[0].W = layers[0].W.map((row) => [...row, ...Array<number>(zeroCount).fill(0)]);
+	}
+	return expanded;
+}
+
 /** Parse + validate an exported weights blob. */
 export function loadPolicyWeights(json: unknown, opts: PolicyLoadOptions = {}): NeuralPolicy {
 	let w = json as PolicyWeights;
@@ -258,25 +313,41 @@ export function loadPolicyWeights(json: unknown, opts: PolicyLoadOptions = {}): 
 	if (opts.expectedObsDim !== undefined && w.obs_dim < opts.expectedObsDim) {
 		w = expandPolicyObsDim(w, opts.expectedObsDim);
 	}
+	if (opts.expectedActDim !== undefined && w.act_dim < opts.expectedActDim) {
+		w = expandPolicyActDim(w, opts.expectedActDim);
+	}
 	if (w.trunk[w.trunk.length - 1]?.W.length !== 1) {
 		throw new Error('Invalid policy weights: trunk must end in a single logit');
 	}
 	for (let i = 0; i < w.trunk.length; i++) validateLinear(w.trunk[i], `trunk[${i}]`);
 	for (let i = 0; i < w.value.length; i++) validateLinear(w.value[i], `value[${i}]`);
-	if (w.farm_value) for (let i = 0; i < w.farm_value.length; i++) validateLinear(w.farm_value[i], `farm_value[${i}]`);
-	if (w.placement) for (let i = 0; i < w.placement.length; i++) validateLinear(w.placement[i], `placement[${i}]`);
-	if (w.reward_pick) for (let i = 0; i < w.reward_pick.length; i++) validateLinear(w.reward_pick[i], `reward_pick[${i}]`);
-	if (w.route_mode) for (let i = 0; i < w.route_mode.length; i++) validateLinear(w.route_mode[i], `route_mode[${i}]`);
+	if (w.farm_value)
+		for (let i = 0; i < w.farm_value.length; i++)
+			validateLinear(w.farm_value[i], `farm_value[${i}]`);
+	if (w.placement)
+		for (let i = 0; i < w.placement.length; i++) validateLinear(w.placement[i], `placement[${i}]`);
+	if (w.reward_pick)
+		for (let i = 0; i < w.reward_pick.length; i++)
+			validateLinear(w.reward_pick[i], `reward_pick[${i}]`);
+	if (w.route_mode)
+		for (let i = 0; i < w.route_mode.length; i++)
+			validateLinear(w.route_mode[i], `route_mode[${i}]`);
 	if (opts.expectedObsDim !== undefined && w.obs_dim !== opts.expectedObsDim) {
-		throw new Error(`Invalid policy weights: obs_dim ${w.obs_dim} does not match encoder ${opts.expectedObsDim}`);
+		throw new Error(
+			`Invalid policy weights: obs_dim ${w.obs_dim} does not match encoder ${opts.expectedObsDim}`
+		);
 	}
 	if (opts.expectedActDim !== undefined && w.act_dim !== opts.expectedActDim) {
-		throw new Error(`Invalid policy weights: act_dim ${w.act_dim} does not match encoder ${opts.expectedActDim}`);
+		throw new Error(
+			`Invalid policy weights: act_dim ${w.act_dim} does not match encoder ${opts.expectedActDim}`
+		);
 	}
 	const trunkInput = w.trunk[0]?.W[0]?.length;
 	const valueInput = w.value[0]?.W[0]?.length;
 	if (trunkInput !== w.obs_dim + w.act_dim) {
-		throw new Error(`Invalid policy weights: trunk input ${trunkInput} does not match obs_dim + act_dim`);
+		throw new Error(
+			`Invalid policy weights: trunk input ${trunkInput} does not match obs_dim + act_dim`
+		);
 	}
 	if (valueInput !== w.obs_dim) {
 		throw new Error(`Invalid policy weights: value input ${valueInput} does not match obs_dim`);
@@ -287,15 +358,21 @@ export function loadPolicyWeights(json: unknown, opts: PolicyLoadOptions = {}): 
 	}
 	const placementInput = w.placement?.[0]?.W[0]?.length;
 	if (placementInput !== undefined && placementInput !== w.obs_dim) {
-		throw new Error(`Invalid policy weights: placement input ${placementInput} does not match obs_dim`);
+		throw new Error(
+			`Invalid policy weights: placement input ${placementInput} does not match obs_dim`
+		);
 	}
 	const rewardPickInput = w.reward_pick?.[0]?.W[0]?.length;
 	if (rewardPickInput !== undefined && rewardPickInput !== w.obs_dim + w.act_dim) {
-		throw new Error(`Invalid policy weights: reward_pick input ${rewardPickInput} does not match obs_dim + act_dim`);
+		throw new Error(
+			`Invalid policy weights: reward_pick input ${rewardPickInput} does not match obs_dim + act_dim`
+		);
 	}
 	const routeModeInput = w.route_mode?.[0]?.W[0]?.length;
 	if (routeModeInput !== undefined && routeModeInput !== w.obs_dim) {
-		throw new Error(`Invalid policy weights: route_mode input ${routeModeInput} does not match obs_dim`);
+		throw new Error(
+			`Invalid policy weights: route_mode input ${routeModeInput} does not match obs_dim`
+		);
 	}
 	return new NeuralPolicy(w);
 }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { applyGameCommand, createLobbyState } from '../runtime';
-import { SEAT_COLORS, type GameActor, type GameCommand, type PlayCatalog, type PublicGameState } from '../types';
+import {
+	SEAT_COLORS,
+	type GameActor,
+	type GameCommand,
+	type PlayCatalog,
+	type PublicGameState
+} from '../types';
 import { computeKillProbability } from '../server/botPolicy';
 import {
 	enumerateCandidates,
@@ -9,7 +15,15 @@ import {
 	type LegalAction
 } from './actions';
 import { rewardPickTarget } from './auxTargets';
-import { ACT_DIM, COMMAND_VOCAB, OBS_DIM, encodeAction, encodeObs } from './encode';
+import {
+	ACT_DIM,
+	ACTION_EFFECT_OFFSET,
+	ACTION_EFFECT_SLOTS,
+	COMMAND_VOCAB,
+	OBS_DIM,
+	encodeAction,
+	encodeObs
+} from './encode';
 import { claimableMonsterRewardVp, evaluateFarmValue } from './farmValue';
 import {
 	hybridIndex,
@@ -399,6 +413,13 @@ describe('neural value action scoring', () => {
 					origins: {}
 				},
 				{
+					id: 'spirit-animal-2',
+					name: 'Route Cub Twin',
+					cost: 2,
+					classes: { 'Spirit Animal': 1 },
+					origins: {}
+				},
+				{
 					id: 'cultivator-1',
 					name: 'Route Cultivator',
 					cost: 3,
@@ -428,8 +449,20 @@ describe('neural value action scoring', () => {
 			undefined,
 			catalog
 		);
+		state.market[0].spiritId = 'spirit-animal-2';
+		const animalTwin = encodeAction(
+			state,
+			'Red',
+			{ type: 'takeSpirit', marketIndex: 0 },
+			undefined,
+			catalog
+		);
 
 		expect(blind[p + 3]).toBe(0);
+		expect(animal.slice(0, ACTION_EFFECT_OFFSET + ACTION_EFFECT_SLOTS)).toEqual(
+			animalTwin.slice(0, ACTION_EFFECT_OFFSET + ACTION_EFFECT_SLOTS)
+		);
+		expect(animal).not.toEqual(animalTwin);
 		expect(animal[p + 2]).toBeCloseTo(2 / 8);
 		expect(animal[p + 3]).toBeGreaterThan(0);
 		expect(animal[p + 9]).toBe(0);
@@ -537,8 +570,8 @@ describe('neural value action scoring', () => {
 
 		const encoded = encodeAction(state, 'Red', actions[startCombat].cmd, actions[startCombat].next);
 		expect(encoded).toHaveLength(ACT_DIM);
-		expect(encoded.slice(-5)[0]).toBeGreaterThan(0);
-		expect(encoded.slice(-5)[1]).toBe(1);
+		expect(encoded[ACTION_EFFECT_OFFSET + 7]).toBeGreaterThan(0);
+		expect(encoded[ACTION_EFFECT_OFFSET + 8]).toBe(1);
 	});
 
 	it('scores low-rung multi-life farm value and can boost Abyss navigation priors', () => {
@@ -627,7 +660,7 @@ describe('neural value action scoring', () => {
 			actions[endLocation].next
 		);
 		expect(endFeatures).toHaveLength(ACT_DIM);
-		expect(endFeatures.slice(-5)[2]).toBe(1);
+		expect(endFeatures[ACTION_EFFECT_OFFSET + 9]).toBe(1);
 		expect(
 			actions[valueGuidedIndex(neutralPolicy, state, 'Red', actions, undefined, CATALOG)].cmd.type
 		).toBe('endLocationActions');

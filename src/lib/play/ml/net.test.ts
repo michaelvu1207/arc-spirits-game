@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { expandPolicyObsDim, loadPolicyWeights, type PolicyWeights } from './net';
+import {
+	expandPolicyActDim,
+	expandPolicyObsDim,
+	loadPolicyWeights,
+	type PolicyWeights
+} from './net';
 
 function fixture(): PolicyWeights {
 	return {
@@ -7,14 +12,28 @@ function fixture(): PolicyWeights {
 		obs_dim: 2,
 		act_dim: 1,
 		trunk: [
-			{ W: [[1, 2, 3], [-1, 0.5, 2]], b: [0.1, -0.2] },
+			{
+				W: [
+					[1, 2, 3],
+					[-1, 0.5, 2]
+				],
+				b: [0.1, -0.2]
+			},
 			{ W: [[0.75, -0.25]], b: [0.3] }
 		],
 		value: [{ W: [[0.5, -1]], b: [0.2] }],
 		farm_value: [{ W: [[0.25, 0.75]], b: [0] }],
 		route_mode: [{ W: [[-0.5, 1]], b: [0.1] }],
 		placement: [
-			{ W: [[1, 0], [0, 1], [-1, 0], [0, -1]], b: [0, 0, 0, 0] }
+			{
+				W: [
+					[1, 0],
+					[0, 1],
+					[-1, 0],
+					[0, -1]
+				],
+				b: [0, 0, 0, 0]
+			}
 		],
 		reward_pick: [{ W: [[0.1, 0.2, 0.3]], b: [-0.4] }]
 	};
@@ -44,8 +63,32 @@ describe('observation-prefix checkpoint compatibility', () => {
 		expect(expandedPolicy.w.trunk[0].W[0]).toEqual([1, 2, 0, 0, 3]);
 	});
 
+	it('zero-expands an appended action tail without changing old-checkpoint output', () => {
+		const raw = fixture();
+		const oldPolicy = loadPolicyWeights(raw);
+		const expandedPolicy = loadPolicyWeights(raw, { expectedObsDim: 2, expectedActDim: 3 });
+		const obs = [0.4, -0.7];
+		const oldCands = [[0.2], [-0.5]];
+		const newCands = [
+			[0.2, 0.9, -0.4],
+			[-0.5, -0.7, 0.8]
+		];
+
+		expect(expandedPolicy.scoreCandidates(obs, newCands)).toEqual(
+			oldPolicy.scoreCandidates(obs, oldCands)
+		);
+		expect(expandedPolicy.rewardPickScores(obs, newCands)).toEqual(
+			oldPolicy.rewardPickScores(obs, oldCands)
+		);
+		expect(expandedPolicy.value(obs)).toBe(oldPolicy.value(obs));
+		expect(raw.act_dim).toBe(1);
+		expect(raw.trunk[0].W[0]).toHaveLength(3);
+		expect(expandedPolicy.w.trunk[0].W[0]).toEqual([1, 2, 3, 0, 0]);
+	});
+
 	it('rejects shrinking or malformed head widths', () => {
 		expect(() => expandPolicyObsDim(fixture(), 1)).toThrow(/cannot expand/);
+		expect(() => expandPolicyActDim(fixture(), 0)).toThrow(/cannot expand/);
 		const malformed = fixture();
 		malformed.placement![0].W[0].push(99);
 		expect(() => loadPolicyWeights(malformed, { expectedObsDim: 4 })).toThrow(

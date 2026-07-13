@@ -14,7 +14,7 @@
  *   SMOKE=1    npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
  *   SMOKE_V2=1 npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
  */
-import { OBS_DIM } from '../encode';
+import { ACT_DIM, OBS_DIM } from '../encode';
 import { describe, expect, it } from 'vitest';
 import {
 	copyFileSync,
@@ -94,7 +94,6 @@ describe('concurrent gauntlet attribution', () => {
 		}
 	});
 });
-
 function member(id: string, kind: LeagueMember['kind'], extra: Partial<LeagueMember> = {}): LeagueMember {
 	return { id, kind, createdGen: 0, matchStats: {}, ...extra };
 }
@@ -479,11 +478,11 @@ describe('league smoke generation (SMOKE=1)', () => {
 				expect(line.promoted).toBeNull();
 				expect(Object.keys(line.opponents).length).toBeGreaterThan(0);
 
-				// The trained checkpoint exists and matches the 62/52 contract.
+				// The trained checkpoint exists and matches the live encoder contract.
 				expect(existsSync(line.ckpt)).toBe(true);
 				const ckpt = JSON.parse(readFileSync(line.ckpt, 'utf8')) as { obs_dim: number; act_dim: number };
 				expect(ckpt.obs_dim).toBe(OBS_DIM);
-				expect(ckpt.act_dim).toBe(52);
+				expect(ckpt.act_dim).toBe(ACT_DIM);
 
 				// State advanced + learner now plays its new ckpt; history has the line.
 				const { state } = loadLeague(root);
@@ -684,7 +683,7 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 				expect(readFileSync(a, 'utf8')).toBe(readFileSync(b, 'utf8')); // seed-deterministic
 				const policy = loadPolicyWeights(JSON.parse(readFileSync(a, 'utf8')), {
 					expectedObsDim: OBS_DIM,
-					expectedActDim: 52
+					expectedActDim: ACT_DIM
 				});
 				expect(typeof policy.probs).toBe('function');
 				// A different seed mints a different net.
@@ -756,7 +755,7 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 				expect(existsSync(main.initFrom!)).toBe(true);
 				loadPolicyWeights(JSON.parse(readFileSync(main.initFrom!, 'utf8')), {
 					expectedObsDim: OBS_DIM,
-					expectedActDim: 52
+					expectedActDim: ACT_DIM
 				});
 
 				// PPO from gen 1: the random-init lane is POLICY-driven in its first games
@@ -815,7 +814,7 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 				expect(line.samples).toBeGreaterThan(0);
 				expect(line.evalGames).toBe(2);
 
-				// .pt + sibling manifest checkpoint; distilled v1 student on the 62/52 contract.
+				// .pt + sibling manifest checkpoint; distilled v1 student on the live contract.
 				expect(line.ckpt.endsWith('.pt')).toBe(true);
 				expect(existsSync(line.ckpt)).toBe(true);
 				expect(existsSync(line.ckpt.replace(/\.pt$/, '.manifest.json'))).toBe(true);
@@ -825,7 +824,7 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 					act_dim: number;
 				};
 				expect(student.obs_dim).toBe(OBS_DIM);
-				expect(student.act_dim).toBe(52);
+				expect(student.act_dim).toBe(ACT_DIM);
 
 				// Paired-row training data: meta kept the pool's obs_v2 block after the merge.
 				const meta = JSON.parse(

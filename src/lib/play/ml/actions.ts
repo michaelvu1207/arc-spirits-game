@@ -122,6 +122,101 @@ function uniqueBy<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
 }
 
 /**
+ * Enumerate the Infiltrator's real dice-swap surface without multiplying fungible
+ * same-tier dice. Larger target sets come first so the rules-text "with all players"
+ * branch is retained even if the global engine-choice bound is reached.
+ */
+function infiltratorSwapCommands(
+	state: PublicGameState,
+	seat: SeatColor
+): Extract<GameCommand, { type: 'infiltratorSwap' }>[] {
+	const me = state.players[seat];
+	if (!me || state.phase !== 'location') return [];
+	if (
+		!(me.spirits ?? []).some(
+			(spirit) => !spirit.isFaceDown && (spirit.classes?.Infiltrator ?? 0) > 0
+		)
+	) {
+		return [];
+	}
+	if ((me.actionsUsedThisRound ?? []).includes('infiltratorSwap')) return [];
+	const destination = me.navigationDestination;
+	if (!destination || (me.attackDice?.length ?? 0) === 0) return [];
+
+	const targets = state.activeSeats
+		.filter(
+			(targetSeat) =>
+				targetSeat !== seat &&
+				state.players[targetSeat]?.navigationDestination === destination &&
+				(state.players[targetSeat]?.attackDice?.length ?? 0) > 0
+		)
+		.map((targetSeat) => ({ targetSeat, dice: state.players[targetSeat]!.attackDice }));
+	if (targets.length === 0) return [];
+
+	const out: Extract<GameCommand, { type: 'infiltratorSwap' }>[] = [];
+	const maxTargets = Math.min(targets.length, me.attackDice.length);
+	for (
+		let targetCount = maxTargets;
+		targetCount >= 1 && out.length < MAX_ENGINE_CHOICE_COMMANDS;
+		targetCount -= 1
+	) {
+		for (const targetSubset of combinations(targets, targetCount)) {
+			if (out.length >= MAX_ENGINE_CHOICE_COMMANDS) break;
+			const ownAssignments: (typeof me.attackDice)[] = [];
+			const ownChosen: typeof me.attackDice = [];
+			const usedOwn = new Set<string>();
+			const seenOwnTiers = new Set<string>();
+			const chooseOwn = (): void => {
+				if (ownChosen.length === targetSubset.length) {
+					const key = ownChosen.map((die) => die.tier).join('|');
+					if (!seenOwnTiers.has(key)) {
+						seenOwnTiers.add(key);
+						ownAssignments.push([...ownChosen]);
+					}
+					return;
+				}
+				for (const die of me.attackDice) {
+					if (usedOwn.has(die.instanceId)) continue;
+					usedOwn.add(die.instanceId);
+					ownChosen.push(die);
+					chooseOwn();
+					ownChosen.pop();
+					usedOwn.delete(die.instanceId);
+				}
+			};
+			chooseOwn();
+
+			for (const own of ownAssignments) {
+				if (out.length >= MAX_ENGINE_CHOICE_COMMANDS) break;
+				const theirChoices = targetSubset.map((target) => uniqueBy(target.dice, (die) => die.tier));
+				const chosenTheirs: (typeof theirChoices)[number] = [];
+				const chooseTheirs = (index: number): void => {
+					if (out.length >= MAX_ENGINE_CHOICE_COMMANDS) return;
+					if (index === targetSubset.length) {
+						out.push({
+							type: 'infiltratorSwap',
+							swaps: targetSubset.map((target, targetIndex) => ({
+								targetSeat: target.targetSeat,
+								myInstanceId: own[targetIndex].instanceId,
+								theirInstanceId: chosenTheirs[targetIndex].instanceId
+							}))
+						});
+						return;
+					}
+					for (const die of theirChoices[index]) {
+						chosenTheirs.push(die);
+						chooseTheirs(index + 1);
+						chosenTheirs.pop();
+					}
+				};
+				chooseTheirs(0);
+			}
+		}
+	}
+	return out;
+}
+
+/**
  * A legal candidate command paired with two deliberately different state views.
  *
  * `next` is the authoritative dry-run result. It may contain dice rolls, shuffled bag
@@ -550,6 +645,7 @@ export function enumerateCandidates(
 						spiritSlotIndex: att.spiritSlotIndex
 					});
 			}
+			for (const command of infiltratorSwapCommands(state, seat)) tryAdd(command);
 			// Pay down a forced corruption-discard obligation (from fighting the Abyss
 			// monster, or a lost PvP strike). It blocks `endLocationActions` until paid, so
 			// WITHOUT these candidates a corrupted bot had no progressing move and stalled

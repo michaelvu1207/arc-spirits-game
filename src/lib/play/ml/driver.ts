@@ -330,7 +330,7 @@ export interface RecordGameOptions {
 	 * the in-process TS NeuralPolicy is v1-only and rejected. Selection must be 'hybrid'
 	 * or 'policy' — 'value' does 1-ply lookahead on per-candidate NEXT-state observations,
 	 * which the root-obs substitution cannot express. Opponent seats and the heuristic
-	 * unstick path stay v1. Candidates stay v1 52f and Sample.obs stays v1 83f throughout;
+	 * unstick path stay v1. Candidates and Sample.obs stay on the current append-only v1 contracts;
 	 * at obsVersion 2 the flat array is computed once per decision and shared with obsV2.
 	 */
 	policyObsVersion?: 1 | 2;

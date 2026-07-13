@@ -16,7 +16,7 @@ CONTRACT") — both encodings of the SAME decision on one row:
      "cands": [[52]...],
      "chosen": i, "ret": r, ...}      # chosen/ret optional (hard-label mixing)
 
-meta.json: {"obs_dim": 188, "act_dim": 52, "obs_version": 2,
+meta.json: {"obs_dim": 188, "act_dim": <current v1 action width>, "obs_version": 2,
 "obs_v2": <obsV2Meta(catalog) block>}.
 The teacher checkpoint's stored obs header must match meta.obs_v2's — a
 mismatch means the encodings drifted apart and distillation would be garbage.

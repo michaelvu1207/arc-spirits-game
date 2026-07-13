@@ -2,7 +2,7 @@
 Entity-level set-transformer policy/value network for Arc Spirits (model v2).
 
 Consumes flat `arc-obs-v2` observations (see ml/obs_v2.py and docs/encoder-v2.md)
-and v1 candidate-action vectors (act_dim=52). The forward contract is EXACTLY
+and append-only v1 candidate-action vectors (act_dim comes from the dataset). The forward contract is EXACTLY
 CandidateScorer's (ml/model.py), so train.py can consume it behind a --model v2
 flag later:
 

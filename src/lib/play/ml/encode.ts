@@ -430,18 +430,13 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 			: [];
 	f.push(
 		clamp01(
-			Math.max(0, ...colocatedOpps.map((opponent) => opponent.attackDice?.length ?? 0)) /
-				POOL_NORM
+			Math.max(0, ...colocatedOpps.map((opponent) => opponent.attackDice?.length ?? 0)) / POOL_NORM
 		)
 	);
 	f.push(
-		clamp01(
-			Math.max(0, ...colocatedOpps.map((opponent) => opponent.barrier ?? 0)) / BARRIER_NORM
-		)
+		clamp01(Math.max(0, ...colocatedOpps.map((opponent) => opponent.barrier ?? 0)) / BARRIER_NORM)
 	);
-	f.push(
-		clamp01(Math.max(0, ...colocatedOpps.map((opponent) => opponent.initiative ?? 0)) / 12)
-	);
+	f.push(clamp01(Math.max(0, ...colocatedOpps.map((opponent) => opponent.initiative ?? 0)) / 12));
 	f.push(
 		clamp01(
 			colocatedOpps.filter((opponent) => !isEvilAlignment(opponent.statusLevel)).length /
@@ -469,7 +464,8 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 		const host = me?.spirits?.find(
 			(spirit) => spirit.slotIndex === attachment.spiritSlotIndex && spirit.isFaceDown
 		);
-		if (host) dormantClasses[attachment.className] = (dormantClasses[attachment.className] ?? 0) + 1;
+		if (host)
+			dormantClasses[attachment.className] = (dormantClasses[attachment.className] ?? 0) + 1;
 	}
 	for (const name of FULL_CLASS_FEATURES) f.push(clamp01((cc[name] ?? 0) / 10));
 	for (const name of FULL_CLASS_FEATURES) f.push(clamp01((dormantClasses[name] ?? 0) / 10));
@@ -522,6 +518,180 @@ VOCAB_INDEX.discardUnplacedAugments = VOCAB_INDEX.commitRound;
 
 /** Number of generic numeric slots appended after the command one-hot. */
 const ACTION_PARAM_SLOTS = 12;
+
+/**
+ * Append-only v1.4 action tail. The original 52-float contract is a strict prefix:
+ * command bits, generic params, then effect deltas remain at their frozen indexes.
+ * New command identities therefore live after that prefix instead of extending
+ * COMMAND_VOCAB (which would shift every existing param/effect feature).
+ */
+const ACTION_EXTENSION_COMMANDS: GameCommand['type'][] = [
+	'unlockNavigation',
+	'dismissManualPrompt',
+	'attachRuneToSpirit',
+	'detachRuneFromSpirit',
+	'infiltratorSwap',
+	'discardUnplacedAugments'
+];
+const ACTION_EXTENSION_SLOTS = 32;
+
+function actionEntityIds(
+	state: PublicGameState,
+	seat: SeatColor,
+	cmd: GameCommand
+): [string | undefined, string | undefined, string | undefined] {
+	const me = state.players[seat];
+	const spiritAt = (slotIndex: number | undefined) =>
+		slotIndex == null ? undefined : me?.spirits?.find((spirit) => spirit.slotIndex === slotIndex);
+	switch (cmd.type) {
+		case 'lockNavigation':
+		case 'selectNavigationDestination':
+			return [cmd.destination, undefined, undefined];
+		case 'spawnHandSpirit': {
+			const draw = me?.handDraws?.find((entry) => entry.guid === cmd.guid);
+			return [draw?.id ?? cmd.guid, spiritAt(cmd.slotIndex)?.id, undefined];
+		}
+		case 'takeSpirit':
+		case 'replaceSpirit': {
+			const marketSpirit = state.market?.[cmd.marketIndex]?.spiritId ?? undefined;
+			return [marketSpirit, spiritAt(cmd.slotIndex)?.id, undefined];
+		}
+		case 'awakenSpirit':
+		case 'manualAwaken':
+		case 'flipSpirit':
+		case 'discardSpirit':
+		case 'absorbSpirit':
+			return [spiritAt(cmd.slotIndex)?.id, undefined, undefined];
+		case 'discardRune': {
+			const mat = me?.mats?.find((entry) => entry.slotIndex === cmd.slotIndex);
+			return [mat?.id ?? mat?.name, undefined, undefined];
+		}
+		case 'attachRuneToSpirit':
+		case 'detachRuneFromSpirit':
+			return [cmd.runeId, spiritAt(cmd.spiritSlotIndex)?.id, undefined];
+		case 'placeAugmentOnSpirit':
+			return [cmd.augmentRuneId, spiritAt(cmd.spiritSlotIndex)?.id, cmd.className];
+		case 'resolveDecision': {
+			const decision = me?.pendingDecisions?.find((entry) => entry.id === cmd.decisionId);
+			return [
+				decision?.kind ?? cmd.decisionId,
+				cmd.optionId,
+				[...(cmd.selectedInstanceIds ?? [])].sort().join('|')
+			];
+		}
+		case 'resolveLocationInteraction': {
+			const paid = (cmd.costChoices ?? [])
+				.map((slotIndex) => {
+					const mat = me?.mats?.[slotIndex];
+					return mat?.id ?? mat?.name ?? String(slotIndex);
+				})
+				.sort()
+				.join('|');
+			return [
+				`${me?.navigationDestination ?? ''}:row:${cmd.rowIndex}`,
+				(cmd.choices ?? []).join('|'),
+				paid
+			];
+		}
+		case 'resolveMonsterReward':
+			return [
+				cmd.picks
+					.slice()
+					.sort((a, b) => a - b)
+					.join('|'),
+				(cmd.choices ?? []).join('|'),
+				undefined
+			];
+		case 'resolveAwakenReward':
+			return [
+				(cmd.relicPicks ?? [])
+					.slice()
+					.sort((a, b) => a - b)
+					.join('|'),
+				String(cmd.taintedMaxBarrier ?? ''),
+				undefined
+			];
+		case 'dismissManualPrompt':
+			return [cmd.id, undefined, undefined];
+		case 'infiltratorSwap':
+			return [
+				cmd.swaps
+					.map((swap) => swap.targetSeat)
+					.sort()
+					.join('|'),
+				cmd.swaps
+					.map((swap) => swap.myInstanceId)
+					.sort()
+					.join('|'),
+				cmd.swaps
+					.map((swap) => swap.theirInstanceId)
+					.sort()
+					.join('|')
+			];
+		default:
+			return [undefined, undefined, undefined];
+	}
+}
+
+function appendActionExtension(
+	f: number[],
+	state: PublicGameState,
+	seat: SeatColor,
+	cmd: GameCommand,
+	next?: PublicGameState
+): void {
+	const x = new Array<number>(ACTION_EXTENSION_SLOTS).fill(0);
+	const extendedType = ACTION_EXTENSION_COMMANDS.indexOf(cmd.type);
+	if (extendedType >= 0) x[extendedType] = 1;
+
+	const [primary, secondary, selection] = actionEntityIds(state, seat, cmd);
+	x[6] = stableTextFeature(primary, 97);
+	x[7] = stableTextFeature(primary, 101);
+	x[8] = stableTextFeature(secondary, 103);
+	x[9] = stableTextFeature(secondary, 107);
+	x[10] = stableTextFeature(selection, 109);
+	x[11] = stableTextFeature(selection, 113);
+
+	const before = state.players[seat];
+	const after = next?.players[seat];
+	if (before && after) {
+		const held = (player: PrivatePlayerState) =>
+			(player.mats ?? []).filter((mat) => mat.hasRune).length;
+		x[12] = clamp01(((before.attackDice?.length ?? 0) - (after.attackDice?.length ?? 0)) / 10);
+		x[13] = clamp01((held(before) - held(after)) / 4);
+		x[14] = clamp01(((before.spirits?.length ?? 0) - (after.spirits?.length ?? 0)) / 7);
+		x[15] = clamp01(
+			((before.unplacedAugments?.length ?? 0) - (after.unplacedAugments?.length ?? 0)) / 6
+		);
+		x[16] = clamp01((before.maxBarrier - after.maxBarrier) / 5);
+		x[17] = clamp01((before.victoryPoints - after.victoryPoints) / 5);
+		x[18] = clamp01((before.barrier - after.barrier) / 10);
+		x[19] = clamp01((before.statusLevel - after.statusLevel) / 3);
+	}
+
+	if (cmd.type === 'infiltratorSwap') {
+		const tierIndex = { basic: 0, enchanted: 1, exalted: 2, arcane: 3 } as const;
+		x[20] = clamp01(cmd.swaps.length / 5);
+		for (const swap of cmd.swaps) {
+			const mine = before?.attackDice?.find((die) => die.instanceId === swap.myInstanceId);
+			const theirs = state.players[swap.targetSeat]?.attackDice?.find(
+				(die) => die.instanceId === swap.theirInstanceId
+			);
+			if (mine) x[21 + tierIndex[mine.tier]] += 0.2;
+			if (theirs) x[25 + tierIndex[theirs.tier]] += 0.2;
+		}
+		x[29] = stableTextFeature(
+			cmd.swaps
+				.map((swap) => swap.targetSeat)
+				.sort()
+				.join('|'),
+			127
+		);
+		x[30] = clamp01(new Set(cmd.swaps.map((swap) => swap.targetSeat)).size / 5);
+	}
+	x[31] = 1; // schema marker: distinguishes a real v1.4 row from zero-padded warm-start input.
+	f.push(...x);
+}
 
 /**
  * Action features for one candidate command: a command-type one-hot followed by
@@ -862,6 +1032,7 @@ export function encodeAction(
 		f.push(1); // committing combat always consumes the combat action
 		f.push(clamp01(expected.killProbability / 4)); // expected monster-life progress
 		f.push(0); // not table churn
+		appendActionExtension(f, state, seat, cmd, next);
 		return f;
 	}
 	if (next && a && b) {
@@ -913,12 +1084,17 @@ export function encodeAction(
 	} else {
 		for (let i = 0; i < ACTION_EFFECT_SLOTS; i++) f.push(0);
 	}
+	appendActionExtension(f, state, seat, cmd, next);
 
 	return f;
 }
 
 /** Number of effect-delta slots appended by encodeAction when a next-state is provided. */
-const ACTION_EFFECT_SLOTS = 12;
+export const ACTION_EFFECT_SLOTS = 12;
+
+/** Frozen start index of the original 12 effect slots. */
+export const ACTION_EFFECT_OFFSET = COMMAND_VOCAB.length + ACTION_PARAM_SLOTS;
 
 /** Number of features encodeAction emits. */
-export const ACT_DIM = COMMAND_VOCAB.length + ACTION_PARAM_SLOTS + ACTION_EFFECT_SLOTS;
+export const ACT_DIM =
+	COMMAND_VOCAB.length + ACTION_PARAM_SLOTS + ACTION_EFFECT_SLOTS + ACTION_EXTENSION_SLOTS;

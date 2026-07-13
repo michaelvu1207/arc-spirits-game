@@ -85,8 +85,22 @@ describe('gumbel planner', () => {
 		expect(a.index).toBe(b.index);
 		expect(a.pi).toEqual(b.pi);
 		expect(a.visits).toEqual(b.visits);
-		const c = planDecisionGumbel(navState, focus, catalog, policy, cands, { ...OPTS, seed: 778 })!;
-		expect(c.pi).not.toEqual(a.pi); // different noise/determinizations
+		// A particular adjacent seed can legitimately land on the same Gumbel top-m set.
+		// Check a small deterministic seed family so this asserts seed sensitivity without
+		// depending on one random-policy/action-width coincidence.
+		const alternatives = Array.from({ length: 8 }, (_, offset) =>
+			planDecisionGumbel(navState, focus, catalog, policy, cands, {
+				...OPTS,
+				seed: 778 + offset
+			})!
+		);
+		expect(
+			alternatives.some(
+				(candidate) =>
+					JSON.stringify(candidate.pi) !== JSON.stringify(a.pi) ||
+					JSON.stringify(candidate.visits) !== JSON.stringify(a.visits)
+			)
+		).toBe(true);
 	});
 
 	it('is INVARIANT to opponents\' secret pre-reveal destination locks', () => {
