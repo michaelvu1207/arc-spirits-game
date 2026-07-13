@@ -106,12 +106,15 @@ does not regress VP/post-15 pace, and has zero stalls. If it fails, the next aud
 branching over navigation and meaningful yield-versus-act decisions; do not spend a five-generation
 PPO screen on an intervention without a game-level ceiling.
 
-The corrected full-game gate failed. On seeds 8,000,001–8,000,512 with 16 rollouts per candidate,
+The corrected-support full-game gate failed. On seeds 8,000,001–8,000,512 with 16 rollouts per candidate,
 the historical arm won 292/512 (57.03%) and the teacher arm won 288/512 (56.25%): delta -0.78
 percentage points, paired bootstrap 95% interval -2.93 to +1.37. The teacher also slightly reduced
 mean final VP (25.629 to 25.592) and post-15 VP/round (1.209 to 1.203); both arms had zero stalls.
 All 512 games exercised the teacher for 1,528 total decisions, so this is a causal rejection rather
-than a support-wiring failure. V24 label collection and PPO are therefore permanently gate-closed.
+than a support-wiring failure. A later V25 audit found that the harness selected guardians by the
+game's shard-local ordinal: each 16-game shard covered all ten guardians but over-weighted guardians
+0–5 two-to-one. The result is strong negative evidence but not the final uniformly scheduled gate.
+V24 label collection and PPO remain gate-closed pending an absolute-seed guardian replication.
 
 ## 3. Compute-matched training screen
 

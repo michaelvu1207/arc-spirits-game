@@ -2,10 +2,12 @@
 
 ## Decision and target
 
-V24 proved that perfecting ambiguous monster-reward choices cannot fix the solo bot. A fair
+V24 supplied strong evidence that perfecting ambiguous monster-reward choices cannot fix the solo bot. A fair
 terminal teacher acted in every one of 512 fresh paired games and lost 288–292 (delta -0.78 points,
 95% interval -2.93 to +1.37), with slightly worse final VP and post-15 pace. No V24 PPO run is
-justified. The strongest frozen solo checkpoint remains V23 control generation 5 at 58.74% on its
+justified. That run was later found to over-weight six of ten guardians because shard-local guardian
+cycling restarted in every shard; its uniformly scheduled replication runs before permanent V24
+closure. The strongest frozen solo checkpoint remains V23 control generation 5 at 58.74% on its
 4,096-game held-out block. The simulator ends at round 30, so the user's requested win by round 35
 is evaluated at the stricter real round-30 cap.
 
@@ -120,3 +122,7 @@ paired outcomes, bootstrap code/version, and wall time. Preserve unrelated SimFo
 paired seeds. A solo improvement is not production-promotable until multiplayer gauntlet,
 exploitability, collusion, hidden-information invariance, regression, and Michael live-play gates
 all pass.
+
+Guardian assignment is a pure function of the absolute game seed, never a shard-local game ordinal.
+The first V25 support/pilot artifacts that violated this contract are explicitly retained under
+`invalid-guardian-sharding` / `biased-guardian-sharding` names and are excluded from every verdict.

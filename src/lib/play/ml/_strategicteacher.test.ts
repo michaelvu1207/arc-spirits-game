@@ -30,6 +30,7 @@ import {
 	navigationDecisionSupport
 } from './terminalTeacher';
 import type { LegalAction } from './actions';
+import { guardianIndexForSeed } from './evalSchedule';
 
 const RUN = process.env.V25_STRATEGIC_TEACHER === '1';
 const MODE = process.env.V25_STRATEGIC_MODE ?? 'audit';
@@ -294,7 +295,8 @@ describe('V25 strategic terminal teacher harness', () => {
 				const outcomes: Array<{ seed: number; guardian: string; result: OutcomeSummary }> = [];
 				for (let game = 0; game < games; game += 1) {
 					const seed = seedBase + game;
-					const guardian = catalog.guardians[game % catalog.guardians.length]?.name;
+					const guardian =
+						catalog.guardians[guardianIndexForSeed(seed, catalog.guardians.length)]?.name;
 					if (!guardian) throw new Error('strategicTeacher: catalog has no guardian');
 					const result = playRecordingGame(catalog, {
 						...commonFor(seed, guardian),
@@ -362,7 +364,8 @@ describe('V25 strategic terminal teacher harness', () => {
 			}> = [];
 			for (let game = 0; game < games; game += 1) {
 				const seed = seedBase + game;
-				const guardian = catalog.guardians[game % catalog.guardians.length]?.name;
+				const guardian =
+					catalog.guardians[guardianIndexForSeed(seed, catalog.guardians.length)]?.name;
 				if (!guardian) throw new Error('strategicTeacher: catalog has no guardian');
 				const common = commonFor(seed, guardian);
 				const baseline = playRecordingGame(catalog, common);

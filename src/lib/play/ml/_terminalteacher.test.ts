@@ -26,6 +26,7 @@ import type { GameCommand, PublicGameState, SeatColor } from '../types';
 import { hybridIndex } from './neuralBot';
 import { loadOrSnapshotCatalog, loadPolicyForEval, mlPath } from './nodeIo';
 import { playRecordingGame, type RecordGameResult } from './driver';
+import { guardianIndexForSeed } from './evalSchedule';
 import type { NeuralPolicy } from './net';
 import {
 	canonicalCommandSignature,
@@ -209,7 +210,8 @@ describe('V24 terminal reward teacher harness', () => {
 				}> = [];
 				for (let game = 0; game < games; game += 1) {
 					const seed = seedBase + game;
-					const guardian = catalog.guardians[game % catalog.guardians.length]?.name;
+					const guardian =
+						catalog.guardians[guardianIndexForSeed(seed, catalog.guardians.length)]?.name;
 					if (!guardian) throw new Error('terminalTeacher: catalog has no guardian');
 					const common = {
 						seed,
@@ -271,7 +273,8 @@ describe('V24 terminal reward teacher harness', () => {
 			const captured: CapturedState[] = [];
 			for (let game = 0; game < games; game += 1) {
 				const seed = seedBase + game;
-				const guardian = catalog.guardians[game % catalog.guardians.length]?.name;
+				const guardian =
+					catalog.guardians[guardianIndexForSeed(seed, catalog.guardians.length)]?.name;
 				if (!guardian) throw new Error('terminalTeacher: catalog has no guardian');
 				const gameCaptures: Omit<CapturedState, 'sourceReached30'>[] = [];
 				let ordinal = 0;
