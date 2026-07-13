@@ -180,4 +180,47 @@ describe('neural bot corruption freeze', () => {
 			expect(actual.phase !== 'location' || actual.players[seat]!.phaseReady).toBe(true);
 		}
 	);
+
+	it.skipIf(!hasCatalog())(
+		'post-corruption Cursed Spirit benefits are claimed and the neural bot is auto-readied',
+		async () => {
+			const catalog = loadPlayCatalogSync();
+			const found = driveToLocationTurn(catalog, 5);
+			expect(found, 'could not reach an active bot turn').not.toBeNull();
+			const { state, seat } = found!;
+
+			// Cursed Spirit computes this reward at the Benefits boundary after the bot has
+			// already paid its corruption sacrifice. Keep another seat unresolved so this
+			// bot's plan stops at its own Benefits pass instead of continuing to plan commands
+			// across later phases after the phase machine advances.
+			state.phase = 'benefits';
+			for (const activeSeat of state.activeSeats) {
+				state.players[activeSeat]!.phaseReady = false;
+			}
+			state.players[seat]!.pendingCorruptionDiscard = null;
+			state.players[seat]!.pendingAwakenReward = {
+				grants: [{ kind: 'taintedChoice', amount: 2, source: 'Cursed Spirit' }]
+			};
+			const otherSeat = state.activeSeats.find((activeSeat) => activeSeat !== seat)!;
+			state.players[otherSeat]!.pendingAwakenReward = {
+				grants: [{ kind: 'relicChoice', amount: 1, source: 'Cursed Spirit' }]
+			};
+
+			const policy = await getNeuralPolicy();
+			expect(policy, 'bundled production policy should load').not.toBeNull();
+			const commands = planNeuralPhaseActions(state, seat, catalog, policy!);
+			expect(commands.map((command) => command.type)).toEqual(['resolveAwakenReward']);
+
+			let actual = state;
+			for (const command of commands) {
+				const result = applyGameCommand(actual, botActorFor(actual, seat), command, catalog);
+				expect(result.ok, command.type).toBe(true);
+				if (!result.ok) throw new Error(result.error.message);
+				actual = result.state;
+			}
+			expect(actual.players[seat]!.pendingAwakenReward).toBeNull();
+			expect(actual.players[seat]!.phaseReady).toBe(true);
+			expect(actual.phase).toBe('benefits');
+		}
+	);
 });

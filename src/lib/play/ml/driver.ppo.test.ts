@@ -123,7 +123,10 @@ describe('driver PPO behavior distribution', () => {
 		const catalog = await loadOrSnapshotCatalog();
 		const policy = randomPolicy(9123);
 		const result = playRecordingGame(catalog, {
-			seed: 3,
+			// Seed 11 terminates on a deterministic hybrid override with the complete
+			// Benefits action surface. (Seed 3 used to do so only because Cursed Spirit
+			// rewards were missing from the neural surface and timed out.)
+			seed: 11,
 			profiles: SEAT_COLORS.map(() => profileFor('medium')),
 			maxRounds: 80,
 			policy,

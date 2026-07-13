@@ -458,6 +458,21 @@ export function enumerateCandidates(
 		}
 
 		case 'benefits': {
+			// Awakening-Phase class grants are claimed in Benefits. These candidates used to
+			// live under the `awakening` case below, where the reducer rejects them as
+			// wrong-phase. A Cursed Spirit bot could therefore corrupt, discard and pass its
+			// Location turn correctly, then have zero legal moves here until the deadline
+			// force-advanced the room.
+			if (me?.pendingAwakenReward) {
+				tryAdd({ type: 'resolveAwakenReward' });
+				const grants = me.pendingAwakenReward.grants ?? [];
+				const tainted = grants.find((g) => g.kind === 'taintedChoice') as
+					| { amount: number }
+					| undefined;
+				if (tainted)
+					for (let t = 0; t <= tainted.amount; t++)
+						tryAdd({ type: 'resolveAwakenReward', taintedMaxBarrier: t });
+			}
 			tryAdd({ type: 'commitBenefits' }); // yield
 			break;
 		}
@@ -485,16 +500,6 @@ export function enumerateCandidates(
 						augmentRuneId: aug.runeId,
 						spiritSlotIndex: s
 					});
-			}
-			if (me?.pendingAwakenReward) {
-				tryAdd({ type: 'resolveAwakenReward' });
-				const grants = me.pendingAwakenReward.grants ?? [];
-				const tainted = grants.find((g) => g.kind === 'taintedChoice') as
-					| { amount: number }
-					| undefined;
-				if (tainted)
-					for (let t = 0; t <= tainted.amount; t++)
-						tryAdd({ type: 'resolveAwakenReward', taintedMaxBarrier: t });
 			}
 			for (const mp of me?.manualPrompts ?? []) tryAdd({ type: 'dismissManualPrompt', id: mp.id });
 			tryAdd({ type: 'commitAwakening' }); // yield
