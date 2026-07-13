@@ -15,6 +15,8 @@
  * over the frozen historical pool), heuristic profiles seeding the initial pool.
  */
 
+import type { StrategicDecisionScope } from '../poolTypes';
+
 export type LeagueMemberKind =
 	| 'main'
 	| 'main_exploiter'
@@ -206,6 +208,8 @@ export interface LeagueConfig {
 	shapingPreset?: string;
 	/** Use discounted policy-invariant potential shaping with zero terminal potential. */
 	potentialShapingMode?: 'legacy-terminal-retention' | 'policy-invariant';
+	/** Decision surfaces eligible for strategic MC/outcome credit. Default navigation. */
+	strategicDecisionScope?: StrategicDecisionScope;
 	selection: 'hybrid' | 'value' | 'policy';
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;

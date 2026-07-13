@@ -181,6 +181,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				denseVpReward: config.denseVpReward,
 				...(config.shapingPreset ? { shaping: shapingFor(config.shapingPreset) } : {}),
 				potentialShapingMode: config.potentialShapingMode,
+				strategicDecisionScope: config.strategicDecisionScope,
 				searcher
 			});
 			const wallMs = performance.now() - t0;

@@ -8,6 +8,8 @@
 import type { SeatColor } from '../types';
 import type { PotentialShapingMode } from './shaping';
 
+export type StrategicDecisionScope = 'navigation' | 'engine-cycle';
+
 /** Per-game configuration shared by every game in a pool run. */
 export interface ActorGameConfig {
 	/** Seat count (profiles are cycled to fill it). */
@@ -64,6 +66,8 @@ export interface ActorGameConfig {
 	shapingPreset?: string;
 	/** Correct discounted shaping with zero terminal potential; legacy is the default. */
 	potentialShapingMode?: PotentialShapingMode;
+	/** Which decision surfaces receive optional long-horizon PPO credit. Default navigation. */
+	strategicDecisionScope?: StrategicDecisionScope;
 	/** Command types stripped from neural seats' legal sets (hard behavioral constraint). */
 	forbidTypes?: string[];
 	maxStatusLevel?: number;

@@ -7,6 +7,7 @@ import { profileFor } from '../server/botPolicy';
 import { SEAT_COLORS, type SeatColor } from '../types';
 import {
 	isStrategicCommand,
+	isStrategicDecision,
 	playRecordingGame,
 	sampledPolicyBehavior,
 	type Sample
@@ -31,6 +32,18 @@ describe('driver PPO behavior distribution', () => {
 		expect(isStrategicCommand({ type: 'startCombat' })).toBe(false);
 		expect(isStrategicCommand({ type: 'spawnHandSpirit', guid: 'x' })).toBe(false);
 		expect(isStrategicCommand({ type: 'passEncounter' })).toBe(false);
+	});
+	it('can expand long-horizon credit to engine-cycle decision surfaces', () => {
+		expect(isStrategicCommand({ type: 'spawnHandSpirit', guid: 'x' }, 'engine-cycle')).toBe(true);
+		expect(isStrategicCommand({ type: 'awakenSpirit', slotIndex: 4 }, 'engine-cycle')).toBe(true);
+		expect(isStrategicCommand({ type: 'startCombat' }, 'engine-cycle')).toBe(true);
+		expect(isStrategicCommand({ type: 'commitBenefits' }, 'engine-cycle')).toBe(false);
+		expect(
+			isStrategicDecision(
+				[{ type: 'commitBenefits' }, { type: 'resolveAwakenReward', relicPicks: [0] }],
+				'engine-cycle'
+			)
+		).toBe(true);
 	});
 	it('records the sampled temperature and post-progress-filter denominator exactly', () => {
 		const policy = scalarPolicy();

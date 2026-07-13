@@ -63,7 +63,7 @@ import {
 	type ShapingWeights
 } from './shaping';
 import type { NeuralPolicy } from './net';
-import type { SeatCycleSummary } from './poolTypes';
+import type { SeatCycleSummary, StrategicDecisionScope } from './poolTypes';
 
 /** One recorded decision. `vp`/`phi` (VP and build-potential at decision time) are used to
  *  compute `ret` (VP-maximizing return-to-go) once the game's VP trajectory is known. */
@@ -143,13 +143,44 @@ export interface Sample {
 
 /** Decisions whose consequences commonly span several phases or rounds. This is a credit-assignment
  * mask, not a strategy oracle: it does not say which action is good and never changes legality. */
-// First controlled ablation: navigation only. It is the round-level strategy skeleton and gives
-// the cleanest causal test of long-horizon credit. Expand to engine/conversion commands only after
-// the matched pilot establishes a positive effect.
-const STRATEGIC_COMMAND_TYPES = new Set<GameCommand['type']>(['lockNavigation']);
+const NAVIGATION_STRATEGIC_TYPES = new Set<GameCommand['type']>([
+	'lockNavigation',
+	'selectNavigationDestination'
+]);
+const ENGINE_CYCLE_STRATEGIC_TYPES = new Set<GameCommand['type']>([
+	...NAVIGATION_STRATEGIC_TYPES,
+	'resolveLocationInteraction',
+	'spawnHandSpirit',
+	'absorbSpirit',
+	'startCombat',
+	'resolveMonsterReward',
+	'initiatePvp',
+	'passEncounter',
+	'awakenSpirit',
+	'resolveDecision',
+	'placeAugmentOnSpirit',
+	'resolveAwakenReward',
+	'discardSpirit',
+	'discardRune',
+	'discardUnplacedAugments'
+]);
 
-export function isStrategicCommand(cmd: GameCommand): boolean {
-	return STRATEGIC_COMMAND_TYPES.has(cmd.type);
+export function isStrategicCommand(
+	cmd: GameCommand,
+	scope: StrategicDecisionScope = 'navigation'
+): boolean {
+	return (scope === 'engine-cycle' ? ENGINE_CYCLE_STRATEGIC_TYPES : NAVIGATION_STRATEGIC_TYPES).has(
+		cmd.type
+	);
+}
+
+/** Classify the decision state, not only the chosen action. Stopping/yielding while an engine
+ * action remains is itself a long-horizon choice and must receive the same credit as taking it. */
+export function isStrategicDecision(
+	candidates: readonly GameCommand[],
+	scope: StrategicDecisionScope = 'navigation'
+): boolean {
+	return candidates.some((candidate) => isStrategicCommand(candidate, scope));
 }
 
 /**
@@ -235,6 +266,8 @@ export interface RecordGameOptions {
 	 * when converted into the real VP/placement objective.
 	 */
 	potentialShapingMode?: PotentialShapingMode;
+	/** Long-horizon credit mask. Navigation-only preserves the completed v16 ablations. */
+	strategicDecisionScope?: StrategicDecisionScope;
 	/** Discount for return-to-go (default 0.99). */
 	gamma?: number;
 	/**
@@ -714,7 +747,12 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 							phi: buildPotential(state.players[seat], shaping),
 							kill: decisionKills(state, withNextH[mi].next, seat, cmd) ? 1 : 0,
 							decisionType: cmd.type,
-							strategic: isStrategicCommand(cmd) ? 1 : 0,
+							strategic: isStrategicDecision(
+								withNextH.map((candidate) => candidate.cmd),
+								opts.strategicDecisionScope
+							)
+								? 1
+								: 0,
 							...sampleAuxTargets(state, seat, catalog, withNextH, withNextH[mi])
 						});
 					}
@@ -895,7 +933,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				phi: buildPotential(state.players[seat], shaping),
 				kill: decisionKills(state, withNext[idx].next, seat, cands[idx]) ? 1 : 0,
 				decisionType: cands[idx].type,
-				strategic: isStrategicCommand(cands[idx]) ? 1 : 0,
+				strategic: isStrategicDecision(cands, opts.strategicDecisionScope) ? 1 : 0,
 				...valueFields,
 				...outcomeFields,
 				...behaviorFields,
