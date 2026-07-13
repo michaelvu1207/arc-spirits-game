@@ -174,7 +174,6 @@ def analyze_pair(
         "catalogPath",
         "catalogSha256",
         "games",
-        "samples",
         "trainerSeed",
         "optimizerStepsPerEpoch",
         "optimizerStepsTotal",
@@ -197,6 +196,10 @@ def analyze_pair(
         "pairedSeeds": len(seeds),
         "seedRange": [seeds[0], seeds[-1]],
         "pairedHistory": {field: control_history.get(field) for field in paired_fields},
+        "trainingSamples": {
+            "control": control_history.get("samples"),
+            "treatment": treatment_history.get("samples"),
+        },
         "reach30": {
             "control": sum(control_reach),
             "treatment": sum(treatment_reach),

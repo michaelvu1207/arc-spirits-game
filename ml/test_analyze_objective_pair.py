@@ -55,6 +55,11 @@ def test_paired_objective_analysis_counts_discordant_successes_and_deltas():
         base = Path(directory)
         control = _make_root(base, "control", [(1, 28, None), (2, 32, 29), (3, 30, 30)])
         treatment = _make_root(base, "treatment", [(1, 31, 28), (2, 27, None), (3, 35, 25)])
+        treatment_history = json.loads((treatment / "history.jsonl").read_text(encoding="utf-8"))
+        treatment_history["samples"] = 119000
+        (treatment / "history.jsonl").write_text(
+            json.dumps(treatment_history) + "\n", encoding="utf-8"
+        )
         result = analyze_pair(
             control,
             treatment,
@@ -70,6 +75,7 @@ def test_paired_objective_analysis_counts_discordant_successes_and_deltas():
     assert result["reach30"]["treatmentOnly"] == 1
     assert result["reach30"]["mcnemarExactTwoSidedP"] == 1.0
     assert result["metrics"]["finalVP"]["pairedMeanDelta"] == 1.0
+    assert result["trainingSamples"] == {"control": 120000, "treatment": 119000}
 
 
 def test_paired_objective_analysis_rejects_different_seed_sets():
