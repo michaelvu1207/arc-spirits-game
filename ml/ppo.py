@@ -901,7 +901,11 @@ def train_ppo(
         buffer.advantages,
         buffer.policy_mask,
         buffer.strategic_mask
-        if buffer.strategic_mc_coef > 0 or buffer.strategic_outcome_coef > 0
+        if (
+            buffer.strategic_mc_coef > 0
+            or buffer.solo_strategic_mc_coef > 0
+            or buffer.strategic_outcome_coef > 0
+        )
         else None,
     )
     n_policy_total = int(buffer.policy_mask.sum())
