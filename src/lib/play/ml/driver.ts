@@ -109,9 +109,14 @@ export interface Sample {
 	stepIdx?: number;
 	/** Per-step shaping reward (default 0; see RecordGameOptions.stepRewards). */
 	rStep?: number;
-	/** True on the seat's last decision of a FINISHED game. Capped/stalled games leave the
-	 *  episode truncated, so the PPO trainer bootstraps GAE from the last vPred. */
+	/** True on the seat's last decision of an engine-FINISHED game. A resolved solo round-cap
+	 *  objective is identified separately by objectiveDone/reach30Target so a learner can choose
+	 *  the legacy bootstrap contract or the explicit terminal-objective contract. */
 	done?: boolean;
+	/** 1 on the final row when the configured solo reach-30 horizon has a resolved outcome,
+	 *  including clean cap failures and confirmed actor stalls. Infrastructure exceptions never
+	 *  produce a row. This is training metadata and does not alter engine terminal semantics. */
+	objectiveDone?: number;
 	/** 1 on the terminal row of a TRUE 30-VP win (not cap/all-Fallen wins). */
 	won?: number;
 	/** 1 on the terminal row of EVERY seat when the game ended via the all-Fallen collapse (no seat
@@ -141,6 +146,9 @@ export interface Sample {
 	reach30Target?: number;
 	/** Configured round limit for reach30Target; paired with it to prevent horizon mixing. */
 	reach30Horizon?: number;
+	/** Final VP on the resolved objective row. Required by the lexicographic solo objective so
+	 *  terminal margin never has to be reconstructed from the pre-action sample. */
+	finalVP?: number;
 	/** Final placement 1..seats (ties share the better place), on rows of finished games. */
 	placement?: number;
 	/** Public round at decision time, retained for held-out calibration slices. */
@@ -1504,8 +1512,15 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			// solo objective even though PPO keeps done=false for dense-return bootstrapping.
 			// Infrastructure exceptions never reach this point and therefore remain unlabeled.
 			if (opts.profiles.length === 1 && i === seatSamples.length - 1) {
+				s.objectiveDone = 1;
 				s.reach30Target = !stalled && finalVP[seat] >= VP_TO_WIN ? 1 : 0;
 				s.reach30Horizon = reach30Horizon;
+				s.finalVP = finalVP[seat];
+				// Engine wins already carry their exact terminal round above. A clean cap exits
+				// with state.round one beyond the configured horizon, so record the objective
+				// horizon rather than an artificial round 31. A pre-cap actor stall is a loss and
+				// its round is retained for diagnosis (the finish-time term never applies to it).
+				s.endRound = Math.min(state.round, reach30Horizon);
 			}
 		});
 	}

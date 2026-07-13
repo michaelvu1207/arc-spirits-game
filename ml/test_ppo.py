@@ -40,6 +40,7 @@ from ppo import (
     select_self_imitation_indices,
     select_ppo_epoch_indices,
     self_imitation_minibatch_loss,
+    solo_lexicographic_terminal_reward,
     train_ppo,
 )
 
@@ -798,6 +799,96 @@ def test_reach30_critic_labels_cap_failures_and_uses_behavior_state_baseline():
     # The cap failure remains a truncated dense-return episode, but is resolved
     # for the separate reach-30 objective and gets critic/policy supervision.
     assert not rows[0]["done"] and bool(buf.reach30_target_mask[0])
+
+
+def test_solo_terminal_objective_resolves_cap_and_lexicographic_reward():
+    rng = np.random.default_rng(10301)
+    rows = []
+    for step, reward in enumerate((0.1, 0.2)):
+        row = {
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": "cap-loss",
+            "stepIdx": step,
+            "rStep": reward,
+            "done": False,
+            "policyMask": 0,
+            "vPred": 0.7,
+            "strategic": 1,
+            "playerCount": 1,
+        }
+        if step == 1:
+            row.update({
+                "objectiveDone": 1,
+                "reach30Target": 0,
+                "reach30Horizon": 30,
+                "finalVP": 20,
+                "endRound": 30,
+            })
+        rows.append(row)
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        legacy = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            solo_terminal_objective="legacy",
+        )
+        resolved = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            solo_terminal_objective="resolved",
+        )
+        lexicographic = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            solo_terminal_objective="lexicographic",
+        )
+
+    # Legacy bootstraps the unresolved engine state from V=0.7. Resolved treats the
+    # configured objective horizon as terminal but retains the dense rewards.
+    assert np.allclose(legacy.returns, [1.0, 0.9], atol=1e-6), legacy.returns
+    assert np.allclose(resolved.returns, [0.3, 0.2], atol=1e-6), resolved.returns
+    # Lexicographic mode discards dense rStep and uses only final margin on this loss:
+    # (20 - 30) * 1e-6 = -1e-5, propagated to both decisions at gamma=1.
+    assert np.allclose(lexicographic.returns, [-1e-5, -1e-5], atol=1e-7)
+
+
+def test_solo_lexicographic_reward_preserves_every_priority_tier():
+    best_loss = max(
+        solo_lexicographic_terminal_reward(won=False, finish_round=None, final_vp=vp)
+        for vp in range(0, 530)
+    )
+    worst_win = min(
+        solo_lexicographic_terminal_reward(won=True, finish_round=round_, final_vp=vp)
+        for round_ in range(1, 31)
+        for vp in range(30, 530)
+    )
+    assert worst_win > best_loss
+
+    # Even the largest legal/clamped margin swing cannot outweigh one finishing round.
+    for round_ in range(1, 30):
+        earlier_low_margin = solo_lexicographic_terminal_reward(
+            won=True, finish_round=round_, final_vp=30
+        )
+        later_high_margin = solo_lexicographic_terminal_reward(
+            won=True, finish_round=round_ + 1, final_vp=10_000
+        )
+        assert earlier_low_margin > later_high_margin
+
+    assert math.isclose(
+        solo_lexicographic_terminal_reward(won=True, finish_round=17, final_vp=33),
+        1.014003,
+        abs_tol=1e-12,
+    )
 
 
 def test_reach30_head_learns_masked_solo_targets():

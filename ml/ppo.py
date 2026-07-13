@@ -53,6 +53,9 @@ from model import CandidateScorer, model_parameters_are_finite
 
 DEFAULT_PLACEMENT_REWARDS = "1.0,0.3,-0.3,-1.0"
 TERMINAL_TEACHER_MAX_ROWS = 4_096
+SOLO_TERMINAL_OBJECTIVES = ("legacy", "resolved", "lexicographic")
+SOLO_OBJECTIVE_HORIZON = 30
+SOLO_VP_TARGET = 30
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +68,35 @@ def parse_placement_rewards(spec: str) -> tuple[float, float, float, float]:
     if len(vals) != 4:
         raise ValueError(f"--placement-rewards needs 4 comma-separated floats, got {spec!r}")
     return vals  # type: ignore[return-value]
+
+
+def solo_lexicographic_terminal_reward(
+    *, won: bool, finish_round: int | None, final_vp: int
+) -> float:
+    """Order-preserving scalarization of the solo objective.
+
+    Primary: reach 30 by round 30. Secondary among wins: finish earlier. Tertiary:
+    final VP margin. The constants are chosen so the full margin span (0.000998)
+    cannot outweigh one round (0.001), and every secondary term together is far
+    smaller than the unit win/loss gap.
+    """
+    if isinstance(final_vp, bool) or not isinstance(final_vp, int) or final_vp < 0:
+        raise ValueError("lexicographic solo objective requires a nonnegative integer finalVP")
+    if won:
+        if (
+            isinstance(finish_round, bool)
+            or not isinstance(finish_round, int)
+            or not 1 <= finish_round <= SOLO_OBJECTIVE_HORIZON
+        ):
+            raise ValueError(
+                "lexicographic solo win requires finish round in "
+                f"[1,{SOLO_OBJECTIVE_HORIZON}]"
+            )
+        tempo = SOLO_OBJECTIVE_HORIZON + 1 - finish_round
+    else:
+        tempo = 0
+    margin = max(-499, min(499, final_vp - SOLO_VP_TARGET))
+    return float(won) + 0.001 * tempo + 0.000001 * margin
 
 
 def compute_gae(
@@ -1000,6 +1032,7 @@ def load_trajectory_buffer(
     solo_strategic_mc_coef: float = 0.0,
     solo_outcome_coef: float = 0.0,
     solo_reach30_coef: float = 0.0,
+    solo_terminal_objective: str = "legacy",
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     obs_key: str = "obs",
@@ -1024,6 +1057,11 @@ def load_trajectory_buffer(
         raise ValueError("solo_outcome_coef must be in [0, 1]")
     if not 0.0 <= solo_reach30_coef <= 1.0:
         raise ValueError("solo_reach30_coef must be in [0, 1]")
+    if solo_terminal_objective not in SOLO_TERMINAL_OBJECTIVES:
+        raise ValueError(
+            "solo_terminal_objective must be one of "
+            + ", ".join(repr(mode) for mode in SOLO_TERMINAL_OBJECTIVES)
+        )
     if not 0.0 <= strategic_mc_gamma <= 1.0:
         raise ValueError("strategic_mc_gamma must be in [0, 1]")
     if not 0.0 <= strategic_outcome_coef <= 1.0:
@@ -1172,9 +1210,23 @@ def load_trajectory_buffer(
                 reach30_target = _coerce_binary_flag(reach30_target_raw)
                 reach30_horizon_raw = rec.get("reach30Horizon", rec.get("reach30_horizon"))
                 reach30_horizon = _coerce_end_round(reach30_horizon_raw)
+                objective_done_raw = rec.get("objectiveDone", rec.get("objective_done"))
+                objective_done = (
+                    _coerce_binary_flag(objective_done_raw)
+                    if objective_done_raw is not None
+                    else None
+                )
+                final_vp_raw = rec.get("finalVP", rec.get("final_vp"))
+                final_vp = (
+                    _coerce_nonnegative_int(final_vp_raw)
+                    if final_vp_raw is not None
+                    else None
+                )
                 if (
                     (reach30_target_raw is not None and reach30_target is None)
                     or (reach30_horizon_raw is not None and reach30_horizon is None)
+                    or (objective_done_raw is not None and objective_done is None)
+                    or (final_vp_raw is not None and final_vp is None)
                 ):
                     n_invalid_rows += 1
                     invalid_episodes.add(game_id)
@@ -1237,6 +1289,8 @@ def load_trajectory_buffer(
                         "reach30_pred_mask": reach30_pred_mask,
                         "reach30_target": reach30_target,
                         "reach30_horizon": reach30_horizon,
+                        "objective_done": objective_done,
+                        "final_vp": final_vp,
                         "v_pred": float(rec["vPred"]),
                         "placement": _coerce_placement(rec.get("placement")),
                         "won": 1 if rec.get("won") else 0,
@@ -1304,10 +1358,17 @@ def load_trajectory_buffer(
         for index, step in enumerate(steps):
             has_target = step["reach30_target"] is not None
             has_horizon = step["reach30_horizon"] is not None
+            has_objective_done = step["objective_done"] is not None
+            has_final_vp = step["final_vp"] is not None
             if (
                 has_target != has_horizon
                 or (has_target and index != len(steps) - 1)
                 or (has_target and step["player_count"] != 1)
+                or has_objective_done != has_final_vp
+                or (has_objective_done and step["objective_done"] is not True)
+                or (has_objective_done and not has_target)
+                or (has_objective_done and index != len(steps) - 1)
+                or (has_objective_done and step["player_count"] != 1)
             ):
                 invalid_structure.add(game_id)
                 break
@@ -1419,8 +1480,15 @@ def load_trajectory_buffer(
     completed_solo_outcomes = []
     for raw_steps in episodes.values():
         steps = sorted(raw_steps, key=lambda s: s["step_idx"])
-        if steps[-1]["done"] and steps[0]["player_count"] == 1:
+        if steps[0]["player_count"] != 1:
+            continue
+        if steps[-1]["done"]:
             completed_solo_outcomes.append(float(any(s["won"] for s in steps)))
+        elif (
+            solo_terminal_objective != "legacy"
+            and steps[-1]["reach30_target"] is not None
+        ):
+            completed_solo_outcomes.append(float(steps[-1]["reach30_target"]))
     solo_outcome_baseline = (
         float(np.mean(completed_solo_outcomes)) if completed_solo_outcomes else 0.0
     )
@@ -1467,7 +1535,44 @@ def load_trajectory_buffer(
                     bonus *= 0.5 ** (max(0, end_round - 12) / win_bonus_halflife)
                 rewards[-1] += bonus
 
-        if dones[-1]:
+        # `done` is the engine terminal bit. A solo round-cap/stall is nevertheless a
+        # resolved reach-30 objective. New training can opt into treating that horizon as
+        # terminal instead of bootstrapping V(s_T), while legacy runs retain exact behavior.
+        learning_dones = dones.copy()
+        if solo_terminal_objective != "legacy" and player_count == 1:
+            if resolved_reach30_target is None:
+                raise ValueError(
+                    f"Episode {game_id} has no resolved reach30Target/reach30Horizon "
+                    f"required by solo_terminal_objective={solo_terminal_objective!r}"
+                )
+            learning_dones[-1] = True
+            if solo_terminal_objective == "lexicographic":
+                horizon = int(steps[-1]["reach30_horizon"])
+                final_vp = steps[-1]["final_vp"]
+                if horizon != SOLO_OBJECTIVE_HORIZON:
+                    raise ValueError(
+                        f"Episode {game_id} has reach30Horizon={horizon}; lexicographic "
+                        f"superhuman objective requires {SOLO_OBJECTIVE_HORIZON}"
+                    )
+                if steps[-1]["objective_done"] is not True or final_vp is None:
+                    raise ValueError(
+                        f"Episode {game_id} lacks objectiveDone=1/finalVP required by "
+                        "the lexicographic solo objective"
+                    )
+                won_objective = bool(resolved_reach30_target)
+                if won_objective != (final_vp >= SOLO_VP_TARGET):
+                    raise ValueError(
+                        f"Episode {game_id} has inconsistent reach30Target={int(won_objective)} "
+                        f"and finalVP={final_vp}"
+                    )
+                rewards.fill(0.0)
+                rewards[-1] = solo_lexicographic_terminal_reward(
+                    won=won_objective,
+                    finish_round=end_round,
+                    final_vp=final_vp,
+                )
+
+        if learning_dones[-1]:
             last_value = 0.0
         else:
             # Truncated episode (no terminal row): bootstrap V(s_{T+1}) with the
@@ -1501,7 +1606,9 @@ def load_trajectory_buffer(
                     ]
                     reward_sequences.append(rewards[indices_for_round].copy())
                     event_dones.append(
-                        bool(dones[indices_for_round].any()) if indices_for_round else False
+                        bool(learning_dones[indices_for_round].any())
+                        if indices_for_round
+                        else False
                     )
                 option_values = np.asarray(
                     [event["v_pred"] for event in seat_events], dtype=np.float64
@@ -1526,7 +1633,7 @@ def load_trajectory_buffer(
                         }
                     )
 
-        adv, ret = compute_gae(rewards, values, dones, gamma, gae_lambda, last_value)
+        adv, ret = compute_gae(rewards, values, learning_dones, gamma, gae_lambda, last_value)
         strategic = np.array([s["strategic"] for s in steps], dtype=bool)
         episode_solo_outcome_adv = np.zeros(len(steps), dtype=np.float64)
         episode_solo_outcome_mask = np.zeros(len(steps), dtype=bool)
@@ -1538,12 +1645,12 @@ def load_trajectory_buffer(
         if (
             collect_self_imitation
             and player_count == 1
-            and dones[-1]
+            and learning_dones[-1]
             and any(s["won"] for s in steps)
             and not any(s["continuation_curriculum"] for s in steps)
         ):
             dense_mc_return = compute_discounted_returns(
-                rewards, dones, strategic_mc_gamma, last_value=0.0
+                rewards, learning_dones, strategic_mc_gamma, last_value=0.0
             )
             dense_mc_advantage = dense_mc_return - values
             episode_rows_by_phase: dict[str, list[dict[str, Any]]] = {
@@ -1605,9 +1712,9 @@ def load_trajectory_buffer(
             if solo_strategic_mc_coef > 0
             else strategic
         )
-        if strategic_mc_coef > 0 and dones[-1] and standard_strategic.any():
+        if strategic_mc_coef > 0 and learning_dones[-1] and standard_strategic.any():
             mc_ret = compute_discounted_returns(
-                rewards, dones, strategic_mc_gamma, last_value=0.0
+                rewards, learning_dones, strategic_mc_gamma, last_value=0.0
             )
             mc_adv = mc_ret - values
             adv[standard_strategic] = (
@@ -1621,9 +1728,14 @@ def load_trajectory_buffer(
         # Solo has no meaningful placement ordering: it is always first by definition. Use the
         # actual episode reward (dense score progress + true 30-VP win bonus) for long-horizon
         # engine decisions instead. This can coexist with multiplayer-only outcome credit.
-        if solo_strategic_mc_coef > 0 and player_count == 1 and dones[-1] and strategic.any():
+        if (
+            solo_strategic_mc_coef > 0
+            and player_count == 1
+            and learning_dones[-1]
+            and strategic.any()
+        ):
             solo_ret = compute_discounted_returns(
-                rewards, dones, strategic_mc_gamma, last_value=0.0
+                rewards, learning_dones, strategic_mc_gamma, last_value=0.0
             )
             solo_adv = solo_ret - values
             adv[strategic] = (
@@ -1637,7 +1749,12 @@ def load_trajectory_buffer(
         # Pure threshold credit for the actual solo objective P(finalVP >= 30). This
         # deliberately changes only the policy advantage: the ordinary value head
         # continues to predict dense score/build return instead of a mixed-scale target.
-        if solo_outcome_coef > 0 and player_count == 1 and dones[-1] and strategic.any():
+        if (
+            solo_outcome_coef > 0
+            and player_count == 1
+            and learning_dones[-1]
+            and strategic.any()
+        ):
             outcome = float(any(s["won"] for s in steps))
             outcome_adv = outcome - solo_outcome_baseline
             episode_solo_outcome_adv[strategic] = outcome_adv
@@ -1856,7 +1973,7 @@ def load_trajectory_buffer(
         f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
         f"solo MC coef={solo_strategic_mc_coef:g}, gamma={strategic_mc_gamma:g}; "
         f"solo outcome coef={solo_outcome_coef:g}, reach30 coef={solo_reach30_coef:g}, "
-        f"reach30 horizon={reach30_horizon}, "
+        f"reach30 horizon={reach30_horizon}, terminal objective={solo_terminal_objective}, "
         f"baseline={solo_outcome_baseline:.3f}, "
         f"component stds={solo_outcome_base_std:.3f}/{solo_outcome_signal_std:.3f}, "
         f"applied={n_solo_outcome_credit}/{n_solo_reach30_credit}; "

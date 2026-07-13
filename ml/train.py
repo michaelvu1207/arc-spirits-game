@@ -737,6 +737,7 @@ def train(
     solo_strategic_mc_coef: float = 0.0,
     solo_outcome_coef: float = 0.0,
     solo_reach30_coef: float = 0.0,
+    solo_terminal_objective: str = "legacy",
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     model_version: str = "v1",
@@ -891,6 +892,7 @@ def train(
             solo_strategic_mc_coef=solo_strategic_mc_coef,
             solo_outcome_coef=solo_outcome_coef,
             solo_reach30_coef=solo_reach30_coef,
+            solo_terminal_objective=solo_terminal_objective,
             strategic_mc_gamma=strategic_mc_gamma,
             strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
@@ -1355,6 +1357,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--solo-reach30-coef", type=float, default=0.0,
                    help="Blend [0,1] toward true-win minus the behavior checkpoint's "
                         "state-dependent reach-30 probability on solo strategic rows")
+    p.add_argument(
+        "--solo-terminal-objective",
+        choices=["legacy", "resolved", "lexicographic"],
+        default="legacy",
+        help=(
+            "Solo horizon handling: legacy bootstraps cap failures; resolved treats every "
+            "reach30Target as terminal while retaining rStep; lexicographic additionally "
+            "replaces solo rStep with the strict win/finish-time/final-VP terminal objective"
+        ),
+    )
     p.add_argument("--strategic-mc-gamma", type=float, default=1.0,
                    help="Discount for strategic full-episode Monte Carlo returns (default 1)")
     p.add_argument("--strategic-outcome-coef", type=float, default=0.0,
@@ -1494,6 +1506,7 @@ if __name__ == "__main__":
         solo_strategic_mc_coef=args.solo_strategic_mc_coef,
         solo_outcome_coef=args.solo_outcome_coef,
         solo_reach30_coef=args.solo_reach30_coef,
+        solo_terminal_objective=args.solo_terminal_objective,
         strategic_mc_gamma=args.strategic_mc_gamma,
         strategic_outcome_coef=args.strategic_outcome_coef,
         model_version=args.model_version,

@@ -365,9 +365,11 @@ describe('driver PPO behavior distribution', () => {
 		);
 		const terminal = replay.samples.at(-1)!;
 		expect(terminal.round).toBeLessThanOrEqual(30);
-		expect(terminal.endRound).toBe(replay.rounds);
+		expect(terminal.endRound).toBe(Math.min(replay.rounds, 30));
 		expect(terminal.reach30Horizon).toBe(30);
 		expect(terminal.reach30Target).toBe(!replay.stalled && replay.finalVP.Red >= 30 ? 1 : 0);
+		expect(terminal.objectiveDone).toBe(1);
+		expect(terminal.finalVP).toBe(replay.finalVP.Red);
 	}, 60_000);
 
 	it('creates deterministic independent pick-RNG forks and keeps continuation IDs distinct', async () => {
@@ -514,6 +516,9 @@ describe('driver PPO behavior distribution', () => {
 		expect(result.samples.slice(0, -1).every((row) => row.reach30Target === undefined)).toBe(true);
 		expect(result.samples.at(-1)!.reach30Target).toBe(0);
 		expect(result.samples.at(-1)!.reach30Horizon).toBe(1);
+		expect(result.samples.at(-1)!.objectiveDone).toBe(1);
+		expect(result.samples.at(-1)!.finalVP).toBe(result.finalVP.Red);
+		expect(result.samples.at(-1)!.endRound).toBe(1);
 		expect(result.samples.at(-1)!.done).toBe(false);
 	}, 30_000);
 
@@ -600,6 +605,8 @@ describe('driver PPO behavior distribution', () => {
 				reach30Pred: 0.42,
 				reach30Target: 0,
 				reach30Horizon: 35,
+				objectiveDone: 1,
+				finalVP: 29,
 				policyMask: 1,
 				vPred: 0,
 				...behavior
@@ -616,6 +623,8 @@ describe('driver PPO behavior distribution', () => {
 					reach30Pred: number;
 					reach30Target: number;
 					reach30Horizon: number;
+					objectiveDone: number;
+					finalVP: number;
 				};
 				expect(serialized.obs).toEqual(obs);
 				expect(serialized.cands).toEqual(cands);
@@ -626,6 +635,8 @@ describe('driver PPO behavior distribution', () => {
 				expect(serialized.reach30Pred).toBe(0.42);
 				expect(serialized.reach30Target).toBe(0);
 				expect(serialized.reach30Horizon).toBe(35);
+				expect(serialized.objectiveDone).toBe(1);
+				expect(serialized.finalVP).toBe(29);
 
 				const code = [
 					'import math, sys, torch',

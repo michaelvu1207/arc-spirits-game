@@ -98,6 +98,11 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				...(typeof s.won === 'number' ? { won: s.won } : {}),
 				...(typeof s.reach30Target === 'number' ? { reach30Target: s.reach30Target } : {}),
 				...(typeof s.reach30Horizon === 'number' ? { reach30Horizon: s.reach30Horizon } : {}),
+				// The solo objective can resolve at a fixed horizon even when the game engine
+				// remains playable. Preserve that distinct terminal flag and the exact final
+				// score so Python can apply the opt-in lexicographic outcome contract.
+				...(typeof s.objectiveDone === 'number' ? { objectiveDone: s.objectiveDone } : {}),
+				...(typeof s.finalVP === 'number' ? { finalVP: s.finalVP } : {}),
 				// All-Fallen collapse terminal (done rows): the PPO --all-fallen-loss stamps a
 				// terminal loss on these rows for every seat.
 				...(typeof s.allFallen === 'number' ? { allFallen: s.allFallen } : {}),
