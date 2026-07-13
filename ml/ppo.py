@@ -16,6 +16,8 @@ rows. On top of obs/cands/chosen/ret, each row carries:
   vPred     (float)  value estimate at decision time (GAE baseline + value clipping)
   strategic (0|1)   round-level route/engine/conversion decision eligible for optional
                      full-episode Monte Carlo credit (default 0 for legacy rows)
+  playerCount (1-6) configured seats for the episode (default 4 for legacy rows); solo
+                     episodes do not receive the automatic first-place competitive reward
   placementProbs    behavior checkpoint's 4-way placement-head probabilities, used as
                      a state-only baseline for optional pure outcome credit
   placement (int)    final placement 1-4 (terminal rows / per-game meta); mapped to a
@@ -141,6 +143,7 @@ class TrajectoryBuffer:
     returns: np.ndarray             # (N,) float32
     strategic_mask: np.ndarray      # (N,) bool; long-horizon credit group
     strategic_mc_coef: float        # loader blend; 0 preserves ordinary PPO bit behavior
+    solo_strategic_mc_coef: float   # solo-only full-episode blend; may coexist with PvP outcome
     strategic_outcome_coef: float   # pure placement-outcome advantage blend on strategic rows
     placement_probs: np.ndarray     # (N, 4) behavior outcome-head probabilities
     placement_prob_mask: np.ndarray # (N,) bool; behavior checkpoint exposed the outcome head
@@ -177,6 +180,16 @@ def _coerce_end_round(raw: Any) -> int | None:
     if isinstance(raw, int) and raw >= 1:
         return raw
     if isinstance(raw, float) and raw.is_integer() and raw >= 1:
+        return int(raw)
+    return None
+
+
+def _coerce_player_count(raw: Any) -> int | None:
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int) and 1 <= raw <= 6:
+        return raw
+    if isinstance(raw, float) and raw.is_integer() and 1 <= raw <= 6:
         return int(raw)
     return None
 
@@ -244,6 +257,7 @@ def load_trajectory_buffer(
     win_bonus_halflife: float = 0.0,
     all_fallen_loss: float = 0.0,
     strategic_mc_coef: float = 0.0,
+    solo_strategic_mc_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     obs_key: str = "obs",
@@ -251,12 +265,14 @@ def load_trajectory_buffer(
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
     GAE advantages + returns learner-side.
 
-    obs_key: "obs" (current v1 83-float summary) or "obsV2" (flat arc-obs-v2,
+    obs_key: "obs" (current v1 187-float summary) or "obsV2" (flat arc-obs-v2,
     paired-row contract). A missing/malformed row rejects its entire episode:
     silently dropping one row would move dense rewards, done, and GAE across a
     transition that the learner can no longer represent."""
     if not 0.0 <= strategic_mc_coef <= 1.0:
         raise ValueError("strategic_mc_coef must be in [0, 1]")
+    if not 0.0 <= solo_strategic_mc_coef <= 1.0:
+        raise ValueError("solo_strategic_mc_coef must be in [0, 1]")
     if not 0.0 <= strategic_mc_gamma <= 1.0:
         raise ValueError("strategic_mc_gamma must be in [0, 1]")
     if not 0.0 <= strategic_outcome_coef <= 1.0:
@@ -410,6 +426,7 @@ def load_trajectory_buffer(
                         "all_fallen": 1 if rec.get("allFallen") else 0,
                         "end_round": _coerce_end_round(rec.get("endRound")),
                         "strategic": strategic,
+                        "player_count": _coerce_player_count(rec.get("playerCount", 4)),
                         "obs": obs,
                         "cands": cands,
                         "chosen": chosen,
@@ -420,6 +437,7 @@ def load_trajectory_buffer(
                     continue
                 if (
                     step["step_idx"] < 0
+                    or step["player_count"] is None
                     or not all(
                         math.isfinite(step[k])
                         for k in ("r_step", "logp_old", "v_pred", "behavior_temperature")
@@ -487,6 +505,9 @@ def load_trajectory_buffer(
 
         placement = None
         end_round = None
+        player_count = steps[0]["player_count"]
+        if any(s["player_count"] != player_count for s in steps):
+            raise ValueError(f"Episode {game_id} mixes playerCount values")
         for s in steps:
             if s["placement"] is not None:
                 placement = s["placement"]
@@ -500,7 +521,7 @@ def load_trajectory_buffer(
             # (normal placement). dense ΔVP and win_bonus are untouched.
             if all_fallen_loss and any(s["all_fallen"] for s in steps):
                 rewards[-1] += all_fallen_loss
-            elif placement is not None:
+            elif placement is not None and player_count > 1:
                 rewards[-1] += placement_rewards[placement - 1]
                 n_with_placement += 1
             # True 30-VP win (driver stamps won=1 only on target-VP finishes, never cap/all-Fallen):
@@ -527,24 +548,53 @@ def load_trajectory_buffer(
         strategic = np.array([s["strategic"] for s in steps], dtype=bool)
         # Only completed episodes have a realized complete-game outcome. Truncated rows retain
         # ordinary GAE instead of pretending the actor's tail bootstrap is a terminal result.
-        if strategic_mc_coef > 0 and dones[-1] and strategic.any():
+        # When an explicit solo coefficient is set it owns solo rows; the legacy/global knob
+        # continues to cover every player count otherwise.
+        standard_strategic = (
+            strategic & (player_count > 1)
+            if solo_strategic_mc_coef > 0
+            else strategic
+        )
+        if strategic_mc_coef > 0 and dones[-1] and standard_strategic.any():
             mc_ret = compute_discounted_returns(
                 rewards, dones, strategic_mc_gamma, last_value=0.0
             )
             mc_adv = mc_ret - values
+            adv[standard_strategic] = (
+                (1.0 - strategic_mc_coef) * adv[standard_strategic]
+                + strategic_mc_coef * mc_adv[standard_strategic]
+            )
+            ret[standard_strategic] = (
+                (1.0 - strategic_mc_coef) * ret[standard_strategic]
+                + strategic_mc_coef * mc_ret[standard_strategic]
+            )
+        # Solo has no meaningful placement ordering: it is always first by definition. Use the
+        # actual episode reward (dense score progress + true 30-VP win bonus) for long-horizon
+        # engine decisions instead. This can coexist with multiplayer-only outcome credit.
+        if solo_strategic_mc_coef > 0 and player_count == 1 and dones[-1] and strategic.any():
+            solo_ret = compute_discounted_returns(
+                rewards, dones, strategic_mc_gamma, last_value=0.0
+            )
+            solo_adv = solo_ret - values
             adv[strategic] = (
-                (1.0 - strategic_mc_coef) * adv[strategic]
-                + strategic_mc_coef * mc_adv[strategic]
+                (1.0 - solo_strategic_mc_coef) * adv[strategic]
+                + solo_strategic_mc_coef * solo_adv[strategic]
             )
             ret[strategic] = (
-                (1.0 - strategic_mc_coef) * ret[strategic]
-                + strategic_mc_coef * mc_ret[strategic]
+                (1.0 - solo_strategic_mc_coef) * ret[strategic]
+                + solo_strategic_mc_coef * solo_ret[strategic]
             )
         # Pure long-horizon outcome credit. Unlike strategic MC, this deliberately excludes
         # dense VP, build shaping, and the tactical value target: navigation receives only the
         # realized placement consequence, baselined by the behavior checkpoint's separately
         # trained placement head. The ordinary value head remains a short-horizon GAE critic.
-        if strategic_outcome_coef > 0 and dones[-1] and placement is not None and strategic.any():
+        if (
+            strategic_outcome_coef > 0
+            and player_count > 1
+            and dones[-1]
+            and placement is not None
+            and strategic.any()
+        ):
             outcome_target = (
                 min(placement_rewards)
                 if any(s["all_fallen"] for s in steps)
@@ -582,7 +632,7 @@ def load_trajectory_buffer(
             reward_mask_list.append(s["reward_mask"])
             route_mode_list.append(s["route_mode"])
             route_mask_list.append(s["route_mask"])
-            placement_list.append(placement if placement is not None else 0)
+            placement_list.append(placement if placement is not None and player_count > 1 else 0)
             placement_probs_list.append(s["placement_probs"])
             placement_prob_mask_list.append(s["placement_prob_mask"])
             strategic_mask_list.append(s["strategic"])
@@ -598,7 +648,8 @@ def load_trajectory_buffer(
         f"{sum(farm_mask_list)} with farmValue, {sum(reward_mask_list)} with rewardPi, "
         f"{sum(route_mask_list)} with routeMode, "
         f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
-        f"gamma={strategic_mc_gamma:g}; outcome coef={strategic_outcome_coef:g}, "
+        f"solo MC coef={solo_strategic_mc_coef:g}, gamma={strategic_mc_gamma:g}; "
+        f"outcome coef={strategic_outcome_coef:g}, "
         f"applied={n_outcome_credit}), "
         f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "
         f"{n_invalid_rows} malformed row(s), {n_nontrajectory} non-trajectory row(s), "
@@ -617,6 +668,7 @@ def load_trajectory_buffer(
         returns=returns,
         strategic_mask=np.array(strategic_mask_list, dtype=bool),
         strategic_mc_coef=float(strategic_mc_coef),
+        solo_strategic_mc_coef=float(solo_strategic_mc_coef),
         strategic_outcome_coef=float(strategic_outcome_coef),
         placement_probs=np.stack(placement_probs_list),
         placement_prob_mask=np.array(placement_prob_mask_list, dtype=bool),

@@ -60,6 +60,7 @@ import {
 	seedRoster,
 	stampBaselineElos,
 	stopInferServers,
+	trainingSeatCountsForGeneration,
 	defaultConfig
 } from './manager';
 import { loadPolicyWeights } from '../net';
@@ -171,6 +172,79 @@ describe('pfsp math', () => {
 		recordPairwise(m, 'X', 4, 1); // worse
 		expect(m.matchStats['X']).toEqual({ games: 3, better: 1, worse: 1 });
 		expect(winrateVs(m, 'X')).toBeCloseTo(0.5, 12);
+	});
+});
+
+describe('mixed player-count training curriculum', () => {
+	const curriculum = {
+		...defaultConfig('unused'),
+		seats: 4,
+		trainingSeatCurriculum: [
+			{ throughGen: 5, weights: { '1': 0.5, '2': 0.25, '3': 0.125, '4': 0.125 } },
+			{ throughGen: 12, weights: { '1': 0.3, '2': 0.25, '3': 0.2, '4': 0.25 } },
+			{ throughGen: 20, weights: { '1': 0.125, '2': 0.125, '3': 0.125, '4': 0.625 } }
+		]
+	} satisfies LeagueConfig;
+
+	it('keeps legacy leagues at their configured seat count', () => {
+		expect(trainingSeatCountsForGeneration(defaultConfig('unused'), 1, 6)).toEqual([
+			4, 4, 4, 4, 4, 4
+		]);
+	});
+
+	it('apportions solo-heavy early games and retains all counts later', () => {
+		const tally = (values: number[]) =>
+			values.reduce<Record<number, number>>((counts, seats) => {
+				counts[seats] = (counts[seats] ?? 0) + 1;
+				return counts;
+			}, {});
+		expect(tally(trainingSeatCountsForGeneration(curriculum, 1, 16))).toEqual({
+			1: 8,
+			2: 4,
+			3: 2,
+			4: 2
+		});
+		expect(tally(trainingSeatCountsForGeneration(curriculum, 9, 16))).toEqual({
+			1: 5,
+			2: 4,
+			3: 3,
+			4: 4
+		});
+		expect(tally(trainingSeatCountsForGeneration(curriculum, 40, 16))).toEqual({
+			1: 2,
+			2: 2,
+			3: 2,
+			4: 10
+		});
+	});
+
+	it('rejects malformed stages instead of silently changing the experiment', () => {
+		expect(() =>
+			trainingSeatCountsForGeneration(
+				{
+					...curriculum,
+					trainingSeatCurriculum: [{ throughGen: 5, weights: { '5': 1 } }]
+				},
+				1,
+				16
+			)
+		).toThrow(/invalid trainingSeatCurriculum weight/);
+	});
+
+	it('builds a true opponent-free solo matchup even when league opponent mixes are enabled', () => {
+		const soloConfig = {
+			...curriculum,
+			seats: 1,
+			selfPlayFraction: 1,
+			heuristicOpponentFraction: 1,
+			terminationBlocker: 'paragon' as const
+		};
+		const learner = member('main-0', 'main', { weightsPath: 'ckpt/cur.json' });
+		const selected = matchupOpponents(soloConfig, learner, [learner], 0, 16, randFrom([0.1]));
+		expect(selected).toEqual({ opponents: [], mirror: false, heuristic: false });
+		const plan = buildMatchup(soloConfig, learner, [], 0, 1);
+		expect(plan.config.profiles).toHaveLength(1);
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
 	});
 });
 

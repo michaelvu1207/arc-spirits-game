@@ -25,7 +25,7 @@ fields still train under awr/alphazero, and trajectory rows still load here.
 
 --model v2 trains the entity set-transformer (ml/model_v2.py) instead of the
 v1 MLP, on the PAIRED-ROW contract (authoritative, see bc_warmstart_v2.py):
-rows keep `obs` = the current 83-float v1 summary AND carry the flat arc-obs-v2 array
+rows keep `obs` = the current 187-float v1 summary AND carry the flat arc-obs-v2 array
 (3419 floats for the frozen catalog) under `obsV2`. --model v2 reads obsV2 and
 skips rows without it (counted); the layout is resolved from meta.json's
 "obs_v2" obsV2Meta block or the row's self-describing header. v2 checkpoints
@@ -78,7 +78,7 @@ class DecisionDataset(Dataset):
     Stores all decisions from JSONL files as numpy arrays.
     Padding is done at collation time (per-batch).
 
-    obs_key selects which field feeds the model: "obs" (current v1 83-float summary)
+    obs_key selects which field feeds the model: "obs" (current v1 187-float summary)
     or "obsV2" (flat arc-obs-v2, paired-row contract). Rows lacking obs_key
     are skipped and counted (v1-only rows mixed into a v2 dataset).
     """
@@ -616,6 +616,7 @@ def train(
     win_bonus_halflife: float = 0.0,
     all_fallen_loss: float = 0.0,
     strategic_mc_coef: float = 0.0,
+    solo_strategic_mc_coef: float = 0.0,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     model_version: str = "v1",
@@ -637,7 +638,7 @@ def train(
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
     # Paired-row contract: v2 reads the flat arc-obs-v2 array from `obsV2`;
-    # `obs` stays the current v1 83-float summary for the v1 net / distillation.
+    # `obs` stays the current v1 187-float summary for the v1 net / distillation.
     obs_key = "obsV2" if model_version == "v2" else "obs"
 
     def export_model(model, obs_dim: int, act_dim: int) -> None:
@@ -665,6 +666,7 @@ def train(
             win_bonus_halflife=win_bonus_halflife,
             all_fallen_loss=all_fallen_loss,
             strategic_mc_coef=strategic_mc_coef,
+            solo_strategic_mc_coef=solo_strategic_mc_coef,
             strategic_mc_gamma=strategic_mc_gamma,
             strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
@@ -1020,6 +1022,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--strategic-mc-coef", type=float, default=0.0,
                    help="Blend [0,1] from ordinary GAE toward full-episode Monte Carlo "
                         "advantages/value targets on rows marked strategic; 0 preserves PPO")
+    p.add_argument("--solo-strategic-mc-coef", type=float, default=0.0,
+                   help="Solo-only full-episode Monte Carlo blend on strategic rows. Solo uses "
+                        "score progress and true 30-VP wins, never its automatic first place")
     p.add_argument("--strategic-mc-gamma", type=float, default=1.0,
                    help="Discount for strategic full-episode Monte Carlo returns (default 1)")
     p.add_argument("--strategic-outcome-coef", type=float, default=0.0,
@@ -1116,6 +1121,7 @@ if __name__ == "__main__":
         win_bonus_halflife=args.win_bonus_halflife,
         all_fallen_loss=args.all_fallen_loss,
         strategic_mc_coef=args.strategic_mc_coef,
+        solo_strategic_mc_coef=args.solo_strategic_mc_coef,
         strategic_mc_gamma=args.strategic_mc_gamma,
         strategic_outcome_coef=args.strategic_outcome_coef,
         model_version=args.model_version,

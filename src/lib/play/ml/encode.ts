@@ -20,6 +20,7 @@ import {
 	GAME_PHASES,
 	SEAT_COLORS,
 	VP_TO_WIN,
+	MAX_ROUNDS,
 	ALL_DESTINATIONS,
 	isEvilAlignment,
 	type GameCommand,
@@ -39,6 +40,58 @@ const ROUND_NORM = 36;
 /** Generic divisor for "pool" counts (dice, mats, barrier) → keeps features ~[0,1]. */
 const POOL_NORM = 10;
 const BARRIER_NORM = 20;
+
+// Frozen semantic ordering for the full engine-composition tail. Never derive this from catalog
+// array order: checkpoint meaning must remain stable across catalog serialization changes.
+const FULL_CLASS_FEATURES = [
+	'Abyss Summoner',
+	'Adaptive Fighter',
+	'Ancient Magus',
+	'Aquamaiden',
+	'Arc Mage',
+	'Arcane Advisor',
+	'Blood Hunter',
+	'Captain',
+	'Child Prodigy',
+	'Cultivator',
+	'Cursed Spirit',
+	'Dark Assassin',
+	'Dark Fighter',
+	'Deep Sea Hunter',
+	'Disruptor',
+	'Dragon Warrior',
+	'Elementalist',
+	'Fairy',
+	'Fairy Droid',
+	'Fighter',
+	'Firekeeper',
+	'Golden Ruler',
+	'Golem of Wishes',
+	'Healer',
+	'Infiltrator',
+	'Ironmane',
+	'Mod Injector',
+	'Purifier',
+	'Rune Mage',
+	'Sharpshooter',
+	'Soul Weaver',
+	'Spirit Animal',
+	'Strategist',
+	'The Corruptor',
+	'Undercover',
+	'World Ender',
+	'World Guardian'
+] as const;
+const FULL_ORIGIN_FEATURES = [
+	'Astral Zone',
+	'Cyber City',
+	'Floral Patch',
+	'Human Enclave',
+	'Lantern Lights',
+	'Moon Tide',
+	'Royal Family',
+	'Void'
+] as const;
 
 // `catalog` was optional in the original action-encoder API. Production callers pass it,
 // but retaining a minimal fallback keeps old diagnostics/tests information-safe without
@@ -350,11 +403,83 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	for (let i = 0; i < 5; i++) f.push(myDestIdx === i ? 1 : 0); // destination one-hot across ALL_DESTINATIONS
 	f.push(myDest === 'Arcane Abyss' ? 1 : 0); // at-Abyss flag (mirrors lockNavigation encoding)
 
+	// ── Full engine-cycle state (obs v1.3). The previous compact block represented only
+	// 14/37 active classes, four dormant classes, and no origins or initiative. That made
+	// many late-game tableaux observationally identical even after action identities were fixed.
+	f.push(clamp01((MAX_ROUNDS - state.round) / MAX_ROUNDS));
+	f.push(me ? clamp01(me.victoryPoints / Math.max(1, state.round * 3)) : 0);
+	const history = me?.vpHistory ?? [];
+	f.push(
+		history.length >= 2
+			? clamp01((history[history.length - 1] - history[history.length - 2]) / 10)
+			: 0
+	);
+	f.push(clamp01((me?.initiative ?? 0) / 12));
+	f.push(clamp01((me?.combatDamageBonus ?? 0) / 20));
+	f.push(clamp01((me?.extraActions?.combat ?? 0) / 3));
+	f.push(clamp01((me?.extraActions?.locationInteraction ?? 0) / 3));
+	const heldMats = me?.mats?.filter((mat) => mat.hasRune) ?? [];
+	f.push(clamp01(heldMats.filter((mat) => mat.type === 'rune').length / 4));
+	f.push(clamp01(heldMats.filter((mat) => mat.type === 'relic').length / 4));
+	f.push(clamp01(heldMats.filter((mat) => mat.type === 'augment').length / 4));
+
+	const colocatedOpps =
+		state.revealedDestinations && myDest
+			? opps.filter((opponent) => opponent.navigationDestination === myDest)
+			: [];
+	f.push(
+		clamp01(
+			Math.max(0, ...colocatedOpps.map((opponent) => opponent.attackDice?.length ?? 0)) /
+				POOL_NORM
+		)
+	);
+	f.push(
+		clamp01(
+			Math.max(0, ...colocatedOpps.map((opponent) => opponent.barrier ?? 0)) / BARRIER_NORM
+		)
+	);
+	f.push(
+		clamp01(Math.max(0, ...colocatedOpps.map((opponent) => opponent.initiative ?? 0)) / 12)
+	);
+	f.push(
+		clamp01(
+			colocatedOpps.filter((opponent) => !isEvilAlignment(opponent.statusLevel)).length /
+				SEAT_COLORS.length
+		)
+	);
+
+	const dormantClasses: Record<string, number> = {};
+	const activeOrigins: Record<string, number> = {};
+	const dormantOrigins: Record<string, number> = {};
+	for (const spirit of me?.spirits ?? []) {
+		const classTarget = spirit.isFaceDown ? dormantClasses : null;
+		if (classTarget) {
+			for (const [name, count] of Object.entries(spirit.classes ?? {})) {
+				classTarget[name] = (classTarget[name] ?? 0) + count;
+			}
+		}
+		const originTarget = spirit.isFaceDown ? dormantOrigins : activeOrigins;
+		for (const [name, count] of Object.entries(spirit.origins ?? {})) {
+			originTarget[name] = (originTarget[name] ?? 0) + count;
+		}
+	}
+	for (const attachment of me?.spiritAugmentAttachments ?? []) {
+		if (!attachment.className) continue;
+		const host = me?.spirits?.find(
+			(spirit) => spirit.slotIndex === attachment.spiritSlotIndex && spirit.isFaceDown
+		);
+		if (host) dormantClasses[attachment.className] = (dormantClasses[attachment.className] ?? 0) + 1;
+	}
+	for (const name of FULL_CLASS_FEATURES) f.push(clamp01((cc[name] ?? 0) / 10));
+	for (const name of FULL_CLASS_FEATURES) f.push(clamp01((dormantClasses[name] ?? 0) / 10));
+	for (const name of FULL_ORIGIN_FEATURES) f.push(clamp01((activeOrigins[name] ?? 0) / 7));
+	for (const name of FULL_ORIGIN_FEATURES) f.push(clamp01((dormantOrigins[name] ?? 0) / 7));
+
 	return f;
 }
 
 /** Number of features encodeObs emits. Asserted in tests; also written to meta.json. */
-export const OBS_DIM = 83; // v1.2: 77 + 6 own-location features (destination one-hot + at-Abyss)
+export const OBS_DIM = 187; // v1.3: 83 + 104 full engine-cycle features
 
 // Command-type vocabulary for the action one-hot. Append-only; index is the contract.
 export const COMMAND_VOCAB: GameCommand['type'][] = [

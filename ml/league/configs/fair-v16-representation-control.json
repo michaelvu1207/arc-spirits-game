@@ -1,8 +1,14 @@
 {
-  "_readme": "v16 representation-complete matched control. Uses the same engine-choice action surface, engine-cycle mask, seeds, fields, and 500-Elo warm start as the outcome treatment, but strategic outcome coefficient is zero. The engine-cycle mask is inert at zero and is kept identical for auditability.",
+  "_readme": "v16 representation-complete mixed-player-count control. Uses the same engine-choice action surface, 187-feature engine state, player-count curriculum, seeds, fields, and 500-Elo warm start as the outcome treatment, but multiplayer strategic outcome coefficient is zero.",
   "version": "league-v1",
   "mode": "ppo",
   "seats": 4,
+  "trainingSeatCurriculum": [
+    { "throughGen": 5, "weights": { "1": 0.5, "2": 0.25, "3": 0.125, "4": 0.125 } },
+    { "throughGen": 12, "weights": { "1": 0.3, "2": 0.25, "3": 0.2, "4": 0.25 } },
+    { "throughGen": 20, "weights": { "1": 0.125, "2": 0.125, "3": 0.125, "4": 0.625 } }
+  ],
+  "soloMaxStatusLevel": 2,
   "maxRounds": 120,
   "gamesPerGen": 512,
   "matchupGames": 32,
@@ -73,6 +79,7 @@
       "--gamma", "0.999",
       "--gae-lambda", "0.95",
       "--strategic-mc-coef", "0",
+      "--solo-strategic-mc-coef", "0.5",
       "--strategic-mc-gamma", "1",
       "--strategic-outcome-coef", "0",
       "--win-bonus", "1.0",
@@ -85,8 +92,7 @@
   "workers": 20,
   "matchupConcurrency": 2,
   "seedBase": 280000000,
-  "initFrom": "ml/v16_finalists/outcome-s1-gen20.json",
-  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20.json" },
+  "initFrom": "ml/v16_finalists/outcome-s1-gen20-obs187.json",
+  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20-obs187.json" },
   "paths": { "root": "ml/league_v16_representation_control_s0" }
 }
-

@@ -669,6 +669,69 @@ export function annealedTemperature(config: LeagueConfig, gen: number): number |
 	return a.from + (a.to - a.from) * frac;
 }
 
+/** Deterministically apportion matchup pools across the configured player-count mixture. */
+export function trainingSeatCountsForGeneration(
+	config: LeagueConfig,
+	gen: number,
+	matchups: number
+): number[] {
+	const stages = config.trainingSeatCurriculum ?? [];
+	if (stages.length === 0) return Array.from({ length: matchups }, () => config.seats);
+	if (!Number.isInteger(matchups) || matchups < 0) {
+		throw new Error(`league: matchup count must be a non-negative integer, got ${matchups}`);
+	}
+	let previousThroughGen = 0;
+	for (const [index, entry] of stages.entries()) {
+		if (!Number.isInteger(entry.throughGen) || entry.throughGen <= previousThroughGen) {
+			throw new Error(
+				`league: trainingSeatCurriculum stage ${index} throughGen must be a strictly increasing positive integer`
+			);
+		}
+		previousThroughGen = entry.throughGen;
+		const weights = Object.entries(entry.weights);
+		if (weights.length === 0) {
+			throw new Error(`league: trainingSeatCurriculum stage ${index} has no weights`);
+		}
+		for (const [key, weight] of weights) {
+			const seats = Number.parseInt(key, 10);
+			if (
+				String(seats) !== key ||
+				!Number.isInteger(seats) ||
+				seats < 1 ||
+				seats > config.seats ||
+				!Number.isFinite(weight) ||
+				weight <= 0
+			) {
+				throw new Error(
+					`league: invalid trainingSeatCurriculum weight ${key}=${weight} at stage ${index}`
+				);
+			}
+		}
+	}
+	const stage = stages.find((entry) => gen <= entry.throughGen) ?? stages[stages.length - 1];
+	const weighted = Object.entries(stage.weights)
+		.map(([key, weight]) => ({ seats: Number.parseInt(key, 10), weight }))
+		.sort((left, right) => left.seats - right.seats);
+	const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+	const assigned = new Map(weighted.map((entry) => [entry.seats, 0]));
+	const result: number[] = [];
+	for (let index = 0; index < matchups; index += 1) {
+		let best = weighted[0];
+		let bestDeficit = -Infinity;
+		for (const entry of weighted) {
+			const target = ((index + 1) * entry.weight) / total;
+			const deficit = target - (assigned.get(entry.seats) ?? 0);
+			if (deficit > bestDeficit) {
+				best = entry;
+				bestDeficit = deficit;
+			}
+		}
+		result.push(best.seats);
+		assigned.set(best.seats, (assigned.get(best.seats) ?? 0) + 1);
+	}
+	return result;
+}
+
 export function buildMatchup(
 	config: LeagueConfig,
 	learner: LeagueMember,
@@ -861,6 +924,7 @@ export function matchupOpponents(
 	matchups: number,
 	rand: () => number
 ): { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean } {
+	if (config.seats <= 1) return { opponents: [], mirror: false, heuristic: false };
 	// Termination blocker: reserve one opponent slot in a deterministic fraction of matchups. This
 	// creates real late-game data without letting the learner assume another seat always keeps the
 	// table alive. The remaining slots use the normal mirror/heuristic/PFSP selection.
@@ -1113,9 +1177,11 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		}
 		let mirrorMatchups = 0;
 		let heuristicMatchups = 0;
+		const trainingSeatCounts = trainingSeatCountsForGeneration(config, gen, matchups);
 		const plans = Array.from({ length: matchups }, (_, m) => {
+			const matchupConfig: LeagueConfig = { ...config, seats: trainingSeatCounts[m] };
 			const { opponents, mirror, heuristic } = matchupOpponents(
-				config,
+				matchupConfig,
 				learner,
 				state.members,
 				m,
@@ -1124,7 +1190,10 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			);
 			if (mirror) mirrorMatchups += 1;
 			if (heuristic) heuristicMatchups += 1;
-			const plan = buildMatchup(config, learner, opponents, m, gen, v2Arg, v1SocketArg);
+			const plan = buildMatchup(matchupConfig, learner, opponents, m, gen, v2Arg, v1SocketArg);
+			if (matchupConfig.seats === 1) {
+				plan.config.maxStatusLevel = config.soloMaxStatusLevel ?? 2;
+			}
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
 			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
 			const seeds = Array.from({ length: count }, (_, i) => seed0 + i);

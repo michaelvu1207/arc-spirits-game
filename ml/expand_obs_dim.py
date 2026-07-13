@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Dims-preserving warm-start surgery: expand an arc-cand-scorer-v1 JSON checkpoint
 from OLD obs_dim to NEW obs_dim by inserting ZERO input columns for the appended
-observation features.
+observation features. The current encoder v1.3 appends 104 engine-cycle features
+(83 -> 187); the surgery also works for any earlier strict-prefix checkpoint.
 
-obs v1.2 appends features at the END of the obs vector (encode.ts OBS_DIM 77 -> 83).
+Observation revisions append features at the END of the obs vector.
 In every head's FIRST Linear the obs block is the leading `obs_dim` input columns
 (trunk/reward_pick then concatenate the `act_dim` action columns after it; value/
 farm_value/route_mode/placement are obs-only). So the insertion index is ALWAYS the
@@ -17,7 +18,7 @@ parity via an independent numpy forward pass before writing.
 
 Usage:
   python ml/expand_obs_dim.py --in ml/champions/ladder3/main-0-gen60.json \
-      --out ml/warmstart/ladder4-main0-obs83.json --new-obs-dim 83
+      --out ml/warmstart/ladder4-main0-obs187.json --new-obs-dim 187
 """
 from __future__ import annotations
 
@@ -117,7 +118,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--in", dest="inp", required=True, type=Path)
     ap.add_argument("--out", dest="out", required=True, type=Path)
-    ap.add_argument("--new-obs-dim", type=int, default=83)
+    ap.add_argument("--new-obs-dim", type=int, default=187)
     ap.add_argument("--no-verify", action="store_true", help="skip the numpy parity self-check")
     args = ap.parse_args()
 

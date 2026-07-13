@@ -268,6 +268,49 @@ def test_strategic_outcome_credit_uses_pure_placement_baseline_only():
     assert np.allclose(outcome.placement_probs[0], probs)
 
 
+def test_solo_uses_score_and_win_progress_not_automatic_first_place():
+    rng = np.random.default_rng(1004)
+    rows = []
+    for t in range(3):
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": "solo-g0",
+            "stepIdx": t,
+            "rStep": 0.4 if t == 2 else 0.0,
+            "done": t == 2,
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "behaviorMask": [1, 1, 1],
+            "behaviorTemperature": 1.0,
+            "vPred": 0.0,
+            "strategic": 1 if t == 0 else 0,
+            "placementProbs": [0.1, 0.2, 0.3, 0.4],
+            "playerCount": 1,
+        })
+    rows[-1]["placement"] = 1  # structurally true, but meaningless in a one-player game
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        ordinary = load_trajectory_buffer(
+            d, gamma=0.9, gae_lambda=0.5, placement_rewards=PLACEMENT_REWARDS
+        )
+        solo = load_trajectory_buffer(
+            d,
+            gamma=0.9,
+            gae_lambda=0.5,
+            placement_rewards=PLACEMENT_REWARDS,
+            solo_strategic_mc_coef=1.0,
+            strategic_outcome_coef=1.0,
+        )
+    # No +1 automatic first-place reward and no placement-head supervision in solo.
+    assert math.isclose(float(ordinary.returns[-1]), 0.4, abs_tol=1e-6)
+    assert np.array_equal(solo.placement, [0, 0, 0])
+    # Full-episode solo credit propagates the actual score progress to the strategic opener.
+    assert math.isclose(float(solo.advantages[0]), 0.4, abs_tol=1e-6)
+
+
 def test_strategic_outcome_credit_requires_recorded_behavior_outcome_head():
     rng = np.random.default_rng(1004)
     row = {

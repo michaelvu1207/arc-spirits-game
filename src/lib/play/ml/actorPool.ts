@@ -273,7 +273,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 	// meta.json alongside the shards: ml/model.py's load_dims_from_meta prefers it, and
 	// without it the trainer would infer dims from the first *.jsonl alphabetically —
 	// which is games-0.jsonl (summaries, no obs), not a sample shard. Shape follows the
-	// pinned paired-row contract (docs/encoder-v2.md): obs_dim stays the current v1 83 on every
+	// pinned paired-row contract (docs/encoder-v2.md): obs_dim stays the current v1 187 on every
 	// dataset, and v2 runs nest obsV2Meta under the exact key "obs_v2" — the block
 	// bc_warmstart_v2 / train.py --model v2 build their ObsV2Spec from.
 	writeFileSync(

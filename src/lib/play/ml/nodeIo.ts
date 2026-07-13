@@ -75,6 +75,7 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				// auditability; PPO consumes the compact binary strategic mask.
 				...(typeof s.decisionType === 'string' ? { decisionType: s.decisionType } : {}),
 				...(typeof s.strategic === 'number' ? { strategic: s.strategic } : {}),
+				...(typeof s.playerCount === 'number' ? { playerCount: s.playerCount } : {}),
 				// Behavior scalars stay full precision: rounding logpOld perturbs PPO's
 				// new/old ratio before the first optimizer step.
 				...(typeof s.logpOld === 'number' ? { logpOld: s.logpOld } : {}),
@@ -173,14 +174,17 @@ export function randomPolicy(seed = 1, trunkHidden = [128, 128], valueHidden = [
 	return new NeuralPolicy(w);
 }
 
-/** Load weights if present AND dims match the current encoder; otherwise a random bootstrap net. */
+/** Load weights if present and compatible with the current encoder. Strict-prefix observation
+ * checkpoints are zero-expanded; incompatible action/newer-observation nets fall back to random. */
 export function loadOrRandomPolicy(
 	file = mlPath('weights', 'policy.json'),
 	seed = 1
 ): NeuralPolicy {
 	if (existsSync(file)) {
 		const w = JSON.parse(readFileSync(file, 'utf8')) as PolicyWeights;
-		if (w.obs_dim === OBS_DIM && w.act_dim === ACT_DIM) return loadPolicyWeights(w);
+		if (w.obs_dim <= OBS_DIM && w.act_dim === ACT_DIM) {
+			return loadPolicyWeights(w, { expectedObsDim: OBS_DIM, expectedActDim: ACT_DIM });
+		}
 	}
 	return randomPolicy(seed);
 }

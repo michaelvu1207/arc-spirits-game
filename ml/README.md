@@ -31,7 +31,8 @@ per-step bridge; both languages do what they're best at.
 ## Current status (verified July 11, 2026)
 
 - The bundled champion is **v15-1 / conservative-gen10**
-  (`ml/champions/v15-1/main-0-gen10.json`), with an **83-float observation** and
+  (`ml/champions/v15-1/main-0-gen10.json`), zero-expanded at load time into the current
+  **187-float observation**, and
   **52-float action** contract. It scored **476 Elo** over the frozen 800-game
   gauntlet-v10 (+23 over v13-2), then beat v13-2 in the mixed learned field
   (48% vs 35.5% wins; 14.9 vs 12.74 VP). The exact live navigation-temperature
@@ -51,7 +52,7 @@ per-step bridge; both languages do what they're best at.
 **TypeScript (`src/lib/play/ml/`)**
 | File | Role |
 |---|---|
-| `encode.ts` | `encodeObs` (OBS_DIM=83) + `encodeAction` (ACT_DIM=52) — the feature contract |
+| `encode.ts` | `encodeObs` (OBS_DIM=187) + `encodeAction` (ACT_DIM=52) — the feature contract |
 | `actions.ts` | `legalActions` — full legal candidate set (dry-run filtered) + `commandMatches` |
 | `reward.ts` | `computeReturns` — placement blended with VP progress; winner pinned to 1.0 |
 | `net.ts` | pure-TS forward pass of the exported weights (`NeuralPolicy`) |

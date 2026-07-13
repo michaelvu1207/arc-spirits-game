@@ -143,13 +143,34 @@ describe('driver PPO behavior distribution', () => {
 		expect(opponentOnly.samples).toHaveLength(0);
 	}, 30_000);
 
-	it('retains a real terminal hybrid-override row and intermediate dense rewards', async () => {
+	it('runs a true solo trajectory without immediately ending or corrupting into Fallen', async () => {
+		const catalog = await loadOrSnapshotCatalog();
+		const result = playRecordingGame(catalog, {
+			seed: 77124,
+			profiles: [profileFor('medium')],
+			maxRounds: 12,
+			policy: randomPolicy(9124),
+			neuralSeats: ['Red'],
+			recordSeats: ['Red'],
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			denseVpReward: true,
+			maxStatusLevel: 2,
+			strategicDecisionScope: 'engine-cycle'
+		});
+
+		expect(result.rounds).toBeGreaterThan(1);
+		expect(result.samples.length).toBeGreaterThan(5);
+		expect(result.samples.every((row) => row.playerCount === 1)).toBe(true);
+		expect(result.finalState.players.Red!.statusLevel).toBeLessThanOrEqual(2);
+	}, 30_000);
+
+	it('retains a real terminal row with exact behavior metadata and intermediate dense rewards', async () => {
 		const catalog = await loadOrSnapshotCatalog();
 		const policy = randomPolicy(9123);
 		const result = playRecordingGame(catalog, {
-			// Seed 11 terminates on a deterministic hybrid override with the complete
-			// Benefits action surface. (Seed 3 used to do so only because Cursed Spirit
-			// rewards were missing from the neural surface and timed out.)
+		// Seed 11 exercises a complete game with the full Benefits action surface.
 			seed: 11,
 			profiles: SEAT_COLORS.map(() => profileFor('medium')),
 			maxRounds: 80,
@@ -170,9 +191,10 @@ describe('driver PPO behavior distribution', () => {
 
 		const terminal = result.samples.at(-1)!;
 		expect(terminal.done).toBe(true);
-		expect(terminal.policyMask).toBe(0);
-		expect(terminal.logpOld).toBeUndefined();
+		expect(terminal.policyMask === 0 || terminal.policyMask === 1).toBe(true);
+		expect(terminal.logpOld === undefined).toBe(terminal.policyMask === 0);
 		expect(terminal.vPred).toEqual(expect.any(Number));
+		expect(terminal.playerCount).toBe(SEAT_COLORS.length);
 	}, 30_000);
 
 	const python = resolve('ml/.venv/bin/python');

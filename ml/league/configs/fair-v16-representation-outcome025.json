@@ -1,8 +1,14 @@
 {
-  "_readme": "v16 representation-complete engine-cycle outcome treatment. Identical to the matched representation control except that strategic decisions blend 25% toward pure final placement minus the behavior placement-head baseline. Lowered from 50% because the navigation-only 50% treatment reversed across seeds.",
+  "_readme": "v16 representation-complete mixed-player-count outcome treatment. Identical to the matched control except multiplayer strategic decisions blend 25% toward pure final placement minus the behavior placement-head baseline. Solo uses score/win Monte Carlo in both arms and never its automatic first place.",
   "version": "league-v1",
   "mode": "ppo",
   "seats": 4,
+  "trainingSeatCurriculum": [
+    { "throughGen": 5, "weights": { "1": 0.5, "2": 0.25, "3": 0.125, "4": 0.125 } },
+    { "throughGen": 12, "weights": { "1": 0.3, "2": 0.25, "3": 0.2, "4": 0.25 } },
+    { "throughGen": 20, "weights": { "1": 0.125, "2": 0.125, "3": 0.125, "4": 0.625 } }
+  ],
+  "soloMaxStatusLevel": 2,
   "maxRounds": 120,
   "gamesPerGen": 512,
   "matchupGames": 32,
@@ -73,6 +79,7 @@
       "--gamma", "0.999",
       "--gae-lambda", "0.95",
       "--strategic-mc-coef", "0",
+      "--solo-strategic-mc-coef", "0.5",
       "--strategic-mc-gamma", "1",
       "--strategic-outcome-coef", "0.25",
       "--win-bonus", "1.0",
@@ -85,8 +92,7 @@
   "workers": 20,
   "matchupConcurrency": 2,
   "seedBase": 280000000,
-  "initFrom": "ml/v16_finalists/outcome-s1-gen20.json",
-  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20.json" },
+  "initFrom": "ml/v16_finalists/outcome-s1-gen20-obs187.json",
+  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20-obs187.json" },
   "paths": { "root": "ml/league_v16_representation_outcome025_s0" }
 }
-

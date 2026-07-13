@@ -111,7 +111,20 @@ export interface LeagueConfig {
 	version: 'league-v1';
 	/** train.py --mode. Default awr until the PPO recording fields land (task #8). */
 	mode: 'awr' | 'alphazero' | 'ppo';
+	/** Ranked/evaluation seat count and maximum seat count available to training curricula. */
 	seats: number;
+	/**
+	 * Optional generation curriculum over training player counts. The first stage whose
+	 * `throughGen` includes the current generation is used; the last stage persists afterward.
+	 * Weights are relative and are deterministically apportioned across matchup pools. Eval and
+	 * promotion remain at `seats`, so solo/two/three-player data can never lower the 4p gate.
+	 */
+	trainingSeatCurriculum?: Array<{
+		throughGen: number;
+		weights: Record<string, number>;
+	}>;
+	/** Status cap for solo curriculum games (default 2) to prevent the one-player all-Fallen exit. */
+	soloMaxStatusLevel?: number;
 	maxRounds: number;
 	/** Learner games generated per lane per generation. */
 	gamesPerGen: number;
