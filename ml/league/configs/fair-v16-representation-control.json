@@ -1,5 +1,5 @@
 {
-  "_readme": "v16 representation-complete mixed-player-count control. Uses the same engine-choice action surface, 187-feature engine state, player-count curriculum, seeds, fields, and 500-Elo warm start as the outcome treatment, but multiplayer strategic outcome coefficient is zero.",
+  "_readme": "v16 representation-complete mixed-player-count control. Uses the same engine-choice action surface, 188-feature engine/player-count state, curriculum, seeds, fields, and 500-Elo warm start as the outcome treatment, but multiplayer strategic outcome coefficient is zero.",
   "version": "league-v1",
   "mode": "ppo",
   "seats": 4,
@@ -92,7 +92,7 @@
   "workers": 20,
   "matchupConcurrency": 2,
   "seedBase": 280000000,
-  "initFrom": "ml/v16_finalists/outcome-s1-gen20-obs187.json",
-  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20-obs187.json" },
+  "initFrom": "ml/v16_finalists/outcome-s1-gen20-obs188.json",
+  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20-obs188.json" },
   "paths": { "root": "ml/league_v16_representation_control_s0" }
 }

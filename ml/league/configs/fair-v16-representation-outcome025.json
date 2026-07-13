@@ -92,7 +92,7 @@
   "workers": 20,
   "matchupConcurrency": 2,
   "seedBase": 280000000,
-  "initFrom": "ml/v16_finalists/outcome-s1-gen20-obs187.json",
-  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20-obs187.json" },
+  "initFrom": "ml/v16_finalists/outcome-s1-gen20-obs188.json",
+  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20-obs188.json" },
   "paths": { "root": "ml/league_v16_representation_outcome025_s0" }
 }

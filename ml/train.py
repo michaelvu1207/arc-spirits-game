@@ -25,7 +25,7 @@ fields still train under awr/alphazero, and trajectory rows still load here.
 
 --model v2 trains the entity set-transformer (ml/model_v2.py) instead of the
 v1 MLP, on the PAIRED-ROW contract (authoritative, see bc_warmstart_v2.py):
-rows keep `obs` = the current 187-float v1 summary AND carry the flat arc-obs-v2 array
+rows keep `obs` = the current 188-float v1 summary AND carry the flat arc-obs-v2 array
 (3419 floats for the frozen catalog) under `obsV2`. --model v2 reads obsV2 and
 skips rows without it (counted); the layout is resolved from meta.json's
 "obs_v2" obsV2Meta block or the row's self-describing header. v2 checkpoints
@@ -78,7 +78,7 @@ class DecisionDataset(Dataset):
     Stores all decisions from JSONL files as numpy arrays.
     Padding is done at collation time (per-batch).
 
-    obs_key selects which field feeds the model: "obs" (current v1 187-float summary)
+    obs_key selects which field feeds the model: "obs" (current v1 188-float summary)
     or "obsV2" (flat arc-obs-v2, paired-row contract). Rows lacking obs_key
     are skipped and counted (v1-only rows mixed into a v2 dataset).
     """
@@ -638,7 +638,7 @@ def train(
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
     # Paired-row contract: v2 reads the flat arc-obs-v2 array from `obsV2`;
-    # `obs` stays the current v1 187-float summary for the v1 net / distillation.
+    # `obs` stays the current v1 188-float summary for the v1 net / distillation.
     obs_key = "obsV2" if model_version == "v2" else "obs"
 
     def export_model(model, obs_dim: int, act_dim: int) -> None:

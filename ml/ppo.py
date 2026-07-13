@@ -265,7 +265,7 @@ def load_trajectory_buffer(
     """Load trajectory rows, group by gameId ordered by stepIdx, and compute
     GAE advantages + returns learner-side.
 
-    obs_key: "obs" (current v1 187-float summary) or "obsV2" (flat arc-obs-v2,
+    obs_key: "obs" (current v1 188-float summary) or "obsV2" (flat arc-obs-v2,
     paired-row contract). A missing/malformed row rejects its entire episode:
     silently dropping one row would move dense rewards, done, and GAE across a
     transition that the learner can no longer represent."""

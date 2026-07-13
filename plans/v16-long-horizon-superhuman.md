@@ -94,7 +94,7 @@ Promotion requires all of:
 ### 5. Escalate only after the objective/data experiment has a verdict
 
 - The first outcome-credit pilots were seed-unstable and did not clear promotion. Before the next
-  matched runs, expand v1 from 83 to 187 observations: preserve the frozen prefix and append the
+  matched runs, expand v1 from 83 to 188 observations: preserve the frozen prefix and append the
   complete active/dormant 37-class and 8-origin engine, initiative/combat resources, held-material
   composition, horizon/score pace, and public co-located threat state. Zero-expand the 500-Elo
   warm start so all old outputs are exactly preserved until the new columns train.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyGameCommand, createLobbyState } from '../runtime';
-import type { GameActor, GameCommand, PlayCatalog, PublicGameState } from '../types';
+import { SEAT_COLORS, type GameActor, type GameCommand, type PlayCatalog, type PublicGameState } from '../types';
 import { computeKillProbability } from '../server/botPolicy';
 import {
 	enumerateCandidates,
@@ -507,6 +507,18 @@ describe('neural value action scoring', () => {
 		// At a Spirit World location (Floral Patch, index 0): one-hot slot 0, at-Abyss flag clear.
 		const floral = encodeObs(atQuietLocation(), 'Red', CATALOG);
 		expect(floral.slice(77, 83)).toEqual([1, 0, 0, 0, 0, 0]);
+	});
+
+	it('makes the configured player count explicit for mixed solo/multiplayer training', () => {
+		const multiplayer = atAbyss();
+		const solo = structuredClone(multiplayer);
+		solo.activeSeats = ['Red'];
+		const multiObs = encodeObs(multiplayer, 'Red', CATALOG);
+		const soloObs = encodeObs(solo, 'Red', CATALOG);
+
+		expect(multiObs[83]).toBe(multiplayer.activeSeats.length / SEAT_COLORS.length);
+		expect(soloObs[83]).toBe(1 / SEAT_COLORS.length);
+		expect(multiObs[83]).not.toBe(soloObs[83]);
 	});
 
 	it('credits a monster kill for the VP pending in its reward claim', () => {

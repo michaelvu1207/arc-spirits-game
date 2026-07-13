@@ -406,6 +406,7 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	// ── Full engine-cycle state (obs v1.3). The previous compact block represented only
 	// 14/37 active classes, four dormant classes, and no origins or initiative. That made
 	// many late-game tableaux observationally identical even after action identities were fixed.
+	f.push(clamp01(state.activeSeats.length / SEAT_COLORS.length));
 	f.push(clamp01((MAX_ROUNDS - state.round) / MAX_ROUNDS));
 	f.push(me ? clamp01(me.victoryPoints / Math.max(1, state.round * 3)) : 0);
 	const history = me?.vpHistory ?? [];
@@ -479,7 +480,7 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 }
 
 /** Number of features encodeObs emits. Asserted in tests; also written to meta.json. */
-export const OBS_DIM = 187; // v1.3: 83 + 104 full engine-cycle features
+export const OBS_DIM = 188; // v1.3: 83 + 105 full engine-cycle/player-count features
 
 // Command-type vocabulary for the action one-hot. Append-only; index is the contract.
 export const COMMAND_VOCAB: GameCommand['type'][] = [

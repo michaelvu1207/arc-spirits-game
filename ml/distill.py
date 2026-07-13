@@ -2,7 +2,7 @@
 Distill the v2 set-transformer teacher into the live TS-format v1 net.
 
 The live TypeScript bot (src/lib/play/ml/net.ts) can only run the fixed-MLP
-`arc-cand-scorer-v1` JSON format on current v1 187-float observations. A transformer
+`arc-cand-scorer-v1` JSON format on current v1 188-float observations. A transformer
 cannot be exported to that format, so v2 knowledge reaches production via
 distillation: a frozen EntityCandidateScorer teacher (arc-entity-scorer-v2 .pt)
 supervises a fresh CandidateScorer student (ml/model.py), and the student is
@@ -11,12 +11,12 @@ exported with train.py's export_weights to arc-cand-scorer-v1 JSON.
 PAIRED rows per the pinned contract (docs/encoder-v2.md §"PINNED DATA
 CONTRACT") — both encodings of the SAME decision on one row:
 
-    {"obs":   [187 floats],           # v1 summary (student input)
+    {"obs":   [188 floats],           # v1 summary (student input)
      "obsV2": [<flat v2 floats>],     # arc-obs-v2 flat (teacher input)
      "cands": [[52]...],
      "chosen": i, "ret": r, ...}      # chosen/ret optional (hard-label mixing)
 
-meta.json: {"obs_dim": 187, "act_dim": 52, "obs_version": 2,
+meta.json: {"obs_dim": 188, "act_dim": 52, "obs_version": 2,
 "obs_v2": <obsV2Meta(catalog) block>}.
 The teacher checkpoint's stored obs header must match meta.obs_v2's — a
 mismatch means the encodings drifted apart and distillation would be garbage.
