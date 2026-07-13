@@ -37,6 +37,7 @@ const { values: args } = parseArgs({
 		'record-seats': { type: 'string' },
 		forbid: { type: 'string' },
 		'max-status-level': { type: 'string' },
+		'shuffle-guardians': { type: 'boolean', default: false },
 		gamma: { type: 'string' },
 		iter: { type: 'string', default: '0' },
 		'obs-version': { type: 'string', default: '1' },
@@ -53,7 +54,7 @@ if (args.help) {
 			'         [--max-rounds N] [--weights FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
 			'         [--selection hybrid|value|policy] [--sample] [--temperature X]\n' +
 			'         [--neural-seats Red,Blue] [--record-seats Red] [--forbid type1,type2]\n' +
-			'         [--max-status-level N] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
+			'         [--max-status-level N] [--shuffle-guardians] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
 			'         [--policy-obs-version 1|2 (2 needs --infer-socket)] [--append] [--quiet]'
 	);
 	process.exit(0);
@@ -85,6 +86,7 @@ const config = {
 	recordSeats: csv(args['record-seats']),
 	forbidTypes: csv(args.forbid),
 	maxStatusLevel: args['max-status-level'] ? parseInt(args['max-status-level'], 10) : undefined,
+	shuffleGuardians: args['shuffle-guardians'] || undefined,
 	gamma: num(args.gamma),
 	iter: parseInt(args.iter, 10),
 	obsVersion: parseInt(args['obs-version'], 10),

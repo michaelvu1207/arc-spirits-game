@@ -37,6 +37,7 @@ const { values: args } = parseArgs({
 		'search-value-weight': { type: 'string', default: '0.5' },
 		'search-rollout': { type: 'string', default: 'policy' },
 		'search-nav-temperature': { type: 'string', default: '0' },
+		'include-games': { type: 'boolean', default: false },
 		out: { type: 'string' },
 		help: { type: 'boolean', default: false }
 	}
@@ -45,7 +46,7 @@ const { values: args } = parseArgs({
 if (args.help || !args.weights) {
 	console.log(
 		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--games N] [--workers N] ' +
-			'[--seed0 N] [--sample --temperature T] [--search-sims N] [--out FILE]'
+			'[--seed0 N] [--sample --temperature T] [--search-sims N] [--include-games] [--out FILE]'
 	);
 	process.exit(args.help ? 0 : 1);
 }
@@ -166,6 +167,7 @@ try {
 	const dice = [];
 	const spirits = [];
 	const barriers = [];
+	const perGame = [];
 	let trueWins = 0;
 	let namedWins = 0;
 	let stalls = 0;
@@ -195,6 +197,20 @@ try {
 			dice.push(seat.cycle.finalAttackDice);
 			spirits.push(seat.cycle.finalSpirits);
 			barriers.push(seat.cycle.finalMaxBarrier);
+		}
+		if (args['include-games']) {
+			perGame.push({
+				seed: game.seed,
+				guardian,
+				trueWin: seat.finalVP >= 30 && !game.stalled,
+				stalled: game.stalled,
+				finalVP: seat.finalVP,
+				first30Round: seat.cycle?.first30Round ?? null,
+				post15VpPerRound: seat.cycle?.post15VpPerRound ?? null,
+				finalAttackDice: seat.cycle?.finalAttackDice ?? null,
+				finalSpirits: seat.cycle?.finalSpirits ?? null,
+				finalMaxBarrier: seat.cycle?.finalMaxBarrier ?? null
+			});
 		}
 	}
 	const sortedVp = [...vp].sort((a, b) => a - b);
@@ -281,7 +297,8 @@ try {
 			wallSeconds: result.wallMs / 1000,
 			gamesPerSecond: result.gamesPerSec,
 			workers: result.workers
-		}
+		},
+		...(args['include-games'] ? { perGame } : {})
 	};
 
 	const json = JSON.stringify(report, null, 2);
