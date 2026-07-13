@@ -497,6 +497,8 @@ def load_trajectory_buffer(
     strategic_mask_list: list[bool] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
+    solo_outcome_adv_list: list[np.ndarray] = []
+    solo_outcome_mask_list: list[np.ndarray] = []
     n_truncated = 0
     n_with_placement = 0
     n_outcome_credit = 0
@@ -564,6 +566,8 @@ def load_trajectory_buffer(
 
         adv, ret = compute_gae(rewards, values, dones, gamma, gae_lambda, last_value)
         strategic = np.array([s["strategic"] for s in steps], dtype=bool)
+        episode_solo_outcome_adv = np.zeros(len(steps), dtype=np.float64)
+        episode_solo_outcome_mask = np.zeros(len(steps), dtype=bool)
         # Only completed episodes have a realized complete-game outcome. Truncated rows retain
         # ordinary GAE instead of pretending the actor's tail bootstrap is a terminal result.
         # When an explicit solo coefficient is set it owns solo rows; the legacy/global knob
@@ -608,10 +612,8 @@ def load_trajectory_buffer(
         if solo_outcome_coef > 0 and player_count == 1 and dones[-1] and strategic.any():
             outcome = float(any(s["won"] for s in steps))
             outcome_adv = outcome - solo_outcome_baseline
-            adv[strategic] = (
-                (1.0 - solo_outcome_coef) * adv[strategic]
-                + solo_outcome_coef * outcome_adv
-            )
+            episode_solo_outcome_adv[strategic] = outcome_adv
+            episode_solo_outcome_mask[strategic] = True
             n_solo_outcome_credit += int(strategic.sum())
         # Pure long-horizon outcome credit. Unlike strategic MC, this deliberately excludes
         # dense VP, build shaping, and the tactical value target: navigation receives only the
@@ -667,9 +669,35 @@ def load_trajectory_buffer(
             strategic_mask_list.append(s["strategic"])
         adv_list.append(adv)
         ret_list.append(ret)
+        solo_outcome_adv_list.append(episode_solo_outcome_adv)
+        solo_outcome_mask_list.append(episode_solo_outcome_mask)
 
     advantages = np.concatenate(adv_list).astype(np.float32)
     returns = np.concatenate(ret_list).astype(np.float32)
+    solo_outcome_base_std = 0.0
+    solo_outcome_signal_std = 0.0
+    if solo_outcome_coef > 0:
+        solo_outcome_mask = np.concatenate(solo_outcome_mask_list)
+        solo_outcome_advantages = np.concatenate(solo_outcome_adv_list)
+        if solo_outcome_mask.any():
+            base_component = advantages[solo_outcome_mask].astype(np.float64)
+            outcome_component = solo_outcome_advantages[solo_outcome_mask]
+            solo_outcome_base_std = float(base_component.std())
+            solo_outcome_signal_std = float(outcome_component.std())
+
+            def standardize(component: np.ndarray) -> np.ndarray:
+                std = float(component.std())
+                if std < 1e-8:
+                    return np.zeros_like(component)
+                return (component - float(component.mean())) / std
+
+            # Put the requested coefficient on a stable scale. Without separate
+            # standardization a 0.25 binary outcome term can become only a few
+            # percent of a multi-unit dense+win-bonus Monte Carlo advantage.
+            advantages[solo_outcome_mask] = (
+                (1.0 - solo_outcome_coef) * standardize(base_component)
+                + solo_outcome_coef * standardize(outcome_component)
+            ).astype(np.float32)
     print(
         f"Loaded {len(cands_list)} PPO steps from {len(episodes)} game(s) "
         f"({sum(policy_mask_list)} exact policy step(s), "
@@ -679,6 +707,7 @@ def load_trajectory_buffer(
         f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
         f"solo MC coef={solo_strategic_mc_coef:g}, gamma={strategic_mc_gamma:g}; "
         f"solo outcome coef={solo_outcome_coef:g}, baseline={solo_outcome_baseline:.3f}, "
+        f"component stds={solo_outcome_base_std:.3f}/{solo_outcome_signal_std:.3f}, "
         f"applied={n_solo_outcome_credit}; "
         f"outcome coef={strategic_outcome_coef:g}, "
         f"applied={n_outcome_credit}), "
@@ -936,6 +965,7 @@ def train_ppo(
         if (
             buffer.strategic_mc_coef > 0
             or buffer.solo_strategic_mc_coef > 0
+            or buffer.solo_outcome_coef > 0
             or buffer.strategic_outcome_coef > 0
         )
         else None,

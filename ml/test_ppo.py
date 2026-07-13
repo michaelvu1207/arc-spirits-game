@@ -344,8 +344,8 @@ def test_solo_outcome_credit_uses_true_win_and_batch_mean_baseline():
             solo_outcome_coef=1.0,
         )
     # Sorted episode order is loss then win. Only strategic rows get pure outcome
-    # credit; their batch-centered advantages are -0.5 and +0.5 respectively.
-    assert np.allclose(buf.advantages, [-0.5, 0.0, 0.5, 0.0])
+    # credit; the separately standardized binary component is -1 and +1.
+    assert np.allclose(buf.advantages, [-1.0, 0.0, 1.0, 0.0])
     assert np.array_equal(buf.returns, [0.0, 0.0, 0.0, 0.0])
     assert math.isclose(buf.solo_outcome_coef, 1.0)
 
