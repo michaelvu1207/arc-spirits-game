@@ -4,12 +4,15 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { profileFor } from '../server/botPolicy';
+import { nextInt } from '../rng';
 import { SEAT_COLORS, type SeatColor } from '../types';
 import {
+	forkContinuationPickRng,
 	isStrategicCommand,
 	isStrategicDecision,
 	playRecordingGame,
 	sampledPolicyBehavior,
+	type ContinuationSnapshot,
 	type Sample
 } from './driver';
 import { NeuralPolicy } from './net';
@@ -24,6 +27,51 @@ function scalarPolicy(): NeuralPolicy {
 		trunk: [{ W: [[0, 1]], b: [0] }],
 		value: [{ W: [[0]], b: [0] }]
 	});
+}
+
+function jsonRoundTrip<T>(value: T): T {
+	return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function withoutEpisodeIdentity(sample: Sample): Omit<Sample, 'gameId' | 'stepIdx'> {
+	const { gameId: _gameId, stepIdx: _stepIdx, ...rest } = sample;
+	return rest;
+}
+
+let continuationFixturePromise:
+	| Promise<{
+			catalog: Awaited<ReturnType<typeof loadOrSnapshotCatalog>>;
+			policy: NeuralPolicy;
+			source: ReturnType<typeof playRecordingGame>;
+			snapshot: ContinuationSnapshot;
+	  }>
+	| undefined;
+
+function continuationFixture() {
+	continuationFixturePromise ??= (async () => {
+		const catalog = await loadOrSnapshotCatalog();
+		const policy = randomPolicy(9140);
+		const source = playRecordingGame(catalog, {
+			seed: 77140,
+			profiles: [profileFor('medium')],
+			maxRounds: 30,
+			policy,
+			neuralSeats: ['Red'],
+			recordSeats: ['Red'],
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			denseVpReward: true,
+			potentialShapingMode: 'policy-invariant',
+			maxStatusLevel: 2,
+			strategicDecisionScope: 'engine-cycle',
+			captureContinuationRounds: [12]
+		});
+		const snapshot = source.continuationSnapshots[0];
+		if (!snapshot) throw new Error('continuation fixture did not reach round 12');
+		return { catalog, policy, source, snapshot };
+	})();
+	return continuationFixturePromise;
 }
 
 describe('driver PPO behavior distribution', () => {
@@ -164,6 +212,182 @@ describe('driver PPO behavior distribution', () => {
 		expect(result.samples.length).toBeGreaterThan(5);
 		expect(result.samples.every((row) => row.playerCount === 1)).toBe(true);
 		expect(result.finalState!.players.Red!.statusLevel).toBeLessThanOrEqual(2);
+	}, 30_000);
+
+	it('JSON-restores an exact late-state suffix with all RNG cursors and fresh episode identity', async () => {
+		const { catalog, policy, source, snapshot } = await continuationFixture();
+		const restored = jsonRoundTrip(snapshot);
+
+		for (const key of ['botRng', 'pickRng'] as const) {
+			const originalRng = { ...snapshot[key] };
+			const restoredRng = { ...restored[key] };
+			expect(nextInt(restoredRng, 1_000_000)).toBe(nextInt(originalRng, 1_000_000));
+		}
+		const originalEnvironmentRng = { ...snapshot.state.rng };
+		const restoredEnvironmentRng = { ...restored.state.rng };
+		expect(nextInt(restoredEnvironmentRng, 1_000_000)).toBe(
+			nextInt(originalEnvironmentRng, 1_000_000)
+		);
+
+		const replay = playRecordingGame(catalog, {
+			seed: snapshot.sourceSeed,
+			episodeId: 'continuation-exact-r12-f0',
+			profiles: [profileFor('medium')],
+			maxRounds: 30,
+			policy,
+			neuralSeats: ['Red'],
+			recordSeats: ['Red'],
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			denseVpReward: true,
+			potentialShapingMode: 'policy-invariant',
+			maxStatusLevel: 2,
+			strategicDecisionScope: 'engine-cycle',
+			continuation: { snapshot: restored }
+		});
+
+		const sourceSuffix = source.samples.filter((sample) => (sample.round ?? 0) >= snapshot.round);
+		expect(replay.finalState).toEqual(source.finalState);
+		expect(replay.finalVP).toEqual(source.finalVP);
+		expect(replay.stalled).toBe(source.stalled);
+		expect(replay.samples.map(withoutEpisodeIdentity)).toEqual(
+			sourceSuffix.map(withoutEpisodeIdentity)
+		);
+		expect(replay.samples.map((sample) => sample.stepIdx)).toEqual(
+			replay.samples.map((_, index) => index)
+		);
+		expect(replay.samples.every((sample) => sample.gameId === 'continuation-exact-r12-f0-Red')).toBe(
+			true
+		);
+		expect(replay.samples[0].round).toBe(12);
+		expect(replay.samples.slice(0, -1).every((sample) => sample.reach30Target === undefined)).toBe(
+			true
+		);
+		const terminal = replay.samples.at(-1)!;
+		expect(terminal.round).toBeLessThanOrEqual(30);
+		expect(terminal.endRound).toBe(replay.rounds);
+		expect(terminal.reach30Horizon).toBe(30);
+		expect(terminal.reach30Target).toBe(
+			!replay.stalled && replay.finalVP.Red >= 30 ? 1 : 0
+		);
+	}, 60_000);
+
+	it('creates deterministic independent pick-RNG forks and keeps continuation IDs distinct', async () => {
+		const { catalog, policy, snapshot } = await continuationFixture();
+		const forkA = forkContinuationPickRng(snapshot, 'a');
+		const forkAAgain = forkContinuationPickRng(snapshot, 'a');
+		const forkB = forkContinuationPickRng(snapshot, 'b');
+		expect(forkA).toEqual(forkAAgain);
+		expect(forkB).not.toEqual(forkA);
+		expect(snapshot.pickRng).not.toEqual(forkA);
+
+		const run = (episodeId: string, pickRng: typeof forkA) =>
+			playRecordingGame(catalog, {
+				seed: snapshot.sourceSeed,
+				episodeId,
+				profiles: [profileFor('medium')],
+				maxRounds: 30,
+				policy,
+				neuralSeats: ['Red'],
+				recordSeats: ['Red'],
+				selection: 'policy',
+				sample: true,
+				temperature: 0.65,
+				denseVpReward: true,
+				potentialShapingMode: 'policy-invariant',
+				maxStatusLevel: 2,
+				strategicDecisionScope: 'engine-cycle',
+				continuation: { snapshot, pickRng }
+			});
+		const a = run('continuation-r12-fork-a', forkA);
+		const b = run('continuation-r12-fork-b', forkB);
+		expect(new Set([...a.samples, ...b.samples].map((sample) => sample.gameId))).toEqual(
+			new Set(['continuation-r12-fork-a-Red', 'continuation-r12-fork-b-Red'])
+		);
+	}, 60_000);
+
+	it('fails closed on unsafe or ambiguous continuation states', async () => {
+		const { catalog, policy, snapshot } = await continuationFixture();
+		const base = {
+			seed: snapshot.sourceSeed,
+			episodeId: 'invalid-continuation',
+			profiles: [profileFor('medium')],
+			maxRounds: 30,
+			policy,
+			neuralSeats: ['Red'] as SeatColor[],
+			recordSeats: ['Red'] as SeatColor[],
+			selection: 'policy' as const,
+			sample: true,
+			temperature: 0.65
+		};
+
+		expect(() =>
+			playRecordingGame(catalog, {
+				...base,
+				episodeId: undefined,
+				continuation: { snapshot }
+			})
+		).toThrow(/explicit unique episodeId/);
+		expect(() =>
+			playRecordingGame(catalog, {
+				...base,
+				seed: snapshot.sourceSeed + 1,
+				continuation: { snapshot }
+			})
+		).toThrow(/does not match snapshot sourceSeed/);
+		expect(() =>
+			playRecordingGame(catalog, {
+				...base,
+				maxRounds: 29,
+				continuation: { snapshot }
+			})
+		).toThrow(/horizon 30 does not match effective rollout horizon 29/);
+		expect(() =>
+			playRecordingGame(catalog, {
+				...base,
+				chooser: () => 0,
+				continuation: { snapshot }
+			})
+		).toThrow(/does not support opaque chooser or searcher/);
+
+		const midPhase = jsonRoundTrip(snapshot);
+		midPhase.state.phase = 'location';
+		expect(() =>
+			playRecordingGame(catalog, { ...base, continuation: { snapshot: midPhase } })
+		).toThrow(/active, winner-free navigation state/);
+
+		const unresolved = jsonRoundTrip(snapshot);
+		unresolved.state.players.Red!.pendingDecisions.push({
+			id: 'pending-test',
+			source: 'class',
+			kind: 'choose_option',
+			prompt: 'test',
+			options: []
+		});
+		expect(() =>
+			playRecordingGame(catalog, { ...base, continuation: { snapshot: unresolved } })
+		).toThrow(/unresolved player work/);
+
+		const badRng = jsonRoundTrip(snapshot);
+		badRng.pickRng.cursor = -1;
+		expect(() =>
+			playRecordingGame(catalog, { ...base, continuation: { snapshot: badRng } })
+		).toThrow(/invalid external RNG cursor/);
+
+		const malformed = jsonRoundTrip(snapshot);
+		delete (malformed.state as Partial<ContinuationSnapshot['state']>).combats;
+		expect(() =>
+			playRecordingGame(catalog, { ...base, continuation: { snapshot: malformed } })
+		).toThrow(/malformed game-state shape/);
+
+		expect(() =>
+			playRecordingGame(catalog, {
+				...base,
+				continuation: undefined,
+				captureContinuationRounds: [11]
+			})
+		).toThrow(/rounds 12\.\.20/);
 	}, 30_000);
 
 	it('records actor-time reach30 predictions and resolves a clean solo cap failure', async () => {

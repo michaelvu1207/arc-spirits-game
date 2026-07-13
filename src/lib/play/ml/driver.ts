@@ -18,7 +18,7 @@
 
 import { applyDeadlineAdvance, applyGameCommand, createLobbyState } from '../runtime';
 import { allPlayersFallen } from '../phases';
-import { createRng, nextInt, type RngState } from '../rng';
+import { createRng, hashString, nextInt, type RngState } from '../rng';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -217,6 +217,15 @@ export interface RecordGameOptions {
 	 *  the unstick fallback for neural seats. */
 	profiles: BotProfile[];
 	maxRounds?: number;
+	/** Optional stable episode-key prefix. The seat is appended by the driver. Continuation
+	 * episodes MUST provide this so multiple suffixes from one source seed cannot collide. */
+	episodeId?: string;
+	/** Capture resumable solo states at the beginning of these navigation rounds. The supported
+	 * late-state curriculum window is deliberately narrow (rounds 12..20). */
+	captureContinuationRounds?: number[];
+	/** Resume a previously captured clean-navigation state. Omitting pickRng restores the exact
+	 * behavior stream; supplying a deterministic fork explores a new on-policy suffix. */
+	continuation?: ContinuationStart;
 	/** If set, these seats are driven by `policy`; the rest stay heuristic. Default: all
 	 *  seats are neural when a policy is supplied, else all heuristic. */
 	policy?: NeuralPolicy;
@@ -356,7 +365,30 @@ export interface RecordGameResult {
 	cycleBySeat: Record<string, SeatCycleSummary>;
 	/** The terminal game state (for diagnostics/strategy tracing — final builds, status, etc.). */
 	finalState?: PublicGameState;
+	/** Clean navigation-boundary states requested by captureContinuationRounds. */
+	continuationSnapshots: ContinuationSnapshot[];
 }
+
+/** Versioned, JSON-safe continuation state. `state.rng` is the environment cursor; the other
+ * two cursors live outside PublicGameState in the recording driver. */
+export interface ContinuationSnapshot {
+	version: 1;
+	sourceSeed: number;
+	round: number;
+	horizon: number;
+	state: PublicGameState;
+	botRng: RngState;
+	pickRng: RngState;
+}
+
+export interface ContinuationStart {
+	snapshot: ContinuationSnapshot;
+	/** Optional policy-sampling fork. Without it the original suffix replays exactly. */
+	pickRng?: RngState;
+}
+
+export const MIN_CONTINUATION_ROUND = 12;
+export const MAX_CONTINUATION_ROUND = 20;
 
 const CYCLE_ROUNDS = [8, 12, 16, 20] as const;
 const OPTIONAL_YIELD_TYPES = new Set<GameCommand['type']>([
@@ -372,6 +404,144 @@ function seededBotRandom(rng: RngState): BotRandom {
 		int: (maxExclusive: number) => nextInt(rng, maxExclusive),
 		chance: () => nextInt(rng, 2) === 0
 	};
+}
+
+function jsonClone<T>(value: T): T {
+	return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function validRngState(value: unknown): value is RngState {
+	if (!value || typeof value !== 'object') return false;
+	const rng = value as Partial<RngState>;
+	return (
+		Number.isInteger(rng.seed) &&
+		Number.isInteger(rng.cursor) &&
+		(rng.seed as number) >= 0 &&
+		(rng.seed as number) <= 0xffffffff &&
+		(rng.cursor as number) >= 0 &&
+		(rng.cursor as number) <= 0xffffffff
+	);
+}
+
+/** A deterministic alternative policy-sampling stream for a continuation. Environment and
+ * fallback RNG cursors stay at their captured values; only the learned-policy exploration fork
+ * changes. The source snapshot is never mutated. */
+export function forkContinuationPickRng(
+	snapshot: ContinuationSnapshot,
+	forkId: string | number
+): RngState {
+	const id = String(forkId);
+	if (!id.trim()) throw new Error('driver: continuation forkId must be non-empty');
+	return createRng(
+		hashString(`arc-continuation-pick-v1:${snapshot.sourceSeed}:${snapshot.round}:${id}`)
+	);
+}
+
+function assertLateRound(round: number, label: string): void {
+	if (
+		!Number.isInteger(round) ||
+		round < MIN_CONTINUATION_ROUND ||
+		round > MAX_CONTINUATION_ROUND
+	) {
+		throw new Error(
+			`driver: ${label} must be an integer in rounds ${MIN_CONTINUATION_ROUND}..${MAX_CONTINUATION_ROUND}`
+		);
+	}
+}
+
+function validateContinuationSnapshot(
+	snapshot: ContinuationSnapshot,
+	seats: readonly SeatColor[],
+	horizon: number
+): void {
+	if (snapshot.version !== 1) throw new Error('driver: unsupported continuation snapshot version');
+	if (!Number.isSafeInteger(snapshot.sourceSeed)) {
+		throw new Error('driver: continuation sourceSeed must be a safe integer');
+	}
+	assertLateRound(snapshot.round, 'continuation snapshot round');
+	if (!Number.isInteger(snapshot.horizon) || snapshot.horizon < 1) {
+		throw new Error('driver: continuation snapshot horizon must be a positive integer');
+	}
+	if (snapshot.horizon !== horizon) {
+		throw new Error(
+			`driver: continuation snapshot horizon ${snapshot.horizon} does not match effective rollout horizon ${horizon}`
+		);
+	}
+	if (!validRngState(snapshot.botRng) || !validRngState(snapshot.pickRng)) {
+		throw new Error('driver: continuation snapshot has an invalid external RNG cursor');
+	}
+	const state = snapshot.state;
+	if (!state || !validRngState(state.rng)) {
+		throw new Error('driver: continuation snapshot has an invalid environment RNG cursor');
+	}
+	if (
+		!Array.isArray(state.activeSeats) ||
+		!state.players ||
+		typeof state.players !== 'object' ||
+		!state.navigation ||
+		typeof state.navigation !== 'object' ||
+		!Array.isArray(state.combats) ||
+		!state.locationOccupancy ||
+		typeof state.locationOccupancy !== 'object'
+	) {
+		throw new Error('driver: continuation snapshot has a malformed game-state shape');
+	}
+	if (state.round !== snapshot.round) {
+		throw new Error('driver: continuation snapshot round does not match state.round');
+	}
+	if (state.status !== 'active' || state.phase !== 'navigation' || state.winnerSeat !== null) {
+		throw new Error('driver: continuation requires an active, winner-free navigation state');
+	}
+	if (seats.length !== 1 || state.activeSeats.length !== 1 || state.activeSeats[0] !== seats[0]) {
+		throw new Error('driver: continuation currently requires exactly one matching active seat');
+	}
+	if (
+		state.revealedDestinations ||
+		state.combats.length > 0 ||
+		Object.keys(state.locationOccupancy).length > 0 ||
+		state.navigation[seats[0]]?.locked !== false
+	) {
+		throw new Error('driver: continuation snapshot is not at a clean navigation boundary');
+	}
+	const player = state.players[seats[0]];
+	if (!player) throw new Error('driver: continuation snapshot is missing its active player');
+	if (
+		player.pendingDestination !== null ||
+		player.navigationDestination !== null ||
+		player.phaseReady ||
+		player.pendingDraw !== null ||
+		player.handDraws.length > 0 ||
+		player.pendingDrawQueue.length > 0 ||
+		player.pendingReward !== null ||
+		player.pendingAwakenReward !== null ||
+		!!player.pendingCorruptionDiscard ||
+		(player.unplacedAugments?.length ?? 0) > 0 ||
+		player.pendingDecisions.length > 0 ||
+		player.manualPrompts.length > 0
+	) {
+		throw new Error('driver: continuation snapshot contains unresolved player work');
+	}
+}
+
+function makeContinuationSnapshot(
+	state: PublicGameState,
+	botRng: RngState,
+	pickRng: RngState,
+	sourceSeed: number,
+	horizon: number,
+	seats: readonly SeatColor[]
+): ContinuationSnapshot {
+	const snapshot: ContinuationSnapshot = {
+		version: 1,
+		sourceSeed,
+		round: state.round,
+		horizon,
+		state: jsonClone(state),
+		botRng: { ...botRng },
+		pickRng: { ...pickRng }
+	};
+	validateContinuationSnapshot(snapshot, seats, horizon);
+	return snapshot;
 }
 
 /** Per (seat,round,phase) action cap so a mis-trained greedy net can't loop forever. */
@@ -576,6 +746,26 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	const reach30Horizon = Math.min(maxRounds, MAX_ROUNDS);
 	const n = Math.min(profiles.length, SEAT_COLORS.length, catalog.guardians.length);
 	const seats = SEAT_COLORS.slice(0, n) as SeatColor[];
+	if (opts.episodeId !== undefined && (!opts.episodeId.trim() || opts.episodeId.length > 200)) {
+		throw new Error('driver: episodeId must be non-empty and at most 200 characters');
+	}
+	if (opts.continuation && !opts.episodeId) {
+		throw new Error('driver: continuation episodes require an explicit unique episodeId');
+	}
+	const captureRounds = new Set(opts.captureContinuationRounds ?? []);
+	for (const round of captureRounds) assertLateRound(round, 'capture continuation round');
+	if ((opts.continuation || captureRounds.size > 0) && (opts.chooser || opts.searcher)) {
+		throw new Error('driver: continuation capture/replay does not support opaque chooser or searcher state');
+	}
+	if (opts.continuation && Object.keys(opts.opponentPolicies ?? {}).length > 0) {
+		throw new Error('driver: continuation replay does not support opponent policies');
+	}
+	if (captureRounds.size > 0 && n !== 1) {
+		throw new Error('driver: continuation capture currently requires a solo game');
+	}
+	if (opts.continuation && captureRounds.size > 0) {
+		throw new Error('driver: continuation replay cannot recursively capture more continuations');
+	}
 	// Seat guardians: honor an explicit (per-game shuffled) lineup, keeping only valid catalog
 	// names, de-duplicated (each seat needs a distinct guardian), then back-fill from the catalog
 	// so we always have n. Default (no override) = first n catalog guardians, as before.
@@ -614,47 +804,70 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	// line the sparse ΔVP signal struggles to discover. Policy-additive shaping; ΔVP stays the core.
 	const huntBonus = process.env.ARC_HUNT_BONUS ? parseFloat(process.env.ARC_HUNT_BONUS) : 0;
 
-	let state = createLobbyState({ roomCode: 'MLSIM', guardianNames });
+	let state: PublicGameState;
 	const host: GameActor = { memberId: 'host', displayName: 'host', role: 'host', seatColor: null };
 	const profileBySeat: Record<string, BotProfile> = {};
+	seats.forEach((seat, i) => {
+		profileBySeat[seat] = profiles[i] ?? MEDIUM_DEFAULTS;
+	});
 
 	const expectOk = (r: ReturnType<typeof applyGameCommand>, label: string): void => {
 		if (!r.ok) throw new Error(`${label}: ${r.error.code} ${r.error.message}`);
 		state = r.state;
 	};
 
-	seats.forEach((seat, i) => {
-		profileBySeat[seat] = profiles[i] ?? MEDIUM_DEFAULTS;
-		const memberId = `bot-${seat}`;
+	let botRngState: RngState;
+	let pickRng: RngState;
+	if (opts.continuation) {
+		if (opts.seed !== opts.continuation.snapshot.sourceSeed) {
+			throw new Error(
+				`driver: continuation seed ${opts.seed} does not match snapshot sourceSeed ${opts.continuation.snapshot.sourceSeed}`
+			);
+		}
+		validateContinuationSnapshot(opts.continuation.snapshot, seats, reach30Horizon);
+		if (opts.continuation.pickRng && !validRngState(opts.continuation.pickRng)) {
+			throw new Error('driver: continuation pick-RNG override is invalid');
+		}
+		state = jsonClone(opts.continuation.snapshot.state);
+		botRngState = { ...opts.continuation.snapshot.botRng };
+		pickRng = { ...(opts.continuation.pickRng ?? opts.continuation.snapshot.pickRng) };
+	} else {
+		state = createLobbyState({ roomCode: 'MLSIM', guardianNames });
+		seats.forEach((seat, i) => {
+			const memberId = `bot-${seat}`;
+			expectOk(
+				applyGameCommand(
+					state,
+					{ memberId, displayName: seat, role: 'player', seatColor: null },
+					{ type: 'claimSeat', seatColor: seat },
+					catalog
+				),
+				`claimSeat ${seat}`
+			);
+			expectOk(
+				applyGameCommand(
+					state,
+					{ memberId, displayName: seat, role: 'player', seatColor: seat },
+					{ type: 'selectGuardian', guardianName: guardianNames[i] },
+					catalog
+				),
+				`selectGuardian ${seat}`
+			);
+		});
 		expectOk(
-			applyGameCommand(
-				state,
-				{ memberId, displayName: seat, role: 'player', seatColor: null },
-				{ type: 'claimSeat', seatColor: seat },
-				catalog
-			),
-			`claimSeat ${seat}`
+			applyGameCommand(state, host, { type: 'startGame', seed: opts.seed }, catalog),
+			'startGame'
 		);
-		expectOk(
-			applyGameCommand(
-				state,
-				{ memberId, displayName: seat, role: 'player', seatColor: seat },
-				{ type: 'selectGuardian', guardianName: guardianNames[i] },
-				catalog
-			),
-			`selectGuardian ${seat}`
-		);
-	});
-	expectOk(
-		applyGameCommand(state, host, { type: 'startGame', seed: opts.seed }, catalog),
-		'startGame'
-	);
+		botRngState = createRng(opts.seed);
+		pickRng = createRng(opts.seed ^ 0x9e3779b9);
+	}
 
-	const botRng = seededBotRandom(createRng(opts.seed));
-	const pickRng = createRng(opts.seed ^ 0x9e3779b9);
+	const botRng = seededBotRandom(botRngState);
 	const rand = (): number => nextInt(pickRng, 1_000_000) / 1_000_000;
 
 	const samples: Sample[] = [];
+	const continuationSnapshots: ContinuationSnapshot[] = [];
+	const capturedRounds = new Set<number>();
 	const cycleBySeat: Record<string, SeatCycleSummary> = {};
 	for (const seat of seats) {
 		cycleBySeat[seat] = {
@@ -983,6 +1196,23 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	};
 
 	while (state.status === 'active' && state.round <= maxRounds) {
+		if (
+			captureRounds.has(state.round) &&
+			!capturedRounds.has(state.round) &&
+			state.phase === 'navigation'
+		) {
+			continuationSnapshots.push(
+				makeContinuationSnapshot(
+					state,
+					botRngState,
+					pickRng,
+					opts.seed,
+					reach30Horizon,
+					seats
+				)
+			);
+			capturedRounds.add(state.round);
+		}
 		ticks += 1;
 		if (ticks > MAX_TICKS) {
 			stalled = true;
@@ -1047,7 +1277,9 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		seatSamples.forEach((s, i) => (s.ret = g[i]));
 
 		// PPO trajectory stamps (per-seat episode; see the Sample field docs).
-		const gameId = `${opts.seed}-${n}p-${seat}`;
+		const gameId = opts.episodeId
+			? `${opts.episodeId}-${seat}`
+			: `${opts.seed}-${n}p-${seat}`;
 		const placement = 1 + seats.filter((o) => o !== seat && finalVP[o] > finalVP[seat]).length;
 		const rSteps = opts.stepRewards?.(seatSamples, seat, finalVP);
 		// Dense reward: ΔVP + ΔΦ between consecutive recorded decisions; the last
@@ -1108,6 +1340,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		finalVP,
 		samples,
 		cycleBySeat,
-		finalState: state
+		finalState: state,
+		continuationSnapshots
 	};
 }
