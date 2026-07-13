@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "experiment": "v26-solo-terminal-objective-live-multiseed",
+  "status": "preregistered",
+  "host": "ubuntu@216.151.21.122",
+  "remoteWorkspace": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+  "executableSourceCommit": "4e54309f35fccec66ae930d6968ff67b45703f86",
+  "catalog": {
+    "path": "ml/catalogs/live-20260713-5f4ad348.json",
+    "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "warmStart": {
+    "path": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+    "sha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472"
+  },
+  "completedSeed0": {
+    "legacyFinalReach30": "140/256",
+    "lexicographicFinalReach30": "146/256",
+    "legacyFinalMeanVP": 23.90625,
+    "lexicographicFinalMeanVP": 23.90625,
+    "stalls": 0,
+    "interpretation": "Mixed learning curve with a small, uncertain final lexicographic advantage. Two independent matched seeds are required before adjudication."
+  },
+  "seeds": {
+    "s1": {
+      "seedBase": 920000000,
+      "legacy": {
+        "root": "ml/league_v26_terminal_legacy_live_s1",
+        "config": "ml/league/configs/fair-v26-solo-terminal-legacy-s1.json",
+        "configSha256": "1b3be50a3d4c30a64e16fd86d9072df52e0e2218831ac03ed1afd81f6638b5ee",
+        "gpu": 1
+      },
+      "lexicographic": {
+        "root": "ml/league_v26_terminal_lexicographic_live_s1",
+        "config": "ml/league/configs/fair-v26-solo-terminal-lexicographic-s1.json",
+        "configSha256": "fe10b187e384b53144b9aefc9e93c0da025918c7b419477a8c39d5e18f5e9402",
+        "gpu": 2
+      }
+    },
+    "s2": {
+      "seedBase": 930000000,
+      "legacy": {
+        "root": "ml/league_v26_terminal_legacy_live_s2",
+        "config": "ml/league/configs/fair-v26-solo-terminal-legacy-s2.json",
+        "configSha256": "e85fa4453f605f6ffdc41e3a6c00170550323a433a330cb429339dd293b78540",
+        "gpu": 5
+      },
+      "lexicographic": {
+        "root": "ml/league_v26_terminal_lexicographic_live_s2",
+        "config": "ml/league/configs/fair-v26-solo-terminal-lexicographic-s2.json",
+        "configSha256": "4bc943b2ab1445ea1f6d0569c8f8da521e9fd70ad727b218c8dedd9ae4787dfa",
+        "gpu": 6
+      }
+    }
+  },
+  "pairingContract": {
+    "generations": 5,
+    "gamesPerGeneration": 1024,
+    "evaluationGamesPerGeneration": 256,
+    "ppoRowsPerEpoch": 100000,
+    "epochs": 4,
+    "matchedFields": [
+      "seed",
+      "guardian schedule",
+      "catalog",
+      "warm-start checkpoint",
+      "actor budget",
+      "architecture",
+      "optimizer steps",
+      "evaluation budget"
+    ],
+    "intentionalDifferences": [
+      "solo-terminal-objective",
+      "descriptive _readme",
+      "output root"
+    ]
+  },
+  "promotionEligible": false
+}
