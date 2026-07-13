@@ -10,7 +10,8 @@ concurrent connections into single forward passes. --weights accepts either:
     frozen catalog). The manifest is the format probe, so SIGHUP can swap a
     fixed --weights path between v1 and v2 checkpoints; the info handshake
     reports the active format/obs_dim so RemotePolicy self-configures.
-    The v2 placement head is NOT exposed over the wire.
+    The v2 placement head has a different per-seat regression contract and is
+    intentionally not exposed as the v1 4-way placement distribution.
 
 Framing:  4-byte little-endian length prefix + payload. The payload is JSON
           (starts with '{') or a binary frame (first byte 0xB1) — see the
@@ -19,11 +20,12 @@ Request:  {"id": <any>, "obs": [B x obs_dim], "cands": [B x C_i x act_dim],
            "want": ["logits", "value"]}          (want optional, default both;
                                                   cands may be ragged per row)
           Extra want keys: "farm_value" -> [B], "route_mode" -> [B] (raw logit;
-          sigmoid is applied client-side), "reward_pick" -> ragged [B x C_i].
+          sigmoid is applied client-side), "reward_pick" -> ragged [B x C_i],
+          "placement" -> [B x 4] raw logits, "reach30" -> [B] raw logits.
           Aux heads are served only when the weights file carries them.
           Handshake: {"id": <any>, "want": ["info"]} needs no obs/cands and
           returns {"id", "info": {format, obs_dim, act_dim, device, weights,
-          aux: {farm_value, route_mode, reward_pick, reach30}}}.
+          aux: {farm_value, route_mode, reward_pick, placement, reach30}}}.
 Response: {"id": <same>, "logits": [B x C_i], "value": [B], ...}
           logits are raw masked scores (softmax NOT applied), ragged like cands.
           On a bad request: {"id": <same>, "error": "<message>"}.
@@ -111,8 +113,9 @@ async def read_frame(reader: asyncio.StreamReader) -> dict:
 #            else: [B u32][C_i u32 x B] + one section per set flag bit, in
 #            BIN_SECTION_ORDER: logits f32 x sum(C_i), value f32 x B,
 #            farm_value f32 x B, route_mode f32 x B, reward_pick f32 x sum(C_i),
-#            reach30 f32 x B
-# want bitmask: 1=logits 2=value 4=farm_value 8=route_mode 16=reward_pick 32=reach30;
+#            reach30 f32 x B, placement f32 x B*4
+# want bitmask: 1=logits 2=value 4=farm_value 8=route_mode 16=reward_pick
+#               32=reach30 64=placement;
 # 0 = default (logits|value). Binary ids are UTF-8 strings, echoed verbatim.
 
 BIN_MAGIC_REQUEST = 0xB1
@@ -120,9 +123,11 @@ BIN_MAGIC_RESPONSE = 0xB2
 BIN_ERROR_FLAG = 0x80
 BIN_WANT_BITS = {
     "logits": 1, "value": 2, "farm_value": 4, "route_mode": 8,
-    "reward_pick": 16, "reach30": 32,
+    "reward_pick": 16, "reach30": 32, "placement": 64,
 }
-BIN_SECTION_ORDER = ("logits", "value", "farm_value", "route_mode", "reward_pick", "reach30")
+BIN_SECTION_ORDER = (
+    "logits", "value", "farm_value", "route_mode", "reward_pick", "reach30", "placement"
+)
 _BIN_REQ_HEADER = struct.Struct("<BBIIII")  # magic, want, id_len, B, obs_dim, act_dim
 
 
@@ -194,6 +199,11 @@ def encode_binary_response(req_id: str, result: dict[str, list], counts: list[in
         if k in ("logits", "reward_pick"):
             flat = [x for row in result[k] for x in row]
             parts.append(np.asarray(flat, dtype="<f4").tobytes())
+        elif k == "placement":
+            arr = np.asarray(result[k], dtype="<f4")
+            if arr.shape != (len(counts), 4):
+                raise ValueError(f"placement response must be [B x 4], got {arr.shape}")
+            parts.append(arr.tobytes())
         else:
             parts.append(np.asarray(result[k], dtype="<f4").tobytes())
     return b"".join(parts)
@@ -232,7 +242,7 @@ def decode_binary_response(payload: bytes) -> dict:
     for k in BIN_SECTION_ORDER:
         if not (flags & BIN_WANT_BITS[k]):
             continue
-        n = total if k in ("logits", "reward_pick") else B
+        n = total if k in ("logits", "reward_pick") else B * 4 if k == "placement" else B
         arr = np.frombuffer(payload, dtype="<f4", count=n, offset=off)
         off += 4 * n
         if k in ("logits", "reward_pick"):
@@ -241,6 +251,8 @@ def decode_binary_response(payload: bytes) -> dict:
                 rows.append(arr[i : i + c].tolist())
                 i += c
             out[k] = rows
+        elif k == "placement":
+            out[k] = arr.reshape(B, 4).tolist()
         else:
             out[k] = arr.tolist()
     return out
@@ -250,7 +262,7 @@ def decode_binary_response(payload: bytes) -> dict:
 # Model loading
 # ---------------------------------------------------------------------------
 
-AUX_HEADS = ("farm_value", "route_mode", "reward_pick", "reach30")
+AUX_HEADS = ("farm_value", "route_mode", "reward_pick", "placement", "reach30")
 FORMAT_V1 = "arc-cand-scorer-v1"
 FORMAT_V2 = "arc-entity-scorer-v2"
 
@@ -283,7 +295,10 @@ def load_scorer(
             )
         # v2 checkpoints carry every aux head in the state_dict (trained together).
         # v2 has the legacy auxiliary heads but no dedicated solo reach-30 critic.
-        aux = {k: k != "reach30" for k in AUX_HEADS}
+        # v2's placement head predicts one ordinal score per seat token. It is not
+        # the v1 head's four-class ego-placement distribution, so fail closed for
+        # the wire-level `placement` request rather than silently changing meaning.
+        aux = {k: k not in ("placement", "reach30") for k in AUX_HEADS}
         return model, obs_dim, model.act_dim, aux, FORMAT_V2
     if weights_path.suffix == ".pt":
         raise ValueError(
@@ -461,6 +476,8 @@ class InferServer:
                 flat["route_mode"] = model.route_mode_logits(obs_t).cpu().numpy()
             if "reward_pick" in wanted:
                 flat["reward_pick"] = model.reward_pick_logits(obs_t, cands_t, mask_t).cpu().numpy()
+            if "placement" in wanted:
+                flat["placement"] = model.placement_head_logits(obs_t).cpu().numpy()
             if "reach30" in wanted:
                 flat["reach30"] = model.reach30_logits(obs_t).cpu().numpy()
 
@@ -476,6 +493,8 @@ class InferServer:
                         flat[key][row + i, : c.shape[0]].tolist()
                         for i, c in enumerate(j.cands)
                     ]
+                elif key == "placement":
+                    res[key] = flat[key][row : row + j.n_rows].tolist()
                 else:  # per-row scalars
                     res[key] = flat[key][row : row + j.n_rows].tolist()
             out.append(res)

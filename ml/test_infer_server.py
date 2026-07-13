@@ -335,6 +335,9 @@ def test_info_handshake_and_aux_heads():
                             torch.ones(1, c.shape[0], dtype=torch.bool),
                         ).squeeze(0).numpy()
                         assert np.allclose(resp["reward_pick"][i], logits, atol=1e-5)
+                if "placement" in available:
+                    ref = model.placement_head_logits(obs_t).numpy()
+                    assert np.allclose(resp["placement"], ref, atol=1e-5)
                 if "reach30" in available:
                     ref = model.reach30_logits(obs_t).numpy()
                     assert np.allclose(resp["reach30"], ref, atol=1e-5)
@@ -480,6 +483,7 @@ def test_v2_correctness_handshake_and_aux():
             "farm_value": True,
             "route_mode": True,
             "reward_pick": True,
+            "placement": False,
             "reach30": False,
         }
         pool = v2_obs_pool()
@@ -494,6 +498,16 @@ def test_v2_correctness_handshake_and_aux():
             assert info["obs_dim"] == 3419 and info["act_dim"] == 52, info
             assert info["aux"] == aux, info
             assert info["reach30_horizon"] is None, info
+
+            # v2 has a per-seat ordinal placement head, not the v1 four-class
+            # distribution. The server must not silently expose it under the
+            # incompatible wire contract.
+            refused = await client.request(
+                pool[:1].tolist(),
+                [np.zeros((1, act_dim), dtype=np.float32).tolist()],
+                want=["placement"],
+            )
+            assert "error" in refused and "not present" in refused["error"], refused
 
             max_ld = max_vd = 0.0
             obs = cands = None
@@ -529,9 +543,9 @@ def test_v2_correctness_handshake_and_aux():
                         ).squeeze(0).numpy()
                         assert np.allclose(resp["reward_pick"][i], rp_ref, atol=1e-5)
 
-            # The placement head is NOT exposed over the wire.
+            # The v2 placement head is refused under the incompatible v1 wire contract.
             bad = await client.request(obs.tolist(), [c.tolist() for c in cands], want=["placement"])
-            assert "error" in bad and "unknown want" in bad["error"], bad
+            assert "error" in bad and "not present" in bad["error"], bad
             # Rows without the arc-obs-v2 header fail per-request; connection survives.
             junk = await client.request(
                 np.zeros((1, 3419), dtype=np.float32).tolist(),
@@ -598,6 +612,7 @@ def test_sighup_swaps_v1_to_v2():
                 "farm_value": True,
                 "route_mode": True,
                 "reward_pick": True,
+                "placement": False,
                 "reach30": False,
             }
             ok = await client.request(pool[:1].tolist(), [rng.standard_normal((3, 52)).tolist()])

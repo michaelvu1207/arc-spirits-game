@@ -42,7 +42,13 @@ export interface RemotePolicyInfo {
 	act_dim: number;
 	device: string;
 	weights: string;
-	aux: { farm_value: boolean; route_mode: boolean; reward_pick: boolean; reach30: boolean };
+	aux: {
+		farm_value: boolean;
+		route_mode: boolean;
+		reward_pick: boolean;
+		placement: boolean;
+		reach30: boolean;
+	};
 	reach30_horizon: number | null;
 }
 
@@ -55,13 +61,14 @@ interface InferResponse {
 	farm_value?: number[];
 	route_mode?: number[];
 	reward_pick?: number[][];
+	placement?: number[][];
 	reach30?: number[];
 }
 
 /** Sections a scoring request can ask for (subset of InferResponse). */
 type ScoreResponse = Pick<
 	InferResponse,
-	'logits' | 'value' | 'farm_value' | 'route_mode' | 'reward_pick' | 'reach30'
+	'logits' | 'value' | 'farm_value' | 'route_mode' | 'reward_pick' | 'placement' | 'reach30'
 >;
 
 // Binary wire constants — MUST mirror ml/infer_server.py (BIN_* there).
@@ -75,7 +82,8 @@ const WANT = {
 	farm_value: 4,
 	route_mode: 8,
 	reward_pick: 16,
-	reach30: 32
+	reach30: 32,
+	placement: 64
 } as const;
 /** Response/flag section order is fixed; bit i of the flags byte = SECTION_ORDER[i]. */
 const SECTION_ORDER = [
@@ -84,7 +92,8 @@ const SECTION_ORDER = [
 	'farm_value',
 	'route_mode',
 	'reward_pick',
-	'reach30'
+	'reach30',
+	'placement'
 ] as const;
 
 /**
@@ -180,7 +189,10 @@ function decodeBinaryResponse(payload: Uint8Array): { id: string; error?: string
 		if (!(flags & (1 << bit))) continue;
 		const key = SECTION_ORDER[bit];
 		if (key === 'logits' || key === 'reward_pick') out[key] = ragged(readFlat(total));
-		else out[key] = readFlat(B);
+		else if (key === 'placement') {
+			const flat = readFlat(B * 4);
+			out.placement = Array.from({ length: B }, (_, i) => flat.slice(i * 4, i * 4 + 4));
+		} else out[key] = readFlat(B);
 	}
 	return out;
 }
@@ -309,15 +321,16 @@ export class RemotePolicy {
 	// Per-decision memo. Within ONE decision the policy is asked twice about the same
 	// state: selection's pick() (via neuralBot, which RE-ENCODES the candidate features —
 	// same content, different array identity) and then the driver's probs()+value() for
-	// logpOld/vPred. Keying the cached logits+value on obs REFERENCE + candidate CONTENT
+	// logpOld/vPred. Keying the cached logits+value on observation and candidate CONTENT
 	// collapses those two roundtrips into one; a content compare (~C×52 floats) is noise
-	// next to a socket RTT. Progress-guard-filtered picks have a different candidate
-	// subset and correctly miss.
+	// next to a socket RTT. Progress-guard-filtered picks reuse the matching rows from
+	// the prefetched candidate superset.
 	private lastObs: number[] | null = null;
 	private lastCands: number[][] | null = null;
 	private lastLogits: number[] | null = null;
 	private lastValue = 0;
 	private lastReach30: number | null = null;
+	private lastPlacementLogits: number[] | null = null;
 
 	/**
 	 * `expectObsDim` pins the server's observation width at handshake time (OBS_DIM for
@@ -418,7 +431,12 @@ export class RemotePolicy {
 	}
 
 	scoreCandidates(obs: number[], cands: number[][]): number[] {
-		if (obs === this.lastObs && this.lastLogits && this.lastCands) {
+		if (
+			this.lastObs &&
+			RemotePolicy.rowEqual(obs, this.lastObs) &&
+			this.lastLogits &&
+			this.lastCands
+		) {
 			if (RemotePolicy.candsEqual(cands, this.lastCands)) return this.lastLogits;
 			const derived = this.deriveFromCache(cands);
 			if (derived) return derived; // cache keeps the superset — don't overwrite
@@ -426,19 +444,37 @@ export class RemotePolicy {
 		const resp = this.score(
 			obs,
 			cands,
-			WANT.logits | WANT.value | (this.info.aux.reach30 ? WANT.reach30 : 0)
+			WANT.logits |
+				WANT.value |
+				(this.info.aux.reach30 ? WANT.reach30 : 0) |
+				(this.info.aux.placement ? WANT.placement : 0)
 		);
-		this.lastObs = obs;
-		this.lastCands = cands;
+		// Keep snapshots rather than caller-owned references: a later accidental mutation
+		// must invalidate the memo instead of pairing new inputs with stale outputs.
+		this.lastObs = obs.slice();
+		this.lastCands = cands.map((row) => row.slice());
 		this.lastLogits = resp.logits![0];
 		this.lastValue = resp.value![0];
 		this.lastReach30 = resp.reach30?.[0] ?? null;
+		this.lastPlacementLogits = resp.placement?.[0] ?? null;
 		return this.lastLogits;
 	}
 
 	value(obs: number[]): number {
-		if (obs === this.lastObs) return this.lastValue;
+		if (this.lastObs && RemotePolicy.rowEqual(obs, this.lastObs)) return this.lastValue;
 		return this.score(obs, [this.zeroCand], WANT.value).value![0];
+	}
+
+	/** Optional 4-way final-placement probabilities (v1 KataGo outcome aux). */
+	placementProbs(obs: number[]): number[] | null {
+		if (!this.info.aux.placement) return null;
+		let logits: number[];
+		if (this.lastObs && RemotePolicy.rowEqual(obs, this.lastObs) && this.lastPlacementLogits) {
+			logits = this.lastPlacementLogits;
+		} else {
+			logits = this.score(obs, [this.zeroCand], WANT.placement).placement![0];
+		}
+		return softmax(logits, 1);
 	}
 
 	farmValue(obs: number[]): number {
@@ -460,7 +496,8 @@ export class RemotePolicy {
 	reach30Probability(obs: number[]): number | null {
 		if (!this.info.aux.reach30) return null;
 		let raw: number;
-		if (obs === this.lastObs && this.lastReach30 !== null) raw = this.lastReach30;
+		if (this.lastObs && RemotePolicy.rowEqual(obs, this.lastObs) && this.lastReach30 !== null)
+			raw = this.lastReach30;
 		else raw = this.score(obs, [this.zeroCand], WANT.reach30).reach30![0];
 		return 1 / (1 + Math.exp(-raw));
 	}
