@@ -61,6 +61,7 @@ import {
 	stampBaselineElos,
 	stopInferServers,
 	trainingSeatCountsForGeneration,
+	trainerSeedForGeneration,
 	defaultConfig
 } from './manager';
 import { loadPolicyWeights } from '../net';
@@ -171,6 +172,21 @@ describe('pfsp math', () => {
 		recordPairwise(m, 'X', 4, 1); // worse
 		expect(m.matchStats['X']).toEqual({ games: 3, better: 1, worse: 1 });
 		expect(winrateVs(m, 'X')).toBeCloseTo(0.5, 12);
+	});
+});
+
+describe('trainer RNG pairing', () => {
+	it('derives a stable, generation- and lane-specific seed', () => {
+		const cfg = { seedBase: 292_000_000 };
+		expect(trainerSeedForGeneration(cfg, 21, 0)).toBe(
+			trainerSeedForGeneration(cfg, 21, 0)
+		);
+		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(
+			trainerSeedForGeneration(cfg, 22, 0)
+		);
+		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(
+			trainerSeedForGeneration(cfg, 21, 1)
+		);
 	});
 });
 

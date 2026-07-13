@@ -326,6 +326,8 @@ export interface HistoryLine {
 	heuristicMatchups?: number;
 	/** Player count -> matchup pools generated this generation (curriculum audit trail). */
 	trainingSeatMatchups?: Record<string, number>;
+	/** Deterministic model-initialization/minibatch-order seed passed to train.py. */
+	trainerSeed?: number;
 	poolWallMs: number;
 	trainMs: number;
 	/** v2 lanes: wall time of the ml/distill.py student run, when one happened. */

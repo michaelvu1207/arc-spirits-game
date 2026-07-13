@@ -628,10 +628,16 @@ def train(
     v2_layers: int = 3,
     v2_heads: int = 4,
     max_grad_norm: float = 1.0,
+    seed: int | None = None,
 ) -> list[dict]:
     """Train and export; returns per-epoch metric dicts (used by tests)."""
+    if seed is not None:
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
     device = get_device()
-    print(f"Device: {device}  mode={mode}  model={model_version}")
+    print(f"Device: {device}  mode={mode}  model={model_version}  seed={seed}")
     check_out_format(model_version, out_path, init_from)
     if model_version != "v1" and (hidden is not None or value_hidden is not None):
         raise ValueError("--hidden/--value-hidden configure only --model v1; use --v2-* for v2")
@@ -712,6 +718,7 @@ def train(
             lr_schedule=lr_schedule,
             placement_coef=effective_placement_coef,
             max_grad_norm=max_grad_norm,
+            seed=seed,
         )
         export_model(model, obs_dim, act_dim)
         return history
@@ -746,6 +753,7 @@ def train(
         shuffle=True,
         collate_fn=collate_fn,
         drop_last=False,
+        generator=torch.Generator().manual_seed(seed) if seed is not None else None,
     )
 
     if effective_placement_coef > 0:
@@ -1087,6 +1095,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--v2-heads", type=int, default=4, help="v2 attention heads (fresh models only)")
     p.add_argument("--max-grad-norm", type=float, default=1.0,
                    help="Gradient clipping (clip_grad_norm_) in all modes; 0 disables")
+    p.add_argument("--seed", type=int, default=None,
+                   help="Deterministic model initialization and minibatch-shuffle seed")
     p.add_argument("--init-from", type=Path, default=None,
                    help="Optional checkpoint to warm-start from while exporting to --out")
     p.add_argument("--no-warm-start", dest="warm_start", action="store_false",
@@ -1138,4 +1148,5 @@ if __name__ == "__main__":
         v2_layers=args.v2_layers,
         v2_heads=args.v2_heads,
         max_grad_norm=args.max_grad_norm,
+        seed=args.seed,
     )

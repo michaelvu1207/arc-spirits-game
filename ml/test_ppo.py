@@ -927,6 +927,26 @@ def test_train_cli_ppo_end_to_end_and_export_roundtrip():
         assert verify_export.verify(out, d, n_checks=5)
 
 
+def test_train_seed_reproduces_model_and_minibatch_order():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td) / "data"
+        out_a = Path(td) / "a.json"
+        out_b = Path(td) / "b.json"
+        make_traj_dataset(d, n_games=12, steps=3, seed=23)
+        kwargs = dict(
+            data_dir=d,
+            epochs=2,
+            batch_size=16,
+            mode="ppo",
+            warm_start=False,
+            placement_coef=0.0,
+            seed=987654,
+        )
+        train_mod.train(out_path=out_a, **kwargs)
+        train_mod.train(out_path=out_b, **kwargs)
+        assert out_a.read_bytes() == out_b.read_bytes()
+
+
 def test_old_format_rows_still_train_in_awr_mode():
     # Backward compat both ways: old rows (no PPO fields) train under awr,
     # and new trajectory rows still load in DecisionDataset.

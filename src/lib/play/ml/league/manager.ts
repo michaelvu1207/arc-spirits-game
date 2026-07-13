@@ -991,6 +991,7 @@ function runTrainer(
 	dataDir: string,
 	outCkpt: string,
 	initFrom: string | undefined,
+	seed: number,
 	model: 'v1' | 'v2' = 'v1'
 ): number {
 	const args = [
@@ -1002,7 +1003,9 @@ function runTrainer(
 		'--mode',
 		config.mode,
 		'--epochs',
-		String(config.train.epochs)
+		String(config.train.epochs),
+		'--seed',
+		String(seed)
 	];
 	if (model === 'v2') {
 		args.push('--model', 'v2');
@@ -1111,6 +1114,21 @@ export interface GenerationReport {
 	lanes: HistoryLine[];
 }
 
+/** Stable learner RNG seed. Actor/environment seeds are already derived from
+ * seedBase, but PPO formerly entropy-seeded its minibatch shuffle, which made
+ * supposedly paired architecture/reward experiments incomparable. */
+export function trainerSeedForGeneration(
+	config: Pick<LeagueConfig, 'seedBase'>,
+	gen: number,
+	laneIdx: number
+): number {
+	const seed = config.seedBase + gen * 1_000_003 + laneIdx * 1009 + 73;
+	if (!Number.isSafeInteger(seed) || seed < 0) {
+		throw new Error(`league: invalid trainer seed ${seed} for gen=${gen} lane=${laneIdx}`);
+	}
+	return seed;
+}
+
 /** Run ONE generation across all learner lanes. Returns the appended history lines. */
 export async function runGeneration(root: string): Promise<GenerationReport> {
 	const { config, state } = loadLeague(root);
@@ -1124,6 +1142,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 	for (let laneIdx = 0; laneIdx < learners.length; laneIdx++) {
 		const learner = learners[laneIdx];
 		const model = laneModelOf(config, learner);
+		const trainerSeed = trainerSeedForGeneration(config, gen, laneIdx);
 		const laneDir = p.laneData(gen, learner.id);
 		mkdirSync(laneDir, { recursive: true });
 		state.phase = `gen${gen}:${learner.id}:games`;
@@ -1261,6 +1280,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				...poolMeta,
 				gen,
 				lane: learner.id,
+				trainerSeed,
 				games,
 				samples
 			})
@@ -1271,7 +1291,14 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		saveStateAtomic(root, state);
 		const ckpt = join(p.checkpoints, `${learner.id}-gen${gen}.${model === 'v2' ? 'pt' : 'json'}`);
 		const trainInit = model === 'v2' ? lanePt(learner) : playWeights(learner);
-		const trainMs = runTrainer(config, laneDir, ckpt, trainInit, model);
+		const trainMs = runTrainer(
+			config,
+			laneDir,
+			ckpt,
+			trainInit,
+			trainerSeed,
+			model
+		);
 
 		// Socket-served lanes (v2, or v1Infer): hot-swap the lane server onto the fresh
 		// checkpoint (or first-start it for a lane that just trained its first net —
@@ -1423,6 +1450,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			...(mirrorMatchups > 0 ? { mirrorMatchups } : {}),
 			...(heuristicMatchups > 0 ? { heuristicMatchups } : {}),
 			trainingSeatMatchups,
+			trainerSeed,
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
 			...(distillMs > 0 ? { distillMs: Math.round(distillMs) } : {}),
