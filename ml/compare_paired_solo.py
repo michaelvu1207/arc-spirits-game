@@ -57,8 +57,20 @@ def exact_mcnemar(discordant_a: int, discordant_b: int) -> float:
     total = discordant_a + discordant_b
     if total == 0:
         return 1.0
-    tail = sum(math.comb(total, k) for k in range(min(discordant_a, discordant_b) + 1))
-    return min(1.0, 2.0 * tail / (2**total))
+    # Summing integer binomial coefficients and then converting to float overflows
+    # once a held-out block has roughly a thousand discordant games.  Compute the
+    # lower Binomial(n, 0.5) tail with log-sum-exp instead.
+    cutoff = min(discordant_a, discordant_b)
+    log_terms = [
+        math.lgamma(total + 1)
+        - math.lgamma(k + 1)
+        - math.lgamma(total - k + 1)
+        - total * math.log(2.0)
+        for k in range(cutoff + 1)
+    ]
+    peak = max(log_terms)
+    lower_tail = math.exp(peak) * sum(math.exp(value - peak) for value in log_terms)
+    return min(1.0, 2.0 * lower_tail)
 
 
 def main() -> None:
