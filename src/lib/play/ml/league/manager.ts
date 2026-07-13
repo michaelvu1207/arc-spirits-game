@@ -1178,6 +1178,13 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		let mirrorMatchups = 0;
 		let heuristicMatchups = 0;
 		const trainingSeatCounts = trainingSeatCountsForGeneration(config, gen, matchups);
+		const trainingSeatMatchups = trainingSeatCounts.reduce<Record<string, number>>(
+			(counts, seats) => {
+				counts[String(seats)] = (counts[String(seats)] ?? 0) + 1;
+				return counts;
+			},
+			{}
+		);
 		const plans = Array.from({ length: matchups }, (_, m) => {
 			const matchupConfig: LeagueConfig = { ...config, seats: trainingSeatCounts[m] };
 			const { opponents, mirror, heuristic } = matchupOpponents(
@@ -1398,6 +1405,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			opponents: opponentsFaced,
 			...(mirrorMatchups > 0 ? { mirrorMatchups } : {}),
 			...(heuristicMatchups > 0 ? { heuristicMatchups } : {}),
+			trainingSeatMatchups,
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
 			...(distillMs > 0 ? { distillMs: Math.round(distillMs) } : {}),

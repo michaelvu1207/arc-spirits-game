@@ -163,7 +163,7 @@ describe('driver PPO behavior distribution', () => {
 		expect(result.rounds).toBeGreaterThan(1);
 		expect(result.samples.length).toBeGreaterThan(5);
 		expect(result.samples.every((row) => row.playerCount === 1)).toBe(true);
-		expect(result.finalState.players.Red!.statusLevel).toBeLessThanOrEqual(2);
+		expect(result.finalState!.players.Red!.statusLevel).toBeLessThanOrEqual(2);
 	}, 30_000);
 
 	it('retains a real terminal row with exact behavior metadata and intermediate dense rewards', async () => {
