@@ -735,6 +735,7 @@ export function buildMatchup(
 			...(config.search && learnerWeights && !viaSocket ? { search: config.search } : {}),
 			...(config.denseVpReward ? { denseVpReward: true } : {}),
 			...(config.shapingPreset ? { shapingPreset: config.shapingPreset } : {}),
+			...(config.potentialShapingMode ? { potentialShapingMode: config.potentialShapingMode } : {}),
 			gamma: config.gamma,
 			iter,
 			...(v2 ? { obsVersion: 2 as const } : {}),

@@ -150,7 +150,7 @@ export interface LeagueConfig {
 		horizonRounds?: number;
 		valueWeight?: number;
 	};
-	/** Dense PPO reward (ΔVP + ΔΦ per decision) — REQUIRED for "reach 30" training. */
+	/** Dense PPO reward (normalized ΔVP plus configured build-potential shaping). */
 	denseVpReward?: boolean;
 	/**
 	 * Mirror-contention fraction (0..1, default 0 = off). This fraction of a
@@ -204,6 +204,8 @@ export interface LeagueConfig {
 	terminationBlockerFraction?: number;
 	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
 	shapingPreset?: string;
+	/** Use discounted policy-invariant potential shaping with zero terminal potential. */
+	potentialShapingMode?: 'legacy-terminal-retention' | 'policy-invariant';
 	selection: 'hybrid' | 'value' | 'policy';
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;

@@ -180,17 +180,19 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				policyObsVersion: config.policyObsVersion,
 				denseVpReward: config.denseVpReward,
 				...(config.shapingPreset ? { shaping: shapingFor(config.shapingPreset) } : {}),
+				potentialShapingMode: config.potentialShapingMode,
 				searcher
 			});
 			const wallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);
 
 			const seatList = Object.keys(r.finalVP) as SeatColor[];
-			const weightsOrProfiles = seatList.map((seat, index) =>
-				config.opponentWeights?.[seat] ??
-				(isLearnerSeat(seat)
-					? learnerRef ?? 'learner-policy'
-					: config.profiles[index % config.profiles.length] ?? 'medium')
+			const weightsOrProfiles = seatList.map(
+				(seat, index) =>
+					config.opponentWeights?.[seat] ??
+					(isLearnerSeat(seat)
+						? (learnerRef ?? 'learner-policy')
+						: (config.profiles[index % config.profiles.length] ?? 'medium'))
 			);
 			const summary: GameSummary = {
 				seed,

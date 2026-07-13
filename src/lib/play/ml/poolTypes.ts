@@ -6,6 +6,7 @@
  * loads its own copy), heuristics by profile NAME (see `profileFor`).
  */
 import type { SeatColor } from '../types';
+import type { PotentialShapingMode } from './shaping';
 
 /** Per-game configuration shared by every game in a pool run. */
 export interface ActorGameConfig {
@@ -57,10 +58,12 @@ export interface ActorGameConfig {
 		horizonRounds?: number;
 		valueWeight?: number;
 	};
-	/** Dense PPO reward: rStep = ΔVP/VP_TO_WIN + ΔΦ_build (see driver.denseVpReward). */
+	/** Dense PPO reward: normalized ΔVP plus configured build-potential shaping. */
 	denseVpReward?: boolean;
 	/** Shaping preset name (shaping.ts shapingFor: 'balanced' | 'banker' | 'ascend' ...). */
 	shapingPreset?: string;
+	/** Correct discounted shaping with zero terminal potential; legacy is the default. */
+	potentialShapingMode?: PotentialShapingMode;
 	/** Command types stripped from neural seats' legal sets (hard behavioral constraint). */
 	forbidTypes?: string[];
 	maxStatusLevel?: number;

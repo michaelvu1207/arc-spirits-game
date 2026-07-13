@@ -55,9 +55,11 @@ import {
 } from './neuralBot';
 import {
 	buildPotential,
+	potentialShapingDelta,
 	vpOf,
 	vpReturnsToGo,
 	BALANCED_SHAPING,
+	type PotentialShapingMode,
 	type ShapingWeights
 } from './shaping';
 import type { NeuralPolicy } from './net';
@@ -224,6 +226,12 @@ export interface RecordGameOptions {
 	/** Reward-shaping weights for the progress potential Φ (default BALANCED). Drives the
 	 *  per-decision return-to-go; vary across a population for diverse playstyles. */
 	shaping?: ShapingWeights;
+	/**
+	 * Historical shaping retains final engine value. `policy-invariant` instead uses
+	 * gamma*Phi(next)-Phi(current) with Phi(terminal)=0, so engine resources help only
+	 * when converted into the real VP/placement objective.
+	 */
+	potentialShapingMode?: PotentialShapingMode;
 	/** Discount for return-to-go (default 0.99). */
 	gamma?: number;
 	/**
@@ -257,8 +265,9 @@ export interface RecordGameOptions {
 		finalVP: Record<string, number>
 	) => number[];
 	/**
-	 * Dense PPO reward (Phase 3): fills rStep with ΔVP/VP_TO_WIN + ΔΦ_build per
-	 * recorded decision (potential-based, policy-invariant). Without this (or a
+	 * Dense PPO reward (Phase 3): fills rStep with ΔVP/VP_TO_WIN + build-potential
+	 * shaping per recorded decision. Select `potentialShapingMode='policy-invariant'`
+	 * for discounted γΦ(next)−Φ(current) with zero terminal potential. Without this (or a
 	 * stepRewards callback) rStep is 0 and PPO trains on placement alone — which
 	 * teaches "out-place the field", never "reach 30". See plan happy-quail W1.
 	 */
@@ -689,7 +698,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 					const mi = withNextH.findIndex((x) => commandMatches(x.cmd, cmd));
 					if (mi >= 0) {
 						const obs = encodeObs(state, seat, catalog);
-							samples.push({
+						samples.push({
 							obs,
 							...(recordObsV2 ? { obsV2: recordObsV2(seat) } : {}),
 							cands: withNextH.map((x) =>
@@ -700,10 +709,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 							seat,
 							vp: vpOf(state.players[seat]),
 							phi: buildPotential(state.players[seat], shaping),
-								kill: decisionKills(state, withNextH[mi].next, seat, cmd) ? 1 : 0,
-								decisionType: cmd.type,
-								strategic: isStrategicCommand(cmd) ? 1 : 0,
-								...sampleAuxTargets(state, seat, catalog, withNextH, withNextH[mi])
+							kill: decisionKills(state, withNextH[mi].next, seat, cmd) ? 1 : 0,
+							decisionType: cmd.type,
+							strategic: isStrategicCommand(cmd) ? 1 : 0,
+							...sampleAuxTargets(state, seat, catalog, withNextH, withNextH[mi])
 						});
 					}
 				}
@@ -826,7 +835,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 										seat,
 										withNext,
 										{ sample, temperature: pickTemperature, rand },
-									catalog
+										catalog
 									);
 		const chosenAction = withNext[idx];
 		recordCycleDecision(
@@ -945,7 +954,8 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			finalVP[seat],
 			finalBuild,
 			gamma,
-			seatSamples.map((s) => huntBonus * s.kill)
+			seatSamples.map((s) => huntBonus * s.kill),
+			{ potentialMode: opts.potentialShapingMode, terminal: finished }
 		);
 		seatSamples.forEach((s, i) => (s.ret = g[i]));
 
@@ -960,7 +970,16 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			dense = seatSamples.map((s, i) => {
 				const nextVp = i + 1 < seatSamples.length ? seatSamples[i + 1].vp : finalVP[seat];
 				const nextPhi = i + 1 < seatSamples.length ? seatSamples[i + 1].phi : finalBuild;
-				return (nextVp - s.vp) / VP_TO_WIN + (nextPhi - s.phi);
+				return (
+					(nextVp - s.vp) / VP_TO_WIN +
+					potentialShapingDelta(
+						s.phi,
+						nextPhi,
+						gamma,
+						finished && i === seatSamples.length - 1,
+						opts.potentialShapingMode
+					)
+				);
 			});
 		}
 		// True 30-VP win (not a round-cap or all-Fallen highest-VP finish): the
