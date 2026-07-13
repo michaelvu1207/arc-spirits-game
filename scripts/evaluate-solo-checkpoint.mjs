@@ -112,6 +112,14 @@ const { runActorPool } = await jiti.import(
 	path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts')
 );
 const { createRng, nextInt } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'rng.ts'));
+const { MAX_ROUNDS } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'types.ts'));
+const effectiveMaxRounds = Math.min(maxRounds, MAX_ROUNDS);
+if (effectiveMaxRounds !== maxRounds) {
+	console.error(
+		`[solo-heldout] requested ${maxRounds} rounds, but the game engine hard-caps at ` +
+			`${MAX_ROUNDS}; reporting the effective ${effectiveMaxRounds}-round horizon`
+	);
+}
 const catalogPath = path.join(root, 'ml', 'catalog.json');
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
 const workDir = mkdtempSync(path.join(tmpdir(), 'arc-solo-heldout-'));
@@ -135,7 +143,7 @@ try {
 		catalogPath,
 		config: {
 			seats: 1,
-			maxRounds,
+			maxRounds: effectiveMaxRounds,
 			profiles: ['medium'],
 			weightsPath: weights,
 			selection: 'hybrid',
@@ -245,7 +253,8 @@ try {
 		weights: path.relative(root, weights),
 		seed0,
 		games,
-		maxRounds,
+		maxRounds: effectiveMaxRounds,
+		...(effectiveMaxRounds !== maxRounds ? { requestedMaxRounds: maxRounds } : {}),
 		maxStatusLevel,
 		decode: {
 			...(args.sample ? { sample: true, temperature } : { sample: false }),
