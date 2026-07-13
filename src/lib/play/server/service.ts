@@ -41,6 +41,7 @@ import { DEFAULT_BOT_PROFILE_KEY } from '../bots/contract';
 import { loadPlayCatalog } from './catalog';
 import { getSupabaseAdmin } from '$lib/server/supabaseAdmin';
 import { finalizeMatch } from './ranked';
+import { completedHistoryRound } from './historyCapture';
 
 const HISTORY_SCHEMA = 'arc_spirits_game';
 // The live 2D engine session tables live in their own schema; everything else
@@ -401,10 +402,18 @@ async function ensureReplayCode(gameId: string, navigationCount: number) {
 	throw kitError(500, 'Failed to create replay code.');
 }
 
-async function writeHistorySnapshots(state: PublicGameState, timestamp: string) {
+async function writeHistorySnapshots(
+	state: PublicGameState,
+	timestamp: string,
+	navigationCount = state.round
+) {
 	if (!state.gameId) return;
 
-	const rows = buildHistorySnapshotRows(state, timestamp);
+	const snapshotState =
+		navigationCount === state.round
+			? state
+			: ({ ...state, round: navigationCount } as PublicGameState);
+	const rows = buildHistorySnapshotRows(snapshotState, timestamp);
 	if (rows.length === 0) return;
 
 	const { error } = await getHistoryAdmin()
@@ -415,7 +424,7 @@ async function writeHistorySnapshots(state: PublicGameState, timestamp: string) 
 		throw kitError(500, `Failed to write history snapshots: ${error.message}`);
 	}
 
-	await ensureReplayCode(state.gameId, state.round);
+	await ensureReplayCode(state.gameId, navigationCount);
 }
 
 async function persistSessionUpdate(params: {
@@ -589,6 +598,7 @@ async function maybeEnforceDeadline(session: PlaySessionRow): Promise<PlaySessio
 		});
 	}
 
+	const beforeDeadline = { status: state.status, round: state.round };
 	const outcome = resolvePassedDeadline(state, catalog, Date.now(), botSeats);
 	// On a backstop advance the phase changed and phaseDeadline was nulled — re-stamp the new
 	// phase against the server clock. An extension already re-stamped phaseDeadline itself.
@@ -600,7 +610,13 @@ async function maybeEnforceDeadline(session: PlaySessionRow): Promise<PlaySessio
 		actorMemberId: null,
 		command: ENFORCE_DEADLINE_COMMAND
 	});
-	if (persisted) return persisted;
+	if (persisted) {
+		const completedRound = completedHistoryRound(beforeDeadline, state);
+		if (completedRound !== null) {
+			await writeHistorySnapshots(state, new Date().toISOString(), completedRound);
+		}
+		return persisted;
+	}
 	// CAS miss: another poller advanced it first — return their fresh state.
 	return (await getSessionByRoomCode(session.room_code)) ?? session;
 }
@@ -1795,8 +1811,9 @@ export async function runRoomCommand(params: {
 			continue; // CAS conflict — reload fresh state and retry.
 		}
 
-		if (params.command.type === 'commitRound') {
-			await writeHistorySnapshots(state, new Date().toISOString());
+		const completedRound = completedHistoryRound(state, commandResult.state);
+		if (completedRound !== null) {
+			await writeHistorySnapshots(commandResult.state, new Date().toISOString(), completedRound);
 		}
 
 		// The acting member just made a request → they're alive. This (plus the /view
