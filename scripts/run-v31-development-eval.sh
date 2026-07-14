@@ -7,6 +7,25 @@ EXPERIMENT="$ROOT/ml/experiments/v31-terminal-credit"
 DEVELOPMENT="$EXPERIMENT/development"
 CATALOG="ml/catalogs/live-20260713-5f4ad348.json"
 SOURCE_COMMIT="bce8bf2"
+SCRATCH="${ARC_V31_SCRATCH:-/dev/shm/arc-v31-development}"
+
+prepare_scratch() {
+  local arm="$1"
+  local arm_scratch="$SCRATCH/$arm"
+  mkdir -p "$arm_scratch"
+  if [[ ! -w "$arm_scratch" ]]; then
+    printf 'V31 scratch is not writable: %s\n' "$arm_scratch" >&2
+    return 1
+  fi
+  local free_kib
+  free_kib="$(df -Pk "$SCRATCH" | awk 'NR == 2 {print $4}')"
+  if (( free_kib < 8 * 1024 * 1024 )); then
+    printf 'V31 evaluation requires at least 8 GiB free scratch; found %s KiB at %s\n' \
+      "$free_kib" "$SCRATCH" >&2
+    return 1
+  fi
+  printf '%s\n' "$arm_scratch"
+}
 
 evaluate_args() {
   printf '%s\n' \
@@ -19,10 +38,12 @@ evaluate_args() {
 v1_worker() {
   local arm="$1" weights="$2"
   local arm_dir="$DEVELOPMENT/$arm"
+  local arm_scratch
+  arm_scratch="$(prepare_scratch "$arm")"
   cd "$ROOT"
   mapfile -t shared < <(evaluate_args)
   set +e
-  nice -n 10 node scripts/evaluate-solo-checkpoint.mjs \
+  env TMPDIR="$arm_scratch" nice -n 10 node scripts/evaluate-solo-checkpoint.mjs \
     --weights "$weights" --policy-obs-version 1 \
     "${shared[@]}" --out "ml/experiments/v31-terminal-credit/development/$arm/report.json"
   local code=$?
@@ -34,7 +55,9 @@ v1_worker() {
 v2_worker() {
   local arm="$1" gpu="$2" weights="$3"
   local arm_dir="$DEVELOPMENT/$arm"
-  local socket="/tmp/arc-v31-development-$arm-$$.sock"
+  local arm_scratch
+  arm_scratch="$(prepare_scratch "$arm")"
+  local socket="$arm_scratch/infer-$$.sock"
   cd "$ROOT"
   env CUDA_VISIBLE_DEVICES="$gpu" nice -n 10 ml/.venv/bin/python ml/infer_server.py \
     --weights "$weights" --socket "$socket" --device cuda \
@@ -58,7 +81,7 @@ v2_worker() {
   fi
   mapfile -t shared < <(evaluate_args)
   set +e
-  nice -n 10 node scripts/evaluate-solo-checkpoint.mjs \
+  env TMPDIR="$arm_scratch" nice -n 10 node scripts/evaluate-solo-checkpoint.mjs \
     --weights "$weights" --infer-socket "$socket" --policy-obs-version 2 \
     "${shared[@]}" --out "ml/experiments/v31-terminal-credit/development/$arm/report.json"
   local code=$?
@@ -95,6 +118,7 @@ if [[ "${1:-}" == "--chain-v2-worker" ]]; then
 fi
 
 cd "$ROOT"
+prepare_scratch _preflight >/dev/null
 declare -A WEIGHTS=(
   [v23]="ml/warmstart/v24/v23-control-gen5-obs199-act104.json"
   [v30]="ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt"
