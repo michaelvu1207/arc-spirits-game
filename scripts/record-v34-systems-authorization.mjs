@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 process.chdir(root);
+execFileSync(process.execPath, ['scripts/verify-v34-authorization-chain.mjs', 'preview'], {
+	stdio: 'ignore'
+});
 const experiment = 'ml/experiments/v34-latency-first-expert-iteration';
 const artifacts = `${experiment}/artifacts`;
 const protocol = JSON.parse(readFileSync(`${experiment}/protocol.json`, 'utf8'));
@@ -37,6 +41,9 @@ if (
 	collection.seed0 !== protocol.previewCalibration.seed0 ||
 	collection.games !== protocol.previewCalibration.games ||
 	collection.completed !== protocol.previewCalibration.games ||
+	!Number.isInteger(collection.stalls) ||
+	collection.stalls < 0 ||
+	collection.stalls > collection.games ||
 	collection.checkpoint.sha256 !== protocol.inputs.policy.sha256 ||
 	collection.catalog.sha256 !== protocol.inputs.catalog.sha256 ||
 	collection.inference.wire !== protocol.commonDecode.inferenceWire

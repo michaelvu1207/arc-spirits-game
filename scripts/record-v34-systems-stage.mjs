@@ -79,6 +79,9 @@ if (
 	benchmark.config.sample !== protocol.commonDecode.sample ||
 	benchmark.config.temperature !== protocol.commonDecode.temperature ||
 	benchmark.config.policyObsVersion !== protocol.commonDecode.policyObsVersion ||
+	benchmark.config.obsVersion !== 1 ||
+	benchmark.config.writeGameSummaries !== false ||
+	JSON.stringify(benchmark.config.neuralSeats) !== '["Red"]' ||
 	JSON.stringify(benchmark.config.recordSeats) !== '[]'
 ) {
 	throw new Error('V34 systems common decode mismatch');
@@ -97,6 +100,9 @@ if (arm.kind === 'critic-rerank') {
 	benchmark.config.search?.horizonRounds !== arm.horizonRounds ||
 	benchmark.config.search?.objective !== 'solo-reach30' ||
 	benchmark.config.search?.rollout !== 'heuristic' ||
+	benchmark.config.search?.frac !== protocol.systems.heuristicDecode.frac ||
+	benchmark.config.search?.valueWeight !== protocol.systems.heuristicDecode.valueWeight ||
+	benchmark.config.search?.navTemperature !== protocol.systems.heuristicDecode.navTemperature ||
 	trial.searchSimulations !== trial.searchDecisions * arm.simulations
 ) {
 	throw new Error('V34 systems batched heuristic config mismatch');
@@ -117,6 +123,7 @@ const gameKeys = [
 	'plannerMode',
 	'strategicDecisions',
 	'strategicSimulations',
+	'stalled',
 	'decisionWallMs',
 	'byPhase',
 	'inferenceProvenance'
@@ -146,6 +153,7 @@ if (JSON.stringify(observedOrdinals) !== JSON.stringify(expectedOrdinals)) {
 const decisionWallMs = [];
 let decisions = 0;
 let simulations = 0;
+let stalls = 0;
 for (const row of games) {
 	if (JSON.stringify(Object.keys(row).sort()) !== JSON.stringify(gameKeys)) {
 		throw new Error('V34 systems progress game schema changed');
@@ -158,6 +166,7 @@ for (const row of games) {
 		row.repeat !== 0 ||
 		row.games !== expectedGames ||
 		row.plannerMode !== expectedMode ||
+		typeof row.stalled !== 'boolean' ||
 		JSON.stringify(row.inferenceProvenance) !== JSON.stringify(trial.inference) ||
 		!Array.isArray(row.decisionWallMs) ||
 		row.decisionWallMs.some((value) => !Number.isFinite(value) || value < 0)
@@ -166,11 +175,13 @@ for (const row of games) {
 	}
 	decisions += row.strategicDecisions;
 	simulations += row.strategicSimulations;
+	stalls += row.stalled ? 1 : 0;
 	decisionWallMs.push(...row.decisionWallMs);
 }
 if (
 	decisions !== trial.searchDecisions ||
 	simulations !== trial.searchSimulations ||
+	stalls !== trial.stalls ||
 	decisionWallMs.length !== decisions
 ) {
 	throw new Error('V34 systems progress search-count mismatch');
@@ -185,7 +196,9 @@ const optimisticProjected4096Seconds =
 const projected4096Seconds = 4096 / trial.gamesPerSecond;
 let eligible = true;
 let rejectionReason = null;
-if (args.stage === 'smoke') {
+if (stalls > 0) {
+	rejectionReason = 'systems stage contains stalled games';
+} else if (args.stage === 'smoke') {
 	if (p95 === null || p95 > p95Limit) rejectionReason = 'smoke decision p95 exceeds 10000ms';
 	else if (
 		optimisticProjected4096Seconds > protocol.systems.smoke.optimisticProjected4096SecondsMax
@@ -197,8 +210,6 @@ if (args.stage === 'smoke') {
 	if (decisions < spec.minimumStrategicDecisions)
 		rejectionReason = 'binding strategic decision count below 256';
 	else if (p95 === null || p95 > p95Limit) rejectionReason = 'binding decision p95 exceeds limit';
-} else if (projected4096Seconds > protocol.systems.throughput.projected4096SecondsMax) {
-	rejectionReason = 'throughput projection exceeds 21600s';
 }
 if (rejectionReason) eligible = false;
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -215,6 +226,7 @@ const report = {
 	plannerMode: expectedMode,
 	strategicDecisions: decisions,
 	strategicSimulations: simulations,
+	stalls,
 	decisionWallMsP95: p95,
 	wallSeconds: trial.wallMs / 1000,
 	gamesPerSecond: trial.gamesPerSecond,

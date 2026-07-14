@@ -58,6 +58,7 @@ const { values: args } = parseArgs({
 		'neural-seats': { type: 'string' },
 		'record-seats': { type: 'string' },
 		'no-record': { type: 'boolean', default: false },
+		'no-game-summaries': { type: 'boolean', default: false },
 		'opponent-weights': { type: 'string' },
 		'opponent-temperature': { type: 'string' },
 		'obs-version': { type: 'string', default: '1' },
@@ -223,6 +224,7 @@ const config = {
 		: csv(args['record-seats']).length
 			? csv(args['record-seats'])
 			: undefined,
+	writeGameSummaries: !args['no-game-summaries'],
 	opponentWeights: parseOpponentWeights(args['opponent-weights']),
 	opponentTemperature: optionalNumber(args['opponent-temperature']),
 	obsVersion: positiveInt(args['obs-version'], '--obs-version'),
@@ -343,6 +345,7 @@ try {
 						plannerMode: summary.search?.mode ?? null,
 						strategicDecisions: summary.search?.decisions ?? 0,
 						strategicSimulations: summary.search?.simulations ?? 0,
+						stalled: summary.stalled,
 						decisionWallMs,
 						byPhase: summary.search?.byPhase ?? null,
 						inferenceProvenance: summary.inference ?? null
@@ -377,6 +380,7 @@ try {
 			(sum, summary) => sum + (summary.search?.simulations ?? 0),
 			0
 		);
+		const stalls = result.summaries.filter((summary) => summary.stalled).length;
 		const plannerMode = result.summaries[0]?.search?.mode ?? null;
 		if (result.summaries.some((summary) => (summary.search?.mode ?? null) !== plannerMode)) {
 			throw new Error('benchmark strategic planner mode changed within a trial');
@@ -411,6 +415,7 @@ try {
 			gameWallMsP95: quantile(gameWallTimes, 0.95),
 			searchDecisions,
 			searchSimulations,
+			stalls,
 			plannerMode,
 			searchDecisionsPerSecond: searchDecisions / (result.wallMs / 1000),
 			searchDecisionWallMsP50:

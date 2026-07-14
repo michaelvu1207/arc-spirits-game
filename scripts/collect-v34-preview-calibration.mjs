@@ -95,6 +95,7 @@ const result = await runActorPool({
 		sample: true,
 		temperature: 0.55,
 		recordSeats: [],
+		writeGameSummaries: false,
 		guardianSchedule: 'absolute-balanced',
 		obsVersion: 1,
 		policyObsVersion: 2,

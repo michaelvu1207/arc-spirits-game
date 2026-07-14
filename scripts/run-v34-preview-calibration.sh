@@ -14,6 +14,7 @@ cd "$ROOT"
 case "$GPU" in 0|5|6|7) ;; *) echo "V34 preview GPU must be 0,5,6,7" >&2; exit 2 ;; esac
 node scripts/verify-v34-source-lock.mjs "$ARTIFACTS/source-lock.json" >/dev/null
 node scripts/validate-v34-protocol.mjs >/dev/null
+node scripts/verify-v34-authorization-chain.mjs preview >/dev/null
 test "$(node -e "const x=require('$ARTIFACTS/source-lock.json');process.stdout.write(String(x.authorization.previewCalibrationSeedsOpen))")" = true
 test "$(node -e "const x=require('$ARTIFACTS/preflight/result.json');process.stdout.write(String(x.passed))")" = true
 for file in preview-calibration-collection.json preview-calibration.json systems-authorization.json; do
@@ -76,4 +77,3 @@ trap - EXIT INT TERM
   df -h /data/share8 /dev/shm
   nvidia-smi --query-gpu=index,memory.used,memory.total,utilization.gpu --format=csv,noheader
 } > "$ARTIFACTS/preview-calibration-postflight.txt"
-

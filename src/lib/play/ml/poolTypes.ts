@@ -134,6 +134,9 @@ export interface ActorGameConfig {
 	policyObsVersion?: 1 | 2;
 	/** Evaluation-only V34 public-preview calibration collection. */
 	previewReach30Audit?: boolean;
+	/** Keep per-game summaries in memory but do not persist games-*.jsonl. This is
+	 * required by outcome-blind operational screens whose scratch may survive a kill. */
+	writeGameSummaries?: boolean;
 	/** Train-only, solo late-state suffix generation. Default/off when absent or enabled=false. */
 	continuationCurriculum?: ContinuationCurriculumConfig;
 }

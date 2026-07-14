@@ -120,6 +120,8 @@
 			},
 			{ "id": "heuristic-s8-h3", "kind": "heuristic-batched", "simulations": 8, "horizonRounds": 3 }
 		],
+		"heuristicDecode": { "frac": 1.0, "valueWeight": 0.5, "navTemperature": 0.0 },
+		"durableGameOutcomeSummaries": false,
 		"stageSeedRule": "every stage reuses the registered systems prefix beginning at seed0; systems outcomes are never strength evidence",
 		"smoke": {
 			"games": 4,
@@ -161,6 +163,7 @@
 			"plannerMode",
 			"strategicDecisions",
 			"strategicSimulations",
+			"stalled",
 			"decisionWallMs",
 			"byPhase",
 			"inferenceProvenance"

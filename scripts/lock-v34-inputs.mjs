@@ -24,6 +24,7 @@ const declaredFiles = [
 	'scripts/validate-v34-protocol.mjs',
 	'scripts/lock-v34-inputs.mjs',
 	'scripts/verify-v34-source-lock.mjs',
+	'scripts/verify-v34-authorization-chain.mjs',
 	'scripts/record-v34-preflight.mjs',
 	'scripts/run-v34-preflight.sh',
 	'scripts/run-v34-preview-calibration.sh',

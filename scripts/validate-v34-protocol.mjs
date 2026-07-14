@@ -97,6 +97,9 @@ if (
 	protocol.systems.smoke.workers !== 1 ||
 	protocol.systems.smoke.decisionP95MsMax !== 10000 ||
 	protocol.systems.smoke.optimisticProjected4096SecondsMax !== 21600 ||
+	JSON.stringify(protocol.systems.heuristicDecode) !==
+		JSON.stringify({ frac: 1, valueWeight: 0.5, navTemperature: 0 }) ||
+	protocol.systems.durableGameOutcomeSummaries !== false ||
 	JSON.stringify(protocol.systems.binding) !==
 		JSON.stringify([
 			{ games: 64, workers: 1, decisionP95MsMax: 1000, minimumStrategicDecisions: 256 },
@@ -104,7 +107,28 @@ if (
 		]) ||
 	JSON.stringify(protocol.systems.throughput.workerCounts) !== JSON.stringify([4, 8, 12, 16, 24]) ||
 	protocol.systems.throughput.games !== 128 ||
-	protocol.systems.throughput.projected4096SecondsMax !== 21600
+	protocol.systems.throughput.projected4096SecondsMax !== 21600 ||
+	JSON.stringify(protocol.systems.gameCompleteProgressExactKeys) !==
+		JSON.stringify([
+			'schemaVersion',
+			'event',
+			'timestamp',
+			'label',
+			'configHash',
+			'workers',
+			'repeat',
+			'seed',
+			'completionOrdinal',
+			'games',
+			'wallMs',
+			'plannerMode',
+			'strategicDecisions',
+			'strategicSimulations',
+			'stalled',
+			'decisionWallMs',
+			'byPhase',
+			'inferenceProvenance'
+		])
 ) {
 	fail('systems schedule or gates changed');
 }

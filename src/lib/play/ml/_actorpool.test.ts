@@ -151,6 +151,28 @@ describe('actor pool', () => {
 		}
 	}, 300_000);
 
+	it('can keep operational summaries in memory without durable outcome files', async () => {
+		const dir = tempDir('no-game-summaries');
+		try {
+			const result = await runActorPool({
+				seeds: [41_998],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 2,
+					profiles: ['medium'],
+					writeGameSummaries: false
+				}
+			});
+			expect(result.summaries).toHaveLength(1);
+			expect(result.gameFiles).toEqual([]);
+			expect(existsSync(join(dir, 'games-0.jsonl'))).toBe(false);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it('emits exact per-decision search timing and simulation telemetry', async () => {
 		const dir = tempDir('search-telemetry');
 		try {

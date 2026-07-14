@@ -33,10 +33,11 @@ node scripts/check-v34-determinization.mjs --samples 100000 --seed0 956400000 \
   --out "$OUT_DIR/determinization-audit.json" \
   > "$OUT_DIR/determinization.log" 2>&1 || determinization_code=$?
 
+node scripts/verify-v34-source-lock.mjs "$EXPERIMENT/artifacts/source-lock.json" >/dev/null
 node scripts/record-v34-preflight.mjs "$OUT_DIR/result.json" \
+  "$EXPERIMENT/artifacts/source-lock.json" \
   "$OUT_DIR/vitest.log" "$OUT_DIR/python.log" "$OUT_DIR/typecheck.log" \
   "$OUT_DIR/protocol.log" "$OUT_DIR/shell.log" "$OUT_DIR/determinization.log" \
   "$vitest_code" "$python_code" "$check_code" "$protocol_code" "$shell_code" \
   "$determinization_code"
 chmod 0444 "$OUT_DIR/result.json" "$OUT_DIR/determinization-audit.json"
-

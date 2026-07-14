@@ -13,6 +13,7 @@ cd "$ROOT"
 case "$GPU" in 0|5|6|7) ;; *) echo "V34 systems GPU must be 0,5,6,7" >&2; exit 2 ;; esac
 node scripts/verify-v34-source-lock.mjs "$ARTIFACTS/source-lock.json" >/dev/null
 node scripts/validate-v34-protocol.mjs >/dev/null
+node scripts/verify-v34-authorization-chain.mjs systems >/dev/null
 test "$(node -e "const x=require('$ARTIFACTS/systems-authorization.json');process.stdout.write(String(x.authorization.systemsSeedsOpen))")" = true
 test ! -e "$ARTIFACTS/systems-eligibility.json"
 test ! -e "$ARTIFACTS/phase2-authorization.json"
@@ -55,12 +56,12 @@ test -S "$SOCKET"
 PROTOCOL_SHA="$(sha256sum "$EXPERIMENT/protocol.json" | awk '{print $1}')"
 mapfile -t ARMS < <(node -e "const x=require('$ARTIFACTS/systems-authorization.json');for(const arm of x.enabledCandidateArms)console.log(arm)")
 
-completed_stage_status() {
-  local arm="$1" stage="$2" base="$ARTIFACTS/systems/stages/$1/$2" report attempt
+completed_stage_result() {
+  local arm="$1" stage="$2" base="$ARTIFACTS/systems/stages/$1/$2" report attempt parsed
   for attempt in 1 2; do
     report="$base/attempt-$attempt/stage-report.json"
     [[ -f "$report" ]] || continue
-    node -e '
+    if ! parsed="$(node -e '
       const crypto = require("node:crypto");
       const fs = require("node:fs");
       const [reportPath, arm, stage, protocolSha] = process.argv.slice(1);
@@ -73,24 +74,30 @@ completed_stage_status() {
           sha(row.inputs.progress.path) !== row.inputs.progress.sha256) {
         throw new Error(`invalid completed V34 systems stage ${arm}/${stage}`);
       }
-      process.exit(row.eligible === true ? 0 : 10);
-    ' "$report" "$arm" "$stage" "$PROTOCOL_SHA"
-    return $?
+      process.stdout.write(row.eligible === true ? "eligible" : "rejected");
+    ' "$report" "$arm" "$stage" "$PROTOCOL_SHA")"; then
+      return 2
+    fi
+    printf '%s' "$parsed"
+    return 0
   done
-  return 3
+  printf 'missing'
 }
 
 run_stage() {
   local arm="$1" stage="$2" games="$3" workers="$4"
   local base="$ARTIFACTS/systems/stages/$arm/$stage" attempt=1 dir status
-  if completed_stage_status "$arm" "$stage"; then
-    return 0
-  else
-    status=$?
-    if [[ "$status" -eq 10 ]]; then return 1; fi
-    if [[ "$status" -ne 3 ]]; then return "$status"; fi
-  fi
+  if ! status="$(completed_stage_result "$arm" "$stage")"; then return 2; fi
+  case "$status" in
+    eligible|rejected) STAGE_RESULT="$status"; return 0 ;;
+    missing) ;;
+    *) echo "invalid V34 completed-stage result: $status" >&2; return 2 ;;
+  esac
   if [[ -d "$base/attempt-1" ]]; then attempt=2; fi
+  if [[ -d "$base/attempt-2" ]]; then
+    echo "V34 systems retry exhausted without an immutable report: $arm/$stage" >&2
+    return 2
+  fi
   dir="$base/attempt-$attempt"
   test ! -e "$dir"
   mkdir -p "$dir" "$SCRATCH/tmp/$arm-$stage-a$attempt"
@@ -110,6 +117,7 @@ run_stage() {
     --seats 1 --max-rounds 30 --max-status-level 2 --guardian-schedule absolute-balanced \
     --weights "$CHECKPOINT" --catalog "$CATALOG" --infer-socket "$SOCKET" \
     --selection hybrid --sample --temperature 0.55 --neural-seats Red --no-record \
+    --no-game-summaries \
     --obs-version 1 --policy-obs-version 2 "${arm_args[@]}" \
     --label "$arm/$stage" --config-hash "$PROTOCOL_SHA" \
     --progress "$dir/progress.jsonl" --report "$dir/benchmark.json" \
@@ -117,18 +125,24 @@ run_stage() {
   node scripts/record-v34-systems-stage.mjs --arm "$arm" --stage "$stage" \
     --benchmark "$dir/benchmark.json" --progress "$dir/progress.jsonl" \
     --out "$dir/stage-report.json" > "$dir/record.stdout"
-  test "$(node -e "const x=require('$dir/stage-report.json');process.stdout.write(String(x.eligible))")" = true
+  if ! STAGE_RESULT="$(completed_stage_result "$arm" "$stage")"; then return 2; fi
+  case "$STAGE_RESULT" in
+    eligible|rejected) ;;
+    *) echo "V34 stage recorder produced no valid immutable result: $arm/$stage" >&2; return 2 ;;
+  esac
 }
 
 for arm in "${ARMS[@]}"; do
-  run_stage "$arm" smoke 4 1 || continue
-  run_stage "$arm" binding-w1 64 1 || continue
-  run_stage "$arm" binding-w8 64 8 || continue
-  rejected=0
+  run_stage "$arm" smoke 4 1
+  if [[ "$STAGE_RESULT" = rejected ]]; then continue; fi
+  run_stage "$arm" binding-w1 64 1
+  if [[ "$STAGE_RESULT" = rejected ]]; then continue; fi
+  run_stage "$arm" binding-w8 64 8
+  if [[ "$STAGE_RESULT" = rejected ]]; then continue; fi
   for workers in 4 8 12 16 24; do
-    run_stage "$arm" "throughput-w$workers" 128 "$workers" || { rejected=1; break; }
+    run_stage "$arm" "throughput-w$workers" 128 "$workers"
+    if [[ "$STAGE_RESULT" = rejected ]]; then break; fi
   done
-  test "$rejected" -eq 0 || continue
 done
 
 cleanup

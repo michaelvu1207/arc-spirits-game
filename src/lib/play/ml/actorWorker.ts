@@ -557,7 +557,9 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				wallMs:
 					Math.round((continuationCurriculum ? performance.now() - t0 : sourceWallMs) * 10) / 10
 			};
-			appendFileSync(gamesFile, JSON.stringify(summary) + '\n');
+			if (config.writeGameSummaries !== false) {
+				appendFileSync(gamesFile, JSON.stringify(summary) + '\n');
+			}
 			return { summary, samples: appendedSamples, curriculum };
 		},
 		close() {
