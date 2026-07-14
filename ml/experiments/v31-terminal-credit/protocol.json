@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v31-conservative-offline-terminal-credit",
-  "status": "training-complete-development-frozen",
+  "status": "development-evaluation-running",
   "createdAt": "2026-07-14T03:50:00Z",
   "sourceCommit": "72e057f",
   "planReview": {
@@ -137,7 +137,7 @@
   "training": {
     "launchedAt": "2026-07-14T04:08:00Z",
     "completedAt": "2026-07-14T04:15:53Z",
-    "developmentEvaluationOpened": false,
+    "developmentEvaluationOpened": true,
     "allArmsValid": true,
     "launchPids": {
       "anchor-only": 3219611,
@@ -300,8 +300,23 @@
         "gamesStarted": 0,
         "seedBlockConsumed": false,
         "repair": "Bind each evaluator's TMPDIR and inference socket to experiment-owned /dev/shm/arc-v31-development scratch, require at least 8 GiB free, preserve this failed attempt, then resume the unchanged preregistered seed block."
+      },
+      {
+        "attempt": 2,
+        "launchedAt": "2026-07-14T04:22:38Z",
+        "outcome": "running",
+        "scratchRoot": "/dev/shm/arc-v31-development",
+        "launchPids": {
+          "v23": 3342448,
+          "v30": 3342450,
+          "anchor": 3342453,
+          "strategic-pg-0p1": 3342457,
+          "strategic-pg-0p3": 3342464,
+          "strategic-pg-0p6": 3342471
+        }
       }
     ],
+    "openedAt": "2026-07-14T04:22:38Z",
     "seed0": 944000000,
     "games": 4096,
     "workersPerPolicy": 4,
