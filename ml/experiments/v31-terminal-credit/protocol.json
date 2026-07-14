@@ -338,8 +338,34 @@
     "analysis": {
       "implementation": {
         "path": "ml/analyze_terminal_credit.py",
-        "sourceCommit": "bc0b1cd",
-        "tests": "ml/test_analyze_terminal_credit.py (3/3 local and remote)"
+        "sourceCommit": "5828bb8",
+        "sha256": "4a7ffc9be84445d87e458bcca17c53c487690a5350d2408040ac16e411b31e4e",
+        "tests": "ml/test_analyze_terminal_credit.py (4/4 local and remote)",
+        "expectedProvenance": {
+          "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+          "evaluatorSourceCommit": "bce8bf2",
+          "weights": {
+            "v23": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+            "v30": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06",
+            "anchor": "e281c1bccf3917212073874c4b6d5282aae25ce0b07bbe57406848b739997588",
+            "strategic-pg-0p1": "77dca3f0f06ad5690b12c5b938394d1468519123cf17df3a3c020cf4f81ce557",
+            "strategic-pg-0p3": "0db9b3353b8300bca33fe4d8482dbb938b7f8fe484914c42fe2ba928a10d5589",
+            "strategic-pg-0p6": "357fad2efb574bce13aaae4dd9b4b1e1e195b045fb5d9c4231f553123650056d"
+          },
+          "policyObsVersions": {
+            "v23": 1,
+            "v30": 2,
+            "anchor": 2,
+            "strategic-pg-0p1": 2,
+            "strategic-pg-0p3": 2,
+            "strategic-pg-0p6": 2
+          },
+          "decisionDecode": {
+            "learnMonsterRewardChoices": false,
+            "sample": true,
+            "temperature": 0.55
+          }
+        }
       },
       "launcher": {
         "path": "scripts/run-v31-development-eval.sh",
