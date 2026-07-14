@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v29-exact-distillation-fidelity-screen",
-  "status": "planned",
+  "status": "running",
   "createdAt": "2026-07-14T01:45:00Z",
   "sourceCommit": "a380638",
   "planReview": {
@@ -175,6 +175,11 @@
       "review": "Claude Fable high effort",
       "optimizerCreated": false,
       "reason": "Correct selection leakage before training: rank arms and select epochs only on the selection half, match the strategic arm's early-stop metric to its purpose, and open the gate half exactly once for the frozen winner with no runner-up fallback."
+    },
+    {
+      "at": "2026-07-14T02:08:00Z",
+      "runtimeSourceCommit": "93020b1",
+      "reason": "V29 d128 arms launched only after both Fable reviews, the zero-alias diagnostic, selection-only trainer tests, and resource guards passed."
     }
   ]
 }
