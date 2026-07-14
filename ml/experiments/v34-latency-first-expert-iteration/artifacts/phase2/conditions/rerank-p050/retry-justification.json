@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "arc-v34-phase2-retry-justification-v1",
+  "condition": "rerank-p050",
+  "attempt": 2,
+  "reason": "host signal interrupted the Phase 2 process before report creation",
+  "reasonCode": "process-interrupted",
+  "infrastructureAttributed": true,
+  "identicalSeedRetry": true,
+  "outcomesInspected": false,
+  "attempt1ReportExisted": false,
+  "sourceCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e",
+  "strengthLockSha256": "e04b20c3734ad3f920626057e106f6d761a2cdf055449740d8275e08cd12ad78",
+  "seed0": 957000000,
+  "games": 4096,
+  "seedMax": 957004095,
+  "failureEvidence": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/attempt-1/failure.json",
+    "bytes": 1952,
+    "sha256": "9c358c814b595da5f7092f0e560b6cb3c0ce9a0d7c68d79058220f75701adb7d"
+  }
+}

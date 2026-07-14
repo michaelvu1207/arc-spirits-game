@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "arc-v34-phase2-attempt-failure-v1",
+  "condition": "rerank-p050",
+  "attempt": 1,
+  "runtimeError": true,
+  "reasonCode": "process-interrupted",
+  "exitCode": 92,
+  "reportExists": false,
+  "outcomesInspected": false,
+  "sourceCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e",
+  "strengthLockSha256": "e04b20c3734ad3f920626057e106f6d761a2cdf055449740d8275e08cd12ad78",
+  "files": {
+    "launch": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/attempt-1/launch.json",
+      "bytes": 2959,
+      "sha256": "4e14d827bbf5c6b39e4c898e29452974ac4f8365fe678a13dcec587b4888b094"
+    },
+    "launchPid": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/attempt-1/launch.pid",
+      "bytes": 8,
+      "sha256": "bf02ac168649e8ca94f80acd0e4516753eda02af7a113797cdf4f211672b0e10"
+    },
+    "exitCode": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/attempt-1/exit-code.txt",
+      "bytes": 3,
+      "sha256": "13c1dc569ae4a0d7f90d8f83d22fc9c8fa526e133f8fea0f9526c8533c4d8da3"
+    },
+    "inferLog": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/attempt-1/infer.log",
+      "bytes": 5326,
+      "sha256": "fe73d1e6e46440267f5cd773d98561199935e423ed04109e01959668ddbbaab7"
+    },
+    "stdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/attempt-1/evaluator.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/attempt-1/evaluator.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
