@@ -81,8 +81,10 @@ protocol.implementationCommits = [
 	'd25dc2a',
 	'95fa971',
 	'0901766',
-	'135e961'
+	'135e961',
+	'3379609'
 ];
+protocol.screenFreezePreparationCommit = '3379609';
 protocol.status = 'screen-frozen';
 writeFileSync(protocolPath, JSON.stringify(protocol, null, 2) + '\n');
 console.log(JSON.stringify(protocol.sharedCritic, null, 2));
