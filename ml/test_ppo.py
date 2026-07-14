@@ -37,6 +37,7 @@ from ppo import (
     normalize_policy_advantages,
     parse_placement_rewards,
     reach30_minibatch_loss,
+    reach30_multihorizon_minibatch_loss,
     select_self_imitation_indices,
     select_ppo_epoch_indices,
     self_imitation_minibatch_loss,
@@ -970,6 +971,35 @@ def test_reach30_minibatch_objective_weights_episodes_equally():
             )
         )
     assert torch.allclose(torch.stack(singleton).mean(), full, atol=1e-7)
+
+
+def test_reach30_multihorizon_targets_use_exact_finish_round():
+    logits = torch.zeros((3, 3), dtype=torch.float32)
+    # Success at 22 -> [0,1,1], success at 29 -> [0,0,1], failure -> [0,0,0].
+    targets = torch.tensor([1.0, 1.0, 0.0])
+    mask = torch.ones(3, dtype=torch.bool)
+    weights = torch.ones(3)
+    finish = torch.tensor([22, 29, 0])
+    loss = reach30_multihorizon_minibatch_loss(
+        logits,
+        targets,
+        mask,
+        weights,
+        finish,
+        (20, 25, 30),
+        total_rows=3,
+        total_episode_weight=3.0,
+    )
+    assert torch.allclose(loss, torch.tensor(math.log(2.0)), atol=1e-7)
+
+    try:
+        reach30_multihorizon_minibatch_loss(
+            logits[:1], targets[:1], mask[:1], weights[:1], torch.tensor([0]),
+            (20, 25, 30), total_rows=1, total_episode_weight=1.0,
+        )
+        raise AssertionError("accepted a success without finishRound")
+    except ValueError:
+        pass
 
 
 def test_reach30_horizon_contract_rejects_mixing_and_nonterminal_labels():

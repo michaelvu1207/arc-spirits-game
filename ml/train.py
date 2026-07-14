@@ -654,6 +654,7 @@ def build_policy_model_v2(
     d_model: int,
     layers: int,
     heads: int,
+    reach30_horizons: tuple[int, ...] = (),
 ):
     """v2 counterpart of build_policy_model: EntityCandidateScorer with .pt warm start.
     On resume the architecture comes from the checkpoint config; the d_model/layers/
@@ -665,6 +666,8 @@ def build_policy_model_v2(
     if warm_start and init_path is not None and Path(init_path).exists():
         try:
             model = load_checkpoint(init_path, device, spec=spec)
+            if reach30_horizons:
+                model.enable_reach30_horizons(reach30_horizons)
             print(f"warm-start from {init_path}: OK (architecture from checkpoint)")
             return model, spec, act_dim
         except Exception as e:  # noqa: BLE001
@@ -674,9 +677,25 @@ def build_policy_model_v2(
     # seed=None: don't let build_model_v2's convenience seeding stomp the global
     # RNG mid-run (it would also freeze the DataLoader shuffle order).
     model = build_model_v2(
-        spec, act_dim, device, d_model=d_model, layers=layers, heads=heads, seed=None
+        spec,
+        act_dim,
+        device,
+        d_model=d_model,
+        layers=layers,
+        heads=heads,
+        reach30_horizons=reach30_horizons,
+        seed=None,
     )
     return model, spec, act_dim
+
+
+def v2_reach30_horizons(primary_horizon: int | None) -> tuple[int, ...]:
+    """Fixed diagnostic horizons plus the actor's exact objective cap."""
+    if primary_horizon is None:
+        return ()
+    if primary_horizon <= 0:
+        raise ValueError(f"reach30 horizon must be positive, got {primary_horizon}")
+    return tuple(sorted({h for h in (20, 25, 30, primary_horizon) if h <= primary_horizon}))
 
 
 # ---------------------------------------------------------------------------
@@ -777,8 +796,6 @@ def train(
     check_out_format(model_version, out_path, init_from)
     if model_version != "v1" and (hidden is not None or value_hidden is not None):
         raise ValueError("--hidden/--value-hidden configure only --model v1; use --v2-* for v2")
-    if model_version != "v1" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
-        raise ValueError("reach-30 critic training currently requires --model v1")
     if model_version != "v1" and self_imitation_replay_fraction > 0:
         raise ValueError("self-imitation currently requires --model v1 reach30Pred behavior rows")
     if mode != "ppo" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
@@ -937,8 +954,21 @@ def train(
                 f"kept={kept}/{loaded_option_dim} | masked={loaded_option_dim - kept}"
             )
         if model_version == "v2":
+            requested_horizons = (
+                v2_reach30_horizons(buffer.reach30_horizon)
+                if reach30_value_coef > 0 or solo_reach30_coef > 0
+                else ()
+            )
             model, spec, act_dim = build_policy_model_v2(
-                data_dir, device, out_path, init_from, warm_start, v2_d_model, v2_layers, v2_heads
+                data_dir,
+                device,
+                out_path,
+                init_from,
+                warm_start,
+                v2_d_model,
+                v2_layers,
+                v2_heads,
+                requested_horizons,
             )
             obs_dim = spec.flat_length
         else:

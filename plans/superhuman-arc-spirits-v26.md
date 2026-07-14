@@ -327,3 +327,11 @@ result that reaches the token/compute/time limit is incomplete, not successful.
   blocks and 30 evaluation blocks had zero stalls, malformed rows, or truncated episodes. Do not
   promote or spend more scaling compute on this objective; proceed to representation and
   multi-horizon value work as specified by the below-70% branch.
+- The representation branch found that entity-v2 PPO had become non-runnable after the option-policy
+  integration: PPO requires every low-level model to advertise `option_dim` and passes an empty
+  option tensor, but `EntityCandidateScorer` did neither. This is now repaired and covered by direct
+  PPO, checkpoint, inference-socket, and zero-width option tests. Entity-v2 also supports a
+  backward-compatible equal-episode 20/25/30-round reach-30 critic; legacy v2 checkpoints remain
+  loadable and fail closed until the new head receives real labels. This is an implementation gate,
+  not evidence of strength; live-catalog BC/representation and matched size screens still decide
+  whether the architecture advances.

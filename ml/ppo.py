@@ -299,6 +299,7 @@ class TrajectoryBuffer:
     reach30_target: np.ndarray      # (N,) final solo true-win label broadcast over the episode
     reach30_target_mask: np.ndarray # (N,) completed solo episode rows only
     reach30_weight: np.ndarray      # (N,) inverse episode length; each solo game has equal weight
+    reach30_finish_round: np.ndarray # (N,) positive objective finish round; 0 when unavailable
     reach30_horizon: int | None     # one explicit round cap for all labeled episodes
     farm_value: np.ndarray          # (N,) float32
     farm_mask: np.ndarray           # (N,) bool
@@ -1454,6 +1455,7 @@ def load_trajectory_buffer(
     reach30_target_list: list[float] = []
     reach30_target_mask_list: list[bool] = []
     reach30_weight_list: list[float] = []
+    reach30_finish_round_list: list[int] = []
     strategic_mask_list: list[bool] = []
     continuation_mask_list: list[bool] = []
     option_id_list: list[int] = []
@@ -1835,6 +1837,9 @@ def load_trajectory_buffer(
             reach30_target_list.append(resolved_reach30_target if resolved_solo else 0.0)
             reach30_target_mask_list.append(resolved_solo)
             reach30_weight_list.append(1.0 / len(steps) if resolved_solo else 0.0)
+            reach30_finish_round_list.append(
+                int(end_round) if resolved_solo and resolved_reach30_target and end_round else 0
+            )
             strategic_mask_list.append(s["strategic"])
             continuation_mask_list.append(s["continuation_curriculum"])
             option_id_list.append(int(s["option_id"]) if option_mode else 0)
@@ -2009,6 +2014,7 @@ def load_trajectory_buffer(
         reach30_target=np.array(reach30_target_list, dtype=np.float32),
         reach30_target_mask=np.array(reach30_target_mask_list, dtype=bool),
         reach30_weight=np.array(reach30_weight_list, dtype=np.float32),
+        reach30_finish_round=np.array(reach30_finish_round_list, dtype=np.int64),
         reach30_horizon=reach30_horizon,
         farm_value=np.array(farm_value_list, dtype=np.float32),
         farm_mask=np.array(farm_mask_list, dtype=bool),
@@ -2235,6 +2241,7 @@ def _minibatch_tensors(
         torch.from_numpy(buffer.reach30_target[idx]).to(device),
         torch.from_numpy(buffer.reach30_target_mask[idx]).to(device),
         torch.from_numpy(buffer.reach30_weight[idx]).to(device),
+        torch.from_numpy(buffer.reach30_finish_round[idx]).to(device),
         torch.from_numpy(buffer.placement[idx]).to(device),
         torch.from_numpy(buffer.options[idx]).to(device),
     )
@@ -2572,7 +2579,9 @@ def reach30_training_metrics(
     """
     labelled = np.flatnonzero(buffer.reach30_target_mask)
     if labelled.size == 0:
-        return {key: float("nan") for key in ("nll", "brier", "auc", "auprc", "ece")}
+        # Keep history JSON standards-compliant and generic trainer smoke tests
+        # finite when the optional critic has no labels.
+        return {key: 0.0 for key in ("nll", "brier", "auc", "auprc", "ece")}
     was_training = model.training
     model.eval()
     score_chunks: list[np.ndarray] = []
@@ -2619,6 +2628,45 @@ def reach30_minibatch_loss(
     return (
         per_row.mul(weights[mask]).sum()
         * (total_rows / (logits.shape[0] * total_episode_weight))
+    )
+
+
+def reach30_multihorizon_minibatch_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    mask: torch.Tensor,
+    weights: torch.Tensor,
+    finish_round: torch.Tensor,
+    horizons: tuple[int, ...],
+    *,
+    total_rows: int,
+    total_episode_weight: float,
+) -> torch.Tensor:
+    """Equal-episode BCE averaged over several nested reach-30 horizons.
+
+    A successful episode's exact finish round labels every earlier horizon;
+    failed episodes label every horizon false. This provides the shared entity
+    trunk with denser pace supervision while retaining the latest horizon as
+    the actor-facing P30 control variate.
+    """
+    if logits.ndim != 2 or logits.shape[1] != len(horizons):
+        raise ValueError(
+            f"reach30 logits shape {tuple(logits.shape)} does not match horizons {horizons}"
+        )
+    if not bool(mask.any()) or total_episode_weight <= 0:
+        return torch.zeros((), dtype=logits.dtype, device=logits.device)
+    if bool(((targets > 0.5) & mask & (finish_round <= 0)).any()):
+        raise ValueError("multi-horizon reach30 labels require finishRound on every success")
+    horizon_tensor = torch.tensor(horizons, dtype=finish_round.dtype, device=logits.device)
+    nested_targets = (
+        (targets > 0.5).unsqueeze(1)
+        & (finish_round.unsqueeze(1) <= horizon_tensor.unsqueeze(0))
+    ).to(logits.dtype)
+    per = F.binary_cross_entropy_with_logits(logits, nested_targets, reduction="none")
+    labelled = mask.unsqueeze(1).to(logits.dtype)
+    weighted_sum = (per * labelled * weights.unsqueeze(1)).sum()
+    return weighted_sum * (
+        total_rows / (logits.shape[0] * total_episode_weight * len(horizons))
     )
 
 
@@ -2811,6 +2859,22 @@ def train_ppo(
                 f"reach30 checkpoint horizon {existing_horizon} does not match "
                 f"training data horizon {buffer.reach30_horizon}"
             )
+        model_horizons = tuple(getattr(model, "reach30_horizons", ()))
+        if model_horizons:
+            if model_horizons[-1] != buffer.reach30_horizon:
+                raise ValueError(
+                    f"reach30 model horizons {model_horizons} do not end at rollout "
+                    f"horizon {buffer.reach30_horizon}"
+                )
+            missing_finish = (
+                buffer.reach30_target_mask
+                & (buffer.reach30_target > 0.5)
+                & (buffer.reach30_finish_round <= 0)
+            )
+            if len(model_horizons) > 1 and bool(missing_finish.any()):
+                raise ValueError(
+                    "multi-horizon reach30 training requires endRound on every successful episode"
+                )
     if buffer.solo_reach30_coef > 0:
         if not getattr(model, "reach30_trained", False):
             raise ValueError("solo_reach30_coef requires a trained behavior reach30 head")
@@ -2915,6 +2979,7 @@ def train_ppo(
                 reach30_target,
                 reach30_target_mask,
                 reach30_weight,
+                reach30_finish_round,
                 placement,
                 option,
             ) = _minibatch_tensors(buffer, mb, device, normalized_advantages)
@@ -3028,19 +3093,33 @@ def train_ppo(
             reach30_loss = torch.zeros((), dtype=torch.float32, device=device)
             reach30_active = bool(reach30_value_coef > 0 and reach30_target_mask.any())
             if reach30_active:
-                reach30_logits = model.reach30_logits(obs, option)
-                # Unbiased minibatch estimator of the fixed full-buffer objective:
-                #   sum_i (BCE_i / episode_length_i) / labelled_episodes.
-                # A per-minibatch weight normalization would cancel 1/L in small
-                # batches and overtrain long episodes.
-                reach30_loss = reach30_minibatch_loss(
-                    reach30_logits,
-                    reach30_target,
-                    reach30_target_mask,
-                    reach30_weight,
-                    total_rows=len(epoch_indices),
-                    total_episode_weight=epoch_reach30_total_weight,
-                )
+                model_horizons = tuple(getattr(model, "reach30_horizons", ()))
+                if len(model_horizons) > 1:
+                    reach30_logits = model.reach30_all_logits(obs, option)
+                    reach30_loss = reach30_multihorizon_minibatch_loss(
+                        reach30_logits,
+                        reach30_target,
+                        reach30_target_mask,
+                        reach30_weight,
+                        reach30_finish_round,
+                        model_horizons,
+                        total_rows=len(epoch_indices),
+                        total_episode_weight=epoch_reach30_total_weight,
+                    )
+                else:
+                    reach30_logits = model.reach30_logits(obs, option)
+                    # Unbiased minibatch estimator of the fixed full-buffer objective:
+                    #   sum_i (BCE_i / episode_length_i) / labelled_episodes.
+                    # A per-minibatch weight normalization would cancel 1/L in small
+                    # batches and overtrain long episodes.
+                    reach30_loss = reach30_minibatch_loss(
+                        reach30_logits,
+                        reach30_target,
+                        reach30_target_mask,
+                        reach30_weight,
+                        total_rows=len(epoch_indices),
+                        total_episode_weight=epoch_reach30_total_weight,
+                    )
 
             placement_loss = torch.zeros((), dtype=torch.float32, device=device)
             if use_placement:

@@ -56,13 +56,22 @@ def v2_fixture() -> dict:
     return _v2_fixture_cache
 
 
-def make_v2_checkpoint(out_dir: Path, name: str = "v2.pt") -> Path:
+def make_v2_checkpoint(
+    out_dir: Path, name: str = "v2.pt", *, reach30: bool = False
+) -> Path:
     """Fresh-init default-size v2 checkpoint saved via the official convention."""
     from model_v2 import build_model_v2, save_checkpoint
     from obs_v2 import ObsV2Spec
 
     spec = ObsV2Spec.from_meta(v2_fixture()["meta"])
-    model = build_model_v2(spec, 52, torch.device("cpu"), seed=0)
+    model = build_model_v2(
+        spec,
+        52,
+        torch.device("cpu"),
+        reach30_horizons=(20, 25, 30) if reach30 else (),
+        seed=0,
+    )
+    model.reach30_trained = reach30
     path = Path(out_dir) / name
     save_checkpoint(model, path)
     return path
@@ -581,6 +590,39 @@ def test_v2_correctness_handshake_and_aux():
     assert max_vd < 1e-5, max_vd
 
 
+def test_v2_reach30_json_binary_and_capability():
+    with tempfile.TemporaryDirectory() as td:
+        ckpt = make_v2_checkpoint(Path(td), name="v2-p30.pt", reach30=True)
+        model, obs_dim, act_dim, aux, fmt = load_scorer(ckpt, torch.device("cpu"))
+        assert fmt == "arc-entity-scorer-v2"
+        assert aux["reach30"] is True and model.reach30_horizon == 30
+        pool = v2_obs_pool()
+        cands = [np.zeros((2, act_dim), dtype=np.float32) for _ in range(3)]
+        obs = pool[:3]
+        server = ServerProc(device="cpu", weights=ckpt)
+
+        async def run():
+            await server.wait_ready()
+            client = await InferClient.connect(server.socket_path)
+            info = (await client.info())["info"]
+            assert info["aux"]["reach30"] is True, info
+            assert info["reach30_horizon"] == 30, info
+            json_resp = await client.request(
+                obs.tolist(), [c.tolist() for c in cands], want=["reach30"]
+            )
+            binary_resp = await client.request_binary(obs, cands, want=["reach30"])
+            _assert_same_response(json_resp, binary_resp, ["reach30"])
+            with torch.no_grad():
+                expected = model.reach30_logits(torch.from_numpy(obs)).numpy()
+            assert np.allclose(json_resp["reach30"], expected, atol=1e-6)
+            await client.close()
+
+        try:
+            asyncio.run(run())
+        finally:
+            server.stop()
+
+
 def test_sighup_swaps_v1_to_v2():
     """A fixed --weights path swaps formats across SIGHUP (manifest is the probe)."""
     with tempfile.TemporaryDirectory() as td:
@@ -781,6 +823,7 @@ def main() -> int:
         test_reach30_head_json_binary_and_capability,
         test_binary_and_json_clients_mixed,
         test_v2_correctness_handshake_and_aux,
+        test_v2_reach30_json_binary_and_capability,
         test_sighup_swaps_v1_to_v2,
         test_throughput_report,
         test_v2_throughput_report,

@@ -259,6 +259,11 @@ spirit:58, market:49, rune:18, monster:10}`; flat length 3419; field-name lists
   run set attention with the masks; the acting seat is `seats[0]` by contract.
 - Candidate actions stay on v1 `encodeAction` (52 floats) — score
   `f(obs_tokens, action_feat)` per legal candidate as today.
+- PPO may attach an equal-episode multi-horizon reach-30 head. Successful solo
+  episodes use their public terminal `endRound` to label the nested 20/25/30
+  objectives; failures label all horizons false. The latest horizon remains the
+  only actor-facing control variate, and old v2 checkpoints without this head
+  remain loadable but do not advertise the capability.
 - Write `obsV2Meta(catalog)` to `meta.json` for every v2 dataset; the trainer
   must refuse data whose `flatHeader` mismatches its parser.
 

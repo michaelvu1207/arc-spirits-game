@@ -60,6 +60,7 @@ def make_v2_dataset(
     seed: int = 0,
     full_meta: bool = True,
     n_legacy: int = 0,
+    solo_objective: bool = False,
 ) -> None:
     """
     PAIRED trajectory rows (authoritative contract, commit 2b4ef69): `obs` = a
@@ -98,8 +99,22 @@ def make_v2_dataset(
                 "logpOld": math.log(1.0 / N_CANDS),
                 "vPred": 0.5,
             }
+            if solo_objective:
+                row["playerCount"] = 1
+                row["strategic"] = 1
             if done:
                 row["placement"] = placement
+                if solo_objective:
+                    won = (pool_idx % 2) == 0
+                    finish_round = 18 + (pool_idx % 12) if won else 30
+                    row.update({
+                        "won": won,
+                        "endRound": finish_round,
+                        "reach30Target": int(won),
+                        "reach30Horizon": 30,
+                        "objectiveDone": 1,
+                        "finalVP": 30 if won else 20 + (pool_idx % 10),
+                    })
             rows.append(row)
     for _ in range(n_legacy):
         rows.append({
@@ -124,7 +139,9 @@ def make_v2_dataset(
 def _assert_finite(history: list[dict]) -> None:
     for i, h in enumerate(history):
         for k, v in h.items():
-            assert math.isfinite(v), (i, k, v)
+            values = v.values() if isinstance(v, dict) else (v,)
+            for item in values:
+                assert isinstance(item, (int, float)) and math.isfinite(item), (i, k, item)
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +211,36 @@ def test_ppo_v2_end_to_end():
         f"ppo v2: value_loss {history[0]['value_loss']:.4f} -> {history[-1]['value_loss']:.4f}, "
         f"mean_p_chosen {history[0]['mean_p_chosen']:.3f} -> {history[-1]['mean_p_chosen']:.3f}"
     )
+
+
+def test_ppo_v2_multihorizon_reach30_end_to_end():
+    torch.manual_seed(0)
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td) / "data"
+        out = Path(td) / "weights" / "v2_reach30.pt"
+        make_v2_dataset(d, n_games=32, steps=3, seed=12, solo_objective=True)
+        history = train_mod.train(
+            data_dir=d,
+            out_path=out,
+            epochs=2,
+            batch_size=48,
+            mode="ppo",
+            warm_start=False,
+            placement_coef=0,
+            policy_coef=0,
+            value_coef=0,
+            entropy_coef=0,
+            reach30_value_coef=1,
+            **V2_KW,
+        )
+        _assert_finite(history)
+        loaded = load_checkpoint(out, torch.device("cpu"))
+        assert loaded.reach30_trained
+        assert loaded.reach30_horizons == (20, 25, 30)
+        assert loaded.reach30_horizon == 30
+        manifest = json.loads(out.with_suffix(".manifest.json").read_text())
+        assert manifest["reach30_trained"] is True
+        assert manifest["reach30_horizons"] == [20, 25, 30]
 
 
 def test_checkpoint_save_and_init_from_resume():
@@ -307,6 +354,7 @@ def main() -> int:
         test_resolve_spec_meta_and_header_paths,
         test_awr_v2_end_to_end_loss_decreases,
         test_ppo_v2_end_to_end,
+        test_ppo_v2_multihorizon_reach30_end_to_end,
         test_checkpoint_save_and_init_from_resume,
         test_paired_rows_games_files_and_legacy_skips,
         test_v1_regression_and_format_guards,

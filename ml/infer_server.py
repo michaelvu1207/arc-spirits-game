@@ -293,12 +293,14 @@ def load_scorer(
                 f"{manifest_path.name}: obs_flat_len {manifest.get('obs_flat_len')} "
                 f"!= checkpoint flat length {obs_dim}"
             )
-        # v2 checkpoints carry every aux head in the state_dict (trained together).
-        # v2 has the legacy auxiliary heads but no dedicated solo reach-30 critic.
+        # v2 checkpoints carry the legacy auxiliary heads. New checkpoints may
+        # additionally expose a trained multi-horizon solo critic; old v2 files
+        # remain valid and fail closed for that request.
         # v2's placement head predicts one ordinal score per seat token. It is not
         # the v1 head's four-class ego-placement distribution, so fail closed for
         # the wire-level `placement` request rather than silently changing meaning.
-        aux = {k: k not in ("placement", "reach30") for k in AUX_HEADS}
+        aux = {k: k != "placement" for k in AUX_HEADS}
+        aux["reach30"] = bool(getattr(model, "reach30_trained", False))
         return model, obs_dim, model.act_dim, aux, FORMAT_V2
     if weights_path.suffix == ".pt":
         raise ValueError(
