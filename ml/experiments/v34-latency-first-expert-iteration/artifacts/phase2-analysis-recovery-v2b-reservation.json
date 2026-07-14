@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-reservation-v2",
+  "reserved": true,
+  "reservedAt": "2026-07-14T21:49:52Z",
+  "authorization": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-v2b-authorization.json",
+    "bytes": 18680,
+    "sha256": "b5b22d654fe3097d3648596540c6ecbff845a36008a30da66fbcda167def8504"
+  },
+  "prelaunch": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-v2b-prelaunch.json",
+    "bytes": 4029,
+    "sha256": "512e1c7ef59729aac867600c5cebc841baa20cd8b0f271ac4223f6e485546008"
+  },
+  "commandSha256": "a94ed033e5788a16100ccd990d00e84bfaa28c8f7d742122e874188a69e301be",
+  "maximumCorrectedAnalyzerProcesses": 1,
+  "reservationAloneConsumesAnalyzerProcess": false,
+  "attemptStartedOrStdoutConsumesSlot": true,
+  "noFurtherRetryAfterAttemptStarted": true,
+  "outcomesInspected": false,
+  "authorizationDecisionOutcomeConditioned": false
+}
