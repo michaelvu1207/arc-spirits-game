@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "arc-v32-critic-audit-v1",
+  "valid": true,
+  "base": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt",
+    "sha256": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06"
+  },
+  "critic": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+  },
+  "validation": {
+    "count": 1024,
+    "min": 946004096,
+    "max": 946005119,
+    "stalls": 0
+  },
+  "policyParametersComparedExact": 78,
+  "policyLogits": {
+    "rows": 8192,
+    "maxAbsDiff": 0.0
+  },
+  "behaviorReach30Calibration": {
+    "nll": 0.3917998036557234,
+    "brier": 0.13092290570492576,
+    "constant_brier": 0.24998474121107966,
+    "auc": 0.8970832092116195,
+    "auprc": 0.902793709752947,
+    "ece": 0.02532575293318204,
+    "rows": 119279.0
+  },
+  "reach30Horizons": [
+    20,
+    25,
+    30
+  ]
+}

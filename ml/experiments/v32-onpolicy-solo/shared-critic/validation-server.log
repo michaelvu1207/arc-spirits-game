@@ -1,0 +1,17 @@
+[infer] serving /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt (arc-entity-scorer-v2, obs_dim=3419, act_dim=104) on /dev/shm/arc-v32-critic/validation.sock device=cuda window=2.0ms max_batch=512
+[infer] reqs=4276 rows=4276 batches=370 avg_batch=11.6 batch_p50=12 batch_p95=17 batch_min=1 batch_max=23 forwards/s=74.0
+[infer] reqs=6796 rows=6796 batches=576 avg_batch=11.8 batch_p50=12 batch_p95=19 batch_min=3 batch_max=21 forwards/s=115.2
+[infer] reqs=6928 rows=6928 batches=575 avg_batch=12.0 batch_p50=12 batch_p95=16 batch_min=6 batch_max=18 forwards/s=115.0
+[infer] reqs=7238 rows=7238 batches=591 avg_batch=12.2 batch_p50=12 batch_p95=17 batch_min=2 batch_max=22 forwards/s=118.2
+[infer] reqs=6862 rows=6862 batches=568 avg_batch=12.1 batch_p50=12 batch_p95=16 batch_min=6 batch_max=19 forwards/s=113.6
+[infer] reqs=7979 rows=7979 batches=652 avg_batch=12.2 batch_p50=12 batch_p95=17 batch_min=3 batch_max=19 forwards/s=130.4
+[infer] reqs=8246 rows=8246 batches=654 avg_batch=12.6 batch_p50=13 batch_p95=17 batch_min=5 batch_max=21 forwards/s=130.8
+[infer] reqs=8010 rows=8010 batches=647 avg_batch=12.4 batch_p50=12 batch_p95=18 batch_min=4 batch_max=21 forwards/s=129.4
+[infer] reqs=8094 rows=8094 batches=649 avg_batch=12.5 batch_p50=12 batch_p95=17 batch_min=6 batch_max=19 forwards/s=129.8
+[infer] reqs=7939 rows=7939 batches=642 avg_batch=12.4 batch_p50=12 batch_p95=18 batch_min=3 batch_max=21 forwards/s=128.4
+[infer] reqs=7894 rows=7894 batches=646 avg_batch=12.2 batch_p50=12 batch_p95=16 batch_min=5 batch_max=19 forwards/s=129.2
+[infer] reqs=8028 rows=8028 batches=649 avg_batch=12.4 batch_p50=12 batch_p95=16 batch_min=5 batch_max=19 forwards/s=129.8
+[infer] reqs=8107 rows=8107 batches=653 avg_batch=12.4 batch_p50=12 batch_p95=17 batch_min=3 batch_max=22 forwards/s=130.6
+[infer] reqs=8078 rows=8078 batches=649 avg_batch=12.4 batch_p50=13 batch_p95=16 batch_min=5 batch_max=18 forwards/s=129.8
+[infer] reqs=7879 rows=7879 batches=640 avg_batch=12.3 batch_p50=12 batch_p95=16 batch_min=5 batch_max=19 forwards/s=128.0
+[infer] shut down

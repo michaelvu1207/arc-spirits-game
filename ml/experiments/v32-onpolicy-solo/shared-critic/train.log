@@ -1,0 +1,34 @@
+Device: cuda  mode=ppo  model=v2  seed=946005120
+Loaded 478462 PPO steps from 4096 game(s) (454362 exact policy step(s), 0 continuation step(s), 0 with terminal placement reward, 0 truncated, 478462 with farmValue, 18547 with rewardPi, 0 with routeMode, 115443 strategic (MC coef=0, solo MC coef=0, gamma=1; solo outcome coef=0, reach30 coef=0, reach30 horizon=30, terminal objective=resolved, baseline=0.517, component stds=0.000/0.000, applied=0/0; outcome coef=0, applied=0), 0 malformed episode(s) rejected, 0 malformed option episode(s), 0 malformed row(s), 0 non-trajectory row(s), 0 missing 'obsV2')
+warm-start from /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt: OK (architecture from checkpoint)
+obs_dim=3419, act_dim=104
+V2 critic-only freeze | trainable=value_head.0.weight,value_head.0.bias,value_head.2.weight,value_head.2.bias,reach30_head.0.weight,reach30_head.0.bias,reach30_head.2.weight,reach30_head.2.bias
+PPO epoch 1/4 | policy_loss=0.0000 | value_loss=0.0026 | strategic_value_loss=0.0023 (n=115443) | tactical_value_loss=0.0028 (n=363019) | farm_value_loss=0.0000 | reward_pick_loss=0.0000 | route_mode_loss=0.0000 | reach30_train_nll=0.4076 (brier=0.1352, auc=0.8894, auprc=0.8979, ece=0.0169) | entropy=0.8195 (coef=0.0000) | approx_kl=0.0000 | clip_frac=0.000 | round_weighted_kl=0.0000 | round_weighted_clip_frac=0.000 | placement_loss=0.0000 | kl_ref=0.0000 | mean_p_chosen=0.560 | policy_steps=454362/478462 | optimizer_steps=935
+PPO epoch 2/4 | policy_loss=0.0000 | value_loss=0.0021 | strategic_value_loss=0.0017 (n=115443) | tactical_value_loss=0.0022 (n=363019) | farm_value_loss=0.0000 | reward_pick_loss=0.0000 | route_mode_loss=0.0000 | reach30_train_nll=0.3924 (brier=0.1299, auc=0.8977, auprc=0.9066, ece=0.0108) | entropy=0.8195 (coef=0.0000) | approx_kl=0.0000 | clip_frac=0.000 | round_weighted_kl=0.0000 | round_weighted_clip_frac=0.000 | placement_loss=0.0000 | kl_ref=0.0000 | mean_p_chosen=0.560 | policy_steps=454362/478462 | optimizer_steps=935
+PPO epoch 3/4 | policy_loss=0.0000 | value_loss=0.0020 | strategic_value_loss=0.0017 (n=115443) | tactical_value_loss=0.0021 (n=363019) | farm_value_loss=0.0000 | reward_pick_loss=0.0000 | route_mode_loss=0.0000 | reach30_train_nll=0.3847 (brier=0.1273, auc=0.9013, auprc=0.9104, ece=0.0114) | entropy=0.8195 (coef=0.0000) | approx_kl=0.0000 | clip_frac=0.000 | round_weighted_kl=0.0000 | round_weighted_clip_frac=0.000 | placement_loss=0.0000 | kl_ref=0.0000 | mean_p_chosen=0.560 | policy_steps=454362/478462 | optimizer_steps=935
+PPO epoch 4/4 | policy_loss=0.0000 | value_loss=0.0019 | strategic_value_loss=0.0016 (n=115443) | tactical_value_loss=0.0020 (n=363019) | farm_value_loss=0.0000 | reward_pick_loss=0.0000 | route_mode_loss=0.0000 | reach30_train_nll=0.3831 (brier=0.1273, auc=0.9015, auprc=0.9111, ece=0.0186) | entropy=0.8195 (coef=0.0000) | approx_kl=0.0000 | clip_frac=0.000 | round_weighted_kl=0.0000 | round_weighted_clip_frac=0.000 | placement_loss=0.0000 | kl_ref=0.0000 | mean_p_chosen=0.560 | policy_steps=454362/478462 | optimizer_steps=935
+
+Checkpoint written: /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt (+ checkpoint.manifest.json)
+	Command being timed: "ml/.venv/bin/python ml/train.py --data /dev/shm/arc-v32-critic/train --out /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt --mode ppo --model v2 --init-from /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt --epochs 4 --batch-size 512 --lr 0.0003 --policy-coef 0 --value-coef 0.5 --entropy-coef 0 --kl-ref-coef 0 --placement-coef 0 --farm-value-coef 0 --reward-pick-coef 0 --route-mode-coef 0 --reach30-value-coef 1 --gamma 0.999 --gae-lambda 0.95 --strategic-mc-coef 0 --solo-strategic-mc-coef 0 --solo-outcome-coef 0 --solo-reach30-coef 0 --strategic-outcome-coef 0 --solo-terminal-objective resolved --win-bonus 0 --all-fallen-loss 0 --max-grad-norm 1 --seed 946005120 --v2-critic-only"
+	User time (seconds): 450.17
+	System time (seconds): 22.43
+	Percent of CPU this job got: 125%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 6:17.46
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 16284420
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 6312948
+	Voluntary context switches: 10773
+	Involuntary context switches: 7136
+	Swaps: 0
+	File system inputs: 1952
+	File system outputs: 6592
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

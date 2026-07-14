@@ -1,0 +1,59 @@
+{
+  "protocol": "ml/experiments/v32-onpolicy-solo/protocol.json",
+  "configs": [
+    {
+      "replicate": "a",
+      "arm": "control-uniform",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-a/control-uniform",
+      "configSha256": "016d597e5d463f48a0348ce48220594b65d6cfc308d4d97985482763b107c4b0"
+    },
+    {
+      "replicate": "a",
+      "arm": "round-reweighted",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-a/round-reweighted",
+      "configSha256": "32c110054368f9234d44e8e46fa3e672ea707554a60cf28e31019cc3bec99c0b"
+    },
+    {
+      "replicate": "a",
+      "arm": "p30-credit025",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-a/p30-credit025",
+      "configSha256": "c727e7db9cf8e27304b8a0e44d1be9fded1be395fbedfb7388f8052433406457"
+    },
+    {
+      "replicate": "b",
+      "arm": "control-uniform",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-b/control-uniform",
+      "configSha256": "762f8051367e2eed8c885c659be076e6230905a3a608974ca48dbceb1f5c8969"
+    },
+    {
+      "replicate": "b",
+      "arm": "round-reweighted",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-b/round-reweighted",
+      "configSha256": "e8a7da2b40818be5625635c731ea865f3ed09a074a2e92e80d62ea6554fa3690"
+    },
+    {
+      "replicate": "b",
+      "arm": "p30-credit025",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-b/p30-credit025",
+      "configSha256": "d106659d5316e3999f68bfe7d10f1d7dcd4523f4eea50e5df170df868c32c6c9"
+    },
+    {
+      "replicate": "c",
+      "arm": "control-uniform",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-c/control-uniform",
+      "configSha256": "d7da505cb1b1e79be17862f8cdbbea525809aac42669b3c8bace66e635381b76"
+    },
+    {
+      "replicate": "c",
+      "arm": "round-reweighted",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-c/round-reweighted",
+      "configSha256": "45490f4ba354743412cfc2eb3096e8833281021d7e54b4fa895dcba8a66e480b"
+    },
+    {
+      "replicate": "c",
+      "arm": "p30-credit025",
+      "root": "ml/experiments/v32-onpolicy-solo/league/rep-c/p30-credit025",
+      "configSha256": "7b346143babc513dccad25537d541f2be7e3701221536dbac1d7468ac222079b"
+    }
+  ]
+}

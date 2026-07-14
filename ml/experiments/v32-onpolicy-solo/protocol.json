@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v32-v30-onpolicy-solo-mechanism-screen",
-  "status": "critic-frozen",
+  "status": "screen-frozen",
   "planCommit": "98f34b6",
   "promotionEligible": false,
   "catalog": {
@@ -189,7 +189,8 @@
       "reach30ValueCoef": 1,
       "winBonus": 4,
       "sample": true,
-      "temperature": 0.55
+      "temperature": 0.55,
+      "matchupGames": 1024
     },
     "perGenerationTrustGates": {
       "maxApproxKl": 0.02,
@@ -200,6 +201,32 @@
       "stalls": 0,
       "malformedEpisodes": 0,
       "malformedRows": 0
+    },
+    "runtime": {
+      "workersPerRoot": 24,
+      "matchupConcurrencyPerRoot": 1,
+      "maxConcurrentRoots": 4,
+      "maxActorThreads": 96,
+      "gpuWaveOrder": [
+        5,
+        6,
+        7,
+        0
+      ],
+      "excludedGpu": 4,
+      "scratch": "/dev/shm/arc-v32-screen"
+    },
+    "manipulationAudit": {
+      "states": "frozen shared-critic validation seeds 946004096..946005119",
+      "rowsPerGameBandPerStratum": 2,
+      "temperature": 0.55,
+      "treatmentMeanKlMin": 0.005,
+      "replicatesRequired": 2,
+      "roundLateEarlyRatioVsControlMin": 1.25,
+      "p30ResidualChosenLogpCovariance": "strictly positive",
+      "firstEndpointGeneration": 8,
+      "outcomeBlindExtensionGeneration": 12,
+      "performanceOutcomesMayTriggerExtension": false
     }
   },
   "development": {
@@ -226,5 +253,31 @@
     "Only generation 8, or generation 12 after the outcome-blind manipulation extension, is eligible.",
     "No V32 checkpoint can promote from solo evidence alone."
   ],
-  "implementationCommit": "2473837"
+  "implementationCommit": "2473837",
+  "sharedCritic": {
+    "path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+    "manifestPath": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.manifest.json",
+    "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+    "auditPath": "ml/experiments/v32-onpolicy-solo/shared-critic/audit.json",
+    "auditSha256": "fff2c5f5a6175d122e440f3ef4adba2569a48ce02d53ee1a6c0f43620cfa90fb",
+    "replayAuditPath": "ml/experiments/v32-onpolicy-solo/shared-critic/validation-replay-audit.json",
+    "replayAuditSha256": "8cfd7a79c8ff0dfa1ce43877da7078689f777ed226d305246be32540f357adf3",
+    "repairLockPath": "ml/experiments/v32-onpolicy-solo/artifacts/critic-telemetry-repair-lock-v2.json",
+    "repairLockSha256": "4fbd2f60fce2dbf4d7631cf514f0e0264016ca674850344329356677be9a3682",
+    "policyLogitMaxAbsDiff": 0,
+    "round30Auc": 0.8970832092116195,
+    "round30Ece": 0.02532575293318204,
+    "status": "valid-policy-identical"
+  },
+  "implementationCommits": [
+    "2473837",
+    "ba3c405",
+    "d25dc2a",
+    "95fa971",
+    "0901766",
+    "135e961",
+    "3379609"
+  ],
+  "screenFreezePreparationCommit": "3379609"
 }
