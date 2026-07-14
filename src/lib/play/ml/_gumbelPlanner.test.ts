@@ -10,14 +10,28 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { applyGameCommand } from '../runtime';
 import { createRng, nextInt } from '../rng';
-import { SEAT_COLORS, type GameActor, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
+import {
+	SEAT_COLORS,
+	type GameActor,
+	type PlayCatalog,
+	type PublicGameState,
+	type SeatColor
+} from '../types';
 import { loadOrSnapshotCatalog } from './nodeIo';
 import { NeuralPolicy, type PolicyWeights, type LinearLayer } from './net';
-import { OBS_DIM, ACT_DIM } from './encode';
+import { OBS_DIM, ACT_DIM, encodeObs } from './encode';
 import { legalActionsWithNext } from './actions';
-import { planDecisionGumbel, outcomeForSeat } from './gumbelPlanner';
+import {
+	planDecisionGumbel,
+	outcomeForSeat,
+	searchInvocationSeed,
+	soloReach30LeafValue
+} from './gumbelPlanner';
 
-function randomPolicy(seed: number): NeuralPolicy {
+function randomPolicy(
+	seed: number,
+	reach30?: { probability: number; horizon: number }
+): NeuralPolicy {
 	const rng = createRng(seed);
 	const g = (): number => (nextInt(rng, 20001) / 10000 - 1) * 0.1;
 	const lin = (out: number, inn: number): LinearLayer => ({
@@ -29,7 +43,18 @@ function randomPolicy(seed: number): NeuralPolicy {
 		obs_dim: OBS_DIM,
 		act_dim: ACT_DIM,
 		trunk: [lin(32, OBS_DIM + ACT_DIM), lin(1, 32)],
-		value: [lin(16, OBS_DIM), lin(1, 16)]
+		value: [lin(16, OBS_DIM), lin(1, 16)],
+		...(reach30
+			? {
+					reach30: [
+						{
+							W: [Array<number>(OBS_DIM).fill(0)],
+							b: [Math.log(reach30.probability / (1 - reach30.probability))]
+						}
+					],
+					reach30_horizon: reach30.horizon
+				}
+			: {})
 	};
 	return new NeuralPolicy(w);
 }
@@ -51,8 +76,22 @@ beforeAll(async () => {
 	};
 	seats.forEach((seat, i) => {
 		const mid = `bot-${seat}`;
-		ok(applyGameCommand(state, { memberId: mid, displayName: seat, role: 'player', seatColor: null }, { type: 'claimSeat', seatColor: seat }, catalog));
-		ok(applyGameCommand(state, { memberId: mid, displayName: seat, role: 'player', seatColor: seat }, { type: 'selectGuardian', guardianName: guardianNames[i] }, catalog));
+		ok(
+			applyGameCommand(
+				state,
+				{ memberId: mid, displayName: seat, role: 'player', seatColor: null },
+				{ type: 'claimSeat', seatColor: seat },
+				catalog
+			)
+		);
+		ok(
+			applyGameCommand(
+				state,
+				{ memberId: mid, displayName: seat, role: 'player', seatColor: seat },
+				{ type: 'selectGuardian', guardianName: guardianNames[i] },
+				catalog
+			)
+		);
 	});
 	ok(applyGameCommand(state, host, { type: 'startGame', seed: 424242 }, catalog));
 	if (state.phase !== 'navigation') throw new Error(`expected navigation, got ${state.phase}`);
@@ -88,11 +127,13 @@ describe('gumbel planner', () => {
 		// A particular adjacent seed can legitimately land on the same Gumbel top-m set.
 		// Check a small deterministic seed family so this asserts seed sensitivity without
 		// depending on one random-policy/action-width coincidence.
-		const alternatives = Array.from({ length: 8 }, (_, offset) =>
-			planDecisionGumbel(navState, focus, catalog, policy, cands, {
-				...OPTS,
-				seed: 778 + offset
-			})!
+		const alternatives = Array.from(
+			{ length: 8 },
+			(_, offset) =>
+				planDecisionGumbel(navState, focus, catalog, policy, cands, {
+					...OPTS,
+					seed: 778 + offset
+				})!
 		);
 		expect(
 			alternatives.some(
@@ -103,7 +144,27 @@ describe('gumbel planner', () => {
 		).toBe(true);
 	});
 
-	it('is INVARIANT to opponents\' secret pre-reveal destination locks', () => {
+	it('keys replay streams by the positive per-game invocation ordinal', () => {
+		const first = searchInvocationSeed(952000123, 17, 1, focus);
+		expect(searchInvocationSeed(952000123, 17, 1, focus)).toBe(first);
+		expect(searchInvocationSeed(952000123, 17, 2, focus)).not.toBe(first);
+		expect(() => searchInvocationSeed(952000123, 17, 0, focus)).toThrow(/positive/);
+	});
+
+	it('rejects a zero or fractional lookahead horizon before simulation', () => {
+		const cands = legalActionsWithNext(navState, focus, catalog);
+		const policy = randomPolicy(29);
+		for (const horizonRounds of [0, 1.5]) {
+			expect(() =>
+				planDecisionGumbel(navState, focus, catalog, policy, cands, {
+					...OPTS,
+					horizonRounds
+				})
+			).toThrow(/positive integer/);
+		}
+	});
+
+	it("is INVARIANT to opponents' secret pre-reveal destination locks", () => {
 		const cands = legalActionsWithNext(navState, focus, catalog);
 		const policy = randomPolicy(3);
 		const base = planDecisionGumbel(navState, focus, catalog, policy, cands, OPTS)!;
@@ -151,5 +212,65 @@ describe('gumbel planner', () => {
 		expect(oc).toBeGreaterThan(od);
 		s.winnerSeat = a;
 		expect(outcomeForSeat(s, a)).toBe(1);
+	});
+
+	it('solo-reach30 leaf freezes active, terminal, success, and public expectation semantics', () => {
+		const s = structuredClone(navState) as PublicGameState;
+		for (const other of seats.slice(1)) delete s.players[other];
+		s.activeSeats = [focus];
+		s.players[focus]!.victoryPoints = 12;
+		const policy = randomPolicy(5, { probability: 0.8, horizon: 30 });
+		expect(soloReach30LeafValue(s, focus, catalog, policy, 0.5)).toBeCloseTo(0.6, 10);
+		expect(soloReach30LeafValue(s, focus, catalog, policy, 0.5, undefined, 3)).toBeCloseTo(
+			0.65,
+			10
+		);
+		s.status = 'finished';
+		expect(soloReach30LeafValue(s, focus, catalog, policy, 0.5)).toBe(0);
+		s.players[focus]!.victoryPoints = 30;
+		expect(soloReach30LeafValue(s, focus, catalog, policy, 0.5)).toBe(1);
+	});
+
+	it('solo-reach30 fails closed on an absent or wrong-horizon critic', () => {
+		const s = structuredClone(navState) as PublicGameState;
+		for (const other of seats.slice(1)) delete s.players[other];
+		s.activeSeats = [focus];
+		expect(() => soloReach30LeafValue(s, focus, catalog, randomPolicy(6), 0.5)).toThrow(
+			/horizon 30/
+		);
+		expect(() =>
+			soloReach30LeafValue(
+				s,
+				focus,
+				catalog,
+				randomPolicy(7, { probability: 0.7, horizon: 35 }),
+				0.5
+			)
+		).toThrow(/got 35/);
+	});
+
+	it('uses the injected observation schema for both root priors and solo leaves', () => {
+		const s = structuredClone(navState) as PublicGameState;
+		for (const other of seats.slice(1)) delete s.players[other];
+		s.activeSeats = [focus];
+		const cands = legalActionsWithNext(s, focus, catalog);
+		let calls = 0;
+		const res = planDecisionGumbel(
+			s,
+			focus,
+			catalog,
+			randomPolicy(8, { probability: 0.7, horizon: 30 }),
+			cands,
+			{
+				...OPTS,
+				objective: 'solo-reach30',
+				encodeObservation: (state, seat) => {
+					calls += 1;
+					return encodeObs(state, seat, catalog);
+				}
+			}
+		);
+		expect(res).not.toBeNull();
+		expect(calls).toBeGreaterThan(1);
 	});
 });

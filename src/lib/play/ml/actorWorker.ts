@@ -21,7 +21,7 @@ import { profileFor } from '../server/botPolicy';
 import { createRng, hashString, nextInt } from '../rng';
 import type { GameCommand, PlayCatalog, SeatColor } from '../types';
 import { OBS_DIM } from './encode';
-import { obsV2Meta } from './encodeV2';
+import { encodeEntityObsV2, flattenObsV2, obsV2Meta } from './encodeV2';
 import {
 	forkContinuationPickRng,
 	playRecordingGame,
@@ -29,7 +29,11 @@ import {
 	type Sample
 } from './driver';
 import { shapingFor } from './shaping';
-import { planDecisionGumbel } from './gumbelPlanner';
+import {
+	planDecisionGumbel,
+	searchInvocationSeed,
+	type SearchObservationEncoder
+} from './gumbelPlanner';
 import { hybridIndex } from './neuralBot';
 import { guardianIndexForSeed } from './evalSchedule';
 import { appendOptionEvents, appendSamples, loadWeightsIfPresent } from './nodeIo';
@@ -180,8 +184,9 @@ function absoluteBalancedGuardianNames(
 ): string[] {
 	const names = catalog.guardians.map((guardian) => guardian.name);
 	const first = guardianIndexForSeed(seed, names.length);
-	return Array.from({ length: Math.min(seats, names.length) }, (_, offset) =>
-		names[(first + offset) % names.length]
+	return Array.from(
+		{ length: Math.min(seats, names.length) },
+		(_, offset) => names[(first + offset) % names.length]
 	);
 }
 
@@ -252,6 +257,15 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 		run(seed, jobIndex, duplicateSeed = false) {
 			if (closed) throw new Error('actorWorker: cannot run a seed after the worker session closed');
 			const t0 = performance.now();
+			const searchDiagnostics = config.search
+				? {
+						decisions: 0,
+						simulations: 0,
+						wallMs: 0,
+						decisionWallMs: [] as number[],
+						byPhase: { navigation: 0, encounter: 0 }
+					}
+				: undefined;
 			// Expert-iteration searcher: deterministic per (seed, decision index); the
 			// frac draw shares the stream, so runs are exactly reproducible.
 			let searcher:
@@ -263,27 +277,54 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				| undefined;
 			if (config.search && policy) {
 				const sc = config.search;
+				if (sc.objective === 'solo-reach30' && config.seats !== 1) {
+					throw new Error('actorWorker: solo-reach30 search requires seats=1');
+				}
 				const frac = sc.frac ?? 1;
 				const searchRng = createRng((seed ^ 0x517cc1b7) >>> 0 || 1);
 				const uni = (): number => (nextInt(searchRng, 1_073_741_824) + 0.5) / 1_073_741_824;
+				const searchObservation: SearchObservationEncoder | undefined =
+					config.policyObsVersion === 2
+						? (searchState, searchSeat) =>
+								Array.from(
+									Float32Array.from(
+										flattenObsV2(encodeEntityObsV2(searchState, searchSeat, catalog), catalog)
+									)
+								)
+						: undefined;
 				let decisionN = 0;
 				searcher = (st, seat, withNext) => {
 					if (st.phase !== 'navigation' && st.phase !== 'encounter') return null;
 					if (withNext.length < 2) return null;
 					decisionN += 1;
 					if (frac < 1 && uni() >= frac) return null;
+					const searchT0 = performance.now();
 					const res = planDecisionGumbel(st, seat, catalog, policy!, withNext, {
 						simulations: sc.sims,
 						horizonRounds: sc.horizonRounds ?? 6,
 						valueWeight: sc.valueWeight ?? 0.5,
-						seed: (seed * 2654435761 + st.round * 7919 + decisionN * 104729) >>> 0,
-						temperature: st.phase === 'navigation' ? (sc.navTemperature ?? 0.8) : 0,
+						objective: sc.objective ?? 'multiplayer',
+						...(searchObservation ? { encodeObservation: searchObservation } : {}),
+						seed: searchInvocationSeed(seed, st.round, decisionN, seat),
+						temperature:
+							st.phase === 'navigation'
+								? (sc.navTemperature ?? (sc.objective === 'solo-reach30' ? 0 : 0.8))
+								: 0,
 						...(sc.rollout === 'heuristic'
 							? {}
 							: {
-									rolloutChoose: (rs, rSeat, rWithNext) =>
-										hybridIndex(
-											policy!,
+									rolloutChoose: (rs, rSeat, rWithNext) => {
+										const rolloutPolicy = searchObservation
+											? ({
+													pick: (
+														_obs: number[],
+														cands: number[][],
+														pickOpts: Parameters<NeuralPolicy['pick']>[2]
+													) => policy!.pick(searchObservation(rs, rSeat, catalog), cands, pickOpts)
+												} as unknown as NeuralPolicy)
+											: policy!;
+										return hybridIndex(
+											rolloutPolicy,
 											rs,
 											rSeat,
 											rWithNext,
@@ -292,9 +333,18 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 												learnMonsterRewardChoices: config.learnMonsterRewardChoices
 											},
 											catalog
-										)
+										);
+									}
 								})
 					});
+					if (res && searchDiagnostics) {
+						const elapsed = performance.now() - searchT0;
+						searchDiagnostics.decisions += 1;
+						searchDiagnostics.simulations += res.visits.reduce((sum, value) => sum + value, 0);
+						searchDiagnostics.wallMs += elapsed;
+						searchDiagnostics.decisionWallMs.push(Math.round(elapsed * 1000) / 1000);
+						searchDiagnostics.byPhase[st.phase] += 1;
+					}
 					return res ? { index: res.index, pi: res.pi } : null;
 				};
 			}
@@ -417,6 +467,18 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				stalled: r.stalled,
 				samples: r.samples.length,
 				neuralSeats: seatList.filter(isLearnerSeat),
+				...(remote
+					? {
+							inference: {
+								format: remote.info.format,
+								obsDim: remote.info.obs_dim,
+								actDim: remote.info.act_dim,
+								weightsPath: remote.info.weights,
+								weightsSha256: remote.info.weights_sha256,
+								wire: remote.wireFormat
+							}
+						}
+					: {}),
 				perSeat: seatList.map((seat) => ({
 					seat,
 					finalVP: r.finalVP[seat] ?? 0,
@@ -428,6 +490,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 					policy: isNeuralSeat(seat) ? ('neural' as const) : ('heuristic' as const),
 					cycle: r.cycleBySeat[seat]
 				})),
+				...(searchDiagnostics ? { search: searchDiagnostics } : {}),
 				wallMs:
 					Math.round((continuationCurriculum ? performance.now() - t0 : sourceWallMs) * 10) / 10
 			};

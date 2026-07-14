@@ -42,6 +42,7 @@ export interface RemotePolicyInfo {
 	act_dim: number;
 	device: string;
 	weights: string;
+	weights_sha256: string;
 	aux: {
 		farm_value: boolean;
 		route_mode: boolean;
@@ -318,6 +319,9 @@ export class RemotePolicy {
 	private nextId = 0;
 	/** Scoring roundtrips issued (handshake excluded) — memo-hit verification hook. */
 	scoringRequests = 0;
+	get wireFormat(): 'binary' | 'json' {
+		return this.wire;
+	}
 	// Per-decision memo. Within ONE decision the policy is asked twice about the same
 	// state: selection's pick() (via neuralBot, which RE-ENCODES the candidate features —
 	// same content, different array identity) and then the driver's probs()+value() for

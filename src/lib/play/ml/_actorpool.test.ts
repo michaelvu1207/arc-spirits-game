@@ -9,7 +9,7 @@
  *
  *   POOL=1 npx vitest run src/lib/play/ml/_actorpool.test.ts --disable-console-intercept
  */
-import { OBS_DIM } from './encode';
+import { ACT_DIM, OBS_DIM } from './encode';
 import { describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, tmpdir } from 'node:os';
@@ -150,6 +150,51 @@ describe('actor pool', () => {
 			rmSync(dirB, { recursive: true, force: true });
 		}
 	}, 300_000);
+
+	it('emits exact per-decision search timing and simulation telemetry', async () => {
+		const dir = tempDir('search-telemetry');
+		try {
+			const weightsPath = join(dir, 'zero-policy.json');
+			writeFileSync(
+				weightsPath,
+				JSON.stringify({
+					format: 'arc-cand-scorer-v1',
+					obs_dim: OBS_DIM,
+					act_dim: ACT_DIM,
+					trunk: [{ W: [Array<number>(OBS_DIM + ACT_DIM).fill(0)], b: [0] }],
+					value: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }]
+				})
+			);
+			const result = await runActorPool({
+				seeds: [41_999],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 2,
+					profiles: ['medium'],
+					weightsPath,
+					selection: 'hybrid',
+					search: {
+						sims: 2,
+						horizonRounds: 1,
+						rollout: 'heuristic',
+						frac: 1,
+						navTemperature: 0
+					}
+				}
+			});
+			const telemetry = result.summaries[0]?.search;
+			expect(telemetry).toBeDefined();
+			expect(telemetry!.decisions).toBeGreaterThan(0);
+			expect(telemetry!.simulations).toBe(telemetry!.decisions * 2);
+			expect(telemetry!.decisionWallMs).toHaveLength(telemetry!.decisions);
+			expect(telemetry!.byPhase.navigation).toBeGreaterThan(0);
+			expect(telemetry!.wallMs).toBeGreaterThan(0);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
 
 	it('obs-version 2: shards carry paired v1 obs + flat obsV2 rows and meta.json validates', async () => {
 		const seeds = Array.from({ length: 4 }, (_, i) => 52_000 + i);
@@ -392,9 +437,7 @@ describe('actor pool', () => {
 				rows.filter((row) => row.continuationCurriculum === 1).map((row) => String(row.gameId))
 			);
 			const sourceIds = new Set(
-				rows
-					.filter((row) => row.continuationCurriculum !== 1)
-					.map((row) => String(row.gameId))
+				rows.filter((row) => row.continuationCurriculum !== 1).map((row) => String(row.gameId))
 			);
 			const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
 			expect(result.games).toBe(2);

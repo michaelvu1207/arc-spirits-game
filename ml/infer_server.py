@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections import Counter
+import hashlib
 import json
 import math
 import os
@@ -388,6 +389,7 @@ class InferServer:
         self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = load_scorer(
             weights_path, device
         )
+        self.weights_sha256 = hashlib.sha256(weights_path.read_bytes()).hexdigest()
         self.reach30_horizon = getattr(self.model, "reach30_horizon", None)
         self._v2_header = self._expected_header()
         self.queue: asyncio.Queue[_Job] = asyncio.Queue()
@@ -596,6 +598,7 @@ class InferServer:
                                 "act_dim": self.act_dim,
                                 "device": str(self.device),
                                 "weights": str(self.weights_path),
+                                "weights_sha256": self.weights_sha256,
                                 "aux": dict(self.aux),
                                 "reach30_horizon": self.reach30_horizon,
                             }
@@ -665,6 +668,7 @@ class InferServer:
         self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = (
             model, obs_dim, act_dim, aux, fmt
         )
+        self.weights_sha256 = hashlib.sha256(self.weights_path.read_bytes()).hexdigest()
         self.reach30_horizon = getattr(model, "reach30_horizon", None)
         self._v2_header = self._expected_header()
         print(

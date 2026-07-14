@@ -31,6 +31,7 @@ const { values: args } = parseArgs({
 		workers: { type: 'string', default: '1,2,4,8' },
 		repeats: { type: 'string', default: '3' },
 		'warmup-games': { type: 'string', default: '0' },
+		'warmup-seed0': { type: 'string' },
 		seed0: { type: 'string', default: '71000' },
 		'shuffle-seed': { type: 'string', default: '710' },
 		seats: { type: 'string', default: '4' },
@@ -48,10 +49,18 @@ const { values: args } = parseArgs({
 		temperature: { type: 'string' },
 		'neural-seats': { type: 'string' },
 		'record-seats': { type: 'string' },
+		'no-record': { type: 'boolean', default: false },
 		'opponent-weights': { type: 'string' },
 		'opponent-temperature': { type: 'string' },
 		'obs-version': { type: 'string', default: '1' },
 		'policy-obs-version': { type: 'string', default: '1' },
+		'search-sims': { type: 'string', default: '0' },
+		'search-objective': { type: 'string', default: 'multiplayer' },
+		'search-horizon': { type: 'string', default: '6' },
+		'search-frac': { type: 'string', default: '1' },
+		'search-value-weight': { type: 'string', default: '0.5' },
+		'search-rollout': { type: 'string', default: 'policy' },
+		'search-nav-temperature': { type: 'string', default: '0' },
 		report: { type: 'string' },
 		'keep-data': { type: 'boolean', default: false },
 		help: { type: 'boolean', default: false }
@@ -134,10 +143,36 @@ if (!workerCounts.length) throw new Error('--workers needs at least one positive
 const games = positiveInt(args.games, '--games');
 const repeats = positiveInt(args.repeats, '--repeats');
 const warmupGames = positiveInt(args['warmup-games'], '--warmup-games', { allowZero: true });
+const warmupSeed0 =
+	args['warmup-seed0'] === undefined
+		? undefined
+		: positiveInt(args['warmup-seed0'], '--warmup-seed0');
+if (warmupGames > 0 && warmupSeed0 === undefined) {
+	throw new Error('--warmup-games requires an explicit disjoint --warmup-seed0');
+}
 const seed0 = Number.parseInt(args.seed0, 10);
 const shuffleSeed = Number.parseInt(args['shuffle-seed'], 10);
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'arc-actor-worker-bench-'));
 const catalogPath = path.resolve(root, args.catalog);
+
+const searchSims = positiveInt(args['search-sims'], '--search-sims', { allowZero: true });
+const searchObjective = args['search-objective'];
+if (searchObjective !== 'multiplayer' && searchObjective !== 'solo-reach30') {
+	throw new Error('--search-objective must be multiplayer or solo-reach30');
+}
+if (args['search-rollout'] !== 'policy' && args['search-rollout'] !== 'heuristic') {
+	throw new Error('--search-rollout must be policy or heuristic');
+}
+const searchFrac = optionalNumber(args['search-frac']);
+const searchValueWeight = optionalNumber(args['search-value-weight']);
+const searchNavTemperature = optionalNumber(args['search-nav-temperature']);
+if (!(searchFrac > 0 && searchFrac <= 1)) throw new Error('--search-frac must be in (0,1]');
+if (!(searchValueWeight >= 0 && searchValueWeight <= 1)) {
+	throw new Error('--search-value-weight must be in [0,1]');
+}
+if (!(searchNavTemperature >= 0)) {
+	throw new Error('--search-nav-temperature must be non-negative');
+}
 
 const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src', 'lib') } });
 const { runActorPool } = await jiti.import(
@@ -160,11 +195,28 @@ const config = {
 	sample: args.sample || undefined,
 	temperature: optionalNumber(args.temperature),
 	neuralSeats: csv(args['neural-seats']).length ? csv(args['neural-seats']) : undefined,
-	recordSeats: csv(args['record-seats']).length ? csv(args['record-seats']) : undefined,
+	recordSeats: args['no-record']
+		? []
+		: csv(args['record-seats']).length
+			? csv(args['record-seats'])
+			: undefined,
 	opponentWeights: parseOpponentWeights(args['opponent-weights']),
 	opponentTemperature: optionalNumber(args['opponent-temperature']),
 	obsVersion: positiveInt(args['obs-version'], '--obs-version'),
-	policyObsVersion: positiveInt(args['policy-obs-version'], '--policy-obs-version')
+	policyObsVersion: positiveInt(args['policy-obs-version'], '--policy-obs-version'),
+	...(searchSims > 0
+		? {
+				search: {
+					sims: searchSims,
+					objective: searchObjective,
+					horizonRounds: positiveInt(args['search-horizon'], '--search-horizon'),
+					frac: searchFrac,
+					valueWeight: searchValueWeight,
+					rollout: args['search-rollout'],
+					navTemperature: searchNavTemperature
+				}
+			}
+		: {})
 };
 if (config.policyObsVersion === 2 && !config.inferSocket) {
 	throw new Error('--policy-obs-version 2 requires --infer-socket');
@@ -185,10 +237,7 @@ const trialRows = [];
 try {
 	if (warmupGames > 0) {
 		for (const count of workerCounts) {
-			const seeds = Array.from(
-				{ length: warmupGames },
-				(_, index) => seed0 + repeats * games + count * 10_000 + index
-			);
+			const seeds = Array.from({ length: warmupGames }, (_, index) => warmupSeed0 + index);
 			await runActorPool({
 				seeds,
 				outDir: path.join(tempRoot, `warmup-${count}`),
@@ -211,6 +260,27 @@ try {
 		});
 		const policyCoverage = countPolicyRows(result.shardFiles);
 		const gameWallTimes = result.summaries.map((summary) => summary.wallMs);
+		const searchDecisionWallTimes = result.summaries.flatMap(
+			(summary) => summary.search?.decisionWallMs ?? []
+		);
+		const searchDecisions = result.summaries.reduce(
+			(sum, summary) => sum + (summary.search?.decisions ?? 0),
+			0
+		);
+		const searchSimulations = result.summaries.reduce(
+			(sum, summary) => sum + (summary.search?.simulations ?? 0),
+			0
+		);
+		const inference = result.summaries[0]?.inference ?? null;
+		if (
+			args['infer-socket'] &&
+			(!inference ||
+				result.summaries.some(
+					(summary) => JSON.stringify(summary.inference) !== JSON.stringify(inference)
+				))
+		) {
+			throw new Error('remote benchmark inference provenance is missing or changed within a trial');
+		}
 		const row = {
 			workers: result.workers,
 			repeat: trial.repeat,
@@ -228,7 +298,15 @@ try {
 			samplesPerSecond: result.samples / (result.wallMs / 1000),
 			validPolicyRowsPerSecond: policyCoverage.policyRows / (result.wallMs / 1000),
 			gameWallMsP50: quantile(gameWallTimes, 0.5),
-			gameWallMsP95: quantile(gameWallTimes, 0.95)
+			gameWallMsP95: quantile(gameWallTimes, 0.95),
+			searchDecisions,
+			searchSimulations,
+			searchDecisionsPerSecond: searchDecisions / (result.wallMs / 1000),
+			searchDecisionWallMsP50:
+				searchDecisionWallTimes.length > 0 ? quantile(searchDecisionWallTimes, 0.5) : null,
+			searchDecisionWallMsP95:
+				searchDecisionWallTimes.length > 0 ? quantile(searchDecisionWallTimes, 0.95) : null,
+			inference
 		};
 		trialRows.push(row);
 		console.log(
@@ -244,6 +322,10 @@ try {
 		const sampleRates = matching.map((row) => row.samplesPerSecond);
 		const policyRates = matching.map((row) => row.validPolicyRowsPerSecond);
 		const gameP95 = matching.map((row) => row.gameWallMsP95);
+		const searchRates = matching.map((row) => row.searchDecisionsPerSecond);
+		const searchP95 = matching
+			.map((row) => row.searchDecisionWallMsP95)
+			.filter((value) => value !== null);
 		return {
 			workers: Math.min(count, games),
 			repeats: matching.length,
@@ -256,6 +338,8 @@ try {
 			validPolicyRowsPerSecondP50: quantile(policyRates, 0.5),
 			validPolicyRowsPerSecondP90: quantile(policyRates, 0.9),
 			gameWallMsP95Median: quantile(gameP95, 0.5),
+			searchDecisionsPerSecondP50: quantile(searchRates, 0.5),
+			searchDecisionWallMsP95Median: searchP95.length > 0 ? quantile(searchP95, 0.5) : null,
 			efficiencyVsOneWorkerP50: null
 		};
 	});

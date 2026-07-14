@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -82,6 +83,10 @@ describe.skipIf(!existsSync(PYTHON))('RemotePolicy decision memo and wire contra
 				wire
 			});
 			try {
+				expect(remote.info.weights_sha256).toBe(
+					createHash('sha256').update(readFileSync(fixtureWeights)).digest('hex')
+				);
+				expect(remote.wireFormat).toBe(wire);
 				expect(remote.info.aux.placement).toBe(true);
 				expect(remote.info.aux.reach30).toBe(true);
 				const obs = Array.from({ length: weights.obs_dim }, (_, i) =>

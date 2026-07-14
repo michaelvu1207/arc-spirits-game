@@ -38,6 +38,7 @@ const { values: args } = parseArgs({
 		sample: { type: 'boolean', default: false },
 		temperature: { type: 'string', default: '0.65' },
 		'search-sims': { type: 'string', default: '0' },
+		'search-objective': { type: 'string', default: 'multiplayer' },
 		'search-horizon': { type: 'string', default: '6' },
 		'search-frac': { type: 'string', default: '1' },
 		'search-value-weight': { type: 'string', default: '0.5' },
@@ -95,6 +96,10 @@ const searchSims = Number.parseInt(args['search-sims'], 10);
 if (!Number.isSafeInteger(searchSims) || searchSims < 0) {
 	throw new Error('--search-sims must be a non-negative integer');
 }
+const searchObjective = args['search-objective'];
+if (searchObjective !== 'multiplayer' && searchObjective !== 'solo-reach30') {
+	throw new Error('--search-objective must be multiplayer or solo-reach30');
+}
 const searchHorizon = integer(args['search-horizon'], '--search-horizon');
 const searchFrac = Number.parseFloat(args['search-frac']);
 const searchValueWeight = Number.parseFloat(args['search-value-weight']);
@@ -127,6 +132,9 @@ const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src',
 const { runActorPool } = await jiti.import(
 	path.join(root, 'src', 'lib', 'play', 'ml', 'actorPool.ts')
 );
+const { guardianIndexForSeed } = await jiti.import(
+	path.join(root, 'src', 'lib', 'play', 'ml', 'evalSchedule.ts')
+);
 const { MAX_ROUNDS } = await jiti.import(path.join(root, 'src', 'lib', 'play', 'types.ts'));
 const effectiveMaxRounds = Math.min(maxRounds, MAX_ROUNDS);
 if (effectiveMaxRounds !== maxRounds) {
@@ -144,7 +152,7 @@ const weightsBytes = readFileSync(weights);
 
 const guardianForSeed = (seed) => {
 	const names = catalog.guardians.map((guardian) => guardian.name);
-	return names[seed % names.length];
+	return names[guardianIndexForSeed(seed, names.length)];
 };
 
 try {
@@ -170,6 +178,7 @@ try {
 				? {
 						search: {
 							sims: searchSims,
+							objective: searchObjective,
 							horizonRounds: searchHorizon,
 							frac: searchFrac,
 							valueWeight: searchValueWeight,
@@ -182,6 +191,22 @@ try {
 			policyObsVersion
 		}
 	});
+	const inference = result.summaries[0]?.inference;
+	if (args['infer-socket']) {
+		if (!inference) throw new Error('remote evaluation did not record its inference handshake');
+		if (inference.weightsSha256 !== sha256(weightsBytes)) {
+			throw new Error(
+				`served checkpoint hash ${inference.weightsSha256} does not match --weights ${sha256(weightsBytes)}`
+			);
+		}
+		if (
+			result.summaries.some(
+				(summary) => JSON.stringify(summary.inference) !== JSON.stringify(inference)
+			)
+		) {
+			throw new Error('inference provenance changed within the evaluation');
+		}
+	}
 
 	const vp = [];
 	const first30Rounds = [];
@@ -237,6 +262,26 @@ try {
 		}
 	}
 	const sortedVp = [...vp].sort((a, b) => a - b);
+	const sortedGameWallMs = result.summaries.map((game) => game.wallMs).sort((a, b) => a - b);
+	const sortedSearchDecisionWallMs = result.summaries
+		.flatMap((game) => game.search?.decisionWallMs ?? [])
+		.sort((a, b) => a - b);
+	const searchDecisions = result.summaries.reduce(
+		(sum, game) => sum + (game.search?.decisions ?? 0),
+		0
+	);
+	const searchSimulations = result.summaries.reduce(
+		(sum, game) => sum + (game.search?.simulations ?? 0),
+		0
+	);
+	const searchByPhase = result.summaries.reduce(
+		(total, game) => {
+			total.navigation += game.search?.byPhase.navigation ?? 0;
+			total.encounter += game.search?.byPhase.encounter ?? 0;
+			return total;
+		},
+		{ navigation: 0, encounter: 0 }
+	);
 	const interval = wilson95(trueWins, games);
 	const guardianBreakdown = [...guardianStats.values()]
 		.map((stat) => ({
@@ -270,6 +315,7 @@ try {
 		weightsSha256: sha256(weightsBytes),
 		catalog: path.relative(root, catalogPath),
 		catalogSha256: sha256(catalogBytes),
+		...(inference ? { inference } : {}),
 		seed0,
 		games,
 		maxRounds: effectiveMaxRounds,
@@ -284,6 +330,7 @@ try {
 				? {
 						search: {
 							sims: searchSims,
+							objective: searchObjective,
 							horizonRounds: searchHorizon,
 							frac: searchFrac,
 							valueWeight: searchValueWeight,
@@ -327,7 +374,20 @@ try {
 		performance: {
 			wallSeconds: result.wallMs / 1000,
 			gamesPerSecond: result.gamesPerSec,
-			workers: result.workers
+			workers: result.workers,
+			gameWallMsP50: quantile(sortedGameWallMs, 0.5),
+			gameWallMsP95: quantile(sortedGameWallMs, 0.95),
+			...(searchSims > 0
+				? {
+						search: {
+							decisions: searchDecisions,
+							simulations: searchSimulations,
+							byPhase: searchByPhase,
+							decisionWallMsP50: quantile(sortedSearchDecisionWallMs, 0.5),
+							decisionWallMsP95: quantile(sortedSearchDecisionWallMs, 0.95)
+						}
+					}
+				: {})
 		},
 		...(args['include-games'] ? { perGame } : {})
 	};

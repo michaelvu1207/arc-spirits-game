@@ -1,0 +1,286 @@
+{
+	"schemaVersion": "arc-controlled-experiment-v1",
+	"experiment": "v33-strategic-search-and-expert-iteration",
+	"status": "implementation-preflight",
+	"promotionEligible": false,
+	"catalog": {
+		"path": "ml/catalogs/live-20260713-5f4ad348.json",
+		"sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+	},
+	"policy": {
+		"path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+		"sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+		"manifestPath": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.manifest.json",
+		"manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+		"format": "arc-entity-scorer-v2",
+		"policyIdentity": "exactly V30",
+		"reach30": {
+			"horizon": 30,
+			"auc": 0.8970832092116195,
+			"ece": 0.02532575293318204,
+			"brier": 0.1309
+		}
+	},
+	"v23Comparator": {
+		"path": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+		"sha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+		"format": "arc-cand-scorer-v1",
+		"policyObsVersion": 1
+	},
+	"predecessor": {
+		"experiment": "v32-v30-onpolicy-solo-mechanism-screen",
+		"status": "invalid-semantic-trust-gate",
+		"artifact": "ml/experiments/v32-onpolicy-solo/artifacts/screen-invalidation.json",
+		"artifactSha256": "844a4bc55635881debed0fa0c8c3067fe6c5307ac7349e51d89027477a1a1835",
+		"retryAllowed": false,
+		"developmentSeedsOpened": false,
+		"hiddenSeedsOpened": false
+	},
+	"review": {
+		"model": "Claude Fable",
+		"effort": "high",
+		"plan": "ml/experiments/v33-strategic-search/plan.md",
+		"artifact": "ml/experiments/v33-strategic-search/fable-review.md",
+		"implementationArtifact": "ml/experiments/v33-strategic-search/implementation-fable-review.md",
+		"status": "incorporated"
+	},
+	"commonDecode": {
+		"seats": 1,
+		"maxRounds": 30,
+		"maxStatusLevel": 2,
+		"guardianSchedule": "absolute-balanced",
+		"selection": "hybrid",
+		"sample": true,
+		"temperature": 0.55,
+		"learnMonsterRewardChoices": false,
+		"policyObsVersion": 2,
+		"inferenceWire": "binary",
+		"searchScope": ["navigation", "encounter"],
+		"searchMinCandidates": 2,
+		"searchFrac": 1,
+		"searchRollout": "policy",
+		"searchLeafObjective": "solo-reach30",
+		"searchValueWeight": 0.5,
+		"searchNavigationTemperature": 0,
+		"searchEncounterTemperature": 0
+	},
+	"searchObjective": {
+		"active": "0.5 * calibratedReach30Probability(horizon=30) + 0.5 * clamp(currentVP/30,0,1)",
+		"success": 1,
+		"terminalBelow30": 0,
+		"hiddenCombat": "reach head on masked public state plus rollout term clamp((currentVP + catalogExpectedPublicRewardVP)/30,0,1)",
+		"oneFreshInformationSetDeterminizationPerSimulation": true,
+		"dryRunHiddenOutcomeMayBeUsed": false,
+		"streamKey": "uint32(imul(gameSeed,0x9e3779b1)+imul(round,7919)+imul(perGameInvocationOrdinal,104729)+hashString(seat))"
+	},
+	"systems": {
+		"strengthUse": false,
+		"seed0": 953900000,
+		"games": 256,
+		"seedMax": 953900255,
+		"repeats": 1,
+		"shuffleSeed": 9539,
+		"singleConcurrencyLatencyGames": 64,
+		"workerCounts": [4, 8, 12, 16, 24],
+		"arms": [
+			{
+				"id": "raw",
+				"sims": 0,
+				"horizonRounds": 0
+			},
+			{
+				"id": "search-s16-h4",
+				"sims": 16,
+				"horizonRounds": 4
+			},
+			{
+				"id": "search-s16-h6",
+				"sims": 16,
+				"horizonRounds": 6
+			},
+			{
+				"id": "search-s32-h6",
+				"sims": 32,
+				"horizonRounds": 6
+			}
+		],
+		"selection": "smallest worker count within 5% of peak median games per second for each arm",
+		"operationalRejectionOnly": [
+			"serving or engine error",
+			"memory exhaustion",
+			"projected 4096-game wall time exceeds 21600 seconds",
+			"binding single-concurrency search-decision p95 exceeds 1000 ms",
+			"binding eight-concurrency search-decision p95 exceeds 2000 ms"
+		],
+		"outcomesMayBeInspected": false,
+		"result": null
+	},
+	"determinizationAudit": {
+		"script": "scripts/check-v33-determinization.mjs",
+		"seed0": 956000000,
+		"samples": 100000,
+		"seedMax": 956099999,
+		"familyConfidence": 0.99,
+		"method": "two-sided Hoeffding with Bonferroni union bound across categories",
+		"engineOutcome": "one public arcane attack die through combat.rollAttack",
+		"result": null
+	},
+	"phase2": {
+		"status": "closed",
+		"seed0": 952000000,
+		"games": 4096,
+		"seedMax": 952004095,
+		"arms": ["raw", "every systems-eligible registered search arm"],
+		"familySize": 3,
+		"simultaneousConfidence": 0.9833,
+		"bootstrap": {
+			"unit": "complete game-seed cluster",
+			"draws": 10000,
+			"rngSeed": 33002026
+		},
+		"metrics": [
+			"paired true-win delta",
+			"paired final-VP delta",
+			"paired post-round-15 VP-per-round delta",
+			"paired censored-first-30-round delta with failures=31",
+			"guardian true-win deltas"
+		],
+		"gates": {
+			"pairedWinGainPointsMin": 3,
+			"pairedWinLowerBoundStrictlyAbove": 0,
+			"finalVpDeltaMin": 0,
+			"post15VpPerRoundDeltaMin": 0,
+			"censoredFirst30RoundDeltaMax": 0,
+			"guardianPointDeltaMin": -5,
+			"stalls": 0,
+			"informationSafetyFailures": 0,
+			"replayMismatches": 0,
+			"servingErrors": 0,
+			"provenanceMismatches": 0,
+			"singleConcurrentSearchDecisionP95MsMax": 1000,
+			"eightConcurrentSearchDecisionP95MsMax": 2000
+		},
+		"integrityEvidenceSources": {
+			"informationSafetyFailures": "frozen actions.informationSafety Vitest preflight; any failure prevents every registered run",
+			"replayMismatches": "frozen exact root-state/action/visits replay and unique invocation-ordinal Vitest preflight",
+			"servingErrors": "actor/inference errors abort before a complete report; complete exact seed coverage is required",
+			"provenanceMismatches": "server handshake SHA-256, format, observation width, and binary wire are embedded and checked in every report"
+		},
+		"selection": "highest paired win rate; under 1 point is a tie and selects lower simulation budget",
+		"outcomeRetryAllowed": false
+	},
+	"guardianConfirmation": {
+		"status": "closed",
+		"trigger": "all non-guardian phase2 gates pass and at least one guardian point delta is below -5",
+		"seed0": 952300000,
+		"games": 8192,
+		"seedMax": 952308191,
+		"arms": "all frozen phase2 arms",
+		"poolOnly": "guardian deltas",
+		"maximumRuns": 1
+	},
+	"phase3": {
+		"status": "closed",
+		"development": {
+			"seed0": 952100000,
+			"games": 4096,
+			"seedMax": 952104095
+		},
+		"hidden": {
+			"seed0": 952200000,
+			"games": 4096,
+			"seedMax": 952204095,
+			"open": false
+		},
+		"policies": ["frozen selected search dose", "raw shared critic", "V23"],
+		"familySize": 2,
+		"simultaneousConfidence": 0.975,
+		"bootstrapDraws": 10000,
+		"bootstrapRngSeed": 33032026,
+		"hiddenBootstrapRngSeed": 33032027,
+		"gates": {
+			"pairedWinGainPointsMinVersusEachComparator": 3,
+			"pairedWinLowerBoundStrictlyAbove": 0,
+			"absoluteTrueWinRateMin": 0.8,
+			"finalVpPointDeltaMin": 0,
+			"post15VpPerRoundPointDeltaMin": 0,
+			"censoredFirst30RoundPointDeltaMax": 0,
+			"guardianPointDeltaMin": -5,
+			"lateGameRegressionAllowed": false,
+			"guardianRegressionAllowed": false,
+			"stalls": 0
+		},
+		"bindingLatencyEvidence": "the phase2-selected arm must carry passing outcome-blind systems p95 checks at one and eight concurrent games; the exact policy/search package is unchanged in phase3",
+		"hiddenOpenOnlyAfterDevelopmentAndLatencyPass": true
+	},
+	"expertIteration": {
+		"status": "closed",
+		"trigger": "registered search is directionally useful but misses absolute 80% or binding latency",
+		"generations": 3,
+		"replicates": [
+			{
+				"id": "a",
+				"generationSeed0": [954000000, 954010000, 954020000]
+			},
+			{
+				"id": "b",
+				"generationSeed0": [954100000, 954110000, 954120000]
+			},
+			{
+				"id": "c",
+				"generationSeed0": [954200000, 954210000, 954220000]
+			}
+		],
+		"gamesPerGeneration": 4096,
+		"teacher": "generation 1 shared critic; generations 2-3 immediately preceding replicate checkpoint",
+		"target": "completed-Q improved root distribution, temperature 1.0, exact candidate alignment, finite, visits sum to frozen simulation budget",
+		"training": {
+			"learningRate": 0.00004,
+			"policyHeadOnlyInitially": true,
+			"encoderFrozenInitially": true,
+			"clipFractionMax": 0.2,
+			"approxKlMax": 0.02,
+			"endpointGeneration": 3
+		},
+		"development": {
+			"seed0": 955000000,
+			"games": 4096,
+			"seedMax": 955004095,
+			"comparators": [
+				"distilled endpoint",
+				"raw shared critic",
+				"original teacher search",
+				"online search with distilled value and reach30 heads"
+			]
+		}
+	},
+	"runtime": {
+		"scratch": "/dev/shm/arc-v33-search",
+		"nice": 10,
+		"maxActorThreads": 96,
+		"eligibleGpuOrder": [5, 6, 7, 0],
+		"excludedGpu": 4,
+		"unrelatedProcessesMayBeStopped": false
+	},
+	"authorization": {
+		"systemsSeedsOpen": false,
+		"phase2SeedsOpen": false,
+		"phase3DevelopmentSeedsOpen": false,
+		"hiddenSeedsOpen": false,
+		"expertIterationSeedsOpen": false,
+		"productionPromotionOpen": false
+	},
+	"failurePolicy": {
+		"semanticFailureRetryAllowed": false,
+		"validWeakOutcomeRetryAllowed": false,
+		"environmentRetry": "one identical-seed retry only before a complete report, after quarantining partial artifacts without outcome inspection",
+		"preserveArtifacts": true
+	},
+	"rules": [
+		"No 952M strength seed may be consumed until source, protocol, launchers, validators, tests, determinization audit, and systems eligibility are frozen.",
+		"Systems outcomes are not strength evidence and may not be inspected.",
+		"No systems, development, hidden, or Michael-evaluation seed may enter training.",
+		"No checkpoint can promote from solo evidence alone.",
+		"Keep the superhuman-bot goal active until every solo, multiplayer, exploitability, fairness, regression, latency, and human gate passes."
+	]
+}

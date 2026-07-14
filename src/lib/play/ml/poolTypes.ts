@@ -89,6 +89,8 @@ export interface ActorGameConfig {
 	 */
 	search?: {
 		sims: number;
+		/** Search leaf semantics. `solo-reach30` is valid only for one-player games. */
+		objective?: 'multiplayer' | 'solo-reach30';
 		navTemperature?: number;
 		/** Leaf rollouts: 'policy' = self-model hybridIndex (slow, unbiased); 'heuristic' = medium profile. */
 		rollout?: 'policy' | 'heuristic';
@@ -184,7 +186,24 @@ export interface GameSummary {
 	 * absent on rows written before this field existed.
 	 */
 	neuralSeats?: SeatColor[];
+	/** Inference-server handshake provenance for remotely served learner policies. */
+	inference?: {
+		format: string;
+		obsDim: number;
+		actDim: number;
+		weightsPath: string;
+		weightsSha256: string;
+		wire: 'binary' | 'json';
+	};
 	perSeat: SeatSummary[];
+	/** Exact per-root-search timing, emitted only when ActorGameConfig.search is enabled. */
+	search?: {
+		decisions: number;
+		simulations: number;
+		wallMs: number;
+		decisionWallMs: number[];
+		byPhase: { navigation: number; encounter: number };
+	};
 	wallMs: number;
 }
 
