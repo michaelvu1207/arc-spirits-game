@@ -16,17 +16,30 @@ import sys
 import time
 from typing import Any, Iterable, Mapping
 
-from run_v34_phase2_analysis_recovery import (
-    ENV_FINGERPRINT_EXCLUDED,
-    ENV_FINGERPRINT_SERIALIZATION,
-    PRELAUNCH_SCHEMA,
-    analysis_environment_sha256,
-    environment_sha256,
-    exclusive_json,
-    fsync_directory,
-    sha256_file,
-    validate_authorization,
-)
+try:
+    from .run_v34_phase2_analysis_recovery import (
+        ENV_FINGERPRINT_EXCLUDED,
+        ENV_FINGERPRINT_SERIALIZATION,
+        PRELAUNCH_SCHEMA,
+        analysis_environment_sha256,
+        environment_sha256,
+        exclusive_json,
+        fsync_directory,
+        sha256_file,
+        validate_authorization,
+    )
+except ImportError:
+    from run_v34_phase2_analysis_recovery import (
+        ENV_FINGERPRINT_EXCLUDED,
+        ENV_FINGERPRINT_SERIALIZATION,
+        PRELAUNCH_SCHEMA,
+        analysis_environment_sha256,
+        environment_sha256,
+        exclusive_json,
+        fsync_directory,
+        sha256_file,
+        validate_authorization,
+    )
 
 
 def require(condition: bool, message: str) -> None:
@@ -36,6 +49,17 @@ def require(condition: bool, message: str) -> None:
 
 def file_record(path: Path) -> dict[str, Any]:
     return {"path": str(path), "bytes": path.stat().st_size, "sha256": sha256_file(path)}
+
+
+def validate_embedded_file_record(record: Any, expected: Path, repo: Path, label: str) -> None:
+    require(isinstance(record, dict), f"{label} record is missing")
+    require({"path", "bytes", "sha256"}.issubset(record), f"{label} record is incomplete")
+    path = Path(record["path"])
+    path = path if path.is_absolute() else repo / path
+    require(path.resolve() == expected.resolve(), f"{label} path does not bind the supplied file")
+    require(expected.is_file(), f"{label} file is missing")
+    require(expected.stat().st_size == record["bytes"], f"{label} size changed")
+    require(sha256_file(expected) == record["sha256"], f"{label} hash changed")
 
 
 def run(
@@ -155,6 +179,8 @@ def create_manifest(args: argparse.Namespace) -> dict[str, Any]:
     require(not inherited_git, f"inherited Git variables found: {inherited_git}")
     authorization = validate_authorization(authorization_path)
     git_context = json.loads(git_context_path.read_text())
+    validate_embedded_file_record(git_context.get("authorization"), authorization_path, repo, "Git-context authorization")
+    validate_embedded_file_record(git_context.get("fileInventory"), git_inventory_path, repo, "Git-context inventory")
     git_dir = Path(authorization["paths"]["gitDir"])
     require(git_context.get("gitDir") == str(git_dir), "Git-context manifest path changed")
     require(not (repo / ".git").exists() and not (repo / ".git").is_symlink(), "authoritative root contains .git")

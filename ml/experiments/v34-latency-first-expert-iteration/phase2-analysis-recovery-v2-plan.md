@@ -86,8 +86,17 @@ permanently abandoned. A superseding v2 authorization revision must use entirely
 new authorization/prelaunch/reservation/marker/stream/Git-context paths and bind
 the corrected generator. The generator must derive the expected HEAD and symbolic
 ref from the hash-bound Git-context manifest; it may not contain a commit/ref
-constant. This operational correction does not alter the analyzer or the accepted
-environment contract.
+constant. It must reverse-bind that post-authorization manifest by requiring the
+manifest's embedded authorization path, byte size, and SHA-256 to match the exact
+supplied authorization, and likewise bind the supplied Git-context inventory.
+The superseding authorization must hash-bind revision 1's incident, this amended
+plan, the corrected generator, and the preserved revision-1 Git-context manifest
+and inventory. It must state mechanically that revision 1 created that isolated
+Git-context lineage, but created no prelaunch-or-later attempt artifact and started
+zero analyzer processes. The new database, manifest, inventory, authorization,
+prelaunch, reservation, markers, streams, and exit paths must all be lineage-unique
+and must not reuse revision-1 v2 artifacts. This operational correction does not
+alter the analyzer or the accepted environment contract.
 
 ## Scientific validity
 
