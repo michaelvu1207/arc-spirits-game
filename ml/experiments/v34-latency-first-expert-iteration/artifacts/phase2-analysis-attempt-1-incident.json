@@ -5,7 +5,7 @@
   "recordedAt": "2026-07-14T17:06:55Z",
   "stdoutCreatedAt": "2026-07-14T17:04:28.274460947Z",
   "exitCode": 1,
-  "classification": "pre-outcome-execution-environment-failure",
+  "classification": "pre-comparative-analysis-execution-environment-failure",
   "repository": {
     "path": "/data/share8/michaelvuaprilexperimentation/arc-bot",
     "wasGitCheckout": false,
@@ -58,7 +58,21 @@
     "function": "validate_strength_lock",
     "sourceLine": 975
   },
-  "callOrderEvidence": {
+  "machineIntegrityVerification": {
+    "lockedNodeVerifierRanForAllSevenManifests": true,
+    "reportReadLine": 235,
+    "outcomeRowsValidatedLines": [365, 420],
+    "completionRecomputedLines": [677, 693],
+    "manifestVerificationLines": [915, 945],
+    "outcomeBearingReportAndReplayRowsRead": true,
+    "stdoutExposed": false,
+    "stderrExposed": false,
+    "crossArmEndpointConstruction": false,
+    "bootstrap": false,
+    "gateEvaluation": false,
+    "rankingOrSelection": false
+  },
+  "pythonCallOrderEvidence": {
     "analyzePhase2EntryLine": 1717,
     "failedValidationCallLine": 1739,
     "firstConditionOutcomeLoader": "load_conditions",
@@ -86,8 +100,10 @@
     }
   },
   "outcomeInspection": {
-    "analyzerReadConditionOutcomes": false,
-    "humanOrAgentOpenedConditionOutcomeAfterLaunch": false,
+    "machineIntegrityReadOccurred": true,
+    "pythonComparativeAnalysisReadOccurred": false,
+    "humanOrAgentObservedConditionOutcomeAfterLaunch": false,
+    "recoveryDecisionConditionedOnPerformance": false,
     "authorizationSelectionObserved": false
   },
   "recovery": {
