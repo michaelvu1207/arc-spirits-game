@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v28-v1-to-v2-exact-distillation-terminal-credit",
-  "status": "running",
+  "status": "rejected-pre-evaluation",
   "createdAt": "2026-07-14T01:12:00Z",
   "createdAtTimeZone": "UTC (2026-07-13 America/Los_Angeles)",
   "sourceCommit": "80ba714",
@@ -151,6 +151,31 @@
   },
   "stopRule": "Run the three preregistered variants once. Do not tune coefficients or epochs on seed block 944000000. If anchor parity fails, fix exact distribution matching. If parity passes but both terminal-credit treatments fail either their causal anchor comparison or their V23 strength comparison, reject this one-step offline credit method and move to on-policy solo PPO or search-improved targets rather than adding width.",
   "promotionEligible": false,
+  "completedAt": "2026-07-14T01:42:00Z",
+  "results": {
+    "stage1": {
+      "exitCode": 0,
+      "bestEpoch": 6,
+      "checkpointSha256": "4fdcdc0db2c3515fae0d99e4004ccf1d67bff1b4aa53fa7e7b9445486b11138a",
+      "trainTeacherKl": 0.07721971442700835,
+      "validationTeacherKlMean": 0.07192975340255081,
+      "validationTeacherKlP99": 0.7648337078094471,
+      "validationTeacherKlMax": 3.2945189476013184,
+      "validationTop1Agreement": 0.8380511417447122,
+      "validationEntropyDelta": 0.08156092069657671,
+      "trainingWallSeconds": 260.71,
+      "peakResidentKiB": 4179272
+    },
+    "trustGate": {
+      "meanKlLimit": 0.05,
+      "p99KlLimit": 0.5,
+      "passed": false
+    },
+    "stage2Started": false,
+    "developmentEvaluationStarted": false,
+    "developmentSeedBlockConsumed": false,
+    "decision": "Reject V28 before the treatment arms. Exact support/temperature reconstruction is correct, but the fixed d128 six-epoch student is not a sufficiently faithful raw-logit anchor. Preserve seed block 944000000 and run a validation-only capacity/optimization screen before any terminal-credit claim."
+  },
   "amendments": [
     {
       "at": "2026-07-14T01:36:00Z",
