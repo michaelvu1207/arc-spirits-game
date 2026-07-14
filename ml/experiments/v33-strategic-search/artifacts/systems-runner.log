@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "arc-v33-preflight-evidence-v1",
+  "strengthUse": false,
+  "evidence": {
+    "informationSafety": "actions.informationSafety.test.ts",
+    "replay": "_gumbelPlanner.test.ts fixed-state/action/visits and unique invocation ordinal",
+    "servedProvenance": "inferenceClient handshake test plus runtime SHA enforcement",
+    "servingErrors": "every actor/inference error is fatal before report creation"
+  },
+  "checks": {
+    "vitest": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v33-strategic-search/artifacts/preflight/vitest.log",
+      "logSha256": "0152157c2c971858ccd93eb157a097a8f6c22dc65eee87b2f76dbeb0d334227f"
+    },
+    "python": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v33-strategic-search/artifacts/preflight/python.log",
+      "logSha256": "d1aaab86fa02d87997171aeb3220b40f5e28046ec4d1674848f9ec5f589f297c"
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v33-strategic-search/artifacts/preflight/typecheck.log",
+      "logSha256": "a741def5b7e7ac991791bd06d2e66cf2bfa26a779930df1737118d22a9130142"
+    },
+    "protocol": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v33-strategic-search/artifacts/preflight/protocol.log",
+      "logSha256": "d879d33f8fb893efa1ce4b53c2f07f69c29f0343540808b59233b9462fa10f03"
+    },
+    "shellSyntax": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v33-strategic-search/artifacts/preflight/shell.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "passed": true,
+  "recordedAt": "2026-07-14T11:18:17.604Z"
+}
+4 workers r0: 2.07 games/s, 0 samples/s, 0 policy rows/s
+16 workers r0: 4.32 games/s, 0 samples/s, 0 policy rows/s
+24 workers r0: 7.43 games/s, 0 samples/s, 0 policy rows/s
+12 workers r0: 5.44 games/s, 0 samples/s, 0 policy rows/s
+8 workers r0: 3.30 games/s, 0 samples/s, 0 policy rows/s
+wrote /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v33-strategic-search/artifacts/systems-raw.json
+Terminated

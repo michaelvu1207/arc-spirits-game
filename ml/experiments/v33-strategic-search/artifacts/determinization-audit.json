@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "arc-v33-determinization-audit-v1",
+  "strengthUse": false,
+  "enginePath": "combat.rollAttack(DICE_TIER_FACES.arcane)",
+  "determinizerPath": "gumbelPlanner.determinizeForSearch",
+  "seed0": 956000000,
+  "samples": 100000,
+  "seedMax": 956099999,
+  "confidence": {
+    "family": 0.99,
+    "method": "two-sided Hoeffding with Bonferroni union bound across categories",
+    "categories": 3,
+    "epsilon": 0.005655497173200666
+  },
+  "rows": [
+    {
+      "face": 1,
+      "count": 16514,
+      "expectedProbability": 0.16666666666666666,
+      "observedProbability": 0.16514,
+      "absoluteError": 0.0015266666666666484,
+      "insideSimultaneous99Envelope": true
+    },
+    {
+      "face": 2,
+      "count": 66761,
+      "expectedProbability": 0.6666666666666666,
+      "observedProbability": 0.66761,
+      "absoluteError": 0.0009433333333334071,
+      "insideSimultaneous99Envelope": true
+    },
+    {
+      "face": 3,
+      "count": 16725,
+      "expectedProbability": 0.16666666666666666,
+      "observedProbability": 0.16725,
+      "absoluteError": 0.0005833333333333524,
+      "insideSimultaneous99Envelope": true
+    }
+  ],
+  "passed": true
+}
