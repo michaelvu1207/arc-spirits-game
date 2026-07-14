@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v30-strategic-tail-cvar-fidelity",
-  "status": "training-running",
+  "status": "selection-winner-frozen",
   "createdAt": "2026-07-14T02:25:00Z",
   "sourceCommit": "b514449",
   "planReview": {
@@ -173,6 +173,7 @@
   },
   "training": {
     "launchedAt": "2026-07-14T02:45:59Z",
+    "completedAt": "2026-07-14T03:10:00Z",
     "launcher": {
       "path": "scripts/run-v30-strategic-tail.sh",
       "sourceCommit": "67ae69f",
@@ -227,12 +228,106 @@
         "strategicTailFraction": 0.05,
         "strategicTailCoef": 0.25
       }
+    ],
+    "systemsAmendments": [
+      {
+        "at": "2026-07-14T02:55:00Z",
+        "change": "Changed only the four V30 learner process nice levels from 5 to 10 while unrelated host workloads drove sustained high CPU load.",
+        "impact": "Wall-clock scheduling only; no data, seeds, row order, optimizer, model, arithmetic, GPU assignment, or selection/gate contract changed."
+      }
     ]
   },
   "selection": {
     "eligible": "On the 256-game selection half, overall mean KL <= 0.05, p99 KL <= 0.5, top-1 >= 0.88; strategic mean KL <= 0.05, strategic p99 KL <= 0.40 (a stricter safety margin than the 0.5 gate), strategic top-1 >= 0.88; all metrics finite.",
     "ranking": "Among eligible arms, choose the lowest strategic CVaR@5%. If two arms differ by less than 0.01 nats, prefer lower overall mean KL; remaining ties prefer mean-control, then CVaR10-c0.25, then CVaR10-c0.50, then CVaR05-c0.25.",
-    "freeze": "Record the selected arm, epoch, checkpoint hash, stats hash, and selection metrics before opening the gate half. If no arm is eligible, reject V30 without opening the gate."
+    "freeze": "Record the selected arm, epoch, checkpoint hash, stats hash, and selection metrics before opening the gate half. If no arm is eligible, reject V30 without opening the gate.",
+    "result": {
+      "frozenAt": "2026-07-14T03:10:29Z",
+      "gateHalfAccessed": false,
+      "allArmsExitCode": 0,
+      "arms": [
+        {
+          "id": "mean-control",
+          "eligible": true,
+          "bestEpoch": 7,
+          "earlyStopped": true,
+          "earlyStopEpoch": 11,
+          "checkpointSha256": "68a094620718503ef1b5a949643641d27698076e65f8e9c1a140f31dd692c431",
+          "statsSha256": "e19a5a83d4baed175a70781abc4152156ede36bebfd183dbe6f1be697461a7c5",
+          "metrics": {
+            "overallMeanKl": 0.01650236134282933,
+            "overallP99Kl": 0.179702141731978,
+            "overallTop1Agreement": 0.9165023936919178,
+            "strategicMeanKl": 0.027841173911568307,
+            "strategicP99Kl": 0.3290867981314656,
+            "strategicCvar05Kl": 0.26546999663114546,
+            "strategicTop1Agreement": 0.9239644147901028
+          }
+        },
+        {
+          "id": "strategic-cvar10-c025",
+          "eligible": true,
+          "bestEpoch": 11,
+          "earlyStopped": false,
+          "earlyStopEpoch": null,
+          "checkpointSha256": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06",
+          "statsSha256": "5f0190bcfbeaab05bfcf350aec522560a935e6f602b634aa1d0a12cbe2a6ad04",
+          "metrics": {
+            "overallMeanKl": 0.01742323594177998,
+            "overallP99Kl": 0.17696065172553072,
+            "overallTop1Agreement": 0.9143199098845396,
+            "strategicMeanKl": 0.02771803896580766,
+            "strategicP99Kl": 0.29526195138692823,
+            "strategicCvar05Kl": 0.250032597552571,
+            "strategicTop1Agreement": 0.9260494856825132
+          }
+        },
+        {
+          "id": "strategic-cvar10-c050",
+          "eligible": true,
+          "bestEpoch": 3,
+          "earlyStopped": true,
+          "earlyStopEpoch": 7,
+          "checkpointSha256": "66a4f3730eb6a2bf57fc9af92aec22291cf81f654dc343e4a2b53499680cf855",
+          "statsSha256": "3c8e701db61f8983e01ebe3ea8d36b8e81fce3399e67b2c91666787a73bf394c",
+          "metrics": {
+            "overallMeanKl": 0.019373204560289285,
+            "overallP99Kl": 0.19816751167178157,
+            "overallTop1Agreement": 0.9117854125598422,
+            "strategicMeanKl": 0.03339174325442529,
+            "strategicP99Kl": 0.3588847935199733,
+            "strategicCvar05Kl": 0.2856900637762414,
+            "strategicTop1Agreement": 0.9216013344453712
+          }
+        },
+        {
+          "id": "strategic-cvar05-c025",
+          "eligible": true,
+          "bestEpoch": 10,
+          "earlyStopped": true,
+          "earlyStopEpoch": 10,
+          "checkpointSha256": "2cbf643922051a1440448b3d991e5a91c49fe91084018a9ff7569b825b435dde",
+          "statsSha256": "7f57cdae35d261c67bd66abd6ba07755493fd73b9b60cb457c168a75319ac083",
+          "metrics": {
+            "overallMeanKl": 0.019628869241046353,
+            "overallP99Kl": 0.20517360001802476,
+            "overallTop1Agreement": 0.9123134328358209,
+            "strategicMeanKl": 0.03287420356944063,
+            "strategicP99Kl": 0.3172618600726125,
+            "strategicCvar05Kl": 0.2689993022630612,
+            "strategicTop1Agreement": 0.9213233249930498
+          }
+        }
+      ],
+      "winner": {
+        "id": "strategic-cvar10-c025",
+        "bestEpoch": 11,
+        "checkpoint": "ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar10-c025/checkpoint.pt",
+        "checkpointSha256": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06",
+        "statsSha256": "5f0190bcfbeaab05bfcf350aec522560a935e6f602b634aa1d0a12cbe2a6ad04",
+        "reason": "Lowest eligible strategic CVaR@5%; its 0.2500326 score beats control by 0.0154374 nats, so the less-than-0.01 overall-mean tie-break does not apply."
+      }
+    }
   },
   "oneShotGate": {
     "checkpoint": "Exactly one frozen selection winner",
