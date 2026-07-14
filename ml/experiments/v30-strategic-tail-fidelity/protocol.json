@@ -1,0 +1,200 @@
+{
+  "schemaVersion": "arc-controlled-experiment-v1",
+  "experiment": "v30-strategic-tail-cvar-fidelity",
+  "status": "planned-review-incorporated",
+  "createdAt": "2026-07-14T02:25:00Z",
+  "sourceCommit": "b514449",
+  "planReview": {
+    "model": "Claude Fable",
+    "effort": "high",
+    "artifact": "ml/experiments/v30-strategic-tail-fidelity/fable-review.md",
+    "status": "incorporated",
+    "incorporated": [
+      "select and early-stop on strategic CVaR@5% rather than p99",
+      "require selection strategic p99 <= 0.40 as a safety margin",
+      "add a stronger CVaR10 coefficient-0.50 arm",
+      "assert V27/fresh generator-config parity",
+      "pin every stochastic seed and report realized tail sample sizes",
+      "add a non-decision game-cluster bootstrap and late-round gate metrics"
+    ]
+  },
+  "motivation": {
+    "v29Winner": "d128-policy-only-continue24-lr1e4 epoch 23",
+    "checkpointSha256": "37d4268900cba44583dcc19e19222db97f8104493d17ad8dc8180025fe138dff",
+    "v29Gate": {
+      "overallMeanKl": 0.02402373613229378,
+      "overallP99Kl": 0.2836954593658447,
+      "overallTop1Agreement": 0.9024716569255686,
+      "strategicMeanKl": 0.043026357674792855,
+      "strategicP99Kl": 0.5555545151233665,
+      "strategicTop1Agreement": 0.906712172923777,
+      "failedOnly": "strategic p99 KL <= 0.5"
+    },
+    "conclusion": "Average fidelity and d128 capacity are adequate, but rare lockNavigation errors do not generalize across game seeds. V30 tests more trajectory coverage plus an explicit strategic tail-risk objective. It does not revisit width or use V29 gate rows for model selection."
+  },
+  "scope": "Fidelity-only screen. It makes no strength claim and cannot promote a bot.",
+  "inputs": {
+    "catalog": {
+      "path": "ml/catalogs/live-20260713-5f4ad348.json",
+      "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+    },
+    "teacher": {
+      "path": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+      "sha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472"
+    },
+    "init": {
+      "path": "ml/experiments/v29-distill-fidelity/arms/d128-policy-only-continue24-lr1e4/checkpoint.pt",
+      "sha256": "37d4268900cba44583dcc19e19222db97f8104493d17ad8dc8180025fe138dff"
+    },
+    "existingTrain": {
+      "path": "ml/experiments/v27-entity-live/train",
+      "seed0": 941000000,
+      "games": 1024
+    }
+  },
+  "freshData": {
+    "dataGeneratingPolicy": "Frozen V23 obs-v1 teacher, hybrid sampling at temperature 0.55",
+    "shared": {
+      "seats": 1,
+      "maxRounds": 30,
+      "maxStatusLevel": 2,
+      "shuffleGuardians": true,
+      "guardianSchedule": "absolute-balanced",
+      "selection": "hybrid",
+      "sample": true,
+      "temperature": 0.55,
+      "gamma": 0.999,
+      "recordObsVersion": 2,
+      "policyObsVersion": 1,
+      "workers": 6
+    },
+    "additionalTrain": {
+      "path": "ml/experiments/v30-strategic-tail-fidelity/data/train-new",
+      "seed0": 947000000,
+      "games": 1024
+    },
+    "validation": {
+      "path": "ml/experiments/v30-strategic-tail-fidelity/data/validation",
+      "seed0": 948000000,
+      "games": 512,
+      "selection": {
+        "seed0": 948000000,
+        "games": 256
+      },
+      "gate": {
+        "seed0": 948000256,
+        "games": 256
+      }
+    },
+    "reservedUnconsumed": {
+      "terminalCredit": 944000000,
+      "hiddenSolo": 945000000,
+      "ppo": 946000000
+    },
+    "merge": "Train on all 2,048 disjoint games through a manifest-backed symlink merge; do not copy JSONL payloads and do not include any V29 validation rows.",
+    "integrity": [
+      "catalog and teacher hashes match",
+      "the normalized fresh actor command exactly matches the V27 generator contract for seats, rounds, status cap, guardian shuffle/schedule, selection, sampling temperature, gamma, and observation versions",
+      "all rows have exact obs-v1/obs-v2/action schemas and complete outcomes",
+      "zero malformed rows and zero stalls",
+      "the existing, additional-train, validation-selection, and validation-gate game-id sets are pairwise disjoint",
+      "teacher chosen-logp max absolute reconstruction error <= 0.001"
+    ],
+    "diskGuard": "Require at least 8 GiB free before generation and at least 5 GiB after generation; stop without deleting unrelated artifacts otherwise."
+  },
+  "implementation": {
+    "tailLoss": "For each minibatch, retain the ordinary mean exact teacher KL over all policy rows. Among strategic policy rows only, compute the mean of the largest ceil(q*N) per-row KL values and add coefficient times this CVaR term. The top-k set is selected from detached KL values but the selected KL values retain gradients.",
+    "smallBatchRule": "If a minibatch has no strategic policy row, the CVaR term is zero. Otherwise select at least one strategic row.",
+    "normalization": "No inverse-frequency multiplier. Each arm has the same base mean-KL term; the CVaR coefficient is the only treatment difference.",
+    "report": [
+      "base mean KL and strategic CVaR training terms separately",
+      "per-batch realized strategic row count and selected top-k count distributions",
+      "selection overall mean/p99/top1",
+      "selection strategic mean/p95/p99/CVaR@5%/max/top1",
+      "round 23-30 mean/p99/top1",
+      "teacher-logp audit, nonfinite count, wall time, peak RSS, checkpoint and stats hashes"
+    ],
+    "tests": [
+      "top-k size and empty-strategic behavior",
+      "tail coefficient zero is numerically identical to V29 mean-only loss",
+      "CVaR gradient reaches only the selected strategic rows in an isolated fixture",
+      "selection metric strategicTeacherKlCvar05 saves and restores the expected checkpoint",
+      "fresh split and merged-manifest disjointness"
+    ]
+  },
+  "training": {
+    "architecture": {
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4
+    },
+    "init": "Same frozen V29 epoch-23 checkpoint for every arm",
+    "optimizer": "Fresh Adam for every arm",
+    "epochs": 12,
+    "batchSize": 512,
+    "learningRate": 0.00005,
+    "teacherKlCoef": 1.0,
+    "valueCoef": 0.0,
+    "reach30Coef": 0.0,
+    "outcomePgCoef": 0.0,
+    "maxGradNorm": 1.0,
+    "seed": 300100,
+    "rowOrderSeed": 300100,
+    "earlyStopping": {
+      "metric": "selection-half strategic CVaR@5%, defined as the mean of the largest ceil(0.05*N) strategic per-row KL values",
+      "patience": 4,
+      "minimumAbsoluteImprovement": 0.002,
+      "minimumEpochs": 4,
+      "restore": "best selection-half checkpoint"
+    },
+    "arms": [
+      {
+        "id": "mean-control",
+        "seed": 300100,
+        "strategicTailFraction": null,
+        "strategicTailCoef": 0.0
+      },
+      {
+        "id": "strategic-cvar10-c025",
+        "seed": 300100,
+        "strategicTailFraction": 0.1,
+        "strategicTailCoef": 0.25
+      },
+      {
+        "id": "strategic-cvar10-c050",
+        "seed": 300100,
+        "strategicTailFraction": 0.1,
+        "strategicTailCoef": 0.5
+      },
+      {
+        "id": "strategic-cvar05-c025",
+        "seed": 300100,
+        "strategicTailFraction": 0.05,
+        "strategicTailCoef": 0.25
+      }
+    ]
+  },
+  "selection": {
+    "eligible": "On the 256-game selection half, overall mean KL <= 0.05, p99 KL <= 0.5, top-1 >= 0.88; strategic mean KL <= 0.05, strategic p99 KL <= 0.40 (a stricter safety margin than the 0.5 gate), strategic top-1 >= 0.88; all metrics finite.",
+    "ranking": "Among eligible arms, choose the lowest strategic CVaR@5%. If two arms differ by less than 0.01 nats, prefer lower overall mean KL; remaining ties prefer mean-control, then CVaR10-c0.25, then CVaR10-c0.50, then CVaR05-c0.25.",
+    "freeze": "Record the selected arm, epoch, checkpoint hash, stats hash, and selection metrics before opening the gate half. If no arm is eligible, reject V30 without opening the gate."
+  },
+  "oneShotGate": {
+    "checkpoint": "Exactly one frozen selection winner",
+    "data": "The untouched 256-game gate half only",
+    "thresholds": {
+      "overallMeanKlMax": 0.05,
+      "overallP99KlMax": 0.5,
+      "overallTop1Min": 0.88,
+      "strategicMeanKlMax": 0.05,
+      "strategicP99KlMax": 0.5,
+      "strategicTop1Min": 0.88
+    },
+    "rule": "Gate metrics are pass/fail only. Never evaluate a runner-up or tune from gate results. A failure rejects V30.",
+    "informationalOnly": "Report round 23-30 metrics and a deterministic 10,000-replicate complete-game-cluster bootstrap 95% interval for strategic p99 using seed 300199. Neither changes pass/fail."
+  },
+  "systemsGate": "Only after the one-shot fidelity gate passes, remeasure A100 binary-wire p95 request latency at 32 rows, 30 candidates, eight clients; require <= 100 ms.",
+  "nextStage": "Only a fidelity- and latency-valid anchor may enter the separately reviewed terminal-credit experiment on seed block 944000000.",
+  "nullResult": "If mean-control wins, conclude added coverage is sufficient and do not attribute benefit to CVaR. If no arm is eligible or CVaR arms do not improve robust selection tail metrics over control, do not sweep coefficients on gate data; move to additional trajectory coverage or a separately reviewed navigation-residual representation experiment on new seeds.",
+  "promotionEligible": false
+}
