@@ -60,12 +60,13 @@ def write_dataset(
                     logp = torch.log_softmax(scaled, dim=-1)
                     chosen = int(logp.argmax())
                 won = game % 2 == 0
+                policy_row = step == 0 or (step == 1 and game % 2 == 0)
                 record = {
                     "obs": obs.tolist(),
                     "obsV2": flat[(game * 2 + step) % flat.shape[0]].tolist(),
                     "cands": cands.tolist(),
                     "chosen": chosen,
-                    "policyMask": int(step == 0),
+                    "policyMask": int(policy_row),
                     "reach30Pred": 0.4 + 0.1 * won,
                     "strategic": int(step == 0),
                     "decisionType": "lockNavigation" if step == 0 else "resolveMonsterReward",
@@ -74,7 +75,7 @@ def write_dataset(
                     "ret": float(value),
                     "gameId": f"{seed * 100000 + game}-1p-Red",
                 }
-                if step == 0:
+                if policy_row:
                     record.update({
                         "behaviorMask": behavior_mask.astype(int).tolist(),
                         "behaviorTemperature": 0.55,
@@ -104,7 +105,7 @@ def test_dataset_equal_game_weights_and_support() -> None:
         write_dataset(root / "data", teacher, seed=11)
         dataset = OutcomeDistillDataset(root / "data")
         assert len(dataset) == 16 and dataset.games == 8 and dataset.true_wins == 4
-        assert dataset.policy_row_count == 8
+        assert dataset.policy_row_count == 12
         assert np.isclose(dataset.reach_weight.sum(), 8)
         assert np.isclose(dataset.outcome_weight.sum(), 8)
         assert all(mask[chosen] for mask, chosen in zip(dataset.behavior_masks, dataset.chosen))
@@ -171,6 +172,8 @@ def test_stage1_and_stage2_end_to_end() -> None:
             early_stop_patience=2,
             early_stop_min_delta=0.0001,
             early_stop_min_epochs=1,
+            strategic_kl_fraction=0.5,
+            selection_metric="strategicTeacherKlMean",
             teacher_logp_tolerance=1e-5,
             device=torch.device("cpu"),
         )

@@ -240,6 +240,15 @@ class OutcomeDistillDataset(Dataset):
         )
         self.games = len(game_counts)
         self.policy_row_count = int(sum(self.policy_rows))
+        self.strategic_policy_row_count = int(
+            sum(
+                strategic and policy_row
+                for strategic, policy_row in zip(self.strategic, self.policy_rows)
+            )
+        )
+        self.nonstrategic_policy_row_count = (
+            self.policy_row_count - self.strategic_policy_row_count
+        )
         self.true_wins = int(sum(outcome[0] for outcome in outcomes.values()))
         self.reach30_horizon = 30
         self.total_reach_weight = float(self.reach_weight.sum())
@@ -619,6 +628,8 @@ def train(
     max_strategic_p99_kl: float | None = None,
     min_top1_agreement: float | None = None,
     min_strategic_top1_agreement: float | None = None,
+    strategic_kl_fraction: float | None = None,
+    selection_metric: str = "teacherKlMean",
     device: torch.device | None = None,
 ) -> dict[str, Any]:
     if device is None:
@@ -637,19 +648,25 @@ def train(
         raise ValueError("early-stop controls must be nonnegative")
     if early_stop_patience and not select_best_teacher_kl:
         raise ValueError("early stopping requires select_best_teacher_kl")
-    split_values = (
-        val_select_seed0,
-        val_select_games,
-        val_gate_seed0,
-        val_gate_games,
-    )
-    if any(value is not None for value in split_values) and not all(
-        value is not None for value in split_values
-    ):
-        raise ValueError("validation selection/gate split requires all four seed arguments")
+    if (val_select_seed0 is None) != (val_select_games is None):
+        raise ValueError("validation selection split requires seed0 and games")
+    if (val_gate_seed0 is None) != (val_gate_games is None):
+        raise ValueError("validation gate split requires seed0 and games")
+    if val_gate_seed0 is not None and val_select_seed0 is None:
+        raise ValueError("validation gate split requires a selection split")
+    if strategic_kl_fraction is not None and not 0 < strategic_kl_fraction < 1:
+        raise ValueError("strategic_kl_fraction must be in (0,1)")
+    allowed_selection_metrics = {"teacherKlMean", "strategicTeacherKlMean"}
+    if selection_metric not in allowed_selection_metrics:
+        raise ValueError(f"selection_metric must be one of {sorted(allowed_selection_metrics)}")
 
     train_ds = OutcomeDistillDataset(data_dir, expected_temperature=expected_temperature)
     val_ds = OutcomeDistillDataset(val_data_dir, expected_temperature=expected_temperature)
+    if strategic_kl_fraction is not None and (
+        train_ds.strategic_policy_row_count <= 0
+        or train_ds.nonstrategic_policy_row_count <= 0
+    ):
+        raise ValueError("strategic KL balancing requires both policy subgroups")
     if (
         train_ds.spec.header != val_ds.spec.header
         or train_ds.obs_dim != val_ds.obs_dim
@@ -738,10 +755,12 @@ def train(
         selection_data: Dataset = seed_subset(
             val_ds, seed0=val_select_seed0, games=int(val_select_games)
         )
-        gate_data: Dataset | None = seed_subset(
-            val_ds, seed0=int(val_gate_seed0), games=int(val_gate_games)
+        gate_data: Dataset | None = (
+            seed_subset(val_ds, seed0=int(val_gate_seed0), games=int(val_gate_games))
+            if val_gate_seed0 is not None
+            else None
         )
-        if set(selection_data.indices) & set(gate_data.indices):
+        if gate_data is not None and set(selection_data.indices) & set(gate_data.indices):
             raise ValueError("validation selection and gate rows overlap")
     else:
         selection_data = val_ds
@@ -797,6 +816,8 @@ def train(
             "earlyStopPatience": early_stop_patience,
             "earlyStopMinDelta": early_stop_min_delta,
             "earlyStopMinEpochs": early_stop_min_epochs,
+            "strategicKlFraction": strategic_kl_fraction,
+            "selectionMetric": selection_metric,
         },
         "epochs": [],
     }
@@ -826,9 +847,27 @@ def train(
                 teacher_logits, student_logits, behavior, temperature, chosen
             )
             policy_device = policy_row.to(device)
-            teacher_kl = terms["kl"][policy_device].sum() * (
-                len(train_ds) / (obs_v1.shape[0] * train_ds.policy_row_count)
-            )
+            if strategic_kl_fraction is None:
+                teacher_kl = terms["kl"][policy_device].sum() * (
+                    len(train_ds) / (obs_v1.shape[0] * train_ds.policy_row_count)
+                )
+            else:
+                strategic_device = outcome_weight.to(device) > 0
+                nonstrategic_device = policy_device & ~strategic_device
+                teacher_kl = (
+                    strategic_kl_fraction
+                    * terms["kl"][strategic_device].sum()
+                    * (
+                        len(train_ds)
+                        / (obs_v1.shape[0] * train_ds.strategic_policy_row_count)
+                    )
+                    + (1.0 - strategic_kl_fraction)
+                    * terms["kl"][nonstrategic_device].sum()
+                    * (
+                        len(train_ds)
+                        / (obs_v1.shape[0] * train_ds.nonstrategic_policy_row_count)
+                    )
+                )
             value_loss = F.mse_loss(value, ret)
             reach_loss = reach30_multihorizon_minibatch_loss(
                 model.reach30_all_logits(obs_v2),
@@ -914,12 +953,13 @@ def train(
             raise RuntimeError(
                 f"V28 p99 validation KL {validation['teacherKlP99']:.6f} > {max_p99_kl}"
             )
-        if select_best_teacher_kl and validation["teacherKlMean"] < best_kl:
-            best_kl = validation["teacherKlMean"]
+        selection_value = validation[selection_metric]
+        if select_best_teacher_kl and selection_value < best_kl:
+            best_kl = selection_value
             best_epoch = epoch
             best_state = copy.deepcopy(model.state_dict())
-        if validation["teacherKlMean"] < significant_best - early_stop_min_delta:
-            significant_best = validation["teacherKlMean"]
+        if selection_value < significant_best - early_stop_min_delta:
+            significant_best = selection_value
             stale_epochs = 0
         else:
             stale_epochs += 1
@@ -937,7 +977,10 @@ def train(
             raise RuntimeError("no finite V28 checkpoint selected")
         model.load_state_dict(best_state)
         stats["bestEpoch"] = best_epoch
-        stats["bestValidationTeacherKl"] = best_kl
+        stats["bestValidationSelectionMetric"] = best_kl
+        stats["selectionMetric"] = selection_metric
+        if selection_metric == "teacherKlMean":
+            stats["bestValidationTeacherKl"] = best_kl
     final_validation = evaluate(
         model,
         teacher,
@@ -1025,6 +1068,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-strategic-p99-kl", type=float)
     parser.add_argument("--min-top1-agreement", type=float)
     parser.add_argument("--min-strategic-top1-agreement", type=float)
+    parser.add_argument("--strategic-kl-fraction", type=float)
+    parser.add_argument(
+        "--selection-metric",
+        choices=["teacherKlMean", "strategicTeacherKlMean"],
+        default="teacherKlMean",
+    )
     parser.add_argument("--device", type=str)
     return parser.parse_args()
 
@@ -1067,6 +1116,8 @@ def main() -> int:
         max_strategic_p99_kl=args.max_strategic_p99_kl,
         min_top1_agreement=args.min_top1_agreement,
         min_strategic_top1_agreement=args.min_strategic_top1_agreement,
+        strategic_kl_fraction=args.strategic_kl_fraction,
+        selection_metric=args.selection_metric,
         device=torch.device(args.device) if args.device else None,
     )
     args.stats_out.parent.mkdir(parents=True, exist_ok=True)

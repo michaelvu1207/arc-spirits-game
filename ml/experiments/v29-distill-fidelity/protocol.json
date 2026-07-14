@@ -40,7 +40,26 @@
     ],
     "aliasDefinition": "Hash exact float32 obsV2 bytes plus exact candidate/support bytes. If one identical student input maps to teacher distributions whose total-variation distance exceeds 0.0001, report the pair as an alias.",
     "stopIf": "A fail-closed schema/header mismatch or any exact-input teacher-target alias under aliasDefinition. In that case repair the encoder rather than spending more training compute.",
-    "artifact": "ml/experiments/v29-distill-fidelity/pretraining-diagnostic.json"
+    "artifact": "ml/experiments/v29-distill-fidelity/pretraining-diagnostic.json",
+    "result": {
+      "valid": true,
+      "policyRows": 28509,
+      "exactDuplicateInputs": 64,
+      "aliasesAboveTvThreshold": 0,
+      "maxDuplicateTargetTv": 0.0,
+      "overall": {
+        "meanKl": 0.07192975340255081,
+        "p99Kl": 0.7648337078094471,
+        "top1Agreement": 0.8380511417447122
+      },
+      "strategic": {
+        "rows": 7112,
+        "meanKl": 0.14275269073348895,
+        "p99Kl": 1.1471701025962844,
+        "top1Agreement": 0.8100393700787402
+      },
+      "conclusion": "No exact-input encoder alias exists. Underfit is concentrated in strategic lockNavigation decisions, so V29 may test balanced strategic policy fidelity without repairing obs-v2."
+    }
   },
   "validationSplit": {
     "selection": {
@@ -84,6 +103,23 @@
       "select": "minimum selection-half teacher KL"
     },
     {
+      "id": "d128-policy-only-strategic-balanced-continue24-lr1e4",
+      "init": "V28 d128 epoch 6 checkpoint",
+      "optimizer": "fresh Adam; optimizer state was not checkpointed",
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4,
+      "maxEpochs": 24,
+      "learningRate": 0.0001,
+      "valueCoef": 0.0,
+      "reach30Coef": 0.0,
+      "strategicKlFraction": 0.5,
+      "strategicKlDefinition": "Scale equal-row minibatch estimates so strategic policy rows carry 50% of total teacher-KL objective mass and non-strategic policy rows carry 50%, each normalized by its full-dataset subgroup count.",
+      "seed": 292900,
+      "purpose": "Diagnostic showed strategic rows are 25% of policy rows but carry roughly twice the aggregate mean KL. Give strategic and non-strategic rows equal teacher-KL objective mass without changing any target or support.",
+      "select": "minimum selection-half strategic teacher KL; early stopping uses the same metric"
+    },
+    {
       "id": "d256-fresh24-lr3e4",
       "init": "fresh deterministic initialization",
       "dModel": 256,
@@ -105,7 +141,7 @@
     "teacherLogpTolerance": 0.001,
     "rowOrderSeed": 292900,
     "earlyStopping": {
-      "metric": "selection-half mean teacher KL",
+      "metric": "selection-half mean teacher KL for ordinary arms; selection-half strategic mean teacher KL for the strategic-balanced arm",
       "patience": 4,
       "minimumAbsoluteImprovement": 0.001,
       "minimumEpochs": 6,
@@ -121,9 +157,24 @@
     "fidelity": "On the untouched 128-game gate half: mean KL <= 0.05 nats, p99 KL <= 0.5 nats, top-1 agreement >= 0.88, and every metric finite.",
     "strategicFidelity": "On gate-half strategic policy rows alone: mean KL <= 0.05 nats, p99 KL <= 0.5 nats, and top-1 agreement >= 0.88. Aggregate fidelity cannot hide poor terminal-credit states.",
     "latency": "A selected checkpoint must pass A100 binary-wire p95 request latency <= 100 ms at 32 rows, 30 candidates, eight clients. The identical d256/l4/h8 architecture already measured 34.25 ms p95 in V27; remeasure the selected weights before the next stage.",
-    "selection": "Prefer a passing d128 arm over d256 because d128 has better measured throughput and latency. Between passing d128 arms, prefer multitask only if its gate KL is within 0.005 nats of policy-only; otherwise the result establishes critic-gradient interference and policy-only becomes the fidelity anchor. Use d256 only if both d128 arms fail and d256 passes. If none passes, stop; do not extend epochs post hoc under this protocol.",
+    "selection": "Use selection-half metrics only. Among d128 arms that meet the selection-half fidelity thresholds, choose the lowest strategic selection-half mean KL provided aggregate selection-half mean KL is within 0.005 nats of the best eligible d128 aggregate KL; comparisons are paired per row. Ties prefer multitask, then unweighted policy-only, then strategic-balanced. Consider d256 only if no d128 arm is selection-eligible. Freeze this one checkpoint before opening the gate half.",
+    "oneShotGate": "Evaluate the 128-game gate half exactly once on the single checkpoint chosen from selection-half metrics. Gate metrics are pass/fail only and never rank arms. If the chosen checkpoint fails, stop V29; do not evaluate or fall through to a runner-up.",
     "d256Fallback": "If d256 passes fidelity but fails the remeasured latency gate, reject it and stop; do not promote or silently relax latency."
   },
   "nextStage": "Freeze the selected checkpoint hash, then create a separately reviewed terminal-credit protocol using the still-unconsumed 944000000 development block. V29 itself never evaluates solo strength.",
-  "promotionEligible": false
+  "promotionEligible": false,
+  "amendments": [
+    {
+      "at": "2026-07-14T01:58:00Z",
+      "runtimeSourceCommit": "ef56c98",
+      "optimizerCreated": false,
+      "reason": "The preregistered full-validation diagnostic found zero exact-input target aliases and localized fidelity error to strategic lockNavigation rows. Add a strategic-balanced policy-only arm before any V29 optimizer so the screen can distinguish raw compute, critic interference, capacity, and strategic loss allocation."
+    },
+    {
+      "at": "2026-07-14T02:02:00Z",
+      "review": "Claude Fable high effort",
+      "optimizerCreated": false,
+      "reason": "Correct selection leakage before training: rank arms and select epochs only on the selection half, match the strategic arm's early-stop metric to its purpose, and open the gate half exactly once for the frozen winner with no runner-up fallback."
+    }
+  ]
 }

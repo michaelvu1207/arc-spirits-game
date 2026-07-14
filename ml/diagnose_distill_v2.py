@@ -22,6 +22,7 @@ from outcome_distill_v2 import (  # noqa: E402
     collate,
     load_teacher,
     masked_policy_terms,
+    seed_subset,
     sha256,
 )
 
@@ -62,6 +63,8 @@ def diagnose(
     batch_size: int = 256,
     alias_tv_threshold: float = 0.0001,
     worst_rows: int = 100,
+    seed0: int | None = None,
+    games: int | None = None,
     device: torch.device | None = None,
 ) -> dict[str, Any]:
     if device is None:
@@ -71,7 +74,15 @@ def diagnose(
         teacher_path, obs_dim=dataset.obs_dim, act_dim=dataset.act_dim, device=device
     )
     student = load_checkpoint(student_path, device=device, spec=dataset.spec).eval()
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collate)
+    if (seed0 is None) != (games is None):
+        raise ValueError("diagnostic seed filter requires both seed0 and games")
+    if seed0 is None:
+        eval_data = dataset
+        row_indices = list(range(len(dataset)))
+    else:
+        eval_data = seed_subset(dataset, seed0=seed0, games=int(games))
+        row_indices = list(eval_data.indices)
+    loader = DataLoader(eval_data, batch_size=batch_size, shuffle=False, collate_fn=collate)
 
     groups: dict[str, dict[str, list]] = defaultdict(
         lambda: {"kl": [], "agree": [], "entropy": []}
@@ -108,7 +119,7 @@ def diagnose(
                 terms["student_entropy"] - terms["teacher_entropy"]
             ).cpu().numpy()
             for local in range(batch_rows):
-                global_index = cursor + local
+                global_index = row_indices[cursor + local]
                 if not bool(policy_row[local]):
                     continue
                 support_size = int(behavior[local].sum())
@@ -187,12 +198,14 @@ def diagnose(
         "teacherSha256": sha256(teacher_path),
         "student": str(student_path),
         "studentSha256": sha256(student_path),
-        "policyRows": dataset.policy_row_count,
+        "seed0": seed0,
+        "games": games,
+        "policyRows": int(sum(dataset.policy_rows[index] for index in row_indices)),
         "metrics": summaries,
         "aliasAudit": {
             "definition": "exact obsV2+candidates+behaviorMask+temperature hash",
             "uniqueInputs": len(alias_reference),
-            "duplicateInputs": dataset.policy_row_count - len(alias_reference),
+            "duplicateInputs": int(sum(dataset.policy_rows[index] for index in row_indices)) - len(alias_reference),
             "tvThreshold": alias_tv_threshold,
             "aliasesAboveThreshold": len(aliases),
             "maxDuplicateTargetTv": max_alias_tv,
@@ -210,6 +223,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--alias-tv-threshold", type=float, default=0.0001)
     parser.add_argument("--worst-rows", type=int, default=100)
+    parser.add_argument("--seed0", type=int)
+    parser.add_argument("--games", type=int)
     parser.add_argument("--device", type=str)
     parser.add_argument("--out", type=Path, required=True)
     return parser.parse_args()
@@ -224,6 +239,8 @@ def main() -> int:
         batch_size=args.batch_size,
         alias_tv_threshold=args.alias_tv_threshold,
         worst_rows=args.worst_rows,
+        seed0=args.seed0,
+        games=args.games,
         device=torch.device(args.device) if args.device else None,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
