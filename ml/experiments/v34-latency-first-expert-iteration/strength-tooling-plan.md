@@ -63,7 +63,8 @@ For candidate `j` and seed `i`, calculate paired candidate-minus-raw differences
 4. censored first round reaching 30 VP, where failure is round 31 and lower is better.
 
 Use complete-seed cluster resampling with 10,000 draws from `numpy.random.Generator(PCG64(34022026))`.
-Pin and record the exact Python and NumPy versions in the strength lock. For draw `b`, endpoint `e`,
+Pin the dedicated `ml/v34_stats_env/.venv/bin/python` executable and record the exact Python and NumPy
+versions in the strength lock. For draw `b`, endpoint `e`,
 observed mean `m_e`, bootstrap mean `m_be`, and original paired standard error `se_e`, compute
 `t_be = (m_be - m_e) / se_e`, then `T_b = max_e(abs(t_be))`. Exclude zero-standard-error endpoints
 from `T_b`; they pass only when their point estimate satisfies the gate. The two-sided simultaneous

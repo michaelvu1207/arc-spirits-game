@@ -13,6 +13,7 @@
 		"checkpointSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
 	},
 	"environment": {
+		"executable": "ml/v34_stats_env/.venv/bin/python",
 		"python": "3.12.8",
 		"numpy": "2.5.0",
 		"rng": "numpy.random.Generator(PCG64)",

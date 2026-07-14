@@ -519,7 +519,8 @@ def validate_strength_protocol(
         raise ValueError("strength protocol Phase 2 gates changed")
     environment = strength.get("environment", {})
     if (
-        environment.get("python") != platform.python_version()
+        environment.get("executable") != "ml/v34_stats_env/.venv/bin/python"
+        or environment.get("python") != platform.python_version()
         or environment.get("numpy") != np.__version__
         or environment.get("rng") != "numpy.random.Generator(PCG64)"
         or environment.get("exactFixtureRequired") is not True

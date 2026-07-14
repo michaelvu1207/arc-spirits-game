@@ -71,6 +71,7 @@ if (!same(protocol.authorization, expectedAuthorization)) {
 	fail('initial authorization must remain fully closed');
 }
 if (
+	protocol.environment.executable !== 'ml/v34_stats_env/.venv/bin/python' ||
 	protocol.environment.python !== '3.12.8' ||
 	protocol.environment.numpy !== '2.5.0' ||
 	protocol.environment.rng !== 'numpy.random.Generator(PCG64)' ||
@@ -80,7 +81,7 @@ if (
 }
 const environment = JSON.parse(
 	execFileSync(
-		'ml/.venv/bin/python',
+		protocol.environment.executable,
 		[
 			'-c',
 			'import json,platform,numpy;print(json.dumps({"python":platform.python_version(),"numpy":numpy.__version__}))'

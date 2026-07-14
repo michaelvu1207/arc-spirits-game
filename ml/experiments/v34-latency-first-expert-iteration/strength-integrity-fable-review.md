@@ -32,6 +32,9 @@ statistics, immutable lock, and seed firewall.
 ## Additional implementation corrections from the review cycle
 
 - The exact remote Python preflight command now sets `PYTHONPATH=ml`.
+- Statistical fixtures and analysis use the dedicated, protocol-pinned
+  `ml/v34_stats_env/.venv/bin/python` (Python 3.12.8, NumPy 2.5.0), leaving the shared Torch inference
+  environment unchanged.
 - The Python analyzer independently reconstructs replay equality and the complete launch argv contract.
 - Python protocol numbers use JavaScript-compatible CLI serialization, including `1.0 -> "1"` and
   `0.0 -> "0"`, so rerank-p100 and heuristic arms cannot be falsely rejected.

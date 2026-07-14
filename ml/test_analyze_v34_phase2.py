@@ -388,6 +388,7 @@ class Fixture:
                 "checkpointSha256": self.policy_sha,
             },
             "environment": {
+                "executable": "ml/v34_stats_env/.venv/bin/python",
                 "python": platform.python_version(),
                 "numpy": np.__version__,
                 "rng": "numpy.random.Generator(PCG64)",

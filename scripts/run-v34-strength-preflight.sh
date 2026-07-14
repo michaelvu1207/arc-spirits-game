@@ -20,7 +20,7 @@ node scripts/verify-v34-strength-chain.mjs evidence > "$OUT_DIR/evidence-chain.l
 protocol_code=0
 node scripts/validate-v34-strength-protocol.mjs > "$OUT_DIR/strength-protocol.log" 2>&1 || protocol_code=$?
 python_code=0
-PYTHONPATH=ml ml/.venv/bin/python -m unittest ml.test_analyze_v34_phase2 \
+PYTHONPATH=ml ml/v34_stats_env/.venv/bin/python -m unittest ml.test_analyze_v34_phase2 \
 	> "$OUT_DIR/python-fixtures.log" 2>&1 || python_code=$?
 recorder_code=0
 node scripts/test-v34-phase2-condition.mjs \
