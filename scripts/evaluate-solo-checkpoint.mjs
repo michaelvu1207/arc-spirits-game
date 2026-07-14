@@ -25,6 +25,8 @@ process.chdir(root);
 const { values: args } = parseArgs({
 	options: {
 		weights: { type: 'string' },
+		'infer-socket': { type: 'string' },
+		'policy-obs-version': { type: 'string', default: '1' },
 		catalog: { type: 'string', default: 'ml/catalog.json' },
 		'source-commit': { type: 'string' },
 		games: { type: 'string', default: '1024' },
@@ -50,6 +52,7 @@ const { values: args } = parseArgs({
 if (args.help || !args.weights) {
 	console.log(
 		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--catalog FILE] [--source-commit SHA] [--games N] [--workers N] ' +
+			'[--infer-socket SOCK --policy-obs-version 2] ' +
 			'[--seed0 N] [--learn-monster-reward-choices] [--sample --temperature T] ' +
 			'[--search-sims N] [--include-games] [--out FILE]'
 	);
@@ -112,6 +115,13 @@ const temperature = Number.parseFloat(args.temperature);
 if (!Number.isFinite(temperature) || temperature <= 0) {
 	throw new Error('--temperature must be a positive number');
 }
+const policyObsVersion = Number.parseInt(args['policy-obs-version'], 10);
+if (policyObsVersion !== 1 && policyObsVersion !== 2) {
+	throw new Error('--policy-obs-version must be 1 or 2');
+}
+if (policyObsVersion === 2 && !args['infer-socket']) {
+	throw new Error('--policy-obs-version 2 requires --infer-socket');
+}
 
 const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src', 'lib') } });
 const { runActorPool } = await jiti.import(
@@ -148,6 +158,7 @@ try {
 			maxRounds: effectiveMaxRounds,
 			profiles: ['medium'],
 			weightsPath: weights,
+			inferSocket: args['infer-socket'],
 			selection: 'hybrid',
 			learnMonsterRewardChoices: args['learn-monster-reward-choices'] || undefined,
 			sample: args.sample,
@@ -168,7 +179,7 @@ try {
 					}
 				: {}),
 			obsVersion: 1,
-			policyObsVersion: 1
+			policyObsVersion
 		}
 	});
 
@@ -265,6 +276,8 @@ try {
 		...(effectiveMaxRounds !== maxRounds ? { requestedMaxRounds: maxRounds } : {}),
 		maxStatusLevel,
 		decode: {
+			policyObsVersion,
+			...(args['infer-socket'] ? { inferenceSocket: args['infer-socket'] } : {}),
 			learnMonsterRewardChoices: args['learn-monster-reward-choices'],
 			...(args.sample ? { sample: true, temperature } : { sample: false }),
 			...(searchSims > 0
