@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v31-conservative-offline-terminal-credit",
-  "status": "training-running",
+  "status": "training-complete-development-frozen",
   "createdAt": "2026-07-14T03:50:00Z",
   "sourceCommit": "72e057f",
   "planReview": {
@@ -136,6 +136,9 @@
   },
   "training": {
     "launchedAt": "2026-07-14T04:08:00Z",
+    "completedAt": "2026-07-14T04:15:53Z",
+    "developmentEvaluationOpened": false,
+    "allArmsValid": true,
     "launchPids": {
       "anchor-only": 3219611,
       "strategic-pg-0p1": 3219613,
@@ -194,7 +197,93 @@
       "strategicP99KlMax": 0.4,
       "strategicTop1Min": 0.88,
       "rule": "Any non-finite statistic or threshold breach immediately and permanently invalidates that arm. Do not restore an earlier epoch."
-    }
+    },
+    "results": [
+      {
+        "id": "anchor-only",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/anchor-only",
+        "checkpointSha256": "e281c1bccf3917212073874c4b6d5282aae25ce0b07bbe57406848b739997588",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "f84dbd029a1617d7f9ce9ce1353ff00f524250bbefa09399fadfe021d3075412",
+        "trainLogSha256": "7d13e43fc7caf745779b710ebd05e92c415bfbde5ad9948ca37e967c05ce03ab",
+        "wallTime": "7:35.51",
+        "peakRssKiB": 7007660,
+        "finalValidation": {
+          "overallMeanKl": 0.018209989913090537,
+          "overallP99Kl": 0.19018639579415322,
+          "overallTop1": 0.9127358490566038,
+          "strategicMeanKl": 0.030863013433964456,
+          "strategicP99Kl": 0.33157915115356296,
+          "strategicCvar05": 0.26728185613950095,
+          "strategicTop1": 0.9213233249930498
+        }
+      },
+      {
+        "id": "strategic-pg-0p1",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/strategic-pg-0p1",
+        "checkpointSha256": "77dca3f0f06ad5690b12c5b938394d1468519123cf17df3a3c020cf4f81ce557",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "f67bafffadeeede76f0dc266dfae1cebd4a00252f904ac4be9bc23954066da77",
+        "trainLogSha256": "8684c219c3c279145bd383f59b3ebe406de2c832a5025c44989db2539312b83d",
+        "wallTime": "7:31.85",
+        "peakRssKiB": 7024516,
+        "finalValidation": {
+          "overallMeanKl": 0.017940345214676953,
+          "overallP99Kl": 0.1937956318259242,
+          "overallTop1": 0.9134750774429738,
+          "strategicMeanKl": 0.03003607581313845,
+          "strategicP99Kl": 0.3275423395633697,
+          "strategicCvar05": 0.2702970147960716,
+          "strategicTop1": 0.9236864053377815
+        }
+      },
+      {
+        "id": "strategic-pg-0p3",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/strategic-pg-0p3",
+        "checkpointSha256": "0db9b3353b8300bca33fe4d8482dbb938b7f8fe484914c42fe2ba928a10d5589",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "b728aa0ea06e0f1bfe139188dd8a0a33e9504083100f7c33e7d42ee29c63293c",
+        "trainLogSha256": "07b2460a919b28c889d78c42164ac627eec466ecfcec04156e9f28a90a2b36be",
+        "wallTime": "7:33.42",
+        "peakRssKiB": 7014272,
+        "finalValidation": {
+          "overallMeanKl": 0.017371235092051057,
+          "overallP99Kl": 0.18755168989300738,
+          "overallTop1": 0.9158335680090115,
+          "strategicMeanKl": 0.027785647169382706,
+          "strategicP99Kl": 0.31782734245061833,
+          "strategicCvar05": 0.2534418953375684,
+          "strategicTop1": 0.9303586321934946
+        }
+      },
+      {
+        "id": "strategic-pg-0p6",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/strategic-pg-0p6",
+        "checkpointSha256": "357fad2efb574bce13aaae4dd9b4b1e1e195b045fb5d9c4231f553123650056d",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "4dbad78b5ed1c94500ad638c1f02eef3cb1ff1d080469a5cbb7779de837bc88e",
+        "trainLogSha256": "415d4bdbdee03cd5f3648163ea8df6e6def8582262ddf910e00ace581503c6da",
+        "wallTime": "7:32.02",
+        "peakRssKiB": 7012680,
+        "finalValidation": {
+          "overallMeanKl": 0.018037596138337584,
+          "overallP99Kl": 0.18994627565145494,
+          "overallTop1": 0.9124542382427485,
+          "strategicMeanKl": 0.030194603126695026,
+          "strategicP99Kl": 0.3225241202116008,
+          "strategicCvar05": 0.26137133311066363,
+          "strategicTop1": 0.918960244648318
+        }
+      }
+    ]
   },
   "developmentEvaluation": {
     "openOnlyAfter": "All arm checkpoints, manifests, stats, exit codes, and hashes are frozen and every valid arm passes the per-epoch trust gate.",
@@ -219,7 +308,7 @@
     "analysis": {
       "implementation": {
         "path": "ml/analyze_terminal_credit.py",
-        "sourceCommit": "bce8bf2",
+        "sourceCommit": "bc0b1cd",
         "tests": "ml/test_analyze_terminal_credit.py (3/3 local and remote)"
       },
       "launcher": {
