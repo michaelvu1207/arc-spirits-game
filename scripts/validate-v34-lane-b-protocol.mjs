@@ -9,7 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_PROTOCOL =
 	'ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json';
 const EXPECTED_CANONICAL_SHA256 =
-	'563b1a3a565fabdea00fd93818393d5b4e215a48d40d627d12b1ad9ba2fe7140';
+	'885fd8a55cbb909245c3d5d7780020cde3dedc10db7fa9046f046798f5431d58';
 
 const EXPECTED_ROOT_KEYS = [
 	'approvedPlan',
@@ -80,7 +80,11 @@ const EXPECTED_AMBIGUITIES = [
 	'b5-multiplayer-development-inference',
 	'b5-final-hidden-schedule',
 	'base-958200-transfer-disposition',
-	'human-reference-schedule'
+	'human-reference-schedule',
+	'b2-replay-integrity-selection',
+	'b1-recovery-weak-engine-thresholds',
+	'b1-density-smoke-seeds',
+	'b4-b5-normal-floor-implementation'
 ];
 
 function canonicalize(value) {
@@ -130,6 +134,36 @@ function assertClosedFlags(protocol) {
 	}
 	for (const row of protocol.seedLedger) {
 		assert.equal(row.open, false, `${row.id} must remain closed`);
+	}
+	assert.equal(
+		protocol.b1.registeredCollectionOpen,
+		false,
+		'b1 registered collection must remain closed'
+	);
+	assert.equal(
+		protocol.b1.densitySmoke.registered,
+		false,
+		'b1 density smoke must remain unregistered'
+	);
+	assert.equal(
+		protocol.b2.registeredTeacherOpen,
+		false,
+		'b2 registered teacher must remain closed'
+	);
+	assert.equal(
+		protocol.b2.systemsPilot.registered,
+		false,
+		'b2 systems pilot must remain unregistered'
+	);
+	for (const [generation, open] of Object.entries(protocol.b3.generationOpen)) {
+		assert.equal(open, false, `b3 ${generation} must remain closed`);
+	}
+	for (const [replicate, open] of Object.entries(protocol.b4.replicatesOpen)) {
+		assert.equal(open, false, `b4 ${replicate} must remain closed`);
+	}
+	assert.equal(protocol.b4.handoffRetrain.open, false, 'b4 handoff retrain must remain closed');
+	for (const [stage, open] of Object.entries(protocol.b5.stagesOpen)) {
+		assert.equal(open, false, `b5 ${stage} must remain closed`);
 	}
 }
 
@@ -186,6 +220,26 @@ function assertRngAndArithmetic(protocol) {
 	assert.equal(protocol.b2.poweredAudit.selectionPcg64Seed, 34041026);
 	assert.equal(protocol.b2.bootstrap.pcg64Seed, 34041027);
 	assert.equal(protocol.b3.development.pcg64Seed, 34042026);
+	assert.equal(protocol.b3.optimizer.batchSize, 512);
+	assert.equal(
+		Object.values(protocol.b3.optimizer.batchComposition).reduce((sum, value) => sum + value, 0),
+		512
+	);
+	assert.equal(
+		protocol.b3.optimizer.stepsPerEpoch * protocol.b3.optimizer.batchComposition.ppo,
+		100128
+	);
+	assert.equal(
+		protocol.b3.optimizer.stepsPerEpoch * protocol.b3.optimizer.batchComposition.teacher,
+		100128
+	);
+	assert.equal(
+		protocol.b3.optimizer.stepsPerEpoch * protocol.b3.optimizer.batchComposition.anchor,
+		28608
+	);
+	assert.equal(protocol.b3.optimizer.ppoRowsPerEpoch - protocol.b3.rows.ppo, 128);
+	assert.equal(protocol.b3.optimizer.teacherRowsPerEpoch - protocol.b3.rows.teacher, 128);
+	assert.equal(protocol.b3.optimizer.anchorRowsPerEpoch - protocol.b3.rows.generation0Anchor, 3608);
 	for (let g = 1; g <= 3; g += 1) {
 		for (let e = 1; e <= 2; e += 1) {
 			for (const [stream, s] of Object.entries({ ppo: 1, teacher: 2, anchor: 3 })) {
@@ -212,7 +266,23 @@ function assertRngAndArithmetic(protocol) {
 	assert.equal(protocol.b4.handoffRetrain.initializationSeed, 34051999);
 	assert.equal(protocol.b4.handoffRetrain.rowOrderBaseSeed, 34051998);
 	assert.equal(protocol.b4.handoffRetrain.developmentPcg64Seed, 34053026);
+	assert.equal(protocol.b4.handoffRetrain.stepsPerEpoch, 1340);
+	assert.equal(
+		protocol.b4.handoffRetrain.stepsPerEpoch * protocol.b4.handoffRetrain.batchComposition.ppo,
+		protocol.b4.handoffRetrain.ppoAndTeacherRowsPerEpoch
+	);
+	assert.equal(
+		protocol.b4.handoffRetrain.stepsPerEpoch * protocol.b4.handoffRetrain.batchComposition.anchor,
+		protocol.b4.handoffRetrain.anchorRowsPerEpoch
+	);
+	assert.equal(protocol.b4.handoffRetrain.ppoAndTeacherRowsPerEpoch - 300000, 160);
+	assert.equal(protocol.b4.handoffRetrain.anchorRowsPerEpoch - 3 * 25000, 10760);
 	assert.equal(protocol.b5.soloRegression.pcg64Seed, 34062026);
+	assert.equal(protocol.b4.development.normalFloorFormula, 'NormalDist().inv_cdf(1 - 0.05 / 48)');
+	assert.equal(
+		protocol.b5.soloRegression.normalFloorFormula,
+		'NormalDist().inv_cdf(1 - 0.05 / 18)'
+	);
 	assert.equal(
 		Object.values(protocol.b5.canary.counts).reduce((sum, value) => sum + value, 0),
 		512

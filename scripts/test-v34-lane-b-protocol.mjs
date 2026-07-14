@@ -23,7 +23,7 @@ const valid = validateProtocol(clone());
 assert.equal(valid.valid, true);
 assert.equal(valid.registeredRanges, 38);
 assert.equal(valid.registeredSeedsOpen, false);
-assert.equal(valid.unresolvedAmbiguities, 8);
+assert.equal(valid.unresolvedAmbiguities, 12);
 
 rejects((value) => {
 	value.unreviewedField = true;
@@ -32,6 +32,10 @@ rejects((value) => {
 rejects((value) => {
 	value.b1.stageOpen = true;
 }, /b1 must remain closed/);
+
+rejects((value) => {
+	value.b4.handoffRetrain.open = true;
+}, /b4 handoff retrain must remain closed/);
 
 rejects((value) => {
 	value.seedLedger[0].seedMax += 1;
@@ -88,7 +92,7 @@ rejects((value) => {
 console.log(
 	JSON.stringify({
 		schemaVersion: 'arc-v34-lane-b-protocol-test-v1',
-		passed: 16,
+		passed: 17,
 		fixtures: 'synthetic-only',
 		registeredSeedsConsumed: false,
 		outcomesRead: false,

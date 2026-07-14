@@ -58,6 +58,26 @@
 				"id": "human-reference-schedule",
 				"affectedStages": ["promotion"],
 				"reason": "The base plan reserves 960900000-960909999, but the Lane B amendment does not freeze the human-reference replay schedule."
+			},
+			{
+				"id": "b2-replay-integrity-selection",
+				"affectedStages": ["b2"],
+				"reason": "The required random selection of at least 1000 replay-integrity rows does not yet bind an RNG algorithm or seed."
+			},
+			{
+				"id": "b1-recovery-weak-engine-thresholds",
+				"affectedStages": ["b1", "b2", "b3", "b4"],
+				"reason": "Recovery is explicitly an any-of predicate, but the weak-post-15-engine thresholds must be frozen in the execution lock before collection."
+			},
+			{
+				"id": "b1-density-smoke-seeds",
+				"affectedStages": ["b1", "b2"],
+				"reason": "The unregistered density-smoke seed ledger must be frozen before the smoke because its rows determine systems selection and powered-audit size."
+			},
+			{
+				"id": "b4-b5-normal-floor-implementation",
+				"affectedStages": ["b4", "b5"],
+				"reason": "The exact NormalDist implementation and numerical result for the explicit 24- and 9-endpoint floor formulas must be bound by the execution tooling lock."
 			}
 		]
 	},
@@ -435,8 +455,12 @@
 		"bandQuotas": { "late": 50000, "mid": 25000, "early": 15000, "recovery": 10000 },
 		"roundBands": { "early": [1, 8], "mid": [9, 15], "late": [16, 30] },
 		"recoveryDefinition": {
+			"predicate": "anyOf",
+			"criteria": ["currentStatus", "weakPost15Engine", "noRecentScoring"],
 			"currentStatusAny": ["Fallen", "Corrupted"],
 			"weakPost15Engine": true,
+			"weakPost15EngineThresholds": null,
+			"weakPost15EngineThresholdsMustBeBoundByExecutionLock": true,
 			"noRecentScoringCompletedRounds": 3,
 			"positiveVpDeltaMaximum": 0,
 			"publicCurrentAndPastFactsOnly": true
@@ -451,6 +475,8 @@
 		"densitySmoke": {
 			"registered": false,
 			"games": 512,
+			"exactSeedLedger": null,
+			"exactSeedLedgerMustBeBoundBeforeSmoke": true,
 			"supplyMultiplier": 1.1,
 			"minimumPostDedupRows": { "late": 6875, "mid": 3438, "early": 2063, "recovery": 1375 },
 			"shortfallKeepsRegisteredCollectionClosed": true
@@ -594,6 +620,12 @@
 			"overallTrueWinSimultaneousLowerStrictlyAbove": 0,
 			"minimumEveryBandPointEstimate": 0,
 			"lateBandSimultaneousLowerStrictlyAbove": -0.03
+		},
+		"replayIntegritySelection": {
+			"minimumRows": 1000,
+			"rng": null,
+			"seed": null,
+			"mustBeBoundBeforeRegisteredTeacher": true
 		}
 	},
 	"b3": {
@@ -780,6 +812,7 @@
 			"endpoints": ["trueWin", "finalVp", "post15"],
 			"quantile": "95th nearest rank",
 			"normalFloor": "fixed two-sided 24-endpoint normal floor",
+			"normalFloorFormula": "NormalDist().inv_cdf(1 - 0.05 / 48)",
 			"pooledCluster": "engine seed and replicate",
 			"zeroSeRule": "bound equals point estimate"
 		},
@@ -931,6 +964,7 @@
 			"endpoints": ["trueWin", "finalVp", "post15VpPerRound"],
 			"quantile": "95th nearest rank",
 			"normalFloor": "fixed two-sided nine-endpoint normal floor",
+			"normalFloorFormula": "NormalDist().inv_cdf(1 - 0.05 / 18)",
 			"trueWinPointLossMinimum": -0.02,
 			"trueWinSimultaneousLowerMinimum": -0.05,
 			"finalVpSimultaneousLowerMinimum": -0.5,
