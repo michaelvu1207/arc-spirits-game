@@ -25,6 +25,8 @@ def make_report(seed0: int, games: int, wins: set[int], *, improved: bool = Fals
         })
     return {
         "schemaVersion": "solo-heldout-v2",
+        "sourceCommit": "fixture",
+        "weightsSha256": "0" * 64,
         "seed0": seed0,
         "games": games,
         "maxRounds": 30,

@@ -104,13 +104,27 @@ def validate_reports(
     expected_seeds = set(range(expected_seed0, expected_seed0 + expected_games))
     indexed: dict[str, dict[int, dict[str, Any]]] = {}
     for label, report in reports.items():
-        for field in ("seed0", "games", "maxRounds", "maxStatusLevel", "catalogSha256"):
+        for field in (
+            "seed0",
+            "games",
+            "maxRounds",
+            "maxStatusLevel",
+            "catalogSha256",
+            "sourceCommit",
+        ):
             if report.get(field) != reference.get(field):
                 raise ValueError(f"{label}: report differs on {field}")
         if int(report["seed0"]) != expected_seed0 or int(report["games"]) != expected_games:
             raise ValueError(f"{label}: report does not match expected development block")
         if decode_contract(report) != decode_contract(reference):
             raise ValueError(f"{label}: decode semantics differ")
+        weights_sha = report.get("weightsSha256")
+        if (
+            not isinstance(weights_sha, str)
+            or len(weights_sha) != 64
+            or any(character not in "0123456789abcdef" for character in weights_sha)
+        ):
+            raise ValueError(f"{label}: invalid weights SHA-256")
         by_seed = index_report(report, label=label)
         if set(by_seed) != expected_seeds:
             raise ValueError(f"{label}: per-game seed set differs from expected block")
@@ -377,6 +391,9 @@ def analyze_reports(
             "unit": "complete paired game",
         },
         "trainingParity": {"comparison": parity, "passed": training_parity_pass},
+        "weightsSha256": {
+            label: report["weightsSha256"] for label, report in reports.items()
+        },
         "arms": arms,
         "mcnemarHolmSensitivity": holm,
         "winner": winner,
