@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-v2b-incident-v1",
+  "recordedAt": "2026-07-14T22:14:16Z",
+  "lane": "A",
+  "laneAClosed": true,
+  "retryAuthorized": false,
+  "analysisOutputCreated": false,
+  "analysisOutputPath": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.json",
+  "analyzerProcessesStarted": 1,
+  "attemptSlotConsumed": true,
+  "analyzerExitCode": 1,
+  "stdoutBytes": 0,
+  "stderrBytes": 813,
+  "archivedAttemptCommit": "3184a425ec8c63547a99a4ba9bae87e4e2e27450",
+  "attemptArtifacts": {
+    "started": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2b-started.json",
+      "sha256": "6a977eaf10638de59d4c2142ac932f917ec06d25bbd6a2d9d71e51246f621dc3"
+    },
+    "execConfirmed": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2b-exec-confirmed.json",
+      "sha256": "8512bbde72f5c253c9def6e57165327254adba418019c7e302ce92553c1c4326"
+    },
+    "exit": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2b-exit.json",
+      "sha256": "4fe2e28d76478941c2f475c02cd76faa7a3dcfb7096b45dcf72c9017161e8a4f"
+    },
+    "stdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2b.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2b.stderr",
+      "sha256": "63f454aba0ffc4fc04bc06a03ba5db3aa62c72f3812bcbe5d0854c95479aeae4"
+    }
+  },
+  "preStartLauncherRejections": {
+    "count": 2,
+    "reason": "prelaunch analysis-relevant environment hash changed",
+    "cause": "the non-login SSH shell lacked the preflight login-shell PATH",
+    "attemptStartedCreated": false,
+    "analyzerProcessStarted": false,
+    "slotConsumed": false,
+    "outcomesInspected": false
+  },
+  "acceptedLaunchEnvironment": {
+    "shell": "remote login shell",
+    "analysisRelevantEnvironmentSha256": "3f4f02e0e29430d2eaec69ccfc16acef724d30e595f6c7db56a2434ef9ae8add",
+    "path": "/home/ubuntu/.local/bin:/home/ubuntu/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+  },
+  "failure": {
+    "exception": "ValueError",
+    "message": "strength-lock commit is not an ancestor of the executing tree",
+    "stage": "validate_strength_lock",
+    "beforeLoadConditions": true,
+    "implementationCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e",
+    "gitContextHead": "f0c045177445c602883d88182ad5f2eac4249ef2",
+    "rootCause": "the isolated commit-only Git database does not contain the implementation commit object",
+    "gitCatFileImplementationCommitStatus": 128,
+    "gitMergeBaseStatus": 128
+  },
+  "outcomeAccess": {
+    "phase2AnalysisJsonObserved": false,
+    "phase2OutcomeValueObserved": false,
+    "comparativeEndpointConstructed": false,
+    "loadConditionsReached": false,
+    "diagnosticsInspectedOnlyAfterAttemptArtifactsCommitted": true,
+    "outcomesInspected": false
+  },
+  "resourceImpact": {
+    "gpuClaimed": false,
+    "gpuTouched": false,
+    "analyzerProcessRemaining": false,
+    "unrelatedProcessesChanged": false
+  },
+  "disposition": "Lane A is permanently closed under the authorized no-further-retry policy. Continue Lane B and later sealed promotion gates without rerunning the Phase 2 analyzer."
+}
