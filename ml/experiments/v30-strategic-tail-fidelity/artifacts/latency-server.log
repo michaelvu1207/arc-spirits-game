@@ -1,0 +1,7 @@
+[infer] serving ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar10-c025/checkpoint.pt (arc-entity-scorer-v2, obs_dim=3419, act_dim=104) on /tmp/arc-v30-latency-3139441.sock device=cuda window=2.0ms max_batch=512
+[infer] reqs=242 rows=7744 batches=54 avg_batch=143.4 batch_p50=160 batch_p95=256 batch_min=32 batch_max=256 forwards/s=54.0
+[infer] reqs=432 rows=13824 batches=108 avg_batch=128.0 batch_p50=96 batch_p95=160 batch_min=96 batch_max=160 forwards/s=107.9
+[infer] reqs=366 rows=11712 batches=92 avg_batch=127.3 batch_p50=128 batch_p95=160 batch_min=64 batch_max=192 forwards/s=91.9
+[infer] reqs=384 rows=12288 batches=96 avg_batch=128.0 batch_p50=128 batch_p95=128 batch_min=128 batch_max=128 forwards/s=95.9
+[infer] reqs=336 rows=10752 batches=86 avg_batch=125.0 batch_p50=128 batch_p95=160 batch_min=32 batch_max=224 forwards/s=86.0
+[infer] shut down

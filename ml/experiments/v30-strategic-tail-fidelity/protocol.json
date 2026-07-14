@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v30-strategic-tail-cvar-fidelity",
-  "status": "selection-winner-frozen",
+  "status": "completed-anchor-valid",
   "createdAt": "2026-07-14T02:25:00Z",
   "sourceCommit": "b514449",
   "planReview": {
@@ -341,10 +341,74 @@
       "strategicTop1Min": 0.88
     },
     "rule": "Gate metrics are pass/fail only. Never evaluate a runner-up or tune from gate results. A failure rejects V30.",
-    "informationalOnly": "Report round 23-30 metrics and a deterministic 10,000-replicate complete-game-cluster bootstrap 95% interval for strategic p99 using seed 300199. Neither changes pass/fail."
+    "informationalOnly": "Report round 23-30 metrics and a deterministic 10,000-replicate complete-game-cluster bootstrap 95% interval for strategic p99 using seed 300199. Neither changes pass/fail.",
+    "result": {
+      "openedAt": "2026-07-14T03:11:00Z",
+      "completedAt": "2026-07-14T03:12:00Z",
+      "exitCode": 0,
+      "passed": true,
+      "artifact": "ml/experiments/v30-strategic-tail-fidelity/artifacts/gate.json",
+      "artifactSha256": "5098bf75bf8fe8516c0b873ccbc13c784ba4ec3ab013493d4ea070208f94d3f9",
+      "checkpointSha256": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06",
+      "seed0": 948000256,
+      "games": 256,
+      "policyRows": 28677,
+      "overall": {
+        "meanKl": 0.018818851269099244,
+        "p99Kl": 0.20164182662963864,
+        "top1Agreement": 0.9112180493078077
+      },
+      "strategic": {
+        "rows": 7151,
+        "meanKl": 0.029988013456515892,
+        "p99Kl": 0.35801781713962555,
+        "cvar05Kl": 0.28424987128243767,
+        "top1Agreement": 0.9284016221507482
+      },
+      "lateRound23To30": {
+        "rows": 4442,
+        "meanKl": 0.022971248143307595,
+        "p99Kl": 0.23240632608533,
+        "top1Agreement": 0.8725799189554255
+      },
+      "strategicP99GameClusterBootstrap95": {
+        "replicates": 10000,
+        "seed": 300199,
+        "lower": 0.28401854634284973,
+        "median": 0.3556916415691376,
+        "upper": 0.46928410226106526,
+        "decisionUse": false
+      },
+      "operationalNote": "The first log tee reported that the artifacts directory was absent while this same evaluator process was already running. The evaluator created the directory for its atomic JSON output, exited 0, and produced the hash-verified gate artifact. It was not restarted; the missing tee log does not alter data, checkpoint, metrics, or the one-shot decision."
+    }
   },
-  "systemsGate": "Only after the one-shot fidelity gate passes, remeasure A100 binary-wire p95 request latency at 32 rows, 30 candidates, eight clients; require <= 100 ms.",
+  "systemsGate": {
+    "contract": "Only after the one-shot fidelity gate passes, remeasure A100 binary-wire p95 request latency at 32 rows, 30 candidates, eight clients; require <= 100 ms.",
+    "result": {
+      "completedAt": "2026-07-14T03:42:00Z",
+      "passed": true,
+      "artifact": "ml/experiments/v30-strategic-tail-fidelity/artifacts/latency.json",
+      "artifactSha256": "838e88aacfbf039ae7f220a016b48f973732e8b8bdb8ad31f4c483441b0ac532",
+      "gpu": "A100-40GB GPU 0 alongside the pre-existing CARLA allocation",
+      "wire": "binary",
+      "rowsPerRequest": 32,
+      "candidatesPerRow": 30,
+      "clients": 8,
+      "warmupRequestsPerClient": 20,
+      "measuredRequestsPerClient": 200,
+      "requestLatencyMs": {
+        "p50": 18.582425,
+        "p95": 27.922112499999997,
+        "p99": 35.7562705,
+        "max": 56.292595
+      },
+      "rowsPerSecond": 12736.239959400915,
+      "p95LimitMs": 100.0
+    }
+  },
   "nextStage": "Only a fidelity- and latency-valid anchor may enter the separately reviewed terminal-credit experiment on seed block 944000000.",
   "nullResult": "If mean-control wins, conclude added coverage is sufficient and do not attribute benefit to CVaR. If no arm is eligible or CVaR arms do not improve robust selection tail metrics over control, do not sweep coefficients on gate data; move to additional trajectory coverage or a separately reviewed navigation-residual representation experiment on new seeds.",
+  "conclusion": "V30 succeeds as a fidelity and systems anchor. The CVaR10 coefficient-0.25 arm improved the preregistered selection strategic tail metric, generalized through the sole held-out gate, and met latency. This establishes a trustworthy entity-v2 initialization for the separately reviewed terminal-credit stage; it makes no direct gameplay-strength or promotion claim.",
+  "completedAt": "2026-07-14T03:43:19Z",
   "promotionEligible": false
 }

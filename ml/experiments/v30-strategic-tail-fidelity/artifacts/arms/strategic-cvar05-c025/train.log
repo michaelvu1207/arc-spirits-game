@@ -1,0 +1,34 @@
+epoch 1/12 kl=0.020328 tail=0.277401 agree=0.909 outcome=-0.007264 val_kl=0.020713 val_kl_p99=0.220402
+epoch 2/12 kl=0.019028 tail=0.245335 agree=0.911 outcome=-0.008188 val_kl=0.021363 val_kl_p99=0.231368
+epoch 3/12 kl=0.018811 tail=0.233619 agree=0.911 outcome=-0.008031 val_kl=0.021131 val_kl_p99=0.223318
+epoch 4/12 kl=0.018468 tail=0.228955 agree=0.911 outcome=-0.008338 val_kl=0.021519 val_kl_p99=0.227858
+epoch 5/12 kl=0.018045 tail=0.217368 agree=0.912 outcome=-0.008809 val_kl=0.021572 val_kl_p99=0.234510
+epoch 6/12 kl=0.017590 tail=0.207073 agree=0.912 outcome=-0.008810 val_kl=0.020105 val_kl_p99=0.212169
+epoch 7/12 kl=0.017500 tail=0.200816 agree=0.913 outcome=-0.009304 val_kl=0.019918 val_kl_p99=0.206675
+epoch 8/12 kl=0.017367 tail=0.199394 agree=0.913 outcome=-0.009166 val_kl=0.020669 val_kl_p99=0.219329
+epoch 9/12 kl=0.016971 tail=0.187664 agree=0.913 outcome=-0.009339 val_kl=0.021082 val_kl_p99=0.234502
+epoch 10/12 kl=0.017033 tail=0.195433 agree=0.914 outcome=-0.009167 val_kl=0.019629 val_kl_p99=0.205174
+checkpoint written: ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar05-c025/checkpoint.pt
+	Command being timed: "ml/.venv/bin/python ml/outcome_distill_v2.py --data ml/experiments/v30-strategic-tail-fidelity/data/train-merged --val-data ml/experiments/v30-strategic-tail-fidelity/data/validation --teacher ml/warmstart/v24/v23-control-gen5-obs199-act104.json --init ml/experiments/v29-distill-fidelity/arms/d128-policy-only-continue24-lr1e4/checkpoint.pt --out ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar05-c025/checkpoint.pt --stats-out ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar05-c025/stats.json --epochs 12 --batch-size 512 --lr 0.00005 --teacher-kl-coef 1 --value-coef 0 --reach30-coef 0 --outcome-pg-coef 0 --seed 300100 --max-grad-norm 1 --expected-temperature 0.55 --teacher-logp-tolerance 0.001 --select-best-teacher-kl --val-select-seed0 948000000 --val-select-games 256 --early-stop-patience 4 --early-stop-min-delta 0.002 --early-stop-min-epochs 4 --selection-metric strategicTeacherKlCvar05 --strategic-tail-fraction 0.05 --strategic-tail-coef 0.25 --device cuda"
+	User time (seconds): 22225.43
+	System time (seconds): 225.30
+	Percent of CPU this job got: 1721%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 21:44.34
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 7086176
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 57833843
+	Voluntary context switches: 2373464
+	Involuntary context switches: 6086864
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 6728
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
