@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v31-conservative-offline-terminal-credit",
-  "status": "development-complete-analysis-frozen",
+  "status": "rejected-development-no-winner",
   "createdAt": "2026-07-14T03:50:00Z",
   "sourceCommit": "72e057f",
   "planReview": {
@@ -335,7 +335,7 @@
         "artifactManifestSha256": "dddf4d3c2bd823b1a2b657ef9c5469cf97bfb935ec79f41cb88cc0332713f95e",
         "failedAttemptManifest": "ml/experiments/v31-terminal-credit/development-attempt-1-enospc.sha256",
         "failedAttemptManifestSha256": "3d62983b8a587debf2aa11aeece5c695fdbad4e1e7401dcce873368879305b0a",
-        "analysisOpened": false
+        "analysisOpened": true
       }
     ],
     "openedAt": "2026-07-14T04:22:38Z",
@@ -406,7 +406,39 @@
         "final attack dice, spirits, and barrier",
         "guardian-stratified wins and VP"
       ],
-      "tests": "Paired whole-game bootstrap with Bonferroni 98.333% simultaneous intervals for each family of three terminal-treatment claims. Exact two-sided McNemar p-values and Holm adjustment are reported as sensitivity analyses but are not an additional gate."
+      "tests": "Paired whole-game bootstrap with Bonferroni 98.333% simultaneous intervals for each family of three terminal-treatment claims. Exact two-sided McNemar p-values and Holm adjustment are reported as sensitivity analyses but are not an additional gate.",
+      "result": {
+        "completedAt": "2026-07-14T07:23:21Z",
+        "artifact": "ml/experiments/v31-terminal-credit/development/analysis.json",
+        "artifactSha256": "13b29638aa5ba730a3c88550088dfb0acc69c4a3c68cc843c6c8d25332726520",
+        "valid": true,
+        "trainingParityPassed": true,
+        "trainingParityWinDelta": -0.00390625,
+        "trainingParityLower95": -0.017828369140624946,
+        "trueWinRates": {
+          "v23": 0.525146484375,
+          "v30": 0.5205078125,
+          "anchor": 0.5166015625,
+          "strategic-pg-0p1": 0.51171875,
+          "strategic-pg-0p3": 0.529296875,
+          "strategic-pg-0p6": 0.510498046875
+        },
+        "eligible": {
+          "strategic-pg-0p1": false,
+          "strategic-pg-0p3": false,
+          "strategic-pg-0p6": false
+        },
+        "bestTreatment": {
+          "id": "strategic-pg-0p3",
+          "causalWinDelta": 0.0126953125,
+          "causalSimultaneousLower": -0.002850341796874937,
+          "causalSimultaneousUpper": 0.028564453125,
+          "strengthVsV23WinDelta": 0.004150390625,
+          "post15VpPerRoundDeltaVsAnchor": -0.008041077098126903,
+          "reasonRejected": "The causal gain is below +2.0 percentage points, its 98.333% simultaneous lower bound is not above zero, strength versus V23 is below +3.0 points, and post-round-15 pace regresses."
+        },
+        "decision": "Reject every V31 offline terminal-credit arm. Do not open hidden seed 945000000; initialize the next on-policy PPO/search stage from frozen V30."
+      }
     }
   },
   "developmentGates": {
@@ -419,6 +451,8 @@
     "winner": "Among treatments passing every gate, select highest true-win rate; ties within one paired win prefer lower censored first-30 round, then higher post-15 pace, then lower coefficient. Freeze the winner before opening hidden seeds."
   },
   "hiddenConfirmation": {
+    "opened": false,
+    "reasonNotOpened": "No V31 treatment passed every frozen development gate, so the one-shot hidden block remains untouched.",
     "seed0": 945000000,
     "games": 2048,
     "openOnlyIf": "Exactly one V31 development winner has been frozen without using hidden data.",
