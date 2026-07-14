@@ -7,6 +7,15 @@ import traceback
 from analyze_terminal_credit import analyze_reports, holm_adjust
 
 
+def provenance(reports: dict[str, dict]) -> dict:
+    return {
+        "expected_catalog_sha256": "catalog",
+        "expected_source_commit": "fixture",
+        "expected_weights_sha256": {label: "0" * 64 for label in reports},
+        "expected_policy_obs_versions": {label: 2 for label in reports},
+    }
+
+
 def make_report(seed0: int, games: int, wins: set[int], *, improved: bool = False) -> dict:
     rows = []
     for index in range(games):
@@ -71,6 +80,7 @@ def test_analysis_selects_only_large_clean_treatment() -> None:
         expected_games=games,
         bootstrap=500,
         bootstrap_seed=310199,
+        **provenance(reports),
     )
     assert result["trainingParity"]["passed"] is True
     assert result["arms"]["pg01"]["eligible"] is True
@@ -94,11 +104,36 @@ def test_analysis_rejects_wrong_seed_set() -> None:
             expected_games=4,
             bootstrap=10,
             bootstrap_seed=1,
+            **provenance(reports),
         )
     except ValueError as exc:
         assert "seed set" in str(exc)
     else:
         raise AssertionError("invalid seed set was accepted")
+
+
+def test_analysis_rejects_nonfrozen_checkpoint() -> None:
+    seed0 = 944000000
+    reports = {
+        label: make_report(seed0, 4, {0, 1})
+        for label in ("v23", "v30", "anchor", "pg01", "pg03", "pg06")
+    }
+    expected = provenance(reports)
+    expected["expected_weights_sha256"]["pg03"] = "1" * 64
+    try:
+        analyze_reports(
+            reports,
+            treatment_labels=["pg01", "pg03", "pg06"],
+            expected_seed0=seed0,
+            expected_games=4,
+            bootstrap=10,
+            bootstrap_seed=1,
+            **expected,
+        )
+    except ValueError as exc:
+        assert "frozen checkpoint" in str(exc)
+    else:
+        raise AssertionError("nonfrozen checkpoint was accepted")
 
 
 def main() -> int:

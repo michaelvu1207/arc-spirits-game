@@ -99,11 +99,22 @@ def validate_reports(
     *,
     expected_seed0: int,
     expected_games: int,
+    expected_catalog_sha256: str,
+    expected_source_commit: str,
+    expected_weights_sha256: dict[str, str],
+    expected_policy_obs_versions: dict[str, int],
 ) -> dict[str, dict[int, dict[str, Any]]]:
+    labels = set(reports)
+    if set(expected_weights_sha256) != labels:
+        raise ValueError("expected checkpoint hashes do not cover every report label")
+    if set(expected_policy_obs_versions) != labels:
+        raise ValueError("expected obs versions do not cover every report label")
     reference = next(iter(reports.values()))
     expected_seeds = set(range(expected_seed0, expected_seed0 + expected_games))
     indexed: dict[str, dict[int, dict[str, Any]]] = {}
     for label, report in reports.items():
+        if report.get("schemaVersion") != "solo-heldout-v2":
+            raise ValueError(f"{label}: unexpected report schema")
         for field in (
             "seed0",
             "games",
@@ -116,6 +127,30 @@ def validate_reports(
                 raise ValueError(f"{label}: report differs on {field}")
         if int(report["seed0"]) != expected_seed0 or int(report["games"]) != expected_games:
             raise ValueError(f"{label}: report does not match expected development block")
+        if int(report["maxRounds"]) != 30 or int(report["maxStatusLevel"]) != 2:
+            raise ValueError(f"{label}: report does not match the frozen game horizon")
+        if report.get("catalogSha256") != expected_catalog_sha256:
+            raise ValueError(f"{label}: catalog SHA-256 differs from the frozen catalog")
+        if report.get("sourceCommit") != expected_source_commit:
+            raise ValueError(f"{label}: evaluator source commit differs from the frozen source")
+        decode = report.get("decode")
+        if not isinstance(decode, dict):
+            raise ValueError(f"{label}: missing decode contract")
+        if decode.get("policyObsVersion") != expected_policy_obs_versions[label]:
+            raise ValueError(f"{label}: policy obs version differs from the frozen decoder")
+        if expected_policy_obs_versions[label] == 2:
+            socket = decode.get("inferenceSocket")
+            if not isinstance(socket, str) or not socket:
+                raise ValueError(f"{label}: obs-v2 report lacks binary inference transport")
+        elif "inferenceSocket" in decode:
+            raise ValueError(f"{label}: obs-v1 report unexpectedly used binary inference transport")
+        expected_decision_decode = {
+            "learnMonsterRewardChoices": False,
+            "sample": True,
+            "temperature": 0.55,
+        }
+        if decode_contract(report) != expected_decision_decode:
+            raise ValueError(f"{label}: report does not match the frozen decision decoder")
         if decode_contract(report) != decode_contract(reference):
             raise ValueError(f"{label}: decode semantics differ")
         weights_sha = report.get("weightsSha256")
@@ -125,9 +160,23 @@ def validate_reports(
             or any(character not in "0123456789abcdef" for character in weights_sha)
         ):
             raise ValueError(f"{label}: invalid weights SHA-256")
+        if weights_sha != expected_weights_sha256[label]:
+            raise ValueError(f"{label}: checkpoint SHA-256 differs from the frozen checkpoint")
         by_seed = index_report(report, label=label)
         if set(by_seed) != expected_seeds:
             raise ValueError(f"{label}: per-game seed set differs from expected block")
+        if len(report["perGame"]) != expected_games:
+            raise ValueError(f"{label}: per-game row count differs from expected block")
+        per_game_wins = sum(bool(row["trueWin"]) for row in by_seed.values())
+        if int(report.get("trueWins", -1)) != per_game_wins:
+            raise ValueError(f"{label}: win aggregate differs from per-game rows")
+        if not math.isclose(
+            float(report.get("trueWinRate", math.nan)),
+            per_game_wins / expected_games,
+            rel_tol=0,
+            abs_tol=1e-15,
+        ):
+            raise ValueError(f"{label}: win rate differs from per-game rows")
         if int(report.get("stalls", -1)) != sum(bool(row["stalled"]) for row in by_seed.values()):
             raise ValueError(f"{label}: stall aggregate differs from per-game rows")
         indexed[label] = by_seed
@@ -273,12 +322,22 @@ def analyze_reports(
     expected_games: int,
     bootstrap: int,
     bootstrap_seed: int,
+    expected_catalog_sha256: str,
+    expected_source_commit: str,
+    expected_weights_sha256: dict[str, str],
+    expected_policy_obs_versions: dict[str, int],
 ) -> dict[str, Any]:
     required = {"v23", "v30", "anchor", *treatment_labels}
     if set(reports) != required or len(treatment_labels) != 3:
         raise ValueError(f"expected v23/v30/anchor and three treatments, got {sorted(reports)}")
     indexed = validate_reports(
-        reports, expected_seed0=expected_seed0, expected_games=expected_games
+        reports,
+        expected_seed0=expected_seed0,
+        expected_games=expected_games,
+        expected_catalog_sha256=expected_catalog_sha256,
+        expected_source_commit=expected_source_commit,
+        expected_weights_sha256=expected_weights_sha256,
+        expected_policy_obs_versions=expected_policy_obs_versions,
     )
     parity = pair_metrics(
         indexed,
@@ -414,6 +473,19 @@ def parse_treatment(value: str) -> tuple[str, Path]:
     return label, Path(raw_path)
 
 
+def parse_named_sha(value: str) -> tuple[str, str]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError("expected weight must be LABEL=SHA256")
+    label, sha256 = value.split("=", 1)
+    if (
+        not label
+        or len(sha256) != 64
+        or any(character not in "0123456789abcdef" for character in sha256)
+    ):
+        raise argparse.ArgumentTypeError("expected weight must be LABEL=64-lowercase-hex")
+    return label, sha256
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--v23", type=Path, required=True)
@@ -424,6 +496,11 @@ def main() -> None:
     parser.add_argument("--games", type=int, default=4096)
     parser.add_argument("--bootstrap", type=int, default=10000)
     parser.add_argument("--bootstrap-seed", type=int, default=310199)
+    parser.add_argument("--catalog-sha256", required=True)
+    parser.add_argument("--source-commit", required=True)
+    parser.add_argument(
+        "--expected-weight", action="append", type=parse_named_sha, required=True
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if len(args.treatment) != 3:
@@ -432,6 +509,13 @@ def main() -> None:
     if len(treatment_paths) != 3:
         parser.error("treatment labels must be unique")
     paths = {"v23": args.v23, "v30": args.v30, "anchor": args.anchor, **treatment_paths}
+    expected_weights = dict(args.expected_weight)
+    if len(expected_weights) != len(paths) or set(expected_weights) != set(paths):
+        parser.error("--expected-weight must cover v23, v30, anchor, and all three treatments")
+    expected_obs_versions = {
+        label: 1 if label == "v23" else 2
+        for label in paths
+    }
     reports = {label: load_report(path) for label, path in paths.items()}
     result = analyze_reports(
         reports,
@@ -440,6 +524,10 @@ def main() -> None:
         expected_games=args.games,
         bootstrap=args.bootstrap,
         bootstrap_seed=args.bootstrap_seed,
+        expected_catalog_sha256=args.catalog_sha256,
+        expected_source_commit=args.source_commit,
+        expected_weights_sha256=expected_weights,
+        expected_policy_obs_versions=expected_obs_versions,
     )
     result["reports"] = {label: str(path) for label, path in paths.items()}
     rendered = json.dumps(result, indent=2) + "\n"
