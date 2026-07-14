@@ -37,7 +37,13 @@ def load_fixture() -> tuple[ObsV2Spec, np.ndarray, dict]:
     return ObsV2Spec.from_meta(fx["meta"]), np.asarray(fx["flat"], dtype=np.float32), fx["meta"]
 
 
-def write_dataset(data_dir: Path, n_rows: int, n_v1_only: int = 0, seed: int = 11) -> dict:
+def write_dataset(
+    data_dir: Path,
+    n_rows: int,
+    n_v1_only: int = 0,
+    seed: int = 11,
+    solo_objective: bool = False,
+) -> dict:
     """
     PINNED-contract rows (docs/encoder-v2.md): obs = current v1 83-float ALWAYS,
     obsV2 = real flat v2 encoding, cands random with a learnable signal
@@ -59,6 +65,16 @@ def write_dataset(data_dir: Path, n_rows: int, n_v1_only: int = 0, seed: int = 1
             }
             if i < n_rows:
                 rec["obsV2"] = flat[i % flat.shape[0]].tolist()
+                if solo_objective:
+                    game = i // 2
+                    rec["gameId"] = f"solo-{seed}-{game}"
+                    if i % 2 == 1:
+                        won = (game % 2) == 0
+                        rec.update({
+                            "reach30Target": int(won),
+                            "reach30Horizon": 30,
+                            "endRound": 20 + (game % 9) if won else 30,
+                        })
             f.write(json.dumps(rec) + "\n")
     ds_meta = {
         "obs_dim": OBS_V1_DIM,
@@ -146,6 +162,35 @@ def test_bc_warmstart_end_to_end():
             logits, _, _ = model.eval()(obs, cands, mask)
         acc = (logits.argmax(dim=-1) == cands[:, :, 0].argmax(dim=-1)).float().mean().item()
         assert acc > 1.5 / 8, f"held-out argmax accuracy {acc:.3f} is at chance"
+
+
+def test_bc_disjoint_validation_and_multihorizon_critic():
+    with tempfile.TemporaryDirectory() as td:
+        train_dir = Path(td) / "train"
+        val_dir = Path(td) / "val"
+        write_dataset(train_dir, 64, seed=21, solo_objective=True)
+        write_dataset(val_dir, 32, seed=22, solo_objective=True)
+        out = Path(td) / "weights" / "v2_p30.pt"
+        stats = train_bc(
+            train_dir,
+            out,
+            epochs=2,
+            batch_size=16,
+            lr=1e-3,
+            d_model=32,
+            layers=1,
+            heads=2,
+            seed=0,
+            val_data_dir=val_dir,
+            reach30_coef=1.0,
+            device=torch.device("cpu"),
+        )
+        assert stats["val_samples"] == 32
+        assert all("val_reach30_nll" in epoch for epoch in stats["epochs"])
+        model = load_checkpoint(out)
+        assert model.reach30_trained
+        assert model.reach30_horizons == (20, 25, 30)
+        assert model.reach30_horizon == 30
 
 
 def test_bc_cli_smoke():

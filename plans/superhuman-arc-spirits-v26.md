@@ -335,3 +335,9 @@ result that reaches the token/compute/time limit is incomplete, not successful.
   loadable and fail closed until the new head receives real labels. This is an implementation gate,
   not evidence of strength; live-catalog BC/representation and matched size screens still decide
   whether the architecture advances.
+- The v2 warm-start path now supports a fully disjoint validation dataset and pretrains the same
+  equal-episode multi-horizon critic from complete solo outcomes. It rejects row-random validation
+  when this loss is active, preventing adjacent states from one game from leaking across the split
+  and preventing long games from receiving extra outcome weight. The V27 screen will use a fresh
+  live-catalog V23 behavior dataset with separate train and development seed blocks; BC imitation,
+  critic calibration, direct solo strength, latency, and throughput are all gates before PPO.

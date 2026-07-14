@@ -264,6 +264,11 @@ spirit:58, market:49, rune:18, monster:10}`; flat length 3419; field-name lists
   objectives; failures label all horizons false. The latest horizon remains the
   only actor-facing control variate, and old v2 checkpoints without this head
   remain loadable but do not advertise the capability.
+- Behavior-cloned warm starts use a disjoint `--val-data` seed block when the
+  reach-30 head is enabled. The terminal outcome is broadcast only within its
+  own complete game, weighted by inverse game length, so long trajectories do
+  not dominate the objective. Row-level validation splits are rejected for this
+  head because they leak adjacent states and break equal-game weighting.
 - Write `obsV2Meta(catalog)` to `meta.json` for every v2 dataset; the trainer
   must refuse data whose `flatHeader` mismatches its parser.
 
