@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v30-strategic-tail-cvar-fidelity",
-  "status": "data-generation-pending",
+  "status": "training-pending",
   "createdAt": "2026-07-14T02:25:00Z",
   "sourceCommit": "b514449",
   "planReview": {
@@ -101,6 +101,53 @@
       "teacher chosen-logp max absolute reconstruction error <= 0.001"
     ],
     "diskGuard": "Require at least 8 GiB free before generation and at least 5 GiB after generation; stop without deleting unrelated artifacts otherwise."
+  },
+  "freshDataResult": {
+    "completedAt": "2026-07-14T02:43:53Z",
+    "generatorConfigParity": true,
+    "additionalTrain": {
+      "games": 1024,
+      "rows": 120722,
+      "trueWins": 535,
+      "stalls": 0,
+      "malformedRows": 0,
+      "audit": "ml/experiments/v30-strategic-tail-fidelity/artifacts/train-audit.json",
+      "auditSha256": "e918e599ef26f33147eda5524a7cb0f23a3ed5c73387827e98db5723bc59126b"
+    },
+    "validation": {
+      "games": 512,
+      "rows": 60159,
+      "trueWins": 276,
+      "stalls": 0,
+      "malformedRows": 0,
+      "audit": "ml/experiments/v30-strategic-tail-fidelity/artifacts/validation-audit.json",
+      "auditSha256": "88b7bdfed6df174d6fe4813541bc5af55e7a4917004d66c337522194c16379f5"
+    },
+    "mergedTrain": {
+      "games": 2048,
+      "rows": 240631,
+      "policyRows": 228477,
+      "linkedShards": 12,
+      "manifest": "ml/experiments/v30-strategic-tail-fidelity/artifacts/merge-manifest.json",
+      "manifestSha256": "5aa8f705a188f693cd319f8ed09c8cf3f9150f951cf413ddaffbfb2ea3ceed4b"
+    },
+    "freeDiskAfter": "9.2 GiB"
+  },
+  "preflight": {
+    "valid": true,
+    "optimizerCreated": false,
+    "checkpointCreated": false,
+    "artifact": "ml/experiments/v30-strategic-tail-fidelity/artifacts/preflight.json",
+    "artifactSha256": "e571d8d34a9463b26c4399df3424a1c9df14b9d2616b65a99f9eed47b6222326",
+    "teacherLogpMaxAbsError": {
+      "train": 0.000004291534423828125,
+      "validation": 0.000004172325134277344,
+      "limit": 0.001
+    },
+    "equalGameWeights": {
+      "train": 2048.0,
+      "validation": 512.0
+    }
   },
   "implementation": {
     "runtimeSourceCommit": "c36fbb8",

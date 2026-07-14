@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "arc-v28-preflight-v1",
+  "valid": true,
+  "data": "ml/experiments/v30-strategic-tail-fidelity/data/train-merged",
+  "validationData": "ml/experiments/v30-strategic-tail-fidelity/data/validation",
+  "teacher": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+  "teacherSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+  "observation": {
+    "v1Dim": 199,
+    "v2FlatDim": 3419,
+    "actDim": 104,
+    "v2Header": [
+      2,
+      6,
+      0,
+      1,
+      122,
+      1,
+      6,
+      55,
+      2,
+      42,
+      58,
+      3,
+      6,
+      49,
+      4,
+      8,
+      18,
+      5,
+      1,
+      10
+    ]
+  },
+  "train": {
+    "rows": 240631,
+    "policyRows": 228477,
+    "games": 2048,
+    "trueWins": 1114,
+    "equalGameReachWeight": 2048.0,
+    "equalGameOutcomeWeight": 2048.0
+  },
+  "validation": {
+    "rows": 60159,
+    "policyRows": 57085,
+    "games": 512,
+    "trueWins": 276,
+    "equalGameReachWeight": 511.9999694824219,
+    "equalGameOutcomeWeight": 512.0
+  },
+  "expectedBehaviorTemperature": 0.55,
+  "teacherLogpTolerance": 0.001,
+  "teacherLogpAudit": {
+    "train": {
+      "rows": 4096,
+      "meanAbsError": 2.269256456823715e-07,
+      "p99AbsError": 1.5497207641601562e-06,
+      "maxAbsError": 4.291534423828125e-06
+    },
+    "validation": {
+      "rows": 4096,
+      "meanAbsError": 2.2097227792353125e-07,
+      "p99AbsError": 1.430511474609375e-06,
+      "maxAbsError": 4.172325134277344e-06
+    }
+  }
+}
