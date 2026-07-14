@@ -130,6 +130,18 @@ def test_stage1_and_stage2_end_to_end() -> None:
         teacher = make_teacher(teacher_path)
         write_dataset(root / "train", teacher, seed=21, games=12)
         write_dataset(root / "validation", teacher, seed=22, games=8)
+        preflight = train(
+            root / "train",
+            root / "validation",
+            teacher_path,
+            root / "unused.pt",
+            batch_size=8,
+            audit_only=True,
+            teacher_logp_tolerance=1e-5,
+            device=torch.device("cpu"),
+        )
+        assert preflight["valid"] is True
+        assert not (root / "unused.pt").exists()
         stage1 = root / "stage1.pt"
         stats1 = train(
             root / "train",

@@ -494,6 +494,7 @@ def train(
     max_mean_kl: float | None = None,
     max_p99_kl: float | None = None,
     teacher_logp_tolerance: float = 1e-3,
+    audit_only: bool = False,
     device: torch.device | None = None,
 ) -> dict[str, Any]:
     if device is None:
@@ -535,6 +536,38 @@ def train(
             f"teacher logp audit exceeds {teacher_logp_tolerance}: "
             f"train={train_audit}, validation={val_audit}"
         )
+    if audit_only:
+        return {
+            "schemaVersion": "arc-v28-preflight-v1",
+            "valid": True,
+            "data": str(data_dir),
+            "validationData": str(val_data_dir),
+            "teacher": str(teacher_path),
+            "teacherSha256": sha256(teacher_path),
+            "observation": {
+                "v1Dim": train_ds.obs_dim,
+                "v2FlatDim": train_ds.spec.flat_length,
+                "actDim": train_ds.act_dim,
+                "v2Header": list(train_ds.spec.header),
+            },
+            "train": {
+                "rows": len(train_ds),
+                "games": train_ds.games,
+                "trueWins": train_ds.true_wins,
+                "equalGameReachWeight": train_ds.total_reach_weight,
+                "equalGameOutcomeWeight": train_ds.total_outcome_weight,
+            },
+            "validation": {
+                "rows": len(val_ds),
+                "games": val_ds.games,
+                "trueWins": val_ds.true_wins,
+                "equalGameReachWeight": val_ds.total_reach_weight,
+                "equalGameOutcomeWeight": val_ds.total_outcome_weight,
+            },
+            "expectedBehaviorTemperature": expected_temperature,
+            "teacherLogpTolerance": teacher_logp_tolerance,
+            "teacherLogpAudit": {"train": train_audit, "validation": val_audit},
+        }
 
     if init_path is None:
         model = build_model_v2(
@@ -739,6 +772,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-mean-kl", type=float)
     parser.add_argument("--max-p99-kl", type=float)
     parser.add_argument("--teacher-logp-tolerance", type=float, default=1e-3)
+    parser.add_argument("--audit-only", action="store_true",
+                        help="validate both datasets and teacher log-probs without building an optimizer")
     parser.add_argument("--device", type=str)
     return parser.parse_args()
 
@@ -769,11 +804,15 @@ def main() -> int:
         max_mean_kl=args.max_mean_kl,
         max_p99_kl=args.max_p99_kl,
         teacher_logp_tolerance=args.teacher_logp_tolerance,
+        audit_only=args.audit_only,
         device=torch.device(args.device) if args.device else None,
     )
     args.stats_out.parent.mkdir(parents=True, exist_ok=True)
     args.stats_out.write_text(json.dumps(stats, indent=2) + "\n")
-    print(f"checkpoint written: {args.out}")
+    if args.audit_only:
+        print(f"preflight written: {args.stats_out}")
+    else:
+        print(f"checkpoint written: {args.out}")
     return 0
 
 
