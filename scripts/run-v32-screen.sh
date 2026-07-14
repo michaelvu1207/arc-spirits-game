@@ -51,8 +51,14 @@ run_wave() {
   (( failed == 0 ))
 }
 
+# The isolated-host optimum is 24 workers/root. Cap each wave at four roots
+# (96 actor threads) so the 128-core host retains headroom for CARLA and system
+# services; GPU 4 is intentionally never touched.
 run_wave \
-  a:control-uniform:0 a:round-reweighted:1 a:p30-credit025:2 \
-  b:control-uniform:3 b:round-reweighted:5 b:p30-credit025:6
-run_wave c:control-uniform:0 c:round-reweighted:1 c:p30-credit025:2
+  a:control-uniform:5 a:round-reweighted:6 a:p30-credit025:7 \
+  b:control-uniform:0
+run_wave \
+  b:round-reweighted:5 b:p30-credit025:6 \
+  c:control-uniform:7 c:round-reweighted:0
+run_wave c:p30-credit025:5
 printf 'V32 nine-arm screen complete\n'

@@ -8,7 +8,7 @@
   "soloMaxStatusLevel": 2,
   "maxRounds": 30,
   "gamesPerGen": 1024,
-  "matchupGames": 64,
+  "matchupGames": 1024,
   "evalGames": 256,
   "evalOpponents": [],
   "lanes": {
