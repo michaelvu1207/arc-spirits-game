@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v30-strategic-tail-cvar-fidelity",
-  "status": "planned-review-incorporated",
+  "status": "data-generation-pending",
   "createdAt": "2026-07-14T02:25:00Z",
   "sourceCommit": "b514449",
   "planReview": {
@@ -103,6 +103,8 @@
     "diskGuard": "Require at least 8 GiB free before generation and at least 5 GiB after generation; stop without deleting unrelated artifacts otherwise."
   },
   "implementation": {
+    "runtimeSourceCommit": "c36fbb8",
+    "generationContract": "ml/experiments/v30-strategic-tail-fidelity/generation-config.json",
     "tailLoss": "For each minibatch, retain the ordinary mean exact teacher KL over all policy rows. Among strategic policy rows only, compute the mean of the largest ceil(q*N) per-row KL values and add coefficient times this CVaR term. The top-k set is selected from detached KL values but the selected KL values retain gradients.",
     "smallBatchRule": "If a minibatch has no strategic policy row, the CVaR term is zero. Otherwise select at least one strategic row.",
     "normalization": "No inverse-frequency multiplier. Each arm has the same base mean-KL term; the CVaR coefficient is the only treatment difference.",

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "arc-actor-generation-contract-v1",
+  "frozenAt": "2026-07-14T02:36:00Z",
+  "reference": "ml/experiments/v27-entity-live/protocol.json#data",
+  "normalizedShared": {
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "shuffleGuardians": true,
+    "guardianSchedule": "absolute-balanced",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "gamma": 0.999,
+    "recordObsVersion": 2,
+    "policyObsVersion": 1,
+    "neuralSeats": ["Red"],
+    "recordSeats": ["Red"],
+    "workers": 6,
+    "weights": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+    "catalog": "ml/catalogs/live-20260713-5f4ad348.json"
+  },
+  "v27Parity": {
+    "pass": true,
+    "note": "The V27 protocol's absolute-seed-balanced schedule is the protocol name for the actor CLI's absolute-balanced option. All behavior-affecting generator fields match. Explicit Red neural/record seats are the single-seat normalization."
+  },
+  "jobs": [
+    {
+      "id": "additional-train",
+      "seed0": 947000000,
+      "games": 1024,
+      "out": "ml/experiments/v30-strategic-tail-fidelity/data/train-new"
+    },
+    {
+      "id": "validation",
+      "seed0": 948000000,
+      "games": 512,
+      "out": "ml/experiments/v30-strategic-tail-fidelity/data/validation"
+    }
+  ],
+  "commandTemplate": [
+    "node",
+    "scripts/run-actor-pool.mjs",
+    "--workers", "6",
+    "--seats", "1",
+    "--max-rounds", "30",
+    "--weights", "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+    "--catalog", "ml/catalogs/live-20260713-5f4ad348.json",
+    "--selection", "hybrid",
+    "--sample",
+    "--temperature", "0.55",
+    "--neural-seats", "Red",
+    "--record-seats", "Red",
+    "--max-status-level", "2",
+    "--shuffle-guardians",
+    "--guardian-schedule", "absolute-balanced",
+    "--gamma", "0.999",
+    "--obs-version", "2",
+    "--policy-obs-version", "1"
+  ]
+}
