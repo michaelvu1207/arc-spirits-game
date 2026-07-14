@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v30-strategic-tail-cvar-fidelity",
-  "status": "training-pending",
+  "status": "training-running",
   "createdAt": "2026-07-14T02:25:00Z",
   "sourceCommit": "b514449",
   "planReview": {
@@ -172,6 +172,12 @@
     ]
   },
   "training": {
+    "launchedAt": "2026-07-14T02:45:59Z",
+    "launcher": {
+      "path": "scripts/run-v30-strategic-tail.sh",
+      "sourceCommit": "67ae69f",
+      "sha256": "f685783da3002dac70b6b9b8935bdf65ba9cace6f841c2afccbfd403c2de39d7"
+    },
     "architecture": {
       "dModel": 128,
       "layers": 3,
