@@ -40,6 +40,7 @@ const { values: args } = parseArgs({
 		forbid: { type: 'string' },
 		'max-status-level': { type: 'string' },
 		'shuffle-guardians': { type: 'boolean', default: false },
+		'guardian-schedule': { type: 'string' },
 		gamma: { type: 'string' },
 		iter: { type: 'string', default: '0' },
 		'obs-version': { type: 'string', default: '1' },
@@ -56,7 +57,7 @@ if (args.help) {
 			'         [--max-rounds N] [--weights FILE] [--catalog FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
 			'         [--selection hybrid|value|policy] [--learn-monster-reward-choices] [--sample] [--temperature X]\n' +
 			'         [--neural-seats Red,Blue] [--record-seats Red] [--forbid type1,type2]\n' +
-			'         [--max-status-level N] [--shuffle-guardians] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
+			'         [--max-status-level N] [--shuffle-guardians] [--guardian-schedule absolute-balanced] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
 			'         [--policy-obs-version 1|2 (2 needs --infer-socket)] [--append] [--quiet]'
 	);
 	process.exit(0);
@@ -90,6 +91,7 @@ const config = {
 	forbidTypes: csv(args.forbid),
 	maxStatusLevel: args['max-status-level'] ? parseInt(args['max-status-level'], 10) : undefined,
 	shuffleGuardians: args['shuffle-guardians'] || undefined,
+	guardianSchedule: args['guardian-schedule'],
 	gamma: num(args.gamma),
 	iter: parseInt(args.iter, 10),
 	obsVersion: parseInt(args['obs-version'], 10),
@@ -107,6 +109,10 @@ if (config.policyObsVersion === 2 && !config.inferSocket) {
 	console.error(
 		'--policy-obs-version 2 requires --infer-socket (the in-process TS net is v1-only)'
 	);
+	process.exit(1);
+}
+if (config.guardianSchedule !== undefined && config.guardianSchedule !== 'absolute-balanced') {
+	console.error(`--guardian-schedule must be absolute-balanced, got ${args['guardian-schedule']}`);
 	process.exit(1);
 }
 
