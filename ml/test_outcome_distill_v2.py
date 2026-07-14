@@ -65,14 +65,18 @@ def write_dataset(
                     "obsV2": flat[(game * 2 + step) % flat.shape[0]].tolist(),
                     "cands": cands.tolist(),
                     "chosen": chosen,
-                    "behaviorMask": behavior_mask.astype(int).tolist(),
-                    "behaviorTemperature": 0.55,
-                    "logpOld": float(logp[chosen]),
+                    "policyMask": int(step == 0),
                     "reach30Pred": 0.4 + 0.1 * won,
                     "strategic": int(step == 0),
                     "ret": float(value),
                     "gameId": f"g-{seed}-{game}",
                 }
+                if step == 0:
+                    record.update({
+                        "behaviorMask": behavior_mask.astype(int).tolist(),
+                        "behaviorTemperature": 0.55,
+                        "logpOld": float(logp[chosen]),
+                    })
                 if step == 1:
                     record.update({
                         "reach30Target": int(won),
@@ -97,6 +101,7 @@ def test_dataset_equal_game_weights_and_support() -> None:
         write_dataset(root / "data", teacher, seed=11)
         dataset = OutcomeDistillDataset(root / "data")
         assert len(dataset) == 16 and dataset.games == 8 and dataset.true_wins == 4
+        assert dataset.policy_row_count == 8
         assert np.isclose(dataset.reach_weight.sum(), 8)
         assert np.isclose(dataset.outcome_weight.sum(), 8)
         assert all(mask[chosen] for mask, chosen in zip(dataset.behavior_masks, dataset.chosen))

@@ -81,6 +81,7 @@ class OutcomeDistillDataset(Dataset):
         self.ret: list[float] = []
         self.temperature: list[float] = []
         self.logp_old: list[float] = []
+        self.policy_rows: list[bool] = []
         self.reach30_pred: list[float] = []
         self.strategic: list[bool] = []
         self.game_ids: list[str] = []
@@ -98,16 +99,31 @@ class OutcomeDistillDataset(Dataset):
                         obs_v1 = np.asarray(record["obs"], dtype=np.float32)
                         obs_v2 = np.asarray(record["obsV2"], dtype=np.float32)
                         cands = np.asarray(record["cands"], dtype=np.float32)
-                        raw_behavior_mask = record["behaviorMask"]
-                        if (
-                            not isinstance(raw_behavior_mask, list)
-                            or any(value not in (0, 1, False, True) for value in raw_behavior_mask)
-                        ):
-                            raise ValueError("behaviorMask must contain only booleans")
-                        behavior_mask = np.asarray(raw_behavior_mask, dtype=bool)
                         chosen = int(record["chosen"])
-                        temperature = float(record["behaviorTemperature"])
-                        logp_old = float(record["logpOld"])
+                        raw_policy_row = record["policyMask"]
+                        if raw_policy_row not in (0, 1, False, True):
+                            raise ValueError("policyMask must be boolean")
+                        policy_row = raw_policy_row in (1, True)
+                        if policy_row:
+                            raw_behavior_mask = record["behaviorMask"]
+                            if (
+                                not isinstance(raw_behavior_mask, list)
+                                or any(
+                                    value not in (0, 1, False, True)
+                                    for value in raw_behavior_mask
+                                )
+                            ):
+                                raise ValueError("behaviorMask must contain only booleans")
+                            behavior_mask = np.asarray(raw_behavior_mask, dtype=bool)
+                            temperature = float(record["behaviorTemperature"])
+                            logp_old = float(record["logpOld"])
+                        else:
+                            # Deterministic/heuristic policyMask=0 rows remain valid
+                            # value/critic states, but are excluded from all policy
+                            # losses and teacher-logp diagnostics.
+                            behavior_mask = np.ones(cands.shape[0], dtype=bool)
+                            temperature = expected_temperature
+                            logp_old = 0.0
                         reach30_pred = float(record["reach30Pred"])
                         game_id = record["gameId"]
                         strategic = record["strategic"] in (1, True)
@@ -118,16 +134,7 @@ class OutcomeDistillDataset(Dataset):
                             or cands.ndim != 2
                             or cands.shape[0] == 0
                             or cands.shape[1] != self.act_dim
-                            or behavior_mask.shape != (cands.shape[0],)
-                            or not bool(behavior_mask.any())
                             or not 0 <= chosen < cands.shape[0]
-                            or not bool(behavior_mask[chosen])
-                            or not math.isfinite(temperature)
-                            or temperature <= 0
-                            or not math.isclose(
-                                temperature, expected_temperature, rel_tol=0.0, abs_tol=1e-8
-                            )
-                            or not math.isfinite(logp_old)
                             or not math.isfinite(reach30_pred)
                             or not 0.0 <= reach30_pred <= 1.0
                             or not math.isfinite(ret)
@@ -136,6 +143,21 @@ class OutcomeDistillDataset(Dataset):
                             or record["strategic"] not in (0, 1, False, True)
                         ):
                             raise ValueError("row shape/support/metadata mismatch")
+                        if policy_row and (
+                            behavior_mask.shape != (cands.shape[0],)
+                            or not bool(behavior_mask.any())
+                            or not bool(behavior_mask[chosen])
+                            or not math.isfinite(temperature)
+                            or temperature <= 0
+                            or not math.isclose(
+                                temperature,
+                                expected_temperature,
+                                rel_tol=0.0,
+                                abs_tol=1e-8,
+                            )
+                            or not math.isfinite(logp_old)
+                        ):
+                            raise ValueError("policy row behavior support/temperature mismatch")
                         if "reach30Target" in record:
                             target = record["reach30Target"]
                             horizon = int(record["reach30Horizon"])
@@ -161,13 +183,18 @@ class OutcomeDistillDataset(Dataset):
                     self.ret.append(ret)
                     self.temperature.append(temperature)
                     self.logp_old.append(logp_old)
+                    self.policy_rows.append(policy_row)
                     self.reach30_pred.append(reach30_pred)
                     self.strategic.append(strategic)
                     self.game_ids.append(game_id)
 
         game_counts = Counter(self.game_ids)
         strategic_counts = Counter(
-            game_id for game_id, strategic in zip(self.game_ids, self.strategic) if strategic
+            game_id
+            for game_id, strategic, policy_row in zip(
+                self.game_ids, self.strategic, self.policy_rows
+            )
+            if strategic and policy_row
         )
         if set(outcomes) != set(game_counts):
             missing = sorted(set(game_counts) - set(outcomes))[:5]
@@ -190,12 +217,15 @@ class OutcomeDistillDataset(Dataset):
         )
         self.outcome_weight = np.asarray(
             [
-                (1.0 / strategic_counts[game_id]) if strategic else 0.0
-                for game_id, strategic in zip(self.game_ids, self.strategic)
+                (1.0 / strategic_counts[game_id]) if strategic and policy_row else 0.0
+                for game_id, strategic, policy_row in zip(
+                    self.game_ids, self.strategic, self.policy_rows
+                )
             ],
             dtype=np.float32,
         )
         self.games = len(game_counts)
+        self.policy_row_count = int(sum(self.policy_rows))
         self.true_wins = int(sum(outcome[0] for outcome in outcomes.values()))
         self.reach30_horizon = 30
         self.total_reach_weight = float(self.reach_weight.sum())
@@ -218,6 +248,7 @@ class OutcomeDistillDataset(Dataset):
             self.ret[index],
             self.temperature[index],
             self.logp_old[index],
+            self.policy_rows[index],
             self.reach30_pred[index],
             self.outcome_target[index],
             self.finish_round[index],
@@ -249,11 +280,12 @@ def collate(batch: list[tuple]) -> tuple[torch.Tensor, ...]:
         torch.tensor([float(row[5]) for row in batch], dtype=torch.float32),
         torch.tensor([float(row[6]) for row in batch], dtype=torch.float32),
         torch.tensor([float(row[7]) for row in batch], dtype=torch.float32),
-        torch.tensor([float(row[8]) for row in batch], dtype=torch.float32),
+        torch.tensor([bool(row[8]) for row in batch], dtype=torch.bool),
         torch.tensor([float(row[9]) for row in batch], dtype=torch.float32),
-        torch.tensor([int(row[10]) for row in batch], dtype=torch.int64),
-        torch.tensor([float(row[11]) for row in batch], dtype=torch.float32),
+        torch.tensor([float(row[10]) for row in batch], dtype=torch.float32),
+        torch.tensor([int(row[11]) for row in batch], dtype=torch.int64),
         torch.tensor([float(row[12]) for row in batch], dtype=torch.float32),
+        torch.tensor([float(row[13]) for row in batch], dtype=torch.float32),
     )
 
 
@@ -364,7 +396,7 @@ def teacher_logp_audit(
         for batch in loader:
             (
                 obs_v1, _obs_v2, cands, valid, behavior, chosen, _ret,
-                temperature, logp_old, *_rest,
+                temperature, logp_old, policy_row, *_rest,
             ) = batch
             teacher_logits, _, _ = teacher(
                 obs_v1.to(device), cands.to(device), valid.to(device)
@@ -378,7 +410,9 @@ def teacher_logp_audit(
             )
             delta = (
                 terms["teacher_chosen_logp"].cpu() - logp_old
-            ).abs().numpy()
+            ).abs()[policy_row].numpy()
+            if delta.size == 0:
+                continue
             take = min(delta.size, max_rows - seen)
             deltas.append(delta[:take])
             seen += take
@@ -405,7 +439,7 @@ def evaluate(
     kl_chunks: list[np.ndarray] = []
     teacher_entropy_chunks: list[np.ndarray] = []
     student_entropy_chunks: list[np.ndarray] = []
-    agree = value_mse = rows = 0.0
+    agree = value_mse = rows = policy_rows = 0.0
     reach_scores: list[np.ndarray] = []
     reach_targets: list[np.ndarray] = []
     reach_finish: list[np.ndarray] = []
@@ -414,7 +448,7 @@ def evaluate(
         for batch in loader:
             (
                 obs_v1, obs_v2, cands, valid, behavior, chosen, ret,
-                temperature, _logp_old, _reach30_pred, outcome_target,
+                temperature, _logp_old, policy_row, _reach30_pred, outcome_target,
                 finish_round, reach_weight, _outcome_weight,
             ) = batch
             obs_v1, obs_v2 = obs_v1.to(device), obs_v2.to(device)
@@ -426,10 +460,16 @@ def evaluate(
                 teacher_logits, student_logits, behavior, temperature, chosen
             )
             batch_rows = obs_v1.shape[0]
-            kl_chunks.append(terms["kl"].cpu().numpy())
-            teacher_entropy_chunks.append(terms["teacher_entropy"].cpu().numpy())
-            student_entropy_chunks.append(terms["student_entropy"].cpu().numpy())
-            agree += terms["agree"].float().sum().item()
+            policy_device = policy_row.to(device)
+            kl_chunks.append(terms["kl"][policy_device].cpu().numpy())
+            teacher_entropy_chunks.append(
+                terms["teacher_entropy"][policy_device].cpu().numpy()
+            )
+            student_entropy_chunks.append(
+                terms["student_entropy"][policy_device].cpu().numpy()
+            )
+            agree += terms["agree"][policy_device].float().sum().item()
+            policy_rows += int(policy_row.sum())
             value_mse += F.mse_loss(value, ret.to(device), reduction="sum").item()
             rows += batch_rows
             reach_scores.append(torch.sigmoid(model.reach30_all_logits(obs_v2)).cpu().numpy())
@@ -460,7 +500,8 @@ def evaluate(
         "teacherKlMean": float(kl.mean()),
         "teacherKlP99": float(np.percentile(kl, 99)),
         "teacherKlMax": float(kl.max()),
-        "top1Agreement": agree / rows,
+        "policyRows": int(policy_rows),
+        "top1Agreement": agree / policy_rows,
         "teacherEntropyMean": float(teacher_entropy.mean()),
         "studentEntropyMean": float(student_entropy.mean()),
         "entropyDelta": float((student_entropy - teacher_entropy).mean()),
@@ -552,6 +593,7 @@ def train(
             },
             "train": {
                 "rows": len(train_ds),
+                "policyRows": train_ds.policy_row_count,
                 "games": train_ds.games,
                 "trueWins": train_ds.true_wins,
                 "equalGameReachWeight": train_ds.total_reach_weight,
@@ -559,6 +601,7 @@ def train(
             },
             "validation": {
                 "rows": len(val_ds),
+                "policyRows": val_ds.policy_row_count,
                 "games": val_ds.games,
                 "trueWins": val_ds.true_wins,
                 "equalGameReachWeight": val_ds.total_reach_weight,
@@ -606,7 +649,9 @@ def train(
         "init": str(init_path) if init_path else None,
         "initSha256": sha256(init_path) if init_path else None,
         "samples": len(train_ds),
+        "policySamples": train_ds.policy_row_count,
         "validationSamples": len(val_ds),
+        "validationPolicySamples": val_ds.policy_row_count,
         "games": train_ds.games,
         "validationGames": val_ds.games,
         "trueWins": train_ds.true_wins,
@@ -638,7 +683,7 @@ def train(
         for batch in train_loader:
             (
                 obs_v1, obs_v2, cands, valid, behavior, chosen, ret,
-                temperature, _logp_old, reach30_pred, outcome_target,
+                temperature, _logp_old, policy_row, reach30_pred, outcome_target,
                 finish_round, reach_weight, outcome_weight,
             ) = batch
             obs_v1, obs_v2 = obs_v1.to(device), obs_v2.to(device)
@@ -651,7 +696,10 @@ def train(
             terms = masked_policy_terms(
                 teacher_logits, student_logits, behavior, temperature, chosen
             )
-            teacher_kl = terms["kl"].mean()
+            policy_device = policy_row.to(device)
+            teacher_kl = terms["kl"][policy_device].sum() * (
+                len(train_ds) / (obs_v1.shape[0] * train_ds.policy_row_count)
+            )
             value_loss = F.mse_loss(value, ret)
             reach_loss = reach30_multihorizon_minibatch_loss(
                 model.reach30_all_logits(obs_v2),
@@ -691,11 +739,14 @@ def train(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
             optimizer.step()
             batch_rows = obs_v1.shape[0]
-            totals["teacherKl"] += float(teacher_kl.detach()) * batch_rows
+            totals["teacherKlSum"] += float(terms["kl"][policy_device].sum().detach())
             totals["valueMse"] += float(value_loss.detach()) * batch_rows
             totals["reach30Loss"] += float(reach_loss.detach()) * batch_rows
             totals["outcomePgLoss"] += float(outcome_loss.detach()) * batch_rows
-            totals["top1Agreement"] += float(terms["agree"].float().sum())
+            totals["top1Agreement"] += float(
+                terms["agree"][policy_device].float().sum()
+            )
+            totals["policyRows"] += int(policy_row.sum())
             rows += batch_rows
         model.reach30_trained = True
         model.reach30_horizon = horizons[-1]
@@ -703,16 +754,24 @@ def train(
         validation = evaluate(
             model, teacher, val_loader, device=device, horizons=horizons
         )
+        train_stats = {
+            "teacherKl": totals["teacherKlSum"] / totals["policyRows"],
+            "top1Agreement": totals["top1Agreement"] / totals["policyRows"],
+            "valueMse": totals["valueMse"] / rows,
+            "reach30Loss": totals["reach30Loss"] / rows,
+            "outcomePgLoss": totals["outcomePgLoss"] / rows,
+            "policyRows": int(totals["policyRows"]),
+        }
         epoch_stats = {
             "epoch": epoch,
-            "train": {key: value / rows for key, value in totals.items()},
+            "train": train_stats,
             "validation": validation,
         }
         stats["epochs"].append(epoch_stats)
         print(
             f"epoch {epoch}/{epochs} "
-            f"kl={totals['teacherKl'] / rows:.6f} "
-            f"agree={totals['top1Agreement'] / rows:.3f} "
+            f"kl={train_stats['teacherKl']:.6f} "
+            f"agree={train_stats['top1Agreement']:.3f} "
             f"outcome={totals['outcomePgLoss'] / rows:.6f} "
             f"val_kl={validation['teacherKlMean']:.6f} "
             f"val_kl_p99={validation['teacherKlP99']:.6f}",

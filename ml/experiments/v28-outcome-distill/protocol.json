@@ -45,12 +45,13 @@
       "chosen",
       "behaviorMask",
       "behaviorTemperature",
+      "policyMask",
       "reach30Pred",
       "strategic",
       "gameId",
       "reach30Target"
     ],
-    "integrity": "Re-run the fail-closed schema/hash/complete-game audits and additionally require chosen to be inside behaviorMask, one constant positive behaviorTemperature per row, finite reach30Pred in [0,1], and an outcome label broadcast only within complete games."
+    "integrity": "Re-run the fail-closed schema/hash/complete-game audits. On policyMask=1 rows require chosen inside behaviorMask, the pinned positive behaviorTemperature, finite logpOld, and finite reach30Pred in [0,1]. policyMask=0 deterministic/heuristic rows remain critic states but are excluded from teacher KL, teacher-logp audits, and terminal policy credit. Broadcast outcomes only within complete games."
   },
   "model": {
     "format": "arc-entity-scorer-v2",
