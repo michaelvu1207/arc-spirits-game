@@ -15,13 +15,13 @@ import time
 from typing import Any, Mapping, Sequence
 
 
-AUTH_SCHEMA = "arc-v34-phase2-analysis-recovery-authorization-v1"
-PRELAUNCH_SCHEMA = "arc-v34-phase2-analysis-recovery-prelaunch-v1"
-RESERVATION_SCHEMA = "arc-v34-phase2-analysis-recovery-reservation-v1"
-STARTED_SCHEMA = "arc-v34-phase2-analysis-recovery-attempt-started-v1"
-EXEC_SCHEMA = "arc-v34-phase2-analysis-recovery-exec-confirmed-v1"
-EXIT_SCHEMA = "arc-v34-phase2-analysis-recovery-exit-v1"
-SELF_TEST_SCHEMA = "arc-v34-phase2-analysis-recovery-launcher-self-test-v1"
+AUTH_SCHEMA = "arc-v34-phase2-analysis-recovery-authorization-v2"
+PRELAUNCH_SCHEMA = "arc-v34-phase2-analysis-recovery-prelaunch-v2"
+RESERVATION_SCHEMA = "arc-v34-phase2-analysis-recovery-reservation-v2"
+STARTED_SCHEMA = "arc-v34-phase2-analysis-recovery-attempt-started-v2"
+EXEC_SCHEMA = "arc-v34-phase2-analysis-recovery-exec-confirmed-v2"
+EXIT_SCHEMA = "arc-v34-phase2-analysis-recovery-exit-v2"
+SELF_TEST_SCHEMA = "arc-v34-phase2-analysis-recovery-launcher-self-test-v2"
 
 ALLOWED_GIT_ENV = {
     "GIT_DIR",
@@ -29,6 +29,28 @@ ALLOWED_GIT_ENV = {
     "GIT_CONFIG_SYSTEM",
     "GIT_CONFIG_GLOBAL",
 }
+
+ENV_FINGERPRINT_EXCLUDED = (
+    "COLUMNS",
+    "DBUS_SESSION_BUS_ADDRESS",
+    "LINES",
+    "OLDPWD",
+    "SHLVL",
+    "SSH_AUTH_SOCK",
+    "SSH_CLIENT",
+    "SSH_CONNECTION",
+    "SSH_TTY",
+    "TERM",
+    "XDG_RUNTIME_DIR",
+    "XDG_SESSION_ID",
+    "_",
+)
+
+ENV_FINGERPRINT_SERIALIZATION = (
+    "UTF-8 JSON array of [key,value] pairs; excluded keys removed; remaining "
+    "keys sorted by Python Unicode code-point order; ensure_ascii=true; "
+    "separators=(',',':'); one terminal newline; SHA-256"
+)
 
 
 class RecoveryLaunchError(RuntimeError):
@@ -100,6 +122,11 @@ def environment_sha256(environment: Mapping[str, str]) -> str:
     return canonical_sha256([[key, environment[key]] for key in sorted(environment)])
 
 
+def analysis_environment_sha256(environment: Mapping[str, str]) -> str:
+    excluded = set(ENV_FINGERPRINT_EXCLUDED)
+    return canonical_sha256([[key, environment[key]] for key in sorted(environment) if key not in excluded])
+
+
 def resolve_bound_path(repo: Path, raw: str) -> Path:
     path = Path(raw)
     return path if path.is_absolute() else repo / path
@@ -136,6 +163,13 @@ def validate_authorization(path: Path) -> dict[str, Any]:
     git_environment = value.get("gitEnvironment")
     if not isinstance(command, dict) or not isinstance(paths, dict) or not isinstance(git_environment, dict):
         raise RecoveryLaunchError("authorization command, paths, or Git environment is invalid")
+    fingerprint = value.get("environmentFingerprint")
+    if fingerprint != {
+        "excludedVariables": list(ENV_FINGERPRINT_EXCLUDED),
+        "serialization": ENV_FINGERPRINT_SERIALIZATION,
+        "fullEnvironmentPassedUnchangedExceptGitAdditions": True,
+    }:
+        raise RecoveryLaunchError("authorization environment fingerprint contract changed")
     require_exact_keys(command, {"executable", "argv", "cwd", "sha256"}, "authorization command")
     require_exact_keys(
         paths,
@@ -206,8 +240,10 @@ def validate_prelaunch(
     command = authorization["command"]
     if value.get("commandSha256") != command["sha256"]:
         raise RecoveryLaunchError("prelaunch command hash changed")
-    if value.get("childEnvironmentSha256") != environment_sha256(child_environment):
-        raise RecoveryLaunchError("prelaunch child environment hash changed")
+    if value.get("analysisRelevantEnvironmentSha256") != analysis_environment_sha256(child_environment):
+        raise RecoveryLaunchError("prelaunch analysis-relevant environment hash changed")
+    if value.get("excludedEnvironmentVariables") != list(ENV_FINGERPRINT_EXCLUDED):
+        raise RecoveryLaunchError("prelaunch environment exclusion set changed")
     if value.get("allChecksPassed") is not True or value.get("outcomesInspected") is not False:
         raise RecoveryLaunchError("prelaunch checks or outcome-access attestation is invalid")
     return value
@@ -298,7 +334,9 @@ def launch(authorization_path: Path, prelaunch_path: Path, reservation_path: Pat
         "prelaunchSha256": prelaunch_sha,
         "reservationSha256": reservation_sha,
         "commandSha256": authorization["command"]["sha256"],
-        "childEnvironmentSha256": environment_sha256(child_environment),
+        "analysisRelevantEnvironmentSha256": analysis_environment_sha256(child_environment),
+        "fullChildEnvironmentSha256": environment_sha256(child_environment),
+        "excludedEnvironmentVariables": list(ENV_FINGERPRINT_EXCLUDED),
         "launcherPid": os.getpid(),
         "slotConsumed": True,
         "outcomesInspected": False,
@@ -333,7 +371,9 @@ def launch(authorization_path: Path, prelaunch_path: Path, reservation_path: Pat
             "reservationSha256": reservation_sha,
             "attemptStartedSha256": sha256_file(paths["attemptStarted"]),
             "commandSha256": command["sha256"],
-            "childEnvironmentSha256": environment_sha256(child_environment),
+            "analysisRelevantEnvironmentSha256": analysis_environment_sha256(child_environment),
+            "fullChildEnvironmentSha256": environment_sha256(child_environment),
+            "excludedEnvironmentVariables": list(ENV_FINGERPRINT_EXCLUDED),
             "stdoutDevice": stdout_stat.st_dev,
             "stdoutInode": stdout_stat.st_ino,
             "popenReturnedAfterExecHandshake": True,
@@ -356,6 +396,9 @@ def launch(authorization_path: Path, prelaunch_path: Path, reservation_path: Pat
             "attemptStartedSha256": sha256_file(paths["attemptStarted"]),
             "execConfirmedSha256": sha256_file(paths["execConfirmed"]),
             "commandSha256": command["sha256"],
+            "analysisRelevantEnvironmentSha256": analysis_environment_sha256(child_environment),
+            "fullChildEnvironmentSha256": environment_sha256(child_environment),
+            "excludedEnvironmentVariables": list(ENV_FINGERPRINT_EXCLUDED),
             "exitCode": exit_code,
             "succeeded": exit_code == 0,
             "laneAClosed": exit_code != 0,

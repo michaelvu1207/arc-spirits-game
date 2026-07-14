@@ -17,7 +17,10 @@ import time
 from typing import Any, Iterable, Mapping
 
 from run_v34_phase2_analysis_recovery import (
+    ENV_FINGERPRINT_EXCLUDED,
+    ENV_FINGERPRINT_SERIALIZATION,
     PRELAUNCH_SCHEMA,
+    analysis_environment_sha256,
     environment_sha256,
     exclusive_json,
     fsync_directory,
@@ -302,13 +305,17 @@ def create_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "gitInventory": file_record(git_inventory_path),
         "preflightGenerator": file_record(Path(__file__).resolve()),
         "commandSha256": authorization["command"]["sha256"],
-        "childEnvironmentSha256": environment_sha256(child_environment),
+        "analysisRelevantEnvironmentSha256": analysis_environment_sha256(child_environment),
+        "fullChildEnvironmentSha256": environment_sha256(child_environment),
+        "excludedEnvironmentVariables": list(ENV_FINGERPRINT_EXCLUDED),
         "environment": {
             "path": os.environ.get("PATH"),
             "inheritedVariableCount": len(os.environ),
             "inheritedGitVariables": [],
             "gitAdditions": authorization["gitEnvironment"],
             "gitWorkTree": None,
+            "fingerprintExcludedVariables": list(ENV_FINGERPRINT_EXCLUDED),
+            "fingerprintSerialization": ENV_FINGERPRINT_SERIALIZATION,
         },
         "toolIdentity": {
             "git": git_identity,
@@ -342,7 +349,8 @@ def main() -> None:
             {
                 "schemaVersion": manifest["schemaVersion"],
                 "passed": manifest["passed"],
-                "childEnvironmentSha256": manifest["childEnvironmentSha256"],
+                "analysisRelevantEnvironmentSha256": manifest["analysisRelevantEnvironmentSha256"],
+                "fullChildEnvironmentSha256": manifest["fullChildEnvironmentSha256"],
                 "outcomesInspected": manifest["outcomesInspected"],
             },
             sort_keys=True,

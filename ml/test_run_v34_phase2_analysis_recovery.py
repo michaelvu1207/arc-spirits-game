@@ -7,12 +7,49 @@ import sys
 import tempfile
 import unittest
 
+from ml.run_v34_phase2_analysis_recovery import (
+    ENV_FINGERPRINT_EXCLUDED,
+    analysis_environment_sha256,
+    environment_sha256,
+)
+
 
 REPO = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO / "ml/run_v34_phase2_analysis_recovery.py"
 
 
 class RecoveryLauncherTests(unittest.TestCase):
+    def test_transport_and_session_values_do_not_change_analysis_fingerprint(self) -> None:
+        first = {"PATH": "/usr/bin", "HOME": "/home/ubuntu", "SSH_CLIENT": "first", "XDG_SESSION_ID": "1"}
+        second = {"PATH": "/usr/bin", "HOME": "/home/ubuntu", "SSH_CLIENT": "second", "XDG_SESSION_ID": "2"}
+        self.assertEqual(analysis_environment_sha256(first), analysis_environment_sha256(second))
+        self.assertNotEqual(environment_sha256(first), environment_sha256(second))
+
+    def test_analysis_relevant_value_changes_fingerprint(self) -> None:
+        first = {"PATH": "/usr/bin", "HOME": "/home/ubuntu"}
+        second = {"PATH": "/usr/local/bin", "HOME": "/home/ubuntu"}
+        self.assertNotEqual(analysis_environment_sha256(first), analysis_environment_sha256(second))
+
+    def test_expected_transport_exclusion_set_is_exact(self) -> None:
+        self.assertEqual(
+            set(ENV_FINGERPRINT_EXCLUDED),
+            {
+                "COLUMNS",
+                "DBUS_SESSION_BUS_ADDRESS",
+                "LINES",
+                "OLDPWD",
+                "SHLVL",
+                "SSH_AUTH_SOCK",
+                "SSH_CLIENT",
+                "SSH_CONNECTION",
+                "SSH_TTY",
+                "TERM",
+                "XDG_RUNTIME_DIR",
+                "XDG_SESSION_ID",
+                "_",
+            },
+        )
+
     def test_self_test_exercises_exclusive_markers_and_exec_handshake(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             target = Path(raw) / "probe"
