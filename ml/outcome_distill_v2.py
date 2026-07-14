@@ -31,6 +31,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Subset
 
 sys.path.insert(0, str(Path(__file__).parent))
 from model import CandidateScorer, build_model, get_device  # noqa: E402
@@ -85,6 +86,9 @@ class OutcomeDistillDataset(Dataset):
         self.reach30_pred: list[float] = []
         self.strategic: list[bool] = []
         self.game_ids: list[str] = []
+        self.decision_types: list[str] = []
+        self.rounds: list[int] = []
+        self.step_indices: list[int] = []
         outcomes: dict[str, tuple[float, int, int]] = {}
         terminal_counts: Counter[str] = Counter()
 
@@ -128,6 +132,9 @@ class OutcomeDistillDataset(Dataset):
                         game_id = record["gameId"]
                         strategic = record["strategic"] in (1, True)
                         ret = float(record["ret"])
+                        decision_type = record["decisionType"]
+                        round_number = int(record["round"])
+                        step_index = int(record["stepIdx"])
                         if (
                             obs_v1.shape != (self.obs_dim,)
                             or obs_v2.shape != (self.spec.flat_length,)
@@ -141,6 +148,10 @@ class OutcomeDistillDataset(Dataset):
                             or not isinstance(game_id, str)
                             or not game_id
                             or record["strategic"] not in (0, 1, False, True)
+                            or not isinstance(decision_type, str)
+                            or not decision_type
+                            or round_number < 1
+                            or step_index < 0
                         ):
                             raise ValueError("row shape/support/metadata mismatch")
                         if policy_row and (
@@ -187,6 +198,9 @@ class OutcomeDistillDataset(Dataset):
                     self.reach30_pred.append(reach30_pred)
                     self.strategic.append(strategic)
                     self.game_ids.append(game_id)
+                    self.decision_types.append(decision_type)
+                    self.rounds.append(round_number)
+                    self.step_indices.append(step_index)
 
         game_counts = Counter(self.game_ids)
         strategic_counts = Counter(
@@ -287,6 +301,35 @@ def collate(batch: list[tuple]) -> tuple[torch.Tensor, ...]:
         torch.tensor([float(row[12]) for row in batch], dtype=torch.float32),
         torch.tensor([float(row[13]) for row in batch], dtype=torch.float32),
     )
+
+
+def game_seed(game_id: str) -> int:
+    try:
+        return int(game_id.split("-", 1)[0])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"gameId does not begin with absolute seed: {game_id!r}") from exc
+
+
+def seed_subset(
+    dataset: OutcomeDistillDataset, *, seed0: int, games: int
+) -> Subset:
+    if games <= 0:
+        raise ValueError("validation split games must be positive")
+    expected = set(range(seed0, seed0 + games))
+    observed_games = {
+        game_id for game_id in dataset.game_ids if game_seed(game_id) in expected
+    }
+    observed_seeds = {game_seed(game_id) for game_id in observed_games}
+    if observed_seeds != expected:
+        missing = sorted(expected - observed_seeds)[:5]
+        extra = sorted(observed_seeds - expected)[:5]
+        raise ValueError(f"validation seed split mismatch missing={missing} extra={extra}")
+    indices = [
+        index
+        for index, game_id in enumerate(dataset.game_ids)
+        if game_seed(game_id) in expected
+    ]
+    return Subset(dataset, indices)
 
 
 def load_teacher(
@@ -439,7 +482,11 @@ def evaluate(
     kl_chunks: list[np.ndarray] = []
     teacher_entropy_chunks: list[np.ndarray] = []
     student_entropy_chunks: list[np.ndarray] = []
+    strategic_kl_chunks: list[np.ndarray] = []
+    strategic_teacher_entropy_chunks: list[np.ndarray] = []
+    strategic_student_entropy_chunks: list[np.ndarray] = []
     agree = value_mse = rows = policy_rows = 0.0
+    strategic_agree = strategic_rows = 0.0
     reach_scores: list[np.ndarray] = []
     reach_targets: list[np.ndarray] = []
     reach_finish: list[np.ndarray] = []
@@ -449,7 +496,7 @@ def evaluate(
             (
                 obs_v1, obs_v2, cands, valid, behavior, chosen, ret,
                 temperature, _logp_old, policy_row, _reach30_pred, outcome_target,
-                finish_round, reach_weight, _outcome_weight,
+                finish_round, reach_weight, outcome_weight,
             ) = batch
             obs_v1, obs_v2 = obs_v1.to(device), obs_v2.to(device)
             cands, valid, behavior = cands.to(device), valid.to(device), behavior.to(device)
@@ -461,6 +508,7 @@ def evaluate(
             )
             batch_rows = obs_v1.shape[0]
             policy_device = policy_row.to(device)
+            strategic_device = outcome_weight.to(device) > 0
             kl_chunks.append(terms["kl"][policy_device].cpu().numpy())
             teacher_entropy_chunks.append(
                 terms["teacher_entropy"][policy_device].cpu().numpy()
@@ -470,6 +518,15 @@ def evaluate(
             )
             agree += terms["agree"][policy_device].float().sum().item()
             policy_rows += int(policy_row.sum())
+            strategic_kl_chunks.append(terms["kl"][strategic_device].cpu().numpy())
+            strategic_teacher_entropy_chunks.append(
+                terms["teacher_entropy"][strategic_device].cpu().numpy()
+            )
+            strategic_student_entropy_chunks.append(
+                terms["student_entropy"][strategic_device].cpu().numpy()
+            )
+            strategic_agree += terms["agree"][strategic_device].float().sum().item()
+            strategic_rows += int(strategic_device.sum())
             value_mse += F.mse_loss(value, ret.to(device), reduction="sum").item()
             rows += batch_rows
             reach_scores.append(torch.sigmoid(model.reach30_all_logits(obs_v2)).cpu().numpy())
@@ -479,6 +536,13 @@ def evaluate(
     kl = np.concatenate(kl_chunks).astype(np.float64)
     teacher_entropy = np.concatenate(teacher_entropy_chunks).astype(np.float64)
     student_entropy = np.concatenate(student_entropy_chunks).astype(np.float64)
+    strategic_kl = np.concatenate(strategic_kl_chunks).astype(np.float64)
+    strategic_teacher_entropy = np.concatenate(
+        strategic_teacher_entropy_chunks
+    ).astype(np.float64)
+    strategic_student_entropy = np.concatenate(
+        strategic_student_entropy_chunks
+    ).astype(np.float64)
     scores = np.concatenate(reach_scores).astype(np.float64)
     target = np.concatenate(reach_targets).astype(np.float64)
     finish = np.concatenate(reach_finish).astype(np.int64)
@@ -505,6 +569,14 @@ def evaluate(
         "teacherEntropyMean": float(teacher_entropy.mean()),
         "studentEntropyMean": float(student_entropy.mean()),
         "entropyDelta": float((student_entropy - teacher_entropy).mean()),
+        "strategicPolicyRows": int(strategic_rows),
+        "strategicTeacherKlMean": float(strategic_kl.mean()),
+        "strategicTeacherKlP99": float(np.percentile(strategic_kl, 99)),
+        "strategicTeacherKlMax": float(strategic_kl.max()),
+        "strategicTop1Agreement": strategic_agree / strategic_rows,
+        "strategicEntropyDelta": float(
+            (strategic_student_entropy - strategic_teacher_entropy).mean()
+        ),
         "valueMse": value_mse / rows,
         "reach30ByHorizon": by_horizon,
     }
@@ -536,6 +608,17 @@ def train(
     max_p99_kl: float | None = None,
     teacher_logp_tolerance: float = 1e-3,
     audit_only: bool = False,
+    val_select_seed0: int | None = None,
+    val_select_games: int | None = None,
+    val_gate_seed0: int | None = None,
+    val_gate_games: int | None = None,
+    early_stop_patience: int = 0,
+    early_stop_min_delta: float = 0.0,
+    early_stop_min_epochs: int = 0,
+    max_strategic_mean_kl: float | None = None,
+    max_strategic_p99_kl: float | None = None,
+    min_top1_agreement: float | None = None,
+    min_strategic_top1_agreement: float | None = None,
     device: torch.device | None = None,
 ) -> dict[str, Any]:
     if device is None:
@@ -550,6 +633,20 @@ def train(
             raise ValueError(f"{name} must be finite and nonnegative")
     if not 0 <= clip_epsilon < 1:
         raise ValueError("clip_epsilon must be in [0,1)")
+    if early_stop_patience < 0 or early_stop_min_epochs < 0 or early_stop_min_delta < 0:
+        raise ValueError("early-stop controls must be nonnegative")
+    if early_stop_patience and not select_best_teacher_kl:
+        raise ValueError("early stopping requires select_best_teacher_kl")
+    split_values = (
+        val_select_seed0,
+        val_select_games,
+        val_gate_seed0,
+        val_gate_games,
+    )
+    if any(value is not None for value in split_values) and not all(
+        value is not None for value in split_values
+    ):
+        raise ValueError("validation selection/gate split requires all four seed arguments")
 
     train_ds = OutcomeDistillDataset(data_dir, expected_temperature=expected_temperature)
     val_ds = OutcomeDistillDataset(val_data_dir, expected_temperature=expected_temperature)
@@ -637,8 +734,25 @@ def train(
         collate_fn=collate,
         generator=torch.Generator().manual_seed(seed),
     )
+    if val_select_seed0 is not None:
+        selection_data: Dataset = seed_subset(
+            val_ds, seed0=val_select_seed0, games=int(val_select_games)
+        )
+        gate_data: Dataset | None = seed_subset(
+            val_ds, seed0=int(val_gate_seed0), games=int(val_gate_games)
+        )
+        if set(selection_data.indices) & set(gate_data.indices):
+            raise ValueError("validation selection and gate rows overlap")
+    else:
+        selection_data = val_ds
+        gate_data = None
     val_loader = DataLoader(
-        val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate
+        selection_data, batch_size=batch_size, shuffle=False, collate_fn=collate
+    )
+    gate_loader = (
+        DataLoader(gate_data, batch_size=batch_size, shuffle=False, collate_fn=collate)
+        if gate_data is not None
+        else None
     )
     stats: dict[str, Any] = {
         "schemaVersion": "arc-v28-training-v1",
@@ -670,12 +784,27 @@ def train(
             "selectBestTeacherKl": select_best_teacher_kl,
             "maxMeanKl": max_mean_kl,
             "maxP99Kl": max_p99_kl,
+            "validationSelection": (
+                {"seed0": val_select_seed0, "games": val_select_games}
+                if val_select_seed0 is not None
+                else None
+            ),
+            "validationGate": (
+                {"seed0": val_gate_seed0, "games": val_gate_games}
+                if val_gate_seed0 is not None
+                else None
+            ),
+            "earlyStopPatience": early_stop_patience,
+            "earlyStopMinDelta": early_stop_min_delta,
+            "earlyStopMinEpochs": early_stop_min_epochs,
         },
         "epochs": [],
     }
     best_state: dict[str, torch.Tensor] | None = None
     best_kl = float("inf")
     best_epoch = 0
+    significant_best = float("inf")
+    stale_epochs = 0
     for epoch in range(1, epochs + 1):
         model.train()
         totals = Counter()
@@ -777,11 +906,11 @@ def train(
             f"val_kl_p99={validation['teacherKlP99']:.6f}",
             flush=True,
         )
-        if max_mean_kl is not None and validation["teacherKlMean"] > max_mean_kl:
+        if gate_loader is None and max_mean_kl is not None and validation["teacherKlMean"] > max_mean_kl:
             raise RuntimeError(
                 f"V28 mean validation KL {validation['teacherKlMean']:.6f} > {max_mean_kl}"
             )
-        if max_p99_kl is not None and validation["teacherKlP99"] > max_p99_kl:
+        if gate_loader is None and max_p99_kl is not None and validation["teacherKlP99"] > max_p99_kl:
             raise RuntimeError(
                 f"V28 p99 validation KL {validation['teacherKlP99']:.6f} > {max_p99_kl}"
             )
@@ -789,6 +918,19 @@ def train(
             best_kl = validation["teacherKlMean"]
             best_epoch = epoch
             best_state = copy.deepcopy(model.state_dict())
+        if validation["teacherKlMean"] < significant_best - early_stop_min_delta:
+            significant_best = validation["teacherKlMean"]
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+        if (
+            early_stop_patience > 0
+            and epoch >= early_stop_min_epochs
+            and stale_epochs >= early_stop_patience
+        ):
+            stats["earlyStopped"] = True
+            stats["earlyStopEpoch"] = epoch
+            break
 
     if select_best_teacher_kl:
         if best_state is None:
@@ -796,6 +938,45 @@ def train(
         model.load_state_dict(best_state)
         stats["bestEpoch"] = best_epoch
         stats["bestValidationTeacherKl"] = best_kl
+    final_validation = evaluate(
+        model,
+        teacher,
+        gate_loader if gate_loader is not None else val_loader,
+        device=device,
+        horizons=horizons,
+    )
+    stats["gateValidation" if gate_loader is not None else "finalValidation"] = final_validation
+    checks = [
+        (max_mean_kl, final_validation["teacherKlMean"], "mean validation KL", lambda a, b: b > a),
+        (max_p99_kl, final_validation["teacherKlP99"], "p99 validation KL", lambda a, b: b > a),
+        (
+            max_strategic_mean_kl,
+            final_validation["strategicTeacherKlMean"],
+            "strategic mean validation KL",
+            lambda a, b: b > a,
+        ),
+        (
+            max_strategic_p99_kl,
+            final_validation["strategicTeacherKlP99"],
+            "strategic p99 validation KL",
+            lambda a, b: b > a,
+        ),
+        (
+            min_top1_agreement,
+            final_validation["top1Agreement"],
+            "validation top1 agreement",
+            lambda a, b: b < a,
+        ),
+        (
+            min_strategic_top1_agreement,
+            final_validation["strategicTop1Agreement"],
+            "strategic validation top1 agreement",
+            lambda a, b: b < a,
+        ),
+    ]
+    for limit, observed, label, fails in checks:
+        if limit is not None and fails(limit, observed):
+            raise RuntimeError(f"V28/V29 {label} {observed:.6f} fails limit {limit}")
     model.eval()
     assert_finite_weights(model, "V28 save checkpoint")
     manifest = save_checkpoint(model, out_path)
@@ -833,6 +1014,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--teacher-logp-tolerance", type=float, default=1e-3)
     parser.add_argument("--audit-only", action="store_true",
                         help="validate both datasets and teacher log-probs without building an optimizer")
+    parser.add_argument("--val-select-seed0", type=int)
+    parser.add_argument("--val-select-games", type=int)
+    parser.add_argument("--val-gate-seed0", type=int)
+    parser.add_argument("--val-gate-games", type=int)
+    parser.add_argument("--early-stop-patience", type=int, default=0)
+    parser.add_argument("--early-stop-min-delta", type=float, default=0.0)
+    parser.add_argument("--early-stop-min-epochs", type=int, default=0)
+    parser.add_argument("--max-strategic-mean-kl", type=float)
+    parser.add_argument("--max-strategic-p99-kl", type=float)
+    parser.add_argument("--min-top1-agreement", type=float)
+    parser.add_argument("--min-strategic-top1-agreement", type=float)
     parser.add_argument("--device", type=str)
     return parser.parse_args()
 
@@ -864,6 +1056,17 @@ def main() -> int:
         max_p99_kl=args.max_p99_kl,
         teacher_logp_tolerance=args.teacher_logp_tolerance,
         audit_only=args.audit_only,
+        val_select_seed0=args.val_select_seed0,
+        val_select_games=args.val_select_games,
+        val_gate_seed0=args.val_gate_seed0,
+        val_gate_games=args.val_gate_games,
+        early_stop_patience=args.early_stop_patience,
+        early_stop_min_delta=args.early_stop_min_delta,
+        early_stop_min_epochs=args.early_stop_min_epochs,
+        max_strategic_mean_kl=args.max_strategic_mean_kl,
+        max_strategic_p99_kl=args.max_strategic_p99_kl,
+        min_top1_agreement=args.min_top1_agreement,
+        min_strategic_top1_agreement=args.min_strategic_top1_agreement,
         device=torch.device(args.device) if args.device else None,
     )
     args.stats_out.parent.mkdir(parents=True, exist_ok=True)

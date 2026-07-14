@@ -68,8 +68,11 @@ def write_dataset(
                     "policyMask": int(step == 0),
                     "reach30Pred": 0.4 + 0.1 * won,
                     "strategic": int(step == 0),
+                    "decisionType": "lockNavigation" if step == 0 else "resolveMonsterReward",
+                    "round": game + 1,
+                    "stepIdx": step,
                     "ret": float(value),
-                    "gameId": f"g-{seed}-{game}",
+                    "gameId": f"{seed * 100000 + game}-1p-Red",
                 }
                 if step == 0:
                     record.update({
@@ -161,12 +164,20 @@ def test_stage1_and_stage2_end_to_end() -> None:
             heads=2,
             seed=28,
             select_best_teacher_kl=True,
+            val_select_seed0=2200000,
+            val_select_games=4,
+            val_gate_seed0=2200004,
+            val_gate_games=4,
+            early_stop_patience=2,
+            early_stop_min_delta=0.0001,
+            early_stop_min_epochs=1,
             teacher_logp_tolerance=1e-5,
             device=torch.device("cpu"),
         )
         assert stage1.exists() and stage1.with_suffix(".manifest.json").exists()
         assert stats1["teacherLogpAudit"]["validation"]["maxAbsError"] < 1e-5
         assert stats1["bestEpoch"] in (1, 2)
+        assert stats1["gateValidation"]["strategicPolicyRows"] == 4
 
         stage2 = root / "stage2.pt"
         stats2 = train(
