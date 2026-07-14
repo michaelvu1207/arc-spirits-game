@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v31-conservative-offline-terminal-credit",
-  "status": "preflight-valid-launch-approved",
+  "status": "training-running",
   "createdAt": "2026-07-14T03:50:00Z",
   "sourceCommit": "72e057f",
   "planReview": {
@@ -135,6 +135,13 @@
     }
   },
   "training": {
+    "launchedAt": "2026-07-14T04:08:00Z",
+    "launchPids": {
+      "anchor-only": 3219611,
+      "strategic-pg-0p1": 3219613,
+      "strategic-pg-0p3": 3219615,
+      "strategic-pg-0p6": 3219619
+    },
     "architecture": {
       "format": "arc-entity-scorer-v2",
       "dModel": 128,
