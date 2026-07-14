@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v31-conservative-offline-terminal-credit",
-  "status": "reviewed-implementation-pending",
+  "status": "implementation-complete-preflight-pending",
   "createdAt": "2026-07-14T03:50:00Z",
   "sourceCommit": "72e057f",
   "planReview": {
@@ -57,6 +57,12 @@
     }
   },
   "implementation": {
+    "runtimeSourceCommit": "5a296b2",
+    "launcher": {
+      "path": "scripts/run-v31-terminal-credit.sh",
+      "sourceCommit": "23d17e1",
+      "sha256": "eb178b6efd2644542dde895120fc0d6349880a070ab2b92f9826c9bad2b6e2c7"
+    },
     "strategicPredicate": {
       "definition": "A decision row is strategic when any legal candidate has type lockNavigation or selectNavigationDestination. The default navigation scope is used; engine-cycle types are not included.",
       "source": "src/lib/play/ml/driver.ts isStrategicDecision/NAVIGATION_STRATEGIC_TYPES",
