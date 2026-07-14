@@ -15,6 +15,8 @@ from outcome_distill_v2 import (
     OutcomeDistillDataset,
     masked_policy_terms,
     outcome_surrogate_loss,
+    strategic_tail_cvar,
+    top_fraction_mean,
     train,
 )
 from train import export_weights
@@ -132,6 +134,30 @@ def test_identical_logits_have_zero_kl_and_unit_ratio_surrogate() -> None:
     assert abs(float(loss)) < 1e-7  # advantages +0.6 and -0.6 cancel at ratio one
 
 
+def test_strategic_tail_cvar_selection_gradient_and_empty_group() -> None:
+    kl = torch.tensor([0.1, 0.8, 0.2, 0.6, 0.9], requires_grad=True)
+    strategic = torch.tensor([True, True, False, True, False])
+    tail, rows, selected = strategic_tail_cvar(kl, strategic, 0.5)
+    assert rows == 3 and selected == 2
+    assert torch.allclose(tail, torch.tensor(0.7))
+    (kl.mean() + 0.0 * tail).backward(retain_graph=True)
+    assert torch.allclose(kl.grad, torch.full_like(kl, 0.2))
+    kl.grad.zero_()
+    tail.backward()
+    assert torch.equal(kl.grad != 0, torch.tensor([False, True, False, True, False]))
+
+    empty, rows, selected = strategic_tail_cvar(
+        kl.detach().clone().requires_grad_(True), torch.zeros(5, dtype=torch.bool), 0.05
+    )
+    assert rows == 0 and selected == 0 and float(empty.detach()) == 0.0
+
+
+def test_top_fraction_mean_uses_ceil_and_at_least_one() -> None:
+    values = np.asarray([0.1, 0.2, 0.3, 0.9], dtype=np.float64)
+    assert np.isclose(top_fraction_mean(values, 0.05), 0.9)
+    assert np.isclose(top_fraction_mean(values, 0.5), 0.6)
+
+
 def test_stage1_and_stage2_end_to_end() -> None:
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -173,13 +199,15 @@ def test_stage1_and_stage2_end_to_end() -> None:
             early_stop_min_delta=0.0001,
             early_stop_min_epochs=1,
             strategic_kl_fraction=0.5,
-            selection_metric="strategicTeacherKlMean",
+            selection_metric="strategicTeacherKlCvar05",
             teacher_logp_tolerance=1e-5,
             device=torch.device("cpu"),
         )
         assert stage1.exists() and stage1.with_suffix(".manifest.json").exists()
         assert stats1["teacherLogpAudit"]["validation"]["maxAbsError"] < 1e-5
         assert stats1["bestEpoch"] in (1, 2)
+        assert stats1["selectionMetric"] == "strategicTeacherKlCvar05"
+        assert "strategicTeacherKlCvar05" in stats1["gateValidation"]
         assert stats1["gateValidation"]["strategicPolicyRows"] == 4
 
         stage2 = root / "stage2.pt"

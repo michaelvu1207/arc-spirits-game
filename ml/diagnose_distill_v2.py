@@ -24,6 +24,7 @@ from outcome_distill_v2 import (  # noqa: E402
     masked_policy_terms,
     seed_subset,
     sha256,
+    top_fraction_mean,
 )
 
 
@@ -39,6 +40,7 @@ def metric_summary(
         "klMean": float(values.mean()),
         "klP95": float(np.percentile(values, 95)),
         "klP99": float(np.percentile(values, 99)),
+        "klCvar05": top_fraction_mean(values, 0.05),
         "klMax": float(values.max()),
         "top1Agreement": float(np.mean(agree)),
         "entropyDeltaMean": float(entropy.mean()),
@@ -55,6 +57,32 @@ def round_bucket(round_number: int) -> str:
     return "23-30"
 
 
+def game_cluster_bootstrap_p99(
+    values_by_game: dict[str, list[float]], *, replicates: int, seed: int
+) -> dict[str, float | int]:
+    if replicates <= 0:
+        raise ValueError("bootstrap replicates must be positive")
+    games = sorted(values_by_game)
+    if len(games) < 2 or any(not values_by_game[game] for game in games):
+        raise ValueError("game-cluster bootstrap requires at least two non-empty games")
+    clusters = [np.asarray(values_by_game[game], dtype=np.float64) for game in games]
+    rng = np.random.default_rng(seed)
+    estimates = np.empty(replicates, dtype=np.float64)
+    for index in range(replicates):
+        sampled = rng.integers(0, len(clusters), size=len(clusters))
+        values = np.concatenate([clusters[cluster] for cluster in sampled])
+        estimates[index] = np.percentile(values, 99)
+    return {
+        "unit": "complete game",
+        "games": len(games),
+        "replicates": replicates,
+        "seed": seed,
+        "lower95": float(np.percentile(estimates, 2.5)),
+        "median": float(np.percentile(estimates, 50)),
+        "upper95": float(np.percentile(estimates, 97.5)),
+    }
+
+
 def diagnose(
     data_dir: Path,
     teacher_path: Path,
@@ -65,6 +93,8 @@ def diagnose(
     worst_rows: int = 100,
     seed0: int | None = None,
     games: int | None = None,
+    bootstrap_replicates: int = 0,
+    bootstrap_seed: int = 0,
     device: torch.device | None = None,
 ) -> dict[str, Any]:
     if device is None:
@@ -90,6 +120,7 @@ def diagnose(
     worst: list[dict[str, Any]] = []
     alias_reference: dict[bytes, tuple[np.ndarray, int]] = {}
     aliases: list[dict[str, Any]] = []
+    strategic_by_game: dict[str, list[float]] = defaultdict(list)
     max_alias_tv = 0.0
     cursor = 0
     with torch.no_grad():
@@ -125,6 +156,8 @@ def diagnose(
                 support_size = int(behavior[local].sum())
                 decision_type = dataset.decision_types[global_index]
                 strategic = dataset.strategic[global_index]
+                if strategic:
+                    strategic_by_game[dataset.game_ids[global_index]].append(float(kl[local]))
                 buckets = (
                     "overall",
                     f"decisionType:{decision_type}",
@@ -190,7 +223,7 @@ def diagnose(
         for key, value in summary.items()
         if key != "rows"
     )
-    return {
+    report = {
         "schemaVersion": "arc-v29-distill-diagnostic-v1",
         "valid": finite and not aliases,
         "data": str(data_dir),
@@ -213,6 +246,13 @@ def diagnose(
         },
         "worstRows": worst[:worst_rows],
     }
+    if bootstrap_replicates > 0:
+        report["strategicP99GameClusterBootstrap"] = game_cluster_bootstrap_p99(
+            strategic_by_game,
+            replicates=bootstrap_replicates,
+            seed=bootstrap_seed,
+        )
+    return report
 
 
 def parse_args() -> argparse.Namespace:
@@ -225,6 +265,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--worst-rows", type=int, default=100)
     parser.add_argument("--seed0", type=int)
     parser.add_argument("--games", type=int)
+    parser.add_argument("--bootstrap-replicates", type=int, default=0)
+    parser.add_argument("--bootstrap-seed", type=int, default=0)
     parser.add_argument("--device", type=str)
     parser.add_argument("--out", type=Path, required=True)
     return parser.parse_args()
@@ -241,6 +283,8 @@ def main() -> int:
         worst_rows=args.worst_rows,
         seed0=args.seed0,
         games=args.games,
+        bootstrap_replicates=args.bootstrap_replicates,
+        bootstrap_seed=args.bootstrap_seed,
         device=torch.device(args.device) if args.device else None,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -60,6 +60,54 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def top_fraction_mean(values: np.ndarray, fraction: float) -> float:
+    """Mean of the largest ceil(fraction * N) values, with at least one value."""
+    if values.ndim != 1 or values.size == 0:
+        raise ValueError("top_fraction_mean requires a non-empty one-dimensional array")
+    if not 0 < fraction <= 1:
+        raise ValueError("top_fraction_mean fraction must be in (0,1]")
+    count = max(1, math.ceil(fraction * values.size))
+    if count == values.size:
+        return float(values.mean())
+    boundary = values.size - count
+    return float(np.partition(values, boundary)[boundary:].mean())
+
+
+def strategic_tail_cvar(
+    per_row_kl: torch.Tensor,
+    strategic_mask: torch.Tensor,
+    fraction: float,
+) -> tuple[torch.Tensor, int, int]:
+    """Differentiable CVaR over rows chosen by detached strategic KL rank."""
+    if per_row_kl.ndim != 1 or strategic_mask.shape != per_row_kl.shape:
+        raise ValueError("strategic_tail_cvar expects matching one-dimensional tensors")
+    if strategic_mask.dtype is not torch.bool:
+        raise ValueError("strategic_tail_cvar mask must be boolean")
+    if not 0 < fraction <= 1:
+        raise ValueError("strategic_tail_cvar fraction must be in (0,1]")
+    strategic = per_row_kl[strategic_mask]
+    rows = int(strategic.numel())
+    if rows == 0:
+        return per_row_kl.sum() * 0.0, 0, 0
+    count = max(1, math.ceil(fraction * rows))
+    selected = torch.topk(strategic.detach(), count, sorted=False).indices
+    return strategic[selected].mean(), rows, count
+
+
+def integer_distribution(values: list[int]) -> dict[str, float | int]:
+    if not values:
+        return {"count": 0}
+    array = np.asarray(values, dtype=np.float64)
+    return {
+        "count": int(array.size),
+        "min": int(array.min()),
+        "mean": float(array.mean()),
+        "p50": float(np.percentile(array, 50)),
+        "p95": float(np.percentile(array, 95)),
+        "max": int(array.max()),
+    }
+
+
 class OutcomeDistillDataset(Dataset):
     """Complete paired actor trajectories with exact behavior-policy metadata."""
 
@@ -571,6 +619,7 @@ def evaluate(
         }
     return {
         "teacherKlMean": float(kl.mean()),
+        "teacherKlP95": float(np.percentile(kl, 95)),
         "teacherKlP99": float(np.percentile(kl, 99)),
         "teacherKlMax": float(kl.max()),
         "policyRows": int(policy_rows),
@@ -580,7 +629,9 @@ def evaluate(
         "entropyDelta": float((student_entropy - teacher_entropy).mean()),
         "strategicPolicyRows": int(strategic_rows),
         "strategicTeacherKlMean": float(strategic_kl.mean()),
+        "strategicTeacherKlP95": float(np.percentile(strategic_kl, 95)),
         "strategicTeacherKlP99": float(np.percentile(strategic_kl, 99)),
+        "strategicTeacherKlCvar05": top_fraction_mean(strategic_kl, 0.05),
         "strategicTeacherKlMax": float(strategic_kl.max()),
         "strategicTop1Agreement": strategic_agree / strategic_rows,
         "strategicEntropyDelta": float(
@@ -629,6 +680,8 @@ def train(
     min_top1_agreement: float | None = None,
     min_strategic_top1_agreement: float | None = None,
     strategic_kl_fraction: float | None = None,
+    strategic_tail_fraction: float | None = None,
+    strategic_tail_coef: float = 0.0,
     selection_metric: str = "teacherKlMean",
     device: torch.device | None = None,
 ) -> dict[str, Any]:
@@ -639,6 +692,7 @@ def train(
         "value_coef": value_coef,
         "reach30_coef": reach30_coef,
         "outcome_pg_coef": outcome_pg_coef,
+        "strategic_tail_coef": strategic_tail_coef,
     }.items():
         if value < 0 or not math.isfinite(value):
             raise ValueError(f"{name} must be finite and nonnegative")
@@ -656,17 +710,27 @@ def train(
         raise ValueError("validation gate split requires a selection split")
     if strategic_kl_fraction is not None and not 0 < strategic_kl_fraction < 1:
         raise ValueError("strategic_kl_fraction must be in (0,1)")
-    allowed_selection_metrics = {"teacherKlMean", "strategicTeacherKlMean"}
+    if strategic_tail_fraction is not None and not 0 < strategic_tail_fraction <= 1:
+        raise ValueError("strategic_tail_fraction must be in (0,1]")
+    if strategic_tail_coef > 0 and strategic_tail_fraction is None:
+        raise ValueError("positive strategic_tail_coef requires strategic_tail_fraction")
+    if strategic_kl_fraction is not None and strategic_tail_coef > 0:
+        raise ValueError("strategic mean balancing and strategic tail CVaR are mutually exclusive")
+    allowed_selection_metrics = {
+        "teacherKlMean",
+        "strategicTeacherKlMean",
+        "strategicTeacherKlCvar05",
+    }
     if selection_metric not in allowed_selection_metrics:
         raise ValueError(f"selection_metric must be one of {sorted(allowed_selection_metrics)}")
 
     train_ds = OutcomeDistillDataset(data_dir, expected_temperature=expected_temperature)
     val_ds = OutcomeDistillDataset(val_data_dir, expected_temperature=expected_temperature)
-    if strategic_kl_fraction is not None and (
+    if (strategic_kl_fraction is not None or strategic_tail_coef > 0) and (
         train_ds.strategic_policy_row_count <= 0
         or train_ds.nonstrategic_policy_row_count <= 0
     ):
-        raise ValueError("strategic KL balancing requires both policy subgroups")
+        raise ValueError("strategic policy objectives require both policy subgroups")
     if (
         train_ds.spec.header != val_ds.spec.header
         or train_ds.obs_dim != val_ds.obs_dim
@@ -817,6 +881,8 @@ def train(
             "earlyStopMinDelta": early_stop_min_delta,
             "earlyStopMinEpochs": early_stop_min_epochs,
             "strategicKlFraction": strategic_kl_fraction,
+            "strategicTailFraction": strategic_tail_fraction,
+            "strategicTailCoef": strategic_tail_coef,
             "selectionMetric": selection_metric,
         },
         "epochs": [],
@@ -829,6 +895,8 @@ def train(
     for epoch in range(1, epochs + 1):
         model.train()
         totals = Counter()
+        strategic_rows_per_batch: list[int] = []
+        tail_topk_per_batch: list[int] = []
         rows = 0
         for batch in train_loader:
             (
@@ -847,12 +915,12 @@ def train(
                 teacher_logits, student_logits, behavior, temperature, chosen
             )
             policy_device = policy_row.to(device)
+            strategic_device = outcome_weight.to(device) > 0
             if strategic_kl_fraction is None:
                 teacher_kl = terms["kl"][policy_device].sum() * (
                     len(train_ds) / (obs_v1.shape[0] * train_ds.policy_row_count)
                 )
             else:
-                strategic_device = outcome_weight.to(device) > 0
                 nonstrategic_device = policy_device & ~strategic_device
                 teacher_kl = (
                     strategic_kl_fraction
@@ -866,6 +934,16 @@ def train(
                     * (
                         len(train_ds)
                         / (obs_v1.shape[0] * train_ds.nonstrategic_policy_row_count)
+                    )
+                )
+            if strategic_tail_fraction is None:
+                strategic_tail_loss = terms["kl"].sum() * 0.0
+                strategic_batch_rows = int(strategic_device.sum())
+                strategic_tail_rows = 0
+            else:
+                strategic_tail_loss, strategic_batch_rows, strategic_tail_rows = (
+                    strategic_tail_cvar(
+                        terms["kl"], strategic_device, strategic_tail_fraction
                     )
                 )
             value_loss = F.mse_loss(value, ret)
@@ -890,6 +968,7 @@ def train(
             )
             loss = (
                 teacher_kl_coef * teacher_kl
+                + strategic_tail_coef * strategic_tail_loss
                 + value_coef * value_loss
                 + reach30_coef * reach_loss
                 + outcome_pg_coef * outcome_loss
@@ -908,6 +987,10 @@ def train(
             optimizer.step()
             batch_rows = obs_v1.shape[0]
             totals["teacherKlSum"] += float(terms["kl"][policy_device].sum().detach())
+            totals["strategicTailLoss"] += float(strategic_tail_loss.detach())
+            totals["batches"] += 1
+            strategic_rows_per_batch.append(strategic_batch_rows)
+            tail_topk_per_batch.append(strategic_tail_rows)
             totals["valueMse"] += float(value_loss.detach()) * batch_rows
             totals["reach30Loss"] += float(reach_loss.detach()) * batch_rows
             totals["outcomePgLoss"] += float(outcome_loss.detach()) * batch_rows
@@ -924,6 +1007,9 @@ def train(
         )
         train_stats = {
             "teacherKl": totals["teacherKlSum"] / totals["policyRows"],
+            "strategicTailCvar": totals["strategicTailLoss"] / totals["batches"],
+            "strategicRowsPerBatch": integer_distribution(strategic_rows_per_batch),
+            "strategicTailTopKPerBatch": integer_distribution(tail_topk_per_batch),
             "top1Agreement": totals["top1Agreement"] / totals["policyRows"],
             "valueMse": totals["valueMse"] / rows,
             "reach30Loss": totals["reach30Loss"] / rows,
@@ -939,6 +1025,7 @@ def train(
         print(
             f"epoch {epoch}/{epochs} "
             f"kl={train_stats['teacherKl']:.6f} "
+            f"tail={train_stats['strategicTailCvar']:.6f} "
             f"agree={train_stats['top1Agreement']:.3f} "
             f"outcome={totals['outcomePgLoss'] / rows:.6f} "
             f"val_kl={validation['teacherKlMean']:.6f} "
@@ -1069,9 +1156,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-top1-agreement", type=float)
     parser.add_argument("--min-strategic-top1-agreement", type=float)
     parser.add_argument("--strategic-kl-fraction", type=float)
+    parser.add_argument("--strategic-tail-fraction", type=float)
+    parser.add_argument("--strategic-tail-coef", type=float, default=0.0)
     parser.add_argument(
         "--selection-metric",
-        choices=["teacherKlMean", "strategicTeacherKlMean"],
+        choices=[
+            "teacherKlMean",
+            "strategicTeacherKlMean",
+            "strategicTeacherKlCvar05",
+        ],
         default="teacherKlMean",
     )
     parser.add_argument("--device", type=str)
@@ -1117,6 +1210,8 @@ def main() -> int:
         min_top1_agreement=args.min_top1_agreement,
         min_strategic_top1_agreement=args.min_strategic_top1_agreement,
         strategic_kl_fraction=args.strategic_kl_fraction,
+        strategic_tail_fraction=args.strategic_tail_fraction,
+        strategic_tail_coef=args.strategic_tail_coef,
         selection_metric=args.selection_metric,
         device=torch.device(args.device) if args.device else None,
     )
