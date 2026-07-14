@@ -1,0 +1,1001 @@
+{
+	"schemaVersion": "arc-v34-lane-b-execution-protocol-v1",
+	"status": "closed",
+	"outcomeBlind": true,
+	"approvedPlan": {
+		"path": "ml/experiments/v34-latency-first-expert-iteration/lane-b-tooling-plan.md",
+		"bytes": 27380,
+		"sha256": "2b77be787b92f0a5f3d8e1122679f5b8eb3e669fee3190ee925770c33f9a5383",
+		"finalFableValidation": {
+			"path": "ml/experiments/v34-latency-first-expert-iteration/lane-b-tooling-fable-final-validation.md",
+			"bytes": 1057,
+			"sha256": "781694f954b1b0c04d4ded8ce06217ba2ea95b67eced5f340e293c0f45524739",
+			"result": "PASS"
+		}
+	},
+	"validationMetadata": {
+		"draftOnly": true,
+		"syntheticFixturesOnly": true,
+		"registeredSeedExecutionAuthorized": false,
+		"unresolvedFieldsKeepAffectedStagesClosed": true,
+		"ambiguities": [
+			{
+				"id": "storage-exact-prefix-and-probe",
+				"affectedStages": ["b1", "b2", "b3", "b4", "b5"],
+				"reason": "The authorization hash, exact S3 prefix, and live probe evidence can only be bound by a future immutable execution lock."
+			},
+			{
+				"id": "b4-probe-family",
+				"affectedStages": ["b4"],
+				"reason": "The plan does not freeze the heuristic/exploiter probe bootstrap RNG, draw count, endpoint family, or exact lower-bound construction."
+			},
+			{
+				"id": "b5-training-recipes",
+				"affectedStages": ["b5"],
+				"reason": "The plan reserves multiplayer ranges but does not freeze per-stage game counts consumed for training, optimizer update counts, or exact training recipes."
+			},
+			{
+				"id": "b5-exploiter-recipes",
+				"affectedStages": ["b5"],
+				"reason": "The plan requires exploiter recipes, initialization seeds, pools, cadence, and selection to be frozen later but does not supply their values."
+			},
+			{
+				"id": "b5-multiplayer-development-inference",
+				"affectedStages": ["b5"],
+				"reason": "The plan supplies multiplayer point and lower-bound gates but does not name the exact confidence-interval or bootstrap construction."
+			},
+			{
+				"id": "b5-final-hidden-schedule",
+				"affectedStages": ["b5"],
+				"reason": "The plan requires the hidden schedule to be analogous to final development but does not freeze its exact per-format, seat, and stratum counts."
+			},
+			{
+				"id": "base-958200-transfer-disposition",
+				"affectedStages": ["b3"],
+				"reason": "The base plan reserves 958200000-958204095 for distilled-v1 transfer, while the Lane B amendment replaces distilled-v1 qualification with direct-v2 but does not explicitly release or repurpose this range."
+			},
+			{
+				"id": "human-reference-schedule",
+				"affectedStages": ["promotion"],
+				"reason": "The base plan reserves 960900000-960909999, but the Lane B amendment does not freeze the human-reference replay schedule."
+			}
+		]
+	},
+	"storage": {
+		"stageOpen": false,
+		"minimumDurableBytes": 137438953472,
+		"minimumScratchToPilotPeakRatio": 2,
+		"minimumDurableToProjectedTotalRatio": 1.5,
+		"actionTraceMaximumDurableFraction": 0.25,
+		"ordinaryFilesystemBound": false,
+		"objectStore": {
+			"kind": "s3",
+			"bucket": "dev-simforge-435362779479-models",
+			"region": "us-west-1",
+			"profile": "simforge",
+			"keyPrefixTemplate": "arc-spirits/v34/lane-b/<authorization-hash>/",
+			"uriTemplate": "s3://dev-simforge-435362779479-models/arc-spirits/v34/lane-b/<authorization-hash>/",
+			"exactPrefix": null,
+			"contentAddressing": "SHA-256 object key and metadata; multipart ETag is not a content hash",
+			"liveProbePerformed": false,
+			"authorizedForRegisteredExecution": false
+		},
+		"scratch": {
+			"root": "/dev/shm",
+			"durable": false,
+			"placeholderOnlyAuthorizationForbidden": true,
+			"recheckFreeBytesImmediatelyBeforeUse": true,
+			"releaseRequiresHashedUpload": true,
+			"releaseRequiresDownloadVerification": true,
+			"releaseRequiresImmutableDurableManifest": true
+		},
+		"pilotMetrics": [
+			"compressedBytesPerRow",
+			"actionTraceBytesPerRow",
+			"shardOverheadBytes",
+			"peakScratchBytes",
+			"uploadBytesPerSecond",
+			"downloadBytesPerSecond",
+			"projectedThreeGenerationBytes"
+		],
+		"livePreflight": {
+			"bindConcreteAbsoluteFilesystemRootOrExactBucketPrefix": true,
+			"createReadHashDeleteUnregisteredProbe": true,
+			"noUnrelatedArtifactDeletionOrMovement": true
+		}
+	},
+	"retry": {
+		"attemptsMax": 2,
+		"attemptSplicing": false,
+		"identicalFullSeedRetryOnly": true,
+		"retryableFailures": {
+			"server-start": 90,
+			"process-interrupted": 92
+		},
+		"requiresImmutableAttempt1Evidence": true,
+		"forbiddenIfPrimaryOrReplayReportExists": true,
+		"seedSubstitution": false,
+		"outcomeDependentRetry": false,
+		"partialRepair": false,
+		"semanticReplayProvenanceHiddenInformationOrSafetyFaultClosesStage": true,
+		"infrastructureFailureBeforeRegisteredSeedConsumptionCreatesAttempt": false
+	},
+	"seedLedger": [
+		{
+			"id": "b3-g1-teacher",
+			"stage": "b3",
+			"seed0": 958000000,
+			"games": 4096,
+			"seedMax": 958004095,
+			"open": false
+		},
+		{
+			"id": "b3-g2-teacher",
+			"stage": "b3",
+			"seed0": 958010000,
+			"games": 4096,
+			"seedMax": 958014095,
+			"open": false
+		},
+		{
+			"id": "b3-g3-teacher",
+			"stage": "b3",
+			"seed0": 958020000,
+			"games": 4096,
+			"seedMax": 958024095,
+			"open": false
+		},
+		{
+			"id": "b3-g1-ppo",
+			"stage": "b3",
+			"seed0": 958030000,
+			"games": 4096,
+			"seedMax": 958034095,
+			"open": false
+		},
+		{
+			"id": "b3-g2-ppo",
+			"stage": "b3",
+			"seed0": 958040000,
+			"games": 4096,
+			"seedMax": 958044095,
+			"open": false
+		},
+		{
+			"id": "b3-g3-ppo",
+			"stage": "b3",
+			"seed0": 958050000,
+			"games": 4096,
+			"seedMax": 958054095,
+			"open": false
+		},
+		{
+			"id": "b3-g1-development",
+			"stage": "b3",
+			"seed0": 958100000,
+			"games": 4096,
+			"seedMax": 958104095,
+			"open": false
+		},
+		{
+			"id": "b3-g2-development",
+			"stage": "b3",
+			"seed0": 958110000,
+			"games": 4096,
+			"seedMax": 958114095,
+			"open": false
+		},
+		{
+			"id": "b3-g3-development",
+			"stage": "b3",
+			"seed0": 958120000,
+			"games": 4096,
+			"seedMax": 958124095,
+			"open": false
+		},
+		{
+			"id": "base-distilled-transfer-reserved",
+			"stage": "b3",
+			"seed0": 958200000,
+			"games": 4096,
+			"seedMax": 958204095,
+			"open": false
+		},
+		{
+			"id": "b4-r1-teacher",
+			"stage": "b4",
+			"seed0": 959000000,
+			"games": 4096,
+			"seedMax": 959004095,
+			"open": false
+		},
+		{
+			"id": "b4-r1-ppo",
+			"stage": "b4",
+			"seed0": 959010000,
+			"games": 4096,
+			"seedMax": 959014095,
+			"open": false
+		},
+		{
+			"id": "b4-r2-teacher",
+			"stage": "b4",
+			"seed0": 959100000,
+			"games": 4096,
+			"seedMax": 959104095,
+			"open": false
+		},
+		{
+			"id": "b4-r2-ppo",
+			"stage": "b4",
+			"seed0": 959110000,
+			"games": 4096,
+			"seedMax": 959114095,
+			"open": false
+		},
+		{
+			"id": "b4-r3-teacher",
+			"stage": "b4",
+			"seed0": 959200000,
+			"games": 4096,
+			"seedMax": 959204095,
+			"open": false
+		},
+		{
+			"id": "b4-r3-ppo",
+			"stage": "b4",
+			"seed0": 959210000,
+			"games": 4096,
+			"seedMax": 959214095,
+			"open": false
+		},
+		{
+			"id": "b4-development",
+			"stage": "b4",
+			"seed0": 959900000,
+			"games": 4096,
+			"seedMax": 959904095,
+			"open": false
+		},
+		{
+			"id": "b4-heuristic-probe",
+			"stage": "b4",
+			"seed0": 959910000,
+			"games": 3072,
+			"seedMax": 959913071,
+			"open": false
+		},
+		{
+			"id": "b4-exploiter-probe",
+			"stage": "b4",
+			"seed0": 959920000,
+			"games": 3072,
+			"seedMax": 959923071,
+			"open": false
+		},
+		{
+			"id": "b4-handoff-development",
+			"stage": "b4",
+			"seed0": 959930000,
+			"games": 4096,
+			"seedMax": 959934095,
+			"open": false
+		},
+		{
+			"id": "b5-zero-shot-canary",
+			"stage": "b5",
+			"seed0": 960000000,
+			"games": 512,
+			"seedMax": 960000511,
+			"open": false
+		},
+		{
+			"id": "b5-final-development",
+			"stage": "b5",
+			"seed0": 960010000,
+			"games": 90000,
+			"seedMax": 960099999,
+			"open": false
+		},
+		{
+			"id": "b5-final-hidden",
+			"stage": "b5",
+			"seed0": 960100000,
+			"games": 100000,
+			"seedMax": 960199999,
+			"open": false
+		},
+		{
+			"id": "promotion-human-reference",
+			"stage": "promotion",
+			"seed0": 960900000,
+			"games": 10000,
+			"seedMax": 960909999,
+			"open": false
+		},
+		{
+			"id": "b5-2p-training",
+			"stage": "b5",
+			"seed0": 961000000,
+			"games": 100000,
+			"seedMax": 961099999,
+			"open": false
+		},
+		{
+			"id": "b5-3p-training",
+			"stage": "b5",
+			"seed0": 961100000,
+			"games": 100000,
+			"seedMax": 961199999,
+			"open": false
+		},
+		{
+			"id": "b5-4p-pfsp-training",
+			"stage": "b5",
+			"seed0": 961200000,
+			"games": 100000,
+			"seedMax": 961299999,
+			"open": false
+		},
+		{
+			"id": "b5-2p-solo-regression",
+			"stage": "b5",
+			"seed0": 961300000,
+			"games": 4096,
+			"seedMax": 961304095,
+			"open": false
+		},
+		{
+			"id": "b5-3p-solo-regression",
+			"stage": "b5",
+			"seed0": 961310000,
+			"games": 4096,
+			"seedMax": 961314095,
+			"open": false
+		},
+		{
+			"id": "b5-4p-solo-regression",
+			"stage": "b5",
+			"seed0": 961320000,
+			"games": 4096,
+			"seedMax": 961324095,
+			"open": false
+		},
+		{
+			"id": "b5-2p-development",
+			"stage": "b5",
+			"seed0": 961400000,
+			"games": 10000,
+			"seedMax": 961409999,
+			"open": false
+		},
+		{
+			"id": "b5-3p-development",
+			"stage": "b5",
+			"seed0": 961410000,
+			"games": 9996,
+			"seedMax": 961419995,
+			"open": false
+		},
+		{
+			"id": "b5-3p-permanently-unused",
+			"stage": "unused",
+			"seed0": 961419996,
+			"games": 4,
+			"seedMax": 961419999,
+			"open": false
+		},
+		{
+			"id": "b5-4p-development",
+			"stage": "b5",
+			"seed0": 961420000,
+			"games": 10000,
+			"seedMax": 961429999,
+			"open": false
+		},
+		{
+			"id": "b5-main-exploiter",
+			"stage": "b5",
+			"seed0": 961500000,
+			"games": 30000,
+			"seedMax": 961529999,
+			"open": false
+		},
+		{
+			"id": "b5-2p-league-exploiter",
+			"stage": "b5",
+			"seed0": 961530000,
+			"games": 30000,
+			"seedMax": 961559999,
+			"open": false
+		},
+		{
+			"id": "b5-3p-league-exploiter",
+			"stage": "b5",
+			"seed0": 961560000,
+			"games": 30000,
+			"seedMax": 961589999,
+			"open": false
+		},
+		{
+			"id": "b5-4p-league-exploiter",
+			"stage": "b5",
+			"seed0": 961590000,
+			"games": 30000,
+			"seedMax": 961619999,
+			"open": false
+		}
+	],
+	"b1": {
+		"stageOpen": false,
+		"registeredCollectionOpen": false,
+		"sourceGamesPerGeneration": 4096,
+		"rowsPerGeneration": 100000,
+		"bandPrecedence": ["recovery", "late", "mid", "early"],
+		"bandQuotas": { "late": 50000, "mid": 25000, "early": 15000, "recovery": 10000 },
+		"roundBands": { "early": [1, 8], "mid": [9, 15], "late": [16, 30] },
+		"recoveryDefinition": {
+			"currentStatusAny": ["Fallen", "Corrupted"],
+			"weakPost15Engine": true,
+			"noRecentScoringCompletedRounds": 3,
+			"positiveVpDeltaMaximum": 0,
+			"publicCurrentAndPastFactsOnly": true
+		},
+		"caps": { "rowsPerSourceGame": 48, "rowsPerStructuralPublicStateHash": 4 },
+		"eligibility": {
+			"minimumLegalActionsAfterForcedClosure": 2,
+			"minimumSemanticallyDistinctOutcomes": 2,
+			"excludeForcedPayments": true,
+			"excludeSingletonChoices": true
+		},
+		"densitySmoke": {
+			"registered": false,
+			"games": 512,
+			"supplyMultiplier": 1.1,
+			"minimumPostDedupRows": { "late": 6875, "mid": 3438, "early": 2063, "recovery": 1375 },
+			"shortfallKeepsRegisteredCollectionClosed": true
+		},
+		"selection": {
+			"sortKey": ["publicStateHash", "sourceGameSeed", "decisionOrdinal"],
+			"withoutReplacement": true,
+			"rng": "numpy.random.Generator(PCG64)",
+			"generationSeeds": { "g1": 34043101, "g2": 34043102, "g3": 34043103 }
+		},
+		"snapshotContract": {
+			"featureAndTargetShardsSeparate": true,
+			"sourceGameSeedAndActionTraceAreModelInputs": false,
+			"teacherRolloutUsesSourceRngCursor": false,
+			"teacherRedeterminizesOnlyInformationHiddenAtDecision": true,
+			"futureTargetsWrittenAfterGameCompletion": true,
+			"targetJoinAllowedOnlyAfterTeacherLabelsFinalized": true,
+			"deletingTargetShardMustNotChangeObservationLegalActionsVisitsOrSelection": true,
+			"requiredFeatureFields": [
+				"opaqueRowId",
+				"sourceGameSeed",
+				"round",
+				"decisionOrdinal",
+				"publicStateHash",
+				"currentVisibleState",
+				"canonicalTakenActionTrace",
+				"botActionSamplingSeed",
+				"obsV1",
+				"obsV2",
+				"canonicalLegalCommandHashes",
+				"candidateFeatures",
+				"rawLogits",
+				"rawProbabilities",
+				"calibratedReach30Probability",
+				"currentPublicRecoveryDiagnostics"
+			],
+			"forbiddenFeatureFields": [
+				"futureOutcome",
+				"hiddenBagOrder",
+				"futureRngCursor",
+				"notYetDrawnIdentity",
+				"uncommittedRandomResolution"
+			]
+		},
+		"structuralHash": {
+			"algorithm": "SHA-256",
+			"serialization": "canonical sorted JSON",
+			"included": [
+				"round",
+				"phaseStage",
+				"actingSeat",
+				"publicGuardian",
+				"publicStatusCorruption",
+				"vp",
+				"resourcesCapacityOverflow",
+				"diceRunesRelics",
+				"publicSpiritsClassesAbilitiesUpgradesInventory",
+				"publicBoardMonsterAbyssSummonRewardState",
+				"sortedLegalCommandHashes"
+			],
+			"excluded": [
+				"engineSeed",
+				"samplingSeed",
+				"actionTrace",
+				"timestamps",
+				"rowGameIds",
+				"rawLogits",
+				"targets",
+				"privateHiddenZones",
+				"futureRng",
+				"fieldsNotVisibleToActingSeat"
+			]
+		},
+		"failureRule": "An exact band shortfall after all 4096 games closes the generation without backfill, duplicates, cross-generation seeds, relaxed caps, or opening later generations."
+	},
+	"b2": {
+		"stageOpen": false,
+		"registeredTeacherOpen": false,
+		"systemsArms": [
+			{ "simulations": 64, "rounds": 10 },
+			{ "simulations": 48, "rounds": 8 },
+			{ "simulations": 32, "rounds": 6 }
+		],
+		"systemsPilot": {
+			"registered": false,
+			"snapshots": 1000,
+			"source": "unregistered 512-game B1 density smoke",
+			"maximumWallHours": 2,
+			"selection": "fastest arm fitting frozen wall/storage budget and deterministic-label fixtures",
+			"tieBreak": "fewer simulated round-steps",
+			"outcomeOrTeacherStrengthSelection": false
+		},
+		"search": {
+			"maximumRootActions": 8,
+			"leafValue": "solo reach-30",
+			"rolloutPolicy": "current parent policy/self-model",
+			"commonRandomNumberRedeterminization": true,
+			"batchedInferenceAcrossIndependentSnapshots": true,
+			"appendOnlyCompressedContentAddressedShards": true,
+			"exactLedger": true
+		},
+		"poweredAudit": {
+			"pilotDisagreementRateField": "q",
+			"pilotOneSidedWilson95UpperField": "q_upper",
+			"auditSizeFormula": "max(8192, ceil(q_upper * ((z5 + z80) / 0.01)^2))",
+			"z5": "NormalDist().inv_cdf(1 - 0.05 / 5)",
+			"z80": "NormalDist().inv_cdf(0.80)",
+			"maximumAuditRows": 65536,
+			"bandAllocation": { "late": 0.5, "mid": 0.25, "early": 0.15, "recovery": 0.1 },
+			"allocationRule": "largest remainder",
+			"selectionWithoutReplacement": true,
+			"selectionPcg64Seed": 34041026,
+			"commonRandomNumberRedeterminizationsPerRow": 32,
+			"minimumDisagreeingRowsFormula": "max(512, ceil(0.04 * n_audit))",
+			"rerunForEveryGenerationAgainstCurrentParent": true
+		},
+		"bootstrap": {
+			"draws": 10000,
+			"pcg64Seed": 34041027,
+			"resampleUnit": "complete source game",
+			"sourceGames": 4096,
+			"sharedDrawAcrossEndpoints": true,
+			"endpoints": ["overallTrueWinDelta", "lateDelta", "midDelta", "earlyDelta", "recoveryDelta"],
+			"family": "one-sided centered maximum-t",
+			"originalClusterRobustSe": "sqrt((G / (G - 1)) * sum_g(sum_{r in g}(d_r - m))^2) / N",
+			"quantile": "95th nearest rank",
+			"normalFloor": "NormalDist().inv_cdf(1 - 0.05 / 5)",
+			"emptyOrFewerThanTwoContributingGames": "structural abort",
+			"zeroSeRule": "lower bound equals point estimate"
+		},
+		"gates": {
+			"minimumIdenticallyReplayedRows": 1000,
+			"duplicateStateActionHashesRequireIdenticalLabels": true,
+			"exactRegisteredSourceSeedLedger": true,
+			"developmentHiddenOverlap": 0,
+			"safetyOrProvenanceFailures": 0,
+			"minimumRawTeacherDisagreement": 0.05,
+			"minimumMeanCandidateNormalizedEntropy": 0.1,
+			"minimumFractionEntropyAtLeastPoint2": 0.1,
+			"minimumOverallTrueWinPointGain": 0.01,
+			"overallTrueWinSimultaneousLowerStrictlyAbove": 0,
+			"minimumEveryBandPointEstimate": 0,
+			"lateBandSimultaneousLowerStrictlyAbove": -0.03
+		}
+	},
+	"b3": {
+		"stageOpen": false,
+		"generationOpen": { "g1": false, "g2": false, "g3": false },
+		"generations": [
+			{
+				"id": "g1",
+				"parent": "frozen-generation-0",
+				"teacherRange": "b3-g1-teacher",
+				"ppoRange": "b3-g1-ppo",
+				"developmentRange": "b3-g1-development"
+			},
+			{
+				"id": "g2",
+				"parent": "valid-g1",
+				"teacherRange": "b3-g2-teacher",
+				"ppoRange": "b3-g2-ppo",
+				"developmentRange": "b3-g2-development"
+			},
+			{
+				"id": "g3",
+				"parent": "valid-g2",
+				"teacherRange": "b3-g3-teacher",
+				"ppoRange": "b3-g3-ppo",
+				"developmentRange": "b3-g3-development"
+			}
+		],
+		"failedGenerationClosesLaterGenerations": true,
+		"rows": { "ppo": 100000, "teacher": 100000, "generation0Anchor": 25000 },
+		"ppoUsesB1CapsDedupBandsAndTargetSegregation": true,
+		"ppoBehaviorLogProbabilityAndSamplingSeedRequired": true,
+		"teacherAndPpoRowsRemainDistinct": true,
+		"losses": {
+			"ppoPolicy": 1,
+			"searchVisitCrossEntropy": 1,
+			"value": 0.5,
+			"reach30Bce": 1,
+			"finishHazardRounds16To30": 0.25,
+			"generation0KlAnchor": 0.05,
+			"entropy": 0.003,
+			"clip": 0.1,
+			"valueClip": 0.1
+		},
+		"optimizer": {
+			"learningRate": 0.00005,
+			"schedule": "cosine",
+			"gradientNormMaximum": 1,
+			"batchSize": 512,
+			"stepsPerEpoch": 447,
+			"epochs": 2,
+			"batchComposition": { "ppo": 224, "teacher": 224, "anchor": 64 },
+			"ppoRowsPerEpoch": 100128,
+			"teacherRowsPerEpoch": 100128,
+			"anchorRowsPerEpoch": 28608
+		},
+		"permutations": {
+			"rng": "numpy.random.Generator(PCG64)",
+			"seedFormula": "34044000 + 100*g + 10*e + s",
+			"streamIds": { "ppo": 1, "teacher": 2, "anchor": 3 },
+			"sortedOpaqueRowIdsFirst": true,
+			"fullPermutationThenContinuingGeneratorWraparound": true,
+			"loaderOrWorkerRngMayAlterOrder": false,
+			"seeds": {
+				"g1": {
+					"epoch1": { "ppo": 34044111, "teacher": 34044112, "anchor": 34044113 },
+					"epoch2": { "ppo": 34044121, "teacher": 34044122, "anchor": 34044123 }
+				},
+				"g2": {
+					"epoch1": { "ppo": 34044211, "teacher": 34044212, "anchor": 34044213 },
+					"epoch2": { "ppo": 34044221, "teacher": 34044222, "anchor": 34044223 }
+				},
+				"g3": {
+					"epoch1": { "ppo": 34044311, "teacher": 34044312, "anchor": 34044313 },
+					"epoch2": { "ppo": 34044321, "teacher": 34044322, "anchor": 34044323 }
+				}
+			}
+		},
+		"lossMasks": {
+			"ppoOnly": ["ppoPolicy", "clippedValue", "behaviorLogProbabilityReconstruction"],
+			"teacherOnly": ["searchVisitCrossEntropy"],
+			"anchorOnly": ["generation0Kl"],
+			"ppoAndTeacher": ["value", "reach30Bce", "finishHazard"],
+			"entropy": "equally weighted mean of PPO and teacher actor entropies",
+			"anchorExcludedFrom": ["value", "reach30Bce", "finishHazard"]
+		},
+		"finishHazard": {
+			"rounds": [16, 30],
+			"oneEventAtFirstReach30Round": true,
+			"atRiskRoundsOnly": true,
+			"rightCensorAtTerminalOrRound30": true,
+			"postDecisionObservationFields": false
+		},
+		"development": {
+			"pairedFamilyAcrossAllSlots": true,
+			"endpointsPerSlot": [
+				"trueWin",
+				"finalVp",
+				"post15VpPerRound",
+				"censoredFirst30Round",
+				"rounds1To15Vp"
+			],
+			"draws": 10000,
+			"pcg64Seed": 34042026,
+			"method": "global complete-seed centered paired max-absolute-t",
+			"familySize": 15,
+			"quantile": "95th nearest rank",
+			"normalFloor": "NormalDist().inv_cdf(1 - 0.05 / (2 * 15))",
+			"unusedLaterSlotsRemainInFloor": true,
+			"zeroSeRule": "bound equals point estimate"
+		},
+		"gates": {
+			"stallsSafetyProvenanceFailures": 0,
+			"behaviorLogProbabilityErrorMaximum": 0.001,
+			"approximateKlMaximum": 0.02,
+			"clipFractionMaximum": 0.2,
+			"behaviorP30EceMaximum": 0.1,
+			"trueWinPointGainMinimum": 0.03,
+			"trueWinSimultaneousLowerStrictlyAbove": 0,
+			"finalVpSimultaneousLowerMinimum": 0,
+			"post15SimultaneousLowerMinimum": 0,
+			"censoredFirst30SimultaneousUpperMaximum": 0,
+			"rounds1To15VpSimultaneousLowerMinimum": -2
+		},
+		"reservedBaseDistilledTransfer": {
+			"range": "base-distilled-transfer-reserved",
+			"open": false,
+			"dispositionSpecified": false
+		}
+	},
+	"b4": {
+		"stageOpen": false,
+		"supersedingWidthAuthorizationRequired": true,
+		"replicatesOpen": { "r1": false, "r2": false, "r3": false },
+		"architectures": [
+			{ "id": "d128-l3-h4", "dModel": 128, "layers": 3, "heads": 4, "expectedParameters": 830000 },
+			{ "id": "d192-l3-h6", "dModel": 192, "layers": 3, "heads": 6, "expectedParameters": 1830000 },
+			{ "id": "d256-l3-h8", "dModel": 256, "layers": 3, "heads": 8, "expectedParameters": 3200000 }
+		],
+		"replicates": [
+			{
+				"id": "r1",
+				"teacherRange": "b4-r1-teacher",
+				"ppoRange": "b4-r1-ppo",
+				"initializationSeed": 34051101,
+				"rowOrderBaseSeed": 34051102
+			},
+			{
+				"id": "r2",
+				"teacherRange": "b4-r2-teacher",
+				"ppoRange": "b4-r2-ppo",
+				"initializationSeed": 34051201,
+				"rowOrderBaseSeed": 34051202
+			},
+			{
+				"id": "r3",
+				"teacherRange": "b4-r3-teacher",
+				"ppoRange": "b4-r3-ppo",
+				"initializationSeed": 34051301,
+				"rowOrderBaseSeed": 34051302
+			}
+		],
+		"rowsPerReplicate": { "teacher": 100000, "ppo": 100000 },
+		"sameImmutableShardsWithinReplicate": true,
+		"sameFixedParentAndCurriculum": true,
+		"warmD128VersusScratchWideForbidden": true,
+		"trainingSchedule": {
+			"stepsPerEpoch": 447,
+			"epochs": 2,
+			"identicalRowIdentitiesAndOrderWithinReplicate": true
+		},
+		"permutations": {
+			"seedFormula": "rowOrderBaseSeed + 10*e + s",
+			"streamIds": { "ppo": 1, "teacher": 2, "anchor": 3 },
+			"sortedIdAndWraparoundRuleSameAsB3": true
+		},
+		"development": {
+			"range": "b4-development",
+			"checkpoints": 9,
+			"draws": 10000,
+			"pcg64Seed": 34052026,
+			"method": "complete-development-seed centered max-absolute-t",
+			"familySize": 24,
+			"endpoints": ["trueWin", "finalVp", "post15"],
+			"quantile": "95th nearest rank",
+			"normalFloor": "fixed two-sided 24-endpoint normal floor",
+			"pooledCluster": "engine seed and replicate",
+			"zeroSeRule": "bound equals point estimate"
+		},
+		"retentionGates": {
+			"default": "d128-l3-h4",
+			"minimumPositiveTrueWinReplicates": 2,
+			"pooledTrueWinPointGainMinimum": 0.02,
+			"pooledTrueWinSimultaneousLowerStrictlyAbove": 0,
+			"pooledFinalVpAndPost15LowerMinimum": 0,
+			"individualReplicateTrueWinLowerMinimum": -0.03
+		},
+		"probes": {
+			"heuristicRange": "b4-heuristic-probe",
+			"exploiterRange": "b4-exploiter-probe",
+			"minimumSimultaneousTrueWinLowerRelativeToMatchedD128": -0.03,
+			"statisticalConstructionSpecified": false
+		},
+		"latency": {
+			"oneActiveGameP95MsMaximum": 1000,
+			"eightConcurrentGamesP95MsMaximum": 2000,
+			"schedules": ["solo", "four-seat"]
+		},
+		"raggedBenchmark": {
+			"batchSizes": [256, 512, 1024, 2048, 4096],
+			"bucketing": ["random", "candidate-count"],
+			"metrics": [
+				"padding",
+				"optimizerUpdates",
+				"kl",
+				"clipFraction",
+				"entropy",
+				"gradientNorm",
+				"wallTime"
+			]
+		},
+		"handoffRetrain": {
+			"open": false,
+			"sourceParent": "pre-width parent",
+			"trainingShards": "pooled three-replicate teacher and PPO shards",
+			"initializationSeed": 34051999,
+			"rowOrderBaseSeed": 34051998,
+			"batchComposition": { "ppo": 224, "teacher": 224, "anchor": 64 },
+			"stepsPerEpoch": 1340,
+			"epochs": 2,
+			"ppoAndTeacherRowsPerEpoch": 300160,
+			"anchorRowsPerEpoch": 85760,
+			"anchorTraversal": "three full 25000-row passes plus 10760 rows from the next continuing-generator permutation",
+			"permutationSeedFormula": "34051998 + 10*e + s",
+			"developmentRange": "b4-handoff-development",
+			"developmentDraws": 10000,
+			"developmentPcg64Seed": 34053026,
+			"developmentFamily": "five-endpoint max-absolute-t with B3 point/bound gates",
+			"repeatHeuristicExploiterAndLatencyGates": true,
+			"failureFallback": "pre-width parent"
+		}
+	},
+	"b5": {
+		"stageOpen": false,
+		"stagesOpen": {
+			"exploiter": false,
+			"canary": false,
+			"twoPlayer": false,
+			"threePlayer": false,
+			"fourPlayerPfsp": false,
+			"finalDevelopment": false,
+			"finalHidden": false
+		},
+		"order": [
+			"solo-qualified",
+			"exploiter-manifests-frozen",
+			"zero-shot-canary",
+			"two-player",
+			"three-player",
+			"four-player-pfsp",
+			"final-policy-freeze",
+			"final-solo-hidden-and-multiplayer-hidden"
+		],
+		"trainingRanges": {
+			"twoPlayer": "b5-2p-training",
+			"threePlayer": "b5-3p-training",
+			"fourPlayerPfsp": "b5-4p-pfsp-training"
+		},
+		"trainingOutcomesMayBeConsumedOnlyForOptimizationAndPfspWeights": true,
+		"trainingSignalsMayAuthorizeGateRetryOrEvaluationSchedule": false,
+		"soloAnchorFractionEveryMultiplayerBatch": 0.25,
+		"soloReachHeadsSupervisedOnlyOnSoloRows": true,
+		"multiplayerTarget": "seat-balanced placement/outcome value",
+		"opponentKinds": [
+			"production",
+			"archive",
+			"heuristics",
+			"main-exploiters",
+			"league-exploiters"
+		],
+		"exploiterRanges": {
+			"main": "b5-main-exploiter",
+			"twoPlayerLeague": "b5-2p-league-exploiter",
+			"threePlayerLeague": "b5-3p-league-exploiter",
+			"fourPlayerLeague": "b5-4p-league-exploiter"
+		},
+		"exploiterRecipe": {
+			"mustFreezeBeforeUse": [
+				"initializationSeeds",
+				"parentOpponentPools",
+				"checkpointCadence",
+				"selectionRule"
+			],
+			"specified": false,
+			"immutableTrainingLedgerAndCheckpointManifestRequired": true,
+			"developmentAndFinalFieldsBindExactHashes": true
+		},
+		"canary": {
+			"range": "b5-zero-shot-canary",
+			"runAfterAllFourExploiterManifestsFrozen": true,
+			"runBeforeMultiplayerLearnerUpdate": true,
+			"counts": { "twoPlayer": 176, "threePlayer": 144, "fourPlayer": 192 },
+			"exactSeatAndStratumBalance": true,
+			"field": ["production", "archive", "heuristic", "exploiter"],
+			"stalls": 0,
+			"directV2ProvenanceRequired": true,
+			"opensOrSubstitutesFinalDevelopment": false
+		},
+		"stageDevelopment": {
+			"twoPlayer": { "range": "b5-2p-development", "games": 10000 },
+			"threePlayer": {
+				"range": "b5-3p-development",
+				"games": 9996,
+				"permanentlyUnusedRange": "b5-3p-permanently-unused"
+			},
+			"fourPlayer": { "range": "b5-4p-development", "games": 10000 },
+			"totalGames": 29996,
+			"distinctFromFinalDevelopment": true,
+			"directServedV2": true,
+			"statisticalConstructionSpecified": false,
+			"gates": {
+				"stallsOrProvenanceFailures": 0,
+				"pairwiseScoreMinimum": 0.55,
+				"oneSided95LowerStrictlyAbove": 0.5,
+				"opponentStratumPointEstimateMinimum": 0.45
+			}
+		},
+		"soloRegression": {
+			"ranges": ["b5-2p-solo-regression", "b5-3p-solo-regression", "b5-4p-solo-regression"],
+			"reference": "frozen pre-multiplayer solo candidate",
+			"draws": 10000,
+			"pcg64Seed": 34062026,
+			"method": "complete-seed global centered max-absolute-t",
+			"familySize": 9,
+			"endpoints": ["trueWin", "finalVp", "post15VpPerRound"],
+			"quantile": "95th nearest rank",
+			"normalFloor": "fixed two-sided nine-endpoint normal floor",
+			"trueWinPointLossMinimum": -0.02,
+			"trueWinSimultaneousLowerMinimum": -0.05,
+			"finalVpSimultaneousLowerMinimum": -0.5,
+			"post15SimultaneousLowerMinimum": -0.025
+		},
+		"latency": { "oneGameP95MsMaximum": 1000, "eightConcurrentFourSeatGamesP95MsMaximum": 2000 },
+		"finalDevelopment": {
+			"range": "b5-final-development",
+			"games": 90000,
+			"formats": [2, 3, 4],
+			"gamesPerFormat": 30000,
+			"balanceLearnerSeatAndFourOpponentStrata": true,
+			"advancementChecksDoNotSubstitute": true
+		},
+		"finalHidden": {
+			"range": "b5-final-hidden",
+			"games": 100000,
+			"analogousScheduleRequired": true,
+			"exactScheduleSpecified": false
+		}
+	},
+	"compute": {
+		"teacherSimulatedRoundStepsPerGenerationExpected": [19200000, 64000000],
+		"teacherGenerationProjectedSearchWallHoursMaximum": 72,
+		"teacherGenerationProjectedEndToEndWallHoursMaximum": 96,
+		"threeGenerationProjectedWallHoursMaximum": 288,
+		"largerProjectionRequiresNewReviewedProtocol": true,
+		"likelyBottlenecks": [
+			"cpu-engine-stepping",
+			"obs-v2-collation",
+			"inference-request-granularity"
+		]
+	},
+	"promotion": {
+		"stageOpen": false,
+		"teacherFitWidthOrSoloScoreAloneMayPromote": false,
+		"requiredGates": [
+			"final-solo-development-hidden",
+			"every-guardian",
+			"direct-v2-multiplayer-elo",
+			"exploiters-collusion",
+			"regression",
+			"hidden-information-invariance",
+			"deterministic-replay",
+			"production-latency",
+			"michael-disjoint-replays",
+			"at-least-50-fair-live-games"
+		],
+		"minimumFairLiveGames": 50,
+		"signedManifestBindsEveryArtifactHash": true
+	},
+	"authorization": {
+		"storagePreflightOpen": false,
+		"densitySmokeOpen": false,
+		"systemsPilotOpen": false,
+		"teacherSeedsOpen": false,
+		"ppoSeedsOpen": false,
+		"developmentSeedsOpen": false,
+		"widthSeedsOpen": false,
+		"multiplayerTrainingSeedsOpen": false,
+		"exploiterSeedsOpen": false,
+		"finalDevelopmentSeedsOpen": false,
+		"hiddenSeedsOpen": false,
+		"humanReferenceSeedsOpen": false,
+		"productionPromotionOpen": false
+	},
+	"result": null
+}
