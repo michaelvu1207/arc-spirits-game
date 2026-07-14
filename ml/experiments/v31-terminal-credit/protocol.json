@@ -287,6 +287,21 @@
   },
   "developmentEvaluation": {
     "openOnlyAfter": "All arm checkpoints, manifests, stats, exit codes, and hashes are frozen and every valid arm passes the per-epoch trust gate.",
+    "attempts": [
+      {
+        "attempt": 1,
+        "launchedAt": "2026-07-14T04:20:08Z",
+        "completedAt": "2026-07-14T04:20:23Z",
+        "outcome": "environment-failure-before-seed-consumption",
+        "failure": "All five immediate evaluators failed at Node mkdtemp because the host root filesystem backing /tmp had zero free bytes. The chained sixth arm exited 99 after its dependency failed.",
+        "evidence": "mkdtemp occurs before runActorPool in scripts/evaluate-solo-checkpoint.mjs; no report.json exists for any policy and no actor pool or game started.",
+        "preservedArtifactRoot": "ml/experiments/v31-terminal-credit/development-attempt-1-enospc",
+        "reportsCreated": 0,
+        "gamesStarted": 0,
+        "seedBlockConsumed": false,
+        "repair": "Bind each evaluator's TMPDIR and inference socket to experiment-owned /dev/shm/arc-v31-development scratch, require at least 8 GiB free, preserve this failed attempt, then resume the unchanged preregistered seed block."
+      }
+    ],
     "seed0": 944000000,
     "games": 4096,
     "workersPerPolicy": 4,
@@ -313,8 +328,8 @@
       },
       "launcher": {
         "path": "scripts/run-v31-development-eval.sh",
-        "sourceCommit": "bc886c4",
-        "sha256": "da4cb52d45e2cf23e5fd1646679c791cc659ba33a0963becdac7fc581cb63a60"
+        "sourceCommit": "e4ba6ab",
+        "sha256": "5d1b4b489fc8a2214b9514af47dd7df63f1a90f624daf901e3467461feb38541"
       },
       "bootstrapReplicates": 10000,
       "bootstrapSeed": 310199,
