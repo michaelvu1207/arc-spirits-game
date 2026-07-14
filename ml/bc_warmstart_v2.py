@@ -50,7 +50,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from model import get_device
 from model_v2 import EntityCandidateScorer, build_model_v2, save_checkpoint
 from obs_v2 import ObsV2Spec
-from ppo import reach30_multihorizon_minibatch_loss
+from ppo import binary_ece, reach30_multihorizon_minibatch_loss
 from train import assert_finite_weights, v2_reach30_horizons
 
 
@@ -206,6 +206,9 @@ def _evaluate(model, dl, device, horizons: tuple[int, ...] = ()) -> dict:
     model.eval()
     tot_ce = tot_v = tot_acc = n = 0.0
     reach_weighted = reach_weight = 0.0
+    reach_scores: list[np.ndarray] = []
+    reach_targets: list[np.ndarray] = []
+    reach_weights: list[np.ndarray] = []
     with torch.no_grad():
         for (
             obs, cands, mask, chosen, ret,
@@ -232,10 +235,32 @@ def _evaluate(model, dl, device, horizons: tuple[int, ...] = ()) -> dict:
                 weights = row_weight.to(device) * reach_mask.to(device)
                 reach_weighted += float((per * weights).sum().item())
                 reach_weight += float(weights.sum().item())
+                selected = reach_mask.cpu().numpy()
+                reach_scores.append(torch.sigmoid(reach_logits).cpu().numpy()[selected])
+                reach_targets.append(nested.cpu().numpy()[selected])
+                reach_weights.append(row_weight.cpu().numpy()[selected])
     model.train()
     result = {"ce": tot_ce / n, "value_mse": tot_v / n, "acc": tot_acc / n}
     if horizons:
         result["reach30_nll"] = reach_weighted / reach_weight if reach_weight else 0.0
+        by_horizon = {}
+        if reach_scores:
+            scores = np.concatenate(reach_scores).astype(np.float64)
+            targets = np.concatenate(reach_targets).astype(np.float64)
+            weights = np.concatenate(reach_weights).astype(np.float64)
+            clipped = np.clip(scores, 1e-7, 1.0 - 1e-7)
+            for column, horizon in enumerate(horizons):
+                target = targets[:, column]
+                score = scores[:, column]
+                by_horizon[str(horizon)] = {
+                    "nll": float(np.average(
+                        -(target * np.log(clipped[:, column]) + (1 - target) * np.log(1 - clipped[:, column])),
+                        weights=weights,
+                    )),
+                    "brier": float(np.average((score - target) ** 2, weights=weights)),
+                    "ece": binary_ece(target, score, weights=weights),
+                }
+        result["reach30_by_horizon"] = by_horizon
     return result
 
 
@@ -378,6 +403,7 @@ def train_bc(
             line += f"  val_ce={val['ce']:.4f}  val_acc={val['acc']:.3f}"
             if horizons:
                 ep["val_reach30_nll"] = val["reach30_nll"]
+                ep["val_reach30_by_horizon"] = val["reach30_by_horizon"]
                 line += f"  val_reach30={val['reach30_nll']:.4f}"
             if val["ce"] < best_val_ce:
                 best_val_ce = val["ce"]

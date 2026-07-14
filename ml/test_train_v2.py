@@ -187,6 +187,7 @@ def test_bc_disjoint_validation_and_multihorizon_critic():
         )
         assert stats["val_samples"] == 32
         assert all("val_reach30_nll" in epoch for epoch in stats["epochs"])
+        assert set(stats["epochs"][-1]["val_reach30_by_horizon"]) == {"20", "25", "30"}
         model = load_checkpoint(out)
         assert model.reach30_trained
         assert model.reach30_horizons == (20, 25, 30)
