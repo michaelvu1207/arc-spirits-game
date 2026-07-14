@@ -4,7 +4,7 @@
   "status": "preregistered",
   "createdAt": "2026-07-14T00:20:00Z",
   "hypothesis": "On the current live catalog, an entity-token policy with an equal-game 20/25/30-round critic can preserve V23 behavior while representing late-game conversion state better than the flat incumbent. Model size helps only if held-out solo strength and calibration improve enough to justify its latency.",
-  "sourceCommit": "d5610934d3e3aa0d1c7f3a83fa8289691e27e535",
+  "sourceCommit": "21893331f6f56b4e6b14a0e6d5e4ab2fbe326973",
   "catalog": {
     "path": "ml/catalogs/live-20260713-5f4ad348.json",
     "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
