@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "arc-controlled-experiment-v1",
+  "experiment": "v27-live-entity-multihorizon-capacity-screen",
+  "status": "preregistered",
+  "createdAt": "2026-07-14T00:20:00Z",
+  "hypothesis": "On the current live catalog, an entity-token policy with an equal-game 20/25/30-round critic can preserve V23 behavior while representing late-game conversion state better than the flat incumbent. Model size helps only if held-out solo strength and calibration improve enough to justify its latency.",
+  "sourceCommit": "d5610934d3e3aa0d1c7f3a83fa8289691e27e535",
+  "catalog": {
+    "path": "ml/catalogs/live-20260713-5f4ad348.json",
+    "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "behaviorCheckpoint": {
+    "path": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+    "sha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+    "policyObsVersion": 1,
+    "role": "The frozen V23 checkpoint is the data-generating policy. It acts from obs-v1 with hybrid sampling at temperature 0.55 while the recorder writes paired obs-v1 and obs-v2 rows."
+  },
+  "data": {
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "shuffleGuardians": true,
+    "guardianSchedule": "absolute-seed-balanced",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "gamma": 0.999,
+    "recordObsVersion": 2,
+    "train": {
+      "seed0": 941000000,
+      "games": 1024
+    },
+    "validation": {
+      "seed0": 942000000,
+      "games": 256
+    },
+    "developmentEvaluation": {
+      "seed0": 943000000,
+      "games": 512,
+      "includePerGame": true
+    },
+    "seedBlocksAreDisjoint": true
+  },
+  "training": {
+    "epochs": 6,
+    "batchSize": 256,
+    "learningRate": 0.0003,
+    "valueCoef": 0.5,
+    "reach30Coef": 1.0,
+    "reach30Horizons": [20, 25, 30],
+    "maxGradNorm": 1.0,
+    "validation": "separate complete-game seed block; best validation policy CE epoch",
+    "variants": [
+      {
+        "id": "d64-l2-h4",
+        "dModel": 64,
+        "layers": 2,
+        "heads": 4,
+        "seed": 271064
+      },
+      {
+        "id": "d128-l3-h4",
+        "dModel": 128,
+        "layers": 3,
+        "heads": 4,
+        "seed": 271128
+      },
+      {
+        "id": "d256-l4-h8",
+        "dModel": 256,
+        "layers": 4,
+        "heads": 8,
+        "seed": 271256
+      }
+    ],
+    "comparisonNote": "The first screen is data- and epoch-matched, not FLOP-matched. It establishes the strength/latency Pareto frontier; any apparent size winner requires a later compute-matched causal confirmation. Each size has one pinned initialization/shuffle seed, so a size ranking inside a two-percentage-point paired win-rate band or overlapping simultaneous confidence intervals is a tie, not evidence of capacity causality.",
+    "reportPerVariant": [
+      "parameter count",
+      "estimated forward FLOPs at 32 rows and 30 candidates",
+      "training wall time and examples per second",
+      "peak GPU memory"
+    ]
+  },
+  "gates": {
+    "integrity": [
+      "catalog and behavior checkpoint hashes match",
+      "all rows carry obsV2 length 3419 and action width 104",
+      "zero malformed rows and zero stalls",
+      "complete solo outcomes have reach30Target, reach30Horizon, endRound, objectiveDone, and finalVP",
+      "training, validation, and development evaluation have no shared game ids or absolute seeds"
+    ],
+    "behaviorClone": {
+      "reportHeldoutTop1Accuracy": true,
+      "reportHeldoutPolicyCrossEntropy": true,
+      "reportHeldoutReach30Nll": true,
+      "reportPerHorizonBrierAndEce": true,
+      "minimumTop1Accuracy": 0.2
+    },
+    "directSolo": {
+      "control": "V23 behavior checkpoint on the exact 512 evaluation seeds",
+      "decode": {
+        "selection": "hybrid",
+        "sample": true,
+        "temperature": 0.55,
+        "identicalForControlAndTreatments": true
+      },
+      "pairedAnalysis": "Match true-win outcomes by absolute seed. Report discordant counts, exact McNemar p-values, paired deltas, and paired bootstrap confidence intervals for VP, finish round, and post-15 pace.",
+      "noninferiorityScreen": "Point delta must be at least -2.0 percentage points and its ordinary paired 95% lower bound must be at least -5.0 points.",
+      "advanceToPpo": "A treatment must improve at least +3.0 percentage points, have a positive Bonferroni-simultaneous 98.33% paired lower bound across the three variants, and survive Holm correction of exact McNemar p-values at familywise alpha 0.05. The later PPO pilot remains an independent confirmation, not a continuation of these development games.",
+      "stalls": 0
+    },
+    "systems": {
+      "reportInferenceRowsPerSecond": true,
+      "reportActorGamesPerSecond": true,
+      "reportGpuMemory": true,
+      "latencyProtocol": "A100-40GB, binary inference wire, 32 rows/request, 30 candidates/row, eight closed-loop clients after warmup; report request p50/p95/p99, per-row equivalent, batch distribution, and throughput.",
+      "rejectIfP95RequestLatencyMsExceeds": 100
+    }
+  },
+  "paretoAxes": [
+    "simultaneous paired true-win-rate lower bound versus V23",
+    "held-out policy cross-entropy and per-horizon critic calibration",
+    "A100 p95 request latency",
+    "A100 inference rows per second",
+    "peak GPU memory"
+  ],
+  "stopRule": "Train all three preregistered variants once. Do not tune on the 512-game evaluation block. Advance at most the variants that are nondominated on the declared Pareto axes and pass the multiplicity-corrected direct-solo advance gate. Otherwise retain the negative result and return to representation features or targets.",
+  "promotionEligible": false,
+  "diskGuard": {
+    "filesystem": "/data/share8",
+    "minimumFreeGiBBeforeLaunchingTraining": 8,
+    "compressRawJsonlAfterAllConsumersFinish": true
+  }
+}
