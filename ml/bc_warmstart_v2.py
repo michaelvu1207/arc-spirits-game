@@ -185,10 +185,12 @@ def collate(batch) -> tuple[torch.Tensor, ...]:
         mask[i, : c.shape[0]] = True
     chosen = torch.tensor([b[2] for b in batch], dtype=torch.long)
     ret = torch.tensor([b[3] for b in batch], dtype=torch.float32)
-    reach30_target = torch.tensor([b[4] for b in batch], dtype=torch.float32)
-    reach30_mask = torch.tensor([b[5] for b in batch], dtype=torch.bool)
-    reach30_finish_round = torch.tensor([b[6] for b in batch], dtype=torch.int64)
-    reach30_weight = torch.tensor([b[7] for b in batch], dtype=torch.float32)
+    # Normalize NumPy scalar subclasses explicitly. Some supported PyTorch
+    # releases accept numpy.bool_ here and others raise TypeError.
+    reach30_target = torch.tensor([float(b[4]) for b in batch], dtype=torch.float32)
+    reach30_mask = torch.tensor([bool(b[5]) for b in batch], dtype=torch.bool)
+    reach30_finish_round = torch.tensor([int(b[6]) for b in batch], dtype=torch.int64)
+    reach30_weight = torch.tensor([float(b[7]) for b in batch], dtype=torch.float32)
     return (
         obs,
         cands,
