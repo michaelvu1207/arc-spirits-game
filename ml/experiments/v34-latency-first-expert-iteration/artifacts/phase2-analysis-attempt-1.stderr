@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/analyze_v34_phase2.py", line 1975, in <module>
+    main()
+  File "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/analyze_v34_phase2.py", line 1959, in main
+    result = analyze_phase2(
+             ^^^^^^^^^^^^^^^
+  File "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/analyze_v34_phase2.py", line 1739, in analyze_phase2
+    strength_preflight = validate_strength_lock(
+                         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/analyze_v34_phase2.py", line 975, in validate_strength_lock
+    raise ValueError("strength-lock commit is not an ancestor of the executing tree")
+ValueError: strength-lock commit is not an ancestor of the executing tree
