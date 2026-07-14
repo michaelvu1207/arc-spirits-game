@@ -1,0 +1,1 @@
+{"schemaVersion":"arc-v34-strength-chain-verification-v1","mode":"phase2","valid":true,"implementationCommit":"ff2aa7cc4e69f0f7da530a0d0df418c26839314e","eligibleCandidateArms":["rerank-p025","rerank-p050","rerank-p075","rerank-p100","heuristic-s4-h2","heuristic-s8-h3"],"files":16}

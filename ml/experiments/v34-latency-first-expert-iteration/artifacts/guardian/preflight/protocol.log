@@ -1,0 +1,1 @@
+{"schemaVersion":"arc-v34-guardian-protocol-validation-v1","valid":true,"protocol":{"path":"ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json","bytes":6530,"sha256":"8cc4387323ce0e1d9a6e0b4dfd7ee781b0eefd286ea75a3dcc1b3042011ae86f"},"historicalStrengthProtocolFlagsIgnoredForCurrentAuthorization":true}

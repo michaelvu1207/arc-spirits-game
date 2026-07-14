@@ -1,0 +1,633 @@
+
+> arc-spirits-spectate@0.0.1 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: /data/share8/michaelvuaprilexperimentation/arc-bot
+Getting Svelte diagnostics...
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameViewer.svelte:738:2
+Warn: Unused CSS selector ".section-head.sm"
+https://svelte.dev/e/css_unused_selector (svelte)
+	}
+	.section-head.sm {
+		padding-bottom: 0.35rem;
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameViewer.svelte:1335:2
+Warn: Unused CSS selector ".tabular-nums"
+https://svelte.dev/e/css_unused_selector (svelte)
+
+	.tabular-nums {
+		font-variant-numeric: tabular-nums;
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameHeader.svelte:331:2
+Warn: Unused CSS selector ".live-chip-dot"
+https://svelte.dev/e/css_unused_selector (svelte)
+	/* Live chip dot */
+	.live-chip-dot {
+		width: 6px;
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameHeader.svelte:340:2
+Warn: Unused CSS selector ".status-badge"
+https://svelte.dev/e/css_unused_selector (svelte)
+	/* Status badges — solid chips, no glow rings */
+	.status-badge {
+		display: flex;
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameHeader.svelte:347:2
+Warn: Unused CSS selector ".status-live"
+https://svelte.dev/e/css_unused_selector (svelte)
+	}
+	.status-live {
+		background: var(--brand-magenta);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameHeader.svelte:350:2
+Warn: Unused CSS selector ".status-live-text"
+https://svelte.dev/e/css_unused_selector (svelte)
+	}
+	.status-live-text {
+		font-family: var(--font-display);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameHeader.svelte:357:2
+Warn: Unused CSS selector ".status-paused"
+https://svelte.dev/e/css_unused_selector (svelte)
+	}
+	.status-paused {
+		background: var(--color-tomb);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/GameHeader.svelte:361:2
+Warn: Unused CSS selector ".status-paused-text"
+https://svelte.dev/e/css_unused_selector (svelte)
+	}
+	.status-paused-text {
+		font-family: var(--font-display);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/MarkdownEditor.svelte:13:29
+Warn: This reference only captures the initial value of `content`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+	let mode = $state<'write' | 'preview'>('write');
+	let textareaValue = $state(content || '');
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/HostNotesEditor.svelte:16:23
+Warn: This reference only captures the initial value of `existingNotes`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+	let hostSecret = $state('');
+	let summary = $state(existingNotes?.summary || '');
+	let improvements = $state<string[]>(existingNotes?.improvements || ['']);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/HostNotesEditor.svelte:17:38
+Warn: This reference only captures the initial value of `existingNotes`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+	let summary = $state(existingNotes?.summary || '');
+	let improvements = $state<string[]>(existingNotes?.improvements || ['']);
+	let isSubmitting = $state(false);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/HostNotesEditor.svelte:103:1
+Warn: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+<!-- Modal Backdrop -->
+<div
+	class="modal-backdrop"
+	onclick={handleBackdropClick}
+	role="dialog"
+	aria-modal="true"
+	aria-labelledby="modal-title"
+>
+	<div class="brand-panel brand-panel-glow modal-container">
+		<!-- Modal Header -->
+		<header class="modal-header">
+			<div class="modal-title-block">
+				<span class="eyebrow eyebrow-magenta">HOST NOTES</span>
+				<h2 id="modal-title" class="modal-title">
+					<span class="title-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path
+								d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z"
+							/>
+						</svg>
+					</span>
+					Host Notes Editor
+				</h2>
+			</div>
+			<button class="close-btn btn-ghost" onclick={onClose} aria-label="Close modal">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+					<path
+						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+					/>
+				</svg>
+			</button>
+		</header>
+
+		<!-- Modal Content -->
+		<form class="modal-content" onsubmit={handleSubmit}>
+			<!-- Secret Key Field -->
+			<div class="form-section secret-section">
+				<label class="form-label" for="host-secret">
+					<span class="label-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path
+								fill-rule="evenodd"
+								d="M8 7a5 5 0 113.61 4.804l-1.903 1.903A1 1 0 019 14H8v1a1 1 0 01-1 1H6v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-2a1 1 0 01.293-.707L8.196 8.39A5.002 5.002 0 018 7zm5-3a.75.75 0 000 1.5A1.5 1.5 0 0114.5 7 .75.75 0 0016 7a3 3 0 00-3-3z"
+								clip-rule="evenodd"
+							/>
+						</svg>
+					</span>
+					Host Secret Key
+				</label>
+				<div class="secret-input-wrapper">
+					<input
+						id="host-secret"
+						type={showSecret ? 'text' : 'password'}
+						bind:value={hostSecret}
+						placeholder="Enter your secret key..."
+						class="form-input secret-input"
+						autocomplete="off"
+					/>
+					<button
+						type="button"
+						class="toggle-secret-btn"
+						onclick={() => (showSecret = !showSecret)}
+						aria-label={showSecret ? 'Hide secret' : 'Show secret'}
+					>
+						{#if showSecret}
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+								<path
+									fill-rule="evenodd"
+									d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06l-1.745-1.745a10.029 10.029 0 003.3-4.38 1.651 1.651 0 000-1.185A10.004 10.004 0 009.999 3a9.956 9.956 0 00-4.744 1.194L3.28 2.22zM7.752 6.69l1.092 1.092a2.5 2.5 0 013.374 3.373l1.091 1.092a4 4 0 00-5.557-5.557z"
+									clip-rule="evenodd"
+								/>
+								<path
+									d="M10.748 13.93l2.523 2.523a9.987 9.987 0 01-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 010-1.186A10.007 10.007 0 012.839 6.02L6.07 9.252a4 4 0 004.678 4.678z"
+								/>
+							</svg>
+						{:else}
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+								<path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
+								<path
+									fill-rule="evenodd"
+									d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+									clip-rule="evenodd"
+								/>
+							</svg>
+						{/if}
+					</button>
+				</div>
+				<p class="form-hint">Enter your host secret key to save notes.</p>
+			</div>
+
+			<!-- Summary Field -->
+			<div class="form-section">
+				<span class="form-label">
+					<span class="label-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path
+								d="M3.5 2.75a.75.75 0 00-1.5 0v14.5a.75.75 0 001.5 0v-4.392l1.657-.348a6.449 6.449 0 014.271.572 7.948 7.948 0 005.965.524l2.078-.64A.75.75 0 0018 11.75V3.332a.75.75 0 00-.96-.72l-2.142.658a6.45 6.45 0 01-4.635-.468 7.949 7.949 0 00-5.498-.648L3.5 2.475v.275z"
+							/>
+						</svg>
+					</span>
+					Game Summary
+				</span>
+				<MarkdownEditor
+					content={summary}
+					placeholder="Write a summary of this game session..."
+					onUpdate={(markdown) => (summary = markdown)}
+				/>
+			</div>
+
+			<!-- Improvements Field -->
+			<div class="form-section">
+				<!-- svelte-ignore a11y_label_has_associated_control -->
+				<span class="form-label" id="improvements-label">
+					<span class="label-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path
+								fill-rule="evenodd"
+								d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z"
+								clip-rule="evenodd"
+							/>
+						</svg>
+					</span>
+					Areas for Improvement
+				</span>
+				<div class="improvements-list" role="group" aria-labelledby="improvements-label">
+					{#each improvements as improvement, i}
+						<div class="improvement-row">
+							<span class="improvement-number">{String(i + 1).padStart(2, '0')}</span>
+							<input
+								type="text"
+								value={improvement}
+								oninput={(e) => updateImprovement(i, e.currentTarget.value)}
+								placeholder="Enter an improvement suggestion..."
+								class="form-input improvement-input"
+								aria-label="Improvement {i + 1}"
+							/>
+							<button
+								type="button"
+								class="remove-btn"
+								onclick={() => removeImprovement(i)}
+								aria-label="Remove improvement"
+								disabled={improvements.length === 1}
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+									<path
+										fill-rule="evenodd"
+										d="M4 10a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.75A.75.75 0 014 10z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button>
+						</div>
+					{/each}
+				</div>
+				<button type="button" class="add-btn btn-pill" onclick={addImprovement}>
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+						<path
+							d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"
+						/>
+					</svg>
+					Add Improvement
+				</button>
+			</div>
+
+			<!-- Error Message -->
+			{#if error}
+				<div class="error-message">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+						<path
+							fill-rule="evenodd"
+							d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+					{error}
+				</div>
+			{/if}
+
+			<!-- Actions -->
+			<div class="modal-actions">
+				<button type="button" class="btn-ghost" onclick={onClose} disabled={isSubmitting}>
+					Cancel
+				</button>
+				<button type="submit" class="btn-flame" disabled={isSubmitting}>
+					{#if isSubmitting}
+						<span class="spinner"></span>
+						Saving...
+					{:else}
+						Save Notes
+					{/if}
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/PlayerFeedbackForm.svelte:102:1
+Warn: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+<!-- Modal Backdrop -->
+<div
+	class="modal-backdrop"
+	onclick={handleBackdropClick}
+	role="dialog"
+	aria-modal="true"
+	aria-labelledby="modal-title"
+>
+	<div class="modal-container">
+		<!-- Modal Header -->
+		<header class="modal-header">
+			<h2 id="modal-title" class="modal-title">
+				<span class="title-icon">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+						<path
+							fill-rule="evenodd"
+							d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+				</span>
+				Rate This Game
+			</h2>
+			<button class="close-btn" onclick={onClose} aria-label="Close modal">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+					<path
+						d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+					/>
+				</svg>
+			</button>
+		</header>
+
+		<!-- Modal Content -->
+		<form class="modal-content" onsubmit={handleSubmit}>
+			<!-- Player Name Field -->
+			<div class="form-section">
+				<label class="form-label" for="player-name">
+					<span class="label-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path
+								d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z"
+							/>
+						</svg>
+					</span>
+					Your Name
+				</label>
+				<input
+					id="player-name"
+					type="text"
+					bind:value={playerName}
+					placeholder="Enter your name..."
+					class="form-input"
+					autocomplete="off"
+				/>
+			</div>
+
+			<!-- Ratings Section -->
+			<div class="ratings-section">
+				<h3 class="ratings-title">Your Ratings</h3>
+
+				<!-- Complexity Rating -->
+				<div class="rating-group" class:active={activeSlider === 'complexity'}>
+					<div class="rating-header">
+						<label class="rating-label" for="rating-complexity">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								style="color: {getRatingColor('complexity')}"
+							>
+								<path
+									d="M10 1a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 1zM5.05 3.05a.75.75 0 011.06 0l1.062 1.06A.75.75 0 116.11 5.173L5.05 4.11a.75.75 0 010-1.06zm9.9 0a.75.75 0 010 1.06l-1.06 1.062a.75.75 0 01-1.062-1.061l1.061-1.06a.75.75 0 011.06 0zM3 8a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 013 8zm11 0a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 0114 8zm-8.082.757a.75.75 0 01.424.974l-1 2.414A.75.75 0 013.944 11.6l1-2.414a.75.75 0 01.974-.429zm8.164 0a.75.75 0 01.974.43l1 2.413a.75.75 0 01-1.398.544l-1-2.414a.75.75 0 01.424-.973zM10 11a1 1 0 100-2 1 1 0 000 2z"
+								/>
+							</svg>
+							Complexity
+						</label>
+						<div class="rating-value" style="color: {getRatingColor('complexity')}">
+							<span class="value-number">{ratingComplexity}</span>
+							<span class="value-label">{getRatingLabel(ratingComplexity)}</span>
+						</div>
+					</div>
+					<div class="slider-container">
+						<input
+							id="rating-complexity"
+							type="range"
+							min="1"
+							max="10"
+							bind:value={ratingComplexity}
+							class="slider complexity"
+							onfocus={() => (activeSlider = 'complexity')}
+							onblur={() => (activeSlider = null)}
+						/>
+						<div class="slider-track">
+							<div
+								class="slider-fill"
+								style="width: {((ratingComplexity - 1) / 9) * 100}%; background: {getRatingColor(
+									'complexity'
+								)}"
+							></div>
+						</div>
+					</div>
+					<p class="rating-hint">How complex did you find this game?</p>
+				</div>
+
+				<!-- Enjoyment Rating -->
+				<div class="rating-group" class:active={activeSlider === 'enjoyment'}>
+					<div class="rating-header">
+						<label class="rating-label" for="rating-enjoyment">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								style="color: {getRatingColor('enjoyment')}"
+							>
+								<path
+									d="M10 1a6 6 0 00-3.815 10.631C7.237 12.5 8 13.443 8 14.456v.644a.75.75 0 00.572.729 6.016 6.016 0 002.856 0A.75.75 0 0012 15.1v-.644c0-1.013.762-1.957 1.815-2.825A6 6 0 0010 1zM8.863 17.414a.75.75 0 00-.226 1.483 9.066 9.066 0 002.726 0 .75.75 0 00-.226-1.483 7.553 7.553 0 01-2.274 0z"
+								/>
+							</svg>
+							My Enjoyment
+						</label>
+						<div class="rating-value" style="color: {getRatingColor('enjoyment')}">
+							<span class="value-number">{ratingEnjoyment}</span>
+							<span class="value-label">{getRatingLabel(ratingEnjoyment)}</span>
+						</div>
+					</div>
+					<div class="slider-container">
+						<input
+							id="rating-enjoyment"
+							type="range"
+							min="1"
+							max="10"
+							bind:value={ratingEnjoyment}
+							class="slider enjoyment"
+							onfocus={() => (activeSlider = 'enjoyment')}
+							onblur={() => (activeSlider = null)}
+						/>
+						<div class="slider-track">
+							<div
+								class="slider-fill"
+								style="width: {((ratingEnjoyment - 1) / 9) * 100}%; background: {getRatingColor(
+									'enjoyment'
+								)}"
+							></div>
+						</div>
+					</div>
+					<p class="rating-hint">How much did you enjoy playing?</p>
+				</div>
+
+				<!-- Others' Enjoyment Rating -->
+				<div class="rating-group" class:active={activeSlider === 'others'}>
+					<div class="rating-header">
+						<label class="rating-label" for="rating-others">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								style="color: {getRatingColor('others')}"
+							>
+								<path
+									d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zM16.44 15.98a4.97 4.97 0 002.07-.654.78.78 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654zM18 8a2 2 0 11-4 0 2 2 0 014 0zM5.304 16.19a.844.844 0 01-.277-.71 5 5 0 019.947 0 .843.843 0 01-.277.71A6.975 6.975 0 0110 18a6.974 6.974 0 01-4.696-1.81z"
+								/>
+							</svg>
+							Others' Enjoyment
+						</label>
+						<div class="rating-value" style="color: {getRatingColor('others')}">
+							<span class="value-number">{ratingOthersEnjoyment}</span>
+							<span class="value-label">{getRatingLabel(ratingOthersEnjoyment)}</span>
+						</div>
+					</div>
+					<div class="slider-container">
+						<input
+							id="rating-others"
+							type="range"
+							min="1"
+							max="10"
+							bind:value={ratingOthersEnjoyment}
+							class="slider others"
+							onfocus={() => (activeSlider = 'others')}
+							onblur={() => (activeSlider = null)}
+						/>
+						<div class="slider-track">
+							<div
+								class="slider-fill"
+								style="width: {((ratingOthersEnjoyment - 1) / 9) *
+									100}%; background: {getRatingColor('others')}"
+							></div>
+						</div>
+					</div>
+					<p class="rating-hint">How much did other players seem to enjoy it?</p>
+				</div>
+			</div>
+
+			<!-- Feedback Text Field -->
+			<div class="form-section">
+				<label class="form-label" for="feedback-text">
+					<span class="label-icon">
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+							<path
+								fill-rule="evenodd"
+								d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902.848.137 1.705.248 2.57.331v3.443a.75.75 0 001.28.53l3.58-3.579a.78.78 0 01.527-.224 41.202 41.202 0 005.183-.5c1.437-.232 2.43-1.49 2.43-2.903V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zm0 7a1 1 0 100-2 1 1 0 000 2zM8 8a1 1 0 11-2 0 1 1 0 012 0zm5 1a1 1 0 100-2 1 1 0 000 2z"
+								clip-rule="evenodd"
+							/>
+						</svg>
+					</span>
+					Additional Comments
+					<span class="optional-tag">(Optional)</span>
+				</label>
+				<textarea
+					id="feedback-text"
+					bind:value={feedbackText}
+					placeholder="Share your thoughts about the game..."
+					class="feedback-input form-input"
+					rows="3"
+				></textarea>
+			</div>
+
+			<!-- Error Message -->
+			{#if error}
+				<div class="error-message">
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+						<path
+							fill-rule="evenodd"
+							d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+					{error}
+				</div>
+			{/if}
+
+			<!-- Actions -->
+			<div class="modal-actions">
+				<button type="button" class="btn btn-secondary" onclick={onClose} disabled={isSubmitting}>
+					Cancel
+				</button>
+				<button type="submit" class="btn btn-primary" disabled={isSubmitting}>
+					{#if isSubmitting}
+						<span class="spinner"></span>
+						Submitting...
+					{:else}
+						Submit Review
+					{/if}
+				</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/PrintRoundPage.svelte:287:3
+Warn: Also define the standard property 'line-clamp' for compatibility (css)
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/components/composition-analysis/IdealCurveEditor.svelte:201:2
+Warn: Non-interactive element `<div>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions (svelte)
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+	<div class="ce__chart-wrap" tabindex="0" onkeydown={onKeyDown} role="application" aria-label="Ideal curve editor">
+		<canvas
+			bind:this={canvas}
+			onpointerdown={onPointerDown}
+			onpointermove={onPointerMove}
+			onpointerup={onPointerUp}
+			onpointercancel={onPointerUp}
+		></canvas>
+	</div>
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/composition-analysis/games/+page.svelte:253:4
+Warn: Non-interactive element `<aside>` cannot have interactive role 'dialog'
+https://svelte.dev/e/a11y_no_noninteractive_element_to_interactive_role (svelte)
+		{#if reportOpen}
+			<aside class="games__report" role="dialog" aria-labelledby="diag-title">
+				<header class="games__report-head">
+					<h3 id="diag-title">Diagnostic report</h3>
+					<div class="games__report-actions">
+						<button class="btn-ghost" type="button" onclick={copyReport}>
+							{reportCopied ? 'Copied!' : 'Copy markdown'}
+						</button>
+						<button
+							class="games__report-close"
+							type="button"
+							aria-label="Close report"
+							onclick={() => (reportOpen = false)}
+						>
+							×
+						</button>
+					</div>
+				</header>
+				<pre class="games__report-body">{reportMarkdown}</pre>
+			</aside>
+		{/if}
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/composition-analysis/library/+page.svelte:14:43
+Warn: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+
+	let compositions = $state<Composition[]>(data.compositions);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/composition-analysis/library/+page.svelte:21:41
+Warn: This reference only captures the initial value of `visibleComps`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+
+	let selectedId = $state<string | null>(visibleComps[0]?.id ?? null);
+	const selected = $derived<Composition | null>(
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/composition-analysis/tagging/[gameId]/[playerColor]/+page.svelte:19:26
+Warn: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+
+	let roundIndex = $state(data.snapshots.length > 0 ? data.snapshots.length - 1 : 0);
+	const currentSnapshot = $derived(data.snapshots[roundIndex] ?? null);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/composition-analysis/tagging/[gameId]/[playerColor]/+page.svelte:19:54
+Warn: This reference only captures the initial value of `data`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+
+	let roundIndex = $state(data.snapshots.length > 0 ? data.snapshots.length - 1 : 0);
+	const currentSnapshot = $derived(data.snapshots[roundIndex] ?? null);
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/players/[username]/+page.svelte:584:2
+Warn: Do not use empty rulesets (css)
+	/* Rank display */
+	.rail-rank-block { }
+	.rank-display {
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/records/+page.svelte:487:2
+Warn: Unused CSS selector ".subhead-meta em"
+https://svelte.dev/e/css_unused_selector (svelte)
+	.subhead-meta { color: var(--color-fog); font-size: 0.92rem; line-height: 1.55; max-width: 60ch; margin: 0; }
+	.subhead-meta em { color: var(--brand-cyan-soft); font-style: italic; font-weight: 500; }
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/stats-analysis/+page.svelte:72:6
+Warn: `canvasEl` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates
+https://svelte.dev/e/non_reactive_update (svelte)
+
+	let canvasEl: HTMLCanvasElement;
+	let chart: Chart | null = null;
+
+/data/share8/michaelvuaprilexperimentation/arc-bot/src/routes/admin/stats-analysis/+page.svelte:196:6
+Warn: `pcCanvasEl` is updated, but is not declared with `$state(...)`. Changing its value will not correctly trigger updates
+https://svelte.dev/e/non_reactive_update (svelte)
+
+	let pcCanvasEl: HTMLCanvasElement;
+	let pcChart: Chart | null = null;
+
+====================================
+svelte-check found 0 errors and 24 warnings in 13 files

@@ -1,0 +1,1 @@
+{"schemaVersion":"arc-v34-guardian-assignment-preflight-v1","seed0":957300000,"seedMax":957308191,"games":8192,"algorithm":"guardianIndexForSeed(seed, guardianCount) = seed % guardianCount","countsInGuardianOrder":[820,820,819,819,819,819,819,819,819,819],"expectedCountsInGuardianOrder":[820,820,819,819,819,819,819,819,819,819],"mismatches":0,"passed":true}

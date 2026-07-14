@@ -1,0 +1,197 @@
+{
+  "schemaVersion": "arc-v34-guardian-preflight-v1",
+  "phase": "tooling",
+  "implementationCommit": "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+  "guardianProtocol": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json",
+    "bytes": 6530,
+    "sha256": "8cc4387323ce0e1d9a6e0b4dfd7ee781b0eefd286ea75a3dcc1b3042011ae86f"
+  },
+  "toolingFiles": {
+    "ml/analyze_v34_guardian.py": "607fd31f9015f3b72635fd1af4a33b59246194c035cd42212068093d4316fc08",
+    "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json": "8cc4387323ce0e1d9a6e0b4dfd7ee781b0eefd286ea75a3dcc1b3042011ae86f",
+    "ml/experiments/v34-latency-first-expert-iteration/guardian-tooling-fable-review.md": "0de4e2153123ec3b3e856d3d2d25fc33d3c6455df47cf2caf1a875b2206939bd",
+    "ml/experiments/v34-latency-first-expert-iteration/guardian-tooling-plan.md": "f44cccdab9fab33a0bae29839deb2832b31b365744e6c30684fb8ed76082ddbb",
+    "ml/test_analyze_v34_guardian.py": "2a0b43915691091bafae564b49574120529030c2f79569c5be51dab983b3fafc",
+    "scripts/lock-v34-guardian-execution.mjs": "54aa7718e47f32fbc9a9b2817a89ca3f9024fd824796d17163a2723d6992940c",
+    "scripts/lock-v34-guardian-tooling.mjs": "17845b1c5a72b998aeb6fe448037136853d5b35f6cbe2a1b053f9999ae1593ba",
+    "scripts/record-v34-guardian-authorization.mjs": "d3b57f5e5de36515c5d538e08e416671bb85f0210714f45c2b3725bf7f95ae82",
+    "scripts/record-v34-guardian-condition.mjs": "05bb02bfc91fba4458adbbc6d97d51a254b1a7adf3e0534df21c828dcaf8c50a",
+    "scripts/record-v34-guardian-preflight.mjs": "9fbb723e4e40f0995a2991d6bac6ca6244df805ae466750e0a6e93bda585eda9",
+    "scripts/run-v34-guardian-confirmation.sh": "38c8c58ef498850ec37b8d8539e9297c13f2ff4f8fb059c433d41066af41427d",
+    "scripts/run-v34-guardian-preflight.sh": "40a40642a70caaf5bb0ea0c1535e137ef6aef97dc5e5058e5e1083136ec22781",
+    "scripts/test-v34-guardian-condition.mjs": "9c080b7ad66e92418753820753445b26d187f470b9c5b966a2fdbdf10f3006c3",
+    "scripts/v34-guardian-tooling-files.mjs": "13542fa822896735add593d39f6cb5e0930f5ef5795999bb7c919bd103cecc49",
+    "scripts/validate-v34-guardian-protocol.mjs": "3068c31af95f59e5779eed24b258b3c22830fc669952f596565d60617a190d60",
+    "scripts/verify-v34-guardian-chain.mjs": "999b199640cb0060039fb6c1f6e5e62fd464d1e866cd4952b49838014620a728"
+  },
+  "environment": {
+    "executable": "ml/v34_stats_env/.venv/bin/python",
+    "python": "3.12.8",
+    "numpy": "2.5.0",
+    "rng": "numpy.random.Generator(PCG64)"
+  },
+  "authorization": {
+    "guardianSeedsOpen": false,
+    "guardianExecutionOpen": false,
+    "teacherSeedsOpen": false,
+    "finalDevelopmentSeedsOpen": false,
+    "hiddenSeedsOpen": false,
+    "multiplayerSeedsOpen": false,
+    "humanReferenceSeedsOpen": false,
+    "productionPromotionOpen": false
+  },
+  "assignment": {
+    "schemaVersion": "arc-v34-guardian-assignment-preflight-v1",
+    "seed0": 957300000,
+    "seedMax": 957308191,
+    "games": 8192,
+    "algorithm": "guardianIndexForSeed(seed, guardianCount) = seed % guardianCount",
+    "countsInGuardianOrder": [
+      820,
+      820,
+      819,
+      819,
+      819,
+      819,
+      819,
+      819,
+      819,
+      819
+    ],
+    "expectedCountsInGuardianOrder": [
+      820,
+      820,
+      819,
+      819,
+      819,
+      819,
+      819,
+      819,
+      819,
+      819
+    ],
+    "mismatches": 0,
+    "passed": true
+  },
+  "replayDeterminism": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/replay-determinism-audit.json",
+    "bytes": 1202,
+    "sha256": "4f4a0e6f2bcbad31394ec2f6f3324b6c16617064704b238d51734684172c1f57"
+  },
+  "resources": {
+    "schemaVersion": "arc-v34-guardian-resource-preflight-v1",
+    "scratchFreeBytes": 524560703488,
+    "scratchRequiredBytes": 17179869184,
+    "persistentFreeBytes": 9476915200,
+    "minimumPersistentRequiredBytes": 3221225472,
+    "worstCasePersistentRequiredBytes": 9663676416,
+    "worstCasePersistentPassed": false,
+    "memoryAvailableBytes": 983729176576,
+    "memoryRequiredBytes": 68719476736,
+    "eligibleGpus": [
+      0,
+      5,
+      6,
+      7
+    ],
+    "excludedGpu": 4,
+    "freeEligibleGpus": [
+      7
+    ],
+    "gpuProbeError": null,
+    "passed": true
+  },
+  "checks": {
+    "protocol": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/protocol.log",
+        "bytes": 336,
+        "sha256": "dfc1d104bcb5179456978091f030a611c88674e0677edc75dce6d70302553123"
+      }
+    },
+    "strengthChain": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/strength-chain.log",
+        "bytes": 283,
+        "sha256": "8e23a7285cfa0f26baca6ea9c415dd6cf4eaa602df533740d8dfaaa27f182eb4"
+      }
+    },
+    "pythonFixtures": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/python-fixtures.log",
+        "bytes": 117,
+        "sha256": "12a0370acbbc9d0813dca47c3c6d4e18f1a2ffbe3f2935ad7575d5a5dc19a50c"
+      }
+    },
+    "recorderFixtures": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/recorder-fixtures.log",
+        "bytes": 548,
+        "sha256": "a4fc88ce5b3324c98e05e2e0226e693528134cc522e6ccb99762b3993996e619"
+      }
+    },
+    "assignment": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/assignment.log",
+        "bytes": 360,
+        "sha256": "9ebbf0768a13701e5ba42badfca3f7e4890aae448f5ebc9b9cdf35d556295972"
+      }
+    },
+    "replayDeterminism": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/replay-determinism.log",
+        "bytes": 1050,
+        "sha256": "823f7044a320b950b782c47afc7def06a7ceae6a24f5a8ed1ec09ca68c6928bb"
+      }
+    },
+    "vitest": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/vitest.log",
+        "bytes": 3431,
+        "sha256": "b7fa30f13d5990af9b308fe90b1bca5d2c76f4962e8e1706026015b2b487e6d9"
+      }
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/typecheck.log",
+        "bytes": 25356,
+        "sha256": "a741def5b7e7ac991791bd06d2e66cf2bfa26a779930df1737118d22a9130142"
+      }
+    },
+    "nodeSyntax": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/node-syntax.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "shellSyntax": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/shell-syntax.log",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "resources": {
+      "exitCode": 0,
+      "log": {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/resources.log",
+        "bytes": 452,
+        "sha256": "aadf1f40464159e5efa99e37d6b7390b8e840d0ca1cd890cbbcb76644012e12b"
+      }
+    }
+  },
+  "passed": true,
+  "recordedAt": "2026-07-14T17:01:43.149Z"
+}
