@@ -200,6 +200,7 @@
     "openOnlyAfter": "All arm checkpoints, manifests, stats, exit codes, and hashes are frozen and every valid arm passes the per-epoch trust gate.",
     "seed0": 944000000,
     "games": 4096,
+    "workersPerPolicy": 4,
     "seats": 1,
     "maxRounds": 30,
     "maxStatusLevel": 2,
@@ -216,6 +217,16 @@
     ],
     "fairness": "Use identical contiguous seeds and decoding semantics for every policy. V2 policies use the production binary inference path with policyObsVersion 2; V23 uses its native obs-v1 path. Record catalog and checkpoint hashes and require zero stalls.",
     "analysis": {
+      "implementation": {
+        "path": "ml/analyze_terminal_credit.py",
+        "sourceCommit": "bce8bf2",
+        "tests": "ml/test_analyze_terminal_credit.py (3/3 local and remote)"
+      },
+      "launcher": {
+        "path": "scripts/run-v31-development-eval.sh",
+        "sourceCommit": "bc886c4",
+        "sha256": "da4cb52d45e2cf23e5fd1646679c791cc659ba33a0963becdac7fc581cb63a60"
+      },
       "bootstrapReplicates": 10000,
       "bootstrapSeed": 310199,
       "terminalTreatmentFamilySize": 3,
