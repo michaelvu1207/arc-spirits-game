@@ -25,6 +25,11 @@ PPO_LINE = re.compile(
     r"optimizer_steps=(?P<steps>\d+)$"
 )
 CALIBRATION_LINE = re.compile(r"^Behavior reach30 calibration \| (?P<body>.*)$")
+CREDIT_LINE = re.compile(
+    r"solo outcome coef=(?P<outcome>[0-9.eE+-]+), "
+    r"reach30 coef=(?P<reach>[0-9.eE+-]+), reach30 horizon=(?P<horizon>[^,]+), .*?"
+    r"applied=(?P<outcome_applied>\d+)/(?P<reach_applied>\d+);"
+)
 
 
 def sha256(path: Path) -> str:
@@ -190,6 +195,7 @@ def audit(args: argparse.Namespace) -> dict:
         raise ValueError("trainer did not report zero malformed rows")
     epoch_metrics = []
     calibration = None
+    credit = None
     for line in log.splitlines():
         match = PPO_LINE.match(line)
         if match:
@@ -205,6 +211,15 @@ def audit(args: argparse.Namespace) -> dict:
         calibration_match = CALIBRATION_LINE.match(line)
         if calibration_match:
             calibration = parse_key_values(calibration_match.group("body"))
+        credit_match = CREDIT_LINE.search(line)
+        if credit_match:
+            credit = {
+                "soloOutcomeCoef": float(credit_match.group("outcome")),
+                "soloReach30Coef": float(credit_match.group("reach")),
+                "reach30Horizon": credit_match.group("horizon"),
+                "soloOutcomeApplied": int(credit_match.group("outcome_applied")),
+                "soloReach30Applied": int(credit_match.group("reach_applied")),
+            }
     if len(epoch_metrics) != int(config["train"]["epochs"]):
         raise ValueError(f"expected {config['train']['epochs']} PPO epoch metrics, got {len(epoch_metrics)}")
     for metric in epoch_metrics:
@@ -220,6 +235,37 @@ def audit(args: argparse.Namespace) -> dict:
             raise ValueError(f"round-weighted clip-fraction gate failed: {metric}")
     if calibration is None or calibration.get("ece", float("inf")) > args.max_ece:
         raise ValueError(f"behavior calibration gate failed: {calibration}")
+    extra_args = config["train"].get("extraArgs", [])
+    try:
+        reach_at = len(extra_args) - 1 - list(reversed(extra_args)).index("--solo-reach30-coef")
+        configured_reach = float(extra_args[reach_at + 1])
+    except (ValueError, IndexError) as exc:
+        raise ValueError("missing configured --solo-reach30-coef") from exc
+    if credit is None or abs(credit["soloReach30Coef"] - configured_reach) > 1e-12:
+        raise ValueError(f"solo reach30 credit telemetry mismatch: {credit}")
+    if credit["reach30Horizon"] != "30":
+        raise ValueError(f"unexpected reach30 credit horizon: {credit}")
+    if configured_reach > 0 and credit["soloReach30Applied"] <= 0:
+        raise ValueError(f"reach30 treatment had no applied strategic rows: {credit}")
+    if configured_reach == 0 and credit["soloReach30Applied"] != 0:
+        raise ValueError(f"reach30 control unexpectedly applied credit: {credit}")
+
+    bands = None
+    if "--ppo-round-policy-bands" in extra_args:
+        at = len(extra_args) - 1 - list(reversed(extra_args)).index("--ppo-round-policy-bands")
+        bands = [
+            [int(upper), float(weight)]
+            for upper, weight in (item.split(":", 1) for item in extra_args[at + 1].split(","))
+        ]
+    band_counts = [policy_round_counts[key] for key in ("1-8", "9-18", "19-30")]
+    band_weights = [1.0, 1.0, 1.0] if bands is None else [entry[1] for entry in bands]
+    weighted_total = sum(count * weight for count, weight in zip(band_counts, band_weights))
+    effective_policy_share = {
+        key: (count * weight / weighted_total if weighted_total else 0.0)
+        for key, count, weight in zip(
+            ("1-8", "9-18", "19-30"), band_counts, band_weights
+        )
+    }
 
     trained = load_checkpoint(checkpoint, torch.device("cpu"))
     for name, tensor in trained.state_dict().items():
@@ -250,6 +296,9 @@ def audit(args: argparse.Namespace) -> dict:
         "behaviorCheckpointSha256": sha256(behavior_checkpoint),
         "behaviorLogpMaxAbsError": max_logp_error,
         "behaviorReach30Calibration": calibration,
+        "soloReach30Credit": credit,
+        "roundPolicyBands": bands,
+        "effectivePolicyWeightShare": effective_policy_share,
         "epochMetrics": epoch_metrics,
         "checkpoint": str(checkpoint),
         "checkpointSha256": sha256(checkpoint),

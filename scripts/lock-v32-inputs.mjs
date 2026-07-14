@@ -56,13 +56,21 @@ if (command === 'create') {
 			: [
 					'ml/league/configs/fair-v32-onpolicy-base.json',
 					'ml/audit_v32_generation.py',
+					'ml/audit_v32_manipulation.py',
+					'ml/test_audit_v32_manipulation.py',
+					'ml/audit_v32_validation_replay.py',
+					'ml/test_audit_v32_validation_replay.py',
 					'scripts/run-league.mjs',
 					'scripts/prepare-v32-onpolicy.mjs',
 					'scripts/run-v32-root.sh',
 					'scripts/run-v32-screen.sh',
+					'scripts/run-v32-critic-validation-repair.sh',
 					`${experiment}/shared-critic/checkpoint.pt`,
 					`${experiment}/shared-critic/checkpoint.manifest.json`,
 					`${experiment}/shared-critic/audit.json`,
+					`${experiment}/shared-critic/validation-replay-audit.json`,
+					`${experiment}/shared-critic/failed-validation-evidence.json`,
+					`${experiment}/artifacts/critic-telemetry-repair-lock-v2.json`,
 					`${experiment}/artifacts/materialized-configs.json`,
 					`${experiment}/league`
 				];
