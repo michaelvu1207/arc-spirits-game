@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v32-v30-onpolicy-solo-mechanism-screen",
-  "status": "implementation-preflight",
+  "status": "critic-frozen",
   "planCommit": "98f34b6",
   "promotionEligible": false,
   "catalog": {
@@ -26,13 +26,36 @@
     "seed0": 951900000,
     "gamesPerTrial": 128,
     "repeats": 2,
-    "workerCounts": [4, 8, 12, 16, 24],
+    "workerCounts": [
+      4,
+      8,
+      12,
+      16,
+      24
+    ],
     "selection": "smallest worker count within 5% of peak median valid-policy rows per second",
-    "strengthUse": false
+    "strengthUse": false,
+    "result": {
+      "report": "ml/experiments/v32-onpolicy-solo/artifacts/systems-benchmark.json",
+      "reportSha256": "7a5822fcc06c321dbe0a540d674835330776deae263009feacb457d4ef8e4028",
+      "peakMedianValidPolicyRowsPerSecond": 1244.766804178778,
+      "eligibleWorkersWithinFivePercent": [
+        24
+      ],
+      "selectedWorkers": 24,
+      "selectedMatchupConcurrency": 1,
+      "recordedAt": "2026-07-14T08:15:57.676Z"
+    }
   },
   "criticWarmup": {
-    "train": { "seed0": 946000000, "games": 4096 },
-    "validation": { "seed0": 946004096, "games": 1024 },
+    "train": {
+      "seed0": 946000000,
+      "games": 4096
+    },
+    "validation": {
+      "seed0": 946004096,
+      "games": 1024
+    },
     "rollout": {
       "seats": 1,
       "maxRounds": 30,
@@ -52,9 +75,17 @@
       "policyCoef": 0,
       "valueCoef": 0.5,
       "reach30ValueCoef": 1,
-      "reach30Horizons": [20, 25, 30],
+      "reach30Horizons": [
+        20,
+        25,
+        30
+      ],
       "v2CriticOnly": true,
-      "frozen": ["entity trunk", "candidate scorer", "all non-value auxiliary heads"]
+      "frozen": [
+        "entity trunk",
+        "candidate scorer",
+        "all non-value auxiliary heads"
+      ]
     },
     "gates": {
       "policyLogitMaxAbsDiff": 0.000001,
@@ -71,21 +102,33 @@
         "seedBase": 946100000,
         "trainBase": 946100000,
         "evalBase": 946700000,
-        "gpuWavePreference": [0, 1, 2]
+        "gpuWavePreference": [
+          0,
+          1,
+          2
+        ]
       },
       {
         "id": "b",
         "seedBase": 946200000,
         "trainBase": 946200000,
         "evalBase": 946800000,
-        "gpuWavePreference": [3, 5, 6]
+        "gpuWavePreference": [
+          3,
+          5,
+          6
+        ]
       },
       {
         "id": "c",
         "seedBase": 946300000,
         "trainBase": 946300000,
         "evalBase": 946900000,
-        "gpuWavePreference": [0, 1, 2]
+        "gpuWavePreference": [
+          0,
+          1,
+          2
+        ]
       }
     ],
     "seedSchedule": {
@@ -106,7 +149,20 @@
       {
         "id": "round-reweighted",
         "soloReach30Coef": 0,
-        "roundPolicyBands": [[8, 0.5], [18, 1.0], [30, 2.0]]
+        "roundPolicyBands": [
+          [
+            8,
+            0.5
+          ],
+          [
+            18,
+            1
+          ],
+          [
+            30,
+            2
+          ]
+        ]
       },
       {
         "id": "p30-credit025",
@@ -150,7 +206,12 @@
     "seed0": 949000000,
     "games": 4096,
     "open": false,
-    "comparators": ["V23", "V30", "shared-critic", "nine final screen checkpoints"],
+    "comparators": [
+      "V23",
+      "V30",
+      "shared-critic",
+      "nine final screen checkpoints"
+    ],
     "familySize": 2
   },
   "hidden": {
@@ -164,5 +225,6 @@
     "Do not use development or hidden games for training or coefficient selection.",
     "Only generation 8, or generation 12 after the outcome-blind manipulation extension, is eligible.",
     "No V32 checkpoint can promote from solo evidence alone."
-  ]
+  ],
+  "implementationCommit": "2473837"
 }

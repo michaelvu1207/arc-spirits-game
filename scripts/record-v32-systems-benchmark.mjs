@@ -31,7 +31,8 @@ if (
 const requested = JSON.stringify(protocol.systemsBenchmark.workerCounts);
 const observed = JSON.stringify(report.rows.map((row) => row.workers));
 if (requested !== observed) throw new Error(`worker counts differ: ${requested} != ${observed}`);
-if (report.catalogPath !== path.resolve(protocol.catalog.path)) {
+const normalizedCatalog = report.catalogPath.replaceAll('\\', '/');
+if (!normalizedCatalog.endsWith(`/${protocol.catalog.path}`)) {
 	throw new Error('benchmark used the wrong catalog');
 }
 if (

@@ -1,0 +1,14 @@
+2026-07-14T08:10:31+00:00
+128
+21.24 15.08 12.98 106/7275 144541
+Filesystem                   Size  Used Avail Use% Mounted on
+/dev/mapper/data--vg-share8  492G  457G  9.1G  99% /data/share8
+tmpfs                        504G   64M  504G   1% /dev/shm
+0, NVIDIA A100-SXM4-40GB, 1516 MiB, 35 %
+1, NVIDIA A100-SXM4-40GB, 5107 MiB, 0 %
+2, NVIDIA A100-SXM4-40GB, 1516 MiB, 49 %
+3, NVIDIA A100-SXM4-40GB, 5097 MiB, 0 %
+4, NVIDIA A100-SXM4-40GB, 5255 MiB, 99 %
+5, NVIDIA A100-SXM4-40GB, 0 MiB, 0 %
+6, NVIDIA A100-SXM4-40GB, 0 MiB, 0 %
+7, NVIDIA A100-SXM4-40GB, 0 MiB, 0 %

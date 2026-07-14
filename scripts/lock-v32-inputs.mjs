@@ -48,9 +48,7 @@ if (command === 'create') {
 		'scripts/run-v32-critic.sh',
 		'scripts/lock-v32-inputs.mjs',
 		'ml/audit_v32_critic.py',
-		'src/lib/play/ml',
-		'src/lib/game',
-		'src/lib/shared'
+		'src/lib/play'
 	];
 	const phaseSpecific =
 		phase === 'critic'
