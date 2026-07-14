@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "arc-v34-strength-resource-preflight-v1",
+  "scratchFreeBytes": 524572741632,
+  "scratchRequiredBytes": 17179869184,
+  "persistentFreeBytes": 9528254464,
+  "persistentRequiredBytes": 7516192768,
+  "eligibleGpus": [
+    0,
+    5,
+    6,
+    7
+  ],
+  "excludedGpu": 4,
+  "freeEligibleGpus": [],
+  "gpuProbeError": null,
+  "passed": false
+}

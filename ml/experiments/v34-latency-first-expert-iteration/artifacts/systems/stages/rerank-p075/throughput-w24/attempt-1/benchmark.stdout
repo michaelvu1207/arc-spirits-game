@@ -1,0 +1,2 @@
+24 workers r0: 8.57 games/s, 0 samples/s, 0 policy rows/s
+wrote /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/throughput-w24/attempt-1/benchmark.json

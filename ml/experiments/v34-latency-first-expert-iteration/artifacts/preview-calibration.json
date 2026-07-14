@@ -1,0 +1,272 @@
+{
+  "schemaVersion": "arc-v34-preview-calibration-v1",
+  "strengthUse": false,
+  "outcomeUse": "reach30-label-calibration-only",
+  "seed0": 957800000,
+  "games": 4096,
+  "seedMax": 957804095,
+  "uniqueSeeds": 4096,
+  "rows": 115584,
+  "phaseCounts": {
+    "navigation": 115584,
+    "encounter": 0
+  },
+  "labelCounts": {
+    "negative": 59490,
+    "positive": 56094
+  },
+  "candidateCount": 693504,
+  "finiteCandidateCount": 693504,
+  "terminalOverrides": {
+    "success": 0,
+    "failure": 0,
+    "mismatches": 0
+  },
+  "metrics": {
+    "auc": 0.8842446555637826,
+    "brier": 0.14606907624119467,
+    "ece": 0.062008661629556074,
+    "bins": [
+      {
+        "index": 0,
+        "lowerInclusive": 0.0,
+        "upperInclusive": null,
+        "upperExclusive": 0.06666666666666667,
+        "count": 32799,
+        "meanPrediction": 0.011501513154990988,
+        "empiricalRate": 0.052928442940333546
+      },
+      {
+        "index": 1,
+        "lowerInclusive": 0.06666666666666667,
+        "upperInclusive": null,
+        "upperExclusive": 0.13333333333333333,
+        "count": 5777,
+        "meanPrediction": 0.09775349999568972,
+        "empiricalRate": 0.27453695689804397
+      },
+      {
+        "index": 2,
+        "lowerInclusive": 0.13333333333333333,
+        "upperInclusive": null,
+        "upperExclusive": 0.2,
+        "count": 4649,
+        "meanPrediction": 0.1663548831238717,
+        "empiricalRate": 0.35706603570660356
+      },
+      {
+        "index": 3,
+        "lowerInclusive": 0.2,
+        "upperInclusive": null,
+        "upperExclusive": 0.26666666666666666,
+        "count": 4630,
+        "meanPrediction": 0.2338918162583913,
+        "empiricalRate": 0.40691144708423327
+      },
+      {
+        "index": 4,
+        "lowerInclusive": 0.26666666666666666,
+        "upperInclusive": null,
+        "upperExclusive": 0.3333333333333333,
+        "count": 4720,
+        "meanPrediction": 0.30064505149444937,
+        "empiricalRate": 0.45826271186440676
+      },
+      {
+        "index": 5,
+        "lowerInclusive": 0.3333333333333333,
+        "upperInclusive": null,
+        "upperExclusive": 0.4,
+        "count": 5235,
+        "meanPrediction": 0.3675098620487339,
+        "empiricalRate": 0.49799426934097424
+      },
+      {
+        "index": 6,
+        "lowerInclusive": 0.4,
+        "upperInclusive": null,
+        "upperExclusive": 0.4666666666666667,
+        "count": 5635,
+        "meanPrediction": 0.4338671633627243,
+        "empiricalRate": 0.5384205856255546
+      },
+      {
+        "index": 7,
+        "lowerInclusive": 0.4666666666666667,
+        "upperInclusive": null,
+        "upperExclusive": 0.5333333333333333,
+        "count": 6101,
+        "meanPrediction": 0.4997968247357737,
+        "empiricalRate": 0.5762989673823963
+      },
+      {
+        "index": 8,
+        "lowerInclusive": 0.5333333333333333,
+        "upperInclusive": null,
+        "upperExclusive": 0.6,
+        "count": 5923,
+        "meanPrediction": 0.5659860882855144,
+        "empiricalRate": 0.6005402667567111
+      },
+      {
+        "index": 9,
+        "lowerInclusive": 0.6,
+        "upperInclusive": null,
+        "upperExclusive": 0.6666666666666666,
+        "count": 5091,
+        "meanPrediction": 0.63254777410517,
+        "empiricalRate": 0.6645059909644471
+      },
+      {
+        "index": 10,
+        "lowerInclusive": 0.6666666666666666,
+        "upperInclusive": null,
+        "upperExclusive": 0.7333333333333333,
+        "count": 4735,
+        "meanPrediction": 0.7002163763865238,
+        "empiricalRate": 0.7001055966209081
+      },
+      {
+        "index": 11,
+        "lowerInclusive": 0.7333333333333333,
+        "upperInclusive": null,
+        "upperExclusive": 0.8,
+        "count": 4723,
+        "meanPrediction": 0.7667076972288548,
+        "empiricalRate": 0.7615922083421555
+      },
+      {
+        "index": 12,
+        "lowerInclusive": 0.8,
+        "upperInclusive": null,
+        "upperExclusive": 0.8666666666666667,
+        "count": 4840,
+        "meanPrediction": 0.8342457110099379,
+        "empiricalRate": 0.8411157024793389
+      },
+      {
+        "index": 13,
+        "lowerInclusive": 0.8666666666666667,
+        "upperInclusive": null,
+        "upperExclusive": 0.9333333333333333,
+        "count": 5898,
+        "meanPrediction": 0.9023893067964569,
+        "empiricalRate": 0.9269243811461513
+      },
+      {
+        "index": 14,
+        "lowerInclusive": 0.9333333333333333,
+        "upperInclusive": 1.0,
+        "upperExclusive": null,
+        "count": 14828,
+        "meanPrediction": 0.9759559235397645,
+        "empiricalRate": 0.9790936066900459
+      }
+    ]
+  },
+  "thresholds": {
+    "aucMin": 0.75,
+    "eceMax": 0.1,
+    "brierMax": 0.2
+  },
+  "passed": true,
+  "criticRerankerArmsEnabled": true,
+  "inputs": [
+    {
+      "name": "preview-audit-0.jsonl",
+      "sha256": "dfe9df440b1ec35b974084abe8fa73a8ccf497b42807d030ec3ae0451d690042"
+    },
+    {
+      "name": "preview-audit-1.jsonl",
+      "sha256": "43bb866c620b4658f05e26feb56fd0e031878ad9b8430cd718522826768858ef"
+    },
+    {
+      "name": "preview-audit-10.jsonl",
+      "sha256": "1639d3fc3e9728ee70749bb433413266ea8a5a42144c8f163f9f7a254bdec83e"
+    },
+    {
+      "name": "preview-audit-11.jsonl",
+      "sha256": "cbdac40325e070f9601eb33fad2375bd12a14132bcc07b8aa948cfe7e28016d5"
+    },
+    {
+      "name": "preview-audit-12.jsonl",
+      "sha256": "fbae34fd1b75757c806622b0578430e2178903661a9c820f2352d2a33a8d6323"
+    },
+    {
+      "name": "preview-audit-13.jsonl",
+      "sha256": "cfbcc62ce504bd813e3f6c36fead4b66167895baa9e285e8e6c9a3979d8adabd"
+    },
+    {
+      "name": "preview-audit-14.jsonl",
+      "sha256": "961c7218756988915a088af8717ae56e933c1a7c46ac8719abbfe03ce912a7d9"
+    },
+    {
+      "name": "preview-audit-15.jsonl",
+      "sha256": "7051a7cb1c432b9f30541176545dee00fba959cc6ac480b798f93932761dba5b"
+    },
+    {
+      "name": "preview-audit-16.jsonl",
+      "sha256": "5084911dfa38eadda5a45033d5bc8f215f5172506b0396e86117af02266dea5e"
+    },
+    {
+      "name": "preview-audit-17.jsonl",
+      "sha256": "aa8165551976478d6a01e3b237e2247024c4e7038aba904980e23b7736b36c3a"
+    },
+    {
+      "name": "preview-audit-18.jsonl",
+      "sha256": "95f11711099dbf0b26a2da2d8a88f537e6324071cf42eb4600903cf19be99e12"
+    },
+    {
+      "name": "preview-audit-19.jsonl",
+      "sha256": "00c6080bf09bafae0db4ff0535f5236883ba5d1a37013284d2c89315d3c555bb"
+    },
+    {
+      "name": "preview-audit-2.jsonl",
+      "sha256": "23b36f2526a8b79199e671cadf11819a554b817d060eb4de7f4d8117db997c6f"
+    },
+    {
+      "name": "preview-audit-20.jsonl",
+      "sha256": "298b83d0e4b713460b1303f7d85d984bb9a36a75e652cbb35c96de72bc0f707b"
+    },
+    {
+      "name": "preview-audit-21.jsonl",
+      "sha256": "ad7136e90a8b2411f64a2fcd3b46e56a1d9b5145dc0f3d46060c27c770a039e6"
+    },
+    {
+      "name": "preview-audit-22.jsonl",
+      "sha256": "ca2a886c651ff883f86cf2bbf8fecb6ce35513591e8c1efaeed0a22c8193d6e7"
+    },
+    {
+      "name": "preview-audit-23.jsonl",
+      "sha256": "d0e5bca4061a1911e97ae182abad202cd4c251121d9e619a2460aaaf7e39bf97"
+    },
+    {
+      "name": "preview-audit-3.jsonl",
+      "sha256": "c997a233719dfb74948da7c7981b325b71608779764a190c017c1004afd17b50"
+    },
+    {
+      "name": "preview-audit-4.jsonl",
+      "sha256": "b7c7e917de449c98721b4e1ae5cb6d989c68f5a029e0661d59b85ef0b96d2f4a"
+    },
+    {
+      "name": "preview-audit-5.jsonl",
+      "sha256": "da971e06e756ea6d8d226deb0a232016f3307ad80d949ce8157d1835ed32a19a"
+    },
+    {
+      "name": "preview-audit-6.jsonl",
+      "sha256": "9f67f9bee5a43e7bf29d3e3a9d5865664bf9e0b872e779f7e81597b7f3997a14"
+    },
+    {
+      "name": "preview-audit-7.jsonl",
+      "sha256": "9abf2290e9c32b01620a4350183d0c51592545d7e6c52656fd6745eb99eda6dd"
+    },
+    {
+      "name": "preview-audit-8.jsonl",
+      "sha256": "096d2a11b31aa26ed1f67d5fc2f300714ce307aa67769f801b88645ba223ab2d"
+    },
+    {
+      "name": "preview-audit-9.jsonl",
+      "sha256": "2c25022fa26e836fa28ba2f1099d9b9c36fd85cc9e35ceef9dab37dafff48830"
+    }
+  ]
+}

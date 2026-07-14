@@ -1,0 +1,33 @@
+
+> arc-spirits-spectate@0.0.1 test
+> vitest run --run src/lib/play/ml/actions.informationSafety.test.ts src/lib/play/ml/_gumbelPlanner.test.ts src/lib/play/ml/_heuristicRolloutPlanner.test.ts src/lib/play/ml/_actorpool.test.ts src/lib/play/ml/inferenceClient.test.ts src/lib/play/ml/driver.ppo.test.ts
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/data/share8/michaelvuaprilexperimentation/arc-bot[39m
+
+ [32m✓[39m src/lib/play/ml/actions.informationSafety.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 71[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/_heuristicRolloutPlanner.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 293[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/_gumbelPlanner.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 888[2mms[22m[39m
+     [33m[2m✓[22m[39m is deterministic for a fixed seed and differs across seeds [33m 514[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/inferenceClient.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 2385[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/driver.ppo.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 4502[2mms[22m[39m
+     [33m[2m✓[22m[39m JSON-restores an exact late-state suffix with all RNG cursors and fresh episode identity [33m 817[2mms[22m[39m
+     [33m[2m✓[22m[39m creates deterministic independent pick-RNG forks and keeps continuation IDs distinct [33m 451[2mms[22m[39m
+     [33m[2m✓[22m[39m retains a real terminal row with exact behavior metadata and intermediate dense rewards [33m 956[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps the initial ratio at one through TypeScript JSONL and the Python loader [33m 1697[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/_actorpool.test.ts [2m([22m[2m15 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 24059[2mms[22m[39m
+     [33m[2m✓[22m[39m determinism: 1 worker and 4 workers produce identical per-seed outcomes [33m 13926[2mms[22m[39m
+     [33m[2m✓[22m[39m routes solo heuristic reach search through one-batch planner telemetry [33m 440[2mms[22m[39m
+     [33m[2m✓[22m[39m runs the solo critic reranker and distinguishes its zero-simulation telemetry [33m 402[2mms[22m[39m
+     [33m[2m✓[22m[39m obs-version 2: shards carry paired v1 obs + flat obsV2 rows and meta.json validates [33m 2787[2mms[22m[39m
+     [33m[2m✓[22m[39m heuristic-only games attribute no neural seats [33m 1519[2mms[22m[39m
+     [33m[2m✓[22m[39m preserves the synchronous runActorGames API and callback order [33m 1363[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps source trajectories byte-identical when the continuation curriculum is off [33m 825[2mms[22m[39m
+     [33m[2m✓[22m[39m appends one deterministic marked solo suffix without adding a game summary [33m 1196[2mms[22m[39m
+     [33m[2m✓[22m[39m aggregates curriculum diagnostics and keeps duplicate-seed suffix IDs unique [33m 966[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[32m64 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (65)[39m
+[2m   Start at [22m 13:18:49
+[2m   Duration [22m 25.03s[2m (transform 3.43s, setup 0ms, import 4.58s, tests 32.20s, environment 2ms)[22m
+

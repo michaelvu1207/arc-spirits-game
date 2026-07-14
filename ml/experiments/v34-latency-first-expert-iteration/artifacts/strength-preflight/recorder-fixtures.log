@@ -1,0 +1,1 @@
+{"schemaVersion":"arc-v34-phase2-condition-test-v1","passed":true,"gamesPerValidReport":4096,"validCases":["raw","rerank-p025"],"rejectedCorruptions":["duplicate-seed","stall","provenance","config","replay"]}

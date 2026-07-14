@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "arc-v34-determinization-audit-v1",
+  "strengthUse": false,
+  "rngOnlyNeverEngineGameSeeds": true,
+  "seed0": 956400000,
+  "samples": 100000,
+  "seedMax": 956499999,
+  "confidence": {
+    "family": 0.99,
+    "method": "two-sided Hoeffding with Bonferroni union bound across categories",
+    "categories": 3,
+    "epsilon": 0.005655497173200666
+  },
+  "rows": [
+    {
+      "face": 1,
+      "count": 16677,
+      "expectedProbability": 0.16666666666666666,
+      "observedProbability": 0.16677,
+      "absoluteError": 0.00010333333333334416,
+      "insideSimultaneous99Envelope": true
+    },
+    {
+      "face": 2,
+      "count": 66781,
+      "expectedProbability": 0.6666666666666666,
+      "observedProbability": 0.66781,
+      "absoluteError": 0.001143333333333385,
+      "insideSimultaneous99Envelope": true
+    },
+    {
+      "face": 3,
+      "count": 16542,
+      "expectedProbability": 0.16666666666666666,
+      "observedProbability": 0.16542,
+      "absoluteError": 0.001246666666666646,
+      "insideSimultaneous99Envelope": true
+    }
+  ],
+  "passed": true
+}

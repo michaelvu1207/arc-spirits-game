@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "arc-v34-systems-authorization-v1",
+  "strengthUse": false,
+  "sourceLock": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/source-lock.json",
+    "sha256": "a430edad4de2635916870196a058ee22b2f80d043dd74f3f9f8ece0ea3ad2e6c"
+  },
+  "preflight": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/preflight/result.json",
+    "sha256": "a353a647d28bae754a8f9fa5a5194487ca6c2c01a08f844c2f7b75a26e758b7b"
+  },
+  "previewCollection": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/preview-calibration-collection.json",
+    "sha256": "b4a8377b91fb7f39643eb52ea1f976370320b8e702fd7b78d1b68e87fb84a366"
+  },
+  "previewCalibration": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/preview-calibration.json",
+    "sha256": "1fcdce3b36ca4c9422186a3f7f48984107ae3608d2c57374df3713d5dd42ae3f"
+  },
+  "criticCalibrationPassed": true,
+  "enabledCandidateArms": [
+    "rerank-p025",
+    "rerank-p050",
+    "rerank-p075",
+    "rerank-p100",
+    "heuristic-s4-h2",
+    "heuristic-s8-h3"
+  ],
+  "disabledCandidateArms": {},
+  "authorization": {
+    "systemsSeedsOpen": true,
+    "phase2SeedsOpen": false,
+    "guardianSeedsOpen": false,
+    "teacherSeedsOpen": false,
+    "finalDevelopmentSeedsOpen": false,
+    "hiddenSeedsOpen": false,
+    "multiplayerSeedsOpen": false,
+    "humanReferenceSeedsOpen": false,
+    "productionPromotionOpen": false
+  },
+  "recordedAt": "2026-07-14T13:26:50.700Z"
+}

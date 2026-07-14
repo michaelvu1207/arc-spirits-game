@@ -1,0 +1,16 @@
+2026-07-14T13:26:51+00:00
+14.45 15.13 34.17 8/7120 1966056
+               total        used        free      shared  buff/cache   available
+Mem:           1.0Ti        73Gi        42Gi        15Gi       913Gi       934Gi
+Swap:             0B          0B          0B
+Filesystem                   Size  Used Avail Use% Mounted on
+/dev/mapper/data--vg-share8  492G  458G  9.0G  99% /data/share8
+tmpfs                        504G   16G  489G   4% /dev/shm
+0, 6037 MiB, 40960 MiB, 0 %
+1, 6043 MiB, 40960 MiB, 0 %
+2, 6045 MiB, 40960 MiB, 0 %
+3, 6045 MiB, 40960 MiB, 0 %
+4, 5255 MiB, 40960 MiB, 98 %
+5, 0 MiB, 40960 MiB, 12 %
+6, 0 MiB, 40960 MiB, 0 %
+7, 0 MiB, 40960 MiB, 0 %

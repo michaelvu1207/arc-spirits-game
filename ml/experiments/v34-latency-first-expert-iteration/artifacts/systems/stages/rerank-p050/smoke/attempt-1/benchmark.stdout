@@ -1,0 +1,2 @@
+1 workers r0: 0.45 games/s, 0 samples/s, 0 policy rows/s
+wrote /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/smoke/attempt-1/benchmark.json

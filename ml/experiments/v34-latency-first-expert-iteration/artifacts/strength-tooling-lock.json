@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "arc-v34-strength-tooling-lock-v1",
+  "implementationCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e",
+  "baseSourceLock": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/source-lock.json",
+    "sha256": "a430edad4de2635916870196a058ee22b2f80d043dd74f3f9f8ece0ea3ad2e6c"
+  },
+  "strengthProtocol": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+    "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd"
+  },
+  "systemsEligibility": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+    "sha256": "74d1a12ee1ce2f32a4add65c2a31dad89c914b673da9803baf6179018231a68d"
+  },
+  "phase2Authorization": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-authorization.json",
+    "sha256": "aa256764285a822d85a359e859dd6b11e53dd3f04ae16d999a525eba6b141cc7"
+  },
+  "strengthPreflight": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-preflight/result.json",
+    "sha256": "8c8b2094c27090a14b169471a071758215687401cecf40565eceed3937aa3b01"
+  },
+  "files": {
+    "ml/analyze_v34_phase2.py": "5f10ee0bd2cf83b499d7d2781b66ba2d123679356f6055136efdbf65269c2a57",
+    "ml/experiments/v34-latency-first-expert-iteration/strength-integrity-fable-review.md": "d0fddf26a2954661c7cebbce61e87daa0088a0e8e5dfd8547ba488816d289607",
+    "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd",
+    "ml/experiments/v34-latency-first-expert-iteration/strength-tooling-fable-review.md": "790d67a94683c18acce13eb84807798e11fd62cee6286fa96237ec0840ecd6e4",
+    "ml/experiments/v34-latency-first-expert-iteration/strength-tooling-plan.md": "8d9cc97d20161d6fdfa4c2cf79e47d463bdd1b9188165483c32d054d38a7649f",
+    "ml/test_analyze_v34_phase2.py": "a7394ecfc3dcbb2d10d686732f96d73cd319a69acb6c219f76020ad87d5005f1",
+    "scripts/check-v34-replay-determinism.sh": "e40f4c5cdb942b7ff3ec1796137ae740679d554217b1369fb4e0393150793435",
+    "scripts/lock-v34-strength-inputs.mjs": "75530a95a9a980e891c23b682ef55ef751b7745403aee94a5f7d06eb1616abbf",
+    "scripts/record-v34-phase2-condition.mjs": "36366dd25399af7129fc13071207f57ef41305511c9f7db3502e9c3c0eaaaf08",
+    "scripts/record-v34-strength-preflight.mjs": "a99819319490eae81cbc709317ee6a6932cd8530ddc66198c6ddfa9a6df75473",
+    "scripts/run-v34-phase2-screen.sh": "1d55c71cdfaacad055ed60f2db2481ba04b6e489ba9a5ca47f40a073183fb0ef",
+    "scripts/run-v34-strength-preflight.sh": "846b25b9a56d96a8425df802ff59be45185b6ff7f7e217ffc846fafe55047f5d",
+    "scripts/test-v34-phase2-condition.mjs": "f31fe410cf8f282d0693e5d08720884ce60d6c138cabf3cb123e1c8f5eb40909",
+    "scripts/v34-strength-tooling-files.mjs": "0e76fb19203b23e4c08ad1ff39fd3da3fa4cb0ac8332de2cafc4c12826aef672",
+    "scripts/validate-v34-strength-protocol.mjs": "f89e888b7806de61251d3b0b8852965df63eb74eff67e42b2b9351c036a1287e",
+    "scripts/verify-v34-strength-chain.mjs": "37629e8fd9d4b41cfb8992f61493fd8e3955f93044973d051f55eae05fe56328"
+  },
+  "environment": {
+    "python": "3.12.8",
+    "numpy": "2.5.0"
+  },
+  "eligibleCandidateArms": [
+    "rerank-p025",
+    "rerank-p050",
+    "rerank-p075",
+    "rerank-p100",
+    "heuristic-s4-h2",
+    "heuristic-s8-h3"
+  ],
+  "authorization": {
+    "phase2ExecutionOpen": true,
+    "guardianSeedsOpen": false,
+    "teacherSeedsOpen": false,
+    "finalDevelopmentSeedsOpen": false,
+    "hiddenSeedsOpen": false,
+    "multiplayerSeedsOpen": false,
+    "humanReferenceSeedsOpen": false,
+    "productionPromotionOpen": false
+  },
+  "createdAt": "2026-07-14T15:03:37.706Z"
+}
