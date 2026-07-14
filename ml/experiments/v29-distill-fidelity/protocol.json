@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v29-exact-distillation-fidelity-screen",
-  "status": "winner-frozen-gate-pending",
+  "status": "rejected-strategic-tail-gate",
   "createdAt": "2026-07-14T01:45:00Z",
   "sourceCommit": "a380638",
   "planReview": {
@@ -206,9 +206,44 @@
         "selectionEligible": false
       }
     ],
-    "gateOpened": false
+    "gateOpened": true
   },
-  "nextStage": "Freeze the selected checkpoint hash, then create a separately reviewed terminal-credit protocol using the still-unconsumed 944000000 development block. V29 itself never evaluates solo strength.",
+  "gateResult": {
+    "evaluatedAt": "2026-07-14T02:22:02Z",
+    "artifact": "ml/experiments/v29-distill-fidelity/gate.json",
+    "artifactSha256": "7780b9d99bb6dd61f9bd376e47a2c1408dbc51508ebf8297f46bf70fd7a2876d",
+    "logSha256": "c01fe1d1086e51681c7fb66ebe62a21433e24df13d9de1fec7165879d80de5fd",
+    "checkpointSha256": "37d4268900cba44583dcc19e19222db97f8104493d17ad8dc8180025fe138dff",
+    "seed0": 942000128,
+    "games": 128,
+    "valid": true,
+    "overall": {
+      "rows": 14201,
+      "teacherKlMean": 0.02402373613229378,
+      "teacherKlP99": 0.2836954593658447,
+      "top1Agreement": 0.9024716569255686,
+      "pass": true
+    },
+    "strategic": {
+      "rows": 3516,
+      "teacherKlMean": 0.043026357674792855,
+      "teacherKlP99": 0.5555545151233665,
+      "top1Agreement": 0.906712172923777,
+      "pass": false,
+      "failedMetric": "teacherKlP99",
+      "limit": 0.5
+    },
+    "lateRounds23To30": {
+      "rows": 2104,
+      "teacherKlMean": 0.030073654197951914,
+      "teacherKlP99": 0.3788277363777118,
+      "top1Agreement": 0.8602661596958175
+    },
+    "aliasesAboveThreshold": 0,
+    "decision": "Reject V29. The aggregate gate and strategic mean/agreement gates pass, but strategic p99 KL exceeds 0.5. Per the one-shot rule, do not evaluate a runner-up and do not proceed to latency or solo strength evaluation."
+  },
+  "completedAt": "2026-07-14T02:22:02Z",
+  "nextStage": "Create a separately reviewed strategic-tail fidelity experiment that uses only new selection/gate splits and does not consume the still-unconsumed 944000000 terminal-credit development block. Terminal-credit training remains blocked until a gate-valid anchor exists.",
   "promotionEligible": false,
   "amendments": [
     {
