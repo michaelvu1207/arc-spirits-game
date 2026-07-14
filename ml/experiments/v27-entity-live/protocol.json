@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v27-live-entity-multihorizon-capacity-screen",
-  "status": "preregistered",
+  "status": "running",
   "createdAt": "2026-07-14T00:20:00Z",
   "hypothesis": "On the current live catalog, an entity-token policy with an equal-game 20/25/30-round critic can preserve V23 behavior while representing late-game conversion state better than the flat incumbent. Model size helps only if held-out solo strength and calibration improve enough to justify its latency.",
   "sourceCommit": "21893331f6f56b4e6b14a0e6d5e4ab2fbe326973",
@@ -130,5 +130,12 @@
     "filesystem": "/data/share8",
     "minimumFreeGiBBeforeLaunchingTraining": 8,
     "compressRawJsonlAfterAllConsumersFinish": true
-  }
+  },
+  "amendments": [
+    {
+      "at": "2026-07-14T00:40:00Z",
+      "runtimeSourceCommit": "6f466b4",
+      "reason": "The remote PyTorch release rejects numpy.bool_ values passed through torch.tensor although the local release accepts them. All three first attempts were stopped or failed during the first DataLoader collation, before any optimizer step or checkpoint. Scalar collation now applies explicit bool/int/float casts. Dataset bytes, model seeds, shuffle seeds, hyperparameters, and evaluation gates are unchanged; failed logs and exit codes are retained."
+    }
+  ]
 }
