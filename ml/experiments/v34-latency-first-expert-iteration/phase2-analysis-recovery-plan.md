@@ -26,14 +26,24 @@ source-order evidence must be recorded and committed before any recovery launch.
 
 1. Preserve all frozen protocols, locks, condition manifests, reports, seeds,
    ordering, analyzer source, Python environment, and command arguments.
-2. Create an isolated temporary Git checkout on SimForge from a locally produced
-   Git bundle. Its `HEAD` must be the committed recovery authorization and must
-   descend from implementation commit
-   `fe8dcdb66357263b808f6b169e34f2eb6732d48f`.
-3. Do not add `.git` to or check out over the authoritative remote artifact root.
-   The temporary checkout is only the analyzer `--repo` and provenance context.
+2. Create an isolated, shallow provenance-only Git object database on SimForge.
+   It must contain the authentic commit objects from implementation commit
+   `fe8dcdb66357263b808f6b169e34f2eb6732d48f` through the committed recovery
+   authorization, mark `fe8dcdb` as the shallow boundary, and set `HEAD` to the
+   recovery-authorization commit. Re-hashing every imported raw commit object
+   must reproduce its original commit ID.
+3. Do not add `.git` to, check out over, symlink over, or copy a working tree onto
+   the authoritative remote artifact root. Bind the provenance database only for
+   the analyzer process with `GIT_DIR=<isolated>/.git` and
+   `GIT_WORK_TREE=<authoritative-root>`. Keep the analyzer's normal repository
+   path and all artifact paths unchanged. This is intentionally a commit-graph
+   database: the analyzer independently hash-verifies every working-tree input,
+   while Git is used only for the frozen `merge-base --is-ancestor` check.
 4. Before launch, require:
-   - the implementation commit is an ancestor of the temporary `HEAD`;
+   - the isolated Git context has exactly the preregistered commit chain, its
+     `HEAD` is the recovery-authorization commit, and the implementation commit
+     is an ancestor of that `HEAD` under the same exported Git environment the
+     analyzer will inherit;
    - every strength-locked and guardian-locked file hash matches;
    - all seven immutable completion paths and their referenced authoritative
      report files remain available and hash-bound;
@@ -42,18 +52,19 @@ source-order evidence must be recorded and committed before any recovery launch.
    - the failed attempt's stdout remains zero bytes;
    - guardian, teacher, final-development, hidden, multiplayer, human-reference,
      and promotion authorization flags remain closed.
-5. Run the same analyzer exactly once more, with the same seven conditions in
-   the same registered order. The only semantic command change is `--repo` to
-   the valid isolated Git checkout; `--out` and redirected stdout use absolute
-   paths in the authoritative artifact root.
+5. Run the same analyzer exactly once more, with the same executable, argv,
+   repository path, seven conditions, registered order, output path, and stdout
+   redirection. The only launch change is the predeclared `GIT_DIR` and
+   `GIT_WORK_TREE` environment needed by the already-frozen ancestry subprocess.
 6. If this corrected launch fails for any reason, permit no further analyzer
    attempt. Record the failure and close the V34 Lane A analysis as invalid.
 7. If it succeeds, copy and hash the JSON and stdout locally, commit them before
    reading any value, then inspect the archived analysis and proceed only through
    its predeclared guardian authorization logic.
-8. Retain the temporary checkout and bundle until the analysis artifacts and
-   provenance manifest are committed. Remove them afterward only if their hashes
-   and exact commit identity are preserved in the incident record.
+8. Retain the isolated Git database until the analysis artifacts and provenance
+   manifest are committed. Remove it afterward only if its recursive hashes,
+   exact commit identities, shallow boundary, environment variables, and
+   successful ancestry command are preserved in the incident record.
 
 ## Scientific rationale
 
