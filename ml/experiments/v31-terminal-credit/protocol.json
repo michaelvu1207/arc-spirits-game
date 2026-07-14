@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v31-conservative-offline-terminal-credit",
-  "status": "implementation-complete-preflight-pending",
+  "status": "preflight-valid-launch-approved",
   "createdAt": "2026-07-14T03:50:00Z",
   "sourceCommit": "72e057f",
   "planReview": {
@@ -94,7 +94,45 @@
       "per-epoch overall and strategic fidelity including mean, p99, CVaR@5%, max, and top-1 agreement",
       "teacher, frozen-anchor, and current-student strategic policy entropy",
       "training wall time, peak RSS, exit code, checkpoint hash, stats hash, and exact command"
-    ]
+    ],
+    "preflightResult": {
+      "completedAt": "2026-07-14T04:07:00Z",
+      "valid": true,
+      "optimizerCreated": false,
+      "checkpointCreated": false,
+      "artifact": "ml/experiments/v31-terminal-credit/artifacts/preflight.json",
+      "artifactSha256": "df190c2d8b8c7055826167cd0c1c9c86571bb0b8f7ca578133651524abeb166d",
+      "logSha256": "9a3d20b46a64a7811da241d67735a021267db5d43e2d1525520ab1d6a50152ac",
+      "train": {
+        "games": 2048,
+        "rows": 240631,
+        "policyRows": 228477,
+        "strategicPolicyRows": 57450,
+        "trueWins": 1114,
+        "equalGameOutcomeWeight": 2048.0
+      },
+      "validation": {
+        "games": 512,
+        "rows": 60159,
+        "policyRows": 57085,
+        "trueWins": 276
+      },
+      "teacherLogpMaxAbsError": {
+        "train": 0.000004291534423828125,
+        "validation": 0.000004172325134277344,
+        "limit": 0.001
+      },
+      "anchorBehaviorCorrection": {
+        "rows": 57450,
+        "rawMean": 1.0000877676866593,
+        "rawP95": 1.2763540625572192,
+        "rawP99": 1.7047389233112367,
+        "rawMax": 58.16262435913086,
+        "upperCap": 2.0,
+        "capFraction": 0.0053089643167972145
+      },
+      "conclusion": "The anchor/teacher correction is centered at one, its p99 remains below the fixed 2x cap, and only 0.53% of strategic rows are capped. Proceed with the frozen estimator and do not retune the cap."
+    }
   },
   "training": {
     "architecture": {
