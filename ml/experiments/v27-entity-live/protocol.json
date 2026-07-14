@@ -154,6 +154,9 @@
         "meanPost15VpPerRoundDelta": -0.1169620063747688,
         "trainingWallSeconds": 254.56,
         "peakResidentKiB": 3732016,
+        "a100InferenceRowsPerSecond": 16017.84129697381,
+        "a100RequestLatencyMs": {"p50": 15.551974000000001, "p95": 18.606928999999997, "p99": 22.1895289},
+        "a100GpuMemoryMiB": 625,
         "stalls": 0
       },
       {
@@ -172,6 +175,9 @@
         "meanPost15VpPerRoundDelta": -0.14812708092005689,
         "trainingWallSeconds": 283.97,
         "peakResidentKiB": 3736016,
+        "a100InferenceRowsPerSecond": 12633.563911686633,
+        "a100RequestLatencyMs": {"p50": 19.27786, "p95": 26.787490999999992, "p99": 36.37871319999999},
+        "a100GpuMemoryMiB": 683,
         "stalls": 0
       },
       {
@@ -190,6 +196,9 @@
         "meanPost15VpPerRoundDelta": -0.07192844550033622,
         "trainingWallSeconds": 402.83,
         "peakResidentKiB": 3762468,
+        "a100InferenceRowsPerSecond": 9369.854932377226,
+        "a100RequestLatencyMs": {"p50": 26.6240545, "p95": 34.248615, "p99": 42.01313521},
+        "a100GpuMemoryMiB": 931,
         "stalls": 0
       }
     ],
