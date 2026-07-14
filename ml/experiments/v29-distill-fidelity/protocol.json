@@ -165,21 +165,28 @@
   "promotionEligible": false,
   "amendments": [
     {
-      "at": "2026-07-14T01:58:00Z",
+      "at": "2026-07-14T01:45:00Z",
       "runtimeSourceCommit": "ef56c98",
       "optimizerCreated": false,
       "reason": "The preregistered full-validation diagnostic found zero exact-input target aliases and localized fidelity error to strategic lockNavigation rows. Add a strategic-balanced policy-only arm before any V29 optimizer so the screen can distinguish raw compute, critic interference, capacity, and strategic loss allocation."
     },
     {
-      "at": "2026-07-14T02:02:00Z",
+      "at": "2026-07-14T01:47:00Z",
       "review": "Claude Fable high effort",
       "optimizerCreated": false,
       "reason": "Correct selection leakage before training: rank arms and select epochs only on the selection half, match the strategic arm's early-stop metric to its purpose, and open the gate half exactly once for the frozen winner with no runner-up fallback."
     },
     {
-      "at": "2026-07-14T02:08:00Z",
+      "at": "2026-07-14T01:49:00Z",
       "runtimeSourceCommit": "93020b1",
       "reason": "V29 d128 arms launched only after both Fable reviews, the zero-alias diagnostic, selection-only trainer tests, and resource guards passed."
+    },
+    {
+      "at": "2026-07-14T01:56:00Z",
+      "attempt": 1,
+      "optimizerProgress": "d128 arms reached epoch 6; d256 reached epoch 2; no checkpoint, stats artifact, exit code, or evaluation existed",
+      "externalEvidence": "journalctl records causal-r18 Docker workers joining host networking on GPUs 0-3 at 01:54:46 UTC, and all four CARLA processes restarted at 01:54:46-47",
+      "reason": "The SimForge worker surface reclaimed GPUs 0-3 and externally killed every co-resident learner. Preserve attempt-1 logs, then restart all arms from their original byte-identical init, seeds, row order, and hyperparameters after CARLA settled. This is not a model failure and does not consume selection or gate results."
     }
   ]
 }
