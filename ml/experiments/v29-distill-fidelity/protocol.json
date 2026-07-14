@@ -1,0 +1,129 @@
+{
+  "schemaVersion": "arc-controlled-experiment-v1",
+  "experiment": "v29-exact-distillation-fidelity-screen",
+  "status": "planned",
+  "createdAt": "2026-07-14T01:45:00Z",
+  "sourceCommit": "a380638",
+  "planReview": {
+    "model": "Claude Fable",
+    "effort": "high",
+    "artifact": "ml/experiments/v29-distill-fidelity/fable-review.md",
+    "status": "incorporated"
+  },
+  "hypothesis": "V28's exact target and support reconstruction are correct, but d128 at six epochs underfit the frozen V23 raw-logit function. Additional optimization may clear the trust gate at d128; if not, d256 may supply the missing approximation capacity while still meeting the measured A100 latency budget.",
+  "scope": "Validation-only representation/optimization screen. It makes no strength claim and consumes no development or hidden evaluation seeds.",
+  "inputs": {
+    "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+    "teacherSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+    "train": "ml/experiments/v27-entity-live/train",
+    "validation": "ml/experiments/v27-entity-live/validation",
+    "v28D128Checkpoint": {
+      "path": "ml/experiments/v28-outcome-distill/stage1/exact-distill.pt",
+      "sha256": "4fdcdc0db2c3515fae0d99e4004ccf1d67bff1b4aa53fa7e7b9445486b11138a"
+    }
+  },
+  "preTrainingDiagnostic": {
+    "checkpoint": "V28 d128 epoch 6",
+    "rows": "all 28,509 validation policy rows",
+    "reportBy": [
+      "decisionType",
+      "round bucket 1-8/9-15/16-22/23-30",
+      "behavior support size",
+      "strategic flag"
+    ],
+    "report": [
+      "row count",
+      "mean/p95/p99/max KL",
+      "top-1 agreement",
+      "teacher/student entropy delta",
+      "the 100 highest-KL row identifiers without private or hidden state"
+    ],
+    "aliasDefinition": "Hash exact float32 obsV2 bytes plus exact candidate/support bytes. If one identical student input maps to teacher distributions whose total-variation distance exceeds 0.0001, report the pair as an alias.",
+    "stopIf": "A fail-closed schema/header mismatch or any exact-input teacher-target alias under aliasDefinition. In that case repair the encoder rather than spending more training compute.",
+    "artifact": "ml/experiments/v29-distill-fidelity/pretraining-diagnostic.json"
+  },
+  "validationSplit": {
+    "selection": {
+      "seed0": 942000000,
+      "games": 128,
+      "use": "per-epoch metrics, early stopping, and best checkpoint selection"
+    },
+    "gate": {
+      "seed0": 942000128,
+      "games": 128,
+      "use": "evaluate exactly once after restoring the selection-half checkpoint"
+    },
+    "reason": "Separating selection from the fidelity gate prevents choosing and certifying an epoch on the same games."
+  },
+  "arms": [
+    {
+      "id": "d128-multitask-continue24-lr1e4",
+      "init": "V28 d128 epoch 6 checkpoint",
+      "optimizer": "fresh Adam; optimizer state was not checkpointed",
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4,
+      "maxEpochs": 24,
+      "learningRate": 0.0001,
+      "seed": 292900,
+      "select": "minimum selection-half teacher KL"
+    },
+    {
+      "id": "d128-policy-only-continue24-lr1e4",
+      "init": "V28 d128 epoch 6 checkpoint",
+      "optimizer": "fresh Adam; optimizer state was not checkpointed",
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4,
+      "maxEpochs": 24,
+      "learningRate": 0.0001,
+      "valueCoef": 0.0,
+      "reach30Coef": 0.0,
+      "seed": 292900,
+      "purpose": "Test whether shared-trunk auxiliary critic gradients, rather than width, limit policy fidelity.",
+      "select": "minimum selection-half teacher KL"
+    },
+    {
+      "id": "d256-fresh24-lr3e4",
+      "init": "fresh deterministic initialization",
+      "dModel": 256,
+      "layers": 4,
+      "heads": 8,
+      "maxEpochs": 24,
+      "learningRate": 0.0003,
+      "seed": 292900,
+      "select": "minimum selection-half teacher KL"
+    }
+  ],
+  "sharedTraining": {
+    "batchSize": 256,
+    "teacherKlCoef": 1.0,
+    "valueCoef": 0.5,
+    "reach30Coef": 1.0,
+    "outcomePgCoef": 0.0,
+    "maxGradNorm": 1.0,
+    "teacherLogpTolerance": 0.001,
+    "rowOrderSeed": 292900,
+    "earlyStopping": {
+      "metric": "selection-half mean teacher KL",
+      "patience": 4,
+      "minimumAbsoluteImprovement": 0.001,
+      "minimumEpochs": 6,
+      "restore": "best selection-half checkpoint"
+    },
+    "nonfinite": "invalidate immediately",
+    "perEpochReport": "training policy KL/top-1 plus selection-half mean/p95/p99/max KL, top-1, entropy delta, and strategic-only metrics",
+    "freshOptimizerNote": "The warm d128 arms begin above the V28 trust bound. A transient early regression under fresh Adam does not invalidate V29; only the restored checkpoint's untouched gate-half metrics decide fidelity.",
+    "note": "The arms are not FLOP-matched. This is a pragmatic fidelity/latency Pareto screen, not a causal claim that width alone caused a difference."
+  },
+  "gates": {
+    "teacherReproduction": "The preflight teacher chosen-logp max absolute error remains <= 0.001.",
+    "fidelity": "On the untouched 128-game gate half: mean KL <= 0.05 nats, p99 KL <= 0.5 nats, top-1 agreement >= 0.88, and every metric finite.",
+    "strategicFidelity": "On gate-half strategic policy rows alone: mean KL <= 0.05 nats, p99 KL <= 0.5 nats, and top-1 agreement >= 0.88. Aggregate fidelity cannot hide poor terminal-credit states.",
+    "latency": "A selected checkpoint must pass A100 binary-wire p95 request latency <= 100 ms at 32 rows, 30 candidates, eight clients. The identical d256/l4/h8 architecture already measured 34.25 ms p95 in V27; remeasure the selected weights before the next stage.",
+    "selection": "Prefer a passing d128 arm over d256 because d128 has better measured throughput and latency. Between passing d128 arms, prefer multitask only if its gate KL is within 0.005 nats of policy-only; otherwise the result establishes critic-gradient interference and policy-only becomes the fidelity anchor. Use d256 only if both d128 arms fail and d256 passes. If none passes, stop; do not extend epochs post hoc under this protocol.",
+    "d256Fallback": "If d256 passes fidelity but fails the remeasured latency gate, reject it and stop; do not promote or silently relax latency."
+  },
+  "nextStage": "Freeze the selected checkpoint hash, then create a separately reviewed terminal-credit protocol using the still-unconsumed 944000000 development block. V29 itself never evaluates solo strength.",
+  "promotionEligible": false
+}
