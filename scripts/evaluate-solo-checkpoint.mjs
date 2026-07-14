@@ -44,6 +44,7 @@ const { values: args } = parseArgs({
 		'search-value-weight': { type: 'string', default: '0.5' },
 		'search-rollout': { type: 'string', default: 'policy' },
 		'search-nav-temperature': { type: 'string', default: '0' },
+		'rerank-policy-weight': { type: 'string' },
 		'include-games': { type: 'boolean', default: false },
 		out: { type: 'string' },
 		help: { type: 'boolean', default: false }
@@ -55,7 +56,7 @@ if (args.help || !args.weights) {
 		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--catalog FILE] [--source-commit SHA] [--games N] [--workers N] ' +
 			'[--infer-socket SOCK --policy-obs-version 2] ' +
 			'[--seed0 N] [--learn-monster-reward-choices] [--sample --temperature T] ' +
-			'[--search-sims N] [--include-games] [--out FILE]'
+			'[--search-sims N | --rerank-policy-weight W] [--include-games] [--out FILE]'
 	);
 	process.exit(args.help ? 0 : 1);
 }
@@ -104,6 +105,10 @@ const searchHorizon = integer(args['search-horizon'], '--search-horizon');
 const searchFrac = Number.parseFloat(args['search-frac']);
 const searchValueWeight = Number.parseFloat(args['search-value-weight']);
 const searchNavTemperature = Number.parseFloat(args['search-nav-temperature']);
+const rerankPolicyWeight =
+	args['rerank-policy-weight'] === undefined
+		? undefined
+		: Number.parseFloat(args['rerank-policy-weight']);
 if (!Number.isFinite(searchFrac) || searchFrac <= 0 || searchFrac > 1) {
 	throw new Error('--search-frac must be in (0, 1]');
 }
@@ -116,6 +121,16 @@ if (!Number.isFinite(searchNavTemperature) || searchNavTemperature < 0) {
 if (args['search-rollout'] !== 'policy' && args['search-rollout'] !== 'heuristic') {
 	throw new Error('--search-rollout must be policy or heuristic');
 }
+if (
+	rerankPolicyWeight !== undefined &&
+	(!Number.isFinite(rerankPolicyWeight) || rerankPolicyWeight < 0 || rerankPolicyWeight > 1)
+) {
+	throw new Error('--rerank-policy-weight must be in [0,1]');
+}
+if (searchSims > 0 && rerankPolicyWeight !== undefined) {
+	throw new Error('--search-sims and --rerank-policy-weight are mutually exclusive');
+}
+const plannerEnabled = searchSims > 0 || rerankPolicyWeight !== undefined;
 const temperature = Number.parseFloat(args.temperature);
 if (!Number.isFinite(temperature) || temperature <= 0) {
 	throw new Error('--temperature must be a positive number');
@@ -186,6 +201,9 @@ try {
 							navTemperature: searchNavTemperature
 						}
 					}
+				: {}),
+			...(rerankPolicyWeight !== undefined
+				? { rerank: { policyRankWeight: rerankPolicyWeight } }
 				: {}),
 			obsVersion: 1,
 			policyObsVersion
@@ -274,6 +292,10 @@ try {
 		(sum, game) => sum + (game.search?.simulations ?? 0),
 		0
 	);
+	const plannerMode = result.summaries[0]?.search?.mode ?? null;
+	if (result.summaries.some((game) => (game.search?.mode ?? null) !== plannerMode)) {
+		throw new Error('strategic planner mode changed within the evaluation');
+	}
 	const searchByPhase = result.summaries.reduce(
 		(total, game) => {
 			total.navigation += game.search?.byPhase.navigation ?? 0;
@@ -326,17 +348,21 @@ try {
 			...(args['infer-socket'] ? { inferenceSocket: args['infer-socket'] } : {}),
 			learnMonsterRewardChoices: args['learn-monster-reward-choices'],
 			...(args.sample ? { sample: true, temperature } : { sample: false }),
-			...(searchSims > 0
+			...(plannerEnabled
 				? {
-						search: {
-							sims: searchSims,
-							objective: searchObjective,
-							horizonRounds: searchHorizon,
-							frac: searchFrac,
-							valueWeight: searchValueWeight,
-							rollout: args['search-rollout'],
-							navTemperature: searchNavTemperature
-						}
+						...(rerankPolicyWeight !== undefined
+							? { rerank: { policyRankWeight: rerankPolicyWeight } }
+							: {
+									search: {
+										sims: searchSims,
+										objective: searchObjective,
+										horizonRounds: searchHorizon,
+										frac: searchFrac,
+										valueWeight: searchValueWeight,
+										rollout: args['search-rollout'],
+										navTemperature: searchNavTemperature
+									}
+								})
 					}
 				: {})
 		},
@@ -377,9 +403,10 @@ try {
 			workers: result.workers,
 			gameWallMsP50: quantile(sortedGameWallMs, 0.5),
 			gameWallMsP95: quantile(sortedGameWallMs, 0.95),
-			...(searchSims > 0
+			...(plannerEnabled
 				? {
 						search: {
+							mode: plannerMode,
 							decisions: searchDecisions,
 							simulations: searchSimulations,
 							byPhase: searchByPhase,

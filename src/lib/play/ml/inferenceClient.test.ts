@@ -156,6 +156,25 @@ describe.skipIf(!existsSync(PYTHON))('RemotePolicy decision memo and wire contra
 				changedObs[0] = Math.fround(changedObs[0] + 0.125);
 				remote.scoreCandidates(changedObs, copiedSupport);
 				expect(remote.scoringRequests).toBe(2);
+
+				const obsBatch = [
+					Array.from(copiedObs),
+					Array.from(changedObs),
+					Array.from(changedObs, (value, i) => (i === 1 ? Math.fround(value - 0.25) : value))
+				];
+				const batchReach30 = remote.reach30Probabilities(obsBatch);
+				expect(remote.scoringRequests).toBe(3);
+				expect(batchReach30).toHaveLength(obsBatch.length);
+				const localBatchReach30 = local.reach30Probabilities(obsBatch);
+				for (let i = 0; i < batchReach30.length; i++) {
+					expect(batchReach30[i]).toBeCloseTo(localBatchReach30[i]!, 4);
+				}
+				expect(() =>
+					remote.reach30Probabilities([Array.from(copiedObs), copiedObs.slice(1)])
+				).toThrow(/observation row 1.*expected/);
+				expect(remote.scoringRequests).toBe(3);
+				expect(() => remote.scoreCandidates(copiedObs, [])).toThrow(/candidate set 0 is empty/);
+				expect(remote.scoringRequests).toBe(3);
 			} finally {
 				remote.close();
 			}

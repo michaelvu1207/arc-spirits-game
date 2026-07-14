@@ -186,11 +186,114 @@ describe('actor pool', () => {
 			});
 			const telemetry = result.summaries[0]?.search;
 			expect(telemetry).toBeDefined();
+			expect(telemetry!.mode).toBe('gumbel');
 			expect(telemetry!.decisions).toBeGreaterThan(0);
 			expect(telemetry!.simulations).toBe(telemetry!.decisions * 2);
 			expect(telemetry!.decisionWallMs).toHaveLength(telemetry!.decisions);
 			expect(telemetry!.byPhase.navigation).toBeGreaterThan(0);
 			expect(telemetry!.wallMs).toBeGreaterThan(0);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
+
+	it('routes solo heuristic reach search through one-batch planner telemetry', async () => {
+		const dir = tempDir('batched-heuristic-telemetry');
+		try {
+			const weightsPath = join(dir, 'zero-policy-with-reach30.json');
+			writeFileSync(
+				weightsPath,
+				JSON.stringify({
+					format: 'arc-cand-scorer-v1',
+					obs_dim: OBS_DIM,
+					act_dim: ACT_DIM,
+					trunk: [{ W: [Array<number>(OBS_DIM + ACT_DIM).fill(0)], b: [0] }],
+					value: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30_horizon: 30
+				})
+			);
+			const result = await runActorPool({
+				seeds: [42_000],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 30,
+					profiles: ['medium'],
+					weightsPath,
+					selection: 'hybrid',
+					search: {
+						sims: 2,
+						horizonRounds: 1,
+						objective: 'solo-reach30',
+						rollout: 'heuristic',
+						frac: 1,
+						navTemperature: 0
+					}
+				}
+			});
+			const telemetry = result.summaries[0]?.search;
+			expect(telemetry).toBeDefined();
+			expect(telemetry!.mode).toBe('heuristic-batched');
+			expect(telemetry!.decisions).toBeGreaterThan(0);
+			expect(telemetry!.simulations).toBe(telemetry!.decisions * 2);
+			expect(telemetry!.decisionWallMs).toHaveLength(telemetry!.decisions);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
+
+	it('runs the solo critic reranker and distinguishes its zero-simulation telemetry', async () => {
+		const dir = tempDir('rerank-telemetry');
+		try {
+			const weightsPath = join(dir, 'zero-policy-with-reach30.json');
+			writeFileSync(
+				weightsPath,
+				JSON.stringify({
+					format: 'arc-cand-scorer-v1',
+					obs_dim: OBS_DIM,
+					act_dim: ACT_DIM,
+					trunk: [{ W: [Array<number>(OBS_DIM + ACT_DIM).fill(0)], b: [0] }],
+					value: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30_horizon: 30
+				})
+			);
+			const result = await runActorPool({
+				seeds: [42_001],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 30,
+					profiles: ['medium'],
+					weightsPath,
+					selection: 'hybrid',
+					previewReach30Audit: true,
+					rerank: { policyRankWeight: 0.5 }
+				}
+			});
+			const telemetry = result.summaries[0]?.search;
+			expect(telemetry).toBeDefined();
+			expect(telemetry!.mode).toBe('critic-rerank');
+			expect(telemetry!.decisions).toBeGreaterThan(0);
+			expect(telemetry!.simulations).toBe(0);
+			expect(telemetry!.decisionWallMs).toHaveLength(telemetry!.decisions);
+			expect(result.previewAuditFiles).toHaveLength(1);
+			const previewRows = readFileSync(result.previewAuditFiles[0], 'utf8')
+				.trim()
+				.split('\n')
+				.map((line) => JSON.parse(line));
+			expect(previewRows.length).toBeGreaterThan(0);
+			for (const row of previewRows) {
+				expect(['navigation', 'encounter']).toContain(row.phase);
+				expect(row.finiteCandidateCount).toBe(row.candidateCount);
+				expect(row.chosenPrediction).toBeGreaterThanOrEqual(0);
+				expect(row.chosenPrediction).toBeLessThanOrEqual(1);
+				expect([0, 1]).toContain(row.target);
+				expect(row.terminalOverrideMismatches).toBe(0);
+			}
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

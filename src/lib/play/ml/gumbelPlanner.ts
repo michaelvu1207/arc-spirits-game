@@ -154,7 +154,8 @@ export function searchInvocationSeed(
 	gameSeed: number,
 	round: number,
 	ordinal: number,
-	seat: SeatColor
+	seat: SeatColor,
+	armId?: string
 ): number {
 	if (!Number.isSafeInteger(gameSeed) || !Number.isInteger(round) || !Number.isInteger(ordinal)) {
 		throw new Error('search invocation key requires integer game seed, round, and ordinal');
@@ -164,7 +165,8 @@ export function searchInvocationSeed(
 		(Math.imul(gameSeed >>> 0, 0x9e3779b1) +
 			Math.imul(round >>> 0, 7919) +
 			Math.imul(ordinal >>> 0, 104729) +
-			hashString(seat)) >>>
+			hashString(seat) +
+			(armId ? Math.imul(hashString(armId), 65537) : 0)) >>>
 		0;
 	return keyed || 1;
 }

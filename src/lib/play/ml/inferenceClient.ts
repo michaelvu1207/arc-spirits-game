@@ -397,21 +397,41 @@ export class RemotePolicy {
 		);
 	}
 
-	/** One B=1 scoring roundtrip for this decision's obs + candidate set. */
-	private score(obs: number[], cands: number[][], wantBits: number): ScoreResponse {
+	/** One scoring roundtrip for a ragged batch of independent observations. */
+	private scoreBatch(obs: number[][], cands: number[][][], wantBits: number): ScoreResponse {
+		if (obs.length === 0 || obs.length !== cands.length) {
+			throw new Error(
+				'RemotePolicy: score batch requires one non-empty candidate set per observation'
+			);
+		}
+		for (let row = 0; row < obs.length; row += 1) {
+			if (obs[row].length !== this.info.obs_dim) {
+				throw new Error(
+					`RemotePolicy: observation row ${row} has width ${obs[row].length}, expected ${this.info.obs_dim}`
+				);
+			}
+			if (cands[row].length === 0) {
+				throw new Error(`RemotePolicy: candidate set ${row} is empty`);
+			}
+		}
 		this.scoringRequests += 1;
-		const serverCands = this.candidatesForServer(cands);
+		const serverCands = cands.map((rows) => this.candidatesForServer(rows));
 		if (this.wire === 'json') {
 			const want = SECTION_ORDER.filter((_, bit) => wantBits & (1 << bit));
-			return this.requestJson({ obs: [obs], cands: [serverCands], want });
+			return this.requestJson({ obs, cands: serverCands, want });
 		}
 		const id = String(++this.nextId);
 		const resp = decodeBinaryResponse(
-			this.bridge.roundtrip(encodeBinaryRequest(id, wantBits, [obs], [serverCands]))
+			this.bridge.roundtrip(encodeBinaryRequest(id, wantBits, obs, serverCands))
 		);
 		if (resp.error) throw new Error(`RemotePolicy: server error: ${resp.error}`);
 		if (resp.id !== id) throw new Error(`RemotePolicy: response id ${resp.id} != request id ${id}`);
 		return resp;
+	}
+
+	/** One B=1 scoring roundtrip for this decision's obs + candidate set. */
+	private score(obs: number[], cands: number[][], wantBits: number): ScoreResponse {
+		return this.scoreBatch([obs], [cands], wantBits);
 	}
 
 	private static rowEqual(a: number[], b: number[]): boolean {
@@ -521,6 +541,24 @@ export class RemotePolicy {
 			raw = this.lastReach30;
 		else raw = this.score(obs, [this.zeroCand], WANT.reach30).reach30![0];
 		return 1 / (1 + Math.exp(-raw));
+	}
+
+	/** One wire roundtrip for every observation in the batch. This is the
+	 * latency-critical V34 primitive; callers must not replace it with serial
+	 * reach30Probability calls. */
+	reach30Probabilities(observations: number[][]): Array<number | null> {
+		if (!this.info.aux.reach30) return observations.map(() => null);
+		if (observations.length === 0) return [];
+		const resp = this.scoreBatch(
+			observations,
+			observations.map(() => [this.zeroCand]),
+			WANT.reach30
+		);
+		const raw = resp.reach30;
+		if (!raw || raw.length !== observations.length) {
+			throw new Error('RemotePolicy: batched reach30 response has the wrong length');
+		}
+		return raw.map((value) => 1 / (1 + Math.exp(-value)));
 	}
 
 	reach30Horizon(): number | null {

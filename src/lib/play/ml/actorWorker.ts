@@ -34,7 +34,9 @@ import {
 	searchInvocationSeed,
 	type SearchObservationEncoder
 } from './gumbelPlanner';
-import { hybridIndex } from './neuralBot';
+import { planDecisionBatchedHeuristic } from './heuristicRolloutPlanner';
+import { planDecisionCriticRerank } from './criticReranker';
+import { hybridIndex, selectableCandidateIndices } from './neuralBot';
 import { guardianIndexForSeed } from './evalSchedule';
 import { appendOptionEvents, appendSamples, loadWeightsIfPresent } from './nodeIo';
 import { asNeuralPolicy, RemotePolicy } from './inferenceClient';
@@ -125,7 +127,7 @@ function normalizeContinuationCurriculum(
 	if (!hasPolicy || data.config.recordSeats?.length === 0) {
 		throw new Error('actorWorker: continuation curriculum requires a recorded learner policy');
 	}
-	if (data.config.search) {
+	if (data.config.search || data.config.rerank) {
 		throw new Error('actorWorker: continuation curriculum does not support opaque search state');
 	}
 	if (data.config.sample !== true) {
@@ -203,6 +205,9 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 			'actorWorker: policyObsVersion 2 requires inferSocket (--infer-socket) — the in-process TS net is v1-only'
 		);
 	}
+	if (config.search && config.rerank) {
+		throw new Error('actorWorker: search and rerank are mutually exclusive');
+	}
 	// Learner policy: a RemotePolicy over the inference server's socket when configured,
 	// else the in-process net from a weights file. Opponents always load in-process.
 	// expectObsDim pins the served checkpoint to the requested policy obs version.
@@ -220,6 +225,9 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 		: config.weightsPath
 			? loadPolicyStrict(config.weightsPath)
 			: undefined;
+	if ((config.search || config.rerank) && !policy) {
+		throw new Error('actorWorker: strategic planning requires a loaded learner policy');
+	}
 	let opponentPolicies: Partial<Record<SeatColor, NeuralPolicy>> | undefined;
 	if (config.opponentWeights) {
 		opponentPolicies = {};
@@ -236,6 +244,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 	const shardFile = join(outDir, `shard-${workerIndex}.jsonl`);
 	const optionsFile = join(outDir, `options-${workerIndex}.jsonl`);
 	const gamesFile = join(outDir, `games-${workerIndex}.jsonl`);
+	const previewAuditFile = join(outDir, `preview-audit-${workerIndex}.jsonl`);
 	// Identify the generator by the server's actual checkpoint when remote (the socket
 	// path says nothing about which weights produced the games).
 	const learnerRef =
@@ -257,15 +266,22 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 		run(seed, jobIndex, duplicateSeed = false) {
 			if (closed) throw new Error('actorWorker: cannot run a seed after the worker session closed');
 			const t0 = performance.now();
-			const searchDiagnostics = config.search
-				? {
-						decisions: 0,
-						simulations: 0,
-						wallMs: 0,
-						decisionWallMs: [] as number[],
-						byPhase: { navigation: 0, encounter: 0 }
-					}
-				: undefined;
+			const searchDiagnostics =
+				config.search || config.rerank
+					? {
+							mode: config.rerank
+								? ('critic-rerank' as const)
+								: config.search?.rollout === 'heuristic' &&
+									  config.search.objective === 'solo-reach30'
+									? ('heuristic-batched' as const)
+									: ('gumbel' as const),
+							decisions: 0,
+							simulations: 0,
+							wallMs: 0,
+							decisionWallMs: [] as number[],
+							byPhase: { navigation: 0, encounter: 0 }
+						}
+					: undefined;
 			// Expert-iteration searcher: deterministic per (seed, decision index); the
 			// frac draw shares the stream, so runs are exactly reproducible.
 			let searcher:
@@ -275,12 +291,13 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 						withNext: Parameters<typeof planDecisionGumbel>[4]
 				  ) => { index: number; pi: number[] } | null)
 				| undefined;
-			if (config.search && policy) {
+			if ((config.search || config.rerank) && policy) {
 				const sc = config.search;
-				if (sc.objective === 'solo-reach30' && config.seats !== 1) {
-					throw new Error('actorWorker: solo-reach30 search requires seats=1');
+				const rerank = config.rerank;
+				if ((sc?.objective === 'solo-reach30' || rerank) && config.seats !== 1) {
+					throw new Error('actorWorker: solo strategic planning requires seats=1');
 				}
-				const frac = sc.frac ?? 1;
+				const frac = sc?.frac ?? 1;
 				const searchRng = createRng((seed ^ 0x517cc1b7) >>> 0 || 1);
 				const uni = (): number => (nextInt(searchRng, 1_073_741_824) + 0.5) / 1_073_741_824;
 				const searchObservation: SearchObservationEncoder | undefined =
@@ -299,53 +316,92 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 					decisionN += 1;
 					if (frac < 1 && uni() >= frac) return null;
 					const searchT0 = performance.now();
-					const res = planDecisionGumbel(st, seat, catalog, policy!, withNext, {
-						simulations: sc.sims,
-						horizonRounds: sc.horizonRounds ?? 6,
-						valueWeight: sc.valueWeight ?? 0.5,
-						objective: sc.objective ?? 'multiplayer',
-						...(searchObservation ? { encodeObservation: searchObservation } : {}),
-						seed: searchInvocationSeed(seed, st.round, decisionN, seat),
-						temperature:
-							st.phase === 'navigation'
-								? (sc.navTemperature ?? (sc.objective === 'solo-reach30' ? 0 : 0.8))
-								: 0,
-						...(sc.rollout === 'heuristic'
-							? {}
-							: {
-									rolloutChoose: (rs, rSeat, rWithNext) => {
-										const rolloutPolicy = searchObservation
-											? ({
-													pick: (
-														_obs: number[],
-														cands: number[][],
-														pickOpts: Parameters<NeuralPolicy['pick']>[2]
-													) => policy!.pick(searchObservation(rs, rSeat, catalog), cands, pickOpts)
-												} as unknown as NeuralPolicy)
-											: policy!;
-										return hybridIndex(
-											rolloutPolicy,
-											rs,
-											rSeat,
-											rWithNext,
-											{
-												sample: false,
-												learnMonsterRewardChoices: config.learnMonsterRewardChoices
-											},
-											catalog
-										);
-									}
+					const rerankSupport = rerank
+						? selectableCandidateIndices(st, seat, withNext, {
+								learnMonsterRewardChoices: config.learnMonsterRewardChoices
+							})
+						: null;
+					if (rerankSupport && rerankSupport.length < 2) return null;
+					const rerankActions = rerankSupport?.map((index) => withNext[index]) ?? withNext;
+					const res = rerank
+						? planDecisionCriticRerank(st, seat, catalog, policy!, rerankActions, {
+								policyRankWeight: rerank.policyRankWeight,
+								...(searchObservation ? { encodeObservation: searchObservation } : {})
+							})
+						: sc!.rollout === 'heuristic' && sc!.objective === 'solo-reach30'
+							? planDecisionBatchedHeuristic(st, seat, catalog, policy!, withNext, {
+									simulations: sc!.sims,
+									horizonRounds: sc!.horizonRounds ?? 6,
+									valueWeight: sc!.valueWeight ?? 0.5,
+									...(searchObservation ? { encodeObservation: searchObservation } : {}),
+									seed: searchInvocationSeed(
+										seed,
+										st.round,
+										decisionN,
+										seat,
+										`heuristic-s${sc!.sims}-h${sc!.horizonRounds ?? 6}`
+									),
+									temperature: sc!.navTemperature ?? 0
 								})
-					});
+							: planDecisionGumbel(st, seat, catalog, policy!, withNext, {
+									simulations: sc!.sims,
+									horizonRounds: sc!.horizonRounds ?? 6,
+									valueWeight: sc!.valueWeight ?? 0.5,
+									objective: sc!.objective ?? 'multiplayer',
+									...(searchObservation ? { encodeObservation: searchObservation } : {}),
+									seed: searchInvocationSeed(seed, st.round, decisionN, seat),
+									temperature:
+										st.phase === 'navigation'
+											? (sc!.navTemperature ?? (sc!.objective === 'solo-reach30' ? 0 : 0.8))
+											: 0,
+									...(sc!.rollout === 'heuristic'
+										? {}
+										: {
+												rolloutChoose: (rs, rSeat, rWithNext) => {
+													const rolloutPolicy = searchObservation
+														? ({
+																pick: (
+																	_obs: number[],
+																	cands: number[][],
+																	pickOpts: Parameters<NeuralPolicy['pick']>[2]
+																) =>
+																	policy!.pick(
+																		searchObservation(rs, rSeat, catalog),
+																		cands,
+																		pickOpts
+																	)
+															} as unknown as NeuralPolicy)
+														: policy!;
+													return hybridIndex(
+														rolloutPolicy,
+														rs,
+														rSeat,
+														rWithNext,
+														{
+															sample: false,
+															learnMonsterRewardChoices: config.learnMonsterRewardChoices
+														},
+														catalog
+													);
+												}
+											})
+								});
 					if (res && searchDiagnostics) {
 						const elapsed = performance.now() - searchT0;
 						searchDiagnostics.decisions += 1;
-						searchDiagnostics.simulations += res.visits.reduce((sum, value) => sum + value, 0);
+						searchDiagnostics.simulations +=
+							'visits' in res ? res.visits.reduce((sum, value) => sum + value, 0) : 0;
 						searchDiagnostics.wallMs += elapsed;
 						searchDiagnostics.decisionWallMs.push(Math.round(elapsed * 1000) / 1000);
 						searchDiagnostics.byPhase[st.phase] += 1;
 					}
-					return res ? { index: res.index, pi: res.pi } : null;
+					if (!res) return null;
+					if (!rerankSupport) return { index: res.index, pi: res.pi };
+					const fullPi = withNext.map(() => 0);
+					for (let local = 0; local < rerankSupport.length; local += 1) {
+						fullPi[rerankSupport[local]] = res.pi[local];
+					}
+					return { index: rerankSupport[res.index], pi: fullPi };
 				};
 			}
 			const guardianNames =
@@ -376,6 +432,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				gamma: config.gamma,
 				obsVersion: config.obsVersion,
 				policyObsVersion: config.policyObsVersion,
+				previewReach30Audit: config.previewReach30Audit,
 				denseVpReward: config.denseVpReward,
 				...(config.shapingPreset ? { shaping: shapingFor(config.shapingPreset) } : {}),
 				potentialShapingMode: config.potentialShapingMode,
@@ -389,6 +446,12 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 			const sourceWallMs = performance.now() - t0;
 			appendSamples(shardFile, r.samples, config.iter ?? 0);
 			appendOptionEvents(optionsFile, r.optionEvents, config.iter ?? 0);
+			if (r.previewReach30AuditRows.length > 0) {
+				appendFileSync(
+					previewAuditFile,
+					r.previewReach30AuditRows.map((row) => JSON.stringify(row)).join('\n') + '\n'
+				);
+			}
 
 			const curriculum = emptyContinuationCurriculumDiagnostics();
 			let appendedSamples = r.samples.length;

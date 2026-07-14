@@ -64,6 +64,7 @@ export interface ActorPoolResult {
 	shardFiles: string[];
 	optionFiles: string[];
 	gameFiles: string[];
+	previewAuditFiles: string[];
 }
 
 function emptyCurriculumDiagnostics(): ContinuationCurriculumDiagnostics {
@@ -200,7 +201,8 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 			curriculum,
 			shardFiles: [],
 			optionFiles: [],
-			gameFiles: []
+			gameFiles: [],
+			previewAuditFiles: []
 		};
 	}
 	const nWorkers = Math.max(1, Math.min(opts.workers ?? cpus().length - 1, opts.seeds.length));
@@ -210,7 +212,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 	if (!existsSync(catalogPath)) throw new Error(`actorPool: catalog not found: ${catalogPath}`);
 	if (!opts.append) {
 		for (const f of readdirSync(outDir)) {
-			if (/^(shard|options|games)-\d+\.jsonl$/.test(f)) rmSync(join(outDir, f));
+			if (/^(shard|options|games|preview-audit)-\d+\.jsonl$/.test(f)) rmSync(join(outDir, f));
 		}
 	}
 
@@ -373,6 +375,9 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 		curriculum,
 		shardFiles: outFiles.filter((f) => /^shard-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
 		optionFiles: outFiles.filter((f) => /^options-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
-		gameFiles: outFiles.filter((f) => /^games-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f))
+		gameFiles: outFiles.filter((f) => /^games-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
+		previewAuditFiles: outFiles
+			.filter((f) => /^preview-audit-\d+\.jsonl$/.test(f))
+			.map((f) => join(outDir, f))
 	};
 }

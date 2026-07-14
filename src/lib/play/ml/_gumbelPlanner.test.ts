@@ -27,6 +27,7 @@ import {
 	searchInvocationSeed,
 	soloReach30LeafValue
 } from './gumbelPlanner';
+import { normalizedRanks, planDecisionCriticRerank } from './criticReranker';
 
 function randomPolicy(
 	seed: number,
@@ -148,6 +149,10 @@ describe('gumbel planner', () => {
 		const first = searchInvocationSeed(952000123, 17, 1, focus);
 		expect(searchInvocationSeed(952000123, 17, 1, focus)).toBe(first);
 		expect(searchInvocationSeed(952000123, 17, 2, focus)).not.toBe(first);
+		expect(searchInvocationSeed(952000123, 17, 1, focus, 'heuristic-s4-h2')).not.toBe(first);
+		expect(searchInvocationSeed(952000123, 17, 1, focus, 'heuristic-s8-h3')).not.toBe(
+			searchInvocationSeed(952000123, 17, 1, focus, 'heuristic-s4-h2')
+		);
 		expect(() => searchInvocationSeed(952000123, 17, 0, focus)).toThrow(/positive/);
 	});
 
@@ -272,5 +277,143 @@ describe('gumbel planner', () => {
 		);
 		expect(res).not.toBeNull();
 		expect(calls).toBeGreaterThan(1);
+	});
+});
+
+describe('V34 critic reranker', () => {
+	const soloNavigation = (): PublicGameState => {
+		const state = structuredClone(navState) as PublicGameState;
+		for (const other of seats.slice(1)) delete state.players[other];
+		state.activeSeats = [focus];
+		return state;
+	};
+
+	it('normalizes exact ties to their average rank', () => {
+		expect(normalizedRanks([4, 1, 4, 2])).toEqual([5 / 6, 0, 5 / 6, 1 / 3]);
+		expect(normalizedRanks([7, 7])).toEqual([0.5, 0.5]);
+		expect(() => normalizedRanks([0, Number.NaN])).toThrow(/non-finite/);
+	});
+
+	it('uses exactly one batched critic call for every unresolved preview', () => {
+		const state = soloNavigation();
+		const actions = legalActionsWithNext(state, focus, catalog);
+		expect(actions.length).toBeGreaterThan(1);
+		const policy = randomPolicy(31, { probability: 0.5, horizon: 30 });
+		policy.scoreCandidates = () => actions.map(() => 0);
+		let batches = 0;
+		let batchSize = 0;
+		policy.reach30Probabilities = (observations) => {
+			batches += 1;
+			batchSize = observations.length;
+			return observations.map((_, index) => (index === 0 ? 0.9 : 0.1));
+		};
+		const result = planDecisionCriticRerank(state, focus, catalog, policy, actions, {
+			policyRankWeight: 0.5
+		})!;
+		expect(batches).toBe(1);
+		expect(batchSize).toBe(actions.length);
+		expect(result.index).toBe(0);
+		expect(result.pi.reduce((sum, value) => sum + value, 0)).toBe(1);
+	});
+
+	it('runs the weight-1 argmax control without a critic request', () => {
+		const state = soloNavigation();
+		const actions = legalActionsWithNext(state, focus, catalog);
+		const policy = randomPolicy(32, { probability: 0.5, horizon: 30 });
+		policy.scoreCandidates = () => actions.map((_, index) => index);
+		policy.reach30Probabilities = () => {
+			throw new Error('argmax control must not call the critic');
+		};
+		const result = planDecisionCriticRerank(state, focus, catalog, policy, actions, {
+			policyRankWeight: 1
+		})!;
+		expect(result.index).toBe(actions.length - 1);
+		expect(result.criticProbabilities.every((value) => value === null)).toBe(true);
+	});
+
+	it('fails closed when the root policy returns the wrong number of logits', () => {
+		const state = soloNavigation();
+		const actions = legalActionsWithNext(state, focus, catalog);
+		const policy = randomPolicy(320, { probability: 0.5, horizon: 30 });
+		policy.scoreCandidates = () => [];
+		expect(() =>
+			planDecisionCriticRerank(state, focus, catalog, policy, actions, {
+				policyRankWeight: 1
+			})
+		).toThrow(/0 root logits/);
+	});
+
+	it('is replay deterministic, ignores hidden realized next states, and breaks full ties by order', () => {
+		const state = soloNavigation();
+		const actions = legalActionsWithNext(state, focus, catalog);
+		const policy = randomPolicy(321, { probability: 0.5, horizon: 30 });
+		policy.scoreCandidates = () => actions.map(() => 0);
+		policy.reach30Probabilities = (observations) => observations.map(() => 0.5);
+		const first = planDecisionCriticRerank(state, focus, catalog, policy, actions, {
+			policyRankWeight: 0.5
+		})!;
+		const replay = planDecisionCriticRerank(state, focus, catalog, policy, actions, {
+			policyRankWeight: 0.5
+		})!;
+		expect(replay).toEqual(first);
+		expect(first.index).toBe(0);
+		const hiddenRealizationsChanged = actions.map((action, index) => {
+			const changed = structuredClone(action);
+			changed.next.players[focus]!.victoryPoints += index + 7;
+			changed.next.rng.cursor += index + 11;
+			return changed;
+		});
+		const changed = planDecisionCriticRerank(
+			state,
+			focus,
+			catalog,
+			policy,
+			hiddenRealizationsChanged,
+			{ policyRankWeight: 0.5 }
+		)!;
+		expect(changed).toEqual(first);
+	});
+
+	it('applies exact terminal overrides before batched critic values', () => {
+		const state = soloNavigation();
+		const actions = legalActionsWithNext(state, focus, catalog).slice(0, 2);
+		const winning = structuredClone(actions[0]);
+		winning.policyNext.players[focus]!.victoryPoints = 30;
+		const losing = structuredClone(actions[1]);
+		losing.policyNext.status = 'finished';
+		losing.policyNext.players[focus]!.victoryPoints = 29;
+		const policy = randomPolicy(33, { probability: 0.5, horizon: 30 });
+		policy.scoreCandidates = () => [0, 0];
+		let batches = 0;
+		policy.reach30Probabilities = () => {
+			batches += 1;
+			return [];
+		};
+		const result = planDecisionCriticRerank(state, focus, catalog, policy, [winning, losing], {
+			policyRankWeight: 0
+		})!;
+		expect(batches).toBe(0);
+		expect(result.criticProbabilities).toEqual([1, 0]);
+		expect(result.index).toBe(0);
+	});
+
+	it('fails closed on a missing round-30 critic or invalid mixture', () => {
+		const state = soloNavigation();
+		const actions = legalActionsWithNext(state, focus, catalog);
+		expect(() =>
+			planDecisionCriticRerank(state, focus, catalog, randomPolicy(34), actions, {
+				policyRankWeight: 0.5
+			})
+		).toThrow(/horizon 30/);
+		expect(() =>
+			planDecisionCriticRerank(
+				state,
+				focus,
+				catalog,
+				randomPolicy(35, { probability: 0.5, horizon: 30 }),
+				actions,
+				{ policyRankWeight: -0.1 }
+			)
+		).toThrow(/\[0,1\]/);
 	});
 });

@@ -166,6 +166,23 @@ export interface Sample {
 	optionId?: number;
 }
 
+/** Evaluation-only V34 calibration row. It intentionally stores no state, action,
+ * reward, score, or candidate identity: only the chosen preview prediction and
+ * aggregate validity counts needed by the critic gate. */
+export interface PreviewReach30AuditRow {
+	seed: number;
+	round: number;
+	seat: SeatColor;
+	phase: 'navigation' | 'encounter';
+	chosenPrediction: number;
+	candidateCount: number;
+	finiteCandidateCount: number;
+	terminalSuccessOverrides: number;
+	terminalFailureOverrides: number;
+	terminalOverrideMismatches: number;
+	target: 0 | 1;
+}
+
 /** One high-level round-option behavior event. These are written to a separate options-*.jsonl
  * stream so option PPO cannot accidentally count the same choice once per low-level action. */
 export interface RoundOptionEvent {
@@ -385,6 +402,9 @@ export interface RecordGameOptions {
 	 * at obsVersion 2 the flat array is computed once per decision and shared with obsV2.
 	 */
 	policyObsVersion?: 1 | 2;
+	/** V34 calibration-only: batch-score every public candidate preview at
+	 * navigation/encounter without changing the acting policy's chosen action. */
+	previewReach30Audit?: boolean;
 }
 
 export interface RecordGameResult {
@@ -402,6 +422,8 @@ export interface RecordGameResult {
 	finalState?: PublicGameState;
 	/** Clean navigation-boundary states requested by captureContinuationRounds. */
 	continuationSnapshots: ContinuationSnapshot[];
+	/** Minimal outcome-labelled rows; populated only by previewReach30Audit. */
+	previewReach30AuditRows: PreviewReach30AuditRow[];
 }
 
 /** Versioned, JSON-safe continuation state. `state.rng` is the environment cursor; the other
@@ -1006,6 +1028,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	const rand = (): number => nextInt(pickRng, 1_000_000) / 1_000_000;
 
 	const samples: Sample[] = [];
+	const previewReach30AuditRows: PreviewReach30AuditRow[] = [];
 	const optionEvents: RoundOptionEvent[] = [];
 	const optionBySeat = new Map<SeatColor, { round: number; optionId: number; oneHot: number[] }>();
 	const gameIdForSeat = (seat: SeatColor): string =>
@@ -1307,6 +1330,72 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 										catalog
 									);
 		const chosenAction = withNext[idx];
+		if (
+			opts.previewReach30Audit &&
+			!oppPolicy &&
+			seatPolicy &&
+			cands.length > 1 &&
+			(state.phase === 'navigation' || state.phase === 'encounter')
+		) {
+			const horizon = seatPolicy.reach30Horizon();
+			if (horizon !== 30) {
+				throw new Error(`preview reach30 audit requires critic horizon 30; got ${String(horizon)}`);
+			}
+			const predictions = new Array<number | null>(withNext.length).fill(null);
+			const unresolvedIndices: number[] = [];
+			const unresolvedObservations: number[][] = [];
+			let terminalSuccessOverrides = 0;
+			let terminalFailureOverrides = 0;
+			for (let candidate = 0; candidate < withNext.length; candidate += 1) {
+				const preview = policyPreviewState(withNext[candidate]);
+				const player = preview.players[seat];
+				if (player && player.victoryPoints >= VP_TO_WIN) {
+					predictions[candidate] = 1;
+					terminalSuccessOverrides += 1;
+				} else if (!player || preview.status !== 'active') {
+					predictions[candidate] = 0;
+					terminalFailureOverrides += 1;
+				} else {
+					unresolvedIndices.push(candidate);
+					unresolvedObservations.push(
+						float32Numbers(
+							opts.policyObsVersion === 2
+								? flattenObsV2(encodeEntityObsV2(preview, seat, catalog), catalog)
+								: encodeObs(preview, seat, catalog)
+						)
+					);
+				}
+			}
+			if (unresolvedObservations.length > 0) {
+				const scored = seatPolicy.reach30Probabilities(unresolvedObservations, roundOption?.oneHot);
+				if (scored.length !== unresolvedObservations.length) {
+					throw new Error('preview reach30 audit received the wrong number of critic outputs');
+				}
+				for (let row = 0; row < scored.length; row += 1) {
+					predictions[unresolvedIndices[row]] = scored[row];
+				}
+			}
+			const finiteCandidateCount = predictions.filter(
+				(prediction) =>
+					prediction !== null && Number.isFinite(prediction) && prediction >= 0 && prediction <= 1
+			).length;
+			if (finiteCandidateCount !== predictions.length || predictions[idx] === null) {
+				throw new Error('preview reach30 audit found an invalid candidate probability');
+			}
+			previewReach30AuditRows.push({
+				seed: opts.seed,
+				round: state.round,
+				seat,
+				phase: state.phase,
+				chosenPrediction: predictions[idx]!,
+				candidateCount: predictions.length,
+				finiteCandidateCount,
+				terminalSuccessOverrides,
+				terminalFailureOverrides,
+				terminalOverrideMismatches: 0,
+				target: 0
+			});
+		}
 		recordCycleDecision(
 			seat,
 			cands[idx],
@@ -1435,6 +1524,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 
 	const finalVP: Record<string, number> = {};
 	for (const seat of seats) finalVP[seat] = state.players[seat]?.victoryPoints ?? 0;
+	if (opts.previewReach30Audit) {
+		const target: 0 | 1 = !stalled && (finalVP[seats[0]] ?? 0) >= VP_TO_WIN ? 1 : 0;
+		for (const row of previewReach30AuditRows) row.target = target;
+	}
 	for (const seat of seats) {
 		const player = state.players[seat];
 		const cycle = cycleBySeat[seat];
@@ -1559,6 +1652,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		samples,
 		optionEvents,
 		cycleBySeat,
+		previewReach30AuditRows,
 		finalState: state,
 		continuationSnapshots
 	};

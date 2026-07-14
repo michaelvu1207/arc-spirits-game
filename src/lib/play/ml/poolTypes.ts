@@ -92,11 +92,17 @@ export interface ActorGameConfig {
 		/** Search leaf semantics. `solo-reach30` is valid only for one-player games. */
 		objective?: 'multiplayer' | 'solo-reach30';
 		navTemperature?: number;
-		/** Leaf rollouts: 'policy' = self-model hybridIndex (slow, unbiased); 'heuristic' = medium profile. */
+		/** Leaf rollouts: 'policy' = serial self-model Gumbel; 'heuristic' = V34 fixed-allocation
+		 * medium-profile rollouts with one batched reach-30 leaf request. */
 		rollout?: 'policy' | 'heuristic';
 		frac?: number;
 		horizonRounds?: number;
 		valueWeight?: number;
+	};
+	/** V34 solo-only latency-bounded root reranker. Mutually exclusive with search. */
+	rerank?: {
+		/** Weight on within-root policy rank; 1 is the deterministic argmax control. */
+		policyRankWeight: number;
 	};
 	/** Dense PPO reward: normalized ΔVP plus configured build-potential shaping. */
 	denseVpReward?: boolean;
@@ -126,6 +132,8 @@ export interface ActorGameConfig {
 	 * verified) and selection 'hybrid'/'policy'. logpOld/vPred become the v2 net's.
 	 */
 	policyObsVersion?: 1 | 2;
+	/** Evaluation-only V34 public-preview calibration collection. */
+	previewReach30Audit?: boolean;
 	/** Train-only, solo late-state suffix generation. Default/off when absent or enabled=false. */
 	continuationCurriculum?: ContinuationCurriculumConfig;
 }
@@ -196,8 +204,9 @@ export interface GameSummary {
 		wire: 'binary' | 'json';
 	};
 	perSeat: SeatSummary[];
-	/** Exact per-root-search timing, emitted only when ActorGameConfig.search is enabled. */
+	/** Exact strategic decision timing, emitted for search or critic reranking. */
 	search?: {
+		mode: 'gumbel' | 'critic-rerank' | 'heuristic-batched';
 		decisions: number;
 		simulations: number;
 		wallMs: number;

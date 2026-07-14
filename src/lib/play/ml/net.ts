@@ -175,6 +175,13 @@ export class NeuralPolicy {
 		return 1 / (1 + Math.exp(-raw));
 	}
 
+	/** State-only round-30 critic over a batch of independent observations. The
+	 * in-process implementation is deliberately simple; RemotePolicy overrides
+	 * this contract with one true batched server request. */
+	reach30Probabilities(observations: number[][], option?: number[]): Array<number | null> {
+		return observations.map((obs) => this.reach30Probability(obs, option));
+	}
+
 	/** Objective horizon attached to the optional reach-30 critic. */
 	reach30Horizon(): number | null {
 		return this.w.reach30 ? (this.w.reach30_horizon ?? null) : null;
