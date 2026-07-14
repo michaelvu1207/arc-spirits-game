@@ -51,7 +51,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
 import json
+import math
 import os
 import signal
 import struct
@@ -392,6 +394,7 @@ class InferServer:
         self.n_reqs = 0
         self.n_rows = 0
         self.n_batches = 0
+        self.batch_row_counts: Counter[int] = Counter()
 
     def _expected_header(self) -> np.ndarray | None:
         """For v2, the arc-obs-v2 header every obs row must start with."""
@@ -543,6 +546,7 @@ class InferServer:
             self.n_batches += 1
             self.n_rows += rows
             self.n_reqs += len(jobs)
+            self.batch_row_counts[rows] += 1
             for j, res in zip(jobs, results):
                 if not j.future.done():
                     j.future.set_result(res)
@@ -623,14 +627,30 @@ class InferServer:
             return
         while True:
             r0, w0, b0 = self.n_reqs, self.n_rows, self.n_batches
+            batch_counts0 = self.batch_row_counts.copy()
             t0 = time.monotonic()
             await asyncio.sleep(self.stats_interval)
             dt = time.monotonic() - t0
             reqs, rows, batches = self.n_reqs - r0, self.n_rows - w0, self.n_batches - b0
             if batches:
+                batch_counts = self.batch_row_counts - batch_counts0
+
+                def hist_percentile(q: float) -> int:
+                    target = max(1, math.ceil(q * sum(batch_counts.values())))
+                    seen = 0
+                    for size, count in sorted(batch_counts.items()):
+                        seen += count
+                        if seen >= target:
+                            return size
+                    return max(batch_counts)
+
                 print(
                     f"[infer] reqs={reqs} rows={rows} batches={batches} "
-                    f"avg_batch={rows / batches:.1f} forwards/s={batches / dt:.1f}",
+                    f"avg_batch={rows / batches:.1f} "
+                    f"batch_p50={hist_percentile(0.50)} "
+                    f"batch_p95={hist_percentile(0.95)} "
+                    f"batch_min={min(batch_counts)} batch_max={max(batch_counts)} "
+                    f"forwards/s={batches / dt:.1f}",
                     file=sys.stderr,
                     flush=True,
                 )
