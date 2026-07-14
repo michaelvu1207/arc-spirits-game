@@ -1,0 +1,14 @@
+node:fs:3005
+  return binding.mkdtemp(prefix, options.encoding);
+                 ^
+
+Error: ENOSPC: no space left on device, mkdtemp '/tmp/arc-solo-heldout-XXXXXX'
+    at mkdtempSync (node:fs:3005:18)
+    at file:///data/share8/michaelvuaprilexperimentation/arc-bot/scripts/evaluate-solo-checkpoint.mjs:141:17 {
+  errno: -28,
+  code: 'ENOSPC',
+  syscall: 'mkdtemp',
+  path: '/tmp/arc-solo-heldout-XXXXXX'
+}
+
+Node.js v20.20.1

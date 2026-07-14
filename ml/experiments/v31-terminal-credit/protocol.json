@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v31-conservative-offline-terminal-credit",
-  "status": "development-evaluation-running",
+  "status": "development-complete-analysis-frozen",
   "createdAt": "2026-07-14T03:50:00Z",
   "sourceCommit": "72e057f",
   "planReview": {
@@ -304,7 +304,8 @@
       {
         "attempt": 2,
         "launchedAt": "2026-07-14T04:22:38Z",
-        "outcome": "running",
+        "completedAt": "2026-07-14T05:40:41Z",
+        "outcome": "completed-valid-before-analysis",
         "scratchRoot": "/dev/shm/arc-v31-development",
         "launchPids": {
           "v23": 3342448,
@@ -313,10 +314,32 @@
           "strategic-pg-0p1": 3342457,
           "strategic-pg-0p3": 3342464,
           "strategic-pg-0p6": 3342471
-        }
+        },
+        "exitCodes": {
+          "v23": 0,
+          "v30": 0,
+          "anchor": 0,
+          "strategic-pg-0p1": 0,
+          "strategic-pg-0p3": 0,
+          "strategic-pg-0p6": 0
+        },
+        "reportSha256": {
+          "v23": "1aa77b9facbff18dc4d9486f58b83df3dab528d3c7404e6f3fd883161190dffa",
+          "v30": "1afb8cec85ff2888339fc86e8a3335b4c2631355e1ee1600e77ae1ff18712249",
+          "anchor": "53af79183b71a4478710c9dcd8448033545acafa2d69a930468e771f127a5454",
+          "strategic-pg-0p1": "c6772ca99c463e9ae1fd6805a9f53fc2cea192ff7e4c8f501541e958aaf74a92",
+          "strategic-pg-0p3": "5ebf8c2252dbeec62ab51f3db9860b03b073d4da4bc00088235697023316cae6",
+          "strategic-pg-0p6": "06ddca1edd4975ed09a0a837b54e5adeb87aa008fe123aad95952616e9ac38da"
+        },
+        "artifactManifest": "ml/experiments/v31-terminal-credit/development.sha256",
+        "artifactManifestSha256": "dddf4d3c2bd823b1a2b657ef9c5469cf97bfb935ec79f41cb88cc0332713f95e",
+        "failedAttemptManifest": "ml/experiments/v31-terminal-credit/development-attempt-1-enospc.sha256",
+        "failedAttemptManifestSha256": "3d62983b8a587debf2aa11aeece5c695fdbad4e1e7401dcce873368879305b0a",
+        "analysisOpened": false
       }
     ],
     "openedAt": "2026-07-14T04:22:38Z",
+    "completedAt": "2026-07-14T05:40:41Z",
     "seed0": 944000000,
     "games": 4096,
     "workersPerPolicy": 4,

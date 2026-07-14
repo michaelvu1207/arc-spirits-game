@@ -1,0 +1,2 @@
+[infer] serving ml/experiments/v31-terminal-credit/arms/strategic-pg-0p3/checkpoint.pt (arc-entity-scorer-v2, obs_dim=3419, act_dim=104) on /tmp/arc-v31-development-strategic-pg-0p3-3284253.sock device=cuda window=2.0ms max_batch=512
+[infer] shut down
