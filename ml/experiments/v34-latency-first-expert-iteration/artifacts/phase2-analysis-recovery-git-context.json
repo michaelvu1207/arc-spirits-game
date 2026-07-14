@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-git-context-v1",
+  "recordedAt": "2026-07-14T20:22:51Z",
+  "authorization": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-authorization.json",
+    "bytes": 14000,
+    "sha256": "9230339c9f2b9e4055288476245afe691f220c4bf6950bf77d83a082a02ade8a"
+  },
+  "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v34-phase2-recovery-git/.git",
+  "authoritativeRoot": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+  "authoritativeRootGitEntryAbsent": true,
+  "fileInventory": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-git-context-files.tsv",
+    "bytes": 2987,
+    "sha256": "c4723ccc0d6dc58784cb6c1f70367b4af64bf45f0c4e9ac4206f52f8977078df",
+    "fileCount": 29,
+    "allFilesReadOnly": true,
+    "allDirectoriesNonWritable": true,
+    "symlinks": []
+  },
+  "head": {
+    "symbolicRef": "refs/heads/recovery",
+    "commit": "7b0be17e1735cdd491455702b54d78bba172439e"
+  },
+  "refs": {
+    "refs/heads/recovery": "7b0be17e1735cdd491455702b54d78bba172439e"
+  },
+  "objectFormat": "sha1",
+  "shallowRepository": true,
+  "shallowBoundaries": [
+    "fe8dcdb66357263b808f6b169e34f2eb6732d48f"
+  ],
+  "shallowDerivation": {
+    "graphIsLinear": true,
+    "mergeCommits": [],
+    "boundaryCommit": "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+    "omittedRawParent": "71924ae8bc3b5c667dc190dcb2e0fdb3f96c5eea",
+    "everyOtherParentImported": true,
+    "completeExpectedSet": true
+  },
+  "visibleParentGraph": [
+    [
+      "7b0be17e1735cdd491455702b54d78bba172439e",
+      "ef36738fcd2349daedcd170d04f0cd0f71566e9a"
+    ],
+    [
+      "ef36738fcd2349daedcd170d04f0cd0f71566e9a",
+      "5f1bacbcb70c382b082a3847ad4358d9db86a049"
+    ],
+    [
+      "5f1bacbcb70c382b082a3847ad4358d9db86a049",
+      "344fa4f9be6c99ff7d6f1340009d34c2cb1d2770"
+    ],
+    [
+      "344fa4f9be6c99ff7d6f1340009d34c2cb1d2770",
+      "84d6dd4eb1a1067b64467096180d5b0c656a740b"
+    ],
+    [
+      "84d6dd4eb1a1067b64467096180d5b0c656a740b",
+      "7c414494d739c04004f8daecf896ca176517b2ee"
+    ],
+    [
+      "7c414494d739c04004f8daecf896ca176517b2ee",
+      "a23010e9a027c25737fcf4987174971039faf213"
+    ],
+    [
+      "a23010e9a027c25737fcf4987174971039faf213",
+      "fe8dcdb66357263b808f6b169e34f2eb6732d48f"
+    ],
+    [
+      "fe8dcdb66357263b808f6b169e34f2eb6732d48f"
+    ]
+  ],
+  "objects": [
+    {
+      "id": "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    },
+    {
+      "id": "a23010e9a027c25737fcf4987174971039faf213",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    },
+    {
+      "id": "7c414494d739c04004f8daecf896ca176517b2ee",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    },
+    {
+      "id": "84d6dd4eb1a1067b64467096180d5b0c656a740b",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    },
+    {
+      "id": "344fa4f9be6c99ff7d6f1340009d34c2cb1d2770",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    },
+    {
+      "id": "5f1bacbcb70c382b082a3847ad4358d9db86a049",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    },
+    {
+      "id": "ef36738fcd2349daedcd170d04f0cd0f71566e9a",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    },
+    {
+      "id": "7b0be17e1735cdd491455702b54d78bba172439e",
+      "type": "commit",
+      "rawCommitRehashMatched": true
+    }
+  ],
+  "forbiddenState": {
+    "packs": [],
+    "alternates": [],
+    "grafts": [],
+    "replaceRefs": [],
+    "commitGraphs": [],
+    "promisorConfiguration": [],
+    "remotes": [],
+    "namespaces": [],
+    "unexpectedRefs": [],
+    "extraObjects": [],
+    "inheritedGitVariables": [],
+    "gitWorkTreeSet": false
+  },
+  "environment": {
+    "GIT_DIR": "/data/share8/michaelvuaprilexperimentation/arc-v34-phase2-recovery-git/.git",
+    "GIT_NO_REPLACE_OBJECTS": "1",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_WORK_TREE": null
+  },
+  "toolIdentity": {
+    "gitPath": "/usr/bin/git",
+    "gitVersion": "git version 2.43.0"
+  },
+  "controls": {
+    "positiveAncestryStatus": 0,
+    "reverseNegativeControlStatus": 1,
+    "revListParentsExact": true,
+    "soleRefExact": true,
+    "headExact": true,
+    "shallowSetExact": true,
+    "objectCount": 8,
+    "allObjectsLooseCommits": true,
+    "recursiveFileInventoryCapturedBeforeLaunch": true,
+    "outcomesInspected": false
+  }
+}
