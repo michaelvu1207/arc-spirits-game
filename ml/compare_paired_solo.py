@@ -100,10 +100,18 @@ def main() -> None:
     parser.add_argument("--label-b", default="treatment")
     parser.add_argument("--bootstrap", type=int, default=10_000)
     parser.add_argument("--bootstrap-seed", type=int, default=20260713)
+    parser.add_argument(
+        "--simultaneous-comparisons",
+        type=int,
+        default=3,
+        help="Bonferroni family size for the simultaneous paired win-delta interval",
+    )
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
     if args.bootstrap <= 0:
         raise ValueError("--bootstrap must be positive")
+    if args.simultaneous_comparisons <= 0:
+        raise ValueError("--simultaneous-comparisons must be positive")
 
     report_a = load_report(args.a)
     report_b = load_report(args.b)
@@ -139,6 +147,14 @@ def main() -> None:
         float(b["post15VpPerRound"]) - float(a["post15VpPerRound"])
         for a, b in sample
     ) / len(sample)
+    simultaneous_confidence = 1.0 - 0.05 / args.simultaneous_comparisons
+    simultaneous_interval = bootstrap_ci(
+        pairs,
+        win_delta,
+        args.bootstrap,
+        args.bootstrap_seed ^ 0xB0F3,
+        confidence=simultaneous_confidence,
+    )
     output = {
         "schemaVersion": "solo-paired-comparison-v1",
         "a": {"label": args.label_a, "report": str(args.a), "weights": report_a.get("weights")},
@@ -156,12 +172,15 @@ def main() -> None:
             "b": sum(bool(b["trueWin"]) for _, b in pairs) / len(pairs),
             "deltaBMinusA": win_delta(pairs),
             "deltaBootstrap95": bootstrap_ci(pairs, win_delta, args.bootstrap, args.bootstrap_seed),
-            "deltaBootstrap9833Simultaneous": bootstrap_ci(
-                pairs,
-                win_delta,
-                args.bootstrap,
-                args.bootstrap_seed ^ 0xB0F3,
-                confidence=1.0 - 0.05 / 3.0,
+            "deltaBootstrapSimultaneous": {
+                "confidence": simultaneous_confidence,
+                "familySize": args.simultaneous_comparisons,
+                **simultaneous_interval,
+            },
+            **(
+                {"deltaBootstrap9833Simultaneous": simultaneous_interval}
+                if args.simultaneous_comparisons == 3
+                else {}
             ),
             "exactMcNemarP": exact_mcnemar(a_only, b_only),
         },
@@ -194,7 +213,11 @@ def main() -> None:
             "a": sum(bool(a["stalled"]) for a, _ in pairs),
             "b": sum(bool(b["stalled"]) for _, b in pairs),
         },
-        "bootstrap": {"samples": args.bootstrap, "seed": args.bootstrap_seed},
+        "bootstrap": {
+            "samples": args.bootstrap,
+            "seed": args.bootstrap_seed,
+            "simultaneousComparisons": args.simultaneous_comparisons,
+        },
     }
     rendered = json.dumps(output, indent=2) + "\n"
     if args.out:

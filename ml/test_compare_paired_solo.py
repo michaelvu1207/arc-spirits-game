@@ -48,7 +48,8 @@ def test_transport_and_obs_version_are_not_decision_semantic_mismatches():
             [
                 sys.executable,
                 str(Path(__file__).with_name("compare_paired_solo.py")),
-                "--a", str(a), "--b", str(b), "--bootstrap", "200", "--out", str(out),
+                "--a", str(a), "--b", str(b), "--bootstrap", "200",
+                "--simultaneous-comparisons", "2", "--out", str(out),
             ],
             capture_output=True,
             text=True,
@@ -56,7 +57,9 @@ def test_transport_and_obs_version_are_not_decision_semantic_mismatches():
         assert completed.returncode == 0, completed.stderr
         result = json.loads(out.read_text())
         assert result["winRate"]["deltaBMinusA"] == 0.5
-        assert "deltaBootstrap9833Simultaneous" in result["winRate"]
+        simultaneous = result["winRate"]["deltaBootstrapSimultaneous"]
+        assert simultaneous["familySize"] == 2 and simultaneous["confidence"] == 0.975
+        assert "deltaBootstrap9833Simultaneous" not in result["winRate"]
         assert result["censoredFirst30Round"]["meanDeltaBMinusA"] == -3.5
         assert abs(result["post15VpPerRound"]["meanDeltaBMinusA"] - 0.3) < 1e-9
 
