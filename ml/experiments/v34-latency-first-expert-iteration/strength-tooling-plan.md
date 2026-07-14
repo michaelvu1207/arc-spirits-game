@@ -1,7 +1,8 @@
 # V34 strength-tooling amendment
 
-Status: draft; all Phase 2, guardian, teacher, final, multiplayer, human, and promotion seeds remain
-operationally closed until the corresponding immutable authorization and tooling lock exist.
+Status: twice Fable-reviewed, integrity-amended implementation contract; all Phase 2, guardian, teacher, final, multiplayer,
+human, and promotion seeds remain operationally closed until the corresponding immutable
+authorization and tooling lock exist.
 
 ## Why this amendment exists
 
@@ -30,11 +31,25 @@ the amended protocol, every runner/analyzer/test, the live catalog, and each ser
   provenance, cycle metrics, guardian identity, strategic telemetry, and wall time. Reports must have
   exact seed coverage and one row per seed. No strength statistic is read until every scheduled
   condition has a complete report.
+- Before any registered Phase 2 seed is consumed, use 64 already-consumed preview-calibration seeds to
+  prove exact scheduling invariance between 24-worker and 8-worker runs through one fixed GPU inference
+  process; compare rows by seed, not completion order. Before accepting each condition, rerun its first
+  64 registered seeds through that condition's same fixed inference process and require exact per-game
+  equality by seed. These are scheduling/determinism audits, not independent checkpoint-provenance tests.
+- Derive serving evidence from the fixed process's request statistics, exactly one serving/shutdown
+  lifecycle, and zero reload/error lines. The source-locked evaluator checks the served checkpoint hash
+  and equality of every game summary's handshake before it emits a report; the recorder binds that
+  accepted report's 4,096-row coverage. This proves evaluation-level, not per-decision, provenance.
+  Information-safety and determinization are static, hash-bound preflight gates rather than runtime
+  event counters, and the manifest names their evidence accordingly.
 - One identical-seed infrastructure retry is allowed per condition. Before retry launch, write an
   immutable justification using only error/operational telemetry; attempts are never spliced and
   outcome-triggered retries are forbidden. A missing, duplicate, stalled, malformed, condition-level
   provenance-mismatched, or replay-mismatched report aborts analysis. A valid complete report that
-  contains an explicitly counted per-decision safety/provenance failure makes that arm fail its gate.
+  contains an explicitly measured serving/replay failure makes that arm fail its gate. Retry eligibility
+  intentionally remains limited to structured pre-evaluation server-start failure or a trapped process
+  interruption; evaluator validation failures, timeouts, missing reports, and hard-crash remnants close
+  the condition rather than risk accepting an unstable run.
 - `stalled` means `GameSummary.stalled === true`; its allowed count is zero. Preflight must prove at
   least 16 GiB scratch headroom and enough persistent headroom for every immutable condition report.
 
@@ -57,20 +72,26 @@ critical value is the 95th nearest-rank quantile of the 10,000 `T_b` values, wit
 24-endpoint penalty when systems-rejected slots have no strength observations. Zero-standard-error
 endpoints pass only when their point estimate satisfies the gate; otherwise they fail closed.
 
-An arm is a Phase 2 core pass only when all original gates hold: win gain at least +3 points and its
-simultaneous lower bound strictly above 0; final-VP and post-15-rate lower bounds at least 0; censored
-round-to-30 upper bound at most 0; binding latency still valid; and zero stalls, information failures,
-  replay mismatches, serving failures, or per-decision provenance mismatches. Core pass does not select a winner.
+An arm is a Phase 2 core pass only when all gates hold: win gain at least +3 points and its simultaneous
+lower bound strictly above 0; final-VP lower bound at least -0.5 VP; post-15-rate lower bound at least
+-0.025 VP/round; censored round-to-30 upper bound at most +0.5 round; binding latency still valid; and
+zero stalls, information-gate failures, replay mismatches, serving failures, or evaluation-provenance
+mismatches. The three secondary thresholds are simultaneous non-inferiority margins: they prevent a
+meaningful late-game regression without accidentally requiring statistically significant superiority
+on every correlated endpoint. Core pass does not select a winner.
 If no arm passes, close Lane A and continue Lane B from raw. If one or more pass, emit an immutable
 guardian authorization naming every passing arm and no others.
 
-This family is intentionally conservative: at the 24-endpoint critical floor, Phase 2 is expected to
-reliably detect roughly +5 to +6 win-rate points rather than an arm exactly at the +3 point boundary.
-A null result closes Lane A; it is not evidence that smaller benefits are impossible.
+This family is intentionally conservative: at the 24-endpoint critical floor, the win gate is expected
+to reliably detect roughly +5 to +6 win-rate points rather than an arm exactly at the +3 point boundary.
+Joint power also depends on the three explicit secondary non-inferiority margins; it is not represented
+by the win-endpoint power statement alone. A null result closes Lane A; it is not evidence that smaller
+benefits are impossible.
 
 ## Guardian confirmation contract
 
-- Amend the protocol before guardian seeds open with the exact guardian order derived and hash-bound
+- Extend the locked base protocol in `strength-protocol.json` before guardian seeds open with the exact
+  guardian order derived and hash-bound
   from the frozen catalog (currently):
   Bubblepop, Embers, Fjorn, Human Avatar, Lumina, Myrtle, Pixia, Prox, Taron, Void Avatar.
 - Run raw and every Phase 2 core-pass arm on exactly seeds `957300000..957308191`, using only this
@@ -96,11 +117,17 @@ guardian runs also record per-decision latency as non-binding regression telemet
 
 ## Required implementation before Phase 2
 
-1. Amend and validate `protocol.json` with the statistical definitions, raw worker count, guardian
-   names, guardian RNG/family, attempt rules, and a second-lock requirement.
+1. Create and validate `strength-protocol.json`, referencing the immutable base protocol hash, with
+   the statistical definitions, raw worker count, guardian names, guardian RNG/family, attempt rules,
+   and a second-lock requirement. Never mutate the already locked base `protocol.json`.
 2. Implement `run-v34-phase2-screen.sh`, `analyze_v34_phase2.py`, and adversarial synthetic tests.
-3. Implement Phase 2 authorization verification and a strength-tooling lock whose commit must be an
-   ancestor of the executing tree and whose file hashes must match at launch and analysis.
+3. Implement Phase 2 authorization verification, then record a fresh immutable SimForge strength
+   preflight covering the adversarial statistical fixtures, exact RNG environment, focused engine
+   regressions, typecheck, shell/Node syntax, determinization, the different-worker-count same-process
+   replay-determinism audit on preview seeds, and live GPU/disk/scratch resources.
+   Only then create a strength-tooling lock whose commit must be an ancestor of the executing tree,
+   whose exact shared file inventory must match at launch and analysis, and which hash-binds that
+   passing preflight.
 4. Implement `run-v34-guardian-confirmation.sh`, `analyze_v34_guardian.py`, and synthetic tests before
    any guardian authorization can be consumed.
 5. Test exact arms/parameters, seed coverage, report schemas, seed-only guardian assignment, pair
@@ -108,6 +135,19 @@ guardian runs also record per-decision latency as non-binding regression telemet
    ghost-slot penalty, zero-variance behavior, malformed/missing attempt handling, stalls, and every
    provenance/hash link.
 6. Run the full preflight again on SimForge and source-lock the tooling before strength games.
+
+## Integrity threat model
+
+The immutable files, exclusive creation, read-only permissions, hash chain, and exact source inventories
+protect against automation error, accidental drift, partial retries, and silent replacement inside this
+campaign. They are not a defense against a malicious machine owner who can chmod or delete artifacts.
+After each complete wave, copy completion manifests and their inputs to the local repository and commit
+their hashes before opening the next seed family. The remote host is an artifact workspace rather than a
+Git checkout, so a clean-worktree check is not available there; the union of the original 344-file source
+lock and the exact strength-tooling inventory must cover every engine, evaluator, server, runner, and
+analyzer file that can affect outcomes. Guardian, teacher, hidden, multiplayer, human, and promotion seed
+blocks remain closed by separate authorization artifacts even though the low-level evaluator can accept
+arbitrary numeric seeds.
 
 ## Lane B and later gates
 
