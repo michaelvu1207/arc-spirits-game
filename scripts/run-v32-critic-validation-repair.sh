@@ -9,7 +9,7 @@ SCRATCH="${ARC_V32_CRITIC_SCRATCH:-/dev/shm/arc-v32-critic}"
 FAILED="$SCRATCH/validation-missing-reach30pred"
 VALIDATION="$SCRATCH/validation"
 OUT="$EXPERIMENT/shared-critic/checkpoint.pt"
-LOCK="$EXPERIMENT/artifacts/critic-telemetry-repair-lock.json"
+LOCK="$EXPERIMENT/artifacts/critic-telemetry-repair-lock-v2.json"
 GPU="${V32_GPU:-7}"
 STAGE="${1:-all}"
 

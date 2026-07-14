@@ -12,6 +12,7 @@ from typing import Any
 
 
 TELEMETRY_FIELDS = ("placementProbs", "reach30Pred")
+TOLERATED_FP32_FIELDS = {"logpOld": 1e-4, "vPred": 1e-5}
 META_INVARIANTS = ("obs_dim", "act_dim", "samples", "games", "workers", "obs_version", "obs_v2")
 
 
@@ -29,13 +30,16 @@ def aggregate_fingerprints(values: dict[str, dict[str, Any]]) -> str:
     return digest.hexdigest()
 
 
-def trajectory_fingerprints(root: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+def trajectory_fingerprints(
+    root: Path,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, list[dict[str, float | None]]]]:
     paths = sorted(root.glob("shard-*.jsonl"))
     if not paths:
         raise ValueError(f"no trajectory shards below {root}")
     digests: dict[str, hashlib._Hash] = {}
     counts: dict[str, int] = {}
     next_steps: dict[str, int] = {}
+    numeric: dict[str, list[dict[str, float | None]]] = {}
     reach_count = 0
     reach_min = math.inf
     reach_max = -math.inf
@@ -58,6 +62,12 @@ def trajectory_fingerprints(root: Path) -> tuple[dict[str, dict[str, Any]], dict
                 next_steps[game_id] = step + 1
                 reach = row.pop("reach30Pred", None)
                 placement = row.pop("placementProbs", None)
+                numeric.setdefault(game_id, []).append(
+                    {
+                        field: None if row.get(field) is None else float(row.pop(field))
+                        for field in TOLERATED_FP32_FIELDS
+                    }
+                )
                 if reach is not None:
                     reach = float(reach)
                     if not math.isfinite(reach) or not 0 <= reach <= 1:
@@ -93,7 +103,7 @@ def trajectory_fingerprints(root: Path) -> tuple[dict[str, dict[str, Any]], dict
         "reach30PredMean": None if reach_count == 0 else reach_sum / reach_count,
         "placementProbsCount": placement_count,
     }
-    return fingerprints, telemetry
+    return fingerprints, telemetry, numeric
 
 
 def summary_fingerprints(root: Path) -> dict[str, dict[str, Any]]:
@@ -129,10 +139,46 @@ def compare_maps(label: str, before: dict[str, Any], after: dict[str, Any]) -> N
         raise ValueError(f"{label} changed for {mismatches[:10]}")
 
 
+def compare_numeric(
+    before: dict[str, list[dict[str, float | None]]],
+    after: dict[str, list[dict[str, float | None]]],
+) -> dict[str, dict[str, float | int]]:
+    if before.keys() != after.keys():
+        raise ValueError("FP32 replay game keys changed")
+    stats = {
+        field: {"compared": 0, "different": 0, "maxAbsDiff": 0.0, "tolerance": tolerance}
+        for field, tolerance in TOLERATED_FP32_FIELDS.items()
+    }
+    for game_id in before:
+        if len(before[game_id]) != len(after[game_id]):
+            raise ValueError(f"FP32 replay row count changed for {game_id}")
+        for step, (left, right) in enumerate(zip(before[game_id], after[game_id])):
+            for field, tolerance in TOLERATED_FP32_FIELDS.items():
+                a = left[field]
+                b = right[field]
+                if (a is None) != (b is None):
+                    raise ValueError(f"{field} presence changed for {game_id} step {step}")
+                if a is None or b is None:
+                    continue
+                if not math.isfinite(a) or not math.isfinite(b):
+                    raise ValueError(f"non-finite {field} for {game_id} step {step}")
+                delta = abs(a - b)
+                stats[field]["compared"] += 1
+                stats[field]["different"] += int(delta != 0)
+                stats[field]["maxAbsDiff"] = max(float(stats[field]["maxAbsDiff"]), delta)
+                if delta > tolerance:
+                    raise ValueError(
+                        f"{field} drift {delta:.9g} exceeds {tolerance:.9g} "
+                        f"for {game_id} step {step}"
+                    )
+    return stats
+
+
 def audit(before_root: Path, after_root: Path) -> dict[str, Any]:
-    before_rows, before_telemetry = trajectory_fingerprints(before_root)
-    after_rows, after_telemetry = trajectory_fingerprints(after_root)
+    before_rows, before_telemetry, before_numeric = trajectory_fingerprints(before_root)
+    after_rows, after_telemetry, after_numeric = trajectory_fingerprints(after_root)
     compare_maps("trajectory", before_rows, after_rows)
+    numeric_drift = compare_numeric(before_numeric, after_numeric)
     before_summaries = summary_fingerprints(before_root)
     after_summaries = summary_fingerprints(after_root)
     compare_maps("game summary", before_summaries, after_summaries)
@@ -154,7 +200,8 @@ def audit(before_root: Path, after_root: Path) -> dict[str, Any]:
             "games": len(after_rows),
             "rows": after_telemetry["rows"],
             "behaviorProjectionSha256": aggregate_fingerprints(after_rows),
-            "exactAfterDroppingOnly": list(TELEMETRY_FIELDS),
+            "exactAfterDroppingTelemetry": list(TELEMETRY_FIELDS),
+            "boundedFp32InferenceDrift": numeric_drift,
         },
         "summaries": {
             "games": len(after_summaries),
