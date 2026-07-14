@@ -1,7 +1,7 @@
 {
   "schemaVersion": "arc-controlled-experiment-v1",
   "experiment": "v28-v1-to-v2-exact-distillation-terminal-credit",
-  "status": "planned",
+  "status": "running",
   "createdAt": "2026-07-14T01:12:00Z",
   "createdAtTimeZone": "UTC (2026-07-13 America/Los_Angeles)",
   "sourceCommit": "80ba714",
@@ -150,5 +150,26 @@
     "note": "Any later PPO pilot uses fresh trajectories and seeds; V28 development rows and games never enter PPO training."
   },
   "stopRule": "Run the three preregistered variants once. Do not tune coefficients or epochs on seed block 944000000. If anchor parity fails, fix exact distribution matching. If parity passes but both terminal-credit treatments fail either their causal anchor comparison or their V23 strength comparison, reject this one-step offline credit method and move to on-policy solo PPO or search-improved targets rather than adding width.",
-  "promotionEligible": false
+  "promotionEligible": false,
+  "amendments": [
+    {
+      "at": "2026-07-14T01:36:00Z",
+      "runtimeSourceCommit": "9830676",
+      "reason": "The no-optimizer real-data preflight showed that 6,086 train rows and 1,477 validation rows are policyMask=0 deterministic or heuristic decisions and therefore legitimately omit behaviorMask/logpOld. The reviewed protocol now explicitly retains those rows for value and reach critics while excluding them from every policy target, teacher audit, and terminal-credit weight. No optimizer or checkpoint existed when this data-contract amendment was made."
+    }
+  ],
+  "preflight": {
+    "artifact": "ml/experiments/v28-outcome-distill/preflight.json",
+    "valid": true,
+    "optimizerCreated": false,
+    "checkpointCreated": false,
+    "trainRows": 119909,
+    "trainPolicyRows": 113823,
+    "trainGames": 1024,
+    "validationRows": 29986,
+    "validationPolicyRows": 28509,
+    "validationGames": 256,
+    "maxTeacherLogpAbsError": 0.000004291534423828125,
+    "teacherLogpTolerance": 0.001
+  }
 }
