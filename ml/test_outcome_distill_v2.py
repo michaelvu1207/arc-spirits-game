@@ -11,8 +11,11 @@ import numpy as np
 import torch
 
 from model import build_model
+from model_v2 import load_checkpoint
 from outcome_distill_v2 import (
     OutcomeDistillDataset,
+    anchored_outcome_surrogate,
+    enforce_trust_region,
     masked_policy_terms,
     outcome_surrogate_loss,
     strategic_tail_cvar,
@@ -134,6 +137,69 @@ def test_identical_logits_have_zero_kl_and_unit_ratio_surrogate() -> None:
     assert abs(float(loss)) < 1e-7  # advantages +0.6 and -0.6 cancel at ratio one
 
 
+def test_anchored_surrogate_clipping_gradient_and_zero_weight() -> None:
+    current_logp = torch.log(
+        torch.tensor([0.7, 1.3, 1.3, 0.7, 1.0], requires_grad=True)
+    )
+    current_logp.retain_grad()
+    teacher_logp = torch.tensor([-np.log(3.0), 0.0, 0.0, 0.0, 0.0])
+    anchor_logp = torch.zeros(5)
+    terms = {
+        "teacher_chosen_logp": teacher_logp,
+        "student_chosen_logp": current_logp,
+    }
+    diagnostics = anchored_outcome_surrogate(
+        terms,
+        target=torch.tensor([1.0, 1.0, 0.0, 0.0, 1.0]),
+        reach30_pred=torch.full((5,), 0.5),
+        weight=torch.tensor([1.0, 1.0, 1.0, 1.0, 0.0]),
+        anchor_chosen_logp=anchor_logp,
+        clip_epsilon=0.2,
+        behavior_ratio_cap=2.0,
+        total_rows=5,
+        total_episode_weight=4.0,
+    )
+    diagnostics["loss"].backward()
+    assert np.isclose(float(diagnostics["behaviorRatioRaw"][0]), 3.0)
+    assert np.isclose(float(diagnostics["behaviorRatio"][0]), 2.0)
+    assert bool(diagnostics["behaviorCapped"][0])
+    # Positive advantage below the lower clip remains trainable and increases log-probability.
+    assert float(current_logp.grad[0]) < 0
+    # Positive advantage above the upper clip and negative advantage below the lower clip freeze.
+    assert abs(float(current_logp.grad[1])) < 1e-8
+    assert abs(float(current_logp.grad[3])) < 1e-8
+    # Negative advantage above the upper clip decreases log-probability.
+    assert float(current_logp.grad[2]) > 0
+    # Non-strategic/zero-weight rows never receive outcome gradient.
+    assert abs(float(current_logp.grad[4])) < 1e-8
+
+
+def test_trust_region_checks_every_registered_metric() -> None:
+    metrics = {
+        "teacherKlMean": 0.01,
+        "teacherKlP99": 0.2,
+        "top1Agreement": 0.91,
+        "strategicTeacherKlMean": 0.02,
+        "strategicTeacherKlP99": 0.41,
+        "strategicTop1Agreement": 0.92,
+    }
+    try:
+        enforce_trust_region(
+            metrics,
+            context="fixture epoch",
+            max_mean_kl=0.05,
+            max_p99_kl=0.5,
+            max_strategic_mean_kl=0.05,
+            max_strategic_p99_kl=0.4,
+            min_top1_agreement=0.88,
+            min_strategic_top1_agreement=0.88,
+        )
+    except RuntimeError as exc:
+        assert "strategic p99" in str(exc)
+    else:
+        raise AssertionError("strategic p99 trust breach was accepted")
+
+
 def test_strategic_tail_cvar_selection_gradient_and_empty_group() -> None:
     kl = torch.tensor([0.1, 0.8, 0.2, 0.6, 0.9], requires_grad=True)
     strategic = torch.tensor([True, True, False, True, False])
@@ -210,6 +276,41 @@ def test_stage1_and_stage2_end_to_end() -> None:
         assert "strategicTeacherKlCvar05" in stats1["gateValidation"]
         assert stats1["gateValidation"]["strategicPolicyRows"] == 4
 
+        plain_zero = root / "plain-zero.pt"
+        anchored_zero = root / "anchored-zero.pt"
+        common_zero = {
+            "init_path": stage1,
+            "epochs": 1,
+            "batch_size": 8,
+            "lr": 1e-4,
+            "outcome_pg_coef": 0.0,
+            "seed": 282800,
+            "teacher_logp_tolerance": 1e-5,
+            "device": torch.device("cpu"),
+        }
+        train(
+            root / "train",
+            root / "validation",
+            teacher_path,
+            plain_zero,
+            **common_zero,
+        )
+        train(
+            root / "train",
+            root / "validation",
+            teacher_path,
+            anchored_zero,
+            outcome_reference_path=stage1,
+            outcome_behavior_ratio_cap=2.0,
+            **common_zero,
+        )
+        plain_state = load_checkpoint(plain_zero).state_dict()
+        anchored_state = load_checkpoint(anchored_zero).state_dict()
+        assert plain_state.keys() == anchored_state.keys()
+        assert all(
+            torch.equal(plain_state[key], anchored_state[key]) for key in plain_state
+        )
+
         stage2 = root / "stage2.pt"
         stats2 = train(
             root / "train",
@@ -217,10 +318,12 @@ def test_stage1_and_stage2_end_to_end() -> None:
             teacher_path,
             stage2,
             init_path=stage1,
+            outcome_reference_path=stage1,
             epochs=1,
             batch_size=8,
             lr=1e-4,
             outcome_pg_coef=0.1,
+            outcome_behavior_ratio_cap=2.0,
             seed=282800,
             max_mean_kl=10.0,
             max_p99_kl=10.0,
@@ -229,6 +332,8 @@ def test_stage1_and_stage2_end_to_end() -> None:
         )
         assert stage2.exists()
         assert stats2["initSha256"] == stats1["checkpointSha256"]
+        assert stats2["outcomeReferenceSha256"] == stats1["checkpointSha256"]
+        assert stats2["outcomeReferenceAudit"]["all"]["count"] == 12
         assert stats2["epochs"][0]["train"]["outcomePgLoss"] != 0
 
 

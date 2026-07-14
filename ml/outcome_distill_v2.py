@@ -108,6 +108,25 @@ def integer_distribution(values: list[int]) -> dict[str, float | int]:
     }
 
 
+def float_distribution(values: np.ndarray) -> dict[str, float | int]:
+    if values.ndim != 1:
+        raise ValueError("float_distribution expects a one-dimensional array")
+    if values.size == 0:
+        return {"count": 0}
+    values = values.astype(np.float64, copy=False)
+    if not np.isfinite(values).all():
+        raise ValueError("float_distribution received non-finite values")
+    return {
+        "count": int(values.size),
+        "min": float(values.min()),
+        "mean": float(values.mean()),
+        "p50": float(np.percentile(values, 50)),
+        "p95": float(np.percentile(values, 95)),
+        "p99": float(np.percentile(values, 99)),
+        "max": float(values.max()),
+    }
+
+
 class OutcomeDistillDataset(Dataset):
     """Complete paired actor trajectories with exact behavior-policy metadata."""
 
@@ -325,6 +344,7 @@ class OutcomeDistillDataset(Dataset):
             self.finish_round[index],
             self.reach_weight[index],
             self.outcome_weight[index],
+            self.rounds[index],
         )
 
 
@@ -357,6 +377,7 @@ def collate(batch: list[tuple]) -> tuple[torch.Tensor, ...]:
         torch.tensor([int(row[11]) for row in batch], dtype=torch.int64),
         torch.tensor([float(row[12]) for row in batch], dtype=torch.float32),
         torch.tensor([float(row[13]) for row in batch], dtype=torch.float32),
+        torch.tensor([int(row[14]) for row in batch], dtype=torch.int64),
     )
 
 
@@ -454,6 +475,77 @@ def masked_policy_terms(
     }
 
 
+def anchored_outcome_surrogate(
+    terms: dict[str, torch.Tensor],
+    target: torch.Tensor,
+    reach30_pred: torch.Tensor,
+    weight: torch.Tensor,
+    *,
+    anchor_chosen_logp: torch.Tensor | None,
+    clip_epsilon: float,
+    behavior_ratio_cap: float | None,
+    total_rows: int,
+    total_episode_weight: float,
+) -> dict[str, torch.Tensor]:
+    """Equal-game offline PPO centered on a frozen anchor policy.
+
+    Actor rows were sampled by the frozen teacher, so ``anchor / teacher`` is a
+    detached off-policy correction. PPO's trainable ratio is ``current / anchor``
+    and is clipped around one. With no anchor this reduces to the original V28
+    teacher-centered estimator for backwards-compatible experiments.
+    """
+    if behavior_ratio_cap is not None and (
+        not math.isfinite(behavior_ratio_cap) or behavior_ratio_cap <= 0
+    ):
+        raise ValueError("behavior_ratio_cap must be finite and positive")
+    if anchor_chosen_logp is None:
+        anchor_chosen_logp = terms["teacher_chosen_logp"]
+    if anchor_chosen_logp.shape != target.shape:
+        raise ValueError("anchor chosen-logp shape differs from outcome target")
+    active = weight > 0
+    advantage = target - reach30_pred.clamp(0.05, 0.95)
+    behavior_log_ratio = (
+        anchor_chosen_logp - terms["teacher_chosen_logp"]
+    ).clamp(-20.0, 20.0)
+    behavior_ratio_raw = behavior_log_ratio.exp().detach()
+    behavior_ratio = (
+        behavior_ratio_raw.clamp(max=behavior_ratio_cap)
+        if behavior_ratio_cap is not None
+        else behavior_ratio_raw
+    )
+    update_log_ratio = (
+        terms["student_chosen_logp"] - anchor_chosen_logp
+    ).clamp(-20.0, 20.0)
+    update_ratio = update_log_ratio.exp()
+    clipped_update_ratio = update_ratio.clamp(
+        1.0 - clip_epsilon, 1.0 + clip_epsilon
+    )
+    surrogate = behavior_ratio * torch.minimum(
+        update_ratio * advantage,
+        clipped_update_ratio * advantage,
+    )
+    if total_episode_weight <= 0 or not bool((weight > 0).any()):
+        loss = terms["student_chosen_logp"].sum() * 0.0
+    else:
+        loss = -(surrogate * weight).sum() * (
+            total_rows / (target.shape[0] * total_episode_weight)
+        )
+    return {
+        "loss": loss,
+        "active": active,
+        "advantage": advantage.detach(),
+        "behaviorRatioRaw": behavior_ratio_raw,
+        "behaviorRatio": behavior_ratio.detach(),
+        "behaviorCapped": (
+            behavior_ratio_raw > behavior_ratio_cap
+            if behavior_ratio_cap is not None
+            else torch.zeros_like(active)
+        ),
+        "updateRatio": update_ratio.detach(),
+        "updateClipped": (update_ratio.detach() != clipped_update_ratio.detach()),
+    }
+
+
 def outcome_surrogate_loss(
     terms: dict[str, torch.Tensor],
     target: torch.Tensor,
@@ -463,22 +555,21 @@ def outcome_surrogate_loss(
     clip_epsilon: float,
     total_rows: int,
     total_episode_weight: float,
+    anchor_chosen_logp: torch.Tensor | None = None,
+    behavior_ratio_cap: float | None = None,
 ) -> torch.Tensor:
-    """Unbiased minibatch estimator of equal-game clipped offline PG loss."""
-    if total_episode_weight <= 0 or not bool((weight > 0).any()):
-        return torch.zeros((), dtype=target.dtype, device=target.device)
-    advantage = target - reach30_pred.clamp(0.05, 0.95)
-    log_ratio = (
-        terms["student_chosen_logp"] - terms["teacher_chosen_logp"]
-    ).clamp(-20.0, 20.0)
-    ratio = log_ratio.exp()
-    surrogate = torch.minimum(
-        ratio * advantage,
-        ratio.clamp(1.0 - clip_epsilon, 1.0 + clip_epsilon) * advantage,
-    )
-    return -(surrogate * weight).sum() * (
-        total_rows / (target.shape[0] * total_episode_weight)
-    )
+    """Compatibility wrapper returning only the anchored surrogate loss."""
+    return anchored_outcome_surrogate(
+        terms,
+        target,
+        reach30_pred,
+        weight,
+        anchor_chosen_logp=anchor_chosen_logp,
+        clip_epsilon=clip_epsilon,
+        behavior_ratio_cap=behavior_ratio_cap,
+        total_rows=total_rows,
+        total_episode_weight=total_episode_weight,
+    )["loss"]
 
 
 def teacher_logp_audit(
@@ -527,11 +618,151 @@ def teacher_logp_audit(
     }
 
 
+def outcome_diagnostic_summary(
+    chunks: dict[str, list[np.ndarray]],
+) -> dict[str, Any]:
+    required = {
+        "advantage",
+        "behaviorRatioRaw",
+        "behaviorRatio",
+        "behaviorCapped",
+        "updateRatio",
+        "updateClipped",
+        "target",
+        "round",
+    }
+    if set(chunks) != required:
+        raise ValueError(f"outcome diagnostic keys differ: {sorted(chunks)}")
+    arrays = {
+        key: np.concatenate(values) if values else np.asarray([], dtype=np.float64)
+        for key, values in chunks.items()
+    }
+    sizes = {array.size for array in arrays.values()}
+    if len(sizes) != 1:
+        raise ValueError("outcome diagnostic arrays have different lengths")
+
+    def group(mask: np.ndarray) -> dict[str, Any]:
+        count = int(mask.sum())
+        if count == 0:
+            return {"count": 0}
+        return {
+            "count": count,
+            "advantage": float_distribution(arrays["advantage"][mask]),
+            "behaviorRatioRaw": float_distribution(arrays["behaviorRatioRaw"][mask]),
+            "behaviorRatio": float_distribution(arrays["behaviorRatio"][mask]),
+            "behaviorCapFraction": float(arrays["behaviorCapped"][mask].mean()),
+            "updateRatio": float_distribution(arrays["updateRatio"][mask]),
+            "updateClipFraction": float(arrays["updateClipped"][mask].mean()),
+        }
+
+    all_mask = np.ones(arrays["advantage"].size, dtype=bool)
+    rounds = arrays["round"]
+    return {
+        "all": group(all_mask),
+        "byOutcome": {
+            "loss": group(arrays["target"] < 0.5),
+            "win": group(arrays["target"] >= 0.5),
+        },
+        "byAdvantageSign": {
+            "negative": group(arrays["advantage"] < 0),
+            "zero": group(arrays["advantage"] == 0),
+            "positive": group(arrays["advantage"] > 0),
+        },
+        "byRoundBand": {
+            "01-08": group((rounds >= 1) & (rounds <= 8)),
+            "09-15": group((rounds >= 9) & (rounds <= 15)),
+            "16-22": group((rounds >= 16) & (rounds <= 22)),
+            "23-30": group((rounds >= 23) & (rounds <= 30)),
+        },
+    }
+
+
+def append_outcome_diagnostics(
+    chunks: dict[str, list[np.ndarray]],
+    diagnostics: dict[str, torch.Tensor],
+    target: torch.Tensor,
+    rounds: torch.Tensor,
+) -> None:
+    active = diagnostics["active"]
+    for key in (
+        "advantage",
+        "behaviorRatioRaw",
+        "behaviorRatio",
+        "behaviorCapped",
+        "updateRatio",
+        "updateClipped",
+    ):
+        chunks[key].append(diagnostics[key][active].detach().cpu().numpy())
+    chunks["target"].append(target[active].detach().cpu().numpy())
+    chunks["round"].append(rounds[active].detach().cpu().numpy())
+
+
+def outcome_reference_audit(
+    teacher: CandidateScorer,
+    reference: EntityCandidateScorer,
+    dataset: OutcomeDistillDataset,
+    *,
+    batch_size: int,
+    behavior_ratio_cap: float | None,
+    device: torch.device,
+) -> dict[str, Any]:
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collate)
+    chunks: dict[str, list[np.ndarray]] = {
+        key: []
+        for key in (
+            "advantage",
+            "behaviorRatioRaw",
+            "behaviorRatio",
+            "behaviorCapped",
+            "updateRatio",
+            "updateClipped",
+            "target",
+            "round",
+        )
+    }
+    with torch.no_grad():
+        for batch in loader:
+            (
+                obs_v1, obs_v2, cands, valid, behavior, chosen, _ret,
+                temperature, _logp_old, _policy_row, reach30_pred, outcome_target,
+                _finish_round, _reach_weight, outcome_weight, round_number,
+            ) = batch
+            obs_v1, obs_v2 = obs_v1.to(device), obs_v2.to(device)
+            cands, valid, behavior = cands.to(device), valid.to(device), behavior.to(device)
+            chosen, temperature = chosen.to(device), temperature.to(device)
+            teacher_logits, _, _ = teacher(obs_v1, cands, valid)
+            reference_logits, _, _ = reference(obs_v2, cands, valid)
+            reference_terms = masked_policy_terms(
+                teacher_logits, reference_logits, behavior, temperature, chosen
+            )
+            diagnostics = anchored_outcome_surrogate(
+                reference_terms,
+                outcome_target.to(device),
+                reach30_pred.to(device),
+                outcome_weight.to(device),
+                anchor_chosen_logp=reference_terms["student_chosen_logp"],
+                clip_epsilon=0.2,
+                behavior_ratio_cap=behavior_ratio_cap,
+                total_rows=len(dataset),
+                total_episode_weight=dataset.total_outcome_weight,
+            )
+            append_outcome_diagnostics(
+                chunks,
+                diagnostics,
+                outcome_target.to(device),
+                round_number.to(device),
+            )
+    summary = outcome_diagnostic_summary(chunks)
+    summary["strategicPolicyRows"] = dataset.strategic_policy_row_count
+    return summary
+
+
 def evaluate(
     model: EntityCandidateScorer,
     teacher: CandidateScorer,
     loader: DataLoader,
     *,
+    outcome_reference: EntityCandidateScorer | None = None,
     device: torch.device,
     horizons: tuple[int, ...],
 ) -> dict[str, Any]:
@@ -542,6 +773,7 @@ def evaluate(
     strategic_kl_chunks: list[np.ndarray] = []
     strategic_teacher_entropy_chunks: list[np.ndarray] = []
     strategic_student_entropy_chunks: list[np.ndarray] = []
+    strategic_reference_entropy_chunks: list[np.ndarray] = []
     agree = value_mse = rows = policy_rows = 0.0
     strategic_agree = strategic_rows = 0.0
     reach_scores: list[np.ndarray] = []
@@ -553,7 +785,7 @@ def evaluate(
             (
                 obs_v1, obs_v2, cands, valid, behavior, chosen, ret,
                 temperature, _logp_old, policy_row, _reach30_pred, outcome_target,
-                finish_round, reach_weight, outcome_weight,
+                finish_round, reach_weight, outcome_weight, _round_number,
             ) = batch
             obs_v1, obs_v2 = obs_v1.to(device), obs_v2.to(device)
             cands, valid, behavior = cands.to(device), valid.to(device), behavior.to(device)
@@ -563,6 +795,12 @@ def evaluate(
             terms = masked_policy_terms(
                 teacher_logits, student_logits, behavior, temperature, chosen
             )
+            reference_terms = None
+            if outcome_reference is not None:
+                reference_logits, _, _ = outcome_reference(obs_v2, cands, valid)
+                reference_terms = masked_policy_terms(
+                    teacher_logits, reference_logits, behavior, temperature, chosen
+                )
             batch_rows = obs_v1.shape[0]
             policy_device = policy_row.to(device)
             strategic_device = outcome_weight.to(device) > 0
@@ -582,6 +820,10 @@ def evaluate(
             strategic_student_entropy_chunks.append(
                 terms["student_entropy"][strategic_device].cpu().numpy()
             )
+            if reference_terms is not None:
+                strategic_reference_entropy_chunks.append(
+                    reference_terms["student_entropy"][strategic_device].cpu().numpy()
+                )
             strategic_agree += terms["agree"][strategic_device].float().sum().item()
             strategic_rows += int(strategic_device.sum())
             value_mse += F.mse_loss(value, ret.to(device), reduction="sum").item()
@@ -617,7 +859,7 @@ def evaluate(
             "brier": float(np.average((score - nested_target) ** 2, weights=weights)),
             "ece": binary_ece(nested_target, score, weights=weights),
         }
-    return {
+    result = {
         "teacherKlMean": float(kl.mean()),
         "teacherKlP95": float(np.percentile(kl, 95)),
         "teacherKlP99": float(np.percentile(kl, 99)),
@@ -634,12 +876,77 @@ def evaluate(
         "strategicTeacherKlCvar05": top_fraction_mean(strategic_kl, 0.05),
         "strategicTeacherKlMax": float(strategic_kl.max()),
         "strategicTop1Agreement": strategic_agree / strategic_rows,
+        "strategicTeacherEntropyMean": float(strategic_teacher_entropy.mean()),
+        "strategicStudentEntropyMean": float(strategic_student_entropy.mean()),
         "strategicEntropyDelta": float(
             (strategic_student_entropy - strategic_teacher_entropy).mean()
         ),
         "valueMse": value_mse / rows,
         "reach30ByHorizon": by_horizon,
     }
+    if strategic_reference_entropy_chunks:
+        strategic_reference_entropy = np.concatenate(
+            strategic_reference_entropy_chunks
+        ).astype(np.float64)
+        result["strategicReferenceEntropyMean"] = float(
+            strategic_reference_entropy.mean()
+        )
+        result["strategicStudentMinusReferenceEntropy"] = float(
+            (strategic_student_entropy - strategic_reference_entropy).mean()
+        )
+    return result
+
+
+def enforce_trust_region(
+    metrics: dict[str, Any],
+    *,
+    context: str,
+    max_mean_kl: float | None,
+    max_p99_kl: float | None,
+    max_strategic_mean_kl: float | None,
+    max_strategic_p99_kl: float | None,
+    min_top1_agreement: float | None,
+    min_strategic_top1_agreement: float | None,
+) -> None:
+    checks = [
+        (max_mean_kl, metrics["teacherKlMean"], "mean validation KL", "max"),
+        (max_p99_kl, metrics["teacherKlP99"], "p99 validation KL", "max"),
+        (
+            max_strategic_mean_kl,
+            metrics["strategicTeacherKlMean"],
+            "strategic mean validation KL",
+            "max",
+        ),
+        (
+            max_strategic_p99_kl,
+            metrics["strategicTeacherKlP99"],
+            "strategic p99 validation KL",
+            "max",
+        ),
+        (
+            min_top1_agreement,
+            metrics["top1Agreement"],
+            "validation top1 agreement",
+            "min",
+        ),
+        (
+            min_strategic_top1_agreement,
+            metrics["strategicTop1Agreement"],
+            "strategic validation top1 agreement",
+            "min",
+        ),
+    ]
+    for limit, raw_observed, label, direction in checks:
+        observed = float(raw_observed)
+        if not math.isfinite(observed):
+            raise RuntimeError(f"{context} {label} is non-finite: {observed}")
+        if limit is None:
+            continue
+        failed = observed > limit if direction == "max" else observed < limit
+        if failed:
+            raise RuntimeError(
+                f"{context} {label} {observed:.6f} fails {direction} limit {limit}"
+            )
 
 
 def train(
@@ -649,6 +956,7 @@ def train(
     out_path: Path,
     *,
     init_path: Path | None = None,
+    outcome_reference_path: Path | None = None,
     epochs: int = 6,
     batch_size: int = 256,
     lr: float = 3e-4,
@@ -657,6 +965,7 @@ def train(
     reach30_coef: float = 1.0,
     outcome_pg_coef: float = 0.0,
     clip_epsilon: float = 0.2,
+    outcome_behavior_ratio_cap: float | None = None,
     d_model: int = 128,
     layers: int = 3,
     heads: int = 4,
@@ -698,6 +1007,11 @@ def train(
             raise ValueError(f"{name} must be finite and nonnegative")
     if not 0 <= clip_epsilon < 1:
         raise ValueError("clip_epsilon must be in [0,1)")
+    if outcome_behavior_ratio_cap is not None and (
+        not math.isfinite(outcome_behavior_ratio_cap)
+        or outcome_behavior_ratio_cap <= 0
+    ):
+        raise ValueError("outcome_behavior_ratio_cap must be finite and positive")
     if early_stop_patience < 0 or early_stop_min_epochs < 0 or early_stop_min_delta < 0:
         raise ValueError("early-stop controls must be nonnegative")
     if early_stop_patience and not select_best_teacher_kl:
@@ -744,6 +1058,17 @@ def train(
         act_dim=train_ds.act_dim,
         device=device,
     )
+    outcome_reference = None
+    if outcome_reference_path is not None:
+        outcome_reference = load_checkpoint(
+            outcome_reference_path, device=device, spec=train_ds.spec
+        ).to(device)
+        if outcome_reference.act_dim != train_ds.act_dim:
+            raise ValueError("outcome reference action width differs from dataset")
+        outcome_reference.eval()
+        assert_finite_weights(outcome_reference, "frozen outcome reference")
+        for parameter in outcome_reference.parameters():
+            parameter.requires_grad_(False)
     train_audit = teacher_logp_audit(
         teacher, train_ds, batch_size=batch_size, device=device
     )
@@ -755,6 +1080,18 @@ def train(
             f"teacher logp audit exceeds {teacher_logp_tolerance}: "
             f"train={train_audit}, validation={val_audit}"
         )
+    reference_audit = (
+        outcome_reference_audit(
+            teacher,
+            outcome_reference,
+            train_ds,
+            batch_size=batch_size,
+            behavior_ratio_cap=outcome_behavior_ratio_cap,
+            device=device,
+        )
+        if outcome_reference is not None
+        else None
+    )
     if audit_only:
         return {
             "schemaVersion": "arc-v28-preflight-v1",
@@ -763,6 +1100,15 @@ def train(
             "validationData": str(val_data_dir),
             "teacher": str(teacher_path),
             "teacherSha256": sha256(teacher_path),
+            "outcomeReference": (
+                str(outcome_reference_path) if outcome_reference_path is not None else None
+            ),
+            "outcomeReferenceSha256": (
+                sha256(outcome_reference_path)
+                if outcome_reference_path is not None
+                else None
+            ),
+            "outcomeReferenceAudit": reference_audit,
             "observation": {
                 "v1Dim": train_ds.obs_dim,
                 "v2FlatDim": train_ds.spec.flat_length,
@@ -845,6 +1191,13 @@ def train(
         "teacherSha256": sha256(teacher_path),
         "init": str(init_path) if init_path else None,
         "initSha256": sha256(init_path) if init_path else None,
+        "outcomeReference": (
+            str(outcome_reference_path) if outcome_reference_path is not None else None
+        ),
+        "outcomeReferenceSha256": (
+            sha256(outcome_reference_path) if outcome_reference_path is not None else None
+        ),
+        "outcomeReferenceAudit": reference_audit,
         "samples": len(train_ds),
         "policySamples": train_ds.policy_row_count,
         "validationSamples": len(val_ds),
@@ -863,6 +1216,7 @@ def train(
             "reach30Coef": reach30_coef,
             "outcomePgCoef": outcome_pg_coef,
             "clipEpsilon": clip_epsilon,
+            "outcomeBehaviorRatioCap": outcome_behavior_ratio_cap,
             "seed": seed,
             "selectBestTeacherKl": select_best_teacher_kl,
             "maxMeanKl": max_mean_kl,
@@ -897,12 +1251,25 @@ def train(
         totals = Counter()
         strategic_rows_per_batch: list[int] = []
         tail_topk_per_batch: list[int] = []
+        outcome_chunks: dict[str, list[np.ndarray]] = {
+            key: []
+            for key in (
+                "advantage",
+                "behaviorRatioRaw",
+                "behaviorRatio",
+                "behaviorCapped",
+                "updateRatio",
+                "updateClipped",
+                "target",
+                "round",
+            )
+        }
         rows = 0
         for batch in train_loader:
             (
                 obs_v1, obs_v2, cands, valid, behavior, chosen, ret,
                 temperature, _logp_old, policy_row, reach30_pred, outcome_target,
-                finish_round, reach_weight, outcome_weight,
+                finish_round, reach_weight, outcome_weight, round_number,
             ) = batch
             obs_v1, obs_v2 = obs_v1.to(device), obs_v2.to(device)
             cands, valid, behavior = cands.to(device), valid.to(device), behavior.to(device)
@@ -910,6 +1277,16 @@ def train(
             temperature = temperature.to(device)
             with torch.no_grad():
                 teacher_logits, _, _ = teacher(obs_v1, cands, valid)
+                reference_terms = None
+                if outcome_reference is not None:
+                    reference_logits, _, _ = outcome_reference(obs_v2, cands, valid)
+                    reference_terms = masked_policy_terms(
+                        teacher_logits,
+                        reference_logits,
+                        behavior,
+                        temperature,
+                        chosen,
+                    )
             student_logits, _, value = model(obs_v2, cands, valid)
             terms = masked_policy_terms(
                 teacher_logits, student_logits, behavior, temperature, chosen
@@ -957,14 +1334,27 @@ def train(
                 total_rows=len(train_ds),
                 total_episode_weight=train_ds.total_reach_weight,
             )
-            outcome_loss = outcome_surrogate_loss(
+            outcome_diagnostics = anchored_outcome_surrogate(
                 terms,
                 outcome_target.to(device),
                 reach30_pred.to(device),
                 outcome_weight.to(device),
+                anchor_chosen_logp=(
+                    reference_terms["student_chosen_logp"]
+                    if reference_terms is not None
+                    else None
+                ),
                 clip_epsilon=clip_epsilon,
+                behavior_ratio_cap=outcome_behavior_ratio_cap,
                 total_rows=len(train_ds),
                 total_episode_weight=train_ds.total_outcome_weight,
+            )
+            outcome_loss = outcome_diagnostics["loss"]
+            append_outcome_diagnostics(
+                outcome_chunks,
+                outcome_diagnostics,
+                outcome_target.to(device),
+                round_number.to(device),
             )
             loss = (
                 teacher_kl_coef * teacher_kl
@@ -1003,7 +1393,12 @@ def train(
         model.reach30_horizon = horizons[-1]
         assert_finite_weights(model, f"V28 epoch {epoch}")
         validation = evaluate(
-            model, teacher, val_loader, device=device, horizons=horizons
+            model,
+            teacher,
+            val_loader,
+            outcome_reference=outcome_reference,
+            device=device,
+            horizons=horizons,
         )
         train_stats = {
             "teacherKl": totals["teacherKlSum"] / totals["policyRows"],
@@ -1014,6 +1409,7 @@ def train(
             "valueMse": totals["valueMse"] / rows,
             "reach30Loss": totals["reach30Loss"] / rows,
             "outcomePgLoss": totals["outcomePgLoss"] / rows,
+            "outcomeDiagnostics": outcome_diagnostic_summary(outcome_chunks),
             "policyRows": int(totals["policyRows"]),
         }
         epoch_stats = {
@@ -1032,13 +1428,16 @@ def train(
             f"val_kl_p99={validation['teacherKlP99']:.6f}",
             flush=True,
         )
-        if gate_loader is None and max_mean_kl is not None and validation["teacherKlMean"] > max_mean_kl:
-            raise RuntimeError(
-                f"V28 mean validation KL {validation['teacherKlMean']:.6f} > {max_mean_kl}"
-            )
-        if gate_loader is None and max_p99_kl is not None and validation["teacherKlP99"] > max_p99_kl:
-            raise RuntimeError(
-                f"V28 p99 validation KL {validation['teacherKlP99']:.6f} > {max_p99_kl}"
+        if gate_loader is None:
+            enforce_trust_region(
+                validation,
+                context=f"epoch {epoch}",
+                max_mean_kl=max_mean_kl,
+                max_p99_kl=max_p99_kl,
+                max_strategic_mean_kl=max_strategic_mean_kl,
+                max_strategic_p99_kl=max_strategic_p99_kl,
+                min_top1_agreement=min_top1_agreement,
+                min_strategic_top1_agreement=min_strategic_top1_agreement,
             )
         selection_value = validation[selection_metric]
         if select_best_teacher_kl and selection_value < best_kl:
@@ -1072,41 +1471,21 @@ def train(
         model,
         teacher,
         gate_loader if gate_loader is not None else val_loader,
+        outcome_reference=outcome_reference,
         device=device,
         horizons=horizons,
     )
     stats["gateValidation" if gate_loader is not None else "finalValidation"] = final_validation
-    checks = [
-        (max_mean_kl, final_validation["teacherKlMean"], "mean validation KL", lambda a, b: b > a),
-        (max_p99_kl, final_validation["teacherKlP99"], "p99 validation KL", lambda a, b: b > a),
-        (
-            max_strategic_mean_kl,
-            final_validation["strategicTeacherKlMean"],
-            "strategic mean validation KL",
-            lambda a, b: b > a,
-        ),
-        (
-            max_strategic_p99_kl,
-            final_validation["strategicTeacherKlP99"],
-            "strategic p99 validation KL",
-            lambda a, b: b > a,
-        ),
-        (
-            min_top1_agreement,
-            final_validation["top1Agreement"],
-            "validation top1 agreement",
-            lambda a, b: b < a,
-        ),
-        (
-            min_strategic_top1_agreement,
-            final_validation["strategicTop1Agreement"],
-            "strategic validation top1 agreement",
-            lambda a, b: b < a,
-        ),
-    ]
-    for limit, observed, label, fails in checks:
-        if limit is not None and fails(limit, observed):
-            raise RuntimeError(f"V28/V29 {label} {observed:.6f} fails limit {limit}")
+    enforce_trust_region(
+        final_validation,
+        context="final checkpoint",
+        max_mean_kl=max_mean_kl,
+        max_p99_kl=max_p99_kl,
+        max_strategic_mean_kl=max_strategic_mean_kl,
+        max_strategic_p99_kl=max_strategic_p99_kl,
+        min_top1_agreement=min_top1_agreement,
+        min_strategic_top1_agreement=min_strategic_top1_agreement,
+    )
     model.eval()
     assert_finite_weights(model, "V28 save checkpoint")
     manifest = save_checkpoint(model, out_path)
@@ -1124,6 +1503,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--stats-out", type=Path, required=True)
     parser.add_argument("--init", type=Path)
+    parser.add_argument(
+        "--outcome-reference",
+        type=Path,
+        help="frozen policy that centers PPO update ratios; teacher remains behavior denominator",
+    )
     parser.add_argument("--epochs", type=int, default=6)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--lr", type=float, default=3e-4)
@@ -1132,6 +1516,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reach30-coef", type=float, default=1.0)
     parser.add_argument("--outcome-pg-coef", type=float, default=0.0)
     parser.add_argument("--clip-epsilon", type=float, default=0.2)
+    parser.add_argument("--outcome-behavior-ratio-cap", type=float)
     parser.add_argument("--d-model", type=int, default=128)
     parser.add_argument("--layers", type=int, default=3)
     parser.add_argument("--heads", type=int, default=4)
@@ -1179,6 +1564,7 @@ def main() -> int:
         args.teacher,
         args.out,
         init_path=args.init,
+        outcome_reference_path=args.outcome_reference,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
@@ -1187,6 +1573,7 @@ def main() -> int:
         reach30_coef=args.reach30_coef,
         outcome_pg_coef=args.outcome_pg_coef,
         clip_epsilon=args.clip_epsilon,
+        outcome_behavior_ratio_cap=args.outcome_behavior_ratio_cap,
         d_model=args.d_model,
         layers=args.layers,
         heads=args.heads,
