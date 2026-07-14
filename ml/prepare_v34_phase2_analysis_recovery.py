@@ -165,7 +165,9 @@ def create_manifest(args: argparse.Namespace) -> dict[str, Any]:
     inventory = validate_inventory(git_dir, git_inventory_path)
     git = ["git", "-C", str(repo)]
     head = run([*git, "rev-parse", "HEAD"], cwd=repo, environment=child_environment).stdout.decode().strip()
-    require(head == "7b0be17e1735cdd491455702b54d78bba172439e", "Git-context HEAD changed")
+    expected_head = git_context["head"]["commit"]
+    expected_ref = git_context["head"]["symbolicRef"]
+    require(head == expected_head, "Git-context HEAD changed")
     shallow = run([*git, "rev-parse", "--is-shallow-repository"], cwd=repo, environment=child_environment).stdout.decode().strip()
     require(shallow == "true", "Git context is not shallow")
     parent_graph = run([*git, "rev-list", "--parents", "HEAD"], cwd=repo, environment=child_environment).stdout.decode().splitlines()
@@ -183,7 +185,7 @@ def create_manifest(args: argparse.Namespace) -> dict[str, Any]:
         expected=1,
     )
     show_ref = run([*git, "show-ref"], cwd=repo, environment=child_environment).stdout.decode().strip()
-    require(show_ref == f"{head} refs/heads/recovery", "Git refs changed")
+    require(show_ref == f"{head} {expected_ref}", "Git refs changed")
     for record in git_context["objects"]:
         object_id = record["id"]
         object_type = run([*git, "cat-file", "-t", object_id], cwd=repo, environment=child_environment).stdout.decode().strip()

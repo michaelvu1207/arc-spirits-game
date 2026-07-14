@@ -77,6 +77,18 @@ manifest in one connection and invoke the already-reserved launcher in another.
     records, prelaunch, reservation, and post-run Git-context inventory before
     opening any value. On any post-start failure, close Lane A.
 
+## Authorization revision discipline
+
+V2 authorization revision 1 was committed but detected, before prelaunch, to bind
+a generator that still hardcoded the v1 Git-context HEAD/ref. It created no
+prelaunch, reservation, start marker, stream, analyzer process, or result and is
+permanently abandoned. A superseding v2 authorization revision must use entirely
+new authorization/prelaunch/reservation/marker/stream/Git-context paths and bind
+the corrected generator. The generator must derive the expected HEAD and symbolic
+ref from the hash-bound Git-context manifest; it may not contain a commit/ref
+constant. This operational correction does not alter the analyzer or the accepted
+environment contract.
+
 ## Scientific validity
 
 This v2 amendment changes only how equality is checked for variables that identify

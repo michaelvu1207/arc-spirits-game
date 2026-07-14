@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-v2-authorization-incident-v1",
+  "authorization": "phase2-analysis-recovery-v2-authorization.json",
+  "recordedAt": "2026-07-14T21:01:00Z",
+  "stage": "post-authorization-before-prelaunch",
+  "issue": "the bound prelaunch generator still hardcoded the v1 Git-context HEAD and ref instead of consuming the hash-bound Git-context manifest values",
+  "correctiveAction": "derive expected HEAD and symbolic ref from git_context.head.commit and git_context.head.symbolicRef",
+  "prelaunchManifestCreated": false,
+  "reservationCreated": false,
+  "attemptStartedCreated": false,
+  "stdoutCreated": false,
+  "stderrCreated": false,
+  "execConfirmedCreated": false,
+  "analysisJsonCreated": false,
+  "analyzerProcessStarted": false,
+  "authorizedAnalyzerProcessConsumed": false,
+  "phase2OutcomeValueDisplayed": false,
+  "disposition": "authorization revision 1 is immutable and abandoned; a superseding revision must bind the corrected generator and use new paths"
+}
