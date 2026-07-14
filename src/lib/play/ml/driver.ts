@@ -693,6 +693,9 @@ function withFixedObs(policy: NeuralPolicy, obs: number[]): NeuralPolicy {
 		probs(o: number[], c: number[][], t?: number): number[];
 		value(o: number[]): number;
 		farmValue(o: number[]): number;
+		placementProbs(o: number[]): number[] | null;
+		reach30Probability(o: number[]): number | null;
+		reach30Horizon(): number | null;
 		routeMode(o: number[]): number | null;
 		rewardPickScores(o: number[], c: number[][]): number[] | null;
 		rewardPickProbs(o: number[], c: number[][], t?: number): number[] | null;
@@ -707,6 +710,9 @@ function withFixedObs(policy: NeuralPolicy, obs: number[]): NeuralPolicy {
 		probs: (_o: number[], c: number[][], t?: number) => p.probs(obs, c, t),
 		value: (_o: number[]) => p.value(obs),
 		farmValue: (_o: number[]) => p.farmValue(obs),
+		placementProbs: (_o: number[]) => p.placementProbs(obs),
+		reach30Probability: (_o: number[]) => p.reach30Probability(obs),
+		reach30Horizon: () => p.reach30Horizon(),
 		routeMode: (_o: number[]) => p.routeMode(obs),
 		rewardPickScores: (_o: number[], c: number[][]) => p.rewardPickScores(obs, c),
 		rewardPickProbs: (_o: number[], c: number[][], t?: number) => p.rewardPickProbs(obs, c, t),

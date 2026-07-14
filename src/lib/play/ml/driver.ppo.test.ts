@@ -522,6 +522,46 @@ describe('driver PPO behavior distribution', () => {
 		expect(result.samples.at(-1)!.done).toBe(false);
 	}, 30_000);
 
+	it('preserves outcome-head telemetry through the v2 fixed-observation shim', async () => {
+		const catalog = await loadOrSnapshotCatalog();
+		const policy = {
+			scoreCandidates: (_obs: number[], cands: number[][]) => cands.map(() => 0),
+			probs: (_obs: number[], cands: number[][]) => cands.map(() => 1 / cands.length),
+			pick: (
+				_obs: number[],
+				cands: number[][],
+				opts?: { rand?: () => number }
+			) => Math.min(cands.length - 1, Math.floor((opts?.rand?.() ?? 0) * cands.length)),
+			value: (_obs: number[]) => 0,
+			farmValue: (_obs: number[]) => 0,
+			placementProbs: (_obs: number[]) => [0.1, 0.2, 0.3, 0.4],
+			reach30Probability: (_obs: number[]) => 0.625,
+			reach30Horizon: () => 1,
+			routeMode: (_obs: number[]) => null,
+			rewardPickScores: (_obs: number[], _cands: number[][]) => null,
+			rewardPickProbs: (_obs: number[], _cands: number[][]) => null
+		} as unknown as NeuralPolicy;
+		const result = playRecordingGame(catalog, {
+			seed: 77_132,
+			profiles: [profileFor('medium')],
+			maxRounds: 1,
+			policy,
+			neuralSeats: ['Red'],
+			recordSeats: ['Red'],
+			selection: 'policy',
+			sample: true,
+			temperature: 0.55,
+			obsVersion: 2,
+			policyObsVersion: 2
+		});
+		expect(result.samples.length).toBeGreaterThan(0);
+		for (const row of result.samples) {
+			expect(row.reach30Pred).toBe(0.625);
+			expect(row.placementProbs).toEqual([0.1, 0.2, 0.3, 0.4]);
+		}
+		expect(result.samples.at(-1)!.reach30Horizon).toBe(1);
+	}, 30_000);
+
 	it('rejects a reach30 behavior baseline trained for a different horizon', async () => {
 		const catalog = await loadOrSnapshotCatalog();
 		const policy = randomPolicy(9131);
