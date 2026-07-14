@@ -42,7 +42,10 @@ def bootstrap_ci(
     statistic: Callable[[list[tuple[dict[str, Any], dict[str, Any]]]], float],
     samples: int,
     seed: int,
+    confidence: float = 0.95,
 ) -> dict[str, float]:
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be in (0,1)")
     rng = random.Random(seed)
     n = len(pairs)
     draws = []
@@ -50,7 +53,23 @@ def bootstrap_ci(
         sample = [pairs[rng.randrange(n)] for _ in range(n)]
         draws.append(statistic(sample))
     draws.sort()
-    return {"lower": percentile(draws, 0.025), "upper": percentile(draws, 0.975)}
+    alpha = 1.0 - confidence
+    return {
+        "lower": percentile(draws, alpha / 2),
+        "upper": percentile(draws, 1.0 - alpha / 2),
+    }
+
+
+def decode_contract(report: dict[str, Any]) -> dict[str, Any]:
+    """Decision semantics that must match; transport/obs version may differ."""
+    decode = report.get("decode")
+    if not isinstance(decode, dict):
+        raise ValueError("report has no decode contract")
+    return {
+        key: value
+        for key, value in decode.items()
+        if key not in ("policyObsVersion", "inferenceSocket")
+    }
 
 
 def exact_mcnemar(discordant_a: int, discordant_b: int) -> float:
@@ -88,9 +107,11 @@ def main() -> None:
 
     report_a = load_report(args.a)
     report_b = load_report(args.b)
-    for field in ("seed0", "games", "maxRounds", "maxStatusLevel", "decode"):
+    for field in ("seed0", "games", "maxRounds", "maxStatusLevel"):
         if report_a.get(field) != report_b.get(field):
             raise ValueError(f"reports differ on paired-evaluation field {field}")
+    if decode_contract(report_a) != decode_contract(report_b):
+        raise ValueError("reports differ on paired decision/decode semantics")
 
     by_seed_a = {int(game["seed"]): game for game in report_a["perGame"]}
     by_seed_b = {int(game["seed"]): game for game in report_b["perGame"]}
@@ -110,6 +131,14 @@ def main() -> None:
         int(bool(b["trueWin"])) - int(bool(a["trueWin"])) for a, b in sample
     ) / len(sample)
     vp_delta = lambda sample: sum(float(b["finalVP"]) - float(a["finalVP"]) for a, b in sample) / len(sample)
+    finish_delta = lambda sample: sum(
+        float(b.get("first30Round") or 31) - float(a.get("first30Round") or 31)
+        for a, b in sample
+    ) / len(sample)
+    post15_delta = lambda sample: sum(
+        float(b["post15VpPerRound"]) - float(a["post15VpPerRound"])
+        for a, b in sample
+    ) / len(sample)
     output = {
         "schemaVersion": "solo-paired-comparison-v1",
         "a": {"label": args.label_a, "report": str(args.a), "weights": report_a.get("weights")},
@@ -127,6 +156,13 @@ def main() -> None:
             "b": sum(bool(b["trueWin"]) for _, b in pairs) / len(pairs),
             "deltaBMinusA": win_delta(pairs),
             "deltaBootstrap95": bootstrap_ci(pairs, win_delta, args.bootstrap, args.bootstrap_seed),
+            "deltaBootstrap9833Simultaneous": bootstrap_ci(
+                pairs,
+                win_delta,
+                args.bootstrap,
+                args.bootstrap_seed ^ 0xB0F3,
+                confidence=1.0 - 0.05 / 3.0,
+            ),
             "exactMcNemarP": exact_mcnemar(a_only, b_only),
         },
         "finalVP": {
@@ -135,6 +171,23 @@ def main() -> None:
             "meanDeltaBMinusA": vp_delta(pairs),
             "deltaBootstrap95": bootstrap_ci(
                 pairs, vp_delta, args.bootstrap, args.bootstrap_seed ^ 0x9E3779B9
+            ),
+        },
+        "censoredFirst30Round": {
+            "meanA": sum(float(a.get("first30Round") or 31) for a, _ in pairs) / len(pairs),
+            "meanB": sum(float(b.get("first30Round") or 31) for _, b in pairs) / len(pairs),
+            "meanDeltaBMinusA": finish_delta(pairs),
+            "deltaBootstrap95": bootstrap_ci(
+                pairs, finish_delta, args.bootstrap, args.bootstrap_seed ^ 0xF130
+            ),
+            "interpretation": "lower is better; failures are round 31",
+        },
+        "post15VpPerRound": {
+            "meanA": sum(float(a["post15VpPerRound"]) for a, _ in pairs) / len(pairs),
+            "meanB": sum(float(b["post15VpPerRound"]) for _, b in pairs) / len(pairs),
+            "meanDeltaBMinusA": post15_delta(pairs),
+            "deltaBootstrap95": bootstrap_ci(
+                pairs, post15_delta, args.bootstrap, args.bootstrap_seed ^ 0xA515
             ),
         },
         "stalls": {
