@@ -31,10 +31,12 @@ from model import build_model
 from ppo import (
     apply_observation_feature_cutoff,
     behavior_log_probs,
+    behavior_reach30_metrics,
     compute_discounted_returns,
     compute_gae,
     load_trajectory_buffer,
     normalize_policy_advantages,
+    normalized_round_policy_weights,
     parse_placement_rewards,
     reach30_minibatch_loss,
     reach30_multihorizon_minibatch_loss,
@@ -243,6 +245,35 @@ def test_post_gae_row_budget_is_deterministic_and_exactly_stratified():
         assert "mixture is unavailable" in str(error)
     else:
         raise AssertionError("unavailable continuation mixture must fail closed")
+
+
+def test_round_policy_weights_are_normalized_and_control_is_exact_ones():
+    rounds = np.array([1, 8, 9, 18, 19, 30], dtype=np.int64)
+    policy = np.array([True, True, True, False, True, True])
+    control = normalized_round_policy_weights(rounds, policy, None)
+    assert control.dtype == np.float32
+    assert np.array_equal(control, np.ones(6, dtype=np.float32))
+
+    weighted = normalized_round_policy_weights(
+        rounds, policy, ((8, 0.5), (18, 1.0), (30, 2.0))
+    )
+    assert math.isclose(float(weighted[policy].mean()), 1.0, abs_tol=1e-7)
+    assert weighted[0] == weighted[1]
+    assert weighted[2] == weighted[3]
+    assert weighted[4] == weighted[5]
+    assert weighted[4] == 4 * weighted[0]
+
+    for bad in (
+        ((8, 1.0), (8, 2.0)),
+        ((8, 0.0), (30, 1.0)),
+        ((8, 1.0), (18, 2.0)),
+    ):
+        try:
+            normalized_round_policy_weights(rounds, policy, bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"bad round policy bands {bad!r} must fail closed")
 
 
 def _sil_episode(
@@ -800,6 +831,11 @@ def test_reach30_critic_labels_cap_failures_and_uses_behavior_state_baseline():
     # The cap failure remains a truncated dense-return episode, but is resolved
     # for the separate reach-30 objective and gets critic/policy supervision.
     assert not rows[0]["done"] and bool(buf.reach30_target_mask[0])
+    metrics = behavior_reach30_metrics(buf)
+    assert metrics["rows"] == 4
+    assert math.isclose(metrics["brier"], 0.41, abs_tol=1e-7)
+    assert math.isclose(metrics["constant_brier"], 0.25, abs_tol=1e-7)
+    assert math.isclose(metrics["auc"], 0.5, abs_tol=1e-7)
 
 
 def test_solo_terminal_objective_resolves_cap_and_lexicographic_reward():

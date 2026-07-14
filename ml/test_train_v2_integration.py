@@ -31,7 +31,7 @@ import torch
 
 import train as train_mod
 from model import load_dims_from_meta
-from model_v2 import load_checkpoint
+from model_v2 import load_checkpoint, save_checkpoint
 from obs_v2 import ObsV2Spec
 from ppo import load_trajectory_buffer, parse_placement_rewards
 
@@ -243,6 +243,45 @@ def test_ppo_v2_multihorizon_reach30_end_to_end():
         assert manifest["reach30_horizons"] == [20, 25, 30]
 
 
+def test_v2_critic_only_preserves_every_policy_parameter_exactly():
+    torch.manual_seed(0)
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td) / "data"
+        init = Path(td) / "weights" / "init.pt"
+        out = Path(td) / "weights" / "critic.pt"
+        make_v2_dataset(d, n_games=24, steps=3, seed=21, solo_objective=True)
+        model, _, _ = train_mod.build_policy_model_v2(
+            d, torch.device("cpu"), init, None, False, 32, 1, 2
+        )
+        save_checkpoint(model, init)
+        before = load_checkpoint(init, torch.device("cpu"))
+        history = train_mod.train(
+            data_dir=d,
+            out_path=out,
+            epochs=2,
+            batch_size=48,
+            mode="ppo",
+            warm_start=True,
+            init_from=init,
+            placement_coef=0,
+            policy_coef=0,
+            value_coef=0.5,
+            entropy_coef=0,
+            kl_ref_coef=0,
+            reach30_value_coef=1,
+            v2_critic_only=True,
+            **V2_KW,
+        )
+        _assert_finite(history)
+        after = load_checkpoint(out, torch.device("cpu"))
+        for name, value in before.state_dict().items():
+            if name.startswith(("value_head.", "reach30_head.")):
+                continue
+            assert torch.equal(value, after.state_dict()[name]), name
+        assert after.reach30_trained
+        assert after.reach30_horizons == (20, 25, 30)
+
+
 def test_checkpoint_save_and_init_from_resume():
     torch.manual_seed(0)
     with tempfile.TemporaryDirectory() as td:
@@ -355,6 +394,7 @@ def main() -> int:
         test_awr_v2_end_to_end_loss_decreases,
         test_ppo_v2_end_to_end,
         test_ppo_v2_multihorizon_reach30_end_to_end,
+        test_v2_critic_only_preserves_every_policy_parameter_exactly,
         test_checkpoint_save_and_init_from_resume,
         test_paired_rows_games_files_and_legacy_skips,
         test_v1_regression_and_format_guards,

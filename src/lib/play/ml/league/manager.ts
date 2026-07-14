@@ -149,7 +149,12 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 			: {}),
 		...(base.laneInit || over.laneInit ? { laneInit: { ...base.laneInit, ...over.laneInit } } : {}),
 		...(base.v2 || over.v2 ? { v2: { ...base.v2, ...over.v2 } } : {}),
-		...(base.v1Infer || over.v1Infer ? { v1Infer: { ...base.v1Infer, ...over.v1Infer } } : {})
+		...(base.v1Infer || over.v1Infer ? { v1Infer: { ...base.v1Infer, ...over.v1Infer } } : {}),
+		...(over.seedSchedule
+			? { seedSchedule: over.seedSchedule }
+			: base.seedSchedule
+				? { seedSchedule: base.seedSchedule }
+				: {})
 	};
 }
 
@@ -164,6 +169,54 @@ function sha256File(path: string): string {
 /** Fail before actor generation when a fixed-budget/curriculum experiment cannot satisfy its
  * statistical or runtime contract. Ordinary historical configs remain unaffected. */
 export function validateLeagueConfig(config: LeagueConfig): void {
+	if (config.guardianSchedule !== undefined && config.guardianSchedule !== 'absolute-balanced') {
+		throw new Error('league: guardianSchedule must be absolute-balanced when configured');
+	}
+	if (config.seedSchedule) {
+		const schedule = config.seedSchedule;
+		for (const [name, value] of Object.entries(schedule)) {
+			if (!Number.isSafeInteger(value) || value < 0) {
+				throw new Error(`league: seedSchedule.${name} must be a nonnegative safe integer`);
+			}
+		}
+		if (schedule.maxGeneration < 1) {
+			throw new Error('league: seedSchedule.maxGeneration must be at least 1');
+		}
+		const lanes = config.lanes.main + config.lanes.mainExploiter + config.lanes.leagueExploiter;
+		const trainLaneSpan = Math.max(0, lanes - 1) * 100_000 + config.gamesPerGen;
+		const evalLaneSpan = Math.max(0, lanes - 1) * 100_000 + config.evalGames + 4_000;
+		if (schedule.trainStride < trainLaneSpan) {
+			throw new Error(
+				`league: seedSchedule.trainStride ${schedule.trainStride} is smaller than ` +
+					`the per-generation lane span ${trainLaneSpan}`
+			);
+		}
+		if (schedule.evalStride < evalLaneSpan) {
+			throw new Error(
+				`league: seedSchedule.evalStride ${schedule.evalStride} is smaller than ` +
+					`the per-generation lane span ${evalLaneSpan}`
+			);
+		}
+		const trainLast =
+			schedule.trainBase +
+			(schedule.maxGeneration - 1) * schedule.trainStride +
+			trainLaneSpan -
+			1;
+		const evalLast =
+			schedule.evalBase +
+			(schedule.maxGeneration - 1) * schedule.evalStride +
+			evalLaneSpan -
+			1;
+		if (!Number.isSafeInteger(trainLast) || !Number.isSafeInteger(evalLast)) {
+			throw new Error('league: seedSchedule endpoints must be safe integers');
+		}
+		if (!(trainLast < schedule.evalBase || evalLast < schedule.trainBase)) {
+			throw new Error(
+				`league: seedSchedule train range ${schedule.trainBase}..${trainLast} overlaps ` +
+					`eval range ${schedule.evalBase}..${evalLast}`
+			);
+		}
+	}
 	const hasCatalogPath = config.catalogPath !== undefined;
 	const hasCatalogHash = config.catalogSha256 !== undefined;
 	if (hasCatalogPath !== hasCatalogHash) {
@@ -918,6 +971,7 @@ export function buildMatchup(
 			maxRounds: config.maxRounds,
 			profiles,
 			...(config.shuffleGuardians ? { shuffleGuardians: true } : {}),
+			...(config.guardianSchedule ? { guardianSchedule: config.guardianSchedule } : {}),
 			weightsPath: learnerWeights ? resolve(learnerWeights) : undefined,
 			// policyObsVersion 2 supports only hybrid/policy selection (actorWorker); the
 			// v1 socket serves the same obs version as in-process, so value stays valid.
@@ -1397,6 +1451,12 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 	const { config, state } = loadLeague(root);
 	const p = leaguePaths(root);
 	const gen = state.gen + 1;
+	if (config.seedSchedule && gen > config.seedSchedule.maxGeneration) {
+		throw new Error(
+			`league: generation ${gen} exceeds preregistered seedSchedule.maxGeneration ` +
+				`${config.seedSchedule.maxGeneration}`
+		);
+	}
 	const learners = learnersOf(state);
 	if (learners.length === 0) throw new Error('league: no learner lanes configured');
 	mkdirSync(p.checkpoints, { recursive: true });
@@ -1487,7 +1547,12 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				}
 			}
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
-			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
+			const seed0 = config.seedSchedule
+				? config.seedSchedule.trainBase +
+					(gen - 1) * config.seedSchedule.trainStride +
+					laneIdx * 100_000 +
+					m * config.matchupGames
+				: config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
 			const seeds = Array.from({ length: count }, (_, i) => seed0 + i);
 			return { m, plan, seeds };
 		});
@@ -1671,7 +1736,16 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			plan.config.sample = false;
 			// Eval measures the RAW net (what ships/promotes) — never the searched agent.
 			plan.config.search = undefined;
-			const seed0 = config.seedBase + 500_000_000 + gen * 1_000_000 + laneIdx * 100_000 + r * 1000;
+			const seed0 = config.seedSchedule
+				? config.seedSchedule.evalBase +
+					(gen - 1) * config.seedSchedule.evalStride +
+					laneIdx * 100_000 +
+					r * 1000
+				: config.seedBase +
+					500_000_000 +
+					gen * 1_000_000 +
+					laneIdx * 100_000 +
+					r * 1000;
 			const res = await runActorPool({
 				seeds: Array.from({ length: count }, (_, i) => seed0 + i),
 				outDir: evalDir,

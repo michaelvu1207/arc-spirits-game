@@ -285,6 +285,7 @@ class TrajectoryBuffer:
     v_pred: np.ndarray              # (N,) float32
     advantages: np.ndarray          # (N,) float32
     returns: np.ndarray             # (N,) float32
+    round: np.ndarray               # (N,) int64; public decision round
     continuation_mask: np.ndarray  # (N,) bool; train-only late-state suffix metadata
     strategic_mask: np.ndarray      # (N,) bool; long-horizon credit group
     strategic_mc_coef: float        # loader blend; 0 preserves ordinary PPO bit behavior
@@ -1249,21 +1250,24 @@ def load_trajectory_buffer(
                     n_invalid_rows += 1
                     invalid_episodes.add(game_id)
                     continue
+                # Historical/synthetic PPO rows predate the public round field; preserve
+                # their bit-compatible default while V32's external auditor requires it.
+                decision_round = _coerce_nonnegative_int(rec.get("round", 1))
+                if decision_round is None or decision_round < 1:
+                    n_invalid_rows += 1
+                    invalid_episodes.add(game_id)
+                    continue
                 raw_option_id = rec.get("optionId")
                 if raw_option_id is None:
                     option_id = None
                     option_seat = None
-                    option_round = None
                 else:
                     option_id = _coerce_nonnegative_int(raw_option_id)
                     option_seat = _coerce_seat(rec.get("seat"))
-                    option_round = _coerce_nonnegative_int(rec.get("round"))
                     if (
                         option_id is None
                         or option_id >= 4
                         or option_seat is None
-                        or option_round is None
-                        or option_round < 1
                     ):
                         n_invalid_rows += 1
                         invalid_episodes.add(game_id)
@@ -1305,7 +1309,7 @@ def load_trajectory_buffer(
                         "player_count": _coerce_player_count(rec.get("playerCount", 4)),
                         "option_id": option_id,
                         "seat": option_seat,
-                        "round": option_round,
+                        "round": decision_round,
                         "obs": obs,
                         "cands": cands,
                         "chosen": chosen,
@@ -1458,6 +1462,7 @@ def load_trajectory_buffer(
     reach30_finish_round_list: list[int] = []
     strategic_mask_list: list[bool] = []
     continuation_mask_list: list[bool] = []
+    round_list: list[int] = []
     option_id_list: list[int] = []
     adv_list: list[np.ndarray] = []
     ret_list: list[np.ndarray] = []
@@ -1842,6 +1847,7 @@ def load_trajectory_buffer(
             )
             strategic_mask_list.append(s["strategic"])
             continuation_mask_list.append(s["continuation_curriculum"])
+            round_list.append(int(s["round"]))
             option_id_list.append(int(s["option_id"]) if option_mode else 0)
         adv_list.append(adv)
         ret_list.append(ret)
@@ -2000,6 +2006,7 @@ def load_trajectory_buffer(
         v_pred=np.array(v_pred_list, dtype=np.float32),
         advantages=advantages,
         returns=returns,
+        round=np.array(round_list, dtype=np.int64),
         continuation_mask=np.array(continuation_mask_list, dtype=bool),
         strategic_mask=np.array(strategic_mask_list, dtype=bool),
         strategic_mc_coef=float(strategic_mc_coef),
@@ -2199,11 +2206,55 @@ def select_ppo_epoch_indices(
     return selected
 
 
+def normalized_round_policy_weights(
+    rounds: np.ndarray,
+    policy_mask: np.ndarray,
+    bands: tuple[tuple[int, float], ...] | None,
+) -> np.ndarray:
+    """Return fixed round-band policy weights normalized over exact-policy rows.
+
+    A ``None`` configuration is the historical control path and returns exact
+    float32 ones.  Configured bands are inclusive upper bounds, must be strictly
+    increasing, and must cover every selected decision round.  Critic losses do
+    not consume these weights.
+    """
+    rounds = np.asarray(rounds, dtype=np.int64)
+    policy_mask = np.asarray(policy_mask, dtype=bool)
+    if rounds.shape != policy_mask.shape:
+        raise ValueError("rounds and policy_mask must have the same shape")
+    if rounds.size and bool((rounds < 1).any()):
+        raise ValueError("decision rounds must be positive integers")
+    if bands is None:
+        return np.ones(rounds.size, dtype=np.float32)
+    if not bands:
+        raise ValueError("round policy bands cannot be empty")
+    previous = 0
+    raw = np.zeros(rounds.size, dtype=np.float64)
+    for upper, weight in bands:
+        if isinstance(upper, bool) or not isinstance(upper, int) or upper <= previous:
+            raise ValueError("round policy band upper bounds must be strictly increasing integers")
+        if not math.isfinite(weight) or weight <= 0:
+            raise ValueError("round policy band weights must be finite and positive")
+        raw[(rounds > previous) & (rounds <= upper)] = weight
+        previous = upper
+    if rounds.size and int(rounds.max()) > previous:
+        raise ValueError(
+            f"round policy bands end at {previous} but rollout contains round {int(rounds.max())}"
+        )
+    if not policy_mask.any():
+        raise ValueError("round policy weights require at least one exact-policy row")
+    mean_weight = float(raw[policy_mask].mean())
+    if not math.isfinite(mean_weight) or mean_weight <= 0:
+        raise ValueError("round policy weights have nonpositive policy-row mean")
+    return (raw / mean_weight).astype(np.float32)
+
+
 def _minibatch_tensors(
     buffer: TrajectoryBuffer,
     idx: np.ndarray,
     device: torch.device,
     normalized_advantages: np.ndarray,
+    round_policy_weights: np.ndarray,
 ) -> tuple[torch.Tensor, ...]:
     """Pad the candidate lists of the selected steps to a common length."""
     B = len(idx)
@@ -2228,6 +2279,7 @@ def _minibatch_tensors(
         torch.from_numpy(buffer.policy_mask[idx]).to(device),
         torch.from_numpy(buffer.logp_old[idx]).to(device),
         torch.from_numpy(buffer.behavior_temperature[idx]).to(device),
+        torch.from_numpy(round_policy_weights[idx]).to(device),
         torch.from_numpy(buffer.v_pred[idx]).to(device),
         torch.from_numpy(normalized_advantages[idx]).to(device),
         torch.from_numpy(buffer.returns[idx]).to(device),
@@ -2610,6 +2662,41 @@ def reach30_training_metrics(
     }
 
 
+def behavior_reach30_metrics(buffer: TrajectoryBuffer) -> dict[str, float]:
+    """Equal-game calibration of the checkpoint that generated this rollout.
+
+    Unlike ``reach30_training_metrics``, this consumes the immutable actor-recorded
+    ``reach30Pred`` values, so it can be checked before the current optimizer sees
+    the generation.
+    """
+    labelled = np.flatnonzero(buffer.reach30_target_mask & buffer.reach30_pred_mask)
+    expected = int(buffer.reach30_target_mask.sum())
+    if labelled.size == 0 or labelled.size != expected:
+        return {
+            key: float("nan")
+            for key in ("nll", "brier", "constant_brier", "auc", "auprc", "ece", "rows")
+        }
+    scores = buffer.reach30_pred[labelled].astype(np.float64)
+    targets = buffer.reach30_target[labelled].astype(np.float64)
+    weights = buffer.reach30_weight[labelled].astype(np.float64)
+    clipped = np.clip(scores, 1e-7, 1.0 - 1e-7)
+    base_rate = float(np.average(targets, weights=weights))
+    return {
+        "nll": float(
+            np.average(
+                -(targets * np.log(clipped) + (1 - targets) * np.log(1 - clipped)),
+                weights=weights,
+            )
+        ),
+        "brier": float(np.average((scores - targets) ** 2, weights=weights)),
+        "constant_brier": float(np.average((base_rate - targets) ** 2, weights=weights)),
+        "auc": binary_auc(targets, scores, weights),
+        "auprc": binary_average_precision(targets, scores, weights),
+        "ece": binary_ece(targets, scores, weights=weights),
+        "rows": float(labelled.size),
+    }
+
+
 def reach30_minibatch_loss(
     logits: torch.Tensor,
     targets: torch.Tensor,
@@ -2711,6 +2798,7 @@ def train_ppo(
     seed: int | None = None,
     rows_per_epoch: int | None = None,
     continuation_fraction: float | None = None,
+    round_policy_bands: tuple[tuple[int, float], ...] | None = None,
     self_imitation_coef: float = 0.0,
     self_imitation_replay_fraction: float = 0.0,
     self_imitation_staleness_logp: float = 1.0,
@@ -2735,6 +2823,8 @@ def train_ppo(
         raise ValueError(
             "target_kl early stopping is incompatible with rows_per_epoch fixed-update training"
         )
+    if round_policy_bands is not None and rows_per_epoch is None:
+        raise ValueError("round_policy_bands requires rows_per_epoch fixed-update training")
     if self_imitation_coef < 0 or not math.isfinite(self_imitation_coef):
         raise ValueError("self_imitation_coef must be finite and nonnegative")
     if not 0.0 <= self_imitation_replay_fraction <= 1.0:
@@ -2927,12 +3017,20 @@ def train_ppo(
                 )
                 else None,
             )
+        selected_policy_mask = np.zeros(n, dtype=bool)
+        selected_policy_mask[epoch_indices] = buffer.policy_mask[epoch_indices]
+        epoch_round_policy_weights = normalized_round_policy_weights(
+            buffer.round,
+            selected_policy_mask,
+            round_policy_bands,
+        )
         model.train()
 
         tot_policy = tot_value = tot_entropy = tot_kl = tot_clip = tot_prob = 0.0
         tot_farm = tot_reward = tot_route = tot_reach30 = 0.0
         tot_placement = 0.0
         tot_kl_ref = 0.0
+        tot_weighted_kl = tot_weighted_clip = 0.0
         tot_self_imitation = 0.0
         tot_terminal_teacher = 0.0
         tot_terminal_teacher_agreement = 0.0
@@ -2966,6 +3064,7 @@ def train_ppo(
                 policy_mask,
                 logp_old,
                 behavior_temperature,
+                round_policy_weight,
                 v_pred,
                 adv,
                 ret,
@@ -2982,7 +3081,13 @@ def train_ppo(
                 reach30_finish_round,
                 placement,
                 option,
-            ) = _minibatch_tensors(buffer, mb, device, normalized_advantages)
+            ) = _minibatch_tensors(
+                buffer,
+                mb,
+                device,
+                normalized_advantages,
+                epoch_round_policy_weights,
+            )
 
             logits, _, value = model(obs, cands, behavior_mask, option)
             log_probs = behavior_log_probs(logits, behavior_mask, behavior_temperature)
@@ -3001,14 +3106,34 @@ def train_ppo(
                     clip_frac = (
                         (ratio[policy_mask] - 1.0).abs() > clip_eps
                     ).float().mean().item()
+                    active_round_weight = round_policy_weight[policy_mask]
+                    active_round_weight_sum = active_round_weight.sum().clamp_min(1e-8)
+                    weighted_kl = (
+                        (((ratio[policy_mask] - 1.0) - log_ratio[policy_mask]) * active_round_weight).sum()
+                        / active_round_weight_sum
+                    ).item()
+                    weighted_clip = (
+                        (
+                            ((ratio[policy_mask] - 1.0).abs() > clip_eps).float()
+                            * active_round_weight
+                        ).sum()
+                        / active_round_weight_sum
+                    ).item()
                 surr1 = ratio[policy_mask] * adv[policy_mask]
                 surr2 = ratio[policy_mask].clamp(
                     1.0 - clip_eps, 1.0 + clip_eps
                 ) * adv[policy_mask]
-                policy_loss = -torch.min(surr1, surr2).mean()
+                if round_policy_bands is None:
+                    policy_loss = -torch.min(surr1, surr2).mean()
+                else:
+                    policy_loss = -(
+                        torch.min(surr1, surr2) * active_round_weight
+                    ).sum() / active_round_weight_sum
             else:
                 approx_kl = 0.0
                 clip_frac = 0.0
+                weighted_kl = 0.0
+                weighted_clip = 0.0
                 policy_loss = torch.zeros((), dtype=torch.float32, device=device)
             if target_kl is not None and policy_count and approx_kl > target_kl:
                 print(
@@ -3045,11 +3170,16 @@ def train_ppo(
             support_log_probs = log_probs.masked_fill(~behavior_mask, 0.0)
             plogp = probs * support_log_probs
             entropy_per_row = -plogp.sum(dim=-1)
-            entropy = (
-                entropy_per_row[policy_mask].mean()
-                if policy_count
-                else torch.zeros((), dtype=torch.float32, device=device)
-            )
+            if policy_count and round_policy_bands is not None:
+                entropy = (
+                    entropy_per_row[policy_mask] * active_round_weight
+                ).sum() / active_round_weight_sum
+            else:
+                entropy = (
+                    entropy_per_row[policy_mask].mean()
+                    if policy_count
+                    else torch.zeros((), dtype=torch.float32, device=device)
+                )
 
             kl_ref = torch.zeros((), dtype=torch.float32, device=device)
             if ref_model is not None:
@@ -3065,11 +3195,16 @@ def train_ppo(
                 support_ref_logp = ref_logp.masked_fill(~behavior_mask, 0.0)
                 kl_terms = probs * (support_log_probs - support_ref_logp)
                 kl_ref_per_row = kl_terms.sum(dim=-1)
-                kl_ref = (
-                    kl_ref_per_row[policy_mask].mean()
-                    if policy_count
-                    else torch.zeros((), dtype=torch.float32, device=device)
-                )
+                if policy_count and round_policy_bands is not None:
+                    kl_ref = (
+                        kl_ref_per_row[policy_mask] * active_round_weight
+                    ).sum() / active_round_weight_sum
+                else:
+                    kl_ref = (
+                        kl_ref_per_row[policy_mask].mean()
+                        if policy_count
+                        else torch.zeros((), dtype=torch.float32, device=device)
+                    )
 
             farm_loss = torch.zeros((), dtype=torch.float32, device=device)
             if farm_value_coef > 0 and farm_mask.any():
@@ -3220,6 +3355,8 @@ def train_ppo(
             tot_entropy += entropy.item() * policy_count
             tot_kl += approx_kl * policy_count
             tot_clip += clip_frac * policy_count
+            tot_weighted_kl += weighted_kl * policy_count
+            tot_weighted_clip += weighted_clip * policy_count
             if policy_count:
                 tot_prob += (
                     logp_new.detach().exp()[policy_mask].mean().item() * policy_count
@@ -3385,6 +3522,8 @@ def train_ppo(
                 f"entropy={tot_entropy / policy_denom:.4f} (coef={ent_coef:.4f}) | "
                 f"approx_kl={tot_kl / policy_denom:.4f} | "
                 f"clip_frac={tot_clip / policy_denom:.3f} | "
+                f"round_weighted_kl={tot_weighted_kl / policy_denom:.4f} | "
+                f"round_weighted_clip_frac={tot_weighted_clip / policy_denom:.3f} | "
                 f"placement_loss={tot_placement / n_seen:.4f} | "
                 f"kl_ref={tot_kl_ref / policy_denom:.4f} | "
                 + self_imitation_summary
@@ -3423,6 +3562,8 @@ def train_ppo(
                 "entropy": tot_entropy / policy_denom,
                 "approx_kl": tot_kl / policy_denom,
                 "clip_frac": tot_clip / policy_denom,
+                "round_weighted_kl": tot_weighted_kl / policy_denom,
+                "round_weighted_clip_frac": tot_weighted_clip / policy_denom,
                 "placement_loss": tot_placement / n_seen,
                 "kl_ref": tot_kl_ref / policy_denom,
                 "mean_p_chosen": tot_prob / policy_denom,

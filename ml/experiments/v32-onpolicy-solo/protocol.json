@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "arc-controlled-experiment-v1",
+  "experiment": "v32-v30-onpolicy-solo-mechanism-screen",
+  "status": "implementation-preflight",
+  "planCommit": "98f34b6",
+  "promotionEligible": false,
+  "catalog": {
+    "path": "ml/catalogs/live-20260713-5f4ad348.json",
+    "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "initialPolicy": {
+    "path": "ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt",
+    "sha256": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06",
+    "format": "arc-entity-scorer-v2",
+    "dModel": 128,
+    "layers": 3,
+    "heads": 4
+  },
+  "review": {
+    "model": "Claude Fable",
+    "effort": "high",
+    "artifact": "ml/experiments/v32-onpolicy-solo/fable-review.md",
+    "status": "incorporated"
+  },
+  "systemsBenchmark": {
+    "seed0": 951900000,
+    "gamesPerTrial": 128,
+    "repeats": 2,
+    "workerCounts": [4, 8, 12, 16, 24],
+    "selection": "smallest worker count within 5% of peak median valid-policy rows per second",
+    "strengthUse": false
+  },
+  "criticWarmup": {
+    "train": { "seed0": 946000000, "games": 4096 },
+    "validation": { "seed0": 946004096, "games": 1024 },
+    "rollout": {
+      "seats": 1,
+      "maxRounds": 30,
+      "maxStatusLevel": 2,
+      "shuffleGuardians": true,
+      "guardianSchedule": "absolute-balanced",
+      "selection": "hybrid",
+      "sample": true,
+      "temperature": 0.55,
+      "recordObsVersion": 2,
+      "policyObsVersion": 2
+    },
+    "training": {
+      "epochs": 4,
+      "batchSize": 512,
+      "learningRate": 0.0003,
+      "policyCoef": 0,
+      "valueCoef": 0.5,
+      "reach30ValueCoef": 1,
+      "reach30Horizons": [20, 25, 30],
+      "v2CriticOnly": true,
+      "frozen": ["entity trunk", "candidate scorer", "all non-value auxiliary heads"]
+    },
+    "gates": {
+      "policyLogitMaxAbsDiff": 0.000001,
+      "round30AucMin": 0.7,
+      "round30EceMax": 0.1,
+      "brierNoWorseThanConstant": true,
+      "stalls": 0
+    }
+  },
+  "screen": {
+    "replicates": [
+      {
+        "id": "a",
+        "seedBase": 946100000,
+        "trainBase": 946100000,
+        "evalBase": 946700000,
+        "gpuWavePreference": [0, 1, 2]
+      },
+      {
+        "id": "b",
+        "seedBase": 946200000,
+        "trainBase": 946200000,
+        "evalBase": 946800000,
+        "gpuWavePreference": [3, 5, 6]
+      },
+      {
+        "id": "c",
+        "seedBase": 946300000,
+        "trainBase": 946300000,
+        "evalBase": 946900000,
+        "gpuWavePreference": [0, 1, 2]
+      }
+    ],
+    "seedSchedule": {
+      "trainStride": 2048,
+      "evalStride": 8192,
+      "maxGeneration": 12,
+      "gamesPerGeneration": 1024,
+      "evalGamesPerGeneration": 256
+    },
+    "initialGenerations": 8,
+    "manipulationOnlyExtensionGeneration": 12,
+    "arms": [
+      {
+        "id": "control-uniform",
+        "soloReach30Coef": 0,
+        "roundPolicyBands": null
+      },
+      {
+        "id": "round-reweighted",
+        "soloReach30Coef": 0,
+        "roundPolicyBands": [[8, 0.5], [18, 1.0], [30, 2.0]]
+      },
+      {
+        "id": "p30-credit025",
+        "soloReach30Coef": 0.25,
+        "roundPolicyBands": null
+      }
+    ],
+    "sharedTraining": {
+      "gamesPerGeneration": 1024,
+      "epochs": 2,
+      "batchSize": 512,
+      "ppoRowsPerEpoch": 100000,
+      "learningRate": 0.00005,
+      "clipEpsilon": 0.1,
+      "valueClipEpsilon": 0.1,
+      "entropyCoef": 0.003,
+      "klReferenceCoef": 0.05,
+      "gamma": 0.999,
+      "gaeLambda": 0.95,
+      "soloTerminalObjective": "resolved",
+      "strategicDecisionScope": "engine-cycle",
+      "soloStrategicMcCoef": 0,
+      "valueCoef": 0.5,
+      "reach30ValueCoef": 1,
+      "winBonus": 4,
+      "sample": true,
+      "temperature": 0.55
+    },
+    "perGenerationTrustGates": {
+      "maxApproxKl": 0.02,
+      "maxClipFraction": 0.2,
+      "maxBehaviorReach30Ece": 0.1,
+      "maxBehaviorLogpReconstructionError": 0.001,
+      "exactOptimizerStepsPerEpoch": 196,
+      "stalls": 0,
+      "malformedEpisodes": 0,
+      "malformedRows": 0
+    }
+  },
+  "development": {
+    "seed0": 949000000,
+    "games": 4096,
+    "open": false,
+    "comparators": ["V23", "V30", "shared-critic", "nine final screen checkpoints"],
+    "familySize": 2
+  },
+  "hidden": {
+    "seed0": 950000000,
+    "games": 4096,
+    "open": false,
+    "openOnlyAfterOneWinnerFrozen": true
+  },
+  "rules": [
+    "Do not consume any 946 seed until code, configs, launchers, auditors, tests, hashes, and this protocol are frozen.",
+    "Do not use development or hidden games for training or coefficient selection.",
+    "Only generation 8, or generation 12 after the outcome-blind manipulation extension, is eligible.",
+    "No V32 checkpoint can promote from solo evidence alone."
+  ]
+}

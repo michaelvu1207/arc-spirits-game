@@ -199,6 +199,44 @@ describe('trainer RNG pairing', () => {
 	});
 });
 
+describe('explicit controlled-experiment seed schedule', () => {
+	it('accepts disjoint compact ranges and rejects overlap, short strides, and invalid caps', () => {
+		const base = {
+			...defaultConfig('ml/test-seed-schedule'),
+			seats: 1,
+			gamesPerGen: 1_024,
+			evalGames: 256,
+			lanes: { main: 1, mainExploiter: 0, leagueExploiter: 0 },
+			seedSchedule: {
+				trainBase: 946_100_000,
+				trainStride: 2_048,
+				evalBase: 946_700_000,
+				evalStride: 8_192,
+				maxGeneration: 12
+			}
+		} satisfies LeagueConfig;
+		expect(() => validateLeagueConfig(base)).not.toThrow();
+		expect(() =>
+			validateLeagueConfig({
+				...base,
+				seedSchedule: { ...base.seedSchedule!, trainStride: 1_023 }
+			})
+		).toThrow(/trainStride/);
+		expect(() =>
+			validateLeagueConfig({
+				...base,
+				seedSchedule: { ...base.seedSchedule!, evalBase: 946_110_000 }
+			})
+		).toThrow(/overlaps/);
+		expect(() =>
+			validateLeagueConfig({
+				...base,
+				seedSchedule: { ...base.seedSchedule!, maxGeneration: 0 }
+			})
+		).toThrow(/maxGeneration/);
+	});
+});
+
 describe('frozen catalog provenance', () => {
 	it('requires a matching path/hash pair and accepts the exact frozen bytes', () => {
 		const root = mkdtempSync(join(tmpdir(), 'league-catalog-contract-'));
@@ -1189,12 +1227,19 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 			'ckpt/cur.json'
 		]);
 		// buildMatchup resolves them into opponentWeights all equal to the learner net.
-		const plan = buildMatchup({ ...config, shuffleGuardians: true }, learner, mir.opponents, 1, 5);
+		const plan = buildMatchup(
+			{ ...config, shuffleGuardians: true, guardianSchedule: 'absolute-balanced' },
+			learner,
+			mir.opponents,
+			1,
+			5
+		);
 		const oppW = Object.values(plan.config.opponentWeights ?? {});
 		expect(oppW).toHaveLength(3);
 		expect(new Set(oppW)).toEqual(new Set([resolve('ckpt/cur.json')]));
 		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]); // still learner-only recording
 		expect(plan.config.shuffleGuardians).toBe(true);
+		expect(plan.config.guardianSchedule).toBe('absolute-balanced');
 		// m=0 is a PFSP slot: opponents come from the field (heuristics), not the mirror.
 		const pf = matchupOpponents(config, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
 		expect(pf.mirror).toBe(false);

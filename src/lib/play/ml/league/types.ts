@@ -91,6 +91,21 @@ export interface LeagueV2Config extends LeagueInferConfig {
 	distillEveryGen?: boolean;
 }
 
+/** Optional compact, explicit game-seed allocation for controlled experiments.
+ * Historical leagues omit this and retain the original million-spaced formulas. */
+export interface LeagueSeedSchedule {
+	/** First training-game seed at generation 1, lane 0. */
+	trainBase: number;
+	/** Seed distance between consecutive generations. */
+	trainStride: number;
+	/** First quick-evaluation seed at generation 1, lane 0. */
+	evalBase: number;
+	/** Evaluation seed distance between consecutive generations. */
+	evalStride: number;
+	/** Fail before starting any generation above this preregistered endpoint. */
+	maxGeneration: number;
+}
+
 export interface PfspConfig {
 	/** Exponent for the 'squared' variant weight (1 − winrate)^p. */
 	p: number;
@@ -174,6 +189,8 @@ export interface LeagueConfig {
 	promoteMarginElo: number;
 	/** Base for the deterministic per-generation seed ranges. */
 	seedBase: number;
+	/** Explicit compact train/eval allocation for controlled experiments. */
+	seedSchedule?: LeagueSeedSchedule;
 	/** Actor-pool worker threads (default: cpus−1). */
 	workers?: number;
 	/**
@@ -227,6 +244,8 @@ export interface LeagueConfig {
 	heuristicOpponentProfiles?: string[];
 	/** Deterministically shuffle guardian identities per game seed (default false for old-run parity). */
 	shuffleGuardians?: boolean;
+	/** Deterministic seed-to-guardian assignment that balances identities over contiguous seeds. */
+	guardianSchedule?: 'absolute-balanced';
 	/** Sampling temperature for checkpoint opponent seats (mirror/PFSP/exploiter fields), default
 	 *  0 = greedy (historical, bit-parity). > 0 (e.g. 0.65) makes them sample, which breaks the
 	 *  argmax-clone-collision artifact where several opponent seats sharing one checkpoint make

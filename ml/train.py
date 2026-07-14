@@ -60,6 +60,28 @@ from model import (
 )
 
 
+def parse_round_policy_bands(raw: str) -> tuple[tuple[int, float], ...]:
+    """Parse inclusive round-band weights such as ``8:0.5,18:1,30:2``."""
+    bands: list[tuple[int, float]] = []
+    previous = 0
+    try:
+        for item in raw.split(","):
+            upper_raw, weight_raw = item.split(":", 1)
+            upper = int(upper_raw)
+            weight = float(weight_raw)
+            if upper <= previous or not math.isfinite(weight) or weight <= 0:
+                raise ValueError
+            bands.append((upper, weight))
+            previous = upper
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError(
+            "round policy bands must be increasing ROUND:POSITIVE_WEIGHT pairs"
+        ) from exc
+    if not bands:
+        raise argparse.ArgumentTypeError("round policy bands cannot be empty")
+    return tuple(bands)
+
+
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
@@ -770,6 +792,10 @@ def train(
     seed: int | None = None,
     ppo_rows_per_epoch: int | None = None,
     ppo_continuation_fraction: float | None = None,
+    ppo_round_policy_bands: tuple[tuple[int, float], ...] | None = None,
+    v2_critic_only: bool = False,
+    behavior_reach30_ece_max: float | None = None,
+    behavior_reach30_auc_min: float | None = None,
     self_imitation_coef: float = 0.0,
     self_imitation_replay_fraction: float = 0.0,
     self_imitation_staleness_logp: float = 1.0,
@@ -812,6 +838,32 @@ def train(
         )
     if ppo_continuation_fraction is not None and ppo_rows_per_epoch is None:
         raise ValueError("--ppo-continuation-fraction requires --ppo-rows-per-epoch")
+    if ppo_round_policy_bands is not None and ppo_rows_per_epoch is None:
+        raise ValueError("--ppo-round-policy-bands requires --ppo-rows-per-epoch")
+    if behavior_reach30_ece_max is not None and not 0 <= behavior_reach30_ece_max <= 1:
+        raise ValueError("--behavior-reach30-ece-max must be in [0,1]")
+    if behavior_reach30_auc_min is not None and not 0 <= behavior_reach30_auc_min <= 1:
+        raise ValueError("--behavior-reach30-auc-min must be in [0,1]")
+    if v2_critic_only:
+        if mode != "ppo" or model_version != "v2":
+            raise ValueError("--v2-critic-only requires --mode ppo --model v2")
+        if policy_coef != 0 or entropy_coef != 0 or kl_ref_coef != 0:
+            raise ValueError(
+                "--v2-critic-only requires zero policy, entropy, and KL-reference coefficients"
+            )
+        if any(
+            coefficient != 0
+            for coefficient in (
+                farm_value_coef,
+                reward_pick_coef,
+                route_mode_coef,
+                placement_coef,
+                solo_outcome_coef,
+                solo_reach30_coef,
+                strategic_outcome_coef,
+            )
+        ):
+            raise ValueError("--v2-critic-only permits only value and reach30 critic losses")
     self_imitation_requested = (
         self_imitation_coef != 0
         or self_imitation_replay_fraction != 0
@@ -891,6 +943,7 @@ def train(
         from ppo import (
             apply_observation_feature_cutoff,
             apply_option_feature_cutoff,
+            behavior_reach30_metrics,
             load_terminal_teacher_replay,
             load_trajectory_buffer,
             parse_placement_rewards,
@@ -919,6 +972,30 @@ def train(
             self_imitation_max_age=self_imitation_max_age,
             self_imitation_max_rows=self_imitation_max_rows,
         )
+        if behavior_reach30_ece_max is not None or behavior_reach30_auc_min is not None:
+            behavior_metrics = behavior_reach30_metrics(buffer)
+            print(
+                "Behavior reach30 calibration | "
+                + " ".join(f"{key}={value:.6f}" for key, value in behavior_metrics.items())
+            )
+            if not all(math.isfinite(value) for value in behavior_metrics.values()):
+                raise ValueError("behavior reach30 calibration is incomplete or non-finite")
+            if (
+                behavior_reach30_ece_max is not None
+                and behavior_metrics["ece"] > behavior_reach30_ece_max
+            ):
+                raise ValueError(
+                    f"behavior reach30 ECE {behavior_metrics['ece']:.6f} exceeds "
+                    f"{behavior_reach30_ece_max:.6f}"
+                )
+            if (
+                behavior_reach30_auc_min is not None
+                and behavior_metrics["auc"] < behavior_reach30_auc_min
+            ):
+                raise ValueError(
+                    f"behavior reach30 AUC {behavior_metrics['auc']:.6f} is below "
+                    f"{behavior_reach30_auc_min:.6f}"
+                )
         if terminal_teacher_requested and buffer.option_dim:
             raise ValueError("terminal-teacher training rejects option-enabled rollout data")
         terminal_teacher = (
@@ -985,6 +1062,20 @@ def train(
                 option_dim=buffer.option_dim,
             )
         print(f"obs_dim={obs_dim}, act_dim={act_dim}")
+        frozen_v2_state: dict[str, torch.Tensor] | None = None
+        if v2_critic_only:
+            frozen_v2_state = {}
+            for name, parameter in model.named_parameters():
+                trainable = name.startswith("value_head.") or name.startswith("reach30_head.")
+                parameter.requires_grad_(trainable)
+                if not trainable:
+                    frozen_v2_state[name] = parameter.detach().cpu().clone()
+            trainable_names = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+            if not trainable_names or not any(name.startswith("reach30_head.") for name in trainable_names):
+                raise ValueError("--v2-critic-only found no trainable reach30 head")
+            print(
+                "V2 critic-only freeze | trainable=" + ",".join(trainable_names)
+            )
         history = train_ppo(
             model,
             buffer,
@@ -1010,6 +1101,7 @@ def train(
             seed=seed,
             rows_per_epoch=ppo_rows_per_epoch,
             continuation_fraction=ppo_continuation_fraction,
+            round_policy_bands=ppo_round_policy_bands,
             self_imitation_coef=self_imitation_coef,
             self_imitation_replay_fraction=self_imitation_replay_fraction,
             self_imitation_staleness_logp=self_imitation_staleness_logp,
@@ -1020,6 +1112,12 @@ def train(
             option_batch_size=option_batch_size,
             option_feature_cutoff=option_feature_cutoff,
         )
+        if frozen_v2_state is not None:
+            for name, parameter in model.named_parameters():
+                if name in frozen_v2_state and not torch.equal(
+                    parameter.detach().cpu(), frozen_v2_state[name]
+                ):
+                    raise ValueError(f"--v2-critic-only changed frozen parameter {name!r}")
         export_model(model, obs_dim, act_dim)
         return history
 
@@ -1407,6 +1505,30 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ppo-continuation-fraction", type=float, default=None,
                    help="Target share of selected PPO rows carrying continuationCurriculum=1; "
                         "requires --ppo-rows-per-epoch")
+    p.add_argument(
+        "--ppo-round-policy-bands",
+        type=parse_round_policy_bands,
+        default=None,
+        help="Inclusive round-band policy weights, e.g. 8:0.5,18:1,30:2; "
+             "requires --ppo-rows-per-epoch and does not reweight critic losses",
+    )
+    p.add_argument(
+        "--v2-critic-only",
+        action="store_true",
+        help="Freeze the v2 trunk/policy and update only value/reach30 heads",
+    )
+    p.add_argument(
+        "--behavior-reach30-ece-max",
+        type=float,
+        default=None,
+        help="Fail before optimizer creation if actor-recorded reach30 ECE exceeds this",
+    )
+    p.add_argument(
+        "--behavior-reach30-auc-min",
+        type=float,
+        default=None,
+        help="Fail before optimizer creation if actor-recorded reach30 AUC is below this",
+    )
     p.add_argument("--obs-feature-cutoff", type=int, default=None,
                    help="PPO v1 compute-matched representation control: zero observation columns "
                         "at and after this append-only index while retaining the full tensor width")
@@ -1550,6 +1672,10 @@ if __name__ == "__main__":
         seed=args.seed,
         ppo_rows_per_epoch=args.ppo_rows_per_epoch,
         ppo_continuation_fraction=args.ppo_continuation_fraction,
+        ppo_round_policy_bands=args.ppo_round_policy_bands,
+        v2_critic_only=args.v2_critic_only,
+        behavior_reach30_ece_max=args.behavior_reach30_ece_max,
+        behavior_reach30_auc_min=args.behavior_reach30_auc_min,
         self_imitation_coef=args.self_imitation_coef,
         self_imitation_replay_fraction=args.self_imitation_replay_fraction,
         self_imitation_staleness_logp=args.self_imitation_staleness_logp,

@@ -35,7 +35,12 @@ const { values: args } = parseArgs({
 		'shuffle-seed': { type: 'string', default: '710' },
 		seats: { type: 'string', default: '4' },
 		'max-rounds': { type: 'string', default: '90' },
+		'max-status-level': { type: 'string' },
+		'shuffle-guardians': { type: 'boolean', default: false },
+		'guardian-schedule': { type: 'string' },
+		gamma: { type: 'string' },
 		weights: { type: 'string', default: 'src/lib/play/ml/policy-weights.json' },
+		catalog: { type: 'string', default: 'ml/catalog.json' },
 		'infer-socket': { type: 'string' },
 		profiles: { type: 'string', default: 'pvphunter,medium,aggressive,hard' },
 		selection: { type: 'string', default: 'hybrid' },
@@ -58,7 +63,7 @@ if (args.help) {
 		'usage: node scripts/benchmark-actor-workers.mjs [--games N] [--repeats N] ' +
 			'[--workers 1,4,8] [--weights FILE | --infer-socket SOCK] [--sample] ' +
 			'[--temperature X] [--neural-seats Red] [--record-seats Red] ' +
-			'[--opponent-weights Blue=file,Green=file] [--report FILE] [--keep-data]'
+			'[--catalog FILE] [--opponent-weights Blue=file,Green=file] [--report FILE] [--keep-data]'
 	);
 	process.exit(0);
 }
@@ -132,6 +137,7 @@ const warmupGames = positiveInt(args['warmup-games'], '--warmup-games', { allowZ
 const seed0 = Number.parseInt(args.seed0, 10);
 const shuffleSeed = Number.parseInt(args['shuffle-seed'], 10);
 const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'arc-actor-worker-bench-'));
+const catalogPath = path.resolve(root, args.catalog);
 
 const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(root, 'src', 'lib') } });
 const { runActorPool } = await jiti.import(
@@ -140,6 +146,13 @@ const { runActorPool } = await jiti.import(
 const config = {
 	seats: positiveInt(args.seats, '--seats'),
 	maxRounds: positiveInt(args['max-rounds'], '--max-rounds'),
+	maxStatusLevel:
+		args['max-status-level'] === undefined
+			? undefined
+			: positiveInt(args['max-status-level'], '--max-status-level'),
+	shuffleGuardians: args['shuffle-guardians'] || undefined,
+	guardianSchedule: args['guardian-schedule'],
+	gamma: optionalNumber(args.gamma),
 	profiles: csv(args.profiles),
 	weightsPath: args.weights ? path.resolve(root, args.weights) : undefined,
 	inferSocket: args['infer-socket'],
@@ -155,6 +168,9 @@ const config = {
 };
 if (config.policyObsVersion === 2 && !config.inferSocket) {
 	throw new Error('--policy-obs-version 2 requires --infer-socket');
+}
+if (config.guardianSchedule !== undefined && config.guardianSchedule !== 'absolute-balanced') {
+	throw new Error('--guardian-schedule must be absolute-balanced');
 }
 
 const trials = [];
@@ -178,7 +194,7 @@ try {
 				outDir: path.join(tempRoot, `warmup-${count}`),
 				workers: count,
 				config,
-				catalogPath: path.join(root, 'ml', 'catalog.json')
+				catalogPath
 			});
 		}
 	}
@@ -191,7 +207,7 @@ try {
 			outDir: path.join(tempRoot, `${trial.count}-workers-r${trial.repeat}`),
 			workers: trial.count,
 			config,
-			catalogPath: path.join(root, 'ml', 'catalog.json')
+			catalogPath
 		});
 		const policyCoverage = countPolicyRows(result.shardFiles);
 		const gameWallTimes = result.summaries.map((summary) => summary.wallMs);
@@ -257,6 +273,7 @@ try {
 		repeats,
 		seed0,
 		shuffleSeed,
+		catalogPath,
 		trialOrder: trials.map(({ count, repeat }) => ({ workers: count, repeat })),
 		config,
 		rows,
