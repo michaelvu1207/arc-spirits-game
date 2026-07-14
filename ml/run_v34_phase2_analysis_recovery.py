@@ -23,6 +23,86 @@ EXEC_SCHEMA = "arc-v34-phase2-analysis-recovery-exec-confirmed-v2"
 EXIT_SCHEMA = "arc-v34-phase2-analysis-recovery-exit-v2"
 SELF_TEST_SCHEMA = "arc-v34-phase2-analysis-recovery-launcher-self-test-v2"
 
+REVISION1_AUTHORIZATION_PATH = (
+    "ml/experiments/v34-latency-first-expert-iteration/artifacts/"
+    "phase2-analysis-recovery-v2-authorization.json"
+)
+REVISION1_AUTHORIZATION_ABSOLUTE = (
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/" + REVISION1_AUTHORIZATION_PATH
+)
+REVISION1_HEAD = "d5535bcac4318158b45ef9bf2bf302d093921203"
+SUPERSESSION_MINIMUM_ANCESTRY = "94e7b7832b26079e038076245959a7bbbb9c1fea"
+REVISION1_GIT_DIR = "/data/share8/michaelvuaprilexperimentation/arc-v34-phase2-recovery-v2-git/.git"
+REVISION1_FILE_RECORDS = {
+    "revision1Authorization": {
+        "path": REVISION1_AUTHORIZATION_PATH,
+        "bytes": 15142,
+        "sha256": "ce9a7717836842894fb9aa8fbb12652d0e193c3fc72c113de4300444ff58dac7",
+    },
+    "revision1AuthorizationIncident": {
+        "path": (
+            "ml/experiments/v34-latency-first-expert-iteration/artifacts/"
+            "phase2-analysis-recovery-v2-authorization-1-incident.json"
+        ),
+        "bytes": 1015,
+        "sha256": "8f279c134023d166e5d9d134d2a630f026bf76a7622ad740e1e3f16f3c1a1fa6",
+    },
+    "revision1GitContext": {
+        "path": (
+            "ml/experiments/v34-latency-first-expert-iteration/artifacts/"
+            "phase2-analysis-recovery-v2-git-context.json"
+        ),
+        "bytes": 6187,
+        "sha256": "abc9301b0af2719c31c6bbb7934d75b84655968edbd6caff2002d3536aaa3081",
+    },
+    "revision1GitInventory": {
+        "path": (
+            "ml/experiments/v34-latency-first-expert-iteration/artifacts/"
+            "phase2-analysis-recovery-v2-git-context-files.tsv"
+        ),
+        "bytes": 4223,
+        "sha256": "f833d8ba6df0dbc0ef569885f867acd9cda772ab98b45ab840743f4f49a6de67",
+    },
+}
+REVISION1_ONE_SHOT_PATHS = {
+    "prelaunch": (
+        "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/"
+        "v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-v2-prelaunch.json"
+    ),
+    "reservation": (
+        "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/"
+        "v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-v2-reservation.json"
+    ),
+    "attemptStarted": (
+        "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/"
+        "v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2-started.json"
+    ),
+    "stdout": (
+        "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/"
+        "v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2.stdout"
+    ),
+    "stderr": (
+        "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/"
+        "v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2.stderr"
+    ),
+    "execConfirmed": (
+        "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/"
+        "v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2-exec-confirmed.json"
+    ),
+    "exitRecord": (
+        "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/"
+        "v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-v2-exit.json"
+    ),
+}
+REQUIRED_SUPERSESSION_BOUND_FILES = {
+    *REVISION1_FILE_RECORDS,
+    "supersessionPlan",
+    "supersessionGenerator",
+    "supersessionGeneratorTests",
+    "supersessionLauncherTests",
+    "supersessionFinalFableReview",
+}
+
 ALLOWED_GIT_ENV = {
     "GIT_DIR",
     "GIT_NO_REPLACE_OBJECTS",
@@ -150,6 +230,86 @@ def command_sha256(executable: str, argv: Sequence[str], cwd: str) -> str:
     return canonical_sha256({"executable": executable, "argv": list(argv), "cwd": cwd})
 
 
+def validate_supersession_contract(
+    value: Mapping[str, Any],
+    authorization_path: Path,
+    paths: Mapping[str, Any],
+) -> None:
+    bound_files = value.get("boundFiles")
+    if not isinstance(bound_files, dict):
+        raise RecoveryLaunchError("supersession bound files are missing")
+    missing = REQUIRED_SUPERSESSION_BOUND_FILES - set(bound_files)
+    if missing:
+        raise RecoveryLaunchError(f"supersession bound files are missing: {sorted(missing)}")
+    for label, expected in REVISION1_FILE_RECORDS.items():
+        if bound_files.get(label) != expected:
+            raise RecoveryLaunchError(f"revision-1 evidence binding changed: {label}")
+
+    decision = value.get("decision")
+    expected_decision = {
+        "reviewer": "Claude Fable",
+        "model": "fable",
+        "effort": "high",
+        "verdict": "ACCEPT",
+        "remainingBlockingGaps": [],
+        "outcomeArtifactsReadByReviewer": False,
+    }
+    if decision != expected_decision:
+        raise RecoveryLaunchError("supersession Fable decision is not an outcome-blind ACCEPT")
+
+    supersession = value.get("supersession")
+    if not isinstance(supersession, dict):
+        raise RecoveryLaunchError("supersession contract is missing")
+    require_exact_keys(supersession, {"revision1Disposition", "lineagePolicy"}, "supersession")
+    disposition = supersession["revision1Disposition"]
+    if not isinstance(disposition, dict):
+        raise RecoveryLaunchError("revision-1 disposition is missing")
+    expected_disposition = {
+        "authorization": REVISION1_FILE_RECORDS["revision1Authorization"],
+        "incident": REVISION1_FILE_RECORDS["revision1AuthorizationIncident"],
+        "gitContext": REVISION1_FILE_RECORDS["revision1GitContext"],
+        "gitInventory": REVISION1_FILE_RECORDS["revision1GitInventory"],
+        "gitContextCreated": True,
+        "prelaunchCreated": False,
+        "reservationCreated": False,
+        "attemptStartedCreated": False,
+        "stdoutCreated": False,
+        "stderrCreated": False,
+        "execConfirmedCreated": False,
+        "exitRecordCreated": False,
+        "analysisJsonCreated": False,
+        "analyzerProcessesStarted": 0,
+        "authorizedAnalyzerProcessConsumed": False,
+        "immutableAndAbandoned": True,
+        "outcomesInspected": False,
+    }
+    if disposition != expected_disposition:
+        raise RecoveryLaunchError("revision-1 disposition changed")
+
+    lineage = supersession["lineagePolicy"]
+    expected_lineage = {
+        "minimumRequiredAncestryCommit": SUPERSESSION_MINIMUM_ANCESTRY,
+        "forbiddenHead": REVISION1_HEAD,
+        "forbiddenGitDir": REVISION1_GIT_DIR,
+        "forbiddenAuthorizationPath": REVISION1_AUTHORIZATION_ABSOLUTE,
+        "forbiddenOneShotPaths": REVISION1_ONE_SHOT_PATHS,
+        "allNewPathsDisjoint": True,
+    }
+    if lineage != expected_lineage:
+        raise RecoveryLaunchError("supersession lineage policy changed")
+    if value.get("requiredAncestryCommit") != SUPERSESSION_MINIMUM_ANCESTRY:
+        raise RecoveryLaunchError("supersession ancestry floor changed")
+    if authorization_path.resolve() == Path(REVISION1_AUTHORIZATION_ABSOLUTE).resolve():
+        raise RecoveryLaunchError("revision-1 authorization path cannot be reused")
+    if paths.get("gitDir") == REVISION1_GIT_DIR:
+        raise RecoveryLaunchError("revision-1 Git database cannot be reused")
+    new_paths = [str(Path(paths[label]).resolve()) for label in REVISION1_ONE_SHOT_PATHS]
+    if len(set(new_paths)) != len(new_paths):
+        raise RecoveryLaunchError("supersession one-shot paths are not unique")
+    if set(new_paths) & set(REVISION1_ONE_SHOT_PATHS.values()):
+        raise RecoveryLaunchError("revision-1 one-shot path cannot be reused")
+
+
 def validate_authorization(path: Path) -> dict[str, Any]:
     value = load_json(path, "recovery authorization")
     if value.get("schemaVersion") != AUTH_SCHEMA or value.get("authorized") is not True:
@@ -175,6 +335,7 @@ def validate_authorization(path: Path) -> dict[str, Any]:
         paths,
         {
             "analysisOutput",
+            "prelaunch",
             "stdout",
             "stderr",
             "reservation",
@@ -213,6 +374,7 @@ def validate_authorization(path: Path) -> dict[str, Any]:
         raise RecoveryLaunchError("analysis output path differs from authorized argv")
     if (cwd / ".git").exists() or (cwd / ".git").is_symlink():
         raise RecoveryLaunchError("authoritative root unexpectedly contains .git")
+    validate_supersession_contract(value, path, paths)
     validate_bound_files(cwd, value.get("boundFiles", {}))
     return value
 
@@ -314,6 +476,8 @@ def launch(authorization_path: Path, prelaunch_path: Path, reservation_path: Pat
     paths = {key: Path(value) for key, value in authorization["paths"].items()}
     if reservation_path != paths["reservation"].resolve():
         raise RecoveryLaunchError("reservation CLI path differs from authorization")
+    if prelaunch_path != paths["prelaunch"].resolve():
+        raise RecoveryLaunchError("prelaunch CLI path differs from authorization")
     inherited_git = sorted(key for key in os.environ if key.startswith("GIT_"))
     if inherited_git:
         raise RecoveryLaunchError(f"inherited Git variables are forbidden: {inherited_git}")

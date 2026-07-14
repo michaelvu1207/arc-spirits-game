@@ -21,6 +21,8 @@ try:
         ENV_FINGERPRINT_EXCLUDED,
         ENV_FINGERPRINT_SERIALIZATION,
         PRELAUNCH_SCHEMA,
+        REVISION1_GIT_DIR,
+        REVISION1_HEAD,
         analysis_environment_sha256,
         environment_sha256,
         exclusive_json,
@@ -33,6 +35,8 @@ except ImportError:
         ENV_FINGERPRINT_EXCLUDED,
         ENV_FINGERPRINT_SERIALIZATION,
         PRELAUNCH_SCHEMA,
+        REVISION1_GIT_DIR,
+        REVISION1_HEAD,
         analysis_environment_sha256,
         environment_sha256,
         exclusive_json,
@@ -183,6 +187,7 @@ def create_manifest(args: argparse.Namespace) -> dict[str, Any]:
     validate_embedded_file_record(git_context.get("fileInventory"), git_inventory_path, repo, "Git-context inventory")
     git_dir = Path(authorization["paths"]["gitDir"])
     require(git_context.get("gitDir") == str(git_dir), "Git-context manifest path changed")
+    require(str(git_dir) != REVISION1_GIT_DIR, "revision-1 Git database cannot be reused")
     require(not (repo / ".git").exists() and not (repo / ".git").is_symlink(), "authoritative root contains .git")
     child_environment = dict(os.environ)
     child_environment.update(authorization["gitEnvironment"])
@@ -193,6 +198,7 @@ def create_manifest(args: argparse.Namespace) -> dict[str, Any]:
     head = run([*git, "rev-parse", "HEAD"], cwd=repo, environment=child_environment).stdout.decode().strip()
     expected_head = git_context["head"]["commit"]
     expected_ref = git_context["head"]["symbolicRef"]
+    require(expected_head != REVISION1_HEAD, "revision-1 Git-context HEAD cannot be reused")
     require(head == expected_head, "Git-context HEAD changed")
     shallow = run([*git, "rev-parse", "--is-shallow-repository"], cwd=repo, environment=child_environment).stdout.decode().strip()
     require(shallow == "true", "Git context is not shallow")
@@ -263,8 +269,18 @@ def create_manifest(args: argparse.Namespace) -> dict[str, Any]:
     require(self_test_value.get("passed") is True and self_test_value.get("outcomesInspected") is False, "launcher self-test failed")
 
     paths = {key: Path(value) for key, value in authorization["paths"].items()}
-    for label in ("analysisOutput", "stdout", "stderr", "reservation", "attemptStarted", "execConfirmed", "exitRecord"):
+    for label in (
+        "analysisOutput",
+        "prelaunch",
+        "stdout",
+        "stderr",
+        "reservation",
+        "attemptStarted",
+        "execConfirmed",
+        "exitRecord",
+    ):
         require(not paths[label].exists() and not paths[label].is_symlink(), f"one-shot path exists before reservation: {label}")
+    require(out == paths["prelaunch"].resolve(), "prelaunch output path differs from authorization")
     original_stdout = repo / "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.stdout"
     require(original_stdout.is_file() and original_stdout.stat().st_size == 0, "attempt-1 stdout changed")
     artifact_dir = paths["analysisOutput"].parent

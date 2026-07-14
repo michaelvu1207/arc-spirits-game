@@ -98,6 +98,14 @@ prelaunch, reservation, markers, streams, and exit paths must all be lineage-uni
 and must not reuse revision-1 v2 artifacts. This operational correction does not
 alter the analyzer or the accepted environment contract.
 
+This uniqueness is fail-closed in code. The launcher pins revision 1's exact
+authorization, incident, Git-context manifest, and inventory records; requires
+the amended plan, corrected generator, generator tests, and final accepting Fable
+review as bound files; requires an ancestry floor at commit `94e7b78`; rejects
+revision 1's Git directory and HEAD; and compares every new prelaunch/reservation/
+marker/stream/exit path against the complete revision-1 set. The preflight also
+requires its output to equal the authorization's newly pinned prelaunch path.
+
 ## Scientific validity
 
 This v2 amendment changes only how equality is checked for variables that identify
