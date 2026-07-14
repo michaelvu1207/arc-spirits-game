@@ -91,8 +91,16 @@ def walk_file_records(value: Any) -> Iterable[dict[str, Any]]:
 
 
 def validate_completion_inputs(repo: Path, authorization: Mapping[str, Any]) -> dict[str, Any]:
-    labels = [label for label in authorization["boundFiles"] if label.startswith("completion")]
-    require(len(labels) == 7, "authorization no longer binds seven completion manifests")
+    labels = [
+        "completionRaw",
+        "completionP025",
+        "completionP050",
+        "completionP075",
+        "completionP100",
+        "completionHeuristicS4H2",
+        "completionHeuristicS8H3",
+    ]
+    require(all(label in authorization["boundFiles"] for label in labels), "authorization no longer binds seven completion manifests")
     records = 0
     unique_paths: set[Path] = set()
     for label in labels:
