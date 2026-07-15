@@ -1,0 +1,52 @@
+{
+	"schemaVersion": "arc-v34-b1-storage-capability-preflight-v1",
+	"checkedAt": "2026-07-15T01:05:04.000Z",
+	"host": "ubuntu@216.151.21.122",
+	"storage": {
+		"kind": "s3",
+		"bucket": "dev-simforge-435362779479-models",
+		"region": "us-west-1",
+		"profile": "simforge"
+	},
+	"checks": {
+		"versioning": {
+			"command": [
+				"/usr/local/bin/aws",
+				"--no-cli-pager",
+				"--profile",
+				"simforge",
+				"--region",
+				"us-west-1",
+				"s3api",
+				"get-bucket-versioning",
+				"--bucket",
+				"dev-simforge-435362779479-models",
+				"--output",
+				"json"
+			],
+			"exitCode": 0,
+			"response": {},
+			"status": "absent"
+		},
+		"objectLock": {
+			"command": [
+				"/usr/local/bin/aws",
+				"--no-cli-pager",
+				"--profile",
+				"simforge",
+				"--region",
+				"us-west-1",
+				"s3api",
+				"get-object-lock-configuration",
+				"--bucket",
+				"dev-simforge-435362779479-models",
+				"--output",
+				"json"
+			],
+			"exitCode": 254,
+			"errorCode": "ObjectLockConfigurationNotFoundError",
+			"status": "absent"
+		}
+	},
+	"passed": true
+}

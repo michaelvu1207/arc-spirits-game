@@ -58,7 +58,10 @@ sends one binary request for raw logits plus reach30 and applies the p30 sigmoid
 general production `RemotePolicy` is not executed or changed by Lane B: its constructor timed out in a
 no-game preflight on both local Node 25 and SimForge Node 20 even though direct framed requests succeeded.
 The ready-synchronized client has an in-process fake-server wire test and must pass a live no-game
-handshake before authorization.
+handshake before authorization. The final no-game server preflight must use the same stripped five-key
+child environment as the smoke (`ARC_V34_PARENT_CHECKPOINT`, `ARC_V34_INFER_SOCKET`,
+`ARC_V34_INFER_TIMEOUT_MS`, `ARC_V34_EXPECT_DEVICE`, and `CUDA_VISIBLE_DEVICES`) rather than inheriting
+the operator shell environment.
 
 The exact config is `b1-parent-policy-config.json`:
 
@@ -105,10 +108,19 @@ Avoid the circular dependency between an authorization hash and the S3 prefix wi
      tests, and final Fable PASS records.
    - Bind exact host, artifact root, `/dev/shm` attempt root, argv arrays, environment allowlist,
      logs, outputs, markers, shard ledger, policy binding, and retry semantics.
+   - Keep the consumed marker, structured orchestrator success/failure evidence, and a verified copy of
+     the final feature-only report under the durable evidence directory outside `/dev/shm`. The
+     orchestrator publishes these files itself with exclusive new-only writes; an external launcher
+     must not pre-create or redirect into the absent attempt root.
    - The exact environment values are the absolute checkpoint path, absent absolute socket path,
      `ARC_V34_INFER_TIMEOUT_MS=30000`, `ARC_V34_EXPECT_DEVICE=cuda:0`, and
      `CUDA_VISIBLE_DEVICES=7`; no other `ARC_V34_*`, `ARC_DEVICE`, or CUDA visibility variable is
      allowed.
+   - Bind a strict no-game provider-preflight record produced on a dedicated, released preflight
+     socket. The execution provider binding is derived by changing only the bound client socket path
+     to the still-absent attempt socket; every checkpoint, manifest, config, server, client, head, and
+     device field must remain byte-for-byte canonical. This avoids creating the attempt directory or
+     execution socket before the new-only launch check.
    - Derive the only S3 prefix as
      `arc-spirits/v34/lane-b/<basisSha256>/`.
    - Open only `storagePreflightOpen`; every game, registered, training, evaluation, promotion, and
@@ -120,6 +132,9 @@ Avoid the circular dependency between an authorization hash and the S3 prefix wi
    - Record exact commands, exits, byte/hash evidence, throughput, timestamp, and `/dev/shm` free bytes.
    - Require at least twice the projected smoke peak in scratch. The later registered capacity gate stays
      `max(128 GiB, 1.5 * projected three-generation bytes)` and action traces at most 25% of that budget.
+   - For this smoke, bind a 16 MiB probe and an outcome-blind conservative 64 GiB projected peak, so
+     launch requires at least 128 GiB free on `/dev/shm`. These are protocol bounds, not estimates
+     selected from any game result.
    - S3 versioning/Object Lock are absent, so later durable artifacts require content-addressed keys,
      conditional new-only uploads, checksum metadata, download verification, and an immutable manifest.
 
@@ -170,11 +185,15 @@ After all 512 games complete:
    files.
 4. Run the committed freezer once with smoke quotas `recovery=1375`, `late=6875`, `mid=3438`,
    `early=2063`, generation-1 PCG64 order, and global caps. A successful exact selection proves each floor.
-5. Run target-deletion invariance and at least 1,000 deterministic trace-prefix verifications selected by
-   an execution-lock RNG. These checks read feature/trace data only.
+5. Delete only the disposable shard target artifacts by their lexically bound paths without opening or
+   hashing them, then run the freezer's `verify --ledger` path and require all bound feature, selection,
+   output, and ledger hashes to remain valid. The freezer `freeze` command still runs exactly once. This
+   is the target-deletion invariance check. Also run at least 1,000 deterministic trace-prefix
+   verifications selected by the execution-lock RNG; these checks read feature/trace data only.
 6. Produce a target-blind report with raw rows/band, globally selectable floors, per-game rows, structural
    duplicates, recovery reason overlaps/boundaries, trace share, peak scratch, throughput, runtime, server
-   batches, and provenance.
+   batches, and provenance. Validate it in scratch, then copy it new-only to the bound durable report path
+   and verify matching bytes and SHA-256 before declaring success.
 
 The registered B1 collection remains closed even if the smoke passes. Opening it requires a separate
 immutable registered authorization after smoke evidence is committed and Fable-reviewed.
@@ -194,6 +213,8 @@ primary shard `collection.json` exists.
 
 - Adapter/config/collector/unit tests and full engine check pass.
 - A no-game live handshake proves the exact provider binding on SimForge.
+- That handshake starts the server under the exact stripped five-key child environment bound for the
+  smoke.
 - The Fable high review of this plan is `PASS`, and the final reviewed file hashes are bound.
 - Lane B protocol still validates with all 38 registered ranges closed.
 - The seed inventory verifier proves `962000000..962000511` disjoint.
