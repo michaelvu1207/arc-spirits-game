@@ -1,0 +1,197 @@
+{
+  "arms": [
+    {
+      "accepted": 20,
+      "bestCandidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.5432012497730315,
+          "multiplayerShare": 0.14762919559448007,
+          "soloShare": 0.3091695546324884
+        },
+        "loss": {
+          "engineWeight": 1.2147028574656882,
+          "entropyWeight": 0.0631602294676675,
+          "reach30Weight": 0.156618665614501,
+          "terminalWeight": 1.3810733807427231
+        },
+        "planner": {
+          "mode": "search",
+          "rerankPolicyWeight": null,
+          "searchFraction": 0.6507523162999274,
+          "searchHorizonRounds": 1,
+          "searchNavTemperature": 0.12929224670241468,
+          "searchRollout": "policy",
+          "searchSims": 16,
+          "searchValueWeight": 1.298837940803122
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.7066739188916352
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "bestCandidateId": "80d14d95521659aa",
+      "bestComplexityUnits": 18.25,
+      "bestScore": 0.8197807000343975,
+      "cost": {
+        "cpu_seconds": 0.001355334185063839,
+        "evaluations": 20,
+        "games": 1280,
+        "gpu_seconds": 0.0,
+        "normalized_cost": 8.470838656648993e-05,
+        "private_queries": 0,
+        "wall_seconds": 0.001355334185063839
+      },
+      "lineages": 1,
+      "method": "random",
+      "rejectionCategories": [],
+      "steps": 20
+    },
+    {
+      "accepted": 20,
+      "bestCandidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "search",
+          "rerankPolicyWeight": null,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 4,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "bestCandidateId": "f4c4c65d4aeb6785",
+      "bestComplexityUnits": 6.5,
+      "bestScore": 0.7406393152272137,
+      "cost": {
+        "cpu_seconds": 0.0013305796310305595,
+        "evaluations": 20,
+        "games": 1280,
+        "gpu_seconds": 0.0,
+        "normalized_cost": 8.316122693940997e-05,
+        "private_queries": 0,
+        "wall_seconds": 0.0013305796310305595
+      },
+      "lineages": 1,
+      "method": "evolutionary",
+      "rejectionCategories": [],
+      "steps": 20
+    },
+    {
+      "accepted": 20,
+      "bestCandidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.5874338011756489,
+          "multiplayerShare": 0.044930639301765274,
+          "soloShare": 0.3676355595225858
+        },
+        "loss": {
+          "engineWeight": 0.5108386696489763,
+          "entropyWeight": 0.02784078538939692,
+          "reach30Weight": 1.9661620654737282,
+          "terminalWeight": 0.7965477698843302
+        },
+        "planner": {
+          "mode": "search",
+          "rerankPolicyWeight": null,
+          "searchFraction": 0.5311401177491901,
+          "searchHorizonRounds": 1,
+          "searchNavTemperature": 0.7754565222054788,
+          "searchRollout": "policy",
+          "searchSims": 16,
+          "searchValueWeight": 0.4389415478264639
+        },
+        "policy": {
+          "sample": true,
+          "temperature": 0.7914526787039017
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "bestCandidateId": "3c62f0ed19d4b60b",
+      "bestComplexityUnits": 18.25,
+      "bestScore": 0.7122999474986437,
+      "cost": {
+        "cpu_seconds": 0.0013255421072244644,
+        "evaluations": 20,
+        "games": 1280,
+        "gpu_seconds": 0.0,
+        "normalized_cost": 8.284638170152903e-05,
+        "private_queries": 0,
+        "wall_seconds": 0.0013255421072244644
+      },
+      "lineages": 1,
+      "method": "tpe",
+      "rejectionCategories": [],
+      "steps": 20
+    },
+    {
+      "accepted": 20,
+      "bestCandidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.529840853596693,
+          "multiplayerShare": 0.1610497195230155,
+          "soloShare": 0.3091094268802915
+        },
+        "loss": {
+          "engineWeight": 1.33432379309566,
+          "entropyWeight": 0.020926972835444316,
+          "reach30Weight": 0.6918424924630249,
+          "terminalWeight": 1.8722876661866488
+        },
+        "planner": {
+          "mode": "search",
+          "rerankPolicyWeight": null,
+          "searchFraction": 0.913301543565541,
+          "searchHorizonRounds": 1,
+          "searchNavTemperature": 0.4668334126441902,
+          "searchRollout": "policy",
+          "searchSims": 2,
+          "searchValueWeight": 1.4746251164411686
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.9032444322933809
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "bestCandidateId": "727af6cd22e801a6",
+      "bestComplexityUnits": 4.25,
+      "bestScore": 0.7421930747487803,
+      "cost": {
+        "cpu_seconds": 0.0013086674734950066,
+        "evaluations": 20,
+        "games": 1280,
+        "gpu_seconds": 0.0,
+        "normalized_cost": 8.179171709343791e-05,
+        "private_queries": 0,
+        "wall_seconds": 0.0013086674734950066
+      },
+      "lineages": 4,
+      "method": "aide",
+      "rejectionCategories": [],
+      "steps": 20
+    }
+  ],
+  "gamesPerStep": 64,
+  "promotionEligible": false,
+  "schemaVersion": "arc-v35-search-comparison-v1",
+  "stepsPerArm": 20,
+  "syntheticOnly": true
+}

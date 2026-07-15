@@ -1,0 +1,141 @@
+{
+	"schemaVersion": "arc-v35-phase1-protocol-v1",
+	"experiment": "v35-v2-late-credit-screen",
+	"status": "smoke-frozen",
+	"promotionEligible": false,
+	"controller": "local-private",
+	"trustedCompute": "simforge-gpu7-only",
+	"plan": "ml/experiments/v35-weco-recursive-autoresearch/phase1-training-plan.md",
+	"review": {
+		"model": "Claude Fable",
+		"effort": "high",
+		"artifact": "ml/experiments/v35-weco-recursive-autoresearch/phase1-training-fable-review.md",
+		"verdict": "PASS"
+	},
+	"catalog": {
+		"path": "ml/catalog.json",
+		"sha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59"
+	},
+	"initialPolicy": {
+		"path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+		"manifestPath": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.manifest.json",
+		"sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+		"manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+		"format": "arc-entity-scorer-v2",
+		"dModel": 128,
+		"layers": 3,
+		"heads": 4
+	},
+	"replicates": [
+		{
+			"id": "a",
+			"trainBase": 966100000,
+			"evalBase": 966700000
+		},
+		{
+			"id": "b",
+			"trainBase": 966300000,
+			"evalBase": 966820000
+		},
+		{
+			"id": "c",
+			"trainBase": 966500000,
+			"evalBase": 966940000
+		}
+	],
+	"arms": [
+		{
+			"id": "control-uniform",
+			"soloReach30Coef": 0,
+			"roundPolicyBands": null
+		},
+		{
+			"id": "late-reweighted",
+			"soloReach30Coef": 0,
+			"roundPolicyBands": [
+				[8, 0.5],
+				[18, 1.0],
+				[30, 2.0]
+			]
+		},
+		{
+			"id": "p30-credit025",
+			"soloReach30Coef": 0.25,
+			"roundPolicyBands": null
+		}
+	],
+	"seedSchedule": {
+		"trainStride": 2048,
+		"evalStride": 8192,
+		"maxGeneration": 12,
+		"gamesPerGeneration": 1024,
+		"evalGamesPerGeneration": 256,
+		"developmentBase": 969030000,
+		"developmentGames": 4096
+	},
+	"training": {
+		"seats": 1,
+		"maxRounds": 30,
+		"soloMaxStatusLevel": 2,
+		"gamesPerGeneration": 1024,
+		"evalGamesPerGeneration": 256,
+		"epochs": 2,
+		"batchSize": 512,
+		"ppoRowsPerEpoch": 100000,
+		"optimizerStepsPerEpoch": 196,
+		"learningRate": 0.00004,
+		"clipEpsilon": 0.1,
+		"valueClipEpsilon": 0.1,
+		"entropyCoef": 0.003,
+		"klReferenceCoef": 0.05,
+		"gamma": 0.999,
+		"gaeLambda": 0.95,
+		"valueCoef": 0.5,
+		"reach30ValueCoef": 1.0,
+		"winBonus": 4.0,
+		"allFallenPenalty": -3.0,
+		"sample": true,
+		"temperature": 0.55,
+		"strategicDecisionScope": "engine-cycle",
+		"guardianSchedule": "absolute-balanced",
+		"workers": 24
+	},
+	"trustGates": {
+		"maxApproxKl": 0.02,
+		"maxOrdinaryClipFraction": 0.2,
+		"maxWeightedClipFraction": 0.2,
+		"maxBehaviorReach30Ece": 0.1,
+		"behaviorReach30BrierNoWorseThanConstant": true,
+		"maxBehaviorLogpReconstructionError": 0.001,
+		"stalls": 0,
+		"malformedEpisodes": 0,
+		"malformedRows": 0
+	},
+	"runtime": {
+		"host": "ubuntu@216.151.21.122",
+		"workspace": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+		"physicalGpu": 7,
+		"gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+		"forbiddenGpus": [4, 5, 6],
+		"scratch": "/dev/shm/arc-v35-training",
+		"lease": "/data/share8/michaelvuaprilexperimentation/arc-bot/.leases/arc-v35-gpu7",
+		"minDataShareAvailableBytes": 4294967296,
+		"minShmAvailableBytes": 34359738368,
+		"minRamAvailableBytes": 68719476736,
+		"maxConcurrentRoots": 1
+	},
+	"endpoints": {
+		"smokeGeneration": 1,
+		"initialEndpointGeneration": 8,
+		"outcomeBlindExtensionGeneration": 12,
+		"extensionIsGlobal": true,
+		"developmentUsesOnlyFrozenEndpoint": true
+	},
+	"rules": [
+		"No 966 training/evaluation seed or 969030000..969034095 development seed may be consumed before the source lock and seed inventory pass.",
+		"A semantic, calibration, trust, replay, stall, or non-finite failure closes this screen without an LR or seed retry.",
+		"Only a whole unchanged generation may resume after a documented infrastructure incident.",
+		"GPU 7 is the only authorized accelerator; GPUs 4, 5, and 6 are forbidden.",
+		"No checkpoint from this status-2 mechanism screen is promotion eligible."
+	]
+}

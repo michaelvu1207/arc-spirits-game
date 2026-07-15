@@ -1,0 +1,293 @@
+{
+  "schemaVersion": "arc-v35-seed-inventory-v1",
+  "valid": true,
+  "protocol": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+  "intervals": [
+    {
+      "id": "a:train",
+      "start": 966100000,
+      "end": 966123551
+    },
+    {
+      "id": "a:eval",
+      "start": 966700000,
+      "end": 966790367
+    },
+    {
+      "id": "b:train",
+      "start": 966300000,
+      "end": 966323551
+    },
+    {
+      "id": "b:eval",
+      "start": 966820000,
+      "end": 966910367
+    },
+    {
+      "id": "c:train",
+      "start": 966500000,
+      "end": 966523551
+    },
+    {
+      "id": "c:eval",
+      "start": 966940000,
+      "end": 967030367
+    },
+    {
+      "id": "development",
+      "start": 969030000,
+      "end": 969034095
+    }
+  ],
+  "filesScanned": 272,
+  "allowedRegistrationHits": [
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966123551,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966700000,
+      "interval": "a:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966790367,
+      "interval": "a:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966323551,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966820000,
+      "interval": "b:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966910367,
+      "interval": "b:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966523551,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 966940000,
+      "interval": "c:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 967030367,
+      "interval": "c:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 969030000,
+      "interval": "development"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-materialized-configs.json",
+      "value": 969034095,
+      "interval": "development"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/config.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/config.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/config.json",
+      "value": 966700000,
+      "interval": "a:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/config.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/config.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/config.json",
+      "value": 966700000,
+      "interval": "a:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/config.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/config.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/config.json",
+      "value": 966700000,
+      "interval": "a:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/control-uniform/config.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/control-uniform/config.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/control-uniform/config.json",
+      "value": 966820000,
+      "interval": "b:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/late-reweighted/config.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/late-reweighted/config.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/late-reweighted/config.json",
+      "value": 966820000,
+      "interval": "b:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/p30-credit025/config.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/p30-credit025/config.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/p30-credit025/config.json",
+      "value": 966820000,
+      "interval": "b:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/control-uniform/config.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/control-uniform/config.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/control-uniform/config.json",
+      "value": 966940000,
+      "interval": "c:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/late-reweighted/config.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/late-reweighted/config.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/late-reweighted/config.json",
+      "value": 966940000,
+      "interval": "c:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/p30-credit025/config.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/p30-credit025/config.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/p30-credit025/config.json",
+      "value": 966940000,
+      "interval": "c:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "value": 966100000,
+      "interval": "a:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "value": 966700000,
+      "interval": "a:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "value": 966300000,
+      "interval": "b:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "value": 966820000,
+      "interval": "b:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "value": 966500000,
+      "interval": "c:train"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "value": 966940000,
+      "interval": "c:eval"
+    },
+    {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "value": 969030000,
+      "interval": "development"
+    }
+  ],
+  "collisions": [],
+  "scope": [
+    "experiment protocol files",
+    "league configs",
+    "top-level ML Python launch/audit sources",
+    "top-level scripts",
+    "V35 plans, materialized configs, and root bindings"
+  ]
+}

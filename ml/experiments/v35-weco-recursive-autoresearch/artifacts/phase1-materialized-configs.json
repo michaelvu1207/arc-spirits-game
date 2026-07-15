@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "arc-v35-materialized-configs-v1",
+  "protocolPath": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+  "protocolSha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+  "basePath": "ml/league/configs/fair-v35-late-credit-base.json",
+  "baseSha256": "c2c0fd7637f27dbc6afdee4adbef48a57b83c19d2c60ebf351f165f506bfb52e",
+  "seedIntervals": [
+    {
+      "id": "a:train",
+      "start": 966100000,
+      "end": 966123551
+    },
+    {
+      "id": "a:eval",
+      "start": 966700000,
+      "end": 966790367
+    },
+    {
+      "id": "b:train",
+      "start": 966300000,
+      "end": 966323551
+    },
+    {
+      "id": "b:eval",
+      "start": 966820000,
+      "end": 966910367
+    },
+    {
+      "id": "c:train",
+      "start": 966500000,
+      "end": 966523551
+    },
+    {
+      "id": "c:eval",
+      "start": 966940000,
+      "end": 967030367
+    },
+    {
+      "id": "development",
+      "start": 969030000,
+      "end": 969034095
+    }
+  ],
+  "configs": [
+    {
+      "replicate": "a",
+      "arm": "control-uniform",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform",
+      "configSha256": "884e476381249594e885a7fc5aaf2adf9dd59cc02839c2c26aa38bf3c69c63a3",
+      "bindingSha256": "735b2ef8c5e88ee68d5f3fed4f16a4f4650707869154d01b79629b95adcc659a"
+    },
+    {
+      "replicate": "a",
+      "arm": "late-reweighted",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted",
+      "configSha256": "7535df92f4112d451e41b99e0b4773cd594961419d5cfbd9cf67fae677044440",
+      "bindingSha256": "6b51160d4a7a0b71e15507fbfa6670c9b51d60d6ba77257161ed5c5634a17472"
+    },
+    {
+      "replicate": "a",
+      "arm": "p30-credit025",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025",
+      "configSha256": "88a2a938e89e26998fac05413fc25b82c940b7044c5a02531ae96df23e7ee9f6",
+      "bindingSha256": "3b6b0b1cfa7d17f6e4a10b1870d3106a733e7719da3336a9aaf4e0ae8ca56e17"
+    },
+    {
+      "replicate": "b",
+      "arm": "control-uniform",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/control-uniform",
+      "configSha256": "8ffa4ccd252dd686709802087ce88c7adea8a29ff44f38d046c85d9b78e07c2d",
+      "bindingSha256": "228227861776d9ca99efbada313f6fc28031b7e8358a1763fde1f11b811c9208"
+    },
+    {
+      "replicate": "b",
+      "arm": "late-reweighted",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/late-reweighted",
+      "configSha256": "e2c6a86cee76760ee68818925f13fe167413735a2a539d5cd18963e9feab50ab",
+      "bindingSha256": "b9c2b7b02113462f724b782a29b6be159d1301e1906e4e563693e59b747e3dc5"
+    },
+    {
+      "replicate": "b",
+      "arm": "p30-credit025",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/p30-credit025",
+      "configSha256": "b52300a479c53da60e74828ad777c95ffd35492a43b8b45751e945f1c0927a4e",
+      "bindingSha256": "0aaebd4fcf4adc767687632ab912bfae71ab08b925c9efa9b5651d98e0b93a59"
+    },
+    {
+      "replicate": "c",
+      "arm": "control-uniform",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/control-uniform",
+      "configSha256": "34a2508868c74694837da5b0f01f290db4dbf9877c5187f12a45073717e08aef",
+      "bindingSha256": "3232a3e9befee3c3ffc6979662068955a6dfde35541690ebce70945edf57762d"
+    },
+    {
+      "replicate": "c",
+      "arm": "late-reweighted",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/late-reweighted",
+      "configSha256": "d338396db5a335d5185af65e80f66408594d51268c02c896cd01316ab92635ba",
+      "bindingSha256": "3a79ed7f04e2e765b07c246b1126ac52bcf147ba44043bb6bc473d850a5b70d7"
+    },
+    {
+      "replicate": "c",
+      "arm": "p30-credit025",
+      "root": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/p30-credit025",
+      "configSha256": "ec9707f7febef9143dfcb3dc829f52ed6641fae1c554d3f73d099fd002c9c8df",
+      "bindingSha256": "c4a72c47da6d2325352d9654c1f1f4111b9f0df5b32cdfab0d0749fd18c17773"
+    }
+  ]
+}

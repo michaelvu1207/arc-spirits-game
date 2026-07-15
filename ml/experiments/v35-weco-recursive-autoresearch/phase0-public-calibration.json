@@ -1,0 +1,731 @@
+{
+  "checkpointSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+  "commonRandomNumbers": true,
+  "finalBudget": {
+    "cpu_seconds": 618.99,
+    "evaluations": 8,
+    "games": 512,
+    "gpu_seconds": 115.75587579328567,
+    "normalized_cost": 154.44275079328565,
+    "private_queries": 0,
+    "wall_seconds": 115.75587579328567
+  },
+  "gamesPerCandidate": 64,
+  "promotionEligible": false,
+  "publicSeed0": 969001000,
+  "rows": [
+    {
+      "accepted": false,
+      "arcFitness": 0.49631187494172213,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "none",
+          "rerankPolicyWeight": null,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 0,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "bad9b2f3a6cfe55a",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 2598.9099999999994,
+        "meanFinalVP": 25.53125,
+        "meanLateGameScore": 0.5777001029930717,
+        "meanPost15VpPerRound": 1.192166860916861,
+        "reach15Rate": 0.84375,
+        "stallRate": 0.0,
+        "trueWinRate": 0.609375
+      },
+      "name": "greedy-none-t065",
+      "signedEntry": {
+        "entrySha256": "6b485a9b3ff3dbe2a55e7336895b13282bf9fa893b54c2f647b228e39656ac3b",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.49631187494172213,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "bad9b2f3a6cfe55a",
+          "candidateSha256": "bad9b2f3a6cfe55ade840a4cc41e1bfa29a298a19167912f012c6b87ab3c0e4d",
+          "cost": {
+            "cpu_seconds": 56.64,
+            "evaluations": 1,
+            "games": 64,
+            "gpu_seconds": 13.066021250095218,
+            "normalized_cost": 16.606021250095218,
+            "private_queries": 0,
+            "wall_seconds": 13.066021250095218
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 2598.9099999999994,
+            "meanFinalVP": 25.53125,
+            "meanLateGameScore": 0.5777001029930717,
+            "meanPost15VpPerRound": 1.192166860916861,
+            "reach15Rate": 0.84375,
+            "stallRate": 0.0,
+            "trueWinRate": 0.609375
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "3caf05ac336d41d9e61f1b8186652534d39122557a42f95094b581a6309365df",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "a6e02936f2cba0c08fe531e4b3a3739fc6cda3463b702e16c6a176612679682e",
+          "tier": "public"
+        },
+        "previousEntrySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "f1c87db7ddeb83f3ebfb92d772d85997b100eac719f7fd37adead10a5557cd29"
+      }
+    },
+    {
+      "accepted": false,
+      "arcFitness": 0.3212524272197522,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "none",
+          "rerankPolicyWeight": null,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 0,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": true,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "0eaad76b493ef52b",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 2581.6549999999997,
+        "meanFinalVP": 21.515625,
+        "meanLateGameScore": 0.40498257890836015,
+        "meanPost15VpPerRound": 0.8043221969003219,
+        "reach15Rate": 0.65625,
+        "stallRate": 0.0,
+        "trueWinRate": 0.375
+      },
+      "name": "sample-none-t065",
+      "signedEntry": {
+        "entrySha256": "6ff63e57a7e94c030da1e4e9e0054b4798f7bc81e865463915869d2045bc81ee",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.3212524272197522,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "0eaad76b493ef52b",
+          "candidateSha256": "0eaad76b493ef52bc6013b9e2c6cb74c446360c41a948f3cb5677f2e05c7f286",
+          "cost": {
+            "cpu_seconds": 113.35,
+            "evaluations": 2,
+            "games": 128,
+            "gpu_seconds": 25.81337495916523,
+            "normalized_cost": 32.89774995916523,
+            "private_queries": 0,
+            "wall_seconds": 25.81337495916523
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 2581.6549999999997,
+            "meanFinalVP": 21.515625,
+            "meanLateGameScore": 0.40498257890836015,
+            "meanPost15VpPerRound": 0.8043221969003219,
+            "reach15Rate": 0.65625,
+            "stallRate": 0.0,
+            "trueWinRate": 0.375
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "867ceb997e07b6a5f0b68834ab99a9e94afbddffe021bf947b93a9b4f58d9ada",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "138110b88f005dc4e47f6c4ec8ad221ac95fbce1bf3cf485844ee41e3ea7ba1e",
+          "tier": "public"
+        },
+        "previousEntrySha256": "6b485a9b3ff3dbe2a55e7336895b13282bf9fa893b54c2f647b228e39656ac3b",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "d491251ca440e74dd327ec21b3d3ec3749c36cf8e9c473b230a930830c3073ac"
+      }
+    },
+    {
+      "accepted": false,
+      "arcFitness": 0.09158974506484008,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "rerank",
+          "rerankPolicyWeight": 0.25,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 0,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "6f985ea643d60359",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 3129.5899999999997,
+        "meanFinalVP": 12.25,
+        "meanLateGameScore": 0.12341608044733045,
+        "meanPost15VpPerRound": 0.36302421536796536,
+        "reach15Rate": 0.296875,
+        "stallRate": 0.0,
+        "trueWinRate": 0.03125
+      },
+      "name": "rerank-p25",
+      "signedEntry": {
+        "entrySha256": "3ab99c43b24d559cbeb574c0198caa2fbc218aae76bf2e53100f9b9b46b7f006",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.09158974506484008,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "6f985ea643d60359",
+          "candidateSha256": "6f985ea643d6035958306d3fd74b58236c8b4c0599d5fae4067cf176d6502220",
+          "cost": {
+            "cpu_seconds": 175.74,
+            "evaluations": 3,
+            "games": 192,
+            "gpu_seconds": 39.73063500132412,
+            "normalized_cost": 50.71438500132412,
+            "private_queries": 0,
+            "wall_seconds": 39.73063500132412
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 3129.5899999999997,
+            "meanFinalVP": 12.25,
+            "meanLateGameScore": 0.12341608044733045,
+            "meanPost15VpPerRound": 0.36302421536796536,
+            "reach15Rate": 0.296875,
+            "stallRate": 0.0,
+            "trueWinRate": 0.03125
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "9100191c82d9de3c0553b10ca1c2c76f920061dbb3ed97b275e6c2bd44020442",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "7dacdd811f88b502dbfc490b7a6201f6df0c61af4718e295276077f6b5e41b58",
+          "tier": "public"
+        },
+        "previousEntrySha256": "6ff63e57a7e94c030da1e4e9e0054b4798f7bc81e865463915869d2045bc81ee",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "7b54b616075a2983d5708a389c388240c30822a8c8cf666fdedf8a3771405acc"
+      }
+    },
+    {
+      "accepted": false,
+      "arcFitness": 0.22272227533407662,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "rerank",
+          "rerankPolicyWeight": 0.5,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 0,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "d901a9c20a1e41f6",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 2909.81,
+        "meanFinalVP": 17.53125,
+        "meanLateGameScore": 0.29800296487451816,
+        "meanPost15VpPerRound": 0.6404887034942182,
+        "reach15Rate": 0.53125,
+        "stallRate": 0.0,
+        "trueWinRate": 0.25
+      },
+      "name": "rerank-p50",
+      "signedEntry": {
+        "entrySha256": "0a4b1e6df1a9137654bafe706c59689b6746e26e70a81c9f137e9343b0f39a90",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.22272227533407662,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "d901a9c20a1e41f6",
+          "candidateSha256": "d901a9c20a1e41f631261af3e973b68bae89058dc4c570d6af6a52a34344e1eb",
+          "cost": {
+            "cpu_seconds": 238.14000000000001,
+            "evaluations": 4,
+            "games": 256,
+            "gpu_seconds": 53.420125376433134,
+            "normalized_cost": 68.30387537643314,
+            "private_queries": 0,
+            "wall_seconds": 53.420125376433134
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 2909.81,
+            "meanFinalVP": 17.53125,
+            "meanLateGameScore": 0.29800296487451816,
+            "meanPost15VpPerRound": 0.6404887034942182,
+            "reach15Rate": 0.53125,
+            "stallRate": 0.0,
+            "trueWinRate": 0.25
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "9223d306fdfeaf0e6a799f3db67367e13148294f2fb5800910462bda440cc9a3",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "880f47d1b617d200f1f5d2891f2508d749fa7d20f400840958536d1f0d4e4901",
+          "tier": "public"
+        },
+        "previousEntrySha256": "3ab99c43b24d559cbeb574c0198caa2fbc218aae76bf2e53100f9b9b46b7f006",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "4c439ab4bb6b1a5a0137f2b7f1ec14c8bd194dc9175780e1f68437dda08a1853"
+      }
+    },
+    {
+      "accepted": false,
+      "arcFitness": 0.48336468615569494,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "rerank",
+          "rerankPolicyWeight": 0.75,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 0,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "fd893e4f218ccbda",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 3234.4199999999996,
+        "meanFinalVP": 25.1875,
+        "meanLateGameScore": 0.5657677468245572,
+        "meanPost15VpPerRound": 1.1673379618946875,
+        "reach15Rate": 0.84375,
+        "stallRate": 0.0,
+        "trueWinRate": 0.59375
+      },
+      "name": "rerank-p75",
+      "signedEntry": {
+        "entrySha256": "64740add62065ee530a923d78056e8be4d60a647283f81cc729312f3ec2b263d",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.48336468615569494,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "fd893e4f218ccbda",
+          "candidateSha256": "fd893e4f218ccbda817f04bf64a871c59ecb99eda254cee1c0ede6ace9888aba",
+          "cost": {
+            "cpu_seconds": 309.71000000000004,
+            "evaluations": 5,
+            "games": 320,
+            "gpu_seconds": 68.30649566836655,
+            "normalized_cost": 87.66337066836655,
+            "private_queries": 0,
+            "wall_seconds": 68.30649566836655
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 3234.4199999999996,
+            "meanFinalVP": 25.1875,
+            "meanLateGameScore": 0.5657677468245572,
+            "meanPost15VpPerRound": 1.1673379618946875,
+            "reach15Rate": 0.84375,
+            "stallRate": 0.0,
+            "trueWinRate": 0.59375
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "59e7d3a989e901f5649a7363aeef32a8e7cb9152ee1aa25ee839c227bcd4d182",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "0f094f7c72e932e59b7e601de14fc55cd9b45af1bda3cfad1860fe185d229544",
+          "tier": "public"
+        },
+        "previousEntrySha256": "0a4b1e6df1a9137654bafe706c59689b6746e26e70a81c9f137e9343b0f39a90",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "6c9ab172185e30559cc668c0b9b408e0838372bd0fc9f46aecce11cba4b64719"
+      }
+    },
+    {
+      "accepted": false,
+      "arcFitness": 0.39315326038025744,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "search",
+          "rerankPolicyWeight": null,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 4,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "f4c4c65d4aeb6785",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 3432.539999999999,
+        "meanFinalVP": 23.546875,
+        "meanLateGameScore": 0.4810069957530895,
+        "meanPost15VpPerRound": 1.164271449037074,
+        "reach15Rate": 0.78125,
+        "stallRate": 0.0,
+        "trueWinRate": 0.4375
+      },
+      "name": "search4-h2-v05",
+      "signedEntry": {
+        "entrySha256": "1d7346a2864c4ad11e10d0f6b626ffdf73cf437b72a96fc9b86fea909db8bbc2",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.39315326038025744,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "f4c4c65d4aeb6785",
+          "candidateSha256": "f4c4c65d4aeb67856f53591944bc7cee0f220e6bdc2a02f1b047eb5b0333a9df",
+          "cost": {
+            "cpu_seconds": 399.27000000000004,
+            "evaluations": 6,
+            "games": 384,
+            "gpu_seconds": 83.82264096057042,
+            "normalized_cost": 108.77701596057042,
+            "private_queries": 0,
+            "wall_seconds": 83.82264096057042
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 3432.539999999999,
+            "meanFinalVP": 23.546875,
+            "meanLateGameScore": 0.4810069957530895,
+            "meanPost15VpPerRound": 1.164271449037074,
+            "reach15Rate": 0.78125,
+            "stallRate": 0.0,
+            "trueWinRate": 0.4375
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "ea1a3c36ff16f3731f7da8de313269b12d36d30db31774b8ef32c37a806d5437",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "8af03a95915e47c69141a510fa530034a29f047e3683ba85e0668c5ef752cf80",
+          "tier": "public"
+        },
+        "previousEntrySha256": "64740add62065ee530a923d78056e8be4d60a647283f81cc729312f3ec2b263d",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "e8d4556b3e66a8411fd3a7a8bc23f353b03f87d06a265678ebd7a2324bf0b35d"
+      }
+    },
+    {
+      "accepted": false,
+      "arcFitness": 0.33941846245020724,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "search",
+          "rerankPolicyWeight": null,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 2,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 8,
+          "searchValueWeight": 0.5
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "fb40764b08e7416b",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 3744.52,
+        "meanFinalVP": 22.375,
+        "meanLateGameScore": 0.42361043165645745,
+        "meanPost15VpPerRound": 1.0395751798774897,
+        "reach15Rate": 0.71875,
+        "stallRate": 0.0,
+        "trueWinRate": 0.359375
+      },
+      "name": "search8-h2-v05",
+      "signedEntry": {
+        "entrySha256": "152f98d642d7b5ae873a32c219c349ddc8537ccd0bc6f4e10aaa46d878e255de",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.33941846245020724,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "fb40764b08e7416b",
+          "candidateSha256": "fb40764b08e7416bdc09e380b1399b63f5ceacc8b3451ed8d9ece4a2d56691b6",
+          "cost": {
+            "cpu_seconds": 510.61,
+            "evaluations": 7,
+            "games": 448,
+            "gpu_seconds": 99.78075712639838,
+            "normalized_cost": 131.6938821263984,
+            "private_queries": 0,
+            "wall_seconds": 99.78075712639838
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 3744.52,
+            "meanFinalVP": 22.375,
+            "meanLateGameScore": 0.42361043165645745,
+            "meanPost15VpPerRound": 1.0395751798774897,
+            "reach15Rate": 0.71875,
+            "stallRate": 0.0,
+            "trueWinRate": 0.359375
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "334dc362c6dff2d5362c401529a841885af60436f83a64afb825a3e867a1d242",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "1c195f4c55e835c7e4c08f8aaf181cf80a915aa47c84fc0732673fa3ae87bb39",
+          "tier": "public"
+        },
+        "previousEntrySha256": "1d7346a2864c4ad11e10d0f6b626ffdf73cf437b72a96fc9b86fea909db8bbc2",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "feffec9df28d75749798a3dfa00685d6f5c199794cac9f3932686adaa69df026"
+      }
+    },
+    {
+      "accepted": false,
+      "arcFitness": 0.27409490625582833,
+      "candidate": {
+        "curriculum": {
+          "lateSnapshotShare": 0.35,
+          "multiplayerShare": 0.15,
+          "soloShare": 0.5
+        },
+        "loss": {
+          "engineWeight": 0.3,
+          "entropyWeight": 0.01,
+          "reach30Weight": 0.5,
+          "terminalWeight": 1.0
+        },
+        "planner": {
+          "mode": "search",
+          "rerankPolicyWeight": null,
+          "searchFraction": 1.0,
+          "searchHorizonRounds": 4,
+          "searchNavTemperature": 0.0,
+          "searchRollout": "heuristic",
+          "searchSims": 4,
+          "searchValueWeight": 1.0
+        },
+        "policy": {
+          "sample": false,
+          "temperature": 0.65
+        },
+        "schemaVersion": "arc-v35-candidate-v1"
+      },
+      "candidateId": "340cbae58e1b79a2",
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 3557.3949999999995,
+        "meanFinalVP": 21.0,
+        "meanLateGameScore": 0.34973908108673735,
+        "meanPost15VpPerRound": 0.821868973040848,
+        "reach15Rate": 0.640625,
+        "stallRate": 0.0,
+        "trueWinRate": 0.265625
+      },
+      "name": "search4-h4-v10",
+      "signedEntry": {
+        "entrySha256": "65692547f189b7133ff2008d8553b8344cd1c08c38cd658165a7b27b9ed00e10",
+        "payload": {
+          "accepted": false,
+          "arcFitness": 0.27409490625582833,
+          "backend": "trusted-simforge-gpu7-v2",
+          "campaign": "v35-gpu7-phase0-public-calibration-20260714",
+          "candidateId": "340cbae58e1b79a2",
+          "candidateSha256": "340cbae58e1b79a2a897eb81f605b4ebf1fdcc47f8eafb06de41aab35a682d73",
+          "cost": {
+            "cpu_seconds": 618.99,
+            "evaluations": 8,
+            "games": 512,
+            "gpu_seconds": 115.75587579328567,
+            "normalized_cost": 154.44275079328565,
+            "private_queries": 0,
+            "wall_seconds": 115.75587579328567
+          },
+          "diagnosticCodes": [
+            "incomplete_task_mix"
+          ],
+          "endpoints": {
+            "gameWallMsP95": 3557.3949999999995,
+            "meanFinalVP": 21.0,
+            "meanLateGameScore": 0.34973908108673735,
+            "meanPost15VpPerRound": 0.821868973040848,
+            "reach15Rate": 0.640625,
+            "stallRate": 0.0,
+            "trueWinRate": 0.265625
+          },
+          "games": 64,
+          "immutableManifestSha256": "041001899f629b65ed5ca766dfa9577724aa9333b7c10c577686e090afeebfee",
+          "rawReportSha256": "39807a69e9df6bfd38614933255fc88a2fa87064d5742c27bceb4bce2879f813",
+          "schemaVersion": "arc-v35-evaluation-v1",
+          "seedCommitment": "a8f9671c0950835f7f0561c499051c98615a80ba453249119ca2bd51596d027d",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutSha256": "d7ab04983ff963030df03a12087cf8b6a92c830ffb817ec641cd296051c065ee",
+          "tier": "public"
+        },
+        "previousEntrySha256": "152f98d642d7b5ae873a32c219c349ddc8537ccd0bc6f4e10aaa46d878e255de",
+        "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+        "signature": "61628f9143e874b649df69df1b289fbaf0a7138b4eefcb6e0165876286a63840"
+      }
+    }
+  ],
+  "schemaVersion": "arc-v35-phase0-public-calibration-v1"
+}
