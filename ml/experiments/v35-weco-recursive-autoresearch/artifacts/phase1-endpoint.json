@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "arc-v35-phase1-endpoint-v1",
+  "valid": true,
+  "endpoint": 8,
+  "reason": "generation-8-manipulation-passed",
+  "performanceOutcomesInspected": false,
+  "promotionEligible": false,
+  "roots": [
+    {
+      "replicate": "a",
+      "arm": "control-uniform",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/artifacts/gen8-audit.json",
+      "checkpointSha256": "738bf508aa7f8e88498fd7838c1f59a89e8c85f9d264bae2e885659d6e26ea5b"
+    },
+    {
+      "replicate": "a",
+      "arm": "late-reweighted",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/artifacts/gen8-audit.json",
+      "checkpointSha256": "daefd124ba62defc39e4f1504c7e0ad7a42761e2e2278795fab4c17bed96bf6c"
+    },
+    {
+      "replicate": "a",
+      "arm": "p30-credit025",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/artifacts/gen8-audit.json",
+      "checkpointSha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91"
+    },
+    {
+      "replicate": "b",
+      "arm": "control-uniform",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/control-uniform/artifacts/gen8-audit.json",
+      "checkpointSha256": "6da8a2118a86fae4d85332e1fc28f7652990f949a899b3f155323d7ae946e924"
+    },
+    {
+      "replicate": "b",
+      "arm": "late-reweighted",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/late-reweighted/artifacts/gen8-audit.json",
+      "checkpointSha256": "20a6279c11e577bc5294a1f742655d2b204860ca52560cb62441a9fd61aac197"
+    },
+    {
+      "replicate": "b",
+      "arm": "p30-credit025",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/p30-credit025/artifacts/gen8-audit.json",
+      "checkpointSha256": "9b6c948adf4ef7139c8ce999624e8395e877204fa58986eedbe97998ca1b9fcb"
+    },
+    {
+      "replicate": "c",
+      "arm": "control-uniform",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/control-uniform/artifacts/gen8-audit.json",
+      "checkpointSha256": "946cf14c03087877213a6ebb58e870efc8a22276d13c3b9ff8e96bd3ee2cc825"
+    },
+    {
+      "replicate": "c",
+      "arm": "late-reweighted",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/late-reweighted/artifacts/gen8-audit.json",
+      "checkpointSha256": "b41c6b2d50ce2d772dd8a55a9d86510e1f1be40d119d9e956778b53df7b931d8"
+    },
+    {
+      "replicate": "c",
+      "arm": "p30-credit025",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/p30-credit025/artifacts/gen8-audit.json",
+      "checkpointSha256": "7f65d31d17152a024fdc2d9a9d696cdb803abcf9c6e1eed56f2f04e204f3889d"
+    }
+  ]
+}

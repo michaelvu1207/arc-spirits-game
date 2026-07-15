@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "arc-v35-phase1-medoid-authorization-v1",
+  "authorized": true,
+  "outcomeBlind": true,
+  "promotionEligible": false,
+  "endpointGeneration": 8,
+  "host": "ubuntu@216.151.21.122",
+  "device": "cpu",
+  "threads": 1,
+  "forbiddenInputs": [
+    "training or quick-evaluation wins",
+    "training or quick-evaluation victory points",
+    "public development outcomes",
+    "private outcomes",
+    "guardian outcomes"
+  ],
+  "inputs": {
+    "selector": {
+      "path": "ml/select_v35_representatives.py",
+      "sha256": "6f23f537ddb5fcf1e21c3acc0f7ca6600ba28831bacea56ee408166cb57bbe56"
+    },
+    "selectorTests": {
+      "path": "ml/test_select_v35_representatives.py",
+      "sha256": "b1f66d8ceb5395bf848593a186445cd3a5f8bd27f7aca49ce3c5bf70e6627a25"
+    },
+    "endpoint": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-endpoint.json",
+      "sha256": "cda179375d71731d763a12e68ea67af9eb147e1b7c7699a7efcf7caa761e5b3a"
+    },
+    "manipulationAudit": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-manipulation-gen8.json",
+      "sha256": "54cb6f62b8258113183e2fb37efa4457d3274be8bea34ae1c6cec4c9b3cc8750"
+    },
+    "validationLock": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-validation-lock.json",
+      "sha256": "db9427ee5d3393421471dc1db2a7407e29d382aa9daab9aad8dc0286486ac310",
+      "corpusSha256": "9eeb593576ec3e76f413b997d462a40e775ee1229a46e27f2d8383f605bcc14d"
+    },
+    "protocol": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "sha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98"
+    }
+  },
+  "command": [
+    "ml/.venv/bin/python",
+    "ml/select_v35_representatives.py",
+    "--experiment",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch",
+    "--validation",
+    "/dev/shm/arc-v32-critic/validation",
+    "--manipulation",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-manipulation-gen8.json",
+    "--endpoint",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-endpoint.json",
+    "--generation",
+    "8",
+    "--temperature",
+    "0.55",
+    "--batch-size",
+    "128",
+    "--expected-games",
+    "1024",
+    "--expected-seed0",
+    "946004096",
+    "--out",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-policy-medoid.json"
+  ],
+  "outputMayBeInspected": true,
+  "notes": [
+    "The selector reads policy inputs and exact legal supports from the frozen shared-critic validation corpus.",
+    "It selects one treatment replicate by minimum mean symmetric KL with A/B/C tie-breaking and binds the same-replicate control.",
+    "It cannot select from rewards, wins, victory points, targets, guardians, or quick/public strength outcomes."
+  ]
+}
