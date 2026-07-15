@@ -86,6 +86,8 @@ def validate_authorization(value: dict[str, Any]) -> None:
     policies = value.get("policies")
     if not isinstance(policies, dict) or set(policies) != set(POLICY_LABELS):
         raise ValueError("V35 development authorization has the wrong policy catalog")
+    if tuple(value.get("policyOrder", ())) != POLICY_LABELS:
+        raise ValueError("V35 development authorization has the wrong policy order")
     representatives = value.get("representatives")
     if not isinstance(representatives, dict) or set(representatives) != set(TREATMENTS):
         raise ValueError("V35 development authorization has the wrong representatives")
