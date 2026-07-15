@@ -23,7 +23,7 @@ const valid = validateProtocol(clone());
 assert.equal(valid.valid, true);
 assert.equal(valid.registeredRanges, 38);
 assert.equal(valid.registeredSeedsOpen, false);
-assert.equal(valid.unresolvedAmbiguities, 12);
+assert.equal(valid.unresolvedAmbiguities, 13);
 
 rejects((value) => {
 	value.unreviewedField = true;

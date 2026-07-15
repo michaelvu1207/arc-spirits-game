@@ -9,7 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_PROTOCOL =
 	'ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json';
 const EXPECTED_CANONICAL_SHA256 =
-	'885fd8a55cbb909245c3d5d7780020cde3dedc10db7fa9046f046798f5431d58';
+	'7ead5625ec12f02c8afda2c03d5c5c56c5d227b3b5dce78bcb76d58a085c3a83';
 
 const EXPECTED_ROOT_KEYS = [
 	'approvedPlan',
@@ -84,7 +84,8 @@ const EXPECTED_AMBIGUITIES = [
 	'b2-replay-integrity-selection',
 	'b1-recovery-weak-engine-thresholds',
 	'b1-density-smoke-seeds',
-	'b4-b5-normal-floor-implementation'
+	'b4-b5-normal-floor-implementation',
+	'b1-raw-policy-selector-binding'
 ];
 
 function canonicalize(value) {
@@ -191,6 +192,8 @@ function assertSeedLedger(protocol) {
 }
 
 function assertRngAndArithmetic(protocol) {
+	assert.equal(protocol.b1.eligibility.excludeChoicesWithAnyImmediatelyTerminalCandidate, true);
+	assert.equal(protocol.b1.snapshotContract.teacherLoadsOnlyBoundTracePrefix, true);
 	assert.deepEqual(protocol.b1.bandQuotas, {
 		late: 50000,
 		mid: 25000,

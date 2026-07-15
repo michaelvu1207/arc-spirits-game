@@ -78,6 +78,11 @@
 				"id": "b4-b5-normal-floor-implementation",
 				"affectedStages": ["b4", "b5"],
 				"reason": "The exact NormalDist implementation and numerical result for the explicit 24- and 9-endpoint floor formulas must be bound by the execution tooling lock."
+			},
+			{
+				"id": "b1-raw-policy-selector-binding",
+				"affectedStages": ["b1", "b2", "b3", "b4"],
+				"reason": "The exact parent checkpoint, provider module, immediate win and VP guards, status-cap escape, option head, sampling mode, temperature, and filtered-support probability semantics must be frozen before collection."
 			}
 		]
 	},
@@ -470,7 +475,8 @@
 			"minimumLegalActionsAfterForcedClosure": 2,
 			"minimumSemanticallyDistinctOutcomes": 2,
 			"excludeForcedPayments": true,
-			"excludeSingletonChoices": true
+			"excludeSingletonChoices": true,
+			"excludeChoicesWithAnyImmediatelyTerminalCandidate": true
 		},
 		"densitySmoke": {
 			"registered": false,
@@ -491,6 +497,7 @@
 			"featureAndTargetShardsSeparate": true,
 			"sourceGameSeedAndActionTraceAreModelInputs": false,
 			"teacherRolloutUsesSourceRngCursor": false,
+			"teacherLoadsOnlyBoundTracePrefix": true,
 			"teacherRedeterminizesOnlyInformationHiddenAtDecision": true,
 			"futureTargetsWrittenAfterGameCompletion": true,
 			"targetJoinAllowedOnlyAfterTeacherLabelsFinalized": true,

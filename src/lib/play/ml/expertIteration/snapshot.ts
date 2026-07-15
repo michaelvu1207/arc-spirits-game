@@ -237,7 +237,12 @@ export function replaySnapshotTrace(input: ReplaySnapshotTraceInput): PublicGame
 function sortedRecord(
 	record: Record<string, number | boolean> | undefined
 ): Record<string, number | boolean> {
-	return Object.fromEntries(Object.entries(record ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+	return Object.fromEntries(Object.entries(record ?? {}).sort(([a], [b]) => codeUnitCompare(a, b)));
+}
+
+/** Locale-independent ordering for arrays that feed canonical hashes. */
+function codeUnitCompare(left: string, right: string): number {
+	return left === right ? 0 : left < right ? -1 : 1;
 }
 
 function publicBagSummary(contents: PublicGameState['bags']['hexSpirits']['contents']) {
@@ -253,7 +258,7 @@ function publicBagSummary(contents: PublicGameState['bags']['hexSpirits']['conte
 		if (current) current.count += 1;
 		else grouped.set(key, { id, name: entry.name, cost, count: 1 });
 	}
-	return [...grouped.values()].sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b)));
+	return [...grouped.values()].sort((a, b) => codeUnitCompare(canonicalJson(a), canonicalJson(b)));
 }
 
 function structuralMonster(monster: PublicGameState['monster']) {
@@ -338,10 +343,10 @@ function structuralPlayer(player: PrivatePlayerState, isOwner: boolean, revealed
 				diceType: die.diceType,
 				faceIndex: die.faceIndex
 			}))
-			.sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b))),
+			.sort((a, b) => codeUnitCompare(canonicalJson(a), canonicalJson(b))),
 		spawnedItems: player.spawnedItems
 			.map((item) => ({ runeId: item.runeId, name: item.name, kind: item.kind }))
-			.sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b))),
+			.sort((a, b) => codeUnitCompare(canonicalJson(a), canonicalJson(b))),
 		spiritAugmentAttachments: player.spiritAugmentAttachments
 			.map((attachment) => ({
 				runeId: attachment.runeId,
@@ -351,13 +356,13 @@ function structuralPlayer(player: PrivatePlayerState, isOwner: boolean, revealed
 				classId: attachment.classId,
 				className: attachment.className
 			}))
-			.sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b))),
+			.sort((a, b) => codeUnitCompare(canonicalJson(a), canonicalJson(b))),
 		attackDice: Object.entries(
 			player.attackDice.reduce<Record<string, number>>((counts, die) => {
 				counts[die.tier] = (counts[die.tier] ?? 0) + 1;
 				return counts;
 			}, {})
-		).sort(([a], [b]) => a.localeCompare(b)),
+		).sort(([a], [b]) => codeUnitCompare(a, b)),
 		capacity: {
 			spirits: { used: player.spirits.length, maximum: MAX_SPIRITS },
 			attackDice: { used: player.attackDice.length, maximum: MAX_ATTACK_DICE },
@@ -368,7 +373,7 @@ function structuralPlayer(player: PrivatePlayerState, isOwner: boolean, revealed
 			}
 		},
 		activeClasses: Object.fromEntries(
-			Object.entries(awakenedClassCounts(player)).sort(([a], [b]) => a.localeCompare(b))
+			Object.entries(awakenedClassCounts(player)).sort(([a], [b]) => codeUnitCompare(a, b))
 		),
 		initiative: player.initiative,
 		actionsUsedThisRound: [...player.actionsUsedThisRound].sort(),
@@ -461,7 +466,7 @@ export function structuralPublicState(
 	const occupancy = Object.fromEntries(
 		Object.entries(state.locationOccupancy)
 			.filter((entry): entry is [string, SeatColor[]] => Array.isArray(entry[1]))
-			.sort(([a], [b]) => a.localeCompare(b))
+			.sort(([a], [b]) => codeUnitCompare(a, b))
 			.map(([destination, seats]) => [
 				destination,
 				[...seats].sort((a, b) => SEAT_COLORS.indexOf(a) - SEAT_COLORS.indexOf(b))
@@ -910,6 +915,6 @@ export function activeClassCounts(state: PublicGameState, seat: SeatColor): Reco
 	const player = state.players[seat];
 	if (!player) throw new Error(`Missing player state for ${seat}.`);
 	return Object.fromEntries(
-		Object.entries(awakenedClassCounts(player)).sort(([a], [b]) => a.localeCompare(b))
+		Object.entries(awakenedClassCounts(player)).sort(([a], [b]) => codeUnitCompare(a, b))
 	);
 }

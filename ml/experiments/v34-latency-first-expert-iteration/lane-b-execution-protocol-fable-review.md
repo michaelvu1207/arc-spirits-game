@@ -40,7 +40,10 @@ These are closed-draft hardening items, not permission to open any seed or stage
 ## Disposition
 
 All six tightening items were incorporated into the closed protocol and its
-validator. The resulting canonical protocol SHA-256 is
-`885fd8a55cbb909245c3d5d7780020cde3dedc10db7fa9046f046798f5431d58`.
-The four newly explicit execution-lock dependencies remain unresolved, every
-registered stage remains closed, and no registered seed was consumed.
+validator. A later outcome-blind Fable collector review required the protocol
+to ratify terminal-candidate exclusion, prefix-only teacher trace loading, and
+the still-unresolved raw-policy selector binding. The resulting canonical
+protocol SHA-256 is
+`7ead5625ec12f02c8afda2c03d5c5c56c5d227b3b5dce78bcb76d58a085c3a83`.
+The explicit execution-lock dependencies remain unresolved, every registered
+stage remains closed, and no registered seed was consumed.
