@@ -292,6 +292,7 @@ class TrajectoryBuffer:
     solo_strategic_mc_coef: float   # solo-only full-episode blend; may coexist with PvP outcome
     solo_outcome_coef: float        # pure true-win advantage blend on solo strategic rows
     solo_reach30_coef: float        # true-win minus behavior p30(s) blend on solo strategic rows
+    solo_reach30_bands: tuple[tuple[int, float], ...] | None  # optional round-varying blend
     strategic_outcome_coef: float   # pure placement-outcome advantage blend on strategic rows
     placement_probs: np.ndarray     # (N, 4) behavior outcome-head probabilities
     placement_prob_mask: np.ndarray # (N,) bool; behavior checkpoint exposed the outcome head
@@ -1034,6 +1035,7 @@ def load_trajectory_buffer(
     solo_strategic_mc_coef: float = 0.0,
     solo_outcome_coef: float = 0.0,
     solo_reach30_coef: float = 0.0,
+    solo_reach30_bands: tuple[tuple[int, float], ...] | None = None,
     solo_terminal_objective: str = "legacy",
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
@@ -1059,6 +1061,12 @@ def load_trajectory_buffer(
         raise ValueError("solo_outcome_coef must be in [0, 1]")
     if not 0.0 <= solo_reach30_coef <= 1.0:
         raise ValueError("solo_reach30_coef must be in [0, 1]")
+    if solo_reach30_coef > 0 and solo_reach30_bands is not None:
+        raise ValueError("solo_reach30_coef and solo_reach30_bands are mutually exclusive")
+    if solo_reach30_bands is not None:
+        # Validate the schedule even for an empty rollout. Coverage is checked once
+        # the exact decision rounds are known.
+        round_band_coefficients(np.empty(0, dtype=np.int64), solo_reach30_bands)
     if solo_terminal_objective not in SOLO_TERMINAL_OBJECTIVES:
         raise ValueError(
             "solo_terminal_objective must be one of "
@@ -1070,8 +1078,12 @@ def load_trajectory_buffer(
         raise ValueError("strategic_outcome_coef must be in [0, 1]")
     if strategic_mc_coef > 0 and strategic_outcome_coef > 0:
         raise ValueError("strategic_mc_coef and strategic_outcome_coef are mutually exclusive")
-    if solo_outcome_coef > 0 and solo_reach30_coef > 0:
-        raise ValueError("solo_outcome_coef and solo_reach30_coef are mutually exclusive")
+    if solo_outcome_coef > 0 and (
+        solo_reach30_coef > 0 or solo_reach30_bands is not None
+    ):
+        raise ValueError(
+            "solo_outcome_coef and solo reach30 credit are mutually exclusive"
+        )
     if (
         isinstance(self_imitation_generation, bool)
         or not isinstance(self_imitation_generation, int)
@@ -1499,6 +1511,10 @@ def load_trajectory_buffer(
     solo_outcome_baseline = (
         float(np.mean(completed_solo_outcomes)) if completed_solo_outcomes else 0.0
     )
+    solo_reach30_active = solo_reach30_coef > 0 or (
+        solo_reach30_bands is not None
+        and any(coefficient > 0 for _, coefficient in solo_reach30_bands)
+    )
 
     for game_id in sorted(episodes):
         steps = sorted(episodes[game_id], key=lambda s: s["step_idx"])
@@ -1772,7 +1788,7 @@ def load_trajectory_buffer(
         # This is strictly more informative than one batch-wide baseline while keeping
         # the dense-return value target on its original scale.
         if (
-            solo_reach30_coef > 0
+            solo_reach30_active
             and resolved_reach30_target is not None
             and strategic.any()
         ):
@@ -1864,6 +1880,13 @@ def load_trajectory_buffer(
             f"{sorted(reach30_horizons)}; train one objective horizon at a time"
         )
     reach30_horizon = next(iter(reach30_horizons), None)
+    scheduled_reach30_coefficients = (
+        round_band_coefficients(
+            np.asarray(round_list, dtype=np.int64), solo_reach30_bands
+        )
+        if solo_reach30_bands is not None
+        else None
+    )
     solo_outcome_base_std = 0.0
     solo_outcome_signal_std = 0.0
     if solo_outcome_coef > 0:
@@ -1888,7 +1911,7 @@ def load_trajectory_buffer(
                 (1.0 - solo_outcome_coef) * standardize(base_component)
                 + solo_outcome_coef * standardize(outcome_component)
             ).astype(np.float32)
-    elif solo_reach30_coef > 0:
+    elif solo_reach30_active:
         reach30_mask = np.concatenate(reach30_mask_list)
         reach30_advantages = np.concatenate(reach30_adv_list)
         if reach30_mask.any():
@@ -1903,9 +1926,14 @@ def load_trajectory_buffer(
                     return np.zeros_like(component)
                 return (component - float(component.mean())) / std
 
+            reach30_coefficients = (
+                np.full(len(round_list), solo_reach30_coef, dtype=np.float64)
+                if scheduled_reach30_coefficients is None
+                else scheduled_reach30_coefficients
+            )[reach30_mask]
             advantages[reach30_mask] = (
-                (1.0 - solo_reach30_coef) * standardize_reach30(base_component)
-                + solo_reach30_coef * standardize_reach30(reach30_component)
+                (1.0 - reach30_coefficients) * standardize_reach30(base_component)
+                + reach30_coefficients * standardize_reach30(reach30_component)
             ).astype(np.float32)
     self_imitation = None
     if collect_self_imitation:
@@ -1984,7 +2012,8 @@ def load_trajectory_buffer(
         f"{sum(strategic_mask_list)} strategic (MC coef={strategic_mc_coef:g}, "
         f"solo MC coef={solo_strategic_mc_coef:g}, gamma={strategic_mc_gamma:g}; "
         f"solo outcome coef={solo_outcome_coef:g}, reach30 coef={solo_reach30_coef:g}, "
-        f"reach30 horizon={reach30_horizon}, terminal objective={solo_terminal_objective}, "
+        f"reach30 horizon={reach30_horizon}, reach30 bands={solo_reach30_bands}, "
+        f"terminal objective={solo_terminal_objective}, "
         f"baseline={solo_outcome_baseline:.3f}, "
         f"component stds={solo_outcome_base_std:.3f}/{solo_outcome_signal_std:.3f}, "
         f"applied={n_solo_outcome_credit}/{n_solo_reach30_credit}; "
@@ -2013,6 +2042,7 @@ def load_trajectory_buffer(
         solo_strategic_mc_coef=float(solo_strategic_mc_coef),
         solo_outcome_coef=float(solo_outcome_coef),
         solo_reach30_coef=float(solo_reach30_coef),
+        solo_reach30_bands=solo_reach30_bands,
         strategic_outcome_coef=float(strategic_outcome_coef),
         placement_probs=np.stack(placement_probs_list),
         placement_prob_mask=np.array(placement_prob_mask_list, dtype=bool),
@@ -2247,6 +2277,39 @@ def normalized_round_policy_weights(
     if not math.isfinite(mean_weight) or mean_weight <= 0:
         raise ValueError("round policy weights have nonpositive policy-row mean")
     return (raw / mean_weight).astype(np.float32)
+
+
+def round_band_coefficients(
+    rounds: np.ndarray,
+    bands: tuple[tuple[int, float], ...],
+) -> np.ndarray:
+    """Map positive decision rounds to inclusive, fully covering coefficient bands."""
+    rounds = np.asarray(rounds, dtype=np.int64)
+    if rounds.ndim != 1:
+        raise ValueError("rounds must be one-dimensional")
+    if rounds.size and bool((rounds < 1).any()):
+        raise ValueError("decision rounds must be positive integers")
+    if not bands:
+        raise ValueError("round coefficient bands cannot be empty")
+    previous = 0
+    coefficients = np.zeros(rounds.size, dtype=np.float64)
+    for upper, coefficient in bands:
+        if isinstance(upper, bool) or not isinstance(upper, int) or upper <= previous:
+            raise ValueError(
+                "round coefficient band upper bounds must be strictly increasing integers"
+            )
+        if not math.isfinite(coefficient) or not 0.0 <= coefficient <= 1.0:
+            raise ValueError("round coefficient band values must be finite and in [0,1]")
+        coefficients[(rounds > previous) & (rounds <= upper)] = coefficient
+        previous = upper
+    if not any(coefficient > 0 for _, coefficient in bands):
+        raise ValueError("round coefficient bands must contain a positive coefficient")
+    if rounds.size and int(rounds.max()) > previous:
+        raise ValueError(
+            f"round coefficient bands end at {previous} but rollout contains round "
+            f"{int(rounds.max())}"
+        )
+    return coefficients
 
 
 def _minibatch_tensors(
@@ -2904,6 +2967,7 @@ def train_ppo(
             or buffer.solo_strategic_mc_coef > 0
             or buffer.solo_outcome_coef > 0
             or buffer.solo_reach30_coef > 0
+            or buffer.solo_reach30_bands is not None
             or buffer.strategic_outcome_coef > 0
         )
         else None,
@@ -2965,7 +3029,7 @@ def train_ppo(
                 raise ValueError(
                     "multi-horizon reach30 training requires endRound on every successful episode"
                 )
-    if buffer.solo_reach30_coef > 0:
+    if buffer.solo_reach30_coef > 0 or buffer.solo_reach30_bands is not None:
         if not getattr(model, "reach30_trained", False):
             raise ValueError("solo_reach30_coef requires a trained behavior reach30 head")
         if getattr(model, "reach30_horizon", None) != buffer.reach30_horizon:
@@ -3013,6 +3077,7 @@ def train_ppo(
                     or buffer.solo_strategic_mc_coef > 0
                     or buffer.solo_outcome_coef > 0
                     or buffer.solo_reach30_coef > 0
+                    or buffer.solo_reach30_bands is not None
                     or buffer.strategic_outcome_coef > 0
                 )
                 else None,

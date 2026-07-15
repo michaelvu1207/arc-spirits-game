@@ -146,6 +146,21 @@ def validate_binding(root: Path, protocol_path: Path) -> tuple[dict[str, Any], d
     else:
         expected_bands = ",".join(f"{upper}:{weight:g}" for upper, weight in arm["roundPolicyBands"])
         require_equal(extra_arg(extra, band_name), expected_bands, "round policy bands")
+    reach30_band_name = "--solo-reach30-bands"
+    reach30_bands = arm.get("soloReach30Bands")
+    if reach30_bands is None:
+        if reach30_band_name in extra:
+            raise ValueError("scalar reach30 arm unexpectedly enables reach30 coefficient bands")
+    else:
+        require_equal(float(arm["soloReach30Coef"]), 0.0, "scheduled reach30 scalar coefficient")
+        expected_reach30_bands = ",".join(
+            f"{upper}:{coefficient:g}" for upper, coefficient in reach30_bands
+        )
+        require_equal(
+            extra_arg(extra, reach30_band_name),
+            expected_reach30_bands,
+            "reach30 coefficient bands",
+        )
     return protocol, config, binding
 
 

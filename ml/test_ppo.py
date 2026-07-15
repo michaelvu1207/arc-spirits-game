@@ -7,6 +7,7 @@ Run with pytest if available, or directly (the venv has no pytest):
 
 from __future__ import annotations
 
+import argparse
 import json
 import copy
 import contextlib
@@ -38,6 +39,7 @@ from ppo import (
     normalize_policy_advantages,
     normalized_round_policy_weights,
     parse_placement_rewards,
+    round_band_coefficients,
     reach30_minibatch_loss,
     reach30_multihorizon_minibatch_loss,
     select_self_imitation_indices,
@@ -274,6 +276,95 @@ def test_round_policy_weights_are_normalized_and_control_is_exact_ones():
             pass
         else:
             raise AssertionError(f"bad round policy bands {bad!r} must fail closed")
+
+
+def test_round_coefficient_bands_parse_cover_and_apply_reach30_schedule():
+    bands = train_mod.parse_round_coefficient_bands("8:0.15,18:0.30,30:0.50")
+    assert bands == ((8, 0.15), (18, 0.3), (30, 0.5))
+    rounds = np.array([1, 8, 9, 18, 19, 30], dtype=np.int64)
+    coefficients = round_band_coefficients(rounds, bands)
+    assert np.allclose(coefficients, [0.15, 0.15, 0.3, 0.3, 0.5, 0.5])
+
+    rng = np.random.default_rng(10302)
+    rewards = np.array([-1.0, 0.2, 0.7, -0.4, 1.3, 0.5], dtype=np.float64)
+    targets = np.array([0, 1, 0, 1, 1, 0], dtype=np.float64)
+    predictions = np.array([0.8, 0.2, 0.6, 0.7, 0.1, 0.4], dtype=np.float64)
+    rows = []
+    for index, round_index in enumerate(rounds):
+        rows.append({
+            "obs": rng.standard_normal(OBS_DIM).tolist(),
+            "cands": rng.standard_normal((N_CANDS, ACT_DIM)).tolist(),
+            "chosen": 0,
+            "gameId": f"scheduled-p30-{index}",
+            "stepIdx": 0,
+            "round": int(round_index),
+            "rStep": float(rewards[index]),
+            "done": True,
+            "policyMask": 1,
+            "logpOld": math.log(1.0 / N_CANDS),
+            "behaviorMask": [1, 1, 1],
+            "behaviorTemperature": 1.0,
+            "vPred": 0.0,
+            "strategic": 1,
+            "playerCount": 1,
+            "won": int(targets[index]),
+            "reach30Pred": float(predictions[index]),
+            "reach30Target": int(targets[index]),
+            "reach30Horizon": 30,
+        })
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        buf = load_trajectory_buffer(
+            d,
+            gamma=1.0,
+            gae_lambda=1.0,
+            placement_rewards=PLACEMENT_REWARDS,
+            solo_reach30_bands=bands,
+        )
+    residuals = targets - predictions
+    base_z = (rewards - rewards.mean()) / rewards.std()
+    residual_z = (residuals - residuals.mean()) / residuals.std()
+    expected = (1.0 - coefficients) * base_z + coefficients * residual_z
+    assert np.allclose(buf.advantages, expected, atol=1e-6)
+    assert buf.solo_reach30_coef == 0
+    assert buf.solo_reach30_bands == bands
+
+    for bad in (
+        "",
+        "8:-0.1,30:0.5",
+        "8:0.1,8:0.5",
+        "8:0.1,30:1.1",
+        "8:0,30:0",
+    ):
+        try:
+            train_mod.parse_round_coefficient_bands(bad)
+        except argparse.ArgumentTypeError:
+            pass
+        else:
+            raise AssertionError(f"bad round coefficient bands {bad!r} must fail closed")
+    try:
+        round_band_coefficients(rounds, ((8, 0.15), (18, 0.3)))
+    except ValueError as exc:
+        assert "rollout contains round 30" in str(exc)
+    else:
+        raise AssertionError("uncovered decision rounds must fail closed")
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        _write_rows(d, rows)
+        try:
+            load_trajectory_buffer(
+                d,
+                gamma=1.0,
+                gae_lambda=1.0,
+                placement_rewards=PLACEMENT_REWARDS,
+                solo_reach30_coef=0.4,
+                solo_reach30_bands=bands,
+            )
+        except ValueError as exc:
+            assert "mutually exclusive" in str(exc)
+        else:
+            raise AssertionError("scalar and scheduled reach30 credit must be exclusive")
 
 
 def _sil_episode(

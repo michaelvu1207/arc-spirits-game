@@ -82,6 +82,37 @@ def parse_round_policy_bands(raw: str) -> tuple[tuple[int, float], ...]:
     return tuple(bands)
 
 
+def parse_round_coefficient_bands(raw: str) -> tuple[tuple[int, float], ...]:
+    """Parse inclusive round-band coefficients such as ``8:0.15,18:0.3,30:0.5``."""
+    bands: list[tuple[int, float]] = []
+    previous = 0
+    try:
+        for item in raw.split(","):
+            upper_raw, coefficient_raw = item.split(":", 1)
+            upper = int(upper_raw)
+            coefficient = float(coefficient_raw)
+            if (
+                upper <= previous
+                or not math.isfinite(coefficient)
+                or not 0.0 <= coefficient <= 1.0
+            ):
+                raise ValueError
+            bands.append((upper, coefficient))
+            previous = upper
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError(
+            "round coefficient bands must be increasing ROUND:COEFFICIENT pairs "
+            "with each coefficient in [0,1]"
+        ) from exc
+    if not bands:
+        raise argparse.ArgumentTypeError("round coefficient bands cannot be empty")
+    if not any(coefficient > 0 for _, coefficient in bands):
+        raise argparse.ArgumentTypeError(
+            "round coefficient bands must contain at least one positive coefficient"
+        )
+    return tuple(bands)
+
+
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
@@ -778,6 +809,7 @@ def train(
     solo_strategic_mc_coef: float = 0.0,
     solo_outcome_coef: float = 0.0,
     solo_reach30_coef: float = 0.0,
+    solo_reach30_bands: tuple[tuple[int, float], ...] | None = None,
     solo_terminal_objective: str = "legacy",
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
@@ -824,7 +856,11 @@ def train(
         raise ValueError("--hidden/--value-hidden configure only --model v1; use --v2-* for v2")
     if model_version != "v1" and self_imitation_replay_fraction > 0:
         raise ValueError("self-imitation currently requires --model v1 reach30Pred behavior rows")
-    if mode != "ppo" and (reach30_value_coef > 0 or solo_reach30_coef > 0):
+    if mode != "ppo" and (
+        reach30_value_coef > 0
+        or solo_reach30_coef > 0
+        or solo_reach30_bands is not None
+    ):
         raise ValueError("reach-30 critic training currently requires --mode ppo")
     if mode != "ppo" and (ppo_rows_per_epoch is not None or ppo_continuation_fraction is not None):
         raise ValueError("PPO row-budget controls require --mode ppo")
@@ -862,7 +898,7 @@ def train(
                 solo_reach30_coef,
                 strategic_outcome_coef,
             )
-        ):
+        ) or solo_reach30_bands is not None:
             raise ValueError("--v2-critic-only permits only value and reach30 critic losses")
     self_imitation_requested = (
         self_imitation_coef != 0
@@ -962,6 +998,7 @@ def train(
             solo_strategic_mc_coef=solo_strategic_mc_coef,
             solo_outcome_coef=solo_outcome_coef,
             solo_reach30_coef=solo_reach30_coef,
+            solo_reach30_bands=solo_reach30_bands,
             solo_terminal_objective=solo_terminal_objective,
             strategic_mc_gamma=strategic_mc_gamma,
             strategic_outcome_coef=strategic_outcome_coef,
@@ -1486,6 +1523,15 @@ def parse_args() -> argparse.Namespace:
                    help="Blend [0,1] toward true-win minus the behavior checkpoint's "
                         "state-dependent reach-30 probability on solo strategic rows")
     p.add_argument(
+        "--solo-reach30-bands",
+        type=parse_round_coefficient_bands,
+        default=None,
+        help=(
+            "Inclusive round-band reach-30 residual coefficients, e.g. "
+            "8:0.15,18:0.3,30:0.5; mutually exclusive with --solo-reach30-coef"
+        ),
+    )
+    p.add_argument(
         "--solo-terminal-objective",
         choices=["legacy", "resolved", "lexicographic"],
         default="legacy",
@@ -1658,6 +1704,7 @@ if __name__ == "__main__":
         solo_strategic_mc_coef=args.solo_strategic_mc_coef,
         solo_outcome_coef=args.solo_outcome_coef,
         solo_reach30_coef=args.solo_reach30_coef,
+        solo_reach30_bands=args.solo_reach30_bands,
         solo_terminal_objective=args.solo_terminal_objective,
         strategic_mc_gamma=args.strategic_mc_gamma,
         strategic_outcome_coef=args.strategic_outcome_coef,

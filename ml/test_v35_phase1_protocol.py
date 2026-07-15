@@ -70,6 +70,40 @@ class V35Phase1ProtocolTests(unittest.TestCase):
             observed.add((binding["replicate"], binding["arm"]))
         self.assertEqual(len(observed), 9)
 
+    def test_binding_audit_accepts_only_protocol_bound_reach30_schedule(self) -> None:
+        import tempfile
+
+        source_root = EXPERIMENT / "league/rep-a/control-uniform"
+        protocol = json.loads(PROTOCOL_PATH.read_text())
+        arm = next(item for item in protocol["arms"] if item["id"] == "control-uniform")
+        arm["soloReach30Bands"] = [[8, 0.15], [18, 0.3], [30, 0.5]]
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            root = temp / "root"
+            root.mkdir()
+            protocol_path = temp / "protocol.json"
+            protocol_path.write_text(json.dumps(protocol, indent=2) + "\n")
+            config = json.loads((source_root / "config.json").read_text())
+            config["train"]["extraArgs"].extend(
+                ["--solo-reach30-bands", "8:0.15,18:0.3,30:0.5"]
+            )
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps(config, indent=2) + "\n")
+            binding = json.loads((source_root / "v35-binding.json").read_text())
+            binding["protocolSha256"] = sha256(protocol_path)
+            binding["configSha256"] = sha256(config_path)
+            (root / "v35-binding.json").write_text(json.dumps(binding, indent=2) + "\n")
+            _, validated_config, validated_binding = validate_binding(root, protocol_path)
+            self.assertEqual(validated_binding["arm"], "control-uniform")
+            self.assertIn("--solo-reach30-bands", validated_config["train"]["extraArgs"])
+
+            config["train"]["extraArgs"][-1] = "8:0.15,18:0.3,30:0.4"
+            config_path.write_text(json.dumps(config, indent=2) + "\n")
+            binding["configSha256"] = sha256(config_path)
+            (root / "v35-binding.json").write_text(json.dumps(binding, indent=2) + "\n")
+            with self.assertRaisesRegex(ValueError, "reach30 coefficient bands changed"):
+                validate_binding(root, protocol_path)
+
     def test_seed_inventory_passes_without_collision(self) -> None:
         inventory = json.loads((EXPERIMENT / "artifacts/phase1-seed-inventory.json").read_text())
         self.assertTrue(inventory["valid"])
