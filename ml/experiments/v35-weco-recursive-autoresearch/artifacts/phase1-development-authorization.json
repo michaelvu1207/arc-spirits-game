@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "arc-v35-phase1-development-authorization-v1",
+  "authorized": true,
+  "immutable": true,
+  "developmentSeedsOpen": true,
+  "privateSeedsOpen": false,
+  "promotionEligible": false,
+  "sourceContractSha256": "b5b74519612809b78e344643a25fd53a1ea84d2f73c7ea1abde6a0f898445174",
+  "catalogSha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+  "contract": {
+    "seed0": 969030000,
+    "seedMax": 969034095,
+    "games": 4096,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "sample": true,
+    "temperature": 0.55,
+    "workers": 24,
+    "guardianSchedule": "absolute-balanced",
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenGpus": [4, 5, 6],
+    "maxConcurrentPolicies": 1
+  },
+  "analysis": {
+    "bootstrapSamples": 10000,
+    "bootstrapSeed": 350969,
+    "simultaneousConfidence": 0.975,
+    "familySize": 2,
+    "minimumWinGain": 0.03,
+    "minimumReplicateWinGain": -0.01,
+    "minimumPositiveReplicates": 2,
+    "guardianFloor": -0.05,
+    "tieThreshold": 0.01,
+    "tiePreference": "late-reweighted"
+  },
+  "files": {
+    "launcher": {
+      "path": "scripts/run-v35-phase1-development.sh",
+      "sha256": "8f47ca2af229984fd5c5739ac1e669bdd20da6910d5c7034bea47255cf6d9e4d"
+    },
+    "analyzer": {
+      "path": "ml/analyze_v35_phase1.py",
+      "sha256": "bed212acb9f3647bfcf3792975eea1cb67c3c1f71bcf0d88ca2ca6fbe26cdaf2"
+    },
+    "analyzerTests": {
+      "path": "ml/test_analyze_v35_phase1.py",
+      "sha256": "06a24d366e7615f4b21ad214e4c2271559591d552a471316d27d0a9c31329f45"
+    },
+    "evaluator": {
+      "path": "scripts/evaluate-solo-checkpoint.mjs",
+      "sha256": "4dcfbcef2139f892e2a7d1aa08add296d1a2b7e05ff1871e3b61d5c90dba2ebc"
+    },
+    "inferenceServer": {
+      "path": "ml/infer_server.py",
+      "sha256": "36573dc4741b75dc813187ab0fe107bd78b94ec186f354d277f24589158fe62b"
+    },
+    "actorPool": {
+      "path": "src/lib/play/ml/actorPool.ts",
+      "sha256": "ba5ea9eebd05827696a0ade65f15505f9e4fcd4b803cd88cb0f5d0f4f7a1f11a"
+    },
+    "guardianSchedule": {
+      "path": "src/lib/play/ml/evalSchedule.ts",
+      "sha256": "94b976c2b43b5e199d2a0a0da38cd78e36229cc127b15e2391fa4dc7daba5c80"
+    },
+    "catalog": {
+      "path": "ml/catalog.json",
+      "sha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59"
+    },
+    "protocol": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "sha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98"
+    },
+    "sourceLock": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-long-run-source-lock.json",
+      "sha256": "b5b74519612809b78e344643a25fd53a1ea84d2f73c7ea1abde6a0f898445174"
+    },
+    "endpoint": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-endpoint.json",
+      "sha256": "cda179375d71731d763a12e68ea67af9eb147e1b7c7699a7efcf7caa761e5b3a"
+    },
+    "representatives": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-policy-medoid.json",
+      "sha256": "e88b9e021802058397440088044ef1d0bc708e5bfc03b5f583694fd4e947ee8d"
+    }
+  },
+  "policyOrder": [
+    "base",
+    "rep-a-control-uniform",
+    "rep-a-late-reweighted",
+    "rep-a-p30-credit025",
+    "rep-b-control-uniform",
+    "rep-b-late-reweighted",
+    "rep-b-p30-credit025",
+    "rep-c-control-uniform",
+    "rep-c-late-reweighted",
+    "rep-c-p30-credit025"
+  ],
+  "policies": {
+    "base": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+      "weightsSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+    },
+    "rep-a-control-uniform": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "738bf508aa7f8e88498fd7838c1f59a89e8c85f9d264bae2e885659d6e26ea5b"
+    },
+    "rep-a-late-reweighted": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "daefd124ba62defc39e4f1504c7e0ad7a42761e2e2278795fab4c17bed96bf6c"
+    },
+    "rep-a-p30-credit025": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91"
+    },
+    "rep-b-control-uniform": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/control-uniform/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "6da8a2118a86fae4d85332e1fc28f7652990f949a899b3f155323d7ae946e924"
+    },
+    "rep-b-late-reweighted": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/late-reweighted/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "20a6279c11e577bc5294a1f742655d2b204860ca52560cb62441a9fd61aac197"
+    },
+    "rep-b-p30-credit025": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/p30-credit025/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "9b6c948adf4ef7139c8ce999624e8395e877204fa58986eedbe97998ca1b9fcb"
+    },
+    "rep-c-control-uniform": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/control-uniform/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "946cf14c03087877213a6ebb58e870efc8a22276d13c3b9ff8e96bd3ee2cc825"
+    },
+    "rep-c-late-reweighted": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/late-reweighted/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "b41c6b2d50ce2d772dd8a55a9d86510e1f1be40d119d9e956778b53df7b931d8"
+    },
+    "rep-c-p30-credit025": {
+      "weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/p30-credit025/checkpoints/main-0-gen8.pt",
+      "weightsSha256": "7f65d31d17152a024fdc2d9a9d696cdb803abcf9c6e1eed56f2f04e204f3889d"
+    }
+  },
+  "representatives": {
+    "late-reweighted": {
+      "selectedReplicate": "a",
+      "treatmentLabel": "rep-a-late-reweighted",
+      "controlLabel": "rep-a-control-uniform",
+      "checkpointSha256": "daefd124ba62defc39e4f1504c7e0ad7a42761e2e2278795fab4c17bed96bf6c",
+      "matchedControlSha256": "738bf508aa7f8e88498fd7838c1f59a89e8c85f9d264bae2e885659d6e26ea5b"
+    },
+    "p30-credit025": {
+      "selectedReplicate": "a",
+      "treatmentLabel": "rep-a-p30-credit025",
+      "controlLabel": "rep-a-control-uniform",
+      "checkpointSha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+      "matchedControlSha256": "738bf508aa7f8e88498fd7838c1f59a89e8c85f9d264bae2e885659d6e26ea5b"
+    }
+  },
+  "notes": [
+    "All ten policies use the exact same public development seeds and decode contract.",
+    "The analyzer evaluates mechanism effects using equal replicate weight and complete seed clusters.",
+    "No development outcome may choose an A/B/C checkpoint; the representatives were frozen outcome-blind.",
+    "A public-development winner still requires private confirmation and every downstream promotion gate."
+  ]
+}
