@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${ARC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 EXPERIMENT="$ROOT/ml/experiments/v35-weco-recursive-autoresearch"
 PROTOCOL="$EXPERIMENT/phase1-protocol.json"
-LOCK="$EXPERIMENT/artifacts/phase1-source-lock-amendment2.json"
+LOCK="${ARC_V35_SOURCE_LOCK:-$EXPERIMENT/artifacts/phase1-source-lock-amendment2.json}"
 LEAGUE_ROOT="${1:?league root required}"
 TARGET_GEN="${2:-1}"
 SCRATCH_BASE="${ARC_V35_TRAINING_SCRATCH:-/dev/shm/arc-v35-training}"
@@ -184,6 +184,27 @@ finalize_generation() {
   rm -rf "$data_root"
 }
 
+verify_input_checkpoint() {
+  local gen="$1"
+  local checkpoint expected actual previous audit
+  if (( gen == 1 )); then
+    checkpoint="$(node -e 'const p=require(process.argv[1]);process.stdout.write(p.initialPolicy.path)' "$PROTOCOL")"
+    expected="$(node -e 'const p=require(process.argv[1]);process.stdout.write(p.initialPolicy.sha256)' "$PROTOCOL")"
+  else
+    previous=$((gen - 1))
+    checkpoint="$LEAGUE_ROOT/checkpoints/main-0-gen${previous}.pt"
+    audit="$LEAGUE_ROOT/artifacts/gen${previous}-audit.json"
+    test -f "$audit"
+    expected="$(node -e 'const a=require(process.argv[1]);process.stdout.write(a.checkpointSha256)' "$audit")"
+  fi
+  test -f "$checkpoint"
+  actual="$(sha256sum "$checkpoint" | awk '{print $1}')"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "input checkpoint hash mismatch for generation $gen" >&2
+    return 1
+  fi
+}
+
 if [[ ! -f "$LEAGUE_ROOT/state.json" ]]; then
   node scripts/run-league.mjs init --root "$LEAGUE_ROOT"
 fi
@@ -208,6 +229,7 @@ while :; do
     echo "partial generation $GEN requires a separately recorded infrastructure-resume authorization" >&2
     exit 1
   fi
+  verify_input_checkpoint "$GEN"
   test ! -e "$LEAGUE_ROOT/artifacts/gen${GEN}-audit.json"
   acquire_generation_lease "$GEN"
   write_environment_manifest "$GEN"

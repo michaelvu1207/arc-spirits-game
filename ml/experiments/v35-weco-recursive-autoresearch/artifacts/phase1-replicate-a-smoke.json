@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "arc-v35-phase1-smoke-v1",
+  "valid": true,
+  "replicate": "a",
+  "generation": 1,
+  "promotionEligible": false,
+  "audits": [
+    {
+      "arm": "control-uniform",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/artifacts/gen1-audit.json",
+      "checkpointSha256": "d966c9d8c7a69b8f8843d34b62e8361a09e1bdc5ce8ee7745ca28b0fe696b943",
+      "behaviorLogpMaxAbsError": 0.000016927719116210938,
+      "behaviorReach30Calibration": {
+        "nll": 0.412792,
+        "brier": 0.138818,
+        "constant_brier": 0.249355,
+        "auc": 0.886328,
+        "auprc": 0.902061,
+        "ece": 0.037061,
+        "rows": 122615
+      },
+      "epochMetrics": [
+        {
+          "epoch": 1,
+          "approxKl": 0.0044,
+          "clipFraction": 0.138,
+          "roundWeightedKl": 0.0044,
+          "roundWeightedClipFraction": 0.138,
+          "optimizerSteps": 196
+        },
+        {
+          "epoch": 2,
+          "approxKl": 0.0026,
+          "clipFraction": 0.099,
+          "roundWeightedKl": 0.0026,
+          "roundWeightedClipFraction": 0.099,
+          "optimizerSteps": 196
+        }
+      ],
+      "rawGenerationCommitment": {
+        "sha256": "aea8da4726f4f78bfc5c3fccafabff2485d1ca1e7b872fb859498a8d28a1d2eb",
+        "files": 76,
+        "bytes": 1469348919
+      }
+    },
+    {
+      "arm": "late-reweighted",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/artifacts/gen1-audit.json",
+      "checkpointSha256": "8be5c7c8c16780e4f31ad37d6165db538981b18fe7eada665054743a0ca600a0",
+      "behaviorLogpMaxAbsError": 0.000024318695068359375,
+      "behaviorReach30Calibration": {
+        "nll": 0.412789,
+        "brier": 0.138817,
+        "constant_brier": 0.249355,
+        "auc": 0.88633,
+        "auprc": 0.902064,
+        "ece": 0.037064,
+        "rows": 122619
+      },
+      "epochMetrics": [
+        {
+          "epoch": 1,
+          "approxKl": 0.0049,
+          "clipFraction": 0.15,
+          "roundWeightedKl": 0.0054,
+          "roundWeightedClipFraction": 0.171,
+          "optimizerSteps": 196
+        },
+        {
+          "epoch": 2,
+          "approxKl": 0.0026,
+          "clipFraction": 0.094,
+          "roundWeightedKl": 0.0028,
+          "roundWeightedClipFraction": 0.105,
+          "optimizerSteps": 196
+        }
+      ],
+      "rawGenerationCommitment": {
+        "sha256": "6f0e00764b98222d294451a1d7e7776d3d69d02fa0d6b2d022b33bcdf574b32c",
+        "files": 76,
+        "bytes": 1469410029
+      }
+    },
+    {
+      "arm": "p30-credit025",
+      "audit": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/artifacts/gen1-audit.json",
+      "checkpointSha256": "60eec0bbf8c136f352742e085bbf9f12430bd74b9ab7ecb370ea54aa5aea2b73",
+      "behaviorLogpMaxAbsError": 0.000024318695068359375,
+      "behaviorReach30Calibration": {
+        "nll": 0.412792,
+        "brier": 0.138818,
+        "constant_brier": 0.249355,
+        "auc": 0.886328,
+        "auprc": 0.902061,
+        "ece": 0.037061,
+        "rows": 122615
+      },
+      "epochMetrics": [
+        {
+          "epoch": 1,
+          "approxKl": 0.0044,
+          "clipFraction": 0.135,
+          "roundWeightedKl": 0.0044,
+          "roundWeightedClipFraction": 0.135,
+          "optimizerSteps": 196
+        },
+        {
+          "epoch": 2,
+          "approxKl": 0.0024,
+          "clipFraction": 0.09,
+          "roundWeightedKl": 0.0024,
+          "roundWeightedClipFraction": 0.09,
+          "optimizerSteps": 196
+        }
+      ],
+      "rawGenerationCommitment": {
+        "sha256": "96146c566bc66746641bc130eca495b926ae0704b6b399627cd6c678f31a316b",
+        "files": 76,
+        "bytes": 1469343189
+      }
+    }
+  ]
+}

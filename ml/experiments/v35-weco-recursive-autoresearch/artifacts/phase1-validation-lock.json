@@ -1,0 +1,21 @@
+{
+	"schemaVersion": "arc-v35-validation-lock-v1",
+	"path": "/dev/shm/arc-v32-critic/validation",
+	"treeCommitment": {
+		"sha256": "9eeb593576ec3e76f413b997d462a40e775ee1229a46e27f2d8383f605bcc14d",
+		"files": 49,
+		"bytes": 1433544644
+	},
+	"games": 1024,
+	"seedMin": 946004096,
+	"seedMax": 946005119,
+	"v32CriticAudit": {
+		"path": "ml/experiments/v32-onpolicy-solo/shared-critic/audit.json",
+		"sha256": "fff2c5f5a6175d122e440f3ef4adba2569a48ce02d53ee1a6c0f43620cfa90fb"
+	},
+	"v32ValidationReplayAudit": {
+		"path": "ml/experiments/v32-onpolicy-solo/shared-critic/validation-replay-audit.json",
+		"sha256": "8cfd7a79c8ff0dfa1ce43877da7078689f777ed226d305246be32540f357adf3"
+	},
+	"performanceOutcomesInspectedForLock": false
+}

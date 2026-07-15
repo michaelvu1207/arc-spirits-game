@@ -1,0 +1,94 @@
+V35 source lock valid (323 files)
+{
+  "valid": true,
+  "root": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform",
+  "generation": 1,
+  "trainingSeeds": {
+    "min": 966100000,
+    "max": 966101023,
+    "count": 1024
+  },
+  "games": 1024,
+  "stalls": 0,
+  "evaluationSeeds": {
+    "min": 966700000,
+    "max": 966700255,
+    "count": 256
+  },
+  "evaluationStalls": 0,
+  "rows": 122615,
+  "policyRows": 115897,
+  "roundCounts": {
+    "1-8": 42071,
+    "9-18": 46563,
+    "19-30": 33981
+  },
+  "policyRoundCounts": {
+    "1-8": 39594,
+    "9-18": 44474,
+    "19-30": 31829
+  },
+  "behaviorCheckpoint": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+  "behaviorCheckpointSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+  "behaviorLogpMaxAbsError": 1.6927719116210938e-05,
+  "behaviorReach30Calibration": {
+    "nll": 0.412792,
+    "brier": 0.138818,
+    "constant_brier": 0.249355,
+    "auc": 0.886328,
+    "auprc": 0.902061,
+    "ece": 0.037061,
+    "rows": 122615.0
+  },
+  "soloReach30Credit": {
+    "soloOutcomeCoef": 0.0,
+    "soloReach30Coef": 0.0,
+    "reach30Horizon": "30",
+    "soloOutcomeApplied": 0,
+    "soloReach30Applied": 0
+  },
+  "roundPolicyBands": null,
+  "effectivePolicyWeightShare": {
+    "1-8": 0.34163093091279323,
+    "9-18": 0.38373728396766094,
+    "19-30": 0.2746317851195458
+  },
+  "epochMetrics": [
+    {
+      "epoch": 1,
+      "approxKl": 0.0044,
+      "clipFraction": 0.138,
+      "roundWeightedKl": 0.0044,
+      "roundWeightedClipFraction": 0.138,
+      "optimizerSteps": 196
+    },
+    {
+      "epoch": 2,
+      "approxKl": 0.0026,
+      "clipFraction": 0.099,
+      "roundWeightedKl": 0.0026,
+      "roundWeightedClipFraction": 0.099,
+      "optimizerSteps": 196
+    }
+  ],
+  "checkpoint": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/checkpoints/main-0-gen1.pt",
+  "checkpointSha256": "d966c9d8c7a69b8f8843d34b62e8361a09e1bdc5ce8ee7745ca28b0fe696b943",
+  "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+  "trustedCoreAuditSchema": "arc-v32-generation-audit-v1",
+  "schemaVersion": "arc-v35-generation-audit-v1",
+  "experiment": "v35-v2-late-credit-screen",
+  "replicate": "a",
+  "arm": "control-uniform",
+  "protocol": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+  "protocolSha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+  "configSha256": "884e476381249594e885a7fc5aaf2adf9dd59cc02839c2c26aa38bf3c69c63a3",
+  "bindingSha256": "735b2ef8c5e88ee68d5f3fed4f16a4f4650707869154d01b79629b95adcc659a",
+  "catalogSha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+  "rawGenerationCommitment": {
+    "sha256": "aea8da4726f4f78bfc5c3fccafabff2485d1ca1e7b872fb859498a8d28a1d2eb",
+    "files": 76,
+    "bytes": 1469348919
+  },
+  "promotionEligible": false
+}
+V35 root complete root=/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform gen=1

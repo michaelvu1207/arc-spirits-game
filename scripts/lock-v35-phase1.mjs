@@ -12,13 +12,15 @@ const experiment = 'ml/experiments/v35-weco-recursive-autoresearch';
 const originalLockPath = `${experiment}/artifacts/phase1-source-lock.json`;
 const amendmentMatch = (command ?? '').match(/^create-amendment([1-9][0-9]*)$/);
 const amendmentNumber = amendmentMatch ? Number.parseInt(amendmentMatch[1], 10) : 0;
+const longRun = command === 'create-long-run';
 const amendmentIncidentPath = `${experiment}/artifacts/phase1-smoke-incident-${amendmentNumber}.json`;
 const amendmentLockPath = `${experiment}/artifacts/phase1-source-lock-amendment${amendmentNumber}.json`;
 const predecessorLockPath =
 	amendmentNumber === 1
 		? originalLockPath
 		: `${experiment}/artifacts/phase1-source-lock-amendment${amendmentNumber - 1}.json`;
-const lockPath = amendmentNumber ? amendmentLockPath : originalLockPath;
+const longRunLockPath = `${experiment}/artifacts/phase1-long-run-source-lock.json`;
+const lockPath = amendmentNumber ? amendmentLockPath : longRun ? longRunLockPath : originalLockPath;
 
 const hash = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 const walk = (target) => {
@@ -42,9 +44,11 @@ const relativeFiles = (targets) =>
 		)
 		.sort();
 
-if (command === 'create' || amendmentNumber) {
+if (command === 'create' || amendmentNumber || longRun) {
 	if (!argument || !/^[0-9a-f]{40}$/.test(argument)) {
-		throw new Error('usage: lock-v35-phase1.mjs <create|create-amendmentN> IMPLEMENTATION_COMMIT');
+		throw new Error(
+			'usage: lock-v35-phase1.mjs <create|create-amendmentN|create-long-run> IMPLEMENTATION_COMMIT'
+		);
 	}
 	if (existsSync(lockPath)) throw new Error(`refusing to overwrite ${lockPath}`);
 	const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -80,9 +84,11 @@ if (command === 'create' || amendmentNumber) {
 		'ml/autoresearch/v35',
 		'ml/audit_v32_generation.py',
 		'ml/audit_v35_generation.py',
+		'ml/audit_v35_manipulation.py',
 		'ml/inventory_v35_seeds.py',
 		'ml/test_v35_autoresearch.py',
 		'ml/test_v35_phase1_protocol.py',
+		'ml/test_audit_v35_manipulation.py',
 		'ml/train.py',
 		'ml/ppo.py',
 		'ml/model.py',
@@ -95,6 +101,8 @@ if (command === 'create' || amendmentNumber) {
 		'scripts/lock-v35-phase1.mjs',
 		'scripts/run-v35-root.sh',
 		'scripts/run-v35-phase1-smoke.sh',
+		'scripts/run-v35-phase1.sh',
+		'scripts/authorize-v35-phase1-long-run.mjs',
 		'src/lib/play'
 	];
 	if (amendmentNumber) {
@@ -103,15 +111,44 @@ if (command === 'create' || amendmentNumber) {
 		}
 		targets.push(predecessorLockPath, amendmentIncidentPath);
 	}
+	if (longRun) {
+		const predecessor = `${experiment}/artifacts/phase1-source-lock-amendment2.json`;
+		const authorization = `${experiment}/artifacts/phase1-long-run-authorization.json`;
+		const validationLock = `${experiment}/artifacts/phase1-validation-lock.json`;
+		const smoke = `${experiment}/artifacts/phase1-replicate-a-smoke.json`;
+		for (const required of [predecessor, authorization, validationLock, smoke]) {
+			if (!existsSync(required))
+				throw new Error(`long-run authorization input missing: ${required}`);
+		}
+		const authorizationData = JSON.parse(readFileSync(authorization, 'utf8'));
+		if (
+			authorizationData.authorized !== true ||
+			authorizationData.performanceOutcomesInspectedForAuthorization !== false
+		) {
+			throw new Error('long-run authorization did not pass outcome-blindly');
+		}
+		targets.push(
+			predecessor,
+			authorization,
+			validationLock,
+			smoke,
+			'ml/experiments/v32-onpolicy-solo/shared-critic/audit.json',
+			'ml/experiments/v32-onpolicy-solo/shared-critic/validation-replay-audit.json'
+		);
+	}
 	const incident = amendmentNumber ? JSON.parse(readFileSync(amendmentIncidentPath, 'utf8')) : null;
 	const files = relativeFiles(targets);
 	const payload = {
-		schemaVersion: amendmentNumber
-			? 'arc-v35-phase1-source-lock-amendment-v1'
-			: 'arc-v35-phase1-source-lock-v1',
-		phase: amendmentNumber
-			? `replicate-a-three-arm-generation-1-smoke-infrastructure-amendment-${amendmentNumber}`
-			: 'replicate-a-three-arm-generation-1-smoke',
+		schemaVersion: longRun
+			? 'arc-v35-phase1-long-run-source-lock-v1'
+			: amendmentNumber
+				? 'arc-v35-phase1-source-lock-amendment-v1'
+				: 'arc-v35-phase1-source-lock-v1',
+		phase: longRun
+			? 'all-nine-generation-8-with-global-generation-12-outcome-blind-extension'
+			: amendmentNumber
+				? `replicate-a-three-arm-generation-1-smoke-infrastructure-amendment-${amendmentNumber}`
+				: 'replicate-a-three-arm-generation-1-smoke',
 		implementationCommit: argument,
 		createdAt: new Date().toISOString(),
 		authorizedGpu: 7,
@@ -131,6 +168,21 @@ if (command === 'create' || amendmentNumber) {
 					seedConsumptionBeforeAmendment: incident.evidence
 				}
 			: {}),
+		...(longRun
+			? {
+					supersedes: {
+						path: `${experiment}/artifacts/phase1-source-lock-amendment2.json`,
+						sha256: hash(`${experiment}/artifacts/phase1-source-lock-amendment2.json`)
+					},
+					authorization: {
+						path: `${experiment}/artifacts/phase1-long-run-authorization.json`,
+						sha256: hash(`${experiment}/artifacts/phase1-long-run-authorization.json`)
+					},
+					performanceOutcomesInspectedForAuthorization: false,
+					maxEndpointBeforeOutcomeBlindAudit: 8,
+					globalExtensionEndpoint: 12
+				}
+			: {}),
 		files: Object.fromEntries(files.map((file) => [file, hash(file)]))
 	};
 	writeFileSync(lockPath, JSON.stringify(payload, null, 2) + '\n');
@@ -140,7 +192,8 @@ if (command === 'create' || amendmentNumber) {
 	const lock = JSON.parse(readFileSync(requested, 'utf8'));
 	if (
 		lock.schemaVersion !== 'arc-v35-phase1-source-lock-v1' &&
-		lock.schemaVersion !== 'arc-v35-phase1-source-lock-amendment-v1'
+		lock.schemaVersion !== 'arc-v35-phase1-source-lock-amendment-v1' &&
+		lock.schemaVersion !== 'arc-v35-phase1-long-run-source-lock-v1'
 	) {
 		throw new Error('wrong V35 source-lock schema');
 	}
@@ -155,6 +208,6 @@ if (command === 'create' || amendmentNumber) {
 	console.log(`V35 source lock valid (${Object.keys(lock.files).length} files)`);
 } else {
 	throw new Error(
-		'usage: lock-v35-phase1.mjs <create IMPLEMENTATION_COMMIT|create-amendmentN IMPLEMENTATION_COMMIT|verify [LOCK]>'
+		'usage: lock-v35-phase1.mjs <create IMPLEMENTATION_COMMIT|create-amendmentN IMPLEMENTATION_COMMIT|create-long-run IMPLEMENTATION_COMMIT|verify [LOCK]>'
 	);
 }
