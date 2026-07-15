@@ -433,6 +433,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				obsVersion: config.obsVersion,
 				policyObsVersion: config.policyObsVersion,
 				previewReach30Audit: config.previewReach30Audit,
+				includeReplayTraceHash: config.includeReplayTraceHash,
 				denseVpReward: config.denseVpReward,
 				...(config.shapingPreset ? { shaping: shapingFor(config.shapingPreset) } : {}),
 				potentialShapingMode: config.potentialShapingMode,
@@ -487,6 +488,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 						const suffixT0 = performance.now();
 						const suffix = playRecordingGame(catalog, {
 							...gameOptions,
+							includeReplayTraceHash: undefined,
 							episodeId,
 							captureContinuationRounds: undefined,
 							searcher: undefined,
@@ -529,6 +531,7 @@ function createActorGameRunner(data: ActorWorkerData): ActorGameRunner {
 				finished: r.finished,
 				stalled: r.stalled,
 				samples: r.samples.length,
+				...(r.replayTraceSha256 ? { replayTraceSha256: r.replayTraceSha256 } : {}),
 				neuralSeats: seatList.filter(isLearnerSeat),
 				...(remote
 					? {

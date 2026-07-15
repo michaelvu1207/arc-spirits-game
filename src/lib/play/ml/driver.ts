@@ -47,6 +47,12 @@ import {
 } from './actions';
 import { sampleAuxTargets } from './auxTargets';
 import {
+	commandTraceEvent,
+	deadlineTraceEvent,
+	sha256Canonical,
+	type SnapshotTraceEventV1
+} from './expertIteration/snapshot';
+import {
 	valueGuidedIndex,
 	hybridIndex,
 	isProgressTransition,
@@ -405,6 +411,9 @@ export interface RecordGameOptions {
 	/** V34 calibration-only: batch-score every public candidate preview at
 	 * navigation/encounter without changing the acting policy's chosen action. */
 	previewReach30Audit?: boolean;
+	/** Opt-in deterministic hash of every successful setup/game command and deadline advance.
+	 * The raw replay trace remains internal and is discarded after hashing. */
+	includeReplayTraceHash?: boolean;
 }
 
 export interface RecordGameResult {
@@ -424,6 +433,8 @@ export interface RecordGameResult {
 	continuationSnapshots: ContinuationSnapshot[];
 	/** Minimal outcome-labelled rows; populated only by previewReach30Audit. */
 	previewReach30AuditRows: PreviewReach30AuditRow[];
+	/** Canonical SHA-256 of the complete command/deadline replay trace. Opt-in only. */
+	replayTraceSha256?: string;
 }
 
 /** Versioned, JSON-safe continuation state. `state.rng` is the environment cursor; the other
@@ -912,6 +923,11 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 	if (opts.continuation && !opts.episodeId) {
 		throw new Error('driver: continuation episodes require an explicit unique episodeId');
 	}
+	if (opts.continuation && opts.includeReplayTraceHash) {
+		throw new Error(
+			'driver: replay trace hashing requires a fresh lobby game, not a continuation suffix'
+		);
+	}
 	const captureRounds = new Set(opts.captureContinuationRounds ?? []);
 	for (const round of captureRounds) assertLateRound(round, 'capture continuation round');
 	if ((opts.continuation || captureRounds.size > 0) && (opts.chooser || opts.searcher)) {
@@ -968,6 +984,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 
 	let state: PublicGameState;
 	const host: GameActor = { memberId: 'host', displayName: 'host', role: 'host', seatColor: null };
+	const replayTrace: SnapshotTraceEventV1[] | null = opts.includeReplayTraceHash ? [] : null;
+	const recordReplayCommand = (actor: GameActor, command: GameCommand): void => {
+		replayTrace?.push(commandTraceEvent(actor, command));
+	};
 	const profileBySeat: Record<string, BotProfile> = {};
 	seats.forEach((seat, i) => {
 		profileBySeat[seat] = profiles[i] ?? MEDIUM_DEFAULTS;
@@ -997,29 +1017,35 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		state = createLobbyState({ roomCode: 'MLSIM', guardianNames });
 		seats.forEach((seat, i) => {
 			const memberId = `bot-${seat}`;
+			const claimActor: GameActor = {
+				memberId,
+				displayName: seat,
+				role: 'player',
+				seatColor: null
+			};
+			const claimCommand: GameCommand = { type: 'claimSeat', seatColor: seat };
+			expectOk(applyGameCommand(state, claimActor, claimCommand, catalog), `claimSeat ${seat}`);
+			recordReplayCommand(claimActor, claimCommand);
+
+			const guardianActor: GameActor = {
+				memberId,
+				displayName: seat,
+				role: 'player',
+				seatColor: seat
+			};
+			const guardianCommand: GameCommand = {
+				type: 'selectGuardian',
+				guardianName: guardianNames[i]
+			};
 			expectOk(
-				applyGameCommand(
-					state,
-					{ memberId, displayName: seat, role: 'player', seatColor: null },
-					{ type: 'claimSeat', seatColor: seat },
-					catalog
-				),
-				`claimSeat ${seat}`
-			);
-			expectOk(
-				applyGameCommand(
-					state,
-					{ memberId, displayName: seat, role: 'player', seatColor: seat },
-					{ type: 'selectGuardian', guardianName: guardianNames[i] },
-					catalog
-				),
+				applyGameCommand(state, guardianActor, guardianCommand, catalog),
 				`selectGuardian ${seat}`
 			);
+			recordReplayCommand(guardianActor, guardianCommand);
 		});
-		expectOk(
-			applyGameCommand(state, host, { type: 'startGame', seed: opts.seed }, catalog),
-			'startGame'
-		);
+		const startCommand: GameCommand = { type: 'startGame', seed: opts.seed };
+		expectOk(applyGameCommand(state, host, startCommand, catalog), 'startGame');
+		recordReplayCommand(host, startCommand);
 		botRngState = createRng(opts.seed);
 		pickRng = createRng(opts.seed ^ 0x9e3779b9);
 	}
@@ -1164,8 +1190,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 			const hadAlternatives = OPTIONAL_YIELD_TYPES.has(cmd.type)
 				? legalActionsWithNext(state, seat, catalog).length > 1
 				: false;
-			const res = applyGameCommand(state, botActorFor(state, seat), cmd, catalog, { mutate: true });
+			const actor = botActorFor(state, seat);
+			const res = applyGameCommand(state, actor, cmd, catalog, { mutate: true });
 			if (!res.ok) break;
+			recordReplayCommand(actor, cmd);
 			recordCycleDecision(
 				seat,
 				cmd,
@@ -1330,6 +1358,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 										catalog
 									);
 		const chosenAction = withNext[idx];
+		const chosenActor = botActorFor(state, seat);
 		if (
 			opts.previewReach30Audit &&
 			!oppPolicy &&
@@ -1480,7 +1509,8 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 				...sampleAuxTargets(state, seat, catalog, withNext, withNext[idx])
 			});
 		}
-		state = withNext[idx].next;
+		recordReplayCommand(chosenActor, chosenAction.cmd);
+		state = chosenAction.next;
 		actionCounter.set(key, used + 1);
 		return true;
 	};
@@ -1512,7 +1542,10 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		if (state.status !== 'active') break;
 		if (!progressed) {
 			const before = `${state.phase}:${state.round}`;
+			const beforeRevision = state.revision;
+			const replayDeadline = replayTrace ? deadlineTraceEvent(state) : null;
 			applyDeadlineAdvance(state, catalog);
+			if (replayDeadline && state.revision > beforeRevision) replayTrace?.push(replayDeadline);
 			if (`${state.phase}:${state.round}` === before) {
 				stalled = true;
 				break;
@@ -1653,6 +1686,7 @@ export function playRecordingGame(catalog: PlayCatalog, opts: RecordGameOptions)
 		optionEvents,
 		cycleBySeat,
 		previewReach30AuditRows,
+		...(replayTrace ? { replayTraceSha256: sha256Canonical(replayTrace) } : {}),
 		finalState: state,
 		continuationSnapshots
 	};

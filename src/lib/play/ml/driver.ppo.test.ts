@@ -102,6 +102,42 @@ function continuationFixture() {
 }
 
 describe('driver PPO behavior distribution', () => {
+	it('emits only an opt-in deterministic canonical replay hash', async () => {
+		const catalog = await loadOrSnapshotCatalog();
+		const base = {
+			seed: 42_035,
+			profiles: [profileFor('medium')],
+			maxRounds: 2,
+			recordSeats: []
+		};
+		const defaultResult = playRecordingGame(catalog, base);
+		const heuristic = playRecordingGame(catalog, {
+			...base,
+			includeReplayTraceHash: true
+		});
+		const repeated = playRecordingGame(catalog, {
+			...base,
+			includeReplayTraceHash: true
+		});
+		const neural = playRecordingGame(catalog, {
+			...base,
+			includeReplayTraceHash: true,
+			neuralSeats: ['Red'],
+			chooser: (_obs, _features, commands) => commands.length - 1
+		});
+
+		expect(defaultResult.replayTraceSha256).toBeUndefined();
+		expect('replayTrace' in defaultResult).toBe(false);
+		expect(heuristic.replayTraceSha256).toBe(
+			'0b56fa0848738ebb1df1269cd07734ab177f454c89ac3ac3e0bc941c9823ccf9'
+		);
+		expect(repeated.replayTraceSha256).toBe(heuristic.replayTraceSha256);
+		expect(neural.replayTraceSha256).toBe(
+			'e1b245032386295e15794c9b8e9d145654acdadbc1c50d2cb716c4e65f3bcfa0'
+		);
+		expect('replayTrace' in heuristic).toBe(false);
+	});
+
 	it('marks only the navigation strategy skeleton in the first MC ablation', () => {
 		expect(isStrategicCommand({ type: 'lockNavigation', destination: 'Arcane Abyss' })).toBe(true);
 		expect(isStrategicCommand({ type: 'startCombat' })).toBe(false);

@@ -58,6 +58,31 @@ function tempDir(label: string): string {
 }
 
 describe('actor pool', () => {
+	it('propagates opt-in replay hashes deterministically across worker counts', async () => {
+		const seeds = [42_036, 42_037];
+		const config: ActorGameConfig = {
+			seats: 1,
+			maxRounds: 2,
+			profiles: ['medium'],
+			includeReplayTraceHash: true
+		};
+		const dirA = tempDir('trace1');
+		const dirB = tempDir('trace2');
+		try {
+			const one = await runActorPool({ seeds, outDir: dirA, workers: 1, config });
+			const two = await runActorPool({ seeds, outDir: dirB, workers: 2, config });
+			const hashes = (summaries: GameSummary[]) =>
+				Object.fromEntries(summaries.map((summary) => [summary.seed, summary.replayTraceSha256]));
+			expect(hashes(two.summaries)).toEqual(hashes(one.summaries));
+			expect(
+				one.summaries.every((summary) => /^[0-9a-f]{64}$/.test(summary.replayTraceSha256!))
+			).toBe(true);
+		} finally {
+			rmSync(dirA, { recursive: true, force: true });
+			rmSync(dirB, { recursive: true, force: true });
+		}
+	}, 120_000);
+
 	it('dynamic scheduler gives fast workers more jobs without changing seed coverage', () => {
 		const seeds = [10, 11, 11, 13, 14];
 		const scheduler = new DynamicSeedScheduler(seeds);

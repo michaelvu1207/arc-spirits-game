@@ -46,6 +46,7 @@ const { values: args } = parseArgs({
 		'search-nav-temperature': { type: 'string', default: '0' },
 		'rerank-policy-weight': { type: 'string' },
 		'include-games': { type: 'boolean', default: false },
+		'include-replay-hashes': { type: 'boolean', default: false },
 		out: { type: 'string' },
 		help: { type: 'boolean', default: false }
 	}
@@ -56,7 +57,7 @@ if (args.help || !args.weights) {
 		'usage: node scripts/evaluate-solo-checkpoint.mjs --weights FILE [--catalog FILE] [--source-commit SHA] [--games N] [--workers N] ' +
 			'[--infer-socket SOCK --policy-obs-version 2] ' +
 			'[--seed0 N] [--learn-monster-reward-choices] [--sample --temperature T] ' +
-			'[--search-sims N | --rerank-policy-weight W] [--include-games] [--out FILE]'
+			'[--search-sims N | --rerank-policy-weight W] [--include-games] [--include-replay-hashes] [--out FILE]'
 	);
 	process.exit(args.help ? 0 : 1);
 }
@@ -206,7 +207,8 @@ try {
 				? { rerank: { policyRankWeight: rerankPolicyWeight } }
 				: {}),
 			obsVersion: 1,
-			policyObsVersion
+			policyObsVersion,
+			includeReplayTraceHash: args['include-replay-hashes'] || undefined
 		}
 	});
 	const inference = result.summaries[0]?.inference;
@@ -330,6 +332,14 @@ try {
 			(game) => game.stalled && (game.perSeat[0]?.finalVP ?? 0) >= 30
 		).length
 	};
+	const replayHashes = args['include-replay-hashes']
+		? result.summaries.map((game) => {
+				if (!/^[0-9a-f]{64}$/.test(game.replayTraceSha256 ?? '')) {
+					throw new Error(`heldout seed ${game.seed} is missing its replay trace hash`);
+				}
+				return { seed: game.seed, replayTraceSha256: game.replayTraceSha256 };
+			})
+		: undefined;
 	const report = {
 		schemaVersion: 'solo-heldout-v2',
 		...(args['source-commit'] ? { sourceCommit: args['source-commit'] } : {}),
@@ -416,7 +426,8 @@ try {
 					}
 				: {})
 		},
-		...(args['include-games'] ? { perGame } : {})
+		...(args['include-games'] ? { perGame } : {}),
+		...(replayHashes ? { replayHashes } : {})
 	};
 
 	const json = JSON.stringify(report, null, 2);

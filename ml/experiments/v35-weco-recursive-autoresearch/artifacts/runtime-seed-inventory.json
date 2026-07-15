@@ -1,0 +1,1656 @@
+{
+  "schemaVersion": "arc-v35-runtime-seed-inventory-v1",
+  "valid": true,
+  "claim": "disjoint-from-hash-pinned-structured-declarations-only",
+  "globalCompletenessProven": false,
+  "spec": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/runtime-seed-inventory-spec.json",
+    "sha256": "48f1770543af60639efaed12c51d27f2c28de5ad470bf2e16b3f89cb62df5f54"
+  },
+  "sourceVerification": [
+    {
+      "id": "v32-protocol",
+      "path": "ml/experiments/v32-onpolicy-solo/protocol.json",
+      "sha256": "f4af0d18529a427ab6ae31fb8b5e5b390ec92ed1dc69c1565f789b210b0dfb9b",
+      "hashVerified": true,
+      "rangeOccurrences": 10,
+      "expectedMinimumRanges": 10,
+      "coverageVerified": true
+    },
+    {
+      "id": "v33-protocol",
+      "path": "ml/experiments/v33-strategic-search/protocol.json",
+      "sha256": "58182573cb7ac5f538b59a5f9c1f030c30ae95819a7d20f6b54bd38281ed7dfb",
+      "hashVerified": true,
+      "rangeOccurrences": 16,
+      "expectedMinimumRanges": 16,
+      "coverageVerified": true
+    },
+    {
+      "id": "v34-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548",
+      "hashVerified": true,
+      "rangeOccurrences": 24,
+      "expectedMinimumRanges": 24,
+      "coverageVerified": true
+    },
+    {
+      "id": "v34-strength-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+      "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd",
+      "hashVerified": true,
+      "rangeOccurrences": 3,
+      "expectedMinimumRanges": 3,
+      "coverageVerified": true
+    },
+    {
+      "id": "v34-guardian-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json",
+      "sha256": "8cc4387323ce0e1d9a6e0b4dfd7ee781b0eefd286ea75a3dcc1b3042011ae86f",
+      "hashVerified": true,
+      "rangeOccurrences": 2,
+      "expectedMinimumRanges": 2,
+      "coverageVerified": true
+    },
+    {
+      "id": "v34-lane-b-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+      "sha256": "4bd7b98d1a2a0b911ff5542df267790462c9195d109b009c2353bb61cbe9ae68",
+      "hashVerified": true,
+      "rangeOccurrences": 38,
+      "expectedMinimumRanges": 38,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-phase1-protocol",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "sha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+      "hashVerified": true,
+      "rangeOccurrences": 6,
+      "expectedMinimumRanges": 6,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-phase1-development-authorization",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-authorization.json",
+      "sha256": "cbc5edc0adbb8aa7a4a7754b077a6cf3513431d56d9751d7114ce64dd2ca7e3e",
+      "hashVerified": true,
+      "rangeOccurrences": 1,
+      "expectedMinimumRanges": 1,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-phase1-seed-inventory",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+      "sha256": "e259411f15ef5b7a58cf2c119fb98c534b1ba61c64d3ad1b0a64192d7276f980",
+      "hashVerified": true,
+      "rangeOccurrences": 7,
+      "expectedMinimumRanges": 7,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-phase0-calibration",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase0-public-calibration.json",
+      "sha256": "732adf73dbd04640d4e71faeeff350f575fdb17f5087557fe518eebb7b73a03f",
+      "hashVerified": true,
+      "rangeOccurrences": 1,
+      "expectedMinimumRanges": 1,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-phase0-powered-pair",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase0-powered-public-pair.json",
+      "sha256": "0646e8581c5e5509b461da6afaa9456b6498b2a821afed0cbcddabba7bdf4beb",
+      "hashVerified": true,
+      "rangeOccurrences": 1,
+      "expectedMinimumRanges": 1,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-v17-fresh-public",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/v17-fresh-public-checkpoints.json",
+      "sha256": "2f672c1a1153e29ee06922d0a8c9afdd8054bfdda72aa870757d9f272a900dd3",
+      "hashVerified": true,
+      "rangeOccurrences": 1,
+      "expectedMinimumRanges": 1,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-v2-v17-common-public",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/v2-v17-common-public.json",
+      "sha256": "a556463163a69488d1e7e6f0b22b424afb75be90cf9b831f7bbcf079afc570e0",
+      "hashVerified": true,
+      "rangeOccurrences": 1,
+      "expectedMinimumRanges": 1,
+      "coverageVerified": true
+    },
+    {
+      "id": "v35-public-config-pilot-authorization",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/public-config-pilot-authorization.json",
+      "sha256": "d953deb5d7f76a12c4f2ad08cbbea081e0a0a3fbab8de5827feac50fc5352cd7",
+      "hashVerified": true,
+      "rangeOccurrences": 1,
+      "expectedMinimumRanges": 1,
+      "coverageVerified": true
+    }
+  ],
+  "sourceErrors": [],
+  "simforgeReadOnlySnapshot": {
+    "host": "ubuntu@216.151.21.122",
+    "root": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+    "capturedAtUtc": "2026-07-15T18:51:06Z",
+    "operation": "read-only find and sha256sum; no games, writes, process changes, or GPU commands",
+    "allowlist": "V32-V35 protocol, authorization, binding, config, audit, lock, and seed-inventory JSON metadata",
+    "allowlistedMetadataFilesObserved": 181,
+    "exclusions": [
+      "private and hidden directories",
+      "results, reports, analyses, replays, stdout, stderr, and logs",
+      "checkpoints, tensors, and optimizer state",
+      "secrets and seed-vault plaintext"
+    ],
+    "limitations": "The artifact root contains extensive pre-V32 archives and ephemeral or deleted files cannot be proven complete. The mirrored hash set establishes that the primary V32-V35 protocol declarations parsed locally are byte-identical on SimForge, not that every historical seed is enumerated. Several newer local public artifacts are absent from the current remote mirror and are therefore proven only by their pinned local Git copies.",
+    "localSourcesAbsentOnSimForge": [
+      "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/phase0-public-calibration.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/phase0-powered-public-pair.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/v17-fresh-public-checkpoints.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/v2-v17-common-public.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/artifacts/public-config-pilot-authorization.json"
+    ],
+    "nonMirroredMetadata": [
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/b1-density-smoke-execution-plan.md",
+        "remoteSha256": "a4c21988c654337f1922f28b7f235ccf032baade32c87023f06ebf8d058ff5c6",
+        "localSha256": "6bf51a9e710adb93c2701666195e2643689918c23d9bde186b6d4556077bfd47",
+        "matchingStructuredDeclaration": {
+          "start": 962000000,
+          "end": 962000511
+        },
+        "note": "The remote prose version differs bytewise, but its read-only exact seed-ledger block declares the same range as the pinned local plan."
+      }
+    ],
+    "semanticSweep": {
+      "schemaVersion": "arc-v35-simforge-semantic-seed-sweep-v1",
+      "capturedAtUtc": "2026-07-15T18:57:32Z",
+      "versions": [
+        "v32",
+        "v33",
+        "v34",
+        "v35"
+      ],
+      "filesScanned": 175,
+      "parseErrors": [],
+      "semanticOccurrences": 57,
+      "distinctRanges": 48,
+      "maxEnd": 969034095,
+      "occurrenceCommitmentSha256": "91a0c9db0728e7073d72a2820d170a8bea7bccd10ad307abcdcf1b4f2bb1b41c",
+      "rangesAtOrAbove969050000": [],
+      "method": "Read-only semantic traversal of allowlisted V32-V35 JSON metadata; only seed0/seedMax, seed0/games, publicSeed0/game-count, and generation Seed0 arrays with an explicit gamesPerGeneration ancestor were emitted."
+    },
+    "files": [
+      {
+        "path": "ml/experiments/v32-onpolicy-solo/protocol.json",
+        "sha256": "f4af0d18529a427ab6ae31fb8b5e5b390ec92ed1dc69c1565f789b210b0dfb9b",
+        "matchesPinnedLocalSource": true
+      },
+      {
+        "path": "ml/experiments/v33-strategic-search/protocol.json",
+        "sha256": "58182573cb7ac5f538b59a5f9c1f030c30ae95819a7d20f6b54bd38281ed7dfb",
+        "matchesPinnedLocalSource": true
+      },
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+        "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548",
+        "matchesPinnedLocalSource": true
+      },
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+        "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd",
+        "matchesPinnedLocalSource": true
+      },
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json",
+        "sha256": "8cc4387323ce0e1d9a6e0b4dfd7ee781b0eefd286ea75a3dcc1b3042011ae86f",
+        "matchesPinnedLocalSource": true
+      },
+      {
+        "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+        "sha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+        "matchesPinnedLocalSource": true
+      },
+      {
+        "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-authorization.json",
+        "sha256": "cbc5edc0adbb8aa7a4a7754b077a6cf3513431d56d9751d7114ce64dd2ca7e3e",
+        "matchesPinnedLocalSource": true
+      },
+      {
+        "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+        "sha256": "e259411f15ef5b7a58cf2c119fb98c534b1ba61c64d3ad1b0a64192d7276f980",
+        "matchesPinnedLocalSource": true
+      }
+    ],
+    "allMirrorsMatch": true,
+    "semanticSweepNoProposalOverlap": true,
+    "semanticSweepProposalOverlaps": []
+  },
+  "extractionPolicy": {
+    "includedSchemas": [
+      "objects with integer seed0 and seedMax",
+      "objects with integer seed0 and games",
+      "objects with integer publicSeed0 and games, gamesPerArm, or gamesPerCandidate",
+      "arrays whose key ends in Seed0 and whose JSON ancestry declares gamesPerGeneration",
+      "V32 and V35 replicated train/eval schedules explicitly enabled per source",
+      "start/end pairs only under per-source intervalArrayPointers such as /intervals",
+      "hash-pinned manual ranges whose declarations exist only in prose or use a one-off schema"
+    ],
+    "excludedSchemas": [
+      "arbitrary nine-digit integers",
+      "model weights, tensors, checkpoints, and optimizer states",
+      "floating-point metrics and outcomes",
+      "trainerSeed, randomSeeds, bootstrap RNG seeds, permutation seeds, and planner-derived RNG keys",
+      "private seed-vault plaintext or hidden outcome artifacts"
+    ],
+    "outcomeFilesRead": false,
+    "privateSeedPlaintextRead": false
+  },
+  "declaredStructuredRanges": [
+    {
+      "start": 946000000,
+      "end": 946004095,
+      "count": 4096,
+      "visibilities": [
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/criticWarmup/train/seed0+games"
+        }
+      ]
+    },
+    {
+      "start": 946004096,
+      "end": 946005119,
+      "count": 1024,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/criticWarmup/validation/seed0+games"
+        }
+      ]
+    },
+    {
+      "start": 946100000,
+      "end": 946123551,
+      "count": 23552,
+      "visibilities": [
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/screen/replicates/0/train/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 946200000,
+      "end": 946223551,
+      "count": 23552,
+      "visibilities": [
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/screen/replicates/1/train/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 946300000,
+      "end": 946323551,
+      "count": 23552,
+      "visibilities": [
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/screen/replicates/2/train/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 946700000,
+      "end": 946790367,
+      "count": 90368,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/screen/replicates/0/eval/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 946800000,
+      "end": 946890367,
+      "count": 90368,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/screen/replicates/1/eval/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 946900000,
+      "end": 946990367,
+      "count": 90368,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/screen/replicates/2/eval/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 949000000,
+      "end": 949004095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/development/seed0+games"
+        }
+      ]
+    },
+    {
+      "start": 950000000,
+      "end": 950004095,
+      "count": 4096,
+      "visibilities": [
+        "hidden-declaration"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/hidden/seed0+games"
+        }
+      ]
+    },
+    {
+      "start": 951900000,
+      "end": 951900127,
+      "count": 128,
+      "visibilities": [
+        "systems-only"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v32-onpolicy-solo/protocol.json",
+          "pointer": "/systemsBenchmark/seed0+gamesPerTrial"
+        }
+      ]
+    },
+    {
+      "start": 952000000,
+      "end": 952004095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/phase2/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 952100000,
+      "end": 952104095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/phase3/development/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 952200000,
+      "end": 952204095,
+      "count": 4096,
+      "visibilities": [
+        "hidden-declaration"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/phase3/hidden/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 952300000,
+      "end": 952308191,
+      "count": 8192,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/guardianConfirmation/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 953900000,
+      "end": 953900255,
+      "count": 256,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/systems/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 954000000,
+      "end": 954004095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/0/generationSeed0/0"
+        }
+      ]
+    },
+    {
+      "start": 954010000,
+      "end": 954014095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/0/generationSeed0/1"
+        }
+      ]
+    },
+    {
+      "start": 954020000,
+      "end": 954024095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/0/generationSeed0/2"
+        }
+      ]
+    },
+    {
+      "start": 954100000,
+      "end": 954104095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/1/generationSeed0/0"
+        }
+      ]
+    },
+    {
+      "start": 954110000,
+      "end": 954114095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/1/generationSeed0/1"
+        }
+      ]
+    },
+    {
+      "start": 954120000,
+      "end": 954124095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/1/generationSeed0/2"
+        }
+      ]
+    },
+    {
+      "start": 954200000,
+      "end": 954204095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/2/generationSeed0/0"
+        }
+      ]
+    },
+    {
+      "start": 954210000,
+      "end": 954214095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/2/generationSeed0/1"
+        }
+      ]
+    },
+    {
+      "start": 954220000,
+      "end": 954224095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/replicates/2/generationSeed0/2"
+        }
+      ]
+    },
+    {
+      "start": 955000000,
+      "end": 955004095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/expertIteration/development/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 956000000,
+      "end": 956099999,
+      "count": 100000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v33-strategic-search/protocol.json",
+          "pointer": "/determinizationAudit/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 956400000,
+      "end": 956499999,
+      "count": 100000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/determinizationAudit/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957000000,
+      "end": 957000063,
+      "count": 64,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+          "pointer": "/phase2/replayAudit/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957000000,
+      "end": 957004095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/phase2/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+          "pointer": "/phase2/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957100000,
+      "end": 957104095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/finalSolo/development/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957200000,
+      "end": 957204095,
+      "count": 4096,
+      "visibilities": [
+        "hidden-declaration"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/finalSolo/hidden/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957300000,
+      "end": 957300063,
+      "count": 64,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json",
+          "pointer": "/guardian/replayAudit/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957300000,
+      "end": 957308191,
+      "count": 8192,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json",
+          "pointer": "/guardian/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/guardianConfirmation/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+          "pointer": "/guardian/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957800000,
+      "end": 957804095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/previewCalibration/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 957900000,
+      "end": 957900255,
+      "count": 256,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/systems/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 958000000,
+      "end": 958004095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/0/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/teacher/generationSeed0/0"
+        }
+      ]
+    },
+    {
+      "start": 958010000,
+      "end": 958014095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/1/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/teacher/generationSeed0/1"
+        }
+      ]
+    },
+    {
+      "start": 958020000,
+      "end": 958024095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/2/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/teacher/generationSeed0/2"
+        }
+      ]
+    },
+    {
+      "start": 958030000,
+      "end": 958034095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/3/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/ppoGenerationSeed0/0"
+        }
+      ]
+    },
+    {
+      "start": 958040000,
+      "end": 958044095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/4/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/ppoGenerationSeed0/1"
+        }
+      ]
+    },
+    {
+      "start": 958050000,
+      "end": 958054095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/5/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/ppoGenerationSeed0/2"
+        }
+      ]
+    },
+    {
+      "start": 958100000,
+      "end": 958104095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/6/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/developmentSeed0/0"
+        }
+      ]
+    },
+    {
+      "start": 958110000,
+      "end": 958114095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/7/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/developmentSeed0/1"
+        }
+      ]
+    },
+    {
+      "start": 958120000,
+      "end": 958124095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/8/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/developmentSeed0/2"
+        }
+      ]
+    },
+    {
+      "start": 958200000,
+      "end": 958204095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/9/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/compositionTransfer/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959000000,
+      "end": 959004095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/10/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/modelWidth/arms/0/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959010000,
+      "end": 959014095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/11/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959100000,
+      "end": 959104095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/12/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/modelWidth/arms/1/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959110000,
+      "end": 959114095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/13/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959200000,
+      "end": 959204095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/14/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/modelWidth/arms/2/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959210000,
+      "end": 959214095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/15/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959900000,
+      "end": 959904095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/16/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/modelWidth/development/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959910000,
+      "end": 959913071,
+      "count": 3072,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/17/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959920000,
+      "end": 959923071,
+      "count": 3072,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/18/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 959930000,
+      "end": 959934095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/19/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 960000000,
+      "end": 960000511,
+      "count": 512,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/20/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/expertIteration/multiplayerCanary/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 960010000,
+      "end": 960099999,
+      "count": 90000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/21/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/multiplayer/development/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 960100000,
+      "end": 960199999,
+      "count": 100000,
+      "visibilities": [
+        "hidden-declaration",
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/22/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+          "pointer": "/multiplayer/hidden/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 960900000,
+      "end": 960909999,
+      "count": 10000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/23/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961000000,
+      "end": 961099999,
+      "count": 100000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/24/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961100000,
+      "end": 961199999,
+      "count": 100000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/25/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961200000,
+      "end": 961299999,
+      "count": 100000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/26/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961300000,
+      "end": 961304095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/27/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961310000,
+      "end": 961314095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/28/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961320000,
+      "end": 961324095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/29/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961400000,
+      "end": 961409999,
+      "count": 10000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/30/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961410000,
+      "end": 961419995,
+      "count": 9996,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/31/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961419996,
+      "end": 961419999,
+      "count": 4,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/32/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961420000,
+      "end": 961429999,
+      "count": 10000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/33/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961500000,
+      "end": 961529999,
+      "count": 30000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/34/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961530000,
+      "end": 961559999,
+      "count": 30000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/35/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961560000,
+      "end": 961589999,
+      "count": 30000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/36/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 961590000,
+      "end": 961619999,
+      "count": 30000,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+          "pointer": "/seedLedger/37/seed0..seedMax"
+        }
+      ]
+    },
+    {
+      "start": 962000000,
+      "end": 962000511,
+      "count": 512,
+      "visibilities": [
+        "unregistered-systems-only"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v34-latency-first-expert-iteration/b1-density-smoke-execution-plan.md",
+          "pointer": "/section-2/exact-unregistered-seed-ledger"
+        }
+      ]
+    },
+    {
+      "start": 966100000,
+      "end": 966123551,
+      "count": 23552,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+          "pointer": "/intervals/0/start..end"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+          "pointer": "/replicates/0/train/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 966300000,
+      "end": 966323551,
+      "count": 23552,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+          "pointer": "/intervals/2/start..end"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+          "pointer": "/replicates/1/train/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 966500000,
+      "end": 966523551,
+      "count": 23552,
+      "visibilities": [
+        "public-or-systems",
+        "training"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+          "pointer": "/intervals/4/start..end"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+          "pointer": "/replicates/2/train/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 966700000,
+      "end": 966790367,
+      "count": 90368,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+          "pointer": "/intervals/1/start..end"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+          "pointer": "/replicates/0/eval/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 966820000,
+      "end": 966910367,
+      "count": 90368,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+          "pointer": "/intervals/3/start..end"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+          "pointer": "/replicates/1/eval/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 966940000,
+      "end": 967030367,
+      "count": 90368,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+          "pointer": "/intervals/5/start..end"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+          "pointer": "/replicates/2/eval/derived-range"
+        }
+      ]
+    },
+    {
+      "start": 969001000,
+      "end": 969001063,
+      "count": 64,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase0-public-calibration.json",
+          "pointer": "/publicSeed0+games"
+        }
+      ]
+    },
+    {
+      "start": 969010000,
+      "end": 969010255,
+      "count": 256,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/phase0-powered-public-pair.json",
+          "pointer": "/publicSeed0+games"
+        }
+      ]
+    },
+    {
+      "start": 969020000,
+      "end": 969020511,
+      "count": 512,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/v17-fresh-public-checkpoints.json",
+          "pointer": "/publicSeed0+games"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/v2-v17-common-public.json",
+          "pointer": "/publicSeed0+games"
+        }
+      ]
+    },
+    {
+      "start": 969030000,
+      "end": 969034095,
+      "count": 4096,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-authorization.json",
+          "pointer": "/contract/seed0..seedMax"
+        },
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+          "pointer": "/intervals/6/start..end"
+        }
+      ]
+    },
+    {
+      "start": 969040000,
+      "end": 969040255,
+      "count": 256,
+      "visibilities": [
+        "public-or-systems"
+      ],
+      "provenance": [
+        {
+          "source": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/public-config-pilot-authorization.json",
+          "pointer": "/publicSeed/seed0..seedMax"
+        }
+      ]
+    }
+  ],
+  "proposalChecks": [
+    {
+      "id": "runtime-parity",
+      "start": 969060000,
+      "end": 969060063,
+      "count": 64,
+      "status": "proposed-public-exact",
+      "disjointFromDeclaredStructuredRanges": true,
+      "declaredOverlaps": [],
+      "disjointFromOtherProposals": true,
+      "proposalOverlaps": []
+    },
+    {
+      "id": "latency-precheck",
+      "start": 969061000,
+      "end": 969061255,
+      "count": 256,
+      "status": "proposed-public-exact",
+      "disjointFromDeclaredStructuredRanges": true,
+      "declaredOverlaps": [],
+      "disjointFromOtherProposals": true,
+      "proposalOverlaps": []
+    },
+    {
+      "id": "provisional-confirmation-zone",
+      "start": 969070000,
+      "end": 969999999,
+      "count": 930000,
+      "status": "provisional-public-container; final range requires a separate authorization",
+      "disjointFromDeclaredStructuredRanges": true,
+      "declaredOverlaps": [],
+      "disjointFromOtherProposals": true,
+      "proposalOverlaps": []
+    }
+  ],
+  "unprovableNamespaces": [
+    {
+      "id": "pre-v32-and-ad-hoc-legacy",
+      "bounds": null,
+      "reason": "SimForge contains extensive pre-V32 archives and one-off local/remote runs without a complete immutable game-seed ledger. Absolute historical non-use cannot be proved."
+    },
+    {
+      "id": "excluded-outcome-and-checkpoint-artifacts",
+      "bounds": null,
+      "reason": "Outcome, replay, log, checkpoint, tensor, and optimizer files were intentionally not read. Their arbitrary numeric values are not valid seed registrations."
+    },
+    {
+      "id": "deleted-ephemeral-and-untracked-remote-state",
+      "bounds": null,
+      "reason": "Deleted scratch files, command-line-only launches, and prior untracked remote artifacts cannot be reconstructed from the current filesystem."
+    },
+    {
+      "id": "v35-private-seed-vault",
+      "bounds": {
+        "start": 970000000,
+        "end": 989999999
+      },
+      "reason": "Private families are commitment-only and were not opened. The provisional public confirmation zone ends before this reserved namespace."
+    },
+    {
+      "id": "derived-rng-not-game-seeds",
+      "bounds": null,
+      "reason": "Trainer, bootstrap, search, permutation, and planner RNG keys are separate namespaces and are not passed to the engine as game seeds. They are excluded rather than falsely merged into the game-seed ledger."
+    }
+  ],
+  "conclusion": {
+    "parityRangeDisjoint": true,
+    "latencyRangeDisjoint": true,
+    "confirmationZoneDisjoint": true,
+    "absoluteLegacyDisjointnessClaimed": false
+  }
+}

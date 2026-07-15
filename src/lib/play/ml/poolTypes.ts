@@ -134,6 +134,8 @@ export interface ActorGameConfig {
 	policyObsVersion?: 1 | 2;
 	/** Evaluation-only V34 public-preview calibration collection. */
 	previewReach30Audit?: boolean;
+	/** Opt-in canonical command/deadline replay hash in each game summary. */
+	includeReplayTraceHash?: boolean;
 	/** Keep per-game summaries in memory but do not persist games-*.jsonl. This is
 	 * required by outcome-blind operational screens whose scratch may survive a kill. */
 	writeGameSummaries?: boolean;
@@ -189,6 +191,8 @@ export interface GameSummary {
 	finished: boolean;
 	stalled: boolean;
 	samples: number;
+	/** Canonical SHA-256 of the complete command/deadline replay trace. Opt-in only. */
+	replayTraceSha256?: string;
 	/**
 	 * Seats the LEARNER policy (weightsPath / inferSocket) drove in this game —
 	 * league-opponent checkpoint seats are excluded. The per-seat attribution that
