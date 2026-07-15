@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${ARC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 EXPERIMENT="$ROOT/ml/experiments/v35-weco-recursive-autoresearch"
 PROTOCOL="$EXPERIMENT/phase1-protocol.json"
-LOCK="$EXPERIMENT/artifacts/phase1-source-lock.json"
+LOCK="$EXPERIMENT/artifacts/phase1-source-lock-amendment1.json"
 LEAGUE_ROOT="${1:?league root required}"
 TARGET_GEN="${2:-1}"
 SCRATCH_BASE="${ARC_V35_TRAINING_SCRATCH:-/dev/shm/arc-v35-training}"

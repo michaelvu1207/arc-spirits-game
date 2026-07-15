@@ -1,0 +1,29 @@
+{
+	"schemaVersion": "arc-v35-infrastructure-incident-v1",
+	"incident": "phase1-smoke-launch-1",
+	"occurredAt": "2026-07-15T07:55:00Z",
+	"classification": "pre-initialization-log-redirection-failure",
+	"command": "scripts/run-v35-phase1-smoke.sh",
+	"failure": "line 17: rep-a/control-uniform/artifacts/smoke-orchestrator.log: No such file or directory",
+	"cause": "The parent shell opened the per-root log before run-v35-root.sh could create the artifacts directory.",
+	"evidence": {
+		"sourceLockSha256": "ee68853e234f67a0f4be497abbee77305803ff2df2aa1b4c7379cd5ab4436221",
+		"gpu7MemoryMiBAfter": 0,
+		"gpu7UtilizationPctAfter": 0,
+		"leaseAfter": "absent",
+		"replicateAStateFilesAfter": 0,
+		"replicateADataLinksAfter": 0,
+		"matchingProcessesAfter": 0,
+		"trainingSeedsConsumed": 0,
+		"evaluationSeedsConsumed": 0
+	},
+	"authorizedCorrection": "Create each root's artifacts directory before parent-shell redirection.",
+	"forbiddenChanges": [
+		"training or evaluation seeds",
+		"arm configuration",
+		"trainer or auditor semantics",
+		"trust thresholds",
+		"GPU assignment",
+		"automatic semantic retry"
+	]
+}

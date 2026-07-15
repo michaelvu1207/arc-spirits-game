@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="${ARC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 EXPERIMENT="$ROOT/ml/experiments/v35-weco-recursive-autoresearch"
-LOCK="$EXPERIMENT/artifacts/phase1-source-lock.json"
+LOCK="$EXPERIMENT/artifacts/phase1-source-lock-amendment1.json"
 OUT="$EXPERIMENT/artifacts/phase1-replicate-a-smoke.json"
 
 cd "$ROOT"
@@ -14,6 +14,7 @@ test ! -e "$OUT"
 
 for arm in control-uniform late-reweighted p30-credit025; do
   league="$EXPERIMENT/league/rep-a/$arm"
+  mkdir -p "$league/artifacts"
   "$ROOT/scripts/run-v35-root.sh" "$league" 1 \
     > "$league/artifacts/smoke-orchestrator.log" 2>&1
 done

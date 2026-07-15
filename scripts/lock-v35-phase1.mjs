@@ -9,7 +9,10 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 process.chdir(repo);
 const [command, argument] = process.argv.slice(2);
 const experiment = 'ml/experiments/v35-weco-recursive-autoresearch';
-const lockPath = `${experiment}/artifacts/phase1-source-lock.json`;
+const originalLockPath = `${experiment}/artifacts/phase1-source-lock.json`;
+const amendmentIncidentPath = `${experiment}/artifacts/phase1-smoke-incident-1.json`;
+const amendmentLockPath = `${experiment}/artifacts/phase1-source-lock-amendment1.json`;
+const lockPath = command === 'create-amendment1' ? amendmentLockPath : originalLockPath;
 
 const hash = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 const walk = (target) => {
@@ -33,9 +36,9 @@ const relativeFiles = (targets) =>
 		)
 		.sort();
 
-if (command === 'create') {
+if (command === 'create' || command === 'create-amendment1') {
 	if (!argument || !/^[0-9a-f]{40}$/.test(argument)) {
-		throw new Error('usage: lock-v35-phase1.mjs create IMPLEMENTATION_COMMIT');
+		throw new Error('usage: lock-v35-phase1.mjs <create|create-amendment1> IMPLEMENTATION_COMMIT');
 	}
 	if (existsSync(lockPath)) throw new Error(`refusing to overwrite ${lockPath}`);
 	const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -88,15 +91,41 @@ if (command === 'create') {
 		'scripts/run-v35-phase1-smoke.sh',
 		'src/lib/play'
 	];
+	if (command === 'create-amendment1') {
+		if (!existsSync(originalLockPath) || !existsSync(amendmentIncidentPath)) {
+			throw new Error('amendment requires the immutable original lock and incident record');
+		}
+		targets.push(originalLockPath, amendmentIncidentPath);
+	}
 	const files = relativeFiles(targets);
 	const payload = {
-		schemaVersion: 'arc-v35-phase1-source-lock-v1',
-		phase: 'replicate-a-three-arm-generation-1-smoke',
+		schemaVersion:
+			command === 'create-amendment1'
+				? 'arc-v35-phase1-source-lock-amendment-v1'
+				: 'arc-v35-phase1-source-lock-v1',
+		phase:
+			command === 'create-amendment1'
+				? 'replicate-a-three-arm-generation-1-smoke-infrastructure-amendment-1'
+				: 'replicate-a-three-arm-generation-1-smoke',
 		implementationCommit: argument,
 		createdAt: new Date().toISOString(),
 		authorizedGpu: 7,
 		forbiddenGpus: [4, 5, 6],
 		noSemanticRetry: true,
+		...(command === 'create-amendment1'
+			? {
+					supersedes: {
+						path: originalLockPath,
+						sha256: hash(originalLockPath)
+					},
+					incident: {
+						path: amendmentIncidentPath,
+						sha256: hash(amendmentIncidentPath)
+					},
+					semanticChanges: false,
+					seedsConsumedBeforeAmendment: 0
+				}
+			: {}),
 		files: Object.fromEntries(files.map((file) => [file, hash(file)]))
 	};
 	writeFileSync(lockPath, JSON.stringify(payload, null, 2) + '\n');
@@ -104,7 +133,10 @@ if (command === 'create') {
 } else if (command === 'verify') {
 	const requested = argument ?? lockPath;
 	const lock = JSON.parse(readFileSync(requested, 'utf8'));
-	if (lock.schemaVersion !== 'arc-v35-phase1-source-lock-v1') {
+	if (
+		lock.schemaVersion !== 'arc-v35-phase1-source-lock-v1' &&
+		lock.schemaVersion !== 'arc-v35-phase1-source-lock-amendment-v1'
+	) {
 		throw new Error('wrong V35 source-lock schema');
 	}
 	const failures = [];
@@ -117,5 +149,7 @@ if (command === 'create') {
 	}
 	console.log(`V35 source lock valid (${Object.keys(lock.files).length} files)`);
 } else {
-	throw new Error('usage: lock-v35-phase1.mjs <create IMPLEMENTATION_COMMIT|verify [LOCK]>');
+	throw new Error(
+		'usage: lock-v35-phase1.mjs <create IMPLEMENTATION_COMMIT|create-amendment1 IMPLEMENTATION_COMMIT|verify [LOCK]>'
+	);
 }
