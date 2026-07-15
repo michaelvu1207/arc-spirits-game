@@ -576,11 +576,22 @@ function pickIndex(probabilities, support, mode, seed) {
 	return support.at(-1);
 }
 
-function chooseBoundRawAction(state, seat, actions, probabilities, support, config, samplingSeed) {
+function chooseBoundRawAction(
+	state,
+	seat,
+	actions,
+	probabilities,
+	hybridGuardSupport,
+	policySupport,
+	config,
+	samplingSeed
+) {
 	const currentVp = state.players[seat]?.victoryPoints ?? 0;
 	let bestVpIndex = -1;
 	let bestVpGain = 0;
-	for (const index of support) {
+	// Match driver.hybridIndex exactly: the status-constrained action surface is searched for an
+	// immediate win/VP conversion before the progress guard narrows learned-policy support.
+	for (const index of hybridGuardSupport) {
 		const preview = policyPreviewState(actions[index]);
 		const nextVp = preview.players[seat]?.victoryPoints ?? 0;
 		if (preview.winnerSeat === seat || nextVp >= VP_TO_WIN) {
@@ -598,8 +609,11 @@ function chooseBoundRawAction(state, seat, actions, probabilities, support, conf
 	if (!learnableMonsterReward && bestVpIndex >= 0 && bestVpGain > 0) {
 		return { index: bestVpIndex, reason: 'immediate-vp-guard' };
 	}
+	if (policySupport.length === 1) {
+		return { index: policySupport[0], reason: 'single-policy-support' };
+	}
 	return {
-		index: pickIndex(probabilities, support, config.decisionSelection, samplingSeed),
+		index: pickIndex(probabilities, policySupport, config.decisionSelection, samplingSeed),
 		reason: config.decisionSelection === 'sample' ? 'sampled-policy' : 'policy-argmax'
 	};
 }
@@ -612,26 +626,32 @@ function roundSelectionBand(round, recoveryEligible) {
 	throw new Error(`snapshot round ${round} is outside V34 B1 support`);
 }
 
-function selectionSupport(state, seat, actions, config) {
-	const raw =
-		config.progressFilter.mode === 'selectable-candidate-indices-v1'
-			? selectableCandidateIndices(state, seat, actions, {
-					learnMonsterRewardChoices: config.progressFilter.learnMonsterRewardChoices
-				})
-			: actions.map((_, index) => index);
-	requireCondition(raw.length > 0, 'bound progress filter removed every candidate');
-	requireCondition(
-		new Set(raw).size === raw.length &&
-			raw.every((index) => Number.isInteger(index) && index >= 0 && index < actions.length),
-		'bound progress filter returned invalid support'
-	);
-	const withinStatusCap = raw.filter(
+function selectionSupports(state, seat, actions, config) {
+	const all = actions.map((_, index) => index);
+	const withinStatusCap = all.filter(
 		(index) =>
 			(policyPreviewState(actions[index]).players[seat]?.statusLevel ?? 0) <= config.maxStatusLevel
 	);
-	// The status cap constrains policy selection, never the engine's legal-action set or forced
-	// closure. If every selectable action exceeds the cap, preserve the full selectable escape set.
-	return withinStatusCap.length > 0 ? withinStatusCap : raw;
+	// This is driver.filterConstrainedActions' all-actions escape, represented as original indices
+	// so snapshots still retain the full engine-legal surface.
+	const hybridGuardSupport = withinStatusCap.length > 0 ? withinStatusCap : all;
+	const constrainedActions = hybridGuardSupport.map((index) => actions[index]);
+	const localPolicySupport =
+		config.progressFilter.mode === 'selectable-candidate-indices-v1'
+			? selectableCandidateIndices(state, seat, constrainedActions, {
+					learnMonsterRewardChoices: config.progressFilter.learnMonsterRewardChoices
+				})
+			: constrainedActions.map((_, index) => index);
+	const policySupport = localPolicySupport.map((index) => hybridGuardSupport[index]);
+	requireCondition(policySupport.length > 0, 'bound progress filter removed every candidate');
+	requireCondition(
+		new Set(policySupport).size === policySupport.length &&
+			policySupport.every(
+				(index) => Number.isInteger(index) && index >= 0 && index < actions.length
+			),
+		'bound progress filter returned invalid support'
+	);
+	return { hybridGuardSupport, policySupport };
 }
 
 function publicPolicyContext(state, seat, catalog, candidateActions, option) {
@@ -1006,15 +1026,21 @@ export function collectOneGame({
 			),
 			candidateActions.length
 		);
-		const support = selectionSupport(state, seat, candidateActions, config);
-		const probabilities = softmaxOnSupport(evaluation.rawLogits, support, config.temperature);
+		const { hybridGuardSupport, policySupport } = selectionSupports(
+			state,
+			seat,
+			candidateActions,
+			config
+		);
+		const probabilities = softmaxOnSupport(evaluation.rawLogits, policySupport, config.temperature);
 		const samplingSeed = botSamplingSeed(sourceSeed, decisionOrdinal, seat, config.samplingStream);
 		const selected = chooseBoundRawAction(
 			state,
 			seat,
 			candidateActions,
 			probabilities,
-			support,
+			hybridGuardSupport,
+			policySupport,
 			config,
 			samplingSeed
 		);
@@ -1095,7 +1121,9 @@ export function collectOneGame({
 				policy: {
 					configSha256: policyConfigSha256,
 					bindingSha256: policyBindingSha256,
-					selectionSupport: candidateActions.map((_, index) => (support.includes(index) ? 1 : 0)),
+					selectionSupport: candidateActions.map((_, index) =>
+						policySupport.includes(index) ? 1 : 0
+					),
 					chosenIndex,
 					chosenCommandHash: full.candidates[chosenIndex].commandHash,
 					selectionReason: selected.reason,

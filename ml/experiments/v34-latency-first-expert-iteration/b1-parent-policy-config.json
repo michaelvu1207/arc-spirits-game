@@ -1,0 +1,29 @@
+{
+	"schemaVersion": "arc-v34-bound-raw-policy-v1",
+	"policyObservationVersion": 2,
+	"actionSelector": "hybrid-v1",
+	"decisionSelection": "sample",
+	"temperature": 0.55,
+	"progressFilter": {
+		"mode": "selectable-candidate-indices-v1",
+		"learnMonsterRewardChoices": false
+	},
+	"optionHead": {
+		"mode": "disabled",
+		"dimension": 0
+	},
+	"guardianSchedule": "absolute-balanced",
+	"maxStatusLevel": 2,
+	"maxRounds": 30,
+	"forcedClosureMaxSteps": 64,
+	"maxTicks": 50000,
+	"samplingStream": 0,
+	"weakEngineThreshold": {
+		"minRoundInclusive": 16,
+		"maxExpectedAttack": 3.25,
+		"maxAttackDice": 3,
+		"maxAwakenedSpirits": 2,
+		"maxBarrier": 5,
+		"maxInitiative": 3
+	}
+}
