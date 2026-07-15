@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="${ARC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 EXPERIMENT="$ROOT/ml/experiments/v35-weco-recursive-autoresearch"
-LOCK="$EXPERIMENT/artifacts/phase1-source-lock-amendment1.json"
+LOCK="$EXPERIMENT/artifacts/phase1-source-lock-amendment2.json"
 OUT="$EXPERIMENT/artifacts/phase1-replicate-a-smoke.json"
 
 cd "$ROOT"

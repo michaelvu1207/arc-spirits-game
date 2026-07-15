@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${ARC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 EXPERIMENT="$ROOT/ml/experiments/v35-weco-recursive-autoresearch"
 PROTOCOL="$EXPERIMENT/phase1-protocol.json"
-LOCK="$EXPERIMENT/artifacts/phase1-source-lock-amendment1.json"
+LOCK="$EXPERIMENT/artifacts/phase1-source-lock-amendment2.json"
 LEAGUE_ROOT="${1:?league root required}"
 TARGET_GEN="${2:-1}"
 SCRATCH_BASE="${ARC_V35_TRAINING_SCRATCH:-/dev/shm/arc-v35-training}"
@@ -160,14 +160,20 @@ PY
 }
 
 finalize_generation() {
-  local gen="$1" audit="$LEAGUE_ROOT/artifacts/gen${gen}-audit.json"
+  local gen="$1"
+  local audit="$LEAGUE_ROOT/artifacts/gen${gen}-audit.json"
   local data_root="$LEAGUE_ROOT/data/gen$gen"
+  local failure_marker="$LEAGUE_ROOT/artifacts/gen${gen}-audit-failed.txt"
+  test ! -e "$failure_marker"
   if [[ ! -e "$audit" ]]; then
     test -d "$data_root"
-    CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=7 PYTHONHASHSEED=0 \
+    if ! CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=7 PYTHONHASHSEED=0 \
       CUBLAS_WORKSPACE_CONFIG=:4096:8 PYTHONPATH=ml nice -n 10 \
-      ml/.venv/bin/python ml/audit_v35_generation.py \
-      --root "$LEAGUE_ROOT" --gen "$gen" --protocol "$PROTOCOL" --out "$audit"
+        ml/.venv/bin/python ml/audit_v35_generation.py \
+        --root "$LEAGUE_ROOT" --gen "$gen" --protocol "$PROTOCOL" --out "$audit"; then
+      printf 'V35 generation %s audit failed; retry forbidden\n' "$gen" > "$failure_marker"
+      return 1
+    fi
     cp "$data_root/main-0/train.log" "$LEAGUE_ROOT/artifacts/gen${gen}-train.log"
     cp "$data_root/main-0/meta.json" "$LEAGUE_ROOT/artifacts/gen${gen}-train-meta.json"
     if [[ -f "$data_root/main-0_eval/meta.json" ]]; then
@@ -184,8 +190,24 @@ fi
 
 while :; do
   CURRENT="$(node -e 'const s=require(process.argv[1]);process.stdout.write(String(s.gen))' "$LEAGUE_ROOT/state.json")"
+  for (( COMPLETED=1; COMPLETED<=CURRENT; COMPLETED++ )); do
+    if [[ ! -e "$LEAGUE_ROOT/artifacts/gen${COMPLETED}-audit.json" ]]; then
+      acquire_generation_lease "$COMPLETED"
+      if [[ ! -e "$LEAGUE_ROOT/artifacts/gen${COMPLETED}-environment.json" ]]; then
+        write_environment_manifest "$COMPLETED"
+      fi
+      finalize_generation "$COMPLETED"
+      release_generation_lease
+    elif [[ -d "$LEAGUE_ROOT/data/gen$COMPLETED" ]]; then
+      rm -rf "$LEAGUE_ROOT/data/gen$COMPLETED"
+    fi
+  done
   (( CURRENT >= TARGET_GEN )) && break
   GEN=$((CURRENT + 1))
+  if [[ -d "$LEAGUE_ROOT/data/gen$GEN" ]]; then
+    echo "partial generation $GEN requires a separately recorded infrastructure-resume authorization" >&2
+    exit 1
+  fi
   test ! -e "$LEAGUE_ROOT/artifacts/gen${GEN}-audit.json"
   acquire_generation_lease "$GEN"
   write_environment_manifest "$GEN"

@@ -1,0 +1,34 @@
+{
+	"schemaVersion": "arc-v35-infrastructure-incident-v1",
+	"incident": "phase1-smoke-launch-2",
+	"occurredAt": "2026-07-15T08:03:36Z",
+	"classification": "post-generation-pre-audit-wrapper-failure",
+	"command": "scripts/run-v35-phase1-smoke.sh",
+	"failure": "run-v35-root.sh line 163: gen: unbound variable",
+	"cause": "finalize_generation referenced gen in a second assignment within the same local declaration under set -u.",
+	"evidence": {
+		"sourceLockSha256": "d49bac6b99b5355a7974498c73af5af9ca0f676733f6a53bf25e83d41faf20c5",
+		"controlState": "generation-1-idle",
+		"controlCheckpointBytes": 3354556,
+		"controlRawData": "intact",
+		"controlAudit": "absent",
+		"gpu7MemoryMiBAfter": 0,
+		"gpu7UtilizationPctAfter": 0,
+		"leaseAfter": "absent",
+		"lateReweightedState": "absent",
+		"p30Credit025State": "absent",
+		"controlTrainingSeedsConsumed": 1024,
+		"controlEvaluationSeedsConsumed": 256,
+		"treatmentSeedsConsumed": 0
+	},
+	"authorizedCorrection": "Separate the local declarations and audit the completed control generation exactly once without rerunning it; then run the two unchanged matched treatments.",
+	"forbiddenChanges": [
+		"rerun control generation 1",
+		"training or evaluation seeds",
+		"arm configuration",
+		"trainer or auditor semantics",
+		"trust thresholds",
+		"GPU assignment",
+		"automatic retry after an audit failure"
+	]
+}
