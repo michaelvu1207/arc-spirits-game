@@ -43,6 +43,12 @@ requireCondition(protocol.promotionEligible === false, 'proposal must not be pro
 requireCondition(protocol.review.artifact === null, 'proposal unexpectedly has a review artifact');
 requireCondition(protocol.review.sha256 === null, 'proposal unexpectedly has a review hash');
 requireCondition(protocol.review.verdict === null, 'proposal unexpectedly has a review verdict');
+requireCondition(protocol.sourceContract.artifact === null, 'proposal unexpectedly has a source contract');
+requireCondition(protocol.sourceContract.sha256 === null, 'proposal unexpectedly has a source-contract hash');
+requireCondition(
+	protocol.sourceContract.schemaVersion === 'arc-v35-p30-source-lock-v1',
+	'proposal source-contract schema changed'
+);
 requireCondition(protocol.replicates.length === 3, 'proposal requires exactly three replicates');
 requireCondition(protocol.arms.length === 3, 'proposal requires exactly three arms');
 requireCondition(hashFile(protocol.catalog.path) === protocol.catalog.sha256, 'catalog hash mismatch');

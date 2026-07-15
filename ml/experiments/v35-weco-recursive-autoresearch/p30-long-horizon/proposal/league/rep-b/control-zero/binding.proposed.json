@@ -4,7 +4,7 @@
   "replicate": "b",
   "arm": "control-zero",
   "protocolPath": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json",
-  "protocolSha256": "6ece0fc595b33cd7d6f95b8c4d67ae3387e492bcad2979d89b6eb2480aca589d",
+  "protocolSha256": "e1785610611f497d15519459dd92ad987a258a7b014867fa58f8fd13931eda40",
   "configProposedSha256": "365d6dd7161754f5ca45410d917f82ceb1ec70913dae43f149e15d4e6964c674",
   "catalogSha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
   "initialPolicySha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",

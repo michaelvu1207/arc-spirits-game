@@ -3,7 +3,7 @@
   "status": "proposed-review-pending",
   "authorized": false,
   "protocolPath": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json",
-  "protocolSha256": "6ece0fc595b33cd7d6f95b8c4d67ae3387e492bcad2979d89b6eb2480aca589d",
+  "protocolSha256": "e1785610611f497d15519459dd92ad987a258a7b014867fa58f8fd13931eda40",
   "basePath": "ml/league/configs/fair-v35-late-credit-base.json",
   "baseSha256": "c2c0fd7637f27dbc6afdee4adbef48a57b83c19d2c60ebf351f165f506bfb52e",
   "seedInventoryPath": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-seed-inventory.json",
@@ -60,7 +60,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/control-zero/config.proposed.json",
       "configProposedSha256": "4d3b0dc8463f8c836fe77446591f54c8a77393499a819bdfcb5f90c5e892e770",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/control-zero/binding.proposed.json",
-      "bindingProposedSha256": "627d4f346f3d1bff633e553cb780b095035e6cc6dde7a74e96cd817568c9944e"
+      "bindingProposedSha256": "302277211277d2d3cc67accce35236e613822cb80dd9c300a39f202e4ad3ada6"
     },
     {
       "replicate": "a",
@@ -69,7 +69,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/uniform-040/config.proposed.json",
       "configProposedSha256": "df151ca0c74b56ff52bfefd5c20e454656bd08edc40ad7053ce960a3c917c6d2",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/uniform-040/binding.proposed.json",
-      "bindingProposedSha256": "058a93a992015f616dec6561fb4935b636ae4c401a983ec25e38d13838a4ca4a"
+      "bindingProposedSha256": "a7d74452856dca64992d6bf2505b1911f56d2df59fc978152b34716944b18453"
     },
     {
       "replicate": "a",
@@ -78,7 +78,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/late-scheduled/config.proposed.json",
       "configProposedSha256": "ba48fdb36bd14622197b6041704c1ac9371428fb24a3435a77601c03fd319d53",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/late-scheduled/binding.proposed.json",
-      "bindingProposedSha256": "4f9609852ae5d1d2fc069d6f736e815279fac62eb033af34d106ae25b36aa0df"
+      "bindingProposedSha256": "7bc25f8484f427db349e1943d2fe9632b9e668983c23f8f588b10628e7da88b5"
     },
     {
       "replicate": "b",
@@ -87,7 +87,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/control-zero/config.proposed.json",
       "configProposedSha256": "365d6dd7161754f5ca45410d917f82ceb1ec70913dae43f149e15d4e6964c674",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/control-zero/binding.proposed.json",
-      "bindingProposedSha256": "a88be00e9678e5c58716d8dbacbabd2a241d1b2a2cecc27a680a17bf26b1ba50"
+      "bindingProposedSha256": "1b87513d806bd759d023941d233034107fd0ff85528b966ee4311385238b0b95"
     },
     {
       "replicate": "b",
@@ -96,7 +96,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/uniform-040/config.proposed.json",
       "configProposedSha256": "4e72eb36c57795414fb648824dcb12a4ec5cd6602cc956630c2d6b5705959f80",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/uniform-040/binding.proposed.json",
-      "bindingProposedSha256": "d5ff0ab69e250e9ed5443fc1f45d212c703d8af6c8d478db038e183c5cdd4c22"
+      "bindingProposedSha256": "ad461be49ecb2a1b98defff41817030c111f8d5c21ebbd653cadf274758a3b5d"
     },
     {
       "replicate": "b",
@@ -105,7 +105,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/late-scheduled/config.proposed.json",
       "configProposedSha256": "4d39f36fda08080b9128e02f6cd259def74301ef775170e9f31f3513e664c5a8",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/late-scheduled/binding.proposed.json",
-      "bindingProposedSha256": "a7c7d59454371250dda0d0229788b369748a7771b59236b58aa9ce654531b5da"
+      "bindingProposedSha256": "f071a9b8f7f024f1bc276dfc941faed17b1e8a975a361bdfcaa852b9a7771858"
     },
     {
       "replicate": "c",
@@ -114,7 +114,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/control-zero/config.proposed.json",
       "configProposedSha256": "74cbc87a8c25967b1b2e57aa5fa6c62e12c63bfeaea2b81c76c096e7e0ceeb1c",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/control-zero/binding.proposed.json",
-      "bindingProposedSha256": "cd099acb578c96e23af3a64c8c440d0990f73adc09deb47cbcb69caae2b0fd81"
+      "bindingProposedSha256": "7bf28b7d6d10b023b6ac02a45362acac340955e644ea933070ba46c920f3cbc4"
     },
     {
       "replicate": "c",
@@ -123,7 +123,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/uniform-040/config.proposed.json",
       "configProposedSha256": "1b4167a470be47e526a7ea241d79942c452179543003a33a2b24dff7d99bd9c1",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/uniform-040/binding.proposed.json",
-      "bindingProposedSha256": "cbb2081ad42a4af8a7f1893b931521c55b48edb855b165a5f4ff3d5365a4f717"
+      "bindingProposedSha256": "35aae33360e06f00d4dcd59657cf00ddd1d273bd8836708ced7682366abc0438"
     },
     {
       "replicate": "c",
@@ -132,7 +132,7 @@
       "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/late-scheduled/config.proposed.json",
       "configProposedSha256": "f306afe90b1579130f6048137a5d6566221195c26d7d4c9dd7a13ed84ef24efc",
       "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/late-scheduled/binding.proposed.json",
-      "bindingProposedSha256": "58aeaafde7dd9a290c1134e11e233695b20be09a8a1e8abc793bee714afa5759"
+      "bindingProposedSha256": "861ebaf554b3a51dc6e6507eaef25877d449590df6170579238e568e8c1a8c87"
     }
   ]
 }

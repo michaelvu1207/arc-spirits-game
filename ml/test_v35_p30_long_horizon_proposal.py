@@ -39,6 +39,16 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
             protocol["initialPolicy"]["sha256"],
             "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
         )
+        self.assertEqual(
+            protocol["sourceContract"],
+            {
+                "schemaVersion": "arc-v35-p30-source-lock-v1",
+                "artifact": None,
+                "sha256": None,
+            },
+        )
+        self.assertEqual(protocol["analysis"]["expectedGuardianCount"], 10)
+        self.assertTrue(protocol["analysis"]["requireOutcomeBlindInputAuthorization"])
         self.assertEqual(protocol["runtime"]["physicalGpu"], 7)
         self.assertEqual(protocol["runtime"]["forbiddenGpus"], [4, 5, 6])
 

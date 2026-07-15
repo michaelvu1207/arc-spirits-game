@@ -23,8 +23,17 @@
     "sha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
     "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
     "format": "arc-entity-scorer-v2",
+    "obsDim": 3419,
+    "actDim": 104,
+    "policyObsVersion": 2,
+    "wire": "binary",
     "reach30Horizons": [20, 25, 30],
     "reach30Trained": true
+  },
+  "sourceContract": {
+    "schemaVersion": "arc-v35-p30-source-lock-v1",
+    "artifact": null,
+    "sha256": null
   },
   "seedEvidence": {
     "inventoryPath": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-seed-inventory.json",
@@ -101,7 +110,29 @@
     "simultaneousTreatmentComparisons": 2,
     "familywiseAlpha": 0.05,
     "correction": "holm",
+    "bootstrap": {
+      "method": "crossed-paired-replicate-and-common-seed-diagnostic",
+      "draws": 20000,
+      "seed": 35153040
+    },
+    "decisionInference": {
+      "method": "paired-training-replicate-t",
+      "degreesOfFreedom": 2,
+      "oneSided": true
+    },
+    "scoreWeights": {
+      "terminal": 0.6,
+      "vpGrowth": 0.25,
+      "engineGrowth": 0.15
+    },
     "primaryEndpoints": ["trueWinRate", "lateGameScore", "postRound15Vp"],
+    "primaryFamilySize": 6,
+    "expectedGuardianCount": 10,
+    "minimumPositiveReplicates": 2,
+    "minimumReplicateTrueWinGain": -0.01,
+    "minimumTrueWinPointGain": 0.03,
+    "requireReplayTraceHashes": true,
+    "requireOutcomeBlindInputAuthorization": true,
     "mandatoryNonRegression": [
       "reach15Rate",
       "finalVp",
@@ -111,6 +142,15 @@
       "malformedEpisodes",
       "latency"
     ],
+    "nonRegressionThresholds": {
+      "reach15RateDeltaLower": -0.01,
+      "finalVpDeltaLower": 0.0,
+      "finishSpeedDeltaLower": 0.0,
+      "guardianTrueWinDeltaLower": -0.05,
+      "maxStalls": 0,
+      "maxGameWallMsP95": 60000,
+      "maxLatencyRatioToMatchedControl": 1.25
+    },
     "selectionIsDevelopmentOnly": true,
     "freshPublicConfirmationRequired": true,
     "privateEvaluationAuthorized": false
@@ -127,6 +167,7 @@
     "This proposal is non-executable: no config.json, runner authorization, GPU lease, or seed consumption may exist before Fable acceptance and a separate immutable launch authorization.",
     "All three arms within a replicate use identical training and per-generation evaluation seeds; only the reach30 residual dose differs.",
     "The common 4096-game block is public development evidence and can select at most one arm; it cannot confirm or promote that arm.",
+    "Every endpoint must be rerun once with the identical checkpoint and seed block; exact per-game telemetry and replay-trace hashes must match before the outcome-blind input authorization can open analysis.",
     "A later fresh public confirmation, private/status-3, multiplayer, exploitability, fairness, latency, regression, and Michael gate remain mandatory.",
     "No outcome-conditioned retry, seed substitution, arm substitution, or early promotion is permitted."
   ]
