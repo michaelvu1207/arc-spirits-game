@@ -1,0 +1,133 @@
+{
+  "schemaVersion": "arc-v35-p30-long-horizon-protocol-v1",
+  "experiment": "v35-p30-long-horizon-dose-screen",
+  "status": "proposed-review-pending",
+  "authorized": false,
+  "promotionEligible": false,
+  "plan": "ml/experiments/v35-weco-recursive-autoresearch/runtime-confirmation-plan.md",
+  "implementationBaseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
+  "review": {
+    "requiredModel": "Claude Fable",
+    "requiredEffort": "high",
+    "artifact": null,
+    "sha256": null,
+    "verdict": null
+  },
+  "catalog": {
+    "path": "ml/catalog.json",
+    "sha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59"
+  },
+  "initialPolicy": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+    "manifestPath": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.manifest.json",
+    "sha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+    "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+    "format": "arc-entity-scorer-v2",
+    "reach30Horizons": [20, 25, 30],
+    "reach30Trained": true
+  },
+  "seedEvidence": {
+    "inventoryPath": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-seed-inventory.json",
+    "inventorySha256": "f4feaa3f5c0034b9f43b38513287f318c3f817bce5b6a6c8096f5719b4a2bf95",
+    "claim": "disjoint-from-hash-pinned-structured-declarations-only",
+    "globalCompletenessProven": false,
+    "publicContainer": {
+      "id": "provisional-confirmation-zone",
+      "start": 969070000,
+      "end": 969999999
+    }
+  },
+  "replicates": [
+    {"id": "a", "trainBase": 967100000, "evalBase": 967500000},
+    {"id": "b", "trainBase": 967200000, "evalBase": 967600000},
+    {"id": "c", "trainBase": 967300000, "evalBase": 967700000}
+  ],
+  "arms": [
+    {
+      "id": "control-zero",
+      "soloReach30Coef": 0.0,
+      "soloReach30Bands": null
+    },
+    {
+      "id": "uniform-040",
+      "soloReach30Coef": 0.4,
+      "soloReach30Bands": null
+    },
+    {
+      "id": "late-scheduled",
+      "soloReach30Coef": 0.0,
+      "soloReach30Bands": [[8, 0.15], [18, 0.3], [30, 0.5]]
+    }
+  ],
+  "seedSchedule": {
+    "trainStride": 2048,
+    "evalStride": 8192,
+    "maxGeneration": 8,
+    "gamesPerGeneration": 1024,
+    "evalGamesPerGeneration": 256,
+    "commonPublicBase": 969070000,
+    "commonPublicGames": 4096
+  },
+  "training": {
+    "seats": 1,
+    "maxRounds": 30,
+    "soloMaxStatusLevel": 2,
+    "gamesPerGeneration": 1024,
+    "evalGamesPerGeneration": 256,
+    "epochs": 2,
+    "batchSize": 512,
+    "ppoRowsPerEpoch": 100000,
+    "optimizerStepsPerEpoch": 196,
+    "learningRate": 0.00004,
+    "clipEpsilon": 0.1,
+    "valueClipEpsilon": 0.1,
+    "entropyCoef": 0.003,
+    "klReferenceCoef": 0.05,
+    "gamma": 0.999,
+    "gaeLambda": 0.95,
+    "valueCoef": 0.5,
+    "reach30ValueCoef": 1.0,
+    "winBonus": 4.0,
+    "allFallenPenalty": -3.0,
+    "sample": true,
+    "temperature": 0.55,
+    "strategicDecisionScope": "engine-cycle",
+    "guardianSchedule": "absolute-balanced",
+    "workers": 24
+  },
+  "analysis": {
+    "commonPublicGames": 4096,
+    "pairedWithinReplicate": true,
+    "simultaneousTreatmentComparisons": 2,
+    "familywiseAlpha": 0.05,
+    "correction": "holm",
+    "primaryEndpoints": ["trueWinRate", "lateGameScore", "postRound15Vp"],
+    "mandatoryNonRegression": [
+      "reach15Rate",
+      "finalVp",
+      "finishRound",
+      "guardianWorstCase",
+      "stalls",
+      "malformedEpisodes",
+      "latency"
+    ],
+    "selectionIsDevelopmentOnly": true,
+    "freshPublicConfirmationRequired": true,
+    "privateEvaluationAuthorized": false
+  },
+  "runtime": {
+    "host": "ubuntu@216.151.21.122",
+    "workspace": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenGpus": [4, 5, 6],
+    "maxConcurrentRoots": 1
+  },
+  "rules": [
+    "This proposal is non-executable: no config.json, runner authorization, GPU lease, or seed consumption may exist before Fable acceptance and a separate immutable launch authorization.",
+    "All three arms within a replicate use identical training and per-generation evaluation seeds; only the reach30 residual dose differs.",
+    "The common 4096-game block is public development evidence and can select at most one arm; it cannot confirm or promote that arm.",
+    "A later fresh public confirmation, private/status-3, multiplayer, exploitability, fairness, latency, regression, and Michael gate remain mandatory.",
+    "No outcome-conditioned retry, seed substitution, arm substitution, or early promotion is permitted."
+  ]
+}
