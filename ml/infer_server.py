@@ -486,20 +486,35 @@ class InferServer:
             obs_t = torch.from_numpy(all_obs).to(self.device)
             cands_t = torch.from_numpy(cands).to(self.device)
             mask_t = torch.from_numpy(mask).to(self.device)
-            logits_t, _, value_t = model(obs_t, cands_t, mask_t)
-            flat["logits"] = logits_t.cpu().numpy()
-            flat["value"] = value_t.cpu().numpy()
-            # Aux heads only when some job in the batch asked for them.
-            if "farm_value" in wanted:
-                flat["farm_value"] = model.farm_value(obs_t).cpu().numpy()
-            if "route_mode" in wanted:
-                flat["route_mode"] = model.route_mode_logits(obs_t).cpu().numpy()
-            if "reward_pick" in wanted:
-                flat["reward_pick"] = model.reward_pick_logits(obs_t, cands_t, mask_t).cpu().numpy()
-            if "placement" in wanted:
-                flat["placement"] = model.placement_head_logits(obs_t).cpu().numpy()
-            if "reach30" in wanted:
-                flat["reach30"] = model.reach30_logits(obs_t).cpu().numpy()
+            requested_outputs = getattr(model, "requested_outputs", None)
+            if callable(requested_outputs):
+                # Entity-v2 shares its transformer state across every requested
+                # head.  Reach30-only leaf batches therefore do one encoder pass
+                # and skip policy/value scoring entirely.
+                tensors = requested_outputs(obs_t, cands_t, mask_t, wanted)
+                flat.update({key: tensor.cpu().numpy() for key, tensor in tensors.items()})
+            else:
+                # Legacy v1 heads consume the flat observation directly.  Retain
+                # its established math, but do not run the policy/value network
+                # for auxiliary-only requests.
+                if "logits" in wanted or "value" in wanted:
+                    logits_t, _, value_t = model(obs_t, cands_t, mask_t)
+                    if "logits" in wanted:
+                        flat["logits"] = logits_t.cpu().numpy()
+                    if "value" in wanted:
+                        flat["value"] = value_t.cpu().numpy()
+                if "farm_value" in wanted:
+                    flat["farm_value"] = model.farm_value(obs_t).cpu().numpy()
+                if "route_mode" in wanted:
+                    flat["route_mode"] = model.route_mode_logits(obs_t).cpu().numpy()
+                if "reward_pick" in wanted:
+                    flat["reward_pick"] = model.reward_pick_logits(
+                        obs_t, cands_t, mask_t
+                    ).cpu().numpy()
+                if "placement" in wanted:
+                    flat["placement"] = model.placement_head_logits(obs_t).cpu().numpy()
+                if "reach30" in wanted:
+                    flat["reach30"] = model.reach30_logits(obs_t).cpu().numpy()
 
         out: list[dict[str, list]] = []
         row = 0

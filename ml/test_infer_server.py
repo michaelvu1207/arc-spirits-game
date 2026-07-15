@@ -22,6 +22,7 @@ import tempfile
 import time
 import traceback
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -31,6 +32,7 @@ import torch
 from model import build_model
 from infer_server import (
     InferClient,
+    InferServer,
     decode_binary_response,
     encode_binary_request,
     encode_frame,
@@ -463,6 +465,88 @@ def test_reach30_head_json_binary_and_capability():
             server.stop()
 
 
+def test_requested_head_dispatch_skips_unused_v1_policy_forward():
+    """A critic-only request must not pay for legacy policy/value scoring."""
+    with tempfile.TemporaryDirectory() as td:
+        ckpt = make_v1_reach30_checkpoint(Path(td))
+
+        async def run() -> None:
+            server = InferServer(ckpt, torch.device("cpu"), 0.0, 32, 0.0)
+            rng = np.random.default_rng(5701)
+            obs, cands = _random_request(rng, server.obs_dim, server.act_dim, max_rows=4)
+            with torch.no_grad():
+                expected = server.model.reach30_logits(torch.from_numpy(obs)).numpy()
+            job = server.job_from_arrays(obs, cands, frozenset(("reach30",)))
+            with patch.object(server.model, "forward", wraps=server.model.forward) as forward:
+                result = server._forward([job])[0]
+            assert forward.call_count == 0
+            assert np.array_equal(np.asarray(result["reach30"], np.float32), expected)
+
+        asyncio.run(run())
+
+
+def test_v2_requested_heads_share_one_bit_exact_encoding():
+    """Mixed V2 outputs reuse one encoder pass without changing head results."""
+    with tempfile.TemporaryDirectory() as td:
+        ckpt = make_v2_checkpoint(Path(td), name="v2-p30-shared.pt", reach30=True)
+
+        async def run() -> None:
+            server = InferServer(ckpt, torch.device("cpu"), 0.0, 32, 0.0)
+            model = server.model
+            obs = np.ascontiguousarray(v2_obs_pool()[:4], dtype=np.float32)
+            rng = np.random.default_rng(5901)
+            cands = [
+                rng.standard_normal((count, server.act_dim)).astype(np.float32)
+                for count in (1, 3, 2, 4)
+            ]
+            max_cands = max(len(row) for row in cands)
+            padded = np.zeros((len(cands), max_cands, server.act_dim), np.float32)
+            mask = np.zeros((len(cands), max_cands), bool)
+            for row, candidate_rows in enumerate(cands):
+                padded[row, : len(candidate_rows)] = candidate_rows
+                mask[row, : len(candidate_rows)] = True
+            obs_t = torch.from_numpy(obs)
+            cands_t = torch.from_numpy(padded)
+            mask_t = torch.from_numpy(mask)
+            with torch.no_grad():
+                logits, _, value = model(obs_t, cands_t, mask_t)
+                expected = {
+                    "logits": logits.numpy(),
+                    "value": value.numpy(),
+                    "farm_value": model.farm_value(obs_t).numpy(),
+                    "route_mode": model.route_mode_logits(obs_t).numpy(),
+                    "reward_pick": model.reward_pick_logits(obs_t, cands_t, mask_t).numpy(),
+                    "reach30": model.reach30_logits(obs_t).numpy(),
+                }
+
+            wanted = frozenset(expected)
+            job = server.job_from_arrays(obs, cands, wanted)
+            with patch.object(model, "encode_state", wraps=model.encode_state) as encode_state:
+                result = server._forward([job])[0]
+            assert encode_state.call_count == 1
+            for key in ("value", "farm_value", "route_mode", "reach30"):
+                assert np.array_equal(np.asarray(result[key], np.float32), expected[key]), key
+            for key in ("logits", "reward_pick"):
+                for row, candidate_rows in enumerate(cands):
+                    got = np.asarray(result[key][row], np.float32)
+                    want = expected[key][row, : len(candidate_rows)]
+                    assert np.array_equal(got, want), (key, row)
+
+            reach_job = server.job_from_arrays(obs, cands, frozenset(("reach30",)))
+            with (
+                patch.object(model, "encode_state", wraps=model.encode_state) as encode_state,
+                patch.object(model, "forward", wraps=model.forward) as forward,
+            ):
+                reach_result = server._forward([reach_job])[0]
+            assert encode_state.call_count == 1
+            assert forward.call_count == 0
+            assert np.array_equal(
+                np.asarray(reach_result["reach30"], np.float32), expected["reach30"]
+            )
+
+        asyncio.run(run())
+
+
 def test_binary_and_json_clients_mixed():
     _, obs_dim, act_dim, _aux, _fmt = load_scorer(LIVE_WEIGHTS, torch.device("cpu"))
     server = ServerProc(device="cpu")
@@ -821,9 +905,11 @@ def main() -> int:
         test_info_handshake_and_aux_heads,
         test_binary_matches_json_and_malformed_frame,
         test_reach30_head_json_binary_and_capability,
+        test_requested_head_dispatch_skips_unused_v1_policy_forward,
         test_binary_and_json_clients_mixed,
         test_v2_correctness_handshake_and_aux,
         test_v2_reach30_json_binary_and_capability,
+        test_v2_requested_heads_share_one_bit_exact_encoding,
         test_sighup_swaps_v1_to_v2,
         test_throughput_report,
         test_v2_throughput_report,

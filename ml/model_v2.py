@@ -259,6 +259,64 @@ class EntityCandidateScorer(nn.Module):
         value = self.value_head(state).squeeze(-1)
         return logits_masked, probs, value
 
+    def requested_outputs(
+        self,
+        obs: torch.Tensor,
+        cands: torch.Tensor,
+        mask: torch.Tensor,
+        wanted: frozenset[str],
+        option: torch.Tensor | None = None,
+    ) -> dict[str, torch.Tensor]:
+        """Compute a wire-requested head set from one shared state encoding.
+
+        Search commonly asks for the reach-30 critic for a large leaf batch and
+        does not need policy logits or the value head.  The inference server used
+        to call ``forward`` unconditionally and then call every requested
+        auxiliary method separately; on the entity model each call repeated the
+        transformer encoder.  Keeping this dispatch on the model makes the shared
+        representation explicit while preserving the exact individual head math.
+        """
+        self._check_option(option)
+        supported = {
+            "logits",
+            "value",
+            "farm_value",
+            "route_mode",
+            "reward_pick",
+            "placement",
+            "reach30",
+        }
+        unknown = wanted - supported
+        if unknown:
+            raise ValueError(f"unsupported requested outputs: {sorted(unknown)}")
+
+        state, token_out, pad_mask = self.encode_state(obs)
+        out: dict[str, torch.Tensor] = {}
+        if "logits" in wanted:
+            out["logits"] = self._score_candidates(self.score_head, state, cands, mask)
+        if "value" in wanted:
+            out["value"] = self.value_head(state).squeeze(-1)
+        if "farm_value" in wanted:
+            out["farm_value"] = self.farm_value_head(state).squeeze(-1)
+        if "route_mode" in wanted:
+            out["route_mode"] = self.route_mode_head(state).squeeze(-1)
+        if "reward_pick" in wanted:
+            out["reward_pick"] = self._score_candidates(
+                self.reward_pick_head, state, cands, mask
+            )
+        if "reach30" in wanted:
+            if self.reach30_head is None:
+                raise ValueError("reach30 logits requested from a v2 model without the auxiliary head")
+            out["reach30"] = self.reach30_head(state)[:, -1]
+        if "placement" in wanted:
+            lo, hi = self._token_slices["seat"]
+            seat_out = token_out[:, lo:hi]
+            seat_real = ~pad_mask[:, lo:hi]
+            out["placement"] = self.placement_head(seat_out).squeeze(-1).masked_fill(
+                ~seat_real, 0.0
+            )
+        return out
+
     def score_single(
         self, obs: torch.Tensor, cands: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
