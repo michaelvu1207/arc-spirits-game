@@ -19,6 +19,8 @@ from .evaluator import (
 )
 from .search import SearchRunner, state_summary
 from .recursive import run_synthetic_recursive_preflight
+from .pilot import load_authorization as load_public_pilot_authorization
+from .pilot import run_public_pilot
 
 
 def _candidate(path: Path):
@@ -156,6 +158,12 @@ def build_parser() -> argparse.ArgumentParser:
     solo.add_argument("--private", action="store_true")
     solo.add_argument("--trusted-ledger-out", type=Path)
     solo.add_argument("--out", type=Path)
+
+    public_pilot = commands.add_parser("public-pilot")
+    public_pilot.add_argument("--repo", type=Path, default=Path.cwd())
+    public_pilot.add_argument("--authorization", type=Path, required=True)
+    public_pilot.add_argument("--signing-key", type=Path, required=True)
+    public_pilot.add_argument("--out", type=Path, required=True)
     return parser
 
 
@@ -181,8 +189,18 @@ def main() -> int:
             games=args.games,
             seed=args.seed,
         )
-    else:
+    elif args.command == "real-solo":
         result = _real_solo(args)
+    else:
+        authorization = load_public_pilot_authorization(args.authorization, args.repo)
+        expected_out = (args.repo.resolve(strict=True) / authorization["output"]["path"]).resolve()
+        if args.out.resolve() != expected_out:
+            parser.error("--out does not match the immutable authorization")
+        result = run_public_pilot(
+            authorization_path=args.authorization,
+            repo_root=args.repo,
+            signing_key=args.signing_key,
+        )
     payload = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if getattr(args, "out", None):
         args.out.parent.mkdir(parents=True, exist_ok=True)

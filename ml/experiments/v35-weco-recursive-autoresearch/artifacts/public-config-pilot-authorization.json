@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "arc-v35-public-config-pilot-authorization-v1",
+  "campaign": "v35-p30-public-config-pilot-20260715",
+  "promotionEligible": false,
+  "privateAccess": false,
+  "searchSurface": "inference",
+  "methods": [
+    "random",
+    "evolutionary",
+    "tpe",
+    "aide"
+  ],
+  "stepsPerArm": 5,
+  "totalProposals": 20,
+  "gamesPerProposal": 256,
+  "publicSeed": {
+    "seed0": 969040000,
+    "seedMax": 969040255,
+    "commitment": "c3ca0a55ca9928db8c26725e2d714474bd5f5ecbf4aed57281f4211c82bb0581"
+  },
+  "randomSeeds": {
+    "random": 351001,
+    "evolutionary": 351002,
+    "tpe": 351003,
+    "aide": 351004
+  },
+  "checkpoint": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+    "sha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91"
+  },
+  "trustedFiles": {
+    "scripts/evaluate-solo-checkpoint.mjs": "4dcfbcef2139f892e2a7d1aa08add296d1a2b7e05ff1871e3b61d5c90dba2ebc",
+    "ml/infer_server.py": "36573dc4741b75dc813187ab0fe107bd78b94ec186f354d277f24589158fe62b",
+    "ml/catalog.json": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+    "ml/autoresearch/v35/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+    "ml/autoresearch/v35/cli.py": "b3e00fbf7b1d44a1def551667e4e0dbdaf5bf257bc0e5c5ecfba843781c86059",
+    "ml/autoresearch/v35/core.py": "05f65fa4b534bcfd8f2c2360ee2255ade01e415386dd9c6467bed5544770538f",
+    "ml/autoresearch/v35/evaluator.py": "6f8c911d01e98816da66c9d5871e495f9d607d1f748b03ebfd95d75baabccb16",
+    "ml/autoresearch/v35/pilot.py": "fd8f9f62c56022d61172a2372cd1c722b3707fd09e210a15c80af98d42d7f85e",
+    "ml/autoresearch/v35/search.py": "1d3fc0aa4c4420f8e339ecf00fb989457ba9e594fde20a866eecdb78b0d9229b",
+    "ml/autoresearch/v35/simforge.py": "73897e88ccfdff56a0b1dfd6881ce1897112b0774dfe7b54f9d165d993672ec0"
+  },
+  "resources": {
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenGpus": [
+      4,
+      5,
+      6
+    ],
+    "workers": 24,
+    "timeoutSeconds": 1800,
+    "maxStatusLevel": 2,
+    "maxGpuSecondsPerArm": 7200,
+    "maxCpuSecondsPerArm": 57600,
+    "maxWallSecondsPerArm": 21600
+  },
+  "thresholds": {
+    "minTrueWinRate": 0.0,
+    "minReach15Rate": 0.0,
+    "maxStallRate": 0.0,
+    "maxGameWallMsP95": 60000.0,
+    "maxComplexityUnits": 40.0,
+    "requireCompleteTaskMix": false
+  },
+  "selection": {
+    "aideParityTolerance": 0.01,
+    "freshPublicRequired": true
+  },
+  "searchPolicy": {
+    "tpeMinObservations": 2,
+    "aide": {
+      "lineages": 2,
+      "bootstrapSteps": 2,
+      "stagnationLimit": 1,
+      "randomRestartInterval": 5,
+      "simplifyInterval": 7,
+      "mutationScale": 0.12
+    }
+  },
+  "output": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/public-config-pilot-result.json",
+    "schemaVersion": "arc-v35-public-config-pilot-result-v1"
+  }
+}

@@ -28,6 +28,7 @@ class Observation:
 class SearchState:
     method: str
     observations: list[Observation] = field(default_factory=list)
+    ledger_entries: list[Mapping[str, Any]] = field(default_factory=list)
     rejected_signatures: set[tuple[str, ...]] = field(default_factory=set)
 
     @property
@@ -72,7 +73,9 @@ def _shares(rng: random.Random) -> tuple[float, float, float]:
     return solo, snapshot, multiplayer
 
 
-def random_candidate(rng: random.Random) -> Candidate:
+def random_candidate(rng: random.Random, *, surface: str = "full") -> Candidate:
+    if surface not in {"full", "inference"}:
+        raise ValueError("search surface must be full or inference")
     value = copy.deepcopy(DEFAULT_CANDIDATE)
     mode = rng.choices(["none", "rerank", "search"], [0.20, 0.35, 0.45])[0]
     value["policy"] = {
@@ -95,34 +98,36 @@ def random_candidate(rng: random.Random) -> Candidate:
     else:
         planner["rerankPolicyWeight"] = None
         planner["searchSims"] = rng.choice([2, 4, 8, 16, 32])
-    solo, snapshot, multiplayer = _shares(rng)
-    value["curriculum"] = {
-        "soloShare": solo,
-        "lateSnapshotShare": snapshot,
-        "multiplayerShare": multiplayer,
-    }
-    value["loss"] = {
-        "terminalWeight": rng.uniform(0.5, 2.5),
-        "engineWeight": rng.uniform(0.0, 1.5),
-        "reach30Weight": rng.uniform(0.0, 2.0),
-        "entropyWeight": rng.uniform(0.0, 0.08),
-    }
+    if surface == "full":
+        solo, snapshot, multiplayer = _shares(rng)
+        value["curriculum"] = {
+            "soloShare": solo,
+            "lateSnapshotShare": snapshot,
+            "multiplayerShare": multiplayer,
+        }
+        value["loss"] = {
+            "terminalWeight": rng.uniform(0.5, 2.5),
+            "engineWeight": rng.uniform(0.0, 1.5),
+            "reach30Weight": rng.uniform(0.0, 2.0),
+            "entropyWeight": rng.uniform(0.0, 0.08),
+        }
     return validate_candidate(value)
 
 
-def mutate_candidate(parent: Candidate, rng: random.Random, scale: float = 0.20) -> Candidate:
+def mutate_candidate(
+    parent: Candidate,
+    rng: random.Random,
+    scale: float = 0.20,
+    *,
+    surface: str = "full",
+) -> Candidate:
+    if surface not in {"full", "inference"}:
+        raise ValueError("search surface must be full or inference")
     value = parent.to_json()
-    dimension = rng.choice(
-        [
-            "temperature",
-            "sample",
-            "planner",
-            "horizon",
-            "search",
-            "curriculum",
-            "loss",
-        ]
-    )
+    dimensions = ["temperature", "sample", "planner", "horizon", "search"]
+    if surface == "full":
+        dimensions += ["curriculum", "loss"]
+    dimension = rng.choice(dimensions)
     if dimension == "temperature":
         current = float(value["policy"]["temperature"])
         value["policy"]["temperature"] = min(2.0, max(0.05, current + rng.gauss(0, scale)))
@@ -169,13 +174,21 @@ def mutate_candidate(parent: Candidate, rng: random.Random, scale: float = 0.20)
     return validate_candidate(value)
 
 
-def tpe_candidate(observations: Iterable[Observation], rng: random.Random) -> Candidate:
+def tpe_candidate(
+    observations: Iterable[Observation],
+    rng: random.Random,
+    *,
+    surface: str = "full",
+    min_observations: int = 5,
+) -> Candidate:
+    if min_observations < 2 or min_observations > 20:
+        raise ValueError("TPE minimum observations must be in [2,20]")
     valid = sorted((item for item in observations if item.accepted), key=lambda item: item.score)
-    if len(valid) < 5:
-        return random_candidate(rng)
+    if len(valid) < min_observations:
+        return random_candidate(rng, surface=surface)
     elite = valid[max(0, math.floor(len(valid) * 0.75)) :]
     parent = rng.choice(elite).candidate
-    return mutate_candidate(parent, rng, scale=0.10)
+    return mutate_candidate(parent, rng, scale=0.10, surface=surface)
 
 
 class SearchRunner:
@@ -189,7 +202,13 @@ class SearchRunner:
         campaign: str,
         random_seed: int,
         aide_policy: AidePolicy | None = None,
+        search_surface: str = "full",
+        tpe_min_observations: int = 5,
     ):
+        if search_surface not in {"full", "inference"}:
+            raise ValueError("search surface must be full or inference")
+        if tpe_min_observations < 2 or tpe_min_observations > 20:
+            raise ValueError("TPE minimum observations must be in [2,20]")
         self.evaluator = evaluator
         self.seed0 = seed0
         self.seed_commitment = seed_commitment
@@ -197,6 +216,8 @@ class SearchRunner:
         self.campaign = campaign
         self.rng = random.Random(random_seed)
         self.aide_policy = aide_policy or AidePolicy()
+        self.search_surface = search_surface
+        self.tpe_min_observations = tpe_min_observations
 
     def _evaluate(
         self,
@@ -226,6 +247,7 @@ class SearchRunner:
             lineage=lineage,
         )
         state.observations.append(observation)
+        state.ledger_entries.append(result.signed_entry)
         if not observation.accepted:
             state.rejected_signatures.add(observation.codes)
         return observation
@@ -240,21 +262,36 @@ class SearchRunner:
             parent: Observation | None = None
             lineage = 0
             if method == "random" or not state.observations:
-                candidate = random_candidate(self.rng) if step else validate_candidate(DEFAULT_CANDIDATE)
+                candidate = (
+                    random_candidate(self.rng, surface=self.search_surface)
+                    if step
+                    else validate_candidate(DEFAULT_CANDIDATE)
+                )
             elif method == "tpe":
-                candidate = tpe_candidate(state.observations, self.rng)
+                candidate = tpe_candidate(
+                    state.observations,
+                    self.rng,
+                    surface=self.search_surface,
+                    min_observations=self.tpe_min_observations,
+                )
             elif method == "evolutionary":
                 elite = sorted(state.valid or state.observations, key=lambda item: item.score)[-4:]
                 parent = self.rng.choice(elite)
                 lineage = parent.lineage
-                candidate = mutate_candidate(parent.candidate, self.rng)
+                candidate = mutate_candidate(
+                    parent.candidate, self.rng, surface=self.search_surface
+                )
             else:
                 # AIDE-style: bootstrap several diverse lineages, exploit within each, fork
                 # after stagnation, retain periodic global exploration, and simplify cost.
                 policy = self.aide_policy
                 if step < min(policy.bootstrap_steps, steps):
                     lineage = step % min(policy.lineages, steps)
-                    candidate = random_candidate(self.rng) if step else validate_candidate(DEFAULT_CANDIDATE)
+                    candidate = (
+                        random_candidate(self.rng, surface=self.search_surface)
+                        if step
+                        else validate_candidate(DEFAULT_CANDIDATE)
+                    )
                 else:
                     lineage = step % len(lineages)
                     parent = lineages[lineage]
@@ -262,7 +299,7 @@ class SearchRunner:
                         stagnant.get(lineage, 0) >= policy.stagnation_limit
                         or step % policy.random_restart_interval == 0
                     ):
-                        candidate = random_candidate(self.rng)
+                        candidate = random_candidate(self.rng, surface=self.search_surface)
                         stagnant[lineage] = 0
                     elif step % policy.simplify_interval == 0 and parent.candidate.planner_mode == "search":
                         simpler = parent.candidate.to_json()
@@ -271,9 +308,15 @@ class SearchRunner:
                         candidate = validate_candidate(simpler)
                     else:
                         candidate = mutate_candidate(
-                            mutate_candidate(parent.candidate, self.rng, scale=policy.mutation_scale),
+                            mutate_candidate(
+                                parent.candidate,
+                                self.rng,
+                                scale=policy.mutation_scale,
+                                surface=self.search_surface,
+                            ),
                             self.rng,
                             scale=policy.mutation_scale,
+                            surface=self.search_surface,
                         )
             observed = self._evaluate(
                 state,

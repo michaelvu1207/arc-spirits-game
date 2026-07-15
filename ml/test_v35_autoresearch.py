@@ -34,6 +34,7 @@ from ml.autoresearch.v35.evaluator import (
 )
 from ml.autoresearch.v35.sandbox import CandidateSandbox
 from ml.autoresearch.v35.search import SearchRunner
+from ml.autoresearch.v35.pilot import load_authorization as load_public_pilot_authorization
 
 
 class CandidateSchemaTests(unittest.TestCase):
@@ -190,9 +191,45 @@ class EvaluatorTests(unittest.TestCase):
                 self.assertEqual(len(state.observations), 8)
                 self.assertEqual(evaluator.budget.evaluations, 8)
                 self.assertEqual(evaluator.budget.games, 256)
+                self.assertEqual(len(state.ledger_entries), 8)
+                self.assertEqual(
+                    state.ledger_entries[0]["previousEntrySha256"], "0" * 64
+                )
+                for previous, current in zip(
+                    state.ledger_entries, state.ledger_entries[1:]
+                ):
+                    self.assertEqual(
+                        current["previousEntrySha256"], previous["entrySha256"]
+                    )
                 self.assertTrue(state.best.accepted)
                 if method == "aide":
                     self.assertGreaterEqual(len({item.lineage for item in state.observations}), 4)
+
+    def test_inference_surface_keeps_training_fields_frozen(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            evaluator, vault = self._fixture(temp, evaluations=12)
+            family = vault.family("private", "inference-surface", 16)
+            runner = SearchRunner(
+                evaluator=evaluator,
+                seed0=family["seed0"],
+                seed_commitment=family["commitment"],
+                games_per_step=16,
+                campaign="inference-surface",
+                random_seed=35_901,
+                search_surface="inference",
+            )
+            state = runner.run("aide", 12)
+            default = validate_candidate(DEFAULT_CANDIDATE)
+            for observation in state.observations:
+                candidate = observation.candidate
+                self.assertEqual(candidate.solo_share, default.solo_share)
+                self.assertEqual(candidate.snapshot_share, default.snapshot_share)
+                self.assertEqual(candidate.multiplayer_share, default.multiplayer_share)
+                self.assertEqual(candidate.terminal_loss_weight, default.terminal_loss_weight)
+                self.assertEqual(candidate.engine_loss_weight, default.engine_loss_weight)
+                self.assertEqual(candidate.reach30_loss_weight, default.reach30_loss_weight)
+                self.assertEqual(candidate.entropy_weight, default.entropy_weight)
 
 
 class StatisticsTests(unittest.TestCase):
@@ -202,6 +239,31 @@ class StatisticsTests(unittest.TestCase):
         self.assertEqual(spearman_rank_correlation([1, 2, 3], [2, 4, 8]), 1.0)
         self.assertGreater(paired_bootstrap_lcb([2, 3, 4], [1, 1, 1], samples=1000), 0)
         self.assertLess(paired_sign_test_p([2] * 8, [1] * 8), 0.05)
+
+
+class PublicPilotAuthorizationTests(unittest.TestCase):
+    def test_frozen_authorization_and_fail_closed_mutations(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        authorization_path = (
+            root
+            / "ml/experiments/v35-weco-recursive-autoresearch/artifacts/"
+            "public-config-pilot-authorization.json"
+        )
+        authorization = load_public_pilot_authorization(authorization_path, root)
+        self.assertEqual(authorization["totalProposals"], 20)
+        self.assertFalse(authorization["privateAccess"])
+        with tempfile.TemporaryDirectory() as temp_name:
+            temp = Path(temp_name)
+            for mutation in ("private", "hash"):
+                changed = copy.deepcopy(authorization)
+                if mutation == "private":
+                    changed["privateAccess"] = True
+                else:
+                    changed["trustedFiles"]["ml/catalog.json"] = "0" * 64
+                path = temp / f"{mutation}.json"
+                path.write_text(json.dumps(changed))
+                with self.assertRaises(ValueError):
+                    load_public_pilot_authorization(path, root)
 
 
 @unittest.skipUnless(platform.system() == "Darwin", "macOS Seatbelt smoke")
