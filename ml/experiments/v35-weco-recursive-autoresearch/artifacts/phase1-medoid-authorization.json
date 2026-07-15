@@ -17,7 +17,7 @@
   "inputs": {
     "selector": {
       "path": "ml/select_v35_representatives.py",
-      "sha256": "6f23f537ddb5fcf1e21c3acc0f7ca6600ba28831bacea56ee408166cb57bbe56"
+      "sha256": "8380f6f83b3945a610a0b499e2fc3f8d422edb52c89760042d02d735b31751d9"
     },
     "selectorTests": {
       "path": "ml/test_select_v35_representatives.py",
@@ -48,6 +48,8 @@
     "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch",
     "--validation",
     "/dev/shm/arc-v32-critic/validation",
+    "--validation-lock",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-validation-lock.json",
     "--manipulation",
     "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-manipulation-gen8.json",
     "--endpoint",

@@ -46,6 +46,22 @@ def inventory(root: Path) -> tuple[list[dict[str, Any]], str]:
     return entries, digest.hexdigest()
 
 
+def tree_commitment(root: Path) -> dict[str, int | str]:
+    digest = hashlib.sha256()
+    files = 0
+    total_bytes = 0
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        relative = path.relative_to(root).as_posix().encode()
+        size = path.stat().st_size
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        digest.update(size.to_bytes(8, "big"))
+        digest.update(sha256(path).encode())
+        files += 1
+        total_bytes += size
+    return {"sha256": digest.hexdigest(), "files": files, "bytes": total_bytes}
+
+
 def select_medoid(pair_distances: dict[str, float]) -> tuple[str, dict[str, float]]:
     expected = {"a-b", "a-c", "b-c"}
     if set(pair_distances) != expected:
@@ -150,6 +166,20 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
     torch.use_deterministic_algorithms(True)
     experiment = args.experiment.resolve()
     validation = args.validation.resolve()
+    validation_lock_path = args.validation_lock.resolve()
+    validation_lock = json.loads(validation_lock_path.read_text())
+    if validation_lock.get("schemaVersion") != "arc-v35-validation-lock-v1":
+        raise ValueError("unexpected V35 validation-lock schema")
+    if str(validation) != validation_lock.get("path"):
+        raise ValueError("validation path differs from V35 validation lock")
+    if tree_commitment(validation) != validation_lock.get("treeCommitment"):
+        raise ValueError("validation tree commitment mismatch")
+    if int(validation_lock.get("games", -1)) != args.expected_games:
+        raise ValueError("validation-lock game count mismatch")
+    if int(validation_lock.get("seedMin", -1)) != args.expected_seed0:
+        raise ValueError("validation-lock seed start mismatch")
+    if int(validation_lock.get("seedMax", -1)) != args.expected_seed0 + args.expected_games - 1:
+        raise ValueError("validation-lock seed end mismatch")
     manipulation_path = args.manipulation.resolve()
     endpoint_path = args.endpoint.resolve()
     manipulation = json.loads(manipulation_path.read_text())
@@ -278,6 +308,11 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             "inventorySha256": inventory_sha,
             "files": corpus_inventory,
         },
+        "validationLock": {
+            "path": str(validation_lock_path),
+            "sha256": sha256(validation_lock_path),
+            "treeCommitment": validation_lock["treeCommitment"],
+        },
         "endpoint": {"path": str(endpoint_path), "sha256": sha256(endpoint_path)},
         "manipulationAudit": {"path": str(manipulation_path), "sha256": sha256(manipulation_path)},
         "checkpointSha256": checkpoint_hashes,
@@ -290,6 +325,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment", type=Path, required=True)
     parser.add_argument("--validation", type=Path, required=True)
+    parser.add_argument("--validation-lock", type=Path, required=True)
     parser.add_argument("--manipulation", type=Path, required=True)
     parser.add_argument("--endpoint", type=Path, required=True)
     parser.add_argument("--generation", type=int, choices=(8, 12), required=True)
