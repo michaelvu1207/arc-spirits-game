@@ -52,6 +52,14 @@ and sigmoid p30. There is no recovery head: the adapter returns an explicitly bo
 not stored as the public recovery classifier and is never used for band assignment. Recovery bands use
 only `snapshot.ts` public-state diagnostics.
 
+The adapter uses its own narrow `ready-synchronized-worker-binary-v1` client. The async factory waits for
+the worker's Unix-socket connection-ready message before any synchronous framed request. Each decision
+sends one binary request for raw logits plus reach30 and applies the p30 sigmoid client-side. The frozen
+general production `RemotePolicy` is not executed or changed by Lane B: its constructor timed out in a
+no-game preflight on both local Node 25 and SimForge Node 20 even though direct framed requests succeeded.
+The ready-synchronized client has an in-process fake-server wire test and must pass a live no-game
+handshake before authorization.
+
 The exact config is `b1-parent-policy-config.json`:
 
 - obs-v2, `hybrid-v1`, sampled temperature 0.55;
@@ -92,8 +100,8 @@ Avoid the circular dependency between an authorization hash and the S3 prefix wi
 1. `b1-smoke-authorization-basis.json`
    - Exact-key schema with one canonical `authorizationBasis` object and its SHA-256.
    - Bind source implementation `ff2aa7cc4e69f0f7da530a0d0df418c26839314e`, source/strength locks,
-     closed Lane B protocol plus canonical hash, collector, adapter, config, inference client/server,
-     model, engine/reducer/actions/encoders, catalog, freezer, merger/analyzer, checkpoint, manifest,
+     closed Lane B protocol plus canonical hash, collector, adapter, config, inference server/wire
+     contract, model, engine/reducer/actions/encoders, catalog, freezer, merger/analyzer, checkpoint, manifest,
      tests, and final Fable PASS records.
    - Bind exact host, artifact root, `/dev/shm` attempt root, argv arrays, environment allowlist,
      logs, outputs, markers, shard ledger, policy binding, and retry semantics.
@@ -146,9 +154,8 @@ Start one bound server with absolute paths:
 The execution-lock verifier requires the socket path to be absent before launch. After all shard
 processes finish but before server shutdown, a new adapter connection performs a final info handshake
 and must reproduce the initial served checkpoint SHA/path/format/dimensions/device/head/horizon binding.
-This detects any mid-run SIGHUP checkpoint reload. `RemotePolicy.scoreCandidates` requests logits and
-p30 in the same wire frame; the immediately following `reach30Probability` call must be a memo hit, so
-the adapter issues one scoring round trip per decision rather than two.
+This detects any mid-run SIGHUP checkpoint reload. The narrow snapshot client requests logits and p30 in
+the same wire frame and therefore issues exactly one scoring round trip per decision.
 
 Run sixteen collector processes concurrently, one per fixed shard, all against that socket. Every process
 writes to a distinct new-only shard directory and stdout/stderr file. Each collector uses the same adapter,

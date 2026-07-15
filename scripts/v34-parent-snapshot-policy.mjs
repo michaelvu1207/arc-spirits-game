@@ -10,8 +10,7 @@
 import { createHash } from 'node:crypto';
 import { statSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createJiti } from 'jiti';
+import { Worker, MessageChannel, receiveMessageOnPort } from 'node:worker_threads';
 
 export const ADAPTER_SCHEMA = 'arc-v34-remote-parent-policy-adapter-v1';
 export const POLICY_BINDING_SCHEMA = 'arc-v34-policy-provider-binding-v1';
@@ -25,11 +24,238 @@ export const EXPECTED_PARENT = Object.freeze({
 	manifestSha256: 'fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad'
 });
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const INFERENCE_CLIENT_PATH = path.join(ROOT, 'src', 'lib', 'play', 'ml', 'inferenceClient.ts');
+const BIN_MAGIC_REQUEST = 0xb1;
+const BIN_MAGIC_RESPONSE = 0xb2;
+const BIN_ERROR_FLAG = 0x80;
+const WANT_LOGITS_AND_REACH30 = 1 | 32;
+
+const IO_WORKER = `
+const { workerData, parentPort } = require('node:worker_threads');
+const net = require('node:net');
+const { socketPath, port, flag } = workerData;
+const sig = new Int32Array(flag);
+const wake = (message) => {
+  port.postMessage(message);
+  Atomics.store(sig, 0, 1);
+  Atomics.notify(sig, 0);
+};
+let awaiting = false;
+let dead = null;
+let buffer = Buffer.alloc(0);
+const fail = (message) => {
+  dead = dead || message;
+  if (awaiting) {
+    awaiting = false;
+    wake({ __error: dead });
+  }
+  parentPort.postMessage({ kind: 'fatal', error: dead });
+};
+process.on('uncaughtException', (error) => fail('infer worker exception: ' + error.message));
+const socket = net.connect(socketPath);
+socket.on('connect', () => parentPort.postMessage({ kind: 'ready' }));
+socket.on('error', (error) => fail('infer socket error: ' + error.message));
+socket.on('close', () => fail('infer socket closed'));
+socket.on('data', (chunk) => {
+  buffer = buffer.length ? Buffer.concat([buffer, chunk]) : chunk;
+  while (buffer.length >= 4) {
+    const length = buffer.readUInt32LE(0);
+    if (buffer.length < 4 + length) break;
+    const payload = Uint8Array.prototype.slice.call(buffer, 4, 4 + length);
+    buffer = buffer.subarray(4 + length);
+    if (awaiting) {
+      awaiting = false;
+      wake(payload);
+    }
+  }
+});
+port.on('message', (bytes) => {
+  if (dead) {
+    wake({ __error: dead });
+    return;
+  }
+  awaiting = true;
+  const frame = Buffer.allocUnsafe(4 + bytes.length);
+  frame.writeUInt32LE(bytes.length, 0);
+  Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length).copy(frame, 4);
+  socket.write(frame);
+});
+`;
 
 function requireCondition(condition, message) {
 	if (!condition) throw new Error(message);
+}
+
+function encodeScoreRequest(id, observation, candidates) {
+	const idBytes = Buffer.from(id, 'utf8');
+	const output = Buffer.allocUnsafe(
+		22 + idBytes.length + 4 * observation.length + 4 * candidates.length * EXPECTED_PARENT.actDim
+	);
+	output.writeUInt8(BIN_MAGIC_REQUEST, 0);
+	output.writeUInt8(WANT_LOGITS_AND_REACH30, 1);
+	output.writeUInt32LE(idBytes.length, 2);
+	output.writeUInt32LE(1, 6);
+	output.writeUInt32LE(observation.length, 10);
+	output.writeUInt32LE(EXPECTED_PARENT.actDim, 14);
+	output.writeUInt32LE(candidates.length, 18);
+	let offset = 22;
+	idBytes.copy(output, offset);
+	offset += idBytes.length;
+	for (const value of observation) {
+		output.writeFloatLE(value, offset);
+		offset += 4;
+	}
+	for (const candidate of candidates) {
+		for (const value of candidate) {
+			output.writeFloatLE(value, offset);
+			offset += 4;
+		}
+	}
+	requireCondition(offset === output.length, 'binary score request size drifted');
+	return output;
+}
+
+function decodeScoreResponse(payload, expectedId, expectedCandidates) {
+	const buffer = Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+	requireCondition(
+		buffer.length >= 6 && buffer.readUInt8(0) === BIN_MAGIC_RESPONSE,
+		'inference response has an unsupported binary magic'
+	);
+	const flags = buffer.readUInt8(1);
+	const idLength = buffer.readUInt32LE(2);
+	let offset = 6;
+	requireCondition(offset + idLength <= buffer.length, 'truncated inference response id');
+	const id = buffer.toString('utf8', offset, offset + idLength);
+	offset += idLength;
+	requireCondition(id === expectedId, `inference response id ${id} differs from ${expectedId}`);
+	if (flags & BIN_ERROR_FLAG) {
+		requireCondition(offset + 4 <= buffer.length, 'truncated inference error length');
+		const length = buffer.readUInt32LE(offset);
+		offset += 4;
+		requireCondition(offset + length <= buffer.length, 'truncated inference error');
+		throw new Error(`inference server error: ${buffer.toString('utf8', offset, offset + length)}`);
+	}
+	requireCondition(
+		flags === WANT_LOGITS_AND_REACH30,
+		'inference response sections differ from request'
+	);
+	requireCondition(offset + 8 <= buffer.length, 'truncated inference response header');
+	const batch = buffer.readUInt32LE(offset);
+	offset += 4;
+	const candidates = buffer.readUInt32LE(offset);
+	offset += 4;
+	requireCondition(batch === 1, 'inference response batch must be one');
+	requireCondition(
+		candidates === expectedCandidates,
+		'inference response candidate count mismatch'
+	);
+	const requiredBytes = 4 * candidates + 4;
+	requireCondition(offset + requiredBytes === buffer.length, 'inference response length mismatch');
+	const rawLogits = [];
+	for (let index = 0; index < candidates; index += 1) {
+		rawLogits.push(buffer.readFloatLE(offset));
+		offset += 4;
+	}
+	const reach30Logit = buffer.readFloatLE(offset);
+	offset += 4;
+	requireCondition(offset === buffer.length, 'inference response trailing bytes');
+	return { rawLogits, reach30Logit };
+}
+
+class SnapshotInferBridge {
+	constructor(socketPath, timeoutMs) {
+		this.timeoutMs = timeoutMs;
+		const { port1, port2 } = new MessageChannel();
+		this.port = port1;
+		this.signal = new Int32Array(new SharedArrayBuffer(4));
+		this.worker = new Worker(IO_WORKER, {
+			eval: true,
+			workerData: { socketPath, port: port2, flag: this.signal.buffer },
+			transferList: [port2]
+		});
+		this.ready = new Promise((resolve, reject) => {
+			const timer = setTimeout(
+				() => reject(new Error(`inference bridge was not ready within ${timeoutMs}ms`)),
+				timeoutMs
+			);
+			const finish = (callback) => {
+				clearTimeout(timer);
+				this.worker.off('message', onMessage);
+				this.worker.off('error', onError);
+				callback();
+			};
+			const onMessage = (message) => {
+				if (message?.kind === 'ready') finish(resolve);
+				else if (message?.kind === 'fatal') finish(() => reject(new Error(message.error)));
+			};
+			const onError = (error) => finish(() => reject(error));
+			this.worker.on('message', onMessage);
+			this.worker.on('error', onError);
+		});
+	}
+
+	roundtrip(payload) {
+		Atomics.store(this.signal, 0, 0);
+		this.port.postMessage(payload);
+		if (Atomics.wait(this.signal, 0, 0, this.timeoutMs) === 'timed-out') {
+			throw new Error(`inference request had no response within ${this.timeoutMs}ms`);
+		}
+		let received = receiveMessageOnPort(this.port);
+		const deadline = Date.now() + this.timeoutMs;
+		while (!received && Date.now() < deadline) received = receiveMessageOnPort(this.port);
+		requireCondition(received, 'inference bridge woke without a response');
+		const message = received.message;
+		if (!(message instanceof Uint8Array)) {
+			throw new Error(`inference bridge failure: ${message?.__error ?? 'unknown error'}`);
+		}
+		return message;
+	}
+
+	close() {
+		this.port.close();
+		void this.worker.terminate();
+	}
+}
+
+class SnapshotInferenceClient {
+	static async connect(socketPath, timeoutMs) {
+		const bridge = new SnapshotInferBridge(socketPath, timeoutMs);
+		try {
+			await bridge.ready;
+			return new SnapshotInferenceClient(bridge);
+		} catch (error) {
+			bridge.close();
+			throw error;
+		}
+	}
+
+	constructor(bridge) {
+		this.bridge = bridge;
+		this.nextId = 0;
+		this.scoringRequests = 0;
+		const payload = this.bridge.roundtrip(
+			Buffer.from(JSON.stringify({ want: ['info'], id: ++this.nextId }), 'utf8')
+		);
+		requireCondition(payload[0] === 0x7b, 'inference handshake did not return JSON');
+		const response = JSON.parse(
+			Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength).toString('utf8')
+		);
+		requireCondition(!response.error && response.id === this.nextId, 'inference handshake failed');
+		this.info = response.info;
+	}
+
+	score(observation, candidates) {
+		const id = String(++this.nextId);
+		this.scoringRequests += 1;
+		return decodeScoreResponse(
+			this.bridge.roundtrip(encodeScoreRequest(id, observation, candidates)),
+			id,
+			candidates.length
+		);
+	}
+
+	close() {
+		this.bridge.close();
+	}
 }
 
 function canonicalValue(value, objectMember = false) {
@@ -248,18 +474,13 @@ export async function createV34SnapshotPolicy({ config, catalogPath }) {
 	);
 	const checkpointManifest = fileRecord(environment.manifest);
 	validateManifest(checkpointManifest);
-	const inferenceClient = fileRecord(INFERENCE_CLIENT_PATH);
-	const jiti = createJiti(import.meta.url, { alias: { $lib: path.join(ROOT, 'src', 'lib') } });
-	const { RemotePolicy } = await jiti.import(INFERENCE_CLIENT_PATH);
-	const policy = new RemotePolicy(environment.socketPath, {
-		timeoutMs: environment.timeoutMs,
-		expectObsDim: EXPECTED_PARENT.obsDim,
-		wire: 'binary'
-	});
+	const policy = await SnapshotInferenceClient.connect(
+		environment.socketPath,
+		environment.timeoutMs
+	);
 	let closed = false;
 	try {
 		const served = validateServedParent(policy.info, checkpoint, environment.expectedDevice);
-		requireCondition(policy.wireFormat === 'binary', 'parent policy did not bind the binary wire');
 		return {
 			binding: {
 				schemaVersion: POLICY_BINDING_SCHEMA,
@@ -274,13 +495,15 @@ export async function createV34SnapshotPolicy({ config, catalogPath }) {
 						.update(canonicalJson(boundConfig), 'utf8')
 						.digest('hex'),
 					checkpointManifest,
-					inferenceClient,
 					server: served,
 					client: {
+						implementation: 'ready-synchronized-worker-binary-v1',
 						wire: 'binary',
 						timeoutMs: environment.timeoutMs,
 						socketPath: environment.socketPath,
-						inputQuantization: 'Float32Array.from'
+						inputQuantization: 'Float32Array.from',
+						requestedSections: ['logits', 'reach30'],
+						roundTripsPerDecision: 1
 					},
 					optionHead: 'disabled-checkpoint-has-no-option-head',
 					reach30Probability: 'sigmoid-trained-logit-horizon-30',
@@ -296,8 +519,8 @@ export async function createV34SnapshotPolicy({ config, catalogPath }) {
 				const candidates = context.candidateFeatures.map((row, index) =>
 					float32Row(row, EXPECTED_PARENT.actDim, `candidateFeatures[${index}]`)
 				);
-				const rawLogits = policy.scoreCandidates(observation, candidates);
-				const reach30Probability = policy.reach30Probability(observation);
+				const { rawLogits, reach30Logit } = policy.score(observation, candidates);
+				const reach30Probability = 1 / (1 + Math.exp(-reach30Logit));
 				requireCondition(
 					Array.isArray(rawLogits) &&
 						rawLogits.length === candidates.length &&
