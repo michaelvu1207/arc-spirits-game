@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/ml/analyze_v35_phase1.py", line 411, in <module>
+    main()
+  File "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/ml/analyze_v35_phase1.py", line 403, in main
+    result = analyze(args.authorization.resolve(), args.reports.resolve())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/ml/analyze_v35_phase1.py", line 267, in analyze
+    reports = load_reports(authorization_path, authorization, reports_path)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/ml/analyze_v35_phase1.py", line 127, in load_reports
+    raise ValueError(f"{policy_label}: missing or hash-invalid report")
+ValueError: base: missing or hash-invalid report

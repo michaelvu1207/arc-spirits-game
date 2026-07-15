@@ -1,0 +1,262 @@
+{
+  "schemaVersion": "arc-v35-phase1-development-analysis-v1",
+  "valid": true,
+  "authorization": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-authorization.json",
+    "sha256": "cbc5edc0adbb8aa7a4a7754b077a6cf3513431d56d9751d7114ce64dd2ca7e3e"
+  },
+  "reports": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-reports.json",
+    "sha256": "484c836ac38ddc31fd930ccc300f18e236f8072398fe955f965934d4111113d0"
+  },
+  "contract": {
+    "seed0": 969030000,
+    "seedMax": 969034095,
+    "games": 4096,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "sample": true,
+    "temperature": 0.55,
+    "workers": 24,
+    "guardianSchedule": "absolute-balanced",
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenGpus": [
+      4,
+      5,
+      6
+    ],
+    "maxConcurrentPolicies": 1
+  },
+  "bootstrap": {
+    "samples": 10000,
+    "seed": 350969,
+    "simultaneousConfidence": 0.975,
+    "familySize": 2,
+    "cluster": "complete common seed with all three replicate pairs"
+  },
+  "mechanisms": {
+    "late-reweighted": {
+      "rawTreatmentWinRate": 0.5291341145833334,
+      "baseWinRate": 0.540283203125,
+      "replicateWinEffects": {
+        "a": 0.001953125,
+        "b": 0.013916015625,
+        "c": 0.00244140625
+      },
+      "metrics": {
+        "win": {
+          "meanEffect": 0.006103515624999999,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": -0.004557291666666666,
+            "upper": 0.017171223958333332
+          }
+        },
+        "vp": {
+          "meanEffect": 0.12581380208333334,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": -0.04956461588541662,
+            "upper": 0.2961435953776042
+          }
+        },
+        "post15": {
+          "meanEffect": 0.0014837536973305579,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": -0.01572741558161742,
+            "upper": 0.01847533304289894
+          }
+        },
+        "finish": {
+          "meanEffect": 0.014404296875000009,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": -0.05411987304687499,
+            "upper": 0.08251953124999999
+          }
+        }
+      },
+      "guardianWinEffects": {
+        "Bubblepop": 0.01300813008130081,
+        "Embers": 0.017886178861788615,
+        "Fjorn": 0.0032520325203252024,
+        "Human Avatar": 0.016260162601626018,
+        "Lumina": 0.006504065040650407,
+        "Myrtle": -0.01382113821138211,
+        "Pixia": -0.0016299918500407517,
+        "Prox": 0.013039934800325996,
+        "Taron": -0.0008149959250203771,
+        "Void Avatar": 0.007334963325183375
+      },
+      "aggregateGates": {
+        "winGainAtLeast3Points": false,
+        "winLowerBoundPositive": false,
+        "atLeastTwoPositiveReplicates": true,
+        "noReplicateBelowMinus1Point": true,
+        "rawWinNoWorseThanBase": false,
+        "finalVpLowerBoundPositive": false,
+        "post15LowerBoundPositive": false,
+        "finishUpperBoundNonpositive": false,
+        "guardianFloor": true,
+        "zeroStalls": true
+      },
+      "aggregatePassed": false,
+      "representative": {
+        "replicate": "a",
+        "treatmentLabel": "rep-a-late-reweighted",
+        "controlLabel": "rep-a-control-uniform",
+        "effects": {
+          "win": 0.001953125,
+          "vp": -0.072998046875,
+          "post15": -0.02402271812534876,
+          "finish": 0.064697265625
+        },
+        "guardianWinEffects": {
+          "Bubblepop": 0.02195121951219512,
+          "Embers": -0.01951219512195122,
+          "Fjorn": -0.014634146341463415,
+          "Human Avatar": 0.014634146341463415,
+          "Lumina": 0.00975609756097561,
+          "Myrtle": -0.05853658536585366,
+          "Pixia": 0.0,
+          "Prox": 0.03667481662591687,
+          "Taron": -0.007334963325183374,
+          "Void Avatar": 0.03667481662591687
+        },
+        "gates": {
+          "winGainAtLeast3Points": false,
+          "rawWinNoWorseThanBase": false,
+          "finalVpNonnegative": false,
+          "post15Nonnegative": false,
+          "finishNonpositive": false,
+          "guardianFloor": false,
+          "zeroStalls": true
+        },
+        "passed": false
+      },
+      "eligible": false
+    },
+    "p30-credit025": {
+      "rawTreatmentWinRate": 0.5418294270833334,
+      "baseWinRate": 0.540283203125,
+      "replicateWinEffects": {
+        "a": 0.02099609375,
+        "b": 0.012451171875,
+        "c": 0.02294921875
+      },
+      "metrics": {
+        "win": {
+          "meanEffect": 0.018798828125,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": 0.007161458333333332,
+            "upper": 0.03076171875
+          }
+        },
+        "vp": {
+          "meanEffect": 0.2827962239583333,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": 0.0956207275390625,
+            "upper": 0.4658284505208338
+          }
+        },
+        "post15": {
+          "meanEffect": 0.018505242915996915,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": 0.00011868147518964598,
+            "upper": 0.0366507005223244
+          }
+        },
+        "finish": {
+          "meanEffect": -0.07731119791666667,
+          "simultaneousInterval": {
+            "confidence": 0.975,
+            "lower": -0.15250752766927084,
+            "upper": -0.0013824462890624368
+          }
+        }
+      },
+      "guardianWinEffects": {
+        "Bubblepop": 0.020325203252032527,
+        "Embers": 0.006504065040650405,
+        "Fjorn": 0.013821138211382115,
+        "Human Avatar": 0.01707317073170732,
+        "Lumina": 0.01869918699186992,
+        "Myrtle": 0.004878048780487803,
+        "Pixia": 0.011409942950285249,
+        "Prox": 0.04156479217603912,
+        "Taron": 0.03341483292583537,
+        "Void Avatar": 0.020374898125509373
+      },
+      "aggregateGates": {
+        "winGainAtLeast3Points": false,
+        "winLowerBoundPositive": true,
+        "atLeastTwoPositiveReplicates": true,
+        "noReplicateBelowMinus1Point": true,
+        "rawWinNoWorseThanBase": true,
+        "finalVpLowerBoundPositive": true,
+        "post15LowerBoundPositive": true,
+        "finishUpperBoundNonpositive": true,
+        "guardianFloor": true,
+        "zeroStalls": true
+      },
+      "aggregatePassed": false,
+      "representative": {
+        "replicate": "a",
+        "treatmentLabel": "rep-a-p30-credit025",
+        "controlLabel": "rep-a-control-uniform",
+        "effects": {
+          "win": 0.02099609375,
+          "vp": 0.245361328125,
+          "post15": 0.012395716847430042,
+          "finish": -0.107666015625
+        },
+        "guardianWinEffects": {
+          "Bubblepop": 0.004878048780487805,
+          "Embers": 0.014634146341463415,
+          "Fjorn": 0.041463414634146344,
+          "Human Avatar": 0.024390243902439025,
+          "Lumina": 0.05853658536585366,
+          "Myrtle": -0.036585365853658534,
+          "Pixia": 0.022004889975550123,
+          "Prox": 0.03667481662591687,
+          "Taron": 0.03667481662591687,
+          "Void Avatar": 0.007334963325183374
+        },
+        "gates": {
+          "winGainAtLeast3Points": false,
+          "rawWinNoWorseThanBase": true,
+          "finalVpNonnegative": true,
+          "post15Nonnegative": true,
+          "finishNonpositive": true,
+          "guardianFloor": true,
+          "zeroStalls": true
+        },
+        "passed": false
+      },
+      "eligible": false
+    }
+  },
+  "selection": {
+    "eligibleMechanisms": [],
+    "selectedMechanism": null,
+    "reason": "no-eligible-mechanism",
+    "selectedRepresentative": null,
+    "privateConfirmationAuthorized": false
+  },
+  "promotionEligible": false,
+  "remainingGates": [
+    "fresh-private-solo-confirmation",
+    "status3-unrestricted-solo",
+    "multiplayer-gauntlets",
+    "exploitability",
+    "hidden-information-and-fairness",
+    "latency-and-load",
+    "catalog-and-replay-regression",
+    "Michael-blinded-games"
+  ]
+}
