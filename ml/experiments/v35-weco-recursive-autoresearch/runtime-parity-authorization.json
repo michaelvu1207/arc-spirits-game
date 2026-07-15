@@ -1,12 +1,15 @@
 {
   "schemaVersion": "arc-v35-runtime-parity-authorization-v1",
-  "status": "authorized-public-outcome-blind-preflight",
+  "attemptId": "attempt-2",
+  "status": "proposed-amendment-review-pending",
   "purpose": "Reject any V35 head-sharing runtime that changes selected commands or deadline advances before latency or strength evaluation.",
   "oldBaseCommit": "0239cb8e6524ce0548a398d94a186cda590d48e1",
   "oldCommit": "5574310327a19a609eb3713bff76efe48535aa91",
   "newCommit": "07dc5e2a183a3f8dbb3ad1719fc228da7d7508af",
   "oldArchiveSha256": "b28b24669bf205a19b70e1160a0336afcc12d0084767ba37b256cfc75c323d1f",
   "newArchiveSha256": "d94b8d6ac9e320bb5b9648289e34af57ba3cc4d0d501e11ec9f8e4fc6d47d0cf",
+  "attempt1AuthorizationSha256": "b7eb90b6606de30c0bb49c12d30b08f6cb8e1bc4420d43a39e748ecf269dd3a7",
+  "attempt1IncidentSha256": "b6fcaa14f1a7518e43071a22da1329c24c29aeec9a19c6a6cad7c111b888320d",
   "runtimeArchiveDiffPaths": [
     "ml/infer_server.py",
     "ml/model_v2.py"
@@ -102,11 +105,13 @@
     }
   },
   "trusted": {
-    "runnerSha256": "df018582bf326689aef80c38a37f5682854c6d8166c96240439ed088f0aa28f1",
+    "runnerSha256": "066ca0a2e762c4a340465f61e309e4db6d43b877db66e9feb4f6947ae1e51d20",
     "comparatorSha256": "50bd2b0b79947bb93232ecb44f4bf604c89043aa7a5197b105fa750f061ad19c",
     "comparatorTestSha256": "02b24bdc95f9a1b553a167a8f4f4a564c6d48dd2e942e00a55c8cb241efd3a23",
     "executionPlanSha256": "0a6f42674c4960e4c414e334ff507582ec9a11a9a76a2c22eba0750432f70cc6",
-    "fableReviewSha256": "3fdf85ab6695d34c6d7276f793058bdf44dada21ef711d6e87c65db004a7fb7c"
+    "fableReviewSha256": "3fdf85ab6695d34c6d7276f793058bdf44dada21ef711d6e87c65db004a7fb7c",
+    "attempt2AmendmentSha256": "14b3a3a38c7ce7a7f1d2a0fec66137b7ec3ecceabeebf9dc9966efad0f36fdcf",
+    "attempt2AmendmentReviewSha256": null
   },
   "pilotEvidence": {
     "authorizationSha256": "d953deb5d7f76a12c4f2ad08cbbea081e0a0a3fbab8de5827feac50fc5352cd7",
@@ -115,7 +120,7 @@
   "execution": {
     "host": "ubuntu@216.151.21.122",
     "root": "/data/share8/michaelvuaprilexperimentation/arc-bot",
-    "out": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-parity/attempt-1",
+    "out": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-parity/attempt-2",
     "gpuIndex": 7,
     "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
     "cudaVisibleDevices": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
