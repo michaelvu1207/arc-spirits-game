@@ -26,11 +26,13 @@ from v35_p30_authorized_execution import AUTHORIZATION_SCHEMA, RECEIPT_SCHEMA
 from v35_p30_crypto import (
     atomic_write_exclusive,
     canonical_json,
+    executable_sha256,
     read_regular_nofollow,
     role_public_key_path,
     sha256_file,
     sign_payload,
     verify_signed_payload,
+    venv_python_entrypoint,
 )
 
 
@@ -142,7 +144,7 @@ def build(
         "stderr": {"path": str(evaluation_root / "supervisor.stderr"), "required": True, "mustBeAbsentAtStart": True},
         "stdout": {"path": str(evaluation_root / "supervisor.stdout"), "required": True, "mustBeAbsentAtStart": True},
     }
-    executable = (REPO_ROOT / "ml/.venv/bin/python").resolve()
+    executable = venv_python_entrypoint(REPO_ROOT)
     payload: dict[str, Any] = {
         "schemaVersion": AUTHORIZATION_SCHEMA,
         "authorized": True,
@@ -200,7 +202,7 @@ def build(
                 "PYTHONHASHSEED": "0",
                 "PYTHONPATH": "ml",
             },
-            "executableSha256": sha256_file(executable),
+            "executableSha256": executable_sha256(executable),
         },
         "isolation": {
             "backend": "bubblewrap",

@@ -10,12 +10,35 @@ from pathlib import Path
 
 from v35_p30_crypto import (
     atomic_write_exclusive,
+    executable_sha256,
     sign_payload,
+    venv_python_entrypoint,
     verify_signed_payload,
 )
 
 
 class P30CryptoTests(unittest.TestCase):
+    def test_venv_entrypoint_preserves_required_runtime_packages(self) -> None:
+        repo = Path(__file__).resolve().parents[1]
+        entrypoint = venv_python_entrypoint(repo)
+        self.assertEqual(entrypoint, repo / "ml/.venv/bin/python")
+        self.assertEqual(executable_sha256(entrypoint), executable_sha256(entrypoint.resolve()))
+        completed = subprocess.run(
+            [
+                str(entrypoint),
+                "-c",
+                (
+                    "import cryptography,numpy,torch,sys;"
+                    "assert sys.prefix != sys.base_prefix;"
+                    "print(sys.prefix)"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(".venv", completed.stdout)
+
     def test_sign_verify_tamper_and_exclusive_write(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

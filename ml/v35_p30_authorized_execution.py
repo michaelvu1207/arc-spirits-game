@@ -21,6 +21,7 @@ from typing import Any, Mapping
 from v35_p30_crypto import (
     atomic_write_exclusive,
     canonical_json,
+    executable_sha256,
     read_regular_nofollow,
     regular_file_evidence,
     sha256_bytes,
@@ -583,7 +584,8 @@ def validate_authorization(
         or not command["argv"]
         or not all(isinstance(value, str) and value for value in command["argv"])
         or not Path(command["argv"][0]).is_absolute()
-        or sha256_file(Path(command["argv"][0])) != command["executableSha256"]
+        or executable_sha256(Path(command["argv"][0]))
+        != command["executableSha256"]
         or not Path(command["cwd"]).is_absolute()
         or not isinstance(command["env"], dict)
         or not set(command["env"]).issubset(ALLOWED_ENVIRONMENT_KEYS)

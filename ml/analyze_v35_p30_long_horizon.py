@@ -24,11 +24,13 @@ import numpy as np
 from calibrate_v35_p30_power import build as build_power_calibration
 from v35_p30_crypto import (
     canonical_json,
+    executable_sha256,
     public_key_identity,
     role_public_key_path,
     sha256_file as secure_sha256_file,
     validate_role_trust,
     verify_signed_payload,
+    venv_python_entrypoint,
 )
 from v35_p30_statistics import conservative_sign_flip_tolerance
 
@@ -3347,7 +3349,7 @@ def load_inputs(
         anchor=authorization_path.parent,
         label="P30 analysis output",
     )
-    executable = (REPO_ROOT / "ml/.venv/bin/python").resolve()
+    executable = venv_python_entrypoint(REPO_ROOT)
     expected_argv = [
         str(executable),
         "ml/analyze_v35_p30_long_horizon.py",
@@ -3370,7 +3372,7 @@ def load_inputs(
                 "PYTHONHASHSEED": "0",
                 "PYTHONPATH": "ml",
             },
-            "executableSha256": secure_sha256_file(executable),
+            "executableSha256": executable_sha256(executable),
         }
     from issue_v35_p30_analysis_bundle import build_analysis_authorization_payload
 

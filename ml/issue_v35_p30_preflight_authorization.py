@@ -18,7 +18,7 @@ from analyze_v35_p30_long_horizon import (
 from audit_v35_p30_generation import source_identity
 from issue_v35_p30_generation_authorization import utc, validate_trust
 from v35_p30_authorized_execution import AUTHORIZATION_SCHEMA
-from v35_p30_crypto import sha256_file
+from v35_p30_crypto import executable_sha256, venv_python_entrypoint
 from v35_p30_phase0 import (
     PHASE0_NAMES,
     artifact_root,
@@ -71,7 +71,7 @@ def build(
     stderr = root / "execution.stderr"
     exit_code = root / "execution.exit-code"
     report = root / "report.json"
-    python = (REPO_ROOT / "ml/.venv/bin/python").resolve()
+    python = venv_python_entrypoint(REPO_ROOT)
     if name == "fault-injection":
         argv = [
             str(python),
@@ -194,7 +194,7 @@ def build(
                 "PYTHONHASHSEED": "0",
                 "PYTHONPATH": "ml",
             },
-            "executableSha256": sha256_file(python),
+            "executableSha256": executable_sha256(python),
         },
         "isolation": {
             "backend": "bubblewrap",

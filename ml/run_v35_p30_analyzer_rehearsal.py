@@ -7,7 +7,12 @@ import argparse
 import subprocess
 from pathlib import Path
 
-from v35_p30_crypto import atomic_write_exclusive, canonical_json, sha256_bytes
+from v35_p30_crypto import (
+    atomic_write_exclusive,
+    canonical_json,
+    sha256_bytes,
+    venv_python_entrypoint,
+)
 
 
 TEST_ID = (
@@ -18,7 +23,7 @@ TEST_ID = (
 
 def run(output: Path) -> None:
     command = [
-        str((Path(__file__).parent / ".venv/bin/python").resolve()),
+        str(venv_python_entrypoint(Path(__file__).resolve().parents[1])),
         "-m",
         "unittest",
         "-q",
@@ -55,7 +60,13 @@ def run(output: Path) -> None:
         capture_output=True,
     )
     if completed.returncode != 0:
-        raise RuntimeError("synthetic analyzer trust-path rehearsal failed")
+        stderr_tail = completed.stderr.decode("utf-8", "replace")[-4096:]
+        raise RuntimeError(
+            "synthetic analyzer trust-path rehearsal failed "
+            f"(exit={completed.returncode}, "
+            f"stdoutSha256={sha256_bytes(completed.stdout)}, "
+            f"stderrSha256={sha256_bytes(completed.stderr)}):\n{stderr_tail}"
+        )
     payload = {
         "schemaVersion": "arc-v35-p30-analyzer-synthetic-rehearsal-v1",
         "valid": True,

@@ -40,11 +40,13 @@ from run_v35_p30_campaign import (
 from v35_p30_authorized_execution import AUTHORIZATION_SCHEMA
 from v35_p30_crypto import (
     canonical_json,
+    executable_sha256,
     read_regular_nofollow,
     role_public_key_path,
     sha256_bytes,
     sha256_file,
     verify_signed_payload,
+    venv_python_entrypoint,
 )
 
 
@@ -509,7 +511,7 @@ def build_analysis_authorization_payload(
         raise ValueError("analysis result root changed")
     token = token_id or secrets.token_hex(32)
     moment = now or dt.datetime.now(dt.timezone.utc)
-    executable = (REPO_ROOT / "ml/.venv/bin/python").resolve()
+    executable = venv_python_entrypoint(REPO_ROOT)
     supervisor_root = ledger / "supervisor" / token
     return {
         "schemaVersion": AUTHORIZATION_SCHEMA,
@@ -560,7 +562,7 @@ def build_analysis_authorization_payload(
                 "PYTHONHASHSEED": "0",
                 "PYTHONPATH": "ml",
             },
-            "executableSha256": sha256_file(executable),
+            "executableSha256": executable_sha256(executable),
         },
         "isolation": {
             "backend": "bubblewrap",

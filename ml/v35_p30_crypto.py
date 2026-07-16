@@ -69,6 +69,20 @@ ROLE_POLICIES = {
 }
 
 
+def venv_python_entrypoint(repo_root: Path) -> Path:
+    """Return the absolute venv launcher without dereferencing its symlink.
+
+    On Linux, ``Path.resolve()`` turns ``ml/.venv/bin/python`` into the system
+    interpreter and thereby removes the venv site-packages from child startup.
+    """
+
+    root = repo_root.absolute()
+    path = root / "ml/.venv/bin/python"
+    if not root.is_absolute() or not path.is_file():
+        raise ValueError("P30 virtual-environment Python entrypoint is unavailable")
+    return path
+
+
 def canonical_json(value: Any) -> bytes:
     """Return the sole byte representation accepted by P30 signatures."""
 
@@ -91,6 +105,23 @@ def sha256_file(path: Path) -> str:
         return sha256_fd(descriptor)
     finally:
         os.close(descriptor)
+
+
+def executable_sha256(path: Path) -> str:
+    """Hash executable bytes without replacing a venv launcher in ``argv``.
+
+    Data and key files continue to use ``sha256_file`` and reject symlinks.
+    Python virtual environments, however, require the original
+    ``.venv/bin/python`` path so the interpreter discovers ``pyvenv.cfg``.
+    Resolve only for byte hashing; the authorization retains the exact launcher.
+    """
+
+    if not path.is_absolute():
+        raise ValueError("runtime executable path must be absolute")
+    target = path.resolve(strict=True)
+    if not target.is_file():
+        raise ValueError("runtime executable target is unavailable")
+    return sha256_file(target)
 
 
 def sha256_fd(descriptor: int) -> str:

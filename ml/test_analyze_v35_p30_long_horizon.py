@@ -35,6 +35,7 @@ from ml.analyze_v35_p30_long_horizon import (
 from ml.v35_p30_authorized_execution import AUTHORIZATION_SCHEMA
 from ml.v35_p30_crypto import (
     canonical_json,
+    executable_sha256,
     public_key_identity,
     sha256_file,
     sign_payload,
@@ -1008,7 +1009,7 @@ class V35P30AnalyzerTests(unittest.TestCase):
             def write_analysis_authorization(
                 bound_manifest_path: Path, destination: Path, token: str
             ) -> None:
-                executable = (REPO / "ml/.venv/bin/python").resolve()
+                executable = REPO / "ml/.venv/bin/python"
                 analysis_out = root / f"{destination.stem}.analysis.json"
                 ledger = root / "ledger"
                 ledger.mkdir(exist_ok=True)
@@ -1088,7 +1089,7 @@ class V35P30AnalyzerTests(unittest.TestCase):
                             "PYTHONHASHSEED": "0",
                             "PYTHONPATH": "ml",
                         },
-                        "executableSha256": sha256_file(executable),
+                        "executableSha256": executable_sha256(executable),
                     },
                     "isolation": {},
                     "outputs": {
