@@ -51,7 +51,7 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
                 "sha256": None,
             },
         )
-        self.assertEqual(protocol["sourceRegistry"]["files"], 550)
+        self.assertEqual(protocol["sourceRegistry"]["files"], 552)
         self.assertEqual(
             protocol["sourceRegistry"]["sha256"],
             sha256(REPO / protocol["sourceRegistry"]["path"]),
@@ -69,6 +69,8 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
             "ml/docker/p30-fable-reviewer.lock.json",
             "ml/run_v35_p30_fault_injection.py",
             "ml/run_v35_p30_cuda_determinism.py",
+            "ml/run_v35_p30_outer_analyzer_rehearsal_probe.py",
+            "ml/test_v35_p30_outer_analyzer_rehearsal_probe.py",
             "ml/issue_v35_p30_preflight_authorization.py",
             "ml/v35_p30_phase0.py",
             "ml/test_v35_p30_phase0_gates.py",

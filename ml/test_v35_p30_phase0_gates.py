@@ -734,6 +734,13 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
                     request_binding={"path": "/request", "sha256": "f" * 64},
                     token_id="2" * 64,
                 )
+                cuda_authorization = preflight_authorization.build(
+                    protocol_path=protocol_path,
+                    name="cuda-determinism",
+                    public_key_path=root / "issuer.pem",
+                    request_binding={"path": "/request", "sha256": "f" * 64},
+                    token_id="3" * 64,
+                )
             self.assertEqual(
                 authorization["command"]["argv"][2:4],
                 ["--protocol", str(protocol_path)],
@@ -755,6 +762,10 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
             self.assertIn(
                 "/proc/driver/nvidia",
                 fault_authorization["isolation"]["readOnlyPaths"],
+            )
+            self.assertNotIn(
+                "/proc/driver/nvidia",
+                cuda_authorization["isolation"]["readOnlyPaths"],
             )
 
 
