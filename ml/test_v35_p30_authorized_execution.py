@@ -47,6 +47,7 @@ from v35_p30_recovery import (
 class AuthorizedExecutionTests(unittest.TestCase):
     def test_nested_controller_rejects_outer_nvidia_proc_submount(self) -> None:
         for entrypoint in (
+            "ml/run_v35_p30_analyzer_rehearsal.py",
             "ml/run_v35_p30_cuda_determinism.py",
             "ml/run_v35_p30_evaluation_attempt.py",
         ):

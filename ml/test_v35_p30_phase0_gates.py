@@ -672,6 +672,13 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
                 "bubblewrapSha256": "b" * 64,
                 "leasePath": str(root / "lease"),
             }
+            real_exists = Path.exists
+
+            def exists_with_synthetic_nvidia(path: Path) -> bool:
+                if path == Path("/proc/driver/nvidia"):
+                    return True
+                return real_exists(path)
+
             with (
                 mock.patch.object(
                     preflight_authorization,
@@ -707,6 +714,11 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
                     "phase0_output_root",
                     return_value=root / "artifacts" / ("a" * 64) / "phase0/analyzer-rehearsal",
                 ),
+                mock.patch.object(
+                    Path,
+                    "exists",
+                    exists_with_synthetic_nvidia,
+                ),
             ):
                 authorization = preflight_authorization.build(
                     protocol_path=protocol_path,
@@ -714,6 +726,13 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
                     public_key_path=root / "issuer.pem",
                     request_binding={"path": "/request", "sha256": "f" * 64},
                     token_id="1" * 64,
+                )
+                fault_authorization = preflight_authorization.build(
+                    protocol_path=protocol_path,
+                    name="fault-injection",
+                    public_key_path=root / "issuer.pem",
+                    request_binding={"path": "/request", "sha256": "f" * 64},
+                    token_id="2" * 64,
                 )
             self.assertEqual(
                 authorization["command"]["argv"][2:4],
@@ -728,6 +747,14 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
                         str(phase0.analyzer_rehearsal_result_root(protocol)),
                     ]
                 ),
+            )
+            self.assertNotIn(
+                "/proc/driver/nvidia",
+                authorization["isolation"]["readOnlyPaths"],
+            )
+            self.assertIn(
+                "/proc/driver/nvidia",
+                fault_authorization["isolation"]["readOnlyPaths"],
             )
 
 

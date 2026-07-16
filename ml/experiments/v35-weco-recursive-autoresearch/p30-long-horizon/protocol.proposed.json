@@ -42,8 +42,8 @@
   "sourceRegistry": {
     "schemaVersion": "arc-v35-p30-source-registry-v1",
     "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-registry.proposed.json",
-    "sha256": "4a561ff65bafcd85e8751ab81914bf1f1932f82083ffaa7c8481d1fe814f4870",
-    "files": 550
+    "sha256": "fd470af2cc47009b397062c3979f7542bed9a0630138a687828a09d369ecd6a3",
+    "files": 552
   },
   "powerCalibration": {
     "schemaVersion": "arc-v35-p30-power-calibration-v1",

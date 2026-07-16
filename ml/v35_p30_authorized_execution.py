@@ -57,6 +57,7 @@ ALLOWED_KINDS = {
 GPU_UUID = "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0"
 NESTED_ISOLATION_CONTROLLERS = frozenset(
     {
+        "run_v35_p30_analyzer_rehearsal.py",
         "run_v35_p30_cuda_determinism.py",
         "run_v35_p30_evaluation_attempt.py",
     }

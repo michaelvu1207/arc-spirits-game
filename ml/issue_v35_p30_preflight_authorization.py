@@ -171,7 +171,10 @@ def build(
         REPO_ROOT,
         git_dir,
     ]
-    if name != "cuda-determinism":
+    # Both the analyzer rehearsal and CUDA determinism controller launch a
+    # nested bubblewrap with a fresh procfs. A host NVIDIA proc submount in the
+    # outer namespace makes that nested proc mount fail with EPERM.
+    if name == "fault-injection":
         read_only_candidates.append(Path("/proc/driver/nvidia"))
     read_only = sorted(str(path) for path in read_only_candidates if path.exists())
     payload: dict[str, Any] = {
