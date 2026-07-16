@@ -4,17 +4,17 @@
   "immutable": true,
   "promotionEligible": false,
   "implementationBaseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
-  "implementationCommit": "05072bbe2672de95dc11027e5c413d8df57c8f68",
+  "implementationCommit": "fdbb76c59846b21082ff2cdff03f2021eabf2765",
   "gitContext": {
     "schemaVersion": "arc-v35-p30-git-context-v1",
-    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-git-context-05072bb.git",
+    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-git-context-fdbb76c.git",
     "shallow": true,
     "objectFormat": "sha1",
     "baseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
-    "implementationCommit": "05072bbe2672de95dc11027e5c413d8df57c8f68",
-    "implementationTree": "392159f902a374c1057be43a90dc2e35c9ea5db2",
-    "objectInventorySha256": "1d42d9f725aefeb22e96fdd7262a387523ea78aac415e3ff00470014eb8fd1ea",
-    "registeredPaths": 540
+    "implementationCommit": "fdbb76c59846b21082ff2cdff03f2021eabf2765",
+    "implementationTree": "628587eb9b13d5096eb0ef42f121011108440368",
+    "objectInventorySha256": "65d0d0349ecee44fb948a5cf61a2391476448f13390315645204fe2094d17a0f",
+    "registeredPaths": 546
   },
   "files": {
     "baseConfig": {
@@ -109,8 +109,8 @@
     },
     "analyzer": {
       "path": "ml/analyze_v35_p30_long_horizon.py",
-      "sha256": "2280ca376ed0f007f2b59f6f9e1fa38bf6f74c17750632c2cb19799346ee9838",
-      "gitBlobOid": "3219383c1090b8befec5431be57ed05a8b9489f1"
+      "sha256": "4ae5d18308d911ea9a2521fe9604eb0968e2357c9ae055f209ffb1d9b8f4c6d0",
+      "gitBlobOid": "75511350ae915d1e99607384c8077d5763aea774"
     },
     "analyzerTests": {
       "path": "ml/test_analyze_v35_p30_long_horizon.py",
@@ -119,13 +119,13 @@
     },
     "sourceRegistry": {
       "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-registry.proposed.json",
-      "sha256": "b8a624f6871e67e36b10abc266c3984ed4e7d28d64cf6ba48730a73cf9b2886a",
-      "gitBlobOid": "c2e01b50d337718fbe6d1b8693b7ec445aff00b3"
+      "sha256": "e38f9f636679b5cd23f50d6075aca582fae0eb77a43eda457aed13d3450da764",
+      "gitBlobOid": "d0d3c95a0bdf93ae5368f3fa1eb642f1bed0c476"
     },
     "sourceRegistryGenerator": {
       "path": "scripts/generate-v35-p30-source-registry.mjs",
-      "sha256": "3947fe4614f6a2e782f78268eccec4b51c590b7f803a6565e16b8c6fb5533dbb",
-      "gitBlobOid": "4b0e464d536efbf64ffa614dbab67eac7b614cea"
+      "sha256": "6a62c1e8de625d34a2ecd8a3ecade4182041ece653d7c32c5ea595b66f2d337d",
+      "gitBlobOid": "59f1d1063c9216d98b8d9802e01e521b46697f8c"
     },
     "runtime:ml/__init__.py": {
       "path": "ml/__init__.py",
@@ -339,8 +339,8 @@
     },
     "runtime:ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md": {
       "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md",
-      "sha256": "adaed6dfc7e35277dd746045fadb1af3a66344bb5e9981faaf45944989ef9354",
-      "gitBlobOid": "e0f6f184b7961ba52d626bf8a3f3671cd36aab22"
+      "sha256": "0f1c1ce6d3b78cbfd889db540d929319b7416413514db6787991bf96d5cb90ea",
+      "gitBlobOid": "b676276cb97d3748befa55453a52ca5626a988b8"
     },
     "runtime:ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/usr.bin.bwrap.apparmor": {
       "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/usr.bin.bwrap.apparmor",
@@ -391,6 +391,11 @@
       "path": "ml/issue_v35_p30_pair_integrity.py",
       "sha256": "5d82a44feb20a5a13544d1b114208f5f27112b9eee7834ed7d027c9aee9869a6",
       "gitBlobOid": "e913b905a6d64df4c0d8ddaa8656d7d7b18b4be0"
+    },
+    "runtime:ml/issue_v35_p30_preflight_authorization.py": {
+      "path": "ml/issue_v35_p30_preflight_authorization.py",
+      "sha256": "9fd47cfd9e37e5c53cbcaf4c91f86b47c2c86b5736a67813ea92580605fb86a6",
+      "gitBlobOid": "01f641c01f5f345ee70a25a4ec4ac98f65b1480d"
     },
     "runtime:ml/make_synthetic_data.py": {
       "path": "ml/make_synthetic_data.py",
@@ -454,13 +459,28 @@
     },
     "runtime:ml/run_v35_p30_campaign.py": {
       "path": "ml/run_v35_p30_campaign.py",
-      "sha256": "5334b03024b61203f1f7e584dc6722fd596117c0a3b6d497821f2262ab61f029",
-      "gitBlobOid": "804368cbc18e5f97029cf44779061c35d6be2c31"
+      "sha256": "5caa26c0e74010774ca5f7734a9fb4d5ab11e346c2084bf2c7d7751dbd4efe2a",
+      "gitBlobOid": "2197a7d0fd58e6aa349913d0d007b03028003dd0"
+    },
+    "runtime:ml/run_v35_p30_cuda_determinism.py": {
+      "path": "ml/run_v35_p30_cuda_determinism.py",
+      "sha256": "7c37f1cddf43cd99d3b9b0c4952d5acbc05c0fa571e933e0d094df54440d2275",
+      "gitBlobOid": "a3d5e3fc8cb0c0bd166eeb0e6a1f4cc809a717b9"
     },
     "runtime:ml/run_v35_p30_evaluation_attempt.py": {
       "path": "ml/run_v35_p30_evaluation_attempt.py",
       "sha256": "bfa945afd10e8d9d1d0cab407e08fcffb63a2c5df8f76b70829dba5550c24a7a",
       "gitBlobOid": "e8e9fcf093e1aee1765e69676cd4a1766140edd9"
+    },
+    "runtime:ml/run_v35_p30_fault_injection.py": {
+      "path": "ml/run_v35_p30_fault_injection.py",
+      "sha256": "04d5655bb19f280a55819a3355af462d4878cec53eefb27039b9dc412c97469f",
+      "gitBlobOid": "87f2d264cc3ad1d5b33c0937e2b9ca4145b04200"
+    },
+    "runtime:ml/run_v35_p30_gate_review_local.py": {
+      "path": "ml/run_v35_p30_gate_review_local.py",
+      "sha256": "f0d71e68962c8f41d8a052321b73e82ffde6f1062650d8738035f54b39f9b434",
+      "gitBlobOid": "0d5f81a9a52174f096fab3c365376ce4941e077a"
     },
     "runtime:ml/run_v35_p30_local_custody.py": {
       "path": "ml/run_v35_p30_local_custody.py",
@@ -469,8 +489,8 @@
     },
     "runtime:ml/run_v35_p30_role.py": {
       "path": "ml/run_v35_p30_role.py",
-      "sha256": "25836746879e4f7c8e8019c454cb3fb6c089282b6d1fc8f44df51826c1c60806",
-      "gitBlobOid": "1c77037c98e4d0a3986d6507d213e386aea6cd29"
+      "sha256": "c39c40354c418d001fa164eddaab151908333755a06cfac019e622497a9757ae",
+      "gitBlobOid": "a9824c24d6ca4f4b27837819fc31a692ab582218"
     },
     "runtime:ml/select_v35_representatives.py": {
       "path": "ml/select_v35_representatives.py",
@@ -674,8 +694,8 @@
     },
     "runtime:ml/test_v35_p30_authorized_execution.py": {
       "path": "ml/test_v35_p30_authorized_execution.py",
-      "sha256": "d6551855d181438fe26950d91935398b222430fc5d2022383eb50fa99859fca5",
-      "gitBlobOid": "fbcc40fbbba58ebc3e8f42d7b70c7bbb920f3a53"
+      "sha256": "e492bfabd3cab50122c8ef2c7f2333402d797200d8b2229d44995df78ff25569",
+      "gitBlobOid": "44d67445d84c6c4d3d6dfecc44707fe7f12d27b3"
     },
     "runtime:ml/test_v35_p30_crypto.py": {
       "path": "ml/test_v35_p30_crypto.py",
@@ -694,8 +714,8 @@
     },
     "runtime:ml/test_v35_p30_key_custody.py": {
       "path": "ml/test_v35_p30_key_custody.py",
-      "sha256": "9cbf4700b9e9d6a2642f186ffbefce0749ffb6265d077602dc67696efbda4f69",
-      "gitBlobOid": "d845d3d2eb7d5231a69f88e8db8fe917d6b47ea9"
+      "sha256": "0ddd921277371a3a6044ff6eeb3dedfe4cc5722aba989547db6d2b7050070774",
+      "gitBlobOid": "41c65c9f87a010fc62e567243f1f53429645e197"
     },
     "runtime:ml/test_v35_p30_launch_permit.py": {
       "path": "ml/test_v35_p30_launch_permit.py",
@@ -704,8 +724,13 @@
     },
     "runtime:ml/test_v35_p30_long_horizon_proposal.py": {
       "path": "ml/test_v35_p30_long_horizon_proposal.py",
-      "sha256": "101674ff0aea019ebcf78a1427cdf39f822832d570e895e5fcfd56c060adfded",
-      "gitBlobOid": "7ada75743c6bdda2af6d7f55741dd937ad600cde"
+      "sha256": "82d158095e4599d2d767eb56fc3333188ba33ccaea0ff9b9e0192d272f08ff09",
+      "gitBlobOid": "296bc49e9d9ef1a3d4b1492a0934e7bf737aba08"
+    },
+    "runtime:ml/test_v35_p30_phase0_gates.py": {
+      "path": "ml/test_v35_p30_phase0_gates.py",
+      "sha256": "4b7890f1d54e6105c3bbc09e62b59865fcd5d681ded31a8a908b02f590f46fbe",
+      "gitBlobOid": "28fe913740701c78371cdfdc491012d78e513146"
     },
     "runtime:ml/test_v35_p30_pre_child_recovery.py": {
       "path": "ml/test_v35_p30_pre_child_recovery.py",
@@ -754,13 +779,18 @@
     },
     "runtime:ml/v35_p30_crypto.py": {
       "path": "ml/v35_p30_crypto.py",
-      "sha256": "d24e6bc3e5316086a6d76096a7de9ff4b24b60b0a4c0340757333c8bca7f0317",
-      "gitBlobOid": "a509e86632087b16a9716755ceadd38426aaa42f"
+      "sha256": "1b19a03cf49f518aabce6a7b4265b14b9a755ba35abfa756e1ede82c16ce185f",
+      "gitBlobOid": "8a5ba1a3a3e29c37d960c621b11de65bd288efbd"
     },
     "runtime:ml/v35_p30_key_custody.py": {
       "path": "ml/v35_p30_key_custody.py",
       "sha256": "4dc283f7dd5b5a8c212547690568ffc1be5ac339cbb03962743ef4efd22feffd",
       "gitBlobOid": "c725ab64a786d021490b84cc59446bbba7d3cf1f"
+    },
+    "runtime:ml/v35_p30_phase0.py": {
+      "path": "ml/v35_p30_phase0.py",
+      "sha256": "f4fd9417fb64e89da0080f92f48c6daa616d05c95bf07527819b9e20289ab5e8",
+      "gitBlobOid": "cc1946b2a2a0d86ffdc4bcc78de570b515ccd506"
     },
     "runtime:ml/v35_p30_recovery.py": {
       "path": "ml/v35_p30_recovery.py",

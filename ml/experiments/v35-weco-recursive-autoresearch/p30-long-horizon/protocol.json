@@ -41,7 +41,7 @@
   "sourceContract": {
     "schemaVersion": "arc-v35-p30-source-lock-v1",
     "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-lock.json",
-    "sha256": "d2c7a5a19314464292a11dde48b522b2c4d4026b0093f3e620714977c9349fe5"
+    "sha256": "35272dfe90b96e8302eff084772d562c7dcf543cc8423ebe81aebf705e3b5349"
   },
   "sourceRegistry": {
     "schemaVersion": "arc-v35-p30-source-registry-v1",
@@ -340,7 +340,7 @@
   "executionTrust": {
     "schemaVersion": "arc-v35-p30-role-trust-v2",
     "algorithm": "Ed25519",
-    "campaignInstanceId": "6b4f412505cb889bd1c083c3a682cde591f4e7337bbe21bb71b20afff422a218",
+    "campaignInstanceId": "dc5341c181cd33ea84ae9d9eda4cc95239c20a10621f3b4531b091e1ebafa99e",
     "roles": {
       "issuer": {
         "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/issuer.pem",
