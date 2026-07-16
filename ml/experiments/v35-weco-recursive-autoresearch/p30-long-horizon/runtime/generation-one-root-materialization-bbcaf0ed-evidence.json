@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "arc-v35-p30-generation-one-root-materialization-evidence-v1",
+  "valid": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "campaignInstanceId": "bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14",
+  "protocolSha256": "9da51efda745bd5221ecc5b00521808846026a9f3d472d3e284a1fae6c7e06ba",
+  "source": {
+    "implementationCommit": "e8c02068d88d677afd655506f6810b66a6b52c3f",
+    "sourceContractSha256": "5aeaa30724111352f73ae9912eb120c3481058bb8df579b0a58a549ea29a035b"
+  },
+  "trigger": {
+    "logicalId": "rep-a-control-zero-gen1-issuer",
+    "diagnostic": "GENERATION_ONE_ROOT_BINDING_ABSENT",
+    "failedBeforeSigningReady": true,
+    "authorizationCreated": false,
+    "childStarted": false,
+    "seedsConsumed": false,
+    "gpuLeaseAcquired": false
+  },
+  "materializer": {
+    "localPath": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/materialize-p30-gen1-roots-bbcaf0ed.py",
+    "sha256": "5d5c10adf85f0e3073f820f5c8ba20446236a00726a5a26dfcd24abf99b0b3c3",
+    "remoteTemporaryCopyDeleted": true
+  },
+  "scope": {
+    "replicate": "a",
+    "arms": [
+      "control-zero",
+      "uniform-040",
+      "late-scheduled"
+    ],
+    "rootsCreated": 3,
+    "remainingReplicateRootsCreated": 0,
+    "all54RootsMaterialized": false
+  },
+  "roots": [
+    {
+      "arm": "control-zero",
+      "configSha256": "5a4461dc860794912cd83561fa7b20914f7c72aa511efd06e2ec5562e377ae8a",
+      "bindingSha256": "77efa0e095b2435e12cc39e05377d1722594c2e73216ad00580b7c6aa8cff300",
+      "stateSha256": "6a49f127cd4078b35c4c7ea7a2773818b8b18d81a58b0b337099c21efdaf34a3"
+    },
+    {
+      "arm": "uniform-040",
+      "configSha256": "a44720578fe27b8e072b212483ba123d02fe8babc3e9799ada1450e3e712a9fb",
+      "bindingSha256": "9d59b66f1d5a32d913db7e0a2834de100ac5df6ed850089f210f37ec97c654d3",
+      "stateSha256": "11a2633d25293ca8d5ed0ebe3cd7e9b7e746ba6c3f63804dbfa1326e84f18f42"
+    },
+    {
+      "arm": "late-scheduled",
+      "configSha256": "ef92ffa0916224a51f848733d727472c11da8b56724b933ce2ee880ffa860560",
+      "bindingSha256": "b4dee0c4703f8e3ce2ad07a0fb388cdee2eaa2df7c606355bcb485c7012736dc",
+      "stateSha256": "31a9e839782d370795149b5ed562274115ac82b43cc038adafb3fac094710904"
+    }
+  ],
+  "verification": {
+    "sourceLockedValidatorPassed": true,
+    "stateGeneration": 0,
+    "statePhase": "idle",
+    "checkpointFiles": 0,
+    "artifactFiles": 0,
+    "gpu7EmptyAfter": true,
+    "gpu7LeaseAbsentAfter": true,
+    "verifiedAtUtc": "2026-07-16T20:45:03Z"
+  }
+}
