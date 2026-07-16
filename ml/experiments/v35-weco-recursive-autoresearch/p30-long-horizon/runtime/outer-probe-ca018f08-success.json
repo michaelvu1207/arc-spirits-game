@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "arc-v35-p30-outer-analyzer-probe-success-v1",
+  "valid": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "syntheticDataOnly": true,
+  "analysisResultInspected": false,
+  "metricsExposed": false,
+  "probeId": "ca018f085788652966328ac9853ff97cc878b5c18811a69746d3c86d65a93097",
+  "syntheticCampaignInstanceId": "2ed0db0d6af0e9f864c556bf75ebd43c4b9f61513697d292d0c64c4cf4d4cd24",
+  "startedAtUtc": "2026-07-16T17:05:21.571853Z",
+  "finishedAtUtc": "2026-07-16T17:09:04.961094Z",
+  "source": {
+    "implementationCommit": "4ae26c0f19911996a199b46d8310e2b9c696713f",
+    "sourceLockSha256": "e699bd661fa4a88c78947c8f4ce6a20ac9a5032b1f50675a2a5329d298a135ad",
+    "gitDir": "/home/ubuntu/arc-v35-p30-git-context-4ae26c0.git",
+    "sourceRegistrySha256": "fd470af2cc47009b397062c3979f7542bed9a0630138a687828a09d369ecd6a3",
+    "sourceRegistryFiles": 552
+  },
+  "fableReview": {
+    "artifact": "fable-final-review-2026-07-16-v23.md",
+    "sha256": "32d187286af1575b5f067fadce91d4da9bffe7184b65626c2db083b0d786e0de",
+    "commandReceiptSha256": "3ffb6e56d62f7ae77e1ddc037661bbebcb3bc957db492abd63312aa4f2b39a96",
+    "model": "fable",
+    "effort": "high",
+    "verdict": "ACCEPT"
+  },
+  "execution": {
+    "exactProductionPreflightIssuerUsed": true,
+    "exactProductionOuterBubblewrapUsed": true,
+    "exactProductionLaunchPermitUsed": true,
+    "exactProductionExecutorUsed": true,
+    "exactProductionReceiptSealUsed": true,
+    "nestedAnalyzerRehearsalValidated": true,
+    "nvidiaProcSubmountAbsent": true,
+    "oneShotReentryRejected": true,
+    "outerExitCode": 0,
+    "outerStdoutBytes": 0,
+    "outerStderrBytes": 0,
+    "gpuMode": "none",
+    "gpuUsed": false,
+    "gpuLeaseAcquired": false,
+    "productionIdentityUsed": false,
+    "productionTrainingSeedsConsumed": false,
+    "ephemeralPrivateKeysDeleted": true
+  },
+  "artifacts": {
+    "parentProtocolSha256": "bca1701706d9eba56a456fe45021a54388adf9009d38adb4a31b83d5d8705721",
+    "outerProbeReportSha256": "c404895930c30bb4016db73e6bebe99398db35162e353f638f2ddb47da9fbf01",
+    "outerAuthorizationSha256": "b84156c84670c2810e86f9c3dbb037851e7c519e83838a4f779c5f5f0af8bd23",
+    "outerExecutionReceiptSha256": "4bbc7b10b99d2386d8198b051cb562703d56f1e174d8182b9cf0f9387071017a",
+    "nestedRehearsalReportSha256": "ee5a6b19b38205a8ce009e949dcea185d192cdcd1d238c46d0f187f792b89893",
+    "analysisArtifactSha256": "4b6b51bf18a6ee961840dd4a46bd7aefdf1ef6c3c4689a1c2b7ac182c3052c80",
+    "analysisArtifactBytes": 208060,
+    "analysisArtifactContentInspected": false
+  },
+  "archive": {
+    "path": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/outer-probe-ca018f08-success",
+    "manifestPath": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/outer-probe-ca018f08-success.archive.json",
+    "manifestSha256": "f79aacf2c27ba78262fbebb4917aee5280af067b4f59ac92a3672cac048037ca",
+    "fileCount": 5576,
+    "totalFileBytes": 278045963,
+    "fileInventorySha256": "c7e78b6f47d73321ab46303ae5a3c0df30fab5202b9b6def8434194be7145ca0",
+    "byteIdentical": true
+  },
+  "productionLaunch": {
+    "authorized": false,
+    "explicitCumulativeSpendDecisionRequired": true,
+    "freshCampaignIdentityRequired": true,
+    "freshRoleKeysRequired": true,
+    "allRuntimeAndPromotionGatesRemainClosed": true
+  }
+}
