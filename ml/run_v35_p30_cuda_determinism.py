@@ -38,6 +38,18 @@ from v35_p30_crypto import (
 SCHEMA = "arc-v35-p30-cuda-determinism-preflight-v1"
 
 
+def _prepare_attempt_output_dir(output_dir: Path) -> None:
+    """Accept the empty directory prepared by the execution supervisor only."""
+
+    if output_dir.exists():
+        if output_dir.is_symlink() or not output_dir.is_dir():
+            raise ValueError("P30 CUDA attempt output path is not a plain directory")
+        if next(output_dir.iterdir(), None) is not None:
+            raise FileExistsError("P30 CUDA attempt output directory is not empty")
+        return
+    output_dir.mkdir(parents=True, exist_ok=False)
+
+
 def _run_attempt(
     *,
     protocol: dict[str, Any],
@@ -48,7 +60,7 @@ def _run_attempt(
     socket_path: Path,
     label: str,
 ) -> dict[str, Any]:
-    output_dir.mkdir(parents=True, exist_ok=False)
+    _prepare_attempt_output_dir(output_dir)
     socket_path.unlink(missing_ok=True)
     backend = Path(protocol["executionTrust"]["bubblewrapPath"])
     catalog = resolve_artifact(

@@ -42,6 +42,12 @@ The directly reviewable enforcement closure is `ml/run_v35_p30_campaign.py`, `ml
 
 After the three matched generation-one arms and the guardian storage/runtime projection, the scheduler again stops. A second local-only Fable review must accept the exact protocol, plan, source lock, Phase-0 readiness receipt, and generation-one preflight receipt. Only then may the guardian sign `full-campaign-authorization`; every later scheduler call revalidates that signature and its complete hash chain before releasing storage reservation or entering generation 2+. Neither review capsule contains raw reports, logs, model outputs, seeds beyond the already-public protocol schedule, or comparative game outcomes.
 
+### Phase 0 launch-incident amendment (2026-07-16)
+
+Campaign instance `e6d754a9...` is permanently closed. Its CUDA child started but failed before launching an inference server or evaluator because the authorized-execution supervisor had correctly pre-created the declared `primary/` and `replay/` output parents while the CUDA child incorrectly required those directories not to exist. The immutable incident record binds the authorization, execution request, launch permit, consumed marker, unsigned invalid draft, and stderr hashes. No game seed or outcome was consumed or inspected, GPU7 returned empty, and the lease was released, but the child-started rule still forbids retry or recovery in that instance.
+
+The corrected CUDA contract accepts a supervisor-created attempt directory only when it is a plain, empty directory. A symlinked, non-directory, or nonempty path remains terminally invalid. Regression tests cover all three cases. Before any corrected launch, the entire source closure, plan, protocol, Git context, source lock, Fable review, trust authorization, and unpredictable campaign ID must be regenerated. The fresh instance repeats every Phase 0 preflight from the beginning; evidence from `e6d754a9...` is incident evidence only and cannot satisfy a launch gate.
+
 ### Frozen bounded recovery policy
 
 Each endpoint/generation or evaluation role permits at most one outcome-blind infrastructure recovery. Recovery requires a guardian-signed incident classification, immutable consumed-token and unsigned-draft evidence, unchanged protocol/source/config/input-checkpoint/seed bindings, and zero metric exposure. Candidate code may rerun only with a fresh token when the guardian proves that no child started and no seed was consumed. The only eligible classes are:

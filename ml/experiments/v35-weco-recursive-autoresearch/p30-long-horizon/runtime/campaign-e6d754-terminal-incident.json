@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "arc-v35-p30-terminal-campaign-incident-v1",
+  "campaignInstanceId": "e6d754a98db790351d6842fe9b9ad1118d3b198d9f52cafa593b9c3380edd2b3",
+  "terminal": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "gameSeedsConsumed": false,
+  "gpuLeaseAcquired": true,
+  "failedPhase": "phase0-cuda-determinism",
+  "diagnosticCode": "CUDA_SUPERVISOR_OUTPUT_PARENT_COLLISION",
+  "rootCause": "The authorized-execution supervisor correctly pre-created every declared output parent, including the primary and replay attempt directories. The CUDA preflight incorrectly required those directories not to exist, so the child exited before starting an inference server or evaluator.",
+  "execution": {
+    "kind": "preflight",
+    "tokenId": "7a9801438cf476521d4c198f992ab6dfa42875a3f332aef41cb420a5b848a95d",
+    "authorization": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/e6d754a98db790351d6842fe9b9ad1118d3b198d9f52cafa593b9c3380edd2b3/authorizations/phase0-cuda-determinism.json",
+      "sha256": "a76c01db0b9eadf0b0d562868951953a76951f90ab98160a6630575235a87302"
+    },
+    "executionRequest": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/e6d754a98db790351d6842fe9b9ad1118d3b198d9f52cafa593b9c3380edd2b3/requests/phase0-cuda-determinism-executor.json",
+      "sha256": "b66ffc2da10cd4147b89a84e5baf3cea5246df3e1e77818cd67337efbf609127"
+    },
+    "launchPermit": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/e6d754a98db790351d6842fe9b9ad1118d3b198d9f52cafa593b9c3380edd2b3/launch-permits/b66ffc2da10cd4147b89a84e5baf3cea5246df3e1e77818cd67337efbf609127.json",
+      "sha256": "e24bea6e9517caefb4a4b25e6f0e987cfa5ccad6b032ae7ac505634227ebef54"
+    },
+    "consumedMarker": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/e6d754a98db790351d6842fe9b9ad1118d3b198d9f52cafa593b9c3380edd2b3/7a9801438cf476521d4c198f992ab6dfa42875a3f332aef41cb420a5b848a95d.consumed.json",
+      "sha256": "2ed502b6ebaaf214338a05d4c9c2cc96614440a3e09ef229c15f9f0124310e45"
+    },
+    "unsignedDraft": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/e6d754a98db790351d6842fe9b9ad1118d3b198d9f52cafa593b9c3380edd2b3/7a9801438cf476521d4c198f992ab6dfa42875a3f332aef41cb420a5b848a95d.receipt.json.unsigned.json",
+      "sha256": "8a2d25c7848dca6d7e3ace336a1bcaf7688b3aa0b6197a637d9fed921b652b81"
+    },
+    "stderr": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-artifacts/e6d754a98db790351d6842fe9b9ad1118d3b198d9f52cafa593b9c3380edd2b3/phase0/cuda-determinism/execution.stderr",
+      "sha256": "cec6c01002893c98f8e8619fa7c6b4d32c0299945158fb8104ef35e675639b7d"
+    },
+    "spawnCallEntered": true,
+    "childStarted": true,
+    "inferenceServerStarted": false,
+    "evaluatorStarted": false,
+    "exitCode": 1,
+    "missingRequiredOutputs": [
+      "primaryEvaluatorStderr",
+      "primaryEvaluatorStdout",
+      "primaryReport",
+      "primaryServerStderr",
+      "primaryServerStdout",
+      "replayEvaluatorStderr",
+      "replayEvaluatorStdout",
+      "replayReport",
+      "replayServerStderr",
+      "replayServerStdout",
+      "report"
+    ],
+    "gpuEmptyAfter": true,
+    "leaseReleased": true
+  },
+  "disposition": {
+    "reuseForbidden": true,
+    "recoveryForbidden": true,
+    "requiredNextInstance": "fresh-campaign-id-and-review",
+    "sourceFix": [
+      "accept the supervisor-created primary and replay directories only when they are plain and empty",
+      "reject symlinked or nonempty attempt directories",
+      "regression-test the exact supervisor/child output-directory contract"
+    ]
+  }
+}

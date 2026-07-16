@@ -9,12 +9,12 @@
   "review": {
     "requiredModel": "Claude Fable",
     "requiredEffort": "high",
-    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v8.md",
-    "sha256": "cbf7838a226b338881a58b0ab598c1c30edc26d69a352b0820228c08bc6f7b81",
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v10.md",
+    "sha256": "60cf1f99dfe068046605c19c014c72411540842bc475e1da0816bb90fe4fbec1",
     "verdict": "ACCEPT",
     "commandReceipt": {
-      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v8.receipt.json",
-      "sha256": "999beadc602e420d747d9c508811afb14f976ca62a423afa069459257b54b20e"
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v10.receipt.json",
+      "sha256": "6777d96c71e8b85ad50276bf3f870477c391b8ac3b7e1eedda0e920f064b6555"
     }
   },
   "catalog": {

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 import run_v35_p30_campaign as campaign
+import run_v35_p30_cuda_determinism as cuda_determinism
 import v35_p30_phase0 as phase0
 from v35_p30_crypto import sha256_file
 
@@ -83,6 +84,41 @@ class P30Phase0SchedulerGateTests(unittest.TestCase):
             ):
                 self.assertEqual(campaign.next_action(protocol_path), expected)
             rolling.assert_not_called()
+
+
+class P30CudaDeterminismOutputTests(unittest.TestCase):
+    def test_supervisor_precreated_empty_attempt_directory_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "primary"
+            output.mkdir()
+            cuda_determinism._prepare_attempt_output_dir(output)
+            self.assertTrue(output.is_dir())
+            self.assertEqual(list(output.iterdir()), [])
+
+    def test_nonempty_attempt_directory_is_never_reused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "primary"
+            output.mkdir()
+            (output / "stale").write_text("stale\n")
+            with self.assertRaisesRegex(FileExistsError, "not empty"):
+                cuda_determinism._prepare_attempt_output_dir(output)
+
+    def test_nondirectory_attempt_path_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "primary"
+            output.write_text("not a directory\n")
+            with self.assertRaisesRegex(ValueError, "plain directory"):
+                cuda_determinism._prepare_attempt_output_dir(output)
+
+    def test_symlink_attempt_directory_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "target"
+            target.mkdir()
+            output = root / "primary"
+            output.symlink_to(target, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "plain directory"):
+                cuda_determinism._prepare_attempt_output_dir(output)
 
 
 class P30GateReviewReceiptTests(unittest.TestCase):
