@@ -106,6 +106,7 @@ from v35_p30_phase0 import (
     PHASE0_NAMES,
     PHASE0_READINESS_SCHEMA,
     PHASE0_REPORT_SCHEMAS,
+    validate_analyzer_rehearsal_report,
     binding as phase0_binding,
     full_campaign_authorization_path,
     gate_review_paths,
@@ -1342,9 +1343,11 @@ def _attest_phase0_readiness(
         )
     ):
         raise ValueError("P30 CPU fault matrix is incomplete")
-    rehearsal = reports["analyzer-rehearsal"]
-    if not isinstance(rehearsal.get("testId"), str):
-        raise ValueError("P30 analyzer rehearsal evidence changed")
+    validate_analyzer_rehearsal_report(
+        report=reports["analyzer-rehearsal"],
+        protocol_path=protocol_path,
+        protocol=protocol,
+    )
     cuda = reports["cuda-determinism"]
     if (
         cuda.get("games") != protocol["seedSchedule"]["commonPublicGames"]

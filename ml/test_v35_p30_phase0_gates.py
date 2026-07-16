@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +10,7 @@ from unittest import mock
 import run_v35_p30_campaign as campaign
 import run_v35_p30_cuda_determinism as cuda_determinism
 import run_v35_p30_gate_review_local as gate_review_local
+import issue_v35_p30_preflight_authorization as preflight_authorization
 from issue_v35_p30_preflight_authorization import cuda_socket_root
 import v35_p30_phase0 as phase0
 import v35_p30_analysis_review as review
@@ -128,6 +131,600 @@ class P30Phase0SchedulerGateTests(unittest.TestCase):
             ):
                 self.assertEqual(campaign.next_action(protocol_path), expected)
             rolling.assert_not_called()
+
+
+class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
+    def _binding(self, path: Path) -> dict[str, object]:
+        return {
+            "path": str(path.resolve()),
+            "sha256": sha256_file(path),
+            "bytes": path.stat().st_size,
+        }
+
+    def _fixture(self, root: Path) -> tuple[dict, Path, dict]:
+        parent_id = "a" * 64
+        role_names = (
+            "analysis-authorizer",
+            "executor",
+            "guardian",
+            "issuer",
+            "review-attester",
+        )
+        parent_roles = {
+            role: {
+                "publicKeyPath": str(root / "parent-keys" / f"{role}.pem"),
+                "publicKeyPemSha256": "5" * 64,
+                "publicKeyDerSha256": "6" * 64,
+                "keyId": "ed25519:" + "6" * 24,
+                "allowedArtifactSchemas": [role],
+                "allowedKinds": [],
+            }
+            for role in role_names
+        }
+        protocol = {
+            "executionTrust": {
+                "campaignInstanceId": parent_id,
+                "ledgerRoot": str(root / "ledger"),
+                "roles": parent_roles,
+            },
+            "seedSchedule": {"commonPublicGames": 4096},
+        }
+        protocol_path = root / "parent-protocol.json"
+        protocol_path.write_text(json.dumps(protocol) + "\n")
+        synthetic_id = phase0.analyzer_rehearsal_campaign_id(protocol)
+        ledger = phase0.analyzer_rehearsal_ledger_root(protocol)
+        result_root = root / "results" / synthetic_id
+        with mock.patch.object(
+            phase0, "ANALYZER_REHEARSAL_RESULT_BASE", root / "results"
+        ):
+            self.assertEqual(
+                phase0.analyzer_rehearsal_result_root(protocol), result_root
+            )
+        paths = {
+            "protocol": phase0.analyzer_rehearsal_protocol_path(protocol),
+            "manifest": ledger / "analysis/input-manifest.signed.json",
+            "authorization": ledger / "authorizations/final-analysis.json",
+            "consumed": ledger / f"{'8' * 64}.consumed.json",
+            "intent": ledger / f"{'8' * 64}.analysis-launch-intent.json",
+            "evidence": ledger / f"{'8' * 64}.analysis-launch.json",
+            "stdout": ledger / "supervisor" / ("8" * 64) / "analysis.stdout",
+            "stderr": ledger / "supervisor" / ("8" * 64) / "analysis.stderr",
+            "unsigned": ledger / f"{'8' * 64}.receipt.json.unsigned.json",
+            "seal": ledger / f"{'8' * 64}.receipt.json.normal-seal-attempt.json",
+            "signed": ledger / f"{'8' * 64}.receipt.json",
+            "analysis": result_root / "analysis.json",
+        }
+        for path in paths.values():
+            path.parent.mkdir(parents=True, exist_ok=True)
+        synthetic_roles = copy.deepcopy(parent_roles)
+        for role, entry in synthetic_roles.items():
+            public_path = ledger / "keys" / f"{role}.public.pem"
+            public_path.parent.mkdir(parents=True, exist_ok=True)
+            public_path.write_text("synthetic public key\n")
+            entry.update(
+                {
+                    "publicKeyPath": str(public_path),
+                    "publicKeyPemSha256": sha256_file(public_path),
+                    "publicKeyDerSha256": "7" * 64,
+                    "keyId": "ed25519:" + "7" * 24,
+                }
+            )
+        synthetic_protocol = copy.deepcopy(protocol)
+        synthetic_protocol["executionTrust"]["campaignInstanceId"] = synthetic_id
+        synthetic_protocol["executionTrust"]["roles"] = synthetic_roles
+        paths["protocol"].write_text(
+            json.dumps(synthetic_protocol) + "\n"
+        )
+        for name, path in paths.items():
+            if name not in {"protocol", "stdout", "stderr"}:
+                path.write_text(f"{name}\n")
+        paths["stdout"].write_bytes(b"")
+        paths["stderr"].write_bytes(b"")
+        source_root = Path(phase0.__file__).resolve().parent
+        canonical_labels = [
+            phase0.endpoint_label(replicate, arm)
+            for replicate in phase0.REPLICATES
+            for arm in phase0.ARMS
+        ]
+        shuffled_labels = canonical_labels[1:] + canonical_labels[:1]
+        inventory = [
+            {
+                "ordinal": ordinal,
+                "kind": "synthetic",
+                "label": f"receipt-{ordinal}",
+                "path": str(ledger / f"receipt-{ordinal}.json"),
+                "sha256": f"{ordinal:064x}"[-64:],
+                "tokenId": (
+                    sha256_bytes(f"token-{ordinal}".encode())
+                    if ordinal < 540
+                    else None
+                ),
+            }
+            for ordinal in range(595)
+        ]
+        receipt_root = phase0.signed_inventory_merkle_root(inventory)
+        report = {
+            "schemaVersion": phase0.ANALYZER_REHEARSAL_SCHEMA,
+            "valid": True,
+            "immutable": True,
+            "promotionEligible": False,
+            "outcomesInspected": False,
+            "syntheticDataOnly": True,
+            "syntheticOutcomesAnalyzed": True,
+            "analysisResultInspected": False,
+            "metricsExposed": False,
+            "parentCampaignInstanceId": parent_id,
+            "syntheticCampaignInstanceId": synthetic_id,
+            "protocol": self._binding(paths["protocol"]),
+            "counts": {
+                **phase0.ANALYZER_REHEARSAL_COUNTS,
+                "gamesPerEndpoint": 4096,
+            },
+            "labelPermutation": {
+                "labelCount": 54,
+                "exactLabelSet": True,
+                "nonCanonicalOrder": True,
+                "canonicalLabelOrderSha256": sha256_bytes(
+                    canonical_json(canonical_labels)
+                ),
+                "shuffledLabelOrderSha256": sha256_bytes(
+                    canonical_json(shuffled_labels)
+                ),
+            },
+            "manifest": {
+                "binding": self._binding(paths["manifest"]),
+                "schemaVersion": "arc-v35-p30-analysis-manifest-v1",
+                "receiptMerkleRoot": receipt_root,
+            },
+            "analysisAuthorization": {
+                "binding": self._binding(paths["authorization"]),
+                "kind": "analysis",
+            },
+            "execution": {
+                "kind": "analysis",
+                "tokenIdSha256": sha256_bytes(("8" * 64).encode()),
+                "consumedMarker": self._binding(paths["consumed"]),
+                "launchIntent": self._binding(paths["intent"]),
+                "launchEvidence": self._binding(paths["evidence"]),
+                "capabilityConsumed": True,
+                "oneShotReentryRejected": True,
+                "network": "none",
+                "newPidNamespace": True,
+                "newUserNamespace": True,
+                "newNetworkNamespace": True,
+                "gpuMode": "none",
+                "exitCode": 0,
+            },
+            "streams": {
+                "stdout": self._binding(paths["stdout"]),
+                "stderr": self._binding(paths["stderr"]),
+            },
+            "analysisArtifact": {
+                "binding": self._binding(paths["analysis"]),
+                "contentExposed": False,
+            },
+            "sealing": {
+                "unsignedReceipt": self._binding(paths["unsigned"]),
+                "normalSealAttempt": self._binding(paths["seal"]),
+                "signedReceipt": self._binding(paths["signed"]),
+                "signatureRole": "executor",
+                "signatureValid": True,
+                "valid": True,
+            },
+            "source": {
+                "rehearsal": self._binding(
+                    source_root / "run_v35_p30_analyzer_rehearsal.py"
+                ),
+                "fixtureBuilder": self._binding(
+                    source_root / "v35_p30_analyzer_rehearsal_fixture.py"
+                ),
+                "productionAnalyzer": self._binding(
+                    source_root / "analyze_v35_p30_long_horizon.py"
+                ),
+                "authorizedExecution": self._binding(
+                    source_root / "v35_p30_authorized_execution.py"
+                ),
+            },
+            "cleanup": {
+                "ephemeralPrivateKeysDeleted": True,
+                "privateKeyPaths": sorted(
+                    str(
+                        phase0.phase0_output_root(protocol, "analyzer-rehearsal")
+                        / ".synthetic-analysis-private-keys"
+                        / f"{role}.private.pem"
+                    )
+                    for role in role_names
+                ),
+            },
+            "diagnosticCodes": list(
+                phase0.ANALYZER_REHEARSAL_DIAGNOSTIC_CODES
+            ),
+        }
+        return protocol, protocol_path, report
+
+    def _validate(self, protocol: dict, protocol_path: Path, report: dict) -> None:
+        result_base = protocol_path.parent / "results"
+        synthetic_protocol_path = Path(report["protocol"]["path"])
+        synthetic_protocol = json.loads(synthetic_protocol_path.read_text())
+        ledger = phase0.analyzer_rehearsal_ledger_root(protocol)
+        token = "8" * 64
+        manifest_path = Path(report["manifest"]["binding"]["path"])
+        authorization_path = Path(
+            report["analysisAuthorization"]["binding"]["path"]
+        )
+        canonical_labels = [
+            phase0.endpoint_label(replicate, arm)
+            for replicate in phase0.REPLICATES
+            for arm in phase0.ARMS
+        ]
+        shuffled_labels = canonical_labels[1:] + canonical_labels[:1]
+        inventory = [
+            {
+                "ordinal": ordinal,
+                "kind": "synthetic",
+                "label": f"receipt-{ordinal}",
+                "path": str(ledger / f"receipt-{ordinal}.json"),
+                "sha256": f"{ordinal:064x}"[-64:],
+                "tokenId": (
+                    sha256_bytes(f"token-{ordinal}".encode())
+                    if ordinal < 540
+                    else None
+                ),
+            }
+            for ordinal in range(595)
+        ]
+        manifest_payload = {
+            "schemaVersion": "arc-v35-p30-analysis-manifest-v1",
+            "valid": True,
+            "immutable": True,
+            "promotionEligible": False,
+            "outcomesInspected": False,
+            "metricsIncluded": False,
+            "campaignInstanceId": report["syntheticCampaignInstanceId"],
+            "protocol": {
+                "path": str(synthetic_protocol_path),
+                "sha256": report["protocol"]["sha256"],
+            },
+            "counts": {
+                "endpoints": 54,
+                "generationReceipts": 432,
+                "evaluationReceipts": 108,
+                "pairIntegrityReceipts": 54,
+                "signedReceipts": 595,
+                "uniqueExecutionTokens": 540,
+            },
+            "signedReceiptInventory": inventory,
+            "receiptMerkleRoot": phase0.signed_inventory_merkle_root(inventory),
+            "reports": [{"label": label} for label in shuffled_labels],
+        }
+        started = "2026-07-16T12:00:01.000000Z"
+        authorization_payload = {
+            "kind": "analysis",
+            "tokenId": token,
+            "notBeforeUtc": "2026-07-16T12:00:00.000000Z",
+            "expiresAtUtc": "2026-07-16T13:00:00.000000Z",
+            "protocol": {
+                "path": str(synthetic_protocol_path),
+                "sha256": report["protocol"]["sha256"],
+            },
+            "predecessor": {
+                "receiptPath": str(manifest_path),
+                "sha256": sha256_file(manifest_path),
+            },
+            "outputs": {
+                "analysis": {"path": report["analysisArtifact"]["binding"]["path"]},
+                "exitCode": {"path": str(ledger / "analysis.exit-code")},
+                "stderr": {"path": report["streams"]["stderr"]["path"]},
+                "stdout": {"path": report["streams"]["stdout"]["path"]},
+            },
+            "ledger": {
+                "consumedPath": report["execution"]["consumedMarker"]["path"],
+                "receiptPath": report["sealing"]["signedReceipt"]["path"],
+            },
+        }
+        authorization_binding = {
+            "path": str(authorization_path),
+            "sha256": sha256_file(authorization_path),
+        }
+        consumed_path = Path(report["execution"]["consumedMarker"]["path"])
+        consumed_binding = {
+            "path": str(consumed_path),
+            "sha256": sha256_file(consumed_path),
+        }
+        intent_path = Path(report["execution"]["launchIntent"]["path"])
+        evidence_path = Path(report["execution"]["launchEvidence"]["path"])
+        intent_payload = {
+            "schemaVersion": phase0.ANALYSIS_LAUNCH_INTENT_SCHEMA,
+            "kind": "analysis",
+            "tokenId": token,
+            "authorization": authorization_binding,
+            "consumedMarker": consumed_binding,
+            "capabilityFd": phase0.ANALYSIS_CAPABILITY_FD,
+            "capabilitySha256": "9" * 64,
+            "launchEvidencePath": str(evidence_path),
+            "supervisor": {
+                "namespaces": {"pid": "pid:[1]", "user": "user:[1]", "network": "net:[1]"}
+            },
+        }
+        evidence_payload = {
+            "schemaVersion": phase0.ANALYSIS_LAUNCH_EVIDENCE_SCHEMA,
+            "kind": "analysis",
+            "tokenId": token,
+            "authorization": authorization_binding,
+            "consumedMarker": consumed_binding,
+            "launchIntent": {
+                "path": str(intent_path),
+                "sha256": sha256_file(intent_path),
+            },
+            "capabilitySha256": "9" * 64,
+            "child": {
+                "namespaces": {"pid": "pid:[2]", "user": "user:[2]", "network": "net:[2]"}
+            },
+        }
+        receipt_payload = {
+            "schemaVersion": phase0.RECEIPT_SCHEMA,
+            "valid": True,
+            "promotionEligible": False,
+            "kind": "analysis",
+            "tokenId": token,
+            "authorization": authorization_binding,
+            "consumedMarker": consumed_binding,
+            "startedAtUtc": started,
+            "exitCode": 0,
+            "artifacts": {
+                "analysis": report["analysisArtifact"]["binding"],
+                "stderr": report["streams"]["stderr"],
+                "stdout": report["streams"]["stdout"],
+            },
+        }
+        seal_payload = {
+            "schemaVersion": phase0.NORMAL_SEAL_ATTEMPT_SCHEMA,
+            "immutable": True,
+            "promotionEligible": False,
+            "kind": "analysis",
+            "tokenId": token,
+            "authorization": authorization_binding,
+            "unsignedReceipt": {
+                "path": report["sealing"]["unsignedReceipt"]["path"],
+                "sha256": report["sealing"]["unsignedReceipt"]["sha256"],
+            },
+            "attemptOrdinal": 1,
+            "signingRole": "executor",
+        }
+        object_by_path = {
+            protocol_path: protocol,
+            synthetic_protocol_path: synthetic_protocol,
+            manifest_path: manifest_payload,
+            authorization_path: authorization_payload,
+            consumed_path: {
+                "schemaVersion": phase0.CONSUMED_SCHEMA,
+                "tokenId": token,
+                "authorizationPath": str(authorization_path),
+                "authorizationSha256": sha256_file(authorization_path),
+            },
+            intent_path: intent_payload,
+            evidence_path: evidence_payload,
+            Path(report["sealing"]["unsignedReceipt"]["path"]): receipt_payload,
+            Path(report["sealing"]["signedReceipt"]["path"]): receipt_payload,
+            Path(report["sealing"]["normalSealAttempt"]["path"]): seal_payload,
+        }
+        object_by_path = {
+            path.resolve(): value for path, value in object_by_path.items()
+        }
+
+        def fake_read(path: Path, _label: str) -> dict:
+            return copy.deepcopy(object_by_path[Path(path).resolve()])
+
+        public_path = next(
+            iter(synthetic_protocol["executionTrust"]["roles"].values())
+        )["publicKeyPath"]
+        with mock.patch.object(
+            phase0, "ANALYZER_REHEARSAL_RESULT_BASE", result_base
+        ), mock.patch.object(
+            phase0, "_read_object", side_effect=fake_read
+        ), mock.patch.object(
+            phase0, "verify_signed_payload", side_effect=lambda value, **_: value
+        ), mock.patch.object(
+            phase0, "validate_authorization", return_value=authorization_payload
+        ), mock.patch.object(
+            phase0, "role_public_key_path", return_value=Path(public_path)
+        ), mock.patch.object(
+            phase0,
+            "public_key_identity",
+            return_value=("ed25519:" + "7" * 24, "7" * 64),
+        ):
+            phase0.validate_analyzer_rehearsal_report(
+                report=report,
+                protocol_path=protocol_path,
+                protocol=protocol,
+            )
+
+    def test_strict_v2_commitment_report_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            protocol, protocol_path, report = self._fixture(Path(temporary))
+            self._validate(protocol, protocol_path, report)
+
+    def test_v1_test_id_evidence_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            protocol, protocol_path, _ = self._fixture(Path(temporary))
+            report = {
+                "schemaVersion": "arc-v35-p30-analyzer-synthetic-rehearsal-v1",
+                "valid": True,
+                "promotionEligible": False,
+                "outcomesInspected": False,
+                "testId": "unit-test-only",
+            }
+            with self.assertRaisesRegex(ValueError, "registry changed"):
+                phase0.validate_analyzer_rehearsal_report(
+                    report=report,
+                    protocol_path=protocol_path,
+                    protocol=protocol,
+                )
+
+    def test_count_diagnostic_boolean_and_binding_tampering_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            protocol, protocol_path, report = self._fixture(Path(temporary))
+            mutations = {
+                "count": lambda value: value["counts"].__setitem__(
+                    "endpointCount", 53
+                ),
+                "diagnostic": lambda value: value["diagnosticCodes"].pop(),
+                "boolean": lambda value: value.__setitem__(
+                    "analysisResultInspected", True
+                ),
+                "label commitment": lambda value: value["labelPermutation"].__setitem__(
+                    "shuffledLabelOrderSha256", "0" * 64
+                ),
+                "namespace boolean": lambda value: value["execution"].__setitem__(
+                    "newNetworkNamespace", False
+                ),
+                "one shot boolean": lambda value: value["execution"].__setitem__(
+                    "oneShotReentryRejected", False
+                ),
+                "signature boolean": lambda value: value["sealing"].__setitem__(
+                    "signatureValid", False
+                ),
+                "cleanup boolean": lambda value: value["cleanup"].__setitem__(
+                    "ephemeralPrivateKeysDeleted", False
+                ),
+                "protocol binding": lambda value: value["protocol"].__setitem__(
+                    "sha256", "0" * 64
+                ),
+                "manifest binding": lambda value: value["manifest"][
+                    "binding"
+                ].__setitem__("sha256", "0" * 64),
+                "authorization binding": lambda value: value[
+                    "analysisAuthorization"
+                ]["binding"].__setitem__("sha256", "0" * 64),
+                "consumed binding": lambda value: value["execution"][
+                    "consumedMarker"
+                ].__setitem__("sha256", "0" * 64),
+                "intent binding": lambda value: value["execution"][
+                    "launchIntent"
+                ].__setitem__("sha256", "0" * 64),
+                "evidence binding": lambda value: value["execution"][
+                    "launchEvidence"
+                ].__setitem__("sha256", "0" * 64),
+                "stream binding": lambda value: value["streams"][
+                    "stdout"
+                ].__setitem__("sha256", "0" * 64),
+                "stderr binding": lambda value: value["streams"][
+                    "stderr"
+                ].__setitem__("sha256", "0" * 64),
+                "analysis binding": lambda value: value["analysisArtifact"][
+                    "binding"
+                ].__setitem__("sha256", "0" * 64),
+                "unsigned binding": lambda value: value["sealing"][
+                    "unsignedReceipt"
+                ].__setitem__("sha256", "0" * 64),
+                "seal binding": lambda value: value["sealing"][
+                    "normalSealAttempt"
+                ].__setitem__("sha256", "0" * 64),
+                "signed binding": lambda value: value["sealing"][
+                    "signedReceipt"
+                ].__setitem__("sha256", "0" * 64),
+                "rehearsal source binding": lambda value: value["source"][
+                    "rehearsal"
+                ].__setitem__("sha256", "0" * 64),
+                "fixture source binding": lambda value: value["source"][
+                    "fixtureBuilder"
+                ].__setitem__("sha256", "0" * 64),
+                "analyzer source binding": lambda value: value["source"][
+                    "productionAnalyzer"
+                ].__setitem__("sha256", "0" * 64),
+                "executor source binding": lambda value: value["source"][
+                    "authorizedExecution"
+                ].__setitem__("sha256", "0" * 64),
+            }
+            for label, mutate in mutations.items():
+                with self.subTest(label=label):
+                    changed = copy.deepcopy(report)
+                    mutate(changed)
+                    with self.assertRaises(ValueError):
+                        self._validate(protocol, protocol_path, changed)
+
+    def test_preflight_authorizes_only_exact_synthetic_writable_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            git_dir = root / "git"
+            git_dir.mkdir()
+            source_lock = root / "source-lock.json"
+            source_lock.write_text(
+                json.dumps({"gitContext": {"gitDir": str(git_dir)}}) + "\n"
+            )
+            protocol_path = root / "protocol.json"
+            protocol = {
+                "experiment": "p30-test",
+                "sourceContract": {"artifact": str(source_lock)},
+                "executionTrust": {
+                    "campaignInstanceId": "a" * 64,
+                    "ledgerRoot": str(root / "ledger"),
+                },
+            }
+            protocol_path.write_text(json.dumps(protocol) + "\n")
+            trust = {
+                **protocol["executionTrust"],
+                "bubblewrapPath": "/usr/bin/bwrap",
+                "bubblewrapSha256": "b" * 64,
+                "leasePath": str(root / "lease"),
+            }
+            with (
+                mock.patch.object(
+                    preflight_authorization,
+                    "read_json_object",
+                    side_effect=lambda path, _label: (
+                        protocol if Path(path) == protocol_path else json.loads(source_lock.read_text())
+                    ),
+                ),
+                mock.patch.object(preflight_authorization, "validate_protocol"),
+                mock.patch.object(
+                    preflight_authorization, "validate_initial_policy_artifacts"
+                ),
+                mock.patch.object(
+                    preflight_authorization,
+                    "source_identity",
+                    return_value=("c" * 40, "d" * 64),
+                ),
+                mock.patch.object(
+                    preflight_authorization, "validate_trust", return_value=trust
+                ),
+                mock.patch.object(
+                    preflight_authorization,
+                    "executable_sha256",
+                    return_value="e" * 64,
+                ),
+                mock.patch.object(
+                    preflight_authorization,
+                    "artifact_root",
+                    return_value=root / "artifacts" / ("a" * 64),
+                ),
+                mock.patch.object(
+                    preflight_authorization,
+                    "phase0_output_root",
+                    return_value=root / "artifacts" / ("a" * 64) / "phase0/analyzer-rehearsal",
+                ),
+            ):
+                authorization = preflight_authorization.build(
+                    protocol_path=protocol_path,
+                    name="analyzer-rehearsal",
+                    public_key_path=root / "issuer.pem",
+                    request_binding={"path": "/request", "sha256": "f" * 64},
+                    token_id="1" * 64,
+                )
+            self.assertEqual(
+                authorization["command"]["argv"][2:4],
+                ["--protocol", str(protocol_path)],
+            )
+            self.assertEqual(
+                authorization["isolation"]["writablePaths"],
+                sorted(
+                    [
+                        str(root / "artifacts" / ("a" * 64) / "phase0/analyzer-rehearsal"),
+                        str(phase0.analyzer_rehearsal_ledger_root(protocol)),
+                        str(phase0.analyzer_rehearsal_result_root(protocol)),
+                    ]
+                ),
+            )
 
 
 class P30CudaDeterminismOutputTests(unittest.TestCase):

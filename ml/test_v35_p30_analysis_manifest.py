@@ -241,6 +241,75 @@ class P30AnalysisManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate execution token"):
             self._build_manifest(duplicate_token=True)
 
+    def test_analysis_authorization_mounts_the_external_git_context_read_only(self) -> None:
+        git_dir = self.root / "external-source-context.git"
+        git_dir.mkdir()
+        source_lock = {
+            "gitContext": {"gitDir": str(git_dir)},
+        }
+        self.source_contract.write_text(json.dumps(source_lock) + "\n")
+        protocol = {
+            "experiment": "p30-synthetic",
+            "executionTrust": {
+                "campaignInstanceId": self.instance,
+                "ledgerRoot": str(self.ledger),
+                "leasePath": str(self.root / "gpu7.lease"),
+                "bubblewrapPath": "/usr/bin/bwrap",
+                "bubblewrapSha256": "b" * 64,
+                "roles": {},
+            },
+            "sourceContract": {
+                "artifact": str(self.source_contract),
+                "sha256": sha256_file(self.source_contract),
+            },
+        }
+        self.protocol_path.write_text(json.dumps(protocol) + "\n")
+        manifest_path = self._write("analysis-manifest.json", b"{}\n")
+        manifest = {
+            "schemaVersion": bundle.ANALYSIS_MANIFEST_SCHEMA,
+            "valid": True,
+            "metricsIncluded": False,
+            "outcomesInspected": False,
+            "campaignInstanceId": self.instance,
+            "receiptMerkleRoot": "c" * 64,
+            "counts": {"endpoints": 54},
+        }
+        result_root = (
+            Path("/data/share8/michaelvuaprilexperimentation/arc-v35-p30-results")
+            / self.instance
+        )
+        with (
+            mock.patch.object(bundle, "validate_protocol"),
+            mock.patch.object(
+                bundle,
+                "source_identity",
+                return_value=("d" * 40, sha256_file(self.source_contract)),
+            ),
+            mock.patch.object(bundle, "_read_signed", return_value=manifest),
+            mock.patch.object(
+                bundle, "role_public_key_path", return_value=self.root / "guardian.pem"
+            ),
+        ):
+            authorization = bundle.build_analysis_authorization_payload(
+                protocol_path=self.protocol_path,
+                manifest_path=manifest_path,
+                request_binding={"path": str(self.root / "request.json"), "sha256": "e" * 64},
+                authorization_draft_path=self.root / "analysis.unsigned.json",
+                review_receipt_path=self.root / "review-receipt.json",
+                analysis_out=result_root / "analysis.json",
+                token_id="f" * 64,
+                now=dt.datetime(2026, 7, 16, 12, 0, tzinfo=dt.timezone.utc),
+            )
+        self.assertIn(str(git_dir), authorization["isolation"]["readOnlyPaths"])
+        from v35_p30_authorized_execution import ANALYSIS_CAPABILITY_FD, bubblewrap_command
+
+        argv = bubblewrap_command(
+            authorization, analysis_capability_fd=ANALYSIS_CAPABILITY_FD
+        )
+        bind = argv.index(str(git_dir))
+        self.assertEqual(argv[bind - 1], "--ro-bind")
+        self.assertEqual(argv[bind + 1], str(git_dir))
+
     def test_report_entries_hash_invalid_json_without_parsing_it(self) -> None:
         root = self.root / "league-root"
         root.mkdir()

@@ -268,6 +268,28 @@ class V35P30AnalyzerTests(unittest.TestCase):
         self.assertFalse(result["comparisons"]["uniform-040"]["gates"]["malformedEpisodes"])
         self.assertFalse(result["comparisons"]["uniform-040"]["passed"])
 
+    def test_analysis_reports_verified_realized_dose_telemetry(self) -> None:
+        reports = copy.deepcopy(self.reports)
+        expected = [
+            {
+                "generation": 1,
+                "soloReach30Coef": 0.4,
+                "soloReach30Bands": None,
+                "soloReach30Applied": 10,
+                "soloReach30AppliedByBand": {"1-8": 3, "9-18": 3, "19-30": 4},
+                "soloReach30DoseByBand": {"1-8": 1.2, "9-18": 1.2, "19-30": 1.6},
+                "soloReach30RealizedDose": 4.0,
+            }
+        ]
+        reports[endpoint_label("a", "uniform-040")][
+            "_verifiedReach30DoseTelemetry"
+        ] = expected
+        result = analyze_indexed(self.indexed, reports, self.protocol)
+        self.assertEqual(
+            result["comparisons"]["uniform-040"]["realizedDose"]["a"],
+            expected,
+        )
+
     def _synthetic_report(self) -> tuple[dict, tuple[str, ...], str, str]:
         protocol = copy.deepcopy(self.protocol)
         protocol["seedSchedule"]["commonPublicBase"] = 1000
@@ -750,6 +772,26 @@ class V35P30AnalyzerTests(unittest.TestCase):
                     generation_offset = protocol["seedSchedule"]["maxGeneration"] - 1
                     train_min = replicate_contract["trainBase"] + generation_offset * protocol["seedSchedule"]["trainStride"]
                     eval_min = replicate_contract["evalBase"] + generation_offset * protocol["seedSchedule"]["evalStride"]
+                    scheduled_bands = arm_contract["soloReach30Bands"]
+                    treatment_enabled = arm_contract["soloReach30Coef"] > 0 or bool(scheduled_bands)
+                    applied_by_band = (
+                        {"1-8": 3, "9-18": 3, "19-30": 4}
+                        if treatment_enabled
+                        else {"1-8": 0, "9-18": 0, "19-30": 0}
+                    )
+                    dose_coefficients = (
+                        [float(arm_contract["soloReach30Coef"])] * 3
+                        if scheduled_bands is None
+                        else [float(entry[1]) for entry in scheduled_bands]
+                    )
+                    dose_by_band = {
+                        band: applied_by_band[band] * coefficient
+                        for band, coefficient in zip(
+                            ("1-8", "9-18", "19-30"),
+                            dose_coefficients,
+                            strict=True,
+                        )
+                    }
                     audit_chain = []
                     previous_audit_hash = None
                     for prior_generation in range(1, 8):
@@ -766,6 +808,15 @@ class V35P30AnalyzerTests(unittest.TestCase):
                             "checkpointSha256": prior_checkpoint_hash,
                             "previousAuditSha256": previous_audit_hash,
                             "auditChain": copy.deepcopy(audit_chain),
+                            "soloReach30Bands": scheduled_bands,
+                            "soloReach30Credit": {
+                                "soloReach30Coef": arm_contract["soloReach30Coef"],
+                                "reach30Horizon": "30",
+                                "soloReach30Applied": 10 if treatment_enabled else 0,
+                                "soloReach30AppliedByBand": applied_by_band,
+                                "soloReach30DoseByBand": dose_by_band,
+                                "soloReach30RealizedDose": sum(dose_by_band.values()),
+                            },
                         }
                         prior_path.write_text(json.dumps(prior_value, indent=2) + "\n")
                         previous_audit_hash = sha256(prior_path)
@@ -777,8 +828,6 @@ class V35P30AnalyzerTests(unittest.TestCase):
                                 "checkpointSha256": prior_checkpoint_hash,
                             }
                         )
-                    scheduled_bands = arm_contract["soloReach30Bands"]
-                    treatment_enabled = arm_contract["soloReach30Coef"] > 0 or bool(scheduled_bands)
                     audit.write_text(
                         json.dumps(
                             {
@@ -834,6 +883,9 @@ class V35P30AnalyzerTests(unittest.TestCase):
                                     "soloReach30Coef": arm_contract["soloReach30Coef"],
                                     "reach30Horizon": "30",
                                     "soloReach30Applied": 10 if treatment_enabled else 0,
+                                    "soloReach30AppliedByBand": applied_by_band,
+                                    "soloReach30DoseByBand": dose_by_band,
+                                    "soloReach30RealizedDose": sum(dose_by_band.values()),
                                 },
                                 "rawGenerationCommitment": {"sha256": "c" * 64, "files": 2, "bytes": 10},
                             },

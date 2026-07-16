@@ -486,6 +486,16 @@ def build_analysis_authorization_payload(
         anchor=REPO_ROOT,
         label="P30 source contract",
     )
+    source_lock = read_json_object(source_contract_path, "P30 source contract")
+    git_context = source_lock.get("gitContext")
+    git_dir_value = (
+        git_context.get("gitDir") if isinstance(git_context, dict) else None
+    )
+    if not isinstance(git_dir_value, str) or not git_dir_value:
+        raise ValueError("analysis source lock does not bind its external Git context")
+    git_dir = Path(git_dir_value)
+    if not git_dir.is_absolute() or not git_dir.is_dir():
+        raise ValueError("analysis external Git context is missing or not absolute")
     manifest = _read_signed(
         manifest_path,
         role_public_key_path(protocol["executionTrust"], "guardian"),
@@ -581,6 +591,7 @@ def build_analysis_authorization_payload(
                     Path("/usr"),
                     REPO_ROOT,
                     ledger,
+                    git_dir,
                 )
                 if path.exists()
             ),

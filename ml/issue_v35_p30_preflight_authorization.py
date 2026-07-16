@@ -22,6 +22,8 @@ from v35_p30_authorized_execution import AUTHORIZATION_SCHEMA
 from v35_p30_crypto import executable_sha256, venv_python_entrypoint
 from v35_p30_phase0 import (
     PHASE0_NAMES,
+    analyzer_rehearsal_ledger_root,
+    analyzer_rehearsal_result_root,
     artifact_root,
     ledger_for,
     phase0_output_root,
@@ -105,6 +107,8 @@ def build(
         argv = [
             str(python),
             "ml/run_v35_p30_analyzer_rehearsal.py",
+            "--protocol",
+            str(protocol_path),
             "--out",
             str(report),
         ]
@@ -116,7 +120,11 @@ def build(
             "stderr": _output(stderr),
             "stdout": _output(stdout),
         }
-        writable = [str(root)]
+        writable = [
+            str(root),
+            str(analyzer_rehearsal_ledger_root(protocol)),
+            str(analyzer_rehearsal_result_root(protocol)),
+        ]
     else:
         socket_root = cuda_socket_root(trust["campaignInstanceId"])
         argv = [

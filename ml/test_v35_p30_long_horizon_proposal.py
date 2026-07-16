@@ -51,7 +51,7 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
                 "sha256": None,
             },
         )
-        self.assertEqual(protocol["sourceRegistry"]["files"], 548)
+        self.assertEqual(protocol["sourceRegistry"]["files"], 550)
         self.assertEqual(
             protocol["sourceRegistry"]["sha256"],
             sha256(REPO / protocol["sourceRegistry"]["path"]),

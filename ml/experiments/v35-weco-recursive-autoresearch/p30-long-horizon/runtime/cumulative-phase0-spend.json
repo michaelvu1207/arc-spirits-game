@@ -1,6 +1,6 @@
 {
   "schemaVersion": "arc-v35-p30-cumulative-phase0-spend-v1",
-  "frozenAtUtc": "2026-07-16T12:30:00.000000Z",
+  "frozenAtUtc": "2026-07-16T13:54:59.435646Z",
   "promotionEligible": false,
   "outcomesInspected": false,
   "scope": "all-closed-p30-campaign-instances-before-next-launch",
@@ -39,13 +39,20 @@
       "gpuLeaseSeconds": 643.090716,
       "cudaGamesCompleted": 8192,
       "retainedCudaOutputBytes": 8091074
+    },
+    {
+      "campaignInstanceId": "aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b",
+      "failedPhase": "phase0-runtime-fable-review",
+      "gpuLeaseSeconds": 649.394604,
+      "cudaGamesCompleted": 8192,
+      "retainedCudaOutputBytes": 9861859
     }
   ],
   "totals": {
-    "closedInstances": 5,
-    "gpuLeaseSeconds": 670.071574,
-    "cudaGamesCompleted": 8192,
-    "retainedCudaOutputBytes": 8091074
+    "closedInstances": 6,
+    "gpuLeaseSeconds": 1319.466178,
+    "cudaGamesCompleted": 16384,
+    "retainedCudaOutputBytes": 17952933
   },
   "seedIsolation": {
     "phase0CudaNamespace": "dedicated-infrastructure-determinism",

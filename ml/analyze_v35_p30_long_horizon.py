@@ -56,7 +56,7 @@ SOURCE_REGISTRY_RELATIVE = (
     "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/"
     "source-registry.proposed.json"
 )
-SOURCE_REGISTRY_SHA256 = "2e2b553631750d0042fb6e477bdd997f87e15d0b2c5f43c4dd73b0a44c959c18"
+SOURCE_REGISTRY_SHA256 = "4a561ff65bafcd85e8751ab81914bf1f1932f82083ffaa7c8481d1fe814f4870"
 REPLICATES = tuple("abcdefghijklmnopqr")
 CONTROL = "control-zero"
 TREATMENTS = ("uniform-040", "late-scheduled")
@@ -135,7 +135,7 @@ if (
     or _source_registry.get("purpose") != "complete-runtime-and-evaluation-source-closure"
     or _source_registry.get("promotionEligible") is not False
     or not isinstance(_source_registry.get("files"), list)
-    or len(_source_registry["files"]) != 548
+    or len(_source_registry["files"]) != 550
     or _source_registry["files"] != sorted(set(_source_registry["files"]))
     or any(not isinstance(path, str) or not path for path in _source_registry["files"])
 ):
@@ -698,7 +698,7 @@ def validate_protocol(protocol: Mapping[str, Any], *, require_authorized: bool =
         "schemaVersion": "arc-v35-p30-source-registry-v1",
         "path": SOURCE_REGISTRY_RELATIVE,
         "sha256": SOURCE_REGISTRY_SHA256,
-        "files": 548,
+        "files": 550,
     }:
         raise ValueError("P30 source registry declaration changed")
     power_calibration = protocol.get("powerCalibration")
@@ -1515,6 +1515,12 @@ def analyze_indexed(
         comparisons[treatment] = {
             "metrics": metrics,
             "guardians": guardian_metrics,
+            "realizedDose": {
+                replicate: reports[
+                    endpoint_label(replicate, treatment)
+                ].get("_verifiedReach30DoseTelemetry", [])
+                for replicate in REPLICATES
+            },
             "latency": {
                 "candidateWorstP95Ms": max(candidate_p95),
                 "controlWorstP95Ms": max(control_p95),
@@ -1881,12 +1887,70 @@ def validate_root_materialization(
             raise ValueError("P30 root scheduled reach-30 dose changed")
 
 
+def validate_generation_dose_telemetry(
+    audit: Mapping[str, Any], *, protocol: Mapping[str, Any], arm: str, label: str
+) -> None:
+    arm_contract = next(row for row in protocol["arms"] if row["id"] == arm)
+    if audit.get("soloReach30Bands") != arm_contract["soloReach30Bands"]:
+        raise ValueError(f"{label}: generation audit reach30 schedule changed")
+    credit = audit.get("soloReach30Credit")
+    treatment_enabled = arm_contract["soloReach30Coef"] > 0 or bool(
+        arm_contract["soloReach30Bands"]
+        and any(coefficient > 0 for _, coefficient in arm_contract["soloReach30Bands"])
+    )
+    band_labels = ("1-8", "9-18", "19-30")
+    applied_by_band = credit.get("soloReach30AppliedByBand") if isinstance(credit, dict) else None
+    dose_by_band = credit.get("soloReach30DoseByBand") if isinstance(credit, dict) else None
+    realized_dose = credit.get("soloReach30RealizedDose") if isinstance(credit, dict) else None
+    coefficients = (
+        [float(arm_contract["soloReach30Coef"])] * 3
+        if arm_contract["soloReach30Bands"] is None
+        else [float(entry[1]) for entry in arm_contract["soloReach30Bands"]]
+    )
+    if (
+        not isinstance(credit, dict)
+        or finite(credit.get("soloReach30Coef"), f"{label} reach30 coefficient")
+        != arm_contract["soloReach30Coef"]
+        or credit.get("reach30Horizon") != "30"
+        or type(credit.get("soloReach30Applied")) is not int
+        or not isinstance(applied_by_band, dict)
+        or set(applied_by_band) != set(band_labels)
+        or any(
+            type(applied_by_band[band]) is not int or applied_by_band[band] < 0
+            for band in band_labels
+        )
+        or not isinstance(dose_by_band, dict)
+        or set(dose_by_band) != set(band_labels)
+        or any(
+            finite(dose_by_band[band], f"{label} reach30 {band} dose") < 0
+            for band in band_labels
+        )
+        or finite(realized_dose, f"{label} realized reach30 dose") < 0
+        or sum(applied_by_band.values()) != credit["soloReach30Applied"]
+        or not math.isclose(
+            sum(float(dose_by_band[band]) for band in band_labels),
+            float(realized_dose),
+            abs_tol=1e-9,
+        )
+        or any(
+            not math.isclose(
+                float(dose_by_band[band]),
+                applied_by_band[band] * coefficient,
+                abs_tol=1e-9,
+            )
+            for band, coefficient in zip(band_labels, coefficients, strict=True)
+        )
+        or (treatment_enabled and credit["soloReach30Applied"] <= 0)
+        or (not treatment_enabled and credit["soloReach30Applied"] != 0)
+    ):
+        raise ValueError(f"{label}: generation audit reach30 credit telemetry changed")
+
+
 def validate_generation_audit_trust(
     audit: Mapping[str, Any], *, protocol: Mapping[str, Any], arm: str, label: str
 ) -> None:
     gates = protocol["trustGates"]
     training = protocol["training"]
-    arm_contract = next(row for row in protocol["arms"] if row["id"] == arm)
     if audit.get("trustedCoreAuditSchema") != "arc-v32-generation-audit-v1":
         raise ValueError(f"{label}: generation audit trusted-core schema changed")
     if finite(audit.get("behaviorLogpMaxAbsError"), f"{label} logp error") > gates[
@@ -1934,23 +1998,9 @@ def validate_generation_audit_trust(
             > gates["maxWeightedClipFraction"]
         ):
             raise ValueError(f"{label}: generation audit PPO trust gate failed")
-    if audit.get("soloReach30Bands") != arm_contract["soloReach30Bands"]:
-        raise ValueError(f"{label}: generation audit reach30 schedule changed")
-    credit = audit.get("soloReach30Credit")
-    treatment_enabled = arm_contract["soloReach30Coef"] > 0 or bool(
-        arm_contract["soloReach30Bands"]
-        and any(coefficient > 0 for _, coefficient in arm_contract["soloReach30Bands"])
+    validate_generation_dose_telemetry(
+        audit, protocol=protocol, arm=arm, label=label
     )
-    if (
-        not isinstance(credit, dict)
-        or finite(credit.get("soloReach30Coef"), f"{label} reach30 coefficient")
-        != arm_contract["soloReach30Coef"]
-        or credit.get("reach30Horizon") != "30"
-        or type(credit.get("soloReach30Applied")) is not int
-        or (treatment_enabled and credit["soloReach30Applied"] <= 0)
-        or (not treatment_enabled and credit["soloReach30Applied"] != 0)
-    ):
-        raise ValueError(f"{label}: generation audit reach30 credit telemetry changed")
 
 
 def validate_generation_audit_chain(
@@ -3978,6 +4028,37 @@ def load_inputs(
             final_checkpoint_sha256=weights_hash,
             label=label,
         )
+        dose_telemetry: list[dict[str, Any]] = []
+        for generation in range(1, protocol["seedSchedule"]["maxGeneration"] + 1):
+            generation_audit_path = (
+                endpoint_root / "artifacts" / f"gen{generation}-audit.json"
+            )
+            generation_audit = read_json_object(
+                generation_audit_path,
+                f"{label} generation {generation} realized-dose audit",
+            )
+            validate_generation_dose_telemetry(
+                generation_audit,
+                protocol=protocol,
+                arm=arm,
+                label=f"{label} generation {generation}",
+            )
+            credit = generation_audit["soloReach30Credit"]
+            dose_telemetry.append(
+                {
+                    "generation": generation,
+                    "soloReach30Coef": credit["soloReach30Coef"],
+                    "soloReach30Bands": generation_audit["soloReach30Bands"],
+                    "soloReach30Applied": credit["soloReach30Applied"],
+                    "soloReach30AppliedByBand": credit[
+                        "soloReach30AppliedByBand"
+                    ],
+                    "soloReach30DoseByBand": credit["soloReach30DoseByBand"],
+                    "soloReach30RealizedDose": credit[
+                        "soloReach30RealizedDose"
+                    ],
+                }
+            )
         commitment = audit.get("rawGenerationCommitment")
         if (
             not isinstance(commitment, dict)
@@ -4051,6 +4132,7 @@ def load_inputs(
             "_verifiedMalformedEpisodes": (
                 primary_receipt["malformedEpisodes"] + replay_receipt["malformedEpisodes"]
             ),
+            "_verifiedReach30DoseTelemetry": dose_telemetry,
         }
     if set(by_label) != expected_labels:
         raise ValueError("development input does not contain the exact fifty-four reports")
