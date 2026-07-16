@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import errno
 import json
 import os
 import subprocess
@@ -83,9 +84,9 @@ class AuthorizedExecutionTests(unittest.TestCase):
         policies = {
             "issuer": (["arc-v35-p30-execution-authorization-v1"], ["generation", "evaluation-primary", "evaluation-replay", "preflight"]),
             "executor": (["arc-v35-p30-authorized-execution-receipt-v1", "arc-v35-p30-executor-launch-permit-v1"], ["generation", "evaluation-primary", "evaluation-replay", "preflight", "analysis"]),
-            "guardian": (["arc-v35-p30-outcome-blind-preflight-v1", "arc-v35-p30-final-generation-completeness-v1", "arc-v35-p30-evaluation-pair-integrity-v1", "arc-v35-p30-analysis-manifest-v1", "arc-v35-p30-recovery-incident-v1", "arc-v35-p30-logical-completion-v1"], []),
+            "guardian": (["arc-v35-p30-outcome-blind-preflight-v1", "arc-v35-p30-final-generation-completeness-v1", "arc-v35-p30-evaluation-pair-integrity-v1", "arc-v35-p30-analysis-manifest-v1", "arc-v35-p30-phase0-readiness-v1", "arc-v35-p30-full-campaign-authorization-v1", "arc-v35-p30-recovery-incident-v1", "arc-v35-p30-logical-completion-v1"], []),
             "analysis-authorizer": (["arc-v35-p30-execution-authorization-v1"], ["analysis"]),
-            "review-attester": (["arc-v35-p30-analysis-authorization-review-receipt-v2"], []),
+            "review-attester": (["arc-v35-p30-analysis-authorization-review-receipt-v2", "arc-v35-p30-gate-review-receipt-v1"], []),
         }
         for role, (_, public) in self.keys.items():
             key_id, public_der_sha256 = public_key_identity(public)
@@ -504,6 +505,174 @@ class AuthorizedExecutionTests(unittest.TestCase):
         self.assertEqual(recovery["artifacts"], {})
         for output in self.authorization["outputs"].values():
             self.assertFalse(Path(output["path"]).exists())
+
+    def test_lease_acquisition_failure_is_pre_child_and_releases_nothing(self) -> None:
+        self._make_recovery_eligible()
+        lease = Path(self.authorization["ledger"]["leasePath"])
+        lease.mkdir()
+        (lease / "unrelated-owner").write_text("occupied\n")
+        authorization_path, descriptor, request_binding = self._write_authorization()
+        try:
+            with self.assertRaisesRegex(RuntimeError, "fail closed"):
+                prepare_execution_receipt(
+                    authorization_path,
+                    issuer_public_key_path=self.public,
+                    analysis_authorizer_public_key_path=self.keys[
+                        "analysis-authorizer"
+                    ][1],
+                    execution_request_binding=request_binding,
+                    launch_permit_path=self.launch_permit,
+                )
+        finally:
+            os.close(descriptor)
+        receipt_path = Path(self.authorization["ledger"]["receiptPath"])
+        self.assertFalse(recovery_execution_draft_path(receipt_path).exists())
+        self.assertTrue((lease / "unrelated-owner").is_file())
+        self.assertFalse(receipt_path.exists())
+
+    def test_child_failure_is_terminally_sealed_in_unsigned_draft(self) -> None:
+        self.authorization["isolation"]["gpuMode"] = "none"
+        self.authorization["isolation"]["gpuUuid"] = None
+        executable = Path("/usr/bin/false")
+        self.authorization["command"]["argv"] = [str(executable)]
+        self.authorization["command"]["executableSha256"] = sha256_file(executable)
+        authorization_path, descriptor, request_binding = self._write_authorization()
+        try:
+            draft_path = prepare_execution_receipt(
+                authorization_path,
+                issuer_public_key_path=self.public,
+                analysis_authorizer_public_key_path=self.keys[
+                    "analysis-authorizer"
+                ][1],
+                execution_request_binding=request_binding,
+                launch_permit_path=self.launch_permit,
+            )
+        finally:
+            os.close(descriptor)
+        draft = json.loads(read_regular_nofollow(draft_path))
+        self.assertFalse(draft["valid"])
+        self.assertTrue(draft["process"]["spawnCallEntered"])
+        self.assertTrue(draft["process"]["childStarted"])
+        self.assertNotEqual(draft["exitCode"], 0)
+        self.assertFalse(Path(self.authorization["ledger"]["receiptPath"]).exists())
+
+    def test_signal_interruption_terminates_child_and_seals_draft(self) -> None:
+        self.authorization["isolation"]["gpuMode"] = "none"
+        self.authorization["isolation"]["gpuUuid"] = None
+        authorization_path, descriptor, request_binding = self._write_authorization()
+
+        class InterruptedChild:
+            pid = 424242
+
+            def wait(self) -> int:
+                raise KeyboardInterrupt()
+
+            def poll(self) -> int:
+                return 143
+
+        child = InterruptedChild()
+        try:
+            with (
+                mock.patch(
+                    "v35_p30_authorized_execution.subprocess.Popen",
+                    return_value=child,
+                ),
+                mock.patch(
+                    "v35_p30_authorized_execution.process_record",
+                    return_value={"pid": child.pid, "available": True},
+                ),
+                mock.patch("v35_p30_authorized_execution._terminate_child") as terminate,
+            ):
+                draft_path = prepare_execution_receipt(
+                    authorization_path,
+                    issuer_public_key_path=self.public,
+                    analysis_authorizer_public_key_path=self.keys[
+                        "analysis-authorizer"
+                    ][1],
+                    execution_request_binding=request_binding,
+                    launch_permit_path=self.launch_permit,
+                )
+                terminate.assert_called_once_with(child)
+        finally:
+            os.close(descriptor)
+        draft = json.loads(read_regular_nofollow(draft_path))
+        self.assertFalse(draft["valid"])
+        self.assertTrue(draft["process"]["childStarted"])
+
+    def test_gpu_postcheck_failure_keeps_lease_and_fails_closed(self) -> None:
+        authorization_path, descriptor, request_binding = self._write_authorization()
+        empty = {
+            "selected": {"memoryMiB": 0, "utilizationPercent": 0},
+            "forbidden": [],
+        }
+        busy = {
+            "selected": {"memoryMiB": 1, "utilizationPercent": 1},
+            "forbidden": [],
+        }
+        try:
+            with (
+                mock.patch(
+                    "v35_p30_authorized_execution.gpu_snapshot", return_value=empty
+                ),
+                mock.patch(
+                    "v35_p30_authorized_execution._wait_for_gpu_empty",
+                    return_value=(busy, False),
+                ),
+            ):
+                draft_path = prepare_execution_receipt(
+                    authorization_path,
+                    issuer_public_key_path=self.public,
+                    analysis_authorizer_public_key_path=self.keys[
+                        "analysis-authorizer"
+                    ][1],
+                    execution_request_binding=request_binding,
+                    launch_permit_path=self.launch_permit,
+                )
+        finally:
+            os.close(descriptor)
+        draft = json.loads(read_regular_nofollow(draft_path))
+        self.assertFalse(draft["valid"])
+        self.assertFalse(draft["gpuEmptyAfter"])
+        self.assertFalse(draft["leaseReleased"])
+        self.assertTrue(Path(self.authorization["ledger"]["leasePath"]).is_dir())
+
+    def test_enospc_during_draft_sealing_is_terminal(self) -> None:
+        self.authorization["isolation"]["gpuMode"] = "none"
+        self.authorization["isolation"]["gpuUuid"] = None
+        authorization_path, descriptor, request_binding = self._write_authorization()
+        receipt_path = Path(self.authorization["ledger"]["receiptPath"])
+        draft_path = receipt_path.with_name(receipt_path.name + ".unsigned.json")
+        real_write = atomic_write_exclusive
+
+        def fail_draft(path: Path, payload: bytes, **kwargs: object) -> None:
+            if Path(path) == draft_path:
+                raise OSError(errno.ENOSPC, "injected no space")
+            real_write(Path(path), payload, **kwargs)
+
+        try:
+            with (
+                mock.patch(
+                    "v35_p30_authorized_execution.atomic_write_exclusive",
+                    side_effect=fail_draft,
+                ),
+                self.assertRaisesRegex(OSError, "injected no space"),
+            ):
+                prepare_execution_receipt(
+                    authorization_path,
+                    issuer_public_key_path=self.public,
+                    analysis_authorizer_public_key_path=self.keys[
+                        "analysis-authorizer"
+                    ][1],
+                    execution_request_binding=request_binding,
+                    launch_permit_path=self.launch_permit,
+                )
+        finally:
+            os.close(descriptor)
+        self.assertTrue(
+            Path(self.authorization["ledger"]["consumedPath"]).is_file()
+        )
+        self.assertFalse(draft_path.exists())
+        self.assertFalse(receipt_path.exists())
 
     def test_normal_seal_attempt_is_durable_before_private_key_use(self) -> None:
         authorization_path, draft_path, descriptor, request_binding = (

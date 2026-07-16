@@ -41,9 +41,9 @@ class P30KeyCustodyTests(unittest.TestCase):
         policies = {
             "issuer": (["arc-v35-p30-execution-authorization-v1"], ["generation", "evaluation-primary", "evaluation-replay", "preflight"]),
             "executor": (["arc-v35-p30-authorized-execution-receipt-v1", "arc-v35-p30-executor-launch-permit-v1"], ["generation", "evaluation-primary", "evaluation-replay", "preflight", "analysis"]),
-            "guardian": (["arc-v35-p30-outcome-blind-preflight-v1", "arc-v35-p30-final-generation-completeness-v1", "arc-v35-p30-evaluation-pair-integrity-v1", "arc-v35-p30-analysis-manifest-v1", "arc-v35-p30-recovery-incident-v1", "arc-v35-p30-logical-completion-v1"], []),
+            "guardian": (["arc-v35-p30-outcome-blind-preflight-v1", "arc-v35-p30-final-generation-completeness-v1", "arc-v35-p30-evaluation-pair-integrity-v1", "arc-v35-p30-analysis-manifest-v1", "arc-v35-p30-phase0-readiness-v1", "arc-v35-p30-full-campaign-authorization-v1", "arc-v35-p30-recovery-incident-v1", "arc-v35-p30-logical-completion-v1"], []),
             "analysis-authorizer": (["arc-v35-p30-execution-authorization-v1"], ["analysis"]),
-            "review-attester": (["arc-v35-p30-analysis-authorization-review-receipt-v2"], []),
+            "review-attester": (["arc-v35-p30-analysis-authorization-review-receipt-v2", "arc-v35-p30-gate-review-receipt-v1"], []),
         }
         for role, (schemas, kinds) in policies.items():
             roles[role] = {

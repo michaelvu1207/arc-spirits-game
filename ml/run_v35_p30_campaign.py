@@ -54,6 +54,19 @@ from v35_p30_recovery import (
     validate_recovery_link,
     validate_sealed_pre_child_draft,
 )
+from v35_p30_phase0 import (
+    FULL_CAMPAIGN_AUTHORIZATION_SCHEMA,
+    PHASE0_NAMES,
+    PHASE0_READINESS_SCHEMA,
+    PHASE0_REPORT_SCHEMAS,
+    binding as phase0_binding,
+    full_campaign_authorization_path,
+    gate_review_paths,
+    phase0_authorization_path,
+    phase0_output_root,
+    phase0_readiness_path,
+    validate_gate_review_receipt,
+)
 
 
 PREFLIGHT_SCHEMA = "arc-v35-p30-outcome-blind-preflight-v1"
@@ -215,6 +228,198 @@ def ensure_preflight_start(protocol_path: Path, protocol: dict[str, Any]) -> Pat
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_exclusive(path, canonical_json(payload) + b"\n")
     return path
+
+
+def phase0_review_inputs(
+    protocol_path: Path, protocol: dict[str, Any]
+) -> list[dict[str, str]]:
+    inputs = [
+        phase0_binding(protocol_path),
+        phase0_binding(REPO_ROOT / protocol["plan"]),
+        phase0_binding(
+            REPO_ROOT / protocol["sourceContract"]["artifact"]
+            if not Path(protocol["sourceContract"]["artifact"]).is_absolute()
+            else Path(protocol["sourceContract"]["artifact"])
+        ),
+    ]
+    for name in PHASE0_NAMES:
+        authorization_path = phase0_authorization_path(protocol, name)
+        authorization = validate_stored_authorization(
+            authorization_path=authorization_path,
+            protocol_path=protocol_path,
+            kind="preflight",
+            root=phase0_output_root(protocol, name),
+            replicate="phase0",
+            arm=name,
+        )
+        receipt_path, _ = validate_completed_execution(
+            authorization_path=authorization_path,
+            authorization=authorization,
+            protocol=protocol,
+        )
+        inputs.extend(
+            (
+                phase0_binding(receipt_path),
+                phase0_binding(phase0_output_root(protocol, name) / "report.json"),
+            )
+        )
+    return inputs
+
+
+def full_campaign_review_inputs(
+    protocol_path: Path, protocol: dict[str, Any]
+) -> list[dict[str, str]]:
+    source_path = Path(protocol["sourceContract"]["artifact"])
+    if not source_path.is_absolute():
+        source_path = REPO_ROOT / source_path
+    return [
+        phase0_binding(protocol_path),
+        phase0_binding(REPO_ROOT / protocol["plan"]),
+        phase0_binding(source_path),
+        phase0_binding(phase0_readiness_path(protocol)),
+        phase0_binding(preflight_path(protocol_path, protocol)),
+    ]
+
+
+def _review_required_status(
+    *,
+    protocol_path: Path,
+    protocol: dict[str, Any],
+    mode: str,
+    inputs: list[dict[str, str]],
+) -> dict[str, Any]:
+    paths = gate_review_paths(protocol, mode)
+    request = emit_request(
+        protocol_path=protocol_path,
+        protocol=protocol,
+        role="review-attester",
+        verb="attest-gate-review",
+        subject={
+            "logicalId": f"{mode}-fable-review",
+            "mode": mode,
+            "inputs": inputs,
+        },
+        predecessor=None,
+        expected_output=paths["receipt"],
+    )
+    return {
+        "schemaVersion": "arc-v35-p30-gate-review-required-v1",
+        "status": f"awaiting-{mode}-fable-review",
+        "mode": mode,
+        "outcomesInspected": False,
+        "promotionEligible": False,
+        "inputs": inputs,
+        "reviewRequest": phase0_binding(
+            _request_path(protocol, request["subject"]["logicalId"])
+        ),
+        "attemptPath": str(paths["attempt"]),
+        "stdoutPath": str(paths["stdout"]),
+        "stderrPath": str(paths["stderr"]),
+        "receiptPath": str(paths["receipt"]),
+        "reviewAttesterPublicKey": phase0_binding(
+            role_public_key_path(protocol["executionTrust"], "review-attester")
+        ),
+    }
+
+
+def require_phase0_readiness(
+    protocol_path: Path, protocol: dict[str, Any]
+) -> dict[str, Any]:
+    path = phase0_readiness_path(protocol)
+    signed = read_signed(
+        path,
+        role_public_key_path(protocol["executionTrust"], "guardian"),
+        "guardian",
+    )
+    inputs = phase0_review_inputs(protocol_path, protocol)
+    review = validate_gate_review_receipt(
+        protocol=protocol,
+        protocol_path=protocol_path,
+        mode="phase0-runtime",
+        required_inputs=inputs,
+    )
+    if (
+        signed.get("schemaVersion") != PHASE0_READINESS_SCHEMA
+        or signed.get("valid") is not True
+        or signed.get("immutable") is not True
+        or signed.get("promotionEligible") is not False
+        or signed.get("outcomesInspected") is not False
+        or signed.get("protocolSha256") != sha256(protocol_path)
+        or signed.get("sourceContractSha256")
+        != protocol["sourceContract"]["sha256"]
+        or signed.get("preflightEvidence") != inputs[3:]
+        or signed.get("runtimeReview")
+        != phase0_binding(gate_review_paths(protocol, "phase0-runtime")["receipt"])
+        or signed.get("diagnosticCodes")
+        != [
+            "CPU_FAULT_MATRIX_PASS",
+            "ANALYZER_REHEARSAL_PASS",
+            "CUDA_PRIMARY_REPLAY_EXACT",
+            "INDEPENDENT_RUNTIME_AUDIT_ACCEPT",
+        ]
+    ):
+        raise ValueError("P30 Phase 0 readiness is invalid")
+    validate_role_request_binding(
+        signed.get("request"),
+        protocol_path=protocol_path,
+        protocol=protocol,
+        role="guardian",
+        verb="attest-phase0-readiness",
+        predecessor=None,
+        expected_output=path,
+    )
+    if review.get("verdict") != "ACCEPT":
+        raise ValueError("P30 Phase 0 runtime review did not accept")
+    return signed
+
+
+def require_full_campaign_authorization(
+    protocol_path: Path, protocol: dict[str, Any]
+) -> dict[str, Any]:
+    path = full_campaign_authorization_path(protocol)
+    signed = read_signed(
+        path,
+        role_public_key_path(protocol["executionTrust"], "guardian"),
+        "guardian",
+    )
+    inputs = full_campaign_review_inputs(protocol_path, protocol)
+    validate_gate_review_receipt(
+        protocol=protocol,
+        protocol_path=protocol_path,
+        mode="full-campaign",
+        required_inputs=inputs,
+    )
+    if (
+        signed.get("schemaVersion") != FULL_CAMPAIGN_AUTHORIZATION_SCHEMA
+        or signed.get("authorized") is not True
+        or signed.get("immutable") is not True
+        or signed.get("promotionEligible") is not False
+        or signed.get("outcomesInspected") is not False
+        or signed.get("protocolSha256") != sha256(protocol_path)
+        or signed.get("phase0Readiness")
+        != phase0_binding(phase0_readiness_path(protocol))
+        or signed.get("generationOnePreflight")
+        != phase0_binding(preflight_path(protocol_path, protocol))
+        or signed.get("review")
+        != phase0_binding(gate_review_paths(protocol, "full-campaign")["receipt"])
+        or signed.get("diagnosticCodes")
+        != [
+            "PHASE0_READINESS_VALID",
+            "GENERATION_ONE_PREFLIGHT_VALID",
+            "FULL_CAMPAIGN_FABLE_ACCEPT",
+        ]
+    ):
+        raise ValueError("P30 full-campaign authorization is invalid")
+    validate_role_request_binding(
+        signed.get("request"),
+        protocol_path=protocol_path,
+        protocol=protocol,
+        role="guardian",
+        verb="authorize-full-campaign",
+        predecessor=preflight_path(protocol_path, protocol),
+        expected_output=path,
+    )
+    return signed
 
 
 def final_barrier_path(protocol: dict[str, Any]) -> Path:
@@ -1718,10 +1923,88 @@ def _rolling_budget_guard(protocol_path: Path, protocol: dict[str, Any]) -> None
         raise RuntimeError("P30 campaign stopped at its rolling compute budget")
 
 
+def _phase0_next(
+    protocol_path: Path, protocol: dict[str, Any]
+) -> dict[str, Any] | None:
+    for name in PHASE0_NAMES:
+        authorization_path = phase0_authorization_path(protocol, name)
+        root = phase0_output_root(protocol, name)
+        subject = {
+            "logicalId": f"phase0-{name}-issuer",
+            "name": name,
+            "root": str(root),
+            "replicate": "phase0",
+            "arm": name,
+        }
+        if not authorization_path.exists():
+            return emit_request(
+                protocol_path=protocol_path,
+                protocol=protocol,
+                role="issuer",
+                verb="issue-preflight-execution",
+                subject=subject,
+                predecessor=None,
+                expected_output=authorization_path,
+            )
+        authorization = validate_stored_authorization(
+            authorization_path=authorization_path,
+            protocol_path=protocol_path,
+            kind="preflight",
+            root=root,
+            replicate="phase0",
+            arm=name,
+        )
+        action = next_execution_action(
+            protocol_path=protocol_path,
+            protocol=protocol,
+            authorization_path=authorization_path,
+            authorization=authorization,
+            normal_subject={
+                **subject,
+                "logicalId": f"phase0-{name}-executor",
+                "authorizationPath": str(authorization_path),
+            },
+        )
+        if action is not None:
+            return action
+    inputs = phase0_review_inputs(protocol_path, protocol)
+    review_path = gate_review_paths(protocol, "phase0-runtime")["receipt"]
+    if not review_path.exists():
+        return _review_required_status(
+            protocol_path=protocol_path,
+            protocol=protocol,
+            mode="phase0-runtime",
+            inputs=inputs,
+        )
+    validate_gate_review_receipt(
+        protocol=protocol,
+        protocol_path=protocol_path,
+        mode="phase0-runtime",
+        required_inputs=inputs,
+    )
+    readiness = phase0_readiness_path(protocol)
+    if not readiness.exists():
+        return emit_request(
+            protocol_path=protocol_path,
+            protocol=protocol,
+            role="guardian",
+            verb="attest-phase0-readiness",
+            subject={"logicalId": "phase0-readiness"},
+            predecessor=None,
+            expected_output=readiness,
+        )
+    require_phase0_readiness(protocol_path, protocol)
+    return None
+
+
 def next_action(protocol_path: Path) -> dict[str, Any]:
     protocol_path = protocol_path.resolve()
     protocol = read_json_object(protocol_path, "P30 protocol")
     validate_protocol(protocol, require_authorized=True)
+    phase0_action = _phase0_next(protocol_path, protocol)
+    if phase0_action is not None:
+        return phase0_action
+    require_phase0_readiness(protocol_path, protocol)
     ensure_preflight_start(protocol_path, protocol)
     # The signed three-arm generation-one preflight is the only route into the
     # remaining campaign.
@@ -1741,6 +2024,33 @@ def next_action(protocol_path: Path) -> dict[str, Any]:
             expected_output=preflight,
         )
     require_preflight(protocol_path, protocol)
+    full_review_inputs = full_campaign_review_inputs(protocol_path, protocol)
+    full_review = gate_review_paths(protocol, "full-campaign")["receipt"]
+    if not full_review.exists():
+        return _review_required_status(
+            protocol_path=protocol_path,
+            protocol=protocol,
+            mode="full-campaign",
+            inputs=full_review_inputs,
+        )
+    validate_gate_review_receipt(
+        protocol=protocol,
+        protocol_path=protocol_path,
+        mode="full-campaign",
+        required_inputs=full_review_inputs,
+    )
+    full_authorization = full_campaign_authorization_path(protocol)
+    if not full_authorization.exists():
+        return emit_request(
+            protocol_path=protocol_path,
+            protocol=protocol,
+            role="guardian",
+            verb="authorize-full-campaign",
+            subject={"logicalId": "full-campaign-authorization"},
+            predecessor=preflight,
+            expected_output=full_authorization,
+        )
+    require_full_campaign_authorization(protocol_path, protocol)
     _rolling_budget_guard(protocol_path, protocol)
     for generation in range(1, protocol["seedSchedule"]["maxGeneration"] + 1):
         for replicate in REPLICATES:

@@ -9,12 +9,12 @@
   "review": {
     "requiredModel": "Claude Fable",
     "requiredEffort": "high",
-    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-15-v4.md",
-    "sha256": "622603b98aecc7f3b7eab3f83c94a6e19b1719f9e002d589b51408858ab984ec",
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-15-v6.md",
+    "sha256": "3faaeb5f3f5a80538951dd8533a74c45b0c9acdd19752e93e89d2ab7b488de28",
     "verdict": "ACCEPT",
     "commandReceipt": {
-      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-15-v4.receipt.json",
-      "sha256": "0a0cf0976ae5378b87416aeec1a91d250518283714def203707e5ec28729dd8d"
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-15-v6.receipt.json",
+      "sha256": "8740dde43bdf0ff1577fce3c84ee148b8f664864e2a39800291944809cf474fb"
     }
   },
   "catalog": {
@@ -46,8 +46,8 @@
   "sourceRegistry": {
     "schemaVersion": "arc-v35-p30-source-registry-v1",
     "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-registry.proposed.json",
-    "sha256": "b8a624f6871e67e36b10abc266c3984ed4e7d28d64cf6ba48730a73cf9b2886a",
-    "files": 538
+    "sha256": "e38f9f636679b5cd23f50d6075aca582fae0eb77a43eda457aed13d3450da764",
+    "files": 544
   },
   "powerCalibration": {
     "schemaVersion": "arc-v35-p30-power-calibration-v1",
@@ -384,6 +384,8 @@
           "arc-v35-p30-final-generation-completeness-v1",
           "arc-v35-p30-evaluation-pair-integrity-v1",
           "arc-v35-p30-analysis-manifest-v1",
+          "arc-v35-p30-phase0-readiness-v1",
+          "arc-v35-p30-full-campaign-authorization-v1",
           "arc-v35-p30-recovery-incident-v1",
           "arc-v35-p30-logical-completion-v1"
         ],
@@ -407,7 +409,8 @@
         "publicKeyDerSha256": "2cfac3d3f9e0637b67873d3a66665afb9c9d042238966e5f8e3ccf57494dd84d",
         "keyId": "ed25519:2cfac3d3f9e0637b67873d3a",
         "allowedArtifactSchemas": [
-          "arc-v35-p30-analysis-authorization-review-receipt-v2"
+          "arc-v35-p30-analysis-authorization-review-receipt-v2",
+          "arc-v35-p30-gate-review-receipt-v1"
         ],
         "allowedKinds": []
       }

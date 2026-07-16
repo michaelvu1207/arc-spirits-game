@@ -48,6 +48,8 @@ ROLE_POLICIES = {
             "arc-v35-p30-final-generation-completeness-v1",
             "arc-v35-p30-evaluation-pair-integrity-v1",
             "arc-v35-p30-analysis-manifest-v1",
+            "arc-v35-p30-phase0-readiness-v1",
+            "arc-v35-p30-full-campaign-authorization-v1",
             "arc-v35-p30-recovery-incident-v1",
             "arc-v35-p30-logical-completion-v1",
         ],
@@ -59,7 +61,8 @@ ROLE_POLICIES = {
     },
     "review-attester": {
         "artifactSchemas": [
-            "arc-v35-p30-analysis-authorization-review-receipt-v2"
+            "arc-v35-p30-analysis-authorization-review-receipt-v2",
+            "arc-v35-p30-gate-review-receipt-v1",
         ],
         "kinds": [],
     },

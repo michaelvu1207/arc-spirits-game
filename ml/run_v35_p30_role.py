@@ -23,6 +23,9 @@ from analyze_v35_p30_long_horizon import (
 )
 from issue_v35_p30_evaluation_authorization import build as build_evaluation_authorization
 from issue_v35_p30_generation_authorization import build as build_generation_authorization
+from issue_v35_p30_preflight_authorization import (
+    build as build_preflight_authorization,
+)
 from issue_v35_p30_pair_integrity import build as build_pair_integrity
 from issue_v35_p30_analysis_bundle import (
     build_manifest_payload,
@@ -47,16 +50,20 @@ from run_v35_p30_campaign import (
     elapsed_seconds,
     evaluation_authorization_path,
     final_barrier_path,
+    full_campaign_review_inputs,
     generation_authorization_path,
     ledger_for,
     nonexecutor_signing_attempt_path,
     next_action,
     pair_path,
+    phase0_review_inputs,
     preflight_path,
     preflight_start_path,
     predecessor_for_generation,
     recovery_paths,
     recovery_request_logical_id,
+    require_phase0_readiness,
+    require_preflight,
     root_for,
     validate_recovery_state,
     validate_completed_execution,
@@ -93,6 +100,19 @@ from v35_p30_recovery import (
     validate_execution_draft,
     validate_guardian_incident,
     validate_recovery_link,
+)
+from v35_p30_phase0 import (
+    FULL_CAMPAIGN_AUTHORIZATION_SCHEMA,
+    PHASE0_NAMES,
+    PHASE0_READINESS_SCHEMA,
+    PHASE0_REPORT_SCHEMAS,
+    binding as phase0_binding,
+    full_campaign_authorization_path,
+    gate_review_paths,
+    phase0_authorization_path,
+    phase0_output_root,
+    phase0_readiness_path,
+    validate_gate_review_receipt,
 )
 from v35_p30_key_custody import (
     receive_private_key,
@@ -398,6 +418,43 @@ def _issue_generation(
         generation=generation,
         public_key_path=issuer_public,
         predecessor_receipt=predecessor,
+        request_binding=request_binding,
+    )
+    return _prepared_artifacts(
+        required_role="issuer",
+        output=output,
+        protocol=protocol,
+        artifacts=[(output, payload, "issuer")],
+    )
+
+
+def _issue_preflight_execution(
+    protocol_path: Path,
+    protocol: dict[str, Any],
+    request: dict[str, Any],
+    request_binding: dict[str, str],
+) -> PreparedSigningAction:
+    subject = request["subject"]
+    name = subject.get("name")
+    if name not in PHASE0_NAMES:
+        raise ValueError("phase-zero preflight request name changed")
+    output = phase0_authorization_path(protocol, name)
+    root = phase0_output_root(protocol, name)
+    if (
+        request["verb"] != "issue-preflight-execution"
+        or request["expectedOutputPath"] != str(output)
+        or request["predecessorSha256"] is not None
+        or subject.get("root") != str(root)
+        or subject.get("replicate") != "phase0"
+        or subject.get("arm") != name
+    ):
+        raise ValueError("phase-zero preflight request contract changed")
+    payload = build_preflight_authorization(
+        protocol_path=protocol_path,
+        name=name,
+        public_key_path=role_public_key_path(
+            protocol["executionTrust"], "issuer"
+        ),
         request_binding=request_binding,
     )
     return _prepared_artifacts(
@@ -1249,6 +1306,164 @@ def _attest_preflight(
     )
 
 
+def _attest_phase0_readiness(
+    protocol_path: Path,
+    protocol: dict[str, Any],
+    request: dict[str, Any],
+    request_binding: dict[str, str],
+) -> PreparedSigningAction:
+    output = phase0_readiness_path(protocol)
+    if (
+        request["verb"] != "attest-phase0-readiness"
+        or request["expectedOutputPath"] != str(output)
+        or request["predecessorSha256"] is not None
+    ):
+        raise ValueError("phase-zero readiness request changed")
+    inputs = phase0_review_inputs(protocol_path, protocol)
+    reports: dict[str, dict[str, Any]] = {}
+    for name in PHASE0_NAMES:
+        report_path = phase0_output_root(protocol, name) / "report.json"
+        report = read_json_object(report_path, f"P30 {name} report")
+        if (
+            report.get("schemaVersion") != PHASE0_REPORT_SCHEMAS[name]
+            or report.get("valid") is not True
+            or report.get("promotionEligible") is not False
+            or report.get("outcomesInspected") is not False
+        ):
+            raise ValueError(f"P30 {name} Phase 0 report is invalid")
+        reports[name] = report
+    fault_checks = reports["fault-injection"].get("checks")
+    if (
+        not isinstance(fault_checks, list)
+        or len(fault_checks) != 11
+        or not all(
+            isinstance(check, dict) and check.get("passed") is True
+            for check in fault_checks
+        )
+    ):
+        raise ValueError("P30 CPU fault matrix is incomplete")
+    rehearsal = reports["analyzer-rehearsal"]
+    if not isinstance(rehearsal.get("testId"), str):
+        raise ValueError("P30 analyzer rehearsal evidence changed")
+    cuda = reports["cuda-determinism"]
+    if (
+        cuda.get("games") != protocol["seedSchedule"]["commonPublicGames"]
+        or cuda.get("workers") != protocol["training"]["workers"]
+        or cuda.get("freshServerSocketsDistinct") is not True
+        or cuda.get("diagnosticCodes")
+        != [
+            "FRESH_CUDA_SERVERS",
+            "EXACT_PER_GAME_MATCH",
+            "EXACT_REPLAY_HASH_MATCH",
+            "PRODUCTION_BATCH_AND_CONCURRENCY_MATCH",
+        ]
+    ):
+        raise ValueError("P30 exact CUDA determinism evidence changed")
+    primary = read_json_object(
+        phase0_output_root(protocol, "cuda-determinism")
+        / "primary/report.json",
+        "P30 CUDA primary report",
+    )
+    replay = read_json_object(
+        phase0_output_root(protocol, "cuda-determinism")
+        / "replay/report.json",
+        "P30 CUDA replay report",
+    )
+    primary_games = primary.get("perGame")
+    primary_replays = primary.get("replayHashes")
+    if (
+        not isinstance(primary_games, list)
+        or len(primary_games) != cuda["games"]
+        or primary_games != replay.get("perGame")
+        or not isinstance(primary_replays, list)
+        or primary_replays != replay.get("replayHashes")
+        or sha256_bytes(canonical_json(primary_games)) != cuda.get("perGameSha256")
+        or sha256_bytes(canonical_json(primary_replays))
+        != cuda.get("replayHashesSha256")
+    ):
+        raise ValueError("P30 guardian CUDA replay comparison failed")
+    review_path = gate_review_paths(protocol, "phase0-runtime")["receipt"]
+    validate_gate_review_receipt(
+        protocol=protocol,
+        protocol_path=protocol_path,
+        mode="phase0-runtime",
+        required_inputs=inputs,
+    )
+    payload = {
+        "schemaVersion": PHASE0_READINESS_SCHEMA,
+        "valid": True,
+        "immutable": True,
+        "promotionEligible": False,
+        "outcomesInspected": False,
+        "protocolSha256": sha256(protocol_path),
+        "sourceContractSha256": protocol["sourceContract"]["sha256"],
+        "preflightEvidence": inputs[3:],
+        "runtimeReview": phase0_binding(review_path),
+        "diagnosticCodes": [
+            "CPU_FAULT_MATRIX_PASS",
+            "ANALYZER_REHEARSAL_PASS",
+            "CUDA_PRIMARY_REPLAY_EXACT",
+            "INDEPENDENT_RUNTIME_AUDIT_ACCEPT",
+        ],
+        "request": request_binding,
+    }
+    return _prepared_artifacts(
+        required_role="guardian",
+        output=output,
+        protocol=protocol,
+        artifacts=[(output, payload, "guardian")],
+    )
+
+
+def _authorize_full_campaign(
+    protocol_path: Path,
+    protocol: dict[str, Any],
+    request: dict[str, Any],
+    request_binding: dict[str, str],
+) -> PreparedSigningAction:
+    output = full_campaign_authorization_path(protocol)
+    preflight = preflight_path(protocol_path, protocol)
+    if (
+        request["verb"] != "authorize-full-campaign"
+        or request["expectedOutputPath"] != str(output)
+        or request["predecessorSha256"] != sha256_file(preflight)
+    ):
+        raise ValueError("full-campaign authorization request changed")
+    require_phase0_readiness(protocol_path, protocol)
+    require_preflight(protocol_path, protocol)
+    inputs = full_campaign_review_inputs(protocol_path, protocol)
+    review_path = gate_review_paths(protocol, "full-campaign")["receipt"]
+    validate_gate_review_receipt(
+        protocol=protocol,
+        protocol_path=protocol_path,
+        mode="full-campaign",
+        required_inputs=inputs,
+    )
+    payload = {
+        "schemaVersion": FULL_CAMPAIGN_AUTHORIZATION_SCHEMA,
+        "authorized": True,
+        "immutable": True,
+        "promotionEligible": False,
+        "outcomesInspected": False,
+        "protocolSha256": sha256(protocol_path),
+        "phase0Readiness": phase0_binding(phase0_readiness_path(protocol)),
+        "generationOnePreflight": phase0_binding(preflight),
+        "review": phase0_binding(review_path),
+        "diagnosticCodes": [
+            "PHASE0_READINESS_VALID",
+            "GENERATION_ONE_PREFLIGHT_VALID",
+            "FULL_CAMPAIGN_FABLE_ACCEPT",
+        ],
+        "request": request_binding,
+    }
+    return _prepared_artifacts(
+        required_role="guardian",
+        output=output,
+        protocol=protocol,
+        artifacts=[(output, payload, "guardian")],
+    )
+
+
 def _attest_final_barrier(
     protocol_path: Path,
     protocol: dict[str, Any],
@@ -1467,6 +1682,7 @@ def main() -> None:
     verb = request["verb"]
     role_for_verb = {
         "issue-generation": "issuer",
+        "issue-preflight-execution": "issuer",
         "issue-evaluation": "issuer",
         "issue-recovery": "issuer",
         "execute": "executor",
@@ -1476,6 +1692,8 @@ def main() -> None:
         "attest-recovery-link": "guardian",
         "attest-recovery-completion": "guardian",
         "attest-preflight": "guardian",
+        "attest-phase0-readiness": "guardian",
+        "authorize-full-campaign": "guardian",
         "attest-final-barrier": "guardian",
         "attest-pair": "guardian",
         "attest-analysis-manifest": "guardian",
@@ -1615,6 +1833,10 @@ def main() -> None:
     else:
         if verb == "issue-generation":
             prepared = _issue_generation(protocol_path, protocol, request, binding)
+        elif verb == "issue-preflight-execution":
+            prepared = _issue_preflight_execution(
+                protocol_path, protocol, request, binding
+            )
         elif verb == "issue-evaluation":
             prepared = _issue_evaluation(protocol_path, protocol, request, binding)
         elif verb == "issue-recovery":
@@ -1625,6 +1847,14 @@ def main() -> None:
             prepared = _issue_analysis(protocol_path, protocol, request, binding)
         elif verb == "attest-preflight":
             prepared = _attest_preflight(protocol_path, protocol, request, binding)
+        elif verb == "attest-phase0-readiness":
+            prepared = _attest_phase0_readiness(
+                protocol_path, protocol, request, binding
+            )
+        elif verb == "authorize-full-campaign":
+            prepared = _authorize_full_campaign(
+                protocol_path, protocol, request, binding
+            )
         elif verb == "attest-final-barrier":
             prepared = _attest_final_barrier(
                 protocol_path, protocol, request, binding

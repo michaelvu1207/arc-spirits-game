@@ -51,7 +51,7 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
                 "sha256": None,
             },
         )
-        self.assertEqual(protocol["sourceRegistry"]["files"], 538)
+        self.assertEqual(protocol["sourceRegistry"]["files"], 544)
         self.assertEqual(
             protocol["sourceRegistry"]["sha256"],
             sha256(REPO / protocol["sourceRegistry"]["path"]),
@@ -64,6 +64,12 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
             "ml/test_v35_p30_durable_nonexecutor_signing.py",
             "ml/run_v35_p30_analysis_review_local.py",
             "ml/test_v35_p30_analysis_review_local.py",
+            "ml/run_v35_p30_gate_review_local.py",
+            "ml/run_v35_p30_fault_injection.py",
+            "ml/run_v35_p30_cuda_determinism.py",
+            "ml/issue_v35_p30_preflight_authorization.py",
+            "ml/v35_p30_phase0.py",
+            "ml/test_v35_p30_phase0_gates.py",
         ):
             self.assertIn(required, registry["files"])
         trust = protocol["executionTrust"]
