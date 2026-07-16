@@ -13,11 +13,19 @@ import { persistedState } from '$lib/persistedState.svelte';
 import { prefersReducedData } from '$lib/play/dataSaver';
 
 export type SplatQuality = 'off' | '30' | '60';
+export type VisualQuality = 'off' | 'battery' | 'balanced' | 'high';
 
 export const SPLAT_QUALITY_OPTIONS: { value: SplatQuality; label: string }[] = [
 	{ value: 'off', label: 'Off' },
 	{ value: '30', label: '30 FPS' },
 	{ value: '60', label: '60 FPS' }
+];
+
+export const VISUAL_QUALITY_OPTIONS: { value: VisualQuality; label: string }[] = [
+	{ value: 'off', label: 'Off' },
+	{ value: 'battery', label: 'Battery Saver' },
+	{ value: 'balanced', label: 'Balanced' },
+	{ value: 'high', label: 'High' }
 ];
 
 /** Device-aware first-run default: off on metered/Data-Saver connections, a gentle
@@ -34,6 +42,17 @@ function defaultSplatQuality(): SplatQuality {
 
 const splatQuality = persistedState<SplatQuality>('asp:splat-quality', defaultSplatQuality());
 
+function defaultVisualQuality(): VisualQuality {
+	if (typeof window === 'undefined') return 'balanced';
+	if (prefersReducedData()) return 'battery';
+	const isPhone =
+		window.matchMedia('(pointer: coarse)').matches ||
+		window.matchMedia('(max-width: 600px)').matches;
+	return isPhone ? 'battery' : 'balanced';
+}
+
+const visualQuality = persistedState<VisualQuality>('asp:visual-quality', defaultVisualQuality());
+
 /** Reactive view of the graphics settings (read inside components/effects). */
 export function getGraphicsSettings() {
 	return {
@@ -47,10 +66,22 @@ export function getGraphicsSettings() {
 		/** Whether the full-screen splat background should mount at all. */
 		get splatEnabled() {
 			return splatQuality.value !== 'off';
+		},
+		/** Shared Three.js/Godot-style showcase quality. Essential state never depends on it. */
+		get visualQuality() {
+			return visualQuality.value;
+		},
+		/** OS reduced-motion is authoritative for decorative motion on the web. */
+		get reducedMotion() {
+			return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		}
 	};
 }
 
 export function setSplatQuality(value: SplatQuality) {
 	splatQuality.value = value;
+}
+
+export function setVisualQuality(value: VisualQuality) {
+	visualQuality.value = value;
 }

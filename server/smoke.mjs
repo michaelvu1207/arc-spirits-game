@@ -16,7 +16,7 @@ import { WebSocket } from 'ws';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = 8000 + Math.floor(Math.random() * 1000);
 const BASE = `http://127.0.0.1:${PORT}`;
-const WS_URL = `ws://127.0.0.1:${PORT}`;
+const WS_URL = `ws://127.0.0.1:${PORT}/ws`;
 
 const results = [];
 function check(name, cond, detail = '') {
@@ -46,6 +46,20 @@ function nextMessage(ws, predicate, timeoutMs = 5000) {
 		}
 		ws.on('message', onMsg);
 	});
+}
+
+async function mintTicket(memberId) {
+	const res = await fetch(`${BASE}/debug/ticket?memberId=${encodeURIComponent(memberId)}`, { method: 'POST' });
+	const body = await res.json();
+	if (!body.ticket) throw new Error(`ticket mint failed: ${body.error ?? res.status}`);
+	return body.ticket;
+}
+
+async function mintSpectatorTicket(roomCode) {
+	const res = await fetch(`${BASE}/debug/spectator-ticket?roomCode=${encodeURIComponent(roomCode)}`, { method: 'POST' });
+	const body = await res.json();
+	if (!body.ticket) throw new Error(`spectator ticket mint failed: ${body.error ?? res.status}`);
+	return body.ticket;
 }
 
 function openSocket() {
@@ -100,12 +114,12 @@ async function main() {
 		console.error('--- server log ---\n' + serverLog);
 		throw new Error(`seed failed: ${seed.error}`);
 	}
-	check('room seeded', !!seed.roomCode && !!seed.memberId, `room=${seed.roomCode} seat=${seed.seat}`);
+	check('room seeded', !!seed.roomCode && !!seed.ticket, `room=${seed.roomCode} seat=${seed.seat}`);
 	check('seed produced a legal command', !!seed.sampleCommand?.type, `cmd=${seed.sampleCommand?.type}`);
 
-	// 3) Seated client joins with the member token.
+	// 3) Seated client joins with its ONE-USE ticket.
 	const owner = await openSocket();
-	owner.send(JSON.stringify({ t: 'join', roomCode: seed.roomCode, memberToken: seed.memberId }));
+	owner.send(JSON.stringify({ t: 'join', roomCode: seed.roomCode, ticket: seed.ticket }));
 	const ownerJoined = await nextMessage(owner, (m) => m.t === 'joined');
 	check('owner joined', ownerJoined.t === 'joined', `revision=${ownerJoined.revision}`);
 	check('owner seated at correct seat', ownerJoined.seat === seed.seat, `seat=${ownerJoined.seat}`);
@@ -118,9 +132,11 @@ async function main() {
 		`affordance seats=[${Object.keys(ownerAffordances).join(',')}] phase=${ownerAffordances[seed.seat]?.phase}`
 	);
 
-	// 4) Spectator joins with no credential.
+	// 4) Spectator joins with a spectator ticket (read-only permission).
 	const spectator = await openSocket();
-	spectator.send(JSON.stringify({ t: 'join', roomCode: seed.roomCode }));
+	spectator.send(
+		JSON.stringify({ t: 'join', roomCode: seed.roomCode, ticket: await mintSpectatorTicket(seed.roomCode) })
+	);
 	const specJoined = await nextMessage(spectator, (m) => m.t === 'joined');
 	check('spectator joined', specJoined.t === 'joined');
 	check('spectator has no seat', specJoined.seat === null, `seat=${specJoined.seat}`);
@@ -167,7 +183,7 @@ async function main() {
 
 	// 8) reconnect: a new socket resuming from a revision gets a delta (not a joined).
 	const reconnect = await openSocket();
-	reconnect.send(JSON.stringify({ t: 'join', roomCode: seed.roomCode, memberToken: seed.memberId, resumeFromRevision: ownerJoined.revision }));
+	reconnect.send(JSON.stringify({ t: 'join', roomCode: seed.roomCode, ticket: await mintTicket(seed.memberId), resumeFromRevision: ownerJoined.revision }));
 	const resumed = await nextMessage(reconnect, (m) => m.t === 'delta' || m.t === 'joined');
 	check('reconnect (resumeFromRevision) replies with a delta', resumed.t === 'delta', `from=${resumed.fromRevision} to=${resumed.toRevision}`);
 
@@ -190,7 +206,7 @@ async function main() {
 	check('bot room seeded (1 human + 3 bots)', !!botSeed.roomCode && botSeed.botSeats?.length === 3, `room=${botSeed.roomCode} bots=${JSON.stringify(botSeed.botSeats)}`);
 
 	const humanSock = await openSocket();
-	humanSock.send(JSON.stringify({ t: 'join', roomCode: botSeed.roomCode, memberToken: botSeed.humanMemberId }));
+	humanSock.send(JSON.stringify({ t: 'join', roomCode: botSeed.roomCode, ticket: botSeed.humanTicket }));
 	const humanJoined = await nextMessage(humanSock, (m) => m.t === 'joined');
 	const botStartRev = humanJoined.revision;
 	let deltaCount = 0;
@@ -213,7 +229,7 @@ async function main() {
 	const dlSeed = await dlSeedRes.json();
 	check('deadline room seeded (1 human, short nav timer)', !!dlSeed.roomCode);
 	const dlSock = await openSocket();
-	dlSock.send(JSON.stringify({ t: 'join', roomCode: dlSeed.roomCode, memberToken: dlSeed.humanMemberId }));
+	dlSock.send(JSON.stringify({ t: 'join', roomCode: dlSeed.roomCode, ticket: dlSeed.humanTicket }));
 	const dlJoined = await nextMessage(dlSock, (m) => m.t === 'joined');
 	const tDl0 = performance.now();
 	const dlDelta = await nextMessage(dlSock, (m) => m.t === 'delta' && m.toRevision > dlJoined.revision, 8000);
@@ -227,12 +243,12 @@ async function main() {
 	const zsSeedRes = await fetch(`${BASE}/debug/seed-bots?botCount=0&navMs=2000`, { method: 'POST' });
 	const zsSeed = await zsSeedRes.json();
 	const zsSock = await openSocket();
-	zsSock.send(JSON.stringify({ t: 'join', roomCode: zsSeed.roomCode, memberToken: zsSeed.humanMemberId }));
+	zsSock.send(JSON.stringify({ t: 'join', roomCode: zsSeed.roomCode, ticket: zsSeed.humanTicket }));
 	const zsJoined = await nextMessage(zsSock, (m) => m.t === 'joined');
 	zsSock.close(); // no connections from here on
 	await new Promise((r) => setTimeout(r, 3500)); // host keeps ticking; nav deadline passes unwatched
 	const zsSock2 = await openSocket();
-	zsSock2.send(JSON.stringify({ t: 'join', roomCode: zsSeed.roomCode, memberToken: zsSeed.humanMemberId }));
+	zsSock2.send(JSON.stringify({ t: 'join', roomCode: zsSeed.roomCode, ticket: await mintTicket(zsSeed.humanMemberId) }));
 	const zsRejoined = await nextMessage(zsSock2, (m) => m.t === 'joined');
 	check('deadline enforcement fires with ZERO connected sockets', zsRejoined.revision > zsJoined.revision, `rev ${zsJoined.revision} → ${zsRejoined.revision} while unwatched`);
 	zsSock2.close();
@@ -246,11 +262,15 @@ async function main() {
 	const raceSeed = await (await fetch(`${BASE}/debug/seed`, { method: 'POST' })).json();
 	const h0 = await (await fetch(`${BASE}/healthz`)).json();
 	const [ra, rb] = await Promise.all([openSocket(), openSocket()]);
-	const joinFrame = JSON.stringify({ t: 'join', roomCode: raceSeed.roomCode });
+	const [specTicketA, specTicketB] = await Promise.all([
+		mintSpectatorTicket(raceSeed.roomCode),
+		mintSpectatorTicket(raceSeed.roomCode)
+	]);
 	const joinedA = nextMessage(ra, (m) => m.t === 'joined');
 	const joinedB = nextMessage(rb, (m) => m.t === 'joined');
-	ra.send(joinFrame); // fired back-to-back so both hit the cold-load window
-	rb.send(joinFrame);
+	// fired back-to-back so both hit the cold-load window
+	ra.send(JSON.stringify({ t: 'join', roomCode: raceSeed.roomCode, ticket: specTicketA }));
+	rb.send(JSON.stringify({ t: 'join', roomCode: raceSeed.roomCode, ticket: specTicketB }));
 	await Promise.all([joinedA, joinedB]);
 	const h1 = await (await fetch(`${BASE}/healthz`)).json();
 	// Deterministic regression signal: the cold room is loaded exactly ONCE for both joins.
@@ -263,7 +283,7 @@ async function main() {
 	const deltaA = nextMessage(ra, (m) => m.t === 'delta', 6000);
 	const deltaB = nextMessage(rb, (m) => m.t === 'delta', 6000);
 	const owner2 = await openSocket();
-	owner2.send(JSON.stringify({ t: 'join', roomCode: raceSeed.roomCode, memberToken: raceSeed.memberId }));
+	owner2.send(JSON.stringify({ t: 'join', roomCode: raceSeed.roomCode, ticket: raceSeed.ticket }));
 	await nextMessage(owner2, (m) => m.t === 'joined');
 	owner2.send(JSON.stringify({ t: 'command', cmdId: 'race-cmd', command: raceSeed.sampleCommand }));
 	let bothDeltas = false;

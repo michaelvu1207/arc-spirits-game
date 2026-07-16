@@ -25,6 +25,7 @@
 		hydratePlayRoom,
 		loadPlayRoom,
 		postPlayJson,
+		retargetPlayRoom,
 		sendPlayCommand,
 		setRoomChatOpen,
 		startPlayGame
@@ -45,8 +46,52 @@
 	let actionError = $state<string | null>(null);
 	let routeError = $state<string | null>(null);
 
-	const room = $derived(playState.room ?? data.initialView?.projection ?? null);
-	const member = $derived(playState.member ?? data.initialView?.member ?? null);
+	// ── Route-param re-targeting (rematch, in-app room links) ─────────────────
+	// SvelteKit REUSES this component instance for a /play/A → /play/B param
+	// navigation: onMount does NOT re-run, so without this the URL would say B
+	// while room A stayed rendered, connected and polling under it. The effect
+	// below watches the param, and on a change SYNCHRONOUSLY removes room A as
+	// the authoritative target — retargetPlayRoom tears down its channel/
+	// transport/timers, fences every in-flight operation AND clears the rendered
+	// room/member, so during the gap while B loads NOTHING on this page can
+	// initiate a fresh HTTP action against A (the loading branch renders, and
+	// every store mutation refuses with "No room is loaded").
+	const normalizeCode = (code: string) => code.trim().toUpperCase();
+	const routeCode = $derived(normalizeCode(String(page.params.roomCode ?? '')));
+	/** The room code this page instance currently targets (set on mount, moved by
+	 *  the re-target effect). Null until the initial mount has claimed a target. */
+	let targetedCode = $state<string | null>(null);
+
+	$effect(() => {
+		const target = routeCode;
+		if (!browser || !target || targetedCode === null || target === targetedCode) return;
+		targetedCode = target;
+		// Reset this page's per-room UI state alongside the store re-target.
+		routeError = null;
+		actionError = null;
+		pendingAction = null;
+		pickerSeat = null;
+		inviteOpen = false;
+		if (chatOpen) setChat(false);
+		void retargetPlayRoom(target).catch((err) => {
+			if (targetedCode === target) {
+				routeError = err instanceof Error ? err.message : 'Failed to load room.';
+			}
+		});
+	});
+
+	// The SSR-provided initial view backs the FIRST render only: once this page
+	// instance targets a DIFFERENT room, falling back to it would re-render (and
+	// re-arm actions against) the old room during the re-target gap.
+	const targetedInitialView = $derived(
+		data.initialView &&
+			(targetedCode === null ||
+				normalizeCode(data.initialView.projection.roomCode) === targetedCode)
+			? data.initialView
+			: null
+	);
+	const room = $derived(playState.room ?? targetedInitialView?.projection ?? null);
+	const member = $derived(playState.member ?? targetedInitialView?.member ?? null);
 	const isLobby = $derived(room?.status === 'lobby');
 	// Terminal state: the room was reaped server-side — a lobby that aged out
 	// (≥30 min unstarted) or was abandoned, or a live game everyone left. Show a
@@ -154,11 +199,7 @@
 	let inviteOpen = $state(false);
 	let copied = $state(false);
 	const inviteUrl = $derived(
-		room
-			? browser
-				? `${location.origin}/play/${room.roomCode}`
-				: `/play/${room.roomCode}`
-			: ''
+		room ? (browser ? `${location.origin}/play/${room.roomCode}` : `/play/${room.roomCode}`) : ''
 	);
 	const canShare = $derived(browser && typeof navigator.share === 'function');
 	async function copyInvite() {
@@ -280,14 +321,20 @@
 
 		const initialView = data.initialView;
 		if (initialView) {
+			targetedCode = normalizeCode(initialView.projection.roomCode);
 			hydratePlayRoom(initialView);
 		} else {
-			const roomCode = String(page.params.roomCode ?? '').trim().toUpperCase();
+			const roomCode = String(page.params.roomCode ?? '')
+				.trim()
+				.toUpperCase();
+			targetedCode = roomCode || null;
 			if (!roomCode) {
 				routeError = 'Missing room code.';
 			} else {
 				void loadPlayRoom(roomCode).catch((err) => {
-					routeError = err instanceof Error ? err.message : 'Failed to load room.';
+					if (targetedCode === roomCode) {
+						routeError = err instanceof Error ? err.message : 'Failed to load room.';
+					}
 				});
 			}
 		}
@@ -395,9 +442,7 @@
 	// Navigation timer (host-only, lobby-only). The <select> works in strings, so "none"
 	// is the sentinel for the no-limit (null) preset.
 	const navTimerDuration = $derived(room?.navigationDurationMs ?? null);
-	const navTimerValue = $derived(
-		navTimerDuration == null ? 'none' : String(navTimerDuration)
-	);
+	const navTimerValue = $derived(navTimerDuration == null ? 'none' : String(navTimerDuration));
 	const navTimerLabel = $derived(
 		NAVIGATION_TIMER_OPTIONS.find((o) => o.ms === navTimerDuration)?.label ?? 'Custom'
 	);
@@ -529,7 +574,7 @@
 							</span>
 						</span>
 						<div class="code-row">
-							<h1 class="code brand-flame-text">{room.roomCode}</h1>
+							<h1 class="code brand-flame-text" data-testid="room-code">{room.roomCode}</h1>
 							<button
 								type="button"
 								class="chip copy-chip"
@@ -595,7 +640,8 @@
 											<span class="pname"
 												>{bot ? botLabel(s.displayName ?? '') : (s.displayName ?? 'Player')}</span
 											>
-											<span class="pguardian" class:none={!gname}>{gname ?? 'No guardian yet'}</span>
+											<span class="pguardian" class:none={!gname}>{gname ?? 'No guardian yet'}</span
+											>
 											{#if actable}
 												<span class="change-hint">{gname ? 'Change' : 'Choose guardian'}</span>
 											{/if}
@@ -633,11 +679,7 @@
 								>
 									<span class="vac-plus" aria-hidden="true">＋</span>
 									<span class="vac-label">
-										{!mySeat
-											? pendingAction === 'claim'
-												? 'Seating…'
-												: 'Tap to sit'
-											: 'Invite'}
+										{!mySeat ? (pendingAction === 'claim' ? 'Seating…' : 'Tap to sit') : 'Invite'}
 									</span>
 									<span class="vac-seat">{seat}</span>
 								</button>
@@ -871,9 +913,7 @@
 		display: grid;
 		grid-template-rows: auto auto minmax(0, 1fr) auto;
 		gap: clamp(10px, 2vh, 22px);
-		padding:
-			calc(18px + env(safe-area-inset-top))
-			clamp(18px, 4vw, 44px)
+		padding: calc(18px + env(safe-area-inset-top)) clamp(18px, 4vw, 44px)
 			calc(16px + env(safe-area-inset-bottom));
 	}
 	/* Row 2 (the error strip) collapses when empty. */
@@ -1148,7 +1188,12 @@
 	.shade {
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(180deg, rgba(5, 3, 16, 0.16) 0%, transparent 30% 52%, rgba(5, 3, 16, 0.94) 100%);
+		background: linear-gradient(
+			180deg,
+			rgba(5, 3, 16, 0.16) 0%,
+			transparent 30% 52%,
+			rgba(5, 3, 16, 0.94) 100%
+		);
 		pointer-events: none;
 	}
 	.badges {
@@ -1733,10 +1778,8 @@
 	@media (orientation: landscape) and (max-height: 520px) {
 		.lobby {
 			gap: 8px;
-			padding:
-				calc(10px + env(safe-area-inset-top))
-				max(16px, calc(12px + env(safe-area-inset-right)))
-				calc(10px + env(safe-area-inset-bottom))
+			padding: calc(10px + env(safe-area-inset-top))
+				max(16px, calc(12px + env(safe-area-inset-right))) calc(10px + env(safe-area-inset-bottom))
 				max(16px, calc(12px + env(safe-area-inset-left)));
 		}
 		.ltop {
@@ -1844,10 +1887,8 @@
 		.closed {
 			max-width: none;
 			min-height: 100%;
-			padding:
-				calc(62px + env(safe-area-inset-top))
-				max(78px, calc(24px + env(safe-area-inset-right)))
-				calc(28px + env(safe-area-inset-bottom))
+			padding: calc(62px + env(safe-area-inset-top))
+				max(78px, calc(24px + env(safe-area-inset-right))) calc(28px + env(safe-area-inset-bottom))
 				max(48px, calc(24px + env(safe-area-inset-left)));
 		}
 		.closed-title {
@@ -1864,5 +1905,154 @@
 			opacity: 1;
 			transform: none;
 		}
+	}
+
+	/* Party lobby as a monumental lineup of banners and sigils. */
+	.lobby::before,
+	.lobby::after {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+		z-index: -1;
+	}
+	.lobby::before {
+		left: -10vw;
+		top: 17%;
+		width: 60vw;
+		height: 24%;
+		background: #43178f;
+		opacity: 0.25;
+		clip-path: polygon(0 0, 100% 22%, 76% 100%, 0 72%);
+	}
+	.lobby::after {
+		right: -12vw;
+		bottom: 10%;
+		width: 54vw;
+		height: 28%;
+		background: #087b91;
+		opacity: 0.2;
+		clip-path: polygon(22% 0, 100% 26%, 100% 100%, 0 78%);
+	}
+	.leave-btn,
+	.chip,
+	.pill {
+		border: 0;
+		border-radius: 0;
+		background: #20104a;
+		backdrop-filter: none;
+		clip-path: polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%);
+	}
+	.leave-btn:hover,
+	.chip:hover:not(:disabled) {
+		background: #24d4ff;
+		color: #080311;
+	}
+	.code {
+		color: #fff;
+		background: none;
+		-webkit-text-fill-color: currentColor;
+		filter: none;
+		text-shadow: 7px 6px 0 #50139f;
+	}
+	.seats {
+		gap: 3px;
+	}
+	.frame,
+	.seat.mine .frame.filled,
+	.frame.vacant,
+	.frame.vacant:hover:not(:disabled),
+	.frame.vacant:focus-visible {
+		max-width: 260px;
+		border: 0;
+		border-radius: 0;
+		background: color-mix(in srgb, var(--seat) 42%, #100725);
+		box-shadow: none;
+		backdrop-filter: none;
+		clip-path: polygon(12% 0, 100% 6%, 90% 100%, 0 92%);
+	}
+	.seat:nth-child(even) .frame {
+		clip-path: polygon(0 7%, 90% 0, 100% 93%, 10% 100%);
+	}
+	.frame-hit:focus-visible {
+		border-radius: 0;
+	}
+	.shade {
+		inset: auto 0 0;
+		height: 38%;
+		background: rgba(5, 3, 16, 0.82);
+		clip-path: polygon(0 24%, 100% 0, 100% 100%, 0 100%);
+	}
+	.badge,
+	.change-hint,
+	.seat-x,
+	.vac-plus,
+	.chat-badge {
+		border-radius: 0;
+	}
+	.badge {
+		backdrop-filter: none;
+	}
+	.seat-x {
+		border: 0;
+		background: #d515aa;
+		clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+	}
+	.vac-plus {
+		border: 0;
+		background: #24d4ff;
+		color: #080311;
+		clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+	}
+	.sigil-gem {
+		background: var(--seat);
+		box-shadow: none;
+		opacity: 0.62;
+	}
+	.chat-tab,
+	.setting-chip,
+	.wait-chip,
+	.ctl,
+	.start {
+		border: 0;
+		border-radius: 0;
+		background: #28115b;
+		backdrop-filter: none;
+		clip-path: polygon(0 0, 91% 0, 100% 50%, 91% 100%, 0 100%);
+	}
+	.chat-tab:hover,
+	.ctl:hover:not(:disabled) {
+		background: #24d4ff;
+		color: #080311;
+	}
+	.start,
+	.start:hover:not(:disabled) {
+		min-width: 230px;
+		justify-content: center;
+		background: #d515aa;
+		box-shadow: none;
+		filter: none;
+	}
+	.invite-backdrop {
+		backdrop-filter: none;
+		background: rgba(5, 3, 16, 0.82);
+	}
+	.invite-sheet {
+		border: 0;
+		border-radius: 0;
+		background: #100725;
+		box-shadow: none;
+		clip-path: polygon(7% 0, 100% 0, 100% 90%, 92% 100%, 0 100%, 0 10%);
+	}
+	.irow input {
+		border: 0;
+		border-bottom: 3px solid #24d4ff;
+		border-radius: 0;
+		background: #080413;
+	}
+	.closed-btn {
+		border: 0;
+		border-radius: 0;
+		background: #d515aa;
+		clip-path: polygon(0 0, 91% 0, 100% 50%, 91% 100%, 0 100%);
 	}
 </style>

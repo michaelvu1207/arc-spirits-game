@@ -1,5 +1,7 @@
 export type RankId = 'iron' | 'silver' | 'gold' | 'prism' | 'abyss' | 'ascendant';
-export type CosmeticKind = 'border' | 'guardianSkin' | 'banner';
+export type CosmeticKind =
+	| 'border' | 'guardianSkin' | 'banner' | 'boardEnvironment' | 'summonTrail'
+	| 'cardFinish' | 'nameplate' | 'emote' | 'victoryPose' | 'profileScene';
 
 export interface RankDefinition {
 	id: RankId;
@@ -29,6 +31,14 @@ export interface ProgressionState {
 	equippedBorderId: string | null;
 	equippedBannerId: string | null;
 	equippedGuardianSkinIds: Record<string, string>;
+	equippedBoardEnvironmentId?: string | null;
+	equippedSummonTrailId?: string | null;
+	equippedCardFinishId?: string | null;
+	equippedNameplateId?: string | null;
+	equippedEmoteId?: string | null;
+	equippedVictoryPoseId?: string | null;
+	equippedProfileSceneId?: string | null;
+	guardianMastery?: Array<{ guardianName: string; masteryXp: number; masteryLevel: number; gamesPlayed: number; wins: number }>;
 	claimedMatchIds: string[];
 }
 
@@ -119,6 +129,34 @@ export const SHOP_ITEMS: CosmeticItem[] = [
 		price: 260,
 		accent: '#5b2dff',
 		rarity: 'mythic'
+	},
+	{
+		id: 'environment-lantern-steps', kind: 'boardEnvironment', name: 'Lantern Steps', shortName: 'Lantern',
+		description: 'Low-poly lantern fragments and warm shrine facets.', price: 180, accent: '#ffba3d', rarity: 'epic'
+	},
+	{
+		id: 'trail-prismatic-shards', kind: 'summonTrail', name: 'Prismatic Shards', shortName: 'Shards',
+		description: 'Faceted shards follow a summoned spirit.', price: 140, accent: '#65f3e1', rarity: 'rare'
+	},
+	{
+		id: 'finish-arcfoil', kind: 'cardFinish', name: 'Arcfoil', shortName: 'Arcfoil',
+		description: 'A restrained animated foil edge for spirit cards.', price: 110, accent: '#8ee7ff', rarity: 'rare'
+	},
+	{
+		id: 'nameplate-veilwalker', kind: 'nameplate', name: 'Veilwalker', shortName: 'Veilwalker',
+		description: 'A compact low-poly rune nameplate.', price: 90, accent: '#a48cff', rarity: 'common'
+	},
+	{
+		id: 'emote-spirit-bow', kind: 'emote', name: 'Spirit Bow', shortName: 'Bow',
+		description: 'A respectful live-match guardian emote.', price: 80, accent: '#f5d08a', rarity: 'common'
+	},
+	{
+		id: 'pose-guardian-rise', kind: 'victoryPose', name: 'Guardian Rise', shortName: 'Rise',
+		description: 'A faceted guardian victory stance.', price: 210, accent: '#ff7fd9', rarity: 'epic'
+	},
+	{
+		id: 'profile-arc-sanctum', kind: 'profileScene', name: 'Arc Sanctum', shortName: 'Sanctum',
+		description: 'A low-poly profile scene of rings, shards, and spirit light.', price: 240, accent: '#7b1dff', rarity: 'mythic'
 	}
 ];
 
@@ -131,6 +169,14 @@ export function defaultProgression(): ProgressionState {
 		equippedBorderId: null,
 		equippedBannerId: null,
 		equippedGuardianSkinIds: {},
+		equippedBoardEnvironmentId: null,
+		equippedSummonTrailId: null,
+		equippedCardFinishId: null,
+		equippedNameplateId: null,
+		equippedEmoteId: null,
+		equippedVictoryPoseId: null,
+		equippedProfileSceneId: null,
+		guardianMastery: [],
 		claimedMatchIds: []
 	};
 }

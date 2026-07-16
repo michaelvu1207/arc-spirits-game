@@ -19,7 +19,11 @@ type RootServerData = {
  * (fired on every auth state change) re-run this load so the session stays fresh.
  */
 export const load: LayoutLoad = async ({ data, depends, fetch }) => {
-	if (!capacitorBuild) depends('supabase:auth');
+	// EVERY build target re-runs this load on `invalidate('supabase:auth')` — the
+	// Capacitor shell included. Skipping it there left `auth.session` null after an
+	// in-app anonymous/email sign-in, so cross-origin play requests never carried
+	// their Bearer token and 401'd until a full app restart.
+	depends('supabase:auth');
 	const serverData = data as unknown as RootServerData | undefined;
 
 	const supabase = isBrowser()

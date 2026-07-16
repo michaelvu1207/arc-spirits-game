@@ -1,0 +1,208 @@
+{
+  "generatedAt": "2026-07-13T12:16:54.352Z",
+  "budgets": {
+    "frameAverageMs": 40,
+    "frameP90Ms": 50,
+    "frameP99Ms": 200,
+    "jsHeapMiB": 512,
+    "networkMiB": 50,
+    "pollGapMs": 6000,
+    "matchedToNavMs": 15000,
+    "eventLoopLagMs": 3000
+  },
+  "measurements": [
+    {
+      "mode": "off",
+      "label": "Off (no splat)",
+      "hydratedMs": 128,
+      "polls": 2,
+      "maxPollGapMs": 2650,
+      "matchedToNavMs": 17,
+      "preMatchLagMaxMs": 162.79999995231628,
+      "preMatchLagP95Ms": 4.799999952316284,
+      "postNavLagMaxMs": 38.5,
+      "splatBytes": 0,
+      "frameSamples": 292,
+      "frameAverageMs": 27.431164383561637,
+      "frameP90Ms": 50,
+      "frameP99Ms": 66.69999999999982,
+      "networkBytes": 4772388,
+      "jsHeapBytes": 21700000
+    },
+    {
+      "mode": "30",
+      "label": "30 FPS (battery saver)",
+      "hydratedMs": 74,
+      "polls": 2,
+      "maxPollGapMs": 2521,
+      "matchedToNavMs": 25,
+      "preMatchLagMaxMs": 91.29999995231628,
+      "preMatchLagP95Ms": 7,
+      "postNavLagMaxMs": 5232.200000047684,
+      "splatBytes": 15406530,
+      "frameSamples": 124,
+      "frameAverageMs": 26.145967741935486,
+      "frameP90Ms": 33.5,
+      "frameP99Ms": 158.5,
+      "networkBytes": 4756899,
+      "jsHeapBytes": 47400000
+    },
+    {
+      "mode": "60",
+      "label": "60 FPS (high)",
+      "hydratedMs": 80,
+      "polls": 2,
+      "maxPollGapMs": 2520,
+      "matchedToNavMs": 57,
+      "preMatchLagMaxMs": 110.40000009536743,
+      "preMatchLagP95Ms": 6.400000095367432,
+      "postNavLagMaxMs": 5619.900000095367,
+      "splatBytes": 15406530,
+      "frameSamples": 120,
+      "frameAverageMs": 26.32,
+      "frameP90Ms": 33.59999999999991,
+      "frameP99Ms": 175.0999999999999,
+      "networkBytes": 4756965,
+      "jsHeapBytes": 47400000
+    }
+  ],
+  "checks": [
+    {
+      "name": "[stack] pgrest emulator (rpc store) is up",
+      "ok": true,
+      "detail": ":9080"
+    },
+    {
+      "name": "[stack] production bundle built (real release CSP, store same-origin)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[stack] production preview is up (store proxied same-origin)",
+      "ok": true,
+      "detail": ":4317"
+    },
+    {
+      "name": "[Off (no splat)] splat truthfully ABSENT",
+      "ok": true,
+      "detail": "0 bytes"
+    },
+    {
+      "name": "[Off (no splat)] queue-poll cadence never starved (max gap ≤ 6000ms)",
+      "ok": true,
+      "detail": "max gap 2650ms over 2 polls"
+    },
+    {
+      "name": "[Off (no splat)] matched→room navigation ≤ 15000ms",
+      "ok": true,
+      "detail": "17ms"
+    },
+    {
+      "name": "[Off (no splat)] no event-loop stall ≥ 3000ms while matchmaking timers were live",
+      "ok": true,
+      "detail": "pre-match max 163ms, p95 5ms"
+    },
+    {
+      "name": "[Off (no splat)] gameplay frame distribution stays within avg/P90/P99 budgets",
+      "ok": true,
+      "detail": "n=292, avg=27.4ms, p90=50.0ms, p99=66.7ms"
+    },
+    {
+      "name": "[Off (no splat)] gameplay JS heap stays ≤ 512MiB",
+      "ok": true,
+      "detail": "20.7MiB"
+    },
+    {
+      "name": "[Off (no splat)] post-navigation resource transfer stays ≤ 50MiB",
+      "ok": true,
+      "detail": "4.6MiB"
+    },
+    {
+      "name": "[30 FPS (battery saver)] splat truthfully streamed",
+      "ok": true,
+      "detail": "15406530 bytes"
+    },
+    {
+      "name": "[30 FPS (battery saver)] queue-poll cadence never starved (max gap ≤ 6000ms)",
+      "ok": true,
+      "detail": "max gap 2521ms over 2 polls"
+    },
+    {
+      "name": "[30 FPS (battery saver)] matched→room navigation ≤ 15000ms",
+      "ok": true,
+      "detail": "25ms"
+    },
+    {
+      "name": "[30 FPS (battery saver)] no event-loop stall ≥ 3000ms while matchmaking timers were live",
+      "ok": true,
+      "detail": "pre-match max 91ms, p95 7ms"
+    },
+    {
+      "name": "[30 FPS (battery saver)] gameplay frame distribution stays within avg/P90/P99 budgets",
+      "ok": true,
+      "detail": "n=124, avg=26.1ms, p90=33.5ms, p99=158.5ms"
+    },
+    {
+      "name": "[30 FPS (battery saver)] gameplay JS heap stays ≤ 512MiB",
+      "ok": true,
+      "detail": "45.2MiB"
+    },
+    {
+      "name": "[30 FPS (battery saver)] post-navigation resource transfer stays ≤ 50MiB",
+      "ok": true,
+      "detail": "4.5MiB"
+    },
+    {
+      "name": "[60 FPS (high)] splat truthfully streamed",
+      "ok": true,
+      "detail": "15406530 bytes"
+    },
+    {
+      "name": "[60 FPS (high)] queue-poll cadence never starved (max gap ≤ 6000ms)",
+      "ok": true,
+      "detail": "max gap 2520ms over 2 polls"
+    },
+    {
+      "name": "[60 FPS (high)] matched→room navigation ≤ 15000ms",
+      "ok": true,
+      "detail": "57ms"
+    },
+    {
+      "name": "[60 FPS (high)] no event-loop stall ≥ 3000ms while matchmaking timers were live",
+      "ok": true,
+      "detail": "pre-match max 110ms, p95 6ms"
+    },
+    {
+      "name": "[60 FPS (high)] gameplay frame distribution stays within avg/P90/P99 budgets",
+      "ok": true,
+      "detail": "n=120, avg=26.3ms, p90=33.6ms, p99=175.1ms"
+    },
+    {
+      "name": "[60 FPS (high)] gameplay JS heap stays ≤ 512MiB",
+      "ok": true,
+      "detail": "45.2MiB"
+    },
+    {
+      "name": "[60 FPS (high)] post-navigation resource transfer stays ≤ 50MiB",
+      "ok": true,
+      "detail": "4.5MiB"
+    },
+    {
+      "name": "[menu idle · 60 FPS] the deferred menu splat still streams (deferral did not kill the feature)",
+      "ok": true,
+      "detail": "7668696 bytes, init stall max 5525ms (idle-scheduled)"
+    },
+    {
+      "name": "[teardown] preview port 4317 refuses connections",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "[teardown] emulator port 9080 refuses connections",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "passed": 27,
+  "failed": 0
+}

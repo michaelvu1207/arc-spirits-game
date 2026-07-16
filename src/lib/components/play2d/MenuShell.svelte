@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
+	import GameIcon from '$lib/components/GameIcon.svelte';
 	import SplatQualityControl from './SplatQualityControl.svelte';
 	import {
 		armMenuAudio,
@@ -19,10 +20,7 @@
 		children?: Snippet;
 	}
 
-	let {
-		audioSrc = '/music/worlds/abyssal-portal.mp3',
-		children
-	}: Props = $props();
+	let { audioSrc = '/music/worlds/abyssal-portal.mp3', children }: Props = $props();
 
 	const audio = getMenuAudio();
 
@@ -58,27 +56,9 @@
 			title={audio.muted ? 'Unmute' : 'Mute'}
 		>
 			{#if audio.muted}
-				<svg viewBox="0 0 24 24" aria-hidden="true"
-					><path
-						d="M4 9v6h4l5 4V5L8 9H4zM17 9l4 4m0-4l-4 4"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.7"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/></svg
-				>
+				<GameIcon name="mute" size={22} />
 			{:else}
-				<svg viewBox="0 0 24 24" aria-hidden="true"
-					><path
-						d="M4 9v6h4l5 4V5L8 9H4zM16 8.5a5 5 0 010 7M18.5 6a8.5 8.5 0 010 12"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.7"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/></svg
-				>
+				<GameIcon name="volume" size={22} />
 			{/if}
 		</button>
 		<button
@@ -95,20 +75,7 @@
 				settingsOpen = !settingsOpen;
 			}}
 		>
-			<svg viewBox="0 0 24 24" aria-hidden="true"
-				><path
-					d="M4 7h8M16 7h4M4 12h4M12 12h8M4 17h11M19 17h1"
-					stroke="currentColor"
-					stroke-width="1.7"
-					stroke-linecap="round"
-				/><circle cx="14" cy="7" r="2.1" stroke="currentColor" stroke-width="1.7" /><circle
-					cx="10"
-					cy="12"
-					r="2.1"
-					stroke="currentColor"
-					stroke-width="1.7"
-				/><circle cx="17" cy="17" r="2.1" stroke="currentColor" stroke-width="1.7" /></svg
-			>
+			<GameIcon name="settings" size={22} />
 		</button>
 
 		{#if settingsOpen}
@@ -241,6 +208,10 @@
 		right: 0;
 		z-index: 7;
 		min-width: 220px;
+		max-width: min(420px, calc(100vw - 24px));
+		max-height: calc(100dvh - 88px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: 16px;
 		border-radius: 14px;
 		border: 1px solid var(--color-mist, #2e1d52);
@@ -273,7 +244,7 @@
 			color 160ms ease,
 			transform 160ms ease;
 	}
-	.ctrl svg {
+	.ctrl :global(.game-icon) {
 		width: 20px;
 		height: 20px;
 	}
@@ -323,5 +294,70 @@
 			backdrop-filter: none;
 			background: rgba(10, 7, 24, 0.85);
 		}
+	}
+
+	/* Bold graphic menu language: flat fields and cut shapes, never floating cards. */
+	.scrim {
+		background: rgba(3, 2, 10, 0.76);
+	}
+	.scrim::before,
+	.scrim::after {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+	}
+	.scrim::before {
+		inset: 0 52% 0 0;
+		background: rgba(9, 4, 27, 0.88);
+		clip-path: polygon(0 0, 78% 0, 100% 22%, 72% 55%, 94% 100%, 0 100%);
+	}
+	.scrim::after {
+		right: -8vw;
+		bottom: -18vh;
+		width: 58vw;
+		height: 45vh;
+		background: #2f0b88;
+		opacity: 0.18;
+		clip-path: polygon(16% 0, 100% 28%, 100% 100%, 0 100%);
+	}
+	.aurora {
+		inset: auto 30vw -26vh auto;
+		width: 48vw;
+		height: 64vh;
+		background: #ff2bc7;
+		opacity: 0.045;
+		mix-blend-mode: normal;
+		clip-path: polygon(58% 0, 100% 8%, 76% 100%, 0 86%);
+		animation: none;
+	}
+	.grain {
+		background: none;
+		opacity: 0;
+	}
+	.ctrl {
+		width: 50px;
+		height: 50px;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		clip-path: none;
+		backdrop-filter: none;
+	}
+	.ctrl :global(.game-icon) {
+		width: 28px;
+		height: 28px;
+	}
+	.ctrl:hover,
+	.ctrl:focus-visible {
+		background: transparent;
+		color: #24d4ff;
+	}
+	.settings-popover {
+		border: 0;
+		border-radius: 0;
+		background: #0d071f;
+		box-shadow: none;
+		backdrop-filter: none;
+		clip-path: polygon(9% 0, 100% 0, 100% 92%, 88% 100%, 0 100%, 0 12%);
 	}
 </style>

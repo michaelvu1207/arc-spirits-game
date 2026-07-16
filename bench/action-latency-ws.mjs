@@ -12,13 +12,13 @@
 //   [--base=https://arcspirits.com] [--ws=wss://gpu.simforge.ai/arcrooms] [--samples=200]
 
 import WebSocket from 'ws';
-import { parseArgs, createRoom, summarize, writeResults, printTable, todayStamp } from './lib.mjs';
+import { parseArgs, createRoom, mintWsTicket, summarize, writeResults, printTable, todayStamp } from './lib.mjs';
 
 const args = parseArgs();
 const SAMPLES = Number.isFinite(args.samples) && args.samples > 0 ? args.samples : 200;
 const WS_URL = typeof args.ws === 'string' && args.ws ? args.ws : 'wss://gpu.simforge.ai/arcrooms';
 
-function connectAndJoin(url, roomCode, memberToken) {
+function connectAndJoin(url, roomCode, ticket) {
 	return new Promise((resolve, reject) => {
 		const sock = new WebSocket(url);
 		const pending = new Map(); // cmdId -> {sentAt, resolve}
@@ -33,15 +33,16 @@ function connectAndJoin(url, roomCode, memberToken) {
 			}
 			if (msg.t === 'error') reject(new Error(`ws error: ${msg.code} ${msg.message}`));
 		});
-		sock.on('open', () => sock.send(JSON.stringify({ t: 'join', roomCode, memberToken })));
+		sock.on('open', () => sock.send(JSON.stringify({ t: 'join', roomCode, ticket })));
 	});
 }
 
 async function main() {
 	console.log(`[action-latency-ws] ws=${WS_URL} samples=${SAMPLES}`);
-	const { code, memberId } = await createRoom(args.base, 'BenchLatencyWs');
+	const { code, token } = await createRoom(args.base, 'BenchLatencyWs');
 	console.log(`[action-latency-ws] room ${code} created via ${args.base}; joining over WS...`);
-	const { sock, pending, joined } = await connectAndJoin(WS_URL, code, memberId);
+	const ticket = await mintWsTicket(args.base, code, token);
+	const { sock, pending, joined } = await connectAndJoin(`${WS_URL.replace(/\/+$/, '')}/ws`, code, ticket);
 	console.log(`[action-latency-ws] joined as seat=${joined.seat} revision=${joined.revision}`);
 
 	const durations = [30_000, 60_000];

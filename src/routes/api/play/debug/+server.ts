@@ -2,12 +2,13 @@ import { json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
 import { createDebugRoom, loadRoomView } from '$lib/play/server/service';
-import { setRoomMemberCookie } from '$lib/play/server/cookies';
+import { setLastRoomCookie } from '$lib/play/server/cookies';
 
 // Dev-only: spawn a solo game parked in the Awakening phase with a face-down
 // spirit of the requested class + everything needed to awaken it. Never exposed
 // in production builds.
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async (event) => {
+	const { request, cookies, locals } = event;
 	if (!dev) {
 		return new Response('Not found', { status: 404 });
 	}
@@ -20,8 +21,12 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ message: 'A class name or spirit id is required.' }, { status: 400 });
 	}
 
-	const created = await createDebugRoom(displayName, className, spiritId);
-	setRoomMemberCookie(cookies, created.roomCode, created.memberId);
+	// Even the dev tool follows the account trust model: the validated (anonymous)
+	// user owns the seeded membership.
+	const { user } = await locals.safeGetSession();
+	const created = await createDebugRoom(displayName, className, spiritId, user?.id ?? null);
+	setLastRoomCookie(cookies, created.roomCode, event.url);
 
-	return json(await loadRoomView(created.roomCode, created.memberId));
+	const view = await loadRoomView(created.roomCode, { trustedMemberId: created.memberId });
+	return json(view);
 };

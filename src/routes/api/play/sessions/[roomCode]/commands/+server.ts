@@ -1,18 +1,18 @@
 import { error, json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
-import { getRoomMemberId } from '$lib/play/server/cookies';
 import { runRoomCommand } from '$lib/play/server/service';
 import { withAffordances } from '$lib/server/roomAffordances';
+import { isValidCmdId, validateCommandShape } from '$lib/play/server/commandPolicy';
 import type { GameCommand } from '$lib/play/types';
 
-export const POST: RequestHandler = async ({ request, params, cookies, locals }) => {
+export const POST: RequestHandler = async ({ request, params, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
-	const memberId = getRoomMemberId(cookies, roomCode, request);
-	// A matchmade player has no member cookie — fall back to their auth user_id so
-	// runRoomCommand can resolve their server-created membership by user.
+	// The validated account is the sole wire principal; the deny-by-default command
+	// admission policy (shared with the WebSocket boundary) runs inside
+	// runRoomCommand before the reducer. No wire field confers internal trust.
 	const { user } = await locals.safeGetSession();
-	if (!memberId && !user) {
+	if (!user) {
 		throw error(401, 'Join this room before sending commands.');
 	}
 
@@ -21,9 +21,14 @@ export const POST: RequestHandler = async ({ request, params, cookies, locals })
 		typeof body?.expectedRevision === 'number' ? body.expectedRevision : null;
 	const command = (body?.command ?? null) as GameCommand | null;
 
-	if (!command || typeof command.type !== 'string') {
-		throw error(400, 'Missing command.');
+	// The SAME bounded cmdId + payload schema as the WebSocket boundary.
+	if (!validateCommandShape(command)) {
+		throw error(400, 'Missing or malformed command.');
 	}
+	if (!isValidCmdId(body?.cmdId)) {
+		throw error(400, 'Missing cmdId — every command must carry a client idempotency key.');
+	}
+	const cmdId = body.cmdId as string;
 
 	// God-mode grants are a dev-only tool — never resolvable in production.
 	if (command.type === 'debugGrant' && !dev) {
@@ -32,10 +37,10 @@ export const POST: RequestHandler = async ({ request, params, cookies, locals })
 
 	const view = await runRoomCommand({
 		roomCode,
-		memberId,
+		userId: user.id,
 		expectedRevision,
 		command,
-		fallbackUserId: user?.id ?? null
+		cmdId
 	});
 	// Post-command affordances ride along so the client's action surface never
 	// goes stale between polls (mirrors the WS ack, which is a full RoomView v2).

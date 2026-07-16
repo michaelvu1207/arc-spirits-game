@@ -1675,6 +1675,9 @@ describe('manualAwaken command', () => {
 		const afterAuto = auto.state.players.Red!;
 		expect(afterAuto.spirits[0].isFaceDown).toBe(true);
 		expect(afterAuto.manualPrompts.filter((p) => p.source === 'awaken')).toHaveLength(1);
+		// The prompt names its slot so clients answer with manualAwaken{slotIndex}
+		// (flip + clear) instead of a generic dismissManualPrompt (clear only).
+		expect(afterAuto.manualPrompts.find((p) => p.source === 'awaken')?.slotIndex).toBe(1);
 
 		// manualAwaken confirms it: flip + clear the prompt.
 		const confirm = applyGameCommand(
@@ -1688,6 +1691,44 @@ describe('manualAwaken command', () => {
 		const out = confirm.state.players.Red!;
 		expect(out.spirits[0].isFaceDown).toBe(false);
 		expect(out.manualPrompts.filter((p) => p.source === 'awaken')).toHaveLength(0);
+	});
+
+	it('clears only the confirmed slot when two same-named spirits both hold prompts', () => {
+		const UNSCRIPTED = 'unscripted-text-spirit';
+		const catalog = textCatalog(UNSCRIPTED, 'Mystery', 'Resolve by hand.');
+		const state = startedGame(catalog);
+		const red = state.players.Red!;
+		red.spirits = [spirit(1, UNSCRIPTED, 'Mystery'), spirit(2, UNSCRIPTED, 'Mystery')];
+
+		let cur = state;
+		for (const slotIndex of [1, 2]) {
+			const res = applyGameCommand(
+				cur,
+				{ ...HOST, seatColor: 'Red' },
+				{ type: 'awakenSpirit', slotIndex },
+				catalog
+			);
+			if (!res.ok) throw new Error(res.error.message);
+			cur = res.state;
+		}
+		expect(cur.players.Red!.manualPrompts.filter((p) => p.source === 'awaken')).toHaveLength(2);
+
+		// Confirm slot 1: slot-keyed clearing must keep slot 2's prompt (a pure
+		// text-includes match would wipe both — the names are identical).
+		const confirm = applyGameCommand(
+			cur,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'manualAwaken', slotIndex: 1 },
+			catalog
+		);
+		expect(confirm.ok).toBe(true);
+		if (!confirm.ok) throw new Error(confirm.error.message);
+		const out = confirm.state.players.Red!;
+		expect(out.spirits.find((s) => s.slotIndex === 1)?.isFaceDown).toBe(false);
+		expect(out.spirits.find((s) => s.slotIndex === 2)?.isFaceDown).toBe(true);
+		const remaining = out.manualPrompts.filter((p) => p.source === 'awaken');
+		expect(remaining).toHaveLength(1);
+		expect(remaining[0].slotIndex).toBe(2);
 	});
 
 	it('rejects manualAwaken on a SCRIPTED text spirit (must use awakenSpirit)', () => {

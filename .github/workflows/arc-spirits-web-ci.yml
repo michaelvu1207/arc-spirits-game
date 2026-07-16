@@ -1,0 +1,78 @@
+name: Arc Spirits Web CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install real PostgreSQL test runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql
+          echo "$(pg_config --bindir)" >> "$GITHUB_PATH"
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Run real PostgreSQL migration contracts with zero skips
+        run: npx vitest run src/lib/play/server/*.pg.test.ts
+      - run: npm run gate:csp
+
+  browser-platforms:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:e2e:platform
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: platform-browser-failures
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  authoritative-journeys:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run gate:journey
+      - run: npm run gate:human-loop
+      - run: npm run gate:mixed-full-games
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: authoritative-journey-evidence
+          path: |
+            bench/results/
+            test-results/
+          if-no-files-found: error
+          retention-days: 14

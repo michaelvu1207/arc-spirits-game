@@ -32,6 +32,7 @@ import {
 	phaseDurationMs
 } from './types';
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
+import { hashGameState } from './stateHash';
 import {
 	bagForSpiritCost,
 	deckCopiesForCost,
@@ -136,7 +137,7 @@ function jsonClone<T>(v: T): T {
 	return n as unknown as T;
 }
 
-function cloneState(state: PublicGameState): PublicGameState {
+export function cloneState(state: PublicGameState): PublicGameState {
 	// The game state is fully JSON-serializable (no Maps/Sets/Dates/functions; the RNG is
 	// {seed,cursor}), so a JSON round-trip is an exact deep clone. MEASURED faster than
 	// structuredClone in the real self-play/bot-search loop (structuredClone regressed random
@@ -967,7 +968,7 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
  * those fields existed (or created via the legacy lobby path). Keeps the reducer
  * and projection robust against older JSON snapshots.
  */
-function ensureStateShape(state: PublicGameState): PublicGameState {
+export function ensureStateShape(state: PublicGameState): PublicGameState {
 	state.rng ??= createRng(hashString(state.roomCode));
 	state.phase ??= 'navigation';
 	state.navigation ??= {};
@@ -1003,6 +1004,13 @@ function activePlayerForActor(
 	ensurePlayerCollections(player);
 	return { seatColor, player };
 }
+
+/** The releaseSeat reducer's "nothing to release" rejection message. Exported as
+ *  a constant because the HTTP layer erases the machine code (`seat_missing`)
+ *  when it rethrows reducer rejections — leaveRoomAsUser matches THIS message to
+ *  tell the one benign already-unseated case apart from real failures (which
+ *  must fail closed rather than delete a membership out from under a seat). */
+export const SEAT_MISSING_MESSAGE = 'No claimed seat found for this member.';
 
 function failure(code: string, message: string): CommandResult {
 	return {
@@ -1173,7 +1181,7 @@ function reduceCommand(
 
 			const currentSeat = command.seatColor ?? occupiedSeatForMember(state, actor.memberId);
 			if (!currentSeat || state.seats[currentSeat].memberId !== actor.memberId) {
-				return failure('seat_missing', 'No claimed seat found for this member.');
+				return failure('seat_missing', SEAT_MISSING_MESSAGE);
 			}
 
 			state.seats[currentSeat] = {
@@ -2288,7 +2296,10 @@ function reduceCommand(
 					active.player.manualPrompts.push({
 						id: nextId(state.rng, 'mp'),
 						source: 'awaken',
-						text: `Awaken ${spirit.name}: ${check.text} — resolve by hand, then confirm.`
+						text: `Awaken ${spirit.name}: ${check.text} — resolve by hand, then confirm.`,
+						// The slot lets clients answer with manualAwaken (flip + clear);
+						// a generic dismissManualPrompt would leave the spirit face-down.
+						slotIndex: spirit.slotIndex
 					});
 					active.player.lastAction = {
 						key: 'awaken_manual',
@@ -2380,9 +2391,17 @@ function reduceCommand(
 			}
 
 			spirit.isFaceDown = false;
-			// Clear any pending awaken prompt the auto-path raised for this spirit.
+			// Clear any pending awaken prompt the auto-path raised for this spirit —
+			// by slot when the prompt carries one, with the historical text match as
+			// the fallback for prompts minted before slotIndex existed.
 			active.player.manualPrompts = active.player.manualPrompts.filter(
-				(entry) => !(entry.source === 'awaken' && entry.text.includes(spirit.name))
+				(entry) =>
+					!(
+						entry.source === 'awaken' &&
+						(entry.slotIndex != null
+							? entry.slotIndex === spirit.slotIndex
+							: entry.text.includes(spirit.name))
+					)
 			);
 			// onAwaken class effects resolve now that the spirit's classes are active.
 			applyTrigger(state, active.seatColor, 'awakening', log, { catalog, command });
@@ -3029,6 +3048,7 @@ export function buildSessionProjection(
 	return {
 		roomCode: state.roomCode,
 		revision: state.revision,
+		stateHash: hashGameState(state),
 		status: state.status,
 		gameId: state.gameId,
 		round: state.round,

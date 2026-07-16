@@ -1,7 +1,7 @@
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { setupTwoPlayerGame, getRoomView, runRoomCommand } from './helpers';
+import { setupTwoPlayerGame, getRoomView, runRoomCommand, ensureGuestIdentity } from './helpers';
 
 /**
  * Parity-harness fixture + golden capture for the Arc Spirits Godot port.
@@ -27,24 +27,34 @@ import { setupTwoPlayerGame, getRoomView, runRoomCommand } from './helpers';
  * commits. Run: `npx playwright test e2e/capture-fixtures.spec.ts` from the spectate repo.
  */
 
-const GODOT_ROOT = resolve(
-	'/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-godot'
-);
+// The Godot repo is a sibling of this one (see PORT_PLAN.md two-repo layout);
+// ARC_GODOT_ROOT overrides for non-standard checkouts. No absolute usernames —
+// this file must collect (`playwright test --list`) on any machine.
+const GODOT_ROOT =
+	process.env.ARC_GODOT_ROOT ?? resolve(import.meta.dirname, '..', '..', 'arc-spirits-godot');
 const FIXTURES_DIR = resolve(GODOT_ROOT, 'fixtures');
 const GOLDENS_DIR = resolve(GODOT_ROOT, 'goldens', 'web');
 const VIEWPORT = { width: 1280, height: 720 };
 const BASE = 'http://localhost:4173';
 
-mkdirSync(FIXTURES_DIR, { recursive: true });
-mkdirSync(GOLDENS_DIR, { recursive: true });
+// Deferred to run time (not module load) so test collection never touches the filesystem.
+function ensureArtifactDirs(): void {
+	mkdirSync(FIXTURES_DIR, { recursive: true });
+	mkdirSync(GOLDENS_DIR, { recursive: true });
+}
 
 const ANIM_KILL = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important;scroll-behavior:auto!important;}`;
 
 // ── low-level setup helpers (mirrors e2e/helpers.ts; those internals aren't exported) ──
 
 async function apiPost(page: Page, path: string, body: Record<string, unknown> = {}): Promise<any> {
+	// Mutation routes require a cmdId; minted once so retries are honest duplicates.
+	const data =
+		/\/(commands|claim-seat|start)$/.test(path) && body.cmdId == null
+			? { ...body, cmdId: `e2e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` }
+			: body;
 	for (let attempt = 0; attempt < 5; attempt += 1) {
-		const res = await page.context().request.post(path, { data: body });
+		const res = await page.context().request.post(path, { data });
 		const text = await res.text();
 		if (res.ok()) return JSON.parse(text);
 		if (res.status() >= 500 && attempt < 4) {
@@ -56,18 +66,10 @@ async function apiPost(page: Page, path: string, body: Record<string, unknown> =
 	throw new Error(`POST ${path} failed after retries.`);
 }
 
-async function seedCookie(page: Page, code: string, memberId: string | null): Promise<void> {
-	if (!memberId) throw new Error(`Missing member id for ${code}`);
-	await page.context().addCookies([
-		{
-			name: `arc_spirits_play_member_${code.toUpperCase()}`,
-			value: memberId,
-			url: BASE,
-			httpOnly: true,
-			sameSite: 'Lax',
-			secure: false
-		}
-	]);
+// Identity: each page establishes the validated anonymous guest account (the sole
+// principal) via the shared helper before driving the API in its context.
+async function seedIdentity(page: Page, name: string): Promise<void> {
+	await ensureGuestIdentity(page, name);
 }
 
 function roomCodeOf(page: Page): string {
@@ -216,6 +218,7 @@ async function capture(
 	howReached: string[],
 	opts: { anchorTestId?: string } = {}
 ): Promise<void> {
+	ensureArtifactDirs();
 	// The fixture (server view) and the golden (page pixels) must describe the SAME
 	// state. Live rooms can advance between the view fetch and the screenshot (07's
 	// reward takeover auto-advanced to round-2 navigation mid-capture), so capture
@@ -325,14 +328,14 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const guest = await guestCtx.newPage();
 			await host.goto('/play');
 			await guest.goto('/play');
+			await seedIdentity(host, 'Host');
+			await seedIdentity(guest, 'Guest');
 			const created = await apiPost(host, '/api/play/sessions', { displayName: 'Host' });
 			const code = created.projection.roomCode;
 			const pool = created.projection.guardianPool as string[];
-			const joined = await apiPost(guest, `/api/play/sessions/${code}/join`, {
+			await apiPost(guest, `/api/play/sessions/${code}/join`, {
 				displayName: 'Guest'
 			});
-			await seedCookie(host, code, created.member.id);
-			await seedCookie(guest, code, joined.member.id);
 			await apiPost(host, `/api/play/sessions/${code}/claim-seat`, { seatColor: 'Red' });
 			await apiPost(host, `/api/play/sessions/${code}/commands`, {
 				command: { type: 'selectGuardian', guardianName: pool[0] }

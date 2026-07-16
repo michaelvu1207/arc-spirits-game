@@ -4,6 +4,8 @@
 	import { mergeCombatLog } from '$lib/play/combatLog';
 	import type { CombatState, SeatColor } from '$lib/play/types';
 	import { displayName } from './helpers';
+	import LowPolySpiritStage from '$lib/components/LowPolySpiritStage.svelte';
+	import { pulseHaptic } from '$lib/stores/accessibilitySettings.svelte';
 
 	interface Props {
 		combats: CombatState[];
@@ -20,6 +22,7 @@
 	const combatId = $derived(myCombat?.id ?? null);
 	// Collapse consecutive same-source buff lines into one summed sentence (cosmetic).
 	const lines = $derived(mergeCombatLog(myCombat?.log ?? []));
+	const corruptionMoment = $derived(lines.some((line) => /corrupt/i.test(line)));
 
 	type LineKind = 'upgrade' | 'ward' | 'gain' | 'strike' | 'harm' | 'cost' | 'neutral';
 
@@ -80,6 +83,7 @@
 	$effect(() => {
 		const id = combatId; // sole tracked dependency → restart only on a NEW combat
 		if (!id) return;
+		pulseHaptic('impact');
 		// Walk the SAME merged lines the template renders, so the reveal stays aligned.
 		const log = untrack(() => mergeCombatLog(myCombat?.log ?? []));
 		lineIdx = 0;
@@ -121,6 +125,7 @@
 {#if myCombat}
 	<section class="combat" class:killed={myCombat.killed} data-testid="combat-overlay">
 		<div class="vignette" aria-hidden="true"></div>
+		{#if corruptionMoment}<div class="corruption-spirit"><LowPolySpiritStage moment="corruption" guardianName="Corrupted Spirit" accent="#ff5b6e" compact /></div>{/if}
 		<header class="head">
 			<span class="eyebrow">{myCombat.kind === 'pvp' ? 'Encounter' : 'Combat'}</span>
 			{#if myCombat.killed}<span class="badge">Monster slain</span>{/if}
@@ -184,6 +189,8 @@
 			repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px);
 		mix-blend-mode: overlay;
 	}
+	.corruption-spirit { position:absolute; right:-28px; top:-44px; width:240px; height:220px; opacity:.32; pointer-events:none; }
+	.head,.verdict,.log{position:relative;z-index:1}
 	.head {
 		display: flex;
 		justify-content: space-between;

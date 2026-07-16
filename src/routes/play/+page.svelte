@@ -1,18 +1,35 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { goto, replaceState } from '$app/navigation';
+	import { beforeNavigate, goto, replaceState } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
-	import { createSoloPlayRoom, setActiveMemberId } from '$lib/stores/playStore.svelte';
+	import {
+		createSoloPlayRoom,
+		restoreActiveMember,
+		setActiveMember
+	} from '$lib/stores/playStore.svelte';
 	import { auth } from '$lib/auth/auth.svelte';
 	import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
+	import {
+		QuickPlaySearch,
+		QuickPlayAuthRequired,
+		type QuickPlayPlayer,
+		type QuickPlayQueueResult,
+		type QuickPlayMatchInfo
+	} from '$lib/play/quickPlaySearch';
+	import { MatchedRoomNavigator, matchedRoomUrl } from '$lib/play/matchedRoomNav';
 	import {
 		getAssetState,
 		getGuardianAsset,
 		loadAssetDataSkipImages
 	} from '$lib/stores/assetStore.svelte';
 	import MenuShell from '$lib/components/play2d/MenuShell.svelte';
+	import LowPolySpiritStage from '$lib/components/LowPolySpiritStage.svelte';
 	import ProfileDock from '$lib/components/play2d/ProfileDock.svelte';
+	import SocialDock from '$lib/components/play2d/SocialDock.svelte';
+	import GameIcon from '$lib/components/GameIcon.svelte';
+	import { holdHeavyBackground } from '$lib/stores/backgroundGate.svelte';
 
 	const hover = () => playMenuSfx('ui-hover', { volume: 0.45 });
 
@@ -37,17 +54,13 @@
 	});
 	const queueArt = $derived(showcase[1] ?? showcase[0] ?? null);
 
-	// ── Ranked matchmaking ───────────────────────────────────────────────────
-	type QueuedPlayer = { userId: string; displayName: string; you: boolean };
-	type QueueResult = {
-		status: 'searching' | 'matched';
-		roomCode?: string;
-		memberId?: string;
-		queued: number;
-		needed: number;
-		players?: QueuedPlayer[];
-	};
-	const RANKED_POLL_MS = 2500;
+	// ── Quick Play matchmaking (ranked only for verified accounts) ─────────────
+	// The queue lifecycle lives in the framework-free QuickPlaySearch controller,
+	// which owns its OWN canonical-identity + search-generation fence: cancel,
+	// unmount, a newer search, or a durable UID change silences every prior poll,
+	// timer, error and navigation, while a same-UID token refresh never interrupts
+	// a valid search. This component only adapts its snapshots into $state.
+	type QueuedPlayer = QuickPlayPlayer;
 
 	// The main menu swaps to a dedicated full-screen ranked view (hiding the nav) while
 	// the player is in/around the matchmaking queue. 'menu' shows the normal menu.
@@ -58,16 +71,30 @@
 	let queued = $state(0);
 	let needed = $state(0);
 	let players = $state<QueuedPlayer[]>([]);
+	/** SERVER-TRUTH metadata of the formed match (mode/rated as the server actually
+	 *  formed it — a verified player whose party includes a guest plays CASUAL).
+	 *  Shown while the navigation into the room is in flight. */
+	let matchFound = $state<QuickPlayMatchInfo | null>(null);
 	let searchStartedAt = $state(0);
 	let elapsed = $state(0);
-	let rankedPollTimer: ReturnType<typeof setTimeout> | null = null;
 	let rankedTickTimer: ReturnType<typeof setInterval> | null = null;
 	let mounted = $state(false);
 	let soloStarting = $state(false);
 	let soloError = $state<string | null>(null);
 
-	/** POST a matchmaking endpoint, forwarding the Bearer token cross-origin (Capacitor). */
-	async function postMatchmaking(path: string): Promise<QueueResult> {
+	/** Whether THIS player's Quick Play would actually be RANKED: only a verified
+	 *  (permanent) account plays rated — a guest plays a casual, unrated match. The
+	 *  queue/searching UI labels itself from this, never claiming "ranked" for a
+	 *  guest. */
+	const rankedEligible = $derived(auth.isPermanent);
+
+	/** POST a matchmaking endpoint, forwarding the Bearer token cross-origin
+	 *  (Capacitor). The token is read at CALL time, so a same-UID refresh simply
+	 *  rides along on the next poll. */
+	async function postMatchmaking(
+		path: string,
+		body: Record<string, unknown> = {}
+	): Promise<QuickPlayQueueResult> {
 		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 		if (isCrossOrigin) {
 			const token = auth.session?.access_token;
@@ -77,16 +104,23 @@
 			method: 'POST',
 			headers,
 			credentials: isCrossOrigin ? 'include' : 'same-origin',
-			body: JSON.stringify({})
+			body: JSON.stringify(body)
 		});
 		const payload = (await res.json().catch(() => null)) as
-			| QueueResult
+			| QuickPlayQueueResult
 			| { message?: string }
 			| null;
 		if (!res.ok) {
 			if (res.status === 401) {
-				rankedNeedsAuth = true;
-				throw new Error('Sign in to play ranked.');
+				// An honest 401 split: with NO local identity the guest sign-in itself
+				// failed (a transport/auth-service problem — Quick Play never requires a
+				// permanent account); with one, the server no longer accepts our session.
+				if (!auth.isSignedIn) {
+					throw new Error(
+						'Could not establish your guest identity — you appear to be offline or the sign-in service is unavailable. Check your connection and try again.'
+					);
+				}
+				throw new QuickPlayAuthRequired();
 			}
 			const message =
 				payload &&
@@ -97,72 +131,172 @@
 					: `Request failed with status ${res.status}`;
 			throw new Error(message);
 		}
-		return payload as QueueResult;
+		return payload as QuickPlayQueueResult;
 	}
 
-	function stopRankedTimers() {
-		if (rankedPollTimer) clearTimeout(rankedPollTimer);
+	function stopTickTimer() {
 		if (rankedTickTimer) clearInterval(rankedTickTimer);
-		rankedPollTimer = null;
 		rankedTickTimer = null;
 	}
 
-	async function pollRanked() {
-		if (ranked !== 'searching') return;
-		try {
-			const result = await postMatchmaking('/api/play/matchmaking/queue');
-			queued = result.queued;
-			needed = result.needed;
-			players = result.players ?? [];
-			if (result.status === 'matched' && result.roomCode) {
-				stopRankedTimers();
-				ranked = 'idle';
-				// Seed our server-created membership id so the room page identifies us
-				// (cross-origin sends ?member=/X-Play-Member; same-origin also has the
-				// cookie the queue endpoint set + the user_id fallback).
-				if (result.memberId) setActiveMemberId(result.memberId, result.roomCode);
-				playMenuSfx('game-start', { volume: 0.8 });
-				await goto(`/play/${encodeURIComponent(result.roomCode)}`);
-				return;
-			}
-			if (ranked === 'searching') rankedPollTimer = setTimeout(pollRanked, RANKED_POLL_MS);
-		} catch (e) {
-			stopRankedTimers();
-			ranked = 'idle';
-			rankedError = e instanceof Error ? e.message : 'Matchmaking failed — try again.';
+	function startTickTimer() {
+		stopTickTimer();
+		searchStartedAt = Date.now();
+		elapsed = 0;
+		rankedTickTimer = setInterval(() => {
+			elapsed = Math.floor((Date.now() - searchStartedAt) / 1000);
+		}, 1000);
+	}
+
+	// ── Matched-room navigation fence ────────────────────────────────────────
+	// The queue controller retires the SEARCH before navigating; this navigator
+	// owns the NAVIGATION itself, so a room `goto` held for seconds by a slow
+	// route load can never commit over Back/Main Menu, a sign-out/account
+	// change, unmount, or a newer attempt — and the room URL carries the
+	// harness/dev query modes (e2e, ws) instead of silently dropping them.
+	const roomNav = new MatchedRoomNavigator({
+		goto: (url, opts) => goto(url, opts),
+		currentLocation: () => ({
+			pathname: window.location.pathname,
+			search: window.location.search
+		}),
+		seedMember: (memberId) => setActiveMember(memberId),
+		restoreMember: (prior, expected) =>
+			restoreActiveMember(prior as ReturnType<typeof setActiveMember>, expected)
+	});
+	/** The uid the held matched navigation was started for — a durable identity
+	 *  change while it is in flight fences it (see the $effect below). */
+	let heldNavUid: string | null = null;
+
+	/** Fence a held matched-room navigation and settle the page UI with it. */
+	function fenceHeldRoomNav(opts: { supersede?: boolean } = {}) {
+		if (roomNav.fence(opts)) {
+			matchFound = null;
 		}
 	}
+
+	// Identity fence: a durable account change (sign-out, account switch) while a
+	// matched navigation is held must cancel it — the room was matched FOR the
+	// previous identity.
+	$effect(() => {
+		const uid = auth.user?.id ?? null;
+		if (roomNav.held && uid !== heldNavUid) fenceHeldRoomNav();
+	});
+
+	// Latency-sensitive flow → HOLD the heavy background (backgroundGate): the
+	// splat's first initialization is a multi-second native main-thread stall
+	// that must never land under the queue's poll timers or a matched-room
+	// navigation. The hold only DELAYS a not-yet-mounted splat; an already
+	// running one is unaffected (its init cost is already paid).
+	let releaseBgHold: (() => void) | null = null;
+	$effect(() => {
+		const latencySensitive = ranked === 'searching' || matchFound !== null;
+		if (latencySensitive && !releaseBgHold) {
+			releaseBgHold = holdHeavyBackground();
+		} else if (!latencySensitive && releaseBgHold) {
+			releaseBgHold();
+			releaseBgHold = null;
+		}
+	});
+
+	// Unmount/own-navigation fence: when ANOTHER navigation takes the router while
+	// a matched-room goto is held, the held goto is already losing — silence it and
+	// roll the member seed back WITHOUT issuing a superseding navigation (that
+	// would hijack the user's own). Our own held goto (destination = the matched
+	// room) passes through untouched.
+	beforeNavigate((nav) => {
+		const held = roomNav.held;
+		if (!held) return;
+		if (nav.to?.url.pathname === `/play/${encodeURIComponent(held.roomCode)}`) return;
+		fenceHeldRoomNav({ supersede: false });
+	});
+
+	const search = new QuickPlaySearch({
+		async resolveIdentity() {
+			// The pre-hydration `?action=` reload path can reach here from onMount
+			// BEFORE the layout effect initializes the auth store — wait for it
+			// instead of racing into a spurious "still initializing" failure.
+			if (!(await auth.whenInitialized())) {
+				throw new Error('Sign-in could not initialize — check your connection and try again.');
+			}
+			// Ensure an account/identity first (captures user_id), same as Quick Play.
+			const typed = (browser ? localStorage.getItem(NAME_KEY) : null) ?? '';
+			await auth.resolvePlayIdentity(typed);
+			const uid = auth.user?.id;
+			if (!uid) {
+				throw new Error(
+					'Could not establish your guest identity — check your connection and try again.'
+				);
+			}
+			return uid;
+		},
+		currentUid: () => auth.user?.id ?? null,
+		// Every poll carries THIS search's client-minted attempt token, so the
+		// server binds the row's cancel handle to it before any response exists —
+		// the generation-safe cancellation contract.
+		queue: (attemptId) => postMatchmaking('/api/play/matchmaking/queue', { attemptId }),
+		leave: async (searchId) => {
+			// ALWAYS token-bound: retires exactly the initiating attempt's row (and
+			// tombstones it) server-side — including after sign-out or a durable
+			// account transition, and never a NEWER search by the same account.
+			await postMatchmaking('/api/play/matchmaking/leave', { searchId }).catch(() => {});
+		},
+		async navigate(roomCode, memberId, match) {
+			// Seed our server-created membership so the room page identifies us:
+			// the public memberId labels the seat; the validated account (which this
+			// endpoint required) is what authorizes every room request. `match` is
+			// the server-truth mode/rated verdict — the transition labels itself
+			// from it (never from the client's own "ranked eligible" assumption).
+			// The navigator owns seeding/rollback, the harness-param carry, and the
+			// cancellation fence: Back, an identity change, unmount, or a newer
+			// attempt silences a HELD goto instead of being overwritten by it.
+			matchFound = match;
+			heldNavUid = auth.user?.id ?? null;
+			playMenuSfx('game-start', { volume: 0.8 });
+			try {
+				await roomNav.navigate(roomCode, memberId);
+			} catch (navErr) {
+				// UNFENCED navigation failure (the fence path is silent): the member
+				// seed is already rolled back by the navigator — surface a recovery
+				// path with the room code, so the match can still be joined by hand.
+				matchFound = null;
+				rankedError =
+					`Match found (room ${roomCode}), but opening it failed — ` +
+					`use Join Room with that code, or search again. (${
+						navErr instanceof Error ? navErr.message : 'navigation failed'
+					})`;
+				return;
+			}
+		},
+		onChange(state) {
+			const wasSearching = ranked === 'searching';
+			ranked = state.phase;
+			rankedError = state.error;
+			rankedNeedsAuth = state.needsAuth;
+			queued = state.queued;
+			needed = state.needed;
+			players = state.players;
+			matchFound = state.match;
+			if (state.phase === 'searching' && !wasSearching) startTickTimer();
+			if (state.phase !== 'searching') stopTickTimer();
+		}
+	});
 
 	/** Open the dedicated ranked view (hides the menu) and begin searching. */
 	async function startRanked() {
 		if (ranked === 'searching') return;
-		rankedError = null;
-		rankedNeedsAuth = false;
-		players = [];
+		// A NEWER attempt fences any held matched-room navigation from a previous
+		// one — the old goto must not commit under the fresh search.
+		fenceHeldRoomNav();
 		view = 'ranked';
 		playMenuSfx('ui-click');
-		try {
-			// Ensure an account/identity first (captures user_id), same as Quick Play.
-			const typed = (browser ? localStorage.getItem(NAME_KEY) : null) ?? '';
-			await auth.resolvePlayIdentity(typed);
-
-			ranked = 'searching';
-			searchStartedAt = Date.now();
-			elapsed = 0;
-			queued = 0;
-			needed = 0;
-			rankedTickTimer = setInterval(() => {
-				elapsed = Math.floor((Date.now() - searchStartedAt) / 1000);
-			}, 1000);
-			await pollRanked();
-		} catch (e) {
-			stopRankedTimers();
-			ranked = 'idle';
-			if (!rankedNeedsAuth) {
-				rankedError = e instanceof Error ? e.message : 'Could not start ranked search.';
-			}
-		}
+		await search.start();
 	}
+
+	// Unmount cancellation for the solo lane: a solo-create resolving after the
+	// player already left this page must neither install/connect the new room in
+	// the store nor let the dead handler goto it or write error/loading state.
+	const unmountSolo = new AbortController();
 
 	async function startSolo() {
 		if (soloStarting) return;
@@ -170,37 +304,42 @@
 		soloError = null;
 		playMenuSfx('ui-click');
 		try {
+			// Same pre-hydration `?action=solo` race as startRanked: wait for auth.
+			if (!(await auth.whenInitialized())) {
+				throw new Error('Sign-in could not initialize — check your connection and try again.');
+			}
 			const typed = (browser ? localStorage.getItem(NAME_KEY) : null) ?? '';
 			const displayName = await auth.resolvePlayIdentity(typed);
-			const view = await createSoloPlayRoom(displayName);
+			if (unmountSolo.signal.aborted) return;
+			const view = await createSoloPlayRoom(displayName, { signal: unmountSolo.signal });
+			if (unmountSolo.signal.aborted) return;
 			playMenuSfx('game-start', { volume: 0.8 });
-			await goto(`/play/${encodeURIComponent(view.projection.roomCode)}`);
+			// Same harness-param carry as the matched navigation: solo room entry
+			// must not drop the e2e/ws posture either.
+			await goto(matchedRoomUrl(view.projection.roomCode, window.location.search));
 		} catch (e) {
+			if (unmountSolo.signal.aborted) return; // cancelled — no error to a dead page
 			soloError = e instanceof Error ? e.message : 'Could not start solo play.';
 		} finally {
 			soloStarting = false;
 		}
 	}
 
-	/** Leave the queue (best-effort) and stop searching, staying on the ranked view. */
-	async function leaveQueue() {
-		stopRankedTimers();
-		ranked = 'idle';
-		try {
-			await postMatchmaking('/api/play/matchmaking/leave');
-		} catch {
-			// Best-effort: the row ages out server-side even if leave fails.
-		}
-	}
-
-	/** Cancel: leave the queue and return to the main menu. */
-	async function cancelRanked() {
+	/** Cancel: leave the queue (best-effort, inside the controller's fence) and
+	 *  return to the main menu. Every in-flight poll/timer of the cancelled search
+	 *  is silenced by the search-generation bump. */
+	function cancelRanked() {
 		playMenuSfx('ui-back');
 		view = 'menu';
-		players = [];
 		rankedError = null;
 		rankedNeedsAuth = false;
-		await leaveQueue();
+		players = [];
+		matchFound = null;
+		search.cancel();
+		// Back/Main Menu also fences a HELD matched-room navigation: the router
+		// aborts the in-flight room load instead of letting it commit over the
+		// player's choice seconds later.
+		fenceHeldRoomNav();
 	}
 
 	function formatElapsed(secs: number): string {
@@ -213,6 +352,22 @@
 	function initial(name: string): string {
 		return (name.trim()[0] ?? '?').toUpperCase();
 	}
+
+	/** Progressive-enhancement anchor target for Solo/Quick Play: the native
+	 *  (pre-hydration) fallback reload must PRESERVE the harness/dev query modes
+	 *  (e2e, ws) alongside ?action= — a cold click used to reload to a bare
+	 *  `/play?action=…`, silently dropping the e2e posture for the whole session. */
+	function actionHref(action: string): string {
+		const params = new URLSearchParams();
+		for (const key of ['e2e', 'ws']) {
+			const value = page.url.searchParams.get(key);
+			if (value !== null) params.set(key, value);
+		}
+		params.set('action', action);
+		return `/play?${params.toString()}`;
+	}
+	const soloHref = $derived(actionHref('solo'));
+	const rankedHref = $derived(actionHref('ranked'));
 
 	onMount(() => {
 		mounted = true;
@@ -247,11 +402,17 @@
 		return () => {
 			document.documentElement.classList.remove('immersive-play');
 			document.body.classList.remove('immersive-play');
-			// Leave the queue + stop polling if the player navigates away mid-search.
-			if (ranked === 'searching') {
-				stopRankedTimers();
-				void postMatchmaking('/api/play/matchmaking/leave').catch(() => {});
-			}
+			// Unmount teardown: the controller leaves the queue (best-effort) and
+			// permanently fences every outstanding poll/timer/navigation, and the
+			// solo lane's in-flight create (if any) is aborted the same way.
+			unmountSolo.abort();
+			search.destroy();
+			// Unmount: another navigation owns the router — silence a held matched
+			// goto and roll its member seed back without issuing a superseding one.
+			fenceHeldRoomNav({ supersede: false });
+			releaseBgHold?.();
+			releaseBgHold = null;
+			stopTickTimer();
 		};
 	});
 </script>
@@ -263,7 +424,15 @@
 <MenuShell>
 	<div class="home" data-testid="play-home" data-hydrated={mounted ? 'true' : 'false'}>
 		{#if view === 'menu'}
+			<SocialDock />
 			<!-- ── Title screen ─────────────────────────────────────────────── -->
+			<div class="poly-showcase">
+				<LowPolySpiritStage
+					moment="guardian"
+					guardianName={showcase[1]?.name ?? 'Arc Spirit'}
+					accent={showcase[1]?.color ?? '#65f3e1'}
+				/>
+			</div>
 			{#if showcase.length > 0}
 				<div class="showcase" aria-hidden="true">
 					{#each showcase as card, i (card.name)}
@@ -295,7 +464,7 @@
 					class="mode primary"
 					class:busy={soloStarting}
 					style="--mc: var(--brand-magenta, #ff2bc7)"
-					href="/play?action=solo"
+					href={soloHref}
 					onclick={(e) => {
 						e.preventDefault();
 						void startSolo();
@@ -303,7 +472,7 @@
 					onpointerenter={hover}
 					aria-busy={soloStarting}
 				>
-					<span class="m-gem" aria-hidden="true"><span class="m-diamond"></span></span>
+					<span class="m-gem"><GameIcon name="solo" size={36} /></span>
 					<span class="m-text">
 						<span class="m-title">{soloStarting ? 'Starting…' : 'Solo Play'}</span>
 						<span class="m-sub">Jump in now · you vs ML bots</span>
@@ -315,17 +484,25 @@
 					data-testid="quick-play"
 					class="mode"
 					style="--mc: var(--brand-cyan, #24d4ff)"
-					href="/play?action=ranked"
+					href={rankedHref}
 					onclick={(e) => {
 						e.preventDefault();
 						void startRanked();
 					}}
 					onpointerenter={hover}
 				>
-					<span class="m-gem" aria-hidden="true"><span class="m-diamond"></span></span>
+					<span class="m-gem"><GameIcon name="quick" size={36} /></span>
 					<span class="m-text">
 						<span class="m-title">Quick Play</span>
-						<span class="m-sub">Ranked matchmaking · 4 players</span>
+						<!-- Truthful mode label: a guest always plays casual/unrated, and even a
+						     verified account is only ELIGIBLE for ranked — whether the formed game
+						     is rated depends on the whole party (a guest in it makes the match
+						     casual), so nothing here promises "ranked". -->
+						<span class="m-sub"
+							>{rankedEligible
+								? 'Matchmaking · 4 players · ranked with a verified party'
+								: 'Casual matchmaking · 4 players · sign in for ranked'}</span
+						>
 					</span>
 					<span class="m-go" aria-hidden="true">→</span>
 				</a>
@@ -338,7 +515,7 @@
 					onpointerenter={hover}
 					onclick={() => playMenuSfx('ui-click')}
 				>
-					<span class="m-gem" aria-hidden="true"><span class="m-diamond"></span></span>
+					<span class="m-gem"><GameIcon name="lobby" size={36} /></span>
 					<span class="m-text">
 						<span class="m-title">Custom Lobby</span>
 						<span class="m-sub">Create a room · play with friends</span>
@@ -352,20 +529,31 @@
 
 				<div class="minor">
 					<a
+						data-testid="hall-of-guardians"
 						class="minor-link"
 						href="/play/champions"
 						onpointerenter={hover}
 						onclick={() => playMenuSfx('ui-click')}
 					>
-						<span class="mgem" aria-hidden="true"></span>Hall of Guardians
+						<GameIcon name="guardians" size={22} /> Hall of Guardians
 					</a>
 					<a
+						data-testid="composition-builder"
 						class="minor-link"
 						href="/play/builder"
 						onpointerenter={hover}
 						onclick={() => playMenuSfx('ui-click')}
 					>
-						<span class="mgem" aria-hidden="true"></span>Builder
+						<GameIcon name="builder" size={22} /> Builder
+					</a>
+					<a
+						data-testid="ranked-season"
+						class="minor-link"
+						href="/play/ranked"
+						onpointerenter={hover}
+						onclick={() => playMenuSfx('ui-click')}
+					>
+						<GameIcon name="ranked" size={22} /> Ranked Season
 					</a>
 				</div>
 			</nav>
@@ -383,16 +571,36 @@
 
 				<div class="q-scene">
 					{#if rankedNeedsAuth}
-						<span class="q-eyebrow">Ranked Matchmaking</span>
-						<h2 class="q-title">Sign in to play ranked</h2>
-						<p class="q-sub">Ranked is account-only so your rating can be tracked.</p>
+						<span class="q-eyebrow">Quick Play</span>
+						<h2 class="q-title">Session expired</h2>
+						<p class="q-sub" data-testid="queue-session-expired">
+							Your session could not be verified. Sign in again to keep playing.
+						</p>
 						<a class="q-primary" href="/account" onclick={() => playMenuSfx('ui-click')}>
 							Sign in →
 						</a>
 					{:else if ranked === 'searching'}
-						<span class="q-eyebrow">Ranked Matchmaking</span>
+						<!-- NEUTRAL while searching: whether the game is RATED is only known when
+						     the server forms the party (one guest in a verified player's party
+						     makes it casual). Promise nothing until `matchFound.rated` says so. -->
+						<span class="q-eyebrow"
+							>{rankedEligible ? 'Quick Play — Finding Match' : 'Quick Play — Casual Match'}</span
+						>
+						{#if rankedEligible}
+							<p class="q-sub" data-testid="queue-neutral-note">
+								Rated ranked play requires an all-verified party — you’ll see the final mode when
+								the match is found.
+							</p>
+						{/if}
 
 						<div class="q-circle" style="--oc: {queueArt?.color ?? '#7b1dff'}">
+							<div class="poly-queue">
+								<LowPolySpiritStage
+									moment="matchmaking"
+									guardianName={queueArt?.name ?? 'Season Core'}
+									accent={queueArt?.color ?? '#65f3e1'}
+								/>
+							</div>
 							<span class="q-ring r1" aria-hidden="true"></span>
 							<span class="q-ring r2" aria-hidden="true"></span>
 							<span class="q-disc" aria-hidden="true">
@@ -405,6 +613,12 @@
 						</div>
 
 						<h2 class="q-title">Searching for a match…</h2>
+						{#if !rankedEligible}
+							<p class="q-sub" data-testid="queue-casual-note">
+								Playing as a guest — this match is casual and unrated.
+								<a href="/account">Sign in</a> to play ranked.
+							</p>
+						{/if}
 						<div class="q-timer" aria-label="Time waiting">{formatElapsed(elapsed)}</div>
 
 						<div class="q-meter">
@@ -418,10 +632,11 @@
 
 						<ul class="q-roster">
 							{#each players as p (p.userId)}
+								<!-- Bot queue entries are DISCLOSED, never dressed as waiting humans. -->
 								<li class="q-chip" class:you={p.you}>
 									<span class="q-ava">{initial(p.displayName)}</span>
 									<span class="q-name">{p.displayName}</span>
-									<span class="q-state">{p.you ? 'You' : 'In queue'}</span>
+									<span class="q-state">{p.you ? 'You' : p.isBot ? 'Bot' : 'In queue'}</span>
 								</li>
 							{/each}
 							{#each Array(Math.max(0, (needed || 4) - players.length)) as _, i (i)}
@@ -431,10 +646,19 @@
 								</li>
 							{/each}
 						</ul>
+					{:else if matchFound}
+						<!-- SERVER TRUTH: label the formed game as the server actually formed
+						     it — a verified player matched with a guest plays casual/unrated,
+						     whatever the searching UI assumed. -->
+						<span class="q-eyebrow">Quick Play</span>
+						<h2 class="q-title" data-testid="queue-match-found">
+							Match found — {matchFound.rated ? 'Ranked' : 'Casual (unrated)'}
+						</h2>
+						<p class="q-sub">Entering the game…</p>
 					{:else}
-						<span class="q-eyebrow">Ranked Matchmaking</span>
+						<span class="q-eyebrow">Quick Play</span>
 						{#if rankedError}
-							<p class="q-sub error">{rankedError}</p>
+							<p class="q-sub error" data-testid="queue-error">{rankedError}</p>
 						{/if}
 						<button class="q-primary" type="button" onclick={startRanked} onpointerenter={hover}>
 							Search again
@@ -479,6 +703,16 @@
 	}
 
 	/* ── Guardian showcase (key art, right side) ───────────────── */
+	.poly-showcase {
+		position: absolute;
+		right: 2vw;
+		top: 10%;
+		width: min(64vw, 760px);
+		height: 76%;
+		z-index: 0;
+		opacity: 0.72;
+		pointer-events: none;
+	}
 	.showcase {
 		position: absolute;
 		right: clamp(24px, 7vw, 120px);
@@ -487,7 +721,13 @@
 		display: flex;
 		gap: clamp(12px, 1.6vw, 22px);
 		pointer-events: none;
-		z-index: 0;
+		z-index: 1;
+	}
+	.poly-queue {
+		position: absolute;
+		inset: -65%;
+		z-index: -1;
+		opacity: 0.72;
 	}
 	.sc-card {
 		position: relative;
@@ -504,7 +744,8 @@
 			),
 			rgba(8, 5, 18, 0.55);
 		box-shadow: 0 30px 70px -30px color-mix(in srgb, var(--oc) 70%, transparent);
-		transform: rotate(calc((var(--i) - 1) * 5deg)) translateY(calc((var(--i) - 1) * (var(--i) - 1) * 12px));
+		transform: rotate(calc((var(--i) - 1) * 5deg))
+			translateY(calc((var(--i) - 1) * (var(--i) - 1) * 12px));
 		animation: sc-float 7s ease-in-out infinite;
 		animation-delay: calc(var(--i) * -2.2s);
 	}
@@ -618,9 +859,9 @@
 			background: linear-gradient(100deg, rgba(30, 18, 52, 0.82), rgba(12, 7, 26, 0.7));
 			box-shadow: 0 16px 42px -20px var(--mc);
 		}
-		.mode:hover .m-diamond {
-			background: var(--mc);
-			box-shadow: 0 0 14px var(--mc);
+		.mode:hover .m-gem :global(.game-icon) {
+			filter: drop-shadow(0 0 7px var(--mc));
+			transform: scale(1.08);
 		}
 		.mode:hover .m-go {
 			opacity: 1;
@@ -650,16 +891,12 @@
 		border-radius: 12px;
 		border: 1px solid color-mix(in srgb, var(--mc) 40%, transparent);
 		background: color-mix(in srgb, var(--mc) 9%, transparent);
+		color: var(--mc);
 	}
-	.m-diamond {
-		width: 11px;
-		height: 11px;
-		transform: rotate(45deg);
-		border: 1px solid var(--mc);
-		background: color-mix(in srgb, var(--mc) 35%, transparent);
+	.m-gem :global(.game-icon) {
 		transition:
-			background 180ms ease,
-			box-shadow 180ms ease;
+			filter 180ms ease,
+			transform 180ms ease;
 	}
 	.m-text {
 		flex: 1;
@@ -712,10 +949,8 @@
 	.mode.primary .m-title {
 		font-size: 1.62rem;
 	}
-	.mode.primary .m-diamond {
-		background: var(--gradient-flame, linear-gradient(135deg, #ff2bc7, #7b1dff));
-		border-color: transparent;
-		box-shadow: 0 0 14px rgba(255, 43, 199, 0.65);
+	.mode.primary .m-gem :global(.game-icon) {
+		filter: drop-shadow(0 0 7px rgba(255, 43, 199, 0.65));
 		animation: gem-pulse 2.8s ease-in-out infinite;
 	}
 	.mode.primary .m-go {
@@ -754,24 +989,21 @@
 		text-decoration: none;
 		transition: color 160ms ease;
 	}
-	.minor-link .mgem {
-		width: 7px;
-		height: 7px;
-		transform: rotate(45deg);
-		border: 1px solid var(--color-aether, #3a2670);
+	.minor-link :global(.game-icon) {
+		color: var(--brand-violet-soft, #9d4dff);
 		transition:
-			background 160ms ease,
-			border-color 160ms ease;
+			color 160ms ease,
+			filter 160ms ease;
 	}
 	.minor-link:hover,
 	.minor-link:focus-visible {
 		color: #fff;
 		outline: none;
 	}
-	.minor-link:hover .mgem,
-	.minor-link:focus-visible .mgem {
-		background: var(--brand-magenta, #ff2bc7);
-		border-color: transparent;
+	.minor-link:hover :global(.game-icon),
+	.minor-link:focus-visible :global(.game-icon) {
+		color: var(--brand-magenta, #ff2bc7);
+		filter: drop-shadow(0 0 5px rgba(255, 43, 199, 0.55));
 	}
 
 	/* ── Searching scene ──────────────────────────────────────── */
@@ -780,9 +1012,7 @@
 		inset: 0;
 		display: grid;
 		grid-template-rows: auto minmax(0, 1fr) auto;
-		padding:
-			calc(clamp(14px, 3vh, 24px) + env(safe-area-inset-top))
-			clamp(16px, 4vw, 44px)
+		padding: calc(clamp(14px, 3vh, 24px) + env(safe-area-inset-top)) clamp(16px, 4vw, 44px)
 			calc(clamp(12px, 2.5vh, 22px) + env(safe-area-inset-bottom));
 	}
 	.q-top {
@@ -1303,7 +1533,7 @@
 			opacity: 1;
 			transform: none;
 		}
-		.mode.primary .m-diamond,
+		.mode.primary .m-gem :global(.game-icon),
 		.sc-card,
 		.q-ring,
 		.q-chip {
@@ -1328,5 +1558,385 @@
 		height: 100vh;
 		height: 100dvh;
 		overflow: hidden;
+	}
+
+	/* ── Selected art direction: graphic fields, not cards ───────── */
+	.home::before,
+	.home::after {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+		z-index: 0;
+	}
+	.home::before {
+		left: -9vw;
+		bottom: 5vh;
+		width: 69vw;
+		height: 27vh;
+		background: #7b1dff;
+		opacity: 0.2;
+		clip-path: polygon(0 18%, 82% 0, 100% 38%, 68% 100%, 0 76%);
+	}
+	.home::after {
+		right: -6vw;
+		top: 12vh;
+		width: 33vw;
+		height: 18vh;
+		background: #24d4ff;
+		opacity: 0.12;
+		clip-path: polygon(20% 0, 100% 34%, 73% 100%, 0 63%);
+	}
+	.showcase {
+		gap: 0;
+		right: 4vw;
+	}
+	.sc-card {
+		width: clamp(150px, 17vw, 245px);
+		border: 0;
+		border-radius: 0;
+		background: #190a3b;
+		box-shadow: none;
+		clip-path: polygon(18% 0, 100% 7%, 84% 100%, 0 86%);
+		animation: none;
+	}
+	.sc-card:nth-child(2) {
+		background: #0c6e83;
+		clip-path: polygon(8% 8%, 90% 0, 100% 87%, 15% 100%);
+	}
+	.sc-card:nth-child(3) {
+		background: #8e0b75;
+	}
+	.sc-fade {
+		inset: auto 0 0;
+		height: 24%;
+		background: rgba(5, 3, 16, 0.72);
+		clip-path: polygon(0 35%, 100% 0, 100% 100%, 0 100%);
+	}
+	.logo {
+		padding-left: clamp(14px, 2vw, 28px);
+	}
+	.logo::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 18%;
+		bottom: 5%;
+		width: 7px;
+		background: #24d4ff;
+		clip-path: polygon(0 0, 100% 8%, 60% 100%, 0 92%);
+	}
+	.l {
+		color: #ff2bc7;
+		background: none;
+		-webkit-text-fill-color: currentColor;
+		filter: none;
+		text-shadow: none;
+	}
+	.l2 {
+		color: #24d4ff;
+		text-shadow: none;
+	}
+	.modes {
+		width: min(610px, 56vw);
+		gap: 3px;
+	}
+	.mode,
+	.mode.primary {
+		min-height: 64px;
+		padding: 10px 42px 10px 18px;
+		border: 0;
+		border-radius: 0;
+		background: #2f1464;
+		box-shadow: none;
+		backdrop-filter: none;
+		clip-path: polygon(0 0, 94% 0, 100% 50%, 94% 100%, 2% 100%, 0 72%);
+	}
+	.mode.primary {
+		min-height: 78px;
+		background: #d515aa;
+	}
+	.mode:nth-of-type(2) {
+		width: 92%;
+		background: #087b91;
+	}
+	.mode:nth-of-type(3) {
+		width: 84%;
+		background: #43178f;
+	}
+	.mode:hover,
+	.mode.primary:hover {
+		background: #24d4ff;
+		box-shadow: none;
+	}
+	.mode:hover .m-title,
+	.mode:hover .m-sub,
+	.mode:hover .m-gem,
+	.mode:hover .m-go {
+		color: #080311;
+	}
+	.m-gem {
+		width: 44px;
+		height: 44px;
+		border: 2px solid currentColor;
+		border-radius: 0;
+		background: transparent;
+		color: #fff;
+		clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+	}
+	.m-title,
+	.mode.primary .m-title {
+		font-size: clamp(1.2rem, 2.1vw, 1.75rem);
+		color: #fff;
+	}
+	.m-sub {
+		color: rgba(255, 255, 255, 0.76);
+	}
+	.m-go {
+		color: #fff;
+		opacity: 1;
+		transform: none;
+	}
+	.minor {
+		width: min(680px, 64vw);
+		gap: 0;
+		padding: 0;
+		background: #100725;
+		clip-path: polygon(0 0, 96% 0, 100% 50%, 96% 100%, 0 100%);
+	}
+	.minor-link {
+		position: relative;
+		padding: 8px 18px;
+		color: #d8cfee;
+	}
+	.minor-link + .minor-link::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 24%;
+		width: 3px;
+		height: 52%;
+		background: #7b1dff;
+		transform: skewX(-20deg);
+	}
+
+	@media (orientation: landscape) and (max-height: 650px) {
+		.modes {
+			width: min(540px, 54vw);
+		}
+		.mode,
+		.mode.primary {
+			min-height: 52px;
+		}
+		.mode.primary {
+			min-height: 60px;
+		}
+		.minor-link {
+			min-height: 32px;
+			padding-block: 4px;
+		}
+	}
+
+	/* ── Organized two-column home composition ─────────────────── */
+	.home {
+		display: grid;
+		grid-template-columns: minmax(420px, 0.92fr) minmax(0, 1.08fr);
+		grid-template-rows: auto minmax(0, 1fr) auto;
+		column-gap: 4vw;
+		padding: clamp(64px, 8vh, 86px) 5vw clamp(24px, 4vh, 42px);
+	}
+	.home::before {
+		opacity: 0.12;
+	}
+	.home::after {
+		opacity: 0.07;
+	}
+	.logo {
+		grid-column: 1;
+		grid-row: 1;
+		align-self: start;
+		width: max-content;
+		margin: 0;
+		padding: 8px 0 12px 22px;
+	}
+	.logo::before {
+		width: 8px;
+		top: 6%;
+		bottom: 0;
+	}
+	.logo::after {
+		display: none;
+	}
+	.kicker {
+		margin-left: 0;
+	}
+	.l1,
+	.l2 {
+		margin-left: 0;
+	}
+	.tag {
+		margin-left: 2px;
+	}
+	.modes {
+		grid-column: 1;
+		grid-row: 2 / 4;
+		align-self: end;
+		width: min(620px, 44vw);
+		margin: 0;
+		gap: 6px;
+	}
+	.mode,
+	.mode.primary,
+	.mode:nth-of-type(2),
+	.mode:nth-of-type(3) {
+		width: 100%;
+		margin-left: 0;
+		clip-path: polygon(0 0, 95% 0, 100% 50%, 95% 100%, 0 100%);
+	}
+	.mode.primary {
+		background: #74105d;
+		box-shadow: inset 7px 0 0 #ff2bc7;
+	}
+	.mode:nth-of-type(2) {
+		background: #064653;
+		box-shadow: inset 7px 0 0 #24d4ff;
+	}
+	.mode:nth-of-type(3) {
+		background: #271052;
+		box-shadow: inset 7px 0 0 #7b1dff;
+	}
+	.mode:hover,
+	.mode.primary:hover,
+	.mode:nth-of-type(2):hover,
+	.mode:nth-of-type(3):hover {
+		background: #15132e;
+		box-shadow: inset 7px 0 0 var(--mc);
+	}
+	.mode:hover .m-title,
+	.mode:hover .m-sub,
+	.mode:hover .m-gem,
+	.mode:hover .m-go {
+		color: #fff;
+	}
+	.mode:nth-of-type(2) .m-gem,
+	.mode:nth-of-type(3) .m-gem {
+		clip-path: none;
+	}
+	.m-gem {
+		width: 54px;
+		height: 54px;
+		border: 0;
+		background: none;
+		color: var(--mc);
+		clip-path: none;
+	}
+	.m-gem :global(.game-icon),
+	.mode.primary .m-gem :global(.game-icon) {
+		width: 36px;
+		height: 36px;
+		filter: none;
+		animation: none;
+	}
+	.minor {
+		width: 100%;
+		margin-left: 0;
+		background: #090415;
+		clip-path: polygon(0 0, 97% 0, 100% 50%, 97% 100%, 0 100%);
+	}
+	.poly-showcase {
+		right: 0;
+		top: 9%;
+		width: 54vw;
+		height: 78%;
+		opacity: 0.78;
+		clip-path: polygon(12% 0, 100% 0, 100% 100%, 12% 100%, 0 50%);
+	}
+	.showcase {
+		right: 5vw;
+		top: 50%;
+	}
+	.sc-card:nth-child(1),
+	.sc-card:nth-child(2),
+	.sc-card:nth-child(3) {
+		margin-top: 0;
+	}
+
+	@media (orientation: landscape) and (max-height: 650px) {
+		.home {
+			grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
+			padding: 36px 4vw 18px;
+		}
+		.logo {
+			margin-left: 0;
+			padding: 0 0 3px 18px;
+		}
+		.kicker {
+			margin: 0 0 3px;
+			font-size: 0.52rem;
+			letter-spacing: 0.22em;
+		}
+		.l {
+			font-size: clamp(1.75rem, 8vh, 2.15rem);
+			line-height: 0.76;
+			text-shadow: none;
+		}
+		.l2 {
+			margin-left: 0;
+			text-shadow: none;
+		}
+		.tag {
+			margin-top: 5px;
+			font-size: 0.52rem;
+			letter-spacing: 0.2em;
+		}
+		.modes {
+			width: min(520px, 52vw);
+		}
+		.mode,
+		.mode.primary {
+			min-height: 54px;
+			padding-block: 4px;
+		}
+		.m-gem {
+			width: 44px;
+			height: 44px;
+		}
+		.m-gem :global(.game-icon),
+		.mode.primary .m-gem :global(.game-icon) {
+			width: 34px;
+			height: 34px;
+		}
+		.minor {
+			width: 100%;
+			margin-left: 0;
+			flex-wrap: nowrap;
+		}
+		.minor-link {
+			padding-inline: 10px;
+			font-size: 0.62rem;
+			letter-spacing: 0.1em;
+		}
+	}
+
+	@media (orientation: portrait) {
+		.home {
+			display: flex;
+			padding-inline: 7vw;
+		}
+		.logo {
+			width: auto;
+			margin-left: 0;
+		}
+		.modes {
+			width: 100%;
+			margin: 0;
+		}
+		.mode:nth-of-type(2) {
+			width: 100%;
+			margin-left: 0;
+		}
+		.mode:nth-of-type(3) {
+			width: 100%;
+			margin-left: 0;
+		}
 	}
 </style>

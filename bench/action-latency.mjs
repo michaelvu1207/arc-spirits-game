@@ -29,7 +29,7 @@ const isProd = /arcspirits\.com/.test(args.base);
 
 async function main() {
 	console.log(`[action-latency] target=${args.base} samples=${SAMPLES}`);
-	const { code, memberId } = await createRoom(args.base, 'BenchLatency');
+	const { code, token } = await createRoom(args.base, 'BenchLatency');
 	console.log(`[action-latency] room ${code} created; sending ${SAMPLES} commands sequentially...`);
 
 	const durations = [30_000, 60_000];
@@ -37,7 +37,7 @@ async function main() {
 	let failures = 0;
 	for (let i = 0; i < SAMPLES; i += 1) {
 		const command = { type: 'setNavigationTimer', durationMs: durations[i % 2] };
-		const r = await sendCommand(args.base, code, memberId, command);
+		const r = await sendCommand(args.base, code, token, command);
 		if (!r.ok) {
 			failures += 1;
 			if (failures <= 3) console.warn(`  sample ${i} failed: ${r.status} ${r.text.slice(0, 120)}`);

@@ -21,6 +21,10 @@ import type {
 	SeatColor
 } from '../src/lib/play/types';
 import { requireEnv } from './env';
+import {
+	consumeWsTicket as consumeWsTicketWith,
+	type ConsumeWsTicketResult
+} from '../src/lib/play/server/wsTickets';
 
 // Schema + table contract — copied from src/lib/play/server/service.ts.
 const PLAY_SCHEMA = 'arc_spirits_2d';
@@ -42,6 +46,8 @@ export interface PlaySessionRow {
 	scenario: PublicGameState['scenario'];
 	public_state: PublicGameState | string | null;
 	mode: PlayMode;
+	/** Central admission ('public' | 'private'); absent on pre-migration rows. */
+	visibility?: string | null;
 	created_at: string;
 	started_at: string | null;
 	ended_at: string | null;
@@ -54,6 +60,8 @@ export interface SessionMemberRow {
 	display_name: string;
 	role: MemberRole;
 	seat_color: SeatColor | null;
+	/** The validated Supabase account that OWNS this membership (null: bots /
+	 *  quarantined legacy rows). The sole durable human principal. */
 	user_id: string | null;
 	is_bot: boolean;
 	bot_profile: string | null;
@@ -104,6 +112,8 @@ export async function getSessionByRoomCode(roomCode: string): Promise<PlaySessio
 	return (data as PlaySessionRow | null) ?? null;
 }
 
+/** TRUSTED-ID lookup — server-internal identities only (never wire input; public
+ *  member ids do not authorize). */
 export async function getMemberById(memberId: string): Promise<SessionMemberRow | null> {
 	const { data, error } = await getPlayAdmin()
 		.from(PLAY_TABLES.MEMBERS)
@@ -114,19 +124,13 @@ export async function getMemberById(memberId: string): Promise<SessionMemberRow 
 	return (data as SessionMemberRow | null) ?? null;
 }
 
-/** Resolve a matchmade player by (session, authenticated user) — the authToken fallback. */
-export async function getMemberBySessionAndUser(
-	sessionId: string,
-	userId: string
-): Promise<SessionMemberRow | null> {
-	const { data, error } = await getPlayAdmin()
-		.from(PLAY_TABLES.MEMBERS)
-		.select('*')
-		.eq('session_id', sessionId)
-		.eq('user_id', userId)
-		.maybeSingle();
-	if (error) throw new Error(`Failed to resolve member by user: ${error.message}`);
-	return (data as SessionMemberRow | null) ?? null;
+/**
+ * Atomically consume a raw WS join ticket against the shared store (one conditional
+ * UPDATE — exactly one winner under replay). See src/lib/play/server/wsTickets.ts
+ * for the full contract; this is the room server's injected-client binding.
+ */
+export async function consumeWsTicket(raw: unknown): Promise<ConsumeWsTicketResult> {
+	return consumeWsTicketWith(getPlayAdmin(), raw);
 }
 
 /**
@@ -148,56 +152,23 @@ export async function loadBotMembers(sessionId: string): Promise<Map<string, str
 }
 
 /**
- * Resolve a Supabase auth user id from a bearer access token (the `authToken`
- * matchmade fallback). Uses a short-lived client with the token as the Authorization
- * header. Returns null on any failure — auth is best-effort here; a bad token simply
- * falls through to spectator.
+ * The durable head of a session — revision + status only. The room host polls this
+ * each tick (and on join/resync) to converge its in-memory cache on writes committed
+ * by the OTHER transport (HTTP path) or another instance. There is deliberately NO
+ * unconditional snapshot writer in this module anymore (the old `persistSnapshot`
+ * could overwrite newer durable state with an equal/stale revision): every state
+ * write goes through the revision-CAS commit in src/lib/play/server/commit.ts.
  */
-export async function resolveUserIdFromAccessToken(token: string): Promise<string | null> {
-	try {
-		const url = requireEnv('PUBLIC_SUPABASE_URL');
-		const key = requireEnv('PUBLIC_SUPABASE_ANON_KEY');
-		const client = createClient(url, key, {
-			global: { headers: { Authorization: `Bearer ${token}` } },
-			auth: { persistSession: false, autoRefreshToken: false }
-		});
-		const { data, error } = await client.auth.getUser(token);
-		if (error) return null;
-		return data.user?.id ?? null;
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Persist the authoritative in-memory state back to the session row. Unlike the
- * SvelteKit path this does NOT compare-and-set on revision: the room host is the single
- * writer of its own state (commands are serialized in one per-room queue), so it always
- * writes the freshest revision it holds. Stamps started_at / ended_at on the first
- * active / terminal transition, matching persistSessionUpdate's column writes.
- */
-export async function persistSnapshot(params: {
-	session: Pick<PlaySessionRow, 'id' | 'started_at' | 'ended_at'>;
-	state: PublicGameState;
-}): Promise<void> {
-	const { session, state } = params;
-	const now = new Date().toISOString();
-	const payload: Record<string, unknown> = {
-		status: state.status,
-		revision: state.revision,
-		game_id: state.gameId,
-		scenario: state.scenario,
-		public_state: state
-	};
-	if (session.started_at == null && state.status === 'active') payload.started_at = now;
-	const isFinished = state.status === 'finished' || state.status === 'closed';
-	if (isFinished && session.ended_at == null) payload.ended_at = now;
-
-	const { error } = await getPlayAdmin()
+export async function getSessionRevision(
+	sessionId: string
+): Promise<{ revision: number; status: string } | null> {
+	const { data, error } = await getPlayAdmin()
 		.from(PLAY_TABLES.SESSIONS)
-		.update(payload)
-		.eq('id', session.id);
-	if (error) throw new Error(`Failed to persist snapshot for ${session.id}: ${error.message}`);
+		.select('revision, status')
+		.eq('id', sessionId)
+		.maybeSingle();
+	if (error) throw new Error(`Failed to read session head ${sessionId}: ${error.message}`);
+	return (data as { revision: number; status: string } | null) ?? null;
 }
 
 /** Best-effort last-seen stamp for a member (presence signal). Never throws. */
@@ -210,4 +181,15 @@ export async function touchMemberLastSeen(memberId: string): Promise<void> {
 	} catch {
 		/* presence is best-effort */
 	}
+}
+
+/** Atomically convert only stale ranked humans to server-driven bots while at
+ * least one other human remains live. The SQL RPC also bumps the room revision,
+ * so every transport observes the metadata change through normal fencing. */
+export async function takeOverRankedDisconnects(sessionId: string): Promise<number> {
+	const { data, error } = await getPlayAdmin().rpc('takeover_stale_ranked_members', {
+		p_session_id: sessionId
+	});
+	if (error) throw new Error('Ranked disconnect integrity is unavailable.');
+	return Number((data as { takenOver?: number } | null)?.takenOver ?? 0);
 }
