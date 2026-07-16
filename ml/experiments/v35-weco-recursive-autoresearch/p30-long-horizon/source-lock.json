@@ -7,7 +7,7 @@
   "implementationCommit": "bc8e1466c798cb455ea3862e90c4561495a28ed4",
   "gitContext": {
     "schemaVersion": "arc-v35-p30-git-context-v1",
-    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-git-context-bc8e146.git",
+    "gitDir": "/home/ubuntu/arc-v35-p30-git-context-bc8e146.git",
     "shallow": true,
     "objectFormat": "sha1",
     "baseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
