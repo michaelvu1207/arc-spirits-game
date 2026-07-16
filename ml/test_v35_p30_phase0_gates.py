@@ -7,11 +7,53 @@ from unittest import mock
 
 import run_v35_p30_campaign as campaign
 import run_v35_p30_cuda_determinism as cuda_determinism
+import run_v35_p30_gate_review_local as gate_review_local
+from issue_v35_p30_preflight_authorization import cuda_socket_root
 import v35_p30_phase0 as phase0
 from v35_p30_crypto import sha256_file
 
 
 class P30Phase0SchedulerGateTests(unittest.TestCase):
+    def test_scheduler_and_validator_share_the_gate_review_request_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            campaign_id = "a" * 64
+            protocol = {
+                "executionTrust": {
+                    "ledgerRoot": str(root / "ledger"),
+                    "campaignInstanceId": campaign_id,
+                }
+            }
+            paths = phase0.gate_review_paths(protocol, "phase0-runtime")
+            expected = (
+                root
+                / "ledger"
+                / campaign_id
+                / "requests"
+                / "phase0-runtime-fable-review.json"
+            )
+            self.assertEqual(paths["request"], expected)
+            expected.parent.mkdir(parents=True)
+            expected.write_text("{}\n")
+            public_key = root / "review-attester.pem"
+            public_key.write_text("public\n")
+            request = {
+                "subject": {"logicalId": "phase0-runtime-fable-review"}
+            }
+            with (
+                mock.patch.object(campaign, "emit_request", return_value=request),
+                mock.patch.object(
+                    campaign, "role_public_key_path", return_value=public_key
+                ),
+            ):
+                status = campaign._review_required_status(
+                    protocol_path=root / "protocol.json",
+                    protocol=protocol,
+                    mode="phase0-runtime",
+                    inputs=[{"path": "/input", "sha256": "b" * 64}],
+                )
+            self.assertEqual(status["reviewRequest"], phase0.binding(expected))
+
     def test_phase0_action_precedes_preflight_start_and_generation(self) -> None:
         protocol_path = Path("/frozen/protocol.json")
         protocol = {"executionTrust": {"campaignInstanceId": "a" * 64}}
@@ -87,6 +129,13 @@ class P30Phase0SchedulerGateTests(unittest.TestCase):
 
 
 class P30CudaDeterminismOutputTests(unittest.TestCase):
+    def test_cuda_socket_namespace_is_full_id_bound_and_below_linux_limit(self) -> None:
+        campaign_id = "a" * 64
+        root = cuda_socket_root(campaign_id)
+        self.assertEqual(root, Path("/dev/shm/p") / campaign_id)
+        for name in ("p30d-primary.sock", "p30d-replay.sock"):
+            self.assertLessEqual(len(str(root / name).encode()), 107)
+
     def test_supervisor_precreated_empty_attempt_directory_is_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "primary"
@@ -122,6 +171,32 @@ class P30CudaDeterminismOutputTests(unittest.TestCase):
 
 
 class P30GateReviewReceiptTests(unittest.TestCase):
+    def test_fetch_lets_scp_create_then_seals_the_input_read_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "capsule" / "input.json"
+            payload = b'{"safe":true}\n'
+
+            def fake_scp(argv: list[str], **_: object) -> mock.Mock:
+                self.assertEqual(Path(argv[-1]), target)
+                self.assertFalse(target.exists())
+                target.write_bytes(payload)
+                return mock.Mock(stdout=b"", stderr=b"")
+
+            with mock.patch.object(
+                gate_review_local.subprocess, "run", side_effect=fake_scp
+            ):
+                gate_review_local.fetch(
+                    remote="simforge1",
+                    binding={
+                        "path": "/remote/input.json",
+                        "sha256": phase0.sha256_bytes(payload),
+                    },
+                    target=target,
+                    timeout=10,
+                )
+            self.assertEqual(target.read_bytes(), payload)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o400)
+
     def test_validator_requires_the_protocol_pinned_claude_executable(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -173,6 +248,7 @@ class P30GateReviewReceiptTests(unittest.TestCase):
                 "inputs": inputs,
                 "request": phase0.binding(paths["request"]),
                 "attempt": phase0.binding(paths["attempt"]),
+                "launcherSha256": phase0.gate_review_launcher_sha256(),
                 "claudeExecutable": pinned,
                 "sandboxProfileSha256": "d" * 64,
                 "argv": [
@@ -233,6 +309,25 @@ class P30GateReviewReceiptTests(unittest.TestCase):
                     mock.patch.object(phase0, "_read_object", return_value=changed),
                     mock.patch.object(
                         phase0, "verify_signed_payload", return_value=changed
+                    ),
+                    self.assertRaisesRegex(ValueError, "review receipt is invalid"),
+                ):
+                    phase0.validate_gate_review_receipt(
+                        protocol=protocol,
+                        protocol_path=protocol_path,
+                        mode="phase0-runtime",
+                        required_inputs=inputs,
+                    )
+                changed_launcher = dict(payload)
+                changed_launcher["launcherSha256"] = "e" * 64
+                with (
+                    mock.patch.object(
+                        phase0, "_read_object", return_value=changed_launcher
+                    ),
+                    mock.patch.object(
+                        phase0,
+                        "verify_signed_payload",
+                        return_value=changed_launcher,
                     ),
                     self.assertRaisesRegex(ValueError, "review receipt is invalid"),
                 ):

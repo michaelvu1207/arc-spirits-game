@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import secrets
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,18 @@ def _output(path: Path) -> dict[str, Any]:
         "required": True,
         "mustBeAbsentAtStart": True,
     }
+
+
+def cuda_socket_root(campaign_instance_id: str) -> Path:
+    if len(campaign_instance_id) != 64 or any(
+        character not in "0123456789abcdef" for character in campaign_instance_id
+    ):
+        raise ValueError("P30 campaign instance ID is malformed")
+    root = Path("/dev/shm/p") / campaign_instance_id
+    for name in ("p30d-primary.sock", "p30d-replay.sock"):
+        if len(os.fsencode(root / name)) > 107:
+            raise ValueError("P30 CUDA preflight socket exceeds Linux AF_UNIX limit")
+    return root
 
 
 def build(
@@ -105,9 +118,7 @@ def build(
         }
         writable = [str(root)]
     else:
-        socket_root = Path("/dev/shm/arc-v35-p30-phase0") / trust[
-            "campaignInstanceId"
-        ]
+        socket_root = cuda_socket_root(trust["campaignInstanceId"])
         argv = [
             str(python),
             "ml/run_v35_p30_cuda_determinism.py",

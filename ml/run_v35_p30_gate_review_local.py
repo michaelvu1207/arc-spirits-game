@@ -9,6 +9,7 @@ import json
 import os
 import secrets
 import shlex
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -35,7 +36,7 @@ from v35_p30_crypto import (
     sha256_bytes,
     sha256_file,
 )
-from v35_p30_phase0 import REVIEW_RECEIPT_SCHEMA
+from v35_p30_phase0 import REVIEW_RECEIPT_SCHEMA, gate_review_launcher_sha256
 
 
 REMOTE = "simforge1"
@@ -126,8 +127,8 @@ def fetch(
     *, remote: str, binding: dict[str, str], target: Path, timeout: int
 ) -> None:
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
-    os.close(descriptor)
+    if target.exists() or target.is_symlink():
+        raise FileExistsError("P30 gate-review input target already exists")
     try:
         completed = subprocess.run(
             ["scp", "-q", f"{remote}:{binding['path']}", str(target)],
@@ -135,8 +136,26 @@ def fetch(
             capture_output=True,
             timeout=timeout,
         )
-        if completed.stdout or completed.stderr or sha256_file(target) != binding["sha256"]:
+        metadata = target.lstat()
+        if (
+            completed.stdout
+            or completed.stderr
+            or target.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or sha256_file(target) != binding["sha256"]
+        ):
             raise ValueError("downloaded P30 gate-review input changed")
+        os.chmod(target, 0o400)
+        descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        directory = os.open(target.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     except BaseException:
         target.unlink(missing_ok=True)
         raise
@@ -390,6 +409,7 @@ def launch(args: argparse.Namespace) -> Path:
         "inputs": status["inputs"],
         "request": status["reviewRequest"],
         "attempt": {"path": status["attemptPath"], "sha256": sha256_file(attempt_local)},
+        "launcherSha256": gate_review_launcher_sha256(),
         "claudeExecutable": executable,
         "sandboxProfileSha256": sha256_file(profile_path),
         "argv": argv,

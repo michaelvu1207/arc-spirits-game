@@ -69,7 +69,9 @@ def gate_review_paths(
         raise ValueError("unknown P30 gate-review mode")
     root = ledger_for(protocol) / "reviews" / mode
     return {
-        "request": root / "review-request.json",
+        "request": ledger_for(protocol)
+        / "requests"
+        / f"{mode}-fable-review.json",
         "attempt": root / "attempt.json",
         "stdout": root / "fable.stdout",
         "stderr": root / "fable.stderr",
@@ -94,6 +96,12 @@ def _read_object(path: Path, label: str) -> dict[str, Any]:
 
 def binding(path: Path) -> dict[str, str]:
     return {"path": str(path), "sha256": sha256_file(path)}
+
+
+def gate_review_launcher_sha256() -> str:
+    return sha256_file(
+        Path(__file__).resolve().parent / "run_v35_p30_gate_review_local.py"
+    )
 
 
 def validate_gate_review_receipt(
@@ -129,6 +137,7 @@ def validate_gate_review_receipt(
         "inputs",
         "request",
         "attempt",
+        "launcherSha256",
         "claudeExecutable",
         "sandboxProfileSha256",
         "argv",
@@ -177,6 +186,7 @@ def validate_gate_review_receipt(
         or receipt.get("inputs") != required_inputs
         or receipt.get("request") != binding(paths["request"])
         or receipt.get("attempt") != binding(paths["attempt"])
+        or receipt.get("launcherSha256") != gate_review_launcher_sha256()
         or receipt.get("claudeExecutable") != pinned_claude
         or not isinstance(argv, list)
         or len(argv) != 13
