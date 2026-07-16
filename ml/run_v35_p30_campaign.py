@@ -61,6 +61,7 @@ from v35_p30_phase0 import (
     PHASE0_REPORT_SCHEMAS,
     binding as phase0_binding,
     full_campaign_authorization_path,
+    gate_review_launcher_sha256,
     gate_review_paths,
     phase0_authorization_path,
     phase0_output_root,
@@ -298,6 +299,8 @@ def _review_required_status(
             "logicalId": f"{mode}-fable-review",
             "mode": mode,
             "inputs": inputs,
+            "reviewRuntime": protocol["executionTrust"]["reviewRuntime"],
+            "launcherSha256": gate_review_launcher_sha256(),
         },
         predecessor=None,
         expected_output=paths["receipt"],
@@ -319,6 +322,8 @@ def _review_required_status(
         "reviewAttesterPublicKey": phase0_binding(
             role_public_key_path(protocol["executionTrust"], "review-attester")
         ),
+        "reviewRuntime": protocol["executionTrust"]["reviewRuntime"],
+        "launcherSha256": gate_review_launcher_sha256(),
     }
 
 
@@ -2250,12 +2255,19 @@ def next_action(protocol_path: Path) -> dict[str, Any]:
         "path": str(review_attester_public_key_path),
         "sha256": sha256_file(review_attester_public_key_path),
     }
-    from v35_p30_analysis_review import APPROVED_CLAUDE_EXECUTABLE
+    from v35_p30_analysis_review import (
+        APPROVED_CLAUDE_EXECUTABLE,
+        APPROVED_REVIEW_CONTAINER,
+        LOCAL_REVIEW_LAUNCHER_RELATIVE,
+    )
     if (
         protocol["executionTrust"]["reviewRuntime"]["claudeExecutable"]
         != APPROVED_CLAUDE_EXECUTABLE
+        or protocol["executionTrust"]["reviewRuntime"]["container"]
+        != APPROVED_REVIEW_CONTAINER
     ):
-        raise ValueError("protocol local Fable executable pin changed")
+        raise ValueError("protocol local Fable runtime pin changed")
+    analysis_launcher_sha = sha256_file(REPO_ROOT / LOCAL_REVIEW_LAUNCHER_RELATIVE)
     review_attestation_request = emit_request(
         protocol_path=protocol_path,
         protocol=protocol,
@@ -2276,6 +2288,8 @@ def next_action(protocol_path: Path) -> dict[str, Any]:
             "reviewStderrPath": str(review_stderr_path),
             "reviewAttesterPublicKey": review_attester_public_key_binding,
             "claudeExecutable": APPROVED_CLAUDE_EXECUTABLE,
+            "reviewRuntime": protocol["executionTrust"]["reviewRuntime"],
+            "launcherSha256": analysis_launcher_sha,
         },
         predecessor=draft_path,
         expected_output=review_path,
@@ -2306,14 +2320,32 @@ def next_action(protocol_path: Path) -> dict[str, Any]:
             "reviewAttestationRequest": review_attestation_binding,
             "reviewAttesterPublicKey": review_attester_public_key_binding,
             "claudeExecutable": APPROVED_CLAUDE_EXECUTABLE,
+            "reviewRuntime": protocol["executionTrust"]["reviewRuntime"],
+            "launcherSha256": analysis_launcher_sha,
             "outcomesInspected": False,
             "promotionEligible": False,
         }
     if not review_path.exists():
         return {
             "schemaVersion": "arc-v35-p30-campaign-status-v1",
-            "status": "analysis-review-attempt-consumed",
+            "status": "analysis-review-postprocess-required",
+            "manifest": {
+                "path": str(manifest_path),
+                "sha256": sha256_file(manifest_path),
+            },
+            "authorizationDraft": {
+                "path": str(draft_path),
+                "sha256": sha256_file(draft_path),
+            },
+            "reviewReceiptPath": str(review_path),
             "reviewAttemptPath": str(review_attempt_path),
+            "reviewStdoutPath": str(review_stdout_path),
+            "reviewStderrPath": str(review_stderr_path),
+            "reviewAttestationRequest": review_attestation_binding,
+            "reviewAttesterPublicKey": review_attester_public_key_binding,
+            "claudeExecutable": APPROVED_CLAUDE_EXECUTABLE,
+            "reviewRuntime": protocol["executionTrust"]["reviewRuntime"],
+            "launcherSha256": analysis_launcher_sha,
             "reviewAttemptSha256": sha256_file(review_attempt_path),
             "outcomesInspected": False,
             "promotionEligible": False,

@@ -52,7 +52,7 @@ from v35_p30_crypto import (
 
 ANALYSIS_MANIFEST_SCHEMA = "arc-v35-p30-analysis-manifest-v1"
 ANALYSIS_REVIEW_RECEIPT_SCHEMA = (
-    "arc-v35-p30-analysis-authorization-review-receipt-v2"
+    "arc-v35-p30-analysis-authorization-review-receipt-v3"
 )
 
 

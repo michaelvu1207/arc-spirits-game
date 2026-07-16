@@ -10,7 +10,8 @@ import run_v35_p30_cuda_determinism as cuda_determinism
 import run_v35_p30_gate_review_local as gate_review_local
 from issue_v35_p30_preflight_authorization import cuda_socket_root
 import v35_p30_phase0 as phase0
-from v35_p30_crypto import sha256_file
+import v35_p30_analysis_review as review
+from v35_p30_crypto import canonical_json, sha256_bytes, sha256_file
 
 
 class P30Phase0SchedulerGateTests(unittest.TestCase):
@@ -22,6 +23,7 @@ class P30Phase0SchedulerGateTests(unittest.TestCase):
                 "executionTrust": {
                     "ledgerRoot": str(root / "ledger"),
                     "campaignInstanceId": campaign_id,
+                    "reviewRuntime": review.APPROVED_REVIEW_RUNTIME,
                 }
             }
             paths = phase0.gate_review_paths(protocol, "phase0-runtime")
@@ -188,7 +190,7 @@ class P30GateReviewReceiptTests(unittest.TestCase):
                 gate_review_local.fetch(
                     remote="simforge1",
                     binding={
-                        "path": "/remote/input.json",
+                        "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/input.json",
                         "sha256": phase0.sha256_bytes(payload),
                     },
                     target=target,
@@ -216,18 +218,116 @@ class P30GateReviewReceiptTests(unittest.TestCase):
             paths["stderr"].write_bytes(b"")
             protocol_path = root / "protocol.json"
             protocol_path.write_text("{}\n")
-            pinned = {
-                "path": "/pinned/claude",
-                "sha256": "a" * 64,
-                "version": "2.1.211 (Claude Code)",
-            }
+            pinned = review.APPROVED_CLAUDE_EXECUTABLE
             protocol = {
                 "sourceContract": {"sha256": "b" * 64},
                 "executionTrust": {
-                    "reviewRuntime": {"claudeExecutable": pinned},
+                    "reviewRuntime": review.APPROVED_REVIEW_RUNTIME,
                 },
             }
-            inputs = [{"path": "/input", "sha256": "c" * 64}]
+            inputs = [
+                {"path": str(protocol_path), "sha256": sha256_file(protocol_path)},
+                {"path": "/plan.json", "sha256": "c" * 64},
+                {"path": "/source.json", "sha256": "b" * 64},
+            ]
+            request_value = {
+                "role": "review-attester",
+                "verb": "attest-gate-review",
+                "subject": {
+                    "logicalId": "phase0-runtime-fable-review",
+                    "mode": "phase0-runtime",
+                    "inputs": inputs,
+                    "reviewRuntime": review.APPROVED_REVIEW_RUNTIME,
+                    "launcherSha256": phase0.gate_review_launcher_sha256(),
+                },
+                "expectedOutputPath": str(paths["receipt"]),
+            }
+            paths["request"].write_bytes(canonical_json(request_value) + b"\n")
+            container_name = "arc-p30-review-0123456789abcdef"
+            container_id = "1" * 64
+            prompt = phase0.gate_review_prompt(
+                "phase0-runtime", [
+                    "/review/inputs/input-00.json",
+                    "/review/inputs/input-01.json",
+                    "/review/inputs/input-02.json",
+                ]
+            )
+            claude_argv = [
+                pinned["path"], "-p", "--model", "fable", "--effort", "high",
+                "--tools", "Read", "--no-session-persistence", prompt,
+            ]
+            create_argv = review.expected_container_create_argv(
+                capsule=root, container_name=container_name, claude_argv=claude_argv
+            )
+            config = review.expected_container_config(
+                capsule=root, container_name=container_name, container_id=container_id,
+                claude_argv=claude_argv,
+            )
+            liveness_name = "arc-p30-review-fedcba9876543210"
+            liveness_id = "3" * 64
+            liveness_argv = review.liveness_claude_argv()
+            liveness_create = review.expected_container_create_argv(
+                capsule=root, container_name=liveness_name, claude_argv=liveness_argv
+            )
+            liveness_config = review.expected_container_config(
+                capsule=root, container_name=liveness_name, container_id=liveness_id,
+                claude_argv=liveness_argv,
+            )
+            liveness_stdout, liveness_stderr = root / "liveness.stdout", root / "liveness.stderr"
+            liveness_stdout.write_bytes(review.REVIEW_LIVENESS_STDOUT)
+            liveness_stderr.write_bytes(b"")
+            authenticated_liveness = {
+                "schemaVersion": review.REVIEW_LIVENESS_SCHEMA, "valid": True,
+                "immutable": True, "outcomesInspected": False,
+                "promotionEligible": False, "model": "fable", "effort": "high",
+                "tools": ["Read"], "noSessionPersistence": True,
+                "authDelivery": review.CLAUDE_AUTH_DELIVERY,
+                "prompt": review.REVIEW_LIVENESS_PROMPT,
+                "containerArgv": liveness_create, "containerName": liveness_name,
+                "containerInvocationSha256": sha256_bytes(canonical_json(liveness_create)),
+                "containerId": liveness_id, "containerConfig": liveness_config,
+                "containerConfigSha256": sha256_bytes(canonical_json(liveness_config)),
+                "startArgv": review.expected_container_start_argv(liveness_name),
+                "cleanupArgv": review.expected_container_cleanup_argv(liveness_name),
+                "cleanupVerified": True,
+                "startedAtUtc": "2026-07-16T00:00:01Z",
+                "finishedAtUtc": "2026-07-16T00:00:02Z", "exitCode": 0,
+                "stdout": {"path": str(liveness_stdout), "sha256": sha256_file(liveness_stdout), "bytes": liveness_stdout.stat().st_size},
+                "stderr": {"path": str(liveness_stderr), "sha256": sha256_file(liveness_stderr), "bytes": 0},
+            }
+            clock_skew = {
+                "schemaVersion": review.CLOCK_SKEW_SCHEMA, "valid": True,
+                "localBeforeUtc": "2026-07-16T00:00:00Z",
+                "remoteUtc": "2026-07-16T00:00:01Z",
+                "localAfterUtc": "2026-07-16T00:00:02Z",
+                "roundTripMs": 2000, "absoluteSkewMs": 0,
+            }
+            attempt = {
+                "schemaVersion": "arc-v35-p30-gate-review-attempt-v2",
+                "valid": True, "immutable": True, "promotionEligible": False,
+                "outcomesInspected": False, "mode": "phase0-runtime",
+                "request": phase0.binding(paths["request"]),
+                "inputsSha256": phase0.outcome_blind_inputs_hash(inputs),
+                "launcherSha256": phase0.gate_review_launcher_sha256(),
+                "claudeExecutable": pinned,
+                "containerRuntime": review.APPROVED_REVIEW_CONTAINER,
+                "containerName": container_name,
+                "containerInvocationSha256": sha256_bytes(canonical_json(create_argv)),
+                "containerId": container_id,
+                "containerConfigSha256": sha256_bytes(canonical_json(config)),
+                "authenticatedLiveness": authenticated_liveness,
+                "clockSkewPreflight": clock_skew,
+                "nonce": "2" * 64,
+                "reservedAtUtc": "2026-07-16T00:00:00Z",
+            }
+            paths["attempt"].write_bytes(canonical_json(attempt) + b"\n")
+            completion_path = root / "review-completion.json"
+            gate_review_local.create_review_completion(
+                path=completion_path, attempt_path=paths["attempt"],
+                stdout_path=paths["stdout"], stderr_path=paths["stderr"],
+                started="2026-07-16T00:00:03Z", finished="2026-07-16T00:01:00Z",
+                exit_code=0, container_name=container_name,
+            )
             payload = {
                 "schemaVersion": phase0.REVIEW_RECEIPT_SCHEMA,
                 "valid": True,
@@ -250,35 +350,21 @@ class P30GateReviewReceiptTests(unittest.TestCase):
                 "attempt": phase0.binding(paths["attempt"]),
                 "launcherSha256": phase0.gate_review_launcher_sha256(),
                 "claudeExecutable": pinned,
-                "sandboxProfileSha256": "d" * 64,
-                "argv": [
-                    "/usr/bin/sandbox-exec",
-                    "-f",
-                    "/capsule/sandbox.sb",
-                    pinned["path"],
-                    "-p",
-                    "--model",
-                    "fable",
-                    "--effort",
-                    "high",
-                    "--tools",
-                    "Read",
-                    "--no-session-persistence",
-                    "review prompt",
-                ],
-                "environmentKeys": sorted(
-                    {
-                        "HOME",
-                        "LANG",
-                        "LC_ALL",
-                        "NO_COLOR",
-                        "PATH",
-                        "TMPDIR",
-                        "XDG_CACHE_HOME",
-                        "XDG_CONFIG_HOME",
-                        "XDG_DATA_HOME",
-                    }
-                ),
+                "containerRuntime": review.APPROVED_REVIEW_CONTAINER,
+                "containerArgv": create_argv,
+                "containerName": container_name,
+                "containerInvocationSha256": sha256_bytes(canonical_json(create_argv)),
+                "containerId": container_id,
+                "containerConfig": config,
+                "containerConfigSha256": sha256_bytes(canonical_json(config)),
+                "startArgv": review.expected_container_start_argv(container_name),
+                "cleanupArgv": review.expected_container_cleanup_argv(container_name),
+                "cleanupVerified": True,
+                "argv": claude_argv,
+                "cwd": str(root),
+                "containerCwd": "/review",
+                "environmentKeys": list(review.SANITIZED_ENVIRONMENT_KEYS),
+                "authDelivery": review.CLAUDE_AUTH_DELIVERY,
                 "startedAtUtc": "2026-07-16T00:00:00Z",
                 "finishedAtUtc": "2026-07-16T00:01:00Z",
                 "exitCode": 0,
@@ -286,16 +372,36 @@ class P30GateReviewReceiptTests(unittest.TestCase):
                 "stderr": phase0.binding(paths["stderr"]),
                 "signature": {},
             }
-            with (
-                mock.patch.object(phase0, "gate_review_paths", return_value=paths),
-                mock.patch.object(phase0, "_read_object", return_value=payload),
-                mock.patch.object(
-                    phase0, "role_public_key_path", return_value=root / "review.pem"
-                ),
-                mock.patch.object(
-                    phase0, "verify_signed_payload", return_value=payload
-                ),
-            ):
+            status = {
+                "inputs": inputs, "reviewRequest": phase0.binding(paths["request"]),
+                "attemptPath": str(paths["attempt"]), "stdoutPath": str(paths["stdout"]),
+                "stderrPath": str(paths["stderr"]), "receiptPath": str(paths["receipt"]),
+            }
+            payload = gate_review_local.build_gate_review_payload(
+                status=status, mode="phase0-runtime", attempt_local=paths["attempt"],
+                completion_path=completion_path, executable=pinned,
+                container_runtime=review.APPROVED_REVIEW_CONTAINER,
+                container_argv=create_argv, container_name=container_name,
+                container_invocation_sha256=sha256_bytes(canonical_json(create_argv)),
+                container_id=container_id, container_config=config,
+                container_config_sha256=sha256_bytes(canonical_json(config)),
+                authenticated_liveness=authenticated_liveness,
+                clock_skew_preflight=clock_skew,
+                start_argv=review.expected_container_start_argv(container_name),
+                cleanup_argv=review.expected_container_cleanup_argv(container_name),
+                cleanup_verified=True, claude_argv=claude_argv, capsule=root,
+                environment={}, started="2026-07-16T00:00:03Z",
+                finished="2026-07-16T00:01:00Z", exit_code=0,
+                stdout=paths["stdout"], stderr=paths["stderr"],
+            )
+            payload["signature"] = {}
+            unsigned_payload = dict(payload)
+            del unsigned_payload["signature"]
+            gate_review_local.validate_gate_unsigned_for_signing(unsigned_payload)
+            paths["receipt"].write_bytes(canonical_json(payload) + b"\n")
+            with mock.patch.object(phase0, "gate_review_paths", return_value=paths), mock.patch.object(
+                phase0, "role_public_key_path", return_value=root / "review.pem"
+            ), mock.patch.object(phase0, "verify_signed_payload", return_value=payload):
                 observed = phase0.validate_gate_review_receipt(
                     protocol=protocol,
                     protocol_path=protocol_path,
@@ -305,13 +411,10 @@ class P30GateReviewReceiptTests(unittest.TestCase):
                 self.assertEqual(observed, payload)
                 changed = dict(payload)
                 changed["claudeExecutable"] = {**pinned, "sha256": "e" * 64}
-                with (
-                    mock.patch.object(phase0, "_read_object", return_value=changed),
-                    mock.patch.object(
-                        phase0, "verify_signed_payload", return_value=changed
-                    ),
-                    self.assertRaisesRegex(ValueError, "review receipt is invalid"),
-                ):
+                paths["receipt"].write_bytes(canonical_json(changed) + b"\n")
+                with mock.patch.object(
+                    phase0, "verify_signed_payload", return_value=changed
+                ), self.assertRaisesRegex(ValueError, "review receipt is invalid"):
                     phase0.validate_gate_review_receipt(
                         protocol=protocol,
                         protocol_path=protocol_path,
@@ -320,17 +423,10 @@ class P30GateReviewReceiptTests(unittest.TestCase):
                     )
                 changed_launcher = dict(payload)
                 changed_launcher["launcherSha256"] = "e" * 64
-                with (
-                    mock.patch.object(
-                        phase0, "_read_object", return_value=changed_launcher
-                    ),
-                    mock.patch.object(
-                        phase0,
-                        "verify_signed_payload",
-                        return_value=changed_launcher,
-                    ),
-                    self.assertRaisesRegex(ValueError, "review receipt is invalid"),
-                ):
+                paths["receipt"].write_bytes(canonical_json(changed_launcher) + b"\n")
+                with mock.patch.object(
+                    phase0, "verify_signed_payload", return_value=changed_launcher
+                ), self.assertRaisesRegex(ValueError, "review receipt is invalid"):
                     phase0.validate_gate_review_receipt(
                         protocol=protocol,
                         protocol_path=protocol_path,

@@ -46,64 +46,58 @@ class P30LocalAnalysisReviewLauncherTests(unittest.TestCase):
                 )
         self.assertFalse(target.exists())
 
-    def test_default_deny_sandbox_and_nonaccept_close_the_lane(self) -> None:
+    def test_container_contract_has_no_secret_and_nonaccept_closes_the_lane(self) -> None:
         capsule = self.root / "capsule"
         capsule.mkdir()
-        profile = capsule / "sandbox.sb"
-        profile.write_bytes(
-            launcher.build_sandbox_profile(
-                capsule=capsule,
-                executable=Path(review.APPROVED_CLAUDE_EXECUTABLE["path"]),
-            )
+        claude_argv = [
+            review.APPROVED_CLAUDE_EXECUTABLE["path"], "-p", "--model", "fable",
+            "--effort", "high", "--tools", "Read", "--no-session-persistence",
+            "VERDICT: ACCEPT",
+        ]
+        argv = review.expected_container_create_argv(
+            capsule=capsule, container_name="arc-p30-review-0123456789abcdef",
+            claude_argv=claude_argv,
         )
-        policy = profile.read_text()
-        self.assertIn("(deny default)", policy)
-        self.assertNotIn(str(Path.home() / ".claude"), policy)
+        joined = "\n".join(argv)
+        self.assertIn("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=0", argv)
+        self.assertNotIn("CLAUDE_CODE_OAUTH_TOKEN=", joined)
+        self.assertIn("seccomp=builtin", argv)
+        self.assertIn("no-new-privileges", argv)
         stdout, stderr = capsule / "stdout", capsule / "stderr"
-
-        def fake_claude(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess:
-            self.assertEqual(argv[:3], ["/usr/bin/sandbox-exec", "-f", str(profile)])
-            os.write(int(kwargs["stderr"]), b"sandbox: deny outcome read\n")
-            return subprocess.CompletedProcess(argv, 1)
-
-        with mock.patch.object(launcher.subprocess, "run", side_effect=fake_claude):
-            _, _, code = launcher.run_fable(
-                sandbox_argv=[
-                    "/usr/bin/sandbox-exec",
-                    "-f",
-                    str(profile),
-                    review.APPROVED_CLAUDE_EXECUTABLE["path"],
-                ],
-                cwd=capsule,
-                stdout_path=stdout,
-                stderr_path=stderr,
-                timeout=10,
-                environment={},
-            )
+        stdout.write_text("VERDICT: REJECT\n")
+        stderr.write_bytes(b"")
         with self.assertRaisesRegex(RuntimeError, "consumed lane is closed"):
             launcher.require_exact_accept(
-                stdout_path=stdout, stderr_path=stderr, exit_code=code
+                stdout_path=stdout, stderr_path=stderr, exit_code=0
             )
 
     @unittest.skipUnless(
-        Path("/usr/bin/sandbox-exec").is_file(),
-        "sandbox-exec is required for the real denial smoke",
+        Path("/usr/local/bin/docker").is_file(),
+        "Docker is required for the real isolation smoke",
     )
-    def test_real_sandbox_exec_denies_a_file_outside_the_capsule(self) -> None:
+    def test_real_container_is_read_only_capless_and_seccomp_filtered(self) -> None:
         capsule = self.root / "capsule"
         capsule.mkdir()
         report = self.root / "actual-report.json"
         report.write_text('{"secretOutcome":true}\n')
-        profile = capsule / "real.sb"
-        profile.write_bytes(
-            launcher.build_sandbox_profile(capsule=capsule, executable=Path("/bin/cat"))
-        )
         completed = subprocess.run(
-            ["/usr/bin/sandbox-exec", "-f", str(profile), "/bin/cat", str(report)],
+            [
+                "/usr/local/bin/docker", "run", "--rm", "--pull", "never",
+                "--network", "none", "--read-only", "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges", "--security-opt", "seccomp=builtin",
+                "--mount", f"type=bind,src={capsule},dst=/review,readonly",
+                "--entrypoint", "/bin/sh",
+                review.APPROVED_REVIEW_CONTAINER["image"]["reference"], "-c",
+                f"test ! -e {report}; ! touch /review/forbidden; "
+                "grep -E '^(NoNewPrivs|Seccomp|CapEff):' /proc/self/status",
+            ],
             capture_output=True,
         )
-        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertNotIn(b"secretOutcome", completed.stdout)
+        self.assertIn(b"NoNewPrivs:\t1", completed.stdout)
+        self.assertIn(b"Seccomp:\t2", completed.stdout)
+        self.assertIn(b"CapEff:\t0000000000000000", completed.stdout)
 
     def test_remote_attempt_failure_is_terminal_before_fable(self) -> None:
         remote_path = (
@@ -122,38 +116,50 @@ class P30LocalAnalysisReviewLauncherTests(unittest.TestCase):
                 )
         self.assertEqual(run.call_args.args[0][0], "ssh")
 
+    def test_postprocess_marker_allows_only_byte_identical_non_fable_resume(self) -> None:
+        attempt = self.root / "attempt.json"
+        completion = self.root / "completion.json"
+        unsigned = self.root / "unsigned.json"
+        signed = self.root / "signed.json"
+        for path, data in ((attempt, b"attempt\n"), (completion, b"completion\n"), (unsigned, b"unsigned\n")):
+            path.write_bytes(data)
+        marker_path = self.root / "postprocess.json"
+        marker = launcher.create_postprocess_marker(
+            path=marker_path, unsigned=unsigned, completion=completion,
+            attempt=attempt, signed=signed,
+            uploads=["/remote/stdout", "/remote/stderr", "/remote/receipt"],
+            created_at="2026-07-16T00:00:00Z",
+        )
+        self.assertFalse(marker["fableRerunAllowed"])
+        self.assertEqual(
+            launcher.validate_postprocess_marker(marker, path=marker_path), marker
+        )
+        unsigned.write_bytes(b"changed\n")
+        with self.assertRaisesRegex(ValueError, "binding changed"):
+            launcher.validate_postprocess_marker(marker, path=marker_path)
+
     def test_local_streams_are_o_excl_and_verdict_must_be_exact(self) -> None:
         stdout, stderr = self.root / "stdout", self.root / "stderr"
         stdout.write_text("existing\n")
-        with mock.patch.object(launcher.subprocess, "run") as run:
+        with mock.patch.object(launcher.subprocess, "Popen") as popen:
             with self.assertRaises(FileExistsError):
                 launcher.run_fable(
-                    sandbox_argv=["sandbox-exec", "claude"],
+                    start_argv=["docker", "start"],
+                    claude_auth=bytearray(b"token"),
                     cwd=self.root,
                     stdout_path=stdout,
                     stderr_path=stderr,
                     timeout=10,
                     environment={},
                 )
-        run.assert_not_called()
+        popen.assert_not_called()
         stdout.unlink()
 
-        def fake_claude(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess:
-            os.write(int(kwargs["stdout"]), b"Review found blocker\nVERDICT: REJECT\n")
-            return subprocess.CompletedProcess(argv, 0)
-
-        with mock.patch.object(launcher.subprocess, "run", side_effect=fake_claude):
-            _, _, code = launcher.run_fable(
-                sandbox_argv=["sandbox-exec", "claude"],
-                cwd=self.root,
-                stdout_path=stdout,
-                stderr_path=stderr,
-                timeout=10,
-                environment={},
-            )
+        stdout.write_text("Review found blocker\nVERDICT: REJECT\n")
+        stderr.write_bytes(b"")
         with self.assertRaisesRegex(RuntimeError, "consumed lane is closed"):
             launcher.require_exact_accept(
-                stdout_path=stdout, stderr_path=stderr, exit_code=code
+                stdout_path=stdout, stderr_path=stderr, exit_code=0
             )
 
     def _complete_receipt_fixture(self) -> tuple[dict, dict[str, Path], bytes]:
@@ -254,19 +260,73 @@ class P30LocalAnalysisReviewLauncherTests(unittest.TestCase):
                     "sha256": sha256_file(public_local),
                 },
                 "claudeExecutable": dict(review.APPROVED_CLAUDE_EXECUTABLE),
+                "reviewRuntime": review.APPROVED_REVIEW_RUNTIME,
+                "launcherSha256": launcher_sha,
             },
             "predecessorSha256": sha256_file(draft_local),
             "expectedOutputPath": str(remote["receipt"]),
             "requestNonce": "f" * 64,
         }
         request_local.write_bytes(canonical_json(request) + b"\n")
-        profile = capsule / "sandbox.sb"
-        profile.write_bytes(
-            launcher.build_sandbox_profile(
-                capsule=capsule,
-                executable=Path(review.APPROVED_CLAUDE_EXECUTABLE["path"]),
-            )
+        argv = review.expected_argv(
+            local_draft_path=review.CONTAINER_REVIEW_ROOT / "inputs/analysis-authorization.unsigned.json",
+            draft_sha256=sha256_file(draft_local),
+            local_manifest_path=review.CONTAINER_REVIEW_ROOT / "inputs/manifest.signed.json",
+            manifest_sha256=sha256_file(manifest_local),
+            local_request_path=review.CONTAINER_REVIEW_ROOT / "inputs/review-attester-request.json",
+            request_sha256=sha256_file(request_local),
+            remote_draft_path=str(remote["draft"]),
+            remote_manifest_path=str(remote["manifest"]),
+            claude_path=review.APPROVED_CLAUDE_EXECUTABLE["path"],
         )
+        container_name = "arc-p30-review-0123456789abcdef"
+        container_id = "1" * 64
+        container_argv = review.expected_container_create_argv(
+            capsule=capsule, container_name=container_name, claude_argv=argv
+        )
+        container_config = review.expected_container_config(
+            capsule=capsule, container_name=container_name,
+            container_id=container_id, claude_argv=argv,
+        )
+        liveness_name = "arc-p30-review-fedcba9876543210"
+        liveness_id = "2" * 64
+        liveness_argv = review.liveness_claude_argv()
+        liveness_create = review.expected_container_create_argv(
+            capsule=capsule, container_name=liveness_name, claude_argv=liveness_argv
+        )
+        liveness_config = review.expected_container_config(
+            capsule=capsule, container_name=liveness_name,
+            container_id=liveness_id, claude_argv=liveness_argv,
+        )
+        liveness_stdout, liveness_stderr = outputs / "liveness.stdout", outputs / "liveness.stderr"
+        liveness_stdout.write_bytes(review.REVIEW_LIVENESS_STDOUT)
+        liveness_stderr.write_bytes(b"")
+        authenticated_liveness = {
+            "schemaVersion": review.REVIEW_LIVENESS_SCHEMA, "valid": True,
+            "immutable": True, "outcomesInspected": False,
+            "promotionEligible": False, "model": "fable", "effort": "high",
+            "tools": ["Read"], "noSessionPersistence": True,
+            "authDelivery": review.CLAUDE_AUTH_DELIVERY,
+            "prompt": review.REVIEW_LIVENESS_PROMPT,
+            "containerArgv": liveness_create, "containerName": liveness_name,
+            "containerInvocationSha256": sha256_bytes(canonical_json(liveness_create)),
+            "containerId": liveness_id, "containerConfig": liveness_config,
+            "containerConfigSha256": sha256_bytes(canonical_json(liveness_config)),
+            "startArgv": review.expected_container_start_argv(liveness_name),
+            "cleanupArgv": review.expected_container_cleanup_argv(liveness_name),
+            "cleanupVerified": True,
+            "startedAtUtc": "2026-07-15T10:01:10.000000Z",
+            "finishedAtUtc": "2026-07-15T10:01:20.000000Z", "exitCode": 0,
+            "stdout": {"path": str(liveness_stdout), "sha256": sha256_file(liveness_stdout), "bytes": liveness_stdout.stat().st_size},
+            "stderr": {"path": str(liveness_stderr), "sha256": sha256_file(liveness_stderr), "bytes": 0},
+        }
+        clock_skew = {
+            "schemaVersion": review.CLOCK_SKEW_SCHEMA, "valid": True,
+            "localBeforeUtc": "2026-07-15T10:01:30.000000Z",
+            "remoteUtc": "2026-07-15T10:01:31.000000Z",
+            "localAfterUtc": "2026-07-15T10:01:32.000000Z",
+            "roundTripMs": 2000, "absoluteSkewMs": 0,
+        }
         request_binding = {"path": str(remote["request"]), "sha256": sha256_file(request_local)}
         attempt_local = inputs / "review-attempt.json"
         attempt = {
@@ -291,31 +351,25 @@ class P30LocalAnalysisReviewLauncherTests(unittest.TestCase):
             "sourceLockSha256": sha256_file(source_lock),
             "launcherSha256": launcher_sha,
             "claudeExecutable": dict(review.APPROVED_CLAUDE_EXECUTABLE),
-            "sandboxProfileSha256": sha256_file(profile),
+            "containerRuntime": review.APPROVED_REVIEW_CONTAINER,
+            "containerName": container_name,
+            "containerInvocationSha256": sha256_bytes(canonical_json(container_argv)),
+            "containerId": container_id,
+            "containerConfigSha256": sha256_bytes(canonical_json(container_config)),
+            "authenticatedLiveness": authenticated_liveness,
+            "clockSkewPreflight": clock_skew,
             "reservedAtUtc": "2026-07-15T10:02:00.000000Z",
         }
         attempt_local.write_bytes(canonical_json(attempt) + b"\n")
         stdout, stderr = outputs / "fable.stdout", outputs / "fable.stderr"
         stdout.write_text("Review complete\nVERDICT: ACCEPT\n")
         stderr.write_bytes(b"")
-        argv = review.expected_argv(
-            local_draft_path=draft_local,
-            draft_sha256=sha256_file(draft_local),
-            local_manifest_path=manifest_local,
-            manifest_sha256=sha256_file(manifest_local),
-            local_request_path=request_local,
-            request_sha256=sha256_file(request_local),
-            remote_draft_path=str(remote["draft"]),
-            remote_manifest_path=str(remote["manifest"]),
-            claude_path=review.APPROVED_CLAUDE_EXECUTABLE["path"],
-        )
-        allowed_reads = sorted(
-            {
-                str(capsule),
-                *review.sandbox_runtime_read_paths(
-                    Path(review.APPROVED_CLAUDE_EXECUTABLE["path"])
-                ),
-            }
+        completion_path = outputs / "review-completion.json"
+        launcher.create_review_completion(
+            path=completion_path, attempt_path=attempt_local, stdout_path=stdout,
+            stderr_path=stderr, started="2026-07-15T10:03:00.000000Z",
+            finished="2026-07-15T10:04:00.000000Z", exit_code=0,
+            container_name=container_name,
         )
         receipt = {
             "schemaVersion": review.ANALYSIS_REVIEW_RECEIPT_SCHEMA,
@@ -356,26 +410,26 @@ class P30LocalAnalysisReviewLauncherTests(unittest.TestCase):
             "noSessionPersistence": True,
             "claudeExecutable": dict(review.APPROVED_CLAUDE_EXECUTABLE),
             "argv": argv,
-            "sandboxArgv": ["/usr/bin/sandbox-exec", "-f", str(profile), *argv],
+            "containerArgv": container_argv,
+            "containerName": container_name,
+            "containerInvocationSha256": sha256_bytes(canonical_json(container_argv)),
+            "containerId": container_id,
+            "containerConfig": container_config,
+            "containerConfigSha256": sha256_bytes(canonical_json(container_config)),
+            "startArgv": review.expected_container_start_argv(container_name),
+            "cleanupArgv": review.expected_container_cleanup_argv(container_name),
+            "cleanupVerified": True,
             "cwd": str(capsule),
+            "containerCwd": str(review.CONTAINER_REVIEW_ROOT),
             "environment": {
                 "clearInherited": True,
                 "keys": list(review.SANITIZED_ENVIRONMENT_KEYS),
-                "secretKeys": [review.CLAUDE_AUTH_ENVIRONMENT_KEY],
+                "secretKeys": [],
+                "authDelivery": review.CLAUDE_AUTH_DELIVERY,
                 "home": str(capsule / "runtime-home"),
                 "tmpdir": str(capsule / "tmp"),
             },
-            "sandbox": {
-                "backend": "sandbox-exec",
-                "backendPath": "/usr/bin/sandbox-exec",
-                "profilePath": str(profile),
-                "profileSha256": sha256_file(profile),
-                "defaultDecision": "deny",
-                "allowedReadPaths": allowed_reads,
-                "allowedWritePaths": [str(capsule)],
-                "network": ["outbound"],
-                "filesystemSecretsAllowed": False,
-            },
+            "containerRuntime": review.APPROVED_REVIEW_CONTAINER,
             "startedAtUtc": "2026-07-15T10:03:00.000000Z",
             "finishedAtUtc": "2026-07-15T10:04:00.000000Z",
             "exitCode": 0,
@@ -390,6 +444,35 @@ class P30LocalAnalysisReviewLauncherTests(unittest.TestCase):
             "verdict": "ACCEPT",
             "request": request_binding,
         }
+        receipt = launcher.build_analysis_review_payload(
+            status={
+                "authorizationDraft": {"path": str(remote["draft"]), "sha256": sha256_file(draft_local)},
+                "manifest": {"path": str(remote["manifest"]), "sha256": sha256_file(manifest_local)},
+                "reviewAttestationRequest": request_binding,
+                "reviewAttemptPath": str(remote["attempt"]),
+                "reviewStdoutPath": str(remote["stdout"]),
+                "reviewStderrPath": str(remote["stderr"]),
+                "reviewAttesterPublicKey": {"path": str(remote["public"]), "sha256": sha256_file(public_local)},
+            },
+            repo_root=repo_root, capsule=capsule, manifest_local=manifest_local,
+            draft_local=draft_local, request_local=request_local,
+            source_lock_local=source_lock, review_attester_key_local=public_local,
+            attempt_local=attempt_local, completion_path=completion_path,
+            stdout_local=stdout, stderr_local=stderr,
+            draft=json.loads(draft_local.read_text()), launcher_sha=launcher_sha,
+            executable=dict(review.APPROVED_CLAUDE_EXECUTABLE), claude_argv=argv,
+            container_argv=container_argv, container_name=container_name,
+            container_invocation_sha256=sha256_bytes(canonical_json(container_argv)),
+            container_id=container_id, container_config=container_config,
+            container_config_sha256=sha256_bytes(canonical_json(container_config)),
+            authenticated_liveness=authenticated_liveness,
+            clock_skew_preflight=clock_skew,
+            start_argv=review.expected_container_start_argv(container_name),
+            cleanup_argv=review.expected_container_cleanup_argv(container_name),
+            cleanup_verified=True, container_runtime=review.APPROVED_REVIEW_CONTAINER,
+            started="2026-07-15T10:03:00.000000Z",
+            finished="2026-07-15T10:04:00.000000Z", exit_code=0,
+        )
         paths = {
             "draft": remote["draft"],
             "manifest": remote["manifest"],

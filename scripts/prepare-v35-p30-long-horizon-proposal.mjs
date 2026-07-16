@@ -66,7 +66,7 @@ requireCondition(
 	'proposal bounded recovery policy changed'
 );
 requireCondition(
-	protocol.executionTrust?.schemaVersion === 'arc-v35-p30-role-trust-v2' &&
+	protocol.executionTrust?.schemaVersion === 'arc-v35-p30-role-trust-v3' &&
 		protocol.executionTrust?.algorithm === 'Ed25519' &&
 		protocol.executionTrust?.campaignInstanceId === null &&
 		Object.keys(protocol.executionTrust?.roles ?? {}).sort().join(',') ===

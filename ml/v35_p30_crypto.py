@@ -23,7 +23,7 @@ SIGNATURE_SCHEMA = "arc-v35-p30-ed25519-signature-v2"
 SIGNING_ROLES = frozenset(
     {"issuer", "executor", "guardian", "analysis-authorizer", "review-attester"}
 )
-ROLE_TRUST_SCHEMA = "arc-v35-p30-role-trust-v2"
+ROLE_TRUST_SCHEMA = "arc-v35-p30-role-trust-v3"
 ROLE_POLICIES = {
     "issuer": {
         "artifactSchemas": ["arc-v35-p30-execution-authorization-v1"],
@@ -61,8 +61,8 @@ ROLE_POLICIES = {
     },
     "review-attester": {
         "artifactSchemas": [
-            "arc-v35-p30-analysis-authorization-review-receipt-v2",
-            "arc-v35-p30-gate-review-receipt-v1",
+            "arc-v35-p30-analysis-authorization-review-receipt-v3",
+            "arc-v35-p30-gate-review-receipt-v2",
         ],
         "kinds": [],
     },
@@ -317,9 +317,53 @@ def validate_role_trust(
         "privateKeyRemoteDelivery": False,
         "attemptReservation": "remote-o-excl-before-fable",
         "claudeExecutable": {
-            "path": "/Users/maikyon/.local/share/claude/versions/2.1.211",
-            "sha256": "5a728a76198b6eca7f3c7cdbff43bab44b77b48c2108f7a3107d889773382629",
+            "path": "/usr/local/bin/claude",
+            "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
             "version": "2.1.211 (Claude Code)",
+        },
+        "container": {
+            "backend": "docker",
+            "engine": {
+                "path": "/usr/local/bin/docker",
+                "resolvedPath": "/Applications/Docker.app/Contents/Resources/bin/docker",
+                "sha256": "cac12f15213d5806f1ffcbc6c159da969e8bf606bf81eafcea89b4c79d7945fd",
+                "version": "Docker version 27.4.0, build bde2b89",
+            },
+            "daemon": {
+                "id": "ef5c7268-c120-4369-8259-7faed4906a28",
+                "serverVersion": "27.4.0",
+                "operatingSystem": "Docker Desktop",
+                "architecture": "aarch64",
+                "rootDirectory": "/var/lib/docker",
+                "securityOptions": [
+                    "name=seccomp,profile=unconfined",
+                    "name=cgroupns",
+                ],
+            },
+            "image": {
+                "reference": (
+                    "arc-p30-fable@sha256:"
+                    "6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c"
+                ),
+                "imageId": (
+                    "sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c"
+                ),
+                "platform": "linux/arm64",
+                "user": "10001:10001",
+                "claudeExecutable": {
+                    "path": "/usr/local/bin/claude",
+                    "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
+                    "version": "2.1.211 (Claude Code)",
+                },
+            },
+            "authDelivery": "oauth-token-file-descriptor-stdin-fd0",
+            "rootFilesystem": "read-only",
+            "capsuleMount": "read-only:/review",
+            "capabilities": [],
+            "noNewPrivileges": True,
+            "network": "default-bridge-icc-enabled",
+            "seccomp": "builtin-enforced",
+            "logDriver": "none",
         },
     }:
         raise ValueError("P30 local review runtime policy changed")

@@ -49,14 +49,14 @@ EXECUTION_AUTHORIZATION_SCHEMA = "arc-v35-p30-execution-authorization-v1"
 EVALUATION_INNER_SCHEMA = "arc-v35-p30-evaluation-inner-execution-v1"
 PAIR_INTEGRITY_SCHEMA = "arc-v35-p30-evaluation-pair-integrity-v1"
 FABLE_RECEIPT_SCHEMA = "arc-v35-p30-fable-review-command-receipt-v2"
-EXECUTION_TRUST_SCHEMA = "arc-v35-p30-role-trust-v2"
+EXECUTION_TRUST_SCHEMA = "arc-v35-p30-role-trust-v3"
 ROOT_BINDING_SCHEMA = "arc-v35-root-binding-v1"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_REGISTRY_RELATIVE = (
     "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/"
     "source-registry.proposed.json"
 )
-SOURCE_REGISTRY_SHA256 = "9249a0b64a144c66676ce87a79996e50d9e59147957eaffe8942a7bfc8e787e1"
+SOURCE_REGISTRY_SHA256 = "2e2b553631750d0042fb6e477bdd997f87e15d0b2c5f43c4dd73b0a44c959c18"
 REPLICATES = tuple("abcdefghijklmnopqr")
 CONTROL = "control-zero"
 TREATMENTS = ("uniform-040", "late-scheduled")
@@ -135,7 +135,7 @@ if (
     or _source_registry.get("purpose") != "complete-runtime-and-evaluation-source-closure"
     or _source_registry.get("promotionEligible") is not False
     or not isinstance(_source_registry.get("files"), list)
-    or len(_source_registry["files"]) != 545
+    or len(_source_registry["files"]) != 548
     or _source_registry["files"] != sorted(set(_source_registry["files"]))
     or any(not isinstance(path, str) or not path for path in _source_registry["files"])
 ):
@@ -698,7 +698,7 @@ def validate_protocol(protocol: Mapping[str, Any], *, require_authorized: bool =
         "schemaVersion": "arc-v35-p30-source-registry-v1",
         "path": SOURCE_REGISTRY_RELATIVE,
         "sha256": SOURCE_REGISTRY_SHA256,
-        "files": 545,
+        "files": 548,
     }:
         raise ValueError("P30 source registry declaration changed")
     power_calibration = protocol.get("powerCalibration")
@@ -3477,6 +3477,8 @@ def load_inputs(
                 "sha256": sha256(role_public_key_path(trust, "review-attester")),
             },
             "claudeExecutable": trust["reviewRuntime"]["claudeExecutable"],
+            "reviewRuntime": trust["reviewRuntime"],
+            "launcherSha256": analysis_review["launcherSha256"],
         },
         label="P30 analysis Fable review",
     )

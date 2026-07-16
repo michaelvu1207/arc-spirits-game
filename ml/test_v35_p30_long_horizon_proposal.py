@@ -51,7 +51,7 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
                 "sha256": None,
             },
         )
-        self.assertEqual(protocol["sourceRegistry"]["files"], 545)
+        self.assertEqual(protocol["sourceRegistry"]["files"], 548)
         self.assertEqual(
             protocol["sourceRegistry"]["sha256"],
             sha256(REPO / protocol["sourceRegistry"]["path"]),
@@ -65,6 +65,8 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
             "ml/run_v35_p30_analysis_review_local.py",
             "ml/test_v35_p30_analysis_review_local.py",
             "ml/run_v35_p30_gate_review_local.py",
+            "ml/docker/p30-fable-reviewer.Dockerfile",
+            "ml/docker/p30-fable-reviewer.lock.json",
             "ml/run_v35_p30_fault_injection.py",
             "ml/run_v35_p30_cuda_determinism.py",
             "ml/issue_v35_p30_preflight_authorization.py",
@@ -80,7 +82,7 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
         )
         self.assertEqual(trust["custody"]["localOnlyRoles"], ["review-attester"])
         self.assertNotIn(
-            "arc-v35-p30-analysis-authorization-review-receipt-v2",
+            "arc-v35-p30-analysis-authorization-review-receipt-v3",
             trust["roles"]["guardian"]["allowedArtifactSchemas"],
         )
         self.assertEqual(protocol["analysis"]["expectedGuardianCount"], 10)

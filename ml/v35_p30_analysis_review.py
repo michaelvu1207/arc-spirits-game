@@ -23,33 +23,86 @@ from analyze_v35_p30_long_horizon import (
     sha256,
     utc_instant,
 )
-from v35_p30_crypto import read_regular_nofollow, verify_signed_payload
+from v35_p30_crypto import (
+    canonical_json,
+    read_regular_nofollow,
+    sha256_bytes,
+    verify_signed_payload,
+)
 
 
 ANALYSIS_REVIEW_RECEIPT_SCHEMA = (
-    "arc-v35-p30-analysis-authorization-review-receipt-v2"
+    "arc-v35-p30-analysis-authorization-review-receipt-v3"
 )
-ANALYSIS_REVIEW_ATTEMPT_SCHEMA = "arc-v35-p30-analysis-review-attempt-v1"
+ANALYSIS_REVIEW_ATTEMPT_SCHEMA = "arc-v35-p30-analysis-review-attempt-v2"
 LOCAL_REVIEW_LAUNCHER_RELATIVE = "ml/run_v35_p30_analysis_review_local.py"
-CLAUDE_AUTH_ENVIRONMENT_KEY = "CLAUDE_CODE_OAUTH_TOKEN"
+CLAUDE_AUTH_DELIVERY = "oauth-token-file-descriptor-stdin-fd0"
 SANITIZED_ENVIRONMENT_KEYS = (
-    "CLAUDE_CODE_OAUTH_TOKEN",
+    "DOCKER_CONFIG",
+    "DOCKER_HOST",
     "HOME",
     "LANG",
     "LC_ALL",
     "NO_COLOR",
     "PATH",
     "TMPDIR",
-    "XDG_CACHE_HOME",
-    "XDG_CONFIG_HOME",
-    "XDG_DATA_HOME",
 )
 VERSION_PATTERN = re.compile(r"^[^\r\n]{1,256}$")
 APPROVED_CLAUDE_EXECUTABLE = {
-    "path": "/Users/maikyon/.local/share/claude/versions/2.1.211",
-    "sha256": "5a728a76198b6eca7f3c7cdbff43bab44b77b48c2108f7a3107d889773382629",
+    "path": "/usr/local/bin/claude",
+    "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
     "version": "2.1.211 (Claude Code)",
 }
+APPROVED_REVIEW_CONTAINER = {
+    "backend": "docker",
+    "engine": {
+        "path": "/usr/local/bin/docker",
+        "resolvedPath": "/Applications/Docker.app/Contents/Resources/bin/docker",
+        "sha256": "cac12f15213d5806f1ffcbc6c159da969e8bf606bf81eafcea89b4c79d7945fd",
+        "version": "Docker version 27.4.0, build bde2b89",
+    },
+    "daemon": {
+        "id": "ef5c7268-c120-4369-8259-7faed4906a28",
+        "serverVersion": "27.4.0",
+        "operatingSystem": "Docker Desktop",
+        "architecture": "aarch64",
+        "rootDirectory": "/var/lib/docker",
+        "securityOptions": ["name=seccomp,profile=unconfined", "name=cgroupns"],
+    },
+    "image": {
+        "reference": (
+            "arc-p30-fable@sha256:"
+            "6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c"
+        ),
+        "imageId": (
+            "sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c"
+        ),
+        "platform": "linux/arm64",
+        "user": "10001:10001",
+        "claudeExecutable": APPROVED_CLAUDE_EXECUTABLE,
+    },
+    "authDelivery": CLAUDE_AUTH_DELIVERY,
+    "rootFilesystem": "read-only",
+    "capsuleMount": "read-only:/review",
+    "capabilities": [],
+    "noNewPrivileges": True,
+    "network": "default-bridge-icc-enabled",
+    "seccomp": "builtin-enforced",
+    "logDriver": "none",
+}
+APPROVED_REVIEW_RUNTIME = {
+    "attesterRole": "review-attester",
+    "privateKeyRemoteDelivery": False,
+    "attemptReservation": "remote-o-excl-before-fable",
+    "claudeExecutable": APPROVED_CLAUDE_EXECUTABLE,
+    "container": APPROVED_REVIEW_CONTAINER,
+}
+CONTAINER_REVIEW_ROOT = Path("/review")
+CONTAINER_NAME_PATTERN = re.compile(r"^arc-p30-review-[0-9a-f]{16}$")
+REVIEW_LIVENESS_SCHEMA = "arc-v35-p30-authenticated-review-liveness-v1"
+REVIEW_LIVENESS_PROMPT = "Reply with exactly P30_REVIEW_LIVENESS_OK"
+REVIEW_LIVENESS_STDOUT = b"P30_REVIEW_LIVENESS_OK\n"
+CLOCK_SKEW_SCHEMA = "arc-v35-p30-review-clock-skew-v1"
 
 
 def review_prompt(
@@ -117,21 +170,268 @@ def expected_argv(
     ]
 
 
-def sandbox_runtime_read_paths(claude_executable: Path) -> list[str]:
-    """Minimal immutable macOS runtime roots required by a Mach-O CLI."""
+def expected_container_create_argv(
+    *, capsule: Path, container_name: str, claude_argv: list[str]
+) -> list[str]:
+    """Return the complete secret-free, digest-pinned Docker invocation."""
 
-    paths = {
-        str(claude_executable.resolve()),
-        "/Library/Apple/System",
-        "/System",
-        "/dev/null",
-        "/dev/random",
-        "/dev/urandom",
-        "/private/var/db/dyld",
-        "/usr/lib",
-        "/usr/share/icu",
+    capsule = capsule.resolve()
+    if not capsule.is_absolute() or any(character in str(capsule) for character in ",\r\n"):
+        raise ValueError("P30 review capsule cannot be represented by a Docker mount")
+    if not isinstance(container_name, str) or CONTAINER_NAME_PATTERN.fullmatch(container_name) is None:
+        raise ValueError("P30 review container name changed")
+    if not claude_argv or claude_argv[0] != APPROVED_CLAUDE_EXECUTABLE["path"]:
+        raise ValueError("P30 review Claude argv changed")
+    runtime = APPROVED_REVIEW_CONTAINER
+    return [
+        runtime["engine"]["path"],
+        "create",
+        "-i",
+        "--pull",
+        "never",
+        "--platform",
+        runtime["image"]["platform"],
+        "--name",
+        container_name,
+        "--hostname",
+        "p30-review",
+        "--network",
+        "bridge",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--security-opt",
+        "seccomp=builtin",
+        "--pids-limit",
+        "128",
+        "--memory",
+        "1g",
+        "--cpus",
+        "2",
+        "--log-driver",
+        "none",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777",
+        "--tmpfs",
+        "/home/reviewer:rw,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=700",
+        "--mount",
+        f"type=bind,src={capsule},dst=/review,readonly",
+        "--workdir",
+        "/review",
+        "--env",
+        "HOME=/home/reviewer",
+        "--env",
+        "LANG=C.UTF-8",
+        "--env",
+        "LC_ALL=C.UTF-8",
+        "--env",
+        "NO_COLOR=1",
+        "--env",
+        "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=0",
+        "--entrypoint",
+        APPROVED_CLAUDE_EXECUTABLE["path"],
+        runtime["image"]["reference"],
+        *claude_argv[1:],
+    ]
+
+
+def expected_container_config(
+    *, capsule: Path, container_name: str, container_id: str, claude_argv: list[str]
+) -> dict[str, Any]:
+    """Return the exact normalized Docker inspect payload allowed before reservation."""
+
+    capsule = capsule.resolve()
+    if not re.fullmatch(r"[0-9a-f]{64}", container_id):
+        raise ValueError("P30 review container ID changed")
+    expected_container_create_argv(
+        capsule=capsule, container_name=container_name, claude_argv=claude_argv
+    )
+    image = APPROVED_REVIEW_CONTAINER["image"]
+    return {
+        "Id": container_id,
+        "Name": f"/{container_name}",
+        "Image": image["imageId"],
+        "Platform": "linux",
+        "State": {
+            "Status": "created", "Running": False, "Paused": False,
+            "Restarting": False, "OOMKilled": False, "Dead": False,
+            "Pid": 0, "ExitCode": 0, "Error": "",
+            "StartedAt": "0001-01-01T00:00:00Z",
+            "FinishedAt": "0001-01-01T00:00:00Z",
+        },
+        "Config": {
+            "Hostname": "p30-review",
+            "User": image["user"],
+            "Env": sorted([
+                "HOME=/home/reviewer",
+                "LANG=C.UTF-8",
+                "LC_ALL=C.UTF-8",
+                "NO_COLOR=1",
+                "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=0",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NODE_VERSION=22.17.1",
+                "YARN_VERSION=1.22.22",
+            ]),
+            "Cmd": claude_argv[1:],
+            "Image": image["reference"],
+            "WorkingDir": str(CONTAINER_REVIEW_ROOT),
+            "Entrypoint": [APPROVED_CLAUDE_EXECUTABLE["path"]],
+            "Labels": {},
+        },
+        "HostConfig": {
+            "Binds": None,
+            "LogConfig": {"Type": "none", "Config": {}},
+            "NetworkMode": "bridge",
+            "CapAdd": None,
+            "CapDrop": ["ALL"],
+            "Privileged": False,
+            "ReadonlyRootfs": True,
+            "SecurityOpt": ["no-new-privileges", "seccomp=builtin"],
+            "PidsLimit": 128,
+            "Memory": 1073741824,
+            "NanoCpus": 2000000000,
+            "AutoRemove": False,
+            "Tmpfs": {
+                "/home/reviewer": "rw,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=700",
+                "/tmp": "rw,noexec,nosuid,nodev,size=128m,mode=1777",
+            },
+            "Mounts": [
+                {
+                    "Type": "bind", "Source": str(capsule),
+                    "Target": str(CONTAINER_REVIEW_ROOT), "ReadOnly": True,
+                }
+            ],
+        },
+        "Mounts": [
+            {
+                "Type": "bind", "Source": str(capsule),
+                "Destination": str(CONTAINER_REVIEW_ROOT), "Mode": "",
+                "RW": False, "Propagation": "rprivate",
+            }
+        ],
     }
-    return sorted(paths)
+
+
+def expected_container_start_argv(container_name: str) -> list[str]:
+    if not isinstance(container_name, str) or CONTAINER_NAME_PATTERN.fullmatch(container_name) is None:
+        raise ValueError("P30 review container name changed")
+    return [APPROVED_REVIEW_CONTAINER["engine"]["path"], "start", "-ai", container_name]
+
+
+def expected_container_cleanup_argv(container_name: str) -> list[str]:
+    if not isinstance(container_name, str) or CONTAINER_NAME_PATTERN.fullmatch(container_name) is None:
+        raise ValueError("P30 review container name changed")
+    return [APPROVED_REVIEW_CONTAINER["engine"]["path"], "rm", "-f", container_name]
+
+
+def liveness_claude_argv() -> list[str]:
+    return [
+        APPROVED_CLAUDE_EXECUTABLE["path"], "-p", "--model", "fable",
+        "--effort", "high", "--tools", "Read", "--no-session-persistence",
+        REVIEW_LIVENESS_PROMPT,
+    ]
+
+
+def validate_authenticated_liveness(
+    evidence: Mapping[str, Any], *, capsule: Path, verify_local_files: bool
+) -> None:
+    exact_keys(
+        evidence,
+        {
+            "schemaVersion", "valid", "immutable", "outcomesInspected",
+            "promotionEligible", "model", "effort", "tools",
+            "noSessionPersistence", "authDelivery", "prompt",
+            "containerArgv", "containerName", "containerInvocationSha256",
+            "containerId", "containerConfig", "containerConfigSha256",
+            "startArgv", "cleanupArgv", "cleanupVerified", "startedAtUtc",
+            "finishedAtUtc", "exitCode", "stdout", "stderr",
+        },
+        "P30 authenticated reviewer liveness",
+    )
+    capsule = capsule.resolve()
+    name = evidence.get("containerName")
+    identifier = evidence.get("containerId")
+    argv = liveness_claude_argv()
+    create = expected_container_create_argv(
+        capsule=capsule, container_name=name, claude_argv=argv
+    )
+    config = expected_container_config(
+        capsule=capsule, container_name=name, container_id=identifier,
+        claude_argv=argv,
+    )
+    stdout = evidence.get("stdout")
+    stderr = evidence.get("stderr")
+    exact_keys(stdout, {"path", "sha256", "bytes"}, "P30 liveness stdout")
+    exact_keys(stderr, {"path", "sha256", "bytes"}, "P30 liveness stderr")
+    if (
+        evidence.get("schemaVersion") != REVIEW_LIVENESS_SCHEMA
+        or evidence.get("valid") is not True
+        or evidence.get("immutable") is not True
+        or evidence.get("outcomesInspected") is not False
+        or evidence.get("promotionEligible") is not False
+        or evidence.get("model") != "fable"
+        or evidence.get("effort") != "high"
+        or evidence.get("tools") != ["Read"]
+        or evidence.get("noSessionPersistence") is not True
+        or evidence.get("authDelivery") != CLAUDE_AUTH_DELIVERY
+        or evidence.get("prompt") != REVIEW_LIVENESS_PROMPT
+        or evidence.get("containerArgv") != create
+        or evidence.get("containerInvocationSha256")
+        != sha256_bytes(canonical_json(create))
+        or evidence.get("containerConfig") != config
+        or evidence.get("containerConfigSha256")
+        != sha256_bytes(canonical_json(config))
+        or evidence.get("startArgv") != expected_container_start_argv(name)
+        or evidence.get("cleanupArgv") != expected_container_cleanup_argv(name)
+        or evidence.get("cleanupVerified") is not True
+        or evidence.get("exitCode") != 0
+        or stdout.get("bytes") != len(REVIEW_LIVENESS_STDOUT)
+        or stdout.get("sha256") != sha256_bytes(REVIEW_LIVENESS_STDOUT)
+        or stderr.get("bytes") != 0
+        or stderr.get("sha256") != sha256_bytes(b"")
+    ):
+        raise ValueError("P30 authenticated reviewer liveness changed")
+    started = utc_instant(evidence["startedAtUtc"], "P30 liveness start")
+    finished = utc_instant(evidence["finishedAtUtc"], "P30 liveness finish")
+    if finished <= started:
+        raise ValueError("P30 authenticated reviewer liveness duration changed")
+    if verify_local_files:
+        stdout_path = Path(stdout["path"])
+        stderr_path = Path(stderr["path"])
+        if (
+            capsule not in stdout_path.resolve().parents
+            or capsule not in stderr_path.resolve().parents
+            or read_regular_nofollow(stdout_path) != REVIEW_LIVENESS_STDOUT
+            or read_regular_nofollow(stderr_path) != b""
+        ):
+            raise ValueError("P30 authenticated reviewer liveness files changed")
+
+
+def validate_clock_skew_preflight(value: Mapping[str, Any]) -> None:
+    exact_keys(
+        value,
+        {"schemaVersion", "valid", "localBeforeUtc", "remoteUtc", "localAfterUtc", "roundTripMs", "absoluteSkewMs"},
+        "P30 review clock-skew preflight",
+    )
+    before = utc_instant(value["localBeforeUtc"], "P30 clock local-before")
+    remote = utc_instant(value["remoteUtc"], "P30 clock remote")
+    after = utc_instant(value["localAfterUtc"], "P30 clock local-after")
+    if (
+        value.get("schemaVersion") != CLOCK_SKEW_SCHEMA
+        or value.get("valid") is not True
+        or after < before
+        or not isinstance(value.get("roundTripMs"), int)
+        or not isinstance(value.get("absoluteSkewMs"), int)
+        or value["roundTripMs"] < 0 or value["roundTripMs"] > 30000
+        or value["absoluteSkewMs"] < 0 or value["absoluteSkewMs"] > 30000
+    ):
+        raise ValueError("P30 review clock-skew preflight changed")
+    midpoint = before + (after - before) / 2
+    observed = round(abs((remote - midpoint).total_seconds()) * 1000)
+    if abs(observed - value["absoluteSkewMs"]) > 2:
+        raise ValueError("P30 review clock-skew calculation changed")
 
 
 def _source_file_entry(source_lock: Mapping[str, Any], relative: str) -> Mapping[str, Any]:
@@ -190,6 +490,8 @@ def _validate_remote_review_request(
             "reviewStderrPath",
             "reviewAttesterPublicKey",
             "claudeExecutable",
+            "reviewRuntime",
+            "launcherSha256",
         },
         "P30 local analysis review-attester request subject",
     )
@@ -211,6 +513,8 @@ def _validate_remote_review_request(
             "sha256": review_attester_public_key_sha256,
         }
         or subject.get("claudeExecutable") != APPROVED_CLAUDE_EXECUTABLE
+        or subject.get("reviewRuntime") != APPROVED_REVIEW_RUNTIME
+        or not is_sha256(subject.get("launcherSha256"))
         or request.get("predecessorSha256") != draft_sha256
         or request.get("expectedOutputPath") != str(review_receipt_path)
         or not is_sha256(request.get("requestNonce"))
@@ -232,7 +536,13 @@ def validate_analysis_review_attempt_payload(
     source_lock_sha256: str,
     launcher_sha256: str,
     claude_executable: Mapping[str, str],
-    sandbox_profile_sha256: str,
+    container_runtime: Mapping[str, Any],
+    container_name: str,
+    container_invocation_sha256: str,
+    container_id: str,
+    container_config_sha256: str,
+    authenticated_liveness: Mapping[str, Any],
+    clock_skew_preflight: Mapping[str, Any],
 ) -> None:
     exact_keys(
         attempt,
@@ -252,7 +562,13 @@ def validate_analysis_review_attempt_payload(
             "sourceLockSha256",
             "launcherSha256",
             "claudeExecutable",
-            "sandboxProfileSha256",
+            "containerRuntime",
+            "containerName",
+            "containerInvocationSha256",
+            "containerId",
+            "containerConfigSha256",
+            "authenticatedLiveness",
+            "clockSkewPreflight",
             "reservedAtUtc",
         },
         "P30 analysis review attempt reservation",
@@ -273,7 +589,18 @@ def validate_analysis_review_attempt_payload(
         or attempt.get("sourceLockSha256") != source_lock_sha256
         or attempt.get("launcherSha256") != launcher_sha256
         or attempt.get("claudeExecutable") != dict(claude_executable)
-        or attempt.get("sandboxProfileSha256") != sandbox_profile_sha256
+        or attempt.get("containerRuntime") != dict(container_runtime)
+        or attempt.get("containerName") != container_name
+        or not isinstance(container_name, str)
+        or CONTAINER_NAME_PATTERN.fullmatch(container_name) is None
+        or attempt.get("containerInvocationSha256") != container_invocation_sha256
+        or not is_sha256(container_invocation_sha256)
+        or attempt.get("containerId") != container_id
+        or not re.fullmatch(r"[0-9a-f]{64}", container_id)
+        or attempt.get("containerConfigSha256") != container_config_sha256
+        or not is_sha256(container_config_sha256)
+        or attempt.get("authenticatedLiveness") != dict(authenticated_liveness)
+        or attempt.get("clockSkewPreflight") != dict(clock_skew_preflight)
         or not isinstance(attempt.get("reservedAtUtc"), str)
     ):
         raise ValueError("P30 analysis review attempt reservation changed")
@@ -297,7 +624,8 @@ def _validate_analysis_review_payload(
             "promotionEligible", "targetDraftPath", "targetDraftSha256",
             "manifestPath", "manifestSha256", "reviewRequestPath",
             "reviewRequestSha256", "reviewAttemptPath", "reviewAttemptSha256",
-            "localAttemptPath", "localAttemptSha256", "localTargetDraftPath",
+            "localAttemptPath", "localAttemptSha256", "localCompletionPath",
+            "localCompletionSha256", "localTargetDraftPath",
             "localTargetDraftSha256", "localManifestPath", "localManifestSha256",
             "localReviewRequestPath", "localReviewRequestSha256", "sourceLockPath",
             "sourceLockSha256", "localSourceLockPath", "localSourceLockSha256",
@@ -305,7 +633,12 @@ def _validate_analysis_review_payload(
             "reviewAttesterPublicKeyPath", "reviewAttesterPublicKeySha256",
             "localReviewAttesterPublicKeyPath", "localReviewAttesterPublicKeySha256",
             "model", "effort", "tools", "noSessionPersistence", "claudeExecutable",
-            "argv", "sandboxArgv", "cwd", "environment", "sandbox",
+            "argv", "containerArgv", "containerName", "containerInvocationSha256",
+            "containerId", "containerConfig", "containerConfigSha256", "startArgv",
+            "cleanupArgv", "cleanupVerified", "authenticatedLiveness",
+            "clockSkewPreflight", "cwd",
+            "containerCwd", "environment",
+            "containerRuntime",
             "startedAtUtc", "finishedAtUtc", "exitCode", "stdoutPath",
             "stdoutSha256", "localStdoutPath", "localStdoutSha256", "stderrPath",
             "stderrSha256", "localStderrPath", "localStderrSha256", "verdict",
@@ -321,6 +654,7 @@ def _validate_analysis_review_payload(
     local_manifest = Path(receipt["localManifestPath"])
     local_request = Path(receipt["localReviewRequestPath"])
     local_attempt = Path(receipt["localAttemptPath"])
+    local_completion = Path(receipt["localCompletionPath"])
     local_stdout = Path(receipt["localStdoutPath"])
     local_stderr = Path(receipt["localStderrPath"])
     local_source_lock = Path(receipt["localSourceLockPath"])
@@ -338,12 +672,19 @@ def _validate_analysis_review_payload(
         or dict(executable) != APPROVED_CLAUDE_EXECUTABLE
     ):
         raise ValueError("P30 review Claude executable binding changed")
+    capsule = Path(receipt["cwd"])
+    try:
+        container_draft = CONTAINER_REVIEW_ROOT / local_draft.relative_to(capsule)
+        container_manifest = CONTAINER_REVIEW_ROOT / local_manifest.relative_to(capsule)
+        container_request = CONTAINER_REVIEW_ROOT / local_request.relative_to(capsule)
+    except ValueError as exc:
+        raise ValueError("P30 analysis review inputs escaped the capsule") from exc
     claude_argv = expected_argv(
-        local_draft_path=local_draft,
+        local_draft_path=container_draft,
         draft_sha256=draft_hash,
-        local_manifest_path=local_manifest,
+        local_manifest_path=container_manifest,
         manifest_sha256=manifest_hash,
-        local_request_path=local_request,
+        local_request_path=container_request,
         request_sha256=receipt["reviewRequestSha256"],
         remote_draft_path=str(draft_path),
         remote_manifest_path=str(manifest_path),
@@ -352,31 +693,36 @@ def _validate_analysis_review_payload(
     environment = receipt.get("environment")
     exact_keys(
         environment,
-        {"clearInherited", "keys", "secretKeys", "home", "tmpdir"},
+        {"clearInherited", "keys", "secretKeys", "home", "tmpdir", "authDelivery"},
         "P30 analysis Fable environment",
     )
-    capsule = Path(receipt["cwd"])
     if (
         environment.get("clearInherited") is not True
         or environment.get("keys") != list(SANITIZED_ENVIRONMENT_KEYS)
-        or environment.get("secretKeys") != [CLAUDE_AUTH_ENVIRONMENT_KEY]
+        or environment.get("secretKeys") != []
+        or environment.get("authDelivery") != CLAUDE_AUTH_DELIVERY
         or environment.get("home") != str(capsule / "runtime-home")
         or environment.get("tmpdir") != str(capsule / "tmp")
     ):
         raise ValueError("P30 analysis Fable environment changed")
-    sandbox = receipt.get("sandbox")
-    exact_keys(
-        sandbox,
-        {
-            "backend", "backendPath", "profilePath", "profileSha256",
-            "defaultDecision", "allowedReadPaths", "allowedWritePaths",
-            "network", "filesystemSecretsAllowed",
-        },
-        "P30 analysis Fable sandbox",
+    container_runtime = receipt.get("containerRuntime")
+    container_name = receipt.get("containerName")
+    container_id = receipt.get("containerId")
+    container_argv = expected_container_create_argv(
+        capsule=capsule, container_name=container_name, claude_argv=claude_argv
     )
-    expected_reads = sorted(
-        {str(capsule.resolve()), *sandbox_runtime_read_paths(Path(executable["path"]))}
+    container_invocation_sha256 = sha256_bytes(canonical_json(container_argv))
+    container_config = expected_container_config(
+        capsule=capsule, container_name=container_name, container_id=container_id,
+        claude_argv=claude_argv,
     )
+    container_config_sha256 = sha256_bytes(canonical_json(container_config))
+    authenticated_liveness = receipt.get("authenticatedLiveness")
+    validate_authenticated_liveness(
+        authenticated_liveness, capsule=capsule, verify_local_files=verify_local_files
+    )
+    clock_skew_preflight = receipt.get("clockSkewPreflight")
+    validate_clock_skew_preflight(clock_skew_preflight)
     if (
         receipt.get("schemaVersion") != ANALYSIS_REVIEW_RECEIPT_SCHEMA
         or receipt.get("valid") is not True
@@ -391,6 +737,7 @@ def _validate_analysis_review_payload(
         or receipt.get("localManifestSha256") != manifest_hash
         or receipt.get("localReviewRequestSha256") != receipt.get("reviewRequestSha256")
         or receipt.get("localAttemptSha256") != receipt.get("reviewAttemptSha256")
+        or not is_sha256(receipt.get("localCompletionSha256"))
         or receipt.get("localSourceLockSha256") != receipt.get("sourceLockSha256")
         or receipt.get("localReviewAttesterPublicKeySha256")
         != receipt.get("reviewAttesterPublicKeySha256")
@@ -401,8 +748,15 @@ def _validate_analysis_review_payload(
         or receipt.get("tools") != ["Read"]
         or receipt.get("noSessionPersistence") is not True
         or receipt.get("argv") != claude_argv
-        or receipt.get("sandboxArgv")
-        != [sandbox.get("backendPath"), "-f", sandbox.get("profilePath"), *claude_argv]
+        or receipt.get("containerArgv") != container_argv
+        or receipt.get("containerInvocationSha256") != container_invocation_sha256
+        or receipt.get("containerConfig") != container_config
+        or receipt.get("containerConfigSha256") != container_config_sha256
+        or receipt.get("startArgv") != expected_container_start_argv(container_name)
+        or receipt.get("cleanupArgv") != expected_container_cleanup_argv(container_name)
+        or receipt.get("cleanupVerified") is not True
+        or container_runtime != APPROVED_REVIEW_CONTAINER
+        or receipt.get("containerCwd") != str(CONTAINER_REVIEW_ROOT)
         or receipt.get("exitCode") != 0
         or receipt.get("verdict") != "ACCEPT"
         or receipt.get("localStdoutSha256") != receipt.get("stdoutSha256")
@@ -414,13 +768,6 @@ def _validate_analysis_review_payload(
                 "reviewAttesterPublicKeySha256", "stdoutSha256", "stderrSha256",
             )
         )
-        or sandbox.get("backend") != "sandbox-exec"
-        or sandbox.get("backendPath") != "/usr/bin/sandbox-exec"
-        or sandbox.get("defaultDecision") != "deny"
-        or sandbox.get("allowedReadPaths") != expected_reads
-        or sandbox.get("allowedWritePaths") != [str(capsule.resolve())]
-        or sandbox.get("network") != ["outbound"]
-        or sandbox.get("filesystemSecretsAllowed") is not False
     ):
         raise ValueError("P30 analysis Fable review receipt changed")
 
@@ -454,6 +801,8 @@ def _validate_analysis_review_payload(
         review_attester_public_key_path=Path(receipt["reviewAttesterPublicKeyPath"]),
         review_attester_public_key_sha256=receipt["reviewAttesterPublicKeySha256"],
     )
+    if request["subject"]["launcherSha256"] != receipt["launcherSha256"]:
+        raise ValueError("P30 analysis review request launcher binding changed")
     if receipt.get("request") != {
         "path": str(request_path), "sha256": receipt["reviewRequestSha256"]
     }:
@@ -474,7 +823,13 @@ def _validate_analysis_review_payload(
         source_lock_sha256=receipt["sourceLockSha256"],
         launcher_sha256=receipt["launcherSha256"],
         claude_executable=executable,
-        sandbox_profile_sha256=sandbox["profileSha256"],
+        container_runtime=container_runtime,
+        container_name=container_name,
+        container_invocation_sha256=container_invocation_sha256,
+        container_id=container_id,
+        container_config_sha256=container_config_sha256,
+        authenticated_liveness=authenticated_liveness,
+        clock_skew_preflight=clock_skew_preflight,
     )
     started = utc_instant(receipt["startedAtUtc"], "analysis Fable review start")
     finished = utc_instant(receipt["finishedAtUtc"], "analysis Fable review finish")
@@ -515,21 +870,26 @@ def _validate_analysis_review_payload(
             (local_manifest, "localManifestSha256"),
             (local_request, "localReviewRequestSha256"),
             (local_attempt, "localAttemptSha256"),
+            (local_completion, "localCompletionSha256"),
             (local_stdout, "localStdoutSha256"),
             (local_stderr, "localStderrSha256"),
             (local_source_lock, "localSourceLockSha256"),
             (local_review_attester_key, "localReviewAttesterPublicKeySha256"),
-            (Path(sandbox["profilePath"]), None),
         )
         for local_path, field in files:
-            expected = sandbox["profileSha256"] if field is None else receipt[field]
+            expected = receipt[field]
             if not local_path.is_file() or sha256(local_path) != expected:
                 raise ValueError("P30 analysis Fable local evidence changed")
         launcher = local_repo_root / LOCAL_REVIEW_LAUNCHER_RELATIVE
         if sha256(launcher) != receipt["launcherSha256"]:
             raise ValueError("P30 analysis Fable local launcher changed")
-        if sha256(Path(executable["path"])) != executable["sha256"]:
-            raise ValueError("P30 review Claude executable changed")
+        engine = APPROVED_REVIEW_CONTAINER["engine"]
+        resolved_engine = Path(engine["path"]).resolve()
+        if (
+            str(resolved_engine) != engine["resolvedPath"]
+            or sha256(resolved_engine) != engine["sha256"]
+        ):
+            raise ValueError("P30 review container engine changed")
     return receipt
 
 

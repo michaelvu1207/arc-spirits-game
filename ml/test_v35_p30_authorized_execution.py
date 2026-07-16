@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from v35_p30_analysis_review import APPROVED_REVIEW_RUNTIME
 from v35_p30_authorized_execution import (
     AUTHORIZATION_SCHEMA,
     bubblewrap_command,
@@ -101,7 +102,7 @@ class AuthorizedExecutionTests(unittest.TestCase):
             "executor": (["arc-v35-p30-authorized-execution-receipt-v1", "arc-v35-p30-executor-launch-permit-v1"], ["generation", "evaluation-primary", "evaluation-replay", "preflight", "analysis"]),
             "guardian": (["arc-v35-p30-outcome-blind-preflight-v1", "arc-v35-p30-final-generation-completeness-v1", "arc-v35-p30-evaluation-pair-integrity-v1", "arc-v35-p30-analysis-manifest-v1", "arc-v35-p30-phase0-readiness-v1", "arc-v35-p30-full-campaign-authorization-v1", "arc-v35-p30-recovery-incident-v1", "arc-v35-p30-logical-completion-v1"], []),
             "analysis-authorizer": (["arc-v35-p30-execution-authorization-v1"], ["analysis"]),
-            "review-attester": (["arc-v35-p30-analysis-authorization-review-receipt-v2", "arc-v35-p30-gate-review-receipt-v1"], []),
+            "review-attester": (["arc-v35-p30-analysis-authorization-review-receipt-v3", "arc-v35-p30-gate-review-receipt-v2"], []),
         }
         for role, (_, public) in self.keys.items():
             key_id, public_der_sha256 = public_key_identity(public)
@@ -116,7 +117,7 @@ class AuthorizedExecutionTests(unittest.TestCase):
             }
         base_ledger = self.root / "ledger"
         self.protocol.write_text(json.dumps({"executionTrust": {
-            "schemaVersion": "arc-v35-p30-role-trust-v2",
+            "schemaVersion": "arc-v35-p30-role-trust-v3",
             "algorithm": "Ed25519",
             "campaignInstanceId": campaign_instance,
             "roles": roles,
@@ -139,16 +140,7 @@ class AuthorizedExecutionTests(unittest.TestCase):
             "leasePath": str(self.root / "gpu7.lease"),
             "bubblewrapPath": str(self.backend),
             "bubblewrapSha256": sha256_file(self.backend),
-            "reviewRuntime": {
-                "attesterRole": "review-attester",
-                "privateKeyRemoteDelivery": False,
-                "attemptReservation": "remote-o-excl-before-fable",
-                "claudeExecutable": {
-                    "path": "/Users/maikyon/.local/share/claude/versions/2.1.211",
-                    "sha256": "5a728a76198b6eca7f3c7cdbff43bab44b77b48c2108f7a3107d889773382629",
-                    "version": "2.1.211 (Claude Code)",
-                },
-            },
+            "reviewRuntime": APPROVED_REVIEW_RUNTIME,
         }}) + "\n")
         now = dt.datetime.now(dt.timezone.utc)
         ledger = base_ledger / campaign_instance

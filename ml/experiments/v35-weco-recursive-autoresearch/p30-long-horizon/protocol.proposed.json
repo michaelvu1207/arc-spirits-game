@@ -42,8 +42,8 @@
   "sourceRegistry": {
     "schemaVersion": "arc-v35-p30-source-registry-v1",
     "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-registry.proposed.json",
-    "sha256": "9249a0b64a144c66676ce87a79996e50d9e59147957eaffe8942a7bfc8e787e1",
-    "files": 545
+    "sha256": "2e2b553631750d0042fb6e477bdd997f87e15d0b2c5f43c4dd73b0a44c959c18",
+    "files": 548
   },
   "powerCalibration": {
     "schemaVersion": "arc-v35-p30-power-calibration-v1",
@@ -234,7 +234,7 @@
     "outcomeExposureClosesCampaign": true
   },
   "executionTrust": {
-    "schemaVersion": "arc-v35-p30-role-trust-v2",
+    "schemaVersion": "arc-v35-p30-role-trust-v3",
     "algorithm": "Ed25519",
     "campaignInstanceId": null,
     "roles": {
@@ -288,8 +288,8 @@
         "publicKeyDerSha256": null,
         "keyId": null,
         "allowedArtifactSchemas": [
-          "arc-v35-p30-analysis-authorization-review-receipt-v2",
-          "arc-v35-p30-gate-review-receipt-v1"
+          "arc-v35-p30-analysis-authorization-review-receipt-v3",
+          "arc-v35-p30-gate-review-receipt-v2"
         ],
         "allowedKinds": []
       }
@@ -314,9 +314,45 @@
       "privateKeyRemoteDelivery": false,
       "attemptReservation": "remote-o-excl-before-fable",
       "claudeExecutable": {
-        "path": "/Users/maikyon/.local/share/claude/versions/2.1.211",
-        "sha256": "5a728a76198b6eca7f3c7cdbff43bab44b77b48c2108f7a3107d889773382629",
+        "path": "/usr/local/bin/claude",
+        "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
         "version": "2.1.211 (Claude Code)"
+      },
+      "container": {
+        "backend": "docker",
+        "engine": {
+          "path": "/usr/local/bin/docker",
+          "resolvedPath": "/Applications/Docker.app/Contents/Resources/bin/docker",
+          "sha256": "cac12f15213d5806f1ffcbc6c159da969e8bf606bf81eafcea89b4c79d7945fd",
+          "version": "Docker version 27.4.0, build bde2b89"
+        },
+        "daemon": {
+          "id": "ef5c7268-c120-4369-8259-7faed4906a28",
+          "serverVersion": "27.4.0",
+          "operatingSystem": "Docker Desktop",
+          "architecture": "aarch64",
+          "rootDirectory": "/var/lib/docker",
+          "securityOptions": ["name=seccomp,profile=unconfined", "name=cgroupns"]
+        },
+        "image": {
+          "reference": "arc-p30-fable@sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+          "imageId": "sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+          "platform": "linux/arm64",
+          "user": "10001:10001",
+          "claudeExecutable": {
+            "path": "/usr/local/bin/claude",
+            "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
+            "version": "2.1.211 (Claude Code)"
+          }
+        },
+        "authDelivery": "oauth-token-file-descriptor-stdin-fd0",
+        "rootFilesystem": "read-only",
+        "capsuleMount": "read-only:/review",
+        "capabilities": [],
+        "noNewPrivileges": true,
+        "network": "default-bridge-icc-enabled",
+        "seccomp": "builtin-enforced",
+        "logDriver": "none"
       }
     }
   },
