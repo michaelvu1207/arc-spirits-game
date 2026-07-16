@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "arc-v35-p30-phase0-runtime-fable-review-evidence-v1",
+  "valid": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "campaignInstanceId": "bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14",
+  "mode": "phase0-runtime",
+  "verdict": "ACCEPT",
+  "model": "fable",
+  "effort": "high",
+  "tools": [
+    "Read"
+  ],
+  "noSessionPersistence": true,
+  "protocol": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.json",
+    "sha256": "9da51efda745bd5221ecc5b00521808846026a9f3d472d3e284a1fae6c7e06ba"
+  },
+  "source": {
+    "implementationCommit": "e8c02068d88d677afd655506f6810b66a6b52c3f",
+    "sourceContractSha256": "5aeaa30724111352f73ae9912eb120c3481058bb8df579b0a58a549ea29a035b"
+  },
+  "reviewRequest": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/requests/phase0-runtime-fable-review.json",
+    "sha256": "2121a617543eccf17e662bb781cbf304199bd631f2dacf5e2a1e1c7734ff9584"
+  },
+  "reviewAttempt": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/reviews/phase0-runtime/attempt.json",
+    "sha256": "62de422589eec2e239f6488c53d00fc1175403950833ab5ebc5e9b835615e7e6"
+  },
+  "reviewReceipt": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/reviews/phase0-runtime/review-receipt.signed.json",
+    "sha256": "b3d4b8714871306654ca745e8354833eb962ce594f4f9b76647f3dfa7ccfb9fc",
+    "payloadSha256": "6afc05ed1a277ae411601b25c76e430f821730856a335cd1c0a8056b921998eb",
+    "signatureAlgorithm": "Ed25519",
+    "signingRole": "review-attester",
+    "signingKeyId": "ed25519:270da3dde1edcd0080039b0d"
+  },
+  "reviewStreams": {
+    "stdout": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/reviews/phase0-runtime/fable.stdout",
+      "sha256": "044a4df2e6fcd3e10fcb846db48bf47e198f0aeb64f0ba51400bf40a6527cc94"
+    },
+    "stderr": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/reviews/phase0-runtime/fable.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "localCompletion": {
+    "sha256": "f60ba963c0bdc14f16662e50478ab5d89322429d9cf09be6a495a2f9bbffbcad",
+    "exitCode": 0,
+    "cleanupVerified": true
+  },
+  "reviewRuntime": {
+    "image": "arc-p30-fable@sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+    "platform": "linux/arm64",
+    "claudeExecutableSha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
+    "claudeVersion": "2.1.211 (Claude Code)",
+    "authenticatedLivenessPassed": true,
+    "authDelivery": "oauth-token-file-descriptor-stdin-fd0",
+    "containerCleanupVerified": true
+  },
+  "timing": {
+    "startedAtUtc": "2026-07-16T20:32:15.469083Z",
+    "finishedAtUtc": "2026-07-16T20:35:47.956558Z"
+  },
+  "schedulerAfterReview": {
+    "role": "guardian",
+    "verb": "attest-phase0-readiness",
+    "logicalId": "phase0-readiness",
+    "trainingStarted": false
+  }
+}
