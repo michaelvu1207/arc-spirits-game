@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import datetime as dt
-import fcntl
+import errno
 import functools
 import hashlib
 import itertools
@@ -2907,35 +2907,59 @@ def _analysis_runtime_start_ticks() -> int:
 
 
 def _consume_analysis_capability(
-    capability_fd: int, *, expected_sha256: str, expected_bytes: int
+    capability_fd: int,
+    *,
+    capability_path: Path,
+    expected_sha256: str,
+    expected_bytes: int,
 ) -> None:
-    """Validate and close the sole inherited sealed capability descriptor."""
+    """Open, validate, and close the sole read-only sandbox capability."""
 
     try:
-        metadata = os.fstat(capability_fd)
+        os.fstat(capability_fd)
+    except OSError as exc:
+        if exc.errno != errno.EBADF:
+            raise RuntimeError("reserved analysis capability FD cannot be inspected") from exc
+    else:
+        raise RuntimeError("reserved analysis capability FD was already open")
+    expected_path = Path("/run/arc-v35-p30-analysis-capability")
+    if capability_path != expected_path or not capability_path.is_absolute():
+        raise RuntimeError("analysis launch capability path changed")
+    try:
+        path_metadata = os.lstat(capability_path)
     except OSError as exc:
         raise RuntimeError(
-            "analysis launch capability FD is missing; direct CLI execution is forbidden"
+            "analysis launch capability is missing; direct CLI execution is forbidden"
         ) from exc
+    if not stat.S_ISREG(path_metadata.st_mode) or stat.S_ISLNK(path_metadata.st_mode):
+        raise RuntimeError("analysis launch capability path is not a regular file")
+    if path_metadata.st_size != expected_bytes:
+        raise RuntimeError("analysis launch capability size changed")
     try:
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size != expected_bytes:
-            raise RuntimeError("analysis launch capability is not the sealed memfd contract")
-        link = os.readlink(f"/proc/self/fd/{capability_fd}")
-        if "memfd:arc-v35-p30-analysis-capability" not in link or not link.endswith(
-            " (deleted)"
+        mount_flags = os.statvfs(capability_path).f_flag
+    except OSError as exc:
+        raise RuntimeError("analysis launch capability mount cannot be inspected") from exc
+    if mount_flags & os.ST_RDONLY == 0:
+        raise RuntimeError("analysis launch capability mount is writable")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    opened_fd: int | None = None
+    reserved_open = False
+    try:
+        opened_fd = os.open(capability_path, flags)
+        metadata = os.fstat(opened_fd)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_size != expected_bytes
+            or metadata.st_dev != path_metadata.st_dev
+            or metadata.st_ino != path_metadata.st_ino
         ):
-            raise RuntimeError("analysis launch capability is not an anonymous memfd")
-        get_seals = getattr(fcntl, "F_GET_SEALS", None)
-        required_names = ("F_SEAL_SEAL", "F_SEAL_SHRINK", "F_SEAL_GROW", "F_SEAL_WRITE")
-        required_values = [getattr(fcntl, name, None) for name in required_names]
-        if get_seals is None or any(value is None for value in required_values):
-            raise RuntimeError("analysis launch capability sealing cannot be verified")
-        required_mask = 0
-        for value in required_values:
-            assert value is not None
-            required_mask |= value
-        if fcntl.fcntl(capability_fd, get_seals) & required_mask != required_mask:
-            raise RuntimeError("analysis launch capability memfd is not fully sealed")
+            raise RuntimeError("analysis launch capability changed while opening")
+        os.dup2(opened_fd, capability_fd, inheritable=False)
+        reserved_open = True
+        if opened_fd != capability_fd:
+            os.close(opened_fd)
+            opened_fd = None
+        metadata = os.fstat(capability_fd)
         duplicate_fds: list[int] = []
         for name in os.listdir("/proc/self/fd"):
             try:
@@ -2943,18 +2967,21 @@ def _consume_analysis_capability(
                 candidate = os.fstat(descriptor)
             except (OSError, ValueError):
                 continue
-            if (
-                candidate.st_dev == metadata.st_dev
-                and candidate.st_ino == metadata.st_ino
-            ):
+            if candidate.st_dev == metadata.st_dev and candidate.st_ino == metadata.st_ino:
                 duplicate_fds.append(descriptor)
         if duplicate_fds != [capability_fd]:
             raise RuntimeError("analysis launch capability FD was duplicated")
         secret = os.pread(capability_fd, expected_bytes + 1, 0)
-        if len(secret) != expected_bytes or hashlib.sha256(secret).hexdigest() != expected_sha256:
+        if (
+            len(secret) != expected_bytes
+            or hashlib.sha256(secret).hexdigest() != expected_sha256
+        ):
             raise RuntimeError("analysis launch capability hash mismatch")
     finally:
-        os.close(capability_fd)
+        if opened_fd is not None and opened_fd != capability_fd:
+            os.close(opened_fd)
+        if reserved_open:
+            os.close(capability_fd)
 
 
 def validate_analysis_launch_boundary(
@@ -2973,6 +3000,8 @@ def validate_analysis_launch_boundary(
     from v35_p30_authorized_execution import (
         ANALYSIS_CAPABILITY_BYTES,
         ANALYSIS_CAPABILITY_FD,
+        ANALYSIS_CAPABILITY_PATH,
+        ANALYSIS_CAPABILITY_TRANSPORT,
         ANALYSIS_LAUNCH_EVIDENCE_SCHEMA,
         ANALYSIS_LAUNCH_INTENT_SCHEMA,
         analysis_launch_paths,
@@ -3055,6 +3084,8 @@ def validate_analysis_launch_boundary(
             "launchPermit",
             "capabilitySha256",
             "capabilityFd",
+            "capabilityTransport",
+            "capabilityPath",
             "supervisor",
             "launchEvidencePath",
             "createdAtUtc",
@@ -3087,6 +3118,8 @@ def validate_analysis_launch_boundary(
         != launch_permit.get("sha256")
         or not is_sha256(intent.get("capabilitySha256"))
         or intent.get("capabilityFd") != ANALYSIS_CAPABILITY_FD
+        or intent.get("capabilityTransport") != ANALYSIS_CAPABILITY_TRANSPORT
+        or intent.get("capabilityPath") != ANALYSIS_CAPABILITY_PATH
         or intent.get("launchEvidencePath") != str(evidence_path)
         or not isinstance(supervisor, dict)
         or set(supervisor)
@@ -3100,6 +3133,7 @@ def validate_analysis_launch_boundary(
         raise ValueError("analysis launch intent changed")
     _consume_analysis_capability(
         ANALYSIS_CAPABILITY_FD,
+        capability_path=Path(ANALYSIS_CAPABILITY_PATH),
         expected_sha256=intent["capabilitySha256"],
         expected_bytes=ANALYSIS_CAPABILITY_BYTES,
     )
@@ -3123,6 +3157,8 @@ def validate_analysis_launch_boundary(
             "launchPermit",
             "launchIntent",
             "capabilitySha256",
+            "capabilityTransport",
+            "capabilityPath",
             "supervisor",
             "child",
             "committedAtUtc",
@@ -3163,6 +3199,10 @@ def validate_analysis_launch_boundary(
         or evidence.get("launchIntent")
         != {"path": str(intent_path), "sha256": sha256(intent_path)}
         or evidence.get("capabilitySha256") != intent["capabilitySha256"]
+        or evidence.get("capabilityTransport") != ANALYSIS_CAPABILITY_TRANSPORT
+        or evidence.get("capabilityTransport") != intent["capabilityTransport"]
+        or evidence.get("capabilityPath") != ANALYSIS_CAPABILITY_PATH
+        or evidence.get("capabilityPath") != intent["capabilityPath"]
         or evidence.get("supervisor") != supervisor
         or not consumed_at <= intent_created <= evidence_committed
         or evidence_committed - consumed_at > dt.timedelta(minutes=5)

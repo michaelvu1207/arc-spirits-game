@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
+import os
 import stat
 import tempfile
 import types
@@ -97,6 +99,8 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
             },
             "capabilitySha256": capability_hash,
             "capabilityFd": executor.ANALYSIS_CAPABILITY_FD,
+            "capabilityTransport": executor.ANALYSIS_CAPABILITY_TRANSPORT,
+            "capabilityPath": executor.ANALYSIS_CAPABILITY_PATH,
             "supervisor": {
                 "pid": 100,
                 "uid": 501,
@@ -129,6 +133,8 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
                 "sha256": sha256_file(intent_path),
             },
             "capabilitySha256": capability_hash,
+            "capabilityTransport": executor.ANALYSIS_CAPABILITY_TRANSPORT,
+            "capabilityPath": executor.ANALYSIS_CAPABILITY_PATH,
             "supervisor": intent["supervisor"],
             "child": {
                 "launcherPid": 200,
@@ -183,6 +189,7 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
             self.assertEqual(loaded_authorization, authorization)
             capability.assert_called_once_with(
                 executor.ANALYSIS_CAPABILITY_FD,
+                capability_path=Path(executor.ANALYSIS_CAPABILITY_PATH),
                 expected_sha256=evidence["capabilitySha256"],
                 expected_bytes=executor.ANALYSIS_CAPABILITY_BYTES,
             )
@@ -227,31 +234,35 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
             st_dev=1,
             st_ino=2,
         )
-        required_mask = 15
+        calls = 0
+
+        def fstat(descriptor: int) -> types.SimpleNamespace:
+            nonlocal calls
+            calls += 1
+            if descriptor == executor.ANALYSIS_CAPABILITY_FD and calls == 1:
+                raise OSError(errno.EBADF, "closed")
+            return metadata
+
         with (
-            mock.patch.object(analyzer.fcntl, "F_GET_SEALS", 100, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_SEAL", 1, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_SHRINK", 2, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_GROW", 4, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_WRITE", 8, create=True),
-            mock.patch.object(analyzer.os, "fstat", return_value=metadata),
+            mock.patch.object(analyzer.os, "fstat", side_effect=fstat),
+            mock.patch.object(analyzer.os, "lstat", return_value=metadata),
             mock.patch.object(
-                analyzer.os,
-                "readlink",
-                return_value="/memfd:arc-v35-p30-analysis-capability (deleted)",
+                analyzer.os, "statvfs", return_value=types.SimpleNamespace(f_flag=os.ST_RDONLY)
             ),
+            mock.patch.object(analyzer.os, "open", return_value=10),
+            mock.patch.object(analyzer.os, "dup2"),
             mock.patch.object(analyzer.os, "listdir", return_value=[str(executor.ANALYSIS_CAPABILITY_FD)]),
             mock.patch.object(analyzer.os, "pread", return_value=secret),
-            mock.patch.object(analyzer.fcntl, "fcntl", return_value=required_mask),
             mock.patch.object(analyzer.os, "close") as close,
         ):
             with self.assertRaisesRegex(RuntimeError, "hash mismatch"):
                 analyzer._consume_analysis_capability(
                     executor.ANALYSIS_CAPABILITY_FD,
+                    capability_path=Path(executor.ANALYSIS_CAPABILITY_PATH),
                     expected_sha256="0" * 64,
                     expected_bytes=len(secret),
                 )
-            close.assert_called_once_with(executor.ANALYSIS_CAPABILITY_FD)
+            close.assert_has_calls([mock.call(10), mock.call(executor.ANALYSIS_CAPABILITY_FD)])
 
     def test_duplicate_capability_fd_is_rejected_and_closed(self) -> None:
         secret = b"s" * executor.ANALYSIS_CAPABILITY_BYTES
@@ -261,34 +272,116 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
             st_dev=1,
             st_ino=2,
         )
-        required_mask = 15
+        calls = 0
+
+        def fstat(descriptor: int) -> types.SimpleNamespace:
+            nonlocal calls
+            calls += 1
+            if descriptor == executor.ANALYSIS_CAPABILITY_FD and calls == 1:
+                raise OSError(errno.EBADF, "closed")
+            return metadata
+
         with (
-            mock.patch.object(analyzer.fcntl, "F_GET_SEALS", 100, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_SEAL", 1, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_SHRINK", 2, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_GROW", 4, create=True),
-            mock.patch.object(analyzer.fcntl, "F_SEAL_WRITE", 8, create=True),
-            mock.patch.object(analyzer.os, "fstat", return_value=metadata),
+            mock.patch.object(analyzer.os, "fstat", side_effect=fstat),
+            mock.patch.object(analyzer.os, "lstat", return_value=metadata),
             mock.patch.object(
-                analyzer.os,
-                "readlink",
-                return_value="/memfd:arc-v35-p30-analysis-capability (deleted)",
+                analyzer.os, "statvfs", return_value=types.SimpleNamespace(f_flag=os.ST_RDONLY)
             ),
+            mock.patch.object(analyzer.os, "open", return_value=10),
+            mock.patch.object(analyzer.os, "dup2"),
             mock.patch.object(
                 analyzer.os,
                 "listdir",
                 return_value=[str(executor.ANALYSIS_CAPABILITY_FD), "199"],
             ),
-            mock.patch.object(analyzer.fcntl, "fcntl", return_value=required_mask),
             mock.patch.object(analyzer.os, "close") as close,
         ):
             with self.assertRaisesRegex(RuntimeError, "duplicated"):
                 analyzer._consume_analysis_capability(
                     executor.ANALYSIS_CAPABILITY_FD,
+                    capability_path=Path(executor.ANALYSIS_CAPABILITY_PATH),
                     expected_sha256=hashlib.sha256(secret).hexdigest(),
                     expected_bytes=len(secret),
                 )
-            close.assert_called_once_with(executor.ANALYSIS_CAPABILITY_FD)
+            close.assert_has_calls([mock.call(10), mock.call(executor.ANALYSIS_CAPABILITY_FD)])
+
+    def test_writable_capability_mount_is_rejected_before_open(self) -> None:
+        metadata = types.SimpleNamespace(
+            st_mode=stat.S_IFREG | 0o400,
+            st_size=executor.ANALYSIS_CAPABILITY_BYTES,
+            st_dev=1,
+            st_ino=2,
+        )
+        with (
+            mock.patch.object(
+                analyzer.os,
+                "fstat",
+                side_effect=OSError(errno.EBADF, "closed"),
+            ),
+            mock.patch.object(analyzer.os, "lstat", return_value=metadata),
+            mock.patch.object(
+                analyzer.os, "statvfs", return_value=types.SimpleNamespace(f_flag=0)
+            ),
+            mock.patch.object(analyzer.os, "open") as opened,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "mount is writable"):
+                analyzer._consume_analysis_capability(
+                    executor.ANALYSIS_CAPABILITY_FD,
+                    capability_path=Path(executor.ANALYSIS_CAPABILITY_PATH),
+                    expected_sha256="0" * 64,
+                    expected_bytes=executor.ANALYSIS_CAPABILITY_BYTES,
+                )
+            opened.assert_not_called()
+
+    def test_preopened_reserved_fd_is_rejected_before_path_access(self) -> None:
+        metadata = types.SimpleNamespace(
+            st_mode=stat.S_IFREG | 0o400,
+            st_size=executor.ANALYSIS_CAPABILITY_BYTES,
+            st_dev=1,
+            st_ino=2,
+        )
+        with (
+            mock.patch.object(analyzer.os, "fstat", return_value=metadata),
+            mock.patch.object(analyzer.os, "lstat") as lstat,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "already open"):
+                analyzer._consume_analysis_capability(
+                    executor.ANALYSIS_CAPABILITY_FD,
+                    capability_path=Path(executor.ANALYSIS_CAPABILITY_PATH),
+                    expected_sha256="0" * 64,
+                    expected_bytes=executor.ANALYSIS_CAPABILITY_BYTES,
+                )
+            lstat.assert_not_called()
+
+    def test_launch_boundary_rejects_capability_transport_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            protocol, authorization_path, evidence_path, authorization, _ = (
+                self._boundary_fixture(root)
+            )
+            token = authorization["tokenId"]
+            ledger = Path(authorization["ledger"]["root"])
+            intent_path, _ = executor.analysis_launch_paths(ledger, token)
+            intent = json.loads(intent_path.read_text())
+            intent["capabilityTransport"] = "sync-fd"
+            intent_path.write_bytes(canonical_json(intent) + b"\n")
+            evidence = json.loads(evidence_path.read_text())
+            evidence["launchIntent"]["sha256"] = sha256_file(intent_path)
+            evidence_path.write_bytes(canonical_json(evidence) + b"\n")
+            with (
+                mock.patch.object(analyzer, "validate_role_trust"),
+                mock.patch.object(analyzer, "role_public_key_path", return_value=Path("/key")),
+                mock.patch.object(
+                    analyzer, "verify_signed_payload", return_value=authorization
+                ),
+                mock.patch.object(executor, "host_boot_id", return_value="boot"),
+                mock.patch.object(analyzer, "_consume_analysis_capability") as consume,
+            ):
+                with self.assertRaisesRegex(ValueError, "launch intent changed"):
+                    analyzer.validate_analysis_launch_boundary(
+                        protocol, authorization_path, evidence_wait_seconds=0
+                    )
+            consume.assert_not_called()
 
     def test_bubblewrap_receives_only_fixed_fd_number_not_secret(self) -> None:
         secret = b"do-not-expose-this-analysis-secret"
@@ -307,7 +400,9 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
             authorization, analysis_capability_fd=executor.ANALYSIS_CAPABILITY_FD
         )
         encoded = canonical_json(command)
-        self.assertIn(b"--sync-fd", encoded)
+        self.assertIn(b"--ro-bind-data", encoded)
+        self.assertIn(executor.ANALYSIS_CAPABILITY_PATH.encode(), encoded)
+        self.assertNotIn(b"--sync-fd", encoded)
         self.assertNotIn(b"--keep-fd", encoded)
         self.assertIn(str(executor.ANALYSIS_CAPABILITY_FD).encode(), encoded)
         self.assertNotIn(secret, encoded)
@@ -354,8 +449,11 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
                 )
             encoded = canonical_json(intent)
             self.assertEqual(intent["capabilitySha256"], digest)
+            self.assertEqual(
+                intent["capabilityTransport"], executor.ANALYSIS_CAPABILITY_TRANSPORT
+            )
+            self.assertEqual(intent["capabilityPath"], executor.ANALYSIS_CAPABILITY_PATH)
             self.assertNotIn(secret, encoded)
-            self.assertNotIn("capability", {key.lower() for key in intent if key != "capabilitySha256"})
 
 
 if __name__ == "__main__":

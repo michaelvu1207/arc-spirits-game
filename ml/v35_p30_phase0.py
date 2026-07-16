@@ -26,6 +26,8 @@ from analyze_v35_p30_long_horizon import (
 )
 from v35_p30_authorized_execution import (
     ANALYSIS_CAPABILITY_FD,
+    ANALYSIS_CAPABILITY_PATH,
+    ANALYSIS_CAPABILITY_TRANSPORT,
     ANALYSIS_LAUNCH_EVIDENCE_SCHEMA,
     ANALYSIS_LAUNCH_INTENT_SCHEMA,
     CONSUMED_SCHEMA,
@@ -586,6 +588,8 @@ def validate_analyzer_rehearsal_report(
         or intent.get("authorization") != expected_authorization_binding
         or intent.get("consumedMarker") != expected_consumed_binding
         or intent.get("capabilityFd") != ANALYSIS_CAPABILITY_FD
+        or intent.get("capabilityTransport") != ANALYSIS_CAPABILITY_TRANSPORT
+        or intent.get("capabilityPath") != ANALYSIS_CAPABILITY_PATH
         or intent.get("launchEvidencePath") != str(execution_paths["launchEvidence"])
         or evidence.get("schemaVersion") != ANALYSIS_LAUNCH_EVIDENCE_SCHEMA
         or evidence.get("kind") != "analysis"
@@ -598,6 +602,10 @@ def validate_analyzer_rehearsal_report(
             "sha256": sha256_file(execution_paths["launchIntent"]),
         }
         or evidence.get("capabilitySha256") != intent.get("capabilitySha256")
+        or evidence.get("capabilityTransport") != ANALYSIS_CAPABILITY_TRANSPORT
+        or evidence.get("capabilityTransport") != intent.get("capabilityTransport")
+        or evidence.get("capabilityPath") != ANALYSIS_CAPABILITY_PATH
+        or evidence.get("capabilityPath") != intent.get("capabilityPath")
         or not isinstance(supervisor_namespaces, dict)
         or not isinstance(child_namespaces, dict)
         or set(supervisor_namespaces) != {"pid", "user", "network"}

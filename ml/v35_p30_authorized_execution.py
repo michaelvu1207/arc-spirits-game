@@ -42,6 +42,8 @@ ANALYSIS_LAUNCH_INTENT_SCHEMA = "arc-v35-p30-analysis-launch-intent-v1"
 ANALYSIS_LAUNCH_EVIDENCE_SCHEMA = "arc-v35-p30-analysis-launch-evidence-v1"
 ANALYSIS_CAPABILITY_FD = 198
 ANALYSIS_CAPABILITY_BYTES = 32
+ANALYSIS_CAPABILITY_PATH = "/run/arc-v35-p30-analysis-capability"
+ANALYSIS_CAPABILITY_TRANSPORT = "sealed-memfd-ro-bind-data"
 EXECUTOR_LAUNCH_PERMIT_SCHEMA = "arc-v35-p30-executor-launch-permit-v1"
 UNSIGNED_RECEIPT_SUFFIX = ".unsigned.json"
 TOKEN_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -435,6 +437,8 @@ def _create_analysis_capability() -> tuple[int, str]:
             descriptor = ANALYSIS_CAPABILITY_FD
         else:
             os.set_inheritable(descriptor, True)
+        # bubblewrap --ro-bind-data reads from the descriptor's current offset.
+        os.lseek(descriptor, 0, os.SEEK_SET)
         return descriptor, sha256_bytes(secret)
     except BaseException:
         os.close(descriptor)
@@ -931,9 +935,18 @@ def bubblewrap_command(
             or analysis_capability_fd != ANALYSIS_CAPABILITY_FD
         ):
             raise ValueError("analysis launch capability FD contract changed")
-        # SimForge's source-pinned bubblewrap 0.9.0 exposes --sync-fd as the
-        # keep-open contract; --keep-fd is a newer spelling and fails there.
-        argv.extend(("--sync-fd", str(analysis_capability_fd)))
+        # SimForge bubblewrap 0.9.0 does not pass --sync-fd through to the
+        # sandboxed child. Materialize the sealed memfd as a read-only file in
+        # the private namespace without exposing its bytes in argv or env.
+        argv.extend(
+            (
+                "--dir",
+                "/run",
+                "--ro-bind-data",
+                str(analysis_capability_fd),
+                ANALYSIS_CAPABILITY_PATH,
+            )
+        )
     for path in isolation["readOnlyPaths"]:
         argv.extend(("--ro-bind", path, path))
     for path in isolation["writablePaths"]:
@@ -1069,6 +1082,8 @@ def _analysis_launch_intent(
         },
         "capabilitySha256": capability_sha256,
         "capabilityFd": ANALYSIS_CAPABILITY_FD,
+        "capabilityTransport": ANALYSIS_CAPABILITY_TRANSPORT,
+        "capabilityPath": ANALYSIS_CAPABILITY_PATH,
         "supervisor": _supervisor_namespace_evidence(),
         "launchEvidencePath": str(evidence_path),
         "createdAtUtc": utc_now(),
@@ -1103,6 +1118,8 @@ def _commit_analysis_launch_evidence(
             "sha256": sha256_file(intent_path),
         },
         "capabilitySha256": intent["capabilitySha256"],
+        "capabilityTransport": intent["capabilityTransport"],
+        "capabilityPath": intent["capabilityPath"],
         "supervisor": dict(intent["supervisor"]),
         "child": child_evidence,
         "committedAtUtc": utc_now(),

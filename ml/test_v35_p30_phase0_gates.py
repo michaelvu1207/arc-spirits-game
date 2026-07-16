@@ -441,6 +441,8 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
             "consumedMarker": consumed_binding,
             "capabilityFd": phase0.ANALYSIS_CAPABILITY_FD,
             "capabilitySha256": "9" * 64,
+            "capabilityTransport": phase0.ANALYSIS_CAPABILITY_TRANSPORT,
+            "capabilityPath": phase0.ANALYSIS_CAPABILITY_PATH,
             "launchEvidencePath": str(evidence_path),
             "supervisor": {
                 "namespaces": {"pid": "pid:[1]", "user": "user:[1]", "network": "net:[1]"}
@@ -457,6 +459,8 @@ class P30AnalyzerRehearsalV2GateTests(unittest.TestCase):
                 "sha256": sha256_file(intent_path),
             },
             "capabilitySha256": "9" * 64,
+            "capabilityTransport": phase0.ANALYSIS_CAPABILITY_TRANSPORT,
+            "capabilityPath": phase0.ANALYSIS_CAPABILITY_PATH,
             "child": {
                 "namespaces": {"pid": "pid:[2]", "user": "user:[2]", "network": "net:[2]"}
             },

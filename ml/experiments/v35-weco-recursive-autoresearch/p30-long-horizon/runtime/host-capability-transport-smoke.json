@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "arc-v35-p30-host-capability-transport-smoke-v1",
+  "valid": true,
+  "promotionEligible": false,
+  "syntheticDataOnly": true,
+  "outcomesInspected": false,
+  "productionCampaignCreated": false,
+  "host": "ubuntu@216.151.21.122",
+  "hostBootId": "54ba1ea9-b697-4c9e-8282-1123fb8c2e1d",
+  "completedAtUtc": "2026-07-16T15:50:39Z",
+  "bubblewrap": {
+    "path": "/usr/bin/bwrap",
+    "version": "bubblewrap 0.9.0",
+    "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712",
+    "bytes": 72160
+  },
+  "transport": {
+    "name": "sealed-memfd-ro-bind-data",
+    "sourceFd": 198,
+    "sandboxPath": "/run/arc-v35-p30-analysis-capability",
+    "secretBytes": 32,
+    "secretPersisted": false,
+    "secretPrinted": false
+  },
+  "checks": {
+    "allRequiredMemfdSealsApplied": true,
+    "memfdOffsetResetBeforeLaunch": true,
+    "reservedFdClosedInSandboxChild": true,
+    "sandboxPathRegular": true,
+    "sandboxPathExactSize": true,
+    "sandboxMountReadOnly": true,
+    "sandboxWriteOpenRejected": true,
+    "sandboxBytesHashMatched": true,
+    "networkNamespaceUnshared": true,
+    "stderrEmpty": true,
+    "exitCode": 0
+  },
+  "stdout": "SEALED_MEMFD_RO_BIND_DATA_OK",
+  "gpu7MemoryMiB": 0,
+  "gpu7UtilizationPercent": 0
+}
