@@ -1,0 +1,11 @@
+# This profile gives the exact system bubblewrap executable permission to create
+# the user namespace required by the frozen P30 isolation contract. All actual
+# filesystem, network, PID, capability, and GPU restrictions remain explicit
+# bubblewrap arguments in each signed authorization.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile arc-v35-p30-bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+}

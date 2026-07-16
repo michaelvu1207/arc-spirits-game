@@ -43,13 +43,81 @@ requireCondition(protocol.promotionEligible === false, 'proposal must not be pro
 requireCondition(protocol.review.artifact === null, 'proposal unexpectedly has a review artifact');
 requireCondition(protocol.review.sha256 === null, 'proposal unexpectedly has a review hash');
 requireCondition(protocol.review.verdict === null, 'proposal unexpectedly has a review verdict');
+requireCondition(
+	protocol.review.commandReceipt?.path === null && protocol.review.commandReceipt?.sha256 === null,
+	'proposal unexpectedly has a Fable command receipt'
+);
 requireCondition(protocol.sourceContract.artifact === null, 'proposal unexpectedly has a source contract');
 requireCondition(protocol.sourceContract.sha256 === null, 'proposal unexpectedly has a source-contract hash');
+requireCondition(
+	JSON.stringify(protocol.recoveryPolicy) ===
+		JSON.stringify({
+			schemaVersion: 'arc-v35-p30-bounded-recovery-policy-v1',
+			maximumRecoveriesPerLogicalAction: 1,
+			classes: ['PRE_CHILD', 'RECEIPT_ONLY'],
+			eligibleKinds: ['generation', 'evaluation-primary', 'evaluation-replay'],
+			preChildRequiresNoChildStart: true,
+			preChildRequiresNoSeedConsumption: true,
+			receiptOnlyForbidsCandidateRerun: true,
+			guardianClassificationRequired: true,
+			secondRecoveryClosesCampaign: true,
+			outcomeExposureClosesCampaign: true
+		}),
+	'proposal bounded recovery policy changed'
+);
+requireCondition(
+	protocol.executionTrust?.schemaVersion === 'arc-v35-p30-role-trust-v2' &&
+		protocol.executionTrust?.algorithm === 'Ed25519' &&
+		protocol.executionTrust?.campaignInstanceId === null &&
+		Object.keys(protocol.executionTrust?.roles ?? {}).sort().join(',') ===
+			'analysis-authorizer,executor,guardian,issuer,review-attester' &&
+		Object.values(protocol.executionTrust.roles).every(
+			(role) =>
+				role.publicKeyPath === null &&
+				role.publicKeyPemSha256 === null &&
+				role.publicKeyDerSha256 === null &&
+				role.keyId === null
+		) &&
+		protocol.executionTrust?.custody?.schedulerPrivateKeyAccess === false &&
+		JSON.stringify(protocol.executionTrust?.custody?.localOnlyRoles) ===
+			JSON.stringify(['review-attester']) &&
+		protocol.executionTrust?.reviewRuntime?.attesterRole === 'review-attester' &&
+		protocol.executionTrust?.reviewRuntime?.privateKeyRemoteDelivery === false &&
+		protocol.executionTrust?.bubblewrapSha256 === null,
+	'proposal unexpectedly has a runnable execution trust root'
+);
 requireCondition(
 	protocol.sourceContract.schemaVersion === 'arc-v35-p30-source-lock-v1',
 	'proposal source-contract schema changed'
 );
-requireCondition(protocol.replicates.length === 3, 'proposal requires exactly three replicates');
+requireCondition(
+	protocol.powerCalibration.schemaVersion === 'arc-v35-p30-power-calibration-v1' &&
+		protocol.powerCalibration.claim === 'primary-efficacy-eligibility-power-only' &&
+		protocol.powerCalibration.replicates === 18 &&
+		protocol.powerCalibration.adequateForPrimaryEfficacy === true &&
+		protocol.powerCalibration.minimumJointPrimaryEligibilityPower === 0.8 &&
+		protocol.powerCalibration.fullSelectorPowerClaimed === false,
+	'proposal power calibration changed or is inadequate'
+);
+requireCondition(
+	hashFile(protocol.powerCalibration.path) === protocol.powerCalibration.sha256,
+	'proposal power calibration hash mismatch'
+);
+requireCondition(
+	protocol.confirmationGates?.schemaVersion ===
+			'arc-v35-superhuman-confirmation-gates-v1' &&
+		protocol.confirmationGates?.frozenBeforeP30Outcomes === true &&
+		hashFile(protocol.confirmationGates.path) === protocol.confirmationGates.sha256,
+	'proposal confirmation gates changed or are hash-invalid'
+);
+requireCondition(
+	protocol.sourceRegistry?.schemaVersion === 'arc-v35-p30-source-registry-v1' &&
+	hashFile(protocol.sourceRegistry.path) === protocol.sourceRegistry.sha256 &&
+	JSON.parse(readFileSync(protocol.sourceRegistry.path, 'utf8')).files.length ===
+		protocol.sourceRegistry.files,
+	'proposal source registry changed or is hash-invalid'
+);
+requireCondition(protocol.replicates.length === 18, 'proposal requires exactly eighteen replicates');
 requireCondition(protocol.arms.length === 3, 'proposal requires exactly three arms');
 requireCondition(hashFile(protocol.catalog.path) === protocol.catalog.sha256, 'catalog hash mismatch');
 requireCondition(
@@ -60,6 +128,10 @@ requireCondition(hashFile(basePath) === 'c2c0fd7637f27dbc6afdee4adbef48a57b83c19
 
 const inventory = JSON.parse(readFileSync(protocol.seedEvidence.inventoryPath, 'utf8'));
 requireCondition(inventory.valid === true, 'seed inventory is not valid');
+requireCondition(
+	Array.isArray(inventory.unprovableNamespaces),
+	'seed inventory unprovable namespaces are missing'
+);
 requireCondition(
 	inventory.claim === protocol.seedEvidence.claim,
 	'seed inventory claim changed'
@@ -78,6 +150,32 @@ requireCondition(
 		container.disjointFromDeclaredStructuredRanges === true,
 	'reserved public container changed or overlaps a declared range'
 );
+
+const boundedUnprovableNamespaces = inventory.unprovableNamespaces.flatMap((namespace) => {
+	requireCondition(
+		namespace && typeof namespace === 'object' && typeof namespace.id === 'string' && namespace.id.length > 0,
+		'seed inventory contains an invalid unprovable namespace'
+	);
+	if (namespace.bounds === null) return [];
+	requireCondition(
+		namespace.bounds && typeof namespace.bounds === 'object',
+		`unprovable namespace ${namespace.id} has invalid bounds`
+	);
+	const bounded = {
+		id: namespace.id,
+		start: namespace.bounds.start,
+		end: namespace.bounds.end
+	};
+	requireCondition(
+		Number.isSafeInteger(bounded.start) && Number.isSafeInteger(bounded.end),
+		`unprovable namespace ${namespace.id} has unsafe bounds`
+	);
+	requireCondition(
+		bounded.start >= 0 && bounded.end >= bounded.start,
+		`unprovable namespace ${namespace.id} has invalid bounds`
+	);
+	return [bounded];
+});
 
 const schedule = protocol.seedSchedule;
 const intervals = [];
@@ -124,6 +222,12 @@ for (let index = 0; index < intervals.length; index += 1) {
 		requireCondition(
 			!intervalsOverlap(interval, declared),
 			`proposal seed overlap ${interval.id} and declared ${declared.start}..${declared.end}`
+		);
+	}
+	for (const namespace of boundedUnprovableNamespaces) {
+		requireCondition(
+			!intervalsOverlap(interval, namespace),
+			`proposal seed overlap ${interval.id} and unprovable ${namespace.id} ${namespace.start}..${namespace.end}`
 		);
 	}
 }

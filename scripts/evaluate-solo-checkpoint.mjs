@@ -13,7 +13,16 @@
  */
 import { createJiti } from 'jiti';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	closeSync,
+	fsyncSync,
+	mkdirSync,
+	mkdtempSync,
+	openSync,
+	readFileSync,
+	rmSync,
+	writeSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -29,6 +38,12 @@ const { values: args } = parseArgs({
 		'policy-obs-version': { type: 'string', default: '1' },
 		catalog: { type: 'string', default: 'ml/catalog.json' },
 		'source-commit': { type: 'string' },
+		experiment: { type: 'string' },
+		replicate: { type: 'string' },
+		arm: { type: 'string' },
+		'config-sha256': { type: 'string' },
+		'binding-sha256': { type: 'string' },
+		'root-identity': { type: 'string' },
 		games: { type: 'string', default: '1024' },
 		workers: { type: 'string', default: '16' },
 		seed0: { type: 'string', default: '900000000' },
@@ -47,6 +62,7 @@ const { values: args } = parseArgs({
 		'rerank-policy-weight': { type: 'string' },
 		'include-games': { type: 'boolean', default: false },
 		'include-replay-hashes': { type: 'boolean', default: false },
+		quiet: { type: 'boolean', default: false },
 		out: { type: 'string' },
 		help: { type: 'boolean', default: false }
 	}
@@ -94,6 +110,25 @@ const workers = integer(args.workers, '--workers');
 const seed0 = integer(args.seed0, '--seed0');
 const maxRounds = integer(args['max-rounds'], '--max-rounds');
 const maxStatusLevel = integer(args['max-status-level'], '--max-status-level');
+const identityFields = [
+	'experiment',
+	'replicate',
+	'arm',
+	'config-sha256',
+	'binding-sha256',
+	'root-identity'
+];
+const identityValues = identityFields.map((field) => args[field]);
+if (identityValues.some(Boolean) && !identityValues.every(Boolean)) {
+	throw new Error('execution identity fields must be provided together');
+}
+if (
+	identityValues.every(Boolean) &&
+	(!/^[0-9a-f]{64}$/.test(args['config-sha256']) ||
+		!/^[0-9a-f]{64}$/.test(args['binding-sha256']))
+) {
+	throw new Error('execution identity config/binding hashes must be SHA-256 values');
+}
 const searchSims = Number.parseInt(args['search-sims'], 10);
 if (!Number.isSafeInteger(searchSims) || searchSims < 0) {
 	throw new Error('--search-sims must be a non-negative integer');
@@ -343,6 +378,18 @@ try {
 	const report = {
 		schemaVersion: 'solo-heldout-v2',
 		...(args['source-commit'] ? { sourceCommit: args['source-commit'] } : {}),
+		...(identityValues.every(Boolean)
+			? {
+					executionIdentity: {
+						experiment: args.experiment,
+						replicate: args.replicate,
+						arm: args.arm,
+						configSha256: args['config-sha256'],
+						bindingSha256: args['binding-sha256'],
+						root: args['root-identity']
+					}
+				}
+			: {}),
 		weights: path.relative(root, weights),
 		weightsSha256: sha256(weightsBytes),
 		catalog: path.relative(root, catalogPath),
@@ -434,9 +481,15 @@ try {
 	if (args.out) {
 		const out = path.resolve(args.out);
 		mkdirSync(path.dirname(out), { recursive: true });
-		writeFileSync(out, `${json}\n`);
+		const descriptor = openSync(out, 'wx', 0o600);
+		try {
+			writeSync(descriptor, `${json}\n`);
+			fsyncSync(descriptor);
+		} finally {
+			closeSync(descriptor);
+		}
 	}
-	console.log(json);
+	if (!args.quiet) console.log(json);
 } finally {
 	rmSync(workDir, { recursive: true, force: true });
 }

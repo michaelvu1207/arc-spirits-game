@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 from pathlib import Path
 
@@ -28,7 +29,17 @@ CALIBRATION_LINE = re.compile(r"^Behavior reach30 calibration \| (?P<body>.*)$")
 CREDIT_LINE = re.compile(
     r"solo outcome coef=(?P<outcome>[0-9.eE+-]+), "
     r"reach30 coef=(?P<reach>[0-9.eE+-]+), reach30 horizon=(?P<horizon>[^,]+), .*?"
-    r"applied=(?P<outcome_applied>\d+)/(?P<reach_applied>\d+);"
+    r"applied=(?P<outcome_applied>\d+)/(?P<reach_applied>\d+), "
+    r"reach30 realized dose=(?P<reach_dose>[0-9.eE+-]+), "
+    r"reach30 applied bands=(?P<reach_applied_early>\d+)/"
+    r"(?P<reach_applied_mid>\d+)/(?P<reach_applied_late>\d+), "
+    r"reach30 dose bands=(?P<reach_dose_early>[0-9.eE+-]+)/"
+    r"(?P<reach_dose_mid>[0-9.eE+-]+)/(?P<reach_dose_late>[0-9.eE+-]+);"
+)
+MALFORMED_LINE = re.compile(
+    r"^Loaded .*? (?P<episodes>\d+) malformed episode\(s\) rejected, .*?"
+    r"(?P<rows>\d+) malformed row\(s\),",
+    re.MULTILINE,
 )
 
 
@@ -46,6 +57,109 @@ def parse_key_values(body: str) -> dict[str, float]:
         key, value = item.split("=", 1)
         result[key] = float(value)
     return result
+
+
+def extra_arg(extra_args: list[str], name: str) -> str:
+    try:
+        at = len(extra_args) - 1 - list(reversed(extra_args)).index(name)
+        return extra_args[at + 1]
+    except (ValueError, IndexError) as exc:
+        raise ValueError(f"missing configured {name}") from exc
+
+
+def validate_reach30_credit(
+    extra_args: list[str], credit: dict | None
+) -> tuple[float, list[list[int | float]] | None]:
+    try:
+        configured_reach = float(extra_arg(extra_args, "--solo-reach30-coef"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("missing configured --solo-reach30-coef") from exc
+    if not math.isfinite(configured_reach) or configured_reach < 0:
+        raise ValueError("configured --solo-reach30-coef must be finite and non-negative")
+    if credit is None or abs(credit["soloReach30Coef"] - configured_reach) > 1e-12:
+        raise ValueError(f"solo reach30 credit telemetry mismatch: {credit}")
+    if credit["reach30Horizon"] != "30":
+        raise ValueError(f"unexpected reach30 credit horizon: {credit}")
+
+    configured_bands: list[list[int | float]] | None = None
+    if "--solo-reach30-bands" in extra_args:
+        try:
+            configured_bands = [
+                [int(upper), float(coefficient)]
+                for upper, coefficient in (
+                    item.split(":", 1)
+                    for item in extra_arg(extra_args, "--solo-reach30-bands").split(",")
+                )
+            ]
+        except (TypeError, ValueError) as exc:
+            raise ValueError("malformed configured --solo-reach30-bands") from exc
+        if (
+            not configured_bands
+            or any(
+                upper <= 0
+                or not math.isfinite(coefficient)
+                or coefficient < 0
+                or (index > 0 and upper <= configured_bands[index - 1][0])
+                for index, (upper, coefficient) in enumerate(configured_bands)
+            )
+        ):
+            raise ValueError("malformed configured --solo-reach30-bands")
+        if configured_reach > 0:
+            raise ValueError("scalar and scheduled reach30 credit are both enabled")
+    scheduled_reach_enabled = bool(
+        configured_bands and any(coefficient > 0 for _, coefficient in configured_bands)
+    )
+    applied_by_band = credit.get("soloReach30AppliedByBand")
+    dose_by_band = credit.get("soloReach30DoseByBand")
+    realized_dose = credit.get("soloReach30RealizedDose")
+    band_labels = ("1-8", "9-18", "19-30")
+    if (
+        not isinstance(applied_by_band, dict)
+        or set(applied_by_band) != set(band_labels)
+        or any(type(applied_by_band[label]) is not int or applied_by_band[label] < 0 for label in band_labels)
+        or not isinstance(dose_by_band, dict)
+        or set(dose_by_band) != set(band_labels)
+        or any(
+            not isinstance(dose_by_band[label], (int, float))
+            or not math.isfinite(float(dose_by_band[label]))
+            or float(dose_by_band[label]) < 0
+            for label in band_labels
+        )
+        or not isinstance(realized_dose, (int, float))
+        or not math.isfinite(float(realized_dose))
+        or float(realized_dose) < 0
+        or sum(applied_by_band.values()) != credit["soloReach30Applied"]
+        or abs(sum(float(dose_by_band[label]) for label in band_labels) - float(realized_dose)) > 1e-9
+    ):
+        raise ValueError(f"reach30 realized-dose telemetry is inconsistent: {credit}")
+    coefficients = (
+        [configured_reach, configured_reach, configured_reach]
+        if configured_bands is None
+        else [float(entry[1]) for entry in configured_bands]
+    )
+    if len(coefficients) != 3 or any(
+        abs(float(dose_by_band[label]) - applied_by_band[label] * coefficient) > 1e-9
+        for label, coefficient in zip(band_labels, coefficients)
+    ):
+        raise ValueError(f"reach30 realized dose differs from the frozen schedule: {credit}")
+    if (configured_reach > 0 or scheduled_reach_enabled) and credit["soloReach30Applied"] <= 0:
+        raise ValueError(f"reach30 treatment had no applied strategic rows: {credit}")
+    if configured_reach == 0 and not scheduled_reach_enabled and credit["soloReach30Applied"] != 0:
+        raise ValueError(f"reach30 control unexpectedly applied credit: {credit}")
+    return configured_reach, configured_bands
+
+
+def parse_malformed_counts(log: str) -> tuple[int, int]:
+    malformed = list(MALFORMED_LINE.finditer(log))
+    if len(malformed) != 1:
+        raise ValueError("trainer did not report exactly one malformed-data summary")
+    malformed_episodes = int(malformed[0].group("episodes"))
+    malformed_rows = int(malformed[0].group("rows"))
+    if malformed_episodes != 0:
+        raise ValueError(f"trainer reported {malformed_episodes} malformed episodes")
+    if malformed_rows != 0:
+        raise ValueError(f"trainer reported {malformed_rows} malformed rows")
+    return malformed_episodes, malformed_rows
 
 
 def flush_logp_batch(model, device, rows: list[dict]) -> float:
@@ -103,11 +217,15 @@ def audit(args: argparse.Namespace) -> dict:
         with summary_path.open() as handle:
             for line in handle:
                 summary = json.loads(line)
-                seed = int(summary["seed"])
+                if type(summary.get("seed")) is not int:
+                    raise ValueError(f"{summary_path}: training seed is not an exact integer")
+                if type(summary.get("stalled")) is not bool:
+                    raise ValueError(f"{summary_path}: training stalled flag is not boolean")
+                seed = summary["seed"]
                 if seed in seen_seeds:
                     raise ValueError(f"duplicate game seed {seed}")
                 seen_seeds.add(seed)
-                stalls += int(bool(summary.get("stalled")))
+                stalls += int(summary["stalled"])
     if seen_seeds != expected_seeds:
         missing = sorted(expected_seeds - seen_seeds)[:10]
         extra = sorted(seen_seeds - expected_seeds)[:10]
@@ -124,11 +242,15 @@ def audit(args: argparse.Namespace) -> dict:
         with summary_path.open() as handle:
             for line in handle:
                 summary = json.loads(line)
-                seed = int(summary["seed"])
+                if type(summary.get("seed")) is not int:
+                    raise ValueError(f"{summary_path}: evaluation seed is not an exact integer")
+                if type(summary.get("stalled")) is not bool:
+                    raise ValueError(f"{summary_path}: evaluation stalled flag is not boolean")
+                seed = summary["seed"]
                 if seed in seen_eval_seeds:
                     raise ValueError(f"duplicate evaluation seed {seed}")
                 seen_eval_seeds.add(seed)
-                eval_stalls += int(bool(summary.get("stalled")))
+                eval_stalls += int(summary["stalled"])
     if seen_eval_seeds != expected_eval_seeds:
         raise ValueError(
             f"evaluation seed mismatch; missing={sorted(expected_eval_seeds-seen_eval_seeds)[:10]} "
@@ -158,14 +280,20 @@ def audit(args: argparse.Namespace) -> dict:
             for line_number, line in enumerate(handle, 1):
                 row = json.loads(line)
                 total_rows += 1
-                if "round" not in row or not isinstance(row["round"], int) or row["round"] < 1:
+                if (
+                    type(row.get("round")) is not int
+                    or row["round"] < 1
+                    or row["round"] > int(config["maxRounds"])
+                ):
                     raise ValueError(f"{shard}:{line_number}: missing/invalid public round")
                 round_index = int(row["round"])
                 band = "1-8" if round_index <= 8 else "9-18" if round_index <= 18 else "19-30"
                 round_counts[band] += 1
                 if len(row.get("obsV2", [])) != int(behavior_model.spec.flat_length):
                     raise ValueError(f"{shard}:{line_number}: invalid obsV2 length")
-                if int(row.get("policyMask", 0)) != 1:
+                if type(row.get("policyMask")) is not int or row["policyMask"] not in (0, 1):
+                    raise ValueError(f"{shard}:{line_number}: invalid policyMask")
+                if row["policyMask"] != 1:
                     continue
                 policy_rows += 1
                 policy_round_counts[band] += 1
@@ -173,7 +301,9 @@ def audit(args: argparse.Namespace) -> dict:
                 if not math.isfinite(temperature) or abs(temperature - 0.55) > 1e-7:
                     raise ValueError(f"{shard}:{line_number}: behavior temperature is not 0.55")
                 support = row.get("behaviorMask")
-                chosen = int(row["chosen"])
+                if type(row.get("chosen")) is not int:
+                    raise ValueError(f"{shard}:{line_number}: chosen action is not an exact integer")
+                chosen = row["chosen"]
                 if not isinstance(support, list) or chosen >= len(support) or support[chosen] != 1:
                     raise ValueError(f"{shard}:{line_number}: chosen action outside behavior support")
                 batch.append(row)
@@ -189,10 +319,7 @@ def audit(args: argparse.Namespace) -> dict:
         raise ValueError("rollout has fewer rows than the fixed PPO budget")
 
     log = train_log_path.read_text()
-    if "malformed episode(s) rejected" not in log or "0 malformed episode(s) rejected" not in log:
-        raise ValueError("trainer did not report zero malformed episodes")
-    if "0 malformed row(s)" not in log:
-        raise ValueError("trainer did not report zero malformed rows")
+    malformed_episodes, malformed_rows = parse_malformed_counts(log)
     epoch_metrics = []
     calibration = None
     credit = None
@@ -219,6 +346,17 @@ def audit(args: argparse.Namespace) -> dict:
                 "reach30Horizon": credit_match.group("horizon"),
                 "soloOutcomeApplied": int(credit_match.group("outcome_applied")),
                 "soloReach30Applied": int(credit_match.group("reach_applied")),
+                "soloReach30RealizedDose": float(credit_match.group("reach_dose")),
+                "soloReach30AppliedByBand": {
+                    "1-8": int(credit_match.group("reach_applied_early")),
+                    "9-18": int(credit_match.group("reach_applied_mid")),
+                    "19-30": int(credit_match.group("reach_applied_late")),
+                },
+                "soloReach30DoseByBand": {
+                    "1-8": float(credit_match.group("reach_dose_early")),
+                    "9-18": float(credit_match.group("reach_dose_mid")),
+                    "19-30": float(credit_match.group("reach_dose_late")),
+                },
             }
     if len(epoch_metrics) != int(config["train"]["epochs"]):
         raise ValueError(f"expected {config['train']['epochs']} PPO epoch metrics, got {len(epoch_metrics)}")
@@ -236,19 +374,7 @@ def audit(args: argparse.Namespace) -> dict:
     if calibration is None or calibration.get("ece", float("inf")) > args.max_ece:
         raise ValueError(f"behavior calibration gate failed: {calibration}")
     extra_args = config["train"].get("extraArgs", [])
-    try:
-        reach_at = len(extra_args) - 1 - list(reversed(extra_args)).index("--solo-reach30-coef")
-        configured_reach = float(extra_args[reach_at + 1])
-    except (ValueError, IndexError) as exc:
-        raise ValueError("missing configured --solo-reach30-coef") from exc
-    if credit is None or abs(credit["soloReach30Coef"] - configured_reach) > 1e-12:
-        raise ValueError(f"solo reach30 credit telemetry mismatch: {credit}")
-    if credit["reach30Horizon"] != "30":
-        raise ValueError(f"unexpected reach30 credit horizon: {credit}")
-    if configured_reach > 0 and credit["soloReach30Applied"] <= 0:
-        raise ValueError(f"reach30 treatment had no applied strategic rows: {credit}")
-    if configured_reach == 0 and credit["soloReach30Applied"] != 0:
-        raise ValueError(f"reach30 control unexpectedly applied credit: {credit}")
+    _, configured_reach30_bands = validate_reach30_credit(extra_args, credit)
 
     bands = None
     if "--ppo-round-policy-bands" in extra_args:
@@ -288,6 +414,8 @@ def audit(args: argparse.Namespace) -> dict:
             "count": len(seen_eval_seeds),
         },
         "evaluationStalls": eval_stalls,
+        "malformedEpisodes": malformed_episodes,
+        "malformedRows": malformed_rows,
         "rows": total_rows,
         "policyRows": policy_rows,
         "roundCounts": round_counts,
@@ -297,6 +425,7 @@ def audit(args: argparse.Namespace) -> dict:
         "behaviorLogpMaxAbsError": max_logp_error,
         "behaviorReach30Calibration": calibration,
         "soloReach30Credit": credit,
+        "soloReach30Bands": configured_reach30_bands,
         "roundPolicyBands": bands,
         "effectivePolicyWeightShare": effective_policy_share,
         "epochMetrics": epoch_metrics,
@@ -319,11 +448,28 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=512)
     args = parser.parse_args()
     result = audit(args)
+    payload = json.dumps(result, indent=2, allow_nan=False) + "\n"
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    temporary = args.out.with_suffix(args.out.suffix + ".tmp")
-    temporary.write_text(json.dumps(result, indent=2) + "\n")
-    temporary.replace(args.out)
-    print(json.dumps(result, indent=2))
+    if args.out.exists():
+        raise FileExistsError(args.out)
+    temporary = args.out.with_name(f".{args.out.name}.{os.getpid()}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, args.out)
+        temporary.unlink()
+        directory = os.open(args.out.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    print(payload, end="")
 
 
 if __name__ == "__main__":

@@ -1487,6 +1487,9 @@ def load_trajectory_buffer(
     n_outcome_credit = 0
     n_solo_outcome_credit = 0
     n_solo_reach30_credit = 0
+    realized_reach30_dose = 0.0
+    reach30_applied_by_band = {"1-8": 0, "9-18": 0, "19-30": 0}
+    reach30_dose_by_band = {"1-8": 0.0, "9-18": 0.0, "19-30": 0.0}
     reach30_horizons: set[int] = set()
     self_imitation_current_rows: list[dict[str, Any]] = []
     self_imitation_source_episodes = 0
@@ -1931,6 +1934,15 @@ def load_trajectory_buffer(
                 if scheduled_reach30_coefficients is None
                 else scheduled_reach30_coefficients
             )[reach30_mask]
+            realized_reach30_dose = float(reach30_coefficients.sum())
+            applied_rounds = np.asarray(round_list, dtype=np.int64)[reach30_mask]
+            for label, selected in (
+                ("1-8", applied_rounds <= 8),
+                ("9-18", (applied_rounds >= 9) & (applied_rounds <= 18)),
+                ("19-30", applied_rounds >= 19),
+            ):
+                reach30_applied_by_band[label] = int(selected.sum())
+                reach30_dose_by_band[label] = float(reach30_coefficients[selected].sum())
             advantages[reach30_mask] = (
                 (1.0 - reach30_coefficients) * standardize_reach30(base_component)
                 + reach30_coefficients * standardize_reach30(reach30_component)
@@ -2016,7 +2028,12 @@ def load_trajectory_buffer(
         f"terminal objective={solo_terminal_objective}, "
         f"baseline={solo_outcome_baseline:.3f}, "
         f"component stds={solo_outcome_base_std:.3f}/{solo_outcome_signal_std:.3f}, "
-        f"applied={n_solo_outcome_credit}/{n_solo_reach30_credit}; "
+        f"applied={n_solo_outcome_credit}/{n_solo_reach30_credit}, "
+        f"reach30 realized dose={realized_reach30_dose:.12g}, "
+        f"reach30 applied bands={reach30_applied_by_band['1-8']}/"
+        f"{reach30_applied_by_band['9-18']}/{reach30_applied_by_band['19-30']}, "
+        f"reach30 dose bands={reach30_dose_by_band['1-8']:.12g}/"
+        f"{reach30_dose_by_band['9-18']:.12g}/{reach30_dose_by_band['19-30']:.12g}; "
         f"outcome coef={strategic_outcome_coef:g}, "
         f"applied={n_outcome_credit}), "
         f"{len(invalid_episodes) + len(invalid_structure)} malformed episode(s) rejected, "

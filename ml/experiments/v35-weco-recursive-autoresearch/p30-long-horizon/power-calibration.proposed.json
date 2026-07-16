@@ -1,0 +1,199 @@
+{
+  "schemaVersion": "arc-v35-p30-power-calibration-v1",
+  "valid": true,
+  "developmentOnly": true,
+  "promotionEligible": false,
+  "scope": {
+    "claim": "primary-efficacy-eligibility-power-only",
+    "fullSelectorPowerClaimed": false,
+    "safetyGatePowerClaimed": false,
+    "conditionalAlternative": "Any one treatment arm attains the complete planning-target vector; the other arm may be arbitrary."
+  },
+  "inputs": {
+    "phase1DevelopmentAnalysis": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-analysis.json",
+      "sha256": "3486648efe5b45746407bff2bfd36716e6ad5e6e1ce553ebdb8156cff8dc9fe0"
+    },
+    "phase1DevelopmentReports": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-reports.json",
+      "sha256": "484c836ac38ddc31fd930ccc300f18e236f8072398fe955f965934d4111113d0"
+    },
+    "reportSha256": {
+      "rep-a-control-uniform": "dff89b8ac697127a0ee4c3172b4d58c9dfca4e520994a833089c5cfa12366fd5",
+      "rep-a-p30-credit025": "3eb72919ef9659dd0741dd1c4b6b20691466290bc37acf5361da92dba3a8e6e3",
+      "rep-a-late-reweighted": "761739ad8175ffdd0fc7cc2b06c3e0d2c5e4df3d21fae86a5a85ec280d08bfd6",
+      "rep-b-control-uniform": "1f865ec93d09fbfa0803310ba8a787d28e763e103d14b6b19c42dc0d683aa725",
+      "rep-b-p30-credit025": "56e2bc05f9702d2de131bbf1d66242584680125c83bf4379ccb66f17c77b07c3",
+      "rep-b-late-reweighted": "adbe60a7bca4ddd53968d8ddbb34175cb04ff00f7501a1f7619a4b94e7075fa5",
+      "rep-c-control-uniform": "33fb6e6eb1ab629108c1bd9357fa63f36d678d149aae26dfbb53a22a6b516425",
+      "rep-c-p30-credit025": "1da130d6e6b6a4f72b9949c5c42ca31a8dfd49ca560d7cba723d57cbaaa89a83",
+      "rep-c-late-reweighted": "cd6ce0b53bd1fa59d56951411e01f682965876851acd167f56957114b396108b"
+    }
+  },
+  "observedPublicReplicateEffects": {
+    "p30-credit025": {
+      "trueWinRate": {
+        "replicateEffects": [
+          0.02099609375,
+          0.012451171875,
+          0.02294921875
+        ],
+        "mean": 0.018798828125,
+        "sampleStandardDeviation": 0.0055832991338033554
+      },
+      "lateGameScore": {
+        "replicateEffects": [
+          0.012670685279820607,
+          0.007900174195423543,
+          0.01597310804628985
+        ],
+        "mean": 0.012181322507178,
+        "sampleStandardDeviation": 0.004058653986551714
+      },
+      "postRound15Vp": {
+        "replicateEffects": [
+          0.012395716847430066,
+          0.0167076079232075,
+          0.02641240397735327
+        ],
+        "mean": 0.018505242915996947,
+        "sampleStandardDeviation": 0.007179171136002715
+      }
+    },
+    "late-reweighted": {
+      "trueWinRate": {
+        "replicateEffects": [
+          0.001953125,
+          0.013916015625,
+          0.00244140625
+        ],
+        "mean": 0.006103515625,
+        "sampleStandardDeviation": 0.00677022686712014
+      },
+      "lateGameScore": {
+        "replicateEffects": [
+          -0.0019128835742478092,
+          0.0077546320158038565,
+          0.00296221407131824
+        ],
+        "mean": 0.0029346541709580954,
+        "sampleStandardDeviation": 0.004833816719948523
+      },
+      "postRound15Vp": {
+        "replicateEffects": [
+          -0.02402271812534874,
+          0.01384008939797983,
+          0.014633889819360618
+        ],
+        "mean": 0.0014837536973305691,
+        "sampleStandardDeviation": 0.02209281802776858
+      }
+    }
+  },
+  "planningAlternative": {
+    "minimumMeaningfulTargetEffects": {
+      "trueWinRate": 0.04,
+      "lateGameScore": 0.025,
+      "postRound15Vp": 0.1
+    },
+    "priorMaximumSampleStandardDeviations": {
+      "trueWinRate": 0.00677022686712014,
+      "lateGameScore": 0.004833816719948523,
+      "postRound15Vp": 0.02209281802776858
+    },
+    "standardDeviationSensitivity": {
+      "method": "each-metric-one-sided-95-percent-upper-bound-from-df2-prior-maximum",
+      "factor": 4.4153964427017955,
+      "values": {
+        "trueWinRate": 0.029893235625366388,
+        "lateGameScore": 0.02134321714993317,
+        "postRound15Vp": 0.09754855012906748
+      },
+      "simultaneousCoverageClaimed": false
+    }
+  },
+  "test": {
+    "method": "exact-paired-replicate-sign-flip",
+    "nullAssumption": "paired replicate effects are independent and sign-exchangeable under the null",
+    "replicates": 18,
+    "enumerations": 262144,
+    "familywiseAlpha": 0.05,
+    "worstCasePerEndpointAlpha": 0.008333333333333333,
+    "familySize": 6,
+    "primaryEligibilityGates": {
+      "minimumTrueWinPointGain": 0.03,
+      "minimumPositiveReplicates": 13,
+      "replicateFloor": -0.01,
+      "maximumReplicatesBelowFloor": 2
+    }
+  },
+  "simulation": {
+    "distribution": "normal-replicate-effect-sensitivity-model",
+    "samples": 20000,
+    "seed": 35153047,
+    "powerByPrimaryEndpoint": {
+      "trueWinRate": 0.89015,
+      "lateGameScore": 0.9836,
+      "postRound15Vp": 0.94565
+    },
+    "endpointMonteCarloBound": {
+      "method": "one-sided-Wilson-with-Bonferroni-simultaneous-endpoint-coverage",
+      "familywiseAlpha": 0.05,
+      "endpointAlpha": 0.016666666666666666,
+      "z": 2.128045234184984
+    },
+    "powerSimultaneousFamilywise95MonteCarloLowerByPrimaryEndpoint": {
+      "trueWinRate": 0.8853559723383624,
+      "lateGameScore": 0.981576446841899,
+      "postRound15Vp": 0.9421366235445663
+    },
+    "bonferroniJointPrimaryEligibilityPowerPointLowerBound": 0.8194,
+    "bonferroniJointPrimaryEligibilityPowerSimultaneousMonteCarloLower95": 0.8090690427248277,
+    "requiredJointLowerBound": 0.8,
+    "adequateForPrimaryEfficacy": true,
+    "smallerEffectSensitivity": {
+      "0.75": {
+        "effectFraction": 0.75,
+        "targetEffects": {
+          "trueWinRate": 0.03,
+          "lateGameScore": 0.018750000000000003,
+          "postRound15Vp": 0.07500000000000001
+        },
+        "samples": 5000,
+        "seed": 35153797,
+        "powerByPrimaryEndpoint": {
+          "trueWinRate": 0.4634,
+          "lateGameScore": 0.8416,
+          "postRound15Vp": 0.719
+        },
+        "bonferroniJointPrimaryEligibilityPowerPointLowerBound": 0.02400000000000002,
+        "powerClaimed": false
+      },
+      "0.5": {
+        "effectFraction": 0.5,
+        "targetEffects": {
+          "trueWinRate": 0.02,
+          "lateGameScore": 0.0125,
+          "postRound15Vp": 0.05
+        },
+        "samples": 5000,
+        "seed": 35153547,
+        "powerByPrimaryEndpoint": {
+          "trueWinRate": 0.0638,
+          "lateGameScore": 0.4542,
+          "postRound15Vp": 0.3444
+        },
+        "bonferroniJointPrimaryEligibilityPowerPointLowerBound": 0.0,
+        "powerClaimed": false
+      }
+    }
+  },
+  "limitations": [
+    "This is design calibration from already-open public Phase 1 data, not evidence that a P30 treatment works.",
+    "The deliberately severe variance sensitivity multiplies each maximum prior SD by its df=2 one-sided 95% upper-bound factor.",
+    "Power is claimed only for the exact primary efficacy family and hard win-effect/replicate-consistency gates under the stated planning alternative.",
+    "Guardian, non-regression, stall, malformed-episode, latency, fresh-public, private, and promotion gates are safety filters and have no power claim.",
+    "Fresh public and private confirmations remain mandatory even if the development screen selects an arm.",
+    "The 75% and 50% planning-effect simulations are diagnostic sensitivity curves only; they carry no adequacy or promotion claim."
+  ]
+}

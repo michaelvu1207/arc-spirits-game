@@ -116,7 +116,7 @@
     "bash",
     "scripts/league-gauntlet.sh"
   ],
-  "seedBase": 967200000,
+  "seedBase": 967056000,
   "initFrom": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
   "laneInit": {
     "main-0": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt"
@@ -125,9 +125,9 @@
     "root": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-b/late-scheduled"
   },
   "seedSchedule": {
-    "trainBase": 967200000,
+    "trainBase": 967056000,
     "trainStride": 2048,
-    "evalBase": 967600000,
+    "evalBase": 968058000,
     "evalStride": 8192,
     "maxGeneration": 8
   }

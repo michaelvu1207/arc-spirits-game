@@ -4,14 +4,18 @@
   "status": "proposed-review-pending",
   "authorized": false,
   "promotionEligible": false,
-  "plan": "ml/experiments/v35-weco-recursive-autoresearch/runtime-confirmation-plan.md",
+  "plan": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md",
   "implementationBaseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
   "review": {
     "requiredModel": "Claude Fable",
     "requiredEffort": "high",
     "artifact": null,
     "sha256": null,
-    "verdict": null
+    "verdict": null,
+    "commandReceipt": {
+      "path": null,
+      "sha256": null
+    }
   },
   "catalog": {
     "path": "ml/catalog.json",
@@ -35,6 +39,28 @@
     "artifact": null,
     "sha256": null
   },
+  "sourceRegistry": {
+    "schemaVersion": "arc-v35-p30-source-registry-v1",
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-registry.proposed.json",
+    "sha256": "b8a624f6871e67e36b10abc266c3984ed4e7d28d64cf6ba48730a73cf9b2886a",
+    "files": 538
+  },
+  "powerCalibration": {
+    "schemaVersion": "arc-v35-p30-power-calibration-v1",
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/power-calibration.proposed.json",
+    "sha256": "82b021acb98b5ea5f937b9fc476b1c4df744250636ec5ee035bec20dc4b9851a",
+    "claim": "primary-efficacy-eligibility-power-only",
+    "replicates": 18,
+    "minimumJointPrimaryEligibilityPower": 0.8,
+    "adequateForPrimaryEfficacy": true,
+    "fullSelectorPowerClaimed": false
+  },
+  "confirmationGates": {
+    "schemaVersion": "arc-v35-superhuman-confirmation-gates-v1",
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/confirmation-gates.proposed.json",
+    "sha256": "a3aca14aedd75fc4947d45b8e86d672d78deb54569ae8b1e921d2a0454f85085",
+    "frozenBeforeP30Outcomes": true
+  },
   "seedEvidence": {
     "inventoryPath": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-seed-inventory.json",
     "inventorySha256": "f4feaa3f5c0034b9f43b38513287f318c3f817bce5b6a6c8096f5719b4a2bf95",
@@ -47,9 +73,24 @@
     }
   },
   "replicates": [
-    {"id": "a", "trainBase": 967100000, "evalBase": 967500000},
-    {"id": "b", "trainBase": 967200000, "evalBase": 967600000},
-    {"id": "c", "trainBase": 967300000, "evalBase": 967700000}
+    {"id": "a", "trainBase": 967040000, "evalBase": 968000000},
+    {"id": "b", "trainBase": 967056000, "evalBase": 968058000},
+    {"id": "c", "trainBase": 967072000, "evalBase": 968116000},
+    {"id": "d", "trainBase": 967088000, "evalBase": 968174000},
+    {"id": "e", "trainBase": 967104000, "evalBase": 968232000},
+    {"id": "f", "trainBase": 967120000, "evalBase": 968290000},
+    {"id": "g", "trainBase": 967136000, "evalBase": 968348000},
+    {"id": "h", "trainBase": 967152000, "evalBase": 968406000},
+    {"id": "i", "trainBase": 967168000, "evalBase": 968464000},
+    {"id": "j", "trainBase": 967184000, "evalBase": 968522000},
+    {"id": "k", "trainBase": 967200000, "evalBase": 968580000},
+    {"id": "l", "trainBase": 967216000, "evalBase": 968638000},
+    {"id": "m", "trainBase": 967232000, "evalBase": 968696000},
+    {"id": "n", "trainBase": 967248000, "evalBase": 968754000},
+    {"id": "o", "trainBase": 967264000, "evalBase": 968812000},
+    {"id": "p", "trainBase": 967280000, "evalBase": 968870000},
+    {"id": "q", "trainBase": 967296000, "evalBase": 968928000},
+    {"id": "r", "trainBase": 967312000, "evalBase": 967400000}
   ],
   "arms": [
     {
@@ -104,6 +145,17 @@
     "guardianSchedule": "absolute-balanced",
     "workers": 24
   },
+  "trustGates": {
+    "maxApproxKl": 0.02,
+    "maxOrdinaryClipFraction": 0.2,
+    "maxWeightedClipFraction": 0.2,
+    "maxBehaviorReach30Ece": 0.1,
+    "behaviorReach30BrierNoWorseThanConstant": true,
+    "maxBehaviorLogpReconstructionError": 0.001,
+    "stalls": 0,
+    "malformedEpisodes": 0,
+    "malformedRows": 0
+  },
   "analysis": {
     "commonPublicGames": 4096,
     "pairedWithinReplicate": true,
@@ -111,14 +163,16 @@
     "familywiseAlpha": 0.05,
     "correction": "holm",
     "bootstrap": {
-      "method": "crossed-paired-replicate-and-common-seed-diagnostic",
+      "method": "crossed-paired-replicate-and-common-seed-safety-bounds",
       "draws": 20000,
       "seed": 35153040
     },
     "decisionInference": {
-      "method": "paired-training-replicate-t",
-      "degreesOfFreedom": 2,
-      "oneSided": true
+      "method": "exact-paired-replicate-sign-flip",
+      "replicates": 18,
+      "enumerations": 262144,
+      "oneSided": true,
+      "nullAssumption": "paired replicate effects are independent and sign-exchangeable under the null"
     },
     "scoreWeights": {
       "terminal": 0.6,
@@ -128,9 +182,12 @@
     "primaryEndpoints": ["trueWinRate", "lateGameScore", "postRound15Vp"],
     "primaryFamilySize": 6,
     "expectedGuardianCount": 10,
-    "minimumPositiveReplicates": 2,
+    "minimumPositiveReplicates": 13,
     "minimumReplicateTrueWinGain": -0.01,
+    "maximumReplicatesBelowFloor": 2,
     "minimumTrueWinPointGain": 0.03,
+    "primaryBootstrapDecisionBearing": false,
+    "safetyBootstrapDecisionBearing": true,
     "requireReplayTraceHashes": true,
     "requireOutcomeBlindInputAuthorization": true,
     "mandatoryNonRegression": [
@@ -161,14 +218,111 @@
     "physicalGpu": 7,
     "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
     "forbiddenGpus": [4, 5, 6],
-    "maxConcurrentRoots": 1
+    "maxConcurrentRoots": 1,
+    "maxCampaignComputeSeconds": 1209600
+  },
+  "recoveryPolicy": {
+    "schemaVersion": "arc-v35-p30-bounded-recovery-policy-v1",
+    "maximumRecoveriesPerLogicalAction": 1,
+    "classes": ["PRE_CHILD", "RECEIPT_ONLY"],
+    "eligibleKinds": ["generation", "evaluation-primary", "evaluation-replay"],
+    "preChildRequiresNoChildStart": true,
+    "preChildRequiresNoSeedConsumption": true,
+    "receiptOnlyForbidsCandidateRerun": true,
+    "guardianClassificationRequired": true,
+    "secondRecoveryClosesCampaign": true,
+    "outcomeExposureClosesCampaign": true
+  },
+  "executionTrust": {
+    "schemaVersion": "arc-v35-p30-role-trust-v2",
+    "algorithm": "Ed25519",
+    "campaignInstanceId": null,
+    "roles": {
+      "issuer": {
+        "publicKeyPath": null,
+        "publicKeyPemSha256": null,
+        "publicKeyDerSha256": null,
+        "keyId": null,
+        "allowedArtifactSchemas": ["arc-v35-p30-execution-authorization-v1"],
+        "allowedKinds": ["generation", "evaluation-primary", "evaluation-replay", "preflight"]
+      },
+      "executor": {
+        "publicKeyPath": null,
+        "publicKeyPemSha256": null,
+        "publicKeyDerSha256": null,
+        "keyId": null,
+        "allowedArtifactSchemas": [
+          "arc-v35-p30-authorized-execution-receipt-v1",
+          "arc-v35-p30-executor-launch-permit-v1"
+        ],
+        "allowedKinds": ["generation", "evaluation-primary", "evaluation-replay", "preflight", "analysis"]
+      },
+      "guardian": {
+        "publicKeyPath": null,
+        "publicKeyPemSha256": null,
+        "publicKeyDerSha256": null,
+        "keyId": null,
+        "allowedArtifactSchemas": [
+          "arc-v35-p30-outcome-blind-preflight-v1",
+          "arc-v35-p30-final-generation-completeness-v1",
+          "arc-v35-p30-evaluation-pair-integrity-v1",
+          "arc-v35-p30-analysis-manifest-v1",
+          "arc-v35-p30-recovery-incident-v1",
+          "arc-v35-p30-logical-completion-v1"
+        ],
+        "allowedKinds": []
+      },
+      "analysis-authorizer": {
+        "publicKeyPath": null,
+        "publicKeyPemSha256": null,
+        "publicKeyDerSha256": null,
+        "keyId": null,
+        "allowedArtifactSchemas": ["arc-v35-p30-execution-authorization-v1"],
+        "allowedKinds": ["analysis"]
+      },
+      "review-attester": {
+        "publicKeyPath": null,
+        "publicKeyPemSha256": null,
+        "publicKeyDerSha256": null,
+        "keyId": null,
+        "allowedArtifactSchemas": ["arc-v35-p30-analysis-authorization-review-receipt-v2"],
+        "allowedKinds": []
+      }
+    },
+    "custody": {
+      "provider": "1Password",
+      "vault": "MichaelAgents",
+      "secretGranularity": "one-item-per-role",
+      "delivery": "encrypted-ssh-after-ready-to-sealed-memfd-cloexec",
+      "schedulerPrivateKeyAccess": false,
+      "maximumConcurrentPrivateKeyRoles": 1,
+      "requirePrSetDumpableZero": true,
+      "localOnlyRoles": ["review-attester"],
+      "remoteDeliveryRoles": ["issuer", "executor", "guardian", "analysis-authorizer"]
+    },
+    "ledgerRoot": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger",
+    "leasePath": "/data/share8/michaelvuaprilexperimentation/arc-bot/.leases/arc-v35-gpu7",
+    "bubblewrapPath": "/usr/bin/bwrap",
+    "bubblewrapSha256": null,
+    "reviewRuntime": {
+      "attesterRole": "review-attester",
+      "privateKeyRemoteDelivery": false,
+      "attemptReservation": "remote-o-excl-before-fable",
+      "claudeExecutable": {
+        "path": "/Users/maikyon/.local/share/claude/versions/2.1.211",
+        "sha256": "5a728a76198b6eca7f3c7cdbff43bab44b77b48c2108f7a3107d889773382629",
+        "version": "2.1.211 (Claude Code)"
+      }
+    }
   },
   "rules": [
     "This proposal is non-executable: no config.json, runner authorization, GPU lease, or seed consumption may exist before Fable acceptance and a separate immutable launch authorization.",
+    "Every generation, evaluation attempt, and analyzer launch requires an Ed25519-signed one-shot token, an external consumed marker, a signed execution receipt, and bubblewrap isolation with no network or credential mounts.",
     "All three arms within a replicate use identical training and per-generation evaluation seeds; only the reach30 residual dose differs.",
     "The common 4096-game block is public development evidence and can select at most one arm; it cannot confirm or promote that arm.",
     "Every endpoint must be rerun once with the identical checkpoint and seed block; exact per-game telemetry and replay-trace hashes must match before the outcome-blind input authorization can open analysis.",
     "A later fresh public confirmation, private/status-3, multiplayer, exploitability, fairness, latency, regression, and Michael gate remain mandatory.",
-    "No outcome-conditioned retry, seed substitution, arm substitution, or early promotion is permitted."
+    "No outcome-conditioned retry, seed substitution, arm substitution, or early promotion is permitted.",
+    "A consumed authorization may recover only through the frozen guardian-classified recovery policy. Any unclassified, ambiguous, outcome-dependent, or second failure permanently closes this campaign instance."
   ]
 }

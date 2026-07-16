@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "arc-v35-p30-fable-review-command-receipt-v1",
+  "valid": true,
+  "model": "fable",
+  "effort": "high",
+  "tools": [
+    "Read"
+  ],
+  "noSessionPersistence": true,
+  "argv": [
+    "claude",
+    "-p",
+    "--model",
+    "fable",
+    "--effort",
+    "high",
+    "--tools",
+    "Read",
+    "--no-session-persistence",
+    "Perform the final pre-authorization review of /Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md and the source-locked implementation files it directly names. Verify that the prior review findings are concretely addressed, especially quantitative confirmation gates, divergence classification, realized-dose telemetry, duration/storage go-no-go rules, local-only review provenance, one-shot launch/signing boundaries, and exact-stack determinism. Identify any remaining P0/P1 launch blocker. End the final nonempty line with exactly VERDICT: ACCEPT only if no P0/P1 blocker remains; otherwise end with exactly VERDICT: REJECT."
+  ],
+  "cwd": "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game",
+  "startedAtUtc": "2026-07-16T06:29:36Z",
+  "finishedAtUtc": "2026-07-16T06:35:39Z",
+  "exitCode": 0,
+  "stdoutPath": "fable-final-review-2026-07-15-v3.md",
+  "stdoutSha256": "f44dfd58e607b73b2d92b4fdbabc056db82c84df674d6609f39ed0cded08b98b",
+  "stderrPath": "fable-final-review-2026-07-15-v3.stderr",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
