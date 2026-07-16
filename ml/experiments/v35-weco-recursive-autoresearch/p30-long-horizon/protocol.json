@@ -393,14 +393,14 @@
     }
   ],
   "review": {
-    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v23.md",
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v24.md",
     "commandReceipt": {
-      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v23.receipt.json",
-      "sha256": "3ffb6e56d62f7ae77e1ddc037661bbebcb3bc957db492abd63312aa4f2b39a96"
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v24.receipt.json",
+      "sha256": "e6144e042d573be1cdb1cbefbb74362376bcb8dc09b8287222467f3e3aad42ca"
     },
     "requiredEffort": "high",
     "requiredModel": "Claude Fable",
-    "sha256": "32d187286af1575b5f067fadce91d4da9bffe7184b65626c2db083b0d786e0de",
+    "sha256": "ed5506c0799352b21b7c9b1ab90e94a0e54dbc66a7acb1201439a790df42adde",
     "verdict": "ACCEPT"
   },
   "rules": [
@@ -450,7 +450,7 @@
   "sourceContract": {
     "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-lock.json",
     "schemaVersion": "arc-v35-p30-source-lock-v1",
-    "sha256": "e699bd661fa4a88c78947c8f4ce6a20ac9a5032b1f50675a2a5329d298a135ad"
+    "sha256": "5aeaa30724111352f73ae9912eb120c3481058bb8df579b0a58a549ea29a035b"
   },
   "sourceRegistry": {
     "files": 552,
