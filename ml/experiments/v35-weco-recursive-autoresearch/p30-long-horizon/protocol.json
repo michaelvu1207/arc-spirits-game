@@ -9,12 +9,12 @@
   "review": {
     "requiredModel": "Claude Fable",
     "requiredEffort": "high",
-    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v14.md",
-    "sha256": "541c803d32b1ceefa3b272e3b628506fbd1b11b5025a0eda33456e16d66e37ca",
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v16.md",
+    "sha256": "129db2f2648baf59422d7a0fd3f250df9d11f92b495bd098f8145fe76ce95af9",
     "verdict": "ACCEPT",
     "commandReceipt": {
-      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v14.receipt.json",
-      "sha256": "3925b139efdc58dc9b15570d856266704de559162abe2c1294fb3e17ea69e6a0"
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v16.receipt.json",
+      "sha256": "810c8220415c9fb18ecf4165c0308218e5158a4a706efcee6a90bb1cd76e2298"
     }
   },
   "catalog": {
@@ -41,13 +41,13 @@
   "sourceContract": {
     "schemaVersion": "arc-v35-p30-source-lock-v1",
     "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-lock.json",
-    "sha256": "5a42d57a1ee36cb249e47996fd551bffe37374d21e0067da0142600b42e1888a"
+    "sha256": "c411c67233d7fafa3be25fb72a8c834cf6dd1667a8a258b315c8e63f6d086a81"
   },
   "sourceRegistry": {
     "schemaVersion": "arc-v35-p30-source-registry-v1",
     "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-registry.proposed.json",
-    "sha256": "9249a0b64a144c66676ce87a79996e50d9e59147957eaffe8942a7bfc8e787e1",
-    "files": 545
+    "sha256": "2e2b553631750d0042fb6e477bdd997f87e15d0b2c5f43c4dd73b0a44c959c18",
+    "files": 548
   },
   "powerCalibration": {
     "schemaVersion": "arc-v35-p30-power-calibration-v1",
@@ -338,15 +338,15 @@
     "outcomeExposureClosesCampaign": true
   },
   "executionTrust": {
-    "schemaVersion": "arc-v35-p30-role-trust-v2",
+    "schemaVersion": "arc-v35-p30-role-trust-v3",
     "algorithm": "Ed25519",
-    "campaignInstanceId": "135ae1e3c6e1c6c4922395cd862174ec17c9964959f180132f4a7ed06db10e2e",
+    "campaignInstanceId": "aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b",
     "roles": {
       "issuer": {
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/issuer.pem",
-        "publicKeyPemSha256": "bd451982df8a0912e0d3ec70fcd6e9b9f4ca1dbd7c9cdd12dfb7a01c9ec162b5",
-        "publicKeyDerSha256": "c0ad8b86151e18a0679288dd0fd9ce0b15b8408b3632b06e7018eb6f4799d567",
-        "keyId": "ed25519:c0ad8b86151e18a0679288dd",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/issuer.pem",
+        "publicKeyPemSha256": "63a1a642ed91ced5a68a9f0c5ad027c2670140a133c619509f27abe43ff0491a",
+        "publicKeyDerSha256": "8380719c4a8069daa86b9c84114c922df97de47d9bf77f768ae8542a3d185f96",
+        "keyId": "ed25519:8380719c4a8069daa86b9c84",
         "allowedArtifactSchemas": [
           "arc-v35-p30-execution-authorization-v1"
         ],
@@ -358,10 +358,10 @@
         ]
       },
       "executor": {
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/executor.pem",
-        "publicKeyPemSha256": "773c92e17e6b1ddf772de88aec4b1a01cb44c3a4a2826b5f4f650be85eadde26",
-        "publicKeyDerSha256": "4f4b42e43d881d79a7f56ad48d793b479aef95f167feb21662403d8a481dbc25",
-        "keyId": "ed25519:4f4b42e43d881d79a7f56ad4",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/executor.pem",
+        "publicKeyPemSha256": "2f2ab362092cf2235bc03f4657d3b2a6940872f8d8191181d53b96e87da79066",
+        "publicKeyDerSha256": "2596bba1f2e827647b9416cc0288891bd0138e1c85c1b424d945c5fafe19f27f",
+        "keyId": "ed25519:2596bba1f2e827647b9416cc",
         "allowedArtifactSchemas": [
           "arc-v35-p30-authorized-execution-receipt-v1",
           "arc-v35-p30-executor-launch-permit-v1"
@@ -375,10 +375,10 @@
         ]
       },
       "guardian": {
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/guardian.pem",
-        "publicKeyPemSha256": "4ccd8f7740d5ebc28f4b80edfb5977c2e75247837c22cd085e4cfca532c89e49",
-        "publicKeyDerSha256": "4c8cd27ae650481c766d7bc4b0f37207b453f5c6935d4ec43422eb23808630d2",
-        "keyId": "ed25519:4c8cd27ae650481c766d7bc4",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/guardian.pem",
+        "publicKeyPemSha256": "7a755c077c0569812005fa8cf2eaa2ec4eaf1c582fd6e96104a07e99e0f5f7b4",
+        "publicKeyDerSha256": "58c844f4be4b3534a82cef4fdd8bcfce14cb8f3a5bf879e2010796e05d9d2dce",
+        "keyId": "ed25519:58c844f4be4b3534a82cef4f",
         "allowedArtifactSchemas": [
           "arc-v35-p30-outcome-blind-preflight-v1",
           "arc-v35-p30-final-generation-completeness-v1",
@@ -392,10 +392,10 @@
         "allowedKinds": []
       },
       "analysis-authorizer": {
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/analysis-authorizer.pem",
-        "publicKeyPemSha256": "3c11e5d45e80f2b8baf983534eae2517ff30487587d1a941a86af8476edd4a9f",
-        "publicKeyDerSha256": "1442ff8459c70eaff0e07db1cc66beef2652a4c45a2892bb1a7c1b0584a82423",
-        "keyId": "ed25519:1442ff8459c70eaff0e07db1",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/analysis-authorizer.pem",
+        "publicKeyPemSha256": "37512c5b336e67699436811b5f27751c6058341bae64cf7f3d42c6c5b6e65fb8",
+        "publicKeyDerSha256": "505749bf0ec9a505ee93a78104d0c199931f0ccff908293983d11787784026c7",
+        "keyId": "ed25519:505749bf0ec9a505ee93a781",
         "allowedArtifactSchemas": [
           "arc-v35-p30-execution-authorization-v1"
         ],
@@ -404,13 +404,13 @@
         ]
       },
       "review-attester": {
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/review-attester.pem",
-        "publicKeyPemSha256": "01baf07e2a4e13a9f995a5e2dedc015bcccb5fc67fe2012d4e2039a67860a31a",
-        "publicKeyDerSha256": "2cfac3d3f9e0637b67873d3a66665afb9c9d042238966e5f8e3ccf57494dd84d",
-        "keyId": "ed25519:2cfac3d3f9e0637b67873d3a",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/review-attester.pem",
+        "publicKeyPemSha256": "241421cba78ca720489463afedc81f0106b2c32f8780866c168380c56c3ad515",
+        "publicKeyDerSha256": "748240f42a89719018351ecb0b71dbc758481cbaf99dc173c073e55c3381a473",
+        "keyId": "ed25519:748240f42a89719018351ecb",
         "allowedArtifactSchemas": [
-          "arc-v35-p30-analysis-authorization-review-receipt-v2",
-          "arc-v35-p30-gate-review-receipt-v1"
+          "arc-v35-p30-analysis-authorization-review-receipt-v3",
+          "arc-v35-p30-gate-review-receipt-v2"
         ],
         "allowedKinds": []
       }
@@ -442,9 +442,48 @@
       "privateKeyRemoteDelivery": false,
       "attemptReservation": "remote-o-excl-before-fable",
       "claudeExecutable": {
-        "path": "/Users/maikyon/.local/share/claude/versions/2.1.211",
-        "sha256": "5a728a76198b6eca7f3c7cdbff43bab44b77b48c2108f7a3107d889773382629",
+        "path": "/usr/local/bin/claude",
+        "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
         "version": "2.1.211 (Claude Code)"
+      },
+      "container": {
+        "backend": "docker",
+        "engine": {
+          "path": "/usr/local/bin/docker",
+          "resolvedPath": "/Applications/Docker.app/Contents/Resources/bin/docker",
+          "sha256": "cac12f15213d5806f1ffcbc6c159da969e8bf606bf81eafcea89b4c79d7945fd",
+          "version": "Docker version 27.4.0, build bde2b89"
+        },
+        "daemon": {
+          "id": "ef5c7268-c120-4369-8259-7faed4906a28",
+          "serverVersion": "27.4.0",
+          "operatingSystem": "Docker Desktop",
+          "architecture": "aarch64",
+          "rootDirectory": "/var/lib/docker",
+          "securityOptions": [
+            "name=seccomp,profile=unconfined",
+            "name=cgroupns"
+          ]
+        },
+        "image": {
+          "reference": "arc-p30-fable@sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+          "imageId": "sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+          "platform": "linux/arm64",
+          "user": "10001:10001",
+          "claudeExecutable": {
+            "path": "/usr/local/bin/claude",
+            "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
+            "version": "2.1.211 (Claude Code)"
+          }
+        },
+        "authDelivery": "oauth-token-file-descriptor-stdin-fd0",
+        "rootFilesystem": "read-only",
+        "capsuleMount": "read-only:/review",
+        "capabilities": [],
+        "noNewPrivileges": true,
+        "network": "default-bridge-icc-enabled",
+        "seccomp": "builtin-enforced",
+        "logDriver": "none"
       }
     }
   },
