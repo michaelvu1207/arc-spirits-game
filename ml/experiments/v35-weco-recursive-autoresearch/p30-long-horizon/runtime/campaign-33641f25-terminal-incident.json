@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "arc-v35-p30-terminal-campaign-incident-v1",
+  "valid": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "productionTrainingSeedsConsumed": false,
+  "productionCampaignInstanceId": "33641f25baf8c4fec063649a50505bf2c8dbef4b4202dd60bf394f1a727042e4",
+  "syntheticCampaignInstanceId": "054205ad5f7fa836b09e0515232e7f9d9e3ffacc2522cfbdaccb4ba51f9a2a8c",
+  "outerTokenId": "42d99fd6273659b5f6bffe6bc853a7b60188e89d869a619e3aba1c3c9b29ed4b",
+  "innerAnalysisTokenId": "fc7a54a7aa44c468f5849a84d84b2d9af59e67ee861b3899ce1be2ccf871bd37",
+  "implementationCommit": "bc8e1466c798cb455ea3862e90c4561495a28ed4",
+  "protocol": {
+    "sha256": "3ac50364570efaa5a19fff358eb7d2f5bc03fb25487f2c5733edd86e7c048426"
+  },
+  "sourceLock": {
+    "sha256": "3d76923c4de16a30d11845dd63df2c9f27bd3116a52bbe117002dd3a345e29b2",
+    "gitDir": "/home/ubuntu/arc-v35-p30-git-context-bc8e146.git"
+  },
+  "fableReview": {
+    "artifact": "fable-final-review-2026-07-16-v22.md",
+    "sha256": "5d445e0c364b6472e374988186e492d2e5526b1b03fd64a94e7f0baa760c6d85",
+    "verdict": "ACCEPT"
+  },
+  "phase0": {
+    "faultInjection": {
+      "completed": true,
+      "validReceiptSha256": "437d9758f7f64fcced76f90e5eaa9a7d685f412ea0debcc572bd0b6698f3ee32",
+      "reportSha256": "d1655423f1bb2147ee5d3321a5b31c07089806c5c9f6beab87da2ef38bbd2f3d",
+      "gpuUsed": false
+    },
+    "analyzerRehearsal": {
+      "completed": false,
+      "outerStartedAtUtc": "2026-07-16T16:37:03.153155Z",
+      "outerFinishedAtUtc": "2026-07-16T16:37:39.917528Z",
+      "outerExitCode": 1,
+      "innerExitCode": 125,
+      "reportAbsent": true,
+      "analysisOutputAbsent": true,
+      "outerChildStarted": true,
+      "innerPopenEntered": true,
+      "noSupervisorChildRemaining": true,
+      "gpuUsed": false
+    },
+    "cudaDeterminismStarted": false,
+    "runtimeFableReviewStarted": false,
+    "generationOneStarted": false
+  },
+  "failure": {
+    "class": "NESTED_BUBBLEWRAP_PROC_SUBMOUNT",
+    "stage": "PHASE0_ANALYZER_REHEARSAL_INNER_ANALYZER_LAUNCH",
+    "rootCause": "The preflight issuer added the host /proc/driver/nvidia submount to every non-CUDA preflight, including run_v35_p30_analyzer_rehearsal.py. That controller launches a nested bubblewrap analyzer, which could not replace the outer procfs while the NVIDIA submount existed. The executor-side nested-controller guard listed only the CUDA controller and therefore failed to reject the malformed analyzer-rehearsal authorization before consumption.",
+    "innerStderr": "bwrap: Can't mount proc on /newroot/proc: Operation not permitted",
+    "recoveryAllowed": false,
+    "reasonRecoveryForbidden": "Both the outer preflight child and the inner analysis Popen boundary were entered. The frozen child-started rule forbids PRE_CHILD recovery, the invalid drafts are ineligible for RECEIPT_ONLY, and analysis has no recovery class."
+  },
+  "evidence": {
+    "outerAuthorizationSha256": "8f94b281027adb16b62db4f185224b15e36dd0088725c42ca6865f1ab15099b9",
+    "outerConsumedMarkerSha256": "f93f267a1e2575f8bbf62b7d9eb3962b31d747a2713b47aef9c74290305c44f5",
+    "outerUnsignedDraftSha256": "d64d28bdfef1f0de91f5d2b85c07c92f6a94ddb980b2d8724297ed56ee3fe788",
+    "outerStdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "outerStderrSha256": "4d70470bf446ba2afd861a105f72b5770c1e9d67c8ec16eedf03ff581919e1cf",
+    "innerAuthorizationSha256": "890124cb6ec3da8f8864a891eaf743c3312e7d260d2e47d28526ba0757f020b1",
+    "innerConsumedMarkerSha256": "b85d684f5a432bcbdbcdae0fbcc1e53ccf9906a7655c275961e91ab0a157ad6f",
+    "innerLaunchIntentSha256": "14b40936c0d3cf720e9274f9695ae985483ad27aea78ec8181bb7302e3c674bc",
+    "innerUnsignedDraftSha256": "6aa326958fed033c3ab75958bc795f0afbaa095179b1f25e6486ca9d5eacf820",
+    "innerStdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "innerStderrSha256": "a4d2a58a559193b52811416426b7bef97f0658b6bf01bf2b14b7cbd790e120dc",
+    "schedulerStdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "schedulerStderrSha256": "7ccb96ef4823c9078c8fd273e24dbdeb64442b705bc475d9789e05f33165c879",
+    "schedulerTerminalError": "P30 'preflight' execution has unsealed state but no recovery path; the campaign lane is terminally closed"
+  },
+  "archive": {
+    "path": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/campaign-33641f25-terminal",
+    "manifestPath": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/campaign-33641f25-terminal.archive.json",
+    "manifestSha256": "64239c0a3686d1b5c0215fc8a12cae811ae66b7dc4f1ef0267673f879788d0d0",
+    "fileCount": 5579,
+    "totalFileBytes": 277677350,
+    "fileInventorySha256": "35573348b2ad47abc3e0b2350f904a203d34f7600a4b5e757f8ea6fc961d57b1",
+    "byteIdentical": true
+  },
+  "nextProtocol": {
+    "newFableReviewedDesignRequired": true,
+    "explicitCumulativeSpendDecisionRequired": true,
+    "freshCampaignIdentityAndRoleKeysRequired": true,
+    "exactOuterSandboxHostProbeRequired": true,
+    "automaticRestartForbidden": true,
+    "promotionStillClosed": true
+  }
+}
