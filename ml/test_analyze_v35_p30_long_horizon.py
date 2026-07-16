@@ -123,6 +123,63 @@ class V35P30AnalyzerTests(unittest.TestCase):
         ):
             load_inputs(PROTOCOL_PATH, missing, missing)
 
+    def test_fable_receipt_binds_plan_bytes_across_different_host_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            review = root / "review.md"
+            stderr = root / "review.stderr"
+            receipt_path = root / "review.receipt.json"
+            review.write_text("VERDICT: ACCEPT\n")
+            stderr.write_bytes(b"")
+            local_cwd = Path("/different/review-host/arc-spirits-game")
+            plan_relative = self.protocol["plan"]
+            plan_path = REPO / plan_relative
+            receipt = {
+                "schemaVersion": FABLE_RECEIPT_SCHEMA,
+                "valid": True,
+                "model": "fable",
+                "effort": "high",
+                "tools": ["Read"],
+                "noSessionPersistence": True,
+                "argv": [
+                    "claude",
+                    "-p",
+                    "--model",
+                    "fable",
+                    "--effort",
+                    "high",
+                    "--tools",
+                    "Read",
+                    "--no-session-persistence",
+                    final_fable_review_prompt(local_cwd / plan_relative),
+                ],
+                "cwd": str(local_cwd),
+                "plan": {"path": plan_relative, "sha256": sha256(plan_path)},
+                "startedAtUtc": "2026-07-16T00:00:00Z",
+                "finishedAtUtc": "2026-07-16T00:00:01Z",
+                "exitCode": 0,
+                "stdoutPath": str(review),
+                "stdoutSha256": sha256(review),
+                "stderrPath": str(stderr),
+                "stderrSha256": sha256(stderr),
+            }
+            receipt_path.write_text(json.dumps(receipt) + "\n")
+            protocol = copy.deepcopy(self.protocol)
+            protocol["review"]["commandReceipt"] = {
+                "path": str(receipt_path),
+                "sha256": sha256(receipt_path),
+            }
+            validate_fable_receipt(
+                protocol, protocol_path=PROTOCOL_PATH, review_path=review
+            )
+            receipt["plan"]["sha256"] = "0" * 64
+            receipt_path.write_text(json.dumps(receipt) + "\n")
+            protocol["review"]["commandReceipt"]["sha256"] = sha256(receipt_path)
+            with self.assertRaisesRegex(ValueError, "reviewed P30 plan"):
+                validate_fable_receipt(
+                    protocol, protocol_path=PROTOCOL_PATH, review_path=review
+                )
+
     def test_holm_adjustment_is_monotone_and_family_bounded(self) -> None:
         adjusted = holm_adjust({"a": 0.001, "b": 0.01, "c": 0.04})
         self.assertEqual(adjusted, {"a": 0.003, "b": 0.02, "c": 0.04})
@@ -371,6 +428,10 @@ class V35P30AnalyzerTests(unittest.TestCase):
                             prompt,
                         ],
                         "cwd": str(REPO),
+                        "plan": {
+                            "path": self.protocol["plan"],
+                            "sha256": sha256(plan_path),
+                        },
                         "startedAtUtc": "2026-07-15T00:00:00Z",
                         "finishedAtUtc": "2026-07-15T00:00:01Z",
                         "exitCode": 0,

@@ -46,7 +46,7 @@ AUTHORIZED_EXECUTION_RECEIPT_SCHEMA = "arc-v35-p30-authorized-execution-receipt-
 EXECUTION_AUTHORIZATION_SCHEMA = "arc-v35-p30-execution-authorization-v1"
 EVALUATION_INNER_SCHEMA = "arc-v35-p30-evaluation-inner-execution-v1"
 PAIR_INTEGRITY_SCHEMA = "arc-v35-p30-evaluation-pair-integrity-v1"
-FABLE_RECEIPT_SCHEMA = "arc-v35-p30-fable-review-command-receipt-v1"
+FABLE_RECEIPT_SCHEMA = "arc-v35-p30-fable-review-command-receipt-v2"
 EXECUTION_TRUST_SCHEMA = "arc-v35-p30-role-trust-v2"
 ROOT_BINDING_SCHEMA = "arc-v35-root-binding-v1"
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1625,6 +1625,7 @@ def validate_fable_receipt(
         "noSessionPersistence",
         "argv",
         "cwd",
+        "plan",
         "startedAtUtc",
         "finishedAtUtc",
         "exitCode",
@@ -1634,10 +1635,24 @@ def validate_fable_receipt(
         "stderrSha256",
     }
     exact_keys(receipt, expected_keys, "Fable command receipt")
-    plan_path = resolve_artifact(
-        protocol.get("plan"), anchor=REPO_ROOT, label="P30 plan"
+    plan_relative = protocol.get("plan")
+    runtime_plan_path = resolve_artifact(
+        plan_relative, anchor=REPO_ROOT, label="P30 plan"
     )
-    prompt = final_fable_review_prompt(plan_path)
+    plan_contract = receipt.get("plan")
+    cwd_value = receipt.get("cwd")
+    if (
+        not isinstance(plan_contract, dict)
+        or set(plan_contract) != {"path", "sha256"}
+        or plan_contract.get("path") != plan_relative
+        or plan_contract.get("sha256") != sha256(runtime_plan_path)
+        or not isinstance(cwd_value, str)
+        or not Path(cwd_value).is_absolute()
+        or "\n" in cwd_value
+    ):
+        raise ValueError("Fable command receipt does not bind the reviewed P30 plan")
+    reviewed_plan_path = Path(cwd_value) / str(plan_relative)
+    prompt = final_fable_review_prompt(reviewed_plan_path)
     expected_argv = [
         "claude",
         "-p",
@@ -1658,7 +1673,6 @@ def validate_fable_receipt(
         or receipt.get("tools") != ["Read"]
         or receipt.get("noSessionPersistence") is not True
         or receipt.get("argv") != expected_argv
-        or receipt.get("cwd") != str(REPO_ROOT)
         or receipt.get("exitCode") != 0
         or receipt.get("stdoutSha256") != sha256(review_path)
         or not is_sha256(receipt.get("stderrSha256"))
