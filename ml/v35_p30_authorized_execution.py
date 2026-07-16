@@ -53,6 +53,12 @@ ALLOWED_KINDS = {
     "preflight",
 }
 GPU_UUID = "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0"
+NESTED_ISOLATION_CONTROLLERS = frozenset(
+    {
+        "run_v35_p30_cuda_determinism.py",
+        "run_v35_p30_evaluation_attempt.py",
+    }
+)
 ALLOWED_ENVIRONMENT_KEYS = {
     "ARC_ROOT",
     "ARC_V35_P30_EXTERNAL_LEASE",
@@ -645,6 +651,9 @@ def validate_authorization(
             or not all(isinstance(path, str) and Path(path).is_absolute() for path in paths)
         ):
             raise ValueError(f"isolation {field} is malformed")
+    validate_nested_controller_mount_contract(
+        command["argv"], isolation["readOnlyPaths"]
+    )
     writable = [Path(path).resolve() for path in isolation["writablePaths"]]
     if any(
         left == right or left in right.parents or right in left.parents
@@ -877,6 +886,21 @@ def validate_authorization(
     ):
         raise ValueError("authorization role request changed")
     return authorization
+
+
+def validate_nested_controller_mount_contract(
+    argv: list[str], read_only_paths: list[str]
+) -> None:
+    """Keep host NVIDIA proc mounts outside a controller's nested procfs."""
+
+    entrypoint = Path(argv[1]).name if len(argv) > 1 else ""
+    if (
+        entrypoint in NESTED_ISOLATION_CONTROLLERS
+        and "/proc/driver/nvidia" in read_only_paths
+    ):
+        raise ValueError(
+            "nested isolation controller cannot inherit an NVIDIA proc submount"
+        )
 
 
 def bubblewrap_command(

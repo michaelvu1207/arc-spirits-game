@@ -219,7 +219,6 @@ def build(
                     "/lib",
                     "/lib64",
                     "/sys",
-                    "/proc/driver/nvidia",
                     "/usr",
                     str(REPO_ROOT),
                     str(git_dir),

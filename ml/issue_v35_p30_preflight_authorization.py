@@ -142,21 +142,19 @@ def build(
         }
         writable = [str(root), str(socket_root)]
     ledger = ledger_for(protocol)
-    read_only = sorted(
-        str(path)
-        for path in (
-            Path("/bin"),
-            Path("/etc"),
-            Path("/lib"),
-            Path("/lib64"),
-            Path("/sys"),
-            Path("/proc/driver/nvidia"),
-            Path("/usr"),
-            REPO_ROOT,
-            git_dir,
-        )
-        if path.exists()
-    )
+    read_only_candidates = [
+        Path("/bin"),
+        Path("/etc"),
+        Path("/lib"),
+        Path("/lib64"),
+        Path("/sys"),
+        Path("/usr"),
+        REPO_ROOT,
+        git_dir,
+    ]
+    if name != "cuda-determinism":
+        read_only_candidates.append(Path("/proc/driver/nvidia"))
+    read_only = sorted(str(path) for path in read_only_candidates if path.exists())
     payload: dict[str, Any] = {
         "schemaVersion": AUTHORIZATION_SCHEMA,
         "authorized": True,

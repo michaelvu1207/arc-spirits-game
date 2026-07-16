@@ -20,6 +20,7 @@ from v35_p30_authorized_execution import (
     seal_receipt_only_recovery,
     seal_execution_receipt,
     validate_authorization,
+    validate_nested_controller_mount_contract,
 )
 from v35_p30_crypto import (
     atomic_write_exclusive,
@@ -43,6 +44,20 @@ from v35_p30_recovery import (
 
 
 class AuthorizedExecutionTests(unittest.TestCase):
+    def test_nested_controller_rejects_outer_nvidia_proc_submount(self) -> None:
+        for entrypoint in (
+            "ml/run_v35_p30_cuda_determinism.py",
+            "ml/run_v35_p30_evaluation_attempt.py",
+        ):
+            with self.assertRaisesRegex(ValueError, "NVIDIA proc submount"):
+                validate_nested_controller_mount_contract(
+                    ["/venv/python", entrypoint],
+                    ["/proc/driver/nvidia", "/usr"],
+                )
+            validate_nested_controller_mount_contract(
+                ["/venv/python", entrypoint], ["/usr"]
+            )
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name).resolve()

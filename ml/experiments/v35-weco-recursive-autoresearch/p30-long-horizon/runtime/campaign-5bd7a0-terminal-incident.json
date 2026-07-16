@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "arc-v35-p30-terminal-campaign-incident-v1",
+  "campaignInstanceId": "5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f",
+  "terminal": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "gameSeedsConsumed": false,
+  "gpuLeaseAcquired": true,
+  "failedPhase": "phase0-cuda-determinism",
+  "diagnosticCode": "NESTED_PROCFS_NVIDIA_SUBMOUNT_CONFLICT",
+  "rootCause": "The outer authorized-execution sandbox mounted host /proc/driver/nvidia below its fresh procfs. The primary inference server's nested bubblewrap could not replace that procfs while the submount existed, so it exited before creating its socket and before any evaluator or game began.",
+  "execution": {
+    "kind": "preflight",
+    "tokenId": "e07023c55c66ece1d294c783ecd247a79c972af6bf1453afa1e669ec91059e5d",
+    "authorization": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f/authorizations/phase0-cuda-determinism.json",
+      "sha256": "ec3b6915404f257ea3fb902186b392bb8c9fddd5ebe70d8d56e2eee5cbc33ee2"
+    },
+    "executionRequest": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f/requests/phase0-cuda-determinism-executor.json",
+      "sha256": "e3ec084aac706e4555275a6a3cf8e045dfd500d079602165f3803348da55198a"
+    },
+    "launchPermit": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f/launch-permits/e3ec084aac706e4555275a6a3cf8e045dfd500d079602165f3803348da55198a.json",
+      "sha256": "34127c085f6d8ee00bf83e2d8358f74d15fdef75e0071ec70270d6104259222d"
+    },
+    "consumedMarker": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f/e07023c55c66ece1d294c783ecd247a79c972af6bf1453afa1e669ec91059e5d.consumed.json",
+      "sha256": "83d6ec6afff8ba516a16a38e7963888aa70fd0f39eb05c87201e983fe0985742"
+    },
+    "unsignedDraft": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f/e07023c55c66ece1d294c783ecd247a79c972af6bf1453afa1e669ec91059e5d.receipt.json.unsigned.json",
+      "sha256": "197c4040d24f6c127d75dee0dc18ce9ea78f32c1d2bcaa6d435d6aad47e306f1"
+    },
+    "stderr": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-artifacts/5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f/phase0/cuda-determinism/execution.stderr",
+      "sha256": "f7da34045ae32771341825afe5a361200b2778941b1756378039b806dfe0b91a"
+    },
+    "serverStderr": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-artifacts/5bd7a059633ed484f612d7396f6c067517ff2f5ba844f1edf5372ba692cf6a3f/phase0/cuda-determinism/primary/server.stderr",
+      "sha256": "a4d2a58a559193b52811416426b7bef97f0658b6bf01bf2b14b7cbd790e120dc"
+    },
+    "spawnCallEntered": true,
+    "childStarted": true,
+    "inferenceServerSocketReady": false,
+    "evaluatorStarted": false,
+    "exitCode": 1,
+    "gpuEmptyAfter": true,
+    "leaseReleased": true
+  },
+  "diagnosticProof": {
+    "nestedBubblewrapWithoutOuterNvidiaProcMount": true,
+    "cudaTensorAllocationPassed": true,
+    "exactInferenceServerSocketReady": true,
+    "gpu7EmptyAfter": true,
+    "gameOrOutcomeInputRead": false
+  },
+  "disposition": {
+    "reuseForbidden": true,
+    "recoveryForbidden": true,
+    "requiredNextInstance": "fresh-campaign-id-and-review",
+    "sourceFix": [
+      "omit /proc/driver/nvidia from outer CUDA and evaluation controller sandboxes",
+      "retain fresh inner procfs and only GPU7 device binds",
+      "reject future nested-controller authorizations that reintroduce the proc submount"
+    ]
+  }
+}
