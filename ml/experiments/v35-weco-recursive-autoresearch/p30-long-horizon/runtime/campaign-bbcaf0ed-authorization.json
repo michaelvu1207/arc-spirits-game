@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "arc-v35-p30-authorized-production-campaign-instance-v1",
+  "authorized": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "campaignInstanceId": "bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14",
+  "protocolSha256": "9da51efda745bd5221ecc5b00521808846026a9f3d472d3e284a1fae6c7e06ba",
+  "userAuthorization": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/user-production-relaunch-authorization.json",
+    "sha256": "66293107ad36ab8a853e172c771ef7f400c6935bd72d4448689d79bcc25da895",
+    "scope": "exactly-one-fresh-p30-production-campaign"
+  },
+  "decisionPackage": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/production-relaunch-decision-package.json",
+    "sha256": "535a63a262e3da1a20a3d654df50d4cad55a3d9aa84fde540a05392e1940ba79"
+  },
+  "source": {
+    "implementationCommit": "e8c02068d88d677afd655506f6810b66a6b52c3f",
+    "sourceLockSha256": "5aeaa30724111352f73ae9912eb120c3481058bb8df579b0a58a549ea29a035b",
+    "gitContext": "/home/ubuntu/arc-v35-p30-git-context-e8c0206.git"
+  },
+  "fableReview": {
+    "artifactSha256": "ed5506c0799352b21b7c9b1ab90e94a0e54dbc66a7acb1201439a790df42adde",
+    "commandReceiptSha256": "e6144e042d573be1cdb1cbefbb74362376bcb8dc09b8287222467f3e3aad42ca",
+    "verdict": "ACCEPT"
+  },
+  "exactOuterProbe": {
+    "probeId": "8daee00c55d1fe443c49b072b71bdda9082dfc9a2050d9ec20207587358fc506",
+    "successReceiptSha256": "79128cf9577e6edc920e4b2d245ca352d7272f94807cdc0187273c08451567fb",
+    "byteIdenticalArchive": true
+  },
+  "roleKeys": {
+    "issuer": {
+      "vaultItemId": "wijzosihukw5zuajz4x7fajueq",
+      "vaultTitle": "arc-v35-p30-bbcaf0ed-issuer",
+      "keyId": "ed25519:12d818791eb971d70c1eb854",
+      "publicKeyPemSha256": "3caff40f529485035bbb83117402823b1ee50111ee601971d972b0e18c18b216"
+    },
+    "executor": {
+      "vaultItemId": "ed76fem4u7hl4tvxdwkuoru56e",
+      "vaultTitle": "arc-v35-p30-bbcaf0ed-executor",
+      "keyId": "ed25519:4e73a2e32e3534ddc8ba24cc",
+      "publicKeyPemSha256": "58db60e405fafe208562be4224597760f9f4a49006cebbcfce88e6bee5893bf9"
+    },
+    "guardian": {
+      "vaultItemId": "4bxr65bi4pyr5labeokjazlzaa",
+      "vaultTitle": "arc-v35-p30-bbcaf0ed-guardian",
+      "keyId": "ed25519:bd4fbbb5064e50e23b20117f",
+      "publicKeyPemSha256": "b6187df1d504e9e94b452ab8238d09a8f33c2521ca606079fde1cef03b5d0840"
+    },
+    "analysis-authorizer": {
+      "vaultItemId": "v7slq6j2gz7625g7x73w5dvbve",
+      "vaultTitle": "arc-v35-p30-bbcaf0ed-analysis-authorizer",
+      "keyId": "ed25519:0477bdfa081760e086eb0d35",
+      "publicKeyPemSha256": "78c25854770b1e65f5c0140520d8c518927506694a82c417e8db5b6f4f9b4ebf"
+    },
+    "review-attester": {
+      "vaultItemId": "4uu5nqljku5yegbrnhmnkvy6y4",
+      "vaultTitle": "arc-v35-p30-bbcaf0ed-review-attester",
+      "keyId": "ed25519:270da3dde1edcd0080039b0d",
+      "publicKeyPemSha256": "9a448b6d3e47d92a422a13e60a22aa96d41bca0695e8cda34ca2823b0265d2d0"
+    }
+  },
+  "privateKeyCustody": {
+    "vault": "MichaelAgents",
+    "localConfigMode": "0600",
+    "vaultPrivateKeysMatchedStagedPublicKeys": true,
+    "temporaryPrivateKeyFilesDeleted": true,
+    "privateKeysWillNotBeCopiedToSimForge": true
+  },
+  "runtime": {
+    "host": "ubuntu@216.151.21.122",
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenPhysicalGpus": [
+      4,
+      5,
+      6
+    ],
+    "maximumCampaignComputeSeconds": 1209600,
+    "maximumConcurrentRoots": 1
+  },
+  "launchState": {
+    "phase0Started": false,
+    "trainingStarted": false,
+    "productionSeedsConsumed": false,
+    "privateEvaluationAuthorized": false,
+    "promotionAuthorized": false
+  }
+}

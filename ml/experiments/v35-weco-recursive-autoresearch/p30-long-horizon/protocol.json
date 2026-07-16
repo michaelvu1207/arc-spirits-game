@@ -104,7 +104,7 @@
     "algorithm": "Ed25519",
     "bubblewrapPath": "/usr/bin/bwrap",
     "bubblewrapSha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712",
-    "campaignInstanceId": "33641f25baf8c4fec063649a50505bf2c8dbef4b4202dd60bf394f1a727042e4",
+    "campaignInstanceId": "bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14",
     "custody": {
       "delivery": "encrypted-ssh-after-ready-to-sealed-memfd-cloexec",
       "localOnlyRoles": [
@@ -182,10 +182,10 @@
         "allowedKinds": [
           "analysis"
         ],
-        "keyId": "ed25519:aeee2f1e9d1667f2dad3914a",
-        "publicKeyDerSha256": "aeee2f1e9d1667f2dad3914a10818ad4402996643bbc2444603daa162d7a447f",
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/33641f25baf8c4fec063649a50505bf2c8dbef4b4202dd60bf394f1a727042e4/analysis-authorizer.pem",
-        "publicKeyPemSha256": "651d1105fc9f1e6d42f6bab18f7012ef16f3d920c275afa6b024862520c0e511"
+        "keyId": "ed25519:0477bdfa081760e086eb0d35",
+        "publicKeyDerSha256": "0477bdfa081760e086eb0d35203e2b0b34fd922b67ac5afa84c0067586e1c408",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/analysis-authorizer.pem",
+        "publicKeyPemSha256": "78c25854770b1e65f5c0140520d8c518927506694a82c417e8db5b6f4f9b4ebf"
       },
       "executor": {
         "allowedArtifactSchemas": [
@@ -199,10 +199,10 @@
           "preflight",
           "analysis"
         ],
-        "keyId": "ed25519:1a37a3a1498d4842fb14ef77",
-        "publicKeyDerSha256": "1a37a3a1498d4842fb14ef7705b26de193d1ebc9bd28ebe5d7a238dcdcf291bb",
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/33641f25baf8c4fec063649a50505bf2c8dbef4b4202dd60bf394f1a727042e4/executor.pem",
-        "publicKeyPemSha256": "0487c22e4efaa50ca35841b25588103efb93da2edb91afc0c4c874251c4d4269"
+        "keyId": "ed25519:4e73a2e32e3534ddc8ba24cc",
+        "publicKeyDerSha256": "4e73a2e32e3534ddc8ba24cc777fc514f390ba9b5a94af10c218cd5f13c7ff47",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/executor.pem",
+        "publicKeyPemSha256": "58db60e405fafe208562be4224597760f9f4a49006cebbcfce88e6bee5893bf9"
       },
       "guardian": {
         "allowedArtifactSchemas": [
@@ -216,10 +216,10 @@
           "arc-v35-p30-logical-completion-v1"
         ],
         "allowedKinds": [],
-        "keyId": "ed25519:04597ae857e93762e385050b",
-        "publicKeyDerSha256": "04597ae857e93762e385050be481e68cef6d92d13495a9eafd3c9d4a43b75f87",
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/33641f25baf8c4fec063649a50505bf2c8dbef4b4202dd60bf394f1a727042e4/guardian.pem",
-        "publicKeyPemSha256": "a1c36c3a500e15a3b4827235ccc453371e8a2de2b41033cd3b412d2754a6b0f7"
+        "keyId": "ed25519:bd4fbbb5064e50e23b20117f",
+        "publicKeyDerSha256": "bd4fbbb5064e50e23b20117f0a7f94155a6509e12472c827336cbd45b60283eb",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/guardian.pem",
+        "publicKeyPemSha256": "b6187df1d504e9e94b452ab8238d09a8f33c2521ca606079fde1cef03b5d0840"
       },
       "issuer": {
         "allowedArtifactSchemas": [
@@ -231,10 +231,10 @@
           "evaluation-replay",
           "preflight"
         ],
-        "keyId": "ed25519:a3b97d2bb905d36cb25ae617",
-        "publicKeyDerSha256": "a3b97d2bb905d36cb25ae617eb4688d5eef3f7e30787171f7cdc656ab4bb8715",
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/33641f25baf8c4fec063649a50505bf2c8dbef4b4202dd60bf394f1a727042e4/issuer.pem",
-        "publicKeyPemSha256": "0ca4953b4332307509de9a7b7029a061600002a3180c94e7fe791057d34deb8e"
+        "keyId": "ed25519:12d818791eb971d70c1eb854",
+        "publicKeyDerSha256": "12d818791eb971d70c1eb854b8cb943e386ae40786b5951edc3f66523c677d11",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/issuer.pem",
+        "publicKeyPemSha256": "3caff40f529485035bbb83117402823b1ee50111ee601971d972b0e18c18b216"
       },
       "review-attester": {
         "allowedArtifactSchemas": [
@@ -242,10 +242,10 @@
           "arc-v35-p30-gate-review-receipt-v2"
         ],
         "allowedKinds": [],
-        "keyId": "ed25519:8cd47c81efc247ac33d5d823",
-        "publicKeyDerSha256": "8cd47c81efc247ac33d5d8233b0263970ce24392a84852d5640bda4e0bae0e2e",
-        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/33641f25baf8c4fec063649a50505bf2c8dbef4b4202dd60bf394f1a727042e4/review-attester.pem",
-        "publicKeyPemSha256": "8fb49675ffdafba54c4b5342bbbcb33692414cde9fec7884f42a1a782bcaee5a"
+        "keyId": "ed25519:270da3dde1edcd0080039b0d",
+        "publicKeyDerSha256": "270da3dde1edcd0080039b0dd21e43f4386acf5c547c4262bd51ed5f86ee555f",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/review-attester.pem",
+        "publicKeyPemSha256": "9a448b6d3e47d92a422a13e60a22aa96d41bca0695e8cda34ca2823b0265d2d0"
       }
     },
     "schemaVersion": "arc-v35-p30-role-trust-v3"
