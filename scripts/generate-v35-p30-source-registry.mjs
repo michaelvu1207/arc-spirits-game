@@ -20,6 +20,7 @@ const explicitlyNew = [
 	'ml/issue_v35_p30_pair_integrity.py',
 	'ml/issue_v35_p30_preflight_authorization.py',
 	'ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md',
+	'ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json',
 	'ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/usr.bin.bwrap.apparmor',
 	'ml/run_v35_p30_evaluation_attempt.py',
 	'ml/run_v35_p30_local_custody.py',

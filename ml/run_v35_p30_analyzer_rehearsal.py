@@ -39,6 +39,10 @@ def run(output: Path) -> None:
     ]
     environment = {
         "HOME": "/tmp",
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
         "PATH": ":".join(path_entries),
         "PYTHONHASHSEED": "0",
         "PYTHONPATH": "ml",

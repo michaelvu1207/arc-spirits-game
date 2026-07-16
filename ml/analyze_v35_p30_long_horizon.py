@@ -54,7 +54,7 @@ SOURCE_REGISTRY_RELATIVE = (
     "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/"
     "source-registry.proposed.json"
 )
-SOURCE_REGISTRY_SHA256 = "e38f9f636679b5cd23f50d6075aca582fae0eb77a43eda457aed13d3450da764"
+SOURCE_REGISTRY_SHA256 = "9249a0b64a144c66676ce87a79996e50d9e59147957eaffe8942a7bfc8e787e1"
 REPLICATES = tuple("abcdefghijklmnopqr")
 CONTROL = "control-zero"
 TREATMENTS = ("uniform-040", "late-scheduled")
@@ -133,7 +133,7 @@ if (
     or _source_registry.get("purpose") != "complete-runtime-and-evaluation-source-closure"
     or _source_registry.get("promotionEligible") is not False
     or not isinstance(_source_registry.get("files"), list)
-    or len(_source_registry["files"]) != 544
+    or len(_source_registry["files"]) != 545
     or _source_registry["files"] != sorted(set(_source_registry["files"]))
     or any(not isinstance(path, str) or not path for path in _source_registry["files"])
 ):
@@ -696,7 +696,7 @@ def validate_protocol(protocol: Mapping[str, Any], *, require_authorized: bool =
         "schemaVersion": "arc-v35-p30-source-registry-v1",
         "path": SOURCE_REGISTRY_RELATIVE,
         "sha256": SOURCE_REGISTRY_SHA256,
-        "files": 544,
+        "files": 545,
     }:
         raise ValueError("P30 source registry declaration changed")
     power_calibration = protocol.get("powerCalibration")

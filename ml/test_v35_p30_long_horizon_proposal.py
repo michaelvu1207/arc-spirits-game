@@ -51,7 +51,7 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
                 "sha256": None,
             },
         )
-        self.assertEqual(protocol["sourceRegistry"]["files"], 544)
+        self.assertEqual(protocol["sourceRegistry"]["files"], 545)
         self.assertEqual(
             protocol["sourceRegistry"]["sha256"],
             sha256(REPO / protocol["sourceRegistry"]["path"]),
@@ -70,6 +70,7 @@ class V35P30LongHorizonProposalTests(unittest.TestCase):
             "ml/issue_v35_p30_preflight_authorization.py",
             "ml/v35_p30_phase0.py",
             "ml/test_v35_p30_phase0_gates.py",
+            "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json",
         ):
             self.assertIn(required, registry["files"])
         trust = protocol["executionTrust"]

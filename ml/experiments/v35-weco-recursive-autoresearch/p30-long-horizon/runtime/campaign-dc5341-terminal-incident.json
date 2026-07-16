@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "arc-v35-p30-terminal-campaign-incident-v1",
+  "campaignInstanceId": "dc5341c181cd33ea84ae9d9eda4cc95239c20a10621f3b4531b091e1ebafa99e",
+  "terminal": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "gameSeedsConsumed": false,
+  "gpuLeaseAcquired": false,
+  "failedPhase": "phase0-analyzer-rehearsal",
+  "diagnosticCode": "SYNTHETIC_ANALYZER_FIXTURE_TRUST_POLICY_STALE",
+  "rootCause": "The source-locked production trust policy added Phase-0 guardian and gate-review schemas, but the synthetic analyzer test loaded protocol.proposed.json from an unregistered, stale remote file. Trust validation rejected the stale guardian allowlist before any outcome input was read.",
+  "execution": {
+    "kind": "preflight",
+    "tokenId": "e408e25837aa600e9e3e84cc1ee2b49785dd8f7f43e50c13d137b95c7e126ee2",
+    "authorization": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/dc5341c181cd33ea84ae9d9eda4cc95239c20a10621f3b4531b091e1ebafa99e/authorizations/phase0-analyzer-rehearsal.json",
+      "sha256": "621cfa5d046537b00fcca62e8ed5ed10864c3745ef391decdd67a34ce8133921"
+    },
+    "consumedMarker": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/dc5341c181cd33ea84ae9d9eda4cc95239c20a10621f3b4531b091e1ebafa99e/e408e25837aa600e9e3e84cc1ee2b49785dd8f7f43e50c13d137b95c7e126ee2.consumed.json",
+      "sha256": "9ca1a4c28863305382285c77418a8452ddde9c0fdbf21df79dfedf2323163e3d"
+    },
+    "unsignedDraft": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/dc5341c181cd33ea84ae9d9eda4cc95239c20a10621f3b4531b091e1ebafa99e/e408e25837aa600e9e3e84cc1ee2b49785dd8f7f43e50c13d137b95c7e126ee2.receipt.json.unsigned.json",
+      "sha256": "88af06ccc5389ccbc1a6d7e0d7bcbc88aca338baa7fc77260d4f8b03cd27c624"
+    },
+    "spawnCallEntered": true,
+    "childStarted": true,
+    "exitCode": 1,
+    "missingRequiredOutputs": [
+      "report"
+    ],
+    "gpuEmptyAfter": true,
+    "leaseReleased": true
+  },
+  "disposition": {
+    "reuseForbidden": true,
+    "recoveryForbidden": true,
+    "requiredNextInstance": "fresh-campaign-id-and-review",
+    "sourceFix": [
+      "register protocol.proposed.json in the immutable source closure",
+      "pin BLAS and numerical-library thread counts in the analyzer rehearsal",
+      "rerun the exact full-shape analyzer test before authorization"
+    ]
+  }
+}
