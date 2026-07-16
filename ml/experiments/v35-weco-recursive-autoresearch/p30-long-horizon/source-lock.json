@@ -4,16 +4,16 @@
   "immutable": true,
   "promotionEligible": false,
   "implementationBaseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
-  "implementationCommit": "54eb1c3c7e7637960f8dedbc7ddbba56f5978002",
+  "implementationCommit": "59702d78e19348b6633291273effa107679e68cf",
   "gitContext": {
     "schemaVersion": "arc-v35-p30-git-context-v1",
-    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-git-context-54eb1c3.git",
+    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-git-context-59702d7.git",
     "shallow": true,
     "objectFormat": "sha1",
     "baseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
-    "implementationCommit": "54eb1c3c7e7637960f8dedbc7ddbba56f5978002",
-    "implementationTree": "7d4d74f869e5a8e649ff158c52dea7bc859ec349",
-    "objectInventorySha256": "498856dfffc1ff4d1a171189e05b4d17efed7caa8b179281b18a28f7e9e34e01",
+    "implementationCommit": "59702d78e19348b6633291273effa107679e68cf",
+    "implementationTree": "e6b253f68c19adcac4af34140d7471c5f1222526",
+    "objectInventorySha256": "24d527825bc1fc3c55cde538379424cef8edbe6dfdd7aa9707b76cabb414ac55",
     "registeredPaths": 547
   },
   "files": {
@@ -339,8 +339,8 @@
     },
     "runtime:ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md": {
       "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md",
-      "sha256": "40503a13bf925f6997e3295007d41b1781ef0f089744bfb5249818e82fddee12",
-      "gitBlobOid": "834f72b3b20897748521567252926f6737d8d8c4"
+      "sha256": "9843a7aa5b2b15ec7f7540c76bc82e33d2a351554d0d23fa922d0c54f994cb83",
+      "gitBlobOid": "4df0fde58d528682026253a5afffbecec4df6139"
     },
     "runtime:ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json": {
       "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json",
@@ -399,8 +399,8 @@
     },
     "runtime:ml/issue_v35_p30_preflight_authorization.py": {
       "path": "ml/issue_v35_p30_preflight_authorization.py",
-      "sha256": "7b8c57ddee1edd5475fe7f9a209f7ca6418ac690dab6d288a7e549e0613a1ae0",
-      "gitBlobOid": "7ad5edea60e0783df332a45192bf440d4c02985c"
+      "sha256": "162a2e0b46fa476b777de50a7d002b1c705251cd73bbf9824c3e4146ce75a632",
+      "gitBlobOid": "0430b7635ac38c56178bee0f2cd799cbfa6af6a9"
     },
     "runtime:ml/make_synthetic_data.py": {
       "path": "ml/make_synthetic_data.py",
@@ -484,8 +484,8 @@
     },
     "runtime:ml/run_v35_p30_gate_review_local.py": {
       "path": "ml/run_v35_p30_gate_review_local.py",
-      "sha256": "f0d71e68962c8f41d8a052321b73e82ffde6f1062650d8738035f54b39f9b434",
-      "gitBlobOid": "0d5f81a9a52174f096fab3c365376ce4941e077a"
+      "sha256": "b294391714f24b3271db7294db4bdafb10f4112bf515d477343ea1aed734c235",
+      "gitBlobOid": "f65ba8dc2424145fc74dd67b53150b48cc81fc52"
     },
     "runtime:ml/run_v35_p30_local_custody.py": {
       "path": "ml/run_v35_p30_local_custody.py",
@@ -734,8 +734,8 @@
     },
     "runtime:ml/test_v35_p30_phase0_gates.py": {
       "path": "ml/test_v35_p30_phase0_gates.py",
-      "sha256": "2084d8499d883261e6b7e1fe83934557f32b70bcf585a4cad868563344a4f204",
-      "gitBlobOid": "c526e02d72d1aa664492564a3bbd3f1751289603"
+      "sha256": "06ad25033b918ee41c4aef105226f93d3887ad293289911fbd92947e379f2eb1",
+      "gitBlobOid": "e3c66fcab27456a297e7380713236e2f2104face"
     },
     "runtime:ml/test_v35_p30_pre_child_recovery.py": {
       "path": "ml/test_v35_p30_pre_child_recovery.py",
@@ -794,8 +794,8 @@
     },
     "runtime:ml/v35_p30_phase0.py": {
       "path": "ml/v35_p30_phase0.py",
-      "sha256": "f4fd9417fb64e89da0080f92f48c6daa616d05c95bf07527819b9e20289ab5e8",
-      "gitBlobOid": "cc1946b2a2a0d86ffdc4bcc78de570b515ccd506"
+      "sha256": "7551bb0004f743b94afef6304f049b9553597a4f3e46706beb766b456c5147f4",
+      "gitBlobOid": "74858eeff0a8a02782776392737c5ab740f92484"
     },
     "runtime:ml/v35_p30_recovery.py": {
       "path": "ml/v35_p30_recovery.py",
