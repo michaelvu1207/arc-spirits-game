@@ -4,16 +4,16 @@
   "immutable": true,
   "promotionEligible": false,
   "implementationBaseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
-  "implementationCommit": "0c07744c89f93e7cbc8fc534d362fb326928dda6",
+  "implementationCommit": "bc8e1466c798cb455ea3862e90c4561495a28ed4",
   "gitContext": {
     "schemaVersion": "arc-v35-p30-git-context-v1",
-    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-git-context-0c07744.git",
+    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-git-context-bc8e146.git",
     "shallow": true,
     "objectFormat": "sha1",
     "baseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
-    "implementationCommit": "0c07744c89f93e7cbc8fc534d362fb326928dda6",
-    "implementationTree": "3772c7be695c194cf7cfdc72c03a28083fbeee87",
-    "objectInventorySha256": "4a0cbef7ea84935e62bcd7204612ecbbdac22c1959fd29292629d6bc27620301",
+    "implementationCommit": "bc8e1466c798cb455ea3862e90c4561495a28ed4",
+    "implementationTree": "88ecdba88fbb14f93a99e3b6f335c67d43d853ee",
+    "objectInventorySha256": "1da32f4a52a0e779637e859e7f5bf9dbe5d8c3cd33f39cba17f3d776102e3238",
     "registeredPaths": 552
   },
   "files": {
@@ -109,8 +109,8 @@
     },
     "analyzer": {
       "path": "ml/analyze_v35_p30_long_horizon.py",
-      "sha256": "70e0f02e8c375ab29d02ed40fd44f8e358a86f3a7e7d991e9d73b6ce1a90cc73",
-      "gitBlobOid": "dfaf54151dbce427804dd00816dc1c7d3d61ddbc"
+      "sha256": "f495ec963888c5809b3f0d952bb9f197dc4b38ea2fdd29f87c107bb8824c5632",
+      "gitBlobOid": "429bda1e6fc7afdbf3db79465fdda53f75ec3826"
     },
     "analyzerTests": {
       "path": "ml/test_analyze_v35_p30_long_horizon.py",
@@ -349,8 +349,8 @@
     },
     "runtime:ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md": {
       "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md",
-      "sha256": "73a7651c364d4bf18c0741f2e42ff57b6b062b67bf7dba4fcf1084be40ddb1ff",
-      "gitBlobOid": "9a950d8edb4f08e94cd86abbd61a15e2edda81d6"
+      "sha256": "1e89be857a2e0eee760a22cf39a06cd7e3a1646de5c46e3b8f61afff922bd058",
+      "gitBlobOid": "64b747c093a4ef77a90fd4bea1e98c2e72f80605"
     },
     "runtime:ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json": {
       "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json",
@@ -699,8 +699,8 @@
     },
     "runtime:ml/test_v35_p30_analysis_launch_capability.py": {
       "path": "ml/test_v35_p30_analysis_launch_capability.py",
-      "sha256": "4b646166f10f36b3ef7a8377f36647380c28b04a77aa663b5460079ebcbffaa0",
-      "gitBlobOid": "4df59622a81013d1dbb756db518a75d9d94bcd7a"
+      "sha256": "25aee9dcd8caa9104994f63634e2d5c53d3b043de36ac7a41cc79cdd58a2bef7",
+      "gitBlobOid": "8b4160b5c6417a260657054ec8bf95b9dbf83dff"
     },
     "runtime:ml/test_v35_p30_analysis_manifest.py": {
       "path": "ml/test_v35_p30_analysis_manifest.py",
@@ -754,8 +754,8 @@
     },
     "runtime:ml/test_v35_p30_phase0_gates.py": {
       "path": "ml/test_v35_p30_phase0_gates.py",
-      "sha256": "d0d58b791ef0fd0d0f0b5f8883b2ec79cb621d7f08d6a12cf53c6f742fe5ef92",
-      "gitBlobOid": "60c1ca38acab9684259a1a64385e29c56fc1b49e"
+      "sha256": "26c0d044f71d00e4996a1cfcaa5f379d03f64e27ef2682a1b4195eed5a8a4deb",
+      "gitBlobOid": "4fda915a81931396aef38ef4c5c96ca2984c1f44"
     },
     "runtime:ml/test_v35_p30_pre_child_recovery.py": {
       "path": "ml/test_v35_p30_pre_child_recovery.py",
@@ -804,8 +804,8 @@
     },
     "runtime:ml/v35_p30_authorized_execution.py": {
       "path": "ml/v35_p30_authorized_execution.py",
-      "sha256": "6399b04b8c3fdc76cc8741db1e7750390acfb9d9949fa01aa7a94c6ed7d2e892",
-      "gitBlobOid": "59da1662ddd747bab1662bb1e3979ad8e0c4288b"
+      "sha256": "1b0e3f2e3997dd3f533a511ef5f1f86efdf129bcad39a65084084fd03dd61f84",
+      "gitBlobOid": "bca16ecb86adefa6610b67f2fa61d155dff2d7b8"
     },
     "runtime:ml/v35_p30_crypto.py": {
       "path": "ml/v35_p30_crypto.py",
@@ -819,8 +819,8 @@
     },
     "runtime:ml/v35_p30_phase0.py": {
       "path": "ml/v35_p30_phase0.py",
-      "sha256": "2818a6ad70a2bac0fe1b6076340a4c683841d61a26e5fdb56f222f7b6426ca58",
-      "gitBlobOid": "e0b5a0d825ff8bc934500e7d63a0ec25d11d3b26"
+      "sha256": "59417fb3c7d4dfe74b12bcc5f5248384fc3fe46e7ecaab4330cba786977c88be",
+      "gitBlobOid": "3c1004b2ae72ceafb50b304ed03a237c617fc050"
     },
     "runtime:ml/v35_p30_recovery.py": {
       "path": "ml/v35_p30_recovery.py",
