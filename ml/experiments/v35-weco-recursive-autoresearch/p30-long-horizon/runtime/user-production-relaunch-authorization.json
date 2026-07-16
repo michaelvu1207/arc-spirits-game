@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "arc-v35-p30-user-production-relaunch-authorization-v1",
+  "authorized": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "authorizedAtUtc": "2026-07-16T20:04:19Z",
+  "threadId": "019f49bf-dd6a-7623-916b-3ce0d2607cb0",
+  "userMessage": "yes sure there's no issues with using the simforge a100",
+  "interpretedScope": "exactly-one-fresh-p30-production-campaign",
+  "simforgeAuthorized": true,
+  "physicalGpu": 7,
+  "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+  "forbiddenPhysicalGpus": [
+    4,
+    5,
+    6
+  ],
+  "decisionPackage": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/production-relaunch-decision-package.json",
+    "sha256": "535a63a262e3da1a20a3d654df50d4cad55a3d9aa84fde540a05392e1940ba79"
+  },
+  "maximumCampaignComputeSeconds": 1209600,
+  "dynamicStorageGateRequired": true,
+  "allPhase0RuntimeFairnessHeldOutAndPromotionGatesRemainMandatory": true,
+  "authorizationDoesNotPermitEarlyPromotion": true,
+  "authorizationDoesNotPermitTouchingOtherGpus": true
+}
