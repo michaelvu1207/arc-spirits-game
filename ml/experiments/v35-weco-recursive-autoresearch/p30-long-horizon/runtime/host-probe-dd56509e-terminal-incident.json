@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "arc-v35-p30-host-integration-probe-incident-v1",
+  "valid": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "syntheticDataOnly": true,
+  "productionCampaignCreated": false,
+  "probeIdentityRetired": true,
+  "implementationCommit": "81ae87ae426d469edb7dd337605361dd6324733c",
+  "parentProbeInstanceId": "dd56509e5edbb453f11069992a03e0ca165f2802585a2fc673b5998abde521a9",
+  "syntheticCampaignInstanceId": "bce6069c34aa796937ceba0b86ea8b71c20a8c02f49ad7acfbb5044e4f8b98c7",
+  "analysisTokenId": "268f8c7f504c55e93fedf6a5ea764348c32339421da649f1c186b0457e320ddc",
+  "startedAtUtc": "2026-07-16T15:08:19Z",
+  "finishedAtUtc": "2026-07-16T15:08:29Z",
+  "failure": {
+    "class": "DISPOSABLE_HOST_COMPATIBILITY_PROBE",
+    "stage": "BUBBLEWRAP_ARGUMENT_PARSE_BEFORE_ANALYZER_EXEC",
+    "exitCode": 125,
+    "reason": "The source-pinned SimForge bubblewrap 0.9.0 does not support the newer --keep-fd spelling; its documented keep-open option is --sync-fd FD.",
+    "analysisOutputPresent": false,
+    "supervisorChildRemaining": false,
+    "gpuUsed": false,
+    "leaseUsed": false
+  },
+  "evidence": {
+    "parentProtocol": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-staging-81ae87a/protocol.host-probe.json",
+      "sha256": "b3ae52a1e43b20e4173295f425ebb9519f3f48adfdfad04df710d88490b2e960"
+    },
+    "analysisAuthorization": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bce6069c34aa796937ceba0b86ea8b71c20a8c02f49ad7acfbb5044e4f8b98c7/authorizations/final-analysis.json",
+      "sha256": "fb5b40af8d0111f466d6da8856beb15c17b6dbc60231f3a46ad54066721de5f8",
+      "bytes": 6683
+    },
+    "consumedMarker": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bce6069c34aa796937ceba0b86ea8b71c20a8c02f49ad7acfbb5044e4f8b98c7/268f8c7f504c55e93fedf6a5ea764348c32339421da649f1c186b0457e320ddc.consumed.json",
+      "sha256": "f4984417b6fbccda5ebf6d0704eaa2bfec16b2c0d2f2366d1a9e8afc24dc56a8",
+      "bytes": 535
+    },
+    "launchPermit": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bce6069c34aa796937ceba0b86ea8b71c20a8c02f49ad7acfbb5044e4f8b98c7/launch-permits/a8d3f7a339510749f54b7cc708ed61586bd5787b73545884ad65be033cd8536c.json",
+      "sha256": "e09e995cb2da72cea88dabb98ac112fe9cee42dea71ea89ced8a7541deba0351",
+      "bytes": 2004
+    },
+    "unsignedInvalidReceipt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bce6069c34aa796937ceba0b86ea8b71c20a8c02f49ad7acfbb5044e4f8b98c7/268f8c7f504c55e93fedf6a5ea764348c32339421da649f1c186b0457e320ddc.receipt.json.unsigned.json",
+      "sha256": "dc6281bc8ca99f97005e2aae10083bf4a69c9b90ab62acc44b46e3184cd93371",
+      "bytes": 5778
+    },
+    "exitCode": {
+      "sha256": "a5e45837a2959db847f7e67a915d0ecaddd47f943af2af5fa6453be497faabca",
+      "bytes": 4
+    },
+    "stdout": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "stderr": {
+      "sha256": "5ee224d2a69d1118304b28ec851675304e1e76e69d4f61b5b0f23c2cb24043d9",
+      "bytes": 32
+    }
+  },
+  "postcondition": {
+    "analysisOutputAbsent": true,
+    "ephemeralPrivateKeyRootAbsent": true,
+    "gpu7MemoryMiB": 0,
+    "gpu7UtilizationPercent": 0
+  },
+  "archive": {
+    "path": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/host-probe-bce6069c34aa7969-ledger",
+    "manifestPath": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/host-probe-bce6069c34aa7969.archive.json",
+    "manifestSha256": "1cdb2292246018233b41b897f9ca27c6fa8364ee3757a6b805fbc60fd7346cf3",
+    "fileCount": 5545,
+    "fileInventorySha256": "3567d76a3766f7320502d84e60959e8fde5b066ebfba283430d1710ff94f9047"
+  },
+  "correction": {
+    "bubblewrapVersion": "0.9.0",
+    "oldOption": "--keep-fd",
+    "newOption": "--sync-fd",
+    "sourceRefreezeRequired": true,
+    "freshProbeIdentityRequired": true
+  }
+}

@@ -931,7 +931,9 @@ def bubblewrap_command(
             or analysis_capability_fd != ANALYSIS_CAPABILITY_FD
         ):
             raise ValueError("analysis launch capability FD contract changed")
-        argv.extend(("--keep-fd", str(analysis_capability_fd)))
+        # SimForge's source-pinned bubblewrap 0.9.0 exposes --sync-fd as the
+        # keep-open contract; --keep-fd is a newer spelling and fails there.
+        argv.extend(("--sync-fd", str(analysis_capability_fd)))
     for path in isolation["readOnlyPaths"]:
         argv.extend(("--ro-bind", path, path))
     for path in isolation["writablePaths"]:

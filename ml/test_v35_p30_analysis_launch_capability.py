@@ -307,7 +307,8 @@ class AnalysisLaunchCapabilityTests(unittest.TestCase):
             authorization, analysis_capability_fd=executor.ANALYSIS_CAPABILITY_FD
         )
         encoded = canonical_json(command)
-        self.assertIn(b"--keep-fd", encoded)
+        self.assertIn(b"--sync-fd", encoded)
+        self.assertNotIn(b"--keep-fd", encoded)
         self.assertIn(str(executor.ANALYSIS_CAPABILITY_FD).encode(), encoded)
         self.assertNotIn(secret, encoded)
 
