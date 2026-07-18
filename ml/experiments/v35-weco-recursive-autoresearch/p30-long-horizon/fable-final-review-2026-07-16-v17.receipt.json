@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "arc-v35-p30-fable-review-command-receipt-v2",
+  "valid": true,
+  "model": "fable",
+  "effort": "high",
+  "tools": [
+    "Read"
+  ],
+  "noSessionPersistence": true,
+  "argv": [
+    "claude",
+    "-p",
+    "--model",
+    "fable",
+    "--effort",
+    "high",
+    "--tools",
+    "Read",
+    "--no-session-persistence",
+    "Review the plan at /Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md. Identify important gaps, risks, and concrete improvements. Be concise."
+  ],
+  "cwd": "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game",
+  "plan": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md",
+    "sha256": "ca096fd088ec77a9f0b0d8f845cd26ac4a5b5502012d5d314b861fd5ea3efadd"
+  },
+  "startedAtUtc": "2026-07-16T14:36:53Z",
+  "finishedAtUtc": "2026-07-16T14:38:54Z",
+  "exitCode": 0,
+  "stdoutPath": "fable-final-review-2026-07-16-v17.md",
+  "stdoutSha256": "ce373aa192a149b7f0d6df233f1d59b57ca0adbbb3f83c9df697b231e2c7c927",
+  "stderrPath": "fable-final-review-2026-07-16-v17.stderr",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

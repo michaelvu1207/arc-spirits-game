@@ -3,6 +3,7 @@
 	import { fetch2DRatingLeaderboard, type Rating2DRow } from '$lib/supabase';
 	import { auth } from '$lib/auth/auth.svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
+	import GameIcon from '$lib/components/GameIcon.svelte';
 	import ScreenScaffold from './ScreenScaffold.svelte';
 	import StateMessage from './StateMessage.svelte';
 
@@ -74,25 +75,50 @@
 >
 	{#snippet actions()}
 		<div class="search-bare">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-				<circle cx="11" cy="11" r="7" />
-				<path d="m21 21-4.3-4.3" stroke-linecap="round" />
-			</svg>
-			<input class="input-bare" bind:value={search} placeholder="Filter by name…" spellcheck="false" />
+			<GameIcon name="search" size={16} />
+			<input
+				class="input-bare"
+				bind:value={search}
+				placeholder="Filter by name…"
+				spellcheck="false"
+			/>
 		</div>
-		<button class="btn-ghost" type="button" onclick={refresh} onpointerenter={hover} disabled={loading}>
-			Refresh
+		<button
+			class="btn-ghost"
+			type="button"
+			onclick={refresh}
+			onpointerenter={hover}
+			disabled={loading}
+		>
+			<GameIcon name="refresh" size={16} /> Refresh
 		</button>
 	{/snippet}
 
 	{#if loading && entries.length === 0}
 		<StateMessage loading message="Tallying ascendant souls…" />
 	{:else if error}
-		<StateMessage tone="error" title="Could not summon leaderboard" message={error}>
-			{#snippet actions()}
-				<button class="btn-ghost" type="button" onclick={refresh}>Try Again</button>
-			{/snippet}
-		</StateMessage>
+		<section class="hall-unavailable" data-testid="hall-unavailable-state">
+			<div class="hall-mark"><GameIcon name="guardians" size={34} /></div>
+			<div class="hall-copy">
+				<p class="state-eyebrow">Hall remains open</p>
+				<h2>Live standings are unavailable</h2>
+				<p>
+					The ladder could not be reached, but the rest of the game is ready. Try again or choose
+					another destination.
+				</p>
+				<small>{error}</small>
+			</div>
+			<div class="hall-actions">
+				<button class="btn-ghost" type="button" onclick={refresh}
+					><GameIcon name="refresh" size={16} /> Try Again</button
+				>
+				<a class="btn-ghost" href="/play?action=ranked"
+					><GameIcon name="quick" size={16} /> Quick Play</a
+				>
+				<a class="btn-ghost" href="/play/ranked"><GameIcon name="ranked" size={16} /> Season</a>
+				<a class="btn-ghost" href="/play/builder"><GameIcon name="builder" size={16} /> Builder</a>
+			</div>
+		</section>
 	{:else if entries.length === 0}
 		<StateMessage
 			title="No ranked games yet"
@@ -109,7 +135,7 @@
 		{/if}
 
 		<div class="standings-head">
-			<h2 class="standings-title">Standings</h2>
+			<h2 class="standings-title"><GameIcon name="ranked" size={24} /> Standings</h2>
 			<span class="standings-rule" aria-hidden="true"></span>
 		</div>
 
@@ -125,14 +151,21 @@
 				</div>
 				{#each filtered as entry (entry.userId)}
 					{@const rank = rankByUser.get(entry.userId) ?? 0}
-					<div class="lb-row" class:top={rank <= 3} class:mine={entry.userId === myUserId} role="row">
+					<div
+						class="lb-row"
+						class:top={rank <= 3}
+						class:mine={entry.userId === myUserId}
+						role="row"
+					>
 						<div class="rank-cell" role="cell">
 							<span class="rank-chip rank-chip-{rank <= 3 ? rank : 'rest'}">{rank}</span>
 						</div>
 						<div class="player-cell" role="cell">
 							<span class="player-name">{entry.displayName}</span>
 						</div>
-						<div class="num" role="cell"><span class="rating-num">{entry.ordinal.toFixed(1)}</span></div>
+						<div class="num" role="cell">
+							<span class="rating-num">{entry.ordinal.toFixed(1)}</span>
+						</div>
 						<div class="num" role="cell">{entry.gamesPlayed}</div>
 					</div>
 				{/each}
@@ -152,7 +185,7 @@
 		align-items: center;
 		min-width: 220px;
 	}
-	.search-bare svg {
+	.search-bare :global(.game-icon) {
 		position: absolute;
 		left: 0;
 		width: 16px;
@@ -163,6 +196,64 @@
 	.search-bare :global(.input-bare) {
 		padding-left: 26px;
 		min-width: 180px;
+	}
+	:global(.btn-ghost) {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 7px;
+	}
+	.hall-unavailable {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 18px;
+		align-items: start;
+		padding: clamp(22px, 5vw, 42px);
+		border: 1px solid rgba(92, 223, 255, 0.28);
+		border-radius: 18px;
+		background: linear-gradient(145deg, rgba(14, 8, 32, 0.88), rgba(7, 18, 28, 0.78));
+	}
+	.hall-mark {
+		display: grid;
+		place-items: center;
+		width: 64px;
+		height: 64px;
+		border-radius: 18px;
+		color: var(--brand-cyan, #5cdfff);
+		background: rgba(92, 223, 255, 0.1);
+		box-shadow: inset 0 0 0 1px rgba(92, 223, 255, 0.2);
+	}
+	.hall-copy h2 {
+		margin: 2px 0 8px;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.hall-copy p {
+		max-width: 62ch;
+		margin: 0;
+		color: var(--color-fog, #9a93b0);
+	}
+	.hall-copy small {
+		display: block;
+		margin-top: 10px;
+		color: var(--brand-coral, #ff704d);
+	}
+	.state-eyebrow {
+		font-family: var(--font-display);
+		font-size: 0.68rem;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--brand-cyan, #5cdfff) !important;
+	}
+	.hall-actions {
+		grid-column: 2;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.hall-actions a {
+		text-decoration: none;
 	}
 
 	/* ── "Your rank" banner ───────────────────────────────── */
@@ -214,6 +305,9 @@
 		margin-bottom: 14px;
 	}
 	.standings-title {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		font-family: var(--font-display);
 		font-size: clamp(1.8rem, 4vmin, 2.6rem);
 		line-height: 0.95;
@@ -325,6 +419,12 @@
 	}
 
 	@media (max-width: 720px) {
+		.hall-unavailable {
+			grid-template-columns: 1fr;
+		}
+		.hall-actions {
+			grid-column: 1;
+		}
 		.search-bare {
 			min-width: 0;
 			flex: 1;
@@ -332,5 +432,57 @@
 		.me-banner {
 			gap: 14px;
 		}
+	}
+
+	/* Hall of Guardians uses ceremonial banners and rank sigils. */
+	.search-bare :global(.input-bare) {
+		border-radius: 0;
+		border-bottom: 3px solid #24d4ff;
+	}
+	.hall-unavailable {
+		border: 0;
+		border-radius: 0;
+		background: #100725;
+		clip-path: polygon(0 0, 96% 0, 100% 14%, 100% 100%, 0 100%);
+	}
+	.hall-mark {
+		border-radius: 0;
+		background: #087b91;
+		box-shadow: none;
+		color: #fff;
+		clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+	}
+	.hall-actions :global(.btn-ghost) {
+		border-radius: 0;
+		background: #28115b;
+		clip-path: polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%);
+	}
+	.me-banner {
+		border: 0;
+		border-left: 9px solid var(--accent);
+		border-radius: 0;
+		background: #28115b;
+		clip-path: polygon(0 0, 96% 0, 100% 50%, 96% 100%, 0 100%);
+	}
+	.standings-rule {
+		height: 7px;
+		background: #ff2bc7;
+		opacity: 1;
+	}
+	.lb-table {
+		border-top: 6px solid #43178f;
+	}
+	.lb-row {
+		border-bottom: 3px solid #1f1043;
+	}
+	.lb-row.top {
+		background: #28115b;
+	}
+	.lb-row.mine {
+		background: #58104d;
+	}
+	.rank-chip {
+		border-radius: 0;
+		clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 	}
 </style>

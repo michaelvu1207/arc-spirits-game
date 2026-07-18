@@ -1,0 +1,273 @@
+{
+  "schemaVersion": "arc-v35-runtime-seed-inventory-spec-v1",
+  "purpose": "Prove proposed V35 public runtime ranges disjoint from hash-pinned V32-V35 structured game-seed declarations without treating arbitrary numeric data as seeds.",
+  "extractionPolicy": {
+    "includedSchemas": [
+      "objects with integer seed0 and seedMax",
+      "objects with integer seed0 and games",
+      "objects with integer publicSeed0 and games, gamesPerArm, or gamesPerCandidate",
+      "arrays whose key ends in Seed0 and whose JSON ancestry declares gamesPerGeneration",
+      "V32 and V35 replicated train/eval schedules explicitly enabled per source",
+      "start/end pairs only under per-source intervalArrayPointers such as /intervals",
+      "hash-pinned manual ranges whose declarations exist only in prose or use a one-off schema"
+    ],
+    "excludedSchemas": [
+      "arbitrary nine-digit integers",
+      "model weights, tensors, checkpoints, and optimizer states",
+      "floating-point metrics and outcomes",
+      "trainerSeed, randomSeeds, bootstrap RNG seeds, permutation seeds, and planner-derived RNG keys",
+      "private seed-vault plaintext or hidden outcome artifacts"
+    ],
+    "outcomeFilesRead": false,
+    "privateSeedPlaintextRead": false
+  },
+  "localSources": [
+    {
+      "id": "v32-protocol",
+      "path": "ml/experiments/v32-onpolicy-solo/protocol.json",
+      "sha256": "f4af0d18529a427ab6ae31fb8b5e5b390ec92ed1dc69c1565f789b210b0dfb9b",
+      "replicateScheduleRoot": "screen",
+      "expectedMinimumRanges": 10
+    },
+    {
+      "id": "v33-protocol",
+      "path": "ml/experiments/v33-strategic-search/protocol.json",
+      "sha256": "58182573cb7ac5f538b59a5f9c1f030c30ae95819a7d20f6b54bd38281ed7dfb",
+      "expectedMinimumRanges": 16
+    },
+    {
+      "id": "v34-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548",
+      "expectedMinimumRanges": 24
+    },
+    {
+      "id": "v34-strength-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+      "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd",
+      "expectedMinimumRanges": 3
+    },
+    {
+      "id": "v34-guardian-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json",
+      "sha256": "8cc4387323ce0e1d9a6e0b4dfd7ee781b0eefd286ea75a3dcc1b3042011ae86f",
+      "expectedMinimumRanges": 2
+    },
+    {
+      "id": "v34-lane-b-protocol",
+      "path": "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+      "sha256": "4bd7b98d1a2a0b911ff5542df267790462c9195d109b009c2353bb61cbe9ae68",
+      "expectedMinimumRanges": 38
+    },
+    {
+      "id": "v35-phase1-protocol",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+      "sha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+      "replicateScheduleRoot": "/",
+      "expectedMinimumRanges": 6
+    },
+    {
+      "id": "v35-phase1-development-authorization",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-authorization.json",
+      "sha256": "cbc5edc0adbb8aa7a4a7754b077a6cf3513431d56d9751d7114ce64dd2ca7e3e",
+      "expectedMinimumRanges": 1
+    },
+    {
+      "id": "v35-phase1-seed-inventory",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+      "sha256": "e259411f15ef5b7a58cf2c119fb98c534b1ba61c64d3ad1b0a64192d7276f980",
+      "intervalArrayPointers": [
+        "/intervals"
+      ],
+      "expectedMinimumRanges": 7
+    },
+    {
+      "id": "v35-phase0-calibration",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase0-public-calibration.json",
+      "sha256": "732adf73dbd04640d4e71faeeff350f575fdb17f5087557fe518eebb7b73a03f",
+      "expectedMinimumRanges": 1
+    },
+    {
+      "id": "v35-phase0-powered-pair",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/phase0-powered-public-pair.json",
+      "sha256": "0646e8581c5e5509b461da6afaa9456b6498b2a821afed0cbcddabba7bdf4beb",
+      "expectedMinimumRanges": 1
+    },
+    {
+      "id": "v35-v17-fresh-public",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/v17-fresh-public-checkpoints.json",
+      "sha256": "2f672c1a1153e29ee06922d0a8c9afdd8054bfdda72aa870757d9f272a900dd3",
+      "expectedMinimumRanges": 1
+    },
+    {
+      "id": "v35-v2-v17-common-public",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/v2-v17-common-public.json",
+      "sha256": "a556463163a69488d1e7e6f0b22b424afb75be90cf9b831f7bbcf079afc570e0",
+      "expectedMinimumRanges": 1
+    },
+    {
+      "id": "v35-public-config-pilot-authorization",
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/public-config-pilot-authorization.json",
+      "sha256": "d953deb5d7f76a12c4f2ad08cbbea081e0a0a3fbab8de5827feac50fc5352cd7",
+      "expectedMinimumRanges": 1
+    }
+  ],
+  "manualRanges": [
+    {
+      "id": "v32-systems-benchmark",
+      "start": 951900000,
+      "end": 951900127,
+      "visibility": "systems-only",
+      "pointer": "/systemsBenchmark/seed0+gamesPerTrial",
+      "sourcePath": "ml/experiments/v32-onpolicy-solo/protocol.json",
+      "sourceSha256": "f4af0d18529a427ab6ae31fb8b5e5b390ec92ed1dc69c1565f789b210b0dfb9b",
+      "note": "Two benchmark repeats reuse one declared 128-game seed block."
+    },
+    {
+      "id": "v34-b1-density-smoke",
+      "start": 962000000,
+      "end": 962000511,
+      "visibility": "unregistered-systems-only",
+      "pointer": "/section-2/exact-unregistered-seed-ledger",
+      "sourcePath": "ml/experiments/v34-latency-first-expert-iteration/b1-density-smoke-execution-plan.md",
+      "sourceSha256": "6bf51a9e710adb93c2701666195e2643689918c23d9bde186b6d4556077bfd47"
+    }
+  ],
+  "proposedPublicRanges": [
+    {
+      "id": "runtime-parity",
+      "start": 969060000,
+      "end": 969060063,
+      "status": "proposed-public-exact"
+    },
+    {
+      "id": "latency-precheck",
+      "start": 969061000,
+      "end": 969061255,
+      "status": "proposed-public-exact"
+    },
+    {
+      "id": "provisional-confirmation-zone",
+      "start": 969070000,
+      "end": 969999999,
+      "status": "provisional-public-container; final range requires a separate authorization"
+    }
+  ],
+  "simforgeReadOnlySnapshot": {
+    "host": "ubuntu@216.151.21.122",
+    "root": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+    "capturedAtUtc": "2026-07-15T18:51:06Z",
+    "operation": "read-only find and sha256sum; no games, writes, process changes, or GPU commands",
+    "allowlist": "V32-V35 protocol, authorization, binding, config, audit, lock, and seed-inventory JSON metadata",
+    "allowlistedMetadataFilesObserved": 181,
+    "exclusions": [
+      "private and hidden directories",
+      "results, reports, analyses, replays, stdout, stderr, and logs",
+      "checkpoints, tensors, and optimizer state",
+      "secrets and seed-vault plaintext"
+    ],
+    "limitations": "The artifact root contains extensive pre-V32 archives and ephemeral or deleted files cannot be proven complete. The mirrored hash set establishes that the primary V32-V35 protocol declarations parsed locally are byte-identical on SimForge, not that every historical seed is enumerated. Several newer local public artifacts are absent from the current remote mirror and are therefore proven only by their pinned local Git copies.",
+    "localSourcesAbsentOnSimForge": [
+      "ml/experiments/v34-latency-first-expert-iteration/lane-b-execution-protocol.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/phase0-public-calibration.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/phase0-powered-public-pair.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/v17-fresh-public-checkpoints.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/v2-v17-common-public.json",
+      "ml/experiments/v35-weco-recursive-autoresearch/artifacts/public-config-pilot-authorization.json"
+    ],
+    "nonMirroredMetadata": [
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/b1-density-smoke-execution-plan.md",
+        "remoteSha256": "a4c21988c654337f1922f28b7f235ccf032baade32c87023f06ebf8d058ff5c6",
+        "localSha256": "6bf51a9e710adb93c2701666195e2643689918c23d9bde186b6d4556077bfd47",
+        "matchingStructuredDeclaration": {
+          "start": 962000000,
+          "end": 962000511
+        },
+        "note": "The remote prose version differs bytewise, but its read-only exact seed-ledger block declares the same range as the pinned local plan."
+      }
+    ],
+    "semanticSweep": {
+      "schemaVersion": "arc-v35-simforge-semantic-seed-sweep-v1",
+      "capturedAtUtc": "2026-07-15T18:57:32Z",
+      "versions": [
+        "v32",
+        "v33",
+        "v34",
+        "v35"
+      ],
+      "filesScanned": 175,
+      "parseErrors": [],
+      "semanticOccurrences": 57,
+      "distinctRanges": 48,
+      "maxEnd": 969034095,
+      "occurrenceCommitmentSha256": "91a0c9db0728e7073d72a2820d170a8bea7bccd10ad307abcdcf1b4f2bb1b41c",
+      "rangesAtOrAbove969050000": [],
+      "method": "Read-only semantic traversal of allowlisted V32-V35 JSON metadata; only seed0/seedMax, seed0/games, publicSeed0/game-count, and generation Seed0 arrays with an explicit gamesPerGeneration ancestor were emitted."
+    },
+    "files": [
+      {
+        "path": "ml/experiments/v32-onpolicy-solo/protocol.json",
+        "sha256": "f4af0d18529a427ab6ae31fb8b5e5b390ec92ed1dc69c1565f789b210b0dfb9b"
+      },
+      {
+        "path": "ml/experiments/v33-strategic-search/protocol.json",
+        "sha256": "58182573cb7ac5f538b59a5f9c1f030c30ae95819a7d20f6b54bd38281ed7dfb"
+      },
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+        "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548"
+      },
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+        "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd"
+      },
+      {
+        "path": "ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json",
+        "sha256": "8cc4387323ce0e1d9a6e0b4dfd7ee781b0eefd286ea75a3dcc1b3042011ae86f"
+      },
+      {
+        "path": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+        "sha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98"
+      },
+      {
+        "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-authorization.json",
+        "sha256": "cbc5edc0adbb8aa7a4a7754b077a6cf3513431d56d9751d7114ce64dd2ca7e3e"
+      },
+      {
+        "path": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-seed-inventory.json",
+        "sha256": "e259411f15ef5b7a58cf2c119fb98c534b1ba61c64d3ad1b0a64192d7276f980"
+      }
+    ]
+  },
+  "unprovableNamespaces": [
+    {
+      "id": "pre-v32-and-ad-hoc-legacy",
+      "bounds": null,
+      "reason": "SimForge contains extensive pre-V32 archives and one-off local/remote runs without a complete immutable game-seed ledger. Absolute historical non-use cannot be proved."
+    },
+    {
+      "id": "excluded-outcome-and-checkpoint-artifacts",
+      "bounds": null,
+      "reason": "Outcome, replay, log, checkpoint, tensor, and optimizer files were intentionally not read. Their arbitrary numeric values are not valid seed registrations."
+    },
+    {
+      "id": "deleted-ephemeral-and-untracked-remote-state",
+      "bounds": null,
+      "reason": "Deleted scratch files, command-line-only launches, and prior untracked remote artifacts cannot be reconstructed from the current filesystem."
+    },
+    {
+      "id": "v35-private-seed-vault",
+      "bounds": {
+        "start": 970000000,
+        "end": 989999999
+      },
+      "reason": "Private families are commitment-only and were not opened. The provisional public confirmation zone ends before this reserved namespace."
+    },
+    {
+      "id": "derived-rng-not-game-seeds",
+      "bounds": null,
+      "reason": "Trainer, bootstrap, search, permutation, and planner RNG keys are separate namespaces and are not passed to the engine as game seeds. They are excluded rather than falsely merged into the game-seed ledger."
+    }
+  ]
+}

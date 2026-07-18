@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "arc-v35-p30-terminal-campaign-incident-v1",
+  "campaignInstanceId": "ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81",
+  "terminal": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "gameSeedsConsumed": false,
+  "gpuLeaseAcquired": true,
+  "failedPhase": "phase0-cuda-determinism",
+  "diagnosticCode": "CUDA_PREFLIGHT_AF_UNIX_PATH_TOO_LONG",
+  "rootCause": "The corrected nested server loaded the exact checkpoint but its Phase-0 socket pathname was 110 bytes. Linux rejected the AF_UNIX bind before the evaluator or any game began.",
+  "execution": {
+    "kind": "preflight",
+    "tokenId": "59f0efe5bde4e6a897b7cf73eec51d39403c7c00cd908e7654d9844ea86bba6a",
+    "authorization": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81/authorizations/phase0-cuda-determinism.json",
+      "sha256": "9010a8da98387f7e19548a9adc286f6c1942996535c6c2098975ff0c6dbcd2dd"
+    },
+    "executionRequest": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81/requests/phase0-cuda-determinism-executor.json",
+      "sha256": "a70a4c9af34c21cd75e5768c6b6d0dce7b7cddaab6a07244c70693046f2e4b1e"
+    },
+    "launchPermit": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81/launch-permits/a70a4c9af34c21cd75e5768c6b6d0dce7b7cddaab6a07244c70693046f2e4b1e.json",
+      "sha256": "6f82a5cd75a2e6188967100233df4af27c5c4fe3417b899e1add2cb3951a6757"
+    },
+    "consumedMarker": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81/59f0efe5bde4e6a897b7cf73eec51d39403c7c00cd908e7654d9844ea86bba6a.consumed.json",
+      "sha256": "ef66981c5f01b640d1698d922e3a629a29ec406b59d46651e4e78058b9849d4c"
+    },
+    "unsignedDraft": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81/59f0efe5bde4e6a897b7cf73eec51d39403c7c00cd908e7654d9844ea86bba6a.receipt.json.unsigned.json",
+      "sha256": "4cc04c6fc06f48e48f3f339f1c8fac1e734c214508bba44aab3a74e66c81eac9"
+    },
+    "stderr": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-artifacts/ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81/phase0/cuda-determinism/execution.stderr",
+      "sha256": "f7da34045ae32771341825afe5a361200b2778941b1756378039b806dfe0b91a"
+    },
+    "serverStderr": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-artifacts/ec2a8df0ef413e4a9ebd8aa439e2754419310db42da84a4adbc190c1fd674a81/phase0/cuda-determinism/primary/server.stderr",
+      "sha256": "f95cf7f7cd81cabbea490baa9f1d2257a5854c1c61ae89b3889b4c469251958e"
+    },
+    "spawnCallEntered": true,
+    "childStarted": true,
+    "checkpointLoaded": true,
+    "inferenceServerSocketReady": false,
+    "evaluatorStarted": false,
+    "exitCode": 1,
+    "gpuEmptyAfter": true,
+    "leaseReleased": true
+  },
+  "disposition": {
+    "reuseForbidden": true,
+    "recoveryForbidden": true,
+    "requiredNextInstance": "fresh-campaign-id-and-review",
+    "sourceFix": [
+      "use the full campaign ID below the short /dev/shm/p namespace",
+      "validate the complete primary and replay socket path lengths before authorization",
+      "freeze the exact path and Linux length bound in regression tests"
+    ]
+  }
+}

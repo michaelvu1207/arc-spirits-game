@@ -10,7 +10,8 @@ concurrent connections into single forward passes. --weights accepts either:
     frozen catalog). The manifest is the format probe, so SIGHUP can swap a
     fixed --weights path between v1 and v2 checkpoints; the info handshake
     reports the active format/obs_dim so RemotePolicy self-configures.
-    The v2 placement head is NOT exposed over the wire.
+    The v2 placement head has a different per-seat regression contract and is
+    intentionally not exposed as the v1 4-way placement distribution.
 
 Framing:  4-byte little-endian length prefix + payload. The payload is JSON
           (starts with '{') or a binary frame (first byte 0xB1) — see the
@@ -19,11 +20,12 @@ Request:  {"id": <any>, "obs": [B x obs_dim], "cands": [B x C_i x act_dim],
            "want": ["logits", "value"]}          (want optional, default both;
                                                   cands may be ragged per row)
           Extra want keys: "farm_value" -> [B], "route_mode" -> [B] (raw logit;
-          sigmoid is applied client-side), "reward_pick" -> ragged [B x C_i].
+          sigmoid is applied client-side), "reward_pick" -> ragged [B x C_i],
+          "placement" -> [B x 4] raw logits, "reach30" -> [B] raw logits.
           Aux heads are served only when the weights file carries them.
           Handshake: {"id": <any>, "want": ["info"]} needs no obs/cands and
           returns {"id", "info": {format, obs_dim, act_dim, device, weights,
-          aux: {farm_value, route_mode, reward_pick}}}.
+          aux: {farm_value, route_mode, reward_pick, placement, reach30}}}.
 Response: {"id": <same>, "logits": [B x C_i], "value": [B], ...}
           logits are raw masked scores (softmax NOT applied), ragged like cands.
           On a bad request: {"id": <same>, "error": "<message>"}.
@@ -49,7 +51,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
+import hashlib
 import json
+import math
 import os
 import signal
 import struct
@@ -110,15 +115,22 @@ async def read_frame(reader: asyncio.StreamReader) -> dict:
 #            if flags & 0x80 (error): [msg_len u32][msg utf8]
 #            else: [B u32][C_i u32 x B] + one section per set flag bit, in
 #            BIN_SECTION_ORDER: logits f32 x sum(C_i), value f32 x B,
-#            farm_value f32 x B, route_mode f32 x B, reward_pick f32 x sum(C_i)
-# want bitmask: 1=logits 2=value 4=farm_value 8=route_mode 16=reward_pick;
+#            farm_value f32 x B, route_mode f32 x B, reward_pick f32 x sum(C_i),
+#            reach30 f32 x B, placement f32 x B*4
+# want bitmask: 1=logits 2=value 4=farm_value 8=route_mode 16=reward_pick
+#               32=reach30 64=placement;
 # 0 = default (logits|value). Binary ids are UTF-8 strings, echoed verbatim.
 
 BIN_MAGIC_REQUEST = 0xB1
 BIN_MAGIC_RESPONSE = 0xB2
 BIN_ERROR_FLAG = 0x80
-BIN_WANT_BITS = {"logits": 1, "value": 2, "farm_value": 4, "route_mode": 8, "reward_pick": 16}
-BIN_SECTION_ORDER = ("logits", "value", "farm_value", "route_mode", "reward_pick")
+BIN_WANT_BITS = {
+    "logits": 1, "value": 2, "farm_value": 4, "route_mode": 8,
+    "reward_pick": 16, "reach30": 32, "placement": 64,
+}
+BIN_SECTION_ORDER = (
+    "logits", "value", "farm_value", "route_mode", "reward_pick", "reach30", "placement"
+)
 _BIN_REQ_HEADER = struct.Struct("<BBIIII")  # magic, want, id_len, B, obs_dim, act_dim
 
 
@@ -190,6 +202,11 @@ def encode_binary_response(req_id: str, result: dict[str, list], counts: list[in
         if k in ("logits", "reward_pick"):
             flat = [x for row in result[k] for x in row]
             parts.append(np.asarray(flat, dtype="<f4").tobytes())
+        elif k == "placement":
+            arr = np.asarray(result[k], dtype="<f4")
+            if arr.shape != (len(counts), 4):
+                raise ValueError(f"placement response must be [B x 4], got {arr.shape}")
+            parts.append(arr.tobytes())
         else:
             parts.append(np.asarray(result[k], dtype="<f4").tobytes())
     return b"".join(parts)
@@ -228,7 +245,7 @@ def decode_binary_response(payload: bytes) -> dict:
     for k in BIN_SECTION_ORDER:
         if not (flags & BIN_WANT_BITS[k]):
             continue
-        n = total if k in ("logits", "reward_pick") else B
+        n = total if k in ("logits", "reward_pick") else B * 4 if k == "placement" else B
         arr = np.frombuffer(payload, dtype="<f4", count=n, offset=off)
         off += 4 * n
         if k in ("logits", "reward_pick"):
@@ -237,6 +254,8 @@ def decode_binary_response(payload: bytes) -> dict:
                 rows.append(arr[i : i + c].tolist())
                 i += c
             out[k] = rows
+        elif k == "placement":
+            out[k] = arr.reshape(B, 4).tolist()
         else:
             out[k] = arr.tolist()
     return out
@@ -246,7 +265,7 @@ def decode_binary_response(payload: bytes) -> dict:
 # Model loading
 # ---------------------------------------------------------------------------
 
-AUX_HEADS = ("farm_value", "route_mode", "reward_pick")
+AUX_HEADS = ("farm_value", "route_mode", "reward_pick", "placement", "reach30")
 FORMAT_V1 = "arc-cand-scorer-v1"
 FORMAT_V2 = "arc-entity-scorer-v2"
 
@@ -277,8 +296,14 @@ def load_scorer(
                 f"{manifest_path.name}: obs_flat_len {manifest.get('obs_flat_len')} "
                 f"!= checkpoint flat length {obs_dim}"
             )
-        # v2 checkpoints carry every aux head in the state_dict (trained together).
-        aux = {k: True for k in AUX_HEADS}
+        # v2 checkpoints carry the legacy auxiliary heads. New checkpoints may
+        # additionally expose a trained multi-horizon solo critic; old v2 files
+        # remain valid and fail closed for that request.
+        # v2's placement head predicts one ordinal score per seat token. It is not
+        # the v1 head's four-class ego-placement distribution, so fail closed for
+        # the wire-level `placement` request rather than silently changing meaning.
+        aux = {k: k != "placement" for k in AUX_HEADS}
+        aux["reach30"] = bool(getattr(model, "reach30_trained", False))
         return model, obs_dim, model.act_dim, aux, FORMAT_V2
     if weights_path.suffix == ".pt":
         raise ValueError(
@@ -290,6 +315,19 @@ def load_scorer(
         payload = json.load(f)
     if payload.get("format") != FORMAT_V1:
         raise ValueError(f"{weights_path}: unexpected format {payload.get('format')!r}")
+    raw_option_dim = payload.get("option_dim", 0)
+    if (
+        isinstance(raw_option_dim, bool)
+        or not isinstance(raw_option_dim, (int, float))
+        or not float(raw_option_dim).is_integer()
+        or int(raw_option_dim) < 0
+    ):
+        raise ValueError(f"{weights_path}: malformed option_dim {raw_option_dim!r}")
+    if int(raw_option_dim) != 0:
+        raise ValueError(
+            f"{weights_path}: option-enabled checkpoints require in-process actors; "
+            "the inference wire has no persistent round-option context"
+        )
     obs_dim = int(payload["obs_dim"])
     act_dim = int(payload["act_dim"])
     hidden = hidden_sizes_from_checkpoint(weights_path)
@@ -351,11 +389,14 @@ class InferServer:
         self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = load_scorer(
             weights_path, device
         )
+        self.weights_sha256 = hashlib.sha256(weights_path.read_bytes()).hexdigest()
+        self.reach30_horizon = getattr(self.model, "reach30_horizon", None)
         self._v2_header = self._expected_header()
         self.queue: asyncio.Queue[_Job] = asyncio.Queue()
         self.n_reqs = 0
         self.n_rows = 0
         self.n_batches = 0
+        self.batch_row_counts: Counter[int] = Counter()
 
     def _expected_header(self) -> np.ndarray | None:
         """For v2, the arc-obs-v2 header every obs row must start with."""
@@ -445,16 +486,35 @@ class InferServer:
             obs_t = torch.from_numpy(all_obs).to(self.device)
             cands_t = torch.from_numpy(cands).to(self.device)
             mask_t = torch.from_numpy(mask).to(self.device)
-            logits_t, _, value_t = model(obs_t, cands_t, mask_t)
-            flat["logits"] = logits_t.cpu().numpy()
-            flat["value"] = value_t.cpu().numpy()
-            # Aux heads only when some job in the batch asked for them.
-            if "farm_value" in wanted:
-                flat["farm_value"] = model.farm_value(obs_t).cpu().numpy()
-            if "route_mode" in wanted:
-                flat["route_mode"] = model.route_mode_logits(obs_t).cpu().numpy()
-            if "reward_pick" in wanted:
-                flat["reward_pick"] = model.reward_pick_logits(obs_t, cands_t, mask_t).cpu().numpy()
+            requested_outputs = getattr(model, "requested_outputs", None)
+            if callable(requested_outputs):
+                # Entity-v2 shares its transformer state across every requested
+                # head.  Reach30-only leaf batches therefore do one encoder pass
+                # and skip policy/value scoring entirely.
+                tensors = requested_outputs(obs_t, cands_t, mask_t, wanted)
+                flat.update({key: tensor.cpu().numpy() for key, tensor in tensors.items()})
+            else:
+                # Legacy v1 heads consume the flat observation directly.  Retain
+                # its established math, but do not run the policy/value network
+                # for auxiliary-only requests.
+                if "logits" in wanted or "value" in wanted:
+                    logits_t, _, value_t = model(obs_t, cands_t, mask_t)
+                    if "logits" in wanted:
+                        flat["logits"] = logits_t.cpu().numpy()
+                    if "value" in wanted:
+                        flat["value"] = value_t.cpu().numpy()
+                if "farm_value" in wanted:
+                    flat["farm_value"] = model.farm_value(obs_t).cpu().numpy()
+                if "route_mode" in wanted:
+                    flat["route_mode"] = model.route_mode_logits(obs_t).cpu().numpy()
+                if "reward_pick" in wanted:
+                    flat["reward_pick"] = model.reward_pick_logits(
+                        obs_t, cands_t, mask_t
+                    ).cpu().numpy()
+                if "placement" in wanted:
+                    flat["placement"] = model.placement_head_logits(obs_t).cpu().numpy()
+                if "reach30" in wanted:
+                    flat["reach30"] = model.reach30_logits(obs_t).cpu().numpy()
 
         out: list[dict[str, list]] = []
         row = 0
@@ -468,6 +528,8 @@ class InferServer:
                         flat[key][row + i, : c.shape[0]].tolist()
                         for i, c in enumerate(j.cands)
                     ]
+                elif key == "placement":
+                    res[key] = flat[key][row : row + j.n_rows].tolist()
                 else:  # per-row scalars
                     res[key] = flat[key][row : row + j.n_rows].tolist()
             out.append(res)
@@ -501,6 +563,7 @@ class InferServer:
             self.n_batches += 1
             self.n_rows += rows
             self.n_reqs += len(jobs)
+            self.batch_row_counts[rows] += 1
             for j, res in zip(jobs, results):
                 if not j.future.done():
                     j.future.set_result(res)
@@ -550,7 +613,9 @@ class InferServer:
                                 "act_dim": self.act_dim,
                                 "device": str(self.device),
                                 "weights": str(self.weights_path),
+                                "weights_sha256": self.weights_sha256,
                                 "aux": dict(self.aux),
+                                "reach30_horizon": self.reach30_horizon,
                             }
                         }
                     else:
@@ -580,14 +645,30 @@ class InferServer:
             return
         while True:
             r0, w0, b0 = self.n_reqs, self.n_rows, self.n_batches
+            batch_counts0 = self.batch_row_counts.copy()
             t0 = time.monotonic()
             await asyncio.sleep(self.stats_interval)
             dt = time.monotonic() - t0
             reqs, rows, batches = self.n_reqs - r0, self.n_rows - w0, self.n_batches - b0
             if batches:
+                batch_counts = self.batch_row_counts - batch_counts0
+
+                def hist_percentile(q: float) -> int:
+                    target = max(1, math.ceil(q * sum(batch_counts.values())))
+                    seen = 0
+                    for size, count in sorted(batch_counts.items()):
+                        seen += count
+                        if seen >= target:
+                            return size
+                    return max(batch_counts)
+
                 print(
                     f"[infer] reqs={reqs} rows={rows} batches={batches} "
-                    f"avg_batch={rows / batches:.1f} forwards/s={batches / dt:.1f}",
+                    f"avg_batch={rows / batches:.1f} "
+                    f"batch_p50={hist_percentile(0.50)} "
+                    f"batch_p95={hist_percentile(0.95)} "
+                    f"batch_min={min(batch_counts)} batch_max={max(batch_counts)} "
+                    f"forwards/s={batches / dt:.1f}",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -602,6 +683,8 @@ class InferServer:
         self.model, self.obs_dim, self.act_dim, self.aux, self.model_format = (
             model, obs_dim, act_dim, aux, fmt
         )
+        self.weights_sha256 = hashlib.sha256(self.weights_path.read_bytes()).hexdigest()
+        self.reach30_horizon = getattr(model, "reach30_horizon", None)
         self._v2_header = self._expected_header()
         print(
             f"[infer] reloaded weights from {self.weights_path} "

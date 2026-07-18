@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import { joinPlayRoom } from '$lib/stores/playStore.svelte';
 	import { getPlayState } from '$lib/stores/playStore.svelte';
 	import { seatAccent } from './helpers';
@@ -61,6 +61,12 @@
 		return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 	}
 
+	// Unmount cancellation: a spectator's join-to-chat resolving after the player
+	// LEFT the room page must not re-install/re-connect the departed room (the
+	// store fences the install; this also keeps the dead handler's state writes out).
+	const unmount = new AbortController();
+	onDestroy(() => unmount.abort());
+
 	async function ensureJoined() {
 		if (member?.id || !room?.roomCode) return;
 		const name = nameDraft.trim();
@@ -69,7 +75,7 @@
 		}
 		joinBusy = true;
 		try {
-			await joinPlayRoom(room.roomCode, name);
+			await joinPlayRoom(room.roomCode, name, { signal: unmount.signal });
 		} finally {
 			joinBusy = false;
 		}
@@ -85,6 +91,7 @@
 			await playState.sendRoomChat(body);
 			draft = '';
 		} catch (err) {
+			if (unmount.signal.aborted) return; // left the page — nothing to report to
 			localError = err instanceof Error ? err.message : 'Could not send chat.';
 		} finally {
 			busy = false;

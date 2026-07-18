@@ -1,0 +1,17 @@
+2026-07-14T11:18:17+00:00
+128
+54.65 51.23 45.42 148/8579 1121889
+               total        used        free      shared  buff/cache   available
+Mem:           1.0Ti        79Gi        59Gi        16Gi       892Gi       927Gi
+Swap:             0B          0B          0B
+Filesystem                   Size  Used Avail Use% Mounted on
+/dev/mapper/data--vg-share8  492G  458G  9.0G  99% /data/share8
+tmpfs                        504G   16G  489G   4% /dev/shm
+0, NVIDIA A100-SXM4-40GB, 1516 MiB, 40960 MiB, 0 %
+1, NVIDIA A100-SXM4-40GB, 803 MiB, 40960 MiB, 0 %
+2, NVIDIA A100-SXM4-40GB, 0 MiB, 40960 MiB, 0 %
+3, NVIDIA A100-SXM4-40GB, 5255 MiB, 40960 MiB, 0 %
+4, NVIDIA A100-SXM4-40GB, 5255 MiB, 40960 MiB, 99 %
+5, NVIDIA A100-SXM4-40GB, 25097 MiB, 40960 MiB, 97 %
+6, NVIDIA A100-SXM4-40GB, 32112 MiB, 40960 MiB, 0 %
+7, NVIDIA A100-SXM4-40GB, 25503 MiB, 40960 MiB, 0 %

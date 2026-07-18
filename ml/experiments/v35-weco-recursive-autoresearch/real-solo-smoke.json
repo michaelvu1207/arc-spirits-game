@@ -1,0 +1,56 @@
+{
+  "feedback": {
+    "accepted": false,
+    "arc_fitness": 0.049999999999999996,
+    "diagnosticCodes": [
+      "incomplete_task_mix"
+    ],
+    "schemaVersion": "arc-v35-feedback-v1"
+  },
+  "promotionEligible": false,
+  "reason": "solo-only backend; complete replay and task-mix gates are not attached",
+  "schemaVersion": "arc-v35-real-solo-cli-v1",
+  "signedEntry": {
+    "entrySha256": "24d51722944f4da7855183d08ec744f17361c72b7051e99f3558a1fee39a3823",
+    "payload": {
+      "accepted": false,
+      "arcFitness": 0.049999999999999996,
+      "backend": "trusted-node-solo-v1",
+      "campaign": "v35-local-real-solo-smoke-20260714",
+      "candidateId": "bad9b2f3a6cfe55a",
+      "candidateSha256": "bad9b2f3a6cfe55ade840a4cc41e1bfa29a298a19167912f012c6b87ab3c0e4d",
+      "cost": {
+        "cpu_seconds": 4.251314,
+        "evaluations": 1,
+        "games": 8,
+        "gpu_seconds": 0.0,
+        "normalized_cost": 0.265707125,
+        "private_queries": 0,
+        "wall_seconds": 2.035893915919587
+      },
+      "diagnosticCodes": [
+        "incomplete_task_mix"
+      ],
+      "endpoints": {
+        "gameWallMsP95": 326.53499999999997,
+        "meanFinalVP": 0.0,
+        "meanLateGameScore": 0.049999999999999996,
+        "meanPost15VpPerRound": 0.0,
+        "reach15Rate": 0.0,
+        "stallRate": 0.0,
+        "trueWinRate": 0.0
+      },
+      "games": 8,
+      "immutableManifestSha256": "3b02ee29d24f8da1fa576410b80abb2772d99b9c5e1c0b9178bfc102132d5779",
+      "rawReportSha256": "5c8f9303687f69797f3b1ffdd605167c1af958c573308931603f520e2ed5b024",
+      "schemaVersion": "arc-v35-evaluation-v1",
+      "seedCommitment": "048a0f3b312925f727da11d9dfc32db82e0527ce2af8907e432b7d4ec04f2afc",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdoutSha256": "5c0aeedd03d6e149531725f6f3877050bdc892e037ec52416fc3f84f64b59927",
+      "tier": "public"
+    },
+    "previousEntrySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "schemaVersion": "arc-v35-signed-ledger-entry-v1",
+    "signature": "826e9bed9ab9c4bb82baba0916aafb941fb8e1151df8abb55a05d745ce2f89ec"
+  }
+}

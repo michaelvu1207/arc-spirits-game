@@ -1,6 +1,6 @@
-import { json } from '@sveltejs/kit';
+import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { setRoomMemberCookie } from '$lib/play/server/cookies';
+import { clearLegacyRoomCredentialCookies, setLastRoomCookie } from '$lib/play/server/cookies';
 import { fillBots } from '$lib/play/server/botSim';
 import {
 	createRoom,
@@ -22,15 +22,25 @@ export const POST: RequestHandler = async (event) => {
 
 	const body = await request.json().catch(() => ({}));
 	const displayName = typeof body?.displayName === 'string' ? body.displayName : '';
+	// Solo is casual by definition; the validated (possibly anonymous) account owns
+	// the membership — createRoom rejects unauthenticated callers.
 	const { user } = await locals.safeGetSession();
+	if (!user) {
+		throw error(401, 'Sign in (a guest identity is created automatically) to start solo play.');
+	}
 
-	const created = await createRoom(displayName, user?.id ?? null, 'casual');
-	setRoomMemberCookie(cookies, created.roomCode, created.memberId);
+	// Client-minted ENTRY-OP id (abort compensation): the created solo session is
+	// stamped with it, so an abort at ANY later point of this multi-step setup —
+	// even with no response delivered — resolves and unwinds exactly this room.
+	const originOp = typeof body?.opId === 'string' ? body.opId : null;
+	const created = await createRoom(displayName, user.id, 'casual', { originOp });
+	clearLegacyRoomCredentialCookies(cookies);
+	setLastRoomCookie(cookies, created.roomCode, event.url);
 
 	const seat = SEAT_COLORS[0];
 	await runRoomCommand({
 		roomCode: created.roomCode,
-		memberId: created.memberId,
+		trustedMemberId: created.memberId,
 		expectedRevision: null,
 		command: { type: 'claimSeat', seatColor: seat }
 	});
@@ -40,7 +50,7 @@ export const POST: RequestHandler = async (event) => {
 	if (guardian) {
 		await runRoomCommand({
 			roomCode: created.roomCode,
-			memberId: created.memberId,
+			trustedMemberId: created.memberId,
 			expectedRevision: null,
 			command: { type: 'selectGuardian', guardianName: guardian }
 		});
@@ -53,10 +63,11 @@ export const POST: RequestHandler = async (event) => {
 
 	await runRoomCommand({
 		roomCode: created.roomCode,
-		memberId: created.memberId,
+		trustedMemberId: created.memberId,
 		expectedRevision: null,
 		command: { type: 'startGame' }
 	});
 
-	return json(await loadRoomView(created.roomCode, created.memberId));
+	const view = await loadRoomView(created.roomCode, { trustedMemberId: created.memberId });
+	return json(view);
 };

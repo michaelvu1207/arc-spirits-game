@@ -1,0 +1,25 @@
+
+> arc-spirits-spectate@0.0.1 test
+> vitest run --run src/lib/play/ml/_gumbelPlanner.test.ts src/lib/play/ml/actions.informationSafety.test.ts src/lib/play/ml/_actorpool.test.ts src/lib/play/ml/inferenceClient.test.ts
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/data/share8/michaelvuaprilexperimentation/arc-bot[39m
+
+ [32m✓[39m src/lib/play/ml/actions.informationSafety.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 71[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/_gumbelPlanner.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1021[2mms[22m[39m
+     [33m[2m✓[22m[39m is deterministic for a fixed seed and differs across seeds [33m 547[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/inferenceClient.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 2409[2mms[22m[39m
+ [32m✓[39m src/lib/play/ml/_actorpool.test.ts [2m([22m[2m12 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 23715[2mms[22m[39m
+     [33m[2m✓[22m[39m determinism: 1 worker and 4 workers produce identical per-seed outcomes [33m 14344[2mms[22m[39m
+     [33m[2m✓[22m[39m obs-version 2: shards carry paired v1 obs + flat obsV2 rows and meta.json validates [33m 2858[2mms[22m[39m
+     [33m[2m✓[22m[39m heuristic-only games attribute no neural seats [33m 1656[2mms[22m[39m
+     [33m[2m✓[22m[39m preserves the synchronous runActorGames API and callback order [33m 1400[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps source trajectories byte-identical when the continuation curriculum is off [33m 872[2mms[22m[39m
+     [33m[2m✓[22m[39m appends one deterministic marked solo suffix without adding a game summary [33m 1245[2mms[22m[39m
+     [33m[2m✓[22m[39m aggregates curriculum diagnostics and keeps duplicate-seed suffix IDs unique [33m 924[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m35 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (36)[39m
+[2m   Start at [22m 11:17:25
+[2m   Duration [22m 24.78s[2m (transform 2.66s, setup 0ms, import 3.53s, tests 27.22s, environment 2ms)[22m
+

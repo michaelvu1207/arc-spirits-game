@@ -1,0 +1,235 @@
+{
+  "schemaVersion": "arc-v35-manipulation-audit-v1",
+  "valid": true,
+  "generation": 8,
+  "performanceOutcomesInspected": false,
+  "protocol": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+  "protocolSha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+  "endpointRule": "generation 8 unless movement fails, then all nine roots continue unchanged to generation 12",
+  "base": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+  },
+  "validation": "/dev/shm/arc-v32-critic/validation",
+  "validationLock": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-validation-lock.json",
+  "validationCommitment": {
+    "sha256": "9eeb593576ec3e76f413b997d462a40e775ee1229a46e27f2d8383f605bcc14d",
+    "files": 49,
+    "bytes": 1433544644
+  },
+  "temperature": 0.55,
+  "probe": {
+    "validationGames": 1024,
+    "validationPolicyRows": 113344,
+    "selectedRows": 9185,
+    "selectedStrategicRows": 6120,
+    "rowsPerGameBandPerStratum": 2
+  },
+  "thresholds": {
+    "treatmentMeanKl": 0.005,
+    "replicatesRequired": 2,
+    "roundLateEarlyRatioVsControl": 1.25,
+    "p30Covariance": "strictly positive"
+  },
+  "models": {
+    "a": {
+      "control-uniform": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/checkpoints/main-0-gen8.pt",
+        "sha256": "738bf508aa7f8e88498fd7838c1f59a89e8c85f9d264bae2e885659d6e26ea5b",
+        "kl": {
+          "overall": 0.051553284890662965,
+          "1-8": 0.051183431746025576,
+          "9-18": 0.029691350906338416,
+          "19-30": 0.0744466400273314
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": 0.002563664340835231,
+          "correlation": 0.00791749508789844
+        }
+      },
+      "late-reweighted": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/checkpoints/main-0-gen8.pt",
+        "sha256": "daefd124ba62defc39e4f1504c7e0ad7a42761e2e2278795fab4c17bed96bf6c",
+        "kl": {
+          "overall": 0.04286420231013387,
+          "1-8": 0.031497946451395364,
+          "9-18": 0.027620689467042103,
+          "19-30": 0.07006654199733303
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": 0.002333610439551573,
+          "correlation": 0.007810612769659071
+        }
+      },
+      "p30-credit025": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+        "sha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+        "kl": {
+          "overall": 0.03184623524003431,
+          "1-8": 0.016117794970500178,
+          "9-18": 0.023470127024689313,
+          "19-30": 0.05652439269860198
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": 0.001278094297132441,
+          "correlation": 0.004775315023809919
+        }
+      }
+    },
+    "b": {
+      "control-uniform": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/control-uniform/checkpoints/main-0-gen8.pt",
+        "sha256": "6da8a2118a86fae4d85332e1fc28f7652990f949a899b3f155323d7ae946e924",
+        "kl": {
+          "overall": 0.05220404799762947,
+          "1-8": 0.05845618119951249,
+          "9-18": 0.03009757662055712,
+          "19-30": 0.06868478447713207
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": 0.0012250151248287431,
+          "correlation": 0.003933497278446302
+        }
+      },
+      "late-reweighted": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/late-reweighted/checkpoints/main-0-gen8.pt",
+        "sha256": "20a6279c11e577bc5294a1f742655d2b204860ca52560cb62441a9fd61aac197",
+        "kl": {
+          "overall": 0.03961009715057741,
+          "1-8": 0.02706367387383087,
+          "9-18": 0.02688577116205589,
+          "19-30": 0.06557283704554857
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": 0.002939539976629123,
+          "correlation": 0.009803918444435428
+        }
+      },
+      "p30-credit025": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-b/p30-credit025/checkpoints/main-0-gen8.pt",
+        "sha256": "9b6c948adf4ef7139c8ce999624e8395e877204fa58986eedbe97998ca1b9fcb",
+        "kl": {
+          "overall": 0.03309310303296274,
+          "1-8": 0.027705921789273447,
+          "9-18": 0.020858189317699487,
+          "19-30": 0.05106184157927905
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": 0.003834340581840812,
+          "correlation": 0.01492448087025654
+        }
+      }
+    },
+    "c": {
+      "control-uniform": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/control-uniform/checkpoints/main-0-gen8.pt",
+        "sha256": "946cf14c03087877213a6ebb58e870efc8a22276d13c3b9ff8e96bd3ee2cc825",
+        "kl": {
+          "overall": 0.05595495789474396,
+          "1-8": 0.055777607259988336,
+          "9-18": 0.03492922865336099,
+          "19-30": 0.0777810990806144
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": -0.0002814104397745156,
+          "correlation": -0.0008067108192463705
+        }
+      },
+      "late-reweighted": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/late-reweighted/checkpoints/main-0-gen8.pt",
+        "sha256": "b41c6b2d50ce2d772dd8a55a9d86510e1f1be40d119d9e956778b53df7b931d8",
+        "kl": {
+          "overall": 0.04550223268308167,
+          "1-8": 0.040263636326385445,
+          "9-18": 0.029468113917278473,
+          "19-30": 0.0674014243383199
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": -9.631316091415917e-06,
+          "correlation": -2.9987675169882763e-05
+        }
+      },
+      "p30-credit025": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-c/p30-credit025/checkpoints/main-0-gen8.pt",
+        "sha256": "7f65d31d17152a024fdc2d9a9d696cdb803abcf9c6e1eed56f2f04e204f3889d",
+        "kl": {
+          "overall": 0.034698502461154815,
+          "1-8": 0.01846733522510391,
+          "9-18": 0.026261927948799703,
+          "19-30": 0.06000556679284598
+        },
+        "reach30Signal": {
+          "rows": 6120,
+          "games": 1024,
+          "standardizedResidualChosenLogpCovariance": -0.00011828412217753108,
+          "correlation": -0.00040968868569250545
+        }
+      }
+    }
+  },
+  "manipulation": {
+    "passed": true,
+    "checks": {
+      "movement": {
+        "late-reweighted": {
+          "passingReplicates": [
+            "a",
+            "b",
+            "c"
+          ],
+          "passed": true
+        },
+        "p30-credit025": {
+          "passingReplicates": [
+            "a",
+            "b",
+            "c"
+          ],
+          "passed": true
+        }
+      },
+      "roundLateEarlyVsControl": {
+        "multipliers": {
+          "a": 1.5293706214400111,
+          "b": 2.0620876601034213,
+          "c": 1.2004439408697831
+        },
+        "passingReplicates": [
+          "a",
+          "b"
+        ],
+        "passed": true
+      },
+      "p30PositiveCovariance": {
+        "passingReplicates": [
+          "a",
+          "b"
+        ],
+        "excessVsControl": {
+          "a": -0.0012855700437027899,
+          "b": 0.002609325457012069,
+          "c": 0.0001631263175969845
+        },
+        "passed": true
+      }
+    }
+  },
+  "disposition": "eligible-endpoint",
+  "promotionEligible": false
+}

@@ -10,7 +10,14 @@ import {
 	legalActionsWithNext,
 	type LegalAction
 } from './actions';
-import { ACT_DIM, COMMAND_VOCAB, encodeAction, encodeObs } from './encode';
+import {
+	ACT_DIM,
+	ACTION_EFFECT_OFFSET,
+	ACTION_EFFECT_SLOTS,
+	COMMAND_VOCAB,
+	encodeAction,
+	encodeObs
+} from './encode';
 import { filterConstrainedActions } from './driver';
 import { planDecisionGumbel } from './gumbelPlanner';
 import { selectableCandidateIndices } from './neuralBot';
@@ -266,7 +273,10 @@ describe('information-safe ML action previews', () => {
 		expect(action.policyNext.players.Red!.pendingCorruptionDiscard?.count).toBe(1);
 		expect(action.policyNext.players.Red!.actionsUsedThisRound).toContain('combat');
 
-		const effects = encodeAction(state, 'Red', action.cmd, action.policyNext, CATALOG).slice(-12);
+		const effects = encodeAction(state, 'Red', action.cmd, action.policyNext, CATALOG).slice(
+			ACTION_EFFECT_OFFSET,
+			ACTION_EFFECT_OFFSET + ACTION_EFFECT_SLOTS
+		);
 		expect(effects[3]).toBe(0); // restored barrier; corruption is carried by the next slot
 		expect(effects[4]).toBeCloseTo(1 / 3);
 	});
@@ -327,7 +337,8 @@ describe('information-safe ML action previews', () => {
 			expect(action.policyNext.players.Red!.pendingDraw?.drawCount).toBe(4);
 			expect(action.policyNext.players.Red!.actionsUsedThisRound).toContain('row:0');
 			const effects = encodeAction(state, 'Red', action.cmd, action.policyNext, DRAW_CATALOG).slice(
-				-12
+				ACTION_EFFECT_OFFSET,
+				ACTION_EFFECT_OFFSET + ACTION_EFFECT_SLOTS
 			);
 			expect(effects[1]).toBeCloseTo(1 / 5);
 		}
@@ -396,7 +407,7 @@ describe('information-safe ML action previews', () => {
 		expect(encoded[p + 10]).toBeCloseTo(2 / 4); // public reward pick count
 		expect(encoded[p + 11]).toBeCloseTo(2 / 8); // public resolvable reward count
 
-		const effects = encoded.slice(-12);
+		const effects = encoded.slice(ACTION_EFFECT_OFFSET, ACTION_EFFECT_OFFSET + ACTION_EFFECT_SLOTS);
 		expect(effects[7]).toBeCloseTo((cleanKill * 4) / 10); // expected pending reward VP
 		expect(effects[8]).toBeCloseTo(cleanKill); // P(reward choice is created)
 		expect(effects[9]).toBe(1); // committing the action is meaningful progress

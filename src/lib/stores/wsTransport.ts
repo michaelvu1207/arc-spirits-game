@@ -102,9 +102,13 @@ const defaultSocketFactory: SocketFactory = (url) =>
 	new WebSocket(url) as unknown as WebSocketLike;
 
 let cmdCounter = 0;
-function nextCommandId(): string {
+/** One id per LOGICAL player action. Exported so the store can mint it once and reuse
+ *  it across a WS attempt AND its HTTP fallback — the server's durable idempotency
+ *  ledger then guarantees the action applies exactly once no matter which transport
+ *  (or how many retries) actually landed it. */
+export function nextCommandId(): string {
 	cmdCounter += 1;
-	return `c${Date.now().toString(36)}-${cmdCounter.toString(36)}`;
+	return `c${Date.now().toString(36)}-${cmdCounter.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export class WsTransport {
@@ -118,7 +122,13 @@ export class WsTransport {
 	private socket: WebSocketLike | null = null;
 	private url: string | null = null;
 	private roomCode: string | null = null;
-	private memberToken: string | undefined;
+	/** Mints a fresh ONE-USE join ticket for every (re)connect — the only credential
+	 *  the room server accepts. Null ⇒ the join cannot proceed (fatal, no silent
+	 *  spectator downgrade); the store falls back to the HTTP path. */
+	private getTicket: (() => Promise<string | null>) | null = null;
+	/** Monotonic socket generation so a ticket minted for a dead socket is never
+	 *  sent on its successor. */
+	private socketGeneration = 0;
 
 	/** Highest revision we have APPLIED. Doubles as `resumeFromRevision` on reconnect and as
 	 *  the staleness watermark (mirrors isStaleRoomUpdate: reject `next.revision < this`). */
@@ -159,14 +169,15 @@ export class WsTransport {
 	}
 
 	/** Open the socket and join `roomCode`. Idempotent-ish: a second call re-points the
-	 *  transport at a (possibly new) room and reconnects cleanly. */
-	connect(url: string, roomCode: string, memberToken?: string): void {
+	 *  transport at a (possibly new) room and reconnects cleanly. `getTicket` is
+	 *  called once per (re)connect to mint a fresh one-use join ticket. */
+	connect(url: string, roomCode: string, getTicket: () => Promise<string | null>): void {
 		// Re-targeting a different room resets the revision watermark so the new room's lower
 		// revisions are not rejected as "stale".
 		if (roomCode !== this.roomCode) this.appliedRevision = -1;
 		this.url = url;
 		this.roomCode = roomCode;
-		this.memberToken = memberToken;
+		this.getTicket = getTicket;
 		this.intentionallyClosed = false;
 		this.reconnectAttempts = 0;
 		this.openSocket();
@@ -176,11 +187,15 @@ export class WsTransport {
 	 *   - resolves with the fresh view on ok (already applied via `onView`);
 	 *   - rejects with {@link WsCommandRejected} on a server rejection;
 	 *   - rejects with {@link WsTransportUnavailable} if the socket drops before the ack. */
-	sendCommand(command: GameCommand, expectedRevision?: number): Promise<CommandOk> {
+	sendCommand(
+		command: GameCommand,
+		expectedRevision?: number,
+		externalCmdId?: string
+	): Promise<CommandOk> {
 		if (this.intentionallyClosed || !this.roomCode) {
 			return Promise.reject(new WsTransportUnavailable('Transport is closed'));
 		}
-		const cmdId = nextCommandId();
+		const cmdId = externalCmdId ?? nextCommandId();
 		return new Promise<CommandOk>((resolve, reject) => {
 			this.pending.set(cmdId, { resolve, reject });
 			const frame = { cmdId, command, expectedRevision };
@@ -218,6 +233,7 @@ export class WsTransport {
 		if (!this.url || !this.roomCode) return;
 		this.teardownSocket();
 		this.joined = false;
+		this.socketGeneration += 1;
 		let socket: WebSocketLike;
 		try {
 			socket = this.createSocket(this.url);
@@ -236,14 +252,33 @@ export class WsTransport {
 
 	private onOpen(): void {
 		this.lastServerMessageAt = Date.now();
-		const join = {
-			t: 'join' as const,
-			roomCode: this.roomCode as string,
-			memberToken: this.memberToken,
-			resumeFromRevision: this.appliedRevision >= 0 ? this.appliedRevision : undefined
-		};
-		this.sendFrame(join);
 		this.startHeartbeat();
+		void this.sendJoin(this.socketGeneration);
+	}
+
+	/** Mint a fresh one-use ticket and send the join frame. A mint failure is FATAL
+	 *  for the transport (the server would refuse the join anyway — there is no
+	 *  credential-less spectator downgrade); the store keeps its HTTP path. */
+	private async sendJoin(generation: number): Promise<void> {
+		let ticket: string | null = null;
+		try {
+			ticket = this.getTicket ? await this.getTicket() : null;
+		} catch {
+			ticket = null;
+		}
+		// The socket may have died (or been replaced) while the ticket was minting —
+		// a ticket is bound to one join attempt on one socket.
+		if (generation !== this.socketGeneration || this.socket?.readyState !== WS_OPEN) return;
+		if (!ticket) {
+			this.handleError({ code: 'no_ticket', message: 'Could not obtain a join ticket.', fatal: true });
+			return;
+		}
+		this.sendFrame({
+			t: 'join',
+			roomCode: this.roomCode as string,
+			ticket,
+			resumeFromRevision: this.appliedRevision >= 0 ? this.appliedRevision : undefined
+		});
 	}
 
 	private onMessage(ev: { data: unknown }): void {

@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "arc-v35-phase1-development-reports-v1",
+  "complete": true,
+  "outcomesInspected": false,
+  "promotionEligible": false,
+  "authorization": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-development-authorization.json",
+  "authorizationSha256": "cbc5edc0adbb8aa7a4a7754b077a6cf3513431d56d9751d7114ce64dd2ca7e3e",
+  "reports": {
+    "base": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/base/attempt-1/report.json",
+      "sha256": "3cd70c3e3bb02a81f7acf101b19e7ace7cae2ce3171b5a3d6d2269337511ff2d",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/base/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/base/attempt-1/server.log",
+        "sha256": "627e6f23f6bddeb5627818fc09641206c1abbbef16ebe4e63d13cf814ed69ff0"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/base/attempt-1/evaluator.stdout",
+        "sha256": "3cd70c3e3bb02a81f7acf101b19e7ace7cae2ce3171b5a3d6d2269337511ff2d"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/base/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-a-control-uniform": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-control-uniform/attempt-1/report.json",
+      "sha256": "dff89b8ac697127a0ee4c3172b4d58c9dfca4e520994a833089c5cfa12366fd5",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-control-uniform/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-control-uniform/attempt-1/server.log",
+        "sha256": "ee57239fb2a9eb24299b3dfc536a70ebf3a9748760ee0490b6bce9b7cd8f40c1"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-control-uniform/attempt-1/evaluator.stdout",
+        "sha256": "dff89b8ac697127a0ee4c3172b4d58c9dfca4e520994a833089c5cfa12366fd5"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-control-uniform/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-a-late-reweighted": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-late-reweighted/attempt-1/report.json",
+      "sha256": "761739ad8175ffdd0fc7cc2b06c3e0d2c5e4df3d21fae86a5a85ec280d08bfd6",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-late-reweighted/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-late-reweighted/attempt-1/server.log",
+        "sha256": "0ec3745638ebdad07b3ad8053f672959588923ecdd49e815e9c50b45a186b67d"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-late-reweighted/attempt-1/evaluator.stdout",
+        "sha256": "761739ad8175ffdd0fc7cc2b06c3e0d2c5e4df3d21fae86a5a85ec280d08bfd6"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-late-reweighted/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-a-p30-credit025": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-p30-credit025/attempt-1/report.json",
+      "sha256": "3eb72919ef9659dd0741dd1c4b6b20691466290bc37acf5361da92dba3a8e6e3",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-p30-credit025/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-p30-credit025/attempt-1/server.log",
+        "sha256": "f003f9e1f63e421faae90e2dda44693dd5cb01f531f56328bd8963a830307c51"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-p30-credit025/attempt-1/evaluator.stdout",
+        "sha256": "3eb72919ef9659dd0741dd1c4b6b20691466290bc37acf5361da92dba3a8e6e3"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-a-p30-credit025/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-b-control-uniform": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-control-uniform/attempt-1/report.json",
+      "sha256": "1f865ec93d09fbfa0803310ba8a787d28e763e103d14b6b19c42dc0d683aa725",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-control-uniform/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-control-uniform/attempt-1/server.log",
+        "sha256": "ce15970fc40e0c061d6aed78783b6498382efa4b8080bb8453724e3db06d584b"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-control-uniform/attempt-1/evaluator.stdout",
+        "sha256": "1f865ec93d09fbfa0803310ba8a787d28e763e103d14b6b19c42dc0d683aa725"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-control-uniform/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-b-late-reweighted": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-late-reweighted/attempt-1/report.json",
+      "sha256": "adbe60a7bca4ddd53968d8ddbb34175cb04ff00f7501a1f7619a4b94e7075fa5",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-late-reweighted/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-late-reweighted/attempt-1/server.log",
+        "sha256": "b06a79ca2738c40e91d5f9e0f2a3094aad4fd99ac41d0cef4c5659a1255d941d"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-late-reweighted/attempt-1/evaluator.stdout",
+        "sha256": "adbe60a7bca4ddd53968d8ddbb34175cb04ff00f7501a1f7619a4b94e7075fa5"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-late-reweighted/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-b-p30-credit025": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-p30-credit025/attempt-1/report.json",
+      "sha256": "56e2bc05f9702d2de131bbf1d66242584680125c83bf4379ccb66f17c77b07c3",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-p30-credit025/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-p30-credit025/attempt-1/server.log",
+        "sha256": "0948308b482d170ce322176db5f78893924fab2bd345132ffc683fb62d61135e"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-p30-credit025/attempt-1/evaluator.stdout",
+        "sha256": "56e2bc05f9702d2de131bbf1d66242584680125c83bf4379ccb66f17c77b07c3"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-b-p30-credit025/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-c-control-uniform": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-control-uniform/attempt-1/report.json",
+      "sha256": "33fb6e6eb1ab629108c1bd9357fa63f36d678d149aae26dfbb53a22a6b516425",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-control-uniform/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-control-uniform/attempt-1/server.log",
+        "sha256": "70033ecd686ec557a1e2df95b4af265ab49cf17860d95df4dd351e605e373aee"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-control-uniform/attempt-1/evaluator.stdout",
+        "sha256": "33fb6e6eb1ab629108c1bd9357fa63f36d678d149aae26dfbb53a22a6b516425"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-control-uniform/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-c-late-reweighted": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-late-reweighted/attempt-1/report.json",
+      "sha256": "cd6ce0b53bd1fa59d56951411e01f682965876851acd167f56957114b396108b",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-late-reweighted/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-late-reweighted/attempt-1/server.log",
+        "sha256": "994ee9698aeb56febabc6bd43a489a1dc691b3efb001ccf95d5ccbedde6e16fa"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-late-reweighted/attempt-1/evaluator.stdout",
+        "sha256": "cd6ce0b53bd1fa59d56951411e01f682965876851acd167f56957114b396108b"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-late-reweighted/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "rep-c-p30-credit025": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-p30-credit025/attempt-1/report.json",
+      "sha256": "1da130d6e6b6a4f72b9949c5c42ca31a8dfd49ca560d7cba723d57cbaaa89a83",
+      "exitCode": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-p30-credit025/attempt-1/exit-code",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "serverLog": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-p30-credit025/attempt-1/server.log",
+        "sha256": "abd42a9114b5c827bd05cd86918f84f8eeb20c7915144914c7a4a25ee9a169f2"
+      },
+      "evaluatorStdout": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-p30-credit025/attempt-1/evaluator.stdout",
+        "sha256": "1da130d6e6b6a4f72b9949c5c42ca31a8dfd49ca560d7cba723d57cbaaa89a83"
+      },
+      "evaluatorStderr": {
+        "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/development/rep-c-p30-credit025/attempt-1/evaluator.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  }
+}

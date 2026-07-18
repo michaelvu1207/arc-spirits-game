@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "arc-v35-runtime-parity-incident-v1",
+  "attempt": 1,
+  "started": true,
+  "closed": true,
+  "retryAuthorized": false,
+  "authorizationSha256": "b7eb90b6606de30c0bb49c12d30b08f6cb8e1bc4420d43a39e748ecf269dd3a7",
+  "runnerSha256": "df018582bf326689aef80c38a37f5682854c6d8166c96240439ed088f0aa28f1",
+  "failureTimestampUtc": "2026-07-15T19:48:05Z",
+  "classification": "infrastructure-pre-evaluator-unix-socket-path-too-long",
+  "failureStage": "legacy-functional-inference-server-before-readiness",
+  "exceptionClass": "OSError",
+  "exceptionFinalLineSha256": "fc101fe7651221fdb42ffd3c6226d36af5ffbe8c97654a7c42f52cbce0061456",
+  "tracebackFrames": [
+    {"file": "infer_server.py", "line": 806, "function": "<module>"},
+    {"file": "runners.py", "line": 194, "function": "run"},
+    {"file": "runners.py", "line": 118, "function": "run"},
+    {"file": "base_events.py", "line": 687, "function": "run_until_complete"},
+    {"file": "infer_server.py", "line": 702, "function": "serve"},
+    {"file": "streams.py", "line": 113, "function": "start_unix_server"},
+    {"file": "unix_events.py", "line": 319, "function": "create_unix_server"}
+  ],
+  "socketPathBytes": 161,
+  "linuxUnixSocketPayloadLimitBytes": 107,
+  "reportsPresent": 0,
+  "evaluatorProcessesStarted": 0,
+  "paritySeedsConsumed": 0,
+  "outcomesProduced": false,
+  "outcomesInspected": false,
+  "comparisonsPerformed": false,
+  "gpu7After": {
+    "uuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "memoryUsedMiB": 0,
+    "utilizationPercent": 0,
+    "matchingInferenceProcesses": 0
+  },
+  "gpu7LeaseReleased": true,
+  "share8FreeBytesAfter": 9126727680,
+  "remoteEvidence": {
+    "environmentJsonSha256": "cbd1c468c98003515b4ca3ed25f570e48aface0bdebfb0d3df07ca96525c204d",
+    "environmentStderrSha256": "e3b0c44298fc1f149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "gpuProcessesBeforeSha256": "cc81aa47ca89ff4c2cba4291d84bf93c09784c8ca02c044964572b6387493f71",
+    "jobContractSha256": "7364700066f63cd8933724f195e389d743ca0b3b8a22064d9e6c1bd5d54b8d32",
+    "inferStderrSha256": "595437181a83b9a2983085103b19959540bc1099651210bccda6d8d271b6a58a",
+    "inferStdoutSha256": "e3b0c44298fc1f149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "preflightStderrSha256": "e3b0c44298fc1f149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "preflightStdoutSha256": "a1602bf20cccd86c43d211075d8fdd82a8c8ff853fc73fdb756f6e38237fee7f"
+  },
+  "nextAttemptAuthorized": false,
+  "requiredCorrection": "Use a hash-bound short socket path under remote /tmp, create a new attempt directory and authorization, and obtain the required review before consuming any parity seed."
+}

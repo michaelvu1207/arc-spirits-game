@@ -175,6 +175,30 @@ def test_forward_shapes_and_finiteness():
     assert torch.allclose(l1[0], logits[0, :11], atol=1e-5)
 
 
+def test_zero_width_option_contract_and_multihorizon_reach30():
+    spec, flat, _ = load_fixture()
+    model = build_model_v2(
+        spec, ACT_DIM, d_model=32, layers=1, heads=2,
+        reach30_horizons=(20, 25, 30), seed=7,
+    ).eval()
+    obs = torch.from_numpy(flat[:5])
+    cands, mask = make_cands(5, 7)
+    empty_option = torch.zeros((5, 0), dtype=torch.float32)
+    with torch.no_grad():
+        logits, probs, value = model(obs, cands, mask, empty_option)
+        all_reach = model.reach30_all_logits(obs, empty_option)
+        primary = model.reach30_logits(obs, empty_option)
+    assert model.option_dim == 0
+    assert logits.shape == probs.shape == (5, 7) and value.shape == (5,)
+    assert all_reach.shape == (5, 3)
+    assert torch.equal(primary, all_reach[:, -1])
+    try:
+        model(obs, cands, mask, torch.ones((5, 1)))
+        raise AssertionError("accepted non-empty option conditioning")
+    except ValueError:
+        pass
+
+
 def test_seed_stable_init_and_deterministic_eval():
     spec, flat, _ = load_fixture()
     a = build_model_v2(spec, ACT_DIM, seed=123)
@@ -310,6 +334,33 @@ def test_checkpoint_roundtrip(tmpdir: Path | None = None):
                 raise AssertionError("loaded checkpoint against mismatched obs spec")
             except ValueError:
                 pass
+
+
+def test_reach30_checkpoint_capability_roundtrip():
+    import tempfile
+
+    spec, flat, _ = load_fixture()
+    model = build_model_v2(
+        spec, ACT_DIM, d_model=32, layers=1, heads=2,
+        reach30_horizons=(20, 25, 30), seed=11,
+    ).eval()
+    model.reach30_trained = True
+    obs = torch.from_numpy(flat[:4])
+    with torch.no_grad():
+        want = model.reach30_all_logits(obs)
+    with tempfile.TemporaryDirectory() as td:
+        pt = Path(td) / "reach.pt"
+        manifest_path = save_checkpoint(model, pt)
+        manifest = json.loads(manifest_path.read_text())
+        assert manifest["reach30_horizons"] == [20, 25, 30]
+        assert manifest["reach30_trained"] is True
+        loaded = load_checkpoint(pt).eval()
+        assert loaded.reach30_trained
+        assert loaded.reach30_horizon == 30
+        assert loaded.reach30_horizons == (20, 25, 30)
+        with torch.no_grad():
+            got = loaded.reach30_all_logits(obs)
+        assert torch.equal(got, want)
 
 
 def test_param_count_report():

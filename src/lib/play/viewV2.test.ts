@@ -844,15 +844,50 @@ describe('bot enumerator never generates the now-rejected command shapes', () =>
 		expect(decs.every((c) => c.selectedInstanceIds === undefined)).toBe(true);
 	});
 
-	test('infiltratorSwap is never enumerated for a bot', () => {
+	test('infiltratorSwap exposes tier-distinct legal choices to a bot', () => {
 		const state = startedGame();
 		state.phase = 'location';
 		const red = state.players.Red!;
 		red.navigationDestination = 'Cyber City';
-		red.spirits = [{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { Infiltrator: 1 }, origins: {}, isFaceDown: false }];
-		red.attackDice = [{ instanceId: 'r1', tier: 'basic' }];
+		red.spirits = [
+			{
+				slotIndex: 1,
+				id: 'inf',
+				name: 'Infil',
+				cost: 2,
+				classes: { Infiltrator: 1 },
+				origins: {},
+				isFaceDown: false
+			}
+		];
+		red.attackDice = [
+			{ instanceId: 'r1', tier: 'basic' },
+			{ instanceId: 'r2', tier: 'enchanted' }
+		];
 		state.players.Blue!.navigationDestination = 'Cyber City';
-		state.players.Blue!.attackDice = [{ instanceId: 'b1', tier: 'basic' }];
-		expect(collect(state, 'Red').some((c) => c.type === 'infiltratorSwap')).toBe(false);
+		state.players.Blue!.attackDice = [
+			{ instanceId: 'b1', tier: 'basic' },
+			{ instanceId: 'b2', tier: 'exalted' }
+		];
+		const swaps = collect(state, 'Red').filter(
+			(command): command is Extract<GameCommand, { type: 'infiltratorSwap' }> =>
+				command.type === 'infiltratorSwap'
+		);
+		expect(swaps).toHaveLength(4);
+		expect(swaps.every((command) => command.swaps.length === 1)).toBe(true);
+		expect(
+			new Set(
+				swaps.map((command) => {
+					const swap = command.swaps[0];
+					const mine = red.attackDice.find((die) => die.instanceId === swap.myInstanceId)!.tier;
+					const theirs = state.players.Blue!.attackDice.find(
+						(die) => die.instanceId === swap.theirInstanceId
+					)!.tier;
+					return `${mine}->${theirs}`;
+				})
+			)
+		).toEqual(
+			new Set(['basic->basic', 'basic->exalted', 'enchanted->basic', 'enchanted->exalted'])
+		);
 	});
 });

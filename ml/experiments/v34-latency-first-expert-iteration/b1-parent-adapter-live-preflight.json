@@ -1,0 +1,85 @@
+{
+	"schemaVersion": "arc-v34-b1-parent-adapter-live-preflight-v1",
+	"valid": true,
+	"observedAt": "2026-07-15T00:46:57Z",
+	"host": "simforge1",
+	"sourceCommit": "0dff1943653f61a37e653b7674c073ab1e70f700",
+	"outcomeBlind": true,
+	"gamesStarted": 0,
+	"seedsConsumed": [],
+	"outcomesRead": false,
+	"phase2OutcomesRead": false,
+	"providerBinding": {
+		"schemaVersion": "arc-v34-policy-provider-binding-v1",
+		"mode": "registered-parent",
+		"provider": "arc-v34-remote-parent-policy-adapter-v1",
+		"purpose": "v34-lane-b-b1-outcome-blind-raw-parent-snapshot-collection",
+		"policyObservationVersion": 2,
+		"checkpoint": {
+			"path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+			"bytes": 3354466,
+			"sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+		},
+		"runtime": {
+			"adapterSchema": "arc-v34-remote-parent-policy-adapter-v1",
+			"policyConfigSha256": "6fede73b038b4b882489bac62feecfb95294fc25cc2f3f17fd09890f89783a9e",
+			"checkpointManifest": {
+				"path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.manifest.json",
+				"bytes": 246,
+				"sha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad"
+			},
+			"server": {
+				"format": "arc-entity-scorer-v2",
+				"obs_dim": 3419,
+				"act_dim": 104,
+				"device": "cuda:0",
+				"weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+				"weights_sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+				"aux": {
+					"farm_value": true,
+					"route_mode": true,
+					"reward_pick": true,
+					"placement": false,
+					"reach30": true
+				},
+				"reach30_horizon": 30
+			},
+			"client": {
+				"implementation": "ready-synchronized-worker-binary-v1",
+				"wire": "binary",
+				"timeoutMs": 30000,
+				"socketPath": "/dev/shm/arc-v34-b1-parent-preflight-0dff194.sock",
+				"inputQuantization": "Float32Array.from",
+				"requestedSections": ["logits", "reach30"],
+				"roundTripsPerDecision": 1
+			},
+			"optionHead": "disabled-checkpoint-has-no-option-head",
+			"reach30Probability": "sigmoid-trained-logit-horizon-30",
+			"recoveryProbability": {
+				"source": "constant-zero-no-trained-head-not-used-for-recovery-classification",
+				"value": 0
+			}
+		}
+	},
+	"providerBindingCanonicalSha256": "2f597581a152f450ce8a07a30757cd47952b2edade154a6a0536b8c858f7ab0b",
+	"adapter": {
+		"path": "scripts/v34-parent-snapshot-policy.mjs",
+		"sha256": "032c0259418f6609988fd7c49672df7deed82ed8e3e5617331865aede10a985a"
+	},
+	"config": {
+		"path": "ml/experiments/v34-latency-first-expert-iteration/b1-parent-policy-config.json",
+		"sha256": "1cf227447657103fcdf33463cbc05004f977024fbd141e4e32ed1227b8c23686"
+	},
+	"gpu": {
+		"physicalIndex": 7,
+		"uuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+		"logicalDevice": "cuda:0",
+		"memoryMiBAfterRelease": 0,
+		"utilizationPercentAfterRelease": 0,
+		"serverShutdownClean": true,
+		"socketAbsentAfterRelease": true
+	},
+	"registeredStagesOpened": false,
+	"densitySmokeOpened": false,
+	"promotionOpened": false
+}

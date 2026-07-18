@@ -1,0 +1,26 @@
+epoch 1/2 kl=0.015374 tail=0.118572 agree=0.917 outcome=-0.012609 val_kl=0.017638 val_kl_p99=0.187265
+epoch 2/2 kl=0.015066 tail=0.116716 agree=0.917 outcome=-0.012915 val_kl=0.017940 val_kl_p99=0.193796
+checkpoint written: ml/experiments/v31-terminal-credit/arms/strategic-pg-0p1/checkpoint.pt
+	Command being timed: "ml/.venv/bin/python ml/outcome_distill_v2.py --data ml/experiments/v30-strategic-tail-fidelity/data/train-merged --val-data ml/experiments/v30-strategic-tail-fidelity/data/validation --teacher ml/warmstart/v24/v23-control-gen5-obs199-act104.json --init ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt --outcome-reference ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt --out ml/experiments/v31-terminal-credit/arms/strategic-pg-0p1/checkpoint.pt --stats-out ml/experiments/v31-terminal-credit/arms/strategic-pg-0p1/stats.json --epochs 2 --batch-size 512 --lr 0.00005 --teacher-kl-coef 1 --strategic-tail-fraction 0.10 --strategic-tail-coef 0.25 --value-coef 0 --reach30-coef 0 --outcome-pg-coef 0.1 --clip-epsilon 0.2 --outcome-behavior-ratio-cap 2 --seed 310100 --max-grad-norm 1 --expected-temperature 0.55 --teacher-logp-tolerance 0.001 --val-select-seed0 948000000 --val-select-games 256 --max-mean-kl 0.05 --max-p99-kl 0.5 --max-strategic-mean-kl 0.05 --max-strategic-p99-kl 0.4 --min-top1-agreement 0.88 --min-strategic-top1-agreement 0.88 --device cuda"
+	User time (seconds): 6769.75
+	System time (seconds): 62.77
+	Percent of CPU this job got: 1512%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 7:31.85
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 7024516
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 18276068
+	Voluntary context switches: 700896
+	Involuntary context switches: 1983100
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 6704
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

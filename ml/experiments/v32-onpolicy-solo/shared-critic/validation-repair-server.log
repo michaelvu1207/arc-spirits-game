@@ -1,0 +1,23 @@
+[infer] serving /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt (arc-entity-scorer-v2, obs_dim=3419, act_dim=104) on /dev/shm/arc-v32-critic/validation-repair.sock device=cuda window=2.0ms max_batch=512
+[infer] reqs=3712 rows=3712 batches=318 avg_batch=11.7 batch_p50=12 batch_p95=20 batch_min=1 batch_max=22 forwards/s=63.6
+[infer] reqs=6925 rows=6925 batches=577 avg_batch=12.0 batch_p50=12 batch_p95=19 batch_min=1 batch_max=22 forwards/s=115.4
+[infer] reqs=7252 rows=7252 batches=592 avg_batch=12.2 batch_p50=12 batch_p95=16 batch_min=5 batch_max=19 forwards/s=118.4
+[infer] reqs=4583 rows=4583 batches=387 avg_batch=11.8 batch_p50=12 batch_p95=17 batch_min=4 batch_max=18 forwards/s=77.4
+[infer] reqs=4973 rows=4973 batches=420 avg_batch=11.8 batch_p50=12 batch_p95=17 batch_min=5 batch_max=19 forwards/s=84.0
+[infer] reqs=5236 rows=5236 batches=442 avg_batch=11.8 batch_p50=12 batch_p95=16 batch_min=6 batch_max=18 forwards/s=88.4
+[infer] reqs=5562 rows=5562 batches=472 avg_batch=11.8 batch_p50=12 batch_p95=16 batch_min=5 batch_max=18 forwards/s=94.4
+[infer] reqs=5457 rows=5457 batches=462 avg_batch=11.8 batch_p50=12 batch_p95=17 batch_min=5 batch_max=19 forwards/s=92.4
+[infer] reqs=5708 rows=5708 batches=481 avg_batch=11.9 batch_p50=12 batch_p95=20 batch_min=1 batch_max=22 forwards/s=96.2
+[infer] reqs=5554 rows=5554 batches=468 avg_batch=11.9 batch_p50=12 batch_p95=19 batch_min=2 batch_max=22 forwards/s=93.6
+[infer] reqs=5699 rows=5699 batches=481 avg_batch=11.8 batch_p50=12 batch_p95=16 batch_min=6 batch_max=18 forwards/s=96.2
+[infer] reqs=6067 rows=6067 batches=513 avg_batch=11.8 batch_p50=12 batch_p95=18 batch_min=4 batch_max=20 forwards/s=102.6
+[infer] reqs=5966 rows=5966 batches=503 avg_batch=11.9 batch_p50=12 batch_p95=17 batch_min=4 batch_max=20 forwards/s=100.6
+[infer] reqs=5982 rows=5982 batches=505 avg_batch=11.8 batch_p50=12 batch_p95=17 batch_min=3 batch_max=21 forwards/s=101.0
+[infer] reqs=5606 rows=5606 batches=472 avg_batch=11.9 batch_p50=12 batch_p95=17 batch_min=5 batch_max=19 forwards/s=94.4
+[infer] reqs=5710 rows=5710 batches=483 avg_batch=11.8 batch_p50=12 batch_p95=17 batch_min=6 batch_max=18 forwards/s=96.6
+[infer] reqs=5904 rows=5904 batches=496 avg_batch=11.9 batch_p50=12 batch_p95=16 batch_min=5 batch_max=18 forwards/s=99.2
+[infer] reqs=5847 rows=5847 batches=494 avg_batch=11.8 batch_p50=12 batch_p95=17 batch_min=5 batch_max=19 forwards/s=98.8
+[infer] reqs=5254 rows=5254 batches=442 avg_batch=11.9 batch_p50=12 batch_p95=16 batch_min=5 batch_max=18 forwards/s=88.4
+[infer] reqs=5118 rows=5118 batches=431 avg_batch=11.9 batch_p50=12 batch_p95=15 batch_min=6 batch_max=18 forwards/s=86.2
+[infer] reqs=5271 rows=5271 batches=447 avg_batch=11.8 batch_p50=11 batch_p95=17 batch_min=6 batch_max=18 forwards/s=89.4
+[infer] shut down

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "arc-v32-failed-validation-evidence-v1",
+  "recordedAt": "2026-07-14T08:41:27.120Z",
+  "validForSelection": false,
+  "stage": "shared-critic-validation",
+  "training": {
+    "games": 4096,
+    "seedStart": 946000000,
+    "samples": 478462,
+    "policyRows": 454362,
+    "stalls": 0
+  },
+  "checkpoint": {
+    "path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+  },
+  "failedValidation": {
+    "preservedPath": "/dev/shm/arc-v32-critic/validation-missing-reach30pred",
+    "games": 1024,
+    "seedStart": 946004096,
+    "seedEndInclusive": 946005119,
+    "samples": 119279,
+    "policyRows": 113344,
+    "stalls": 0,
+    "metaSha256": "c9d2996abfcad5ccbb284a63e9c35cb42c4a93cef59a667110cfbfc4166f3a13",
+    "failure": "behavior_reach30_metrics was entirely non-finite because every serialized row omitted reach30Pred"
+  },
+  "rootCause": {
+    "file": "src/lib/play/ml/driver.ts",
+    "detail": "withFixedObs omitted placementProbs, reach30Probability, and reach30Horizon while adapting v2 policy observations",
+    "repairCommit": "95fa971",
+    "actingPolicyChanged": false
+  },
+  "locks": {
+    "originalCriticLockSha256": "06550dedef9ca91c3d432173dd0f2797041f91c3db8c33cef9a1543ff37601a1",
+    "repairLock": "ml/experiments/v32-onpolicy-solo/artifacts/critic-telemetry-repair-lock.json"
+  },
+  "requiredRecoveryGate": "Replay all 1024 identical validation seeds and prove every row and outcome exact after dropping only placementProbs and reach30Pred (and summary wallMs) before rerunning critic calibration."
+}

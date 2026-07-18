@@ -34,7 +34,7 @@
  */
 
 import { applyGameCommand, applyDeadlineAdvance } from '../runtime';
-import { createRng, nextInt } from '../rng';
+import { createRng, hashString, nextInt } from '../rng';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -48,6 +48,13 @@ import { legalActionsWithNext, policyPreviewState, type LegalAction } from './ac
 import { combatActionExpectation, encodeObs, encodeAction } from './encode';
 import type { NeuralPolicy } from './net';
 
+export type SearchLeafObjective = 'multiplayer' | 'solo-reach30';
+export type SearchObservationEncoder = (
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+) => number[];
+
 export interface GumbelPlanOptions {
 	/** Total simulation budget n across all candidates. */
 	simulations?: number;
@@ -57,6 +64,10 @@ export interface GumbelPlanOptions {
 	horizonRounds?: number;
 	/** Leaf blend: value = w·V_net + (1−w)·playoutOutcome. */
 	valueWeight?: number;
+	/** Leaf semantics. The legacy/default multiplayer objective is unchanged. */
+	objective?: SearchLeafObjective;
+	/** Observation schema used by both root priors and every leaf critic call. */
+	encodeObservation?: SearchObservationEncoder;
 	/** Completed-Q transform scale: σ(q) = (cVisit + maxN)·cScale·q. */
 	cVisit?: number;
 	cScale?: number;
@@ -121,7 +132,11 @@ export function outcomeForSeat(s: PublicGameState, seat: SeatColor): number {
 
 /** Full-seat determinization: fresh RNG stream + opponents' secret pre-reveal
  *  navigation locks cleared (re-picked by the rollout policy). */
-function determinize(state: PublicGameState, seat: SeatColor, simSeed: number): PublicGameState {
+export function determinizeForSearch(
+	state: PublicGameState,
+	seat: SeatColor,
+	simSeed: number
+): PublicGameState {
 	const s = structuredClone(state) as PublicGameState;
 	s.rng = createRng(simSeed >>> 0 || 1);
 	if (s.phase === 'navigation' && !s.revealedDestinations) {
@@ -133,10 +148,33 @@ function determinize(state: PublicGameState, seat: SeatColor, simSeed: number): 
 	return s;
 }
 
+/** Unique, reproducible root-search stream key. The monotonically increasing
+ * ordinal is per game, including multiple strategic decisions in one round. */
+export function searchInvocationSeed(
+	gameSeed: number,
+	round: number,
+	ordinal: number,
+	seat: SeatColor,
+	armId?: string
+): number {
+	if (!Number.isSafeInteger(gameSeed) || !Number.isInteger(round) || !Number.isInteger(ordinal)) {
+		throw new Error('search invocation key requires integer game seed, round, and ordinal');
+	}
+	if (ordinal < 1) throw new Error('search invocation ordinal must be positive');
+	const keyed =
+		(Math.imul(gameSeed >>> 0, 0x9e3779b1) +
+			Math.imul(round >>> 0, 7919) +
+			Math.imul(ordinal >>> 0, 104729) +
+			hashString(seat) +
+			(armId ? Math.imul(hashString(armId), 65537) : 0)) >>>
+		0;
+	return keyed || 1;
+}
+
 /** Advance a determinized state with every seat played by `profile` (or the
  *  self-model `choose` callback) until game end / stopRound. Same drain shape
  *  as advanceAfterNav (botPolicy.ts). */
-function rollout(
+export function rolloutPolicyToRound(
 	s: PublicGameState,
 	catalog: PlayCatalog,
 	profile: BotProfile,
@@ -189,6 +227,75 @@ function rollout(
 
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 
+function observationFor(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog,
+	encoder?: SearchObservationEncoder
+): number[] {
+	return encoder ? encoder(state, seat, catalog) : encodeObs(state, seat, catalog);
+}
+
+/** Exact solo production objective at a search leaf. The reach head is a
+ * load-bearing contract: using the multiplayer value head here would silently
+ * reintroduce the short-horizon/placement proxy V33 is intended to remove. */
+export function soloReach30LeafValue(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog,
+	policy: NeuralPolicy,
+	valueWeight: number,
+	encoder?: SearchObservationEncoder,
+	expectedPublicRewardVp = 0
+): number {
+	const player = state.players[seat];
+	if (!player) return 0;
+	if (player.victoryPoints >= 30) return 1;
+	if (state.status !== 'active') return 0;
+	const horizon = policy.reach30Horizon();
+	if (horizon !== 30) {
+		throw new Error(
+			`solo-reach30 search requires a reach30 critic with horizon 30; got ${String(horizon)}`
+		);
+	}
+	const reach30 = policy.reach30Probability(observationFor(state, seat, catalog, encoder));
+	if (reach30 === null || !Number.isFinite(reach30) || reach30 < 0 || reach30 > 1) {
+		throw new Error('solo-reach30 search requires a finite reach30 probability in [0,1]');
+	}
+	const w = clamp01(valueWeight);
+	const rollout = clamp01((player.victoryPoints + expectedPublicRewardVp) / 30);
+	return clamp01(w * reach30 + (1 - w) * rollout);
+}
+
+function leafValue(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog,
+	policy: NeuralPolicy,
+	valueWeight: number,
+	objective: SearchLeafObjective,
+	encoder?: SearchObservationEncoder,
+	expectedPublicRewardVp = 0
+): number {
+	if (objective === 'solo-reach30') {
+		return soloReach30LeafValue(
+			state,
+			seat,
+			catalog,
+			policy,
+			valueWeight,
+			encoder,
+			expectedPublicRewardVp
+		);
+	}
+	if (state.status !== 'active') return outcomeForSeat(state, seat);
+	const vNet = clamp01(policy.value(observationFor(state, seat, catalog, encoder)));
+	const publicOutcome = outcomeForSeat(state, seat);
+	const baseValue =
+		valueWeight >= 1 ? vNet : valueWeight * vNet + (1 - valueWeight) * publicOutcome;
+	return clamp01(baseValue + (0.3 * expectedPublicRewardVp) / 30);
+}
+
 function softmax(xs: number[]): number[] {
 	let max = -Infinity;
 	for (const x of xs) if (x > max) max = x;
@@ -215,7 +322,22 @@ export function planDecisionGumbel(
 	const nSims = Math.max(2, opts.simulations ?? 16);
 	const m = Math.max(2, Math.min(opts.maxConsidered ?? 8, N));
 	const horizon = opts.horizonRounds ?? 6;
+	if (!Number.isInteger(horizon) || horizon < 1) {
+		throw new Error('Gumbel search horizonRounds must be a positive integer');
+	}
 	const valueWeight = clamp01(opts.valueWeight ?? 0.5);
+	const objective = opts.objective ?? 'multiplayer';
+	if (objective === 'solo-reach30') {
+		if (Object.keys(state.players).length !== 1) {
+			throw new Error('solo-reach30 search requires exactly one player');
+		}
+		const reach30Horizon = policy.reach30Horizon();
+		if (reach30Horizon !== 30) {
+			throw new Error(
+				`solo-reach30 search requires a reach30 critic with horizon 30; got ${String(reach30Horizon)}`
+			);
+		}
+	}
 	const cVisit = opts.cVisit ?? 50;
 	const cScale = opts.cScale ?? 1.0;
 	const profile: BotProfile = {
@@ -226,7 +348,7 @@ export function planDecisionGumbel(
 	const baseSeed = (opts.seed ?? state.round * 7919 + 977) >>> 0 || 1;
 
 	// Priors over ALL candidates from the policy net.
-	const obs = encodeObs(state, seat, catalog);
+	const obs = observationFor(state, seat, catalog, opts.encodeObservation);
 	const feats = withNext.map((x) =>
 		encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)
 	);
@@ -254,33 +376,47 @@ export function planDecisionGumbel(
 			// monster-reward value. Other hidden outcomes remain represented by the policy
 			// prior/value until they have an explicit public expectation model.
 			const publicState = policyPreviewState(action);
-			const vNet = clamp01(policy.value(encodeObs(publicState, seat, catalog)));
-			const publicOutcome = outcomeForSeat(publicState, seat);
-			const baseValue =
-				valueWeight >= 1 ? vNet : valueWeight * vNet + (1 - valueWeight) * publicOutcome;
 			const combatExpectedVp =
 				action.cmd.type === 'startCombat'
 					? combatActionExpectation(state, seat, catalog).expectedRewardVp
 					: 0;
-			const value = clamp01(baseValue + (0.3 * combatExpectedVp) / 30);
+			const value = leafValue(
+				publicState,
+				seat,
+				catalog,
+				policy,
+				valueWeight,
+				objective,
+				opts.encodeObservation,
+				combatExpectedVp
+			);
 			visits[i] += 1;
 			qSum[i] += value;
 			return;
 		}
 		const simSeed = (baseSeed + (visits[i] + 1) * 2654435761 + i * 40503) >>> 0 || 1;
-		let s = determinize(policyPreviewState(action), seat, simSeed);
+		let s = determinizeForSearch(policyPreviewState(action), seat, simSeed);
 		const botRng: BotRandom = {
 			int: (mm: number) => nextInt(s.rng, mm),
 			chance: () => nextInt(s.rng, 2) === 0
 		};
-		s = rollout(s, catalog, profile, botRng, state.round + horizon, opts.rolloutChoose);
-		const vNet = clamp01(policy.value(encodeObs(s, seat, catalog)));
-		const value =
-			valueWeight >= 1 || s.status !== 'active'
-				? s.status !== 'active'
-					? outcomeForSeat(s, seat)
-					: vNet
-				: valueWeight * vNet + (1 - valueWeight) * outcomeForSeat(s, seat);
+		s = rolloutPolicyToRound(
+			s,
+			catalog,
+			profile,
+			botRng,
+			state.round + horizon - 1,
+			opts.rolloutChoose
+		);
+		const value = leafValue(
+			s,
+			seat,
+			catalog,
+			policy,
+			valueWeight,
+			objective,
+			opts.encodeObservation
+		);
 		visits[i] += 1;
 		qSum[i] += value;
 	};

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-prelaunch-incident-v1",
+  "attempt": 1,
+  "recordedAt": "2026-07-14T20:28:00Z",
+  "stage": "outcome-blind-prelaunch-verifier",
+  "exitCode": 1,
+  "failure": "completion-manifest label filter also counted the bound completionVerifier source",
+  "failedFunction": "validate_completion_inputs",
+  "correctiveAction": "replace prefix matching with the seven exact preregistered completion labels",
+  "prelaunchManifestCreated": false,
+  "reservationCreated": false,
+  "attemptStartedCreated": false,
+  "attempt2StdoutCreated": false,
+  "attempt2StderrCreated": false,
+  "execConfirmedCreated": false,
+  "analyzerProcessStarted": false,
+  "authorizedAnalyzerProcessConsumed": false,
+  "phase2OutcomeValueDisplayed": false,
+  "recoveryDecisionOutcomeConditioned": false
+}

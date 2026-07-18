@@ -5,7 +5,14 @@
  * that the potential telescopes correctly through vpReturnsToGo.
  */
 import { describe, expect, it } from 'vitest';
-import { buildPotential, expectedAttack, shapingFor, SHAPING_PRESETS, vpReturnsToGo } from './shaping';
+import {
+	buildPotential,
+	expectedAttack,
+	potentialShapingDelta,
+	shapingFor,
+	SHAPING_PRESETS,
+	vpReturnsToGo
+} from './shaping';
 import type { PrivatePlayerState } from '../types';
 
 type SpiritFixture = { slotIndex: number; isFaceDown: boolean; classes?: Record<string, number> };
@@ -96,5 +103,27 @@ describe('shaping: ascend3 engine-power preset', () => {
 		const r0 = 3 / 30 + (b1 - b0);
 		expect(g[1]).toBeCloseTo(r1, 12);
 		expect(g[0]).toBeCloseTo(r0 + gamma * r1, 12);
+	});
+
+	it('policy-invariant shaping cancels engine utility from a terminal discounted return', () => {
+		const gamma = 0.9;
+		const b0 = 0.2;
+		const b1 = 0.8;
+		const finalBuild = 1.4; // must not become terminal utility
+		const g = vpReturnsToGo([0, 3], [b0, b1], 6, finalBuild, gamma, [], {
+			potentialMode: 'policy-invariant',
+			terminal: true
+		});
+		const baseVpReturn = 3 / 30 + gamma * (3 / 30);
+		expect(g[0]).toBeCloseTo(baseVpReturn - b0, 12);
+		expect(g[1]).toBeCloseTo(3 / 30 - b1, 12);
+		expect(potentialShapingDelta(b1, finalBuild, gamma, true, 'policy-invariant')).toBe(-b1);
+	});
+
+	it('policy-invariant shaping preserves a nonterminal bootstrap potential', () => {
+		expect(potentialShapingDelta(0.4, 0.7, 0.9, false, 'policy-invariant')).toBeCloseTo(
+			0.9 * 0.7 - 0.4,
+			12
+		);
 	});
 });

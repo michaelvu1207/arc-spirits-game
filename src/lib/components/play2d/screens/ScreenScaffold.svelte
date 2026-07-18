@@ -47,12 +47,16 @@
 					<p class="subtitle">
 						{subtitle}
 						{#if syncedAt}
-							<span class="synced"><span class="dot"></span>Synced {syncedAt.toLocaleTimeString()}</span>
+							<span class="synced"
+								><span class="dot"></span>Synced {syncedAt.toLocaleTimeString()}</span
+							>
 						{/if}
 					</p>
 				{:else if syncedAt}
 					<p class="subtitle">
-						<span class="synced"><span class="dot"></span>Synced {syncedAt.toLocaleTimeString()}</span>
+						<span class="synced"
+							><span class="dot"></span>Synced {syncedAt.toLocaleTimeString()}</span
+						>
 					</p>
 				{/if}
 			</div>
@@ -192,10 +196,8 @@
 	@media (orientation: landscape) and (max-height: 520px) {
 		.inner {
 			max-width: none;
-			padding:
-				calc(42px + env(safe-area-inset-top))
-				max(74px, calc(28px + env(safe-area-inset-right)))
-				calc(28px + env(safe-area-inset-bottom))
+			padding: calc(42px + env(safe-area-inset-top))
+				max(74px, calc(28px + env(safe-area-inset-right))) calc(28px + env(safe-area-inset-bottom))
 				max(48px, calc(28px + env(safe-area-inset-left)));
 		}
 		.back {
@@ -235,5 +237,79 @@
 		.content {
 			margin-top: 16px;
 		}
+	}
+
+	/* Shared outside-game page frame: oversized type and flat cut rails. */
+	.screen {
+		position: relative;
+		background: rgba(5, 3, 16, 0.36);
+	}
+	.screen::before,
+	.screen::after {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+	}
+	.screen::before {
+		left: -8vw;
+		top: 18vh;
+		width: 42vw;
+		height: 16vh;
+		background: #7b1dff;
+		opacity: 0.2;
+		clip-path: polygon(0 0, 100% 24%, 72% 100%, 0 72%);
+	}
+	.screen::after {
+		right: -12vw;
+		bottom: -14vh;
+		width: 54vw;
+		height: 36vh;
+		background: #087b91;
+		opacity: 0.18;
+		clip-path: polygon(22% 0, 100% 30%, 100% 100%, 0 100%);
+	}
+	.inner {
+		max-width: 1320px;
+		position: relative;
+		z-index: 1;
+	}
+	.back {
+		padding: 7px 32px 7px 12px;
+		background: #20104a;
+		color: #fff;
+		clip-path: polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%);
+	}
+	.back:hover,
+	.back:focus-visible {
+		transform: none;
+		background: #24d4ff;
+		color: #080311;
+	}
+	.head {
+		position: relative;
+		border: 0;
+		padding-bottom: 18px;
+	}
+	.head::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		bottom: 0;
+		width: min(720px, 76vw);
+		height: 8px;
+		background: #ff2bc7;
+		clip-path: polygon(0 0, 100% 0, 96% 100%, 0 100%);
+	}
+	.title {
+		color: #fff;
+		background: none;
+		-webkit-text-fill-color: currentColor;
+		filter: none;
+		text-shadow: none;
+	}
+	.dot {
+		border-radius: 0;
+		box-shadow: none;
+		transform: rotate(45deg);
 	}
 </style>

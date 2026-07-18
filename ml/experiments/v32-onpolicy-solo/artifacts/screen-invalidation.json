@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "arc-v32-screen-invalidation-v1",
+  "recordedAt": "2026-07-14T10:03:56Z",
+  "valid": true,
+  "screenValid": false,
+  "developmentSeedsMayOpen": false,
+  "hiddenSeedsMayOpen": false,
+  "failedRoot": "ml/experiments/v32-onpolicy-solo/league/rep-c/round-reweighted",
+  "failedGeneration": 1,
+  "failureClass": "preregistered-training-trust-gate",
+  "failure": {
+    "gate": "max round-weighted PPO clip fraction",
+    "threshold": 0.2,
+    "observed": 0.201,
+    "epoch": 1,
+    "metric": {
+      "approxKl": 0.0057,
+      "clipFraction": 0.174,
+      "roundWeightedKl": 0.0064,
+      "roundWeightedClipFraction": 0.201,
+      "optimizerSteps": 196
+    },
+    "auditError": "ValueError: round-weighted clip-fraction gate failed",
+    "infrastructureAttributed": false,
+    "retryAllowed": false
+  },
+  "lineage": {
+    "stateGeneration": 1,
+    "statePhase": "idle",
+    "trainingSeeds": {
+      "min": 947300000,
+      "max": 947301023,
+      "count": 1024
+    },
+    "checkpointSha256": "a247bc35da5eef9df396178c1168f01caa033293133ce167dde38efdda991bb1",
+    "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad"
+  },
+  "evidence": {
+    "config": {
+      "path": "ml/experiments/v32-onpolicy-solo/league/rep-c/round-reweighted/config.json",
+      "sha256": "45490f4ba354743412cfc2eb3096e8833281021d7e54b4fa895dcba8a66e480b"
+    },
+    "state": {
+      "path": "ml/experiments/v32-onpolicy-solo/league/rep-c/round-reweighted/state.json",
+      "sha256": "2a90e6eb9c321337cdf26c05d7ca0fb01d04df4850e94982ee6d90a858859b8f"
+    },
+    "history": {
+      "path": "ml/experiments/v32-onpolicy-solo/league/rep-c/round-reweighted/history.jsonl",
+      "sha256": "5899696b9f873dcdb9a9d25773a89e28f19b5186139b64c3d505c4bc9f32f01a"
+    },
+    "orchestratorLog": {
+      "path": "ml/experiments/v32-onpolicy-solo/league/rep-c/round-reweighted/orchestrator.log",
+      "sha256": "22b5a6024d8aca9653518dca1bd0781ca03e2857de71d4bec7d39e3df4238cc2"
+    },
+    "inferenceLog": {
+      "path": "ml/experiments/v32-onpolicy-solo/league/rep-c/round-reweighted/infer-main-0.log",
+      "sha256": "ad4ffb4844da0fd1b81d5d93b51d94be74b6a24cfc89d8873ca3ca7218de056a"
+    },
+    "trainLog": {
+      "path": "/dev/shm/arc-v32-screen/rep-c/round-reweighted/data/gen1/main-0/train.log",
+      "sha256": "8dcda3774993b9381fc7d9e4c322f8f78f63d6d08e91623d7421e39e0ebdbec3"
+    }
+  },
+  "disposition": {
+    "pairedScreenInvalidated": true,
+    "remainingV32ProcessesStopped": true,
+    "stoppedRootOrchestratorPid": 684980,
+    "stoppedProcessCount": 11,
+    "forcedKillCount": 0,
+    "unrelatedProcessesTouched": false,
+    "performanceOutcomesUsedToMakeDisposition": false,
+    "reason": "The frozen protocol makes any per-generation trust-gate failure in any root invalidate the whole paired screen. A semantic training-gate failure cannot be repaired or retried."
+  }
+}

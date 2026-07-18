@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "arc-v34-systems-stage-v1",
+  "strengthUse": false,
+  "outcomesLoaded": false,
+  "arm": "rerank-p025",
+  "stage": "throughput-w8",
+  "seed0": 957900000,
+  "games": 128,
+  "seedMax": 957900127,
+  "workers": 8,
+  "plannerMode": "critic-rerank",
+  "strategicDecisions": 3769,
+  "strategicSimulations": 0,
+  "stalls": 0,
+  "decisionWallMsP95": 41.595,
+  "wallSeconds": 36.138549454,
+  "gamesPerSecond": 3.541924120748911,
+  "optimisticProjected4096Seconds": null,
+  "projected4096Seconds": 1156.433582528,
+  "inference": {
+    "format": "arc-entity-scorer-v2",
+    "obsDim": 3419,
+    "actDim": 104,
+    "weightsPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "weightsSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+    "wire": "binary"
+  },
+  "inputs": {
+    "protocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548"
+    },
+    "benchmark": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/throughput-w8/attempt-1/benchmark.json",
+      "sha256": "0fe1407987deff10e6f33b9b4d6f4ab22192b09f76307224416cf89a29a52964"
+    },
+    "progress": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/throughput-w8/attempt-1/progress.jsonl",
+      "sha256": "15c8a8352d7899ad940817ba788a4978b8e86d52e52e290cd82e6224f3eb2bbd"
+    }
+  },
+  "eligible": true,
+  "rejectionReason": null
+}

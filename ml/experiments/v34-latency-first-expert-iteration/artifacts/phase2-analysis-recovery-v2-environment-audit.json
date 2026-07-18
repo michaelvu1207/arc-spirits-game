@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-v2-environment-audit-v1",
+  "recordedAt": "2026-07-14T20:42:00Z",
+  "outcomeBlind": true,
+  "freshConnections": {
+    "count": 4,
+    "nonPty": 2,
+    "pty": 2,
+    "variableCounts": [19, 19, 21, 21],
+    "varyingOrPresenceChanging": [
+      "SSH_CLIENT",
+      "SSH_CONNECTION",
+      "SSH_TTY",
+      "TERM",
+      "XDG_SESSION_ID"
+    ],
+    "absentFromEveryConnection": [
+      "COLUMNS",
+      "LINES",
+      "SSH_AUTH_SOCK"
+    ],
+    "sampledStableSessionVariables": [
+      "DBUS_SESSION_BUS_ADDRESS",
+      "XDG_RUNTIME_DIR"
+    ],
+    "valuesDisplayed": false,
+    "onlyValueHashesCompared": true
+  },
+  "sourceAudit": {
+    "files": [
+      "ml/analyze_v34_phase2.py",
+      "scripts/record-v34-phase2-condition.mjs",
+      "scripts/verify-v34-strength-chain.mjs"
+    ],
+    "patterns": [
+      "get_terminal_size",
+      "COLUMNS",
+      "LINES",
+      "SSH_CLIENT",
+      "SSH_CONNECTION",
+      "SSH_TTY",
+      "SSH_AUTH_SOCK",
+      "XDG_SESSION_ID",
+      "XDG_RUNTIME_DIR",
+      "DBUS_SESSION_BUS_ADDRESS",
+      "os.environ",
+      "os.getenv",
+      "process.env"
+    ],
+    "matches": [],
+    "analyzerOrLockedVerifierReadsExcludedVariable": false
+  },
+  "outputSemantics": {
+    "stdout": "audit-only stream with no registered measured endpoint",
+    "measuredAnalysisOutput": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.json"
+  },
+  "conclusion": "The excluded variables identify SSH transport, terminal, shell bookkeeping, or login-session plumbing; they are not consumed by the frozen analysis path."
+}

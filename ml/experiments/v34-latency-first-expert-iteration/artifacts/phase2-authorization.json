@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "arc-v34-phase2-authorization-v1",
+  "systemsEligibility": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+    "sha256": "74d1a12ee1ce2f32a4add65c2a31dad89c914b673da9803baf6179018231a68d"
+  },
+  "registeredFamilyCandidateSlots": [
+    "rerank-p025",
+    "rerank-p050",
+    "rerank-p075",
+    "rerank-p100",
+    "heuristic-s4-h2",
+    "heuristic-s8-h3"
+  ],
+  "eligibleCandidateArms": [
+    "rerank-p025",
+    "rerank-p050",
+    "rerank-p075",
+    "rerank-p100",
+    "heuristic-s4-h2",
+    "heuristic-s8-h3"
+  ],
+  "authorization": {
+    "phase2SeedsOpen": true,
+    "guardianSeedsOpen": false,
+    "teacherSeedsOpen": false,
+    "finalDevelopmentSeedsOpen": false,
+    "hiddenSeedsOpen": false,
+    "multiplayerSeedsOpen": false,
+    "humanReferenceSeedsOpen": false,
+    "productionPromotionOpen": false
+  },
+  "recordedAt": "2026-07-14T14:04:21.682Z"
+}

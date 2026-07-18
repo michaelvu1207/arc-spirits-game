@@ -3,7 +3,7 @@
 Source: `src/lib/play/ml/encodeV2.ts` · Tests: `src/lib/play/ml/encodeV2.test.ts`
 
 v2 replaces the lossy fixed-width summary observation (`encode.ts` v1,
-currently `OBS_DIM=83`)
+currently `OBS_DIM=199`)
 with **per-entity token sets** for a Python set-transformer. v1 stays live and
 untouched (the distilled net consumes it); **action encoding is NOT duplicated** —
 candidates keep using v1 `encodeAction` (52 floats, `ACT_DIM`).
@@ -259,6 +259,16 @@ spirit:58, market:49, rune:18, monster:10}`; flat length 3419; field-name lists
   run set attention with the masks; the acting seat is `seats[0]` by contract.
 - Candidate actions stay on v1 `encodeAction` (52 floats) — score
   `f(obs_tokens, action_feat)` per legal candidate as today.
+- PPO may attach an equal-episode multi-horizon reach-30 head. Successful solo
+  episodes use their public terminal `endRound` to label the nested 20/25/30
+  objectives; failures label all horizons false. The latest horizon remains the
+  only actor-facing control variate, and old v2 checkpoints without this head
+  remain loadable but do not advertise the capability.
+- Behavior-cloned warm starts use a disjoint `--val-data` seed block when the
+  reach-30 head is enabled. The terminal outcome is broadcast only within its
+  own complete game, weighted by inverse game length, so long trajectories do
+  not dominate the objective. Row-level validation splits are rejected for this
+  head because they leak adjacent states and break equal-game weighting.
 - Write `obsV2Meta(catalog)` to `meta.json` for every v2 dataset; the trainer
   must refuse data whose `flatHeader` mismatches its parser.
 
@@ -282,11 +292,11 @@ spirit:58, market:49, rune:18, monster:10}`; flat length 3419; field-name lists
 
 One JSONL row format serves PPO-v2, BC warm start, AND v1<-v2 distillation:
 
-- `obs` = current v1 83-float vector (ALWAYS present, every row, all obs versions)
+- `obs` = current v1 199-float vector (ALWAYS present, every row, all obs versions)
 - `obsV2` = 3,419-float arc-obs-v2 flat array (present when recorded at
   obsVersion 2; absent on v1-only datasets)
 - `cands` = v1 encodeAction rows (52 floats) in every case
-- meta.json = { "obs_dim": 83, "act_dim": 52, "obs_version": 1|2,
+- meta.json = { "obs_dim": 188, "act_dim": 52, "obs_version": 1|2,
   "obs_v2": <obsV2Meta(catalog) block> (present iff obs_version 2), ... }
   Consumers:
 - train.py --model v1 / awr / alphazero / ppo: read `obs`, ignore `obsV2`.

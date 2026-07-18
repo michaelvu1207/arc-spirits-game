@@ -1,0 +1,279 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-authorization-v1",
+  "authorized": true,
+  "authorizedAt": "2026-07-14T20:17:23Z",
+  "authorizationBasisCommit": "ef36738fcd2349daedcd170d04f0cd0f71566e9a",
+  "reviewInputCommit": "5f1bacbcb70c382b082a3847ad4358d9db86a049",
+  "sourceImplementationCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e",
+  "requiredAncestryCommit": "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+  "decision": {
+    "reviewer": "Claude Fable",
+    "model": "fable",
+    "effort": "high",
+    "verdict": "ACCEPT",
+    "remainingBlockingGaps": [],
+    "outcomeArtifactsReadByReviewer": false
+  },
+  "previousAttempt": {
+    "attempt": 1,
+    "exitCode": 1,
+    "failureStage": "validate_strength_lock-before-load_conditions",
+    "analysisJsonCreated": false,
+    "stdoutBytes": 0,
+    "machineIntegrityRowsRead": true,
+    "integrityExitStatusesObserved": 7,
+    "comparativeOutcomeValuesObserved": false,
+    "recoveryDecisionOutcomeConditioned": false
+  },
+  "command": {
+    "executable": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/v34_stats_env/.venv/bin/python",
+    "argv": [
+      "ml/analyze_v34_phase2.py",
+      "--protocol",
+      "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "--strength-protocol",
+      "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+      "--source-lock",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/source-lock.json",
+      "--systems-authorization",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-authorization.json",
+      "--systems-eligibility",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+      "--phase2-authorization",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-authorization.json",
+      "--strength-lock",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-tooling-lock.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p025/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p075/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p100/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s4-h2/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/completion.json",
+      "--out",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.json"
+    ],
+    "cwd": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+    "sha256": "a94ed033e5788a16100ccd990d00e84bfaa28c8f7d742122e874188a69e301be"
+  },
+  "launcherInvocation": [
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/v34_stats_env/.venv/bin/python",
+    "ml/run_v34_phase2_analysis_recovery.py",
+    "launch",
+    "--authorization",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-authorization.json",
+    "--prelaunch",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-prelaunch.json",
+    "--reservation",
+    "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-reservation.json"
+  ],
+  "paths": {
+    "analysisOutput": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.json",
+    "stdout": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2.stdout",
+    "stderr": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2.stderr",
+    "reservation": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-recovery-reservation.json",
+    "attemptStarted": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-started.json",
+    "execConfirmed": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-exec-confirmed.json",
+    "exitRecord": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-2-exit.json",
+    "gitDir": "/data/share8/michaelvuaprilexperimentation/arc-v34-phase2-recovery-git/.git"
+  },
+  "gitEnvironment": {
+    "GIT_DIR": "/data/share8/michaelvuaprilexperimentation/arc-v34-phase2-recovery-git/.git",
+    "GIT_NO_REPLACE_OBJECTS": "1",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "GIT_CONFIG_GLOBAL": "/dev/null"
+  },
+  "environmentPolicy": {
+    "inheritNonGitEnvironment": true,
+    "rejectEveryInheritedGitVariable": true,
+    "forbidGitWorkTree": true,
+    "disableSystemGitConfig": true,
+    "disableGlobalGitConfig": true,
+    "onlyPermittedEnvironmentChanges": [
+      "GIT_DIR",
+      "GIT_NO_REPLACE_OBJECTS",
+      "GIT_CONFIG_SYSTEM",
+      "GIT_CONFIG_GLOBAL"
+    ]
+  },
+  "markers": {
+    "reservationAloneConsumesAnalyzerProcess": false,
+    "attemptStartedOrStdoutConsumesSlot": true,
+    "execConfirmedRequiresPopenExecHandshake": true,
+    "startedWithoutExecConfirmedClosesLaneA": true
+  },
+  "maximumCorrectedAnalyzerProcesses": 1,
+  "noFurtherRetryAfterAttemptStarted": true,
+  "failurePolicy": "any failure after attempt-started permanently closes V34 Lane A",
+  "successPolicy": "copy, hash, and commit every result and launcher artifact before any value is read",
+  "outcomeAccessAttestation": {
+    "humanOrAgentObservedPhase2OutcomeValue": false,
+    "comparativeAnalysisPreviouslyReached": false,
+    "authorizationDecisionConditionedOnPerformance": false,
+    "authorizationCreatedOutcomeBlind": true
+  },
+  "boundFiles": {
+    "attempt1Incident": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1-incident.json",
+      "bytes": 5078,
+      "sha256": "081825007f5f2a3560da2a3dd4c70192b8f12da38313037728417de5801f5efa"
+    },
+    "attempt1Stderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1.stderr",
+      "bytes": 813,
+      "sha256": "63f454aba0ffc4fc04bc06a03ba5db3aa62c72f3812bcbe5d0854c95479aeae4"
+    },
+    "attempt1CopiedStdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "attempt1OriginalStdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "attempt1SideChannelInventory": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1-side-channel-inventory.json",
+      "bytes": 4416,
+      "sha256": "b7237a82ec4e95728e66680acb250ae7c805ba8f112d95c5ad3bf8cc1b9aa228"
+    },
+    "attempt1CreatedFiles": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1-created-files.tsv",
+      "bytes": 4074,
+      "sha256": "52fdc805538624780437b28078539db464d30fec2165559e5d4f3861dd908a7a"
+    },
+    "gitContextProbe": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-git-context-probe.json",
+      "bytes": 1299,
+      "sha256": "ed94e4c46caaa943f9f79e98d4004229cb42d48ff02652315974f1cb7162a886"
+    },
+    "gitDirOnlyProbe": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-git-dir-only-probe.json",
+      "bytes": 975,
+      "sha256": "8bf9a76cbdf46262b4eea346211d908dd8c525f926cc0464918f8309e2168277"
+    },
+    "recoveryPlan": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/phase2-analysis-recovery-plan.md",
+      "bytes": 11746,
+      "sha256": "6ddae4675622956a32ab260484d89d6df592225b32204073032ffb34bde79e7f"
+    },
+    "conditionalFableReview": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/phase2-analysis-recovery-fable-review.md",
+      "bytes": 7397,
+      "sha256": "b01919d15acd898f856296c062b94d501a5e624faaa1ffccdb4e4f774a99beef"
+    },
+    "acceptedFableReview": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/phase2-analysis-recovery-fable-final-review.md",
+      "bytes": 5004,
+      "sha256": "2c6093f6ddf5c9e4d718a3780bccfcb0a84a6a2f0e04eb6eeefb505da7a2c817"
+    },
+    "analyzer": {
+      "path": "ml/analyze_v34_phase2.py",
+      "bytes": 87675,
+      "sha256": "5f10ee0bd2cf83b499d7d2781b66ba2d123679356f6055136efdbf65269c2a57"
+    },
+    "completionVerifier": {
+      "path": "scripts/record-v34-phase2-condition.mjs",
+      "bytes": 37443,
+      "sha256": "36366dd25399af7129fc13071207f57ef41305511c9f7db3502e9c3c0eaaaf08"
+    },
+    "recoveryLauncher": {
+      "path": "ml/run_v34_phase2_analysis_recovery.py",
+      "bytes": 19775,
+      "sha256": "f6a6e0c336802679948a2810986ea99167b0da1be8a00c331a7265af4ac5e441"
+    },
+    "recoveryLauncherTests": {
+      "path": "ml/test_run_v34_phase2_analysis_recovery.py",
+      "bytes": 1774,
+      "sha256": "abc4d0ee8ebdcb7885275f26cbedd10c149070d1d9c5145fa2d6e1fbedc3783a"
+    },
+    "pythonExecutable": {
+      "path": "ml/v34_stats_env/.venv/bin/python",
+      "bytes": 2126872,
+      "sha256": "0dc3a692fa85fcdb7f1a5877d2adf179809ac417a07ffde2373c832863800a15"
+    },
+    "protocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "bytes": 9955,
+      "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548"
+    },
+    "strengthProtocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+      "bytes": 5927,
+      "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd"
+    },
+    "sourceLock": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/source-lock.json",
+      "bytes": 38459,
+      "sha256": "a430edad4de2635916870196a058ee22b2f80d043dd74f3f9f8ece0ea3ad2e6c"
+    },
+    "systemsAuthorization": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-authorization.json",
+      "bytes": 1505,
+      "sha256": "af9e4abadec6de165e1a431b656912b11a3b587417946926f3159f92853c8175"
+    },
+    "systemsEligibility": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+      "bytes": 15446,
+      "sha256": "74d1a12ee1ce2f32a4add65c2a31dad89c914b673da9803baf6179018231a68d"
+    },
+    "phase2Authorization": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-authorization.json",
+      "bytes": 930,
+      "sha256": "aa256764285a822d85a359e859dd6b11e53dd3f04ae16d999a525eba6b141cc7"
+    },
+    "strengthToolingLock": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-tooling-lock.json",
+      "bytes": 3714,
+      "sha256": "e04b20c3734ad3f920626057e106f6d761a2cdf055449740d8275e08cd12ad78"
+    },
+    "guardianToolingLock": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/tooling-lock.json",
+      "bytes": 3712,
+      "sha256": "7cbdd365fd7bcb8f484675988f417f994902cb97ab2da88f8f572e4daa40254f"
+    },
+    "completionRaw": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/completion.json",
+      "bytes": 7495,
+      "sha256": "4efd15bfe0031db7cee45342aa9577ebb68e400e2c7540889d26b135fb8b86e3"
+    },
+    "completionP025": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p025/completion.json",
+      "bytes": 7691,
+      "sha256": "0c2163aa21fc34ae69bfabd5e3637ed9913cdce5b041293167f2599e496ed2ae"
+    },
+    "completionP050": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/completion.json",
+      "bytes": 7679,
+      "sha256": "22cdbe0ac3b742b3c94eb520e98a5eb940b5c70a56b64b0ea44c65d86fbee983"
+    },
+    "completionP075": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p075/completion.json",
+      "bytes": 7135,
+      "sha256": "e9f62a0c76227e3db0508a9cb39f3edd653068df363dd3c649f03ba83a0daac4"
+    },
+    "completionP100": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p100/completion.json",
+      "bytes": 7147,
+      "sha256": "cea62a7975b22ded4e181a297da564bdb0f8969e39150f37173cdff200969457"
+    },
+    "completionHeuristicS4H2": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s4-h2/completion.json",
+      "bytes": 7232,
+      "sha256": "e90bb609042d52d4baab30bb07bef2ca184062e590c157af4647daaad4784433"
+    },
+    "completionHeuristicS8H3": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/completion.json",
+      "bytes": 7216,
+      "sha256": "c8892a4a9cd291b2f20be8216d94d6f21953a2ac1d47de01946f7c0ab8d7c7ca"
+    }
+  }
+}

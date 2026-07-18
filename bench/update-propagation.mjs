@@ -60,7 +60,7 @@ async function main() {
 	if (!url || !anon) throw new Error('Missing PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY (.env).');
 
 	console.log(`[update-propagation] target=${args.base} samples=${SAMPLES}`);
-	const { code, memberId } = await createRoom(args.base, 'BenchProp');
+	const { code, token } = await createRoom(args.base, 'BenchProp');
 	console.log(`[update-propagation] room ${code}; subscribing client B to room:${code}...`);
 
 	// Client B: the passive observer. Subscribe exactly as playStore.openChannel does.
@@ -75,7 +75,7 @@ async function main() {
 	channel.on('broadcast', { event: 'sync' }, () => {
 		// Mirror the store: a sync signal → refetch the projection, then check revision.
 		void (async () => {
-			const r = await getView(args.base, code, memberId);
+			const r = await getView(args.base, code, token);
 			if (r.ok && onReached && r.json?.projection?.revision >= target) {
 				const resolve = onReached;
 				onReached = null;
@@ -105,7 +105,7 @@ async function main() {
 	for (let i = 0; i < SAMPLES; i += 1) {
 		const command = { type: 'setNavigationTimer', durationMs: durations[i % 2] };
 		// Fire the command from client A; its ack carries the freshly-committed revision.
-		const ack = await sendCommand(args.base, code, memberId, command);
+		const ack = await sendCommand(args.base, code, token, command);
 		if (!ack.ok) {
 			timeouts += 1;
 			continue;

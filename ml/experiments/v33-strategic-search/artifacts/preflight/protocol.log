@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "arc-v33-protocol-validation-v1",
+  "valid": true,
+  "protocolSha256": "58182573cb7ac5f538b59a5f9c1f030c30ae95819a7d20f6b54bd38281ed7dfb",
+  "ranges": [
+    {
+      "name": "systems",
+      "lo": 953900000,
+      "hi": 953900255
+    },
+    {
+      "name": "determinization",
+      "lo": 956000000,
+      "hi": 956099999
+    },
+    {
+      "name": "phase2",
+      "lo": 952000000,
+      "hi": 952004095
+    },
+    {
+      "name": "guardian",
+      "lo": 952300000,
+      "hi": 952308191
+    },
+    {
+      "name": "phase3-development",
+      "lo": 952100000,
+      "hi": 952104095
+    },
+    {
+      "name": "phase3-hidden",
+      "lo": 952200000,
+      "hi": 952204095
+    },
+    {
+      "name": "expert-development",
+      "lo": 955000000,
+      "hi": 955004095
+    },
+    {
+      "name": "expert-a-g1",
+      "lo": 954000000,
+      "hi": 954004095
+    },
+    {
+      "name": "expert-a-g2",
+      "lo": 954010000,
+      "hi": 954014095
+    },
+    {
+      "name": "expert-a-g3",
+      "lo": 954020000,
+      "hi": 954024095
+    },
+    {
+      "name": "expert-b-g1",
+      "lo": 954100000,
+      "hi": 954104095
+    },
+    {
+      "name": "expert-b-g2",
+      "lo": 954110000,
+      "hi": 954114095
+    },
+    {
+      "name": "expert-b-g3",
+      "lo": 954120000,
+      "hi": 954124095
+    },
+    {
+      "name": "expert-c-g1",
+      "lo": 954200000,
+      "hi": 954204095
+    },
+    {
+      "name": "expert-c-g2",
+      "lo": 954210000,
+      "hi": 954214095
+    },
+    {
+      "name": "expert-c-g3",
+      "lo": 954220000,
+      "hi": 954224095
+    }
+  ]
+}

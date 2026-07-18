@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "arc-v35-candidate-v1",
+  "policy": { "sample": false, "temperature": 0.65 },
+  "planner": {
+    "mode": "none",
+    "rerankPolicyWeight": null,
+    "searchSims": 0,
+    "searchHorizonRounds": 2,
+    "searchFraction": 1.0,
+    "searchValueWeight": 0.5,
+    "searchRollout": "heuristic",
+    "searchNavTemperature": 0.0
+  },
+  "curriculum": { "soloShare": 0.5, "lateSnapshotShare": 0.35, "multiplayerShare": 0.15 },
+  "loss": { "terminalWeight": 1.0, "engineWeight": 0.3, "reach30Weight": 0.5, "entropyWeight": 0.01 }
+}

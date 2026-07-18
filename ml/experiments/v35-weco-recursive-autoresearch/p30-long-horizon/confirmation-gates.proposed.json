@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "arc-v35-superhuman-confirmation-gates-v1",
+  "status": "frozen-before-p30-outcomes",
+  "authorized": false,
+  "promotionEligible": false,
+  "baseline": {
+    "checkpointSha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+    "selectionRule": "compare the sole P30-selected checkpoint against this locked incumbent on identical seeds"
+  },
+  "freshPublicSolo": {
+    "games": 8192,
+    "seedFamily": "one-shot-fresh-public-never-training-or-selection",
+    "pairedToBaseline": true,
+    "familywiseAlpha": 0.05,
+    "correction": "bonferroni-three-primary-endpoints",
+    "oneSidedZ": 2.128045234184984,
+    "endpoints": {
+      "round30WinRate": {
+        "method": "one-sided-Wilson",
+        "minimumLowerBound": 0.8,
+        "minimumWins": 6631
+      },
+      "round35WinRate": {
+        "method": "one-sided-Wilson",
+        "minimumLowerBound": 0.9,
+        "minimumWins": 7431
+      },
+      "postRound15VpPerRoundDelta": {
+        "method": "paired-game-percentile-bootstrap",
+        "draws": 100000,
+        "seed": 35153501,
+        "confidence": 0.9833333333333333,
+        "minimumLowerBound": 0.05
+      }
+    },
+    "stalls": 0,
+    "malformedActions": 0
+  },
+  "heldOutPrivateSolo": {
+    "games": 4096,
+    "seedFamily": "status-3-private-never-visible-to-candidate-or-selector",
+    "oneSidedZ": 2.3263478740408408,
+    "round30WinRate": {
+      "minimumLowerBound": 0.8,
+      "minimumWins": 3337
+    },
+    "round35WinRate": {
+      "minimumLowerBound": 0.9,
+      "minimumWins": 3732
+    },
+    "lateGameSlices": {
+      "minimumGamesPerSlice": 1024,
+      "minimumRound30WinLowerBound": 0.7,
+      "minimumWinsPer1024GameSlice": 751,
+      "requiredSlices": [
+        "low-vp-at-round15",
+        "fallen-or-corrupted-recovery",
+        "engine-deficit",
+        "long-game"
+      ]
+    },
+    "stalls": 0,
+    "malformedActions": 0
+  },
+  "multiplayer": {
+    "formats": [2, 3, 4],
+    "gamesPerFormat": 4096,
+    "seatAndOrderBalanced": true,
+    "estimator": "precommitted-multinomial-Elo-MLE-with-game-cluster-bootstrap",
+    "bootstrapDraws": 100000,
+    "bootstrapSeed": 35153502,
+    "minimumOverallEloDeltaLower95": 50,
+    "minimumPerFormatEloDeltaLower95": 0,
+    "maximumAbsoluteSeatWinRateSpread": 0.02
+  },
+  "exploitability": {
+    "families": ["champion", "exploiter", "heuristic", "adversarial"],
+    "gamesPerFamily": 3072,
+    "pairedToBaseline": true,
+    "bootstrapDraws": 100000,
+    "bootstrapSeed": 35153503,
+    "minimumAggregateScoreDeltaLower95": 0.03,
+    "minimumPerFamilyScoreDeltaLower95": -0.01,
+    "maximumBestResponseExploitRateUpper95": 0.4,
+    "maximumBestResponseExploitRateDeltaUpper95": -0.02
+  },
+  "fairness": {
+    "hiddenOrFutureInformationReads": 0,
+    "counterfactualHiddenStateActionMismatches": 0,
+    "privateSeedOrOutcomeExposure": 0,
+    "publicMonsterStatsAndDeterministicDropsAllowed": true
+  },
+  "systemsAndRegression": {
+    "stalls": 0,
+    "malformedActions": 0,
+    "corruptionOrFallenProgressFailures": 0,
+    "deterministicReplayMismatches": 0,
+    "productionBinaryInferenceP95Ms": 100,
+    "maximumInferenceLatencyRatioToBaseline": 1.1,
+    "maximumGameWallP95Ms": 60000,
+    "maximumGameWallLatencyRatioToBaseline": 1.25,
+    "maximumGpuMemoryRatioToBaseline": 1.1,
+    "requiredSuites": ["engine", "rules", "bot-progress", "catalog-parity", "live-e2e"]
+  },
+  "michael": {
+    "games": 40,
+    "minimumBotWins": 28,
+    "tiesCountAsNonWins": true,
+    "firstPlayerAndOrderAlternated": true,
+    "immutableReplaysRequired": true,
+    "procedureRequiresSeparatePreGameFableAcceptance": true
+  },
+  "decision": "every threshold is conjunctive; no strong result waives another gate"
+}

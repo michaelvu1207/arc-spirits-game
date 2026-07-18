@@ -1,8 +1,10 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import { spawn, type ChildProcess } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { currentPhase, currentRound } from './helpers';
+import { currentPhase, currentRound, ensureGuestIdentity } from './helpers';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — plain-JS process-ownership helper shared with the release gates
+import { spawnOwned, stopOwned } from '../scripts/procOwn.mjs';
 
 /**
  * M0 GATE — two real browsers, both on the WebSocket transport, playing a real game.
@@ -38,8 +40,7 @@ const WS_MATCH = new RegExp(`127\\.0\\.0\\.1:${PORT}`);
 // task's requirement) is asserted separately in the latency summary.
 const CROSS_MS = 5_000;
 
-let server: ChildProcess;
-let serverLog = '';
+let server: ReturnType<typeof spawnOwned>;
 
 async function waitForServerHealth(retries = 100): Promise<void> {
 	for (let i = 0; i < retries; i += 1) {
@@ -51,27 +52,27 @@ async function waitForServerHealth(retries = 100): Promise<void> {
 		}
 		await new Promise((r) => setTimeout(r, 250));
 	}
-	throw new Error(`room server did not become healthy on :${PORT}\n--- server log ---\n${serverLog}`);
+	throw new Error(
+		`room server did not become healthy on :${PORT}\n--- server log ---\n${server.ownedLog}`
+	);
 }
 
 test.beforeAll(async () => {
-	server = spawn('npx', ['tsx', join(REPO, 'server', 'index.ts')], {
-		cwd: REPO,
-		env: { ...process.env, PORT: String(PORT) },
-		stdio: ['ignore', 'pipe', 'pipe']
-	});
-	server.stdout?.on('data', (d) => (serverLog += d));
-	server.stderr?.on('data', (d) => (serverLog += d));
+	// OWNED process group (scripts/procOwn.mjs): the old `spawn('npx', ['tsx', …])`
+	// + `.killed` checks killed only the npx wrapper and leaked the tsx/node pair.
+	server = spawnOwned(
+		'node',
+		[join(REPO, 'node_modules', '.bin', 'tsx'), join(REPO, 'server', 'index.ts')],
+		{ cwd: REPO, label: 'ws-two-browser room server', env: { ...process.env, PORT: String(PORT) } }
+	);
 	await waitForServerHealth();
 });
 
 test.afterAll(async () => {
-	console.log(`[server-log tail]\n${serverLog.slice(-3000)}`);
-	if (server && !server.killed) {
-		server.kill('SIGTERM');
-		await new Promise((r) => setTimeout(r, 500));
-		if (!server.killed) server.kill('SIGKILL');
-	}
+	console.log(`[server-log tail]\n${server?.ownedLog.slice(-3000) ?? ''}`);
+	// TERM → bounded wait → KILL against the whole group, ACTUAL exit awaited
+	// (safe if the fallback test already killed it mid-run).
+	if (server) await stopOwned(server, { termTimeoutMs: 3000 });
 });
 
 // ── HTTP setup helpers (same pattern as e2e/helpers.ts, inlined so this spec is self-contained
@@ -80,8 +81,13 @@ test.afterAll(async () => {
 type RoomView = { projection: { roomCode: string; revision: number; guardianPool: string[] }; member: { id: string | null } };
 
 async function apiPost(page: Page, path: string, body: Record<string, unknown> = {}): Promise<RoomView> {
+	// Mutation routes require a cmdId; minted once so retries are honest duplicates.
+	const data =
+		/\/(commands|claim-seat|start)$/.test(path) && body.cmdId == null
+			? { ...body, cmdId: `e2e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` }
+			: body;
 	for (let attempt = 0; attempt < 5; attempt += 1) {
-		const res = await page.context().request.post(path, { data: body });
+		const res = await page.context().request.post(path, { data });
 		const text = await res.text();
 		if (res.ok()) return JSON.parse(text) as RoomView;
 		if (res.status() >= 500 && attempt < 4) {
@@ -100,30 +106,18 @@ async function getRoomView(page: Page, code: string): Promise<RoomView['projecti
 	return (JSON.parse(text) as RoomView).projection;
 }
 
-async function seedMemberCookie(page: Page, code: string, memberId: string | null): Promise<void> {
-	if (!memberId) throw new Error(`missing member id for ${code}`);
-	await page.context().addCookies([
-		{
-			name: `arc_spirits_play_member_${code.toUpperCase()}`,
-			value: memberId,
-			url: 'http://localhost:4173',
-			httpOnly: true,
-			sameSite: 'Lax',
-			secure: false
-		}
-	]);
-}
-
-/** Create + seat a 2-player active game via the HTTP API (no navigation yet). */
+/** Create + seat a 2-player active game via the HTTP API (no navigation yet). Each
+ *  page first establishes the validated anonymous guest identity — the account is
+ *  the sole principal; per-room member cookies no longer exist or authorize. */
 async function seatTwoPlayers(host: Page, guest: Page): Promise<string> {
 	await host.goto('/play');
 	await guest.goto('/play');
+	await ensureGuestIdentity(host, 'Host');
+	await ensureGuestIdentity(guest, 'Guest');
 	const created = await apiPost(host, '/api/play/sessions', { displayName: 'Host' });
 	const code = created.projection.roomCode;
 	const pool = created.projection.guardianPool;
-	const joined = await apiPost(guest, `/api/play/sessions/${code}/join`, { displayName: 'Guest' });
-	await seedMemberCookie(host, code, created.member.id);
-	await seedMemberCookie(guest, code, joined.member.id);
+	await apiPost(guest, `/api/play/sessions/${code}/join`, { displayName: 'Guest' });
 	await apiPost(host, `/api/play/sessions/${code}/claim-seat`, { seatColor: 'Red' });
 	await apiPost(host, `/api/play/sessions/${code}/commands`, { command: { type: 'selectGuardian', guardianName: pool[0] } });
 	await apiPost(guest, `/api/play/sessions/${code}/claim-seat`, { seatColor: 'Blue' });
@@ -419,7 +413,9 @@ test.describe('M0 gate — two-browser WS game', () => {
 		const hostRev0 = (await getRoomView(host, code)).revision;
 		const guestRev0 = (await getRoomView(guest, code)).revision;
 
-		server.kill('SIGKILL'); // WS transport now unavailable to BOTH clients (server is gone)
+		// WS transport now unavailable to BOTH clients (server is gone) — kill the
+		// WHOLE owned group and await the real exit so no tsx/node half survives.
+		await stopOwned(server, { termTimeoutMs: 0 });
 		// Give the transports a moment to observe the drop (wsConnected → false → HTTP fallback).
 		// We don't poll `opened`: the transports keep opening short-lived reconnect sockets that
 		// fail against the dead port, so that flag flaps. The proof is that the game still advances.

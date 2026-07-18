@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-recovery-v1-reservation-incident-v1",
+  "recordedAt": "2026-07-14T20:35:00Z",
+  "authorizationVersion": 1,
+  "stage": "reservation-only-before-attempt-started",
+  "launcherExitCode": 2,
+  "launcherRejection": "prelaunch child environment hash changed",
+  "rootCause": "the v1 environment equality hash included outcome-irrelevant SSH transport and login-session variables that change between prelaunch archival and launcher invocation",
+  "observedCrossConnectionVariableChanges": [
+    "SSH_CLIENT",
+    "SSH_CONNECTION",
+    "XDG_SESSION_ID"
+  ],
+  "otherPotentialPtyTransportVariables": [
+    "SSH_TTY",
+    "TERM",
+    "COLUMNS",
+    "LINES"
+  ],
+  "prelaunchManifestCreated": true,
+  "reservationCreated": true,
+  "attemptStartedCreated": false,
+  "attempt2StdoutCreated": false,
+  "attempt2StderrCreated": false,
+  "execConfirmedCreated": false,
+  "exitRecordCreated": false,
+  "analysisJsonCreated": false,
+  "analyzerProcessStarted": false,
+  "authorizedAnalyzerProcessConsumed": false,
+  "phase2OutcomeValueDisplayed": false,
+  "recoveryDecisionOutcomeConditioned": false,
+  "v1Disposition": "abandoned without consumption; never mutate or reuse its authorization, prelaunch, or reservation artifacts"
+}

@@ -6,6 +6,40 @@
  * loads its own copy), heuristics by profile NAME (see `profileFor`).
  */
 import type { SeatColor } from '../types';
+import type { PotentialShapingMode } from './shaping';
+
+export type StrategicDecisionScope = 'navigation' | 'engine-cycle';
+
+/** Optional late-game suffix generation. Presence alone does not enable it: callers must set
+ * `enabled: true`, which keeps every historical/default actor config bit-for-bit unchanged. */
+export interface ContinuationCurriculumConfig {
+	enabled?: boolean;
+	/** Clean navigation rounds to capture. Default [12, 16, 20]. */
+	rounds?: number[];
+	/** Base deterministic selection probability per eligible source game. Default 1. */
+	sourceProbability?: number;
+	/** Probability multiplier when the source full game misses 30 VP. Default 1. */
+	capFailureWeight?: number;
+	/** Probability multiplier when the source full game reaches 30 VP. Default 0.25. */
+	successWeight?: number;
+}
+
+export interface ContinuationCurriculumDiagnostics {
+	eligibleSourceGames: number;
+	selectedSourceGames: number;
+	episodes: number;
+	rows: number;
+	/** Wall time spent only in continuation suffix rollouts on this worker/pool. */
+	wallMs: number;
+	sourceCapFailures: number;
+	sourceSuccesses: number;
+	forkSuccesses: number;
+	forkFailures: number;
+	recoveries: number;
+	skippedNoSnapshot: number;
+	sourceRoundCounts: Record<string, number>;
+	forkRoundCounts: Record<string, number>;
+}
 
 /** Per-game configuration shared by every game in a pool run. */
 export interface ActorGameConfig {
@@ -17,6 +51,11 @@ export interface ActorGameConfig {
 	 * unstick fallback profiles; in heuristic mode (no weightsPath) they play the game.
 	 */
 	profiles: string[];
+	/** Deterministically shuffle catalog guardians per seed instead of always using the first seats. */
+	shuffleGuardians?: boolean;
+	/** Evaluation-only absolute-seed schedule. Unlike a seeded shuffle, this assigns each guardian
+	 * exactly once per contiguous guardianCount-sized seed block and is invariant to sharding. */
+	guardianSchedule?: 'absolute-balanced';
 	/** Learner policy weights file. Omit for heuristic-only (BC/cold-start) generation. */
 	weightsPath?: string;
 	/**
@@ -27,6 +66,8 @@ export interface ActorGameConfig {
 	 */
 	inferSocket?: string;
 	selection?: 'hybrid' | 'value' | 'policy';
+	/** Opt-in V24 hybrid mode: policy-select ambiguous monster rewards except immediate wins. */
+	learnMonsterRewardChoices?: boolean;
 	sample?: boolean;
 	temperature?: number;
 	/** Seats driven by the learner policy (driver default: all seats when weightsPath set). */
@@ -48,17 +89,29 @@ export interface ActorGameConfig {
 	 */
 	search?: {
 		sims: number;
+		/** Search leaf semantics. `solo-reach30` is valid only for one-player games. */
+		objective?: 'multiplayer' | 'solo-reach30';
 		navTemperature?: number;
-		/** Leaf rollouts: 'policy' = self-model hybridIndex (slow, unbiased); 'heuristic' = medium profile. */
+		/** Leaf rollouts: 'policy' = serial self-model Gumbel; 'heuristic' = V34 fixed-allocation
+		 * medium-profile rollouts with one batched reach-30 leaf request. */
 		rollout?: 'policy' | 'heuristic';
 		frac?: number;
 		horizonRounds?: number;
 		valueWeight?: number;
 	};
-	/** Dense PPO reward: rStep = ΔVP/VP_TO_WIN + ΔΦ_build (see driver.denseVpReward). */
+	/** V34 solo-only latency-bounded root reranker. Mutually exclusive with search. */
+	rerank?: {
+		/** Weight on within-root policy rank; 1 is the deterministic argmax control. */
+		policyRankWeight: number;
+	};
+	/** Dense PPO reward: normalized ΔVP plus configured build-potential shaping. */
 	denseVpReward?: boolean;
 	/** Shaping preset name (shaping.ts shapingFor: 'balanced' | 'banker' | 'ascend' ...). */
 	shapingPreset?: string;
+	/** Correct discounted shaping with zero terminal potential; legacy is the default. */
+	potentialShapingMode?: PotentialShapingMode;
+	/** Which decision surfaces receive optional long-horizon PPO credit. Default navigation. */
+	strategicDecisionScope?: StrategicDecisionScope;
 	/** Command types stripped from neural seats' legal sets (hard behavioral constraint). */
 	forbidTypes?: string[];
 	maxStatusLevel?: number;
@@ -79,6 +132,15 @@ export interface ActorGameConfig {
 	 * verified) and selection 'hybrid'/'policy'. logpOld/vPred become the v2 net's.
 	 */
 	policyObsVersion?: 1 | 2;
+	/** Evaluation-only V34 public-preview calibration collection. */
+	previewReach30Audit?: boolean;
+	/** Opt-in canonical command/deadline replay hash in each game summary. */
+	includeReplayTraceHash?: boolean;
+	/** Keep per-game summaries in memory but do not persist games-*.jsonl. This is
+	 * required by outcome-blind operational screens whose scratch may survive a kill. */
+	writeGameSummaries?: boolean;
+	/** Train-only, solo late-state suffix generation. Default/off when absent or enabled=false. */
+	continuationCurriculum?: ContinuationCurriculumConfig;
 }
 
 export interface SeatSummary {
@@ -95,19 +157,42 @@ export interface SeatSummary {
 	 * random fallback); the pool never emits it. Optional: absent on old rows.
 	 */
 	policy?: 'neural' | 'heuristic' | 'uniform';
+	/** Evaluation-only build-convert-finish diagnostics; absent on historical rows. */
+	cycle?: SeatCycleSummary;
+}
+
+export interface SeatCycleSummary {
+	vpAfterRound: Record<string, number>;
+	first15Round: number | null;
+	first30Round: number | null;
+	decisions: number;
+	productiveDecisions: number;
+	optionalYieldDecisions: number;
+	locationInteractions: number;
+	summons: number;
+	awakens: number;
+	combats: number;
+	rewards: number;
+	pvpAttacks: number;
+	finalAttackDice: number;
+	finalSpirits: number;
+	finalMaxBarrier: number;
+	post15VpPerRound: number;
 }
 
 /** One line of games-<workerIndex>.jsonl — the league-manager / balance-dashboard feed. */
 export interface GameSummary {
 	seed: number;
 	seats: number;
-	/** weightsPath when neural, else the profile-name list — identifies who generated the game. */
-	weightsOrProfiles: string;
+	/** Per-seat learner/opponent checkpoint or heuristic profile. Historical rows may use one label. */
+	weightsOrProfiles: string | string[];
 	rounds: number;
 	winnerSeat: SeatColor | null;
 	finished: boolean;
 	stalled: boolean;
 	samples: number;
+	/** Canonical SHA-256 of the complete command/deadline replay trace. Opt-in only. */
+	replayTraceSha256?: string;
 	/**
 	 * Seats the LEARNER policy (weightsPath / inferSocket) drove in this game —
 	 * league-opponent checkpoint seats are excluded. The per-seat attribution that
@@ -116,7 +201,25 @@ export interface GameSummary {
 	 * absent on rows written before this field existed.
 	 */
 	neuralSeats?: SeatColor[];
+	/** Inference-server handshake provenance for remotely served learner policies. */
+	inference?: {
+		format: string;
+		obsDim: number;
+		actDim: number;
+		weightsPath: string;
+		weightsSha256: string;
+		wire: 'binary' | 'json';
+	};
 	perSeat: SeatSummary[];
+	/** Exact strategic decision timing, emitted for search or critic reranking. */
+	search?: {
+		mode: 'gumbel' | 'critic-rerank' | 'heuristic-batched';
+		decisions: number;
+		simulations: number;
+		wallMs: number;
+		decisionWallMs: number[];
+		byPhase: { navigation: number; encounter: number };
+	};
 	wallMs: number;
 }
 
@@ -139,6 +242,9 @@ export interface ActorWorkerData {
 export interface ActorSeedJob {
 	jobIndex: number;
 	seed: number;
+	/** True when this seed appears more than once in the same pool. Duplicate sources need a
+	 * job-qualified episode ID or PPO would splice their trajectories together. */
+	duplicateSeed?: boolean;
 }
 
 /** Commands sent to a persistent actor worker after it has loaded its catalog/policies. */
@@ -147,5 +253,12 @@ export type ActorWorkerCommand = ({ type: 'run' } & ActorSeedJob) | { type: 'sto
 export type ActorWorkerMessage =
 	| { type: 'ready'; workerIndex: number }
 	| { type: 'game'; workerIndex: number; jobIndex: number; summary: GameSummary }
-	| { type: 'done'; workerIndex: number; games: number; samples: number; wallMs: number }
+	| {
+			type: 'done';
+			workerIndex: number;
+			games: number;
+			samples: number;
+			wallMs: number;
+			curriculum: ContinuationCurriculumDiagnostics;
+	  }
 	| { type: 'error'; workerIndex: number; message: string };

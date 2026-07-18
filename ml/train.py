@@ -25,7 +25,7 @@ fields still train under awr/alphazero, and trajectory rows still load here.
 
 --model v2 trains the entity set-transformer (ml/model_v2.py) instead of the
 v1 MLP, on the PAIRED-ROW contract (authoritative, see bc_warmstart_v2.py):
-rows keep `obs` = the current 83-float v1 summary AND carry the flat arc-obs-v2 array
+rows keep `obs` = the current 199-float v1 summary AND carry the flat arc-obs-v2 array
 (3419 floats for the frozen catalog) under `obsV2`. --model v2 reads obsV2 and
 skips rows without it (counted); the layout is resolved from meta.json's
 "obs_v2" obsV2Meta block or the row's self-describing header. v2 checkpoints
@@ -60,6 +60,59 @@ from model import (
 )
 
 
+def parse_round_policy_bands(raw: str) -> tuple[tuple[int, float], ...]:
+    """Parse inclusive round-band weights such as ``8:0.5,18:1,30:2``."""
+    bands: list[tuple[int, float]] = []
+    previous = 0
+    try:
+        for item in raw.split(","):
+            upper_raw, weight_raw = item.split(":", 1)
+            upper = int(upper_raw)
+            weight = float(weight_raw)
+            if upper <= previous or not math.isfinite(weight) or weight <= 0:
+                raise ValueError
+            bands.append((upper, weight))
+            previous = upper
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError(
+            "round policy bands must be increasing ROUND:POSITIVE_WEIGHT pairs"
+        ) from exc
+    if not bands:
+        raise argparse.ArgumentTypeError("round policy bands cannot be empty")
+    return tuple(bands)
+
+
+def parse_round_coefficient_bands(raw: str) -> tuple[tuple[int, float], ...]:
+    """Parse inclusive round-band coefficients such as ``8:0.15,18:0.3,30:0.5``."""
+    bands: list[tuple[int, float]] = []
+    previous = 0
+    try:
+        for item in raw.split(","):
+            upper_raw, coefficient_raw = item.split(":", 1)
+            upper = int(upper_raw)
+            coefficient = float(coefficient_raw)
+            if (
+                upper <= previous
+                or not math.isfinite(coefficient)
+                or not 0.0 <= coefficient <= 1.0
+            ):
+                raise ValueError
+            bands.append((upper, coefficient))
+            previous = upper
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError(
+            "round coefficient bands must be increasing ROUND:COEFFICIENT pairs "
+            "with each coefficient in [0,1]"
+        ) from exc
+    if not bands:
+        raise argparse.ArgumentTypeError("round coefficient bands cannot be empty")
+    if not any(coefficient > 0 for _, coefficient in bands):
+        raise argparse.ArgumentTypeError(
+            "round coefficient bands must contain at least one positive coefficient"
+        )
+    return tuple(bands)
+
+
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
@@ -78,7 +131,7 @@ class DecisionDataset(Dataset):
     Stores all decisions from JSONL files as numpy arrays.
     Padding is done at collation time (per-batch).
 
-    obs_key selects which field feeds the model: "obs" (current v1 83-float summary)
+    obs_key selects which field feeds the model: "obs" (current v1 199-float summary)
     or "obsV2" (flat arc-obs-v2, paired-row contract). Rows lacking obs_key
     are skipped and counted (v1-only rows mixed into a v2 dataset).
     """
@@ -307,15 +360,86 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
     try:
         with open(path) as f:
             w = json.load(f)
+        raw_option_dim = w.get("option_dim", 0)
+        if (
+            isinstance(raw_option_dim, bool)
+            or not isinstance(raw_option_dim, (int, float))
+            or not float(raw_option_dim).is_integer()
+            or int(raw_option_dim) < 0
+            or int(raw_option_dim) != model.option_dim
+        ):
+            return False
         if int(w.get("obs_dim", -1)) != model.obs_dim or int(w.get("act_dim", -1)) != model.act_dim:
             return False
         trunk_linears = [m for m in model.trunk if isinstance(m, torch.nn.Linear)]
         value_linears = [m for m in model.value_head if isinstance(m, torch.nn.Linear)]
         farm_value_linears = [m for m in model.farm_value_head if isinstance(m, torch.nn.Linear)]
         route_mode_linears = [m for m in model.route_mode_head if isinstance(m, torch.nn.Linear)]
+        reach30_linears = [m for m in model.reach30_head if isinstance(m, torch.nn.Linear)]
         reward_pick_linears = [m for m in model.reward_pick_head if isinstance(m, torch.nn.Linear)]
+        option_linears = (
+            [m for m in model.option_head if isinstance(m, torch.nn.Linear)]
+            if model.option_head is not None
+            else []
+        )
+        option_value_linears = (
+            [m for m in model.option_value_head if isinstance(m, torch.nn.Linear)]
+            if model.option_value_head is not None
+            else []
+        )
         if len(trunk_linears) != len(w["trunk"]) or len(value_linears) != len(w["value"]):
             return False
+        if model.option_dim:
+            required = {
+                "trunk": trunk_linears,
+                "value": value_linears,
+                "farm_value": farm_value_linears,
+                "route_mode": route_mode_linears,
+                "reward_pick": reward_pick_linears,
+                "placement": [m for m in model.placement_head if isinstance(m, torch.nn.Linear)],
+                "option": option_linears,
+                "option_value": option_value_linears,
+            }
+            for name, linears in required.items():
+                layers = w.get(name)
+                if not isinstance(layers, list) or len(layers) != len(linears):
+                    return False
+                for lin, layer in zip(linears, layers):
+                    try:
+                        W = torch.tensor(layer["W"], dtype=torch.float32)
+                        b = torch.tensor(layer["b"], dtype=torch.float32)
+                    except (KeyError, TypeError, ValueError):
+                        return False
+                    if (
+                        lin.weight.shape != W.shape
+                        or lin.bias.shape != b.shape
+                        or not torch.isfinite(W).all()
+                        or not torch.isfinite(b).all()
+                    ):
+                        return False
+        reach30_tensors: list[tuple[torch.Tensor, torch.Tensor]] | None = None
+        if "reach30" in w:
+            horizon = w.get("reach30_horizon")
+            if (
+                len(reach30_linears) != len(w["reach30"])
+                or not isinstance(horizon, (int, float))
+                or isinstance(horizon, bool)
+                or not float(horizon).is_integer()
+                or int(horizon) < 1
+            ):
+                return False
+            reach30_tensors = []
+            for lin, layer in zip(reach30_linears, w["reach30"]):
+                W = torch.tensor(layer["W"], dtype=torch.float32)
+                b = torch.tensor(layer["b"], dtype=torch.float32)
+                if (
+                    lin.weight.shape != W.shape
+                    or lin.bias.shape != b.shape
+                    or not torch.isfinite(W).all()
+                    or not torch.isfinite(b).all()
+                ):
+                    return False
+                reach30_tensors.append((W, b))
         with torch.no_grad():
             for lin, d in zip(trunk_linears, w["trunk"]):
                 W = torch.tensor(d["W"], dtype=torch.float32)
@@ -357,6 +481,13 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
                         break
                     lin.weight.copy_(W)
                     lin.bias.copy_(b)
+            if "reach30" in w:
+                loaded_reach30 = reach30_tensors is not None
+                for lin, (W, b) in zip(reach30_linears, reach30_tensors or []):
+                    lin.weight.copy_(W)
+                    lin.bias.copy_(b)
+                model.reach30_trained = loaded_reach30
+                model.reach30_horizon = int(w["reach30_horizon"]) if loaded_reach30 else None
             if "reward_pick" in w and len(reward_pick_linears) == len(w["reward_pick"]):
                 for lin, d in zip(reward_pick_linears, w["reward_pick"]):
                     W = torch.tensor(d["W"], dtype=torch.float32)
@@ -365,6 +496,13 @@ def load_json_weights_into(model: CandidateScorer, path: Path) -> bool:
                         break
                     lin.weight.copy_(W)
                     lin.bias.copy_(b)
+            if model.option_dim:
+                for lin, d in zip(option_linears, w["option"]):
+                    lin.weight.copy_(torch.tensor(d["W"], dtype=torch.float32))
+                    lin.bias.copy_(torch.tensor(d["b"], dtype=torch.float32))
+                for lin, d in zip(option_value_linears, w["option_value"]):
+                    lin.weight.copy_(torch.tensor(d["W"], dtype=torch.float32))
+                    lin.bias.copy_(torch.tensor(d["b"], dtype=torch.float32))
         return True
     except Exception as e:  # noqa: BLE001 — warm-start is best-effort
         print(f"warm-start skipped: {e}")
@@ -385,6 +523,27 @@ def hidden_sizes_from_checkpoint(path: Path) -> tuple[tuple[int, ...], tuple[int
         return trunk_hidden, value_hidden
     except Exception as e:  # noqa: BLE001 — architecture inference is best-effort
         print(f"checkpoint architecture inference skipped: {e}")
+        return None
+
+
+def option_dim_from_checkpoint(path: Path) -> int | None:
+    """Return a valid v1 option width, treating old checkpoints as option_dim=0."""
+    try:
+        with open(path) as f:
+            w = json.load(f)
+        raw = w.get("option_dim", 0)
+        if (
+            isinstance(raw, bool)
+            or not isinstance(raw, (int, float))
+            or not float(raw).is_integer()
+            or int(raw) < 0
+        ):
+            return None
+        dim = int(raw)
+        if dim and (not isinstance(w.get("option"), list) or not isinstance(w.get("option_value"), list)):
+            return None
+        return dim
+    except Exception:
         return None
 
 
@@ -412,6 +571,7 @@ def build_policy_model(
     warm_start: bool,
     trunk_hidden: tuple[int, ...] | None = None,
     value_hidden: tuple[int, ...] | None = None,
+    option_dim: int | None = None,
 ) -> CandidateScorer:
     """Build v1, then optionally warm-start it.
 
@@ -421,6 +581,10 @@ def build_policy_model(
     """
     init_path = init_from if init_from is not None else (out_path if out_path.exists() else None)
     inferred_hidden = hidden_sizes_from_checkpoint(init_path) if init_path is not None else None
+    inferred_option_dim = option_dim_from_checkpoint(init_path) if init_path is not None else 0
+    resolved_option_dim = inferred_option_dim if option_dim is None else option_dim
+    if resolved_option_dim is None:
+        raise ValueError(f"malformed option metadata in checkpoint {init_path}")
     resolved_trunk = trunk_hidden if trunk_hidden is not None else (
         inferred_hidden[0] if inferred_hidden else None
     )
@@ -433,9 +597,11 @@ def build_policy_model(
         device,
         trunk_hidden=resolved_trunk,
         value_hidden=resolved_value,
+        option_dim=resolved_option_dim,
     )
     print(
         f"v1 architecture: trunk={model.trunk_hidden}, value={model.value_hidden} "
+        f"option_dim={model.option_dim} "
         f"(explicit trunk={trunk_hidden is not None}, value={value_hidden is not None})"
     )
     if warm_start and init_path is not None and init_path.exists():
@@ -447,6 +613,10 @@ def build_policy_model(
         ok = load_json_weights_into(model, init_path)
         if not ok:
             model.load_state_dict(fresh_state)
+            if model.option_dim:
+                raise ValueError(
+                    f"option-enabled checkpoint {init_path} failed strict shape/metadata loading"
+                )
         print(f"warm-start from {init_path}: {'OK' if ok else 'skipped (mismatch)'}")
     return model
 
@@ -537,6 +707,7 @@ def build_policy_model_v2(
     d_model: int,
     layers: int,
     heads: int,
+    reach30_horizons: tuple[int, ...] = (),
 ):
     """v2 counterpart of build_policy_model: EntityCandidateScorer with .pt warm start.
     On resume the architecture comes from the checkpoint config; the d_model/layers/
@@ -548,6 +719,8 @@ def build_policy_model_v2(
     if warm_start and init_path is not None and Path(init_path).exists():
         try:
             model = load_checkpoint(init_path, device, spec=spec)
+            if reach30_horizons:
+                model.enable_reach30_horizons(reach30_horizons)
             print(f"warm-start from {init_path}: OK (architecture from checkpoint)")
             return model, spec, act_dim
         except Exception as e:  # noqa: BLE001
@@ -557,9 +730,25 @@ def build_policy_model_v2(
     # seed=None: don't let build_model_v2's convenience seeding stomp the global
     # RNG mid-run (it would also freeze the DataLoader shuffle order).
     model = build_model_v2(
-        spec, act_dim, device, d_model=d_model, layers=layers, heads=heads, seed=None
+        spec,
+        act_dim,
+        device,
+        d_model=d_model,
+        layers=layers,
+        heads=heads,
+        reach30_horizons=reach30_horizons,
+        seed=None,
     )
     return model, spec, act_dim
+
+
+def v2_reach30_horizons(primary_horizon: int | None) -> tuple[int, ...]:
+    """Fixed diagnostic horizons plus the actor's exact objective cap."""
+    if primary_horizon is None:
+        return ()
+    if primary_horizon <= 0:
+        raise ValueError(f"reach30 horizon must be positive, got {primary_horizon}")
+    return tuple(sorted({h for h in (20, 25, 30, primary_horizon) if h <= primary_horizon}))
 
 
 # ---------------------------------------------------------------------------
@@ -600,6 +789,7 @@ def train(
     farm_value_coef: float = 0.0,
     reward_pick_coef: float = 0.0,
     route_mode_coef: float = 0.0,
+    reach30_value_coef: float = 0.0,
     warm_start: bool = True,
     init_from: Path | None = None,
     gamma: float = 0.997,
@@ -615,6 +805,14 @@ def train(
     win_bonus: float = 0.0,
     win_bonus_halflife: float = 0.0,
     all_fallen_loss: float = 0.0,
+    strategic_mc_coef: float = 0.0,
+    solo_strategic_mc_coef: float = 0.0,
+    solo_outcome_coef: float = 0.0,
+    solo_reach30_coef: float = 0.0,
+    solo_reach30_bands: tuple[tuple[int, float], ...] | None = None,
+    solo_terminal_objective: str = "legacy",
+    strategic_mc_gamma: float = 1.0,
+    strategic_outcome_coef: float = 0.0,
     model_version: str = "v1",
     hidden: tuple[int, ...] | None = None,
     value_hidden: tuple[int, ...] | None = None,
@@ -623,18 +821,145 @@ def train(
     v2_layers: int = 3,
     v2_heads: int = 4,
     max_grad_norm: float = 1.0,
+    seed: int | None = None,
+    ppo_rows_per_epoch: int | None = None,
+    ppo_continuation_fraction: float | None = None,
+    ppo_round_policy_bands: tuple[tuple[int, float], ...] | None = None,
+    v2_critic_only: bool = False,
+    behavior_reach30_ece_max: float | None = None,
+    behavior_reach30_auc_min: float | None = None,
+    self_imitation_coef: float = 0.0,
+    self_imitation_replay_fraction: float = 0.0,
+    self_imitation_staleness_logp: float = 1.0,
+    self_imitation_replay_path: Path | None = None,
+    self_imitation_generation: int = 0,
+    self_imitation_max_age: int = 3,
+    self_imitation_max_rows: int = 100_000,
+    terminal_teacher_data: Path | None = None,
+    terminal_teacher_coef: float = 0.0,
+    terminal_teacher_batch_size: int = 256,
+    obs_feature_cutoff: int | None = None,
+    option_feature_cutoff: int | None = None,
+    option_rows_per_epoch: int = 16_384,
+    option_batch_size: int = 256,
 ) -> list[dict]:
     """Train and export; returns per-epoch metric dicts (used by tests)."""
+    if seed is not None:
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
     device = get_device()
-    print(f"Device: {device}  mode={mode}  model={model_version}")
+    print(f"Device: {device}  mode={mode}  model={model_version}  seed={seed}")
     check_out_format(model_version, out_path, init_from)
     if model_version != "v1" and (hidden is not None or value_hidden is not None):
         raise ValueError("--hidden/--value-hidden configure only --model v1; use --v2-* for v2")
+    if model_version != "v1" and self_imitation_replay_fraction > 0:
+        raise ValueError("self-imitation currently requires --model v1 reach30Pred behavior rows")
+    if mode != "ppo" and (
+        reach30_value_coef > 0
+        or solo_reach30_coef > 0
+        or solo_reach30_bands is not None
+    ):
+        raise ValueError("reach-30 critic training currently requires --mode ppo")
+    if mode != "ppo" and (ppo_rows_per_epoch is not None or ppo_continuation_fraction is not None):
+        raise ValueError("PPO row-budget controls require --mode ppo")
+    if obs_feature_cutoff is not None and (mode != "ppo" or model_version != "v1"):
+        raise ValueError("--obs-feature-cutoff requires --mode ppo --model v1")
+    if option_feature_cutoff is not None and (mode != "ppo" or model_version != "v1"):
+        raise ValueError("--option-feature-cutoff requires --mode ppo --model v1")
+    if ppo_rows_per_epoch is not None and target_kl is not None:
+        raise ValueError(
+            "--target-kl is incompatible with --ppo-rows-per-epoch fixed-update training"
+        )
+    if ppo_continuation_fraction is not None and ppo_rows_per_epoch is None:
+        raise ValueError("--ppo-continuation-fraction requires --ppo-rows-per-epoch")
+    if ppo_round_policy_bands is not None and ppo_rows_per_epoch is None:
+        raise ValueError("--ppo-round-policy-bands requires --ppo-rows-per-epoch")
+    if behavior_reach30_ece_max is not None and not 0 <= behavior_reach30_ece_max <= 1:
+        raise ValueError("--behavior-reach30-ece-max must be in [0,1]")
+    if behavior_reach30_auc_min is not None and not 0 <= behavior_reach30_auc_min <= 1:
+        raise ValueError("--behavior-reach30-auc-min must be in [0,1]")
+    if v2_critic_only:
+        if mode != "ppo" or model_version != "v2":
+            raise ValueError("--v2-critic-only requires --mode ppo --model v2")
+        if policy_coef != 0 or entropy_coef != 0 or kl_ref_coef != 0:
+            raise ValueError(
+                "--v2-critic-only requires zero policy, entropy, and KL-reference coefficients"
+            )
+        if any(
+            coefficient != 0
+            for coefficient in (
+                farm_value_coef,
+                reward_pick_coef,
+                route_mode_coef,
+                placement_coef,
+                solo_outcome_coef,
+                solo_reach30_coef,
+                strategic_outcome_coef,
+            )
+        ) or solo_reach30_bands is not None:
+            raise ValueError("--v2-critic-only permits only value and reach30 critic losses")
+    self_imitation_requested = (
+        self_imitation_coef != 0
+        or self_imitation_replay_fraction != 0
+        or self_imitation_replay_path is not None
+    )
+    if mode != "ppo" and self_imitation_requested:
+        raise ValueError("self-imitation controls require --mode ppo")
+    if self_imitation_coef < 0 or not math.isfinite(self_imitation_coef):
+        raise ValueError("--self-imitation-coef must be finite and nonnegative")
+    if not 0 <= self_imitation_replay_fraction <= 1:
+        raise ValueError("--self-imitation-replay-fraction must be in [0,1]")
+    if self_imitation_coef > 0 and self_imitation_replay_fraction <= 0:
+        raise ValueError("--self-imitation-coef requires a positive replay fraction")
+    if self_imitation_replay_fraction > 0 and target_kl is not None:
+        raise ValueError("self-imitation replay is incompatible with --target-kl early stopping")
+    if self_imitation_staleness_logp < 0 or not math.isfinite(self_imitation_staleness_logp):
+        raise ValueError("--self-imitation-staleness-logp must be finite and nonnegative")
+    if self_imitation_generation < 0:
+        raise ValueError("--self-imitation-generation must be nonnegative")
+    if self_imitation_max_age < 0:
+        raise ValueError("--self-imitation-max-age must be nonnegative")
+    if self_imitation_max_rows <= 0:
+        raise ValueError("--self-imitation-max-rows must be positive")
+    terminal_teacher_requested = (
+        terminal_teacher_data is not None or terminal_teacher_coef != 0
+    )
+    if terminal_teacher_requested and (mode != "ppo" or model_version != "v1"):
+        raise ValueError("terminal-teacher controls require --mode ppo --model v1")
+    if terminal_teacher_coef < 0 or not math.isfinite(terminal_teacher_coef):
+        raise ValueError("--terminal-teacher-coef must be finite and nonnegative")
+    if terminal_teacher_coef > 0 and terminal_teacher_data is None:
+        raise ValueError("--terminal-teacher-coef requires --terminal-teacher-data")
+    if (
+        isinstance(terminal_teacher_batch_size, bool)
+        or not isinstance(terminal_teacher_batch_size, int)
+        or terminal_teacher_batch_size <= 0
+    ):
+        raise ValueError("--terminal-teacher-batch-size must be a positive integer")
+    if terminal_teacher_data is not None and target_kl is not None:
+        raise ValueError(
+            "terminal-teacher batches are incompatible with --target-kl early stopping"
+        )
+    if terminal_teacher_requested and option_feature_cutoff is not None:
+        raise ValueError("terminal-teacher training rejects option-enabled checkpoints")
+    teacher_init_path = (
+        init_from
+        if init_from is not None
+        else (out_path if warm_start and out_path.exists() else None)
+    )
+    if terminal_teacher_requested and teacher_init_path is not None:
+        checkpoint_option_dim = option_dim_from_checkpoint(teacher_init_path)
+        if checkpoint_option_dim is not None and checkpoint_option_dim > 0:
+            raise ValueError(
+                f"terminal-teacher training rejects option-enabled checkpoint {teacher_init_path}"
+            )
     # Both models expose placement auxiliaries with different contracts: v1 has
     # a 4-way CE head; v2 has per-seat-token ordinal regression.
     effective_placement_coef = placement_coef
     # Paired-row contract: v2 reads the flat arc-obs-v2 array from `obsV2`;
-    # `obs` stays the current v1 83-float summary for the v1 net / distillation.
+    # `obs` stays the current v1 199-float summary for the v1 net / distillation.
     obs_key = "obsV2" if model_version == "v2" else "obs"
 
     def export_model(model, obs_dim: int, act_dim: int) -> None:
@@ -651,7 +976,15 @@ def train(
             print(f"\nWeights exported to: {out_path}")
 
     if mode == "ppo":
-        from ppo import load_trajectory_buffer, parse_placement_rewards, train_ppo
+        from ppo import (
+            apply_observation_feature_cutoff,
+            apply_option_feature_cutoff,
+            behavior_reach30_metrics,
+            load_terminal_teacher_replay,
+            load_trajectory_buffer,
+            parse_placement_rewards,
+            train_ppo,
+        )
 
         buffer = load_trajectory_buffer(
             data_dir,
@@ -661,11 +994,95 @@ def train(
             win_bonus=win_bonus,
             win_bonus_halflife=win_bonus_halflife,
             all_fallen_loss=all_fallen_loss,
+            strategic_mc_coef=strategic_mc_coef,
+            solo_strategic_mc_coef=solo_strategic_mc_coef,
+            solo_outcome_coef=solo_outcome_coef,
+            solo_reach30_coef=solo_reach30_coef,
+            solo_reach30_bands=solo_reach30_bands,
+            solo_terminal_objective=solo_terminal_objective,
+            strategic_mc_gamma=strategic_mc_gamma,
+            strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
+            collect_self_imitation=self_imitation_replay_fraction > 0,
+            self_imitation_generation=self_imitation_generation,
+            self_imitation_replay_path=self_imitation_replay_path,
+            self_imitation_max_age=self_imitation_max_age,
+            self_imitation_max_rows=self_imitation_max_rows,
         )
+        if behavior_reach30_ece_max is not None or behavior_reach30_auc_min is not None:
+            behavior_metrics = behavior_reach30_metrics(buffer)
+            print(
+                "Behavior reach30 calibration | "
+                + " ".join(f"{key}={value:.6f}" for key, value in behavior_metrics.items())
+            )
+            if not all(math.isfinite(value) for value in behavior_metrics.values()):
+                raise ValueError("behavior reach30 calibration is incomplete or non-finite")
+            if (
+                behavior_reach30_ece_max is not None
+                and behavior_metrics["ece"] > behavior_reach30_ece_max
+            ):
+                raise ValueError(
+                    f"behavior reach30 ECE {behavior_metrics['ece']:.6f} exceeds "
+                    f"{behavior_reach30_ece_max:.6f}"
+                )
+            if (
+                behavior_reach30_auc_min is not None
+                and behavior_metrics["auc"] < behavior_reach30_auc_min
+            ):
+                raise ValueError(
+                    f"behavior reach30 AUC {behavior_metrics['auc']:.6f} is below "
+                    f"{behavior_reach30_auc_min:.6f}"
+                )
+        if terminal_teacher_requested and buffer.option_dim:
+            raise ValueError("terminal-teacher training rejects option-enabled rollout data")
+        terminal_teacher = (
+            load_terminal_teacher_replay(
+                terminal_teacher_data,
+                expected_obs_dim=int(buffer.obs.shape[1]),
+                expected_act_dim=int(buffer.cands[0].shape[1]),
+            )
+            if terminal_teacher_data is not None
+            else None
+        )
+        if terminal_teacher is not None:
+            print(
+                "Terminal teacher | "
+                f"rows={len(terminal_teacher)} | obs_dim={terminal_teacher.obs_dim} | "
+                f"act_dim={terminal_teacher.act_dim} | batch={terminal_teacher_batch_size} | "
+                f"coef={terminal_teacher_coef:g}"
+            )
+        if obs_feature_cutoff is not None:
+            kept, loaded_obs_dim = apply_observation_feature_cutoff(
+                buffer, obs_feature_cutoff, terminal_teacher
+            )
+            print(
+                "Observation feature cutoff | "
+                f"kept={kept}/{loaded_obs_dim} | masked={loaded_obs_dim - kept}"
+            )
+        if option_feature_cutoff is not None:
+            kept, loaded_option_dim = apply_option_feature_cutoff(
+                buffer, option_feature_cutoff
+            )
+            print(
+                "Option feature cutoff | "
+                f"kept={kept}/{loaded_option_dim} | masked={loaded_option_dim - kept}"
+            )
         if model_version == "v2":
+            requested_horizons = (
+                v2_reach30_horizons(buffer.reach30_horizon)
+                if reach30_value_coef > 0 or solo_reach30_coef > 0
+                else ()
+            )
             model, spec, act_dim = build_policy_model_v2(
-                data_dir, device, out_path, init_from, warm_start, v2_d_model, v2_layers, v2_heads
+                data_dir,
+                device,
+                out_path,
+                init_from,
+                warm_start,
+                v2_d_model,
+                v2_layers,
+                v2_heads,
+                requested_horizons,
             )
             obs_dim = spec.flat_length
         else:
@@ -679,8 +1096,23 @@ def train(
                 warm_start,
                 trunk_hidden=hidden,
                 value_hidden=value_hidden,
+                option_dim=buffer.option_dim,
             )
         print(f"obs_dim={obs_dim}, act_dim={act_dim}")
+        frozen_v2_state: dict[str, torch.Tensor] | None = None
+        if v2_critic_only:
+            frozen_v2_state = {}
+            for name, parameter in model.named_parameters():
+                trainable = name.startswith("value_head.") or name.startswith("reach30_head.")
+                parameter.requires_grad_(trainable)
+                if not trainable:
+                    frozen_v2_state[name] = parameter.detach().cpu().clone()
+            trainable_names = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+            if not trainable_names or not any(name.startswith("reach30_head.") for name in trainable_names):
+                raise ValueError("--v2-critic-only found no trainable reach30 head")
+            print(
+                "V2 critic-only freeze | trainable=" + ",".join(trainable_names)
+            )
         history = train_ppo(
             model,
             buffer,
@@ -694,6 +1126,7 @@ def train(
             farm_value_coef=farm_value_coef,
             reward_pick_coef=reward_pick_coef,
             route_mode_coef=route_mode_coef,
+            reach30_value_coef=reach30_value_coef,
             entropy_coef=entropy_coef,
             entropy_anneal=entropy_anneal,
             value_clip_eps=value_clip_eps,
@@ -702,7 +1135,26 @@ def train(
             lr_schedule=lr_schedule,
             placement_coef=effective_placement_coef,
             max_grad_norm=max_grad_norm,
+            seed=seed,
+            rows_per_epoch=ppo_rows_per_epoch,
+            continuation_fraction=ppo_continuation_fraction,
+            round_policy_bands=ppo_round_policy_bands,
+            self_imitation_coef=self_imitation_coef,
+            self_imitation_replay_fraction=self_imitation_replay_fraction,
+            self_imitation_staleness_logp=self_imitation_staleness_logp,
+            terminal_teacher=terminal_teacher,
+            terminal_teacher_coef=terminal_teacher_coef,
+            terminal_teacher_batch_size=terminal_teacher_batch_size,
+            option_rows_per_epoch=option_rows_per_epoch,
+            option_batch_size=option_batch_size,
+            option_feature_cutoff=option_feature_cutoff,
         )
+        if frozen_v2_state is not None:
+            for name, parameter in model.named_parameters():
+                if name in frozen_v2_state and not torch.equal(
+                    parameter.detach().cpu(), frozen_v2_state[name]
+                ):
+                    raise ValueError(f"--v2-critic-only changed frozen parameter {name!r}")
         export_model(model, obs_dim, act_dim)
         return history
 
@@ -736,6 +1188,7 @@ def train(
         shuffle=True,
         collate_fn=collate_fn,
         drop_last=False,
+        generator=torch.Generator().manual_seed(seed) if seed is not None else None,
     )
 
     if effective_placement_coef > 0:
@@ -938,6 +1391,17 @@ def export_weights(
         for layer in model.route_mode_head
         if isinstance(layer, torch.nn.Linear)
     ]
+    reach30_linears = (
+        [
+            _linear_to_dict(layer)
+            for layer in model.reach30_head
+            if isinstance(layer, torch.nn.Linear)
+        ]
+        if model.reach30_trained
+        else []
+    )
+    if reach30_linears and model.reach30_horizon is None:
+        raise ValueError("trained reach30 head is missing its objective horizon")
     reward_pick_linears = [
         _linear_to_dict(layer)
         for layer in model.reward_pick_head
@@ -948,9 +1412,28 @@ def export_weights(
         for layer in model.placement_head
         if isinstance(layer, torch.nn.Linear)
     ]
+    option_linears = (
+        [
+            _linear_to_dict(layer)
+            for layer in model.option_head
+            if isinstance(layer, torch.nn.Linear)
+        ]
+        if model.option_head is not None
+        else []
+    )
+    option_value_linears = (
+        [
+            _linear_to_dict(layer)
+            for layer in model.option_value_head
+            if isinstance(layer, torch.nn.Linear)
+        ]
+        if model.option_value_head is not None
+        else []
+    )
     all_linears = (
         trunk_linears + value_linears + farm_value_linears + route_mode_linears
-        + reward_pick_linears + placement_linears
+        + reward_pick_linears + placement_linears + reach30_linears
+        + option_linears + option_value_linears
     )
 
     payload = {
@@ -970,10 +1453,24 @@ def export_weights(
             "farm_value": "obs -> scalar clean farm opportunity target",
             "reward_pick": "obs + candidate -> reward-pick target logits",
             "route_mode": "obs -> Fallen route mode logit, sigmoid=probability to hunt Good player",
-            "placement": "obs -> 4-way final-placement logits (KataGo outcome aux)"
+            "placement": "obs -> 4-way final-placement logits (KataGo outcome aux)",
         },
         "params": sum(len(l["W"]) * len(l["W"][0]) + len(l["b"]) for l in all_linears),
     }
+    if reach30_linears:
+        payload["reach30"] = reach30_linears
+        payload["reach30_horizon"] = model.reach30_horizon
+        payload["aux_heads"]["reach30"] = (
+            "obs -> scalar logit for reaching 30 VP by the configured solo round cap"
+        )
+    if model.option_dim:
+        if not option_linears or not option_value_linears:
+            raise ValueError("option-enabled model is missing required high-level heads")
+        payload["option_dim"] = model.option_dim
+        payload["option"] = option_linears
+        payload["option_value"] = option_value_linears
+        payload["aux_heads"]["option"] = "obs -> persistent round-option logits"
+        payload["aux_heads"]["option_value"] = "obs -> SMDP round-start value"
 
     with open(out_path, "w") as f:
         json.dump(payload, f)
@@ -1002,15 +1499,114 @@ def parse_args() -> argparse.Namespace:
                    help="Weight on the auxiliary reward-pick policy cross-entropy loss")
     p.add_argument("--route-mode-coef", type=float, default=0.0,
                    help="Weight on the auxiliary Fallen route-mode BCE loss")
+    p.add_argument("--reach30-value-coef", type=float, default=0.0,
+                   help="Weight on the solo reach-30 critic BCE loss")
     # PPO flags (used only with --mode ppo). --epochs is the K passes over the
     # rollout buffer; --batch-size the minibatch size; --policy-coef/--value-coef
     # weight the surrogate and value losses as in the other modes.
-    # gamma default 0.997: effective horizon 1/(1-gamma) ~ 333 steps. Games run
-    # ~200-1000 decisions, so the terminal placement reward still reaches
-    # early-game decisions (0.997^300 ~ 0.41) without washing out per-step
-    # shaping credit on short games.
+    # gamma alone has a long horizon, but ordinary GAE policy credit also carries
+    # lambda (default gamma*lambda ~= 0.947). --strategic-mc-coef selectively restores
+    # complete-game credit on route/engine/conversion rows without applying noisy
+    # Monte Carlo targets to every tactical decision.
     p.add_argument("--gamma", type=float, default=0.997, help="PPO discount factor")
     p.add_argument("--gae-lambda", type=float, default=0.95, help="GAE lambda")
+    p.add_argument("--strategic-mc-coef", type=float, default=0.0,
+                   help="Blend [0,1] from ordinary GAE toward full-episode Monte Carlo "
+                        "advantages/value targets on rows marked strategic; 0 preserves PPO")
+    p.add_argument("--solo-strategic-mc-coef", type=float, default=0.0,
+                   help="Solo-only full-episode Monte Carlo blend on strategic rows. Solo uses "
+                        "score progress and true 30-VP wins, never its automatic first place")
+    p.add_argument("--solo-outcome-coef", type=float, default=0.0,
+                   help="Blend [0,1] from the current advantage toward a batch-centered pure "
+                        "true-30-VP-win advantage on solo strategic rows")
+    p.add_argument("--solo-reach30-coef", type=float, default=0.0,
+                   help="Blend [0,1] toward true-win minus the behavior checkpoint's "
+                        "state-dependent reach-30 probability on solo strategic rows")
+    p.add_argument(
+        "--solo-reach30-bands",
+        type=parse_round_coefficient_bands,
+        default=None,
+        help=(
+            "Inclusive round-band reach-30 residual coefficients, e.g. "
+            "8:0.15,18:0.3,30:0.5; mutually exclusive with --solo-reach30-coef"
+        ),
+    )
+    p.add_argument(
+        "--solo-terminal-objective",
+        choices=["legacy", "resolved", "lexicographic"],
+        default="legacy",
+        help=(
+            "Solo horizon handling: legacy bootstraps cap failures; resolved treats every "
+            "reach30Target as terminal while retaining rStep; lexicographic additionally "
+            "replaces solo rStep with the strict win/finish-time/final-VP terminal objective"
+        ),
+    )
+    p.add_argument("--strategic-mc-gamma", type=float, default=1.0,
+                   help="Discount for strategic full-episode Monte Carlo returns (default 1)")
+    p.add_argument("--strategic-outcome-coef", type=float, default=0.0,
+                   help="Blend [0,1] from GAE toward pure final-placement advantage on strategic "
+                        "rows, baselined by recorded placementProbs; excludes dense/build rewards")
+    p.add_argument("--ppo-rows-per-epoch", type=int, default=None,
+                   help="Exact post-GAE trajectory rows consumed per PPO epoch")
+    p.add_argument("--ppo-continuation-fraction", type=float, default=None,
+                   help="Target share of selected PPO rows carrying continuationCurriculum=1; "
+                        "requires --ppo-rows-per-epoch")
+    p.add_argument(
+        "--ppo-round-policy-bands",
+        type=parse_round_policy_bands,
+        default=None,
+        help="Inclusive round-band policy weights, e.g. 8:0.5,18:1,30:2; "
+             "requires --ppo-rows-per-epoch and does not reweight critic losses",
+    )
+    p.add_argument(
+        "--v2-critic-only",
+        action="store_true",
+        help="Freeze the v2 trunk/policy and update only value/reach30 heads",
+    )
+    p.add_argument(
+        "--behavior-reach30-ece-max",
+        type=float,
+        default=None,
+        help="Fail before optimizer creation if actor-recorded reach30 ECE exceeds this",
+    )
+    p.add_argument(
+        "--behavior-reach30-auc-min",
+        type=float,
+        default=None,
+        help="Fail before optimizer creation if actor-recorded reach30 AUC is below this",
+    )
+    p.add_argument("--obs-feature-cutoff", type=int, default=None,
+                   help="PPO v1 compute-matched representation control: zero observation columns "
+                        "at and after this append-only index while retaining the full tensor width")
+    p.add_argument("--option-feature-cutoff", type=int, default=None,
+                   help="PPO v1 causal control: retain this many low-level option columns; "
+                        "use 0 for control and 4 for treatment")
+    p.add_argument("--option-rows-per-epoch", type=int, default=16_384,
+                   help="Exact high-level option events consumed per PPO epoch")
+    p.add_argument("--option-batch-size", type=int, default=256,
+                   help="High-level SMDP PPO minibatch size")
+    p.add_argument("--self-imitation-coef", type=float, default=0.0,
+                   help="Weight on conservative winning-action masked CE (default 0 = off)")
+    p.add_argument("--self-imitation-replay-fraction", type=float, default=0.0,
+                   help="Auxiliary replay rows per natural PPO minibatch row; >0 also enables "
+                        "compute-matched coefficient-zero controls")
+    p.add_argument("--self-imitation-staleness-logp", type=float, default=1.0,
+                   help="Reject replay rows when |current chosen logp - behavior logp| exceeds this")
+    p.add_argument("--self-imitation-replay-path", type=Path, default=None,
+                   help="Optional trusted local replay file persisted across league generations")
+    p.add_argument("--self-imitation-generation", type=int, default=0,
+                   help="Generation stamped on newly admitted replay rows")
+    p.add_argument("--self-imitation-max-age", type=int, default=3,
+                   help="Maximum replay age in generations (default 3)")
+    p.add_argument("--self-imitation-max-rows", type=int, default=100_000,
+                   help="Maximum phase-balanced replay rows persisted per lane")
+    p.add_argument("--terminal-teacher-data", type=Path, default=None,
+                   help="Immutable V24 terminal-teacher JSONL file or shard directory")
+    p.add_argument("--terminal-teacher-coef", type=float, default=0.0,
+                   help="Weight on masked soft terminal-teacher policy CE; coefficient-zero "
+                        "controls still load and forward batches when data is provided")
+    p.add_argument("--terminal-teacher-batch-size", type=int, default=256,
+                   help="Fixed deterministic terminal-teacher rows injected per PPO minibatch")
     p.add_argument("--clip-eps", type=float, default=0.2, help="PPO surrogate clip epsilon")
     p.add_argument("--entropy-coef", type=float, default=0.01, help="PPO entropy bonus coefficient")
     p.add_argument("--entropy-anneal", action="store_true",
@@ -1063,6 +1659,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--v2-heads", type=int, default=4, help="v2 attention heads (fresh models only)")
     p.add_argument("--max-grad-norm", type=float, default=1.0,
                    help="Gradient clipping (clip_grad_norm_) in all modes; 0 disables")
+    p.add_argument("--seed", type=int, default=None,
+                   help="Deterministic model initialization and minibatch-shuffle seed")
     p.add_argument("--init-from", type=Path, default=None,
                    help="Optional checkpoint to warm-start from while exporting to --out")
     p.add_argument("--no-warm-start", dest="warm_start", action="store_false",
@@ -1086,6 +1684,7 @@ if __name__ == "__main__":
         farm_value_coef=args.farm_value_coef,
         reward_pick_coef=args.reward_pick_coef,
         route_mode_coef=args.route_mode_coef,
+        reach30_value_coef=args.reach30_value_coef,
         warm_start=args.warm_start,
         init_from=args.init_from,
         gamma=args.gamma,
@@ -1101,6 +1700,14 @@ if __name__ == "__main__":
         win_bonus=args.win_bonus,
         win_bonus_halflife=args.win_bonus_halflife,
         all_fallen_loss=args.all_fallen_loss,
+        strategic_mc_coef=args.strategic_mc_coef,
+        solo_strategic_mc_coef=args.solo_strategic_mc_coef,
+        solo_outcome_coef=args.solo_outcome_coef,
+        solo_reach30_coef=args.solo_reach30_coef,
+        solo_reach30_bands=args.solo_reach30_bands,
+        solo_terminal_objective=args.solo_terminal_objective,
+        strategic_mc_gamma=args.strategic_mc_gamma,
+        strategic_outcome_coef=args.strategic_outcome_coef,
         model_version=args.model_version,
         hidden=args.hidden,
         value_hidden=args.value_hidden,
@@ -1109,4 +1716,25 @@ if __name__ == "__main__":
         v2_layers=args.v2_layers,
         v2_heads=args.v2_heads,
         max_grad_norm=args.max_grad_norm,
+        seed=args.seed,
+        ppo_rows_per_epoch=args.ppo_rows_per_epoch,
+        ppo_continuation_fraction=args.ppo_continuation_fraction,
+        ppo_round_policy_bands=args.ppo_round_policy_bands,
+        v2_critic_only=args.v2_critic_only,
+        behavior_reach30_ece_max=args.behavior_reach30_ece_max,
+        behavior_reach30_auc_min=args.behavior_reach30_auc_min,
+        self_imitation_coef=args.self_imitation_coef,
+        self_imitation_replay_fraction=args.self_imitation_replay_fraction,
+        self_imitation_staleness_logp=args.self_imitation_staleness_logp,
+        self_imitation_replay_path=args.self_imitation_replay_path,
+        self_imitation_generation=args.self_imitation_generation,
+        self_imitation_max_age=args.self_imitation_max_age,
+        self_imitation_max_rows=args.self_imitation_max_rows,
+        terminal_teacher_data=args.terminal_teacher_data,
+        terminal_teacher_coef=args.terminal_teacher_coef,
+        terminal_teacher_batch_size=args.terminal_teacher_batch_size,
+        obs_feature_cutoff=args.obs_feature_cutoff,
+        option_feature_cutoff=args.option_feature_cutoff,
+        option_rows_per_epoch=args.option_rows_per_epoch,
+        option_batch_size=args.option_batch_size,
     )

@@ -33,23 +33,23 @@ function measure(json) {
 
 async function main() {
 	console.log(`[payload-size] target=${args.base}`);
-	const { code, memberId } = await createRoom(args.base, 'BenchPayload');
+	const { code, token } = await createRoom(args.base, 'BenchPayload');
 
 	// Point 1: empty lobby.
-	const lobbyView = (await getView(args.base, code, memberId)).json;
+	const lobbyView = (await getView(args.base, code, token)).json;
 	const lobby = measure(lobbyView);
 	console.log(`[payload-size] lobby: ${lobby.rawBytes}B raw / ${lobby.gzipBytes}B gzip`);
 
 	// Point 2: live game. Fill 4 bots, start, and tick a couple of times so the board,
 	// occupancy, and per-seat private state are all populated (a representative mid-play
 	// projection, which is what clients refetch every revision during a game).
-	await fillBots(args.base, code, memberId, 4, 'neural');
-	await startGame(args.base, code, memberId);
+	await fillBots(args.base, code, token, 4, 'neural');
+	await startGame(args.base, code, token);
 	for (let i = 0; i < 3; i += 1) {
-		await tickBots(args.base, code, memberId);
+		await tickBots(args.base, code, token);
 		await sleep(500);
 	}
-	const gameView = (await getView(args.base, code, memberId)).json;
+	const gameView = (await getView(args.base, code, token)).json;
 	const game = measure(gameView);
 	console.log(`[payload-size] active round ${gameView?.projection?.round}: ${game.rawBytes}B raw / ${game.gzipBytes}B gzip`);
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "arc-v35-public-config-pilot-incident-v1",
+  "attempt": 1,
+  "classification": "local-process-supervision-pre-outcome",
+  "authorizationCommit": "1a7fbcdecdd5837d281ebad0837243bca182eb90",
+  "outcomeObserved": false,
+  "resultProduced": false,
+  "stdoutBytes": 0,
+  "stderrBytes": 0,
+  "remoteGpu7Released": true,
+  "remoteLeaseReleased": true,
+  "description": "The detached local controller disappeared when the launching desktop command session closed. No result or diagnostic was produced. Retry uses the same frozen authorization in a managed foreground command session; no source, seed, candidate, gate, or outcome-dependent decision changed."
+}

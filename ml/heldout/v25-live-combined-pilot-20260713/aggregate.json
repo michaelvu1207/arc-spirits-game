@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "strategic-pilot-aggregate-v1",
+  "verdict": "reject_effect",
+  "games": 64,
+  "seed0": 9900001,
+  "seedLast": 9900064,
+  "provenance": {
+    "mode": "loop",
+    "family": "combined",
+    "sourceCommit": "5e47685",
+    "checkpointSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+    "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+    "rollouts": 8,
+    "maxStatusLevel": 2,
+    "navigationMinRound": 1,
+    "navigationMaxLogitGap": 1.7976931348623157e+308
+  },
+  "pairedOutcomes": {
+    "bothWin": 24,
+    "baselineOnlyWin": 15,
+    "teacherOnlyWin": 14,
+    "neitherWin": 11
+  },
+  "winRate": {
+    "baseline": 0.609375,
+    "teacher": 0.59375,
+    "deltaTeacherMinusBaseline": -0.015625,
+    "deltaBootstrap95": {
+      "lower": -0.1875,
+      "upper": 0.15625
+    },
+    "exactMcNemarP": 0.9999999999999905
+  },
+  "finalVP": {
+    "baselineMean": 25.609375,
+    "teacherMean": 24.953125,
+    "meanDelta": -0.65625,
+    "deltaBootstrap95": {
+      "lower": -3.15625,
+      "upper": 1.796875
+    }
+  },
+  "post15VpPerRound": {
+    "baselineMean": 1.1214275125459336,
+    "teacherMean": 1.1918502504440005,
+    "meanDelta": 0.07042273789806686,
+    "deltaBootstrap95": {
+      "lower": -0.15841626597999953,
+      "upper": 0.2975568861305908
+    }
+  },
+  "stalls": {
+    "baseline": 0,
+    "teacher": 0
+  },
+  "intervention": {
+    "evaluations": 4454,
+    "decisive": 591,
+    "changed": 439,
+    "nonDecisiveAbstentions": 3863,
+    "invalidAbstentions": 0,
+    "candidateRollouts": 192080,
+    "candidateRolloutStalls": 0,
+    "byRoundBand": {
+      "01-05": {
+        "evaluations": 827,
+        "decisive": 225,
+        "changed": 182
+      },
+      "06-10": {
+        "evaluations": 771,
+        "decisive": 180,
+        "changed": 141
+      },
+      "11-20": {
+        "evaluations": 1571,
+        "decisive": 171,
+        "changed": 105
+      },
+      "21-30": {
+        "evaluations": 1285,
+        "decisive": 15,
+        "changed": 11
+      }
+    },
+    "evaluatedGames": 64,
+    "evaluatedGameRate": 1.0,
+    "changedGames": 62,
+    "changedGameRate": 0.96875,
+    "changedDecisionRate": 0.09856308935788055,
+    "candidateRolloutStallRate": 0.0
+  },
+  "pilotGate": {
+    "netPairedWinsAtLeast4": false,
+    "meanVPNonRegressing": false,
+    "post15NonRegressing": true,
+    "zeroResultingGameStalls": true,
+    "evaluatedAtLeast90PctGames": true,
+    "changedAtLeast50PctGames": true,
+    "changedAtLeast1PctDecisions": true,
+    "candidateRolloutStallRateAtMost0_1Pct": true,
+    "supportValid": true,
+    "effectPass": false
+  },
+  "artifactValidation": {
+    "summaries": 32,
+    "allComplete": true,
+    "wrapperTimeoutsAfterSummary": 8,
+    "wrapperTimeoutReason": "Vitest wall-clock included deliberate SIGSTOP load throttling; each accepted summary passed provenance, seed, count, and paired-row validation.",
+    "files": [
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-0.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-1.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-10.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-11.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-12.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-13.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-14.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-15.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-16.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-17.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-18.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-19.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-2.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-20.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-21.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-22.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-23.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-24.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-25.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-26.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-27.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-28.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-29.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-3.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-30.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-31.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-4.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-5.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-6.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-7.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-8.jsonl.summary.json",
+      "ml/heldout/v25-live-combined-pilot-20260713/shard-9.jsonl.summary.json"
+    ]
+  },
+  "bootstrap": {
+    "samples": 20000,
+    "seed": 20260713
+  }
+}

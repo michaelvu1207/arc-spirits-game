@@ -1,0 +1,20 @@
+export const V34_GUARDIAN_TOOLING_FILES = Object.freeze(
+	[
+		'ml/analyze_v34_guardian.py',
+		'ml/experiments/v34-latency-first-expert-iteration/guardian-execution-protocol.json',
+		'ml/experiments/v34-latency-first-expert-iteration/guardian-tooling-fable-review.md',
+		'ml/experiments/v34-latency-first-expert-iteration/guardian-tooling-plan.md',
+		'ml/test_analyze_v34_guardian.py',
+		'scripts/lock-v34-guardian-execution.mjs',
+		'scripts/lock-v34-guardian-tooling.mjs',
+		'scripts/record-v34-guardian-authorization.mjs',
+		'scripts/record-v34-guardian-condition.mjs',
+		'scripts/record-v34-guardian-preflight.mjs',
+		'scripts/run-v34-guardian-confirmation.sh',
+		'scripts/run-v34-guardian-preflight.sh',
+		'scripts/test-v34-guardian-condition.mjs',
+		'scripts/v34-guardian-tooling-files.mjs',
+		'scripts/validate-v34-guardian-protocol.mjs',
+		'scripts/verify-v34-guardian-chain.mjs'
+	].sort()
+);

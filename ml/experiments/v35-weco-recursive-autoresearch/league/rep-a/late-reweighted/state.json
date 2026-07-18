@@ -1,0 +1,73 @@
+{
+	"version": "league-v1",
+	"gen": 1,
+	"members": [
+		{
+			"id": "heur-medium",
+			"kind": "heuristic",
+			"profile": "medium",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-hard",
+			"kind": "heuristic",
+			"profile": "hard",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-insane",
+			"kind": "heuristic",
+			"profile": "insane",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-survivor",
+			"kind": "heuristic",
+			"profile": "survivor",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-cultivator",
+			"kind": "heuristic",
+			"profile": "cultivator",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-rushpatient",
+			"kind": "heuristic",
+			"profile": "rushpatient",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-paragon",
+			"kind": "heuristic",
+			"profile": "paragon",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "heur-pvphunter",
+			"kind": "heuristic",
+			"profile": "pvphunter",
+			"createdGen": 0,
+			"matchStats": {}
+		},
+		{
+			"id": "main-0",
+			"kind": "main",
+			"initFrom": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+			"createdGen": 0,
+			"matchStats": {},
+			"model": "v2",
+			"ptPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/checkpoints/main-0-gen1.pt"
+		}
+	],
+	"phase": "idle",
+	"updatedAt": "2026-07-15T08:14:06.463Z"
+}

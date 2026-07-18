@@ -1,0 +1,98 @@
+{
+  "_readme": "v16 representation-complete mixed-player-count outcome treatment. Identical to the matched control except multiplayer strategic decisions blend 25% toward pure final placement minus the behavior placement-head baseline. Solo uses score/win Monte Carlo in both arms and never its automatic first place.",
+  "version": "league-v1",
+  "mode": "ppo",
+  "seats": 4,
+  "trainingSeatCurriculum": [
+    { "throughGen": 5, "weights": { "1": 0.5, "2": 0.25, "3": 0.125, "4": 0.125 } },
+    { "throughGen": 12, "weights": { "1": 0.3, "2": 0.25, "3": 0.2, "4": 0.25 } },
+    { "throughGen": 20, "weights": { "1": 0.125, "2": 0.125, "3": 0.125, "4": 0.625 } }
+  ],
+  "soloMaxStatusLevel": 2,
+  "maxRounds": 120,
+  "gamesPerGen": 512,
+  "matchupGames": 32,
+  "evalGames": 48,
+  "evalOpponents": ["heur-medium", "heur-hard", "heur-pvphunter"],
+  "lanes": { "main": 1, "mainExploiter": 0, "leagueExploiter": 0 },
+  "seedCheckpointAnchors": true,
+  "baselineElos": {
+    "frozen-v13-1-gen48-champion": 439,
+    "frozen-ladder8c2-gen60-champion": 136
+  },
+  "extraFrozen": [
+    {
+      "id": "frozen-v13-2-gen44-champion",
+      "weightsPath": "ml/champions/v13-2/main-0-gen44.json",
+      "elo": 453
+    },
+    {
+      "id": "frozen-v14b-gen120-exploiter",
+      "weightsPath": "ml/exploiters/v14b-gen120.json",
+      "elo": 394
+    },
+    {
+      "id": "frozen-v15-1-gen10-champion",
+      "weightsPath": "ml/champions/v15-1/main-0-gen10.json",
+      "elo": 476
+    },
+    {
+      "id": "frozen-v16-outcome-s1-gen20",
+      "weightsPath": "ml/v16_finalists/outcome-s1-gen20.json",
+      "elo": 500
+    }
+  ],
+  "denseVpReward": true,
+  "shapingPreset": "ascend3",
+  "potentialShapingMode": "policy-invariant",
+  "strategicDecisionScope": "engine-cycle",
+  "gamma": 0.999,
+  "shuffleGuardians": true,
+  "selfPlayFraction": 0.1,
+  "heuristicOpponentFraction": 0.2,
+  "heuristicOpponentProfiles": ["paragon", "insane"],
+  "terminationBlocker": "paragon",
+  "terminationBlockerFraction": 0.5,
+  "opponentTemperature": 0.65,
+  "pfsp": { "p": 2, "variant": "squared" },
+  "promoteEvery": 0,
+  "promoteMarginElo": 25,
+  "selection": "hybrid",
+  "sample": true,
+  "temperature": 0.65,
+  "train": {
+    "epochs": 2,
+    "batchSize": 256,
+    "hidden": [128, 128],
+    "valueHidden": [64],
+    "extraArgs": [
+      "--lr", "0.0001",
+      "--clip-eps", "0.1",
+      "--entropy-coef", "0.002",
+      "--lr-schedule", "cosine",
+      "--target-kl", "0.01",
+      "--kl-ref-coef", "0.05",
+      "--placement-coef", "0.3",
+      "--farm-value-coef", "0",
+      "--reward-pick-coef", "0",
+      "--route-mode-coef", "0",
+      "--gamma", "0.999",
+      "--gae-lambda", "0.95",
+      "--strategic-mc-coef", "0",
+      "--solo-strategic-mc-coef", "0.5",
+      "--strategic-mc-gamma", "1",
+      "--strategic-outcome-coef", "0.25",
+      "--win-bonus", "1.0",
+      "--win-bonus-halflife", "0",
+      "--all-fallen-loss", "-3.0"
+    ]
+  },
+  "pythonBin": "ml/.venv/bin/python",
+  "gauntletCmd": ["bash", "scripts/league-gauntlet.sh"],
+  "workers": 20,
+  "matchupConcurrency": 2,
+  "seedBase": 280000000,
+  "initFrom": "ml/v16_finalists/outcome-s1-gen20-obs188.json",
+  "laneInit": { "main-0": "ml/v16_finalists/outcome-s1-gen20-obs188.json" },
+  "paths": { "root": "ml/league_v16_representation_outcome025_s0" }
+}

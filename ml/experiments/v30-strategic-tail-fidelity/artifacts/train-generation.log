@@ -1,0 +1,14 @@
+[pool] 1024 games x 1 seats, 6 workers, weights=ml/warmstart/v24/v23-control-gen5-obs199-act104.json
+[pool] 102/1024 games (8.5/s live)
+[pool] 204/1024 games (8.9/s live)
+[pool] 306/1024 games (9.0/s live)
+[pool] 408/1024 games (9.1/s live)
+[pool] 510/1024 games (9.2/s live)
+[pool] 612/1024 games (9.2/s live)
+[pool] 714/1024 games (9.3/s live)
+[pool] 816/1024 games (9.3/s live)
+[pool] 918/1024 games (9.3/s live)
+[pool] 1020/1024 games (9.3/s live)
+[pool] 1024/1024 games (9.3/s live)
+[pool] DONE games=1024 samples=120722 workers=6 wall=109.7s rate=9.3 games/s
+[pool] shards: 6 files, summaries: 6 files in /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new

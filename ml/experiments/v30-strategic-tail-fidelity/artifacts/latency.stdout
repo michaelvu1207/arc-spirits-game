@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "arc-infer-latency-v1",
+  "socket": "/tmp/arc-v30-latency-3139441.sock",
+  "data": "ml/experiments/v30-strategic-tail-fidelity/data/validation",
+  "server": {
+    "format": "arc-entity-scorer-v2",
+    "obs_dim": 3419,
+    "act_dim": 104,
+    "device": "cuda",
+    "weights": "ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar10-c025/checkpoint.pt",
+    "aux": {
+      "farm_value": true,
+      "route_mode": true,
+      "reward_pick": true,
+      "placement": false,
+      "reach30": true
+    },
+    "reach30_horizon": 30
+  },
+  "protocol": {
+    "wire": "binary",
+    "rowsPerRequest": 32,
+    "candidatesPerRow": 30,
+    "clients": 8,
+    "warmupRequestsPerClient": 20,
+    "measuredRequestsPerClient": 200,
+    "requestBytes": 837143
+  },
+  "measurement": {
+    "requests": 1600,
+    "rows": 51200,
+    "wallSeconds": 4.020024761091918,
+    "requestsPerSecond": 398.0074987312786,
+    "rowsPerSecond": 12736.239959400915,
+    "requestLatencyMs": {
+      "min": 10.74012,
+      "p50": 18.582425,
+      "p95": 27.922112499999997,
+      "p99": 35.7562705,
+      "max": 56.292595,
+      "mean": 20.0130810225
+    },
+    "perRowEquivalentLatencyMs": {
+      "min": 0.33562875,
+      "p50": 0.58070078125,
+      "p95": 0.8725660156249999,
+      "p99": 1.117383453125,
+      "max": 1.75914359375,
+      "mean": 0.625408781953125
+    },
+    "perClientRequestLatencyMs": [
+      {
+        "min": 12.986006,
+        "p50": 18.7270955,
+        "p95": 27.169963949999985,
+        "p99": 34.08375406999993,
+        "max": 56.292595,
+        "mean": 20.0098348
+      },
+      {
+        "min": 14.316243,
+        "p50": 18.489261,
+        "p95": 27.294097,
+        "p99": 35.835162919999966,
+        "max": 42.774721,
+        "mean": 19.96552391
+      },
+      {
+        "min": 11.02392,
+        "p50": 18.531875499999998,
+        "p95": 28.016252399999985,
+        "p99": 34.025612439999975,
+        "max": 55.999186,
+        "mean": 20.030679115
+      },
+      {
+        "min": 12.765287,
+        "p50": 18.663265,
+        "p95": 27.717932949999994,
+        "p99": 35.4778918,
+        "max": 43.1808,
+        "mean": 20.04854801
+      },
+      {
+        "min": 10.74012,
+        "p50": 18.6162105,
+        "p95": 27.716564899999987,
+        "p99": 35.726684379999995,
+        "max": 41.240944,
+        "mean": 19.98799604
+      },
+      {
+        "min": 12.290717,
+        "p50": 18.57968,
+        "p95": 28.466153999999996,
+        "p99": 36.074725769999986,
+        "max": 42.062083,
+        "mean": 20.018463645
+      },
+      {
+        "min": 14.863373,
+        "p50": 18.581856000000002,
+        "p95": 27.425493449999994,
+        "p99": 34.53517365999999,
+        "max": 55.531737,
+        "mean": 19.983316990000002
+      },
+      {
+        "min": 11.240249,
+        "p50": 18.603046,
+        "p95": 27.174299899999983,
+        "p99": 34.087528409999955,
+        "max": 54.769199,
+        "mean": 20.06028567
+      }
+    ]
+  }
+}

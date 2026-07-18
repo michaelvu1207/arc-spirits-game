@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "arc-v34-phase2-condition-v1",
+  "valid": true,
+  "immutable": true,
+  "condition": "raw",
+  "attempt": 2,
+  "workers": 24,
+  "arm": {
+    "id": "raw",
+    "kind": "raw",
+    "selectedWorkers": 24
+  },
+  "sourceCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e",
+  "seed0": 957000000,
+  "games": 4096,
+  "seedMax": 957004095,
+  "commonDecode": {
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "guardianSchedule": "absolute-balanced",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "learnMonsterRewardChoices": false,
+    "obsVersion": 1,
+    "policyObsVersion": 2,
+    "inferenceWire": "binary"
+  },
+  "checkpoint": {
+    "path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+  },
+  "catalog": {
+    "path": "ml/catalogs/live-20260713-5f4ad348.json",
+    "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "inference": {
+    "format": "arc-entity-scorer-v2",
+    "obsDim": 3419,
+    "actDim": 104,
+    "weightsPath": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "weightsSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+    "wire": "binary"
+  },
+  "telemetry": {
+    "plannerMode": "raw",
+    "strategicDecisions": 0,
+    "strategicSimulations": 0,
+    "decisionWallMsP50": null,
+    "decisionWallMsP95": null,
+    "byPhase": {
+      "navigation": 0,
+      "encounter": 0
+    },
+    "wallSeconds": 289.36831903300003
+  },
+  "stalls": 0,
+  "integrity": {
+    "informationSafetyFailures": 0,
+    "replayMismatches": 0,
+    "servingErrors": 0,
+    "provenanceMismatches": 0,
+    "derivedOnlyAfterStrictValidation": true,
+    "evidence": {
+      "informationSafety": {
+        "strengthPreflight": {
+          "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-preflight/result.json",
+          "bytes": 6506,
+          "sha256": "8c8b2094c27090a14b169471a071758215687401cecf40565eceed3937aa3b01"
+        },
+        "vitestExitCode": 0,
+        "determinizationExitCode": 0
+      },
+      "replay": {
+        "seed0": 957000000,
+        "games": 64,
+        "workers": 8,
+        "exactPerGameEquality": true,
+        "preflightExitCode": 0,
+        "mismatches": 0
+      },
+      "serving": {
+        "servingLines": 1,
+        "shutdownLines": 1,
+        "errorLines": 0,
+        "requests": 456149,
+        "rows": 456149,
+        "batches": 35992
+      },
+      "provenance": {
+        "acceptedGameSummariesChecked": 4096,
+        "evaluatorCrossGameHandshakeInvariant": true,
+        "fixedInferenceProcess": true,
+        "reloadLines": 0
+      }
+    }
+  },
+  "inputs": {
+    "strengthLock": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-tooling-lock.json",
+      "bytes": 3714,
+      "sha256": "e04b20c3734ad3f920626057e106f6d761a2cdf055449740d8275e08cd12ad78"
+    },
+    "baseProtocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "bytes": 9955,
+      "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548"
+    },
+    "strengthProtocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+      "bytes": 5927,
+      "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd"
+    },
+    "systemsEligibility": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+      "bytes": 15446,
+      "sha256": "74d1a12ee1ce2f32a4add65c2a31dad89c914b673da9803baf6179018231a68d"
+    },
+    "phase2Authorization": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-authorization.json",
+      "bytes": 930,
+      "sha256": "aa256764285a822d85a359e859dd6b11e53dd3f04ae16d999a525eba6b141cc7"
+    },
+    "strengthPreflight": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-preflight/result.json",
+      "bytes": 6506,
+      "sha256": "8c8b2094c27090a14b169471a071758215687401cecf40565eceed3937aa3b01"
+    },
+    "report": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/report.json",
+      "bytes": 3490040,
+      "sha256": "aff0e557b49873a440665f6ee0694e637aa14f589d78b66f26023d1c552949ae"
+    },
+    "replayReport": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/replay-report.json",
+      "bytes": 59216,
+      "sha256": "f5b845d6951dac55aee115dc39cdaa6c705c73cf6d85e1871f64334fe9c0655c"
+    },
+    "replayStdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/replay-evaluator.stdout",
+      "bytes": 59216,
+      "sha256": "f5b845d6951dac55aee115dc39cdaa6c705c73cf6d85e1871f64334fe9c0655c"
+    },
+    "replayStderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/replay-evaluator.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "replayExitCode": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/replay-exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "inferLog": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/infer.log",
+      "bytes": 7728,
+      "sha256": "b850abd4ead4c6b55111cb644adf50be1669925f796bb3203f138e0ce7b01abc"
+    },
+    "stdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/evaluator.stdout",
+      "bytes": 3490040,
+      "sha256": "aff0e557b49873a440665f6ee0694e637aa14f589d78b66f26023d1c552949ae"
+    },
+    "stderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/evaluator.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "launch": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/launch.json",
+      "bytes": 2994,
+      "sha256": "f00973c706e15241ff90a92d611671af9beec8d65e35061e722c98ef0d611caf"
+    },
+    "launchPid": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/launch.pid",
+      "bytes": 8,
+      "sha256": "2c79de0a8b7ed1af8280e270f0b8d149b9da118923f94df1c8d2fe2caf14ea28"
+    },
+    "exitCode": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-2/exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "retryJustification": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/retry-justification.json",
+      "bytes": 817,
+      "sha256": "f11c194898c41d174aeb52583f1c338c29027491f0ce2be35bebcafac20d45da"
+    },
+    "retryFailureEvidence": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/attempt-1/failure.json",
+      "bytes": 1896,
+      "sha256": "049e42301cbfd864d94fd3e4666151c29bcd81de58d513f3f7552540905c52e3"
+    }
+  }
+}

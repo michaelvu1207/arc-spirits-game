@@ -1,0 +1,343 @@
+{
+  "result": {
+    "schemaVersion": "arc-v34-systems-eligibility-v1",
+    "strengthUse": false,
+    "outcomesLoaded": false,
+    "protocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548"
+    },
+    "systemsAuthorization": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-authorization.json",
+      "sha256": "af9e4abadec6de165e1a431b656912b11a3b587417946926f3159f92853c8175"
+    },
+    "arms": [
+      {
+        "id": "rerank-p025",
+        "enabledBeforeSystems": true,
+        "operationallyEligible": true,
+        "rejectionReason": null,
+        "selectedWorkers": 24,
+        "peakGamesPerSecond": 8.970381952734952,
+        "projected4096Seconds": 456.61377872000014,
+        "binding": {
+          "binding-w1": 32.626,
+          "binding-w8": 40.003
+        },
+        "stageReports": [
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/smoke/attempt-1/stage-report.json",
+            "sha256": "219deed1d47704e2aa88d02080e4358172ed4bfb0af165e9679f621348371628"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/binding-w1/attempt-1/stage-report.json",
+            "sha256": "6235419fc92af9f9784a84deebc774ac258ab1859ffc54a8c58e4322748cc57d"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/binding-w8/attempt-1/stage-report.json",
+            "sha256": "52227af185e500de0cbbe35c32b8c60908d4b33b7859baadfabb0262596610ae"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/throughput-w4/attempt-1/stage-report.json",
+            "sha256": "e9f834ad7ee2f1e06dd00d3ca849b99dfd83cee91bade26828a1d78d67e9f971"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/throughput-w8/attempt-1/stage-report.json",
+            "sha256": "81b410058f001e319875affe696e424e5994171ad8cff65efa0f9346b0115a91"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/throughput-w12/attempt-1/stage-report.json",
+            "sha256": "1091505d9aceaa63ecc1da25a96b7b670d73ca71998e3aec8af09dede4c7cf8d"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/throughput-w16/attempt-1/stage-report.json",
+            "sha256": "5e6778df64aa8a42c1a132485b9cf8dcba613f4083519b0fc7dfb6d089ebc4a2"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p025/throughput-w24/attempt-1/stage-report.json",
+            "sha256": "87ded71dbbab8aa555dced42a135312ac70281f97a8d8f42b8614c30aee3272d"
+          }
+        ]
+      },
+      {
+        "id": "rerank-p050",
+        "enabledBeforeSystems": true,
+        "operationallyEligible": true,
+        "rejectionReason": null,
+        "selectedWorkers": 24,
+        "peakGamesPerSecond": 8.861087008104493,
+        "projected4096Seconds": 462.245771456,
+        "binding": {
+          "binding-w1": 29.616,
+          "binding-w8": 41.514
+        },
+        "stageReports": [
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/smoke/attempt-1/stage-report.json",
+            "sha256": "cebf41f12a0b9fbcc6b62deae668036cd6dedc024d72761e93dbb99b6a95d779"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/binding-w1/attempt-1/stage-report.json",
+            "sha256": "c8a64a6c80b41a877e96d086def78a77a4fceffaba5fa42e77596ec93362c0cc"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/binding-w8/attempt-1/stage-report.json",
+            "sha256": "3b57323fbd30089d8b0a1d4b801bfa1b0d95c09ac9406416d08319980d267856"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/throughput-w4/attempt-1/stage-report.json",
+            "sha256": "c9edd2fba66f84d134fe19a05dea2487c24bbf14201cee2a7d096d632c1dc28f"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/throughput-w8/attempt-1/stage-report.json",
+            "sha256": "0a698a28fb6e6626ae3f57bd77b2bd40ec4a256e3fefb0b72870dc74dca2dd00"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/throughput-w12/attempt-1/stage-report.json",
+            "sha256": "2fc0e6e75ee58b231bb40513cad36bef1e5fa1bc500afe7fb416adfd560b87b1"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/throughput-w16/attempt-1/stage-report.json",
+            "sha256": "85c684ae2abb12f28fe0cf88ba46ba4551a0afadad31bfdc73abb3412155a068"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p050/throughput-w24/attempt-1/stage-report.json",
+            "sha256": "2eafe6be2a516768e8de868cc00d7046c83d848eee639e1fc756b0181ee9fb29"
+          }
+        ]
+      },
+      {
+        "id": "rerank-p075",
+        "enabledBeforeSystems": true,
+        "operationallyEligible": true,
+        "rejectionReason": null,
+        "selectedWorkers": 24,
+        "peakGamesPerSecond": 8.565590887214755,
+        "projected4096Seconds": 478.192345856,
+        "binding": {
+          "binding-w1": 31.688,
+          "binding-w8": 41.345
+        },
+        "stageReports": [
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/smoke/attempt-1/stage-report.json",
+            "sha256": "4d70c0056b6c685bb1c019234963aa11bd1c3b652cdf306d8cd20fb287387694"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/binding-w1/attempt-1/stage-report.json",
+            "sha256": "740d0ee171f97f9b476390b233df60cbe49b0e07a28852845870ac4779df4dbf"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/binding-w8/attempt-1/stage-report.json",
+            "sha256": "0b42f39b4a40da68d81cf5675e264da996582280f91ee44f11f2c7fd51603ed9"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/throughput-w4/attempt-1/stage-report.json",
+            "sha256": "09b162155a14cb1a12c74cce84592e5aa68a1f22d6209196b3e0768087852fdb"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/throughput-w8/attempt-1/stage-report.json",
+            "sha256": "08cfab34c3c5843bef74ed38e4b0be2bb7e7c7e3a62344f55bc10fa4f778ef8f"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/throughput-w12/attempt-1/stage-report.json",
+            "sha256": "7f8cf970ceb6a6b91e3ffb2e628018f32387a1ecd485a3f0567eb1bd14af203c"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/throughput-w16/attempt-1/stage-report.json",
+            "sha256": "989de7e282afcfccb2c2ad3c5a678198f39c5392bc60e9f82ee7f470c5eb2519"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p075/throughput-w24/attempt-1/stage-report.json",
+            "sha256": "a26c2b8fe3f313a6672475c94945ab6c667bb5e6ad8435173ded294c37c07ef2"
+          }
+        ]
+      },
+      {
+        "id": "rerank-p100",
+        "enabledBeforeSystems": true,
+        "operationallyEligible": true,
+        "rejectionReason": null,
+        "selectedWorkers": 24,
+        "peakGamesPerSecond": 11.639923689034957,
+        "projected4096Seconds": 351.89234134399993,
+        "binding": {
+          "binding-w1": 17.14,
+          "binding-w8": 23.346
+        },
+        "stageReports": [
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/smoke/attempt-1/stage-report.json",
+            "sha256": "bc9590f2b40eac5ccf6855eef09c5f18a504da77c3287fa99844e0341819db3c"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/binding-w1/attempt-1/stage-report.json",
+            "sha256": "e955b3b19ebf15f60ee4a39bcb6339d09e24ecd5dfdf4e123586dfe5c6e501e8"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/binding-w8/attempt-1/stage-report.json",
+            "sha256": "7a64d8b80c7d8c83d6c5292d4f10743d0c39b4cae292b472eee639bfceddc6e5"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/throughput-w4/attempt-1/stage-report.json",
+            "sha256": "c69fd79431592966368538644ad95c00e476f607fd05da823c653795a16f28e3"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/throughput-w8/attempt-1/stage-report.json",
+            "sha256": "6a6a08ea158f3adc86457f29e2767f2c6ba8e16c84efbc01f5a54685d586bc38"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/throughput-w12/attempt-1/stage-report.json",
+            "sha256": "78ff5567c11a037bdd2b34454cc377f7251d38974be2b6a171af138d03ed0a1f"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/throughput-w16/attempt-1/stage-report.json",
+            "sha256": "b88107c543ebf26ccc926b3052ff2390b70ecefb24622b0a982d1c1be2c0b301"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/rerank-p100/throughput-w24/attempt-1/stage-report.json",
+            "sha256": "a65c22fa8e44c63b4a1661c28d932813534904334da67b0a8baaea7814e40989"
+          }
+        ]
+      },
+      {
+        "id": "heuristic-s4-h2",
+        "enabledBeforeSystems": true,
+        "operationallyEligible": true,
+        "rejectionReason": null,
+        "selectedWorkers": 24,
+        "peakGamesPerSecond": 5.891526807328608,
+        "projected4096Seconds": 695.235740064,
+        "binding": {
+          "binding-w1": 44.488,
+          "binding-w8": 49.812
+        },
+        "stageReports": [
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/smoke/attempt-1/stage-report.json",
+            "sha256": "75ddd18ebf8426b1b752dfef6f9760b2f6df83d44c0c666d905f9a261857868e"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/binding-w1/attempt-1/stage-report.json",
+            "sha256": "d03fd3139d08052bb8c65ed3ae4a88f3559d9e31659987e488911ff4f0346224"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/binding-w8/attempt-1/stage-report.json",
+            "sha256": "0bf7e90897fff5ae23dd52c65e8682494aa3c8b68b3803ef96caee61a92c338d"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/throughput-w4/attempt-1/stage-report.json",
+            "sha256": "a73375b69b1b958b7858918757fcca3ca521fc7f4914ded43875101295e63ca2"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/throughput-w8/attempt-1/stage-report.json",
+            "sha256": "6ddd443fddb7898cf3c239882c42233c494500e65e69ad34fb97ec8c0134940f"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/throughput-w12/attempt-1/stage-report.json",
+            "sha256": "713946625aa07f4009b8633c83d63d4047cca5f5d5732980fa104eba7ae091b2"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/throughput-w16/attempt-1/stage-report.json",
+            "sha256": "ad4084f02c725dd14d5d61a1b20d9c19820e3efb6819d5f38e24646c81ee625b"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s4-h2/throughput-w24/attempt-1/stage-report.json",
+            "sha256": "d9e088e9bb0ee1b7ab09496a65806903af1386ce38d251decaa621e8a96a151f"
+          }
+        ]
+      },
+      {
+        "id": "heuristic-s8-h3",
+        "enabledBeforeSystems": true,
+        "operationallyEligible": true,
+        "rejectionReason": null,
+        "selectedWorkers": 24,
+        "peakGamesPerSecond": 4.840446813141262,
+        "projected4096Seconds": 846.2028730239998,
+        "binding": {
+          "binding-w1": 64.524,
+          "binding-w8": 88.431
+        },
+        "stageReports": [
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/smoke/attempt-1/stage-report.json",
+            "sha256": "fba0d1483392846199bc1df7f56461e5096846c4f3e40d75338cae3c41b0faa7"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/binding-w1/attempt-1/stage-report.json",
+            "sha256": "fa107e00bb266dc52510c1754fb163996e479cbc28a85eaf8b2670bd177da2d1"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/binding-w8/attempt-1/stage-report.json",
+            "sha256": "a9aa213bd080e85fa3eb964f2659ae0a72b959a07acc747dd561f08ea2481bf3"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/throughput-w4/attempt-1/stage-report.json",
+            "sha256": "a5ff08065141a99c91f4a1aae1e3bb9b920e265021cdeb3c285367e9edb6b26e"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/throughput-w8/attempt-1/stage-report.json",
+            "sha256": "2cc8e0b3167780675a9b7c93172b1d912d3895ab48f0ff5f9b9901426505f3b0"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/throughput-w12/attempt-1/stage-report.json",
+            "sha256": "7240bcdf8f33652ad5052ffc69880c8ffe2ecaf85f0dc3f014d05807b66926ae"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/throughput-w16/attempt-1/stage-report.json",
+            "sha256": "2b7939f080fdcee0ec5c51c2ab4ca56e74b34a662e1fe301eea6c46e923733c2"
+          },
+          {
+            "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/throughput-w24/attempt-1/stage-report.json",
+            "sha256": "0d24687df4eb473a5e93cf17bb6069432a22cda0694605521429305e5c5ed5c7"
+          }
+        ]
+      }
+    ],
+    "eligibleCandidateArms": [
+      "rerank-p025",
+      "rerank-p050",
+      "rerank-p075",
+      "rerank-p100",
+      "heuristic-s4-h2",
+      "heuristic-s8-h3"
+    ],
+    "phase2MayOpen": true,
+    "recordedAt": "2026-07-14T14:04:21.681Z"
+  },
+  "phase2Authorization": {
+    "schemaVersion": "arc-v34-phase2-authorization-v1",
+    "systemsEligibility": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+      "sha256": "74d1a12ee1ce2f32a4add65c2a31dad89c914b673da9803baf6179018231a68d"
+    },
+    "registeredFamilyCandidateSlots": [
+      "rerank-p025",
+      "rerank-p050",
+      "rerank-p075",
+      "rerank-p100",
+      "heuristic-s4-h2",
+      "heuristic-s8-h3"
+    ],
+    "eligibleCandidateArms": [
+      "rerank-p025",
+      "rerank-p050",
+      "rerank-p075",
+      "rerank-p100",
+      "heuristic-s4-h2",
+      "heuristic-s8-h3"
+    ],
+    "authorization": {
+      "phase2SeedsOpen": true,
+      "guardianSeedsOpen": false,
+      "teacherSeedsOpen": false,
+      "finalDevelopmentSeedsOpen": false,
+      "hiddenSeedsOpen": false,
+      "multiplayerSeedsOpen": false,
+      "humanReferenceSeedsOpen": false,
+      "productionPromotionOpen": false
+    },
+    "recordedAt": "2026-07-14T14:04:21.682Z"
+  }
+}

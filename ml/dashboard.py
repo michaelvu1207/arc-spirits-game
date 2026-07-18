@@ -66,6 +66,15 @@ def summarize_games(spec: str) -> dict:
     by_candidate = defaultdict(lambda: {
         "games": 0, "wins": 0, "placements": defaultdict(int),
         "vp_sum": 0.0, "vp_max": 0.0, "status": defaultdict(int),
+        # Evaluation-only cycle diagnostics.  These never feed the reward; they
+        # make the early-score/late-engine failure mode visible in artifacts.
+        "cycle_games": 0, "reach15": 0, "reach30": 0,
+        "converted15to30": 0, "rounds15to30_sum": 0.0,
+        "vp_after_round_sum": defaultdict(float),
+        "vp_after_round_count": defaultdict(int),
+        "decisions": 0, "productive_decisions": 0, "optional_yields": 0,
+        "post15_vp_per_round_sum": 0.0, "post15_vp_per_round_count": 0,
+        "action_sum": defaultdict(float), "engine_sum": defaultdict(float),
     })
     rounds_all = []
     h2h = defaultdict(lambda: defaultdict(int))  # cand -> opponent-cand -> better-placement count
@@ -89,6 +98,32 @@ def summarize_games(spec: str) -> dict:
             c["status"][s.get("finalStatus", -1)] += 1
             if s.get("seat") == row.get("winnerSeat"):
                 c["wins"] += 1
+            cycle = s.get("cycle")
+            if isinstance(cycle, dict):
+                c["cycle_games"] += 1
+                first15, first30 = cycle.get("first15Round"), cycle.get("first30Round")
+                if first15 is not None:
+                    c["reach15"] += 1
+                if first30 is not None:
+                    c["reach30"] += 1
+                if first15 is not None and first30 is not None:
+                    c["converted15to30"] += 1
+                    c["rounds15to30_sum"] += first30 - first15
+                for rnd, vp in (cycle.get("vpAfterRound") or {}).items():
+                    if isinstance(vp, (int, float)):
+                        c["vp_after_round_sum"][str(rnd)] += vp
+                        c["vp_after_round_count"][str(rnd)] += 1
+                c["decisions"] += int(cycle.get("decisions") or 0)
+                c["productive_decisions"] += int(cycle.get("productiveDecisions") or 0)
+                c["optional_yields"] += int(cycle.get("optionalYieldDecisions") or 0)
+                post15 = cycle.get("post15VpPerRound")
+                if isinstance(post15, (int, float)):
+                    c["post15_vp_per_round_sum"] += post15
+                    c["post15_vp_per_round_count"] += 1
+                for key in ("locationInteractions", "summons", "awakens", "combats", "rewards", "pvpAttacks"):
+                    c["action_sum"][key] += float(cycle.get(key) or 0)
+                for key in ("finalAttackDice", "finalSpirits", "finalMaxBarrier"):
+                    c["engine_sum"][key] += float(cycle.get(key) or 0)
             for j, o in enumerate(seats):
                 if i == j:
                     continue
@@ -105,6 +140,14 @@ def summarize_games(spec: str) -> dict:
         }
     for label, c in sorted(by_candidate.items()):
         n = c["games"]
+        cycle_n = c["cycle_games"]
+        conversion_n = c["reach15"]
+        converted_n = c["converted15to30"]
+        vp_after_round = {
+            rnd: round(total / c["vp_after_round_count"][rnd], 2)
+            for rnd, total in sorted(c["vp_after_round_sum"].items(), key=lambda item: int(item[0]))
+            if c["vp_after_round_count"][rnd]
+        }
         report["candidates"][label] = {
             "games": n,
             "winRatePct": pct(c["wins"], n),
@@ -113,6 +156,28 @@ def summarize_games(spec: str) -> dict:
             "placementPct": {str(k): pct(v, n) for k, v in sorted(c["placements"].items())},
             "finalStatusPct": {str(k): pct(v, n) for k, v in sorted(c["status"].items())},
             "headToHeadBetterPlace": dict(h2h.get(label, {})),
+            "lateGame": {
+                "observedSeatGames": cycle_n,
+                "reach15Pct": pct(c["reach15"], cycle_n),
+                "reach30Pct": pct(c["reach30"], cycle_n),
+                "conversion15To30Pct": pct(converted_n, conversion_n),
+                "meanRounds15To30": round(c["rounds15to30_sum"] / converted_n, 2)
+                if converted_n else None,
+                "meanVpAfterRound": vp_after_round,
+                "productiveDecisionPct": pct(c["productive_decisions"], c["decisions"]),
+                "optionalYieldDecisionPct": pct(c["optional_yields"], c["decisions"]),
+                "meanPost15VpPerRound": round(
+                    c["post15_vp_per_round_sum"] / c["post15_vp_per_round_count"], 3,
+                ) if c["post15_vp_per_round_count"] else None,
+                "meanActionsPerGame": {
+                    key: round(total / cycle_n, 2) if cycle_n else None
+                    for key, total in sorted(c["action_sum"].items())
+                },
+                "meanFinalEngine": {
+                    key: round(total / cycle_n, 2) if cycle_n else None
+                    for key, total in sorted(c["engine_sum"].items())
+                },
+            },
         }
     return report
 
@@ -298,12 +363,16 @@ def render_summary_md(report: dict, spec: str) -> str:
              f"(p50 {report['rounds'].get('p50', '-')}, p90 {report['rounds'].get('p90', '-')})", ""]
     rows = []
     for label, c in report["candidates"].items():
+        late = c.get("lateGame") or {}
         rows.append([
             os.path.basename(label)[:48], c["games"], c["winRatePct"], c["meanVP"],
             c["placementPct"].get("1"), c["finalStatusPct"].get("3"),
+            late.get("reach30Pct"), late.get("conversion15To30Pct"),
+            late.get("meanPost15VpPerRound"), late.get("optionalYieldDecisionPct"),
         ])
     lines.append(md_table(
-        ["candidate", "seat-games", "win %", "mean VP", "1st %", "corrupt %"], rows))
+        ["candidate", "seat-games", "win %", "mean VP", "1st %", "corrupt %",
+         "reach 30 %", "15→30 %", "post-15 VP/round", "optional yield %"], rows))
     return "\n".join(lines)
 
 

@@ -1,0 +1,14 @@
+[infer] serving ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt (arc-entity-scorer-v2, obs_dim=3419, act_dim=104) on /dev/shm/arc-v34-phase2/rerank-p025/attempt-1/infer.sock device=cuda window=2.0ms max_batch=512
+[infer] reqs=2181 rows=4129 batches=185 avg_batch=22.3 batch_p50=21 batch_p95=42 batch_min=1 batch_max=115 forwards/s=37.0
+[infer] reqs=6636 rows=12932 batches=548 avg_batch=23.6 batch_p50=23 batch_p95=41 batch_min=1 batch_max=57 forwards/s=109.6
+[infer] reqs=6203 rows=12043 batches=507 avg_batch=23.8 batch_p50=23 batch_p95=40 batch_min=4 batch_max=56 forwards/s=101.4
+[infer] reqs=6235 rows=11943 batches=506 avg_batch=23.6 batch_p50=23 batch_p95=42 batch_min=3 batch_max=57 forwards/s=101.2
+[infer] reqs=5635 rows=10983 batches=454 avg_batch=24.2 batch_p50=24 batch_p95=39 batch_min=5 batch_max=54 forwards/s=90.8
+[infer] reqs=5938 rows=11394 batches=480 avg_batch=23.7 batch_p50=23 batch_p95=38 batch_min=5 batch_max=45 forwards/s=96.0
+[infer] reqs=5352 rows=10312 batches=427 avg_batch=24.1 batch_p50=24 batch_p95=41 batch_min=2 batch_max=63 forwards/s=85.4
+[infer] reqs=5044 rows=9664 batches=404 avg_batch=23.9 batch_p50=23 batch_p95=38 batch_min=7 batch_max=48 forwards/s=80.8
+[infer] reqs=4525 rows=8821 batches=364 avg_batch=24.2 batch_p50=24 batch_p95=36 batch_min=6 batch_max=44 forwards/s=72.8
+[infer] reqs=4391 rows=8539 batches=356 avg_batch=24.0 batch_p50=24 batch_p95=39 batch_min=4 batch_max=58 forwards/s=71.2
+[infer] reqs=4819 rows=9271 batches=391 avg_batch=23.7 batch_p50=23 batch_p95=40 batch_min=3 batch_max=61 forwards/s=78.2
+[infer] reqs=5130 rows=9906 batches=413 avg_batch=24.0 batch_p50=23 batch_p95=37 batch_min=8 batch_max=48 forwards/s=82.6
+[infer] shut down

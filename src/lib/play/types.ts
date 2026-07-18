@@ -147,6 +147,13 @@ export type GameSessionStatus = 'lobby' | 'active' | 'finished' | 'closed';
 export interface RoomSummary {
 	roomCode: string;
 	status: GameSessionStatus;
+	/** 'casual' | 'ranked' — the public browser only ever lists casual rooms, but the
+	 *  flag is carried so clients never have to guess. */
+	mode: 'casual' | 'ranked';
+	/** Central admission policy: only 'public' rooms are listed/joinable by policy. */
+	visibility: 'public' | 'private';
+	/** True only for a real rated (ranked, verified-identity) game. */
+	rated: boolean;
 	/** Display name of the room's host member. */
 	hostName: string;
 	/** Seats currently claimed (by a human or bot). */
@@ -318,8 +325,15 @@ export interface NavigationLockState {
 /** An un-encodable class/trait effect surfaced for the player to resolve by hand. */
 export interface ManualPrompt {
 	id: string;
-	source: string; // class name that produced the prompt
+	source: string; // class name that produced the prompt, or 'awaken' for a blocked flip
 	text: string;
+	/**
+	 * For `source === 'awaken'` prompts only: the face-down spirit slot whose text
+	 * condition the owner is resolving by hand. Lets clients answer with
+	 * `manualAwaken` (flip + clear) instead of a generic `dismissManualPrompt`
+	 * (clear only — the spirit would stay face-down).
+	 */
+	slotIndex?: number;
 }
 
 /**
@@ -1030,7 +1044,19 @@ export interface BagSpiritSummary {
 export interface SpectatorProjection {
 	roomCode: string;
 	revision: number;
+	/** Canonical content hash of the FULL authoritative state this projection was built
+	 *  from (viewer-independent — see stateHash.ts). Equal (revision, stateHash) pairs on
+	 *  two clients ⇒ they are looking at the same history; a mismatch at the same revision
+	 *  is a fork. Optional only for snapshots predating the field. */
+	stateHash?: string;
 	status: GameSessionStatus;
+	/** Truthful room metadata, stamped by the authoritative view layers on BOTH
+	 *  transports (never derivable from wire input): play mode, central visibility/
+	 *  admission, and whether the game is actually rated. Optional only for
+	 *  projections snapshotted before the fields existed. */
+	mode?: 'casual' | 'ranked';
+	visibility?: 'public' | 'private';
+	rated?: boolean;
 	gameId: string | null;
 	round: number;
 	guardianPool: string[];

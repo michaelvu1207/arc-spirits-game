@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "arc-v34-preflight-evidence-v1",
+  "strengthUse": false,
+  "sourceLock": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/source-lock.json",
+    "sha256": "a430edad4de2635916870196a058ee22b2f80d043dd74f3f9f8ece0ea3ad2e6c",
+    "implementationCommit": "4aefd1113caa3c43878c0344d519dd000e2624cf"
+  },
+  "evidence": {
+    "informationSafety": "actions.informationSafety.test.ts",
+    "rerankerReplayAndHiddenInvariance": "_gumbelPlanner.test.ts",
+    "batchedHeuristic": "_heuristicRolloutPlanner.test.ts",
+    "binaryBatchEquivalenceAndShape": "inferenceClient.test.ts",
+    "actorIntegration": "_actorpool.test.ts",
+    "determinization": "check-v34-determinization.mjs"
+  },
+  "checks": {
+    "vitest": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/preflight/vitest.log",
+      "logSha256": "5c9ede8a106fe1d315a51986b246e3d7ce58fcd47c9cc6dad7e9e2eecd19bccf"
+    },
+    "python": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/preflight/python.log",
+      "logSha256": "d094b1bd2c8318c96097f80c50da282add5b2972970a77046de8db6c8935f6ca"
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/preflight/typecheck.log",
+      "logSha256": "a741def5b7e7ac991791bd06d2e66cf2bfa26a779930df1737118d22a9130142"
+    },
+    "protocol": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/preflight/protocol.log",
+      "logSha256": "4ae62672b7794fd0e171f2d25dd17ba63fe7cadf3227186cbe1ec1f0655a0906"
+    },
+    "shellSyntax": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/preflight/shell.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "determinization": {
+      "exitCode": 0,
+      "log": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/preflight/determinization.log",
+      "logSha256": "77ede905fd5ec57a5f2f41f2f0f62633dc207c2fd900f5cf363820c00beb77e8"
+    }
+  },
+  "passed": true,
+  "recordedAt": "2026-07-14T13:19:39.656Z"
+}

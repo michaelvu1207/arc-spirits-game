@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "arc-v2-dataset-audit-v1",
+  "data": "ml/experiments/v30-strategic-tail-fidelity/data/train-new",
+  "valid": true,
+  "errors": [],
+  "meta": {
+    "obsVersion": 2,
+    "obsDim": 199,
+    "obsV2FlatLength": 3419,
+    "actDim": 104,
+    "samples": 120722,
+    "games": 1024
+  },
+  "observed": {
+    "rows": 120722,
+    "games": 1024,
+    "terminalLabels": 1024,
+    "trueWins": 535,
+    "trueWinRate": 0.5224609375,
+    "stalls": 0,
+    "malformedRows": 0,
+    "seedMin": 947000000,
+    "seedMax": 947001023
+  },
+  "catalog": "ml/catalogs/live-20260713-5f4ad348.json",
+  "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+  "weights": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+  "weightsSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472"
+}

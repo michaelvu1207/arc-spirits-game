@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { browser, dev } from '$app/environment';
-	import { sendPlayCommand, applyOptimistic, getPlayState } from '$lib/stores/playStore.svelte';
+	import { sendPlayCommand, applyOptimistic, getPlayState, postPlayJson } from '$lib/stores/playStore.svelte';
 	import { getAssetState } from '$lib/stores/assetStore.svelte';
 	import type {
 		AwakenDiscardRef,
@@ -41,10 +41,12 @@
 	import SplatQualityControl from './SplatQualityControl.svelte';
 	import { prefersReducedData } from '$lib/play/dataSaver';
 	import { getGraphicsSettings } from '$lib/stores/graphicsSettings.svelte';
+	import { pulseHaptic } from '$lib/stores/accessibilitySettings.svelte';
 	import BagViewer from './BagViewer.svelte';
 	import DebugPanel from './DebugPanel.svelte';
 	import SummonFxLayer from './SummonFxLayer.svelte';
 	import PostGameView from './PostGameView.svelte';
+	import GuidedCoach from './GuidedCoach.svelte';
 	import GameChat from './GameChat.svelte';
 	import {
 		setMusic,
@@ -83,6 +85,7 @@
 	let infoOpen = $state(false);
 	let chatOpen = $state(false);
 	let bagOpen = $state(false);
+	let concedeArmed = $state(false);
 	/** Which action sub-view the central stage is showing (null = the action grid). */
 	let activeAction = $state<ActiveAction>(null);
 	/** Last group-Encounter (PvP) combat id this client has shown + dismissed, so the
@@ -96,11 +99,30 @@
 	// This seat's engine-computed action surface (RoomView v2 affordances, threaded
 	// over both the WS and HTTP transports). Null until the server ships it.
 	const myAffordances = $derived(mySeat ? (playState.affordances[mySeat] ?? null) : null);
+	const guidePendingKind = $derived(myAffordances?.pendingWork?.[0]?.kind ?? null);
 	// A stage takeover (awaken payment / armed trade) is staging a decision — park
 	// the pass control so "I'm done" can't race a half-built selection.
 	let stageTakeoverOpen = $state(false);
 
 	const spiritImages = $derived(spiritImageMap(assets.spiritAssets));
+
+	async function concedeRankedSeat() {
+		if (!concedeArmed) {
+			concedeArmed = true;
+			return;
+		}
+		pendingAction = 'concede';
+		try {
+			await postPlayJson(`/api/play/sessions/${encodeURIComponent(room.roomCode)}/concede`, {});
+			actionError = 'Seat conceded. A disclosed server bot now completes the live match; you may spectate.';
+			settingsOpen = false;
+		} catch (cause) {
+			actionError = cause instanceof Error ? cause.message : 'Could not concede this ranked seat.';
+		} finally {
+			pendingAction = null;
+			concedeArmed = false;
+		}
+	}
 
 	// ── Composition view: replace the MainStage content with a player's 7-hex board ──
 	// viewedSeat = null → normal stage; a seat → that player's composition fills the
@@ -676,9 +698,11 @@
 	async function runAction(label: string, work: () => Promise<unknown>) {
 		pendingAction = label;
 		actionError = null;
+		pulseHaptic('commit');
 		try {
 			await work();
 		} catch (err) {
+			pulseHaptic('error');
 			actionError = err instanceof Error ? err.message : 'Action failed.';
 		} finally {
 			pendingAction = null;
@@ -738,9 +762,11 @@
 		actionError = null;
 		try {
 			playSfx('ui-click');
+			pulseHaptic('commit');
 			await sendPlayCommand({ type: 'resolveLocationInteraction', rowIndex, choices, costChoices });
 			activeAction = null;
 		} catch (err) {
+			pulseHaptic('error');
 			actionError = err instanceof Error ? err.message : 'Action failed.';
 		} finally {
 			pendingAction = null;
@@ -753,9 +779,11 @@
 		actionError = null;
 		try {
 			playSfx('combat-start');
+			pulseHaptic('impact');
 			await sendPlayCommand({ type: 'startCombat' });
 			activeAction = 'combat';
 		} catch (err) {
+			pulseHaptic('error');
 			actionError = err instanceof Error ? err.message : 'Action failed.';
 		} finally {
 			pendingAction = null;
@@ -780,9 +808,11 @@
 		actionError = null;
 		try {
 			playSfx('reward-pick');
+			pulseHaptic('success');
 			await sendPlayCommand({ type: 'resolveMonsterReward', picks, choices });
 			activeAction = triggersDraw ? null : 'reward';
 		} catch (err) {
+			pulseHaptic('error');
 			actionError = err instanceof Error ? err.message : 'Action failed.';
 		} finally {
 			pendingAction = null;
@@ -848,6 +878,12 @@
 	}
 	function dismissManual(id: string) {
 		send('dismiss-manual', { type: 'dismissManualPrompt', id });
+	}
+	// Awaken-sourced manual prompt confirmed: the server contract is manualAwaken
+	// (flip the spirit face-up AND clear the prompt) — dismissManualPrompt alone
+	// would clear the reminder while leaving the spirit face-down.
+	function confirmManualAwaken(slotIndex: number) {
+		send('manual-awaken', { type: 'manualAwaken', slotIndex });
 	}
 	function grantDebug(
 		grant: import('$lib/play/types').DebugGrant,
@@ -1283,6 +1319,12 @@
 									Force phase ▶
 								</button>
 							{/if}
+							{#if room.mode === 'ranked' && room.status === 'active' && mySeat}
+								<button type="button" class="settings-item danger" role="menuitem"
+									data-testid="concede-ranked" disabled={busy} onclick={concedeRankedSeat}>
+									{concedeArmed ? 'Confirm concede — irreversible' : 'Concede ranked seat'}
+								</button>
+							{/if}
 							<a class="settings-item" href="/play" role="menuitem" data-testid="exit-game"
 								>Exit Game</a
 							>
@@ -1378,6 +1420,7 @@
 							onClaimAwakenReward={claimAwakenReward}
 							onResolveDecision={resolveDecision}
 							onDismissManual={dismissManual}
+							onConfirmManualAwaken={confirmManualAwaken}
 							onPlaceAugment={placeAugment}
 							onDiscardAugments={discardAugments}
 							onDiscardSpirits={discardSpirits}
@@ -1514,6 +1557,14 @@
 
 	{#if bagOpen}
 		<BagViewer {room} {spiritImages} onClose={() => (bagOpen = false)} />
+	{/if}
+	{#if !e2eMode && room.status === 'active' && mySeat}
+		<GuidedCoach
+			phase={room.phase}
+			mode={room.mode ?? 'casual'}
+			pendingKind={guidePendingKind}
+			{lockedDestination}
+		/>
 	{/if}
 
 	{#if actionError}<div class="error">{actionError}</div>{/if}
@@ -2051,6 +2102,10 @@
 		right: 0;
 		z-index: 31;
 		min-width: 184px;
+		max-width: min(420px, calc(100vw - 24px));
+		max-height: calc(100dvh - 88px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		display: flex;
 		flex-direction: column;
 		gap: 7px;

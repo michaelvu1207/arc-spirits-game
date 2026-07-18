@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "arc-v34-protocol-validation-v1",
+  "valid": true,
+  "protocolSha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548",
+  "ranges": [
+    {
+      "name": "preview-calibration",
+      "lo": 957800000,
+      "hi": 957804095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "systems",
+      "lo": 957900000,
+      "hi": 957900255,
+      "kind": "engine-game"
+    },
+    {
+      "name": "determinization-rng-only",
+      "lo": 956400000,
+      "hi": 956499999,
+      "kind": "rng-only"
+    },
+    {
+      "name": "phase2",
+      "lo": 957000000,
+      "hi": 957004095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "guardian",
+      "lo": 957300000,
+      "hi": 957308191,
+      "kind": "engine-game"
+    },
+    {
+      "name": "final-development",
+      "lo": 957100000,
+      "hi": 957104095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "final-hidden",
+      "lo": 957200000,
+      "hi": 957204095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "teacher-g1",
+      "lo": 958000000,
+      "hi": 958004095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "ppo-g1",
+      "lo": 958030000,
+      "hi": 958034095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "expert-development-g1",
+      "lo": 958100000,
+      "hi": 958104095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "teacher-g2",
+      "lo": 958010000,
+      "hi": 958014095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "ppo-g2",
+      "lo": 958040000,
+      "hi": 958044095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "expert-development-g2",
+      "lo": 958110000,
+      "hi": 958114095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "teacher-g3",
+      "lo": 958020000,
+      "hi": 958024095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "ppo-g3",
+      "lo": 958050000,
+      "hi": 958054095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "expert-development-g3",
+      "lo": 958120000,
+      "hi": 958124095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "composition-transfer",
+      "lo": 958200000,
+      "hi": 958204095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "width-1x",
+      "lo": 959000000,
+      "hi": 959004095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "width-1p5x",
+      "lo": 959100000,
+      "hi": 959104095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "width-2x",
+      "lo": 959200000,
+      "hi": 959204095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "width-development",
+      "lo": 959900000,
+      "hi": 959904095,
+      "kind": "engine-game"
+    },
+    {
+      "name": "multiplayer-canary",
+      "lo": 960000000,
+      "hi": 960000511,
+      "kind": "engine-game"
+    },
+    {
+      "name": "multiplayer-development",
+      "lo": 960010000,
+      "hi": 960099999,
+      "kind": "engine-game"
+    },
+    {
+      "name": "multiplayer-hidden",
+      "lo": 960100000,
+      "hi": 960199999,
+      "kind": "engine-game"
+    },
+    {
+      "name": "human-reference",
+      "lo": 960900000,
+      "hi": 960909999,
+      "kind": "engine-game"
+    }
+  ]
+}

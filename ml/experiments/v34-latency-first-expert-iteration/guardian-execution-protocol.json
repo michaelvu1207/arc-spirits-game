@@ -1,0 +1,172 @@
+{
+	"schemaVersion": "arc-v34-guardian-execution-protocol-v1",
+	"status": "closed",
+	"authoritativeStateArtifacts": {
+		"toolingLock": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/tooling-lock.json",
+		"authorization": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/authorization.json",
+		"preflight": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/preflight/result.json",
+		"executionLock": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/execution-lock.json",
+		"phase2Analysis": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.json",
+		"conditionsRoot": "ml/experiments/v34-latency-first-expert-iteration/artifacts/guardian/conditions",
+		"historicalStrengthProtocolFlagsAreNotCurrentAuthorization": true
+	},
+	"base": {
+		"protocol": {
+			"path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+			"bytes": 9955,
+			"sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548"
+		},
+		"strengthProtocol": {
+			"path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+			"bytes": 5927,
+			"sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd"
+		},
+		"sourceLock": {
+			"path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/source-lock.json",
+			"bytes": 38459,
+			"sha256": "a430edad4de2635916870196a058ee22b2f80d043dd74f3f9f8ece0ea3ad2e6c"
+		},
+		"strengthToolingLock": {
+			"path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-tooling-lock.json",
+			"bytes": 3714,
+			"sha256": "e04b20c3734ad3f920626057e106f6d761a2cdf055449740d8275e08cd12ad78"
+		},
+		"catalog": {
+			"path": "ml/catalogs/live-20260713-5f4ad348.json",
+			"bytes": 31938,
+			"sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+		},
+		"checkpoint": {
+			"path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+			"bytes": 3354466,
+			"sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+		},
+		"sourceCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e"
+	},
+	"environment": {
+		"executable": "ml/v34_stats_env/.venv/bin/python",
+		"python": "3.12.8",
+		"numpy": "2.5.0",
+		"rng": "numpy.random.Generator(PCG64)"
+	},
+	"commonDecode": {
+		"seats": 1,
+		"maxRounds": 30,
+		"maxStatusLevel": 2,
+		"guardianSchedule": "absolute-balanced",
+		"selection": "hybrid",
+		"sample": true,
+		"temperature": 0.55,
+		"learnMonsterRewardChoices": false,
+		"obsVersion": 1,
+		"policyObsVersion": 2,
+		"inferenceWire": "binary"
+	},
+	"guardian": {
+		"status": "closed",
+		"seed0": 957300000,
+		"games": 8192,
+		"seedMax": 957308191,
+		"referenceArm": "raw",
+		"registeredCandidateSlots": [
+			"rerank-p025",
+			"rerank-p050",
+			"rerank-p075",
+			"rerank-p100",
+			"heuristic-s4-h2",
+			"heuristic-s8-h3"
+		],
+		"guardians": [
+			{ "id": "fd8557f7-1cdc-4dde-9941-42b171992432", "name": "Bubblepop" },
+			{ "id": "20112149-c8df-48b6-b508-5e9c39e87fc2", "name": "Embers" },
+			{ "id": "36ed021f-cad0-4442-8879-054e095c84b3", "name": "Fjorn" },
+			{ "id": "9cb13598-1b9f-47a6-b86c-c687665b3eb5", "name": "Human Avatar" },
+			{ "id": "20ec3d5d-3fd8-4b5b-b75b-127acb325fff", "name": "Lumina" },
+			{ "id": "3267074b-4f61-457c-b406-12ccf43d068a", "name": "Myrtle" },
+			{ "id": "8ce23995-bb31-4be8-8fd6-fda19d1f430a", "name": "Pixia" },
+			{ "id": "c17484dc-741b-4e9b-9ece-6581c2095fe1", "name": "Prox" },
+			{ "id": "73ab5a4a-b988-4d3e-b849-611f4767f1ae", "name": "Taron" },
+			{ "id": "2d8d81ec-5b43-4b2b-b8b4-a69e7fca8496", "name": "Void Avatar" }
+		],
+		"assignment": {
+			"algorithm": "guardianIndexForSeed(seed, guardianCount) = seed % guardianCount",
+			"dependsOnlyOnEngineSeed": true,
+			"expectedCountsInGuardianOrder": [820, 820, 819, 819, 819, 819, 819, 819, 819, 819]
+		},
+		"replayAudit": {
+			"seed0": 957300000,
+			"games": 64,
+			"seedMax": 957300063,
+			"workers": 8,
+			"sameInferenceProcess": true,
+			"exactPerGameEqualityBySeed": true
+		},
+		"family": {
+			"method": "global complete-seed centered paired one-sided max-t bootstrap with 60-cell Bonferroni-normal floor",
+			"draws": 10000,
+			"rngSeed": 34032026,
+			"confidence": 0.95,
+			"maximumArms": 6,
+			"guardians": 10,
+			"maximumFamilySize": 60,
+			"resampleUnit": "one of all 8192 engine seeds, shared by every observed arm and guardian cell",
+			"studentization": "t_be=(bootstrapMean_be-observedMean_e)/originalPairedSE_e",
+			"pairedSe": "sample standard deviation ddof=1 divided by sqrt(cell seed count)",
+			"drawMaximum": "max t_be across observed nonzero-SE cells",
+			"nearestRankIndex": "ceil(0.95 * 10000) - 1",
+			"criticalFloor": "NormalDist().inv_cdf(1 - 0.05 / 60)",
+			"zeroSeRule": "exclude from max statistic; lower bound equals point estimate",
+			"emptyBootstrapCellRule": "abort analysis"
+		},
+		"gates": {
+			"everyCellPointDeltaPointsMin": -5.0,
+			"everyCellSimultaneousLowerStrictlyAbovePoints": -10.0,
+			"candidateMeasuredStalls": 0,
+			"rawMeasuredStalls": 0,
+			"safetyAndProvenanceFailures": 0
+		},
+		"selection": [
+			"largest phase2 paired win gain among guardian survivors",
+			"lower 8-worker binding p95",
+			"lexicographically smaller arm id"
+		],
+		"guardianOutcomesMayReorderPhase2Ranking": false,
+		"poolPhase2Outcomes": false
+	},
+	"runtime": {
+		"eligibleGpus": [0, 5, 6, 7],
+		"excludedGpu": 4,
+		"rawWorkers": 24,
+		"maxConcurrentConditions": 3,
+		"maxActorWorkers": 96,
+		"nice": 19,
+		"watchdogSeconds": 46800,
+		"watchdogKillAfterSeconds": 60,
+		"replayWatchdogSeconds": 1800,
+		"minimumScratchFreeBytes": 17179869184,
+		"persistentBytesPerRemainingCondition": 1073741824,
+		"minimumPersistentFreeBytes": 2147483648,
+		"minimumAvailableMemoryBytes": 68719476736,
+		"scratch": "/dev/shm/arc-v34-guardian",
+		"conditionLockPattern": ".condition-slot-N.lock",
+		"guardianGpuLockPattern": ".gpu-N.lock",
+		"legacyPhase2GpuLockRoot": "/dev/shm/arc-v34-phase2",
+		"resourceChecksBeforeAttemptCreation": true,
+		"cpuLoadBinding": false,
+		"attemptsMax": 2,
+		"attemptSplicing": false,
+		"retryableFailureCodes": { "server-start": 90, "process-interrupted": 92 },
+		"retryRequiresPrelaunchOutcomeBlindJustification": true,
+		"retryForbiddenAfterPrimaryOrReplayReportExists": true
+	},
+	"authorization": {
+		"guardianExecutionOpen": false,
+		"teacherSeedsOpen": false,
+		"finalDevelopmentSeedsOpen": false,
+		"hiddenSeedsOpen": false,
+		"multiplayerSeedsOpen": false,
+		"humanReferenceSeedsOpen": false,
+		"productionPromotionOpen": false
+	},
+	"result": null
+}

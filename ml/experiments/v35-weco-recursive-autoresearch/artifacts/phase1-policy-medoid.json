@@ -1,0 +1,340 @@
+{
+  "schemaVersion": "arc-v35-policy-medoid-v1",
+  "valid": true,
+  "outcomeBlind": true,
+  "forbiddenOutcomesInspected": false,
+  "generation": 8,
+  "temperature": 0.55,
+  "precision": "model-forward-float32, logits/probabilities/KL-float64",
+  "determinism": {
+    "device": "cpu",
+    "torchThreads": 1,
+    "tieBreak": [
+      "a",
+      "b",
+      "c"
+    ]
+  },
+  "validation": {
+    "path": "/dev/shm/arc-v32-critic/validation",
+    "seed0": 946004096,
+    "seedMax": 946005119,
+    "games": 1024,
+    "policyRows": 113344,
+    "aggregation": "rows-within-game then equal-game mean",
+    "inventorySha256": "10223e9d8bdf8bf6d5225f450d91f978cfd1685b4f13dc194caddd0697a988ca",
+    "files": [
+      {
+        "path": "games-0.jsonl",
+        "bytes": 30386,
+        "sha256": "6712bbf182bce94b619b187c89c96b925ec3ec392b35dfe303d0f607f8d0cefe"
+      },
+      {
+        "path": "games-1.jsonl",
+        "bytes": 30354,
+        "sha256": "6f672ed948026d270279a2a9e5b1694a5beee6a08779da4db8fc9d3227e161cc"
+      },
+      {
+        "path": "games-10.jsonl",
+        "bytes": 29647,
+        "sha256": "7fed04d88b9771039cd50261db3de29950c62bbd704450699cb873a580b64788"
+      },
+      {
+        "path": "games-11.jsonl",
+        "bytes": 30373,
+        "sha256": "7f1e57026f6b8df1434668d5cea0cd125419a1caa83386e58b9fc453bfd76409"
+      },
+      {
+        "path": "games-12.jsonl",
+        "bytes": 29635,
+        "sha256": "15f174dfb9ce96ee9d623bba4dd15631de2bca9fc244e56b56709808c22b0fed"
+      },
+      {
+        "path": "games-13.jsonl",
+        "bytes": 31040,
+        "sha256": "19272f8ed6fc9bd0b805c5f06ee35f475ac87df0c9bcd6e9664f14523e80f8ea"
+      },
+      {
+        "path": "games-14.jsonl",
+        "bytes": 30306,
+        "sha256": "d417ae01f2a1af302eaac211971d125e43c1a3433415bf167e6bba53dc3ca503"
+      },
+      {
+        "path": "games-15.jsonl",
+        "bytes": 31099,
+        "sha256": "8d7e9a4b3f51c3e1a1a3c1a901748516fdaa360e3243aa778d3e2e072d527c90"
+      },
+      {
+        "path": "games-16.jsonl",
+        "bytes": 30422,
+        "sha256": "e25c830a6711352ded4bdbb5e04cf029df27b9df94bf94dcc6efb172f31fa863"
+      },
+      {
+        "path": "games-17.jsonl",
+        "bytes": 29609,
+        "sha256": "3a206da386f34ddc3204d754b15e8a96779145fa4660df3c728cd676993320c0"
+      },
+      {
+        "path": "games-18.jsonl",
+        "bytes": 28886,
+        "sha256": "2528a93e409e7224c5c81aa4aaefd32102867dc67270348f25adf226b39ed8df"
+      },
+      {
+        "path": "games-19.jsonl",
+        "bytes": 29640,
+        "sha256": "a5c0646ac8fecd97fbedd47b6ce7b975df8c626a2e7c1fe8db50bbb890fc4050"
+      },
+      {
+        "path": "games-2.jsonl",
+        "bytes": 30322,
+        "sha256": "5a58cec2b7df5dd89d6ef64efd4d1714ec45e93d356ab6381ad0987467d209ca"
+      },
+      {
+        "path": "games-20.jsonl",
+        "bytes": 29708,
+        "sha256": "d9e003aceebb8b1d3038205b1e40c8a3419252221cd544e7938306845a5308d1"
+      },
+      {
+        "path": "games-21.jsonl",
+        "bytes": 29710,
+        "sha256": "b69617d1f476234895b9141aaa81bbbbec2b40330cb16235e0c55ee0ebc40ebc"
+      },
+      {
+        "path": "games-22.jsonl",
+        "bytes": 29694,
+        "sha256": "72814a36670d8918a595d9922482bc90e8d2416fc6ac0a9540b552deba51bd97"
+      },
+      {
+        "path": "games-23.jsonl",
+        "bytes": 30417,
+        "sha256": "d6fb6704ff14c3982ec212f49bb1b8c195b3e65ecdf483e6249bddb61571d848"
+      },
+      {
+        "path": "games-3.jsonl",
+        "bytes": 29707,
+        "sha256": "3f540ec6eb855a1fd9fa52f70bbf3e4df740c031f6b4c6a5af66c97ebd7d9456"
+      },
+      {
+        "path": "games-4.jsonl",
+        "bytes": 30368,
+        "sha256": "abfab9e2289e92388f6d70a551c813eedb0355a9fd62451cf65af52b7fe836bb"
+      },
+      {
+        "path": "games-5.jsonl",
+        "bytes": 31047,
+        "sha256": "665d359de18756263213453f69394a2f3f3c3e6d6089d09c88f6753f9fd4d068"
+      },
+      {
+        "path": "games-6.jsonl",
+        "bytes": 30412,
+        "sha256": "dc396af8f3d895f549f27b1ac5ad53ac1410c8940eba2465a37b4fa3adce384f"
+      },
+      {
+        "path": "games-7.jsonl",
+        "bytes": 30378,
+        "sha256": "a880ccf40f742a73bd741e7e9622b59b5e3bf9c19856550d68f49bacf18caef3"
+      },
+      {
+        "path": "games-8.jsonl",
+        "bytes": 29700,
+        "sha256": "5438518beada2f69a6fd6465839c9a3e397c1d96f2c8aaeba94c2cce9c02dba9"
+      },
+      {
+        "path": "games-9.jsonl",
+        "bytes": 30358,
+        "sha256": "d209f4103fee0f5d3347ac56a2ddc755eaa7c473382801f8043b031a42469fdc"
+      },
+      {
+        "path": "meta.json",
+        "bytes": 16901,
+        "sha256": "c9d2996abfcad5ccbb284a63e9c35cb42c4a93cef59a667110cfbfc4166f3a13"
+      },
+      {
+        "path": "shard-0.jsonl",
+        "bytes": 60054686,
+        "sha256": "b501b160e47e658374db6bc04b3baaf2ed8bc18beb773af6c55f9f078fbcb380"
+      },
+      {
+        "path": "shard-1.jsonl",
+        "bytes": 59386194,
+        "sha256": "2ba35371401bf7407e361157c16bd095e45ff069a51659131fe45a22dc166948"
+      },
+      {
+        "path": "shard-10.jsonl",
+        "bytes": 59202396,
+        "sha256": "32b7e321676c9e5326da5feb28e2c8cfafa8369731489ced976e192e3a7fc56b"
+      },
+      {
+        "path": "shard-11.jsonl",
+        "bytes": 59992848,
+        "sha256": "0b091e440bff29aa9fd3f76eedbb4a18c38f26075a92da5cafd16a8eae09c430"
+      },
+      {
+        "path": "shard-12.jsonl",
+        "bytes": 59581209,
+        "sha256": "5e3128ff3def836b0b03958dd78f945fbd3d2dbaebc46e6ee797b731fb0174f0"
+      },
+      {
+        "path": "shard-13.jsonl",
+        "bytes": 59961199,
+        "sha256": "e9b8280e8f33fdd56b5419738dbda0417ae1c062217020a3894abb8a7a046e30"
+      },
+      {
+        "path": "shard-14.jsonl",
+        "bytes": 59902245,
+        "sha256": "45c3b25314018eba924d6ac78089220263025c64d059f26c75849a253b4fa0c6"
+      },
+      {
+        "path": "shard-15.jsonl",
+        "bytes": 59203475,
+        "sha256": "28c869de12d86fe0768162396a93d148afaefde0dc62f9dbc36c461582308faa"
+      },
+      {
+        "path": "shard-16.jsonl",
+        "bytes": 60368317,
+        "sha256": "132dd2bf8dd564c4ed1cb4ab901af3c306c44b8f1033a888f30729d782a43d74"
+      },
+      {
+        "path": "shard-17.jsonl",
+        "bytes": 58533736,
+        "sha256": "005f2533aa8565ea883250ad0f5099c8d597bb6b02eb7362e3b6dbaa782a1a22"
+      },
+      {
+        "path": "shard-18.jsonl",
+        "bytes": 59092741,
+        "sha256": "c93eeaa6a30386550a321c089334a649c3830966fde0c73080a0d910435320f8"
+      },
+      {
+        "path": "shard-19.jsonl",
+        "bytes": 59871795,
+        "sha256": "509e3a0e32b182f01b1a50a40460d3d657a0fe6a464869aafb33746babe4ed28"
+      },
+      {
+        "path": "shard-2.jsonl",
+        "bytes": 59492196,
+        "sha256": "f00dac641325d80719f4014b5fcb1b62ef9482b8814600e3a12e0d84cef6d89c"
+      },
+      {
+        "path": "shard-20.jsonl",
+        "bytes": 59984230,
+        "sha256": "bddee2e12a121bdc1b0ade0224888bb89caa401f9e82628a9ed588f3cabff641"
+      },
+      {
+        "path": "shard-21.jsonl",
+        "bytes": 59748197,
+        "sha256": "7c11793787db78aa59e3619a9d6502835f5aa00c0d7ed3d49691f266de081f0d"
+      },
+      {
+        "path": "shard-22.jsonl",
+        "bytes": 59444599,
+        "sha256": "a0272a51f08b870340b4a00eee7e08b7e01108c5518c660cc8f6c26191dc8d94"
+      },
+      {
+        "path": "shard-23.jsonl",
+        "bytes": 60494406,
+        "sha256": "0908103f37e246457a18c99af447d1c8ed5928e111e8c15e05486a1968326f43"
+      },
+      {
+        "path": "shard-3.jsonl",
+        "bytes": 59802625,
+        "sha256": "054c6793017b994e8c74abf171f0035c789051c770d82d167b8c493588b494e2"
+      },
+      {
+        "path": "shard-4.jsonl",
+        "bytes": 59238191,
+        "sha256": "b67180ee401ba6adf21153a44762cf469b28e93d3c1aea32e06ce887cd43cc23"
+      },
+      {
+        "path": "shard-5.jsonl",
+        "bytes": 60088240,
+        "sha256": "9602c9e7330ac5ba9e5c409b826ccd0e05e93ab32c391e26bbd11fe7c431ad4b"
+      },
+      {
+        "path": "shard-6.jsonl",
+        "bytes": 60405563,
+        "sha256": "294934ab9e585a2e99784faf783166856080824b478ba77103a0b0bacf90e834"
+      },
+      {
+        "path": "shard-7.jsonl",
+        "bytes": 59698426,
+        "sha256": "1a5b798d34f178436b5a817aeda2c83b555c9090bda60589cfdded1f3c012f0c"
+      },
+      {
+        "path": "shard-8.jsonl",
+        "bytes": 59892269,
+        "sha256": "bf59d2198b964395c9e57fb607e6902f557dbe5aa78ee9b993fd05dbd3b70de0"
+      },
+      {
+        "path": "shard-9.jsonl",
+        "bytes": 59364742,
+        "sha256": "c101fca99676d9fc72a29dc17e5d59ed6e75eea3b5f96fb27208aef6d86c3afd"
+      }
+    ]
+  },
+  "validationLock": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-validation-lock.json",
+    "sha256": "db9427ee5d3393421471dc1db2a7407e29d382aa9daab9aad8dc0286486ac310",
+    "treeCommitment": {
+      "sha256": "9eeb593576ec3e76f413b997d462a40e775ee1229a46e27f2d8383f605bcc14d",
+      "files": 49,
+      "bytes": 1433544644
+    }
+  },
+  "endpoint": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-endpoint.json",
+    "sha256": "cda179375d71731d763a12e68ea67af9eb147e1b7c7699a7efcf7caa761e5b3a"
+  },
+  "manipulationAudit": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/phase1-manipulation-gen8.json",
+    "sha256": "54cb6f62b8258113183e2fb37efa4457d3274be8bea34ae1c6cec4c9b3cc8750"
+  },
+  "checkpointSha256": {
+    "late-reweighted": {
+      "a": "daefd124ba62defc39e4f1504c7e0ad7a42761e2e2278795fab4c17bed96bf6c",
+      "b": "20a6279c11e577bc5294a1f742655d2b204860ca52560cb62441a9fd61aac197",
+      "c": "b41c6b2d50ce2d772dd8a55a9d86510e1f1be40d119d9e956778b53df7b931d8"
+    },
+    "p30-credit025": {
+      "a": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+      "b": "9b6c948adf4ef7139c8ce999624e8395e877204fa58986eedbe97998ca1b9fcb",
+      "c": "7f65d31d17152a024fdc2d9a9d696cdb803abcf9c6e1eed56f2f04e204f3889d"
+    }
+  },
+  "treatments": {
+    "late-reweighted": {
+      "pairwiseSymmetricKl": {
+        "a-b": 0.01206477302828264,
+        "a-c": 0.011876946989214493,
+        "b-c": 0.013947492637354106
+      },
+      "medoidScores": {
+        "a": 0.011970860008748566,
+        "b": 0.013006132832818373,
+        "c": 0.0129122198132843
+      },
+      "selectedReplicate": "a",
+      "checkpoint": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/checkpoints/main-0-gen8.pt",
+      "checkpointSha256": "daefd124ba62defc39e4f1504c7e0ad7a42761e2e2278795fab4c17bed96bf6c",
+      "matchedControl": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/checkpoints/main-0-gen8.pt",
+      "matchedControlSha256": "738bf508aa7f8e88498fd7838c1f59a89e8c85f9d264bae2e885659d6e26ea5b"
+    },
+    "p30-credit025": {
+      "pairwiseSymmetricKl": {
+        "a-b": 0.011118305209937174,
+        "a-c": 0.010805921266472483,
+        "b-c": 0.011897606784896514
+      },
+      "medoidScores": {
+        "a": 0.010962113238204828,
+        "b": 0.011507955997416844,
+        "c": 0.011351764025684498
+      },
+      "selectedReplicate": "a",
+      "checkpoint": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+      "checkpointSha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+      "matchedControl": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/control-uniform/checkpoints/main-0-gen8.pt",
+      "matchedControlSha256": "738bf508aa7f8e88498fd7838c1f59a89e8c85f9d264bae2e885659d6e26ea5b"
+    }
+  },
+  "promotionEligible": false
+}

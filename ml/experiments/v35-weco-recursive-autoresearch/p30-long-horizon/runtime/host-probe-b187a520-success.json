@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "arc-v35-p30-host-integration-probe-success-v1",
+  "valid": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "syntheticDataOnly": true,
+  "analysisResultInspected": false,
+  "metricsExposed": false,
+  "productionCampaignCreated": false,
+  "probeIdentityRetired": true,
+  "implementationCommit": "bc8e1466c798cb455ea3862e90c4561495a28ed4",
+  "sourceLock": {
+    "sha256": "3d76923c4de16a30d11845dd63df2c9f27bd3116a52bbe117002dd3a345e29b2",
+    "gitDir": "/home/ubuntu/arc-v35-p30-git-context-bc8e146.git",
+    "objectInventorySha256": "1da32f4a52a0e779637e859e7f5bf9dbe5d8c3cd33f39cba17f3d776102e3238"
+  },
+  "fableReview": {
+    "artifact": "fable-final-review-2026-07-16-v22.md",
+    "sha256": "5d445e0c364b6472e374988186e492d2e5526b1b03fd64a94e7f0baa760c6d85",
+    "receiptSha256": "e93006da31359fde04c0bebd7d2200152c50c26849ceecf21fabf0da240e2141",
+    "verdict": "ACCEPT"
+  },
+  "parentProbeInstanceId": "b187a5200973a28dc05222ec10a666430f7a4b74f99ab6f5ef16b389ecba40cf",
+  "syntheticCampaignInstanceId": "80ac5fbacd622cc06a3721057015103e57f1aa916a52189a04a4c0bd64c74947",
+  "analysisTokenId": "e3dedff3edf19f42f38f40283a146ff5cc79410ead96bc43cd8649cc1e0bebba",
+  "startedAtUtc": "2026-07-16T16:22:31.553239Z",
+  "finishedAtUtc": "2026-07-16T16:25:43.136515Z",
+  "protocol": {
+    "sha256": "087da79ea439641b250ab35240babc82c00805e7c1579bb66b973d3a25ca4018",
+    "bytes": 17668
+  },
+  "structuralReport": {
+    "schemaVersion": "arc-v35-p30-analyzer-synthetic-rehearsal-v2",
+    "sha256": "7ce099337f4d9d3b012960342b5cf6a863eac7c03b56e9396a57d27de3b6dd1e",
+    "bytes": 7658,
+    "independentlyValidated": true,
+    "endpointCount": 54,
+    "generationExecutionReceiptCount": 432,
+    "evaluationExecutionReceiptCount": 108,
+    "pairIntegrityReceiptCount": 54,
+    "signedReceiptInventoryCount": 595,
+    "uniqueExecutionTokenCount": 540
+  },
+  "analysisArtifact": {
+    "sha256": "4b6b51bf18a6ee961840dd4a46bd7aefdf1ef6c3c4689a1c2b7ac182c3052c80",
+    "bytes": 208060,
+    "contentExposed": false
+  },
+  "execution": {
+    "exitCode": 0,
+    "capabilityTransport": "sealed-memfd-ro-bind-data",
+    "capabilityPath": "/run/arc-v35-p30-analysis-capability",
+    "capabilityFd": 198,
+    "capabilityConsumed": true,
+    "oneShotReentryRejected": true,
+    "distinctPidUserNetworkNamespaces": true,
+    "ephemeralPrivateKeysDeleted": true,
+    "gpuMode": "none",
+    "network": "none"
+  },
+  "evidence": {
+    "consumedMarkerSha256": "4515f88f943975147b178ab534152461b5c84f8065dc10f9cfd19ac3ccea1256",
+    "launchIntentSha256": "e95ead8f07af5b513ebc434b5e5771977b6fbdb37d5082b94b7cab4e671f9efc",
+    "launchEvidenceSha256": "4cc7b1077210f258a94db471be48e3ef47d37446386155298ed832c74a9dfe02",
+    "unsignedReceiptSha256": "dfa9406ab312c34c8390f6d746ae846c0905b84feff440b0c88fab3f67337330",
+    "normalSealAttemptSha256": "dafc3c0d26aab930ffb49af7b5f9ff4229941d9177fc601c25c071e7db204ee8",
+    "signedReceiptSha256": "c96d668f76f42f7567ea55e0af4eeaf40e887478ab221ac024ea335852f14ffc",
+    "outerStdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "outerStderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "outerExitCodeSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  "postcondition": {
+    "outerStdoutBytes": 0,
+    "outerStderrBytes": 0,
+    "analysisStdoutBytes": 0,
+    "analysisStderrBytes": 0,
+    "supervisorChildRemaining": false,
+    "gpu7MemoryMiB": 0,
+    "gpu7UtilizationPercent": 0,
+    "share8AvailableBytesBeforeProbe": 9216843776,
+    "share8AvailableBytesAfterProbe": 8923914240,
+    "eightGiBSafetyFloorMaintained": true
+  },
+  "archive": {
+    "path": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/host-probe-b187a520-success",
+    "manifestPath": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/host-probe-b187a520-success.archive.json",
+    "manifestSha256": "dee8badb7951644f073e1ac99811abe267d759b77c9a18bbbeb2485ef52d8b93",
+    "fileCount": 5559,
+    "totalFileBytes": 277847701,
+    "fileInventorySha256": "6e6807d6299496aae0937630c684e999adff57603b0c14aa870d43b242705f28",
+    "byteIdentical": true
+  },
+  "nextGate": {
+    "freshProductionCampaignIdRequired": true,
+    "fullPhase0Required": true,
+    "productionSeedsStillClosed": true,
+    "promotionStillClosed": true
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "arc-v35-p30-terminal-campaign-incident-v1",
+  "campaignInstanceId": "135ae1e3c6e1c6c4922395cd862174ec17c9964959f180132f4a7ed06db10e2e",
+  "terminal": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "gameSeedsConsumed": true,
+  "gpuLeaseAcquired": true,
+  "failedPhase": "phase0-runtime-fable-review",
+  "diagnosticCode": "LOCAL_FABLE_MACOS_KEYCHAIN_HELPER_SANDBOX_DENIED",
+  "rootCause": "After the remote review attempt was durably consumed, Claude Code 2.1.211 attempted to spawn the macOS security helper. The source-locked default-deny sandbox correctly rejected that helper with EPERM before any model response. The helper cannot safely be granted Keychain access, so this campaign and review lane are closed without retry.",
+  "protocol": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.json",
+    "sha256": "a38404a82af06177ed1037db5022cde1b1aa73050da3d2862655f255a2abac1e"
+  },
+  "review": {
+    "mode": "phase0-runtime",
+    "request": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/135ae1e3c6e1c6c4922395cd862174ec17c9964959f180132f4a7ed06db10e2e/requests/phase0-runtime-fable-review.json",
+      "sha256": "f0217c5cc35406247edff5601d9235fb0e1a3ff69b6c8e904a0fa43f26d62a4a"
+    },
+    "attempt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/135ae1e3c6e1c6c4922395cd862174ec17c9964959f180132f4a7ed06db10e2e/reviews/phase0-runtime/attempt.json",
+      "sha256": "cdc29b15ab47c8beb5c840ba449073a4ecaf68d38ee433eca7811e17c6f5ce01",
+      "reservedAtUtc": "2026-07-16T11:35:45.971637Z"
+    },
+    "localCapsule": "/tmp/arc-p30-phase0-review-135ae1e3",
+    "stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "bytes": 2841,
+      "sha256": "ab3ffd5f578f25f31a26e78d3d6c57cf8e281a204cf08c58ca655d6d0d1fb6d2"
+    },
+    "sandboxProfileSha256": "77426d16d194de6d93f0668a39549a72958e7b5324da0ba373d78b7ed4f74b22",
+    "modelStarted": false,
+    "reviewReceiptCreated": false,
+    "reviewStreamsUploaded": false
+  },
+  "completedPreflights": {
+    "faultInjectionReceipt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/135ae1e3c6e1c6c4922395cd862174ec17c9964959f180132f4a7ed06db10e2e/a5a66b2de6e61c3110cfcfa39bcde6d1d8e63a7a124a8e28b517a7d63a56ac9b.receipt.json",
+      "sha256": "1188e904df8fbc5c91c67d3dda9afeabc99d3bda70a6b996a97c3659332d8c1a"
+    },
+    "analyzerRehearsalReceipt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/135ae1e3c6e1c6c4922395cd862174ec17c9964959f180132f4a7ed06db10e2e/bb32019331f4129489fb7b8999fc2845d596909590ff2acd9d5db1e4cd421a27.receipt.json",
+      "sha256": "74a53d1e317527ee07ebd16c5b9c50c6f819873c6531b5512c1c7d010689a01d"
+    },
+    "cudaDeterminismReceipt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/135ae1e3c6e1c6c4922395cd862174ec17c9964959f180132f4a7ed06db10e2e/a97266b159a399893695524ad97845c11f81e620c2de6168ff23405f4f0e1867.receipt.json",
+      "sha256": "1c4bd3e5a76bcee3ec46f72f7257bea572e5ea4779d79194ff030dc1baa17b15"
+    }
+  },
+  "resourcePostcondition": {
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "gpuMemoryMiB": 0,
+    "gpuUtilizationPercent": 0,
+    "campaignProcessesRemaining": 0,
+    "dataShare8AvailableBytes": 8722124800
+  },
+  "disposition": {
+    "reuseForbidden": true,
+    "recoveryForbidden": true,
+    "requiredNextInstance": "fresh-campaign-id-and-review",
+    "sourceFix": [
+      "replace macOS sandbox-exec with a digest-pinned unprivileged Linux container",
+      "deliver OAuth only through CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR=0 and inherited stdin",
+      "create and inspect the stopped container before remote O_EXCL reservation",
+      "bind the engine, daemon, image, effective container configuration, container ID, and lifecycle commands",
+      "enforce read-only root and capsule, zero capabilities, no-new-privileges, builtin seccomp, no Docker logs, and unconditional verified container deletion"
+    ],
+    "exactLifecycleSmoke": {
+      "stdoutBytes": 16,
+      "stderrBytes": 0,
+      "containerConfigSha256": "4de61821adbd84e9f23e2276e54dff1065bc52869318a866c8d7502ddd5b8fb0",
+      "cleanupVerified": true
+    }
+  }
+}

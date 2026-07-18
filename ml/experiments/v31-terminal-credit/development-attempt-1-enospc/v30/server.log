@@ -1,0 +1,2 @@
+[infer] serving ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt (arc-entity-scorer-v2, obs_dim=3419, act_dim=104) on /tmp/arc-v31-development-v30-3284242.sock device=cuda window=2.0ms max_batch=512
+[infer] shut down

@@ -1,0 +1,9 @@
+{
+	"schemaVersion": "arc-v34-teacher-snapshot-freeze-protocol-v1",
+	"quotas": {
+		"recovery": 1375,
+		"late": 6875,
+		"mid": 3438,
+		"early": 2063
+	}
+}

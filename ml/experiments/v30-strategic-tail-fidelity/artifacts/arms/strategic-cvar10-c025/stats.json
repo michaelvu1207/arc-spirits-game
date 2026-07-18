@@ -1,0 +1,882 @@
+{
+  "schemaVersion": "arc-v28-training-v1",
+  "data": "ml/experiments/v30-strategic-tail-fidelity/data/train-merged",
+  "validationData": "ml/experiments/v30-strategic-tail-fidelity/data/validation",
+  "teacher": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+  "teacherSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+  "init": "ml/experiments/v29-distill-fidelity/arms/d128-policy-only-continue24-lr1e4/checkpoint.pt",
+  "initSha256": "37d4268900cba44583dcc19e19222db97f8104493d17ad8dc8180025fe138dff",
+  "samples": 240631,
+  "policySamples": 228477,
+  "validationSamples": 60159,
+  "validationPolicySamples": 57085,
+  "games": 2048,
+  "validationGames": 512,
+  "trueWins": 1114,
+  "validationTrueWins": 276,
+  "teacherLogpAudit": {
+    "train": {
+      "rows": 4096,
+      "meanAbsError": 2.269256456823715e-07,
+      "p99AbsError": 1.5497207641601562e-06,
+      "maxAbsError": 4.291534423828125e-06
+    },
+    "validation": {
+      "rows": 4096,
+      "meanAbsError": 2.2097227792353125e-07,
+      "p99AbsError": 1.430511474609375e-06,
+      "maxAbsError": 4.172325134277344e-06
+    }
+  },
+  "config": {
+    "epochs": 12,
+    "batchSize": 512,
+    "learningRate": 5e-05,
+    "teacherKlCoef": 1.0,
+    "valueCoef": 0.0,
+    "reach30Coef": 0.0,
+    "outcomePgCoef": 0.0,
+    "clipEpsilon": 0.2,
+    "seed": 300100,
+    "selectBestTeacherKl": true,
+    "maxMeanKl": null,
+    "maxP99Kl": null,
+    "validationSelection": {
+      "seed0": 948000000,
+      "games": 256
+    },
+    "validationGate": null,
+    "earlyStopPatience": 4,
+    "earlyStopMinDelta": 0.002,
+    "earlyStopMinEpochs": 4,
+    "strategicKlFraction": null,
+    "strategicTailFraction": 0.1,
+    "strategicTailCoef": 0.25,
+    "selectionMetric": "strategicTeacherKlCvar05"
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "train": {
+        "teacherKl": 0.018904612195708475,
+        "strategicTailCvar": 0.1842015323486734,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 95,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 137.0,
+          "max": 153
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.670212765957446,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 16
+        },
+        "top1Agreement": 0.9109275769552296,
+        "valueMse": 0.046845733649092176,
+        "reach30Loss": 0.36423002462008575,
+        "outcomePgLoss": -0.008337629728787453,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.020048377351990596,
+        "teacherKlP95": 0.07845129743218408,
+        "teacherKlP99": 0.21240853741765042,
+        "teacherKlMax": 1.6645371913909912,
+        "policyRows": 28408,
+        "top1Agreement": 0.9120670233736976,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8168092348889203,
+        "entropyDelta": 0.02411718856620295,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.036496288514469545,
+        "strategicTeacherKlP95": 0.14755338877439486,
+        "strategicTeacherKlP99": 0.3740502351522442,
+        "strategicTeacherKlCvar05": 0.30276095714006157,
+        "strategicTeacherKlMax": 1.6645371913909912,
+        "strategicTop1Agreement": 0.9182652210175146,
+        "strategicEntropyDelta": 0.05428264857975889,
+        "valueMse": 0.04848788817060213,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.1009434391159207,
+            "brier": 0.018902105669160767,
+            "ece": 0.013528584419213249
+          },
+          "25": {
+            "nll": 0.46274066404708986,
+            "brier": 0.14017819688647015,
+            "ece": 0.08354165418077236
+          },
+          "30": {
+            "nll": 0.5236242732288887,
+            "brier": 0.17478054641801374,
+            "ece": 0.04636180221739582
+          }
+        }
+      }
+    },
+    {
+      "epoch": 2,
+      "train": {
+        "teacherKl": 0.017620357133722796,
+        "strategicTailCvar": 0.16062785163521767,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 94,
+          "mean": 122.23404255319149,
+          "p50": 123.0,
+          "p95": 138.0,
+          "max": 149
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.672340425531916,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 15
+        },
+        "top1Agreement": 0.9131378650805114,
+        "valueMse": 0.047760602449463806,
+        "reach30Loss": 0.3663352372294784,
+        "outcomePgLoss": -0.009136385845802755,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.02083064784852025,
+        "teacherKlP95": 0.07966834641993038,
+        "teacherKlP99": 0.22083899334073076,
+        "teacherKlMax": 2.7648253440856934,
+        "policyRows": 28408,
+        "top1Agreement": 0.910412559842298,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8122484195264041,
+        "entropyDelta": 0.019556373203686868,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.037737941699435965,
+        "strategicTeacherKlP95": 0.14634298309683794,
+        "strategicTeacherKlP99": 0.39608109205961084,
+        "strategicTeacherKlCvar05": 0.3477742561863528,
+        "strategicTeacherKlMax": 2.7648253440856934,
+        "strategicTop1Agreement": 0.914512093411176,
+        "strategicEntropyDelta": 0.04166606158544166,
+        "valueMse": 0.0487711518435725,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10313290881874347,
+            "brier": 0.019021558598173203,
+            "ece": 0.014254764903163184
+          },
+          "25": {
+            "nll": 0.45238822344753465,
+            "brier": 0.13856520214142448,
+            "ece": 0.07969069432734352
+          },
+          "30": {
+            "nll": 0.5425534599112857,
+            "brier": 0.17888951029665437,
+            "ece": 0.07447850354673866
+          }
+        }
+      }
+    },
+    {
+      "epoch": 3,
+      "train": {
+        "teacherKl": 0.017367499569758343,
+        "strategicTailCvar": 0.15368889979225525,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 97,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 138.0,
+          "max": 157
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.678723404255319,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 16
+        },
+        "top1Agreement": 0.9131641259295247,
+        "valueMse": 0.04819050311514199,
+        "reach30Loss": 0.3670657258821919,
+        "outcomePgLoss": -0.00890245074910687,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.01944785677080898,
+        "teacherKlP95": 0.07458419688045977,
+        "teacherKlP99": 0.2137365420162678,
+        "teacherKlMax": 2.0384137630462646,
+        "policyRows": 28408,
+        "top1Agreement": 0.9118206139115742,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8170223801463152,
+        "entropyDelta": 0.024330333823597845,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.03447750839836089,
+        "strategicTeacherKlP95": 0.1486924186348914,
+        "strategicTeacherKlP99": 0.3671025592088673,
+        "strategicTeacherKlCvar05": 0.30022784935103525,
+        "strategicTeacherKlMax": 2.0384137630462646,
+        "strategicTop1Agreement": 0.9165971643035863,
+        "strategicEntropyDelta": 0.046430610812101085,
+        "valueMse": 0.04813896916346478,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10322127080364693,
+            "brier": 0.018952097235568708,
+            "ece": 0.013846667608342966
+          },
+          "25": {
+            "nll": 0.46382231935164714,
+            "brier": 0.1407667848520963,
+            "ece": 0.08566734095678075
+          },
+          "30": {
+            "nll": 0.5265336627488757,
+            "brier": 0.1746846862094297,
+            "ece": 0.04351738987558657
+          }
+        }
+      }
+    },
+    {
+      "epoch": 4,
+      "train": {
+        "teacherKl": 0.016975973923402082,
+        "strategicTailCvar": 0.14774540412299175,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 95,
+          "mean": 122.23404255319149,
+          "p50": 122.5,
+          "p95": 138.0,
+          "max": 148
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.64468085106383,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 15
+        },
+        "top1Agreement": 0.9137418646078161,
+        "valueMse": 0.047931394209614536,
+        "reach30Loss": 0.3683109178207594,
+        "outcomePgLoss": -0.009421890724371813,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.01946617431821785,
+        "teacherKlP95": 0.07624657116830348,
+        "teacherKlP99": 0.20926324114203454,
+        "teacherKlMax": 1.9743911027908325,
+        "policyRows": 28408,
+        "top1Agreement": 0.9121022247254295,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8090093065871046,
+        "entropyDelta": 0.016317260264387217,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.03437640060611611,
+        "strategicTeacherKlP95": 0.13526661023497566,
+        "strategicTeacherKlP99": 0.36128950923681075,
+        "strategicTeacherKlCvar05": 0.2939264821095599,
+        "strategicTeacherKlMax": 1.9743911027908325,
+        "strategicTop1Agreement": 0.9128440366972477,
+        "strategicEntropyDelta": 0.03308639501972724,
+        "valueMse": 0.04894837572100962,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10431570792462246,
+            "brier": 0.019051484686986832,
+            "ece": 0.014460603465271872
+          },
+          "25": {
+            "nll": 0.4742050762520832,
+            "brier": 0.14283205694080206,
+            "ece": 0.08890735289898903
+          },
+          "30": {
+            "nll": 0.5331424849311884,
+            "brier": 0.17767937119106694,
+            "ece": 0.05559981735258038
+          }
+        }
+      }
+    },
+    {
+      "epoch": 5,
+      "train": {
+        "teacherKl": 0.016900575902343597,
+        "strategicTailCvar": 0.14430134406590717,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 93,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 138.54999999999995,
+          "max": 148
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.661702127659574,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 15
+        },
+        "top1Agreement": 0.9136411980199319,
+        "valueMse": 0.04824421304685773,
+        "reach30Loss": 0.3688247870001345,
+        "outcomePgLoss": -0.00936789471653313,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.02022606786573405,
+        "teacherKlP95": 0.07827074229717247,
+        "teacherKlP99": 0.21960790947079664,
+        "teacherKlMax": 2.115668773651123,
+        "policyRows": 28408,
+        "top1Agreement": 0.9106941706561532,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8155151060085565,
+        "entropyDelta": 0.022823059685839055,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.03566581273832686,
+        "strategicTeacherKlP95": 0.1496674075722694,
+        "strategicTeacherKlP99": 0.3995947381854053,
+        "strategicTeacherKlCvar05": 0.32180235497653487,
+        "strategicTeacherKlMax": 2.115668773651123,
+        "strategicTop1Agreement": 0.9181262162913539,
+        "strategicEntropyDelta": 0.04187886532407438,
+        "valueMse": 0.04837785362600285,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10439878575315512,
+            "brier": 0.01899443439362965,
+            "ece": 0.01419250154905193
+          },
+          "25": {
+            "nll": 0.47316606147533347,
+            "brier": 0.14232230576622332,
+            "ece": 0.09116730551051636
+          },
+          "30": {
+            "nll": 0.5244889692365177,
+            "brier": 0.17411657415773582,
+            "ece": 0.04452151897698684
+          }
+        }
+      }
+    },
+    {
+      "epoch": 6,
+      "train": {
+        "teacherKl": 0.016218058256124424,
+        "strategicTailCvar": 0.13369736963130058,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 88,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 138.0,
+          "max": 149
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 9,
+          "mean": 12.651063829787233,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 15
+        },
+        "top1Agreement": 0.9148316898418659,
+        "valueMse": 0.04798720883800272,
+        "reach30Loss": 0.36976430045753894,
+        "outcomePgLoss": -0.010134032813698568,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.01957829887013175,
+        "teacherKlP95": 0.07873530872166132,
+        "teacherKlP99": 0.20605262428522117,
+        "teacherKlMax": 1.372270941734314,
+        "policyRows": 28408,
+        "top1Agreement": 0.9107293720078851,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8172960490046793,
+        "entropyDelta": 0.024604002681961935,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.03457226846320102,
+        "strategicTeacherKlP95": 0.1423939064145085,
+        "strategicTeacherKlP99": 0.3736091154813755,
+        "strategicTeacherKlCvar05": 0.28217010336617626,
+        "strategicTeacherKlMax": 1.372270941734314,
+        "strategicTop1Agreement": 0.9121490130664442,
+        "strategicEntropyDelta": 0.03494856582593434,
+        "valueMse": 0.050365258043317845,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10375465497423367,
+            "brier": 0.019061716096419882,
+            "ece": 0.014017046729483739
+          },
+          "25": {
+            "nll": 0.4698718105474113,
+            "brier": 0.141732589402979,
+            "ece": 0.08879157167831958
+          },
+          "30": {
+            "nll": 0.5290754069668768,
+            "brier": 0.17567312371612384,
+            "ece": 0.04090916616142505
+          }
+        }
+      }
+    },
+    {
+      "epoch": 7,
+      "train": {
+        "teacherKl": 0.016054111203088507,
+        "strategicTailCvar": 0.12965570066837553,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 94,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 138.0,
+          "max": 150
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.689361702127659,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 15
+        },
+        "top1Agreement": 0.9151293127973494,
+        "valueMse": 0.04834126027156056,
+        "reach30Loss": 0.3708542029262141,
+        "outcomePgLoss": -0.010096092168624825,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.018499931180818482,
+        "teacherKlP95": 0.07116954252123828,
+        "teacherKlP99": 0.18601419866085062,
+        "teacherKlMax": 1.822839617729187,
+        "policyRows": 28408,
+        "top1Agreement": 0.9135454801464377,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8122367264099112,
+        "entropyDelta": 0.019544680087193855,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.030064004265845524,
+        "strategicTeacherKlP95": 0.11994778141379343,
+        "strategicTeacherKlP99": 0.30322865784168157,
+        "strategicTeacherKlCvar05": 0.25346962643994225,
+        "strategicTeacherKlMax": 1.822839617729187,
+        "strategicTop1Agreement": 0.9245204336947456,
+        "strategicEntropyDelta": 0.042797562408445546,
+        "valueMse": 0.04938490216441465,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10354508344580532,
+            "brier": 0.01900412178828342,
+            "ece": 0.014254616407587104
+          },
+          "25": {
+            "nll": 0.46942874879806507,
+            "brier": 0.1420599869636237,
+            "ece": 0.08658753227274993
+          },
+          "30": {
+            "nll": 0.5425610860928387,
+            "brier": 0.17972783314727175,
+            "ece": 0.06562969547530856
+          }
+        }
+      }
+    },
+    {
+      "epoch": 8,
+      "train": {
+        "teacherKl": 0.015772250278863108,
+        "strategicTailCvar": 0.12498467315701728,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 94,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 139.0,
+          "max": 154
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.670212765957446,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 16
+        },
+        "top1Agreement": 0.9156764138184588,
+        "valueMse": 0.048270317820315975,
+        "reach30Loss": 0.3717368380684383,
+        "outcomePgLoss": -0.010127034406877282,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.018912573967059542,
+        "teacherKlP95": 0.07453495338559141,
+        "teacherKlP99": 0.19710049241781247,
+        "teacherKlMax": 1.4858163595199585,
+        "policyRows": 28408,
+        "top1Agreement": 0.911539003097719,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8172976804267759,
+        "entropyDelta": 0.02460563410405855,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.03248326169761156,
+        "strategicTeacherKlP95": 0.1355216816067694,
+        "strategicTeacherKlP99": 0.32882926344871427,
+        "strategicTeacherKlCvar05": 0.2667883209056324,
+        "strategicTeacherKlMax": 1.4858163595199585,
+        "strategicTop1Agreement": 0.9177092021128719,
+        "strategicEntropyDelta": 0.04325500778307871,
+        "valueMse": 0.04881700506194406,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10278452159283252,
+            "brier": 0.019028349616963473,
+            "ece": 0.013265039634340349
+          },
+          "25": {
+            "nll": 0.46994178172322026,
+            "brier": 0.14236759762786516,
+            "ece": 0.0844566859787443
+          },
+          "30": {
+            "nll": 0.5336482753169627,
+            "brier": 0.17733049359557665,
+            "ece": 0.05098071738030362
+          }
+        }
+      }
+    },
+    {
+      "epoch": 9,
+      "train": {
+        "teacherKl": 0.015641918005059423,
+        "strategicTailCvar": 0.12296773882463892,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 90,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 139.0,
+          "max": 154
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 9,
+          "mean": 12.674468085106383,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 16
+        },
+        "top1Agreement": 0.9157814572145118,
+        "valueMse": 0.048305863108459295,
+        "reach30Loss": 0.3734835819585325,
+        "outcomePgLoss": -0.010215467196485115,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.018944913190357588,
+        "teacherKlP95": 0.07171763516962527,
+        "teacherKlP99": 0.21247354343533534,
+        "teacherKlMax": 1.19204843044281,
+        "policyRows": 28408,
+        "top1Agreement": 0.9136862855533653,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8168488900502336,
+        "entropyDelta": 0.024156843727516204,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.03328572596270612,
+        "strategicTeacherKlP95": 0.1335849359631538,
+        "strategicTeacherKlP99": 0.43216765671968443,
+        "strategicTeacherKlCvar05": 0.31336519117984507,
+        "strategicTeacherKlMax": 1.19204843044281,
+        "strategicTop1Agreement": 0.9184042257436753,
+        "strategicEntropyDelta": 0.03326970018511789,
+        "valueMse": 0.05048523111614043,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10124429212275193,
+            "brier": 0.019004424875615045,
+            "ece": 0.013044023409121986
+          },
+          "25": {
+            "nll": 0.4626192704155895,
+            "brier": 0.14096050626432158,
+            "ece": 0.07947122178764864
+          },
+          "30": {
+            "nll": 0.5390400278222238,
+            "brier": 0.17814763408833414,
+            "ece": 0.05376694049400062
+          }
+        }
+      }
+    },
+    {
+      "epoch": 10,
+      "train": {
+        "teacherKl": 0.015631424880707828,
+        "strategicTailCvar": 0.12358181930761387,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 93,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 138.0,
+          "max": 156
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.678723404255319,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 16
+        },
+        "top1Agreement": 0.916192877182386,
+        "valueMse": 0.048178239533696994,
+        "reach30Loss": 0.3721065496541924,
+        "outcomePgLoss": -0.009927541280999718,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.019045010357897404,
+        "teacherKlP95": 0.0709886122494936,
+        "teacherKlP99": 0.20409118771553042,
+        "teacherKlMax": 1.221305251121521,
+        "policyRows": 28408,
+        "top1Agreement": 0.9124190368910167,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8158320513638434,
+        "entropyDelta": 0.023140005041126163,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.03279143080407689,
+        "strategicTeacherKlP95": 0.127853426337242,
+        "strategicTeacherKlP99": 0.3494773274660099,
+        "strategicTeacherKlCvar05": 0.2820995315909386,
+        "strategicTeacherKlMax": 1.2034333944320679,
+        "strategicTop1Agreement": 0.9186822351959967,
+        "strategicEntropyDelta": 0.049720142314805295,
+        "valueMse": 0.0493605322829869,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10138339698173862,
+            "brier": 0.018955438517618228,
+            "ece": 0.013479451548879792
+          },
+          "25": {
+            "nll": 0.45846213660403784,
+            "brier": 0.1401511965713423,
+            "ece": 0.07930054896803916
+          },
+          "30": {
+            "nll": 0.5376625141353248,
+            "brier": 0.17782872168845457,
+            "ece": 0.06666722643595935
+          }
+        }
+      }
+    },
+    {
+      "epoch": 11,
+      "train": {
+        "teacherKl": 0.015447426783115923,
+        "strategicTailCvar": 0.12042290005595126,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 97,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 138.0,
+          "max": 149
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.680851063829786,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 15
+        },
+        "top1Agreement": 0.9165167609868827,
+        "valueMse": 0.04822016755213998,
+        "reach30Loss": 0.37170831380521646,
+        "outcomePgLoss": -0.010333592955428707,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.01742323594177998,
+        "teacherKlP95": 0.0652949061244726,
+        "teacherKlP99": 0.17696065172553072,
+        "teacherKlMax": 1.9744770526885986,
+        "policyRows": 28408,
+        "top1Agreement": 0.9143199098845396,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8088508562510798,
+        "entropyDelta": 0.01615880992836243,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.02771803896580766,
+        "strategicTeacherKlP95": 0.10684464462101408,
+        "strategicTeacherKlP99": 0.29526195138692823,
+        "strategicTeacherKlCvar05": 0.250032597552571,
+        "strategicTeacherKlMax": 1.9744770526885986,
+        "strategicTop1Agreement": 0.9260494856825132,
+        "strategicEntropyDelta": 0.033342702716820154,
+        "valueMse": 0.04915799472089204,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10372076025168668,
+            "brier": 0.01902561679808817,
+            "ece": 0.013713498592287477
+          },
+          "25": {
+            "nll": 0.4713121897041132,
+            "brier": 0.14220518506917654,
+            "ece": 0.08464663947549615
+          },
+          "30": {
+            "nll": 0.5418181496489982,
+            "brier": 0.17881594247610116,
+            "ece": 0.056958106706325826
+          }
+        }
+      }
+    },
+    {
+      "epoch": 12,
+      "train": {
+        "teacherKl": 0.015221264108793,
+        "strategicTailCvar": 0.11686775024901046,
+        "strategicRowsPerBatch": {
+          "count": 470,
+          "min": 93,
+          "mean": 122.23404255319149,
+          "p50": 122.0,
+          "p95": 136.54999999999995,
+          "max": 155
+        },
+        "strategicTailTopKPerBatch": {
+          "count": 470,
+          "min": 10,
+          "mean": 12.704255319148936,
+          "p50": 13.0,
+          "p95": 14.0,
+          "max": 16
+        },
+        "top1Agreement": 0.9172039198693961,
+        "valueMse": 0.048560357909885096,
+        "reach30Loss": 0.37396482774000084,
+        "outcomePgLoss": -0.010646979767357557,
+        "policyRows": 228477
+      },
+      "validation": {
+        "teacherKlMean": 0.018301434026093508,
+        "teacherKlP95": 0.06944094710052012,
+        "teacherKlP99": 0.19949359923601168,
+        "teacherKlMax": 1.402734637260437,
+        "policyRows": 28408,
+        "top1Agreement": 0.9133342720360462,
+        "teacherEntropyMean": 0.7926920463227173,
+        "studentEntropyMean": 0.8119712978557875,
+        "entropyDelta": 0.019279251533070217,
+        "strategicPolicyRows": 7194,
+        "strategicTeacherKlMean": 0.031089447480729625,
+        "strategicTeacherKlP95": 0.12139920443296387,
+        "strategicTeacherKlP99": 0.3498280516266819,
+        "strategicTeacherKlCvar05": 0.27500267126080064,
+        "strategicTeacherKlMax": 1.402734637260437,
+        "strategicTop1Agreement": 0.9218793438976925,
+        "strategicEntropyDelta": 0.03414185967845977,
+        "valueMse": 0.04965146719115803,
+        "reach30ByHorizon": {
+          "20": {
+            "nll": 0.10414627225437172,
+            "brier": 0.019026507980365537,
+            "ece": 0.013957699917307633
+          },
+          "25": {
+            "nll": 0.48176993672874724,
+            "brier": 0.14404638540441883,
+            "ece": 0.09136198306144389
+          },
+          "30": {
+            "nll": 0.5331379140430518,
+            "brier": 0.17681109996886438,
+            "ece": 0.03953359836699237
+          }
+        }
+      }
+    }
+  ],
+  "bestEpoch": 11,
+  "bestValidationSelectionMetric": 0.250032597552571,
+  "selectionMetric": "strategicTeacherKlCvar05",
+  "finalValidation": {
+    "teacherKlMean": 0.01742323594177998,
+    "teacherKlP95": 0.0652949061244726,
+    "teacherKlP99": 0.17696065172553072,
+    "teacherKlMax": 1.9744770526885986,
+    "policyRows": 28408,
+    "top1Agreement": 0.9143199098845396,
+    "teacherEntropyMean": 0.7926920463227173,
+    "studentEntropyMean": 0.8088508562510798,
+    "entropyDelta": 0.01615880992836243,
+    "strategicPolicyRows": 7194,
+    "strategicTeacherKlMean": 0.02771803896580766,
+    "strategicTeacherKlP95": 0.10684464462101408,
+    "strategicTeacherKlP99": 0.29526195138692823,
+    "strategicTeacherKlCvar05": 0.250032597552571,
+    "strategicTeacherKlMax": 1.9744770526885986,
+    "strategicTop1Agreement": 0.9260494856825132,
+    "strategicEntropyDelta": 0.033342702716820154,
+    "valueMse": 0.04915799472089204,
+    "reach30ByHorizon": {
+      "20": {
+        "nll": 0.10372076025168668,
+        "brier": 0.01902561679808817,
+        "ece": 0.013713498592287477
+      },
+      "25": {
+        "nll": 0.4713121897041132,
+        "brier": 0.14220518506917654,
+        "ece": 0.08464663947549615
+      },
+      "30": {
+        "nll": 0.5418181496489982,
+        "brier": 0.17881594247610116,
+        "ece": 0.056958106706325826
+      }
+    }
+  },
+  "out": "ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar10-c025/checkpoint.pt",
+  "manifest": "ml/experiments/v30-strategic-tail-fidelity/arms/strategic-cvar10-c025/checkpoint.manifest.json",
+  "checkpointSha256": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06"
+}

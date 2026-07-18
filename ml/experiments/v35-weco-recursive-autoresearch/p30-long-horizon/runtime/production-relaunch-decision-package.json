@@ -1,0 +1,81 @@
+{
+  "schemaVersion": "arc-v35-p30-production-relaunch-decision-package-v1",
+  "valid": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "preparedAtUtc": "2026-07-16T17:36:17Z",
+  "requestedDecision": "authorize-exactly-one-fresh-p30-production-campaign",
+  "authorizationReceived": false,
+  "productionCampaignIdentityCreated": false,
+  "productionRoleKeysCreated": false,
+  "productionLaunchStarted": false,
+  "cumulativeClosedAttemptSpend": {
+    "closedInstances": 7,
+    "gpuLeaseSeconds": 1319.466178,
+    "cudaGamesCompleted": 16384,
+    "retainedCudaOutputBytes": 17952933,
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/cumulative-phase0-spend.json",
+    "sha256": "cee16e15b68e21ee47f9c99bb3d7994547fe3ea03816165dc102cdb957b4cb0d"
+  },
+  "proposedFreshCampaignLimits": {
+    "maximumCampaignComputeSeconds": 1209600,
+    "maximumConcurrentRoots": 1,
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenPhysicalGpus": [
+      4,
+      5,
+      6
+    ],
+    "dynamicDiskProjectionMustPassBeforeEveryAction": true,
+    "phase0MustPassBeforeGenerationOne": true,
+    "generationOneRuntimeAndStorageReviewMustPass": true,
+    "fullCampaignAuthorizationMustPass": true,
+    "outcomeExposureClosesCampaign": true,
+    "secondRecoveryClosesCampaign": true,
+    "promotionRequiresAllFairnessAndHeldOutGates": true
+  },
+  "finalSource": {
+    "implementationCommit": "e8c02068d88d677afd655506f6810b66a6b52c3f",
+    "sourceLockSha256": "5aeaa30724111352f73ae9912eb120c3481058bb8df579b0a58a549ea29a035b",
+    "sourceRegistryFiles": 552,
+    "sourceRegistrySha256": "fd470af2cc47009b397062c3979f7542bed9a0630138a687828a09d369ecd6a3",
+    "gitContext": "/home/ubuntu/arc-v35-p30-git-context-e8c0206.git",
+    "gitContextCommitCount": 39,
+    "gitContextBaseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d"
+  },
+  "finalReview": {
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v24.md",
+    "sha256": "ed5506c0799352b21b7c9b1ab90e94a0e54dbc66a7acb1201439a790df42adde",
+    "commandReceiptSha256": "e6144e042d573be1cdb1cbefbb74362376bcb8dc09b8287222467f3e3aad42ca",
+    "model": "fable",
+    "effort": "high",
+    "verdict": "ACCEPT",
+    "p0OrP1Blockers": 0
+  },
+  "verification": {
+    "localP30TestsPassed": 146,
+    "localP30TestsSkipped": 1,
+    "localP30TestsFailed": 0,
+    "exactFinalLockOuterProbe": {
+      "probeId": "8daee00c55d1fe443c49b072b71bdda9082dfc9a2050d9ec20207587358fc506",
+      "successReceipt": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/outer-probe-8daee00c-success.json",
+      "successReceiptSha256": "79128cf9577e6edc920e4b2d245ca352d7272f94807cdc0187273c08451567fb",
+      "archiveManifestSha256": "b1707e3e7f72b9cfb6d0ae762a48db04e48523ec9485884b4f9dc4249ade68c6",
+      "byteIdenticalArchive": true,
+      "gpuUsed": false,
+      "productionSeedsConsumed": false
+    }
+  },
+  "simforgeReadiness": {
+    "auditedAtUtc": "2026-07-16T17:36:17Z",
+    "p30Processes": 0,
+    "gpu7MemoryMiB": 0,
+    "gpu7UtilizationPercent": 0,
+    "share8FreeBytes": 9201037312,
+    "finalProbeRemoteArtifactsReclaimed": true
+  },
+  "requiredExplicitAffirmation": "YES — authorize one fresh P30 production campaign under the frozen 14-day compute ceiling, GPU7-only allocation, dynamic storage gate, and all fairness, held-out, recovery, and promotion gates.",
+  "negativeDecision": "NO — do not create a new production campaign identity or spend additional GPU budget."
+}

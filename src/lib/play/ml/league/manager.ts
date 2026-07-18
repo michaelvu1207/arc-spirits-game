@@ -46,6 +46,7 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
 	appendFileSync,
 	copyFileSync,
@@ -66,7 +67,7 @@ import { SEAT_COLORS, type SeatColor } from '../../types';
 import { runActorPool } from '../actorPool';
 import { ACT_DIM, OBS_DIM } from '../encode';
 import { CHECKPOINT_ANCHORS, HEURISTIC_ANCHORS, eloFromScore } from '../gauntlet/manifest';
-import type { ActorGameConfig, GameSummary } from '../poolTypes';
+import type { ActorGameConfig, ContinuationCurriculumDiagnostics, GameSummary } from '../poolTypes';
 import { isPlayable, recordPairwise, sampleOpponents } from './pfsp';
 import type {
 	HistoryLine,
@@ -148,8 +149,203 @@ function mergeConfig(base: LeagueConfig, over: Partial<LeagueConfig>): LeagueCon
 			: {}),
 		...(base.laneInit || over.laneInit ? { laneInit: { ...base.laneInit, ...over.laneInit } } : {}),
 		...(base.v2 || over.v2 ? { v2: { ...base.v2, ...over.v2 } } : {}),
-		...(base.v1Infer || over.v1Infer ? { v1Infer: { ...base.v1Infer, ...over.v1Infer } } : {})
+		...(base.v1Infer || over.v1Infer ? { v1Infer: { ...base.v1Infer, ...over.v1Infer } } : {}),
+		...(over.seedSchedule
+			? { seedSchedule: over.seedSchedule }
+			: base.seedSchedule
+				? { seedSchedule: base.seedSchedule }
+				: {})
 	};
+}
+
+function hasExtraArg(args: readonly string[] | undefined, name: string): boolean {
+	return !!args?.some((arg) => arg === name || arg.startsWith(`${name}=`));
+}
+
+function sha256File(path: string): string {
+	return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+/** Fail before actor generation when a fixed-budget/curriculum experiment cannot satisfy its
+ * statistical or runtime contract. Ordinary historical configs remain unaffected. */
+export function validateLeagueConfig(config: LeagueConfig): void {
+	if (config.guardianSchedule !== undefined && config.guardianSchedule !== 'absolute-balanced') {
+		throw new Error('league: guardianSchedule must be absolute-balanced when configured');
+	}
+	if (config.seedSchedule) {
+		const schedule = config.seedSchedule;
+		for (const [name, value] of Object.entries(schedule)) {
+			if (!Number.isSafeInteger(value) || value < 0) {
+				throw new Error(`league: seedSchedule.${name} must be a nonnegative safe integer`);
+			}
+		}
+		if (schedule.maxGeneration < 1) {
+			throw new Error('league: seedSchedule.maxGeneration must be at least 1');
+		}
+		const lanes = config.lanes.main + config.lanes.mainExploiter + config.lanes.leagueExploiter;
+		const trainLaneSpan = Math.max(0, lanes - 1) * 100_000 + config.gamesPerGen;
+		const evalLaneSpan = Math.max(0, lanes - 1) * 100_000 + config.evalGames + 4_000;
+		if (schedule.trainStride < trainLaneSpan) {
+			throw new Error(
+				`league: seedSchedule.trainStride ${schedule.trainStride} is smaller than ` +
+					`the per-generation lane span ${trainLaneSpan}`
+			);
+		}
+		if (schedule.evalStride < evalLaneSpan) {
+			throw new Error(
+				`league: seedSchedule.evalStride ${schedule.evalStride} is smaller than ` +
+					`the per-generation lane span ${evalLaneSpan}`
+			);
+		}
+		const trainLast =
+			schedule.trainBase +
+			(schedule.maxGeneration - 1) * schedule.trainStride +
+			trainLaneSpan -
+			1;
+		const evalLast =
+			schedule.evalBase +
+			(schedule.maxGeneration - 1) * schedule.evalStride +
+			evalLaneSpan -
+			1;
+		if (!Number.isSafeInteger(trainLast) || !Number.isSafeInteger(evalLast)) {
+			throw new Error('league: seedSchedule endpoints must be safe integers');
+		}
+		if (!(trainLast < schedule.evalBase || evalLast < schedule.trainBase)) {
+			throw new Error(
+				`league: seedSchedule train range ${schedule.trainBase}..${trainLast} overlaps ` +
+					`eval range ${schedule.evalBase}..${evalLast}`
+			);
+		}
+	}
+	const hasCatalogPath = config.catalogPath !== undefined;
+	const hasCatalogHash = config.catalogSha256 !== undefined;
+	if (hasCatalogPath !== hasCatalogHash) {
+		throw new Error('league: catalogPath and catalogSha256 must be configured together');
+	}
+	if (hasCatalogPath) {
+		const catalogPath = resolve(config.catalogPath!);
+		if (!existsSync(catalogPath)) throw new Error(`league: catalogPath not found: ${catalogPath}`);
+		if (!/^[0-9a-f]{64}$/.test(config.catalogSha256!)) {
+			throw new Error('league: catalogSha256 must be a lowercase SHA-256 hex digest');
+		}
+		const actual = sha256File(catalogPath);
+		if (actual !== config.catalogSha256) {
+			throw new Error(
+				`league: catalog hash mismatch for ${catalogPath}: expected ${config.catalogSha256}, got ${actual}`
+			);
+		}
+	}
+	const rows = config.train.ppoRowsPerEpoch;
+	const fraction = config.train.ppoContinuationFraction;
+	const curriculum = config.continuationCurriculum;
+	const selfImitation = config.train.selfImitation;
+	if (config.learnMonsterRewardChoices && config.selection !== 'hybrid') {
+		throw new Error(
+			"league: learnMonsterRewardChoices requires selection='hybrid' so the V24 intervention is active"
+		);
+	}
+	if (config.learnMonsterRewardChoices && config.mode === 'ppo' && config.sample !== true) {
+		throw new Error(
+			'league: PPO learnMonsterRewardChoices requires sample=true for exact on-policy reward rows'
+		);
+	}
+	if (rows !== undefined) {
+		if (config.mode !== 'ppo') {
+			throw new Error('league: ppoRowsPerEpoch requires mode=ppo');
+		}
+		if (!Number.isInteger(rows) || rows <= 0) {
+			throw new Error('league: ppoRowsPerEpoch must be a positive integer');
+		}
+		if (hasExtraArg(config.train.extraArgs, '--target-kl')) {
+			throw new Error(
+				'league: fixed ppoRowsPerEpoch forbids data-dependent --target-kl early stopping'
+			);
+		}
+	}
+	if (fraction !== undefined) {
+		if (rows === undefined) {
+			throw new Error('league: ppoContinuationFraction requires ppoRowsPerEpoch');
+		}
+		if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
+			throw new Error('league: ppoContinuationFraction must be in [0,1]');
+		}
+		if (fraction > 0 && !curriculum?.enabled) {
+			throw new Error(
+				'league: positive ppoContinuationFraction requires an enabled continuation curriculum'
+			);
+		}
+	}
+	if (curriculum?.enabled) {
+		if (config.mode !== 'ppo' || config.seats !== 1) {
+			throw new Error('league: continuation curriculum requires solo mode=ppo training');
+		}
+		if (config.sample !== true) {
+			throw new Error('league: continuation curriculum requires sample=true');
+		}
+		if (config.search) {
+			throw new Error('league: continuation curriculum cannot preserve opaque search state');
+		}
+		const rounds = curriculum.rounds ?? [12, 16, 20];
+		if (
+			rounds.length === 0 ||
+			rounds.some(
+				(round) => !Number.isInteger(round) || round < 12 || round > 20 || round > config.maxRounds
+			)
+		) {
+			throw new Error('league: continuation rounds must be integers in 12..20 within maxRounds');
+		}
+	}
+	if (selfImitation !== undefined) {
+		if (config.mode !== 'ppo') {
+			throw new Error('league: selfImitation requires mode=ppo');
+		}
+		if (config.sample !== true) {
+			throw new Error('league: selfImitation requires sample=true exact-policy rows');
+		}
+		if (config.strategicDecisionScope !== 'engine-cycle') {
+			throw new Error('league: selfImitation requires strategicDecisionScope=engine-cycle');
+		}
+		if (Object.values(config.laneModel ?? {}).some((model) => model === 'v2')) {
+			throw new Error('league: selfImitation currently requires v1 reach30Pred behavior rows');
+		}
+		if (hasExtraArg(config.train.extraArgs, '--target-kl')) {
+			throw new Error('league: selfImitation forbids data-dependent --target-kl early stopping');
+		}
+		const hasSoloSource =
+			config.seats === 1 ||
+			!!config.trainingSeatCurriculum?.some((stage) => Number(stage.weights['1'] ?? 0) > 0);
+		if (!hasSoloSource) {
+			throw new Error('league: selfImitation requires solo source games');
+		}
+		if (!Number.isFinite(selfImitation.coef) || selfImitation.coef < 0) {
+			throw new Error('league: selfImitation.coef must be finite and nonnegative');
+		}
+		if (
+			!Number.isFinite(selfImitation.replayFraction) ||
+			selfImitation.replayFraction <= 0 ||
+			selfImitation.replayFraction > 1
+		) {
+			throw new Error('league: selfImitation.replayFraction must be in (0,1]');
+		}
+		if (
+			selfImitation.stalenessLogp !== undefined &&
+			(!Number.isFinite(selfImitation.stalenessLogp) || selfImitation.stalenessLogp < 0)
+		) {
+			throw new Error('league: selfImitation.stalenessLogp must be finite and nonnegative');
+		}
+		if (
+			selfImitation.maxAge !== undefined &&
+			(!Number.isInteger(selfImitation.maxAge) || selfImitation.maxAge < 0)
+		) {
+			throw new Error('league: selfImitation.maxAge must be a nonnegative integer');
+		}
+		if (
+			selfImitation.maxRows !== undefined &&
+			(!Number.isInteger(selfImitation.maxRows) || selfImitation.maxRows <= 0)
+		) {
+			throw new Error('league: selfImitation.maxRows must be a positive integer');
+		}
+	}
 }
 
 // ── State IO (atomic) ────────────────────────────────────────────────────────
@@ -172,6 +368,7 @@ export function loadLeague(root: string): { config: LeagueConfig; state: LeagueS
 		defaultConfig(root),
 		JSON.parse(readFileSync(p.config, 'utf8')) as Partial<LeagueConfig>
 	);
+	validateLeagueConfig(config);
 	const state = JSON.parse(readFileSync(p.state, 'utf8')) as LeagueState;
 	return { config, state };
 }
@@ -418,6 +615,7 @@ export function initLeague(
 		? (JSON.parse(readFileSync(p.config, 'utf8')) as Partial<LeagueConfig>)
 		: {};
 	const config = mergeConfig(mergeConfig(defaultConfig(root), fromDisk), overrides);
+	validateLeagueConfig(config);
 	mkdirSync(p.root, { recursive: true });
 	mkdirSync(p.checkpoints, { recursive: true });
 	if (!existsSync(p.config)) writeFileSync(p.config, JSON.stringify(config, null, '\t'));
@@ -669,6 +867,69 @@ export function annealedTemperature(config: LeagueConfig, gen: number): number |
 	return a.from + (a.to - a.from) * frac;
 }
 
+/** Deterministically apportion matchup pools across the configured player-count mixture. */
+export function trainingSeatCountsForGeneration(
+	config: LeagueConfig,
+	gen: number,
+	matchups: number
+): number[] {
+	const stages = config.trainingSeatCurriculum ?? [];
+	if (stages.length === 0) return Array.from({ length: matchups }, () => config.seats);
+	if (!Number.isInteger(matchups) || matchups < 0) {
+		throw new Error(`league: matchup count must be a non-negative integer, got ${matchups}`);
+	}
+	let previousThroughGen = 0;
+	for (const [index, entry] of stages.entries()) {
+		if (!Number.isInteger(entry.throughGen) || entry.throughGen <= previousThroughGen) {
+			throw new Error(
+				`league: trainingSeatCurriculum stage ${index} throughGen must be a strictly increasing positive integer`
+			);
+		}
+		previousThroughGen = entry.throughGen;
+		const weights = Object.entries(entry.weights);
+		if (weights.length === 0) {
+			throw new Error(`league: trainingSeatCurriculum stage ${index} has no weights`);
+		}
+		for (const [key, weight] of weights) {
+			const seats = Number.parseInt(key, 10);
+			if (
+				String(seats) !== key ||
+				!Number.isInteger(seats) ||
+				seats < 1 ||
+				seats > config.seats ||
+				!Number.isFinite(weight) ||
+				weight <= 0
+			) {
+				throw new Error(
+					`league: invalid trainingSeatCurriculum weight ${key}=${weight} at stage ${index}`
+				);
+			}
+		}
+	}
+	const stage = stages.find((entry) => gen <= entry.throughGen) ?? stages[stages.length - 1];
+	const weighted = Object.entries(stage.weights)
+		.map(([key, weight]) => ({ seats: Number.parseInt(key, 10), weight }))
+		.sort((left, right) => left.seats - right.seats);
+	const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+	const assigned = new Map(weighted.map((entry) => [entry.seats, 0]));
+	const result: number[] = [];
+	for (let index = 0; index < matchups; index += 1) {
+		let best = weighted[0];
+		let bestDeficit = -Infinity;
+		for (const entry of weighted) {
+			const target = ((index + 1) * entry.weight) / total;
+			const deficit = target - (assigned.get(entry.seats) ?? 0);
+			if (deficit > bestDeficit) {
+				best = entry;
+				bestDeficit = deficit;
+			}
+		}
+		result.push(best.seats);
+		assigned.set(best.seats, (assigned.get(best.seats) ?? 0) + 1);
+	}
+	return result;
+}
+
 export function buildMatchup(
 	config: LeagueConfig,
 	learner: LeagueMember,
@@ -709,10 +970,13 @@ export function buildMatchup(
 			seats: config.seats,
 			maxRounds: config.maxRounds,
 			profiles,
+			...(config.shuffleGuardians ? { shuffleGuardians: true } : {}),
+			...(config.guardianSchedule ? { guardianSchedule: config.guardianSchedule } : {}),
 			weightsPath: learnerWeights ? resolve(learnerWeights) : undefined,
 			// policyObsVersion 2 supports only hybrid/policy selection (actorWorker); the
 			// v1 socket serves the same obs version as in-process, so value stays valid.
 			selection: viaV2Socket && config.selection === 'value' ? 'hybrid' : config.selection,
+			...(config.learnMonsterRewardChoices ? { learnMonsterRewardChoices: true } : {}),
 			sample: config.sample,
 			temperature: annealedTemperature(config, iter),
 			// Checkpoint-opponent seats must be neural too, else the driver routes them to
@@ -734,6 +998,10 @@ export function buildMatchup(
 			...(config.search && learnerWeights && !viaSocket ? { search: config.search } : {}),
 			...(config.denseVpReward ? { denseVpReward: true } : {}),
 			...(config.shapingPreset ? { shapingPreset: config.shapingPreset } : {}),
+			...(config.potentialShapingMode ? { potentialShapingMode: config.potentialShapingMode } : {}),
+			...(config.strategicDecisionScope
+				? { strategicDecisionScope: config.strategicDecisionScope }
+				: {}),
 			gamma: config.gamma,
 			iter,
 			...(v2 ? { obsVersion: 2 as const } : {}),
@@ -843,7 +1111,7 @@ export function heuristicFieldOpponents(config: LeagueConfig, count: number): Le
  * so a would-be mirror slot falls back to PFSP.
  */
 /** The fixed non-corrupting seat (config.terminationBlocker) — same shape as a heuristic-field
- *  member, so buildMatchup seats it by profile. Present in EVERY matchup; never recorded. */
+ *  member, so buildMatchup seats it by profile. Present in a deterministic matchup fraction. */
 function blockerMember(profile: string): LeagueMember {
 	return { id: `blocker-${profile}`, kind: 'heuristic', profile, createdGen: 0, matchStats: {} };
 }
@@ -856,10 +1124,14 @@ export function matchupOpponents(
 	matchups: number,
 	rand: () => number
 ): { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean } {
-	// Termination blocker (option c): reserve ONE opponent slot for a fixed non-corrupting profile in
-	// every matchup — mirror, heuristic, and PFSP alike — so the all-Fallen terminal can't fire in
-	// training. The remaining slots use the normal mirror/heuristic/PFSP selection.
-	const blocker = config.terminationBlocker ? blockerMember(config.terminationBlocker) : null;
+	if (config.seats <= 1) return { opponents: [], mirror: false, heuristic: false };
+	// Termination blocker: reserve one opponent slot in a deterministic fraction of matchups. This
+	// creates real late-game data without letting the learner assume another seat always keeps the
+	// table alive. The remaining slots use the normal mirror/heuristic/PFSP selection.
+	const blockerFraction = Math.max(0, Math.min(1, config.terminationBlockerFraction ?? 1));
+	const blockerSlot = Math.floor((m + 1) * blockerFraction) > Math.floor(m * blockerFraction);
+	const blocker =
+		config.terminationBlocker && blockerSlot ? blockerMember(config.terminationBlocker) : null;
 	const count = config.seats - 1 - (blocker ? 1 : 0);
 	const withBlocker = (r: { opponents: LeagueMember[]; mirror: boolean; heuristic: boolean }) =>
 		blocker ? { ...r, opponents: [...r.opponents, blocker] } : r;
@@ -914,13 +1186,27 @@ function foldSummaries(
 	return { scoreSum, encounters, wins };
 }
 
+interface TrainerRunResult {
+	ms: number;
+	optimizerStepsPerEpoch?: number;
+	optimizerStepsTotal?: number;
+	selfImitationLoss?: number;
+	selfImitationSampled?: number;
+	selfImitationAccepted?: number;
+	selfImitationStale?: number;
+	selfImitationPhaseCounts?: [number, number, number, number];
+}
+
 function runTrainer(
 	config: LeagueConfig,
 	dataDir: string,
 	outCkpt: string,
 	initFrom: string | undefined,
-	model: 'v1' | 'v2' = 'v1'
-): number {
+	seed: number,
+	model: 'v1' | 'v2' = 'v1',
+	generation = 0,
+	laneId = 'learner'
+): TrainerRunResult {
 	const args = [
 		'ml/train.py',
 		'--data',
@@ -930,7 +1216,9 @@ function runTrainer(
 		'--mode',
 		config.mode,
 		'--epochs',
-		String(config.train.epochs)
+		String(config.train.epochs),
+		'--seed',
+		String(seed)
 	];
 	if (model === 'v2') {
 		args.push('--model', 'v2');
@@ -944,6 +1232,29 @@ function runTrainer(
 	if (config.train.beta !== undefined) args.push('--beta', String(config.train.beta));
 	if (config.train.batchSize !== undefined)
 		args.push('--batch-size', String(config.train.batchSize));
+	if (config.train.ppoRowsPerEpoch !== undefined)
+		args.push('--ppo-rows-per-epoch', String(config.train.ppoRowsPerEpoch));
+	if (config.train.ppoContinuationFraction !== undefined)
+		args.push('--ppo-continuation-fraction', String(config.train.ppoContinuationFraction));
+	if (config.train.selfImitation) {
+		const sil = config.train.selfImitation;
+		args.push(
+			'--self-imitation-coef',
+			String(sil.coef),
+			'--self-imitation-replay-fraction',
+			String(sil.replayFraction),
+			'--self-imitation-staleness-logp',
+			String(sil.stalenessLogp ?? 1),
+			'--self-imitation-generation',
+			String(generation),
+			'--self-imitation-max-age',
+			String(sil.maxAge ?? 3),
+			'--self-imitation-max-rows',
+			String(sil.maxRows ?? 100_000),
+			'--self-imitation-replay-path',
+			join(config.paths.root, 'self-imitation', `${laneId}.pt`)
+		);
+	}
 	if (config.train.hidden?.length) args.push('--hidden', config.train.hidden.join(','));
 	if (config.train.valueHidden?.length)
 		args.push('--value-hidden', config.train.valueHidden.join(','));
@@ -964,6 +1275,82 @@ function runTrainer(
 		const tail = trainerOutput.split('\n').slice(-25).join('\n');
 		throw new Error(`league: trainer rolled back a non-finite PPO update:\n${tail}`);
 	}
+	let optimizerStepsPerEpoch: number | undefined;
+	let optimizerStepsTotal: number | undefined;
+	if (config.train.ppoRowsPerEpoch !== undefined) {
+		const batchSize = config.train.batchSize ?? 256;
+		optimizerStepsPerEpoch = Math.ceil(config.train.ppoRowsPerEpoch / batchSize);
+		// Anchor to the low-level PPO line. Option-enabled runs also report a separately
+		// preregistered `option_optimizer_steps` budget; it must not inflate this guard.
+		const reported = [...trainerOutput.matchAll(/^PPO epoch .*optimizer_steps=(\d+)$/gm)].map(
+			(match) => Number.parseInt(match[1], 10)
+		);
+		if (
+			reported.length !== config.train.epochs ||
+			reported.some((steps) => steps !== optimizerStepsPerEpoch)
+		) {
+			throw new Error(
+				`league: fixed-update trainer reported optimizer steps ${JSON.stringify(reported)}, ` +
+					`expected ${optimizerStepsPerEpoch} for each of ${config.train.epochs} epochs`
+			);
+		}
+		optimizerStepsTotal = optimizerStepsPerEpoch * config.train.epochs;
+		const extra = config.train.extraArgs ?? [];
+		const optionRowsAt = extra.lastIndexOf('--option-rows-per-epoch');
+		if (optionRowsAt >= 0) {
+			const optionBatchAt = extra.lastIndexOf('--option-batch-size');
+			const optionRows = Number.parseInt(extra[optionRowsAt + 1] ?? '', 10);
+			const optionBatch = Number.parseInt(extra[optionBatchAt + 1] ?? '', 10);
+			if (!(optionRows > 0) || optionBatchAt < 0 || !(optionBatch > 0)) {
+				throw new Error('league: option fixed-update budget requires positive row and batch sizes');
+			}
+			const expectedOptionSteps = Math.ceil(optionRows / optionBatch);
+			const reportedOption = [
+				...trainerOutput.matchAll(
+					/^Option PPO epoch [^\n]*\boption_optimizer_steps=(\d+)\b[^\n]*$/gm
+				)
+			].map((match) => Number.parseInt(match[1], 10));
+			if (
+				reportedOption.length !== config.train.epochs ||
+				reportedOption.some((steps) => steps !== expectedOptionSteps)
+			) {
+				throw new Error(
+					`league: option fixed-update trainer reported optimizer steps ${JSON.stringify(reportedOption)}, ` +
+						`expected ${expectedOptionSteps} for each of ${config.train.epochs} epochs`
+				);
+			}
+		}
+	}
+	let selfImitationDiagnostics: Omit<
+		TrainerRunResult,
+		'ms' | 'optimizerStepsPerEpoch' | 'optimizerStepsTotal'
+	> = {};
+	if (config.train.selfImitation) {
+		const matches = [
+			...trainerOutput.matchAll(
+				/self_imitation_loss=([^ ]+) \(coef=[^,]+, accepted=(\d+)\/(\d+), stale=(\d+), phases\(route\/build\/convert\/yield\)=(\d+)\/(\d+)\/(\d+)\/(\d+)\)/g
+			)
+		];
+		if (matches.length !== config.train.epochs) {
+			throw new Error(
+				`league: self-imitation trainer diagnostics missing epochs: ` +
+					`reported ${matches.length}, expected ${config.train.epochs}`
+			);
+		}
+		const last = matches.at(-1)!;
+		selfImitationDiagnostics = {
+			selfImitationLoss: Number(last[1]),
+			selfImitationAccepted: Number.parseInt(last[2], 10),
+			selfImitationSampled: Number.parseInt(last[3], 10),
+			selfImitationStale: Number.parseInt(last[4], 10),
+			selfImitationPhaseCounts: [
+				Number.parseInt(last[5], 10),
+				Number.parseInt(last[6], 10),
+				Number.parseInt(last[7], 10),
+				Number.parseInt(last[8], 10)
+			]
+		};
+	}
 	if (
 		model === 'v1' &&
 		initFrom &&
@@ -976,7 +1363,12 @@ function runTrainer(
 				`see ${join(dataDir, 'train.log')}`
 		);
 	}
-	return performance.now() - t0;
+	return {
+		ms: performance.now() - t0,
+		...(optimizerStepsPerEpoch !== undefined ? { optimizerStepsPerEpoch } : {}),
+		...(optimizerStepsTotal !== undefined ? { optimizerStepsTotal } : {}),
+		...selfImitationDiagnostics
+	};
 }
 
 /** Distill a v2 .pt teacher into a v1-JSON student on the lane's paired data. */
@@ -1039,11 +1431,32 @@ export interface GenerationReport {
 	lanes: HistoryLine[];
 }
 
+/** Stable learner RNG seed. Actor/environment seeds are already derived from
+ * seedBase, but PPO formerly entropy-seeded its minibatch shuffle, which made
+ * supposedly paired architecture/reward experiments incomparable. */
+export function trainerSeedForGeneration(
+	config: Pick<LeagueConfig, 'seedBase'>,
+	gen: number,
+	laneIdx: number
+): number {
+	const seed = config.seedBase + gen * 1_000_003 + laneIdx * 1009 + 73;
+	if (!Number.isSafeInteger(seed) || seed < 0) {
+		throw new Error(`league: invalid trainer seed ${seed} for gen=${gen} lane=${laneIdx}`);
+	}
+	return seed;
+}
+
 /** Run ONE generation across all learner lanes. Returns the appended history lines. */
 export async function runGeneration(root: string): Promise<GenerationReport> {
 	const { config, state } = loadLeague(root);
 	const p = leaguePaths(root);
 	const gen = state.gen + 1;
+	if (config.seedSchedule && gen > config.seedSchedule.maxGeneration) {
+		throw new Error(
+			`league: generation ${gen} exceeds preregistered seedSchedule.maxGeneration ` +
+				`${config.seedSchedule.maxGeneration}`
+		);
+	}
 	const learners = learnersOf(state);
 	if (learners.length === 0) throw new Error('league: no learner lanes configured');
 	mkdirSync(p.checkpoints, { recursive: true });
@@ -1052,6 +1465,7 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 	for (let laneIdx = 0; laneIdx < learners.length; laneIdx++) {
 		const learner = learners[laneIdx];
 		const model = laneModelOf(config, learner);
+		const trainerSeed = trainerSeedForGeneration(config, gen, laneIdx);
 		const laneDir = p.laneData(gen, learner.id);
 		mkdirSync(laneDir, { recursive: true });
 		state.phase = `gen${gen}:${learner.id}:games`;
@@ -1105,9 +1519,18 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		}
 		let mirrorMatchups = 0;
 		let heuristicMatchups = 0;
+		const trainingSeatCounts = trainingSeatCountsForGeneration(config, gen, matchups);
+		const trainingSeatMatchups = trainingSeatCounts.reduce<Record<string, number>>(
+			(counts, seats) => {
+				counts[String(seats)] = (counts[String(seats)] ?? 0) + 1;
+				return counts;
+			},
+			{}
+		);
 		const plans = Array.from({ length: matchups }, (_, m) => {
+			const matchupConfig: LeagueConfig = { ...config, seats: trainingSeatCounts[m] };
 			const { opponents, mirror, heuristic } = matchupOpponents(
-				config,
+				matchupConfig,
 				learner,
 				state.members,
 				m,
@@ -1116,9 +1539,20 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			);
 			if (mirror) mirrorMatchups += 1;
 			if (heuristic) heuristicMatchups += 1;
-			const plan = buildMatchup(config, learner, opponents, m, gen, v2Arg, v1SocketArg);
+			const plan = buildMatchup(matchupConfig, learner, opponents, m, gen, v2Arg, v1SocketArg);
+			if (matchupConfig.seats === 1) {
+				plan.config.maxStatusLevel = config.soloMaxStatusLevel ?? 2;
+				if (config.continuationCurriculum?.enabled) {
+					plan.config.continuationCurriculum = config.continuationCurriculum;
+				}
+			}
 			const count = Math.min(config.matchupGames, config.gamesPerGen - m * config.matchupGames);
-			const seed0 = config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
+			const seed0 = config.seedSchedule
+				? config.seedSchedule.trainBase +
+					(gen - 1) * config.seedSchedule.trainStride +
+					laneIdx * 100_000 +
+					m * config.matchupGames
+				: config.seedBase + gen * 1_000_000 + laneIdx * 100_000 + m * config.matchupGames;
 			const seeds = Array.from({ length: count }, (_, i) => seed0 + i);
 			return { m, plan, seeds };
 		});
@@ -1146,7 +1580,8 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 						seeds: job.seeds,
 						outDir: join(laneDir, `m-${job.m}`),
 						config: job.plan.config,
-						workers: Math.max(1, Math.ceil(totalWorkers / concurrency))
+						workers: Math.max(1, Math.ceil(totalWorkers / concurrency)),
+						...(config.catalogPath ? { catalogPath: config.catalogPath } : {})
 					});
 				}
 			})
@@ -1154,10 +1589,50 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		const poolWallMs = performance.now() - tPool;
 		let games = 0;
 		let samples = 0;
+		let continuationCurriculum: ContinuationCurriculumDiagnostics | undefined;
+		if (config.continuationCurriculum?.enabled) {
+			continuationCurriculum = {
+				eligibleSourceGames: 0,
+				selectedSourceGames: 0,
+				episodes: 0,
+				rows: 0,
+				wallMs: 0,
+				sourceCapFailures: 0,
+				sourceSuccesses: 0,
+				forkSuccesses: 0,
+				forkFailures: 0,
+				recoveries: 0,
+				skippedNoSnapshot: 0,
+				sourceRoundCounts: {},
+				forkRoundCounts: {}
+			};
+		}
 		for (const job of plans) {
 			const res = results[job.m];
 			games += res.games;
 			samples += res.samples;
+			if (continuationCurriculum) {
+				for (const key of [
+					'eligibleSourceGames',
+					'selectedSourceGames',
+					'episodes',
+					'rows',
+					'wallMs',
+					'sourceCapFailures',
+					'sourceSuccesses',
+					'forkSuccesses',
+					'forkFailures',
+					'recoveries',
+					'skippedNoSnapshot'
+				] as const) {
+					continuationCurriculum[key] += res.curriculum[key];
+				}
+				for (const key of ['sourceRoundCounts', 'forkRoundCounts'] as const) {
+					for (const [round, count] of Object.entries(res.curriculum[key])) {
+						continuationCurriculum[key][round] = (continuationCurriculum[key][round] ?? 0) + count;
+					}
+				}
+			}
 			foldSummaries(learner, job.plan, res.summaries, opponentsFaced);
 		}
 		// Each pool wrote meta.json in its OWN m-<i>/ dir (dims, obs_version, and
@@ -1177,8 +1652,10 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 				...poolMeta,
 				gen,
 				lane: learner.id,
+				trainerSeed,
 				games,
-				samples
+				samples,
+				...(continuationCurriculum ? { continuation_curriculum: continuationCurriculum } : {})
 			})
 		);
 
@@ -1187,7 +1664,17 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		saveStateAtomic(root, state);
 		const ckpt = join(p.checkpoints, `${learner.id}-gen${gen}.${model === 'v2' ? 'pt' : 'json'}`);
 		const trainInit = model === 'v2' ? lanePt(learner) : playWeights(learner);
-		const trainMs = runTrainer(config, laneDir, ckpt, trainInit, model);
+		const trainerRun = runTrainer(
+			config,
+			laneDir,
+			ckpt,
+			trainInit,
+			trainerSeed,
+			model,
+			gen,
+			learner.id
+		);
+		const trainMs = trainerRun.ms;
 
 		// Socket-served lanes (v2, or v1Infer): hot-swap the lane server onto the fresh
 		// checkpoint (or first-start it for a lane that just trained its first net —
@@ -1232,6 +1719,11 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		let evalEncounters = 0;
 		let evalWins = 0;
 		let evalGames = 0;
+		let evalReach30 = 0;
+		let evalVpSum = 0;
+		let evalFirst30RoundSum = 0;
+		let evalFirst30Count = 0;
+		let evalStalls = 0;
 		const trained: LeagueMember =
 			model === 'v2' ? { ...learner, ptPath: ckpt } : { ...learner, weightsPath: ckpt };
 		for (let r = 0; r < config.seats && evalGames < config.evalGames; r++) {
@@ -1244,18 +1736,40 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			plan.config.sample = false;
 			// Eval measures the RAW net (what ships/promotes) — never the searched agent.
 			plan.config.search = undefined;
-			const seed0 = config.seedBase + 500_000_000 + gen * 1_000_000 + laneIdx * 100_000 + r * 1000;
+			const seed0 = config.seedSchedule
+				? config.seedSchedule.evalBase +
+					(gen - 1) * config.seedSchedule.evalStride +
+					laneIdx * 100_000 +
+					r * 1000
+				: config.seedBase +
+					500_000_000 +
+					gen * 1_000_000 +
+					laneIdx * 100_000 +
+					r * 1000;
 			const res = await runActorPool({
 				seeds: Array.from({ length: count }, (_, i) => seed0 + i),
 				outDir: evalDir,
 				config: plan.config,
 				workers: config.workers,
-				append: r > 0
+				append: r > 0,
+				...(config.catalogPath ? { catalogPath: config.catalogPath } : {})
 			});
 			const fold = foldSummaries(learner, plan, res.summaries, opponentsFaced);
 			evalScore += fold.scoreSum;
 			evalEncounters += fold.encounters;
 			evalWins += fold.wins;
+			for (const summary of res.summaries) {
+				const learnerSummary = summary.perSeat.find((seat) => seat.seat === plan.learnerSeat);
+				if (!learnerSummary) continue;
+				evalVpSum += learnerSummary.finalVP;
+				if (learnerSummary.finalVP >= 30 && !summary.stalled) evalReach30 += 1;
+				const first30Round = learnerSummary.cycle?.first30Round;
+				if (!summary.stalled && first30Round !== null && first30Round !== undefined) {
+					evalFirst30RoundSum += first30Round;
+					evalFirst30Count += 1;
+				}
+				if (summary.stalled) evalStalls += 1;
+			}
 			evalGames += res.games;
 		}
 		const evalMs = performance.now() - tEval;
@@ -1313,6 +1827,9 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 		// ── 6: history line + state save ─────────────────────────────────────
 		const line: HistoryLine = {
 			ts: new Date().toISOString(),
+			...(config.catalogPath
+				? { catalogPath: config.catalogPath, catalogSha256: config.catalogSha256! }
+				: {}),
 			gen,
 			lane: learner.id,
 			kind: learner.kind,
@@ -1321,12 +1838,34 @@ export async function runGeneration(root: string): Promise<GenerationReport> {
 			opponents: opponentsFaced,
 			...(mirrorMatchups > 0 ? { mirrorMatchups } : {}),
 			...(heuristicMatchups > 0 ? { heuristicMatchups } : {}),
+			trainingSeatMatchups,
+			...(continuationCurriculum ? { continuationCurriculum } : {}),
+			trainerSeed,
+			...(trainerRun.optimizerStepsPerEpoch !== undefined
+				? { optimizerStepsPerEpoch: trainerRun.optimizerStepsPerEpoch }
+				: {}),
+			...(trainerRun.optimizerStepsTotal !== undefined
+				? { optimizerStepsTotal: trainerRun.optimizerStepsTotal }
+				: {}),
+			...(trainerRun.selfImitationLoss !== undefined
+				? {
+						selfImitationLoss: trainerRun.selfImitationLoss,
+						selfImitationSampled: trainerRun.selfImitationSampled,
+						selfImitationAccepted: trainerRun.selfImitationAccepted,
+						selfImitationStale: trainerRun.selfImitationStale,
+						selfImitationPhaseCounts: trainerRun.selfImitationPhaseCounts
+					}
+				: {}),
 			poolWallMs: Math.round(poolWallMs),
 			trainMs: Math.round(trainMs),
 			...(distillMs > 0 ? { distillMs: Math.round(distillMs) } : {}),
 			evalMs: Math.round(evalMs),
 			evalGames,
 			evalWinRate: evalGames > 0 ? evalWins / evalGames : 0,
+			evalReach30Rate: evalGames > 0 ? evalReach30 / evalGames : 0,
+			evalMeanVP: evalGames > 0 ? evalVpSum / evalGames : 0,
+			evalMeanFirst30Round: evalFirst30Count > 0 ? evalFirst30RoundSum / evalFirst30Count : null,
+			evalStallRate: evalGames > 0 ? evalStalls / evalGames : 0,
 			evalPairwiseScore: evalEncounters > 0 ? evalScore / evalEncounters : 0,
 			eloEstimate: eloFromScore(evalScore, evalEncounters),
 			ckpt,

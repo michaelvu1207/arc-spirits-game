@@ -1,0 +1,274 @@
+{
+  "schemaVersion": "arc-controlled-experiment-v1",
+  "experiment": "v29-exact-distillation-fidelity-screen",
+  "status": "rejected-strategic-tail-gate",
+  "createdAt": "2026-07-14T01:45:00Z",
+  "sourceCommit": "a380638",
+  "planReview": {
+    "model": "Claude Fable",
+    "effort": "high",
+    "artifact": "ml/experiments/v29-distill-fidelity/fable-review.md",
+    "status": "incorporated"
+  },
+  "hypothesis": "V28's exact target and support reconstruction are correct, but d128 at six epochs underfit the frozen V23 raw-logit function. Additional optimization may clear the trust gate at d128; if not, d256 may supply the missing approximation capacity while still meeting the measured A100 latency budget.",
+  "scope": "Validation-only representation/optimization screen. It makes no strength claim and consumes no development or hidden evaluation seeds.",
+  "inputs": {
+    "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+    "teacherSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+    "train": "ml/experiments/v27-entity-live/train",
+    "validation": "ml/experiments/v27-entity-live/validation",
+    "v28D128Checkpoint": {
+      "path": "ml/experiments/v28-outcome-distill/stage1/exact-distill.pt",
+      "sha256": "4fdcdc0db2c3515fae0d99e4004ccf1d67bff1b4aa53fa7e7b9445486b11138a"
+    }
+  },
+  "preTrainingDiagnostic": {
+    "checkpoint": "V28 d128 epoch 6",
+    "rows": "all 28,509 validation policy rows",
+    "reportBy": [
+      "decisionType",
+      "round bucket 1-8/9-15/16-22/23-30",
+      "behavior support size",
+      "strategic flag"
+    ],
+    "report": [
+      "row count",
+      "mean/p95/p99/max KL",
+      "top-1 agreement",
+      "teacher/student entropy delta",
+      "the 100 highest-KL row identifiers without private or hidden state"
+    ],
+    "aliasDefinition": "Hash exact float32 obsV2 bytes plus exact candidate/support bytes. If one identical student input maps to teacher distributions whose total-variation distance exceeds 0.0001, report the pair as an alias.",
+    "stopIf": "A fail-closed schema/header mismatch or any exact-input teacher-target alias under aliasDefinition. In that case repair the encoder rather than spending more training compute.",
+    "artifact": "ml/experiments/v29-distill-fidelity/pretraining-diagnostic.json",
+    "result": {
+      "valid": true,
+      "policyRows": 28509,
+      "exactDuplicateInputs": 64,
+      "aliasesAboveTvThreshold": 0,
+      "maxDuplicateTargetTv": 0.0,
+      "overall": {
+        "meanKl": 0.07192975340255081,
+        "p99Kl": 0.7648337078094471,
+        "top1Agreement": 0.8380511417447122
+      },
+      "strategic": {
+        "rows": 7112,
+        "meanKl": 0.14275269073348895,
+        "p99Kl": 1.1471701025962844,
+        "top1Agreement": 0.8100393700787402
+      },
+      "conclusion": "No exact-input encoder alias exists. Underfit is concentrated in strategic lockNavigation decisions, so V29 may test balanced strategic policy fidelity without repairing obs-v2."
+    }
+  },
+  "validationSplit": {
+    "selection": {
+      "seed0": 942000000,
+      "games": 128,
+      "use": "per-epoch metrics, early stopping, and best checkpoint selection"
+    },
+    "gate": {
+      "seed0": 942000128,
+      "games": 128,
+      "use": "evaluate exactly once after restoring the selection-half checkpoint"
+    },
+    "reason": "Separating selection from the fidelity gate prevents choosing and certifying an epoch on the same games."
+  },
+  "arms": [
+    {
+      "id": "d128-multitask-continue24-lr1e4",
+      "init": "V28 d128 epoch 6 checkpoint",
+      "optimizer": "fresh Adam; optimizer state was not checkpointed",
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4,
+      "maxEpochs": 24,
+      "learningRate": 0.0001,
+      "seed": 292900,
+      "select": "minimum selection-half teacher KL"
+    },
+    {
+      "id": "d128-policy-only-continue24-lr1e4",
+      "init": "V28 d128 epoch 6 checkpoint",
+      "optimizer": "fresh Adam; optimizer state was not checkpointed",
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4,
+      "maxEpochs": 24,
+      "learningRate": 0.0001,
+      "valueCoef": 0.0,
+      "reach30Coef": 0.0,
+      "seed": 292900,
+      "purpose": "Test whether shared-trunk auxiliary critic gradients, rather than width, limit policy fidelity.",
+      "select": "minimum selection-half teacher KL"
+    },
+    {
+      "id": "d128-policy-only-strategic-balanced-continue24-lr1e4",
+      "init": "V28 d128 epoch 6 checkpoint",
+      "optimizer": "fresh Adam; optimizer state was not checkpointed",
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4,
+      "maxEpochs": 24,
+      "learningRate": 0.0001,
+      "valueCoef": 0.0,
+      "reach30Coef": 0.0,
+      "strategicKlFraction": 0.5,
+      "strategicKlDefinition": "Scale equal-row minibatch estimates so strategic policy rows carry 50% of total teacher-KL objective mass and non-strategic policy rows carry 50%, each normalized by its full-dataset subgroup count.",
+      "seed": 292900,
+      "purpose": "Diagnostic showed strategic rows are 25% of policy rows but carry roughly twice the aggregate mean KL. Give strategic and non-strategic rows equal teacher-KL objective mass without changing any target or support.",
+      "select": "minimum selection-half strategic teacher KL; early stopping uses the same metric"
+    },
+    {
+      "id": "d256-fresh24-lr3e4",
+      "init": "fresh deterministic initialization",
+      "dModel": 256,
+      "layers": 4,
+      "heads": 8,
+      "maxEpochs": 24,
+      "learningRate": 0.0003,
+      "seed": 292900,
+      "select": "minimum selection-half teacher KL"
+    }
+  ],
+  "sharedTraining": {
+    "batchSize": 256,
+    "teacherKlCoef": 1.0,
+    "valueCoef": 0.5,
+    "reach30Coef": 1.0,
+    "outcomePgCoef": 0.0,
+    "maxGradNorm": 1.0,
+    "teacherLogpTolerance": 0.001,
+    "rowOrderSeed": 292900,
+    "earlyStopping": {
+      "metric": "selection-half mean teacher KL for ordinary arms; selection-half strategic mean teacher KL for the strategic-balanced arm",
+      "patience": 4,
+      "minimumAbsoluteImprovement": 0.001,
+      "minimumEpochs": 6,
+      "restore": "best selection-half checkpoint"
+    },
+    "nonfinite": "invalidate immediately",
+    "perEpochReport": "training policy KL/top-1 plus selection-half mean/p95/p99/max KL, top-1, entropy delta, and strategic-only metrics",
+    "freshOptimizerNote": "The warm d128 arms begin above the V28 trust bound. A transient early regression under fresh Adam does not invalidate V29; only the restored checkpoint's untouched gate-half metrics decide fidelity.",
+    "note": "The arms are not FLOP-matched. This is a pragmatic fidelity/latency Pareto screen, not a causal claim that width alone caused a difference."
+  },
+  "gates": {
+    "teacherReproduction": "The preflight teacher chosen-logp max absolute error remains <= 0.001.",
+    "fidelity": "On the untouched 128-game gate half: mean KL <= 0.05 nats, p99 KL <= 0.5 nats, top-1 agreement >= 0.88, and every metric finite.",
+    "strategicFidelity": "On gate-half strategic policy rows alone: mean KL <= 0.05 nats, p99 KL <= 0.5 nats, and top-1 agreement >= 0.88. Aggregate fidelity cannot hide poor terminal-credit states.",
+    "latency": "A selected checkpoint must pass A100 binary-wire p95 request latency <= 100 ms at 32 rows, 30 candidates, eight clients. The identical d256/l4/h8 architecture already measured 34.25 ms p95 in V27; remeasure the selected weights before the next stage.",
+    "selection": "Use selection-half metrics only. Among d128 arms that meet the selection-half fidelity thresholds, choose the lowest strategic selection-half mean KL provided aggregate selection-half mean KL is within 0.005 nats of the best eligible d128 aggregate KL; comparisons are paired per row. Ties prefer multitask, then unweighted policy-only, then strategic-balanced. Consider d256 only if no d128 arm is selection-eligible. Freeze this one checkpoint before opening the gate half.",
+    "oneShotGate": "Evaluate the 128-game gate half exactly once on the single checkpoint chosen from selection-half metrics. Gate metrics are pass/fail only and never rank arms. If the chosen checkpoint fails, stop V29; do not evaluate or fall through to a runner-up.",
+    "d256Fallback": "If d256 passes fidelity but fails the remeasured latency gate, reject it and stop; do not promote or silently relax latency."
+  },
+  "selectionResult": {
+    "frozenAt": "2026-07-14T02:19:20Z",
+    "winner": {
+      "arm": "d128-policy-only-continue24-lr1e4",
+      "bestEpoch": 23,
+      "checkpoint": "ml/experiments/v29-distill-fidelity/arms/d128-policy-only-continue24-lr1e4/checkpoint.pt",
+      "checkpointSha256": "37d4268900cba44583dcc19e19222db97f8104493d17ad8dc8180025fe138dff",
+      "statsSha256": "f5efefb493565177fb84366a342be27bf02bd91c4ec65bb7fdbe1d3be2c0627e",
+      "selectionMetrics": {
+        "teacherKlMean": 0.021519911049745124,
+        "teacherKlP99": 0.238105663061142,
+        "top1Agreement": 0.9110287950796757,
+        "strategicTeacherKlMean": 0.03529601823082935,
+        "strategicTeacherKlP99": 0.38277680575847745,
+        "strategicTop1Agreement": 0.914071190211346
+      }
+    },
+    "decision": "The plain d128 policy-only arm is selection-eligible and has both the best aggregate mean KL and the best strategic mean KL. The strategic-balanced arm is within 0.005 nats on aggregate but has worse strategic mean KL; multitask and d256 fail selection thresholds. Freeze the plain policy-only checkpoint and open the gate half only for this checkpoint.",
+    "losers": [
+      {
+        "arm": "d128-multitask-continue24-lr1e4",
+        "bestEpoch": 12,
+        "checkpointSha256": "d0edfdbdc79ceb93e69da607cf893d3cc3c5b0d8b8e300df881f8328b74c3b37",
+        "teacherKlMean": 0.0486303004317277,
+        "strategicTeacherKlMean": 0.10037238308650072,
+        "selectionEligible": false
+      },
+      {
+        "arm": "d128-policy-only-strategic-balanced-continue24-lr1e4",
+        "bestEpoch": 21,
+        "checkpointSha256": "0d66279568a57dd10aa68b38691acd35ecd551f83ba34399d6d65232bcd2e181",
+        "teacherKlMean": 0.025096162876008243,
+        "strategicTeacherKlMean": 0.04029501079691892,
+        "selectionEligible": false,
+        "reason": "Strategic p99 KL is 0.5340556174516703, above the 0.5 selection threshold."
+      },
+      {
+        "arm": "d256-fresh24-lr3e4",
+        "bestEpoch": 9,
+        "checkpointSha256": "af6eae42ca3c16e56b95b6b92045488e5c567221fad3a0f4edf3bc4515b1d54d",
+        "teacherKlMean": 0.050675332859864204,
+        "strategicTeacherKlMean": 0.10821660510097289,
+        "selectionEligible": false
+      }
+    ],
+    "gateOpened": true
+  },
+  "gateResult": {
+    "evaluatedAt": "2026-07-14T02:22:02Z",
+    "artifact": "ml/experiments/v29-distill-fidelity/gate.json",
+    "artifactSha256": "7780b9d99bb6dd61f9bd376e47a2c1408dbc51508ebf8297f46bf70fd7a2876d",
+    "logSha256": "c01fe1d1086e51681c7fb66ebe62a21433e24df13d9de1fec7165879d80de5fd",
+    "checkpointSha256": "37d4268900cba44583dcc19e19222db97f8104493d17ad8dc8180025fe138dff",
+    "seed0": 942000128,
+    "games": 128,
+    "valid": true,
+    "overall": {
+      "rows": 14201,
+      "teacherKlMean": 0.02402373613229378,
+      "teacherKlP99": 0.2836954593658447,
+      "top1Agreement": 0.9024716569255686,
+      "pass": true
+    },
+    "strategic": {
+      "rows": 3516,
+      "teacherKlMean": 0.043026357674792855,
+      "teacherKlP99": 0.5555545151233665,
+      "top1Agreement": 0.906712172923777,
+      "pass": false,
+      "failedMetric": "teacherKlP99",
+      "limit": 0.5
+    },
+    "lateRounds23To30": {
+      "rows": 2104,
+      "teacherKlMean": 0.030073654197951914,
+      "teacherKlP99": 0.3788277363777118,
+      "top1Agreement": 0.8602661596958175
+    },
+    "aliasesAboveThreshold": 0,
+    "decision": "Reject V29. The aggregate gate and strategic mean/agreement gates pass, but strategic p99 KL exceeds 0.5. Per the one-shot rule, do not evaluate a runner-up and do not proceed to latency or solo strength evaluation."
+  },
+  "completedAt": "2026-07-14T02:22:02Z",
+  "nextStage": "Create a separately reviewed strategic-tail fidelity experiment that uses only new selection/gate splits and does not consume the still-unconsumed 944000000 terminal-credit development block. Terminal-credit training remains blocked until a gate-valid anchor exists.",
+  "promotionEligible": false,
+  "amendments": [
+    {
+      "at": "2026-07-14T01:45:00Z",
+      "runtimeSourceCommit": "ef56c98",
+      "optimizerCreated": false,
+      "reason": "The preregistered full-validation diagnostic found zero exact-input target aliases and localized fidelity error to strategic lockNavigation rows. Add a strategic-balanced policy-only arm before any V29 optimizer so the screen can distinguish raw compute, critic interference, capacity, and strategic loss allocation."
+    },
+    {
+      "at": "2026-07-14T01:47:00Z",
+      "review": "Claude Fable high effort",
+      "optimizerCreated": false,
+      "reason": "Correct selection leakage before training: rank arms and select epochs only on the selection half, match the strategic arm's early-stop metric to its purpose, and open the gate half exactly once for the frozen winner with no runner-up fallback."
+    },
+    {
+      "at": "2026-07-14T01:49:00Z",
+      "runtimeSourceCommit": "93020b1",
+      "reason": "V29 d128 arms launched only after both Fable reviews, the zero-alias diagnostic, selection-only trainer tests, and resource guards passed."
+    },
+    {
+      "at": "2026-07-14T01:56:00Z",
+      "attempt": 1,
+      "optimizerProgress": "d128 arms reached epoch 6; d256 reached epoch 2; no checkpoint, stats artifact, exit code, or evaluation existed",
+      "externalEvidence": "journalctl records causal-r18 Docker workers joining host networking on GPUs 0-3 at 01:54:46 UTC, and all four CARLA processes restarted at 01:54:46-47",
+      "reason": "The SimForge worker surface reclaimed GPUs 0-3 and externally killed every co-resident learner. Preserve attempt-1 logs, then restart all arms from their original byte-identical init, seeds, row order, and hyperparameters after CARLA settled. This is not a model failure and does not consume selection or gate results."
+    }
+  ]
+}

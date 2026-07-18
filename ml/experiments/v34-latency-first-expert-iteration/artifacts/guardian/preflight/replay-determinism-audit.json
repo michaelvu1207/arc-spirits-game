@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "arc-v34-replay-determinism-preflight-v1",
+  "passed": true,
+  "implementationCommit": "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+  "gpu": 7,
+  "seed0": 957800000,
+  "games": 64,
+  "primaryWorkers": 24,
+  "replayWorkers": 8,
+  "sameInferenceProcess": true,
+  "comparedBySeed": true,
+  "mismatches": 0,
+  "checkpointSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+  "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+  "inference": {
+    "format": "arc-entity-scorer-v2",
+    "obsDim": 3419,
+    "actDim": 104,
+    "weightsPath": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "weightsSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+    "wire": "binary"
+  },
+  "lifecycle": {
+    "servingLines": 1,
+    "shutdownLines": 1,
+    "reloadLines": 0,
+    "errorLines": 0
+  },
+  "inputs": {
+    "primaryReportSha256": "2e5f5d5d497c50c0662ab42bfc0a9d5ca56c188e25586361237926a320473221",
+    "replayReportSha256": "bee9ee7880c514191ec5d8db3e5a7b0e052f3d100ee592f528d519d994e8f251",
+    "inferLogSha256": "e6acbf291bd6db461f375de4eb996a33a43701fb3b3411b088d9df5e327a9121"
+  }
+}

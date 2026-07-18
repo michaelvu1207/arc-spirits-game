@@ -1,0 +1,20 @@
+export const V34_STRENGTH_TOOLING_FILES = Object.freeze(
+	[
+		'ml/analyze_v34_phase2.py',
+		'ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json',
+		'ml/experiments/v34-latency-first-expert-iteration/strength-integrity-fable-review.md',
+		'ml/experiments/v34-latency-first-expert-iteration/strength-tooling-fable-review.md',
+		'ml/experiments/v34-latency-first-expert-iteration/strength-tooling-plan.md',
+		'ml/test_analyze_v34_phase2.py',
+		'scripts/check-v34-replay-determinism.sh',
+		'scripts/lock-v34-strength-inputs.mjs',
+		'scripts/record-v34-phase2-condition.mjs',
+		'scripts/record-v34-strength-preflight.mjs',
+		'scripts/run-v34-phase2-screen.sh',
+		'scripts/run-v34-strength-preflight.sh',
+		'scripts/test-v34-phase2-condition.mjs',
+		'scripts/v34-strength-tooling-files.mjs',
+		'scripts/validate-v34-strength-protocol.mjs',
+		'scripts/verify-v34-strength-chain.mjs'
+	].sort()
+);

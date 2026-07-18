@@ -1,0 +1,482 @@
+{
+  "schemaVersion": "arc-controlled-experiment-v1",
+  "experiment": "v31-conservative-offline-terminal-credit",
+  "status": "rejected-development-no-winner",
+  "createdAt": "2026-07-14T03:50:00Z",
+  "sourceCommit": "72e057f",
+  "planReview": {
+    "model": "Claude Fable",
+    "effort": "high",
+    "artifact": "ml/experiments/v31-terminal-credit/fable-review.md",
+    "status": "incorporated",
+    "incorporated": [
+      "increase development evaluation from 1024 to 4096 paired games",
+      "remove the arbitrary hidden 60% absolute-win cutoff",
+      "center PPO clipping on the frozen V30 anchor while retaining teacher behavior correction",
+      "split V30 training parity from report-only V23 baseline context",
+      "pin strategic and hybrid sampled-row contracts",
+      "restrict trust decisions to the V30 selection half and preserve the 0.40 strategic-p99 safety margin",
+      "use simultaneous intervals as the causal multiplicity gate and keep McNemar/Holm informational",
+      "add anchor-ratio, clipping, and strategic-entropy telemetry"
+    ]
+  },
+  "scope": "Causal screen of conservative long-horizon solo credit from a gate-valid entity-v2 anchor. This stage can fund hidden solo confirmation and on-policy PPO, but cannot promote a production bot.",
+  "hypothesis": "V23 trajectories contain enough paired state, sampled-action, behavior-probability, and terminal-success information to improve late-game strategic choices with a small clipped off-policy policy-gradient term. Retaining the exact teacher mean-KL and strategic-tail CVaR anchors should prevent the outcome signal from erasing the strong early-game policy.",
+  "inputs": {
+    "catalog": {
+      "path": "ml/catalogs/live-20260713-5f4ad348.json",
+      "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+    },
+    "teacher": {
+      "path": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+      "sha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472"
+    },
+    "anchor": {
+      "path": "ml/experiments/v30-strategic-tail-fidelity/artifacts/arms/strategic-cvar10-c025/checkpoint.pt",
+      "sha256": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06",
+      "v30FidelityGatePassed": true,
+      "v30A100P95Ms": 27.922112499999997
+    },
+    "train": {
+      "path": "ml/experiments/v30-strategic-tail-fidelity/data/train-merged",
+      "games": 2048,
+      "rows": 240631,
+      "policyRows": 228477,
+      "behaviorSeedBlocks": [941000000, 947000000],
+      "dataPolicy": "Frozen V23 at temperature 0.55; outcomes and behavior log-probabilities are immutable."
+    },
+    "fidelityValidation": {
+      "path": "ml/experiments/v30-strategic-tail-fidelity/data/validation",
+      "seed0": 948000000,
+      "games": 256,
+      "excludedFormerGate": {
+        "seed0": 948000256,
+        "games": 256
+      },
+      "use": "Trust-region monitoring only on the former V30 selection half. V31 has fixed epochs and no validation-based checkpoint or coefficient selection; the former V30 one-shot gate half is not reused for a decision."
+    }
+  },
+  "implementation": {
+    "runtimeSourceCommit": "5a296b2",
+    "launcher": {
+      "path": "scripts/run-v31-terminal-credit.sh",
+      "sourceCommit": "23d17e1",
+      "sha256": "eb178b6efd2644542dde895120fc0d6349880a070ab2b92f9826c9bad2b6e2c7"
+    },
+    "strategicPredicate": {
+      "definition": "A decision row is strategic when any legal candidate has type lockNavigation or selectNavigationDestination. The default navigation scope is used; engine-cycle types are not included.",
+      "source": "src/lib/play/ml/driver.ts isStrategicDecision/NAVIGATION_STRATEGIC_TYPES",
+      "sourceCommit": "72e057f172288e4871dbed52ba66c7c3e6967c63"
+    },
+    "hybridSamplingContract": "Hybrid deterministic immediate-VP/win branches have policyMask=0 and no logpOld, so they remain critic/trajectory states but receive zero terminal policy credit. Only policyMask=1 rows observed inside an exact sample=true learned-policy pick enter teacher KL or terminal credit. Teacher, anchor, and current student probabilities are all recomputed at behaviorTemperature 0.55 on the identical recorded behaviorMask support.",
+    "estimator": {
+      "advantage": "reach30Target minus clamp(frozen behavior reach30Pred, 0.05, 0.95) on strategic policyMask=1 rows only",
+      "behaviorCorrection": "rho0 = exp(frozenAnchorChosenLogp - frozenTeacherChosenLogp), detached and upper-truncated at 2.0",
+      "updateRatio": "r = exp(currentStudentChosenLogp - frozenAnchorChosenLogp)",
+      "loss": "-equal_game_mean(rho0 * min(r * advantage, clip(r, 0.8, 1.2) * advantage)), using the sign-correct PPO minimum for both advantage signs",
+      "reason": "The teacher remains the actual sampled behavior denominator, while PPO clipping is centered at the policy being updated. This avoids making outcomePgCoef an asymmetric teacher-restoration coefficient.",
+      "behaviorCorrectionCaveat": "Upper truncation reduces variance and introduces conservative bias. Report the untruncated distribution and capped fraction; do not tune the cap after training starts."
+    },
+    "requiredTestsBeforeTraining": [
+      "positive- and negative-advantage clipping has the expected loss and gradient direction",
+      "zero-weight and non-strategic rows have zero outcome gradient",
+      "each complete game contributes total terminal-credit weight one regardless of trajectory length",
+      "policyMask=0 hybrid deterministic rows never enter behavior correction or terminal credit",
+      "teacher, anchor, and student chosen probabilities use the exact same recorded support and temperature",
+      "coefficient zero is numerically identical to the V30 objective under the same seed and batch",
+      "every trust metric is checked after every epoch and a breached arm cannot be rescued by a later checkpoint",
+      "all arm initial checkpoints are byte-identical and train/validation/development seed sets are disjoint"
+    ],
+    "preflight": "Run audit-only against the merged train and validation data before constructing an optimizer. Require exact schemas, complete games, finite fields, equal-game weights, and teacher chosen-logp reconstruction error <= 0.001.",
+    "telemetry": [
+      "base teacher mean KL, strategic-tail CVaR loss, and outcome surrogate separately",
+      "outcome advantage, untruncated and truncated anchor/teacher behavior ratio, current/anchor update ratio, cap fraction, PPO clip fraction, and effective strategic-row counts split by win/loss, advantage sign, and round band",
+      "per-epoch overall and strategic fidelity including mean, p99, CVaR@5%, max, and top-1 agreement",
+      "teacher, frozen-anchor, and current-student strategic policy entropy",
+      "training wall time, peak RSS, exit code, checkpoint hash, stats hash, and exact command"
+    ],
+    "preflightResult": {
+      "completedAt": "2026-07-14T04:07:00Z",
+      "valid": true,
+      "optimizerCreated": false,
+      "checkpointCreated": false,
+      "artifact": "ml/experiments/v31-terminal-credit/artifacts/preflight.json",
+      "artifactSha256": "df190c2d8b8c7055826167cd0c1c9c86571bb0b8f7ca578133651524abeb166d",
+      "logSha256": "9a3d20b46a64a7811da241d67735a021267db5d43e2d1525520ab1d6a50152ac",
+      "train": {
+        "games": 2048,
+        "rows": 240631,
+        "policyRows": 228477,
+        "strategicPolicyRows": 57450,
+        "trueWins": 1114,
+        "equalGameOutcomeWeight": 2048.0
+      },
+      "validation": {
+        "games": 512,
+        "rows": 60159,
+        "policyRows": 57085,
+        "trueWins": 276
+      },
+      "teacherLogpMaxAbsError": {
+        "train": 0.000004291534423828125,
+        "validation": 0.000004172325134277344,
+        "limit": 0.001
+      },
+      "anchorBehaviorCorrection": {
+        "rows": 57450,
+        "rawMean": 1.0000877676866593,
+        "rawP95": 1.2763540625572192,
+        "rawP99": 1.7047389233112367,
+        "rawMax": 58.16262435913086,
+        "upperCap": 2.0,
+        "capFraction": 0.0053089643167972145
+      },
+      "conclusion": "The anchor/teacher correction is centered at one, its p99 remains below the fixed 2x cap, and only 0.53% of strategic rows are capped. Proceed with the frozen estimator and do not retune the cap."
+    }
+  },
+  "training": {
+    "launchedAt": "2026-07-14T04:08:00Z",
+    "completedAt": "2026-07-14T04:15:53Z",
+    "developmentEvaluationOpened": true,
+    "allArmsValid": true,
+    "launchPids": {
+      "anchor-only": 3219611,
+      "strategic-pg-0p1": 3219613,
+      "strategic-pg-0p3": 3219615,
+      "strategic-pg-0p6": 3219619
+    },
+    "architecture": {
+      "format": "arc-entity-scorer-v2",
+      "dModel": 128,
+      "layers": 3,
+      "heads": 4
+    },
+    "capacityDecision": "Keep architecture fixed so the terminal-credit mechanism is causal. V27-V30 showed that width was not the fidelity or latency bottleneck; reconsider width only after a valid on-policy/search result identifies capacity as limiting strength.",
+    "shared": {
+      "init": "Byte-identical V30 anchor",
+      "optimizer": "Fresh Adam",
+      "epochs": 2,
+      "save": "Last epoch only; no early stopping or checkpoint selection",
+      "batchSize": 512,
+      "learningRate": 0.00005,
+      "teacherKlCoef": 1.0,
+      "strategicTailFraction": 0.1,
+      "strategicTailCoef": 0.25,
+      "valueCoef": 0.0,
+      "reach30Coef": 0.0,
+      "clipEpsilon": 0.2,
+      "maxGradNorm": 1.0,
+      "seed": 310100,
+      "rowOrderSeed": 310100,
+      "deviceAssignments": [0, 1, 2, 3]
+    },
+    "arms": [
+      {
+        "id": "anchor-only",
+        "outcomePgCoef": 0.0
+      },
+      {
+        "id": "strategic-pg-0p1",
+        "outcomePgCoef": 0.1
+      },
+      {
+        "id": "strategic-pg-0p3",
+        "outcomePgCoef": 0.3
+      },
+      {
+        "id": "strategic-pg-0p6",
+        "outcomePgCoef": 0.6
+      }
+    ],
+    "computeMatching": "All arms load byte-identical weights and execute identical data, batch order, teacher forwards, optimizer steps, fidelity terms, and validation passes. Only outcomePgCoef differs.",
+    "trustGateEveryEpoch": {
+      "overallMeanKlMax": 0.05,
+      "overallP99KlMax": 0.5,
+      "overallTop1Min": 0.88,
+      "strategicMeanKlMax": 0.05,
+      "strategicP99KlMax": 0.4,
+      "strategicTop1Min": 0.88,
+      "rule": "Any non-finite statistic or threshold breach immediately and permanently invalidates that arm. Do not restore an earlier epoch."
+    },
+    "results": [
+      {
+        "id": "anchor-only",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/anchor-only",
+        "checkpointSha256": "e281c1bccf3917212073874c4b6d5282aae25ce0b07bbe57406848b739997588",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "f84dbd029a1617d7f9ce9ce1353ff00f524250bbefa09399fadfe021d3075412",
+        "trainLogSha256": "7d13e43fc7caf745779b710ebd05e92c415bfbde5ad9948ca37e967c05ce03ab",
+        "wallTime": "7:35.51",
+        "peakRssKiB": 7007660,
+        "finalValidation": {
+          "overallMeanKl": 0.018209989913090537,
+          "overallP99Kl": 0.19018639579415322,
+          "overallTop1": 0.9127358490566038,
+          "strategicMeanKl": 0.030863013433964456,
+          "strategicP99Kl": 0.33157915115356296,
+          "strategicCvar05": 0.26728185613950095,
+          "strategicTop1": 0.9213233249930498
+        }
+      },
+      {
+        "id": "strategic-pg-0p1",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/strategic-pg-0p1",
+        "checkpointSha256": "77dca3f0f06ad5690b12c5b938394d1468519123cf17df3a3c020cf4f81ce557",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "f67bafffadeeede76f0dc266dfae1cebd4a00252f904ac4be9bc23954066da77",
+        "trainLogSha256": "8684c219c3c279145bd383f59b3ebe406de2c832a5025c44989db2539312b83d",
+        "wallTime": "7:31.85",
+        "peakRssKiB": 7024516,
+        "finalValidation": {
+          "overallMeanKl": 0.017940345214676953,
+          "overallP99Kl": 0.1937956318259242,
+          "overallTop1": 0.9134750774429738,
+          "strategicMeanKl": 0.03003607581313845,
+          "strategicP99Kl": 0.3275423395633697,
+          "strategicCvar05": 0.2702970147960716,
+          "strategicTop1": 0.9236864053377815
+        }
+      },
+      {
+        "id": "strategic-pg-0p3",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/strategic-pg-0p3",
+        "checkpointSha256": "0db9b3353b8300bca33fe4d8482dbb938b7f8fe484914c42fe2ba928a10d5589",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "b728aa0ea06e0f1bfe139188dd8a0a33e9504083100f7c33e7d42ee29c63293c",
+        "trainLogSha256": "07b2460a919b28c889d78c42164ac627eec466ecfcec04156e9f28a90a2b36be",
+        "wallTime": "7:33.42",
+        "peakRssKiB": 7014272,
+        "finalValidation": {
+          "overallMeanKl": 0.017371235092051057,
+          "overallP99Kl": 0.18755168989300738,
+          "overallTop1": 0.9158335680090115,
+          "strategicMeanKl": 0.027785647169382706,
+          "strategicP99Kl": 0.31782734245061833,
+          "strategicCvar05": 0.2534418953375684,
+          "strategicTop1": 0.9303586321934946
+        }
+      },
+      {
+        "id": "strategic-pg-0p6",
+        "exitCode": 0,
+        "allEpochTrustGatesPassed": true,
+        "artifactRoot": "ml/experiments/v31-terminal-credit/arms/strategic-pg-0p6",
+        "checkpointSha256": "357fad2efb574bce13aaae4dd9b4b1e1e195b045fb5d9c4231f553123650056d",
+        "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+        "statsSha256": "4dbad78b5ed1c94500ad638c1f02eef3cb1ff1d080469a5cbb7779de837bc88e",
+        "trainLogSha256": "415d4bdbdee03cd5f3648163ea8df6e6def8582262ddf910e00ace581503c6da",
+        "wallTime": "7:32.02",
+        "peakRssKiB": 7012680,
+        "finalValidation": {
+          "overallMeanKl": 0.018037596138337584,
+          "overallP99Kl": 0.18994627565145494,
+          "overallTop1": 0.9124542382427485,
+          "strategicMeanKl": 0.030194603126695026,
+          "strategicP99Kl": 0.3225241202116008,
+          "strategicCvar05": 0.26137133311066363,
+          "strategicTop1": 0.918960244648318
+        }
+      }
+    ]
+  },
+  "developmentEvaluation": {
+    "openOnlyAfter": "All arm checkpoints, manifests, stats, exit codes, and hashes are frozen and every valid arm passes the per-epoch trust gate.",
+    "attempts": [
+      {
+        "attempt": 1,
+        "launchedAt": "2026-07-14T04:20:08Z",
+        "completedAt": "2026-07-14T04:20:23Z",
+        "outcome": "environment-failure-before-seed-consumption",
+        "failure": "All five immediate evaluators failed at Node mkdtemp because the host root filesystem backing /tmp had zero free bytes. The chained sixth arm exited 99 after its dependency failed.",
+        "evidence": "mkdtemp occurs before runActorPool in scripts/evaluate-solo-checkpoint.mjs; no report.json exists for any policy and no actor pool or game started.",
+        "preservedArtifactRoot": "ml/experiments/v31-terminal-credit/development-attempt-1-enospc",
+        "reportsCreated": 0,
+        "gamesStarted": 0,
+        "seedBlockConsumed": false,
+        "repair": "Bind each evaluator's TMPDIR and inference socket to experiment-owned /dev/shm/arc-v31-development scratch, require at least 8 GiB free, preserve this failed attempt, then resume the unchanged preregistered seed block."
+      },
+      {
+        "attempt": 2,
+        "launchedAt": "2026-07-14T04:22:38Z",
+        "completedAt": "2026-07-14T05:40:41Z",
+        "outcome": "completed-valid-before-analysis",
+        "scratchRoot": "/dev/shm/arc-v31-development",
+        "launchPids": {
+          "v23": 3342448,
+          "v30": 3342450,
+          "anchor": 3342453,
+          "strategic-pg-0p1": 3342457,
+          "strategic-pg-0p3": 3342464,
+          "strategic-pg-0p6": 3342471
+        },
+        "exitCodes": {
+          "v23": 0,
+          "v30": 0,
+          "anchor": 0,
+          "strategic-pg-0p1": 0,
+          "strategic-pg-0p3": 0,
+          "strategic-pg-0p6": 0
+        },
+        "reportSha256": {
+          "v23": "1aa77b9facbff18dc4d9486f58b83df3dab528d3c7404e6f3fd883161190dffa",
+          "v30": "1afb8cec85ff2888339fc86e8a3335b4c2631355e1ee1600e77ae1ff18712249",
+          "anchor": "53af79183b71a4478710c9dcd8448033545acafa2d69a930468e771f127a5454",
+          "strategic-pg-0p1": "c6772ca99c463e9ae1fd6805a9f53fc2cea192ff7e4c8f501541e958aaf74a92",
+          "strategic-pg-0p3": "5ebf8c2252dbeec62ab51f3db9860b03b073d4da4bc00088235697023316cae6",
+          "strategic-pg-0p6": "06ddca1edd4975ed09a0a837b54e5adeb87aa008fe123aad95952616e9ac38da"
+        },
+        "artifactManifest": "ml/experiments/v31-terminal-credit/development.sha256",
+        "artifactManifestSha256": "dddf4d3c2bd823b1a2b657ef9c5469cf97bfb935ec79f41cb88cc0332713f95e",
+        "failedAttemptManifest": "ml/experiments/v31-terminal-credit/development-attempt-1-enospc.sha256",
+        "failedAttemptManifestSha256": "3d62983b8a587debf2aa11aeece5c695fdbad4e1e7401dcce873368879305b0a",
+        "analysisOpened": true
+      }
+    ],
+    "openedAt": "2026-07-14T04:22:38Z",
+    "completedAt": "2026-07-14T05:40:41Z",
+    "seed0": 944000000,
+    "games": 4096,
+    "workersPerPolicy": 4,
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "guardianSchedule": "absolute-balanced",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "includePerGame": true,
+    "policies": [
+      "frozen V23 control",
+      "frozen V30 initial anchor",
+      "V31 anchor-only update",
+      "each trust-valid terminal-credit arm"
+    ],
+    "fairness": "Use identical contiguous seeds and decoding semantics for every policy. V2 policies use the production binary inference path with policyObsVersion 2; V23 uses its native obs-v1 path. Record catalog and checkpoint hashes and require zero stalls.",
+    "analysis": {
+      "implementation": {
+        "path": "ml/analyze_terminal_credit.py",
+        "sourceCommit": "5828bb8",
+        "sha256": "4a7ffc9be84445d87e458bcca17c53c487690a5350d2408040ac16e411b31e4e",
+        "tests": "ml/test_analyze_terminal_credit.py (4/4 local and remote)",
+        "expectedProvenance": {
+          "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+          "evaluatorSourceCommit": "bce8bf2",
+          "weights": {
+            "v23": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+            "v30": "c47a63ac7c4a74624294e5af49494e00812c97736db4a085f2fdad0deafa8a06",
+            "anchor": "e281c1bccf3917212073874c4b6d5282aae25ce0b07bbe57406848b739997588",
+            "strategic-pg-0p1": "77dca3f0f06ad5690b12c5b938394d1468519123cf17df3a3c020cf4f81ce557",
+            "strategic-pg-0p3": "0db9b3353b8300bca33fe4d8482dbb938b7f8fe484914c42fe2ba928a10d5589",
+            "strategic-pg-0p6": "357fad2efb574bce13aaae4dd9b4b1e1e195b045fb5d9c4231f553123650056d"
+          },
+          "policyObsVersions": {
+            "v23": 1,
+            "v30": 2,
+            "anchor": 2,
+            "strategic-pg-0p1": 2,
+            "strategic-pg-0p3": 2,
+            "strategic-pg-0p6": 2
+          },
+          "decisionDecode": {
+            "learnMonsterRewardChoices": false,
+            "sample": true,
+            "temperature": 0.55
+          }
+        }
+      },
+      "launcher": {
+        "path": "scripts/run-v31-development-eval.sh",
+        "sourceCommit": "e4ba6ab",
+        "sha256": "5d1b4b489fc8a2214b9514af47dd7df63f1a90f624daf901e3467461feb38541"
+      },
+      "bootstrapReplicates": 10000,
+      "bootstrapSeed": 310199,
+      "terminalTreatmentFamilySize": 3,
+      "pairedMetrics": [
+        "true win by 30 rounds",
+        "final VP",
+        "censored first-30 round with failures at 31",
+        "post-round-15 VP per round",
+        "final attack dice, spirits, and barrier",
+        "guardian-stratified wins and VP"
+      ],
+      "tests": "Paired whole-game bootstrap with Bonferroni 98.333% simultaneous intervals for each family of three terminal-treatment claims. Exact two-sided McNemar p-values and Holm adjustment are reported as sensitivity analyses but are not an additional gate.",
+      "result": {
+        "completedAt": "2026-07-14T07:23:21Z",
+        "artifact": "ml/experiments/v31-terminal-credit/development/analysis.json",
+        "artifactSha256": "13b29638aa5ba730a3c88550088dfb0acc69c4a3c68cc843c6c8d25332726520",
+        "valid": true,
+        "trainingParityPassed": true,
+        "trainingParityWinDelta": -0.00390625,
+        "trainingParityLower95": -0.017828369140624946,
+        "trueWinRates": {
+          "v23": 0.525146484375,
+          "v30": 0.5205078125,
+          "anchor": 0.5166015625,
+          "strategic-pg-0p1": 0.51171875,
+          "strategic-pg-0p3": 0.529296875,
+          "strategic-pg-0p6": 0.510498046875
+        },
+        "eligible": {
+          "strategic-pg-0p1": false,
+          "strategic-pg-0p3": false,
+          "strategic-pg-0p6": false
+        },
+        "bestTreatment": {
+          "id": "strategic-pg-0p3",
+          "causalWinDelta": 0.0126953125,
+          "causalSimultaneousLower": -0.002850341796874937,
+          "causalSimultaneousUpper": 0.028564453125,
+          "strengthVsV23WinDelta": 0.004150390625,
+          "post15VpPerRoundDeltaVsAnchor": -0.008041077098126903,
+          "reasonRejected": "The causal gain is below +2.0 percentage points, its 98.333% simultaneous lower bound is not above zero, strength versus V23 is below +3.0 points, and post-round-15 pace regresses."
+        },
+        "decision": "Reject every V31 offline terminal-credit arm. Do not open hidden seed 945000000; initialize the next on-policy PPO/search stage from frozen V30."
+      }
+    }
+  },
+  "developmentGates": {
+    "trainingParity": "V31 anchor-only must be no worse than V30 initial by 1.0 percentage point, with paired 95% lower bound at least -3.0 points. Only this comparison can invalidate the causal interpretation of the compute-matched update.",
+    "v23Context": "Report V30 initial and V31 anchor-only versus V23, but do not use those baseline gaps to invalidate the terminal-credit-versus-anchor causal test. V23 uses its native obs-v1 path while all V31 arms share the v2 binary path; therefore the clean causal comparison is treatment versus anchor-only.",
+    "terminalCreditCausal": "Against V31 anchor-only on the same games, a treatment must gain at least +2.0 percentage points and have its Bonferroni-simultaneous 98.333% paired lower bound above zero across the three treatment claims.",
+    "strength": "The same treatment must gain at least +3.0 percentage points versus V23 and have its Bonferroni-simultaneous 98.333% paired lower bound above zero across the three treatment-versus-V23 claims.",
+    "lateGame": "Mean final VP and post-round-15 VP/round must not regress versus both anchor-only and V23; censored first-30 round must not increase. Report rather than hide guardian-specific regressions.",
+    "integrity": "All evaluated reports must have the exact expected seed set, catalog hash, decode contract, checkpoint hash, 4096 games, and zero stalls.",
+    "winner": "Among treatments passing every gate, select highest true-win rate; ties within one paired win prefer lower censored first-30 round, then higher post-15 pace, then lower coefficient. Freeze the winner before opening hidden seeds."
+  },
+  "hiddenConfirmation": {
+    "opened": false,
+    "reasonNotOpened": "No V31 treatment passed every frozen development gate, so the one-shot hidden block remains untouched.",
+    "seed0": 945000000,
+    "games": 2048,
+    "openOnlyIf": "Exactly one V31 development winner has been frozen without using hidden data.",
+    "comparators": [
+      "V23",
+      "V30 initial anchor",
+      "V31 anchor-only",
+      "frozen V31 development winner"
+    ],
+    "pass": "Winner must beat V23 and V31 anchor-only by at least +3.0 percentage points with paired 95% lower bounds above zero and exact McNemar p < 0.05, have zero stalls, and not regress mean final VP, post-15 pace, or censored first-30 round. Absolute win rate is reported but is not a gate because hidden-block difficulty is unknown. This confirms a useful initialization but does not satisfy the final 80% goal and cannot promote.",
+    "failure": "Reject offline terminal-credit checkpoint and initialize the next on-policy stage from V30 instead. Never test a V31 runner-up on hidden seeds."
+  },
+  "nextStage": {
+    "ifPass": "Use the hidden-confirmed V31 winner as the initialization for a separately reviewed on-policy solo PPO/search-target stage on fresh seed block 946000000.",
+    "ifNoDevelopmentWinner": "Reject this offline one-step estimator and move to separately reviewed on-policy solo PPO or search-improved targets from V30 on seed block 946000000; do not sweep coefficients or epochs on 944000000.",
+    "ifHiddenFailure": "Move to the same on-policy stage from V30 and preserve the hidden failure as final evidence against this offline treatment."
+  },
+  "stopRules": [
+    "Do not consume 944000000 until training artifacts are frozen.",
+    "Do not consume 945000000 unless a sole development winner is frozen.",
+    "Do not tune from either development or hidden evaluation results.",
+    "Do not evaluate an invalid arm or a hidden runner-up.",
+    "Do not claim strength from offline loss or fidelity metrics alone.",
+    "Do not promote any V31 checkpoint."
+  ],
+  "promotionEligible": false
+}

@@ -46,7 +46,10 @@ import type {
 	TraitOccurrenceRow,
 	TraitStatsRow
 } from './types';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
+
+const PUBLIC_SUPABASE_URL = publicEnv.PUBLIC_SUPABASE_URL || 'https://unconfigured.invalid';
+const PUBLIC_SUPABASE_ANON_KEY = publicEnv.PUBLIC_SUPABASE_ANON_KEY || 'unconfigured-public-anon-key';
 
 // Schema names
 export const SCHEMA = 'arc_spirits_game'; // Game state data

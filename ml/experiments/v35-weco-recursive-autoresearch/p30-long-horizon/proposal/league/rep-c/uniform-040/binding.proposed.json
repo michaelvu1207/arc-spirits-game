@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "arc-v35-p30-proposed-root-binding-v1",
+  "experiment": "v35-p30-long-horizon-dose-screen",
+  "replicate": "c",
+  "arm": "uniform-040",
+  "protocolPath": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json",
+  "protocolSha256": "8f7b23481f26e0726cb950a79e2e0be4f5a929764e4a3fd66b7d7805bf92091d",
+  "configProposedSha256": "0478033093bc09b58588ecbcdff587089c57c1069561822770aa34a875a66b9f",
+  "catalogSha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+  "initialPolicySha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+  "authorized": false,
+  "promotionEligible": false
+}

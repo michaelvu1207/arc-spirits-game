@@ -2,13 +2,13 @@
 Entity-level set-transformer policy/value network for Arc Spirits (model v2).
 
 Consumes flat `arc-obs-v2` observations (see ml/obs_v2.py and docs/encoder-v2.md)
-and v1 candidate-action vectors (act_dim=52). The forward contract is EXACTLY
+and append-only v1 candidate-action vectors (act_dim comes from the dataset). The forward contract is EXACTLY
 CandidateScorer's (ml/model.py), so train.py can consume it behind a --model v2
 flag later:
 
-    forward(obs_flat, cands, mask) -> (logits, probs, value)
+    forward(obs_flat, cands, mask, option=None) -> (logits, probs, value)
       obs_flat: (batch, flat_len=3419)   # raw flattened obs, header included
-      cands:    (batch, max_cands, 52)
+      cands:    (batch, max_cands, act_dim)
       mask:     (batch, max_cands) bool  # True = valid candidate
       logits:   (batch, max_cands)       # padded slots at -1e9
       probs:    (batch, max_cands)
@@ -27,7 +27,8 @@ Architecture (BOT_TAKEOVER_PLAN.md M2):
     encoder output (pads masked out).
   - Candidate head: embed each 52-float candidate to d_model, score an MLP on
     [cand_emb, state_emb, cand_emb * state_emb].
-  - Value head on state_emb; aux heads mirror CandidateScorer's API:
+  - Value head on state_emb; optional 20/25/30-round reach-30 critic; aux heads mirror
+    CandidateScorer's API:
     farm_value(obs), route_mode_logits(obs), reward_pick_logits(obs, cands, mask),
     plus placement_logits(obs) — per-seat final-placement prediction read from
     each REAL seat token's encoder output (pad seats masked to 0).
@@ -94,7 +95,7 @@ class EntityCandidateScorer(nn.Module):
 
     Drop-in interface match for CandidateScorer (ml/model.py): forward/score_single
     signatures and the aux-head methods are identical; only obs_dim differs
-    (flat v2 length instead of the current 83-float summary).
+    (flat v2 length instead of the current 199-float summary).
     """
 
     def __init__(
@@ -106,6 +107,7 @@ class EntityCandidateScorer(nn.Module):
         heads: int = 4,
         ff_mult: int = 4,
         dropout: float = 0.0,
+        reach30_horizons: tuple[int, ...] = (),
     ) -> None:
         super().__init__()
         self.spec = spec
@@ -115,6 +117,21 @@ class EntityCandidateScorer(nn.Module):
         self.layers = layers
         self.heads = heads
         self.ff_mult = ff_mult
+        # PPO's low-level model contract is option-aware. Entity v2 deliberately
+        # has no high-level option conditioning, but it must still advertise the
+        # zero-width capability and accept the empty tensors emitted by PPO.
+        self.option_dim = 0
+        normalized_horizons = tuple(int(h) for h in reach30_horizons)
+        if (
+            any(h <= 0 for h in normalized_horizons)
+            or tuple(sorted(set(normalized_horizons))) != normalized_horizons
+        ):
+            raise ValueError("reach30_horizons must be strictly increasing positive integers")
+        self.reach30_horizons = normalized_horizons
+        self.reach30_horizon: int | None = (
+            normalized_horizons[-1] if normalized_horizons else None
+        )
+        self.reach30_trained = False
 
         self.family_names = [f.name for f in spec.families]
         self.family_embed = nn.ModuleDict(
@@ -142,6 +159,11 @@ class EntityCandidateScorer(nn.Module):
         self.cand_embed = nn.Linear(act_dim, d_model)
         self.score_head = _mlp(3 * d_model, d_model, 1)
         self.value_head = _mlp(d_model, d_model, 1)
+        self.reach30_head: nn.Module | None = (
+            _mlp(d_model, d_model // 2, len(normalized_horizons))
+            if normalized_horizons
+            else None
+        )
 
         # Aux heads (kept optional-cost: tiny). Names mirror CandidateScorer.
         self.farm_value_head = _mlp(d_model, d_model // 2, 1)
@@ -158,6 +180,35 @@ class EntityCandidateScorer(nn.Module):
             off += f.cap
         self._token_slices = offsets
         self.num_tokens = off
+
+    def enable_reach30_horizons(self, horizons: tuple[int, ...]) -> None:
+        """Add the multi-horizon solo critic to a legacy v2 warm start.
+
+        Old v2 checkpoints predate this auxiliary head. Their policy/value
+        tensors remain loadable bit-for-bit; the new head is initialized only
+        when a trainer explicitly requests reach-30 supervision.
+        """
+        normalized = tuple(int(h) for h in horizons)
+        if any(h <= 0 for h in normalized) or tuple(sorted(set(normalized))) != normalized:
+            raise ValueError("reach30 horizons must be strictly increasing positive integers")
+        if self.reach30_head is not None:
+            if normalized != self.reach30_horizons:
+                raise ValueError(
+                    f"checkpoint reach30 horizons {self.reach30_horizons} != requested {normalized}"
+                )
+            return
+        if not normalized:
+            raise ValueError("at least one reach30 horizon is required")
+        head = _mlp(self.d_model, self.d_model // 2, len(normalized))
+        reference = next(self.parameters())
+        self.reach30_head = head.to(device=reference.device, dtype=reference.dtype)
+        self.reach30_horizons = normalized
+        self.reach30_horizon = normalized[-1]
+        self.reach30_trained = False
+
+    def _check_option(self, option: torch.Tensor | None) -> None:
+        if option is not None and option.numel() != 0:
+            raise ValueError("entity v2 does not support non-empty high-level option conditioning")
 
     # ── encoding ────────────────────────────────────────────────────────────
 
@@ -199,12 +250,72 @@ class EntityCandidateScorer(nn.Module):
         obs: torch.Tensor,   # (batch, flat_len)
         cands: torch.Tensor,  # (batch, max_cands, act_dim)
         mask: torch.Tensor,   # (batch, max_cands) — True = valid, False = padded
+        option: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        self._check_option(option)
         state, _, _ = self.encode_state(obs)
         logits_masked = self._score_candidates(self.score_head, state, cands, mask)
         probs = F.softmax(logits_masked, dim=-1)
         value = self.value_head(state).squeeze(-1)
         return logits_masked, probs, value
+
+    def requested_outputs(
+        self,
+        obs: torch.Tensor,
+        cands: torch.Tensor,
+        mask: torch.Tensor,
+        wanted: frozenset[str],
+        option: torch.Tensor | None = None,
+    ) -> dict[str, torch.Tensor]:
+        """Compute a wire-requested head set from one shared state encoding.
+
+        Search commonly asks for the reach-30 critic for a large leaf batch and
+        does not need policy logits or the value head.  The inference server used
+        to call ``forward`` unconditionally and then call every requested
+        auxiliary method separately; on the entity model each call repeated the
+        transformer encoder.  Keeping this dispatch on the model makes the shared
+        representation explicit while preserving the exact individual head math.
+        """
+        self._check_option(option)
+        supported = {
+            "logits",
+            "value",
+            "farm_value",
+            "route_mode",
+            "reward_pick",
+            "placement",
+            "reach30",
+        }
+        unknown = wanted - supported
+        if unknown:
+            raise ValueError(f"unsupported requested outputs: {sorted(unknown)}")
+
+        state, token_out, pad_mask = self.encode_state(obs)
+        out: dict[str, torch.Tensor] = {}
+        if "logits" in wanted:
+            out["logits"] = self._score_candidates(self.score_head, state, cands, mask)
+        if "value" in wanted:
+            out["value"] = self.value_head(state).squeeze(-1)
+        if "farm_value" in wanted:
+            out["farm_value"] = self.farm_value_head(state).squeeze(-1)
+        if "route_mode" in wanted:
+            out["route_mode"] = self.route_mode_head(state).squeeze(-1)
+        if "reward_pick" in wanted:
+            out["reward_pick"] = self._score_candidates(
+                self.reward_pick_head, state, cands, mask
+            )
+        if "reach30" in wanted:
+            if self.reach30_head is None:
+                raise ValueError("reach30 logits requested from a v2 model without the auxiliary head")
+            out["reach30"] = self.reach30_head(state)[:, -1]
+        if "placement" in wanted:
+            lo, hi = self._token_slices["seat"]
+            seat_out = token_out[:, lo:hi]
+            seat_real = ~pad_mask[:, lo:hi]
+            out["placement"] = self.placement_head(seat_out).squeeze(-1).masked_fill(
+                ~seat_real, 0.0
+            )
+        return out
 
     def score_single(
         self, obs: torch.Tensor, cands: torch.Tensor
@@ -219,19 +330,46 @@ class EntityCandidateScorer(nn.Module):
 
     # ── aux heads (API-parity with CandidateScorer + v2 placement aux) ──────
 
-    def farm_value(self, obs: torch.Tensor) -> torch.Tensor:
+    def farm_value(
+        self, obs: torch.Tensor, option: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        self._check_option(option)
         state, _, _ = self.encode_state(obs)
         return self.farm_value_head(state).squeeze(-1)
 
-    def route_mode_logits(self, obs: torch.Tensor) -> torch.Tensor:
+    def route_mode_logits(
+        self, obs: torch.Tensor, option: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        self._check_option(option)
         state, _, _ = self.encode_state(obs)
         return self.route_mode_head(state).squeeze(-1)
 
     def reward_pick_logits(
-        self, obs: torch.Tensor, cands: torch.Tensor, mask: torch.Tensor
+        self,
+        obs: torch.Tensor,
+        cands: torch.Tensor,
+        mask: torch.Tensor,
+        option: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        self._check_option(option)
         state, _, _ = self.encode_state(obs)
         return self._score_candidates(self.reward_pick_head, state, cands, mask)
+
+    def reach30_all_logits(
+        self, obs: torch.Tensor, option: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """P(reach 30 VP by each configured horizon), shape ``(batch, H)``."""
+        self._check_option(option)
+        if self.reach30_head is None:
+            raise ValueError("reach30 logits requested from a v2 model without the auxiliary head")
+        state, _, _ = self.encode_state(obs)
+        return self.reach30_head(state)
+
+    def reach30_logits(
+        self, obs: torch.Tensor, option: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Wire-compatible scalar logit for the checkpoint's primary (latest) horizon."""
+        return self.reach30_all_logits(obs, option)[:, -1]
 
     def placement_logits(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -258,6 +396,8 @@ class EntityCandidateScorer(nn.Module):
             "layers": self.layers,
             "heads": self.heads,
             "ff_mult": self.ff_mult,
+            "reach30_horizons": list(self.reach30_horizons),
+            "reach30_trained": bool(self.reach30_trained),
         }
 
 
@@ -271,12 +411,21 @@ def build_model_v2(
     layers: int = 3,
     heads: int = 4,
     ff_mult: int = 4,
+    reach30_horizons: tuple[int, ...] = (),
     seed: Optional[int] = 0,
 ) -> EntityCandidateScorer:
     """Build with seed-stable init (pass seed=None to inherit global RNG state)."""
     if seed is not None:
         torch.manual_seed(seed)
-    model = EntityCandidateScorer(spec, act_dim, d_model=d_model, layers=layers, heads=heads, ff_mult=ff_mult)
+    model = EntityCandidateScorer(
+        spec,
+        act_dim,
+        d_model=d_model,
+        layers=layers,
+        heads=heads,
+        ff_mult=ff_mult,
+        reach30_horizons=reach30_horizons,
+    )
     model = model.float()
     if device is not None:
         model = model.to(device)
@@ -301,6 +450,8 @@ def save_checkpoint(model: EntityCandidateScorer, path: str | Path) -> Path:
         "d_model": model.d_model,
         "layers": model.layers,
         "heads": model.heads,
+        "reach30_horizons": list(model.reach30_horizons),
+        "reach30_trained": bool(model.reach30_trained),
         "params": model.param_count(),
     }
     manifest_path = path.with_suffix(".manifest.json")
@@ -333,8 +484,10 @@ def load_checkpoint(
         layers=int(cfg["layers"]),
         heads=int(cfg["heads"]),
         ff_mult=int(cfg["ff_mult"]),
+        reach30_horizons=tuple(int(h) for h in cfg.get("reach30_horizons", ())),
     )
     model.load_state_dict(payload["state_dict"])
+    model.reach30_trained = bool(cfg.get("reach30_trained", False))
     model = model.float()
     if device is not None:
         model = model.to(device)

@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "arc-v34-phase2-attempt-1-side-channel-inventory-v1",
+  "attempt": 1,
+  "recordedAt": "2026-07-14T20:00:06Z",
+  "authoritativeRoot": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+  "attemptWindow": {
+    "scanStart": "2026-07-14T17:04:27Z",
+    "scanEnd": "2026-07-14T17:06:56Z",
+    "stdoutCreatedAt": "2026-07-14T17:04:28.274460947Z"
+  },
+  "launchMechanism": {
+    "kind": "direct-synchronous-ssh",
+    "foreground": true,
+    "schedulerOrJobWrapperUsed": false,
+    "screenUsed": false,
+    "tmuxUsed": false,
+    "nohupUsed": false,
+    "systemdUnitUsed": false,
+    "containerUsed": false,
+    "basis": "the recorded Codex launch invoked the analyzer directly in the authoritative root and synchronously captured the SSH exit"
+  },
+  "streamRouting": {
+    "analyzerStdout": {
+      "remotePath": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "persistedOutcomeValues": false
+    },
+    "analyzerStderr": {
+      "capturedBy": "foreground SSH client",
+      "committedPath": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1.stderr",
+      "bytes": 813,
+      "sha256": "63f454aba0ffc4fc04bc06a03ba5db3aa62c72f3812bcbe5d0854c95479aeae4",
+      "containsOnlyPreLoadConditionsTraceback": true,
+      "persistedOutcomeValues": false
+    },
+    "nodeCompletionVerifiers": {
+      "frozenAnalyzerSource": "ml/analyze_v34_phase2.py",
+      "subprocessLines": [1942, 1954],
+      "stdoutTarget": "subprocess.DEVNULL",
+      "stderrTarget": "subprocess.DEVNULL",
+      "observedExitStatuses": [0, 0, 0, 0, 0, 0, 0],
+      "onlyObservable": "per-manifest integrity pass/fail",
+      "observableCorrelatedWithCrossArmPerformance": false,
+      "unsuppressedSuccessSchemaContainsPerformanceValues": false
+    },
+    "gitAncestrySubprocess": {
+      "frozenAnalyzerSource": "ml/analyze_v34_phase2.py",
+      "subprocessLines": [966, 970],
+      "stdoutTarget": "subprocess.DEVNULL",
+      "stderrTarget": "subprocess.DEVNULL",
+      "observedExitStatus": 128,
+      "persistedOutcomeValues": false
+    }
+  },
+  "createdFileInventory": {
+    "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1-created-files.tsv",
+    "bytes": 4074,
+    "sha256": "52fdc805538624780437b28078539db464d30fec2165559e5d4f3861dd908a7a",
+    "entries": 19,
+    "authoritativeRootEntries": 1,
+    "tmpEntries": 8,
+    "homeEntries": 10,
+    "attemptDerivedEntries": 1,
+    "unrelatedConcurrentEntries": 18,
+    "scanMethod": "find each filesystem with -newermt 2026-07-14T17:04:27Z and not -newermt 2026-07-14T17:06:56Z, recording path, size, mtime, and SHA-256 without displaying outcome-bearing Phase 2 inputs"
+  },
+  "otherPersistenceChecks": {
+    "analysisJsonExists": false,
+    "bashHistory": {
+      "path": "/home/ubuntu/.bash_history",
+      "mtime": "2026-07-13T08:23:29.442211062Z",
+      "predatesAttempt": true,
+      "sha256": "79e4a01293dfd518ef959dbb2c59dc1fb105f92986fed2e71715de94b6aa8029"
+    },
+    "matchingScreenSessions": 0,
+    "matchingSystemdUnits": 0,
+    "matchingContainers": 0,
+    "matchingAnalyzerProcessesAtInventoryTime": 0,
+    "preexistingTmuxSession": {
+      "name": "0",
+      "created": "2026-06-06T06:32:44Z",
+      "classification": "preexisting-unrelated"
+    }
+  },
+  "quarantine": {
+    "potentiallyOutcomeDerivedFilesIdentified": [],
+    "filesQuarantined": [],
+    "unrelatedArtifactsModified": false,
+    "reason": "the only attempt-created artifact is the hash-verified empty stdout; stderr is committed and contains only the pre-load_conditions traceback; the verifier streams were kernel-discarded"
+  },
+  "outcomeExposure": {
+    "machineIntegrityRowsRead": true,
+    "integrityExitStatusObserved": true,
+    "integrityExitStatusWasPerformanceCorrelated": false,
+    "humanOrAgentObservedOutcomeValue": false,
+    "comparativeAnalysisReached": false,
+    "recoveryDecisionOutcomeConditioned": false
+  },
+  "limitations": "The host-wide scan is retrospective and cannot preserve ephemeral kernel state, but the frozen subprocess stream routing, direct foreground launch record, committed stderr, zero-byte stdout, absent analysis JSON, and attempt-window filesystem inventory cover every plausible persistence sink used by this launch."
+}

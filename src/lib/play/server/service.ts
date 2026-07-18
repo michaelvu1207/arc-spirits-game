@@ -5,8 +5,8 @@ import {
 	deadlineBlockingSeats,
 	refreshActiveChoiceDeadline,
 	resolvePassedDeadline,
-	buildHistorySnapshotRows,
-	buildSessionProjection
+	buildSessionProjection,
+	SEAT_MISSING_MESSAGE
 } from '../runtime';
 import { enterBenefits, enterAwakening } from '../phases';
 import { WILDCARD_MAT_IDS } from '../awakenConditions';
@@ -40,7 +40,26 @@ import {
 import { DEFAULT_BOT_PROFILE_KEY } from '../bots/contract';
 import { loadPlayCatalog } from './catalog';
 import { getSupabaseAdmin } from '$lib/server/supabaseAdmin';
-import { finalizeMatch } from './ranked';
+import {
+	commitRoomMutation,
+	CommitNotReadyError,
+	committedCmdMatches,
+	findCommittedCmd,
+	type CommitEvent
+} from './commit';
+import { computeRequiredEffects, drainEffectsOutbox, effectsOutboxEvent } from './effectsOutbox';
+import { RankedFormationAbortError } from './formationAbort';
+import { syncMemberMirrorsWith } from './memberMirrors';
+import { ensureRoomMembership } from './membership';
+import {
+	canJoinFromWire,
+	canListPublicly,
+	canViewRoom,
+	roomVisibility,
+	type RoomVisibility
+} from './roomAdmission';
+import { admitCommand, httpIntegrityToolsAllowed } from './commandPolicy';
+import { createWsTicket, sweepWsTickets, type WsTicketRole } from './wsTickets';
 
 const HISTORY_SCHEMA = 'arc_spirits_game';
 // The live 2D engine session tables live in their own schema; everything else
@@ -51,10 +70,6 @@ const PLAY_TABLES = {
 	MEMBERS: 'play_session_members',
 	EVENTS: 'play_game_session_events',
 	MESSAGES: 'play_session_messages'
-} as const;
-const HISTORY_TABLES = {
-	SNAPSHOTS: 'game_state_snapshots',
-	REPLAY_CODES: 'replay_codes'
 } as const;
 
 export type PlayMode = 'casual' | 'ranked';
@@ -68,9 +83,14 @@ export type PlaySessionRow = {
 	scenario: PublicGameState['scenario'];
 	public_state: PublicGameState | string | null;
 	mode: PlayMode;
+	/** Central admission: 'public' rooms are listable/joinable by policy; 'private'
+	 *  rooms (ranked, matchmade, rematch) never leak to outsiders. Optional only for
+	 *  rows predating the 20260710_identity_trust migration (normalized on read). */
+	visibility?: RoomVisibility | null;
 	created_at: string;
 	started_at: string | null;
 	ended_at: string | null;
+	ranked_season_id?: string | null;
 };
 
 type SessionMemberRow = {
@@ -85,6 +105,9 @@ type SessionMemberRow = {
 	joined_at: string;
 	updated_at: string;
 	last_seen_at: string;
+	/** The validated Supabase account (permanent or anonymous) that OWNS this
+	 *  membership — the sole durable human principal. Null only for bots and for
+	 *  quarantined legacy rows (see roomLifecycle 'security_upgrade'). */
 	user_id: string | null;
 	is_bot: boolean;
 	bot_profile: string | null;
@@ -128,6 +151,17 @@ function getPlayAdmin() {
 		throw kitError(500, 'Missing SUPABASE_SERVICE_ROLE_KEY on the server.');
 	}
 	return client;
+}
+
+/**
+ * Whether the manual integrity tools (see commandPolicy.INTEGRITY_TOOLS) may be
+ * admitted from external callers: NEVER in production — the shared gate in
+ * commandPolicy.ts refuses NODE_ENV=production unconditionally; no environment
+ * flag can override it. Every non-production stack (dev/e2e/bench) qualifies via
+ * NODE_ENV alone.
+ */
+function integrityToolsAllowed(): boolean {
+	return httpIntegrityToolsAllowed();
 }
 
 function getHistoryAdmin() {
@@ -241,6 +275,9 @@ async function getMembersForSession(sessionId: string): Promise<SessionMemberRow
 	return (data as SessionMemberRow[] | null) ?? [];
 }
 
+/** TRUSTED-ID lookup — for server-internal actors only (bot driving, ranked
+ *  assembly, post-mint hydration). Wire input must NEVER reach this: external
+ *  callers authenticate through {@link getMemberBySecret} exclusively. */
 async function getMemberById(memberId: string): Promise<SessionMemberRow | null> {
 	const { data, error } = await getPlayAdmin()
 		.from(PLAY_TABLES.MEMBERS)
@@ -254,10 +291,12 @@ async function getMemberById(memberId: string): Promise<SessionMemberRow | null>
 }
 
 /**
- * Resolve a session member by (session, authenticated user). Used as the fallback
- * identity for matchmade players who arrive at /play/<roomCode> with no room-member
- * cookie / member id but a valid auth session — their membership was created
- * server-side by the matchmaker, keyed only by user_id.
+ * Resolve a session member by (session, validated user) — THE authentication rule.
+ * The validated Supabase identity (permanent account or auto-created anonymous
+ * account) is the sole durable human principal: there are no room secrets, no
+ * member cookies, and the public member UUID never authorizes. Sign-out drops
+ * authority instantly because every request re-resolves from the CURRENT user.
+ * Quarantined legacy rows (user_id null) and bot rows can never resolve here.
  */
 async function getMemberBySessionAndUser(
 	sessionId: string,
@@ -268,24 +307,105 @@ async function getMemberBySessionAndUser(
 		.select('*')
 		.eq('session_id', sessionId)
 		.eq('user_id', userId)
-		.maybeSingle();
+		.eq('is_bot', false)
+		.limit(1);
 	if (error) {
 		throw kitError(500, `Failed to resolve member by user: ${error.message}`);
 	}
-	return (data as SessionMemberRow | null) ?? null;
+	const rows = (data as SessionMemberRow[] | null) ?? [];
+	return rows[0] ?? null;
 }
 
+/** Read-only membership resolution also recognizes a human seat that has crossed
+ * the ranked disconnect deadline and is now bot-controlled. The account may keep
+ * watching its private match, but all command/write resolvers continue to use
+ * getMemberBySessionAndUser (is_bot=false) and therefore cannot reclaim authority. */
+async function getViewerMemberBySessionAndUser(
+	sessionId: string,
+	userId: string
+): Promise<SessionMemberRow | null> {
+	const { data, error } = await getPlayAdmin()
+		.from(PLAY_TABLES.MEMBERS)
+		.select('*')
+		.eq('session_id', sessionId)
+		.eq('user_id', userId)
+		.limit(1);
+	if (error) throw kitError(500, `Failed to resolve room viewer: ${error.message}`);
+	return ((data as SessionMemberRow[] | null) ?? [])[0] ?? null;
+}
+
+/** Authenticate a caller within a session by their validated user identity. */
 async function resolveMemberForSession(
 	session: PlaySessionRow,
-	memberId: string | null | undefined,
-	fallbackUserId?: string | null
+	userId?: string | null
 ): Promise<SessionMemberRow | null> {
-	const rawMember = memberId ? await getMemberById(memberId) : null;
-	let member = rawMember && rawMember.session_id === session.id ? rawMember : null;
-	if (!member && fallbackUserId) {
-		member = await getMemberBySessionAndUser(session.id, fallbackUserId);
+	if (!userId) return null;
+	return getMemberBySessionAndUser(session.id, userId);
+}
+
+/**
+ * Route-edge authentication: resolve the validated account to the member it owns
+ * WITHIN a room. Returns the trusted internal identity for handing to internal
+ * helpers like botSim, or null when nothing authorizes — callers 401 on null.
+ */
+export async function authenticateRoomMember(
+	roomCode: string,
+	userId: string | null | undefined
+): Promise<{ memberId: string; role: MemberRole } | null> {
+	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	if (!session) return null;
+	const member = await resolveMemberForSession(session, userId);
+	return member ? { memberId: member.id, role: member.role } : null;
+}
+
+/**
+ * Mint a short-lived, one-use, room-scoped WebSocket join ticket for the validated
+ * caller (see wsTickets.ts). Members get a 'member' ticket bound to their exact
+ * membership; an authenticated non-member gets a 'spectator' ticket ONLY for a room
+ * they may view (private rooms answer 404 — their existence is not confirmed).
+ * A ranked member whose disconnected seat is now bot-controlled may keep watching
+ * the private match, but receives a spectator ticket with no command authority.
+ */
+export async function mintRoomWsTicket(
+	roomCode: string,
+	userId: string
+): Promise<{ ticket: string; expiresAt: string; role: WsTicketRole }> {
+	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	if (!session) throw kitError(404, 'Room not found.');
+	const member = await getViewerMemberBySessionAndUser(session.id, userId);
+	const facts = admissionFacts(session);
+	if (!member && !canViewRoom(facts, false)) {
+		throw kitError(404, 'Room not found.');
 	}
-	return member;
+	const liveMember = member && !member.is_bot ? member : null;
+	const role: WsTicketRole = liveMember ? 'member' : 'spectator';
+	// Opportunistic hygiene — dead ticket rows are swept on the mint path.
+	await sweepWsTickets(getPlayAdmin()).catch(() => {});
+	const minted = await createWsTicket(getPlayAdmin(), {
+		sessionId: session.id,
+		userId,
+		memberId: liveMember?.id ?? null,
+		role
+	});
+	return { ...minted, role };
+}
+
+/** The pure admission facts for a session row (visibility normalized). */
+function admissionFacts(session: PlaySessionRow) {
+	return {
+		mode: session.mode === 'ranked' ? ('ranked' as const) : ('casual' as const),
+		visibility: roomVisibility(session),
+		status: session.status
+	};
+}
+
+/** Stamp the truthful room metadata onto an outgoing projection (both transports
+ *  do this — clients stay honest across reloads and cannot be lied to by caches). */
+function stampRoomMeta(projection: SpectatorProjection, session: PlaySessionRow): SpectatorProjection {
+	projection.mode = session.mode === 'ranked' ? 'ranked' : 'casual';
+	projection.visibility = roomVisibility(session);
+	projection.rated = session.mode === 'ranked';
+	return projection;
 }
 
 function viewerForMember(
@@ -300,10 +420,10 @@ function viewerForMember(
 		};
 	}
 
+	// The authoritative state is the SOLE seat authority: member.seat_color is only a
+	// mirror and may lag a concurrent release/takeover — never consulted as a fallback.
 	const seatColor =
-		SEAT_COLORS.find((candidate) => state.seats[candidate].memberId === member.id) ??
-		member.seat_color ??
-		null;
+		SEAT_COLORS.find((candidate) => state.seats[candidate].memberId === member.id) ?? null;
 
 	return {
 		role: member.role,
@@ -330,92 +450,14 @@ async function updateLastSeen(memberId: string) {
 }
 
 async function syncMemberMirrors(sessionId: string, state: PublicGameState) {
-	const members = await getMembersForSession(sessionId);
-
-	// Run the per-member mirror writes CONCURRENTLY — they touch independent rows, so
-	// serializing them (the old `for await` loop) added one DB round-trip per member to
-	// every command's latency, which is painful for cross-region players. A single
-	// rejection still surfaces as a 500 below.
-	const results = await Promise.all(
-		members.map((member) => {
-			const occupiedSeat =
-				SEAT_COLORS.find((seatColor) => state.seats[seatColor].memberId === member.id) ?? null;
-			const selectedGuardian = occupiedSeat
-				? (state.seats[occupiedSeat].selectedGuardian ?? null)
-				: null;
-			const role: MemberRole =
-				member.role === 'host' ? 'host' : occupiedSeat ? 'player' : 'spectator';
-
-			// NOTE: do NOT touch last_seen_at here. It must reflect only THIS member's own
-			// activity (their /view poll in loadRoomView / their own command), so that a stale
-			// last_seen_at is a reliable "this member has disconnected" signal. Bumping it
-			// for every member on every command (the old behavior) made it useless.
-			return getPlayAdmin()
-				.from(PLAY_TABLES.MEMBERS)
-				.update({ seat_color: occupiedSeat, selected_guardian: selectedGuardian, role })
-				.eq('id', member.id);
-		})
-	);
-
-	const failed = results.find((result) => result.error);
-	if (failed?.error) {
-		throw kitError(500, `Failed to update member mirror: ${failed.error.message}`);
+	// Shared, client-injected implementation (memberMirrors.ts) — the SAME side effect
+	// now also runs on WebSocket-committed commands in the standalone room server, so
+	// a claimSeat over WS can no longer leave the member row stale for the HTTP path.
+	try {
+		await syncMemberMirrorsWith(getPlayAdmin(), sessionId, state);
+	} catch (err) {
+		throw kitError(500, err instanceof Error ? err.message : 'Failed to update member mirror.');
 	}
-}
-
-async function ensureReplayCode(gameId: string, navigationCount: number) {
-	const historyAdmin = getHistoryAdmin();
-	const existing = await historyAdmin
-		.from(HISTORY_TABLES.REPLAY_CODES)
-		.select('code')
-		.eq('game_id', gameId)
-		.eq('navigation_count', navigationCount)
-		.maybeSingle();
-
-	if (existing.error) {
-		throw kitError(500, `Failed to load replay code: ${existing.error.message}`);
-	}
-	if (existing.data?.code) {
-		return existing.data.code as string;
-	}
-
-	const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-	for (let attempt = 0; attempt < 20; attempt += 1) {
-		let code = '';
-		for (let index = 0; index < 4; index += 1) {
-			code += alphabet[Math.floor(Math.random() * alphabet.length)];
-		}
-		if (!/[A-Z]/.test(code)) continue;
-
-		const inserted = await historyAdmin.from(HISTORY_TABLES.REPLAY_CODES).insert({
-			code,
-			game_id: gameId,
-			navigation_count: navigationCount
-		});
-
-		if (!inserted.error) {
-			return code;
-		}
-	}
-
-	throw kitError(500, 'Failed to create replay code.');
-}
-
-async function writeHistorySnapshots(state: PublicGameState, timestamp: string) {
-	if (!state.gameId) return;
-
-	const rows = buildHistorySnapshotRows(state, timestamp);
-	if (rows.length === 0) return;
-
-	const { error } = await getHistoryAdmin()
-		.from(HISTORY_TABLES.SNAPSHOTS)
-		.upsert(rows, { onConflict: 'game_id,navigation_count,player_color' });
-
-	if (error) {
-		throw kitError(500, `Failed to write history snapshots: ${error.message}`);
-	}
-
-	await ensureReplayCode(state.gameId, state.round);
 }
 
 async function persistSessionUpdate(params: {
@@ -423,69 +465,91 @@ async function persistSessionUpdate(params: {
 	nextState: PublicGameState;
 	actorMemberId: string | null;
 	command: GameCommand;
+	/** Durable idempotency key for player-issued commands (see commit.ts). */
+	cmdId?: string | null;
 }) {
-	const now = new Date().toISOString();
-	const { session, nextState, actorMemberId, command } = params;
-	const updatePayload: Record<string, unknown> = {
-		status: nextState.status,
-		revision: nextState.revision,
-		game_id: nextState.gameId,
-		scenario: nextState.scenario,
-		public_state: nextState
-	};
+	const { session, nextState, actorMemberId, command, cmdId } = params;
 
-	if (session.started_at == null && nextState.status === 'active') {
-		updatePayload.started_at = now;
-	}
-	// The finished-transition fires exactly once: when we first stamp ended_at.
-	const isFinishedTransition = nextState.status === 'finished' && session.ended_at == null;
-	if (isFinishedTransition) {
-		updatePayload.ended_at = now;
-	}
+	// The shared durable commit (commit.ts): revision CAS + ledger append — the SAME
+	// protocol the WebSocket room server commits through, so there is exactly one
+	// authoritative history regardless of transport. REQUIRES the atomic
+	// commit_room_command RPC (20260710_command_ledger migration); without it the
+	// commit fails closed with a readiness error (503) rather than degrade to the
+	// non-atomic fallback, which cannot promise exactly-once.
+	const events: CommitEvent[] = [
+		{
+			commandType: command.type,
+			payload: command,
+			actorMemberId,
+			revision: nextState.revision,
+			cmdId: cmdId ?? null
+		}
+	];
+	// Required post-commit side effects (member mirrors / match finalize / round
+	// history) ride the SAME atomic commit as a durable outbox event, so a crash
+	// between the commit and the effects can never lose them — recovery drains later.
+	const outbox = effectsOutboxEvent(
+		nextState.revision,
+		computeRequiredEffects({
+			prev: asState(session),
+			next: nextState,
+			command,
+			session: {
+				id: session.id,
+				game_id: nextState.gameId,
+				mode: session.mode,
+				started_at: session.started_at,
+				ended_at: session.ended_at
+			},
+			timestamp: new Date().toISOString()
+		})
+	);
+	if (outbox) events.push(outbox);
 
-	const { data, error } = await getPlayAdmin()
-		.from(PLAY_TABLES.SESSIONS)
-		.update(updatePayload)
-		.eq('id', session.id)
-		.eq('revision', session.revision)
-		.select('*')
-		.maybeSingle();
-
-	if (error) {
-		throw kitError(500, `Failed to persist session: ${error.message}`);
+	let outcome;
+	try {
+		outcome = await commitRoomMutation(getPlayAdmin(), {
+			session: {
+				id: session.id,
+				revision: session.revision,
+				started_at: session.started_at,
+				ended_at: session.ended_at
+			},
+			nextState,
+			events
+		});
+	} catch (err) {
+		if (err instanceof CommitNotReadyError) {
+			throw kitError(503, err.message);
+		}
+		throw kitError(500, err instanceof Error ? err.message : 'Failed to persist session.');
 	}
-	if (!data) {
-		// Compare-and-set miss: another write landed between our load and update.
-		// Signal the caller to reload fresh state and re-apply the command.
+	if (outcome.outcome === 'idempotency_conflict') {
+		throw kitError(
+			409,
+			'Idempotency conflict: this cmdId was already used by a different actor or command.'
+		);
+	}
+	if (outcome.outcome !== 'committed') {
+		// CAS miss (another write landed between our load and update), or — vanishingly
+		// rare — a concurrent duplicate of the same cmdId won first. Either way the
+		// caller reloads fresh state; its per-attempt cmdId dedup then answers a
+		// duplicate with the original result instead of re-applying.
 		return null;
 	}
+	const data = outcome.row;
 
-	// The audit/replay event-log insert and the member-mirror sync touch different
-	// tables and neither feeds the projection we return, so run them CONCURRENTLY
-	// instead of back-to-back — collapsing two sequential round-trips into one.
-	const [eventInsert] = await Promise.all([
-		getPlayAdmin().from(PLAY_TABLES.EVENTS).insert({
-			session_id: session.id,
-			revision: nextState.revision,
-			actor_member_id: actorMemberId,
-			command_type: command.type,
-			command_payload: command
-		}),
-		syncMemberMirrors(session.id, nextState)
-	]);
-	if (eventInsert.error) {
-		throw kitError(500, `Failed to append room event: ${eventInsert.error.message}`);
-	}
-
-	// On the transition into `finished`, record the match result + ratings exactly
-	// once. Best-effort: finalizeMatch is idempotent and never throws, but we still
-	// guard here so a ratings failure can never break the game-state persist.
-	if (isFinishedTransition) {
-		try {
-			await finalizeMatch(data as PlaySessionRow, nextState);
-		} catch (err) {
-			console.error('[ranked] finalizeMatch threw (swallowed):', err);
-		}
+	// Attempt the owed effects now — acknowledgement follows this attempt, whose
+	// durable record (the outbox event) committed atomically with the state. An
+	// effect failure is logged and recovered by a later drain, never a lost effect
+	// and never a failed request on top of an already-committed command.
+	try {
+		await drainEffectsOutbox(getPlayAdmin(), getHistoryAdmin(), session.id, nextState);
+	} catch (err) {
+		console.error(
+			'[effects] post-commit outbox drain failed (recovered on a later drain):',
+			err instanceof Error ? err.message : err
+		);
 	}
 
 	return data as PlaySessionRow;
@@ -600,7 +664,9 @@ async function maybeEnforceDeadline(session: PlaySessionRow): Promise<PlaySessio
 		actorMemberId: null,
 		command: ENFORCE_DEADLINE_COMMAND
 	});
-	if (persisted) return persisted;
+	if (persisted) {
+		return persisted;
+	}
 	// CAS miss: another poller advanced it first — return their fresh state.
 	return (await getSessionByRoomCode(session.room_code)) ?? session;
 }
@@ -622,7 +688,12 @@ export async function enforceRoomDeadlines(roomCode: string): Promise<void> {
 /** Build the pure {@link RoomLiveness} input from a session row + its member rows. */
 function roomLivenessFrom(
 	session: Pick<PlaySessionRow, 'status' | 'created_at' | 'started_at'>,
-	members: { display_name: string | null; last_seen_at: string; is_bot?: boolean | null }[]
+	members: {
+		display_name: string | null;
+		last_seen_at: string;
+		is_bot?: boolean | null;
+		user_id?: string | null;
+	}[]
 ): RoomLiveness {
 	return {
 		status: session.status,
@@ -634,7 +705,10 @@ function roomLivenessFrom(
 				lastSeenAtMs: Date.parse(m.last_seen_at),
 				isBot: m.is_bot ?? false
 			}))
-		)
+		),
+		// Legacy human memberships with no owning account have no safe claim path under
+		// the account trust model — the room is quarantined (closed) for security upgrade.
+		hasUnownedHumans: members.some((m) => !(m.is_bot ?? false) && m.user_id == null)
 	};
 }
 
@@ -649,6 +723,12 @@ async function closeRoomSession(
 	session: PlaySessionRow,
 	reason: RoomCloseReason
 ): Promise<PlaySessionRow | null> {
+	if (reason === 'abandoned' && session.status === 'active' && session.mode === 'ranked' && session.ranked_season_id) {
+		const abandonment = await getPlayAdmin().rpc('finalize_ranked_abandonment', { p_session_id: session.id });
+		if (abandonment.error) {
+			throw kitError(503, 'Could not durably record ranked abandonment; room closure will retry.');
+		}
+	}
 	const oldRevision = session.revision;
 	// Clone before mutating: asState() may alias the row's parsed public_state, and a
 	// CAS miss would otherwise leave a half-mutated object behind for the next reader.
@@ -693,6 +773,24 @@ async function closeRoomSession(
 	return data as PlaySessionRow;
 }
 
+/** One service-role RPC owns the disconnect deadline, participation ledger,
+ * bot handoff, room revision, and system event atomically. A migration gap is an
+ * integrity failure for a live ranked match and therefore fails closed. */
+async function maybeTakeOverRankedDisconnects(session: PlaySessionRow): Promise<PlaySessionRow> {
+	if (session.status !== 'active' || session.mode !== 'ranked' || !session.ranked_season_id) {
+		return session;
+	}
+	const takeover = await getPlayAdmin().rpc('takeover_stale_ranked_members', {
+		p_session_id: session.id
+	});
+	if (takeover.error) {
+		throw kitError(503, 'Ranked disconnect integrity is unavailable; retrying is safe.');
+	}
+	const takenOver = Number((takeover.data as { takenOver?: number } | null)?.takenOver ?? 0);
+	if (takenOver === 0) return session;
+	return (await getSessionByRoomCode(session.room_code)) ?? session;
+}
+
 /**
  * Close THIS session if it is a lobby that has aged out (≥30 min, never started) or a
  * lobby/active room that has been abandoned (no human seen within the presence
@@ -703,10 +801,19 @@ async function closeRoomSession(
  */
 async function maybeCloseRoom(
 	session: PlaySessionRow,
-	members?: { display_name: string | null; last_seen_at: string; is_bot?: boolean | null }[]
+	members?: {
+		display_name: string | null;
+		last_seen_at: string;
+		is_bot?: boolean | null;
+		user_id?: string | null;
+	}[]
 ): Promise<PlaySessionRow> {
 	if (session.status !== 'lobby' && session.status !== 'active') return session;
-	const memberRows = members ?? (await getMembersForSession(session.id));
+	const priorRevision = session.revision;
+	session = await maybeTakeOverRankedDisconnects(session);
+	const memberRows = members && session.revision === priorRevision
+		? members
+		: await getMembersForSession(session.id);
 	const reason = roomCloseReason(roomLivenessFrom(session, memberRows), Date.now());
 	if (!reason) return session;
 
@@ -738,7 +845,7 @@ export async function closeAbandonedRooms(): Promise<void> {
 	const ids = rooms.map((room) => room.id);
 	const { data: memberData, error: memberError } = await admin
 		.from(PLAY_TABLES.MEMBERS)
-		.select('session_id, display_name, last_seen_at, is_bot')
+		.select('session_id, display_name, last_seen_at, is_bot, user_id')
 		.in('session_id', ids);
 	if (memberError) {
 		throw kitError(500, `Failed to sweep room members: ${memberError.message}`);
@@ -749,6 +856,7 @@ export async function closeAbandonedRooms(): Promise<void> {
 		display_name: string | null;
 		last_seen_at: string;
 		is_bot: boolean | null;
+		user_id: string | null;
 	};
 	const bySession = new Map<string, LiteMember[]>();
 	for (const row of (memberData as LiteMember[] | null) ?? []) {
@@ -757,20 +865,41 @@ export async function closeAbandonedRooms(): Promise<void> {
 		else bySession.set(row.session_id, [row]);
 	}
 
-	const now = Date.now();
 	for (const room of rooms) {
-		const reason = roomCloseReason(roomLivenessFrom(room, bySession.get(room.id) ?? []), now);
-		if (reason) await closeRoomSession(room, reason); // CAS miss ⇒ already handled; ignore
+		await maybeCloseRoom(room, bySession.get(room.id) ?? []);
 	}
 }
 
 export async function createRoom(
 	displayName: string,
-	userId?: string | null,
-	mode: PlayMode = 'casual'
+	userId: string | null | undefined,
+	mode: PlayMode = 'casual',
+	opts?: { visibility?: RoomVisibility; originOp?: string | null; rankedSeasonId?: string | null }
 ): Promise<{ roomCode: string; memberId: string }> {
+	if (!userId) {
+		// Validated identity is the sole human principal — the client creates an
+		// anonymous account first (auth.resolvePlayIdentity), so this only fires for
+		// unauthenticated raw API calls.
+		throw kitError(401, 'Sign in (a guest identity is created automatically) to create a room.');
+	}
+	const originOp = normalizeEntryOp(opts?.originOp);
+	// ENTRY-OP IDEMPOTENCY: a retry carrying the same op id (a client resolving an
+	// AMBIGUOUS COMMIT — the request may have committed while the response never
+	// arrived) resolves to the room the op already created instead of minting a
+	// second one. Owner-checked: the op's session must carry the caller's own
+	// membership (op ids are unguessable, but never trusted as authorization).
+	if (originOp) {
+		const prior = await findSessionByOriginOp(originOp);
+		if (prior) {
+			const mine = await getMemberBySessionAndUser(prior.id, userId);
+			if (!mine) throw kitError(409, 'This operation id belongs to a different account.');
+			return { roomCode: prior.room_code, memberId: mine.id };
+		}
+	}
 	const catalog = await loadPlayCatalog();
 	const normalizedName = normalizeDisplayName(displayName);
+	// Ranked/matchmade parties are private by default; casual rooms are public.
+	const visibility: RoomVisibility = opts?.visibility ?? (mode === 'ranked' ? 'private' : 'public');
 
 	let roomCode = createRoomCode();
 	for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -787,7 +916,10 @@ export async function createRoom(
 				revision: state.revision,
 				scenario: state.scenario,
 				public_state: state,
-				mode
+				mode,
+				visibility,
+				origin_op: originOp,
+				ranked_season_id: opts?.rankedSeasonId ?? null
 			})
 			.select('*')
 			.maybeSingle();
@@ -805,29 +937,368 @@ export async function createRoom(
 		}
 
 		const createdSession = data as PlaySessionRow;
-		const memberInsert = await getPlayAdmin()
-			.from(PLAY_TABLES.MEMBERS)
-			.insert({
-				session_id: createdSession.id,
-				display_name: normalizedName,
-				role: 'host',
-				private_state: {},
-				user_id: userId ?? null
-			})
-			.select('*')
-			.single();
-
-		if (memberInsert.error) {
-			throw kitError(500, `Failed to create host membership: ${memberInsert.error.message}`);
+		let membership;
+		try {
+			membership = await ensureRoomMembership(getPlayAdmin(), {
+				sessionId: createdSession.id,
+				userId,
+				displayName: normalizedName,
+				role: 'host'
+			});
+		} catch (err) {
+			// COMPENSATE: the session row landed but its host membership did not — a
+			// member-less lobby would be an orphan room nobody owns. Nothing else
+			// references the brand-new session yet, so delete it outright; if even
+			// the delete fails, the abandoned-game reaper still covers the shell
+			// (logged loudly, never silently ignored).
+			try {
+				const cleanup = await getPlayAdmin()
+					.from(PLAY_TABLES.SESSIONS)
+					.delete()
+					.eq('id', createdSession.id);
+				if (cleanup.error) throw new Error(cleanup.error.message);
+			} catch (cleanupErr) {
+				console.error(
+					'[play] failed to delete orphan session after membership failure:',
+					cleanupErr
+				);
+			}
+			throw kitError(
+				500,
+				err instanceof Error ? err.message : 'Failed to create host membership.'
+			);
 		}
 
-		return {
-			roomCode,
-			memberId: (memberInsert.data as SessionMemberRow).id
-		};
+		// TOMBSTONE RE-CHECK, strictly AFTER the commit: an abandon for this op that
+		// raced AHEAD of this (in-flight) create wins in every ordering — the
+		// abandon tombstoned first, and this re-check self-compensates the room the
+		// late commit just made. The caller was aborted client-side; the returned
+		// view is discarded there.
+		if (originOp && (await entryOpTombstoned(originOp))) {
+			await compensateEntryOp(originOp, userId);
+		}
+
+		return { roomCode, memberId: membership.memberId };
 	}
 
 	throw kitError(500, 'Failed to generate a unique room code.');
+}
+
+/**
+ * Leave a room as the validated account — the compensation half of an ABANDONED
+ * room entry (the client unmounted/cancelled while its create/solo/join round-trip
+ * was in flight and the server-side effect landed anyway). Idempotent and safe to
+ * call for rooms the caller never entered:
+ *
+ *   - No membership → no-op.
+ *   - LOBBY: a held seat is released first (the seat map must never point at a
+ *     deleted membership), then the caller's membership row is deleted — it is
+ *     seconds old and unreferenced. The delete happens ONLY after the release is
+ *     proven: the reducer's explicit "no claimed seat" rejection means the member
+ *     was already unseated (proceed), while any other release failure (transient
+ *     command/CAS/store error, a room racing out of lobby) FAILS CLOSED with seat
+ *     and membership left coherent for a retry. A lobby left with NO human member
+ *     is closed immediately instead of aging out as an orphan.
+ *   - ACTIVE: memberships are NOT deleted (a started seat must never become an
+ *     unauthorized ghost). Only when the caller is the SOLE human (the aborted
+ *     solo lane) is the room closed outright; otherwise presence rules own the
+ *     outcome.
+ *   - finished/closed: terminal — no-op.
+ */
+/** True only for the releaseSeat reducer's explicit "no claimed seat" rejection
+ *  (rethrown by runRoomCommand as an HTTP 400 whose body carries the reducer
+ *  message). Everything else — CAS exhaustion, store errors, a room that raced
+ *  out of lobby (seat_locked) — is NOT benign for leaveRoomAsUser. */
+function isSeatMissingRejection(err: unknown): boolean {
+	const body = (err as { status?: number; body?: { message?: string } })?.body;
+	return (
+		(err as { status?: number })?.status === 400 &&
+		typeof body?.message === 'string' &&
+		body.message === SEAT_MISSING_MESSAGE
+	);
+}
+
+export async function leaveRoomAsUser(
+	roomCode: string,
+	userId: string | null
+): Promise<{ left: boolean; closed: boolean }> {
+	if (!userId) {
+		throw kitError(401, 'Sign in (a guest identity is created automatically) to leave a room.');
+	}
+	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	if (!session) return { left: false, closed: false };
+	const admin = getPlayAdmin();
+	const memberRes = await admin
+		.from(PLAY_TABLES.MEMBERS)
+		.select('id')
+		.eq('session_id', session.id)
+		.eq('user_id', userId)
+		.eq('is_bot', false)
+		.limit(1);
+	if (memberRes.error) {
+		throw kitError(500, `Failed to resolve membership: ${memberRes.error.message}`);
+	}
+	const memberId = (((memberRes.data as { id: string }[] | null) ?? [])[0]?.id ?? null) as
+		| string
+		| null;
+	if (!memberId) return { left: false, closed: false };
+
+	if (session.status === 'lobby') {
+		try {
+			await runRoomCommand({
+				roomCode: session.room_code,
+				trustedMemberId: memberId,
+				expectedRevision: null,
+				command: { type: 'releaseSeat' }
+			});
+		} catch (err) {
+			// ONLY the reducer's explicit "no claimed seat" rejection is benign (the
+			// common abandoned-entry case: the member never sat down — nothing to
+			// release, already-unseated members keep leaving exactly as before).
+			// EVERYTHING else fails CLOSED: a transient command/CAS/store failure
+			// here means the seat map may still point at this membership, and
+			// deleting the row anyway would strand a GHOST SEAT (a claimed seat
+			// whose member no longer exists — unrecoverable by any later actor).
+			// Seat + membership stay coherent; the caller may simply retry.
+			if (!isSeatMissingRejection(err)) throw err;
+		}
+		const del = await admin
+			.from(PLAY_TABLES.MEMBERS)
+			.delete()
+			.eq('id', memberId)
+			.eq('is_bot', false);
+		if (del.error) throw kitError(500, `Failed to leave room: ${del.error.message}`);
+		const remaining = await admin
+			.from(PLAY_TABLES.MEMBERS)
+			.select('id', { count: 'exact', head: true })
+			.eq('session_id', session.id)
+			.eq('is_bot', false);
+		if (remaining.error) {
+			throw kitError(500, `Failed to count remaining members: ${remaining.error.message}`);
+		}
+		if ((remaining.count ?? 0) === 0) {
+			const fresh = await getSessionByRoomCode(session.room_code);
+			if (fresh && fresh.status === 'lobby') await closeRoomSession(fresh, 'abandoned');
+			return { left: true, closed: true };
+		}
+		return { left: true, closed: false };
+	}
+
+	if (session.status === 'active') {
+		const humans = await admin
+			.from(PLAY_TABLES.MEMBERS)
+			.select('id', { count: 'exact', head: true })
+			.eq('session_id', session.id)
+			.eq('is_bot', false);
+		if (humans.error) {
+			throw kitError(500, `Failed to count human members: ${humans.error.message}`);
+		}
+		if ((humans.count ?? 0) === 1) {
+			await closeRoomSession(session, 'abandoned');
+			return { left: true, closed: true };
+		}
+		return { left: false, closed: false };
+	}
+
+	return { left: false, closed: false };
+}
+
+// ── Entry-op abort compensation (create / solo / join) ─────────────────────────
+// See supabase/migrations/20260712_entry_op_compensation.sql. The client mints an
+// unguessable op id BEFORE sending a create/solo/join, so an ABORTED request can
+// be compensated even when its response never arrived (ambiguous commit): the
+// abandon path tombstones the op, then resolves exactly what the op created —
+// the session stamped with origin_op, or the membership stamped with it — and
+// leaves/closes precisely that. The create/join paths re-check the tombstone
+// AFTER committing, so an abandon racing AHEAD of the in-flight request still
+// wins. A pre-existing membership never carries the op's stamp and can never be
+// resolved (or removed) through it.
+
+const ENTRY_OP_CANCELLATIONS = 'play_entry_op_cancellations';
+const ENTRY_OP_PATTERN = /^peo_[A-Za-z0-9_-]{43}$/;
+
+/** Validate a client-supplied entry-op id; anything malformed is ignored (the
+ *  legacy no-op-id behavior applies). Never trusted as authorization. */
+export function normalizeEntryOp(value: unknown): string | null {
+	return typeof value === 'string' && ENTRY_OP_PATTERN.test(value) ? value : null;
+}
+
+function isMissingRelation(error: { code?: string; message?: string }): boolean {
+	return (
+		error.code === '42P01' ||
+		/relation .* does not exist|could not find the table/i.test(error.message ?? '')
+	);
+}
+
+/** The session a create/solo entry-op already created, if any (idempotent-replay
+ *  resolution for an ambiguous commit). Missing-column = migration lag: behave
+ *  as if the op never committed (the pre-contract posture). */
+async function findSessionByOriginOp(opId: string): Promise<PlaySessionRow | null> {
+	const res = await getPlayAdmin()
+		.from(PLAY_TABLES.SESSIONS)
+		.select('*')
+		.eq('origin_op', opId)
+		.maybeSingle();
+	if (res.error) {
+		if (isMissingColumn(res.error)) return null;
+		throw kitError(500, `Entry-op session lookup failed: ${res.error.message}`);
+	}
+	return (res.data as PlaySessionRow | null) ?? null;
+}
+
+/** Whether an entry-op has been abandoned. Store errors THROW (a silently-missed
+ *  tombstone would resurrect an abandoned op's room); a store that predates the
+ *  tombstone table keeps the pre-contract behavior, loudly logged. */
+async function entryOpTombstoned(opId: string): Promise<boolean> {
+	const res = await getPlayAdmin()
+		.from(ENTRY_OP_CANCELLATIONS)
+		.select('op_id')
+		.eq('op_id', opId)
+		.maybeSingle();
+	if (res.error) {
+		if (isMissingRelation(res.error)) {
+			console.error(
+				'[play] play_entry_op_cancellations missing (apply 20260712_entry_op_compensation.sql); ' +
+					'entry-op abort compensation disabled until then.'
+			);
+			return false;
+		}
+		throw kitError(500, `Entry-op lookup failed: ${res.error.message}`);
+	}
+	return res.data != null;
+}
+
+/**
+ * Abandon an entry operation: the authenticated owner's aborted create/solo/join
+ * must be resolvable WITHOUT its response. Tombstones the op id FIRST (so an
+ * enqueue still in flight self-compensates on its post-commit re-check, whatever
+ * the arrival order), then compensates whatever the op already created.
+ * Idempotent; safe to call for ops that never committed anything.
+ */
+export async function abandonEntryOp(
+	opId: string,
+	userId: string | null
+): Promise<{ compensated: 'none' | 'room' | 'membership' }> {
+	if (!userId) {
+		throw kitError(401, 'Sign in (a guest identity is created automatically) first.');
+	}
+	const normalized = normalizeEntryOp(opId);
+	if (!normalized) return { compensated: 'none' };
+
+	const admin = getPlayAdmin();
+	const tombstone = await admin
+		.from(ENTRY_OP_CANCELLATIONS)
+		.upsert(
+			{ op_id: normalized, user_id: userId, cancelled_at: new Date().toISOString() },
+			{ onConflict: 'op_id' }
+		);
+	if (tombstone.error) {
+		if (isMissingRelation(tombstone.error)) {
+			console.error(
+				'[play] play_entry_op_cancellations missing (apply 20260712_entry_op_compensation.sql); ' +
+					'abandoning without a tombstone.'
+			);
+		} else {
+			// FAIL-CLOSED: without the tombstone a still-in-flight request could land
+			// AFTER this abandon and never be compensated — make the caller retry.
+			throw kitError(500, `Failed to abandon operation: ${tombstone.error.message}`);
+		}
+	}
+
+	return compensateEntryOp(normalized, userId);
+}
+
+/** Resolve + unwind what an entry-op created (shared by abandonEntryOp and the
+ *  post-commit tombstone re-checks in createRoom/joinRoom). */
+async function compensateEntryOp(
+	opId: string,
+	userId: string
+): Promise<{ compensated: 'none' | 'room' | 'membership' }> {
+	const admin = getPlayAdmin();
+
+	// A SESSION this op created (create / solo): leave it as the owner —
+	// lobby: seat released + membership deleted + close-if-empty; active solo:
+	// sole-human close. Ownership is enforced naturally: leaveRoomAsUser acts on
+	// the CALLER's own membership only.
+	const sess = await admin
+		.from(PLAY_TABLES.SESSIONS)
+		.select('room_code')
+		.eq('origin_op', opId)
+		.maybeSingle();
+	if (sess.error && !isMissingColumn(sess.error)) {
+		throw kitError(500, `Entry-op session lookup failed: ${sess.error.message}`);
+	}
+	const roomCode = (sess.data as { room_code?: string } | null)?.room_code;
+	if (roomCode) {
+		await leaveRoomAsUser(roomCode, userId);
+		return { compensated: 'room' };
+	}
+
+	// A MEMBERSHIP this op created (join). Only a row stamped with exactly this op
+	// AND owned by the caller can match — a pre-existing membership is untouchable.
+	const mem = await admin
+		.from(PLAY_TABLES.MEMBERS)
+		.select('id, session_id')
+		.eq('origin_op', opId)
+		.eq('user_id', userId)
+		.eq('is_bot', false)
+		.maybeSingle();
+	if (mem.error && !isMissingColumn(mem.error)) {
+		throw kitError(500, `Entry-op membership lookup failed: ${mem.error.message}`);
+	}
+	const memberRow = mem.data as { id: string; session_id: string } | null;
+	if (!memberRow) return { compensated: 'none' };
+
+	const sessionRes = await admin
+		.from(PLAY_TABLES.SESSIONS)
+		.select('*')
+		.eq('id', memberRow.session_id)
+		.maybeSingle();
+	if (sessionRes.error) {
+		throw kitError(500, `Entry-op session load failed: ${sessionRes.error.message}`);
+	}
+	const session = sessionRes.data as PlaySessionRow | null;
+	if (!session) return { compensated: 'none' };
+
+	if (session.status === 'lobby') {
+		// The normal leave path: seat released (fail-closed), membership deleted,
+		// lobby closed when the last human departs.
+		await leaveRoomAsUser(session.room_code, userId);
+		return { compensated: 'membership' };
+	}
+
+	if (session.status === 'active') {
+		// A join aborted into an ACTIVE room: the op-created membership is a fresh,
+		// UNSEATED row (seats lock at start) — delete exactly it, even when other
+		// humans remain. A seat somehow held in game state keeps the membership
+		// (deleting it would ghost the seat); the standard leave rules own that.
+		const state = asState(session);
+		const holdsSeat = Object.values(state.seats ?? {}).some(
+			(seat) => seat?.memberId === memberRow.id
+		);
+		if (!holdsSeat) {
+			const del = await admin
+				.from(PLAY_TABLES.MEMBERS)
+				.delete()
+				.eq('id', memberRow.id)
+				.eq('is_bot', false);
+			if (del.error) {
+				throw kitError(500, `Entry-op membership delete failed: ${del.error.message}`);
+			}
+			return { compensated: 'membership' };
+		}
+		await leaveRoomAsUser(session.room_code, userId);
+		return { compensated: 'membership' };
+	}
+
+	return { compensated: 'none' };
+}
+
+/** PostgREST "column does not exist" (migration-lag posture for origin_op). */
+function isMissingColumn(error: { code?: string; message?: string }): boolean {
+	return (
+		error.code === '42703' || /column .* does not exist|could not find/i.test(error.message ?? '')
+	);
 }
 
 /** A ranked-match participant the matchmaker pairs into a session. */
@@ -841,16 +1312,26 @@ export interface RankedPlayer {
 }
 
 /**
- * Create a STARTED ranked game for an already-paired group. Reuses the normal
- * lobby primitives: the first player hosts a ranked room (createRoom mode:'ranked'),
- * the rest join + claim distinct seats + pick distinct guardians, then the host
- * starts the game. Returns the room code and a memberId-by-userId map so the
- * matchmaker can stamp each queue row's claimed_session_id.
+ * Create a STARTED matchmade game for an already-paired group. Reuses the normal
+ * lobby primitives: the first player hosts a PRIVATE room, the rest join + claim
+ * distinct seats + pick distinct guardians, then the host starts the game. Returns
+ * the room code and a memberId-by-userId map so the matchmaker can stamp each queue
+ * row's claimed_session_id.
  *
- * Throws on failure so the caller can roll the queue rows back to 'queued'.
+ * `mode` is decided by the matchmaker: 'ranked' ONLY when every human in the party
+ * has a permanent verified identity — an anonymous guest is never represented as a
+ * verified ranked identity, so a party containing one plays a casual, unrated
+ * matchmade game instead. Either way the room is private (never browsable).
+ *
+ * Throws on failure. Once a session row exists, every failure is rethrown as a
+ * {@link RankedFormationAbortError} telling the caller whether the partial room
+ * was VERIFIED closed — only then may the claimed queue rows re-enter the pool
+ * (an unconfirmed close must hold them out until recovery closes it for real).
  */
 export async function createRankedSession(
-	players: RankedPlayer[]
+	players: RankedPlayer[],
+	mode: PlayMode = 'ranked',
+	rankedSeasonId: string | null = null
 ): Promise<{ roomCode: string; sessionId: string; memberIdByUserId: Record<string, string> }> {
 	if (players.length < 2) {
 		throw kitError(400, 'A ranked session needs at least two players.');
@@ -872,8 +1353,10 @@ export async function createRankedSession(
 
 	const [host] = orderedPlayers;
 
-	// 1) First player (a human) hosts a ranked room.
-	const created = await createRoom(host.displayName, host.userId, 'ranked');
+	// 1) First player (a human) hosts the private matchmade room.
+	const created = await createRoom(host.displayName, host.userId, mode, {
+		visibility: 'private', rankedSeasonId: mode === 'ranked' ? rankedSeasonId : null
+	});
 	const roomCode = created.roomCode;
 	const memberIdByUserId: Record<string, string> = { [host.userId]: created.memberId };
 
@@ -881,57 +1364,107 @@ export async function createRankedSession(
 	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
 	if (!session) throw kitError(500, 'Ranked room vanished immediately after creation.');
 
-	// 2) Seat everyone at a distinct seat with a distinct guardian.
-	for (let i = 0; i < orderedPlayers.length; i += 1) {
-		const seat = SEAT_COLORS[i];
-		const player = orderedPlayers[i];
-		const memberId =
-			i === 0
-				? created.memberId
-				: (
-						await joinRoom(
-							roomCode,
-							player.displayName,
-							player.userId,
-							player.isBot
-								? { isBot: true, botProfile: player.botProfile ?? DEFAULT_BOT_PROFILE_KEY }
-								: undefined
-						)
-					).memberId;
-		if (i !== 0) memberIdByUserId[player.userId] = memberId;
+	try {
+		// 2) Seat everyone at a distinct seat with a distinct guardian.
+		for (let i = 0; i < orderedPlayers.length; i += 1) {
+			const seat = SEAT_COLORS[i];
+			const player = orderedPlayers[i];
+			const memberId =
+				i === 0
+					? created.memberId
+					: (
+							await joinRoom(
+								roomCode,
+								player.displayName,
+								player.userId,
+								player.isBot
+									? {
+											isBot: true,
+											botProfile: player.botProfile ?? DEFAULT_BOT_PROFILE_KEY,
+											admission: 'internal'
+										}
+									: { admission: 'internal' }
+							)
+						).memberId;
+			if (i !== 0) memberIdByUserId[player.userId] = memberId;
 
-		await runRoomCommand({
-			roomCode,
-			memberId,
-			expectedRevision: null,
-			command: { type: 'claimSeat', seatColor: seat }
-		});
-
-		// Distinct, unused guardian from the live pool.
-		const state = await loadRawRoomState(roomCode);
-		const used = new Set(
-			SEAT_COLORS.map((s) => state.seats[s]?.selectedGuardian).filter((g): g is string => g != null)
-		);
-		const guardian = state.guardianPool.find((name) => !used.has(name));
-		if (guardian) {
 			await runRoomCommand({
 				roomCode,
-				memberId,
+				trustedMemberId: memberId,
 				expectedRevision: null,
-				command: { type: 'selectGuardian', guardianName: guardian }
+				command: { type: 'claimSeat', seatColor: seat }
 			});
+
+			// Distinct, unused guardian from the live pool.
+			const state = await loadRawRoomState(roomCode);
+			const used = new Set(
+				SEAT_COLORS.map((s) => state.seats[s]?.selectedGuardian).filter(
+					(g): g is string => g != null
+				)
+			);
+			const guardian = state.guardianPool.find((name) => !used.has(name));
+			if (guardian) {
+				await runRoomCommand({
+					roomCode,
+					trustedMemberId: memberId,
+					expectedRevision: null,
+					command: { type: 'selectGuardian', guardianName: guardian }
+				});
+			}
 		}
+
+		// 3) Host starts the game now that the lobby is full.
+		await runRoomCommand({
+			roomCode,
+			trustedMemberId: created.memberId,
+			expectedRevision: null,
+			command: { type: 'startGame' }
+		});
+
+		return { roomCode, sessionId: session.id, memberIdByUserId };
+	} catch (err) {
+		// ATOMIC ABORT: a failed formation must not leave a half-seated/half-started
+		// room OPEN — releasing the claimed queue rows while the shell lives would
+		// let these players re-match while still holding live memberships in it
+		// (duplicate membership across sessions). Close the just-created session
+		// under the revision CAS, VERIFYING that a row actually changed (a zero-row
+		// CAS outcome is a lost race, not success — reload and retry; an
+		// already-closed reload counts as done). Member rows remain as historical
+		// rows of a CLOSED private room (never listed, never joinable, ledger
+		// references intact). The caller learns EXACTLY where the abort stands via
+		// RankedFormationAbortError: `closed` true means the shell is durably gone
+		// and the queue claim may re-enter the pool; false means it must NOT be
+		// released until a later recovery confirms the close.
+		let closed = false;
+		try {
+			for (let attempt = 0; attempt < 3 && !closed; attempt++) {
+				const current = await getPlayAdmin()
+					.from(PLAY_TABLES.SESSIONS)
+					.select('*')
+					.eq('id', session.id)
+					.maybeSingle();
+				if (current.error) throw new Error(current.error.message);
+				const row = current.data as PlaySessionRow | null;
+				if (!row || row.status === 'closed') {
+					closed = true;
+					break;
+				}
+				// closeRoomSession CAS-closes and returns null on a lost race — loop
+				// reloads the advanced revision and tries again.
+				if ((await closeRoomSession(row, 'abandoned')) != null) closed = true;
+			}
+		} catch (abortErr) {
+			console.error('[play] failed to close aborted formation room', session.id, abortErr);
+		}
+		if (!closed) {
+			console.error(
+				'[play] aborted formation room could NOT be confirmed closed',
+				session.id,
+				'- claim must be held out of the pool until recovery closes it'
+			);
+		}
+		throw new RankedFormationAbortError(session.id, closed, err);
 	}
-
-	// 3) Host starts the game now that the lobby is full.
-	await runRoomCommand({
-		roomCode,
-		memberId: created.memberId,
-		expectedRevision: null,
-		command: { type: 'startGame' }
-	});
-
-	return { roomCode, sessionId: session.id, memberIdByUserId };
 }
 
 // ── Debug spawn (dev-only) ────────────────────────────────────────────────────
@@ -1068,8 +1601,12 @@ function satisfyAwakenCondition(
 export async function createDebugRoom(
 	displayName: string,
 	className: string,
-	spiritId?: string
+	spiritId?: string,
+	userId?: string | null
 ): Promise<{ roomCode: string; memberId: string }> {
+	if (!userId) {
+		throw kitError(401, 'Sign in (a guest identity is created automatically) to spawn a debug room.');
+	}
 	const catalog = await loadPlayCatalog();
 	const normalizedName = normalizeDisplayName(displayName || 'Debug Player');
 	const guardianName = catalog.guardians[0]?.name;
@@ -1119,20 +1656,19 @@ export async function createDebugRoom(
 	}
 	if (sessionId === null) throw kitError(500, 'Failed to generate a unique debug room code.');
 
-	const memberInsert = await getPlayAdmin()
-		.from(PLAY_TABLES.MEMBERS)
-		.insert({
-			session_id: sessionId,
-			display_name: normalizedName,
-			role: 'host',
-			private_state: {}
-		})
-		.select('*')
-		.single();
-	if (memberInsert.error) {
-		throw kitError(500, `Failed to create debug host: ${memberInsert.error.message}`);
+	let memberId: string;
+	try {
+		memberId = (
+			await ensureRoomMembership(getPlayAdmin(), {
+				sessionId,
+				userId,
+				displayName: normalizedName,
+				role: 'host'
+			})
+		).memberId;
+	} catch (err) {
+		throw kitError(500, err instanceof Error ? err.message : 'Failed to create debug host.');
 	}
-	const memberId = (memberInsert.data as SessionMemberRow).id;
 
 	// 2. Drive the lobby → active transition through the real reducer.
 	let state = createLobbyState({ roomCode, guardianNames: catalog.guardians.map((g) => g.name) });
@@ -1222,8 +1758,31 @@ export async function joinRoom(
 	roomCode: string,
 	displayName: string,
 	userId?: string | null,
-	opts?: { isBot?: boolean; botProfile?: string | null }
-): Promise<{ memberId: string }> {
+	opts?: {
+		isBot?: boolean;
+		botProfile?: string | null;
+		/**
+		 * 'wire' (default): an external caller — the central admission policy applies
+		 * (validated identity required; private/ranked rooms admit ONLY someone who is
+		 * already a member, idempotently). 'internal': server-side assembly (matchmaker
+		 * seating, bot fill, rematch convergence) that already made its own decision.
+		 */
+		admission?: 'wire' | 'internal';
+		/** Client-minted ENTRY-OP id (abort-compensation contract): stamped on the
+		 *  membership ONLY when this join CREATES it, so an abandoned op resolves
+		 *  exactly the row it added — never a pre-existing membership. */
+		originOp?: string | null;
+	}
+): Promise<{ memberId: string; created: boolean }> {
+	const isBot = opts?.isBot ?? false;
+	const admission = opts?.admission ?? 'wire';
+	if (admission === 'wire' && isBot) {
+		throw kitError(403, 'Bots are server-managed and cannot join over the wire.');
+	}
+	if (!isBot && !userId) {
+		throw kitError(401, 'Sign in (a guest identity is created automatically) to join a room.');
+	}
+
 	let session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
 	if (!session) {
 		throw kitError(404, 'Room not found.');
@@ -1231,39 +1790,61 @@ export async function joinRoom(
 	// Close the room first if it's already due (expired/abandoned), so a stale row
 	// can't accept a joiner a beat before it would have been reaped.
 	session = await maybeCloseRoom(session);
+
+	const facts = admissionFacts(session);
+	// Idempotent recovery: the caller's existing membership always resolves, even in
+	// a private/finished room — a repeat join can never fail them out of their game.
+	const existing = !isBot && userId ? await getMemberBySessionAndUser(session.id, userId) : null;
+	if (existing) {
+		return { memberId: existing.id, created: false };
+	}
+
+	if (admission === 'wire' && !canJoinFromWire(facts, false)) {
+		// A hidden room's existence is never confirmed to outsiders.
+		if (facts.visibility === 'private') throw kitError(404, 'Room not found.');
+		throw kitError(410, 'This room is no longer open to join.');
+	}
 	if (session.status === 'closed' || session.status === 'finished') {
 		throw kitError(410, 'This room is no longer open to join.');
 	}
 
-	const insert = await getPlayAdmin()
-		.from(PLAY_TABLES.MEMBERS)
-		.insert({
-			session_id: session.id,
-			display_name: normalizeDisplayName(displayName),
+	const originOp = normalizeEntryOp(opts?.originOp);
+	let membership;
+	try {
+		membership = await ensureRoomMembership(getPlayAdmin(), {
+			sessionId: session.id,
+			userId: userId ?? null,
+			displayName: normalizeDisplayName(displayName),
 			role: 'spectator',
-			private_state: {},
-			user_id: userId ?? null,
-			is_bot: opts?.isBot ?? false,
-			bot_profile: opts?.botProfile ?? null
-		})
-		.select('*')
-		.single();
-
-	if (insert.error) {
-		throw kitError(500, `Failed to join room: ${insert.error.message}`);
+			isBot,
+			botProfile: opts?.botProfile ?? null,
+			originOp
+		});
+	} catch (err) {
+		throw kitError(500, err instanceof Error ? err.message : 'Failed to join room.');
 	}
-	const memberId = (insert.data as SessionMemberRow).id;
 
 	// TOCTOU guard: another request may have closed the room between the status check
 	// and this insert. If it went terminal, roll back the orphaned membership so a
 	// closed room never carries a live member (the "open only while present" invariant).
-	const fresh = await getSessionByRoomCode(session.room_code);
-	if (fresh && (fresh.status === 'closed' || fresh.status === 'finished')) {
-		await getPlayAdmin().from(PLAY_TABLES.MEMBERS).delete().eq('id', memberId);
-		throw kitError(410, 'This room is no longer open to join.');
+	if (membership.created) {
+		const fresh = await getSessionByRoomCode(session.room_code);
+		if (fresh && (fresh.status === 'closed' || fresh.status === 'finished')) {
+			await getPlayAdmin().from(PLAY_TABLES.MEMBERS).delete().eq('id', membership.memberId);
+			throw kitError(410, 'This room is no longer open to join.');
+		}
 	}
 
-	return { memberId };
+	// TOMBSTONE RE-CHECK, strictly AFTER the commit (created memberships only): an
+	// abandon for this op that raced AHEAD of this in-flight join wins in every
+	// ordering — it tombstoned first, so the late commit self-compensates exactly
+	// the membership it just added (a reused pre-existing membership carries a
+	// different/no stamp and is untouchable through this op).
+	if (membership.created && originOp && userId && (await entryOpTombstoned(originOp))) {
+		await compensateEntryOp(originOp, userId);
+	}
+
+	return { memberId: membership.memberId, created: membership.created };
 }
 
 function scenarioDisplayName(scenario: PublicGameState['scenario']): string | null {
@@ -1292,9 +1873,11 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 	await closeAbandonedRooms();
 
 	const admin = getPlayAdmin();
+	// `select('*')` keeps this readable on pre-migration rows (no `visibility` column
+	// yet); visibility is normalized in code either way.
 	const { data, error } = await admin
 		.from(PLAY_TABLES.SESSIONS)
-		.select('id, room_code, status, public_state, scenario, created_at, started_at')
+		.select('*')
 		.in('status', ['lobby', 'active'])
 		.order('created_at', { ascending: false })
 		.limit(60);
@@ -1303,18 +1886,18 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 		throw kitError(500, `Failed to list rooms: ${error.message}`);
 	}
 
-	type ListRow = Pick<
-		PlaySessionRow,
-		'id' | 'room_code' | 'status' | 'public_state' | 'scenario' | 'created_at' | 'started_at'
-	>;
-	const rows = (data as ListRow[] | null) ?? [];
+	// Central admission: ONLY public casual rooms are browsable. Ranked, matchmade
+	// and rematch rooms are private and never leak through the public list.
+	const rows = ((data as PlaySessionRow[] | null) ?? []).filter((row) =>
+		canListPublicly(admissionFacts(row))
+	);
 	if (rows.length === 0) return [];
 
 	// One batched query resolves both the host name and lobby presence (avoids N+1).
 	const sessionIds = rows.map((r) => r.id);
 	const { data: memberRows, error: memberError } = await admin
 		.from(PLAY_TABLES.MEMBERS)
-		.select('session_id, display_name, role, last_seen_at, is_bot')
+		.select('session_id, display_name, role, last_seen_at, is_bot, user_id')
 		.in('session_id', sessionIds);
 
 	if (memberError) {
@@ -1327,6 +1910,7 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 		role: MemberRole;
 		last_seen_at: string;
 		is_bot: boolean | null;
+		user_id: string | null;
 	};
 	const hostBySession = new Map<string, string>();
 	const membersBySession = new Map<string, LiteMember[]>();
@@ -1350,9 +1934,13 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 			const state = parseJsonValue<PublicGameState | null>(row.public_state, null);
 			const seats = state ? Object.values(state.seats) : [];
 			const occupiedSeats = seats.filter((seat) => seat.memberId != null).length;
+			const facts = admissionFacts(row);
 			return {
 				roomCode: row.room_code,
 				status: row.status,
+				mode: facts.mode,
+				visibility: facts.visibility,
+				rated: facts.mode === 'ranked',
 				hostName: hostBySession.get(row.id) ?? 'Anonymous',
 				occupiedSeats,
 				totalSeats: seats.length,
@@ -1364,11 +1952,20 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 		});
 }
 
-export async function loadRoomView(
-	roomCode: string,
-	memberId: string | null | undefined,
-	fallbackUserId?: string | null
-): Promise<RoomView> {
+/**
+ * Viewer identity for a view/command entry point. Exactly one of the two id paths:
+ *  - `userId` — the VALIDATED Supabase account from the wire (session cookie or
+ *    Bearer token, verified by safeGetSession). The sole external principal.
+ *  - `trustedMemberId` — a server-internal actor id (bot driving, post-mint
+ *    hydration). MUST NOT be fed from request input: public member ids are
+ *    non-authorizing by contract.
+ */
+export interface RoomViewer {
+	userId?: string | null;
+	trustedMemberId?: string | null;
+}
+
+export async function loadRoomView(roomCode: string, viewer: RoomViewer = {}): Promise<RoomView> {
 	let session = await getSessionByRoomCode(roomCode);
 	if (!session) {
 		throw kitError(404, 'Room not found.');
@@ -1378,18 +1975,24 @@ export async function loadRoomView(
 	// poll (and the page-load path) advances a phase that has run past its deadline,
 	// so a silent/disconnected seat can't stall the game. Cheap no-op when not due.
 	session = await maybeEnforceDeadline(session);
+	session = await maybeTakeOverRankedDisconnects(session);
 
-	const rawMember = memberId ? await getMemberById(memberId) : null;
-	let member = rawMember && rawMember.session_id === session.id ? rawMember : null;
-	// Fallback: a matchmade (or just-authenticated) player may arrive with no
-	// member cookie/id but a valid auth session — resolve their membership by user_id.
-	if (!member && fallbackUserId) {
-		member = await getMemberBySessionAndUser(session.id, fallbackUserId);
+	const rawMember = viewer.trustedMemberId
+		? await getMemberById(viewer.trustedMemberId)
+		: viewer.userId
+			? await getViewerMemberBySessionAndUser(session.id, viewer.userId)
+			: null;
+	const member = rawMember && rawMember.session_id === session.id ? rawMember : null;
+
+	// Central admission: a private room (ranked/matchmade/rematch) exists only for
+	// its members — outsiders get 404 through view/spectate exactly like browse/join.
+	if (!canViewRoom(admissionFacts(session), member != null)) {
+		throw kitError(404, 'Room not found.');
 	}
 	// Stamp THIS member's liveness BEFORE the room-close check, so an actively
 	// polling member always counts as present — an `abandoned` close can never fire
 	// out from under someone who is here. (An `expired` lobby still closes regardless.)
-	if (member) {
+	if (member && !member.is_bot) {
 		await updateLastSeen(member.id);
 	}
 
@@ -1400,9 +2003,15 @@ export async function loadRoomView(
 	session = await maybeCloseRoom(session);
 
 	const state = asState(session);
-	const projection = await attachBotSeatFlags(
-		session.id,
-		buildSessionProjection(state, viewerForMember(state, member))
+	const viewerContext = member?.is_bot && viewer.userId
+		? { role: 'spectator' as const, seatColor: null, displayName: member.display_name }
+		: viewerForMember(state, member);
+	const projection = stampRoomMeta(
+		await attachBotSeatFlags(
+			session.id,
+			buildSessionProjection(state, viewerContext)
+		),
+		session
 	);
 	return {
 		projection,
@@ -1546,8 +2155,7 @@ async function listRoomChatMessagesFromEvents(
 
 export async function listRoomChatMessages(params: {
 	roomCode: string;
-	memberId?: string | null;
-	fallbackUserId?: string | null;
+	userId?: string | null;
 	after?: string | null;
 	limit?: number | null;
 }): Promise<RoomChatMessage[]> {
@@ -1556,8 +2164,14 @@ export async function listRoomChatMessages(params: {
 		throw kitError(404, 'Room not found.');
 	}
 
-	const member = await resolveMemberForSession(session, params.memberId, params.fallbackUserId);
-	if (member) {
+	const member = params.userId
+		? await getViewerMemberBySessionAndUser(session.id, params.userId)
+		: null;
+	// Private rooms don't leak through chat either — members only.
+	if (!canViewRoom(admissionFacts(session), member != null)) {
+		throw kitError(404, 'Room not found.');
+	}
+	if (member && !member.is_bot) {
 		void updateLastSeen(member.id).catch(() => {});
 	}
 
@@ -1614,8 +2228,7 @@ export async function listRoomChatMessages(params: {
 
 export async function createRoomChatMessage(params: {
 	roomCode: string;
-	memberId?: string | null;
-	fallbackUserId?: string | null;
+	userId?: string | null;
 	body: unknown;
 }): Promise<RoomChatMessage> {
 	let session = await getSessionByRoomCode(params.roomCode);
@@ -1627,17 +2240,17 @@ export async function createRoomChatMessage(params: {
 		throw kitError(410, 'This room has closed.');
 	}
 
-	const member = await resolveMemberForSession(session, params.memberId, params.fallbackUserId);
+	const member = await resolveMemberForSession(session, params.userId);
 	if (!member) {
+		// A private room never confirms its existence to outsiders.
+		if (!canViewRoom(admissionFacts(session), false)) throw kitError(404, 'Room not found.');
 		throw kitError(401, 'Join this room before sending chat messages.');
 	}
 
 	const body = normalizeChatBody(params.body);
 	const state = asState(session);
 	const seatColor =
-		SEAT_COLORS.find((seat) => state.seats[seat].memberId === member.id) ??
-		member.seat_color ??
-		null;
+		SEAT_COLORS.find((seat) => state.seats[seat].memberId === member.id) ?? null;
 	const authorRole: MemberRole = member.role === 'host' ? 'host' : seatColor ? 'player' : 'spectator';
 
 	const { data, error } = await getPlayAdmin()
@@ -1707,19 +2320,34 @@ export async function loadRawRoomState(roomCode: string): Promise<PublicGameStat
 
 export async function runRoomCommand(params: {
 	roomCode: string;
-	memberId: string | null;
+	/** VALIDATED Supabase user from the wire (session cookie / Bearer). The command
+	 *  admission policy applies to this path — it is the external boundary. */
+	userId?: string | null;
+	/** Server-internal trusted actor (bot driving, ranked assembly, solo seeding).
+	 *  NEVER pass request-derived values here — public ids do not authorize. */
+	trustedMemberId?: string | null;
 	expectedRevision: number | null;
 	command: GameCommand;
-	fallbackUserId?: string | null;
+	/**
+	 * Client-generated idempotency key for this LOGICAL action. A retry carrying the
+	 * same cmdId after a lost response — including a WebSocket→HTTP fallback retry —
+	 * is answered from the durable command ledger with the original result instead of
+	 * a second application. Optional: legacy clients without one behave as before.
+	 */
+	cmdId?: string | null;
 }): Promise<RoomView> {
 	const roomCode = normalizeRoomCode(params.roomCode);
-	let member = params.memberId ? await getMemberById(params.memberId) : null;
-	// Fallback: resolve a matchmade/authenticated player by user_id within this room
-	// when they have no member cookie/id (or it didn't resolve to a member).
-	if (!member && params.fallbackUserId) {
+	// Wire callers (userId) pass through the deny-by-default admission policy below;
+	// trusted internal actors (bot driver, matchmaker assembly, solo seeding) do not.
+	const isWire = !params.trustedMemberId;
+	let member: SessionMemberRow | null = null;
+	if (params.trustedMemberId) {
+		member = await getMemberById(params.trustedMemberId);
+	} else if (params.userId) {
 		const session = await getSessionByRoomCode(roomCode);
 		if (session) {
-			member = await getMemberBySessionAndUser(session.id, params.fallbackUserId);
+			const current = await maybeTakeOverRankedDisconnects(session);
+			member = await getMemberBySessionAndUser(current.id, params.userId);
 		}
 	}
 	if (!member) {
@@ -1762,8 +2390,71 @@ export async function runRoomCommand(params: {
 			throw kitError(410, 'This lobby has closed.');
 		}
 
+		// Durable exactly-once boundary: if this cmdId already committed (a retry after
+		// a lost ack — same transport or a WS→HTTP fallback), answer with the CURRENT
+		// authoritative view instead of applying the command a second time. Checked on
+		// every attempt so a CAS-miss retry re-reads the ledger the winner just wrote.
+		// IDENTITY-BOUND: only an honest retry (same actor + command type + payload as
+		// the committed original) is a duplicate; a re-used cmdId with a different
+		// identity is a stable 409 idempotency conflict, never a silent substitution.
+		if (params.cmdId) {
+			const committed = await findCommittedCmd(getPlayAdmin(), session.id, params.cmdId).catch(
+				(err: unknown) => {
+					throw kitError(500, err instanceof Error ? err.message : 'Command lookup failed.');
+				}
+			);
+			if (committed) {
+				if (
+					!committedCmdMatches(committed, {
+						commandType: params.command.type,
+						payload: params.command,
+						actorMemberId: member.id,
+						revision: committed.revision,
+						cmdId: params.cmdId
+					})
+				) {
+					throw kitError(
+						409,
+						'Idempotency conflict: this cmdId was already used by a different actor or command.'
+					);
+				}
+				// Recovery drain: the original writer may have died after its commit but
+				// before its required side effects — finish them before answering.
+				try {
+					await drainEffectsOutbox(getPlayAdmin(), getHistoryAdmin(), session.id, asState(session));
+				} catch (err) {
+					console.error(
+						'[effects] duplicate-retry outbox drain failed (recovered later):',
+						err instanceof Error ? err.message : err
+					);
+				}
+				return viewForMemberAndState(session, asState(session), member);
+			}
+		}
+
 		const state = asState(session);
 		const actor = actorForMember(state, member);
+
+		// Deny-by-default command admission for EXTERNAL callers (same policy the WS
+		// room server enforces — transport-neutral). Internal actors (bot driver,
+		// matchmaker assembly, solo seeding) are server code, not wire input. A
+		// rejection throws before any reducer/ledger/outbox work: nothing changes.
+		if (isWire) {
+			const admission = admitCommand(
+				{
+					mode: session.mode === 'ranked' ? 'ranked' : 'casual',
+					role: member.role,
+					seated: actor.seatColor != null,
+					isBot: member.is_bot,
+					allowIntegrityTools: integrityToolsAllowed()
+				},
+				params.command
+			);
+			if (!admission.ok) {
+				throw kitError(403, admission.message);
+			}
+		}
+
 		const commandResult: CommandResult = applyGameCommand(state, actor, params.command, catalog);
 		if (!commandResult.ok) {
 			throw kitError(400, commandResult.error.message);
@@ -1788,16 +2479,16 @@ export async function runRoomCommand(params: {
 			session,
 			nextState: commandResult.state,
 			actorMemberId: member.id,
-			command: params.command
+			command: params.command,
+			cmdId: params.cmdId ?? null
 		});
 
 		if (!persisted) {
 			continue; // CAS conflict — reload fresh state and retry.
 		}
 
-		if (params.command.type === 'commitRound') {
-			await writeHistorySnapshots(state, new Date().toISOString());
-		}
+		// Round-history snapshots (commitRound) now ride the durable effects outbox
+		// inside persistSessionUpdate — committed atomically, drained before this return.
 
 		// The acting member just made a request → they're alive. This (plus the /view
 		// poll in loadRoomView) is the only writer of last_seen_at, keeping it a
@@ -1809,29 +2500,47 @@ export async function runRoomCommand(params: {
 		// member's role/seat recomputed locally (the same rule syncMemberMirrors applies).
 		// This drops a post-write SELECT round-trip that only re-read our own seat back —
 		// meaningful latency for cross-region players on every command.
-		const occupiedSeat =
-			SEAT_COLORS.find((seat) => commandResult.state.seats[seat].memberId === member.id) ?? null;
-		const updatedRole: MemberRole =
-			member.role === 'host' ? 'host' : occupiedSeat ? 'player' : 'spectator';
-		const projection = await attachBotSeatFlags(
-			session.id,
-			buildSessionProjection(commandResult.state, {
-				role: updatedRole,
-				seatColor: occupiedSeat ?? member.seat_color ?? null,
-				displayName: member.display_name
-			})
-		);
-
-		return {
-			projection,
-			member: {
-				id: member.id,
-				role: projection.viewer.role,
-				seatColor: projection.viewer.seatColor,
-				displayName: projection.viewer.displayName
-			}
-		};
+		return viewForMemberAndState(session, commandResult.state, member);
 	}
 
 	throw kitError(409, 'This room is being updated by other players — please retry.');
+}
+
+/**
+ * Project a RoomView for `member` from an authoritative state already in hand, with
+ * the member's role/seat recomputed locally (the same rule syncMemberMirrors applies)
+ * — no post-write SELECT. Used for both the fresh-commit response and the duplicate-
+ * cmdId retry answer, so a retried command sees exactly what the original would have.
+ */
+async function viewForMemberAndState(
+	session: PlaySessionRow,
+	state: PublicGameState,
+	member: NonNullable<Awaited<ReturnType<typeof getMemberById>>>
+): Promise<RoomView> {
+	const occupiedSeat =
+		SEAT_COLORS.find((seat) => state.seats[seat].memberId === member.id) ?? null;
+	const updatedRole: MemberRole =
+		member.role === 'host' ? 'host' : occupiedSeat ? 'player' : 'spectator';
+	const projection = stampRoomMeta(
+		await attachBotSeatFlags(
+			session.id,
+			buildSessionProjection(state, {
+				role: updatedRole,
+				// State is the sole seat authority — no stale member.seat_color fallback.
+				seatColor: occupiedSeat,
+				displayName: member.display_name
+			})
+		),
+		session
+	);
+
+	return {
+		projection,
+		member: {
+			id: member.id,
+			role: projection.viewer.role,
+			seatColor: projection.viewer.seatColor,
+			displayName: projection.viewer.displayName
+		}
+	};
 }

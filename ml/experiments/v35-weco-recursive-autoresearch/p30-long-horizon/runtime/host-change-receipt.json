@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "arc-v35-p30-host-change-receipt-v1",
+  "valid": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "host": "ubuntu@216.151.21.122",
+  "campaignInstanceId": "6b4f412505cb889bd1c083c3a682cde591f4e7337bbe21bb71b20afff422a218",
+  "completedAtUtc": "2026-07-16T07:13:59Z",
+  "authorization": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/host-change-authorization.signed.json",
+    "sha256": "806315c57c3389e3dd4e77bf96927b84eff864f28c8953f179aee74f2ec3ef2e"
+  },
+  "profile": {
+    "sourceSha256": "ee9bbaf34cedde616b381aba41f0c89afd402752fbaaa73a1a4dc5124838839c",
+    "destination": "/etc/apparmor.d/arc-v35-p30-bwrap",
+    "destinationSha256": "ee9bbaf34cedde616b381aba41f0c89afd402752fbaaa73a1a4dc5124838839c",
+    "loaded": true
+  },
+  "bubblewrap": {
+    "path": "/usr/bin/bwrap",
+    "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712",
+    "smoke": "pass",
+    "networkEgress": false,
+    "visibleGpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenGpuIndicesAbsent": [
+      4,
+      5,
+      6
+    ]
+  },
+  "gpu7After": {
+    "memoryMiB": 0,
+    "utilizationPercent": 0
+  }
+}

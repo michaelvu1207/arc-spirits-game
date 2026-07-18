@@ -1,0 +1,269 @@
+{
+  "confirmation": {
+    "controlScores": [
+      0.8336690034758643,
+      0.6012858830541195,
+      0.8153601729307116,
+      0.8249376615336204,
+      0.8220695588556949,
+      0.8351359425255467,
+      0.7770707464333935,
+      0.8202055404611028
+    ],
+    "exactSignTestP": 1.0,
+    "meanDifference": -0.0013765589626652808,
+    "pairedBootstrap95Lcb": -0.006091618594517942,
+    "pairedDifferences": [
+      -0.009167964966597886,
+      0.013425224362180854,
+      0.006538605671036035,
+      -0.007473264828572579,
+      0.0011775091224106582,
+      -0.013878601098013421,
+      0.00037657225523846094,
+      -0.002010552219004369
+    ],
+    "syntheticGatePassed": false,
+    "treatmentScores": [
+      0.8245010385092664,
+      0.6147111074163003,
+      0.8218987786017476,
+      0.8174643967050478,
+      0.8232470679781055,
+      0.8212573414275333,
+      0.7774473186886319,
+      0.8181949882420985
+    ]
+  },
+  "confirmationReplicates": 8,
+  "controlPolicy": {
+    "bootstrap_steps": 8,
+    "lineages": 4,
+    "mutation_scale": 0.12,
+    "random_restart_interval": 5,
+    "simplify_interval": 7,
+    "stagnation_limit": 3
+  },
+  "development": [
+    {
+      "developmentMean": 0.8211765458032659,
+      "developmentScores": [
+        0.8210196094748958,
+        0.8254362593904061,
+        0.8170737685444958
+      ],
+      "policy": {
+        "bootstrap_steps": 8,
+        "lineages": 4,
+        "mutation_scale": 0.12,
+        "random_restart_interval": 5,
+        "simplify_interval": 7,
+        "stagnation_limit": 3
+      },
+      "policyIndex": 0
+    },
+    {
+      "developmentMean": 0.8227014013988255,
+      "developmentScores": [
+        0.8210196094748958,
+        0.8245942468536887,
+        0.822490347867892
+      ],
+      "policy": {
+        "bootstrap_steps": 6,
+        "lineages": 6,
+        "mutation_scale": 0.08,
+        "random_restart_interval": 6,
+        "simplify_interval": 7,
+        "stagnation_limit": 4
+      },
+      "policyIndex": 1
+    },
+    {
+      "developmentMean": 0.8199731164729032,
+      "developmentScores": [
+        0.8210196094748958,
+        0.8274387473828331,
+        0.8114609925609807
+      ],
+      "policy": {
+        "bootstrap_steps": 6,
+        "lineages": 6,
+        "mutation_scale": 0.16,
+        "random_restart_interval": 5,
+        "simplify_interval": 9,
+        "stagnation_limit": 3
+      },
+      "policyIndex": 2
+    },
+    {
+      "developmentMean": 0.8012875989607009,
+      "developmentScores": [
+        0.8210196094748958,
+        0.7716038616595893,
+        0.8112393257476176
+      ],
+      "policy": {
+        "bootstrap_steps": 12,
+        "lineages": 2,
+        "mutation_scale": 0.16,
+        "random_restart_interval": 5,
+        "simplify_interval": 11,
+        "stagnation_limit": 2
+      },
+      "policyIndex": 3
+    },
+    {
+      "developmentMean": 0.7550507226338834,
+      "developmentScores": [
+        0.8210196094748958,
+        0.7729921422597648,
+        0.6711404161669895
+      ],
+      "policy": {
+        "bootstrap_steps": 12,
+        "lineages": 4,
+        "mutation_scale": 0.12,
+        "random_restart_interval": 8,
+        "simplify_interval": 5,
+        "stagnation_limit": 2
+      },
+      "policyIndex": 4
+    },
+    {
+      "developmentMean": 0.8024280921126514,
+      "developmentScores": [
+        0.8230059096158919,
+        0.771842568802359,
+        0.8124357979197033
+      ],
+      "policy": {
+        "bootstrap_steps": 8,
+        "lineages": 5,
+        "mutation_scale": 0.16,
+        "random_restart_interval": 5,
+        "simplify_interval": 11,
+        "stagnation_limit": 5
+      },
+      "policyIndex": 5
+    },
+    {
+      "developmentMean": 0.8195125605537464,
+      "developmentScores": [
+        0.8221961824415991,
+        0.8199990428335461,
+        0.816342456386094
+      ],
+      "policy": {
+        "bootstrap_steps": 8,
+        "lineages": 3,
+        "mutation_scale": 0.08,
+        "random_restart_interval": 6,
+        "simplify_interval": 11,
+        "stagnation_limit": 3
+      },
+      "policyIndex": 6
+    },
+    {
+      "developmentMean": 0.799414370508809,
+      "developmentScores": [
+        0.8221961824415991,
+        0.7552100108254389,
+        0.8208369182593892
+      ],
+      "policy": {
+        "bootstrap_steps": 6,
+        "lineages": 2,
+        "mutation_scale": 0.12,
+        "random_restart_interval": 6,
+        "simplify_interval": 7,
+        "stagnation_limit": 3
+      },
+      "policyIndex": 7
+    },
+    {
+      "developmentMean": 0.7401694550900195,
+      "developmentScores": [
+        0.8210196094748958,
+        0.7910204321047515,
+        0.6084683236904113
+      ],
+      "policy": {
+        "bootstrap_steps": 12,
+        "lineages": 5,
+        "mutation_scale": 0.16,
+        "random_restart_interval": 8,
+        "simplify_interval": 11,
+        "stagnation_limit": 5
+      },
+      "policyIndex": 8
+    },
+    {
+      "developmentMean": 0.7743653277568785,
+      "developmentScores": [
+        0.8210196094748958,
+        0.8298979689544107,
+        0.6721784048413288
+      ],
+      "policy": {
+        "bootstrap_steps": 12,
+        "lineages": 2,
+        "mutation_scale": 0.12,
+        "random_restart_interval": 4,
+        "simplify_interval": 11,
+        "stagnation_limit": 4
+      },
+      "policyIndex": 9
+    },
+    {
+      "developmentMean": 0.7963756381222062,
+      "developmentScores": [
+        0.8210196094748958,
+        0.7552100108254389,
+        0.8128972940662841
+      ],
+      "policy": {
+        "bootstrap_steps": 8,
+        "lineages": 4,
+        "mutation_scale": 0.22,
+        "random_restart_interval": 4,
+        "simplify_interval": 7,
+        "stagnation_limit": 2
+      },
+      "policyIndex": 10
+    },
+    {
+      "developmentMean": 0.799022179519908,
+      "developmentScores": [
+        0.8210196094748958,
+        0.7552100108254389,
+        0.8208369182593892
+      ],
+      "policy": {
+        "bootstrap_steps": 8,
+        "lineages": 2,
+        "mutation_scale": 0.22,
+        "random_restart_interval": 5,
+        "simplify_interval": 11,
+        "stagnation_limit": 2
+      },
+      "policyIndex": 11
+    }
+  ],
+  "developmentReplicates": 3,
+  "equalEvaluatorCalls": true,
+  "gamesPerStep": 64,
+  "recursiveImprovementClaim": false,
+  "schemaVersion": "arc-v35-synthetic-recursive-preflight-v1",
+  "selectedTreatmentPolicy": {
+    "bootstrap_steps": 6,
+    "lineages": 6,
+    "mutation_scale": 0.08,
+    "random_restart_interval": 6,
+    "simplify_interval": 7,
+    "stagnation_limit": 4
+  },
+  "selectionIndex": 1,
+  "stepsPerInnerCampaign": 20,
+  "syntheticOnly": true
+}

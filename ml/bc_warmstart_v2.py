@@ -35,6 +35,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import sys
 from pathlib import Path
@@ -49,7 +50,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from model import get_device
 from model_v2 import EntityCandidateScorer, build_model_v2, save_checkpoint
 from obs_v2 import ObsV2Spec
-from train import assert_finite_weights
+from ppo import binary_ece, reach30_multihorizon_minibatch_loss
+from train import assert_finite_weights, v2_reach30_horizons
 
 
 def load_spec_for_dataset(data_dir: Path) -> tuple[ObsV2Spec, int]:
@@ -77,10 +79,15 @@ class DecisionDatasetV2(Dataset):
         self.cands_list: list[np.ndarray] = []
         self.chosen_list: list[int] = []
         self.ret_list: list[float] = []
+        self.game_id_list: list[str | None] = []
+        outcomes: dict[str, tuple[float, int, int]] = {}
         skipped = 0
         skipped_no_v2 = 0
 
-        jsonl_files = sorted(p for p in data_dir.rglob("*.jsonl") if p.is_file())
+        jsonl_files = sorted(
+            p for p in data_dir.rglob("*.jsonl")
+            if p.is_file() and not p.name.startswith("games-")
+        )
         if not jsonl_files:
             raise FileNotFoundError(f"No *.jsonl files found in {data_dir}")
         for fpath in jsonl_files:
@@ -98,6 +105,19 @@ class DecisionDatasetV2(Dataset):
                         cands = np.asarray(rec["cands"], dtype=np.float32)
                         chosen = int(rec["chosen"])
                         ret = float(rec.get("ret", 0.0))
+                        game_id = rec.get("gameId") if isinstance(rec.get("gameId"), str) else None
+                        raw_target = rec.get("reach30Target")
+                        if raw_target is not None:
+                            if game_id is None or raw_target not in (0, 1, False, True):
+                                raise ValueError("malformed reach30Target/gameId")
+                            horizon = int(rec["reach30Horizon"])
+                            finish_round = int(rec.get("endRound", 0))
+                            if horizon <= 0 or (bool(raw_target) and finish_round <= 0):
+                                raise ValueError("malformed reach30 horizon/finish round")
+                            outcome = (float(bool(raw_target)), horizon, finish_round)
+                            if game_id in outcomes and outcomes[game_id] != outcome:
+                                raise ValueError("inconsistent reach30 outcome within game")
+                            outcomes[game_id] = outcome
                     except (json.JSONDecodeError, KeyError, ValueError, TypeError):
                         skipped += 1
                         continue
@@ -108,6 +128,7 @@ class DecisionDatasetV2(Dataset):
                     self.cands_list.append(cands)
                     self.chosen_list.append(chosen)
                     self.ret_list.append(ret)
+                    self.game_id_list.append(game_id)
         self.skipped_no_v2 = skipped_no_v2
         if not self.obs_list:
             raise ValueError(
@@ -118,33 +139,83 @@ class DecisionDatasetV2(Dataset):
                 f"dataset: kept {len(self.obs_list)} rows, skipped {skipped} malformed, "
                 f"{skipped_no_v2} without obsV2"
             )
+        counts = Counter(game_id for game_id in self.game_id_list if game_id is not None)
+        labelled_horizons = {outcome[1] for outcome in outcomes.values()}
+        if len(labelled_horizons) > 1:
+            raise ValueError(f"BC data mixes reach30 horizons {sorted(labelled_horizons)}")
+        self.reach30_horizon = next(iter(labelled_horizons), None)
+        self.reach30_target = np.zeros(len(self.obs_list), dtype=np.float32)
+        self.reach30_mask = np.zeros(len(self.obs_list), dtype=bool)
+        self.reach30_finish_round = np.zeros(len(self.obs_list), dtype=np.int64)
+        self.reach30_weight = np.zeros(len(self.obs_list), dtype=np.float32)
+        for index, game_id in enumerate(self.game_id_list):
+            if game_id is None or game_id not in outcomes:
+                continue
+            target, _horizon, finish_round = outcomes[game_id]
+            self.reach30_target[index] = target
+            self.reach30_mask[index] = True
+            self.reach30_finish_round[index] = finish_round if target else 0
+            self.reach30_weight[index] = 1.0 / counts[game_id]
 
     def __len__(self) -> int:
         return len(self.obs_list)
 
     def __getitem__(self, i: int):
-        return self.obs_list[i], self.cands_list[i], self.chosen_list[i], self.ret_list[i]
+        return (
+            self.obs_list[i],
+            self.cands_list[i],
+            self.chosen_list[i],
+            self.ret_list[i],
+            self.reach30_target[i],
+            self.reach30_mask[i],
+            self.reach30_finish_round[i],
+            self.reach30_weight[i],
+        )
 
 
-def collate(batch) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def collate(batch) -> tuple[torch.Tensor, ...]:
     obs = torch.from_numpy(np.stack([b[0] for b in batch]))
     max_c = max(b[1].shape[0] for b in batch)
     act_dim = batch[0][1].shape[1]
     cands = torch.zeros(len(batch), max_c, act_dim)
     mask = torch.zeros(len(batch), max_c, dtype=torch.bool)
-    for i, (_, c, _, _) in enumerate(batch):
+    for i, sample in enumerate(batch):
+        c = sample[1]
         cands[i, : c.shape[0]] = torch.from_numpy(c)
         mask[i, : c.shape[0]] = True
     chosen = torch.tensor([b[2] for b in batch], dtype=torch.long)
     ret = torch.tensor([b[3] for b in batch], dtype=torch.float32)
-    return obs, cands, mask, chosen, ret
+    # Normalize NumPy scalar subclasses explicitly. Some supported PyTorch
+    # releases accept numpy.bool_ here and others raise TypeError.
+    reach30_target = torch.tensor([float(b[4]) for b in batch], dtype=torch.float32)
+    reach30_mask = torch.tensor([bool(b[5]) for b in batch], dtype=torch.bool)
+    reach30_finish_round = torch.tensor([int(b[6]) for b in batch], dtype=torch.int64)
+    reach30_weight = torch.tensor([float(b[7]) for b in batch], dtype=torch.float32)
+    return (
+        obs,
+        cands,
+        mask,
+        chosen,
+        ret,
+        reach30_target,
+        reach30_mask,
+        reach30_finish_round,
+        reach30_weight,
+    )
 
 
-def _evaluate(model, dl, device) -> dict:
+def _evaluate(model, dl, device, horizons: tuple[int, ...] = ()) -> dict:
     model.eval()
     tot_ce = tot_v = tot_acc = n = 0.0
+    reach_weighted = reach_weight = 0.0
+    reach_scores: list[np.ndarray] = []
+    reach_targets: list[np.ndarray] = []
+    reach_weights: list[np.ndarray] = []
     with torch.no_grad():
-        for obs, cands, mask, chosen, ret in dl:
+        for (
+            obs, cands, mask, chosen, ret,
+            reach_target, reach_mask, finish_round, row_weight,
+        ) in dl:
             obs, cands, mask = obs.to(device), cands.to(device), mask.to(device)
             chosen, ret = chosen.to(device), ret.to(device)
             logits, _, value = model(obs, cands, mask)
@@ -153,8 +224,46 @@ def _evaluate(model, dl, device) -> dict:
             tot_v += F.mse_loss(value, ret).item() * b
             tot_acc += (logits.argmax(dim=-1) == chosen).float().sum().item()
             n += b
+            if horizons and bool(reach_mask.any()):
+                reach_logits = model.reach30_all_logits(obs)
+                horizon_tensor = torch.tensor(horizons, dtype=finish_round.dtype, device=device)
+                nested = (
+                    (reach_target.to(device) > 0.5).unsqueeze(1)
+                    & (finish_round.to(device).unsqueeze(1) <= horizon_tensor.unsqueeze(0))
+                ).to(reach_logits.dtype)
+                per = F.binary_cross_entropy_with_logits(
+                    reach_logits, nested, reduction="none"
+                ).mean(dim=1)
+                weights = row_weight.to(device) * reach_mask.to(device)
+                reach_weighted += float((per * weights).sum().item())
+                reach_weight += float(weights.sum().item())
+                selected = reach_mask.cpu().numpy()
+                reach_scores.append(torch.sigmoid(reach_logits).cpu().numpy()[selected])
+                reach_targets.append(nested.cpu().numpy()[selected])
+                reach_weights.append(row_weight.cpu().numpy()[selected])
     model.train()
-    return {"ce": tot_ce / n, "value_mse": tot_v / n, "acc": tot_acc / n}
+    result = {"ce": tot_ce / n, "value_mse": tot_v / n, "acc": tot_acc / n}
+    if horizons:
+        result["reach30_nll"] = reach_weighted / reach_weight if reach_weight else 0.0
+        by_horizon = {}
+        if reach_scores:
+            scores = np.concatenate(reach_scores).astype(np.float64)
+            targets = np.concatenate(reach_targets).astype(np.float64)
+            weights = np.concatenate(reach_weights).astype(np.float64)
+            clipped = np.clip(scores, 1e-7, 1.0 - 1e-7)
+            for column, horizon in enumerate(horizons):
+                target = targets[:, column]
+                score = scores[:, column]
+                by_horizon[str(horizon)] = {
+                    "nll": float(np.average(
+                        -(target * np.log(clipped[:, column]) + (1 - target) * np.log(1 - clipped[:, column])),
+                        weights=weights,
+                    )),
+                    "brier": float(np.average((score - target) ** 2, weights=weights)),
+                    "ece": binary_ece(target, score, weights=weights),
+                }
+        result["reach30_by_horizon"] = by_horizon
+    return result
 
 
 def train_bc(
@@ -169,6 +278,8 @@ def train_bc(
     heads: int = 4,
     seed: int = 0,
     val_frac: float = 0.0,
+    val_data_dir: Path | None = None,
+    reach30_coef: float = 0.0,
     max_grad_norm: float = 1.0,
     device: torch.device | None = None,
     model: EntityCandidateScorer | None = None,
@@ -182,11 +293,31 @@ def train_bc(
         device = get_device()
     spec, act_dim = load_spec_for_dataset(data_dir)
     ds = DecisionDatasetV2(data_dir, spec)
+    if val_data_dir is not None and val_frac > 0:
+        raise ValueError("use either val_data_dir or val_frac, not both")
+    if reach30_coef < 0:
+        raise ValueError("reach30_coef must be nonnegative")
+    horizons = v2_reach30_horizons(ds.reach30_horizon) if reach30_coef > 0 else ()
+    if reach30_coef > 0 and not horizons:
+        raise ValueError("reach30_coef requires labelled solo objective episodes")
+    if reach30_coef > 0 and val_frac > 0:
+        raise ValueError(
+            "reach30 training requires a disjoint val_data_dir or val_frac=0; "
+            "row-level splitting breaks equal-episode weights"
+        )
     gen = torch.Generator().manual_seed(seed)
 
     val_dl = None
     train_ds: Dataset = ds
-    if val_frac > 0:
+    if val_data_dir is not None:
+        val_spec, val_act_dim = load_spec_for_dataset(val_data_dir)
+        if val_spec.header != spec.header or val_act_dim != act_dim:
+            raise ValueError("validation data observation/action schema differs from training data")
+        val_ds = DecisionDatasetV2(val_data_dir, val_spec)
+        if horizons and val_ds.reach30_horizon != ds.reach30_horizon:
+            raise ValueError("validation reach30 horizon differs from training data")
+        val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate)
+    elif val_frac > 0:
         n_val = max(1, int(len(ds) * val_frac))
         perm = torch.randperm(len(ds), generator=torch.Generator().manual_seed(seed + 1)).tolist()
         train_ds = torch.utils.data.Subset(ds, perm[n_val:])
@@ -195,23 +326,55 @@ def train_bc(
     dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=collate, generator=gen)
 
     if model is None:
-        model = build_model_v2(spec, act_dim, device=device, d_model=d_model, layers=layers, heads=heads, seed=seed)
+        model = build_model_v2(
+            spec,
+            act_dim,
+            device=device,
+            d_model=d_model,
+            layers=layers,
+            heads=heads,
+            reach30_horizons=horizons,
+            seed=seed,
+        )
+    elif horizons:
+        model.enable_reach30_horizons(horizons)
     model = model.to(device).train()
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
     stats: dict = {"epochs": [], "samples": len(ds), "train_samples": len(train_ds)}
+    if val_data_dir is not None:
+        stats["val_samples"] = len(val_ds)
+        stats["val_data"] = str(val_data_dir)
+    reach_total_weight = float(ds.reach30_weight.sum())
     best_val_ce = float("inf")
     best_state: dict | None = None
     best_epoch = -1
     for epoch in range(epochs):
-        tot_ce = tot_v = tot_acc = n = 0.0
-        for obs, cands, mask, chosen, ret in dl:
+        tot_ce = tot_v = tot_acc = tot_reach = n = 0.0
+        reach_updated = False
+        for (
+            obs, cands, mask, chosen, ret,
+            reach_target, reach_mask, finish_round, row_weight,
+        ) in dl:
             obs, cands, mask = obs.to(device), cands.to(device), mask.to(device)
             chosen, ret = chosen.to(device), ret.to(device)
             logits, _, value = model(obs, cands, mask)
             ce = F.cross_entropy(logits, chosen)
             v_loss = F.mse_loss(value, ret)
-            loss = ce + value_coef * v_loss
+            reach_loss = torch.zeros((), dtype=torch.float32, device=device)
+            if horizons and bool(reach_mask.any()):
+                reach_loss = reach30_multihorizon_minibatch_loss(
+                    model.reach30_all_logits(obs),
+                    reach_target.to(device),
+                    reach_mask.to(device),
+                    row_weight.to(device),
+                    finish_round.to(device),
+                    horizons,
+                    total_rows=len(train_ds),
+                    total_episode_weight=reach_total_weight,
+                )
+                reach_updated = True
+            loss = ce + value_coef * v_loss + reach30_coef * reach_loss
             opt.zero_grad()
             loss.backward()
             if max_grad_norm > 0:
@@ -221,13 +384,29 @@ def train_bc(
             tot_ce += ce.item() * b
             tot_v += v_loss.item() * b
             tot_acc += (logits.argmax(dim=-1) == chosen).float().sum().item()
+            tot_reach += reach_loss.item() * b
             n += b
-        ep = {"ce": tot_ce / n, "value_mse": tot_v / n, "acc": tot_acc / n}
-        line = f"epoch {epoch + 1}/{epochs}  ce={ep['ce']:.4f}  acc={ep['acc']:.3f}  vmse={ep['value_mse']:.4f}"
+        if reach_updated:
+            model.reach30_trained = True
+            model.reach30_horizon = ds.reach30_horizon
+        ep = {
+            "ce": tot_ce / n,
+            "value_mse": tot_v / n,
+            "acc": tot_acc / n,
+            "reach30_loss": tot_reach / n,
+        }
+        line = (
+            f"epoch {epoch + 1}/{epochs}  ce={ep['ce']:.4f}  acc={ep['acc']:.3f} "
+            f"vmse={ep['value_mse']:.4f}  reach30={ep['reach30_loss']:.4f}"
+        )
         if val_dl is not None:
-            val = _evaluate(model, val_dl, device)
+            val = _evaluate(model, val_dl, device, horizons)
             ep["val_ce"], ep["val_acc"], ep["val_value_mse"] = val["ce"], val["acc"], val["value_mse"]
             line += f"  val_ce={val['ce']:.4f}  val_acc={val['acc']:.3f}"
+            if horizons:
+                ep["val_reach30_nll"] = val["reach30_nll"]
+                ep["val_reach30_by_horizon"] = val["reach30_by_horizon"]
+                line += f"  val_reach30={val['reach30_nll']:.4f}"
             if val["ce"] < best_val_ce:
                 best_val_ce = val["ce"]
                 best_epoch = epoch
@@ -265,6 +444,10 @@ def main() -> int:
     ap.add_argument("--heads", type=int, default=4)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--val-frac", type=float, default=0.0, help="held-out fraction; best-val epoch is saved")
+    ap.add_argument("--val-data", type=Path, default=None,
+                    help="disjoint validation dataset; preferred over row-level --val-frac")
+    ap.add_argument("--reach30-coef", type=float, default=0.0,
+                    help="equal-episode 20/25/30-round objective-critic loss")
     ap.add_argument("--max-grad-norm", type=float, default=1.0,
                     help="Gradient clipping (clip_grad_norm_); 0 disables")
     ap.add_argument("--device", type=str, default=None, help="cpu / cuda / mps (default: auto)")
@@ -282,6 +465,8 @@ def main() -> int:
         heads=a.heads,
         seed=a.seed,
         val_frac=a.val_frac,
+        val_data_dir=a.val_data,
+        reach30_coef=a.reach30_coef,
         max_grad_norm=a.max_grad_norm,
         device=torch.device(a.device) if a.device else None,
     )

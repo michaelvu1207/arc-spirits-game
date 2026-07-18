@@ -1,13 +1,18 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth/auth.svelte';
-	import { fetchMyMatchHistory } from '$lib/supabase';
-	import { claimMatchAward, getCosmeticsState } from '$lib/stores/cosmetics.svelte';
+	import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
+	import { postPlayJson, restoreActiveMember, setActiveMember } from '$lib/stores/playStore.svelte';
+	import { runRematch } from '$lib/play/rematchAction';
+	import { buildPostgameInsights } from '$lib/play/postgameInsights';
+	import { getCosmeticsState, syncCosmetics } from '$lib/stores/cosmetics.svelte';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
-	import type { MatchAward, RankDefinition } from '$lib/cosmetics/progression';
+	import { calculateMatchAward, type MatchAward, type RankDefinition } from '$lib/cosmetics/progression';
 	import type { PrivatePlayerState, SeatColor, SpectatorProjection } from '$lib/play/types';
 	import type { ClassTrait } from '$lib/types';
 	import { expectedAttack } from '$lib/play/combat';
+	import LowPolySpiritStage from '$lib/components/LowPolySpiritStage.svelte';
 	import { augmentContributions } from '$lib/play/augments';
 	import { seatAccent, storageUrl, spiritBackImageUrl, iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
 
@@ -169,24 +174,37 @@
 	// Spotlight subject: the local player; for spectators, fall back to the winner.
 	const me = $derived(standings.find((s) => s.isMe) ?? winner ?? standings[0] ?? null);
 	const myWon = $derived((me?.placement ?? 0) === 1);
+	const insights = $derived(mySeat ? buildPostgameInsights(room, mySeat) : null);
+	let reviewOpen = $state(false);
+	let shareBusy = $state(false);
+	let shareError = $state<string | null>(null);
+	let shareUrl = $state<string | null>(null);
 	let payout = $state<MatchAward | null>(null);
 	let promotedTo = $state<RankDefinition | null>(null);
 	let payoutChecked = $state(false);
+	let authoritative = $state<null | { rated: boolean; finalized: boolean; players: Array<{
+		seatColor: SeatColor; placement: number; ratedPlacement: number; abandoned: boolean;
+		rating: { ordinalDelta: number } | null }> }>(null);
+	const myAuthoritative = $derived(authoritative?.players.find((player) => player.seatColor === mySeat) ?? null);
 
 	$effect(() => {
-		if (payoutChecked || room.status !== 'finished' || !mySeat || !me) return;
+		if (payoutChecked || room.status !== 'finished' || !mySeat || !me || !authoritative?.finalized) return;
 		payoutChecked = true;
-		const result = claimMatchAward({
+		if (myAuthoritative?.abandoned) return;
+		// Display the deterministic formula immediately, but award nothing locally.
+		// syncCosmetics reconciles the trusted match-result ledger on the server; a
+		// forged/replayed client can neither mint currency nor claim twice.
+		payout = calculateMatchAward({
 			matchId: `${room.roomCode}:${mySeat}`,
 			victoryPoints: me.vp,
 			placement: me.placement,
 			won: myWon,
 			round: room.round
 		});
-		if (result.claimed) {
-			payout = result.award;
-			if (result.currentRank.id !== result.previousRank.id) promotedTo = result.currentRank;
-		}
+		const previousRank = cosmetics.rank;
+		void syncCosmetics().then(() => {
+			if (cosmetics.rank.id !== previousRank.id) promotedTo = cosmetics.rank;
+		}).catch(() => {});
 	});
 
 	function ordinal(n: number): string {
@@ -203,33 +221,28 @@
 		| { kind: 'none' };
 	let rank = $state<RankState>({ kind: 'loading' });
 	$effect(() => {
-		const uid = auth.user?.id ?? null;
-		if (!uid) {
+		if (!auth.user || !mySeat) {
 			rank = { kind: 'unranked' };
 			return;
 		}
 		let cancelled = false;
 		rank = { kind: 'loading' };
-		// Identify THIS match among recent history (the result is written server-side at
-		// finish, so it may not be there for a moment — and the newest row could briefly
-		// be a PRIOR game). Match on my seat + winner + my final VP, retrying until it lands.
-		const myVp = standings.find((s) => s.isMe)?.vp ?? null;
-		const isThisMatch = (m: { mySeat: string; winnerSeat: string | null; myVictoryPoints: number }) =>
-			m.mySeat === mySeat &&
-			(m.winnerSeat ?? null) === (room.winnerSeat ?? null) &&
-			(myVp == null || m.myVictoryPoints === myVp);
 		let tries = 0;
-		const attempt = () => {
-			fetchMyMatchHistory(uid, 6)
-				.then((rows) => {
+		const attempt = async () => {
+			fetch(apiUrl(`/api/play/sessions/${encodeURIComponent(room.roomCode)}/postgame`), {
+				headers: isCrossOrigin && auth.session?.access_token ? { Authorization: `Bearer ${auth.session.access_token}` } : {},
+				credentials: isCrossOrigin ? 'include' : 'same-origin'
+			}).then((response) => response.ok ? response.json() : Promise.reject(new Error('postgame unavailable')))
+				.then((summary) => {
 					if (cancelled) return;
-					const match = rows.find(isThisMatch);
-					if (!match) {
+					authoritative = summary;
+					const player = summary.players?.find((entry: { seatColor: SeatColor }) => entry.seatColor === mySeat);
+					if (!summary.finalized || !player) {
 						if (tries++ < 4) setTimeout(attempt, 1500);
 						else rank = { kind: 'none' };
 						return;
 					}
-					if (match.ratingDelta != null) rank = { kind: 'ranked', delta: match.ratingDelta };
+					if (summary.rated && player.rating) rank = { kind: 'ranked', delta: player.rating.ordinalDelta };
 					else rank = { kind: 'unranked' };
 				})
 				.catch(() => {
@@ -253,8 +266,133 @@
 		return 'var(--color-fog, #8d8aa1)';
 	}
 
+	// ── Component-lifetime / explicit-navigation fence ─────────────────────────
+	// A held rematch response must never act on a screen the player has LEFT: the
+	// closure fence (rematchContext) sees only uid/room-code/status — a plain
+	// unmount, or an explicit Main Menu departure over the same props, passes it.
+	// `departed` closes that gap: set on unmount and on any explicit navigation
+	// away, it silences seeding, goto and error writes from every held response.
+	// (The rematch lobby the server may have created stays live for the PARTY —
+	// its members converge on it through their own postgame polls; only THIS
+	// client's late jump is cancelled.)
+	let departed = false;
+	onDestroy(() => {
+		departed = true;
+	});
+
 	function mainMenu() {
+		// EXPLICIT navigation away: cancel any in-flight rematch's local effects
+		// FIRST, so a rematch response racing this click cannot seed room B or drag
+		// the player back off the route they just chose.
+		departed = true;
 		void goto('/play');
+	}
+
+	async function shareReplay() {
+		if (shareBusy || !room.gameId) return;
+		shareBusy = true;
+		shareError = null;
+		try {
+			const result = await postPlayJson<{ code: string; url: string }>('/api/play/replays', {
+				gameId: room.gameId,
+				title: `${me?.name ?? 'Arc Spirits'} · round ${room.round}`
+			});
+			const apiRoot = apiUrl('/');
+			shareUrl = new URL(result.url, /^https?:\/\//.test(apiRoot) ? apiRoot : window.location.origin).toString();
+			if (navigator.share) await navigator.share({ title: 'Arc Spirits replay', url: shareUrl });
+			else await navigator.clipboard.writeText(shareUrl);
+		} catch (cause) {
+			shareError = cause instanceof Error ? cause.message : 'Could not share this replay.';
+		} finally {
+			shareBusy = false;
+		}
+	}
+
+	// ── Same-party rematch ───────────────────────────────────────────────────
+	// The first player to tap creates + hosts the rematch lobby; everyone else's
+	// tap joins it. While this screen is up we poll the postgame summary so a
+	// lobby opened by ANY party member (web or Godot) is offered live.
+	type RematchInfo = { roomCode: string; status: string; joinedCount: number; joinedNames: string[] };
+	let rematchOpen = $state<RematchInfo | null>(null);
+	let rematchBusy = $state(false);
+	let rematchError = $state<string | null>(null);
+	const REMATCH_POLL_MS = 3000;
+
+	// Fences a rematch-scoped async result to the EXACT context it started under:
+	// the same signed-in account (a token refresh keeps the uid; a durable account
+	// change moves it) and the same finished room on screen. A poll or rematch
+	// response captured under a previous account/room must act on nothing.
+	function rematchContext() {
+		const uid = auth.user?.id ?? null;
+		const code = room.roomCode;
+		return () => auth.user?.id === uid && room.roomCode === code && room.status === 'finished';
+	}
+
+	$effect(() => {
+		if (room.status !== 'finished') return;
+		const code = room.roomCode;
+		const fresh = rematchContext();
+		let cancelled = false;
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		const poll = async () => {
+			try {
+				// Identity rides the account session (cookie same-origin; Bearer for the
+				// cross-origin native shell) — the rematch status is member-only data.
+				const headers: Record<string, string> = { Accept: 'application/json' };
+				if (isCrossOrigin && auth.session?.access_token) {
+					headers['Authorization'] = `Bearer ${auth.session.access_token}`;
+				}
+				const res = await fetch(apiUrl(`/api/play/sessions/${encodeURIComponent(code)}/postgame`), {
+					headers,
+					credentials: isCrossOrigin ? 'include' : 'same-origin'
+				});
+				// Fence both await boundaries (headers AND delayed body): a response for
+				// a previous account or a departed room must not populate this screen.
+				if (cancelled || !fresh()) return;
+				if (res.ok) {
+					const summary = (await res.json()) as { rematch?: RematchInfo | null };
+					if (!cancelled && fresh()) rematchOpen = summary.rematch ?? null;
+				}
+			} catch {
+				// Poll is best-effort; the button still works without it.
+			}
+			if (!cancelled && fresh()) timer = setTimeout(poll, REMATCH_POLL_MS);
+		};
+		void poll();
+		return () => {
+			cancelled = true;
+			if (timer) clearTimeout(timer);
+		};
+	});
+
+	// The rematch lifecycle contract (lifetime fence over unmount / Main Menu,
+	// identity/room fence, seed rollback on a failed goto) lives framework-free in
+	// runRematch (rematchAction.ts) — this component only adapts its closures.
+	async function rematch() {
+		if (rematchBusy) return;
+		rematchBusy = true;
+		rematchError = null;
+		const fresh = rematchContext();
+		try {
+			await runRematch<ReturnType<typeof setActiveMember>>({
+				post: () =>
+					postPlayJson<{ roomCode: string; memberId: string }>(
+						`/api/play/sessions/${encodeURIComponent(room.roomCode)}/rematch`,
+						{}
+					),
+				fresh,
+				departed: () => departed,
+				seed: (memberId) => setActiveMember(memberId),
+				restore: (prior, seededMemberId) => restoreActiveMember(prior, seededMemberId),
+				navigate: (roomCode) => goto(`/play/${encodeURIComponent(roomCode)}`),
+				onError: (message) => {
+					rematchError = message;
+				}
+			});
+		} finally {
+			// Safe unconditionally: the busy guard means no NEWER rematch owns the flag.
+			rematchBusy = false;
+		}
 	}
 </script>
 
@@ -321,6 +459,7 @@
 		{#if me}
 			<aside class="spotlight" style="--accent: {me.accent}; --place: {placeAccent(me.placement)}" aria-label="Your result" data-testid="postgame-spotlight">
 				<span class="spot-eyebrow">{myWon ? 'Champion' : 'Your Result'}</span>
+				<div class="victory-spirit"><LowPolySpiritStage moment={myWon ? 'victory' : 'reward'} guardianName={me.name} accent={me.accent} compact /></div>
 
 				<!-- The player's icon, hex-cut, set inside the placement hexagon. -->
 				<div class="medallion">
@@ -334,18 +473,20 @@
 				</div>
 
 				<h2 class="hero-name" title={me.name}>{me.name}</h2>
-				<span class="hero-verdict">{myWon ? 'Victory' : `Finished ${ordinal(me.placement)}`}</span>
+				<span class="hero-verdict">{myAuthoritative?.abandoned
+					? `Conceded · rated ${ordinal(myAuthoritative.ratedPlacement)}`
+					: myWon ? 'Victory' : `Finished ${ordinal(me.placement)}`}</span>
 				<span class="hero-status" style="--sc: {me.statusColor}">{me.statusLabel}</span>
 
 				<div class="ladder" style="--rank-accent: {cosmetics.rank.accent}">
 					<span class="ladder-name">{promotedTo ? `Promoted to ${promotedTo.name}` : cosmetics.rank.name}</span>
-					<span class="ladder-xp">{cosmetics.progression.rankXp} ladder XP</span>
+					<span class="ladder-xp">{cosmetics.progression.rankXp} account XP</span>
 				</div>
 
 				<div class="payout" aria-live="polite">
 					<img src="/cosmetics/abyss-credit.png" alt="" />
-					<span>{payout ? `+${payout.credits}` : cosmetics.progression.credits}</span>
-					<small>{payout ? `+${payout.rankXp} XP` : 'Wallet'}</small>
+					<span>{myAuthoritative?.abandoned ? 'No payout' : payout ? `+${payout.credits}` : cosmetics.progression.credits}</span>
+					<small>{myAuthoritative?.abandoned ? 'Conceded match' : payout ? `+${payout.rankXp} XP` : 'Wallet'}</small>
 				</div>
 
 				{#if rank.kind === 'ranked'}
@@ -361,12 +502,61 @@
 		{/if}
 	</div>
 
+	{#if reviewOpen && insights}
+		<div class="review-scrim" role="presentation" onclick={() => (reviewOpen = false)}>
+			<dialog
+				open
+				class="match-review"
+				aria-labelledby="match-review-title"
+				onclick={(event) => event.stopPropagation()}
+				data-testid="postgame-review"
+			>
+				<div class="review-head">
+					<div><span>Recorded evidence</span><h2 id="match-review-title">Match Review</h2></div>
+					<button type="button" onclick={() => (reviewOpen = false)} aria-label="Close match review">×</button>
+				</div>
+				<div class="review-grid">
+					{#each insights.observations as observation}
+						<p>{observation}</p>
+					{/each}
+				</div>
+				<div class="experiment"><strong>Possible next experiment</strong><p>{insights.nextExperiment}</p></div>
+				<small>Observations use only the recorded board state. The experiment is not a claim that a different move would certainly change the result.</small>
+			</dialog>
+		</div>
+	{/if}
+
 	<footer class="pg-foot">
-		<button type="button" class="pg-btn primary" onclick={mainMenu} data-testid="postgame-menu">Main Menu</button>
+		{#if rematchError}<span class="rematch-err" role="alert">{rematchError}</span>{/if}
+		{#if shareError}<span class="rematch-err" role="alert">{shareError}</span>{/if}
+		{#if mySeat}
+			<button type="button" class="pg-btn" onclick={() => (reviewOpen = true)} data-testid="postgame-review-open">Match Review</button>
+			<button type="button" class="pg-btn" onclick={shareReplay} disabled={shareBusy || !room.gameId} data-testid="postgame-share-replay">
+				{shareBusy ? 'Preparing…' : shareUrl ? 'Replay link ready' : 'Share Replay'}
+			</button>
+			<button
+				type="button"
+				class="pg-btn"
+				class:primary={!!rematchOpen}
+				onclick={rematch}
+				disabled={rematchBusy}
+				data-testid="postgame-rematch"
+			>
+				{#if rematchBusy}
+					Rematch…
+				{:else if rematchOpen}
+					Join Rematch · {rematchOpen.joinedCount} in lobby
+				{:else}
+					Rematch
+				{/if}
+			</button>
+		{/if}
+		<button type="button" class="pg-btn" class:primary={!rematchOpen || !mySeat} onclick={mainMenu} data-testid="postgame-menu">Main Menu</button>
 	</footer>
 </section>
 
 <style>
+	.victory-spirit { width:100%; height:138px; margin:-12px 0 -34px; overflow:hidden; }
 	.postgame {
 		position: absolute;
 		inset: 0;
@@ -383,6 +573,26 @@
 			linear-gradient(180deg, rgba(9, 5, 20, 0.98), rgba(5, 3, 13, 0.99));
 		animation: pg-in 320ms cubic-bezier(0.2, 0.85, 0.3, 1) both;
 	}
+	.review-scrim {
+		position: absolute; inset: 0; z-index: 70; display: grid; place-items: center;
+		padding: 1rem; background: rgba(3, 2, 10, 0.82); backdrop-filter: blur(8px);
+	}
+	.match-review {
+		width: min(720px, 94vw); max-height: min(620px, 88vh); overflow: auto;
+		box-sizing: border-box; margin: 0; padding: clamp(1rem, 3vw, 1.8rem); border-radius: 18px;
+		background: linear-gradient(155deg, rgba(25, 12, 54, 0.99), rgba(8, 5, 20, 0.99));
+		border: 1px solid rgba(123, 29, 255, 0.7); box-shadow: 0 24px 80px rgba(0,0,0,.55);
+	}
+	.review-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+	.review-head span, .experiment strong { font: 700 .68rem/1 var(--font-display); letter-spacing: .18em; text-transform: uppercase; color: #65f3e1; }
+	.review-head h2 { margin: .25rem 0 0; font: 400 clamp(1.5rem, 4vw, 2.4rem)/1 var(--font-display); text-transform: uppercase; }
+	.review-head button { min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; color: white; background: rgba(255,255,255,.08); font-size: 1.5rem; }
+	.review-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; margin: 1.2rem 0; }
+	.review-grid p, .experiment { margin: 0; padding: .9rem; border-radius: 12px; border: 1px solid rgba(255,255,255,.09); background: rgba(255,255,255,.045); color: #ece6f8; line-height: 1.45; }
+	.experiment { border-color: rgba(101,243,225,.32); }
+	.experiment p { margin: .45rem 0 0; }
+	.match-review small { display: block; margin-top: .9rem; color: #aaa1bb; line-height: 1.4; }
+	@media (max-width: 700px) { .review-grid { grid-template-columns: 1fr; } }
 	@keyframes pg-in {
 		from { opacity: 0; transform: scale(0.99); }
 	}
@@ -737,9 +947,20 @@
 		border-radius: 999px;
 		cursor: pointer;
 		transition: transform 120ms ease, box-shadow 140ms ease, filter 140ms ease;
+		/* Secondary (non-primary) footer action — same silhouette, quiet chrome. */
+		color: var(--color-mist, #d9d6ea);
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.22);
 	}
 	.pg-btn:hover { transform: translateY(-1px); }
 	.pg-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+	.pg-btn:disabled { opacity: 0.6; cursor: wait; transform: none; }
+	.rematch-err {
+		align-self: center;
+		color: var(--brand-coral, #ff7a59);
+		font-size: 0.72rem;
+		letter-spacing: 0.06em;
+	}
 	.pg-btn.primary {
 		color: var(--color-void, #0c0518);
 		background: var(--brand-amber, #ffba3d);

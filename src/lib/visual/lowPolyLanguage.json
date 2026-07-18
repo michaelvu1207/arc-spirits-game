@@ -1,0 +1,36 @@
+{
+	"version": 1,
+	"name": "Arc Spirits Faceted Core",
+	"principles": [
+		"essential-state-stays-2d",
+		"motion-signals-importance",
+		"one-showcase-per-surface",
+		"canonical-colors-and-silhouettes",
+		"static-and-low-power-fallbacks"
+	],
+	"palette": {
+		"void": "#050310",
+		"bone": "#f5f0ff",
+		"cyan": "#65f3e1",
+		"magenta": "#ff2bc7",
+		"violet": "#7b1dff",
+		"corruption": "#ff5b6e",
+		"reward": "#ffce45"
+	},
+	"moments": {
+		"guardian": { "spin": 0.18, "pulse": 0.08, "shards": 7, "rings": 2 },
+		"matchmaking": { "spin": 0.3, "pulse": 0.12, "shards": 9, "rings": 3 },
+		"summon": { "spin": 0.48, "pulse": 0.22, "shards": 12, "rings": 3 },
+		"corruption": { "spin": -0.25, "pulse": 0.16, "shards": 8, "rings": 2 },
+		"reward": { "spin": 0.22, "pulse": 0.18, "shards": 10, "rings": 3 },
+		"victory": { "spin": 0.16, "pulse": 0.13, "shards": 14, "rings": 4 },
+		"profile": { "spin": 0.12, "pulse": 0.05, "shards": 6, "rings": 2 },
+		"replay": { "spin": 0.2, "pulse": 0.09, "shards": 8, "rings": 2 }
+	},
+	"quality": {
+		"off": { "fps": 0, "pixelRatio": 0, "shardScale": 0, "glow": false },
+		"battery": { "fps": 15, "pixelRatio": 0.7, "shardScale": 0.5, "glow": false },
+		"balanced": { "fps": 30, "pixelRatio": 1, "shardScale": 0.75, "glow": true },
+		"high": { "fps": 60, "pixelRatio": 1.5, "shardScale": 1, "glow": true }
+	}
+}

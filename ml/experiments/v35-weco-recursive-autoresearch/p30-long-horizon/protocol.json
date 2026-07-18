@@ -1,0 +1,500 @@
+{
+  "analysis": {
+    "bootstrap": {
+      "draws": 20000,
+      "method": "crossed-paired-replicate-and-common-seed-safety-bounds",
+      "seed": 35153040
+    },
+    "commonPublicGames": 4096,
+    "correction": "holm",
+    "decisionInference": {
+      "enumerations": 262144,
+      "method": "exact-paired-replicate-sign-flip",
+      "nullAssumption": "paired replicate effects are independent and sign-exchangeable under the null",
+      "oneSided": true,
+      "replicates": 18
+    },
+    "expectedGuardianCount": 10,
+    "familywiseAlpha": 0.05,
+    "freshPublicConfirmationRequired": true,
+    "mandatoryNonRegression": [
+      "reach15Rate",
+      "finalVp",
+      "finishRound",
+      "guardianWorstCase",
+      "stalls",
+      "malformedEpisodes",
+      "latency"
+    ],
+    "maximumReplicatesBelowFloor": 2,
+    "minimumPositiveReplicates": 13,
+    "minimumReplicateTrueWinGain": -0.01,
+    "minimumTrueWinPointGain": 0.03,
+    "nonRegressionThresholds": {
+      "finalVpDeltaLower": 0.0,
+      "finishSpeedDeltaLower": 0.0,
+      "guardianTrueWinDeltaLower": -0.05,
+      "maxGameWallMsP95": 60000,
+      "maxLatencyRatioToMatchedControl": 1.25,
+      "maxStalls": 0,
+      "reach15RateDeltaLower": -0.01
+    },
+    "pairedWithinReplicate": true,
+    "primaryBootstrapDecisionBearing": false,
+    "primaryEndpoints": [
+      "trueWinRate",
+      "lateGameScore",
+      "postRound15Vp"
+    ],
+    "primaryFamilySize": 6,
+    "privateEvaluationAuthorized": false,
+    "requireOutcomeBlindInputAuthorization": true,
+    "requireReplayTraceHashes": true,
+    "safetyBootstrapDecisionBearing": true,
+    "scoreWeights": {
+      "engineGrowth": 0.15,
+      "terminal": 0.6,
+      "vpGrowth": 0.25
+    },
+    "selectionIsDevelopmentOnly": true,
+    "simultaneousTreatmentComparisons": 2
+  },
+  "arms": [
+    {
+      "id": "control-zero",
+      "soloReach30Bands": null,
+      "soloReach30Coef": 0.0
+    },
+    {
+      "id": "uniform-040",
+      "soloReach30Bands": null,
+      "soloReach30Coef": 0.4
+    },
+    {
+      "id": "late-scheduled",
+      "soloReach30Bands": [
+        [
+          8,
+          0.15
+        ],
+        [
+          18,
+          0.3
+        ],
+        [
+          30,
+          0.5
+        ]
+      ],
+      "soloReach30Coef": 0.0
+    }
+  ],
+  "authorized": true,
+  "catalog": {
+    "path": "ml/catalog.json",
+    "sha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59"
+  },
+  "confirmationGates": {
+    "frozenBeforeP30Outcomes": true,
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/confirmation-gates.proposed.json",
+    "schemaVersion": "arc-v35-superhuman-confirmation-gates-v1",
+    "sha256": "a3aca14aedd75fc4947d45b8e86d672d78deb54569ae8b1e921d2a0454f85085"
+  },
+  "executionTrust": {
+    "algorithm": "Ed25519",
+    "bubblewrapPath": "/usr/bin/bwrap",
+    "bubblewrapSha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712",
+    "campaignInstanceId": "bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14",
+    "custody": {
+      "delivery": "encrypted-ssh-after-ready-to-sealed-memfd-cloexec",
+      "localOnlyRoles": [
+        "review-attester"
+      ],
+      "maximumConcurrentPrivateKeyRoles": 1,
+      "provider": "1Password",
+      "remoteDeliveryRoles": [
+        "issuer",
+        "executor",
+        "guardian",
+        "analysis-authorizer"
+      ],
+      "requirePrSetDumpableZero": true,
+      "schedulerPrivateKeyAccess": false,
+      "secretGranularity": "one-item-per-role",
+      "vault": "MichaelAgents"
+    },
+    "leasePath": "/data/share8/michaelvuaprilexperimentation/arc-bot/.leases/arc-v35-gpu7",
+    "ledgerRoot": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger",
+    "reviewRuntime": {
+      "attemptReservation": "remote-o-excl-before-fable",
+      "attesterRole": "review-attester",
+      "claudeExecutable": {
+        "path": "/usr/local/bin/claude",
+        "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
+        "version": "2.1.211 (Claude Code)"
+      },
+      "container": {
+        "authDelivery": "oauth-token-file-descriptor-stdin-fd0",
+        "backend": "docker",
+        "capabilities": [],
+        "capsuleMount": "read-only:/review",
+        "daemon": {
+          "architecture": "aarch64",
+          "id": "ef5c7268-c120-4369-8259-7faed4906a28",
+          "operatingSystem": "Docker Desktop",
+          "rootDirectory": "/var/lib/docker",
+          "securityOptions": [
+            "name=seccomp,profile=unconfined",
+            "name=cgroupns"
+          ],
+          "serverVersion": "27.4.0"
+        },
+        "engine": {
+          "path": "/usr/local/bin/docker",
+          "resolvedPath": "/Applications/Docker.app/Contents/Resources/bin/docker",
+          "sha256": "cac12f15213d5806f1ffcbc6c159da969e8bf606bf81eafcea89b4c79d7945fd",
+          "version": "Docker version 27.4.0, build bde2b89"
+        },
+        "image": {
+          "claudeExecutable": {
+            "path": "/usr/local/bin/claude",
+            "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
+            "version": "2.1.211 (Claude Code)"
+          },
+          "imageId": "sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+          "platform": "linux/arm64",
+          "reference": "arc-p30-fable@sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+          "user": "10001:10001"
+        },
+        "logDriver": "none",
+        "network": "default-bridge-icc-enabled",
+        "noNewPrivileges": true,
+        "rootFilesystem": "read-only",
+        "seccomp": "builtin-enforced"
+      },
+      "privateKeyRemoteDelivery": false
+    },
+    "roles": {
+      "analysis-authorizer": {
+        "allowedArtifactSchemas": [
+          "arc-v35-p30-execution-authorization-v1"
+        ],
+        "allowedKinds": [
+          "analysis"
+        ],
+        "keyId": "ed25519:0477bdfa081760e086eb0d35",
+        "publicKeyDerSha256": "0477bdfa081760e086eb0d35203e2b0b34fd922b67ac5afa84c0067586e1c408",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/analysis-authorizer.pem",
+        "publicKeyPemSha256": "78c25854770b1e65f5c0140520d8c518927506694a82c417e8db5b6f4f9b4ebf"
+      },
+      "executor": {
+        "allowedArtifactSchemas": [
+          "arc-v35-p30-authorized-execution-receipt-v1",
+          "arc-v35-p30-executor-launch-permit-v1"
+        ],
+        "allowedKinds": [
+          "generation",
+          "evaluation-primary",
+          "evaluation-replay",
+          "preflight",
+          "analysis"
+        ],
+        "keyId": "ed25519:4e73a2e32e3534ddc8ba24cc",
+        "publicKeyDerSha256": "4e73a2e32e3534ddc8ba24cc777fc514f390ba9b5a94af10c218cd5f13c7ff47",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/executor.pem",
+        "publicKeyPemSha256": "58db60e405fafe208562be4224597760f9f4a49006cebbcfce88e6bee5893bf9"
+      },
+      "guardian": {
+        "allowedArtifactSchemas": [
+          "arc-v35-p30-outcome-blind-preflight-v1",
+          "arc-v35-p30-final-generation-completeness-v1",
+          "arc-v35-p30-evaluation-pair-integrity-v1",
+          "arc-v35-p30-analysis-manifest-v1",
+          "arc-v35-p30-phase0-readiness-v1",
+          "arc-v35-p30-full-campaign-authorization-v1",
+          "arc-v35-p30-recovery-incident-v1",
+          "arc-v35-p30-logical-completion-v1"
+        ],
+        "allowedKinds": [],
+        "keyId": "ed25519:bd4fbbb5064e50e23b20117f",
+        "publicKeyDerSha256": "bd4fbbb5064e50e23b20117f0a7f94155a6509e12472c827336cbd45b60283eb",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/guardian.pem",
+        "publicKeyPemSha256": "b6187df1d504e9e94b452ab8238d09a8f33c2521ca606079fde1cef03b5d0840"
+      },
+      "issuer": {
+        "allowedArtifactSchemas": [
+          "arc-v35-p30-execution-authorization-v1"
+        ],
+        "allowedKinds": [
+          "generation",
+          "evaluation-primary",
+          "evaluation-replay",
+          "preflight"
+        ],
+        "keyId": "ed25519:12d818791eb971d70c1eb854",
+        "publicKeyDerSha256": "12d818791eb971d70c1eb854b8cb943e386ae40786b5951edc3f66523c677d11",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/issuer.pem",
+        "publicKeyPemSha256": "3caff40f529485035bbb83117402823b1ee50111ee601971d972b0e18c18b216"
+      },
+      "review-attester": {
+        "allowedArtifactSchemas": [
+          "arc-v35-p30-analysis-authorization-review-receipt-v3",
+          "arc-v35-p30-gate-review-receipt-v2"
+        ],
+        "allowedKinds": [],
+        "keyId": "ed25519:270da3dde1edcd0080039b0d",
+        "publicKeyDerSha256": "270da3dde1edcd0080039b0dd21e43f4386acf5c547c4262bd51ed5f86ee555f",
+        "publicKeyPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/trust/public/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/review-attester.pem",
+        "publicKeyPemSha256": "9a448b6d3e47d92a422a13e60a22aa96d41bca0695e8cda34ca2823b0265d2d0"
+      }
+    },
+    "schemaVersion": "arc-v35-p30-role-trust-v3"
+  },
+  "experiment": "v35-p30-long-horizon-dose-screen",
+  "implementationBaseCommit": "28c494bddf0fc66d760ad783f24e9556034ce85d",
+  "initialPolicy": {
+    "actDim": 104,
+    "format": "arc-entity-scorer-v2",
+    "manifestPath": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.manifest.json",
+    "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+    "obsDim": 3419,
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+    "policyObsVersion": 2,
+    "reach30Horizons": [
+      20,
+      25,
+      30
+    ],
+    "reach30Trained": true,
+    "sha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+    "wire": "binary"
+  },
+  "plan": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/plan.md",
+  "powerCalibration": {
+    "adequateForPrimaryEfficacy": true,
+    "claim": "primary-efficacy-eligibility-power-only",
+    "fullSelectorPowerClaimed": false,
+    "minimumJointPrimaryEligibilityPower": 0.8,
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/power-calibration.proposed.json",
+    "replicates": 18,
+    "schemaVersion": "arc-v35-p30-power-calibration-v1",
+    "sha256": "82b021acb98b5ea5f937b9fc476b1c4df744250636ec5ee035bec20dc4b9851a"
+  },
+  "promotionEligible": false,
+  "recoveryPolicy": {
+    "classes": [
+      "PRE_CHILD",
+      "RECEIPT_ONLY"
+    ],
+    "eligibleKinds": [
+      "generation",
+      "evaluation-primary",
+      "evaluation-replay"
+    ],
+    "guardianClassificationRequired": true,
+    "maximumRecoveriesPerLogicalAction": 1,
+    "outcomeExposureClosesCampaign": true,
+    "preChildRequiresNoChildStart": true,
+    "preChildRequiresNoSeedConsumption": true,
+    "receiptOnlyForbidsCandidateRerun": true,
+    "schemaVersion": "arc-v35-p30-bounded-recovery-policy-v1",
+    "secondRecoveryClosesCampaign": true
+  },
+  "replicates": [
+    {
+      "evalBase": 968000000,
+      "id": "a",
+      "trainBase": 967040000
+    },
+    {
+      "evalBase": 968058000,
+      "id": "b",
+      "trainBase": 967056000
+    },
+    {
+      "evalBase": 968116000,
+      "id": "c",
+      "trainBase": 967072000
+    },
+    {
+      "evalBase": 968174000,
+      "id": "d",
+      "trainBase": 967088000
+    },
+    {
+      "evalBase": 968232000,
+      "id": "e",
+      "trainBase": 967104000
+    },
+    {
+      "evalBase": 968290000,
+      "id": "f",
+      "trainBase": 967120000
+    },
+    {
+      "evalBase": 968348000,
+      "id": "g",
+      "trainBase": 967136000
+    },
+    {
+      "evalBase": 968406000,
+      "id": "h",
+      "trainBase": 967152000
+    },
+    {
+      "evalBase": 968464000,
+      "id": "i",
+      "trainBase": 967168000
+    },
+    {
+      "evalBase": 968522000,
+      "id": "j",
+      "trainBase": 967184000
+    },
+    {
+      "evalBase": 968580000,
+      "id": "k",
+      "trainBase": 967200000
+    },
+    {
+      "evalBase": 968638000,
+      "id": "l",
+      "trainBase": 967216000
+    },
+    {
+      "evalBase": 968696000,
+      "id": "m",
+      "trainBase": 967232000
+    },
+    {
+      "evalBase": 968754000,
+      "id": "n",
+      "trainBase": 967248000
+    },
+    {
+      "evalBase": 968812000,
+      "id": "o",
+      "trainBase": 967264000
+    },
+    {
+      "evalBase": 968870000,
+      "id": "p",
+      "trainBase": 967280000
+    },
+    {
+      "evalBase": 968928000,
+      "id": "q",
+      "trainBase": 967296000
+    },
+    {
+      "evalBase": 967400000,
+      "id": "r",
+      "trainBase": 967312000
+    }
+  ],
+  "review": {
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v24.md",
+    "commandReceipt": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/fable-final-review-2026-07-16-v24.receipt.json",
+      "sha256": "e6144e042d573be1cdb1cbefbb74362376bcb8dc09b8287222467f3e3aad42ca"
+    },
+    "requiredEffort": "high",
+    "requiredModel": "Claude Fable",
+    "sha256": "ed5506c0799352b21b7c9b1ab90e94a0e54dbc66a7acb1201439a790df42adde",
+    "verdict": "ACCEPT"
+  },
+  "rules": [
+    "This proposal is non-executable: no config.json, runner authorization, GPU lease, or seed consumption may exist before Fable acceptance and a separate immutable launch authorization.",
+    "Every generation, evaluation attempt, and analyzer launch requires an Ed25519-signed one-shot token, an external consumed marker, a signed execution receipt, and bubblewrap isolation with no network or credential mounts.",
+    "All three arms within a replicate use identical training and per-generation evaluation seeds; only the reach30 residual dose differs.",
+    "The common 4096-game block is public development evidence and can select at most one arm; it cannot confirm or promote that arm.",
+    "Every endpoint must be rerun once with the identical checkpoint and seed block; exact per-game telemetry and replay-trace hashes must match before the outcome-blind input authorization can open analysis.",
+    "A later fresh public confirmation, private/status-3, multiplayer, exploitability, fairness, latency, regression, and Michael gate remain mandatory.",
+    "No outcome-conditioned retry, seed substitution, arm substitution, or early promotion is permitted.",
+    "A consumed authorization may recover only through the frozen guardian-classified recovery policy. Any unclassified, ambiguous, outcome-dependent, or second failure permanently closes this campaign instance."
+  ],
+  "runtime": {
+    "forbiddenGpus": [
+      4,
+      5,
+      6
+    ],
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "host": "ubuntu@216.151.21.122",
+    "maxCampaignComputeSeconds": 1209600,
+    "maxConcurrentRoots": 1,
+    "physicalGpu": 7,
+    "workspace": "/data/share8/michaelvuaprilexperimentation/arc-bot"
+  },
+  "schemaVersion": "arc-v35-p30-long-horizon-protocol-v1",
+  "seedEvidence": {
+    "claim": "disjoint-from-hash-pinned-structured-declarations-only",
+    "globalCompletenessProven": false,
+    "inventoryPath": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-seed-inventory.json",
+    "inventorySha256": "f4feaa3f5c0034b9f43b38513287f318c3f817bce5b6a6c8096f5719b4a2bf95",
+    "publicContainer": {
+      "end": 969999999,
+      "id": "provisional-confirmation-zone",
+      "start": 969070000
+    }
+  },
+  "seedSchedule": {
+    "commonPublicBase": 969070000,
+    "commonPublicGames": 4096,
+    "evalGamesPerGeneration": 256,
+    "evalStride": 8192,
+    "gamesPerGeneration": 1024,
+    "maxGeneration": 8,
+    "trainStride": 2048
+  },
+  "sourceContract": {
+    "artifact": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-lock.json",
+    "schemaVersion": "arc-v35-p30-source-lock-v1",
+    "sha256": "5aeaa30724111352f73ae9912eb120c3481058bb8df579b0a58a549ea29a035b"
+  },
+  "sourceRegistry": {
+    "files": 552,
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/source-registry.proposed.json",
+    "schemaVersion": "arc-v35-p30-source-registry-v1",
+    "sha256": "fd470af2cc47009b397062c3979f7542bed9a0630138a687828a09d369ecd6a3"
+  },
+  "status": "authorized",
+  "training": {
+    "allFallenPenalty": -3.0,
+    "batchSize": 512,
+    "clipEpsilon": 0.1,
+    "entropyCoef": 0.003,
+    "epochs": 2,
+    "evalGamesPerGeneration": 256,
+    "gaeLambda": 0.95,
+    "gamesPerGeneration": 1024,
+    "gamma": 0.999,
+    "guardianSchedule": "absolute-balanced",
+    "klReferenceCoef": 0.05,
+    "learningRate": 4e-05,
+    "maxRounds": 30,
+    "optimizerStepsPerEpoch": 196,
+    "ppoRowsPerEpoch": 100000,
+    "reach30ValueCoef": 1.0,
+    "sample": true,
+    "seats": 1,
+    "soloMaxStatusLevel": 2,
+    "strategicDecisionScope": "engine-cycle",
+    "temperature": 0.55,
+    "valueClipEpsilon": 0.1,
+    "valueCoef": 0.5,
+    "winBonus": 4.0,
+    "workers": 24
+  },
+  "trustGates": {
+    "behaviorReach30BrierNoWorseThanConstant": true,
+    "malformedEpisodes": 0,
+    "malformedRows": 0,
+    "maxApproxKl": 0.02,
+    "maxBehaviorLogpReconstructionError": 0.001,
+    "maxBehaviorReach30Ece": 0.1,
+    "maxOrdinaryClipFraction": 0.2,
+    "maxWeightedClipFraction": 0.2,
+    "stalls": 0
+  }
+}

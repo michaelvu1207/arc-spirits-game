@@ -1,0 +1,105 @@
+{
+  "valid": true,
+  "root": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted",
+  "generation": 1,
+  "trainingSeeds": {
+    "min": 966100000,
+    "max": 966101023,
+    "count": 1024
+  },
+  "games": 1024,
+  "stalls": 0,
+  "evaluationSeeds": {
+    "min": 966700000,
+    "max": 966700255,
+    "count": 256
+  },
+  "evaluationStalls": 0,
+  "rows": 122619,
+  "policyRows": 115902,
+  "roundCounts": {
+    "1-8": 42071,
+    "9-18": 46562,
+    "19-30": 33986
+  },
+  "policyRoundCounts": {
+    "1-8": 39594,
+    "9-18": 44473,
+    "19-30": 31835
+  },
+  "behaviorCheckpoint": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+  "behaviorCheckpointSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+  "behaviorLogpMaxAbsError": 2.4318695068359375e-05,
+  "behaviorReach30Calibration": {
+    "nll": 0.412789,
+    "brier": 0.138817,
+    "constant_brier": 0.249355,
+    "auc": 0.88633,
+    "auprc": 0.902064,
+    "ece": 0.037064,
+    "rows": 122619.0
+  },
+  "soloReach30Credit": {
+    "soloOutcomeCoef": 0.0,
+    "soloReach30Coef": 0.0,
+    "reach30Horizon": "30",
+    "soloOutcomeApplied": 0,
+    "soloReach30Applied": 0
+  },
+  "roundPolicyBands": [
+    [
+      8,
+      0.5
+    ],
+    [
+      18,
+      1.0
+    ],
+    [
+      30,
+      2.0
+    ]
+  ],
+  "effectivePolicyWeightShare": {
+    "1-8": 0.15473659527903705,
+    "9-18": 0.34760825386900107,
+    "19-30": 0.4976551508519619
+  },
+  "epochMetrics": [
+    {
+      "epoch": 1,
+      "approxKl": 0.0049,
+      "clipFraction": 0.15,
+      "roundWeightedKl": 0.0054,
+      "roundWeightedClipFraction": 0.171,
+      "optimizerSteps": 196
+    },
+    {
+      "epoch": 2,
+      "approxKl": 0.0026,
+      "clipFraction": 0.094,
+      "roundWeightedKl": 0.0028,
+      "roundWeightedClipFraction": 0.105,
+      "optimizerSteps": 196
+    }
+  ],
+  "checkpoint": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted/checkpoints/main-0-gen1.pt",
+  "checkpointSha256": "8be5c7c8c16780e4f31ad37d6165db538981b18fe7eada665054743a0ca600a0",
+  "manifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+  "trustedCoreAuditSchema": "arc-v32-generation-audit-v1",
+  "schemaVersion": "arc-v35-generation-audit-v1",
+  "experiment": "v35-v2-late-credit-screen",
+  "replicate": "a",
+  "arm": "late-reweighted",
+  "protocol": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+  "protocolSha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+  "configSha256": "7535df92f4112d451e41b99e0b4773cd594961419d5cfbd9cf67fae677044440",
+  "bindingSha256": "6b51160d4a7a0b71e15507fbfa6670c9b51d60d6ba77257161ed5c5634a17472",
+  "catalogSha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+  "rawGenerationCommitment": {
+    "sha256": "6f0e00764b98222d294451a1d7e7776d3d69d02fa0d6b2d022b33bcdf574b32c",
+    "files": 76,
+    "bytes": 1469410029
+  },
+  "promotionEligible": false
+}

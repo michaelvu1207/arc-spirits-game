@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "arc-v35-generation-environment-v1",
+  "root": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/late-reweighted",
+  "generation": 1,
+  "gpuLine": "7,GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0,0,0",
+  "python": "3.12.3",
+  "torch": "2.6.0+cu124",
+  "torchCuda": "12.4",
+  "cudaAvailable": true,
+  "visibleDeviceCount": 1,
+  "visibleDeviceName": "NVIDIA A100-SXM4-40GB",
+  "cudnn": 90100,
+  "node": "v20.20.1",
+  "npm": "10.8.2",
+  "kernel": "6.8.0-101-generic",
+  "determinism": {
+    "CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+    "CUDA_VISIBLE_DEVICES": "7",
+    "PYTHONHASHSEED": "0",
+    "CUBLAS_WORKSPACE_CONFIG": ":4096:8"
+  },
+  "hashes": {
+    "package-lock.json": "e449053b2edd44cf465d88a3fe72517c105ea3baa344d17d8feba119e089b97c",
+    "ml/requirements.txt": "87f89cca3a457dd6ec0ec0a771d81668c9e45c3ca16bd86d6028bbfc13037a6d",
+    "ml/catalog.json": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+    "ml/train.py": "fd026db80fdbf21c2f880ffabb5d5422a0f754cd0a8003a14e8643d184d5d201",
+    "ml/ppo.py": "9bdaa7d1057182601805cd552804eb5deea6c206033f32acfe6d3ffc08c59fc6"
+  }
+}

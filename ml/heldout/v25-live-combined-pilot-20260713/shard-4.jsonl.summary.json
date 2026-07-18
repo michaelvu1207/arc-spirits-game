@@ -1,0 +1,175 @@
+{
+  "mode": "loop",
+  "family": "combined",
+  "sourceCommit": "5e47685",
+  "checkpointPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+  "checkpointSha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+  "catalogPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/catalogs/live-20260713-5f4ad348.json",
+  "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+  "games": 2,
+  "rollouts": 8,
+  "seedBase": 9900009,
+  "maxStatusLevel": 2,
+  "navigationMinRound": 1,
+  "navigationMaxLogitGap": 1.7976931348623157e+308,
+  "baselineWins": 2,
+  "teacherWins": 1,
+  "baselineOnly": 1,
+  "teacherOnly": 0,
+  "baselineReach15": 2,
+  "teacherReach15": 2,
+  "baselineConvert15To30": 2,
+  "teacherConvert15To30": 1,
+  "baselineMeanVP": 30,
+  "teacherMeanVP": 23.5,
+  "baselinePost15": 1.7532467532467533,
+  "teacherPost15": 1.3333333333333335,
+  "baselineMeanFirst30Round": 25,
+  "teacherMeanFirst30Round": 26,
+  "baselineStalls": 0,
+  "teacherStalls": 0,
+  "counters": {
+    "evaluations": 135,
+    "decisive": 17,
+    "changed": 15,
+    "nonDecisiveAbstentions": 118,
+    "invalidAbstentions": 0,
+    "candidateRollouts": 5648,
+    "candidateRolloutStalls": 0,
+    "byRoundBand": {
+      "01-05": {
+        "evaluations": 27,
+        "decisive": 2,
+        "changed": 2
+      },
+      "06-10": {
+        "evaluations": 23,
+        "decisive": 6,
+        "changed": 5
+      },
+      "11-20": {
+        "evaluations": 46,
+        "decisive": 8,
+        "changed": 7
+      },
+      "21-30": {
+        "evaluations": 39,
+        "decisive": 1,
+        "changed": 1
+      }
+    }
+  },
+  "wallMs": 610530,
+  "paired": [
+    {
+      "seed": 9900009,
+      "guardian": "Void Avatar",
+      "baseline": {
+        "reached15": true,
+        "reached30": true,
+        "converted15To30": true,
+        "finalVP": 30,
+        "post15VpPerRound": 2.142857142857143,
+        "first30Round": 23,
+        "rounds": 23,
+        "stalled": false
+      },
+      "teacher": {
+        "reached15": true,
+        "reached30": false,
+        "converted15To30": false,
+        "finalVP": 17,
+        "post15VpPerRound": 1,
+        "first30Round": null,
+        "rounds": 30,
+        "stalled": false
+      },
+      "counters": {
+        "evaluations": 74,
+        "decisive": 6,
+        "changed": 6,
+        "nonDecisiveAbstentions": 68,
+        "invalidAbstentions": 0,
+        "candidateRollouts": 3344,
+        "candidateRolloutStalls": 0,
+        "byRoundBand": {
+          "01-05": {
+            "evaluations": 14,
+            "decisive": 0,
+            "changed": 0
+          },
+          "06-10": {
+            "evaluations": 10,
+            "decisive": 3,
+            "changed": 3
+          },
+          "11-20": {
+            "evaluations": 23,
+            "decisive": 2,
+            "changed": 2
+          },
+          "21-30": {
+            "evaluations": 27,
+            "decisive": 1,
+            "changed": 1
+          }
+        }
+      }
+    },
+    {
+      "seed": 9900010,
+      "guardian": "Bubblepop",
+      "baseline": {
+        "reached15": true,
+        "reached30": true,
+        "converted15To30": true,
+        "finalVP": 30,
+        "post15VpPerRound": 1.3636363636363635,
+        "first30Round": 27,
+        "rounds": 27,
+        "stalled": false
+      },
+      "teacher": {
+        "reached15": true,
+        "reached30": true,
+        "converted15To30": true,
+        "finalVP": 30,
+        "post15VpPerRound": 1.6666666666666667,
+        "first30Round": 26,
+        "rounds": 26,
+        "stalled": false
+      },
+      "counters": {
+        "evaluations": 61,
+        "decisive": 11,
+        "changed": 9,
+        "nonDecisiveAbstentions": 50,
+        "invalidAbstentions": 0,
+        "candidateRollouts": 2304,
+        "candidateRolloutStalls": 0,
+        "byRoundBand": {
+          "01-05": {
+            "evaluations": 13,
+            "decisive": 2,
+            "changed": 2
+          },
+          "06-10": {
+            "evaluations": 13,
+            "decisive": 3,
+            "changed": 2
+          },
+          "11-20": {
+            "evaluations": 23,
+            "decisive": 6,
+            "changed": 5
+          },
+          "21-30": {
+            "evaluations": 12,
+            "decisive": 0,
+            "changed": 0
+          }
+        }
+      }
+    }
+  ]
+}

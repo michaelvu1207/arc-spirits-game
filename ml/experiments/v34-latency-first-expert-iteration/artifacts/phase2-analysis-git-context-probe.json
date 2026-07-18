@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-git-context-probe-v1",
+  "authoritative": false,
+  "purpose": "outcome-blind local feasibility probe only",
+  "recordedAt": "2026-07-14T17:13:53Z",
+  "gitVersion": "git version 2.39.5 (Apple Git-154)",
+  "databaseBytesApproximate": 102400,
+  "workingTreeCopied": false,
+  "commitObjects": [
+    "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+    "a23010e9a027c25737fcf4987174971039faf213",
+    "7c414494d739c04004f8daecf896ca176517b2ee"
+  ],
+  "shallowBoundary": "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+  "head": "7c414494d739c04004f8daecf896ca176517b2ee",
+  "environment": {
+    "GIT_DIR": "/tmp/arc-v34-minimal-git-context-probe/.git",
+    "GIT_WORK_TREE": "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game"
+  },
+  "checks": {
+    "rawCommitObjectsRehashedToOriginalIds": true,
+    "headResolved": true,
+    "threeCommitLogExact": true,
+    "implementationCommitIsAncestor": true,
+    "authoritativeWorkingTreeUnchanged": true,
+    "analyzerInvoked": false,
+    "conditionOutcomeOpened": false
+  },
+  "limitations": {
+    "commitGraphOnly": true,
+    "treeAndBlobObjectsIntentionallyAbsent": true,
+    "fullGitFsckExpectedToReportMissingTrees": true,
+    "workingTreeInputsRemainIndependentlyHashVerifiedByFrozenAnalyzer": true
+  }
+}

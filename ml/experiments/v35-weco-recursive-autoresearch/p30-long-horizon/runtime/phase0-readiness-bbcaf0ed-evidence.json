@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "arc-v35-p30-phase0-readiness-evidence-v1",
+  "valid": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "campaignInstanceId": "bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14",
+  "protocolSha256": "9da51efda745bd5221ecc5b00521808846026a9f3d472d3e284a1fae6c7e06ba",
+  "sourceContractSha256": "5aeaa30724111352f73ae9912eb120c3481058bb8df579b0a58a549ea29a035b",
+  "phase0RuntimeReviewEvidence": {
+    "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/runtime/phase0-runtime-fable-review-bbcaf0ed-evidence.json",
+    "sha256": "ef7f1c70bd340cdcaed752622130fe3c56414ab2c9520f51cf3153a470e06483",
+    "commit": "8b9dcc29e4b0ad6968768245b920118cc1847822",
+    "verdict": "ACCEPT"
+  },
+  "guardianReadiness": {
+    "actionId": "2238f1e0162939cceb3c349fca0f590830a860ee05ad9f6501ce7d54be1f2876",
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/bbcaf0ed7716b21e8fc2bfbeac72f7beb958b6be7f6cab46b9911e8466b64c14/preflights/phase0-readiness.signed.json",
+    "sha256": "76fe8beee77b60cd68b39877fc4258e670da59c67141b9fd8fc72dfb5cfa55f1",
+    "stateAdvanced": true
+  },
+  "nextAuthorizedState": {
+    "role": "issuer",
+    "verb": "issue-generation",
+    "logicalId": "rep-a-control-zero-gen1-issuer",
+    "replicate": "a",
+    "arm": "control-zero",
+    "generation": 1,
+    "trainingStarted": false,
+    "productionSeedsConsumed": false
+  },
+  "runtimeBoundary": {
+    "host": "ubuntu@216.151.21.122",
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenPhysicalGpus": [
+      4,
+      5,
+      6
+    ]
+  }
+}

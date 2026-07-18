@@ -1,21 +1,22 @@
 /**
  * Reward shaping for VP-MAXIMIZATION.
  *
- * Objective (per the design): the bot maximizes the Victory Points it accumulates — total VP
- * by game end, and VP/turn (efficiency). It is NOT trying to beat opponents; opponents are just
- * part of the environment. This is a dense, well-defined objective, which is what makes it
- * learnable (unlike sparse "win the game").
+ * This module supplies the dense Victory Point and build-progress part of the objective.
+ * PPO additionally supplies terminal placement, true-win, and all-Fallen outcomes. Keeping
+ * those concerns separate makes the dense discovery signal inspectable without pretending
+ * that final VP alone is the complete competitive objective.
  *
- * Per-step reward  r_t = ΔVP (normalized)  +  λ · (Φ_build(s_{t+1}) − Φ_build(s_t))
+ * Historical per-step reward  r_t = ΔVP (normalized) + Φ_build(s_{t+1}) − Φ_build(s_t)
  *   - ΔVP is the PRIMARY signal — summed over a game it telescopes to final VP.
- *   - Φ_build (attack dice, max barrier = Cultivator scaling, awakened spirits, corruption) is
- *     a potential-based shaping term: POLICY-INVARIANT (Ng et al. 1999), so it can't change WHAT
- *     is optimal (max VP) — it only guides discovery toward the build that produces VP, which is
- *     how the strong economy line gets found instead of the bot flailing.
+ *   - Φ_build (attack dice, max barrier = Cultivator scaling, awakened spirits, corruption)
+ *     guides discovery toward the build that produces VP.
+ *   - The historical form retains final Φ and is therefore an explicit engine objective, not
+ *     policy-invariant. `PotentialShapingMode='policy-invariant'` uses Ng et al.'s discounted
+ *     γΦ(s')−Φ(s), with Φ(terminal)=0, so shaping cannot reward unused terminal engine.
  * Return-to-go  G_t = Σ_k γ^{k−t} r_k.  γ<1 ⇒ near-term VP worth more ⇒ optimizes VP/TURN.
  *
- * Build weights are configurable so a population of agents can be guided toward distinct VP
- * routes (economy-scaler vs pvp) — the diversity lever — while all maximizing VP.
+ * Build weights are configurable so a population can be guided toward distinct VP routes.
+ * In corrected mode they change learning guidance, not the terminal objective.
  */
 
 import { VP_TO_WIN, type PrivatePlayerState } from '../types';
@@ -46,6 +47,28 @@ export interface ShapingWeights {
 	attackPower?: number;
 }
 
+/**
+ * The historical reward used a plain `Phi(next) - Phi(current)` delta and retained
+ * `Phi(final)` at a terminal state. That is useful as an explicit engine objective,
+ * but it is not policy-invariant under discounted RL and can reward an engine that
+ * is never converted into VP. The corrected mode uses Ng et al.'s discounted form
+ * `gamma * Phi(next) - Phi(current)` and defines terminal potential as zero.
+ */
+export type PotentialShapingMode = 'legacy-terminal-retention' | 'policy-invariant';
+
+export function potentialShapingDelta(
+	currentPhi: number,
+	nextPhi: number,
+	gamma: number,
+	terminal: boolean,
+	mode: PotentialShapingMode = 'legacy-terminal-retention'
+): number {
+	if (mode === 'policy-invariant') {
+		return gamma * (terminal ? 0 : nextPhi) - currentPhi;
+	}
+	return nextPhi - currentPhi;
+}
+
 /** Dice-tier mean face value (matches encode.ts expRoll: basic 1/3, enchanted 2/3, exalted 1, arcane 2). */
 const DICE_MEAN: Record<string, number> = { basic: 1 / 3, enchanted: 2 / 3, exalted: 1, arcane: 2 };
 
@@ -57,7 +80,12 @@ export function expectedAttack(p: PrivatePlayerState | undefined): number {
 }
 
 /** Balanced default: modest build guidance toward dice + barrier (the economy core). */
-export const BALANCED_SHAPING: ShapingWeights = { dice: 0.15, maxBarrier: 0.15, awakened: 0.1, status: 0.05 };
+export const BALANCED_SHAPING: ShapingWeights = {
+	dice: 0.15,
+	maxBarrier: 0.15,
+	awakened: 0.1,
+	status: 0.05
+};
 
 /**
  * Population playstyle presets — same VP objective, different build guidance → diverse VP routes.
@@ -66,9 +94,9 @@ export const BALANCED_SHAPING: ShapingWeights = { dice: 0.15, maxBarrier: 0.15, 
  * corruption ladder toward Fallen, which is the gateway to the +3-VP Evil group-attack. A
  * POSITIVE status weight (pvp) nudges discovery toward corrupting; ZERO leaves it neutral; a
  * NEGATIVE weight (pure) actively steers discovery AWAY from corruption so the learner must find
- * a Good economy / monster-hunting line to earn VP. Because Φ enters the return only as a
- * telescoping potential delta (Ng et al. 1999), none of these change the true VP optimum — they
- * only change WHICH VP route gets discovered, which is exactly the diversity lever.
+ * a Good economy / monster-hunting line to earn VP. These weights change the historical objective
+ * whenever terminal Φ is retained; use policy-invariant shaping when they should only accelerate
+ * discovery without changing the true VP optimum.
  */
 export const SHAPING_PRESETS: Record<string, ShapingWeights> = {
 	balanced: BALANCED_SHAPING,
@@ -91,18 +119,34 @@ export const SHAPING_PRESETS: Record<string, ShapingWeights> = {
 	banker: { dice: 0.05, maxBarrier: 0.35, awakened: 0.15, status: 0, classProgress: 0.4 }, // assemble Cultivators → maxBarrier → kill monsters
 	ascend: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: 0, classProgress: 0.4 }, // assemble + awaken VP-class spirits (World Ender +1/round)
 	// ascend2 (ladder4, ABLATION): tested whether a NEGATIVE status potential (−0.25) reduces the
-	// corruption→Fallen spiral. It did NOT — Fallen held ~100% across all 60 gens. Potential-based
-	// shaping is policy-invariant (Ng et al. 1999), so it cannot move a VP-optimal corrupt policy;
-	// and per Michael, corrupting is a legitimate line when the engine backs it. Kept frozen as the
-	// ablation arm. `ascend` is likewise frozen for reproducibility.
-	ascend2: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: -0.25, faceDown: 0.1, classProgress: 0.4 },
+	// corruption→Fallen spiral. It did NOT — Fallen held ~100% across all 60 gens. The historical
+	// terminal-retention implementation also made this an explicit end-state preference, so the
+	// negative result cannot be treated as a clean policy-invariant ablation. Kept frozen for
+	// reproducibility; `ascend` is likewise frozen.
+	ascend2: {
+		dice: 0.05,
+		maxBarrier: 0.15,
+		awakened: 0.35,
+		status: -0.25,
+		faceDown: 0.1,
+		classProgress: 0.4
+	},
 	// ascend3 (ladder5): the ENGINE-POWER fix. Michael's diagnosis is that the Fallen spiral is a
 	// SYMPTOM — the real deficit is attack power / initiative: the bot fights with a far weaker dice
 	// pool than a strong player, so its fights fail and its corruptions pay nothing. So NO status
 	// penalty (corruption is fine when it earns value); instead ADD attackPower 0.3 crediting the
 	// dice-pool expected roll, keep faceDown 0.1 (unawakened summons feed the engine loop), and lower
-	// awakened 0.35→0.25 to keep total Φ ~O(1). All terms are Φ-of-state, policy-invariant.
-	ascend3: { dice: 0.05, maxBarrier: 0.15, awakened: 0.25, status: 0, faceDown: 0.1, classProgress: 0.4, attackPower: 0.3 }
+	// awakened 0.35→0.25 to keep total Φ ~O(1). These terms are policy-invariant only when paired
+	// with `PotentialShapingMode='policy-invariant'`.
+	ascend3: {
+		dice: 0.05,
+		maxBarrier: 0.15,
+		awakened: 0.25,
+		status: 0,
+		faceDown: 0.1,
+		classProgress: 0.4,
+		attackPower: 0.3
+	}
 };
 
 export function shapingFor(name: string | undefined): ShapingWeights {
@@ -150,7 +194,12 @@ export function vpReturnsToGo(
 	finalVp: number,
 	finalBuild: number,
 	gamma = 0.97,
-	bonus: number[] = []
+	bonus: number[] = [],
+	opts: {
+		potentialMode?: PotentialShapingMode;
+		/** True only when the trajectory reached a real terminal game state. */
+		terminal?: boolean;
+	} = {}
 ): number[] {
 	const n = vp.length;
 	const g = new Array<number>(n).fill(0);
@@ -158,10 +207,14 @@ export function vpReturnsToGo(
 	for (let i = n - 1; i >= 0; i--) {
 		const nextVp = i < n - 1 ? vp[i + 1] : finalVp;
 		const nextBuild = i < n - 1 ? build[i + 1] : finalBuild;
+		const terminalTransition = opts.terminal === true && i === n - 1;
 		// Core = normalized ΔVP + potential-based build shaping. `bonus` is an additive per-step
 		// event reward (e.g. monster-kill bonus) — amplifies the sparse monster-VP signal and, via
 		// the backward return-to-go, credits the whole setup sequence that led to the kill.
-		const r = (nextVp - vp[i]) / VP_TO_WIN + (nextBuild - build[i]) + (bonus[i] ?? 0);
+		const r =
+			(nextVp - vp[i]) / VP_TO_WIN +
+			potentialShapingDelta(build[i], nextBuild, gamma, terminalTransition, opts.potentialMode) +
+			(bonus[i] ?? 0);
 		running = r + gamma * running;
 		g[i] = running;
 	}

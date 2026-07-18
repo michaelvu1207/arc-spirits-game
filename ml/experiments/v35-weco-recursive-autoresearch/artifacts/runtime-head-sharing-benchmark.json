@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "arc-v35-runtime-head-sharing-benchmark-v1",
+  "recordedAt": "2026-07-15T18:45:38Z",
+  "outcomeBearing": false,
+  "promotionEligible": false,
+  "basisCommit": "0239cb8e6524ce0548a398d94a186cda590d48e1",
+  "implementation": {
+    "ml/infer_server.py": "417b3d62d650b625fef7ba9d772cc11dd21c73f57a2ad399a5d703f69b27f5cd",
+    "ml/model_v2.py": "9eb14bca7bd64951141a496faf3f1b67bad02cf52b4901bd7c573527cc4c398d",
+    "ml/test_infer_server.py": "fb6fbc6662cd2b4fadd03f1004176b30aafeab316f894e5f122762b3a5ae02c1"
+  },
+  "inputs": {
+    "checkpoint": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+    "checkpointSha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+    "fixture": "ml/data_fixtures/obsv2_fixture.json",
+    "fixtureSha256": "50a299e1b6f4b60aa88f5b13193964af56f1c9362d4c57d57dbb8661f25b88b8",
+    "candidatesPerRow": 8,
+    "dtype": "float32"
+  },
+  "environment": {
+    "host": "SimForge",
+    "physicalGpu": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "gpuName": "NVIDIA A100-SXM4-40GB",
+    "driver": "580.159.03",
+    "torch": "2.6.0+cu124",
+    "cuda": "12.4",
+    "cudnn": 90100,
+    "deterministicAlgorithms": false,
+    "allowTf32Matmul": false,
+    "allowTf32Cudnn": true,
+    "forbiddenPhysicalGpus": [4, 5, 6],
+    "isolatedOverlay": "/tmp/arc-v35-runtime-bench-20260715",
+    "isolatedOverlayRemoved": true,
+    "gpu7MemoryMiBAfter": 0
+  },
+  "method": {
+    "legacyReachOnly": "full policy/value forward followed by reach30_logits",
+    "repairedReachOnly": "requested_outputs(reach30)",
+    "legacyMixed": "full policy/value forward followed by reach30_logits",
+    "repairedMixed": "requested_outputs(logits,value,reach30)",
+    "warmupIterations": 10,
+    "synchronizeAfterTimedLoop": true
+  },
+  "measurements": [
+    {
+      "batchRows": 8,
+      "iterations": 100,
+      "legacyReachOnlyMs": 4.076803023926914,
+      "repairedReachOnlyMs": 1.8912727106362581,
+      "reachOnlySpeedup": 2.155587082179917,
+      "legacyMixedMs": 4.144718758761883,
+      "repairedMixedMs": 2.201769598759711,
+      "mixedSpeedup": 1.8824488997834576
+    },
+    {
+      "batchRows": 32,
+      "iterations": 60,
+      "legacyReachOnlyMs": 3.9922921375061073,
+      "repairedReachOnlyMs": 1.9029041364168127,
+      "reachOnlySpeedup": 2.097999610754766,
+      "legacyMixedMs": 3.9874263030166426,
+      "repairedMixedMs": 2.1908535777280727,
+      "mixedSpeedup": 1.820033225201488
+    },
+    {
+      "batchRows": 128,
+      "iterations": 30,
+      "legacyReachOnlyMs": 4.976392071694136,
+      "repairedReachOnlyMs": 2.4596926600982747,
+      "reachOnlySpeedup": 2.0231763717566684,
+      "legacyMixedMs": 4.972359025850892,
+      "repairedMixedMs": 2.542269400631388,
+      "mixedSpeedup": 1.9558741589762187
+    }
+  ],
+  "claims": {
+    "sameBatchBitExactCoveredByTests": true,
+    "actionReplayParityRun": false,
+    "gameLatencyPrecheckRun": false,
+    "strengthConfirmationRun": false
+  },
+  "storage": {
+    "share8AvailableBytesAfter": 9126797312
+  }
+}

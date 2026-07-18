@@ -1,0 +1,16 @@
+{
+  "format": "arc-entity-scorer-v2",
+  "obs_version": 2,
+  "obs_flat_len": 3419,
+  "act_dim": 104,
+  "d_model": 128,
+  "layers": 3,
+  "heads": 4,
+  "reach30_horizons": [
+    20,
+    25,
+    30
+  ],
+  "reach30_trained": true,
+  "params": 832009
+}

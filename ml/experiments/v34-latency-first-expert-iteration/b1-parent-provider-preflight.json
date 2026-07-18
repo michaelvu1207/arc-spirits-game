@@ -1,0 +1,58 @@
+{
+	"schemaVersion": "arc-v34-b1-parent-provider-preflight-v1",
+	"policyBinding": {
+		"schemaVersion": "arc-v34-policy-provider-binding-v1",
+		"mode": "registered-parent",
+		"provider": "arc-v34-remote-parent-policy-adapter-v1",
+		"purpose": "v34-lane-b-b1-outcome-blind-raw-parent-snapshot-collection",
+		"policyObservationVersion": 2,
+		"checkpoint": {
+			"path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+			"bytes": 3354466,
+			"sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+		},
+		"runtime": {
+			"adapterSchema": "arc-v34-remote-parent-policy-adapter-v1",
+			"policyConfigSha256": "6fede73b038b4b882489bac62feecfb95294fc25cc2f3f17fd09890f89783a9e",
+			"checkpointManifest": {
+				"path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.manifest.json",
+				"bytes": 246,
+				"sha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad"
+			},
+			"server": {
+				"format": "arc-entity-scorer-v2",
+				"obs_dim": 3419,
+				"act_dim": 104,
+				"device": "cuda:0",
+				"weights": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+				"weights_sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+				"aux": {
+					"farm_value": true,
+					"route_mode": true,
+					"reward_pick": true,
+					"placement": false,
+					"reach30": true
+				},
+				"reach30_horizon": 30
+			},
+			"client": {
+				"implementation": "ready-synchronized-worker-binary-v1",
+				"wire": "binary",
+				"timeoutMs": 30000,
+				"socketPath": "/dev/shm/arc-v34-b1-parent-preflight-0dff194.sock",
+				"inputQuantization": "Float32Array.from",
+				"requestedSections": ["logits", "reach30"],
+				"roundTripsPerDecision": 1
+			},
+			"optionHead": "disabled-checkpoint-has-no-option-head",
+			"reach30Probability": "sigmoid-trained-logit-horizon-30",
+			"recoveryProbability": {
+				"source": "constant-zero-no-trained-head-not-used-for-recovery-classification",
+				"value": 0
+			}
+		}
+	},
+	"policyBindingSha256": "2f597581a152f450ce8a07a30757cd47952b2edade154a6a0536b8c858f7ab0b",
+	"passed": true,
+	"checkedAt": "2026-07-15T00:46:57.000Z"
+}

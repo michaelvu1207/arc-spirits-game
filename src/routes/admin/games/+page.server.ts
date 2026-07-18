@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getSupabaseAdmin } from '$lib/server/supabaseAdmin';
-import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 
 type GameSummaryRow = {
 	game_id: string;
@@ -40,6 +40,11 @@ const GAME_TABLES_TO_DELETE = [
 ] as const;
 
 async function recomputeVerifiedStats(supabaseAdmin: NonNullable<ReturnType<typeof getSupabaseAdmin>>): Promise<void> {
+	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL;
+	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY;
+	if (!supabaseUrl || !supabaseAnonKey) {
+		throw error(500, 'Missing public Supabase configuration');
+	}
 	const { data, error: tokenError } = await supabaseAdmin
 		.from('internal_tokens')
 		.select('value')
@@ -56,13 +61,13 @@ async function recomputeVerifiedStats(supabaseAdmin: NonNullable<ReturnType<type
 		throw error(500, 'Missing recompute token in internal_tokens');
 	}
 
-	const res = await fetch(`${PUBLIC_SUPABASE_URL}/functions/v1/recompute-stats`, {
+	const res = await fetch(`${supabaseUrl}/functions/v1/recompute-stats`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			'x-recompute-token': token,
-			Authorization: `Bearer ${PUBLIC_SUPABASE_ANON_KEY}`,
-			apikey: PUBLIC_SUPABASE_ANON_KEY
+			Authorization: `Bearer ${supabaseAnonKey}`,
+			apikey: supabaseAnonKey
 		},
 		body: JSON.stringify({ minTurns: 10, minVictoryPoints: 0 })
 	});

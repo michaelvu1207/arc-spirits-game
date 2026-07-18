@@ -2,6 +2,7 @@
 	import { getGuardianAsset } from '$lib/stores/assetStore.svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
 	import { seatAccent } from './helpers';
+	import LowPolySpiritStage from '$lib/components/LowPolySpiritStage.svelte';
 
 	interface Props {
 		open: boolean;
@@ -151,6 +152,7 @@
 			<aside class="detail" aria-live="polite">
 				{#if selected}
 					{@const dsrc = detailArt(selected)}
+					<div class="guardian-stage"><LowPolySpiritStage moment="guardian" guardianName={selected} accent={originColor(selected)} compact /></div>
 					<div class="dart" style="--oc: {originColor(selected)}">
 						{#if dsrc}
 							<img src={dsrc} alt={selected} />
@@ -206,6 +208,7 @@
 {/if}
 
 <style>
+	.guardian-stage{width:100%;height:136px;margin:-8px 0 -18px;overflow:hidden}
 	/* Full-screen character-select scene (not a floating modal). */
 	.select {
 		position: fixed;

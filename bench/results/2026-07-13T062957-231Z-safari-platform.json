@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-07-13T06:29:57.232Z",
+  "browserVersion": "26.3",
+  "screenshotPath": "/Users/michaelvu-simforge/Documents/Programming/ArcSpirits/arc-spirits-game/bench/results/2026-07-13T062957-231Z-safari-platform.png",
+  "passed": 8,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "installed Safari session created",
+      "ok": true,
+      "detail": "Safari 26.3"
+    },
+    {
+      "name": "play surface hydrates in Safari",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "browser zoom remains enabled",
+      "ok": true,
+      "detail": "width=device-width, initial-scale=1, viewport-fit=cover"
+    },
+    {
+      "name": "settings controls meet the 44px target",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "text, contrast and pseudo-locale apply",
+      "ok": true,
+      "detail": "{\"scale\":\"130\",\"lang\":\"en-XA\",\"contrast\":\"true\"}"
+    },
+    {
+      "name": "accessibility preferences survive reload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "low-poly showcase has a real Safari WebGL context",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "primary journey accepts keyboard Enter",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

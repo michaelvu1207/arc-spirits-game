@@ -11,8 +11,10 @@ import { createLobbyState, applyGameCommand } from '../src/lib/play/runtime';
 import { legalActions } from '../src/lib/play/ml/actions';
 import { SEAT_COLORS } from '../src/lib/play/types';
 import type { GameActor, GameCommand, PublicGameState, SeatColor } from '../src/lib/play/types';
-import { getPlayAdmin, PLAY_TABLES } from './supabase';
+import { randomUUID } from 'node:crypto';
+import { getPlayAdmin, PLAY_TABLES, getSessionByRoomCode, getMemberById } from './supabase';
 import { loadCatalog } from './catalog';
+import { createWsTicket } from '../src/lib/play/server/wsTickets';
 
 function randomRoomCode(): string {
 	const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -23,10 +25,56 @@ function randomRoomCode(): string {
 
 export interface SeededRoom {
 	roomCode: string;
+	/** PUBLIC member id (seat labeling; non-authorizing). */
 	memberId: string;
+	/** The seeded member's account id (the durable principal for this membership). */
+	userId: string;
+	/** A ONE-USE join ticket for the seeded member (the smoke's first join; later
+	 *  joins mint fresh ones via /debug/ticket). */
+	ticket: string;
 	seat: SeatColor;
 	/** A pre-validated legal command for the seated member, for the smoke to submit. */
 	sampleCommand: GameCommand;
+}
+
+/**
+ * Mint a fresh ONE-USE join ticket for an already-seeded member (reconnects,
+ * second instances, restart scenarios). Dev/test only — gated by
+ * ARC_WS_ALLOW_DEBUG_SEED at the HTTP layer; production tickets come exclusively
+ * from the authenticated SvelteKit endpoint.
+ */
+export async function mintDebugTicket(params: {
+	memberId?: string;
+	roomCode?: string;
+}): Promise<{ ticket: string; expiresAt: string }> {
+	if (!params.memberId) throw new Error('memberId is required.');
+	const member = await getMemberById(params.memberId);
+	if (!member) throw new Error('member not found.');
+	if (params.roomCode) {
+		const session = await getSessionByRoomCode(params.roomCode);
+		if (!session || session.id !== member.session_id) throw new Error('member/room mismatch.');
+	}
+	if (!member.user_id) throw new Error('member has no owning account.');
+	return createWsTicket(getPlayAdmin(), {
+		sessionId: member.session_id,
+		userId: member.user_id,
+		memberId: member.id,
+		role: 'member'
+	});
+}
+
+/** Dev/test spectator ticket for a room (the smoke's spectator connections). */
+export async function mintDebugSpectatorTicket(
+	roomCode: string
+): Promise<{ ticket: string; expiresAt: string }> {
+	const session = await getSessionByRoomCode(roomCode);
+	if (!session) throw new Error('room not found.');
+	return createWsTicket(getPlayAdmin(), {
+		sessionId: session.id,
+		userId: randomUUID(),
+		memberId: null,
+		role: 'spectator'
+	});
 }
 
 /**
@@ -59,9 +107,16 @@ export async function seedDebugRoom(displayName = 'Smoke Host'): Promise<SeededR
 	if (sessionInsert.error) throw new Error(`seed: session insert failed: ${sessionInsert.error.message}`);
 	const sessionId = (sessionInsert.data as { id: string }).id;
 
+	const userId = randomUUID();
 	const memberInsert = await admin
 		.from(PLAY_TABLES.MEMBERS)
-		.insert({ session_id: sessionId, display_name: displayName, role: 'host', private_state: {} })
+		.insert({
+			session_id: sessionId,
+			display_name: displayName,
+			role: 'host',
+			private_state: {},
+			user_id: userId
+		})
 		.select('id')
 		.single();
 	if (memberInsert.error) throw new Error(`seed: member insert failed: ${memberInsert.error.message}`);
@@ -107,13 +162,21 @@ export async function seedDebugRoom(displayName = 'Smoke Host'): Promise<SeededR
 	const legal = legalActions(state, seat, catalog);
 	if (legal.length === 0) throw new Error('seed: no legal command available for the seated player.');
 
-	return { roomCode, memberId, seat, sampleCommand: legal[0] };
+	const { ticket } = await createWsTicket(admin, {
+		sessionId,
+		userId,
+		memberId,
+		role: 'member'
+	});
+	return { roomCode, memberId, userId, ticket, seat, sampleCommand: legal[0] };
 }
 
 export interface SeededBotRoom {
 	roomCode: string;
-	/** The one human (host) seat's member id — the client the smoke joins as. */
+	/** The one human (host) seat's PUBLIC member id (labeling only). */
 	humanMemberId: string;
+	/** ONE-USE join ticket for the human seat. */
+	humanTicket: string;
 	humanSeat: SeatColor;
 	botSeats: SeatColor[];
 }
@@ -155,6 +218,7 @@ export async function seedBotRoom(opts: {
 	const sessionId = (sessionInsert.data as { id: string }).id;
 
 	const memberIds: string[] = [];
+	const humanUserId = randomUUID();
 	for (let i = 0; i < seatCount; i += 1) {
 		const isBot = i > 0;
 		const insert = await admin
@@ -165,7 +229,8 @@ export async function seedBotRoom(opts: {
 				role: i === 0 ? 'host' : 'spectator',
 				private_state: {},
 				is_bot: isBot,
-				bot_profile: isBot ? 'neural' : null
+				bot_profile: isBot ? 'neural' : null,
+				user_id: isBot ? null : humanUserId
 			})
 			.select('id')
 			.single();
@@ -222,9 +287,16 @@ export async function seedBotRoom(opts: {
 		.eq('id', sessionId);
 	if (persist.error) throw new Error(`seedBot: persist: ${persist.error.message}`);
 
+	const { ticket: humanTicket } = await createWsTicket(admin, {
+		sessionId,
+		userId: humanUserId,
+		memberId: memberIds[0],
+		role: 'member'
+	});
 	return {
 		roomCode,
 		humanMemberId: memberIds[0],
+		humanTicket,
 		humanSeat: seats[0],
 		botSeats: seats.slice(1)
 	};

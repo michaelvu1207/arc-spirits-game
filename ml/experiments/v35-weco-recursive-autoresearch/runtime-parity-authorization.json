@@ -1,0 +1,150 @@
+{
+  "schemaVersion": "arc-v35-runtime-parity-authorization-v1",
+  "attemptId": "attempt-2",
+  "status": "proposed-amendment-review-pending",
+  "purpose": "Reject any V35 head-sharing runtime that changes selected commands or deadline advances before latency or strength evaluation.",
+  "oldBaseCommit": "0239cb8e6524ce0548a398d94a186cda590d48e1",
+  "oldCommit": "5574310327a19a609eb3713bff76efe48535aa91",
+  "newCommit": "07dc5e2a183a3f8dbb3ad1719fc228da7d7508af",
+  "oldArchiveSha256": "b28b24669bf205a19b70e1160a0336afcc12d0084767ba37b256cfc75c323d1f",
+  "newArchiveSha256": "d94b8d6ac9e320bb5b9648289e34af57ba3cc4d0d501e11ec9f8e4fc6d47d0cf",
+  "attempt1AuthorizationSha256": "b7eb90b6606de30c0bb49c12d30b08f6cb8e1bc4420d43a39e748ecf269dd3a7",
+  "attempt1IncidentSha256": "b6fcaa14f1a7518e43071a22da1329c24c29aeec9a19c6a6cad7c111b888320d",
+  "runtimeArchiveDiffPaths": [
+    "ml/infer_server.py",
+    "ml/model_v2.py"
+  ],
+  "sourceCommitDiffPaths": [
+    "ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-head-sharing-benchmark.json",
+    "ml/experiments/v35-weco-recursive-autoresearch/runtime-confirmation-fable-final-review.md",
+    "ml/experiments/v35-weco-recursive-autoresearch/runtime-confirmation-fable-review.md",
+    "ml/experiments/v35-weco-recursive-autoresearch/runtime-confirmation-plan.md",
+    "ml/infer_server.py",
+    "ml/model_v2.py",
+    "ml/test_infer_server.py"
+  ],
+  "checkpointPath": "ml/experiments/v35-weco-recursive-autoresearch/league/rep-a/p30-credit025/checkpoints/main-0-gen8.pt",
+  "checkpointSha256": "c799ee8587c5a82013dd06830eab7818b359a07944629a236de3dd1d2bd24e91",
+  "checkpointManifestSha256": "fe21b3adfc1b688515dc3a3d2de0d7a6defa611728aac0ccbdfb79bf36678fad",
+  "catalogSha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+  "candidate": {
+    "candidateId": "f4e6230e8d983dbc",
+    "candidateSha256": "f4e6230e8d983dbc65c25ab7132f9b9d24dc2c0d6567c1628fd70634416b7d18",
+    "sample": false,
+    "temperatureArg": 0.70727915,
+    "search": {
+      "sims": 4,
+      "objective": "solo-reach30",
+      "horizonRounds": 6,
+      "frac": 0.84868158,
+      "valueWeight": 0.25337527,
+      "rollout": "policy",
+      "navTemperature": 0.01453346
+    }
+  },
+  "seedContract": {
+    "visibility": "public-systems-only",
+    "seed0": 969060000,
+    "seedMax": 969060063,
+    "functionalGames": 8,
+    "operationalGames": 64,
+    "inventorySha256": "f4feaa3f5c0034b9f43b38513287f318c3f817bce5b6a6c8096f5719b4a2bf95",
+    "globalHistoricalNonUseClaimed": false,
+    "strengthEvaluation": false
+  },
+  "jobs": {
+    "legacy-functional": {
+      "sourceCommit": "5574310327a19a609eb3713bff76efe48535aa91",
+      "seed0": 969060000,
+      "games": 8,
+      "workers": 1,
+      "windowMs": 0,
+      "maxBatch": 1
+    },
+    "optimized-functional": {
+      "sourceCommit": "07dc5e2a183a3f8dbb3ad1719fc228da7d7508af",
+      "seed0": 969060000,
+      "games": 8,
+      "workers": 1,
+      "windowMs": 0,
+      "maxBatch": 1
+    },
+    "optimized-operational": {
+      "sourceCommit": "07dc5e2a183a3f8dbb3ad1719fc228da7d7508af",
+      "seed0": 969060000,
+      "games": 64,
+      "workers": 24,
+      "windowMs": 2,
+      "maxBatch": 512
+    },
+    "legacy-operational": {
+      "sourceCommit": "5574310327a19a609eb3713bff76efe48535aa91",
+      "seed0": 969060000,
+      "games": 64,
+      "workers": 24,
+      "windowMs": 2,
+      "maxBatch": 512
+    }
+  },
+  "traceInstrumentationFiles": {
+    "scripts/evaluate-solo-checkpoint.mjs": "924cd343983fef8b585564c4ef67ea1414a6b16bb4988df9ca5193f9c9df2e22",
+    "src/lib/play/ml/_actorpool.test.ts": "ed3572d25e5960050c6cf77c6afa077dd4cc94a8182ed625151777e92069de2a",
+    "src/lib/play/ml/actorWorker.ts": "6b1d773350d6e7f03d3a8a197c561a5fc62706ba184760b7137982aad91dd136",
+    "src/lib/play/ml/driver.ppo.test.ts": "41248087c56cdfd9442c8a448943daf9f320c3508eca6597893f483324f4c8cc",
+    "src/lib/play/ml/driver.ts": "5bc3b1e7524e25db9993453da38aa0da884907d69953cae39007d8e5d0d3e063",
+    "src/lib/play/ml/poolTypes.ts": "2386bb4721b373029bdae2b1f946900064cc90fbb9f53c1ebe092608517b6c5e"
+  },
+  "runtimeFiles": {
+    "old": {
+      "ml/infer_server.py": "36573dc4741b75dc813187ab0fe107bd78b94ec186f354d277f24589158fe62b",
+      "ml/model_v2.py": "4b5f9bc47bfcd96cac210e4f2a87ee43a1f8ca1b47edc4a9bb6bcd6ff6a033ea"
+    },
+    "new": {
+      "ml/infer_server.py": "417b3d62d650b625fef7ba9d772cc11dd21c73f57a2ad399a5d703f69b27f5cd",
+      "ml/model_v2.py": "9eb14bca7bd64951141a496faf3f1b67bad02cf52b4901bd7c573527cc4c398d"
+    }
+  },
+  "trusted": {
+    "runnerSha256": "066ca0a2e762c4a340465f61e309e4db6d43b877db66e9feb4f6947ae1e51d20",
+    "comparatorSha256": "50bd2b0b79947bb93232ecb44f4bf604c89043aa7a5197b105fa750f061ad19c",
+    "comparatorTestSha256": "02b24bdc95f9a1b553a167a8f4f4a564c6d48dd2e942e00a55c8cb241efd3a23",
+    "executionPlanSha256": "0a6f42674c4960e4c414e334ff507582ec9a11a9a76a2c22eba0750432f70cc6",
+    "fableReviewSha256": "3fdf85ab6695d34c6d7276f793058bdf44dada21ef711d6e87c65db004a7fb7c",
+    "attempt2AmendmentSha256": "14b3a3a38c7ce7a7f1d2a0fec66137b7ec3ecceabeebf9dc9966efad0f36fdcf",
+    "attempt2AmendmentReviewSha256": null
+  },
+  "pilotEvidence": {
+    "authorizationSha256": "d953deb5d7f76a12c4f2ad08cbbea081e0a0a3fbab8de5827feac50fc5352cd7",
+    "resultSha256": "7e83f0f781e7a81310e59c7cd3d3a71b1452f8851937136769e4b2780eb0ff89"
+  },
+  "execution": {
+    "host": "ubuntu@216.151.21.122",
+    "root": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+    "out": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-parity/attempt-2",
+    "gpuIndex": 7,
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "cudaVisibleDevices": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "forbiddenGpuIndices": [4, 5, 6],
+    "minimumShare8FreeBytes": 8589934592,
+    "minimumTmpFreeBytes": 5368709120,
+    "attempts": 1,
+    "retryAuthorized": false,
+    "ttyAllowed": false,
+    "outcomeOutputAllowed": false
+  },
+  "gates": {
+    "requiredComparisons": [
+      "crossRuntimeFunctional",
+      "crossRuntimeOperational",
+      "legacyBatchingControl",
+      "optimizedBatchingControl"
+    ],
+    "maximumTraceMismatchesEach": 0,
+    "maximumTotalStalls": 0,
+    "exactCoverageRequired": true,
+    "latencyPrecheckAuthorizedOnPass": true,
+    "strengthConfirmationAuthorized": false,
+    "privateConfirmationAuthorized": false,
+    "promotionEligible": false
+  }
+}

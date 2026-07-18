@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "arc-v35-p30-fable-reviewer-image-lock-v1",
+  "platform": "linux/arm64",
+  "baseImage": "node@sha256:f31365dd54da647fa44463f9b70391c748ffcf5e0ec0960115ab4b032d1f89ec",
+  "claudePackage": "@anthropic-ai/claude-code@2.1.211",
+  "imageReference": "arc-p30-fable@sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+  "imageId": "sha256:6c754e87b7f24678161673b3f3201038eb83c99ec8fd8682b4f952171d6ea01c",
+  "claudeExecutable": {
+    "path": "/usr/local/bin/claude",
+    "sha256": "1fff7e8f947c07b19d10b1fbf714b7e547e9536253b9b58230d8adbc4624f867",
+    "version": "2.1.211 (Claude Code)"
+  },
+  "user": "10001:10001",
+  "build": {
+    "command": "docker build --platform linux/arm64 --tag arc-p30-fable:2.1.211 --file ml/docker/p30-fable-reviewer.Dockerfile .",
+    "networkSecretsUsed": false
+  }
+}

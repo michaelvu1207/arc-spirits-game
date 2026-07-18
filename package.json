@@ -2,6 +2,11 @@
 	"name": "arc-spirits-spectate",
 	"private": true,
 	"version": "0.0.1",
+	"packageManager": "npm@11.12.1",
+	"engines": {
+		"node": ">=22 <27",
+		"npm": ">=10 <12"
+	},
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -9,7 +14,6 @@
 		"build:app": "BUILD_TARGET=capacitor VITE_BUILD_TARGET=capacitor PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-https://arc-spirits-spectate.vercel.app} vite build",
 		"cap:sync": "npm run build:app && PATH=/opt/homebrew/opt/node/bin:$PATH cap sync",
 		"cap:ios": "npm run cap:sync && PATH=/opt/homebrew/opt/node/bin:$PATH cap open ios",
-		"cap:android": "npm run cap:sync && PATH=/opt/homebrew/opt/node/bin:$PATH cap open android",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -17,6 +21,8 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:e2e": "playwright test",
+		"test:e2e:platform": "playwright test --config=playwright.platform.config.ts",
+		"test:e2e:platform:local": "playwright test --config=playwright.platform.config.ts --project=chromium-platform --project=firefox-platform && node scripts/safari-platform-smoke.mjs",
 		"test:bot:engine": "node scripts/bot-test-gate.mjs engine",
 		"test:bot:ml-smoke": "node scripts/bot-test-gate.mjs ml-smoke",
 		"test:bot:az-smoke": "node scripts/bot-test-gate.mjs az-smoke",
@@ -61,10 +67,19 @@
 		"bot:route-proof": "bash scripts/run-arc-route-proof-matrix.sh",
 		"seed:bots": "node --env-file=.env scripts/seed-bots.mjs",
 		"format": "prettier --write .",
-		"lint": "prettier --check ."
+		"lint": "prettier --check .",
+		"smoke:authority": "tsx server/authoritySmoke.ts",
+		"smoke:server": "node server/smoke.mjs",
+		"gate:csp": "node scripts/csp-gate.mjs",
+		"gate:csp:release": "node scripts/csp-gate.mjs --release",
+		"gate:journey": "node scripts/session-journey-gate.mjs",
+		"gate:human-loop": "node scripts/human-loop-gate.mjs",
+		"gate:mixed-full-games": "node scripts/mixed-full-game-gate.mjs",
+		"perf:journey": "node scripts/perf-journey.mjs",
+		"ranked:roll": "node --env-file=.env scripts/roll-ranked-season.mjs"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.55.1",
+		"@playwright/test": "^1.61.1",
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/adapter-vercel": "^6.2.0",
@@ -73,8 +88,10 @@
 		"@tailwindcss/forms": "^0.5.10",
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.17",
+		"@types/pg": "^8.20.0",
 		"@types/three": "^0.184.0",
 		"@types/ws": "^8.5.13",
+		"pg": "^8.22.0",
 		"prettier": "^3.7.4",
 		"prettier-plugin-svelte": "^3.4.0",
 		"prettier-plugin-tailwindcss": "^0.7.2",
@@ -85,10 +102,11 @@
 		"typescript": "^5.9.3",
 		"vite": "^7.2.6",
 		"vitest": "^4.0.10",
-		"ws": "^8.18.3"
+		"ws": "^8.21.0"
 	},
 	"dependencies": {
-		"@capacitor/android": "^8.4.0",
+		"@capacitor/app": "^8.1.0",
+		"@capacitor/browser": "^8.0.3",
 		"@capacitor/cli": "^8.4.0",
 		"@capacitor/core": "^8.4.0",
 		"@capacitor/ios": "^8.4.0",

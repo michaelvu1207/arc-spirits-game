@@ -14,7 +14,7 @@
  *   SMOKE=1    npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
  *   SMOKE_V2=1 npx vitest run src/lib/play/ml/league/_league_scaffold.test.ts --disable-console-intercept
  */
-import { OBS_DIM } from '../encode';
+import { ACT_DIM, OBS_DIM } from '../encode';
 import { describe, expect, it } from 'vitest';
 import {
 	copyFileSync,
@@ -27,6 +27,7 @@ import {
 	writeFileSync
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -60,6 +61,9 @@ import {
 	seedRoster,
 	stampBaselineElos,
 	stopInferServers,
+	trainingSeatCountsForGeneration,
+	trainerSeedForGeneration,
+	validateLeagueConfig,
 	defaultConfig
 } from './manager';
 import { loadPolicyWeights } from '../net';
@@ -93,8 +97,11 @@ describe('concurrent gauntlet attribution', () => {
 		}
 	});
 });
-
-function member(id: string, kind: LeagueMember['kind'], extra: Partial<LeagueMember> = {}): LeagueMember {
+function member(
+	id: string,
+	kind: LeagueMember['kind'],
+	extra: Partial<LeagueMember> = {}
+): LeagueMember {
 	return { id, kind, createdGen: 0, matchStats: {}, ...extra };
 }
 
@@ -140,7 +147,10 @@ describe('pfsp math', () => {
 
 	it('league exploiters sample uniformly (weights all 1)', () => {
 		const lx = member('lx-0', 'league_exploiter');
-		const pool = [member('frozen-a', 'frozen', { weightsPath: 'a' }), member('heur-h', 'heuristic', { profile: 'hard' })];
+		const pool = [
+			member('frozen-a', 'frozen', { weightsPath: 'a' }),
+			member('heur-h', 'heuristic', { profile: 'hard' })
+		];
 		expect(opponentWeights(lx, pool, { p: 2, variant: 'squared' })).toEqual([1, 1]);
 	});
 
@@ -159,9 +169,15 @@ describe('pfsp math', () => {
 		expect(a.map((m) => m.id)).toEqual(b.map((m) => m.id)); // deterministic
 		// With weights ~{easy: 0.001, nemesis: 1}, every draw lands on the nemesis.
 		expect(a.every((m) => m.id === 'nemesis')).toBe(true);
-		expect(() => sampleOpponents(member('mx', 'main_exploiter'), [member('mx', 'main_exploiter')], 1, cfg, randFrom([0.5]))).toThrow(
-			/empty opponent pool/
-		);
+		expect(() =>
+			sampleOpponents(
+				member('mx', 'main_exploiter'),
+				[member('mx', 'main_exploiter')],
+				1,
+				cfg,
+				randFrom([0.5])
+			)
+		).toThrow(/empty opponent pool/);
 	});
 
 	it('recordPairwise: better/worse/tie accounting', () => {
@@ -171,6 +187,316 @@ describe('pfsp math', () => {
 		recordPairwise(m, 'X', 4, 1); // worse
 		expect(m.matchStats['X']).toEqual({ games: 3, better: 1, worse: 1 });
 		expect(winrateVs(m, 'X')).toBeCloseTo(0.5, 12);
+	});
+});
+
+describe('trainer RNG pairing', () => {
+	it('derives a stable, generation- and lane-specific seed', () => {
+		const cfg = { seedBase: 292_000_000 };
+		expect(trainerSeedForGeneration(cfg, 21, 0)).toBe(trainerSeedForGeneration(cfg, 21, 0));
+		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(trainerSeedForGeneration(cfg, 22, 0));
+		expect(trainerSeedForGeneration(cfg, 21, 0)).not.toBe(trainerSeedForGeneration(cfg, 21, 1));
+	});
+});
+
+describe('explicit controlled-experiment seed schedule', () => {
+	it('accepts disjoint compact ranges and rejects overlap, short strides, and invalid caps', () => {
+		const base = {
+			...defaultConfig('ml/test-seed-schedule'),
+			seats: 1,
+			gamesPerGen: 1_024,
+			evalGames: 256,
+			lanes: { main: 1, mainExploiter: 0, leagueExploiter: 0 },
+			seedSchedule: {
+				trainBase: 946_100_000,
+				trainStride: 2_048,
+				evalBase: 946_700_000,
+				evalStride: 8_192,
+				maxGeneration: 12
+			}
+		} satisfies LeagueConfig;
+		expect(() => validateLeagueConfig(base)).not.toThrow();
+		expect(() =>
+			validateLeagueConfig({
+				...base,
+				seedSchedule: { ...base.seedSchedule!, trainStride: 1_023 }
+			})
+		).toThrow(/trainStride/);
+		expect(() =>
+			validateLeagueConfig({
+				...base,
+				seedSchedule: { ...base.seedSchedule!, evalBase: 946_110_000 }
+			})
+		).toThrow(/overlaps/);
+		expect(() =>
+			validateLeagueConfig({
+				...base,
+				seedSchedule: { ...base.seedSchedule!, maxGeneration: 0 }
+			})
+		).toThrow(/maxGeneration/);
+	});
+});
+
+describe('frozen catalog provenance', () => {
+	it('requires a matching path/hash pair and accepts the exact frozen bytes', () => {
+		const root = mkdtempSync(join(tmpdir(), 'league-catalog-contract-'));
+		try {
+			const catalogPath = join(root, 'catalog.json');
+			writeFileSync(catalogPath, '{"version":"test"}\n');
+			const hash = createHash('sha256').update(readFileSync(catalogPath)).digest('hex');
+			const config = { ...defaultConfig('unused'), catalogPath, catalogSha256: hash };
+			expect(() => validateLeagueConfig(config)).not.toThrow();
+			expect(() => validateLeagueConfig({ ...config, catalogSha256: '0'.repeat(64) })).toThrow(
+				/catalog hash mismatch/
+			);
+			expect(() =>
+				validateLeagueConfig({ ...config, catalogSha256: undefined })
+			).toThrow(/configured together/);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe('fixed-update continuation config guards', () => {
+	const valid = (): LeagueConfig => ({
+		...defaultConfig('ml/test-continuation-config'),
+		mode: 'ppo',
+		seats: 1,
+		maxRounds: 30,
+		sample: true,
+		search: undefined,
+		continuationCurriculum: {
+			enabled: true,
+			rounds: [12, 16, 20],
+			sourceProbability: 1,
+			capFailureWeight: 1,
+			successWeight: 1
+		},
+		train: {
+			...defaultConfig().train,
+			ppoRowsPerEpoch: 120_000,
+			ppoContinuationFraction: 0.25,
+			extraArgs: ['--clip-eps', '0.15']
+		}
+	});
+
+	it('accepts a solo PPO curriculum with a fixed row/update budget', () => {
+		expect(() => validateLeagueConfig(valid())).not.toThrow();
+	});
+
+	it('plumbs the opt-in V24 monster-reward mode and rejects inactive configurations', () => {
+		const config = {
+			...defaultConfig('unused'),
+			mode: 'ppo' as const,
+			seats: 1,
+			selection: 'hybrid' as const,
+			sample: true,
+			learnMonsterRewardChoices: true
+		};
+		expect(() => validateLeagueConfig(config)).not.toThrow();
+		const learner = member('main-0', 'main', { weightsPath: 'w.json' });
+		expect(buildMatchup(config, learner, [], 0, 1).config.learnMonsterRewardChoices).toBe(true);
+		expect(() => validateLeagueConfig({ ...config, selection: 'policy' })).toThrow(
+			/requires selection='hybrid'/
+		);
+		expect(() => validateLeagueConfig({ ...config, sample: false })).toThrow(
+			/requires sample=true/
+		);
+	});
+
+	it('rejects expensive invalid experiments before actor generation', () => {
+		const targetKl = valid();
+		targetKl.train.extraArgs = ['--target-kl', '0.015'];
+		expect(() => validateLeagueConfig(targetKl)).toThrow(/forbids.*target-kl/);
+
+		const noRows = valid();
+		noRows.train.ppoRowsPerEpoch = undefined;
+		expect(() => validateLeagueConfig(noRows)).toThrow(/requires ppoRowsPerEpoch/);
+
+		const disabled = valid();
+		disabled.continuationCurriculum = { enabled: false };
+		expect(() => validateLeagueConfig(disabled)).toThrow(/requires an enabled continuation/);
+
+		const searched = valid();
+		searched.search = { sims: 4 };
+		expect(() => validateLeagueConfig(searched)).toThrow(/opaque search state/);
+	});
+});
+
+describe('conservative self-imitation config guards', () => {
+	const valid = (): LeagueConfig => ({
+		...defaultConfig('ml/test-self-imitation-config'),
+		mode: 'ppo',
+		seats: 1,
+		sample: true,
+		strategicDecisionScope: 'engine-cycle',
+		train: {
+			...defaultConfig().train,
+			selfImitation: {
+				coef: 0.05,
+				replayFraction: 0.1,
+				stalenessLogp: 1,
+				maxAge: 3,
+				maxRows: 100_000
+			}
+		}
+	});
+
+	it('accepts treatment and compute-matched coefficient-zero control configs', () => {
+		expect(() => validateLeagueConfig(valid())).not.toThrow();
+		const control = valid();
+		control.train.selfImitation!.coef = 0;
+		expect(() => validateLeagueConfig(control)).not.toThrow();
+	});
+
+	it('keeps the preregistered V21 pair identical apart from coefficient and metadata', () => {
+		type PreregisteredConfig = LeagueConfig & { _readme: string };
+		const read = (name: string) =>
+			JSON.parse(
+				readFileSync(resolve(process.cwd(), 'ml/league/configs', name), 'utf8')
+			) as PreregisteredConfig;
+		const control = read('fair-v21-solo-sil-control.json');
+		const treatment = read('fair-v21-solo-sil-treatment005.json');
+
+		expect(() => validateLeagueConfig(control)).not.toThrow();
+		expect(() => validateLeagueConfig(treatment)).not.toThrow();
+		expect(control.train.selfImitation?.coef).toBe(0);
+		expect(treatment.train.selfImitation?.coef).toBe(0.05);
+
+		treatment._readme = control._readme;
+		treatment.train.selfImitation!.coef = control.train.selfImitation!.coef;
+		treatment.paths.root = control.paths.root;
+		expect(treatment).toEqual(control);
+	});
+
+	it('requires exact sampled solo engine-cycle PPO data and bounded replay', () => {
+		const greedy = valid();
+		greedy.sample = false;
+		expect(() => validateLeagueConfig(greedy)).toThrow(/sample=true/);
+
+		const routeOnly = valid();
+		routeOnly.strategicDecisionScope = 'navigation';
+		expect(() => validateLeagueConfig(routeOnly)).toThrow(/engine-cycle/);
+
+		const multiplayerOnly = valid();
+		multiplayerOnly.seats = 4;
+		expect(() => validateLeagueConfig(multiplayerOnly)).toThrow(/solo source/);
+
+		const noReplay = valid();
+		noReplay.train.selfImitation!.replayFraction = 0;
+		expect(() => validateLeagueConfig(noReplay)).toThrow(/replayFraction/);
+
+		const old = valid();
+		old.train.selfImitation!.maxAge = -1;
+		expect(() => validateLeagueConfig(old)).toThrow(/maxAge/);
+
+		const earlyStop = valid();
+		earlyStop.train.extraArgs = ['--target-kl', '0.01'];
+		expect(() => validateLeagueConfig(earlyStop)).toThrow(/forbids.*target-kl/);
+
+		const v2 = valid();
+		v2.laneModel = { main_0: 'v2' };
+		expect(() => validateLeagueConfig(v2)).toThrow(/requires v1/);
+	});
+});
+
+describe('late-game macro representation preregistration', () => {
+	it('keeps the V22 pair identical apart from the observation cutoff and metadata', () => {
+		type PreregisteredConfig = LeagueConfig & { _readme: string };
+		const read = (name: string) =>
+			JSON.parse(
+				readFileSync(resolve(process.cwd(), 'ml/league/configs', name), 'utf8')
+			) as PreregisteredConfig;
+		const control = read('fair-v22-solo-macro-control.json');
+		const treatment = read('fair-v22-solo-macro-treatment.json');
+		const cutoffIndex = control.train.extraArgs!.indexOf('--obs-feature-cutoff');
+
+		expect(() => validateLeagueConfig(control)).not.toThrow();
+		expect(() => validateLeagueConfig(treatment)).not.toThrow();
+		expect(OBS_DIM).toBe(199);
+		expect(cutoffIndex).toBeGreaterThanOrEqual(0);
+		expect(control.train.extraArgs![cutoffIndex + 1]).toBe('188');
+		expect(treatment.train.extraArgs![cutoffIndex + 1]).toBe(String(OBS_DIM));
+		expect(treatment.train.extraArgs![cutoffIndex]).toBe('--obs-feature-cutoff');
+
+		treatment._readme = control._readme;
+		treatment.train.extraArgs![cutoffIndex + 1] = control.train.extraArgs![cutoffIndex + 1];
+		treatment.paths.root = control.paths.root;
+		expect(treatment).toEqual(control);
+	});
+});
+
+describe('mixed player-count training curriculum', () => {
+	const curriculum = {
+		...defaultConfig('unused'),
+		seats: 4,
+		trainingSeatCurriculum: [
+			{ throughGen: 5, weights: { '1': 0.5, '2': 0.25, '3': 0.125, '4': 0.125 } },
+			{ throughGen: 12, weights: { '1': 0.3, '2': 0.25, '3': 0.2, '4': 0.25 } },
+			{ throughGen: 20, weights: { '1': 0.125, '2': 0.125, '3': 0.125, '4': 0.625 } }
+		]
+	} satisfies LeagueConfig;
+
+	it('keeps legacy leagues at their configured seat count', () => {
+		expect(trainingSeatCountsForGeneration(defaultConfig('unused'), 1, 6)).toEqual([
+			4, 4, 4, 4, 4, 4
+		]);
+	});
+
+	it('apportions solo-heavy early games and retains all counts later', () => {
+		const tally = (values: number[]) =>
+			values.reduce<Record<number, number>>((counts, seats) => {
+				counts[seats] = (counts[seats] ?? 0) + 1;
+				return counts;
+			}, {});
+		expect(tally(trainingSeatCountsForGeneration(curriculum, 1, 16))).toEqual({
+			1: 8,
+			2: 4,
+			3: 2,
+			4: 2
+		});
+		expect(tally(trainingSeatCountsForGeneration(curriculum, 9, 16))).toEqual({
+			1: 5,
+			2: 4,
+			3: 3,
+			4: 4
+		});
+		expect(tally(trainingSeatCountsForGeneration(curriculum, 40, 16))).toEqual({
+			1: 2,
+			2: 2,
+			3: 2,
+			4: 10
+		});
+	});
+
+	it('rejects malformed stages instead of silently changing the experiment', () => {
+		expect(() =>
+			trainingSeatCountsForGeneration(
+				{
+					...curriculum,
+					trainingSeatCurriculum: [{ throughGen: 5, weights: { '5': 1 } }]
+				},
+				1,
+				16
+			)
+		).toThrow(/invalid trainingSeatCurriculum weight/);
+	});
+
+	it('builds a true opponent-free solo matchup even when league opponent mixes are enabled', () => {
+		const soloConfig = {
+			...curriculum,
+			seats: 1,
+			selfPlayFraction: 1,
+			heuristicOpponentFraction: 1,
+			terminationBlocker: 'paragon' as const
+		};
+		const learner = member('main-0', 'main', { weightsPath: 'ckpt/cur.json' });
+		const selected = matchupOpponents(soloConfig, learner, [learner], 0, 16, randFrom([0.1]));
+		expect(selected).toEqual({ opponents: [], mirror: false, heuristic: false });
+		const plan = buildMatchup(soloConfig, learner, [], 0, 1);
+		expect(plan.config.profiles).toHaveLength(1);
+		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]);
 	});
 });
 
@@ -258,16 +584,28 @@ describe('promotion bar + baseline elos', () => {
 				// v5 pool has no checkpoint anchors; frozen peers enter via extraFrozen and
 				// are stamped through baselineElos exactly as before (by id or by path).
 				extraFrozen: [
-					{ id: 'frozen-traceq-damage-nearmiss', weightsPath: 'ml/meta_runs/traceq-damage-nearmiss-vp28-29-20260630T053132Z/best_policy.json' },
-					{ id: 'frozen-routeexecq-shared-allseat', weightsPath: 'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json' }
+					{
+						id: 'frozen-traceq-damage-nearmiss',
+						weightsPath:
+							'ml/meta_runs/traceq-damage-nearmiss-vp28-29-20260630T053132Z/best_policy.json'
+					},
+					{
+						id: 'frozen-routeexecq-shared-allseat',
+						weightsPath:
+							'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json'
+					}
 				],
 				baselineElos: {
 					'frozen-traceq-damage-nearmiss': 221, // by member id
 					'ml/meta_runs/routeexecq-shared-allseat-candidate-20260701Ttrain/best_policy.json': 500 // by path, overrides scan
 				}
 			});
-			expect(state.members.find((m) => m.id === 'frozen-traceq-damage-nearmiss')!.eloVsAnchors).toBe(221);
-			expect(state.members.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors).toBe(500);
+			expect(
+				state.members.find((m) => m.id === 'frozen-traceq-damage-nearmiss')!.eloVsAnchors
+			).toBe(221);
+			expect(
+				state.members.find((m) => m.id === 'frozen-routeexecq-shared-allseat')!.eloVsAnchors
+			).toBe(500);
 			expect(promotionBar(state.members)).toBe(500);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
@@ -292,7 +630,11 @@ describe('promotion bar + baseline elos', () => {
 		try {
 			const { state } = initLeague(root, {
 				extraFrozen: [
-					{ id: 'frozen-champion-run1', weightsPath: 'ml/champions/league-run1-main0-gen8-elo268.json', elo: 500 },
+					{
+						id: 'frozen-champion-run1',
+						weightsPath: 'ml/champions/league-run1-main0-gen8-elo268.json',
+						elo: 500
+					},
 					{ id: 'frozen-unscored', weightsPath: 'ml/champions/nonexistent-for-scan.json' } // no elo, fake path
 				]
 			});
@@ -405,11 +747,14 @@ describe('league smoke generation (SMOKE=1)', () => {
 				expect(line.promoted).toBeNull();
 				expect(Object.keys(line.opponents).length).toBeGreaterThan(0);
 
-				// The trained checkpoint exists and matches the 62/52 contract.
+				// The trained checkpoint exists and matches the live encoder contract.
 				expect(existsSync(line.ckpt)).toBe(true);
-				const ckpt = JSON.parse(readFileSync(line.ckpt, 'utf8')) as { obs_dim: number; act_dim: number };
+				const ckpt = JSON.parse(readFileSync(line.ckpt, 'utf8')) as {
+					obs_dim: number;
+					act_dim: number;
+				};
 				expect(ckpt.obs_dim).toBe(OBS_DIM);
-				expect(ckpt.act_dim).toBe(52);
+				expect(ckpt.act_dim).toBe(ACT_DIM);
 
 				// State advanced + learner now plays its new ckpt; history has the line.
 				const { state } = loadLeague(root);
@@ -417,7 +762,10 @@ describe('league smoke generation (SMOKE=1)', () => {
 				expect(state.phase).toBe('idle');
 				expect(state.members.find((m) => m.id === 'main-0')!.weightsPath).toBe(line.ckpt);
 				const p = leaguePaths(root);
-				const hist = readFileSync(p.history, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as HistoryLine);
+				const hist = readFileSync(p.history, 'utf8')
+					.trim()
+					.split('\n')
+					.map((l) => JSON.parse(l) as HistoryLine);
 				expect(hist).toHaveLength(1);
 				expect(hist[0].gen).toBe(1);
 
@@ -444,7 +792,9 @@ describe('v2 lanes (unit)', () => {
 			const main = state.members.find((m) => m.id === 'main-0')!;
 			expect(main.model).toBe('v2');
 			expect(laneModelOf(config, main)).toBe('v2');
-			expect(laneModelOf(config, state.members.find((m) => m.id === 'main_exploiter-0')!)).toBe('v1');
+			expect(laneModelOf(config, state.members.find((m) => m.id === 'main_exploiter-0')!)).toBe(
+				'v1'
+			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -456,7 +806,9 @@ describe('v2 lanes (unit)', () => {
 		v2Learner.distilledPath = 'ckpt/main-0-gen3-distilled.json';
 		expect(isPlayable(v2Learner)).toBe(true);
 		// A v2 lane's initFrom .pt must never leak into opponent seats either.
-		expect(isPlayable(member('x', 'main_exploiter', { model: 'v2', initFrom: 'w/init.pt' }))).toBe(false);
+		expect(isPlayable(member('x', 'main_exploiter', { model: 'v2', initFrom: 'w/init.pt' }))).toBe(
+			false
+		);
 		expect(isPlayable(member('y', 'main_exploiter', { initFrom: 'w/init.json' }))).toBe(true);
 	});
 
@@ -531,7 +883,9 @@ describe('v2 lanes (unit)', () => {
 			member('heur-hard', 'heuristic', { profile: 'hard' }),
 			member('heur-insane', 'heuristic', { profile: 'insane' })
 		];
-		expect(buildMatchup(config, learner, opps, 0, 1, { socket: '/tmp/s' }).config.selection).toBe('hybrid');
+		expect(buildMatchup(config, learner, opps, 0, 1, { socket: '/tmp/s' }).config.selection).toBe(
+			'hybrid'
+		);
 		expect(buildMatchup(config, learner, opps, 0, 1).config.selection).toBe('value'); // v1 path untouched
 	});
 });
@@ -574,7 +928,15 @@ describe('v1 socket lanes (unit)', () => {
 		const config = defaultConfig('unused');
 		const learner = member('main-0', 'main', { model: 'v2', ptPath: 'x.pt' });
 		// Both provided: the v2 arg is authoritative, v1Socket is dropped.
-		const plan = buildMatchup(config, learner, opps(), 0, 1, { socket: '/tmp/v2.sock' }, '/tmp/v1.sock');
+		const plan = buildMatchup(
+			config,
+			learner,
+			opps(),
+			0,
+			1,
+			{ socket: '/tmp/v2.sock' },
+			'/tmp/v1.sock'
+		);
 		expect(plan.config.inferSocket).toBe('/tmp/v2.sock');
 		expect(plan.config.policyObsVersion).toBe(2);
 		expect(plan.config.obsVersion).toBe(2);
@@ -585,13 +947,23 @@ describe('v1 socket lanes (unit)', () => {
 		expect(annealedTemperature(flat, 1)).toBe(0.9);
 		expect(annealedTemperature(flat, 50)).toBe(0.9);
 
-		const cfg = { ...defaultConfig('unused'), temperature: 0.9, temperatureAnneal: { from: 1.0, to: 0.65, overGens: 40 } };
+		const cfg = {
+			...defaultConfig('unused'),
+			temperature: 0.9,
+			temperatureAnneal: { from: 1.0, to: 0.65, overGens: 40 }
+		};
 		expect(annealedTemperature(cfg, 1)).toBeCloseTo(1.0); // gen 1 = from (warm-start gate unaffected)
 		expect(annealedTemperature(cfg, 40)).toBeCloseTo(0.65); // reaches `to` at overGens
 		expect(annealedTemperature(cfg, 60)).toBeCloseTo(0.65); // holds after
 		expect(annealedTemperature(cfg, 20)).toBeCloseTo(1.0 + (0.65 - 1.0) * (19 / 39)); // linear midpoint
 		// It flows into the actor game config (both generation and eval matchups use buildMatchup).
-		const plan = buildMatchup(cfg, member('main-0', 'main', { weightsPath: 'w.json' }), opps(), 0, 40);
+		const plan = buildMatchup(
+			cfg,
+			member('main-0', 'main', { weightsPath: 'w.json' }),
+			opps(),
+			0,
+			40
+		);
 		expect(plan.config.temperature).toBeCloseTo(0.65);
 	});
 });
@@ -610,7 +982,7 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 				expect(readFileSync(a, 'utf8')).toBe(readFileSync(b, 'utf8')); // seed-deterministic
 				const policy = loadPolicyWeights(JSON.parse(readFileSync(a, 'utf8')), {
 					expectedObsDim: OBS_DIM,
-					expectedActDim: 52
+					expectedActDim: ACT_DIM
 				});
 				expect(typeof policy.probs).toBe('function');
 				// A different seed mints a different net.
@@ -682,7 +1054,7 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 				expect(existsSync(main.initFrom!)).toBe(true);
 				loadPolicyWeights(JSON.parse(readFileSync(main.initFrom!, 'utf8')), {
 					expectedObsDim: OBS_DIM,
-					expectedActDim: 52
+					expectedActDim: ACT_DIM
 				});
 
 				// PPO from gen 1: the random-init lane is POLICY-driven in its first games
@@ -700,9 +1072,9 @@ describe('random-init lanes (from-scratch rediscovery)', () => {
 
 				// Same config elsewhere reproduces the SAME zero-knowledge net.
 				const b = initLeague(rootB, template);
-				expect(readFileSync(b.state.members.find((m) => m.id === 'main-0')!.initFrom!, 'utf8')).toBe(
-					readFileSync(main.initFrom!, 'utf8')
-				);
+				expect(
+					readFileSync(b.state.members.find((m) => m.id === 'main-0')!.initFrom!, 'utf8')
+				).toBe(readFileSync(main.initFrom!, 'utf8'));
 			} finally {
 				rmSync(rootA, { recursive: true, force: true });
 				rmSync(rootB, { recursive: true, force: true });
@@ -727,7 +1099,14 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 					maxRounds: 15,
 					lanes: { main: 1, mainExploiter: 0, leagueExploiter: 0 },
 					laneModel: { 'main-0': 'v2' },
-					v2: { dModel: 32, layers: 1, heads: 2, device: 'cpu', distillEpochs: 1, distillEveryGen: true },
+					v2: {
+						dModel: 32,
+						layers: 1,
+						heads: 2,
+						device: 'cpu',
+						distillEpochs: 1,
+						distillEveryGen: true
+					},
 					train: { epochs: 1 },
 					initFrom: undefined, // fresh net — gen 1 bootstraps heuristically
 					promoteEvery: 0,
@@ -741,7 +1120,7 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 				expect(line.samples).toBeGreaterThan(0);
 				expect(line.evalGames).toBe(2);
 
-				// .pt + sibling manifest checkpoint; distilled v1 student on the 62/52 contract.
+				// .pt + sibling manifest checkpoint; distilled v1 student on the live contract.
 				expect(line.ckpt.endsWith('.pt')).toBe(true);
 				expect(existsSync(line.ckpt)).toBe(true);
 				expect(existsSync(line.ckpt.replace(/\.pt$/, '.manifest.json'))).toBe(true);
@@ -751,7 +1130,7 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 					act_dim: number;
 				};
 				expect(student.obs_dim).toBe(OBS_DIM);
-				expect(student.act_dim).toBe(52);
+				expect(student.act_dim).toBe(ACT_DIM);
 
 				// Paired-row training data: meta kept the pool's obs_v2 block after the merge.
 				const meta = JSON.parse(
@@ -792,14 +1171,20 @@ describe('league v2 smoke generation (SMOKE_V2=1)', () => {
 describe('mirror-contention lane (selfPlayFraction)', () => {
 	it('isMirrorSlot: exactly floor(matchups·f) mirrors, evenly spread; off at f=0', () => {
 		const count = (matchups: number, f: number) =>
-			Array.from({ length: matchups }, (_, m) => isMirrorSlot(m, matchups, f)).filter(Boolean).length;
+			Array.from({ length: matchups }, (_, m) => isMirrorSlot(m, matchups, f)).filter(Boolean)
+				.length;
 		expect(count(16, 0)).toBe(0);
 		expect(count(16, 0.35)).toBe(Math.floor(16 * 0.35)); // 5
 		expect(count(20, 0.35)).toBe(7); // 20·0.35 = 7 exactly
 		expect(count(10, 1)).toBe(10);
 		// Spread, not clustered: with f=0.5 every other matchup is a mirror.
 		expect(Array.from({ length: 6 }, (_, m) => isMirrorSlot(m, 6, 0.5))).toEqual([
-			false, true, false, true, false, true
+			false,
+			true,
+			false,
+			true,
+			false,
+			true
 		]);
 		// Fraction is clamped into [0,1].
 		expect(count(8, -0.2)).toBe(0);
@@ -816,9 +1201,9 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 			expect(o.id).toBe('main-0-mirror'); // distinct id: self-play stays out of real matchStats
 		}
 		// Warm-start-only learner (gen 1): mirrors its initFrom.
-		expect(mirrorOpponents(member('main-0', 'main', { initFrom: 'init.json' }), 3)![0].weightsPath).toBe(
-			'init.json'
-		);
+		expect(
+			mirrorOpponents(member('main-0', 'main', { initFrom: 'init.json' }), 3)![0].weightsPath
+		).toBe('init.json');
 		// Fresh net, no checkpoint yet → null (caller falls back to PFSP).
 		expect(mirrorOpponents(member('x', 'main_exploiter'), 3)).toBeNull();
 	});
@@ -836,13 +1221,25 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		// m=1 is a mirror slot at f=0.5: three copies of the learner's current ckpt.
 		const mir = matchupOpponents(config, learner, members, 1, 6, rand);
 		expect(mir.mirror).toBe(true);
-		expect(mir.opponents.map((o) => o.weightsPath)).toEqual(['ckpt/cur.json', 'ckpt/cur.json', 'ckpt/cur.json']);
+		expect(mir.opponents.map((o) => o.weightsPath)).toEqual([
+			'ckpt/cur.json',
+			'ckpt/cur.json',
+			'ckpt/cur.json'
+		]);
 		// buildMatchup resolves them into opponentWeights all equal to the learner net.
-		const plan = buildMatchup(config, learner, mir.opponents, 1, 5);
+		const plan = buildMatchup(
+			{ ...config, shuffleGuardians: true, guardianSchedule: 'absolute-balanced' },
+			learner,
+			mir.opponents,
+			1,
+			5
+		);
 		const oppW = Object.values(plan.config.opponentWeights ?? {});
 		expect(oppW).toHaveLength(3);
 		expect(new Set(oppW)).toEqual(new Set([resolve('ckpt/cur.json')]));
 		expect(plan.config.recordSeats).toEqual([plan.learnerSeat]); // still learner-only recording
+		expect(plan.config.shuffleGuardians).toBe(true);
+		expect(plan.config.guardianSchedule).toBe('absolute-balanced');
 		// m=0 is a PFSP slot: opponents come from the field (heuristics), not the mirror.
 		const pf = matchupOpponents(config, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
 		expect(pf.mirror).toBe(false);
@@ -861,7 +1258,7 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		expect(boot.opponents.every((o) => o.kind === 'heuristic')).toBe(true);
 	});
 
-	it('matchupOpponents: terminationBlocker seats one fixed non-corruptor in EVERY matchup (mirror + pfsp)', () => {
+	it('matchupOpponents: terminationBlocker defaults to every matchup and supports a deterministic fraction', () => {
 		const config = {
 			...defaultConfig('unused'),
 			seats: 4,
@@ -886,6 +1283,13 @@ describe('mirror-contention lane (selfPlayFraction)', () => {
 		const pf = matchupOpponents(config, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
 		expect(pf.opponents).toHaveLength(config.seats - 1);
 		expect(blockers(pf)).toHaveLength(1);
+		// Fable-review guard: a partial blocker mix creates late-game data without teaching
+		// the learner that another seat always keeps the table alive. f=0.5 alternates.
+		const partial = { ...config, terminationBlockerFraction: 0.5 };
+		const partialOff = matchupOpponents(partial, learner, members, 0, 6, randFrom([0.1, 0.5, 0.9]));
+		const partialOn = matchupOpponents(partial, learner, members, 1, 6, randFrom([0.1, 0.5, 0.9]));
+		expect(blockers(partialOff)).toHaveLength(0);
+		expect(blockers(partialOn)).toHaveLength(1);
 		// buildMatchup seats the blocker as a heuristic (profile), NOT a checkpoint or neural seat.
 		const plan = buildMatchup(config, learner, mir.opponents, 1, 5);
 		const paragonSeat = plan.oppBySeat.find(([, mm]) => mm.profile === 'paragon')![0];
@@ -941,14 +1345,21 @@ describe('heuristic-field contention (heuristicOpponentFraction)', () => {
 	});
 
 	it('heuristicFieldOpponents: cycles the configured profiles as scripted, weightless opponents', () => {
-		const config = { ...defaultConfig('unused'), seats: 4, heuristicOpponentProfiles: ['paragon', 'insane'] };
+		const config = {
+			...defaultConfig('unused'),
+			seats: 4,
+			heuristicOpponentProfiles: ['paragon', 'insane']
+		};
 		const opps = heuristicFieldOpponents(config, 3);
 		expect(opps).toHaveLength(3);
 		expect(opps.map((o) => o.profile)).toEqual(['paragon', 'insane', 'paragon']); // cycled over seats
 		expect(opps.every((o) => o.kind === 'heuristic' && !o.weightsPath)).toBe(true);
 		expect(opps.every((o) => o.id.startsWith('heur-field-'))).toBe(true); // distinct from roster anchors
 		// Default field when none configured.
-		expect(heuristicFieldOpponents(defaultConfig('unused'), 2).map((o) => o.profile)).toEqual(['paragon', 'insane']);
+		expect(heuristicFieldOpponents(defaultConfig('unused'), 2).map((o) => o.profile)).toEqual([
+			'paragon',
+			'insane'
+		]);
 	});
 
 	it('matchupOpponents: a heuristic slot seats the strong scripted field; learner still records alone', () => {

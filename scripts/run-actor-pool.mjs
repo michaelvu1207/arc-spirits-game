@@ -27,16 +27,20 @@ const { values: args } = parseArgs({
 		seats: { type: 'string', default: '4' },
 		'max-rounds': { type: 'string', default: '90' },
 		weights: { type: 'string' },
+		catalog: { type: 'string' },
 		'infer-socket': { type: 'string' },
 		out: { type: 'string', default: 'ml/data/poolrun' },
 		profiles: { type: 'string', default: 'pvphunter,medium,aggressive,hard' },
 		selection: { type: 'string', default: 'hybrid' },
+		'learn-monster-reward-choices': { type: 'boolean', default: false },
 		sample: { type: 'boolean', default: false },
 		temperature: { type: 'string' },
 		'neural-seats': { type: 'string' },
 		'record-seats': { type: 'string' },
 		forbid: { type: 'string' },
 		'max-status-level': { type: 'string' },
+		'shuffle-guardians': { type: 'boolean', default: false },
+		'guardian-schedule': { type: 'string' },
 		gamma: { type: 'string' },
 		iter: { type: 'string', default: '0' },
 		'obs-version': { type: 'string', default: '1' },
@@ -50,10 +54,10 @@ const { values: args } = parseArgs({
 if (args.help) {
 	console.log(
 		'usage: node scripts/run-actor-pool.mjs [--games N] [--workers N] [--seed0 N] [--seats N]\n' +
-			'         [--max-rounds N] [--weights FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
-			'         [--selection hybrid|value|policy] [--sample] [--temperature X]\n' +
+			'         [--max-rounds N] [--weights FILE] [--catalog FILE] [--infer-socket SOCK] [--out DIR] [--profiles a,b,c] \n' +
+			'         [--selection hybrid|value|policy] [--learn-monster-reward-choices] [--sample] [--temperature X]\n' +
 			'         [--neural-seats Red,Blue] [--record-seats Red] [--forbid type1,type2]\n' +
-			'         [--max-status-level N] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
+			'         [--max-status-level N] [--shuffle-guardians] [--guardian-schedule absolute-balanced] [--gamma X] [--iter N] [--obs-version 1|2]\n' +
 			'         [--policy-obs-version 1|2 (2 needs --infer-socket)] [--append] [--quiet]'
 	);
 	process.exit(0);
@@ -79,12 +83,15 @@ const config = {
 	weightsPath: args.weights ? path.resolve(args.weights) : undefined,
 	inferSocket: args['infer-socket'],
 	selection: args.selection,
+	learnMonsterRewardChoices: args['learn-monster-reward-choices'] || undefined,
 	sample: args.sample || undefined,
 	temperature: num(args.temperature),
 	neuralSeats: csv(args['neural-seats']),
 	recordSeats: csv(args['record-seats']),
 	forbidTypes: csv(args.forbid),
 	maxStatusLevel: args['max-status-level'] ? parseInt(args['max-status-level'], 10) : undefined,
+	shuffleGuardians: args['shuffle-guardians'] || undefined,
+	guardianSchedule: args['guardian-schedule'],
 	gamma: num(args.gamma),
 	iter: parseInt(args.iter, 10),
 	obsVersion: parseInt(args['obs-version'], 10),
@@ -102,6 +109,10 @@ if (config.policyObsVersion === 2 && !config.inferSocket) {
 	console.error(
 		'--policy-obs-version 2 requires --infer-socket (the in-process TS net is v1-only)'
 	);
+	process.exit(1);
+}
+if (config.guardianSchedule !== undefined && config.guardianSchedule !== 'absolute-balanced') {
+	console.error(`--guardian-schedule must be absolute-balanced, got ${args['guardian-schedule']}`);
 	process.exit(1);
 }
 
@@ -124,7 +135,7 @@ const res = await runActorPool({
 	outDir: path.resolve(args.out),
 	workers,
 	config,
-	catalogPath: path.join(root, 'ml', 'catalog.json'),
+	catalogPath: args.catalog ? path.resolve(args.catalog) : path.join(root, 'ml', 'catalog.json'),
 	append: args.append,
 	onGame: args.quiet
 		? undefined

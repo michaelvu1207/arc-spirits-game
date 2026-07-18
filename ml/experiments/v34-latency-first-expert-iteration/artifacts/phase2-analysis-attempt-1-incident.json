@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "arc-v34-phase2-analysis-launch-incident-v1",
+  "attempt": 1,
+  "authoritative": true,
+  "recordedAt": "2026-07-14T17:06:55Z",
+  "stdoutCreatedAt": "2026-07-14T17:04:28.274460947Z",
+  "exitCode": 1,
+  "classification": "pre-comparative-analysis-execution-environment-failure",
+  "repository": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot",
+    "wasGitCheckout": false,
+    "requiredImplementationCommit": "fe8dcdb66357263b808f6b169e34f2eb6732d48f"
+  },
+  "lockedSources": {
+    "ml/analyze_v34_phase2.py": "5f10ee0bd2cf83b499d7d2781b66ba2d123679356f6055136efdbf65269c2a57",
+    "scripts/record-v34-phase2-condition.mjs": "36366dd25399af7129fc13071207f57ef41305511c9f7db3502e9c3c0eaaaf08"
+  },
+  "command": {
+    "executable": "ml/v34_stats_env/.venv/bin/python",
+    "argv": [
+      "ml/analyze_v34_phase2.py",
+      "--protocol",
+      "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "--strength-protocol",
+      "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+      "--source-lock",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/source-lock.json",
+      "--systems-authorization",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-authorization.json",
+      "--systems-eligibility",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+      "--phase2-authorization",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-authorization.json",
+      "--strength-lock",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-tooling-lock.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/raw/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p025/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p050/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p075/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/rerank-p100/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s4-h2/completion.json",
+      "--condition",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/completion.json",
+      "--out",
+      "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.json"
+    ],
+    "stdoutRemotePath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.stdout"
+  },
+  "failure": {
+    "exception": "ValueError",
+    "message": "strength-lock commit is not an ancestor of the executing tree",
+    "function": "validate_strength_lock",
+    "sourceLine": 975
+  },
+  "machineIntegrityVerification": {
+    "lockedNodeVerifierRanForAllSevenManifests": true,
+    "reportReadLine": 235,
+    "outcomeRowsValidatedLines": [365, 420],
+    "completionRecomputedLines": [677, 693],
+    "manifestVerificationLines": [915, 945],
+    "outcomeBearingReportAndReplayRowsRead": true,
+    "stdoutExposed": false,
+    "stderrExposed": false,
+    "crossArmEndpointConstruction": false,
+    "bootstrap": false,
+    "gateEvaluation": false,
+    "rankingOrSelection": false
+  },
+  "pythonCallOrderEvidence": {
+    "analyzePhase2EntryLine": 1717,
+    "failedValidationCallLine": 1739,
+    "firstConditionOutcomeLoader": "load_conditions",
+    "firstConditionOutcomeLoaderLine": 1749,
+    "conditionOutcomeLoaderReached": false,
+    "reportValidationReached": false,
+    "endpointConstructionReached": false,
+    "bootstrapReached": false,
+    "gateEvaluationReached": false
+  },
+  "artifacts": {
+    "stdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis-attempt-1.stderr",
+      "bytes": 813,
+      "sha256": "63f454aba0ffc4fc04bc06a03ba5db3aa62c72f3812bcbe5d0854c95479aeae4"
+    },
+    "analysis": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-analysis.json",
+      "exists": false
+    }
+  },
+  "outcomeInspection": {
+    "machineIntegrityReadOccurred": true,
+    "pythonComparativeAnalysisReadOccurred": false,
+    "humanOrAgentObservedConditionOutcomeAfterLaunch": false,
+    "recoveryDecisionConditionedOnPerformance": false,
+    "authorizationSelectionObserved": false
+  },
+  "recovery": {
+    "authorized": false,
+    "requiresFableHighEffortReview": true,
+    "maximumCorrectedAttempts": 1,
+    "furtherAttemptAfterCorrectedFailure": false
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "arc-v35-p30-terminal-campaign-incident-v1",
+  "campaignInstanceId": "aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b",
+  "terminal": true,
+  "immutable": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "gameSeedsConsumed": true,
+  "gpuLeaseAcquired": true,
+  "failedPhase": "phase0-runtime-fable-review",
+  "diagnosticCode": "PHASE0_ANALYZER_REHEARSAL_INCOMPLETE",
+  "rootCause": "The local container review completed normally and rejected the metric-free Phase-0 evidence. The analyzer rehearsal report proved only the existing input-loading unit test; it did not prove the plan-required exact analyzer execution over a label-shuffled synthetic 54-endpoint manifest through the production launch capability, isolation, consumed-token, empty-stream, signing, and sealing paths. The unit-test runner also produced nonempty framework stderr. Because Phase-0 seeds were consumed and the review attempt was reserved, this campaign is closed without retry.",
+  "protocol": {
+    "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.json",
+    "sha256": "cae6a9d4b0c0970d39fd5d68116c617bfe5fffd5c99bc0409b46fe1544711028"
+  },
+  "review": {
+    "mode": "phase0-runtime",
+    "request": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/requests/phase0-runtime-fable-review.json",
+      "sha256": "a2485981692d27347d8d35115dc78be614d202247e220364d18c1a45be3ac4e1"
+    },
+    "attempt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/reviews/phase0-runtime/attempt.json",
+      "sha256": "3383181dcf9e9dd9d5e23851de5725d9cdc24fd259060b3d97577f247379be65",
+      "reservedAtUtc": "2026-07-16T13:48:22.003195Z"
+    },
+    "localCapsule": "/tmp/arc-p30-phase0-review-aa80b50e",
+    "stdout": {
+      "bytes": 4755,
+      "sha256": "81a1a8a4a0b26ab2bfdbf94f106b39d4864428d07dfcfe76b62843454b6a8fc5"
+    },
+    "stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "completion": {
+      "path": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/phase0-fable-review-aa80b50e.completion.json",
+      "sha256": "aadf3fbb2546d269e4059f9dc89348e010bfd17eb343a8b1d1638e9510ce914f",
+      "startedAtUtc": "2026-07-16T13:48:22.614805Z",
+      "finishedAtUtc": "2026-07-16T13:50:38.821386Z",
+      "exitCode": 0,
+      "cleanupVerified": true
+    },
+    "modelStarted": true,
+    "reviewReceiptCreated": false,
+    "reviewStreamsUploaded": false,
+    "verdict": "REJECT"
+  },
+  "completedPreflights": {
+    "faultInjectionReceipt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/6dad4386d405baa0bc7c231ca6818a5b4bc96edc8a0c09addfec0c28047b8410.receipt.json",
+      "sha256": "82e9635ae586e009f181333b356a565a365f9d0853af3dddbf628ad272260658"
+    },
+    "analyzerRehearsalReceipt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/7bce91c28d740248ed66a9e36c1494f0eca89e125d53d17e3c9c11fd8c39ebb5.receipt.json",
+      "sha256": "b9f81a4c7be704ff418fb0e26ac7957bf041dbc68fec72ab78ea4c6f6d8681be"
+    },
+    "cudaDeterminismReceipt": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/aa80b50e207025930ad25fab69cd29e3cdd7d7aec10cc8b4873565b3e4b8e34b/77d9cb1199d931e00a9778196d136bba2dcffc5d54327410ad5529cb02e81981.receipt.json",
+      "sha256": "0c4201cb8cdc36badc4bb4e7ce11dbbd85c57fd7e9e95221af57ebcfffe4bb99"
+    }
+  },
+  "resourcePostcondition": {
+    "gpuUuid": "GPU-53f5407a-8e21-a269-7afb-df395cb9b7e0",
+    "gpuMemoryMiB": 0,
+    "gpuUtilizationPercent": 0,
+    "campaignProcessesRemaining": 0,
+    "dataShare8AvailableBytes": 8205606912
+  },
+  "resourceSpend": {
+    "gpuLeaseSeconds": 649.394604,
+    "cudaGamesCompleted": 8192,
+    "retainedCudaOutputBytes": 9861859
+  },
+  "disposition": {
+    "reuseForbidden": true,
+    "recoveryForbidden": true,
+    "requiredNextInstance": "fresh-source-lock-campaign-id-keys-seeds-and-review",
+    "sourceFix": [
+      "replace the unit-test-only rehearsal with a real synthetic 54-endpoint analyzer execution",
+      "shuffle endpoint labels under a committed deterministic permutation and prove the exact expected label set",
+      "run through the production analysis capability, nested isolation, consumed-token, authorization, and child-evidence boundaries",
+      "seal and validate an executor-signed analysis receipt while requiring empty analyzer stdout and stderr",
+      "report only structural counts, commitments, fixed diagnostic codes, and cleanup evidence"
+    ]
+  }
+}

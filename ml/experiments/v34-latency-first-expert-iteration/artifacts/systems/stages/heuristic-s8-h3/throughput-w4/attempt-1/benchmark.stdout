@@ -1,0 +1,2 @@
+4 workers r0: 0.87 games/s, 0 samples/s, 0 policy rows/s
+wrote /data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v34-latency-first-expert-iteration/artifacts/systems/stages/heuristic-s8-h3/throughput-w4/attempt-1/benchmark.json

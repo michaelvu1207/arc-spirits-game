@@ -31,6 +31,7 @@ import type {
 	ActorSeedJob,
 	ActorWorkerCommand,
 	ActorWorkerMessage,
+	ContinuationCurriculumDiagnostics,
 	GameSummary
 } from './poolTypes';
 
@@ -58,8 +59,56 @@ export interface ActorPoolResult {
 	gamesPerSec: number;
 	/** All summaries, in seed order. */
 	summaries: GameSummary[];
+	/** Train-only late-state suffix diagnostics; all zero when the curriculum is disabled. */
+	curriculum: ContinuationCurriculumDiagnostics;
 	shardFiles: string[];
+	optionFiles: string[];
 	gameFiles: string[];
+	previewAuditFiles: string[];
+}
+
+function emptyCurriculumDiagnostics(): ContinuationCurriculumDiagnostics {
+	return {
+		eligibleSourceGames: 0,
+		selectedSourceGames: 0,
+		episodes: 0,
+		rows: 0,
+		wallMs: 0,
+		sourceCapFailures: 0,
+		sourceSuccesses: 0,
+		forkSuccesses: 0,
+		forkFailures: 0,
+		recoveries: 0,
+		skippedNoSnapshot: 0,
+		sourceRoundCounts: {},
+		forkRoundCounts: {}
+	};
+}
+
+function mergeCurriculumDiagnostics(
+	into: ContinuationCurriculumDiagnostics,
+	add: ContinuationCurriculumDiagnostics
+): void {
+	for (const key of [
+		'eligibleSourceGames',
+		'selectedSourceGames',
+		'episodes',
+		'rows',
+		'wallMs',
+		'sourceCapFailures',
+		'sourceSuccesses',
+		'forkSuccesses',
+		'forkFailures',
+		'recoveries',
+		'skippedNoSnapshot'
+	] as const) {
+		into[key] += add[key];
+	}
+	for (const key of ['sourceRoundCounts', 'forkRoundCounts'] as const) {
+		for (const [round, count] of Object.entries(add[key])) {
+			into[key][round] = (into[key][round] ?? 0) + count;
+		}
+	}
 }
 
 const workerFile = fileURLToPath(new URL('./actorWorker.ts', import.meta.url));
@@ -95,8 +144,15 @@ export class DynamicSeedScheduler {
 	private nextJobIndex = 0;
 	private readonly inFlight = new Map<number, number>();
 	private readonly completed = new Set<number>();
+	private readonly duplicateSeeds: Set<number>;
 
-	constructor(private readonly seeds: readonly number[]) {}
+	constructor(private readonly seeds: readonly number[]) {
+		const counts = new Map<number, number>();
+		for (const seed of seeds) counts.set(seed, (counts.get(seed) ?? 0) + 1);
+		this.duplicateSeeds = new Set(
+			[...counts].filter(([, count]) => count > 1).map(([seed]) => seed)
+		);
+	}
 
 	next(workerIndex: number): ActorSeedJob | null {
 		if (this.inFlight.has(workerIndex)) {
@@ -105,7 +161,12 @@ export class DynamicSeedScheduler {
 		if (this.nextJobIndex >= this.seeds.length) return null;
 		const jobIndex = this.nextJobIndex++;
 		this.inFlight.set(workerIndex, jobIndex);
-		return { jobIndex, seed: this.seeds[jobIndex] };
+		const seed = this.seeds[jobIndex];
+		return {
+			jobIndex,
+			seed,
+			...(this.duplicateSeeds.has(seed) ? { duplicateSeed: true } : {})
+		};
 	}
 
 	complete(workerIndex: number, jobIndex: number): void {
@@ -129,6 +190,7 @@ export class DynamicSeedScheduler {
 
 export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolResult> {
 	if (opts.seeds.length === 0) {
+		const curriculum = emptyCurriculumDiagnostics();
 		return {
 			workers: 0,
 			games: 0,
@@ -136,8 +198,11 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 			wallMs: 0,
 			gamesPerSec: 0,
 			summaries: [],
+			curriculum,
 			shardFiles: [],
-			gameFiles: []
+			optionFiles: [],
+			gameFiles: [],
+			previewAuditFiles: []
 		};
 	}
 	const nWorkers = Math.max(1, Math.min(opts.workers ?? cpus().length - 1, opts.seeds.length));
@@ -147,7 +212,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 	if (!existsSync(catalogPath)) throw new Error(`actorPool: catalog not found: ${catalogPath}`);
 	if (!opts.append) {
 		for (const f of readdirSync(outDir)) {
-			if (/^(shard|games)-\d+\.jsonl$/.test(f)) rmSync(join(outDir, f));
+			if (/^(shard|options|games|preview-audit)-\d+\.jsonl$/.test(f)) rmSync(join(outDir, f));
 		}
 	}
 
@@ -164,6 +229,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 	const byJob = new Map<number, GameSummary>();
 	let samples = 0;
 	let gamesCompleted = 0;
+	const curriculum = emptyCurriculumDiagnostics();
 	const t0 = performance.now();
 	const liveWorkers: Worker[] = [];
 	try {
@@ -225,6 +291,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 									done = true;
 									gamesCompleted += msg.games;
 									samples += msg.samples;
+									mergeCurriculumDiagnostics(curriculum, msg.curriculum);
 								} else if (msg.type === 'error') {
 									fail(new Error(`actorPool worker ${msg.workerIndex}: ${msg.message}`));
 								}
@@ -273,7 +340,7 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 	// meta.json alongside the shards: ml/model.py's load_dims_from_meta prefers it, and
 	// without it the trainer would infer dims from the first *.jsonl alphabetically —
 	// which is games-0.jsonl (summaries, no obs), not a sample shard. Shape follows the
-	// pinned paired-row contract (docs/encoder-v2.md): obs_dim stays the current v1 83 on every
+	// pinned paired-row contract (docs/encoder-v2.md): obs_dim stays the current v1 199 on every
 	// dataset, and v2 runs nest obsV2Meta under the exact key "obs_v2" — the block
 	// bc_warmstart_v2 / train.py --model v2 build their ObsV2Spec from.
 	writeFileSync(
@@ -285,6 +352,9 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 				samples,
 				games: summaries.length,
 				workers: nWorkers,
+				...(opts.config.continuationCurriculum?.enabled
+					? { continuation_curriculum: curriculum }
+					: {}),
 				obs_version: opts.config.obsVersion ?? 1,
 				...(opts.config.obsVersion === 2
 					? { obs_v2: obsV2Meta(JSON.parse(readFileSync(catalogPath, 'utf8')) as PlayCatalog) }
@@ -302,7 +372,12 @@ export async function runActorPool(opts: ActorPoolOptions): Promise<ActorPoolRes
 		wallMs,
 		gamesPerSec: summaries.length / (wallMs / 1000),
 		summaries,
+		curriculum,
 		shardFiles: outFiles.filter((f) => /^shard-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
-		gameFiles: outFiles.filter((f) => /^games-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f))
+		optionFiles: outFiles.filter((f) => /^options-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
+		gameFiles: outFiles.filter((f) => /^games-\d+\.jsonl$/.test(f)).map((f) => join(outDir, f)),
+		previewAuditFiles: outFiles
+			.filter((f) => /^preview-audit-\d+\.jsonl$/.test(f))
+			.map((f) => join(outDir, f))
 	};
 }

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { PlaySpirit } from '$lib/play/types';
+	import LowPolySpiritStage from '$lib/components/LowPolySpiritStage.svelte';
+	import { pulseHaptic } from '$lib/stores/accessibilitySettings.svelte';
 
 	interface Props {
 		spirits: PlaySpirit[];
@@ -16,6 +18,7 @@
 	let {
 		spirits,
 		spiritImages,
+		guardianName = null,
 		accent = '#ff2bc7',
 		durationMs = 5000,
 		onDone
@@ -31,6 +34,7 @@
 	}
 
 	$effect(() => {
+		pulseHaptic('impact');
 		const t = setTimeout(finish, durationMs);
 		return () => clearTimeout(t);
 	});
@@ -54,6 +58,7 @@
 	onclick={finish}
 >
 	<div class="aura" aria-hidden="true"></div>
+	<div class="summon-stage" aria-hidden="true"><LowPolySpiritStage moment="summon" guardianName={guardianName ?? 'Starting Spirit'} {accent} /></div>
 	<div class="content">
 		<div class="spirits" data-testid="start-spirits" style="--n: {Math.max(spirits.length, 1)}">
 			{#each spirits as s, i (s.id + ':' + i)}
@@ -104,6 +109,7 @@
 		opacity: 0.7;
 		animation: aura-pulse 4s ease-in-out infinite;
 	}
+	.summon-stage { position:absolute; width:min(680px,92vw); height:min(620px,82vh); opacity:.62; }
 	.content {
 		position: relative;
 		display: flex;

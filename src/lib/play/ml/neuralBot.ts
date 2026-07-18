@@ -106,7 +106,8 @@ function entriesSig(obj: Record<string, number> | undefined): string {
  * Cheap signature of a player's material/progression state; ignores table churn such as market
  * refills and object positions so only meaningful player/rules progress counts.
  */
-function materialSig(state: PublicGameState, seat: SeatColor): string {
+/** Compact signature used by the progress guard and evaluation diagnostics. */
+export function progressSignature(state: PublicGameState, seat: SeatColor): string {
 	const p = state.players[seat];
 	if (!p) return `${state.phase}:${state.round}`;
 	const spirits = [...(p.spirits ?? [])]
@@ -193,12 +194,12 @@ function nonProgressPenalty(cmd: GameCommand): number {
 	return cmd.type === 'refillMarket' ? REFILL_MARKET_PENALTY : NOOP_PENALTY;
 }
 
-function isProgressTransition(
+export function isProgressTransition(
 	state: PublicGameState,
 	seat: SeatColor,
 	next: PublicGameState
 ): boolean {
-	return materialSig(next, seat) !== materialSig(state, seat);
+	return progressSignature(next, seat) !== progressSignature(state, seat);
 }
 
 function progressCandidateIndices(
@@ -220,8 +221,18 @@ function progressCandidateIndices(
 export function selectableCandidateIndices(
 	state: PublicGameState,
 	seat: SeatColor,
-	withNext: LegalAction[]
+	withNext: LegalAction[],
+	opts?: { learnMonsterRewardChoices?: boolean }
 ): number[] {
+	if (opts?.learnMonsterRewardChoices && state.players[seat]?.pendingReward) {
+		const rewards = withNext.flatMap((action, index) =>
+			action.cmd.type === 'resolveMonsterReward' ? [index] : []
+		);
+		// Reward resolution can coexist with other legal Location actions. V24
+		// learns the reward tradeoff on exactly this support; a single reward is
+		// forced, matching the historical non-ambiguous contract.
+		if (rewards.length > 0) return rewards;
+	}
 	const progress = progressCandidateIndices(state, seat, withNext);
 	return progress.length > 0 ? progress : withNext.map((_, i) => i);
 }
@@ -344,7 +355,7 @@ export function scoreByValue(
 	catalog: PlayCatalog
 ): number[] {
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
-	const curSig = materialSig(state, seat);
+	const curSig = progressSignature(state, seat);
 	const curPendingRewardVp = pendingRewardVpPotential(state, seat);
 	const rootObs = encodeObs(state, seat, catalog);
 	const rewardPickProbs = state.players[seat]?.pendingReward
@@ -362,7 +373,7 @@ export function scoreByValue(
 		const dPendingRewardVP =
 			Math.max(0, pendingRewardVpPotential(next, seat) - curPendingRewardVp) / VP_TO_WIN;
 		const noop =
-			!action.hasHiddenOutcome && materialSig(next, seat) === curSig
+			!action.hasHiddenOutcome && progressSignature(next, seat) === curSig
 				? nonProgressPenalty(action.cmd)
 				: 0;
 		const rewardPickBonus =
@@ -569,22 +580,48 @@ export function hybridIndex(
 	state: PublicGameState,
 	seat: SeatColor,
 	withNext: LegalAction[],
-	opts?: { sample?: boolean; temperature?: number; rand?: () => number },
+	opts?: {
+		sample?: boolean;
+		temperature?: number;
+		rand?: () => number;
+		/** Opt-in V24 mode: let the policy trade immediate VP for engine rewards. */
+		learnMonsterRewardChoices?: boolean;
+	},
 	catalog?: PlayCatalog
 ): number {
 	if (withNext.length <= 1) return 0;
 	const curVP = state.players[seat]?.victoryPoints ?? 0;
-	// 1) Take an outright win immediately; otherwise the largest immediate VP gain (if any).
+	// Take an outright win immediately in every mode. V24 changes only ambiguous
+	// all-monster-reward decisions; every other historical VP safeguard is retained.
 	let bestVpIdx = -1;
 	let bestVpGain = 0;
 	for (let i = 0; i < withNext.length; i++) {
 		const n = policyPreviewState(withNext[i]);
-		if (n.winnerSeat === seat) return i;
+		// Some resolution commands cross the public VP threshold before phase
+		// advancement stamps winnerSeat. Treat the rules objective itself as the
+		// immediate-win guard, not only the derived terminal marker.
+		if (n.winnerSeat === seat || (n.players[seat]?.victoryPoints ?? 0) >= VP_TO_WIN) return i;
 		const gain = (n.players[seat]?.victoryPoints ?? 0) - curVP;
 		if (gain > bestVpGain) {
 			bestVpGain = gain;
 			bestVpIdx = i;
 		}
+	}
+	const learnableMonsterReward =
+		opts?.learnMonsterRewardChoices === true && state.players[seat]?.pendingReward != null;
+	if (learnableMonsterReward) {
+		const rewardSupport = selectableCandidateIndices(state, seat, withNext, {
+			learnMonsterRewardChoices: true
+		});
+		if (rewardSupport.length === 1) return rewardSupport[0];
+		return policyIndexWithProgressGuard(
+			policy,
+			state,
+			seat,
+			withNext,
+			{ ...opts, supportIndices: rewardSupport },
+			catalog
+		);
 	}
 	if (bestVpIdx >= 0 && bestVpGain > 0) return bestVpIdx;
 	// No immediate VP → the learned policy owns positioning and delayed-payoff decisions.
@@ -596,16 +633,29 @@ export function policyIndexWithProgressGuard(
 	state: PublicGameState,
 	seat: SeatColor,
 	withNext: LegalAction[],
-	opts?: { sample?: boolean; temperature?: number; rand?: () => number },
+	opts?: {
+		sample?: boolean;
+		temperature?: number;
+		rand?: () => number;
+		supportIndices?: number[];
+	},
 	catalog?: PlayCatalog
 ): number {
 	if (!catalog)
 		throw new Error('policyIndexWithProgressGuard: catalog is required (obs v1.1 ladder features)');
-	const progress = progressCandidateIndices(state, seat, withNext);
-	const filtered =
-		progress.length > 0 && progress.length < withNext.length
-			? progress.map((i) => withNext[i])
-			: withNext;
+	const requested = opts?.supportIndices;
+	if (
+		requested &&
+		(requested.length === 0 ||
+			new Set(requested).size !== requested.length ||
+			requested.some((index) => !Number.isInteger(index) || index < 0 || index >= withNext.length))
+	) {
+		throw new Error('policyIndexWithProgressGuard: invalid explicit support');
+	}
+	const naturalProgress = progressCandidateIndices(state, seat, withNext);
+	const support =
+		requested ?? (naturalProgress.length > 0 ? naturalProgress : withNext.map((_, index) => index));
+	const filtered = support.length < withNext.length ? support.map((i) => withNext[i]) : withNext;
 	const picked = policy.pick(
 		encodeObs(state, seat, catalog),
 		filtered.map((x) => encodeAction(state, seat, x.cmd, policyPreviewState(x), catalog)),
@@ -615,7 +665,7 @@ export function policyIndexWithProgressGuard(
 			rand: opts?.rand
 		}
 	);
-	return filtered === withNext ? picked : progress[picked];
+	return filtered === withNext ? picked : support[picked];
 }
 
 /** Pick a candidate index by value-lookahead. Greedy by default; softmax-sample for
@@ -749,6 +799,12 @@ export interface NeuralPlanOptions {
 	 * is the legacy behavior, kept for the training/eval paths that want it.
 	 */
 	temperatureScope?: 'all' | 'navigation';
+	/**
+	 * Opt-in V24 behavior. Ambiguous all-monster-reward decisions go through the
+	 * learned policy (except an action that wins immediately). Default false keeps
+	 * historical/live checkpoint behavior exactly unchanged.
+	 */
+	learnMonsterRewardChoices?: boolean;
 }
 
 /** Synchronous variant when the caller already holds a policy (e.g. self-play / eval).
@@ -823,8 +879,15 @@ export function planNeuralPhaseActions(
 				seat,
 				withNext,
 				opts.temperature && opts.temperature > 0 && tempApplies
-					? { sample: true, temperature: opts.temperature }
-					: { sample: false },
+					? {
+							sample: true,
+							temperature: opts.temperature,
+							learnMonsterRewardChoices: opts.learnMonsterRewardChoices
+						}
+					: {
+							sample: false,
+							learnMonsterRewardChoices: opts.learnMonsterRewardChoices
+						},
 				catalog
 			);
 		}

@@ -14,7 +14,7 @@ import { dirname, resolve } from 'node:path';
 import type { PlayCatalog } from '../types';
 import { OBS_DIM, ACT_DIM } from './encode';
 import { loadPolicyWeights, NeuralPolicy, type PolicyWeights, type LinearLayer } from './net';
-import type { Sample } from './driver';
+import type { RoundOptionEvent, Sample } from './driver';
 import { createRng, nextInt } from '../rng';
 
 /** Repo-root-relative path (vitest runs with cwd = repo root). */
@@ -60,17 +60,26 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				cands: s.cands.map(encodeVector),
 				chosen: s.chosen,
 				ret: r4(s.ret),
+				...(typeof s.round === 'number' ? { round: s.round } : {}),
+				vp: r4(s.vp),
 				...(s.pi ? { pi: round4(s.pi) } : {}),
 				...(typeof s.farmValue === 'number' ? { farmValue: r4(s.farmValue) } : {}),
 				...(s.rewardPi ? { rewardPi: round4(s.rewardPi) } : {}),
 				...(typeof s.policyWeight === 'number' ? { policyWeight: r4(s.policyWeight) } : {}),
 				...(typeof s.routeMode === 'number' ? { routeMode: r4(s.routeMode) } : {}),
 				...(typeof s.teacherKind === 'string' ? { teacherKind: s.teacherKind } : {}),
+				...(s.continuationCurriculum === 1 ? { continuationCurriculum: 1 } : {}),
 				// PPO trajectory fields (ml/ppo.py); optional so old-format consumers see no change.
 				...(typeof s.gameId === 'string' ? { gameId: s.gameId } : {}),
 				...(typeof s.stepIdx === 'number' ? { stepIdx: s.stepIdx } : {}),
 				...(typeof s.rStep === 'number' ? { rStep: r4(s.rStep) } : {}),
 				...(typeof s.done === 'boolean' ? { done: s.done } : {}),
+				// Long-horizon credit assignment labels. `decisionType` is retained for
+				// auditability; PPO consumes the compact binary strategic mask.
+				...(typeof s.decisionType === 'string' ? { decisionType: s.decisionType } : {}),
+				...(typeof s.strategic === 'number' ? { strategic: s.strategic } : {}),
+				...(typeof s.playerCount === 'number' ? { playerCount: s.playerCount } : {}),
+				...(typeof s.optionId === 'number' ? { seat: s.seat, optionId: s.optionId } : {}),
 				// Behavior scalars stay full precision: rounding logpOld perturbs PPO's
 				// new/old ratio before the first optimizer step.
 				...(typeof s.logpOld === 'number' ? { logpOld: s.logpOld } : {}),
@@ -80,11 +89,20 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				...(s.behaviorMask ? { behaviorMask: s.behaviorMask } : {}),
 				...(typeof s.policyMask === 'number' ? { policyMask: s.policyMask } : {}),
 				...(typeof s.vPred === 'number' ? { vPred: s.vPred } : {}),
+				...(s.placementProbs ? { placementProbs: round4(s.placementProbs) } : {}),
+				...(typeof s.reach30Pred === 'number' ? { reach30Pred: s.reach30Pred } : {}),
 				...(typeof s.placement === 'number' ? { placement: s.placement } : {}),
 				// True 30-VP win flag + final round (done rows only): the PPO --win-bonus
 				// reads `won`, and --win-bonus-halflife reads `endRound`. These were stamped
 				// on the Sample but never serialized before (win bonus was silently inert).
 				...(typeof s.won === 'number' ? { won: s.won } : {}),
+				...(typeof s.reach30Target === 'number' ? { reach30Target: s.reach30Target } : {}),
+				...(typeof s.reach30Horizon === 'number' ? { reach30Horizon: s.reach30Horizon } : {}),
+				// The solo objective can resolve at a fixed horizon even when the game engine
+				// remains playable. Preserve that distinct terminal flag and the exact final
+				// score so Python can apply the opt-in lexicographic outcome contract.
+				...(typeof s.objectiveDone === 'number' ? { objectiveDone: s.objectiveDone } : {}),
+				...(typeof s.finalVP === 'number' ? { finalVP: s.finalVP } : {}),
 				// All-Fallen collapse terminal (done rows): the PPO --all-fallen-loss stamps a
 				// terminal loss on these rows for every seat.
 				...(typeof s.allFallen === 'number' ? { allFallen: s.allFallen } : {}),
@@ -92,6 +110,23 @@ export function appendSamples(file: string, samples: Sample[], iter = 0): void {
 				iter
 			});
 		})
+		.join('\n');
+	appendFileSync(file, lines + '\n');
+}
+
+/** Append one row per persistent round-option selection. Keep this separate from low-level
+ * decision shards: option PPO must see one behavior event, not one copy per action. */
+export function appendOptionEvents(file: string, events: RoundOptionEvent[], iter = 0): void {
+	if (events.length === 0) return;
+	ensureDir(file);
+	const lines = events
+		.map((event) =>
+			JSON.stringify({
+				...event,
+				obs: float32Numbers(event.obs),
+				iter
+			})
+		)
 		.join('\n');
 	appendFileSync(file, lines + '\n');
 }
@@ -168,14 +203,17 @@ export function randomPolicy(seed = 1, trunkHidden = [128, 128], valueHidden = [
 	return new NeuralPolicy(w);
 }
 
-/** Load weights if present AND dims match the current encoder; otherwise a random bootstrap net. */
+/** Load weights if present and compatible with the current encoder. Strict-prefix observation
+ * and action checkpoints are zero-expanded; newer/incompatible nets fall back to random. */
 export function loadOrRandomPolicy(
 	file = mlPath('weights', 'policy.json'),
 	seed = 1
 ): NeuralPolicy {
 	if (existsSync(file)) {
 		const w = JSON.parse(readFileSync(file, 'utf8')) as PolicyWeights;
-		if (w.obs_dim === OBS_DIM && w.act_dim === ACT_DIM) return loadPolicyWeights(w);
+		if (w.obs_dim <= OBS_DIM && w.act_dim <= ACT_DIM) {
+			return loadPolicyWeights(w, { expectedObsDim: OBS_DIM, expectedActDim: ACT_DIM });
+		}
 	}
 	return randomPolicy(seed);
 }

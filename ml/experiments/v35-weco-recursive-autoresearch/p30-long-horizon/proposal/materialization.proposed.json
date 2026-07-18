@@ -1,0 +1,723 @@
+{
+  "schemaVersion": "arc-v35-p30-proposal-materialization-v1",
+  "status": "proposed-review-pending",
+  "authorized": false,
+  "protocolPath": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/protocol.proposed.json",
+  "protocolSha256": "8f7b23481f26e0726cb950a79e2e0be4f5a929764e4a3fd66b7d7805bf92091d",
+  "basePath": "ml/league/configs/fair-v35-late-credit-base.json",
+  "baseSha256": "c2c0fd7637f27dbc6afdee4adbef48a57b83c19d2c60ebf351f165f506bfb52e",
+  "seedInventoryPath": "ml/experiments/v35-weco-recursive-autoresearch/artifacts/runtime-seed-inventory.json",
+  "seedInventorySha256": "f4feaa3f5c0034b9f43b38513287f318c3f817bce5b6a6c8096f5719b4a2bf95",
+  "seedIntervals": [
+    {
+      "id": "a:train",
+      "visibility": "training",
+      "start": 967040000,
+      "end": 967055359
+    },
+    {
+      "id": "a:eval",
+      "visibility": "public-development",
+      "start": 968000000,
+      "end": 968057599
+    },
+    {
+      "id": "b:train",
+      "visibility": "training",
+      "start": 967056000,
+      "end": 967071359
+    },
+    {
+      "id": "b:eval",
+      "visibility": "public-development",
+      "start": 968058000,
+      "end": 968115599
+    },
+    {
+      "id": "c:train",
+      "visibility": "training",
+      "start": 967072000,
+      "end": 967087359
+    },
+    {
+      "id": "c:eval",
+      "visibility": "public-development",
+      "start": 968116000,
+      "end": 968173599
+    },
+    {
+      "id": "d:train",
+      "visibility": "training",
+      "start": 967088000,
+      "end": 967103359
+    },
+    {
+      "id": "d:eval",
+      "visibility": "public-development",
+      "start": 968174000,
+      "end": 968231599
+    },
+    {
+      "id": "e:train",
+      "visibility": "training",
+      "start": 967104000,
+      "end": 967119359
+    },
+    {
+      "id": "e:eval",
+      "visibility": "public-development",
+      "start": 968232000,
+      "end": 968289599
+    },
+    {
+      "id": "f:train",
+      "visibility": "training",
+      "start": 967120000,
+      "end": 967135359
+    },
+    {
+      "id": "f:eval",
+      "visibility": "public-development",
+      "start": 968290000,
+      "end": 968347599
+    },
+    {
+      "id": "g:train",
+      "visibility": "training",
+      "start": 967136000,
+      "end": 967151359
+    },
+    {
+      "id": "g:eval",
+      "visibility": "public-development",
+      "start": 968348000,
+      "end": 968405599
+    },
+    {
+      "id": "h:train",
+      "visibility": "training",
+      "start": 967152000,
+      "end": 967167359
+    },
+    {
+      "id": "h:eval",
+      "visibility": "public-development",
+      "start": 968406000,
+      "end": 968463599
+    },
+    {
+      "id": "i:train",
+      "visibility": "training",
+      "start": 967168000,
+      "end": 967183359
+    },
+    {
+      "id": "i:eval",
+      "visibility": "public-development",
+      "start": 968464000,
+      "end": 968521599
+    },
+    {
+      "id": "j:train",
+      "visibility": "training",
+      "start": 967184000,
+      "end": 967199359
+    },
+    {
+      "id": "j:eval",
+      "visibility": "public-development",
+      "start": 968522000,
+      "end": 968579599
+    },
+    {
+      "id": "k:train",
+      "visibility": "training",
+      "start": 967200000,
+      "end": 967215359
+    },
+    {
+      "id": "k:eval",
+      "visibility": "public-development",
+      "start": 968580000,
+      "end": 968637599
+    },
+    {
+      "id": "l:train",
+      "visibility": "training",
+      "start": 967216000,
+      "end": 967231359
+    },
+    {
+      "id": "l:eval",
+      "visibility": "public-development",
+      "start": 968638000,
+      "end": 968695599
+    },
+    {
+      "id": "m:train",
+      "visibility": "training",
+      "start": 967232000,
+      "end": 967247359
+    },
+    {
+      "id": "m:eval",
+      "visibility": "public-development",
+      "start": 968696000,
+      "end": 968753599
+    },
+    {
+      "id": "n:train",
+      "visibility": "training",
+      "start": 967248000,
+      "end": 967263359
+    },
+    {
+      "id": "n:eval",
+      "visibility": "public-development",
+      "start": 968754000,
+      "end": 968811599
+    },
+    {
+      "id": "o:train",
+      "visibility": "training",
+      "start": 967264000,
+      "end": 967279359
+    },
+    {
+      "id": "o:eval",
+      "visibility": "public-development",
+      "start": 968812000,
+      "end": 968869599
+    },
+    {
+      "id": "p:train",
+      "visibility": "training",
+      "start": 967280000,
+      "end": 967295359
+    },
+    {
+      "id": "p:eval",
+      "visibility": "public-development",
+      "start": 968870000,
+      "end": 968927599
+    },
+    {
+      "id": "q:train",
+      "visibility": "training",
+      "start": 967296000,
+      "end": 967311359
+    },
+    {
+      "id": "q:eval",
+      "visibility": "public-development",
+      "start": 968928000,
+      "end": 968985599
+    },
+    {
+      "id": "r:train",
+      "visibility": "training",
+      "start": 967312000,
+      "end": 967327359
+    },
+    {
+      "id": "r:eval",
+      "visibility": "public-development",
+      "start": 967400000,
+      "end": 967457599
+    },
+    {
+      "id": "common-public-development",
+      "visibility": "public-development",
+      "start": 969070000,
+      "end": 969074095
+    }
+  ],
+  "configs": [
+    {
+      "replicate": "a",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-a/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/control-zero/config.proposed.json",
+      "configProposedSha256": "5a4461dc860794912cd83561fa7b20914f7c72aa511efd06e2ec5562e377ae8a",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "06596dc635174d200249195de2f439444f11cdb8d17613ab905baedec40f1d2f"
+    },
+    {
+      "replicate": "a",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-a/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/uniform-040/config.proposed.json",
+      "configProposedSha256": "a44720578fe27b8e072b212483ba123d02fe8babc3e9799ada1450e3e712a9fb",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "8cb25397c34b5b57c8c7d9eb84c74c23733f1b7551a21b099321aca167723509"
+    },
+    {
+      "replicate": "a",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-a/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/late-scheduled/config.proposed.json",
+      "configProposedSha256": "ef92ffa0916224a51f848733d727472c11da8b56724b933ce2ee880ffa860560",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-a/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "0c083e8761b9b8d77e4a2f2fc51019b74b1ce981da53e7d1d612e052240a8119"
+    },
+    {
+      "replicate": "b",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-b/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/control-zero/config.proposed.json",
+      "configProposedSha256": "0f47a44dd2efe2b0e7734c669aff1c2914c005b2740648f67847d5be1da3ada1",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "8a420237d1b267fedd45fd08ee4739a6cd56955e4031c14b273b9fbd1fba1aa0"
+    },
+    {
+      "replicate": "b",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-b/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/uniform-040/config.proposed.json",
+      "configProposedSha256": "093bfc69b6fb4f95301aca0187975b52125d575a0555b1d4d4c4d23983136d6e",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "5417614dc4f1891099268662c998914d7a89a29997ae195ba850e531d54d7011"
+    },
+    {
+      "replicate": "b",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-b/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/late-scheduled/config.proposed.json",
+      "configProposedSha256": "14a6397d0716b9baa00e86b408745f0d87d33f701df8c429f8ae1f2d1bb91cb0",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-b/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "e8c59b6017c1313aa8d75c735fc4c7d0c0a1664435d6003131df41adf911df7c"
+    },
+    {
+      "replicate": "c",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-c/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/control-zero/config.proposed.json",
+      "configProposedSha256": "c40fe3d1f1f00ed54e14f4d1436ee48a56eb63515fb5f8bf890057e7a15f3547",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "0680e1b636f6060c5174a5031143801c534c991f8165d74878cd6d307038c0f9"
+    },
+    {
+      "replicate": "c",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-c/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/uniform-040/config.proposed.json",
+      "configProposedSha256": "0478033093bc09b58588ecbcdff587089c57c1069561822770aa34a875a66b9f",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "742b11982309f5d8a9113f95ee7b2cdae3f0315115411d6c1f330da338934fe3"
+    },
+    {
+      "replicate": "c",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-c/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/late-scheduled/config.proposed.json",
+      "configProposedSha256": "242d947019df95060a81779771e6707d846ffe4e27d46d2bd43b1d5f43e19835",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-c/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "9f893a0a764f3d5914351e0ee82f48b198d2f76ef68937b8709837a66904b442"
+    },
+    {
+      "replicate": "d",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-d/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-d/control-zero/config.proposed.json",
+      "configProposedSha256": "7416d2a5b5788ba929580bc0bcad348bcf206c2967e0752e25d50fc8ec6fce4a",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-d/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "e9136225dd98ebca9dfa0b005ffa953a4cea680393ca0fc9ae98c241ed9e36a3"
+    },
+    {
+      "replicate": "d",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-d/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-d/uniform-040/config.proposed.json",
+      "configProposedSha256": "7648eb55ec787c9667a53c87697a4b102d112e19148732716a0f12ed5db0e7b7",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-d/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "98902df01622de64d58367b06348ce7a916f2282cf2c19d3e0c8c613736cbf4f"
+    },
+    {
+      "replicate": "d",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-d/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-d/late-scheduled/config.proposed.json",
+      "configProposedSha256": "743be13acbb6ba4714927e9a2dd24f34c376f2c6d069ad8da7497c8b00248d70",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-d/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "e198908b10c65e73be2b157b1fc7a7a11d17e0d9017b7d6ea09a3d54a466c6f3"
+    },
+    {
+      "replicate": "e",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-e/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-e/control-zero/config.proposed.json",
+      "configProposedSha256": "c677f583ea13a669228af7310d2a46fd277630df70459c16c2eb3992def386be",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-e/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "8fb32d6d4fa121081c5d8eb458e259db697987c917529e7ec873be1b7fdc07dc"
+    },
+    {
+      "replicate": "e",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-e/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-e/uniform-040/config.proposed.json",
+      "configProposedSha256": "ac54de007bdc7be811ad4c9e2e7b2ee2deca2e048a0e85f27a1c7ff472dce5fe",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-e/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "99e1a1eebf2911a5a6e325ecba56dc8c150aeec266ba5ae176c6c7001ae992ac"
+    },
+    {
+      "replicate": "e",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-e/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-e/late-scheduled/config.proposed.json",
+      "configProposedSha256": "221bbb53744c6611ebfcce8aefb248146eff6bf019270a23cbc5ce21ab77b86f",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-e/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "3ada73dc3cc4fcf370a5a6f4fd517caef2b019cd9e028846c1b0d2a773c65035"
+    },
+    {
+      "replicate": "f",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-f/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-f/control-zero/config.proposed.json",
+      "configProposedSha256": "e990ff78eed488d26218e962d2b5a7caadb23c16d08e3048fc89fdb62848c679",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-f/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "183868f20f77da5fab00a04da509df982757166adf58bd5a574ada457e1ae63e"
+    },
+    {
+      "replicate": "f",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-f/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-f/uniform-040/config.proposed.json",
+      "configProposedSha256": "0f36681eb3960cc835503ac6fe97941ee487799172c3a787371ed34527be3d0b",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-f/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "bdde817218c1ac0affe4ee66bc1e62110252d293be43b5d8dae50064f685f11f"
+    },
+    {
+      "replicate": "f",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-f/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-f/late-scheduled/config.proposed.json",
+      "configProposedSha256": "a403e5270f0303d2e36c35ebb90422a066e04b41e894f5e629bc37348722d4bd",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-f/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "f35824b5b4c167789b110b435be64f809c3dfa792084814c4eb0e4c96cb95dce"
+    },
+    {
+      "replicate": "g",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-g/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-g/control-zero/config.proposed.json",
+      "configProposedSha256": "9aea3e00556d49c6e982fe5e0b26026ed63008ed85d798543af6d067d64dd00d",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-g/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "b884c6aba9186960705527e66ca43a0443f99bb90134d409fa0efa55976a64bc"
+    },
+    {
+      "replicate": "g",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-g/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-g/uniform-040/config.proposed.json",
+      "configProposedSha256": "7f4683025265595342a10a4796ffb75786c85d2d8ac8b7b5a3ec010151bf06c7",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-g/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "86960b6e2b6d664d21da2a02319b3500e003587cab59450d8904d9222b13216c"
+    },
+    {
+      "replicate": "g",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-g/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-g/late-scheduled/config.proposed.json",
+      "configProposedSha256": "33aeaa1946494a798749adb76f20c8465d540cf089dd9278beda1603ad029db1",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-g/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "a984bfcfec6e7155ac05353a1a720f956682430ce6a5e23984f9b0e7b81316f4"
+    },
+    {
+      "replicate": "h",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-h/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-h/control-zero/config.proposed.json",
+      "configProposedSha256": "454837b71eb5f6c7ca20d3c67b551cfd47202135d6d0d22e64976dcea4f59a87",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-h/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "3d658f96a5aace4bdf1f4eff671c89959a7d434e30b6137d92e9390393ba48c2"
+    },
+    {
+      "replicate": "h",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-h/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-h/uniform-040/config.proposed.json",
+      "configProposedSha256": "2ee848736d15aaa3b9831aaad03891e51945952dec84ba73ac7ff9f7a21d43df",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-h/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "3c24bb387ad3a130d4eb5f770333d3943502b8f66519f4b6d046cf1e4c39db1f"
+    },
+    {
+      "replicate": "h",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-h/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-h/late-scheduled/config.proposed.json",
+      "configProposedSha256": "821186545b385e543dfdeedb6e33cad29369329fc046a89f3ac9695903d55f5d",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-h/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "334117a44163a2a62aa0e362b1c4a96a866341dd028efb74abb57b3a7cc62379"
+    },
+    {
+      "replicate": "i",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-i/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-i/control-zero/config.proposed.json",
+      "configProposedSha256": "e01480bbf7824b04f45dc6ced225a558369ee5c41d28733c594b9ecfc068bc34",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-i/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "c03c961550a4c1e6d2e9e50bfd829c649a7ed5cb99d70b3bec1023a3d7fef248"
+    },
+    {
+      "replicate": "i",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-i/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-i/uniform-040/config.proposed.json",
+      "configProposedSha256": "8cd02bc7bcf165e13282a4ed92924dcbbb758ea41468f8e989c8f6d3b5b0ca75",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-i/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "aa3b5014cce3a28523748d183986206f11a4903b8477f29c87d333f0325a481a"
+    },
+    {
+      "replicate": "i",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-i/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-i/late-scheduled/config.proposed.json",
+      "configProposedSha256": "d39fcdcc39f2489b1bad8339979ec6f17f9f8c153951df9b950ce935bd6c2a8d",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-i/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "01da3f92e56a1d1854d8d13909f3712864741d2d22ee1ed899a4968de2517507"
+    },
+    {
+      "replicate": "j",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-j/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-j/control-zero/config.proposed.json",
+      "configProposedSha256": "5f8cc83af70ab66c627595fa94c6548396633d9359547a2f6e01b1e6e014eb04",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-j/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "7a895179a12b272a2a97974f792780d593a20fb9ca614f6668e7f8ce75ed4b69"
+    },
+    {
+      "replicate": "j",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-j/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-j/uniform-040/config.proposed.json",
+      "configProposedSha256": "5f5cc36f0eb36093ac67fb5b9275c36bc6be8124617ca4bd3a7ab0a35cc71260",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-j/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "e1f242390e455e28e574dbafea9ca8a94ba993ac04f22987f59e2756e38ebb9a"
+    },
+    {
+      "replicate": "j",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-j/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-j/late-scheduled/config.proposed.json",
+      "configProposedSha256": "f70280368117ed399701b52718b85d434daa5447a90e6b487da889d4e80ab6cf",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-j/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "cb2d0ae9c27e5e7741dc8310891aba3593a5ddb1c6ebd64eff39f04875cd3843"
+    },
+    {
+      "replicate": "k",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-k/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-k/control-zero/config.proposed.json",
+      "configProposedSha256": "1e9af989e7864b9dbfd679a50baea80642090f689adfb82da675cb293737b139",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-k/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "a2654cb590952faa49d72f5e95a6fada4a02c0e85e0efe7a48194bd6cf8ba9d8"
+    },
+    {
+      "replicate": "k",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-k/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-k/uniform-040/config.proposed.json",
+      "configProposedSha256": "148500453199c05b072f1b4b3c6e3ae17509f4b3957d45492a68c6c072d8ed3a",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-k/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "b546877a194a39e09f7a4a3fe9387538c21122f0c1f5c66f4d3919b949a81260"
+    },
+    {
+      "replicate": "k",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-k/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-k/late-scheduled/config.proposed.json",
+      "configProposedSha256": "4a4e3767f0e00288401611150d93964ec412ceac2bbc0a554b07bfe23a6b3cf6",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-k/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "b91afd39020a99afcf6f8f4b09a284a57c19ce007aca66fab12d9b6cbb66b29a"
+    },
+    {
+      "replicate": "l",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-l/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-l/control-zero/config.proposed.json",
+      "configProposedSha256": "7b830470bade0873fab2535f87de07c10131c99c5ee170d66d6fdc5134ac6043",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-l/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "9f0552f682658a1d620b47a9abcaf262a23fd69e1e023f8206441c20bad6a2b0"
+    },
+    {
+      "replicate": "l",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-l/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-l/uniform-040/config.proposed.json",
+      "configProposedSha256": "3462f6c58a788f12dadda5ac40338dc7f45af51ca1ce9eb2676237f7bd21aa40",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-l/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "8d67024b2ea2b54fa7e95dcbf5d127fabb93dfa1cfdd93646cc430219ef17180"
+    },
+    {
+      "replicate": "l",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-l/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-l/late-scheduled/config.proposed.json",
+      "configProposedSha256": "b58b1a735f4e9bbdcee02e9a73703c9a61fb4f5408821bfac92224a32a00d6bc",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-l/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "dd383b6343a2651d23d9ac047ae87b0110448c8050a6b2652d16b173023350bd"
+    },
+    {
+      "replicate": "m",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-m/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-m/control-zero/config.proposed.json",
+      "configProposedSha256": "fa6df0e445133fcae6ac578613d9fe9c082ad8157479245d6429c5ea8417b72a",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-m/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "98fa0b2910f9f7d8f67add986511fb1652ec317b7974213c61e14f4c45f672ca"
+    },
+    {
+      "replicate": "m",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-m/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-m/uniform-040/config.proposed.json",
+      "configProposedSha256": "2ac248cb65c2f6e8d4f62159db8ec194521439d790b1ce60de8ae9e3d84eee57",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-m/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "0d69a36c5fe373b212d02c3c92fd01bc7ad496b010b40acb48bc5f97eb392cae"
+    },
+    {
+      "replicate": "m",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-m/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-m/late-scheduled/config.proposed.json",
+      "configProposedSha256": "56df231a65085c741372c9026dfccb96d3097856bbcaaddc587895f286d58286",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-m/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "ea516d658cea55cfaeeabd23ecbc9ad90edc150c59c30a49f19e5e4951d9dc00"
+    },
+    {
+      "replicate": "n",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-n/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-n/control-zero/config.proposed.json",
+      "configProposedSha256": "baaf88a7a176a9b076ca4965cee16d1f2b273df894e99ee15d9c8a1ff270e0b3",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-n/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "549e2d3b5598a486a8cb334c47159691763fcbce33ffc91d19d0d46b1a1aa96e"
+    },
+    {
+      "replicate": "n",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-n/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-n/uniform-040/config.proposed.json",
+      "configProposedSha256": "204aa74d4fdaebc2bec399fde9e58d265bb1981c2ea25ed788ddb1b44c3afa73",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-n/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "8b4af013939f4cacc7ee0f4432d07ee2c852c0dc856213edeed2e375996df045"
+    },
+    {
+      "replicate": "n",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-n/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-n/late-scheduled/config.proposed.json",
+      "configProposedSha256": "8fc0c3471255b7c06ff822811656c0de03b0dffd81ba95b2fa487270b88b4231",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-n/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "0799bcdc4b13f11d7bbbba7bdac07259393cf92fedf31c5079a5652f1a539f78"
+    },
+    {
+      "replicate": "o",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-o/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-o/control-zero/config.proposed.json",
+      "configProposedSha256": "e4416c6e5138a1f263dfd7b32d0199f404210ac4925fa7b8f5473833ff6cd615",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-o/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "7e113b5bf9dbeaf2acbd487e6a7b8afa3e82bc01d9e250a1573f241c19039cf8"
+    },
+    {
+      "replicate": "o",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-o/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-o/uniform-040/config.proposed.json",
+      "configProposedSha256": "b211e1613a9e8c59134270656ed8f90b2b9865b6e190c4fc30d7cb3da932a00b",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-o/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "6de199cc20d71153f1b9208b1611b204177ed2bfe7ff30e6344157131373bc07"
+    },
+    {
+      "replicate": "o",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-o/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-o/late-scheduled/config.proposed.json",
+      "configProposedSha256": "93806527e7cb3faff5e7ded1ed6c189d9719f7668f4f9b6d6cda050f66a5678b",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-o/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "ae8eaeaf90aee19ae7c1e7871d28d7b31c7d7cba843c1ee42c147831184030e8"
+    },
+    {
+      "replicate": "p",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-p/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-p/control-zero/config.proposed.json",
+      "configProposedSha256": "4b46bddf311b418711fb68e16367997f95056100f879c2c841c0edae42914120",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-p/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "68d0fa383b495c27820d313e1c2b747545a836aae91873e73786045526ae1b59"
+    },
+    {
+      "replicate": "p",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-p/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-p/uniform-040/config.proposed.json",
+      "configProposedSha256": "e726e7acc6866a2fa35830fd7439aa7a1b25a24c822f0549a074eba42112cee3",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-p/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "4d8918edf8e272de60613742162b44abe13fe6cbb1ab79cc54dcb4e0dc6965c9"
+    },
+    {
+      "replicate": "p",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-p/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-p/late-scheduled/config.proposed.json",
+      "configProposedSha256": "cd87a7c5a33d3f9afff1ab43afad1c2d89597920947a5ec57c2e0d5c739c9a55",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-p/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "e047f165a70b6dc1c993ece2f37b2c5800a8fc774f10f62ac7834abc65955b81"
+    },
+    {
+      "replicate": "q",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-q/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-q/control-zero/config.proposed.json",
+      "configProposedSha256": "5a89c6eada89edb1d1cbde9620a5c379f70a54b7aff8a9a599b0f09a54576f99",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-q/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "2e6896b030949b5e90f9350ee553b2b597bbfdf951d6cc011c21c1bed9e36331"
+    },
+    {
+      "replicate": "q",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-q/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-q/uniform-040/config.proposed.json",
+      "configProposedSha256": "ef900670b89edab0c7133900608296ac6d4b786debb48ad42e7586e9083b8c81",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-q/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "e413ec061c8c7052af3e005c1dc25085f865d52be42c381ea263f08705b97de7"
+    },
+    {
+      "replicate": "q",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-q/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-q/late-scheduled/config.proposed.json",
+      "configProposedSha256": "e88c5c683c35feef4b0c28bae54585e6810093b60d90c710ce27bb2fba39bf92",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-q/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "47b7fa37c09f5a86e556a2d4409752532fb2b48c60f0cb1be1db450c1f57bb57"
+    },
+    {
+      "replicate": "r",
+      "arm": "control-zero",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-r/control-zero",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-r/control-zero/config.proposed.json",
+      "configProposedSha256": "eb9bcfed8c6dae5803dbe932fcb6f6d612b7dad4f275d544733001f86cc382eb",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-r/control-zero/binding.proposed.json",
+      "bindingProposedSha256": "dffcccb6650cb4819340a12853d96e4e8375bfd2b93b837f8e019b2e6fb82d58"
+    },
+    {
+      "replicate": "r",
+      "arm": "uniform-040",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-r/uniform-040",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-r/uniform-040/config.proposed.json",
+      "configProposedSha256": "d14a765c60a7fb8291ae151c464e178f742091b6644e4b849bed20b6325c1c8b",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-r/uniform-040/binding.proposed.json",
+      "bindingProposedSha256": "26aaa1fa9244beef68ed8101b16803ab67c76d6bb69d7b3ade9aaf22c9467fd4"
+    },
+    {
+      "replicate": "r",
+      "arm": "late-scheduled",
+      "finalRoot": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/league/rep-r/late-scheduled",
+      "configProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-r/late-scheduled/config.proposed.json",
+      "configProposedSha256": "c6b54ed66005d72f8926664356d6fb07b400c2a54f78cbe406f22a64433ff1a7",
+      "bindingProposed": "ml/experiments/v35-weco-recursive-autoresearch/p30-long-horizon/proposal/league/rep-r/late-scheduled/binding.proposed.json",
+      "bindingProposedSha256": "fc009e3277209af5152407597ee70887795a532578cb00a74d502a74f3ddcd95"
+    }
+  ]
+}

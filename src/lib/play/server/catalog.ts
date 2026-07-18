@@ -134,6 +134,20 @@ export async function loadPlayCatalog(): Promise<PlayCatalog> {
 		return cachedCatalog;
 	}
 
+	// Frozen-catalog override — the SvelteKit twin of the room server's
+	// ARC_WS_CATALOG_FILE (server/catalog.ts): point at ml/catalog.json to run the
+	// whole play HTTP app with zero Supabase-assets reachability (local stacks,
+	// e2e, Godot selfdrive smokes). Server-only code path, so the dynamic import
+	// never enters a client bundle.
+	const fileOverride =
+		typeof process !== 'undefined' ? process.env?.ARC_PLAY_CATALOG_FILE : undefined;
+	if (fileOverride) {
+		const { readFileSync } = await import('node:fs');
+		cachedCatalog = JSON.parse(readFileSync(fileOverride, 'utf8')) as PlayCatalog;
+		cachedAt = now;
+		return cachedCatalog;
+	}
+
 	const assets = await fetchAssetsData();
 	const catalog = buildPlayCatalog(assets);
 

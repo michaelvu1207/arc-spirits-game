@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import GameIcon from '$lib/components/GameIcon.svelte';
 	import MenuShell from '$lib/components/play2d/MenuShell.svelte';
 	import TraitTracker from '$lib/components/play2d/TraitTracker.svelte';
 	import HexGrid from '$lib/components/HexGrid.svelte';
 	import { loadAssets, getAssetState, getSpiritAsset } from '$lib/stores/assetStore.svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
 	import { bagForSpiritCost, SPIRIT_WORLD_BAG, ARCANE_ABYSS_BAG } from '$lib/play/bags';
+	import { BUNDLED_SPIRIT_CATALOG } from '$lib/play/bundledSpiritCatalog';
 	import type { ResolvedSpiritAsset } from '$lib/types';
 	import type { PlaySpirit, PlayerProjection } from '$lib/play/types';
 
@@ -23,8 +25,6 @@
 
 	const LS_KEY = 'arc-comp-builder';
 
-	// Gate the catalog on the asset store's own reactive flags (the source of truth).
-	const ready = $derived(assets.isLoaded);
 	const loadError = $derived(assets.error);
 
 	onMount(() => {
@@ -72,7 +72,7 @@
 	});
 
 	// ── Spirit catalog (left) ─────────────────────────────────────────────────
-	const catalog = $derived.by((): ResolvedSpiritAsset[] => {
+	const liveCatalog = $derived.by((): ResolvedSpiritAsset[] => {
 		const list: ResolvedSpiritAsset[] = [];
 		for (const id of assets.spiritAssets.keys()) {
 			const resolved = getSpiritAsset(id);
@@ -81,8 +81,16 @@
 		list.sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
 		return list;
 	});
+	const catalog = $derived(liveCatalog.length > 0 ? liveCatalog : BUNDLED_SPIRIT_CATALOG);
+	const usingBundled = $derived(liveCatalog.length === 0);
+	const catalogById = $derived(new Map(catalog.map((spirit) => [spirit.id, spirit])));
 	const originOptions = $derived.by(() => {
-		const out = [...assets.originTraits.values()].map((o) => ({ id: o.id, name: o.name }));
+		const byId = new Map<string, { id: string; name: string }>();
+		for (const spirit of catalog) {
+			for (const origin of spirit.traits.origins)
+				byId.set(origin.id, { id: origin.id, name: origin.name });
+		}
+		const out = [...byId.values()];
 		out.sort((a, b) => a.name.localeCompare(b.name));
 		return out;
 	});
@@ -109,7 +117,7 @@
 		const out: PlaySpirit[] = [];
 		board.forEach((id, i) => {
 			if (!id) return;
-			const r = getSpiritAsset(id);
+			const r = catalogById.get(id);
 			if (!r) return;
 			const classes: Record<string, number> = {};
 			for (const c of r.traits.classes) classes[c.name] = (classes[c.name] ?? 0) + 1;
@@ -133,7 +141,7 @@
 		const m = new Map<string, string>();
 		for (const id of board) {
 			if (!id || m.has(id)) continue;
-			const url = getSpiritAsset(id)?.imageUrl;
+			const url = catalogById.get(id)?.imageUrl;
 			if (url) m.set(id, url);
 		}
 		return m;
@@ -185,14 +193,14 @@
 </svelte:head>
 
 <MenuShell showBrand={false}>
-	<div class="builder">
+	<div class="builder" data-testid="builder-root" data-restored={restored}>
 		<!-- ── Header ──────────────────────────────────────────────── -->
 		<header class="bx-head">
 			<a class="back" href="/play" onpointerenter={hover} onclick={() => playMenuSfx('ui-back')}>
-				<span aria-hidden="true">←</span> Back
+				<GameIcon name="back" /> Back
 			</a>
 			<div class="title-block">
-				<span class="eyebrow">Composition Builder</span>
+				<span class="eyebrow"><GameIcon name="builder" size={15} /> Composition Builder</span>
 				<h1>Forge a Team</h1>
 			</div>
 			<div class="head-tools">
@@ -204,8 +212,12 @@
 					spellcheck="false"
 					aria-label="Team name"
 				/>
-				<span class="count" class:full={placedCount === TEAM_SIZE}>{placedCount}/{TEAM_SIZE}</span>
-				<button class="clear" type="button" onpointerenter={hover} onclick={clearAll}>Clear</button>
+				<span class="count" data-testid="builder-team-count" class:full={placedCount === TEAM_SIZE}
+					>{placedCount}/{TEAM_SIZE}</span
+				>
+				<button class="clear" type="button" onpointerenter={hover} onclick={clearAll}
+					><GameIcon name="clear" size={16} /> Clear</button
+				>
 			</div>
 		</header>
 
@@ -213,39 +225,51 @@
 			<!-- ── Spirit catalog (browsable) ───────────────────────── -->
 			<section class="catalog panel" aria-label="All spirits">
 				<div class="cat-head">
-					<input
-						class="search"
-						bind:value={search}
-						placeholder="Search spirits…"
-						spellcheck="false"
-						aria-label="Search spirits"
-					/>
-					<select class="filter" bind:value={originFilter} aria-label="Filter by origin">
-						<option value="">All origins</option>
-						{#each originOptions as o (o.id)}
-							<option value={o.id}>{o.name}</option>
-						{/each}
-					</select>
-					<select class="filter" bind:value={sourceFilter} aria-label="Filter by source">
-						<option value="all">All sources</option>
-						<option value="spiritWorld">Spirit World</option>
-						<option value="arcaneAbyss">Arcane Abyss</option>
-					</select>
+					<label class="search-shell">
+						<GameIcon name="search" size={16} />
+						<input
+							class="search"
+							bind:value={search}
+							placeholder="Search spirits…"
+							spellcheck="false"
+							aria-label="Search spirits"
+						/>
+					</label>
+					<label class="filter-shell">
+						<GameIcon name="origin" size={15} />
+						<select class="filter" bind:value={originFilter} aria-label="Filter by origin">
+							<option value="">All origins</option>
+							{#each originOptions as o (o.id)}
+								<option value={o.id}>{o.name}</option>
+							{/each}
+						</select>
+					</label>
+					<label class="filter-shell">
+						<GameIcon name="portal" size={15} />
+						<select class="filter" bind:value={sourceFilter} aria-label="Filter by source">
+							<option value="all">All sources</option>
+							<option value="spiritWorld">Spirit World</option>
+							<option value="arcaneAbyss">Arcane Abyss</option>
+						</select>
+					</label>
 				</div>
-				{#if !ready}
-					{#if loadError}
-						<div class="loading">
-							<p>Couldn't summon the roster.</p>
-							<button class="retry" type="button" onclick={retryLoad}>Retry</button>
-							<small class="err-detail">{loadError}</small>
-						</div>
-					{:else}
-						<div class="loading">Summoning the roster…</div>
-					{/if}
-				{:else if catalog.length === 0}
+				{#if usingBundled}
+					<div class="roster-note" data-testid="builder-bundled-roster">
+						<GameIcon name={loadError ? 'warning' : 'refresh'} size={16} />
+						<span
+							>{loadError
+								? 'Using the bundled roster; live card art is unavailable.'
+								: 'Bundled roster ready while live card art syncs.'}</span
+						>
+						{#if loadError}<button class="retry" type="button" onclick={retryLoad}
+								><GameIcon name="refresh" size={14} /> Retry</button
+							>{/if}
+					</div>
+				{/if}
+				{#if catalog.length === 0}
 					<div class="loading">No spirits found.</div>
 				{:else}
-					<div class="cat-scroll">
+					<div class="cat-scroll" data-testid="builder-catalog">
 						<div class="cat-grid">
 							{#each filtered as spirit (spirit.id)}
 								<button
@@ -259,9 +283,19 @@
 									onpointerenter={hover}
 								>
 									{#if spirit.imageUrl}
-										<img class="card-art" src={spirit.imageUrl} alt={spirit.name} loading="lazy" draggable="false" />
+										<img
+											class="card-art"
+											src={spirit.imageUrl}
+											alt={spirit.name}
+											loading="lazy"
+											draggable="false"
+										/>
 									{:else}
-										<span class="ph">{spirit.name}</span>
+										<span class="ph"
+											><GameIcon name="spirit" size={28} /><b>{spirit.name}</b><small
+												>{spirit.cost} Arc</small
+											></span
+										>
 									{/if}
 								</button>
 							{/each}
@@ -272,6 +306,7 @@
 
 			<!-- ── Synergies: the game's TraitTracker ───────────────── -->
 			<aside class="trait-panel" aria-label="Synergies">
+				<div class="panel-kicker"><GameIcon name="synergy" size={16} /> Synergies</div>
 				<div class="trait-host">
 					<TraitTracker player={traitPlayer} {assets} />
 				</div>
@@ -289,10 +324,19 @@
 				ondragleave={() => (boardOver = false)}
 				ondrop={onBoardDrop}
 			>
+				<div class="panel-kicker"><GameIcon name="board" size={16} /> Formation</div>
 				<div class="board-host">
-					<HexGrid spirits={boardSpirits} spiritAssets={spiritImages} discardMode onDiscard={removeBySlot} />
+					<HexGrid
+						spirits={boardSpirits}
+						spiritAssets={spiritImages}
+						discardMode
+						onDiscard={removeBySlot}
+					/>
 				</div>
-				<p class="board-hint">Drag a spirit onto the board — or tap one to add it. Tap a placed spirit to remove it.</p>
+				<p class="board-hint">
+					<GameIcon name="info" size={15} /> Drag a spirit onto the board — or tap one to add it. Tap
+					a placed spirit to remove it.
+				</p>
 			</section>
 		</div>
 	</div>
@@ -336,7 +380,9 @@
 		touch-action: manipulation;
 		-webkit-tap-highlight-color: transparent;
 		user-select: none;
-		transition: border-color 160ms ease, color 160ms ease;
+		transition:
+			border-color 160ms ease,
+			color 160ms ease;
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.back:hover {
@@ -404,6 +450,9 @@
 		text-shadow: 0 0 12px rgba(255, 186, 61, 0.5);
 	}
 	.clear {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
 		font-family: var(--font-display);
 		font-size: 0.72rem;
 		letter-spacing: 0.16em;
@@ -418,7 +467,9 @@
 		touch-action: manipulation;
 		-webkit-tap-highlight-color: transparent;
 		user-select: none;
-		transition: border-color 160ms ease, color 160ms ease;
+		transition:
+			border-color 160ms ease,
+			color 160ms ease;
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.clear:hover {
@@ -461,8 +512,23 @@
 		padding: 12px 14px;
 		border-bottom: 1px solid var(--color-mist, #2e1d52);
 	}
-	.search {
+	.search-shell,
+	.filter-shell {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		color: var(--color-fog, #9a93b0);
+	}
+	.search-shell {
 		flex: 1 1 100%;
+	}
+	.filter-shell {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	.search {
+		flex: 1;
+		min-width: 0;
 		background: rgba(0, 0, 0, 0.35);
 		border: 1px solid var(--color-mist, #2e1d52);
 		border-radius: 8px;
@@ -475,7 +541,7 @@
 		border-color: var(--brand-cyan, #5cdfff);
 	}
 	.filter {
-		flex: 1 1 0;
+		flex: 1;
 		min-width: 0;
 		background: rgba(0, 0, 0, 0.35);
 		border: 1px solid var(--color-mist, #2e1d52);
@@ -493,6 +559,19 @@
 		background: var(--color-void, #0c0518);
 		color: var(--color-bone, #f5f0ff);
 	}
+	.roster-note {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 14px;
+		border-bottom: 1px solid var(--color-mist, #2e1d52);
+		color: var(--color-fog, #9a93b0);
+		font-size: 0.72rem;
+		line-height: 1.3;
+	}
+	.roster-note span {
+		flex: 1;
+	}
 	.loading {
 		padding: 40px 16px;
 		text-align: center;
@@ -502,10 +581,10 @@
 		align-items: center;
 		gap: 10px;
 	}
-	.loading p {
-		margin: 0;
-	}
 	.retry {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 		font-family: var(--font-display);
 		font-size: 0.72rem;
 		letter-spacing: 0.16em;
@@ -521,12 +600,6 @@
 		.retry:hover {
 			background: rgba(255, 43, 199, 0.3);
 		}
-	}
-	.err-detail {
-		font-size: 0.72rem;
-		color: var(--brand-coral, #ff704d);
-		max-width: 40ch;
-		word-break: break-word;
 	}
 	.cat-scroll {
 		flex: 1;
@@ -556,7 +629,9 @@
 		touch-action: manipulation;
 		-webkit-tap-highlight-color: transparent;
 		user-select: none;
-		transition: transform 160ms ease, filter 160ms ease;
+		transition:
+			transform 160ms ease,
+			filter 160ms ease;
 	}
 	.spirit-card:focus {
 		outline: none;
@@ -584,13 +659,31 @@
 	.ph {
 		display: grid;
 		place-items: center;
+		align-content: center;
+		gap: 8px;
 		aspect-ratio: 3 / 4;
 		font-family: var(--font-display);
 		font-size: 0.9rem;
 		line-height: 1.2;
 		text-align: center;
-		padding: 6px;
+		padding: 12px;
 		color: var(--color-fog, #9a93b0);
+		background:
+			radial-gradient(circle at 50% 35%, rgba(92, 223, 255, 0.12), transparent 35%),
+			linear-gradient(160deg, rgba(123, 29, 255, 0.13), rgba(8, 5, 18, 0.8));
+		border: 1px solid var(--color-mist, #2e1d52);
+		border-radius: 8px;
+		line-height: 1.1;
+	}
+	.ph b {
+		font-size: 0.82rem;
+		line-height: 1.15;
+		color: var(--color-bone, #f5f0ff);
+	}
+	.ph small {
+		font-family: var(--font-body);
+		font-size: 0.68rem;
+		color: var(--brand-cyan, #5cdfff);
 	}
 
 	/* ── Synergies (TraitTracker host) — sits on the background, no panel box ── */
@@ -598,6 +691,18 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+	}
+	.panel-kicker {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		align-self: stretch;
+		padding: 8px 10px;
+		font-family: var(--font-display);
+		font-size: 0.66rem;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--brand-cyan, #5cdfff);
 	}
 	.trait-host {
 		flex: 1;
@@ -637,6 +742,10 @@
 		max-height: 62vh;
 	}
 	.board-hint {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
 		margin: 0;
 		font-size: 0.78rem;
 		color: var(--color-fog, #9a93b0);
@@ -718,5 +827,105 @@
 			font-size: 0.76rem;
 			padding: 6px 8px;
 		}
+	}
+
+	/* Builder as a drafting table of cut shapes, not dashboard panels. */
+	.builder {
+		position: relative;
+		background: rgba(5, 3, 16, 0.45);
+		overflow: hidden;
+	}
+	.builder::before {
+		content: '';
+		position: absolute;
+		right: -12vw;
+		top: 16vh;
+		width: 56vw;
+		height: 32vh;
+		background: #087b91;
+		opacity: 0.12;
+		clip-path: polygon(18% 0, 100% 28%, 78% 100%, 0 70%);
+		pointer-events: none;
+	}
+	.bx-head,
+	.bx-grid {
+		position: relative;
+		z-index: 1;
+	}
+	.back,
+	.clear,
+	.retry {
+		border: 0;
+		border-radius: 0;
+		background: #28115b;
+		backdrop-filter: none;
+		clip-path: polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%);
+	}
+	.back:hover,
+	.clear:hover,
+	.retry:hover {
+		background: #24d4ff;
+		color: #080311;
+	}
+	.title-block h1 {
+		font-size: clamp(2.1rem, 4.6vw, 4.4rem);
+		text-transform: uppercase;
+		text-shadow: none;
+	}
+	.team-name,
+	.search,
+	.filter {
+		border: 0;
+		border-bottom: 3px solid #24d4ff;
+		border-radius: 0;
+		background: #100824;
+	}
+	.panel {
+		border: 0;
+		border-radius: 0;
+		background: #100725;
+		backdrop-filter: none;
+		clip-path: polygon(0 0, 96% 0, 100% 5%, 100% 100%, 0 100%);
+	}
+	.cat-head {
+		border: 0;
+		background: #43178f;
+		clip-path: polygon(0 0, 100% 0, 95% 100%, 0 100%);
+	}
+	.roster-note {
+		border: 0;
+		background: #1a0c3d;
+	}
+	.spirit-card {
+		border-radius: 0;
+		background: #2f1464;
+		clip-path: polygon(18% 0, 82% 0, 100% 14%, 91% 100%, 9% 100%, 0 14%);
+	}
+	.spirit-card:hover {
+		transform: none;
+		filter: brightness(1.16);
+	}
+	.card-art {
+		clip-path: inherit;
+	}
+	.ph {
+		border: 0;
+		border-radius: 0;
+		background: #2f1464;
+		clip-path: inherit;
+	}
+	.trait-panel {
+		background: transparent;
+		clip-path: none;
+	}
+	.panel-kicker {
+		background: #d515aa;
+		color: #fff;
+		clip-path: polygon(0 0, 94% 0, 100% 50%, 94% 100%, 0 100%);
+	}
+	.board-panel {
+		border-radius: 0;
+		background: transparent;
+		clip-path: none;
 	}
 </style>

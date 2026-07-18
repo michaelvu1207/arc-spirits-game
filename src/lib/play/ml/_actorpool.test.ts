@@ -9,7 +9,7 @@
  *
  *   POOL=1 npx vitest run src/lib/play/ml/_actorpool.test.ts --disable-console-intercept
  */
-import { OBS_DIM } from './encode';
+import { ACT_DIM, OBS_DIM } from './encode';
 import { describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, tmpdir } from 'node:os';
@@ -58,6 +58,31 @@ function tempDir(label: string): string {
 }
 
 describe('actor pool', () => {
+	it('propagates opt-in replay hashes deterministically across worker counts', async () => {
+		const seeds = [42_036, 42_037];
+		const config: ActorGameConfig = {
+			seats: 1,
+			maxRounds: 2,
+			profiles: ['medium'],
+			includeReplayTraceHash: true
+		};
+		const dirA = tempDir('trace1');
+		const dirB = tempDir('trace2');
+		try {
+			const one = await runActorPool({ seeds, outDir: dirA, workers: 1, config });
+			const two = await runActorPool({ seeds, outDir: dirB, workers: 2, config });
+			const hashes = (summaries: GameSummary[]) =>
+				Object.fromEntries(summaries.map((summary) => [summary.seed, summary.replayTraceSha256]));
+			expect(hashes(two.summaries)).toEqual(hashes(one.summaries));
+			expect(
+				one.summaries.every((summary) => /^[0-9a-f]{64}$/.test(summary.replayTraceSha256!))
+			).toBe(true);
+		} finally {
+			rmSync(dirA, { recursive: true, force: true });
+			rmSync(dirB, { recursive: true, force: true });
+		}
+	}, 120_000);
+
 	it('dynamic scheduler gives fast workers more jobs without changing seed coverage', () => {
 		const seeds = [10, 11, 11, 13, 14];
 		const scheduler = new DynamicSeedScheduler(seeds);
@@ -70,6 +95,8 @@ describe('actor pool', () => {
 
 		const slow = take(0)!;
 		let fast = take(1)!;
+		expect(slow.duplicateSeed).toBeUndefined();
+		expect(fast.duplicateSeed).toBe(true);
 		expect(() => scheduler.next(0)).toThrow(/while busy/);
 		// Worker 1 completes three games while worker 0 is still on its first. The
 		// central queue assigns work by completion, not by a static round-robin slice.
@@ -104,6 +131,7 @@ describe('actor pool', () => {
 			seats: 4,
 			maxRounds: 60,
 			profiles: ['pvphunter', 'medium', 'aggressive', 'hard'],
+			shuffleGuardians: true,
 			// Exercise the neural path when a checkpoint is available (the shipping config);
 			// fall back to heuristic-only so the guarantee is still tested without weights.
 			...(NEURAL_WEIGHTS ? { weightsPath: NEURAL_WEIGHTS, selection: 'hybrid' as const } : {})
@@ -123,6 +151,16 @@ describe('actor pool', () => {
 			expect(mapOf(four.summaries)).toEqual(mapOf(one.summaries));
 			expect(four.summaries.map((s) => s.seed)).toEqual(seeds);
 			expect(four.samples).toBe(one.samples);
+			expect(
+				four.summaries.every((summary) =>
+					summary.perSeat.every(
+						(seat) =>
+							seat.cycle !== undefined &&
+							seat.cycle.decisions >= seat.cycle.productiveDecisions &&
+							seat.cycle.post15VpPerRound >= 0
+					)
+				)
+			).toBe(true);
 
 			// The games-<i>.jsonl feed must cover every seed exactly once.
 			const lines = four.gameFiles.flatMap((f) =>
@@ -137,6 +175,176 @@ describe('actor pool', () => {
 			rmSync(dirB, { recursive: true, force: true });
 		}
 	}, 300_000);
+
+	it('can keep operational summaries in memory without durable outcome files', async () => {
+		const dir = tempDir('no-game-summaries');
+		try {
+			const result = await runActorPool({
+				seeds: [41_998],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 2,
+					profiles: ['medium'],
+					writeGameSummaries: false
+				}
+			});
+			expect(result.summaries).toHaveLength(1);
+			expect(result.gameFiles).toEqual([]);
+			expect(existsSync(join(dir, 'games-0.jsonl'))).toBe(false);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('emits exact per-decision search timing and simulation telemetry', async () => {
+		const dir = tempDir('search-telemetry');
+		try {
+			const weightsPath = join(dir, 'zero-policy.json');
+			writeFileSync(
+				weightsPath,
+				JSON.stringify({
+					format: 'arc-cand-scorer-v1',
+					obs_dim: OBS_DIM,
+					act_dim: ACT_DIM,
+					trunk: [{ W: [Array<number>(OBS_DIM + ACT_DIM).fill(0)], b: [0] }],
+					value: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }]
+				})
+			);
+			const result = await runActorPool({
+				seeds: [41_999],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 2,
+					profiles: ['medium'],
+					weightsPath,
+					selection: 'hybrid',
+					search: {
+						sims: 2,
+						horizonRounds: 1,
+						rollout: 'heuristic',
+						frac: 1,
+						navTemperature: 0
+					}
+				}
+			});
+			const telemetry = result.summaries[0]?.search;
+			expect(telemetry).toBeDefined();
+			expect(telemetry!.mode).toBe('gumbel');
+			expect(telemetry!.decisions).toBeGreaterThan(0);
+			expect(telemetry!.simulations).toBe(telemetry!.decisions * 2);
+			expect(telemetry!.decisionWallMs).toHaveLength(telemetry!.decisions);
+			expect(telemetry!.byPhase.navigation).toBeGreaterThan(0);
+			expect(telemetry!.wallMs).toBeGreaterThan(0);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
+
+	it('routes solo heuristic reach search through one-batch planner telemetry', async () => {
+		const dir = tempDir('batched-heuristic-telemetry');
+		try {
+			const weightsPath = join(dir, 'zero-policy-with-reach30.json');
+			writeFileSync(
+				weightsPath,
+				JSON.stringify({
+					format: 'arc-cand-scorer-v1',
+					obs_dim: OBS_DIM,
+					act_dim: ACT_DIM,
+					trunk: [{ W: [Array<number>(OBS_DIM + ACT_DIM).fill(0)], b: [0] }],
+					value: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30_horizon: 30
+				})
+			);
+			const result = await runActorPool({
+				seeds: [42_000],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 30,
+					profiles: ['medium'],
+					weightsPath,
+					selection: 'hybrid',
+					search: {
+						sims: 2,
+						horizonRounds: 1,
+						objective: 'solo-reach30',
+						rollout: 'heuristic',
+						frac: 1,
+						navTemperature: 0
+					}
+				}
+			});
+			const telemetry = result.summaries[0]?.search;
+			expect(telemetry).toBeDefined();
+			expect(telemetry!.mode).toBe('heuristic-batched');
+			expect(telemetry!.decisions).toBeGreaterThan(0);
+			expect(telemetry!.simulations).toBe(telemetry!.decisions * 2);
+			expect(telemetry!.decisionWallMs).toHaveLength(telemetry!.decisions);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
+
+	it('runs the solo critic reranker and distinguishes its zero-simulation telemetry', async () => {
+		const dir = tempDir('rerank-telemetry');
+		try {
+			const weightsPath = join(dir, 'zero-policy-with-reach30.json');
+			writeFileSync(
+				weightsPath,
+				JSON.stringify({
+					format: 'arc-cand-scorer-v1',
+					obs_dim: OBS_DIM,
+					act_dim: ACT_DIM,
+					trunk: [{ W: [Array<number>(OBS_DIM + ACT_DIM).fill(0)], b: [0] }],
+					value: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30: [{ W: [Array<number>(OBS_DIM).fill(0)], b: [0] }],
+					reach30_horizon: 30
+				})
+			);
+			const result = await runActorPool({
+				seeds: [42_001],
+				outDir: dir,
+				workers: 1,
+				config: {
+					seats: 1,
+					maxRounds: 30,
+					profiles: ['medium'],
+					weightsPath,
+					selection: 'hybrid',
+					previewReach30Audit: true,
+					rerank: { policyRankWeight: 0.5 }
+				}
+			});
+			const telemetry = result.summaries[0]?.search;
+			expect(telemetry).toBeDefined();
+			expect(telemetry!.mode).toBe('critic-rerank');
+			expect(telemetry!.decisions).toBeGreaterThan(0);
+			expect(telemetry!.simulations).toBe(0);
+			expect(telemetry!.decisionWallMs).toHaveLength(telemetry!.decisions);
+			expect(result.previewAuditFiles).toHaveLength(1);
+			const previewRows = readFileSync(result.previewAuditFiles[0], 'utf8')
+				.trim()
+				.split('\n')
+				.map((line) => JSON.parse(line));
+			expect(previewRows.length).toBeGreaterThan(0);
+			for (const row of previewRows) {
+				expect(['navigation', 'encounter']).toContain(row.phase);
+				expect(row.finiteCandidateCount).toBe(row.candidateCount);
+				expect(row.chosenPrediction).toBeGreaterThanOrEqual(0);
+				expect(row.chosenPrediction).toBeLessThanOrEqual(1);
+				expect([0, 1]).toContain(row.target);
+				expect(row.terminalOverrideMismatches).toBe(0);
+			}
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
 
 	it('obs-version 2: shards carry paired v1 obs + flat obsV2 rows and meta.json validates', async () => {
 		const seeds = Array.from({ length: 4 }, (_, i) => 52_000 + i);
@@ -208,6 +416,8 @@ describe('actor pool', () => {
 			for (const s of res.summaries) {
 				expect(s.neuralSeats).toEqual([]);
 				expect(s.perSeat.every((p) => p.policy === 'heuristic')).toBe(true);
+				expect(s.weightsOrProfiles).toEqual(['medium', 'medium', 'medium', 'medium']);
+				expect(s.perSeat.every((p) => (p.cycle?.decisions ?? 0) > 0)).toBe(true);
 			}
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
@@ -236,6 +446,189 @@ describe('actor pool', () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	}, 120_000);
+
+	it('keeps source trajectories byte-identical when the continuation curriculum is off', () => {
+		const dirAbsent = tempDir('continuation-off-absent');
+		const dirDisabled = tempDir('continuation-off-disabled');
+		const base: ActorGameConfig = {
+			seats: 1,
+			maxRounds: 30,
+			profiles: ['medium'],
+			weightsPath: WEIGHTS,
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			maxStatusLevel: 2
+		};
+		try {
+			const absent = runActorGames({
+				workerIndex: 0,
+				seeds: [77_140],
+				config: base,
+				outDir: dirAbsent,
+				catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+			});
+			const disabled = runActorGames({
+				workerIndex: 0,
+				seeds: [77_140],
+				config: { ...base, continuationCurriculum: { enabled: false } },
+				outDir: dirDisabled,
+				catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+			});
+			expect(readFileSync(join(dirDisabled, 'shard-0.jsonl'), 'utf8')).toBe(
+				readFileSync(join(dirAbsent, 'shard-0.jsonl'), 'utf8')
+			);
+			expect(disabled.samples).toBe(absent.samples);
+			expect(disabled.curriculum.episodes).toBe(0);
+			expect(disabled.curriculum.rows).toBe(0);
+		} finally {
+			rmSync(dirAbsent, { recursive: true, force: true });
+			rmSync(dirDisabled, { recursive: true, force: true });
+		}
+	}, 120_000);
+
+	it('appends one deterministic marked solo suffix without adding a game summary', () => {
+		const dirA = tempDir('continuation-a');
+		const dirB = tempDir('continuation-b');
+		const config: ActorGameConfig = {
+			seats: 1,
+			maxRounds: 30,
+			profiles: ['medium'],
+			weightsPath: WEIGHTS,
+			selection: 'policy',
+			sample: true,
+			temperature: 0.65,
+			maxStatusLevel: 2,
+			continuationCurriculum: {
+				enabled: true,
+				rounds: [12],
+				sourceProbability: 1,
+				capFailureWeight: 1,
+				successWeight: 1
+			}
+		};
+		const run = (outDir: string) =>
+			runActorGames({
+				workerIndex: 0,
+				seeds: [77_140],
+				config,
+				outDir,
+				catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+			});
+		try {
+			const a = run(dirA);
+			const b = run(dirB);
+			const shardA = readFileSync(join(dirA, 'shard-0.jsonl'), 'utf8');
+			expect(readFileSync(join(dirB, 'shard-0.jsonl'), 'utf8')).toBe(shardA);
+			const rows = shardA
+				.trim()
+				.split('\n')
+				.map((line) => JSON.parse(line) as Record<string, unknown>);
+			const suffixRows = rows.filter((row) => row.continuationCurriculum === 1);
+			const suffixIds = new Set(suffixRows.map((row) => row.gameId));
+			const gameLines = readFileSync(join(dirA, 'games-0.jsonl'), 'utf8').trim().split('\n');
+
+			const { wallMs: _aWallMs, ...aDeterministic } = a.curriculum;
+			const { wallMs: _bWallMs, ...bDeterministic } = b.curriculum;
+			expect(aDeterministic).toEqual(bDeterministic);
+			expect(a.curriculum.wallMs).toBeGreaterThan(0);
+			expect(a.curriculum.eligibleSourceGames).toBe(1);
+			expect(a.curriculum.selectedSourceGames).toBe(1);
+			expect(a.curriculum.episodes).toBe(1);
+			expect(a.curriculum.rows).toBe(suffixRows.length);
+			expect(a.curriculum.sourceRoundCounts).toEqual({ '12': 1 });
+			expect(a.curriculum.forkRoundCounts).toEqual({ '12': 1 });
+			expect(a.samples).toBe(rows.length);
+			expect(suffixIds.size).toBe(1);
+			expect([...suffixIds][0]).toMatch(/^late-cont-v1-77140-j0-r12-f0-Red$/);
+			expect(suffixRows.map((row) => row.stepIdx)).toEqual(suffixRows.map((_, index) => index));
+			expect(gameLines).toHaveLength(1);
+			const summary = JSON.parse(gameLines[0]) as GameSummary;
+			expect(summary.samples).toBe(rows.length - suffixRows.length);
+			expect(summary.samples).toBeLessThan(a.samples);
+		} finally {
+			rmSync(dirA, { recursive: true, force: true });
+			rmSync(dirB, { recursive: true, force: true });
+		}
+	}, 180_000);
+
+	it('aggregates curriculum diagnostics and keeps duplicate-seed suffix IDs unique', async () => {
+		const dir = tempDir('continuation-pool');
+		try {
+			const result = await runActorPool({
+				seeds: [77_140, 77_140],
+				outDir: dir,
+				workers: 2,
+				config: {
+					seats: 1,
+					maxRounds: 30,
+					profiles: ['medium'],
+					weightsPath: WEIGHTS,
+					selection: 'policy',
+					sample: true,
+					temperature: 0.65,
+					maxStatusLevel: 2,
+					continuationCurriculum: {
+						enabled: true,
+						rounds: [12],
+						sourceProbability: 1,
+						capFailureWeight: 1,
+						successWeight: 1
+					}
+				}
+			});
+			const rows = result.shardFiles.flatMap((file) =>
+				readFileSync(file, 'utf8')
+					.trim()
+					.split('\n')
+					.map((line) => JSON.parse(line) as Record<string, unknown>)
+			);
+			const suffixIds = new Set(
+				rows.filter((row) => row.continuationCurriculum === 1).map((row) => String(row.gameId))
+			);
+			const sourceIds = new Set(
+				rows.filter((row) => row.continuationCurriculum !== 1).map((row) => String(row.gameId))
+			);
+			const meta = JSON.parse(readFileSync(join(dir, 'meta.json'), 'utf8'));
+			expect(result.games).toBe(2);
+			expect(result.curriculum.episodes).toBe(2);
+			expect(result.curriculum.rows).toBeGreaterThan(0);
+			expect(suffixIds).toEqual(
+				new Set(['late-cont-v1-77140-j0-r12-f0-Red', 'late-cont-v1-77140-j1-r12-f0-Red'])
+			);
+			expect(sourceIds).toEqual(
+				new Set(['actor-source-v1-77140-j0-Red', 'actor-source-v1-77140-j1-Red'])
+			);
+			expect(meta.continuation_curriculum).toEqual(result.curriculum);
+			expect(result.summaries.every((summary) => summary.samples < result.samples)).toBe(true);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}, 180_000);
+
+	it('fails closed when continuation generation is not sampled solo training', () => {
+		const dir = tempDir('continuation-invalid');
+		try {
+			expect(() =>
+				runActorGames({
+					workerIndex: 0,
+					seeds: [1],
+					config: {
+						seats: 4,
+						maxRounds: 30,
+						profiles: ['medium'],
+						weightsPath: WEIGHTS,
+						sample: true,
+						continuationCurriculum: { enabled: true }
+					},
+					outDir: dir,
+					catalogPath: resolve(process.cwd(), 'ml/catalog.json')
+				})
+			).toThrow(/requires seats=1/);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 
 	it('policy-obs-version 2 without an infer socket is rejected with a clear error', async () => {
 		const dir = tempDir('pov2');

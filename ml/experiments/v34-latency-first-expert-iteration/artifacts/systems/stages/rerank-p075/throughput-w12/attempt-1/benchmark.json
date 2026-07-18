@@ -1,0 +1,94 @@
+{
+  "capturedAt": "2026-07-14T13:42:20.560Z",
+  "host": "simforge1",
+  "logicalCpus": 128,
+  "gamesPerTrial": 128,
+  "repeats": 1,
+  "seed0": 957900000,
+  "shuffleSeed": 9579,
+  "catalogPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/catalogs/live-20260713-5f4ad348.json",
+  "trialOrder": [
+    {
+      "workers": 12,
+      "repeat": 0
+    }
+  ],
+  "config": {
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "guardianSchedule": "absolute-balanced",
+    "profiles": [
+      "pvphunter",
+      "medium",
+      "aggressive",
+      "hard"
+    ],
+    "weightsPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "inferSocket": "/dev/shm/arc-v34/systems-infer.sock",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "neuralSeats": [
+      "Red"
+    ],
+    "recordSeats": [],
+    "writeGameSummaries": false,
+    "obsVersion": 1,
+    "policyObsVersion": 2,
+    "rerank": {
+      "policyRankWeight": 0.75
+    }
+  },
+  "rows": [
+    {
+      "workers": 12,
+      "repeats": 1,
+      "gamesPerSecondP50": 4.882422467558999,
+      "gamesPerSecondP90": 4.882422467558999,
+      "gamesPerSecondMean": 4.882422467558999,
+      "gamesPerSecondStdDev": 0,
+      "samplesPerSecondP50": 0,
+      "samplesPerSecondP90": 0,
+      "validPolicyRowsPerSecondP50": 0,
+      "validPolicyRowsPerSecondP90": 0,
+      "gameWallMsP95Median": 2906.7,
+      "searchDecisionsPerSecondP50": 136.1356702087349,
+      "searchDecisionWallMsP95Median": 42.358,
+      "efficiencyVsOneWorkerP50": null
+    }
+  ],
+  "trials": [
+    {
+      "workers": 12,
+      "repeat": 0,
+      "seed0": 957900000,
+      "games": 128,
+      "samples": 0,
+      "trajectoryRows": 0,
+      "validPolicyRows": 0,
+      "validPolicyRowPct": 0,
+      "wallMs": 26216.494138000002,
+      "gamesPerSecond": 4.882422467558999,
+      "samplesPerSecond": 0,
+      "validPolicyRowsPerSecond": 0,
+      "gameWallMsP50": 2343.8,
+      "gameWallMsP95": 2906.7,
+      "searchDecisions": 3569,
+      "searchSimulations": 0,
+      "stalls": 0,
+      "plannerMode": "critic-rerank",
+      "searchDecisionsPerSecond": 136.1356702087349,
+      "searchDecisionWallMsP50": 30.383,
+      "searchDecisionWallMsP95": 42.358,
+      "inference": {
+        "format": "arc-entity-scorer-v2",
+        "obsDim": 3419,
+        "actDim": 104,
+        "weightsPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+        "weightsSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+        "wire": "binary"
+      }
+    }
+  ]
+}

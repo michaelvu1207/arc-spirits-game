@@ -1,0 +1,219 @@
+{
+  "schemaVersion": "arc-controlled-experiment-v1",
+  "experiment": "v27-live-entity-multihorizon-capacity-screen",
+  "status": "rejected",
+  "createdAt": "2026-07-14T00:20:00Z",
+  "hypothesis": "On the current live catalog, an entity-token policy with an equal-game 20/25/30-round critic can preserve V23 behavior while representing late-game conversion state better than the flat incumbent. Model size helps only if held-out solo strength and calibration improve enough to justify its latency.",
+  "sourceCommit": "21893331f6f56b4e6b14a0e6d5e4ab2fbe326973",
+  "catalog": {
+    "path": "ml/catalogs/live-20260713-5f4ad348.json",
+    "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "behaviorCheckpoint": {
+    "path": "ml/warmstart/v24/v23-control-gen5-obs199-act104.json",
+    "sha256": "c75ff32538ae957c6fcca8d54cff3fdee97b9a9d63df7749368d98e9f0f2c472",
+    "policyObsVersion": 1,
+    "role": "The frozen V23 checkpoint is the data-generating policy. It acts from obs-v1 with hybrid sampling at temperature 0.55 while the recorder writes paired obs-v1 and obs-v2 rows."
+  },
+  "data": {
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "shuffleGuardians": true,
+    "guardianSchedule": "absolute-seed-balanced",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "gamma": 0.999,
+    "recordObsVersion": 2,
+    "train": {
+      "seed0": 941000000,
+      "games": 1024
+    },
+    "validation": {
+      "seed0": 942000000,
+      "games": 256
+    },
+    "developmentEvaluation": {
+      "seed0": 943000000,
+      "games": 512,
+      "includePerGame": true
+    },
+    "seedBlocksAreDisjoint": true
+  },
+  "training": {
+    "epochs": 6,
+    "batchSize": 256,
+    "learningRate": 0.0003,
+    "valueCoef": 0.5,
+    "reach30Coef": 1.0,
+    "reach30Horizons": [20, 25, 30],
+    "maxGradNorm": 1.0,
+    "validation": "separate complete-game seed block; best validation policy CE epoch",
+    "variants": [
+      {
+        "id": "d64-l2-h4",
+        "dModel": 64,
+        "layers": 2,
+        "heads": 4,
+        "seed": 271064
+      },
+      {
+        "id": "d128-l3-h4",
+        "dModel": 128,
+        "layers": 3,
+        "heads": 4,
+        "seed": 271128
+      },
+      {
+        "id": "d256-l4-h8",
+        "dModel": 256,
+        "layers": 4,
+        "heads": 8,
+        "seed": 271256
+      }
+    ],
+    "comparisonNote": "The first screen is data- and epoch-matched, not FLOP-matched. It establishes the strength/latency Pareto frontier; any apparent size winner requires a later compute-matched causal confirmation. Each size has one pinned initialization/shuffle seed, so a size ranking inside a two-percentage-point paired win-rate band or overlapping simultaneous confidence intervals is a tie, not evidence of capacity causality.",
+    "reportPerVariant": [
+      "parameter count",
+      "estimated forward FLOPs at 32 rows and 30 candidates",
+      "training wall time and examples per second",
+      "peak GPU memory"
+    ]
+  },
+  "gates": {
+    "integrity": [
+      "catalog and behavior checkpoint hashes match",
+      "all rows carry obsV2 length 3419 and action width 104",
+      "zero malformed rows and zero stalls",
+      "complete solo outcomes have reach30Target, reach30Horizon, endRound, objectiveDone, and finalVP",
+      "training, validation, and development evaluation have no shared game ids or absolute seeds"
+    ],
+    "behaviorClone": {
+      "reportHeldoutTop1Accuracy": true,
+      "reportHeldoutPolicyCrossEntropy": true,
+      "reportHeldoutReach30Nll": true,
+      "reportPerHorizonBrierAndEce": true,
+      "minimumTop1Accuracy": 0.2
+    },
+    "directSolo": {
+      "control": "V23 behavior checkpoint on the exact 512 evaluation seeds",
+      "decode": {
+        "selection": "hybrid",
+        "sample": true,
+        "temperature": 0.55,
+        "identicalForControlAndTreatments": true
+      },
+      "pairedAnalysis": "Match true-win outcomes by absolute seed. Report discordant counts, exact McNemar p-values, paired deltas, and paired bootstrap confidence intervals for VP, finish round, and post-15 pace.",
+      "noninferiorityScreen": "Point delta must be at least -2.0 percentage points and its ordinary paired 95% lower bound must be at least -5.0 points.",
+      "advanceToPpo": "A treatment must improve at least +3.0 percentage points, have a positive Bonferroni-simultaneous 98.33% paired lower bound across the three variants, and survive Holm correction of exact McNemar p-values at familywise alpha 0.05. The later PPO pilot remains an independent confirmation, not a continuation of these development games.",
+      "stalls": 0
+    },
+    "systems": {
+      "reportInferenceRowsPerSecond": true,
+      "reportActorGamesPerSecond": true,
+      "reportGpuMemory": true,
+      "latencyProtocol": "A100-40GB, binary inference wire, 32 rows/request, 30 candidates/row, eight closed-loop clients after warmup; report request p50/p95/p99, per-row equivalent, batch distribution, and throughput.",
+      "rejectIfP95RequestLatencyMsExceeds": 100
+    }
+  },
+  "paretoAxes": [
+    "simultaneous paired true-win-rate lower bound versus V23",
+    "held-out policy cross-entropy and per-horizon critic calibration",
+    "A100 p95 request latency",
+    "A100 inference rows per second",
+    "peak GPU memory"
+  ],
+  "stopRule": "Train all three preregistered variants once. Do not tune on the 512-game evaluation block. Advance at most the variants that are nondominated on the declared Pareto axes and pass the multiplicity-corrected direct-solo advance gate. Otherwise retain the negative result and return to representation features or targets.",
+  "promotionEligible": false,
+  "completedAt": "2026-07-14T01:04:00Z",
+  "results": {
+    "control": {
+      "id": "V23",
+      "trueWins": 288,
+      "games": 512,
+      "trueWinRate": 0.5625,
+      "meanFinalVP": 24.9765625,
+      "meanPost15VpPerRound": 1.0945565485342266,
+      "stalls": 0
+    },
+    "variants": [
+      {
+        "id": "d64-l2-h4",
+        "params": 173513,
+        "bestEpoch": 6,
+        "validationPolicyCE": 0.8937093811643249,
+        "validationTop1Accuracy": 0.6182885346495031,
+        "trueWins": 224,
+        "trueWinRate": 0.4375,
+        "pairedDeltaVsV23": -0.125,
+        "pairedBootstrap95": [-0.177734375, -0.072265625],
+        "simultaneousBootstrap9833": [-0.189453125, -0.060546875],
+        "exactMcNemarP": 0.000006346997755773523,
+        "meanFinalVPDelta": -1.263671875,
+        "meanPost15VpPerRoundDelta": -0.1169620063747688,
+        "trainingWallSeconds": 254.56,
+        "peakResidentKiB": 3732016,
+        "a100InferenceRowsPerSecond": 16017.84129697381,
+        "a100RequestLatencyMs": {"p50": 15.551974000000001, "p95": 18.606928999999997, "p99": 22.1895289},
+        "a100GpuMemoryMiB": 625,
+        "stalls": 0
+      },
+      {
+        "id": "d128-l3-h4",
+        "params": 832009,
+        "bestEpoch": 5,
+        "validationPolicyCE": 0.8779414218270197,
+        "validationTop1Accuracy": 0.6211898886146868,
+        "trueWins": 213,
+        "trueWinRate": 0.416015625,
+        "pairedDeltaVsV23": -0.146484375,
+        "pairedBootstrap95": [-0.19921875, -0.09375],
+        "simultaneousBootstrap9833": [-0.2109375, -0.08203125],
+        "exactMcNemarP": 1.504414849381718e-7,
+        "meanFinalVPDelta": -1.74609375,
+        "meanPost15VpPerRoundDelta": -0.14812708092005689,
+        "trainingWallSeconds": 283.97,
+        "peakResidentKiB": 3736016,
+        "a100InferenceRowsPerSecond": 12633.563911686633,
+        "a100RequestLatencyMs": {"p50": 19.27786, "p95": 26.787490999999992, "p99": 36.37871319999999},
+        "a100GpuMemoryMiB": 683,
+        "stalls": 0
+      },
+      {
+        "id": "d256-l4-h8",
+        "params": 3993865,
+        "bestEpoch": 6,
+        "validationPolicyCE": 0.8691376081216187,
+        "validationTop1Accuracy": 0.6253585006336291,
+        "trueWins": 241,
+        "trueWinRate": 0.470703125,
+        "pairedDeltaVsV23": -0.091796875,
+        "pairedBootstrap95": [-0.14453125, -0.0390625],
+        "simultaneousBootstrap9833": [-0.15625, -0.02734375],
+        "exactMcNemarP": 0.0008819823006755322,
+        "meanFinalVPDelta": -0.970703125,
+        "meanPost15VpPerRoundDelta": -0.07192844550033622,
+        "trainingWallSeconds": 402.83,
+        "peakResidentKiB": 3762468,
+        "a100InferenceRowsPerSecond": 9369.854932377226,
+        "a100RequestLatencyMs": {"p50": 26.6240545, "p95": 34.248615, "p99": 42.01313521},
+        "a100GpuMemoryMiB": 931,
+        "stalls": 0
+      }
+    ],
+    "decision": "Reject every hard-label entity clone. All three variants fail both noninferiority and the PPO advance gate. Increasing capacity improved held-out chosen-action CE only marginally and did not monotonically improve direct play. The next experiment must repair the behavior target/support mismatch and add a trust-anchored long-horizon outcome objective; it must not spend more compute on width alone."
+  },
+  "diskGuard": {
+    "filesystem": "/data/share8",
+    "minimumFreeGiBBeforeLaunchingTraining": 8,
+    "compressRawJsonlAfterAllConsumersFinish": true
+  },
+  "amendments": [
+    {
+      "at": "2026-07-14T00:40:00Z",
+      "runtimeSourceCommit": "6f466b4",
+      "reason": "The remote PyTorch release rejects numpy.bool_ values passed through torch.tensor although the local release accepts them. All three first attempts were stopped or failed during the first DataLoader collation, before any optimizer step or checkpoint. Scalar collation now applies explicit bool/int/float casts. Dataset bytes, model seeds, shuffle seeds, hyperparameters, and evaluation gates are unchanged; failed logs and exit codes are retained."
+    }
+  ]
+}

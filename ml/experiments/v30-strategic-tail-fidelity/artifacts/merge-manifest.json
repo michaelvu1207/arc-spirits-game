@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "arc-v2-symlink-merge-v1",
+  "out": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-merged",
+  "games": 2048,
+  "samples": 240631,
+  "seeds": {
+    "count": 2048,
+    "min": 941000000,
+    "max": 947001023
+  },
+  "sources": [
+    {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v27-entity-live/train",
+      "metaSha256": "257557739968f5286e28b3cbabd308a4c7f2004dcafb72a87c764de2b1d46f56",
+      "games": 1024,
+      "samples": 119909,
+      "seedMin": 941000000,
+      "seedMax": 941001023
+    },
+    {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new",
+      "metaSha256": "8ddd501ec400a36980f44683127592af95080274080d0a022ef176e7a0db77be",
+      "games": 1024,
+      "samples": 120722,
+      "seedMin": 947000000,
+      "seedMax": 947001023
+    }
+  ],
+  "linkedShards": [
+    {
+      "path": "shard-00-000.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v27-entity-live/train/shard-0.jsonl",
+      "sha256": "57ba589871987da83b757cd8506d3c8eca07c4595669329c5aa71f251f4538c6"
+    },
+    {
+      "path": "shard-00-001.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v27-entity-live/train/shard-1.jsonl",
+      "sha256": "a9bfd20ee53727c295126dbf995f79ce7671b74284869d12ca877e667f17f7b9"
+    },
+    {
+      "path": "shard-00-002.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v27-entity-live/train/shard-2.jsonl",
+      "sha256": "82a8af882b3a53ec0d6f00b986975abc330a9350580b74b429e6cf8fbf34ba4f"
+    },
+    {
+      "path": "shard-00-003.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v27-entity-live/train/shard-3.jsonl",
+      "sha256": "4e398119dbc55e1f73f780cdf5ef5f501e9011e960cf4e6e1523746a37d334ca"
+    },
+    {
+      "path": "shard-00-004.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v27-entity-live/train/shard-4.jsonl",
+      "sha256": "3bb158afaea9e5d73fa91dd236f1415d2ef4a8eb257b601da9ed3c26e3127773"
+    },
+    {
+      "path": "shard-00-005.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v27-entity-live/train/shard-5.jsonl",
+      "sha256": "6c135b0cd8d6e2e2becbf013cfc8450154a733d53d1fb7d32c043d755844e0aa"
+    },
+    {
+      "path": "shard-01-000.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new/shard-0.jsonl",
+      "sha256": "f6e2971056ae94eed401046bdceb7867d92668220e3ab0a980d2c9da09e2be03"
+    },
+    {
+      "path": "shard-01-001.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new/shard-1.jsonl",
+      "sha256": "e74b5f510a493f3296f76ba30dbce6236a718ffe5ecb6898e3f09facbb3f5411"
+    },
+    {
+      "path": "shard-01-002.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new/shard-2.jsonl",
+      "sha256": "231f20653d983e714a0ffb6996ebb6b78a04f22352cdb2295bea68c70c4f0d12"
+    },
+    {
+      "path": "shard-01-003.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new/shard-3.jsonl",
+      "sha256": "f6cb8655b0302929dde68965ef14b5b889e329244d2c97280358ffa12e293971"
+    },
+    {
+      "path": "shard-01-004.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new/shard-4.jsonl",
+      "sha256": "955650387ee8823c1fb26dec8066ff89156175335834c9a0e2d6e068be77b817"
+    },
+    {
+      "path": "shard-01-005.jsonl",
+      "source": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/experiments/v30-strategic-tail-fidelity/data/train-new/shard-5.jsonl",
+      "sha256": "97e946a6002fc964e89d98e7a19065572994ba939fb0d34dcaf4d0b08727fbdb"
+    }
+  ]
+}

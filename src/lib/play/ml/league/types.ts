@@ -15,6 +15,12 @@
  * over the frozen historical pool), heuristic profiles seeding the initial pool.
  */
 
+import type {
+	ContinuationCurriculumConfig,
+	ContinuationCurriculumDiagnostics,
+	StrategicDecisionScope
+} from '../poolTypes';
+
 export type LeagueMemberKind =
 	| 'main'
 	| 'main_exploiter'
@@ -85,6 +91,21 @@ export interface LeagueV2Config extends LeagueInferConfig {
 	distillEveryGen?: boolean;
 }
 
+/** Optional compact, explicit game-seed allocation for controlled experiments.
+ * Historical leagues omit this and retain the original million-spaced formulas. */
+export interface LeagueSeedSchedule {
+	/** First training-game seed at generation 1, lane 0. */
+	trainBase: number;
+	/** Seed distance between consecutive generations. */
+	trainStride: number;
+	/** First quick-evaluation seed at generation 1, lane 0. */
+	evalBase: number;
+	/** Evaluation seed distance between consecutive generations. */
+	evalStride: number;
+	/** Fail before starting any generation above this preregistered endpoint. */
+	maxGeneration: number;
+}
+
 export interface PfspConfig {
 	/** Exponent for the 'squared' variant weight (1 − winrate)^p. */
 	p: number;
@@ -103,13 +124,53 @@ export interface LeagueTrainConfig {
 	valueHidden?: number[];
 	/** Extra raw CLI args appended to the train.py invocation. */
 	extraArgs?: string[];
+	/** PPO-only exact number of post-GAE trajectory rows consumed per epoch. Paired control and
+	 * treatment runs should use the same value to match optimizer-update count. */
+	ppoRowsPerEpoch?: number;
+	/** PPO-only target share of rows drawn from continuation suffixes. Requires ppoRowsPerEpoch.
+	 * Set 0 in the matched control and the desired fraction in treatment. */
+	ppoContinuationFraction?: number;
+	/** Conservative, winning-episode self-imitation auxiliary. Omit for exact historical behavior.
+	 * The replay is lane-local and never enters PPO ratios or value targets. */
+	selfImitation?: {
+		/** Masked chosen-action CE coefficient. Use 0 for a compute-matched control. */
+		coef: number;
+		/** Auxiliary replay rows per natural PPO row (recommended 0.1). */
+		replayFraction: number;
+		/** Maximum |current chosen logp - behavior logp| (default 1). */
+		stalenessLogp?: number;
+		/** Persisted replay lifetime in generations (default 3). */
+		maxAge?: number;
+		/** Per-lane replay row cap (default 100,000). */
+		maxRows?: number;
+	};
 }
 
 export interface LeagueConfig {
 	version: 'league-v1';
+	/** Immutable catalog used by every training and evaluation actor. Omit both fields only for
+	 * historical configs that intentionally use ml/catalog.json. New qualification runs should
+	 * pin both so catalog drift fails before actor generation. */
+	catalogPath?: string;
+	catalogSha256?: string;
 	/** train.py --mode. Default awr until the PPO recording fields land (task #8). */
 	mode: 'awr' | 'alphazero' | 'ppo';
+	/** Ranked/evaluation seat count and maximum seat count available to training curricula. */
 	seats: number;
+	/**
+	 * Optional generation curriculum over training player counts. The first stage whose
+	 * `throughGen` includes the current generation is used; the last stage persists afterward.
+	 * Weights are relative and are deterministically apportioned across matchup pools. Eval and
+	 * promotion remain at `seats`, so solo/two/three-player data can never lower the 4p gate.
+	 */
+	trainingSeatCurriculum?: Array<{
+		throughGen: number;
+		weights: Record<string, number>;
+	}>;
+	/** Status cap for solo curriculum games (default 2) to prevent the one-player all-Fallen exit. */
+	soloMaxStatusLevel?: number;
+	/** Train-generation-only late-game solo suffix curriculum. It is never propagated to eval. */
+	continuationCurriculum?: ContinuationCurriculumConfig;
 	maxRounds: number;
 	/** Learner games generated per lane per generation. */
 	gamesPerGen: number;
@@ -128,6 +189,8 @@ export interface LeagueConfig {
 	promoteMarginElo: number;
 	/** Base for the deterministic per-generation seed ranges. */
 	seedBase: number;
+	/** Explicit compact train/eval allocation for controlled experiments. */
+	seedSchedule?: LeagueSeedSchedule;
 	/** Actor-pool worker threads (default: cpus−1). */
 	workers?: number;
 	/**
@@ -150,7 +213,7 @@ export interface LeagueConfig {
 		horizonRounds?: number;
 		valueWeight?: number;
 	};
-	/** Dense PPO reward (ΔVP + ΔΦ per decision) — REQUIRED for "reach 30" training. */
+	/** Dense PPO reward (normalized ΔVP plus configured build-potential shaping). */
 	denseVpReward?: boolean;
 	/**
 	 * Mirror-contention fraction (0..1, default 0 = off). This fraction of a
@@ -179,6 +242,10 @@ export interface LeagueConfig {
 	/** BOT_PROFILES names cycled across the opponent seats of a heuristic-field matchup
 	 *  (default ['paragon','insane']). Only used when heuristicOpponentFraction > 0. */
 	heuristicOpponentProfiles?: string[];
+	/** Deterministically shuffle guardian identities per game seed (default false for old-run parity). */
+	shuffleGuardians?: boolean;
+	/** Deterministic seed-to-guardian assignment that balances identities over contiguous seeds. */
+	guardianSchedule?: 'absolute-balanced';
 	/** Sampling temperature for checkpoint opponent seats (mirror/PFSP/exploiter fields), default
 	 *  0 = greedy (historical, bit-parity). > 0 (e.g. 0.65) makes them sample, which breaks the
 	 *  argmax-clone-collision artifact where several opponent seats sharing one checkpoint make
@@ -187,19 +254,28 @@ export interface LeagueConfig {
 	opponentTemperature?: number;
 	/**
 	 * TERMINATION BLOCKER (default undefined = off): a BOT_PROFILES name (e.g. 'paragon') seated in
-	 * EVERY matchup — mirror, heuristic, and PFSP alike — replacing one opponent slot. A non-corrupting
+	 * matchup slots selected by terminationBlockerFraction — mirror, heuristic, and PFSP alike —
+	 * replacing one opponent slot. A non-corrupting
 	 * profile that never Falls makes the all-Fallen early-termination (phases.ts tryAdvanceFromCleanup)
 	 * unreachable in training, so games must run to the real VP target or the round cap. This removes the
 	 * degenerate all-bot collapse (every seat racing to Fallen ends the game at ~round 8 / ~12 VP) that
 	 * poisons the reach-30 signal — matching deployment, where a human opponent never Falls. It is NOT
 	 * the heuristicOpponentFraction field lever (paragon as a punisher); it is paragon as a structural
-	 * termination blocker (one guaranteed non-corruptor per table). Whether the profile truly never Falls
+	 * termination blocker. Whether the profile truly never Falls
 	 * (forced corruption via damage overflow) is verified empirically, not assumed.
 	 */
 	terminationBlocker?: string;
+	/** Fraction of matchup slots that receive terminationBlocker (default 1 for old blocker configs). */
+	terminationBlockerFraction?: number;
 	/** Shaping preset name for Φ_build (shaping.ts): 'balanced' | 'banker' | 'ascend'. */
 	shapingPreset?: string;
+	/** Use discounted policy-invariant potential shaping with zero terminal potential. */
+	potentialShapingMode?: 'legacy-terminal-retention' | 'policy-invariant';
+	/** Decision surfaces eligible for strategic MC/outcome credit. Default navigation. */
+	strategicDecisionScope?: StrategicDecisionScope;
 	selection: 'hybrid' | 'value' | 'policy';
+	/** Opt-in V24 hybrid mode: policy-select ambiguous monster rewards except immediate wins. */
+	learnMonsterRewardChoices?: boolean;
 	/** Sample from the softmax during generation (exploration). */
 	sample: boolean;
 	temperature?: number;
@@ -289,6 +365,9 @@ export interface LeagueState {
 /** One JSONL line appended to <root>/history.jsonl per (generation, lane). */
 export interface HistoryLine {
 	ts: string;
+	/** Exact catalog provenance for pinned-catalog runs. */
+	catalogPath?: string;
+	catalogSha256?: string;
 	gen: number;
 	lane: string;
 	kind: LeagueMemberKind;
@@ -300,6 +379,23 @@ export interface HistoryLine {
 	mirrorMatchups?: number;
 	/** How many of this generation's matchups were the pure heuristic field (heuristicOpponentFraction); absent when 0. */
 	heuristicMatchups?: number;
+	/** Player count -> matchup pools generated this generation (curriculum audit trail). */
+	trainingSeatMatchups?: Record<string, number>;
+	/** Aggregated late-state suffix diagnostics for this train generation. */
+	continuationCurriculum?: ContinuationCurriculumDiagnostics;
+	/** Deterministic model-initialization/minibatch-order seed passed to train.py. */
+	trainerSeed?: number;
+	/** Audited fixed-update count for each PPO epoch when ppoRowsPerEpoch is configured. */
+	optimizerStepsPerEpoch?: number;
+	/** Audited fixed-update count across all PPO epochs. */
+	optimizerStepsTotal?: number;
+	/** Final-epoch self-imitation diagnostics (also retained in the lane train.log). */
+	selfImitationLoss?: number;
+	selfImitationSampled?: number;
+	selfImitationAccepted?: number;
+	selfImitationStale?: number;
+	/** route/build/convert/yield sampled counts, in that order. */
+	selfImitationPhaseCounts?: [number, number, number, number];
 	poolWallMs: number;
 	trainMs: number;
 	/** v2 lanes: wall time of the ml/distill.py student run, when one happened. */
@@ -308,6 +404,16 @@ export interface HistoryLine {
 	evalGames: number;
 	/** Placement-1 share of the eval games. */
 	evalWinRate: number;
+	/** Share of eval games where the learner actually reached the 30-VP target.
+	 *  Unlike evalWinRate, this is meaningful in solo games: the lone seat is always
+	 *  placement 1 at the round cap even when it failed to reach 30. */
+	evalReach30Rate?: number;
+	/** Learner's mean final VP over the quick-eval games. */
+	evalMeanVP?: number;
+	/** Mean first-30 round among successful eval games; null when none reached 30. */
+	evalMeanFirst30Round?: number | null;
+	/** Share of quick-eval games that exhausted the driver's unstick budget. */
+	evalStallRate?: number;
 	/** Mean pairwise placement score (win 1 / tie 0.5 / loss 0) over eval games. */
 	evalPairwiseScore: number;
 	/** eloFromScore over the eval pairwise encounters (quick estimate, NOT gauntlet). */

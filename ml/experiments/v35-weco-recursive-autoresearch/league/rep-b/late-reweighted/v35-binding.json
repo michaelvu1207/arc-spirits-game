@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "arc-v35-root-binding-v1",
+  "experiment": "v35-v2-late-credit-screen",
+  "replicate": "b",
+  "arm": "late-reweighted",
+  "protocolPath": "ml/experiments/v35-weco-recursive-autoresearch/phase1-protocol.json",
+  "protocolSha256": "af4e6683007e2037ec99d249e7a3678d333e6f9b9f2884b211c13084c4316d98",
+  "configSha256": "e2c6a86cee76760ee68818925f13fe167413735a2a539d5cd18963e9feab50ab",
+  "catalogSha256": "62203ec1b981c2e59f129db54cf1863639f605f331ed8d7408c53693c941bc59",
+  "initialPolicySha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+  "promotionEligible": false
+}

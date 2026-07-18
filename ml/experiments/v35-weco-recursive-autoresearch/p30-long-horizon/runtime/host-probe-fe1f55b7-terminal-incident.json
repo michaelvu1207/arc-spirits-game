@@ -1,0 +1,94 @@
+{
+  "schemaVersion": "arc-v35-p30-host-integration-probe-incident-v1",
+  "valid": true,
+  "promotionEligible": false,
+  "outcomesInspected": false,
+  "syntheticDataOnly": true,
+  "productionCampaignCreated": false,
+  "probeIdentityRetired": true,
+  "implementationCommit": "0c07744c89f93e7cbc8fc534d362fb326928dda6",
+  "sourceLockCommit": "b0583dc",
+  "reviewCommit": "6e1d887",
+  "parentProbeInstanceId": "fe1f55b74dc6d5b7dc52b1cc37ac7758c3bbcbf4aa225232151ede42186a7bb5",
+  "syntheticCampaignInstanceId": "75e67e77db5430ea5ebda98eaffb7a1501bbcff75ca45b9f35fd8f104ca2f8bb",
+  "analysisTokenId": "de233bba129f07d3aa7db295d1b311ad804562d578797d07f1d774d167c4847e",
+  "startedAtUtc": "2026-07-16T15:34:20.914237Z",
+  "finishedAtUtc": "2026-07-16T15:34:21.096375Z",
+  "failure": {
+    "class": "DISPOSABLE_HOST_COMPATIBILITY_PROBE",
+    "stage": "ANALYZER_PRE_MANIFEST_CAPABILITY_CONSUMPTION",
+    "exitCode": 1,
+    "reason": "SimForge bubblewrap 0.9.0 accepted --sync-fd and launched the isolated analyzer, but --sync-fd is a lifecycle synchronization descriptor rather than a child descriptor-inheritance mechanism. The analyzer therefore found reserved FD 198 closed and failed before opening its manifest.",
+    "analysisOutputPresent": false,
+    "manifestOpened": false,
+    "supervisorChildRemaining": false,
+    "gpuUsed": false,
+    "leaseUsed": false
+  },
+  "evidence": {
+    "analysisAuthorization": {
+      "path": "/data/share8/michaelvuaprilexperimentation/arc-v35-p30-ledger/75e67e77db5430ea5ebda98eaffb7a1501bbcff75ca45b9f35fd8f104ca2f8bb/authorizations/final-analysis.json",
+      "sha256": "baab52ae83c6332563b494742d88f4a18660e2876019d68b88076c376b13a8e7",
+      "bytes": 6683
+    },
+    "consumedMarker": {
+      "sha256": "f391e2db3cf7a21edae9be23b79de57255041f8b4f034a9aa12c5e27c7ef4204",
+      "bytes": 535
+    },
+    "launchPermit": {
+      "sha256": "570b03a145c2fc07f616eb0a0fe2eb370792126af5d5f24713b4ae67ec967e80",
+      "bytes": 2004
+    },
+    "launchIntent": {
+      "sha256": "d41511ad02113d48a44600f83ca78eacbf2616713ca00e925d55d67f62327aba",
+      "bytes": 1737
+    },
+    "launchEvidence": {
+      "sha256": "a951d3978dce52d060f7210762f6643e4316437805272b244db68eae52476060",
+      "bytes": 2134,
+      "analyzerExecProven": true,
+      "pidUserNetworkNamespacesDistinct": true
+    },
+    "unsignedInvalidReceipt": {
+      "sha256": "fd64572dd17f451c51759eb06edc9bfe8f67976561b49cad075300492e31bf24",
+      "bytes": 5966
+    },
+    "exitCode": {
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "bytes": 2
+    },
+    "stdout": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "stderr": {
+      "sha256": "dd5ce816cc6462c8c8ae9ef35d2822d106ff91d28588f4283ff99f5c9a9faf62",
+      "bytes": 1531
+    }
+  },
+  "postcondition": {
+    "analysisOutputAbsent": true,
+    "resultRootEmpty": true,
+    "gpu7MemoryMiB": 0,
+    "gpu7UtilizationPercent": 0
+  },
+  "archive": {
+    "path": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/host-probe-75e67e77db5430ea5ebda98eaffb7a1501bbcff75ca45b9f35fd8f104ca2f8bb-ledger",
+    "manifestPath": "/Users/maikyon/Documents/Programming/ArcSpirits/.simforge-archives/host-probe-75e67e77db5430ea5ebda98eaffb7a1501bbcff75ca45b9f35fd8f104ca2f8bb-archive-manifest.json",
+    "manifestSha256": "b762d6a38ec96da77cf61ba5b1cf1579215844d2c53746da3bfe7787c7862cbb",
+    "fileCount": 5546,
+    "totalFileBytes": 277606802,
+    "fileInventorySha256": "789c87cd0ead265e3524321f214c71cbc855b0140da67b9e9983f43e6efca9e9",
+    "byteIdentical": true
+  },
+  "correction": {
+    "bubblewrapVersion": "0.9.0",
+    "failedOption": "--sync-fd",
+    "replacementTransport": "sealed-memfd-ro-bind-data",
+    "replacementPath": "/run/arc-v35-p30-analysis-capability",
+    "hostSmokePassed": true,
+    "sourceRefreezeRequired": true,
+    "freshFableReviewRequired": true,
+    "freshProbeIdentityRequired": true
+  }
+}

@@ -1,0 +1,313 @@
+{
+  "capturedAt": "2026-07-14T08:15:08.287Z",
+  "host": "simforge1",
+  "logicalCpus": 128,
+  "gamesPerTrial": 128,
+  "repeats": 2,
+  "seed0": 951900000,
+  "shuffleSeed": 9519,
+  "catalogPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/catalogs/live-20260713-5f4ad348.json",
+  "trialOrder": [
+    {
+      "workers": 16,
+      "repeat": 1
+    },
+    {
+      "workers": 4,
+      "repeat": 0
+    },
+    {
+      "workers": 12,
+      "repeat": 1
+    },
+    {
+      "workers": 4,
+      "repeat": 1
+    },
+    {
+      "workers": 8,
+      "repeat": 1
+    },
+    {
+      "workers": 24,
+      "repeat": 1
+    },
+    {
+      "workers": 16,
+      "repeat": 0
+    },
+    {
+      "workers": 12,
+      "repeat": 0
+    },
+    {
+      "workers": 24,
+      "repeat": 0
+    },
+    {
+      "workers": 8,
+      "repeat": 0
+    }
+  ],
+  "config": {
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "shuffleGuardians": true,
+    "guardianSchedule": "absolute-balanced",
+    "gamma": 0.999,
+    "profiles": [
+      "pvphunter",
+      "medium",
+      "aggressive",
+      "hard"
+    ],
+    "weightsPath": "/data/share8/michaelvuaprilexperimentation/arc-bot/src/lib/play/ml/policy-weights.json",
+    "inferSocket": "/dev/shm/arc-v32-systems-benchmark/infer.sock",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "neuralSeats": [
+      "Red"
+    ],
+    "recordSeats": [
+      "Red"
+    ],
+    "obsVersion": 2,
+    "policyObsVersion": 2
+  },
+  "rows": [
+    {
+      "workers": 4,
+      "repeats": 2,
+      "gamesPerSecondP50": 2.3276432034714696,
+      "gamesPerSecondP90": 2.5496445664277263,
+      "gamesPerSecondMean": 2.438643884949598,
+      "gamesPerSecondStdDev": 0.15697866917902514,
+      "samplesPerSecondP50": 273.2616751450451,
+      "samplesPerSecondP90": 295.3603877421119,
+      "validPolicyRowsPerSecondP50": 258.8775675360925,
+      "validPolicyRowsPerSecondP90": 280.14219673624643,
+      "gameWallMsP95Median": 1859.3,
+      "efficiencyVsOneWorkerP50": null
+    },
+    {
+      "workers": 8,
+      "repeats": 2,
+      "gamesPerSecondP50": 4.423179219243897,
+      "gamesPerSecondP90": 4.44155476120577,
+      "gamesPerSecondMean": 4.432366990224834,
+      "gamesPerSecondStdDev": 0.012993470329218644,
+      "samplesPerSecondP50": 512.3976676792852,
+      "samplesPerSecondP90": 521.431589036243,
+      "validPolicyRowsPerSecondP50": 485.9968167144232,
+      "validPolicyRowsPerSecondP90": 493.9841685978543,
+      "gameWallMsP95Median": 2081.7,
+      "efficiencyVsOneWorkerP50": null
+    },
+    {
+      "workers": 12,
+      "repeats": 2,
+      "gamesPerSecondP50": 6.148772119988352,
+      "gamesPerSecondP90": 6.374642991325269,
+      "gamesPerSecondMean": 6.261707555656811,
+      "gamesPerSecondStdDev": 0.15971482479484808,
+      "samplesPerSecondP50": 712.2968202749006,
+      "samplesPerSecondP90": 748.3731268019126,
+      "validPolicyRowsPerSecondP50": 675.5963366837202,
+      "validPolicyRowsPerSecondP90": 708.9798251914572,
+      "gameWallMsP95Median": 2154.5,
+      "efficiencyVsOneWorkerP50": null
+    },
+    {
+      "workers": 16,
+      "repeats": 2,
+      "gamesPerSecondP50": 7.747042488439244,
+      "gamesPerSecondP90": 8.107162327167282,
+      "gamesPerSecondMean": 7.927102407803263,
+      "gamesPerSecondStdDev": 0.2546431800044017,
+      "samplesPerSecondP50": 909.490683388879,
+      "samplesPerSecondP90": 939.1640858377848,
+      "validPolicyRowsPerSecondP50": 861.6163817611022,
+      "validPolicyRowsPerSecondP90": 890.7744606975051,
+      "gameWallMsP95Median": 2180.8,
+      "efficiencyVsOneWorkerP50": null
+    },
+    {
+      "workers": 24,
+      "repeats": 2,
+      "gamesPerSecondP50": 11.3289356466783,
+      "gamesPerSecondP90": 11.585957470663402,
+      "gamesPerSecondMean": 11.457446558670851,
+      "gamesPerSecondStdDev": 0.18174187465280106,
+      "samplesPerSecondP50": 1312.3863888198894,
+      "samplesPerSecondP90": 1360.1733039973356,
+      "validPolicyRowsPerSecondP50": 1244.766804178778,
+      "validPolicyRowsPerSecondP90": 1288.5757074403452,
+      "gameWallMsP95Median": 2271.4,
+      "efficiencyVsOneWorkerP50": null
+    }
+  ],
+  "trials": [
+    {
+      "workers": 16,
+      "repeat": 1,
+      "seed0": 951900128,
+      "games": 128,
+      "samples": 15027,
+      "trajectoryRows": 15027,
+      "validPolicyRows": 14236,
+      "validPolicyRowPct": 94.73614161176549,
+      "wallMs": 16522.434231000003,
+      "gamesPerSecond": 7.747042488439244,
+      "samplesPerSecond": 909.490683388879,
+      "validPolicyRowsPerSecond": 861.6163817611022,
+      "gameWallMsP50": 1882.9,
+      "gameWallMsP95": 2469.9
+    },
+    {
+      "workers": 4,
+      "repeat": 0,
+      "seed0": 951900000,
+      "games": 128,
+      "samples": 14828,
+      "trajectoryRows": 14828,
+      "validPolicyRows": 14064,
+      "validPolicyRowPct": 94.8475856487726,
+      "wallMs": 50203.076022999994,
+      "gamesPerSecond": 2.5496445664277263,
+      "samplesPerSecond": 295.3603877421119,
+      "validPolicyRowsPerSecond": 280.14219673624643,
+      "gameWallMsP50": 1545.1,
+      "gameWallMsP95": 1859.3
+    },
+    {
+      "workers": 12,
+      "repeat": 1,
+      "seed0": 951900128,
+      "games": 128,
+      "samples": 15027,
+      "trajectoryRows": 15027,
+      "validPolicyRows": 14236,
+      "validPolicyRowPct": 94.73614161176549,
+      "wallMs": 20079.555855,
+      "gamesPerSecond": 6.374642991325269,
+      "samplesPerSecond": 748.3731268019126,
+      "validPolicyRowsPerSecond": 708.9798251914572,
+      "gameWallMsP50": 1726.5,
+      "gameWallMsP95": 2154.5
+    },
+    {
+      "workers": 4,
+      "repeat": 1,
+      "seed0": 951900128,
+      "games": 128,
+      "samples": 15027,
+      "trajectoryRows": 15027,
+      "validPolicyRows": 14236,
+      "validPolicyRowPct": 94.73614161176549,
+      "wallMs": 54991.245999000006,
+      "gamesPerSecond": 2.3276432034714696,
+      "samplesPerSecond": 273.2616751450451,
+      "validPolicyRowsPerSecond": 258.8775675360925,
+      "gameWallMsP50": 1633.8,
+      "gameWallMsP95": 2015.5
+    },
+    {
+      "workers": 8,
+      "repeat": 1,
+      "seed0": 951900128,
+      "games": 128,
+      "samples": 15027,
+      "trajectoryRows": 15027,
+      "validPolicyRows": 14236,
+      "validPolicyRowPct": 94.73614161176549,
+      "wallMs": 28818.737330000004,
+      "gamesPerSecond": 4.44155476120577,
+      "samplesPerSecond": 521.431589036243,
+      "validPolicyRowsPerSecond": 493.9841685978543,
+      "gameWallMsP50": 1674.8,
+      "gameWallMsP95": 2083.9
+    },
+    {
+      "workers": 24,
+      "repeat": 1,
+      "seed0": 951900128,
+      "games": 128,
+      "samples": 15027,
+      "trajectoryRows": 15027,
+      "validPolicyRows": 14236,
+      "validPolicyRowPct": 94.73614161176549,
+      "wallMs": 11047.856884000008,
+      "gamesPerSecond": 11.585957470663402,
+      "samplesPerSecond": 1360.1733039973356,
+      "validPolicyRowsPerSecond": 1288.5757074403452,
+      "gameWallMsP50": 1807.2,
+      "gameWallMsP95": 2288.7
+    },
+    {
+      "workers": 16,
+      "repeat": 0,
+      "seed0": 951900000,
+      "games": 128,
+      "samples": 14828,
+      "trajectoryRows": 14828,
+      "validPolicyRows": 14064,
+      "validPolicyRowPct": 94.8475856487726,
+      "wallMs": 15788.508337999985,
+      "gamesPerSecond": 8.107162327167282,
+      "samplesPerSecond": 939.1640858377848,
+      "validPolicyRowsPerSecond": 890.7744606975051,
+      "gameWallMsP50": 1823.8,
+      "gameWallMsP95": 2180.8
+    },
+    {
+      "workers": 12,
+      "repeat": 0,
+      "seed0": 951900000,
+      "games": 128,
+      "samples": 14828,
+      "trajectoryRows": 14828,
+      "validPolicyRows": 14064,
+      "validPolicyRowPct": 94.8475856487726,
+      "wallMs": 20817.164386999997,
+      "gamesPerSecond": 6.148772119988352,
+      "samplesPerSecond": 712.2968202749006,
+      "validPolicyRowsPerSecond": 675.5963366837202,
+      "gameWallMsP50": 1850.6,
+      "gameWallMsP95": 2195
+    },
+    {
+      "workers": 24,
+      "repeat": 0,
+      "seed0": 951900000,
+      "games": 128,
+      "samples": 14828,
+      "trajectoryRows": 14828,
+      "validPolicyRows": 14064,
+      "validPolicyRowPct": 94.8475856487726,
+      "wallMs": 11298.501818000019,
+      "gamesPerSecond": 11.3289356466783,
+      "samplesPerSecond": 1312.3863888198894,
+      "validPolicyRowsPerSecond": 1244.766804178778,
+      "gameWallMsP50": 1873.1,
+      "gameWallMsP95": 2271.4
+    },
+    {
+      "workers": 8,
+      "repeat": 0,
+      "seed0": 951900000,
+      "games": 128,
+      "samples": 14828,
+      "trajectoryRows": 14828,
+      "validPolicyRows": 14064,
+      "validPolicyRowPct": 94.8475856487726,
+      "wallMs": 28938.461150999996,
+      "gamesPerSecond": 4.423179219243897,
+      "samplesPerSecond": 512.3976676792852,
+      "validPolicyRowsPerSecond": 485.9968167144232,
+      "gameWallMsP50": 1700.9,
+      "gameWallMsP95": 2081.7
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "arc-live-replay-export-v1",
+  "schema": "arc_spirits_2d",
+  "roomCode": "7RPYHU",
+  "gameId": "game_20260713_201748_0191",
+  "status": "finished",
+  "revision": 119,
+  "events": 119,
+  "firstRevision": 1,
+  "lastRevision": 119,
+  "eventsSha256": "6771538722924d6941b5ade8d318fa21a7c0272e7c3e8cbcbb5328b9dcd6a1b2",
+  "snapshotSha256": "e80434e1bf4a4a4e076ce2bb7198cbc8345907e07b6251baf2bb27328b848984",
+  "createdAt": "2026-07-13T20:17:37.927868+00:00",
+  "startedAt": "2026-07-13T20:17:48.267+00:00",
+  "endedAt": "2026-07-13T20:33:28.449+00:00",
+  "exportedAt": "2026-07-13T22:21:04.320Z"
+}

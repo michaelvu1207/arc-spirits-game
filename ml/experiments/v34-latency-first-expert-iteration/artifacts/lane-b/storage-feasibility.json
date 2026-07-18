@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "arc-v34-lane-b-storage-feasibility-v1",
+  "recordedAt": "2026-07-14T22:24:40Z",
+  "outcomeBlind": true,
+  "registeredSeedsConsumed": false,
+  "gpuTouched": false,
+  "storageMutated": false,
+  "ordinaryFilesystemQualified": false,
+  "requirements": {
+    "minimumDurableBytes": 137438953472,
+    "scratchMultiplierOnPilotPeak": 2.0,
+    "fullRunDurableMultiplierOnProjection": 1.5
+  },
+  "filesystems": [
+    {
+      "location": "local-mac-data-volume",
+      "availableGiB": 104.21,
+      "durableQualified": false
+    },
+    {
+      "location": "/data/share8",
+      "availableGiB": 8.83,
+      "durableQualified": false
+    },
+    {
+      "location": "/data/share11",
+      "availableGiB": 9.23,
+      "durableQualified": false
+    },
+    {
+      "location": "/data/share12",
+      "availableGiB": 112.05,
+      "durableQualified": false
+    },
+    {
+      "location": "/data/share13",
+      "availableGiB": 46.28,
+      "durableQualified": false
+    },
+    {
+      "location": "/data/share7",
+      "availableGiB": 58.98,
+      "durableQualified": false
+    },
+    {
+      "location": "/data/share9",
+      "availableGiB": 45.68,
+      "durableQualified": false
+    },
+    {
+      "location": "/dev/shm",
+      "availableGiB": 488.53,
+      "durableQualified": false,
+      "scratchCandidate": true,
+      "maximumPilotPeakGiBAtObservedCapacity": 244.26,
+      "mustRecheckImmediatelyBeforeUse": true
+    }
+  ],
+  "lvm": {
+    "unallocatedGiB": 61.96,
+    "unusedBlockDeviceFound": false,
+    "newDedicated128GiBVolumePossible": false
+  },
+  "recommendedDurableCandidate": {
+    "kind": "s3",
+    "bucket": "dev-simforge-435362779479-models",
+    "region": "us-west-1",
+    "prefixTemplate": "arc-spirits/v34/lane-b/<authorization-hash>/",
+    "profile": "simforge",
+    "authenticationVerified": true,
+    "publicAccessBlocked": true,
+    "defaultEncryption": "AES256",
+    "bucketOwnerEnforced": true,
+    "versioningEnabled": false,
+    "objectLockEnabled": false,
+    "lifecycleConfigured": false,
+    "readOnlyIamSimulationPassed": true,
+    "realProbePerformed": false,
+    "authorizedForRegisteredExecution": false,
+    "contentAddressing": "SHA-256 key and metadata; multipart ETag is not a content hash",
+    "requiredProbe": "After an immutable execution lock binds the exact prefix, create random bytes in /dev/shm, hash, upload with SHA-256 checksum, download to a second path, verify bytes and hash, delete only the probe key, and record throughput and exits."
+  },
+  "conditionalFilesystemCandidate": {
+    "location": "/data/share11/ubuntu/alpamayo-carla-sim2real/storage/nurec_main_full_cache",
+    "availableGiB": 557.91,
+    "durableCapacityQualified": true,
+    "authorized": false,
+    "reason": "The writable nested volume belongs to an unrelated Alpamayo project and requires explicit owner authorization plus an isolated namespace."
+  },
+  "rejectedAlternatives": [
+    {
+      "option": "extend-/data/share12-with-all-free-vg-extents",
+      "reason": "Would consume the full LVM reserve, share failure scope with unrelated data, and still not provide a dedicated filesystem."
+    },
+    {
+      "option": "configured-google-drive-remote",
+      "reason": "Read-only capacity probe failed."
+    },
+    {
+      "option": "path-profile-buckets",
+      "reason": "They belong to unrelated Path/V2X work."
+    }
+  ],
+  "auditIncident": {
+    "description": "An initial broad local text search returned Phase 2 artifact path names and the field label vpBuckets.",
+    "phase2ArtifactOpened": false,
+    "phase2ValueObserved": false,
+    "rowObserved": false,
+    "comparisonObserved": false,
+    "rankingObserved": false,
+    "recoveryDecisionAffected": false
+  },
+  "disposition": "Keep every Lane B registered seed closed. Draft and test B1 with synthetic fixtures only. Bind the exact S3 prefix and perform the real unregistered object probe only after the Lane B execution lock is committed."
+}

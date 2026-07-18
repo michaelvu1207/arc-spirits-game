@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "arc-v34-phase2-git-dir-only-probe-v1",
+  "recordedAt": "2026-07-14T20:00:06Z",
+  "purpose": "prove that the frozen git -C ancestry command requires only an isolated GIT_DIR and does not require GIT_WORK_TREE",
+  "cwd": "/tmp",
+  "environment": {
+    "GIT_DIR": "/Users/maikyon/Documents/Programming/ArcSpirits/arc-spirits-game/.git",
+    "GIT_WORK_TREE": null,
+    "GIT_NO_REPLACE_OBJECTS": "1",
+    "GIT_CONFIG_SYSTEM": "/dev/null",
+    "GIT_CONFIG_GLOBAL": "/dev/null"
+  },
+  "command": [
+    "git",
+    "-C",
+    "/tmp",
+    "merge-base",
+    "--is-ancestor",
+    "fe8dcdb66357263b808f6b169e34f2eb6732d48f",
+    "HEAD"
+  ],
+  "status": 0,
+  "resolvedHead": "344fa4f9be6c99ff7d6f1340009d34c2cb1d2770",
+  "mechanismValid": true,
+  "authoritativeRemoteRootModified": false,
+  "outcomesRead": false,
+  "note": "The final prelaunch repeats this command against the authentic isolated commit-only database on SimForge under the exact final environment."
+}

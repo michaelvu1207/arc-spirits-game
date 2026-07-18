@@ -1,0 +1,39 @@
+V32 critic lock valid (275 files)
+[pool] 4096 games x 1 seats, 24 workers, infer-socket=/dev/shm/arc-v32-critic/train.sock
+[pool] 409/4096 games (11.8/s live)
+[pool] 818/4096 games (12.6/s live)
+[pool] 1227/4096 games (12.9/s live)
+[pool] 1636/4096 games (13.1/s live)
+[pool] 2045/4096 games (13.2/s live)
+[pool] 2454/4096 games (13.3/s live)
+[pool] 2863/4096 games (13.3/s live)
+[pool] 3272/4096 games (13.3/s live)
+[pool] 3681/4096 games (13.3/s live)
+[pool] 4090/4096 games (13.3/s live)
+[pool] 4096/4096 games (13.3/s live)
+[pool] DONE games=4096 samples=478462 workers=24 wall=307.5s rate=13.3 games/s
+[pool] shards: 24 files, summaries: 24 files in /dev/shm/arc-v32-critic/train
+[pool] 1024 games x 1 seats, 24 workers, infer-socket=/dev/shm/arc-v32-critic/validation.sock
+[pool] 102/1024 games (9.8/s live)
+[pool] 204/1024 games (10.8/s live)
+[pool] 306/1024 games (11.5/s live)
+[pool] 408/1024 games (12.0/s live)
+[pool] 510/1024 games (12.3/s live)
+[pool] 612/1024 games (12.6/s live)
+[pool] 714/1024 games (12.8/s live)
+[pool] 816/1024 games (12.9/s live)
+[pool] 918/1024 games (12.9/s live)
+[pool] 1020/1024 games (13.0/s live)
+[pool] 1024/1024 games (13.0/s live)
+[pool] DONE games=1024 samples=119279 workers=24 wall=78.7s rate=13.0 games/s
+[pool] shards: 24 files, summaries: 24 files in /dev/shm/arc-v32-critic/validation
+Loaded 119279 PPO steps from 1024 game(s) (113344 exact policy step(s), 0 continuation step(s), 0 with terminal placement reward, 0 truncated, 119279 with farmValue, 4591 with rewardPi, 0 with routeMode, 28925 strategic (MC coef=0, solo MC coef=0, gamma=1; solo outcome coef=0, reach30 coef=0, reach30 horizon=30, terminal objective=legacy, baseline=0.496, component stds=0.000/0.000, applied=0/0; outcome coef=0, applied=0), 0 malformed episode(s) rejected, 0 malformed option episode(s), 0 malformed row(s), 0 non-trajectory row(s), 0 missing 'obsV2')
+Traceback (most recent call last):
+  File "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/audit_v32_critic.py", line 198, in <module>
+    main()
+  File "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/audit_v32_critic.py", line 189, in main
+    result = audit(args)
+             ^^^^^^^^^^^
+  File "/data/share8/michaelvuaprilexperimentation/arc-bot/ml/audit_v32_critic.py", line 150, in audit
+    raise ValueError(f"non-finite behavior calibration: {calibration}")
+ValueError: non-finite behavior calibration: {'nll': nan, 'brier': nan, 'constant_brier': nan, 'auc': nan, 'auprc': nan, 'ece': nan, 'rows': nan}

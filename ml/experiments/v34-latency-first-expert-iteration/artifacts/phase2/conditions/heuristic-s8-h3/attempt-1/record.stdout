@@ -1,0 +1,188 @@
+{
+  "schemaVersion": "arc-v34-phase2-condition-v1",
+  "valid": true,
+  "immutable": true,
+  "condition": "heuristic-s8-h3",
+  "attempt": 1,
+  "workers": 24,
+  "arm": {
+    "id": "heuristic-s8-h3",
+    "kind": "heuristic-batched",
+    "simulations": 8,
+    "horizonRounds": 3,
+    "selectedWorkers": 24
+  },
+  "sourceCommit": "ff2aa7cc4e69f0f7da530a0d0df418c26839314e",
+  "seed0": 957000000,
+  "games": 4096,
+  "seedMax": 957004095,
+  "commonDecode": {
+    "seats": 1,
+    "maxRounds": 30,
+    "maxStatusLevel": 2,
+    "guardianSchedule": "absolute-balanced",
+    "selection": "hybrid",
+    "sample": true,
+    "temperature": 0.55,
+    "learnMonsterRewardChoices": false,
+    "obsVersion": 1,
+    "policyObsVersion": 2,
+    "inferenceWire": "binary"
+  },
+  "checkpoint": {
+    "path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b"
+  },
+  "catalog": {
+    "path": "ml/catalogs/live-20260713-5f4ad348.json",
+    "sha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e"
+  },
+  "inference": {
+    "format": "arc-entity-scorer-v2",
+    "obsDim": 3419,
+    "actDim": 104,
+    "weightsPath": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "weightsSha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+    "wire": "binary"
+  },
+  "telemetry": {
+    "plannerMode": "heuristic-batched",
+    "strategicDecisions": 129193,
+    "strategicSimulations": 1033544,
+    "decisionWallMsP50": 45.745,
+    "decisionWallMsP95": 62.09,
+    "byPhase": {
+      "navigation": 129193,
+      "encounter": 0
+    },
+    "wallSeconds": 486.925024798
+  },
+  "stalls": 0,
+  "integrity": {
+    "informationSafetyFailures": 0,
+    "replayMismatches": 0,
+    "servingErrors": 0,
+    "provenanceMismatches": 0,
+    "derivedOnlyAfterStrictValidation": true,
+    "evidence": {
+      "informationSafety": {
+        "strengthPreflight": {
+          "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-preflight/result.json",
+          "bytes": 6506,
+          "sha256": "8c8b2094c27090a14b169471a071758215687401cecf40565eceed3937aa3b01"
+        },
+        "vitestExitCode": 0,
+        "determinizationExitCode": 0
+      },
+      "replay": {
+        "seed0": 957000000,
+        "games": 64,
+        "workers": 8,
+        "exactPerGameEquality": true,
+        "preflightExitCode": 0,
+        "mismatches": 0
+      },
+      "serving": {
+        "servingLines": 1,
+        "shutdownLines": 1,
+        "errorLines": 0,
+        "requests": 592586,
+        "rows": 1393813,
+        "batches": 59567
+      },
+      "provenance": {
+        "acceptedGameSummariesChecked": 4096,
+        "evaluatorCrossGameHandshakeInvariant": true,
+        "fixedInferenceProcess": true,
+        "reloadLines": 0
+      }
+    }
+  },
+  "inputs": {
+    "strengthLock": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-tooling-lock.json",
+      "bytes": 3714,
+      "sha256": "e04b20c3734ad3f920626057e106f6d761a2cdf055449740d8275e08cd12ad78"
+    },
+    "baseProtocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/protocol.json",
+      "bytes": 9955,
+      "sha256": "af6feef48d896b2071657f5c55970dc01872c79d1d643cf2af161a29ce7fe548"
+    },
+    "strengthProtocol": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/strength-protocol.json",
+      "bytes": 5927,
+      "sha256": "0bb62d80150c2f79464ae3b56c54f2897daf7d97622e3093e71a01b98d8071dd"
+    },
+    "systemsEligibility": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/systems-eligibility.json",
+      "bytes": 15446,
+      "sha256": "74d1a12ee1ce2f32a4add65c2a31dad89c914b673da9803baf6179018231a68d"
+    },
+    "phase2Authorization": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2-authorization.json",
+      "bytes": 930,
+      "sha256": "aa256764285a822d85a359e859dd6b11e53dd3f04ae16d999a525eba6b141cc7"
+    },
+    "strengthPreflight": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/strength-preflight/result.json",
+      "bytes": 6506,
+      "sha256": "8c8b2094c27090a14b169471a071758215687401cecf40565eceed3937aa3b01"
+    },
+    "report": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/report.json",
+      "bytes": 3483403,
+      "sha256": "624a93f672c9a2fd0593b7994f80644ed9dcb95ccbb10a29ff5b5fdd1d0dbb54"
+    },
+    "replayReport": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/replay-report.json",
+      "bytes": 59857,
+      "sha256": "861c1b383ec08d99e0d7c91ace99dca08615ecd7beea21b0af6be038c168a711"
+    },
+    "replayStdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/replay-evaluator.stdout",
+      "bytes": 59857,
+      "sha256": "861c1b383ec08d99e0d7c91ace99dca08615ecd7beea21b0af6be038c168a711"
+    },
+    "replayStderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/replay-evaluator.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "replayExitCode": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/replay-exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    "inferLog": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/infer.log",
+      "bytes": 12881,
+      "sha256": "e770b1d1dfdb5510035c95f363e76d3c0f8ce6b8bef89edccea8e259782c7ee4"
+    },
+    "stdout": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/evaluator.stdout",
+      "bytes": 3483403,
+      "sha256": "624a93f672c9a2fd0593b7994f80644ed9dcb95ccbb10a29ff5b5fdd1d0dbb54"
+    },
+    "stderr": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/evaluator.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "launch": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/launch.json",
+      "bytes": 3444,
+      "sha256": "147e88ba3c9d19a089b2b0972f7f67379c6db4e1c1e4f8dbc2b5ec7cc768fa37"
+    },
+    "launchPid": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/launch.pid",
+      "bytes": 8,
+      "sha256": "b260f2e65362e3de920f85465c684a116f4e1258fea98c20dc5d6165467ce584"
+    },
+    "exitCode": {
+      "path": "ml/experiments/v34-latency-first-expert-iteration/artifacts/phase2/conditions/heuristic-s8-h3/attempt-1/exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    }
+  }
+}

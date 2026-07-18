@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "arc-v33-systems-early-rejection-v1",
+  "experiment": "v33-strategic-search-and-expert-iteration",
+  "status": "operationally-rejected-before-strength-evaluation",
+  "strengthUse": false,
+  "outcomesInspected": false,
+  "implementationCommit": "fe7e026415066e29d610bd5480436e160dcc6caf",
+  "sourceLockSha256": "d56411fab63e2851785c8b6001b92579f6eca8b9f4c821f3437f04ffbb7fcf6f",
+  "servedPolicy": {
+    "path": "ml/experiments/v32-onpolicy-solo/shared-critic/checkpoint.pt",
+    "sha256": "aeb254c20367029696da1e6ca823b96187191140056d646a7c2d3d47ec4e567b",
+    "format": "arc-entity-scorer-v2",
+    "obsDim": 3419,
+    "actDim": 104,
+    "wire": "binary"
+  },
+  "catalogSha256": "5f4ad348f6c7add612c736df0f3e00b7d4c821758e0561049f2e550e798c6e2e",
+  "completedChecks": {
+    "preflightPassed": true,
+    "determinizationAuditPassed": true,
+    "rawSystemsSweepCompleted": true
+  },
+  "rejectedArm": {
+    "id": "search-s16-h4",
+    "simulations": 16,
+    "horizonRounds": 4,
+    "workers": 4,
+    "plannedGames": 256,
+    "registeredSeed0": 953900000,
+    "completedGamesAtTermination": 23,
+    "completedSeedMin": 953900000,
+    "completedSeedMax": 953900022,
+    "observedElapsedSeconds": 1038,
+    "observedGamesPerSecond": 0.022157996146435453,
+    "projected4096GameSeconds": 184854.26086956522,
+    "projected4096GameHours": 51.34840579710145,
+    "registeredMax4096GameSeconds": 21600,
+    "factorOverRuntimeGate": 8.558067632850241,
+    "optimisticProjectionTreatingAllFourInFlightGamesAsComplete": {
+      "games": 27,
+      "projected4096GameSeconds": 157468.44444444444,
+      "projected4096GameHours": 43.74123456790123,
+      "factorOverRuntimeGate": 7.290205761316872
+    },
+    "searchTelemetry": {
+      "completedSearchDecisions": 702,
+      "completedSimulations": 11232,
+      "gameWallMsMean": 173174.42608695652,
+      "gameWallMsP50": 172300.1,
+      "gameWallMsP95": 235412.2,
+      "gameWallMsMax": 247306.2,
+      "searchDecisionWallMsCount": 702,
+      "searchDecisionWallMsMean": 5606.352575498573,
+      "searchDecisionWallMsP50": 5141.09,
+      "searchDecisionWallMsP95": 11530.606,
+      "searchDecisionWallMsMax": 26127.979,
+      "latencyBinding": false,
+      "latencyNote": "Four-worker partial telemetry is diagnostic only; the preregistered runtime projection gate independently rejects the arm."
+    }
+  },
+  "decision": {
+    "reason": "The least-compute registered search arm exceeded the preregistered six-hour 4096-game projection by more than 7x even under the optimistic in-flight accounting bound.",
+    "remainingRegisteredSearchArmsRun": false,
+    "remainingArmsNote": "The 16x6 and 32x6 arms require weakly more engine and inference work per searched root. V33 was terminated as an online policy-rollout search design; no strength conclusion is claimed for any arm.",
+    "phase2AuthorizationCreated": false,
+    "phase2SeedsOpened": false,
+    "developmentSeedsOpened": false,
+    "hiddenSeedsOpened": false,
+    "expertIterationSeedsOpened": false,
+    "promotionEligible": false,
+    "nextDesignRequirement": "Use critic-only or heuristic-rollout search for online play, or batch and distill expensive policy-rollout search offline before opening a new disjoint experiment."
+  },
+  "evidence": {
+    "preflightResult": {
+      "path": "ml/experiments/v33-strategic-search/artifacts/preflight/result.json",
+      "sha256": "b38bd1cf5dc6071b1a6e068d13f4253284cee1380a5d5a8a53b60b34e0d5d961"
+    },
+    "determinizationAudit": {
+      "path": "ml/experiments/v33-strategic-search/artifacts/determinization-audit.json",
+      "sha256": "350b8479d45ee46ac6b5bc0da60a04ed3e57d351c166fb2c7661ac29bbe8ed68"
+    },
+    "rawSystemsReport": {
+      "path": "ml/experiments/v33-strategic-search/artifacts/systems-raw.json",
+      "sha256": "cb36c4fb925672336a268d76243b8257ae30af814737740fcb40524a1b89af26"
+    },
+    "runnerLogSha256": "3dbbf11db8ae20a13cc6374d2efed9b8fa26dc5ffa17a03ff5f0d5c1f333d915",
+    "inferenceLogSha256": "7e82543088de025d280d3ded86a99ea0d03b058638350f1d5bab881ca85d2707",
+    "resourceLogSha256": "d6b025db4a6be38f5dab0ffcf1e979ae625495e4dca96e0df1a95f6e8005085c",
+    "partialGameFileSha256": {
+      "games-0.jsonl": "e4aad3228669e85376a6092d28dac8bf4f6c10f4bd7ebe32092ceae1574233b5",
+      "games-1.jsonl": "b7d093a4aa4808e7a8db19bc2529f309f8f11ee9a7d6958f939b8f42352ca073",
+      "games-2.jsonl": "144b647bd077cc1336c2a30e2371108e75808f8d926361817d413bc18f4327c4",
+      "games-3.jsonl": "4a8557e6e19f0efb2751c1272e11a837543857366f963c2a27cacb000b8da37c"
+    },
+    "inspectedFields": [
+      "seed",
+      "wallMs",
+      "search.decisions",
+      "search.simulations",
+      "search.wallMs",
+      "search.decisionWallMs",
+      "inference"
+    ]
+  },
+  "terminatedAt": "2026-07-14T11:41:41.243Z"
+}
