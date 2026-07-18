@@ -4,6 +4,7 @@
 	import { fetchMy2DRating, type Rating2DRow } from '$lib/supabase';
 	import { getCosmeticsState } from '$lib/stores/cosmetics.svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
+	import GameIcon from '$lib/components/GameIcon.svelte';
 	import StatCell from './screens/StatCell.svelte';
 	import MatchHistoryOverlay from './MatchHistoryOverlay.svelte';
 
@@ -108,7 +109,6 @@
 		click();
 		goto('/play/records');
 	}
-
 </script>
 
 <svelte:window
@@ -139,7 +139,12 @@
 								/>
 								<div class="name-actions">
 									<button class="btn-primary sm" type="submit" disabled={busy}>Save</button>
-									<button class="btn-ghost sm" type="button" onclick={() => (editingName = false)} disabled={busy}>
+									<button
+										class="btn-ghost sm"
+										type="button"
+										onclick={() => (editingName = false)}
+										disabled={busy}
+									>
 										Cancel
 									</button>
 								</div>
@@ -171,7 +176,12 @@
 					{#if !ratingLoaded}
 						<p class="stats-muted">Reading the aether…</p>
 					{:else if rating}
-						<StatCell value={Math.round(rating.ordinal)} label="Rating" size="sm" accent="var(--brand-cyan)" />
+						<StatCell
+							value={Math.round(rating.ordinal)}
+							label="Rating"
+							size="sm"
+							accent="var(--brand-cyan)"
+						/>
 						<span class="s-div" aria-hidden="true"></span>
 						<StatCell value={rating.gamesPlayed} label="Ranked Games" size="sm" />
 					{:else}
@@ -195,7 +205,13 @@
 						<span class="lbl">{auth.isAnonymous ? 'Claim Account' : 'Account Settings'}</span>
 						<span class="go" aria-hidden="true">→</span>
 					</button>
-					<button class="act danger" type="button" onclick={signOut} onpointerenter={hover} disabled={busy}>
+					<button
+						class="act danger"
+						type="button"
+						onclick={signOut}
+						onpointerenter={hover}
+						disabled={busy}
+					>
 						<span class="gem" aria-hidden="true"></span>
 						<span class="lbl">Sign Out</span>
 						<span class="go" aria-hidden="true">→</span>
@@ -235,7 +251,7 @@
 				<span class="chip-sub">{auth.isAnonymous ? 'Guest' : 'Profile'}</span>
 			</span>
 		{:else}
-			<span class="avatar ghost" aria-hidden="true">?</span>
+			<span class="avatar ghost" aria-hidden="true"><GameIcon name="account" size={30} /></span>
 			<span class="chip-text">
 				<span class="chip-name">Sign In</span>
 				<span class="chip-sub">Profile</span>
@@ -246,7 +262,11 @@
 </div>
 
 {#if showHistory && userId}
-	<MatchHistoryOverlay {userId} displayName={auth.displayName} onClose={() => (showHistory = false)} />
+	<MatchHistoryOverlay
+		{userId}
+		displayName={auth.displayName}
+		onClose={() => (showHistory = false)}
+	/>
 {/if}
 
 <style>
@@ -326,6 +346,13 @@
 		align-items: flex-start;
 		line-height: 1.15;
 		min-width: 0;
+	}
+	.avatar.ghost {
+		width: 38px;
+		height: 38px;
+		background: none;
+		color: #24d4ff;
+		clip-path: none;
 	}
 	.chip-name {
 		font-family: var(--font-display);
@@ -665,6 +692,216 @@
 		.gem,
 		.go {
 			transition: none;
+		}
+	}
+
+	/* Profile as an identity blade, not a pill or popover card. */
+	.chip,
+	.chip:hover,
+	.chip.active {
+		min-width: 210px;
+		padding: 7px 26px 7px 8px;
+		border: 0;
+		border-radius: 0;
+		background: #160a34;
+		box-shadow: none;
+		backdrop-filter: none;
+		transform: none;
+		clip-path: polygon(0 0, calc(100% - 24px) 0, 100% 50%, calc(100% - 24px) 100%, 0 100%);
+	}
+	.chip::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		bottom: 0;
+		width: 72%;
+		height: 4px;
+		background: #24d4ff;
+	}
+	.chip.active::after,
+	.chip:hover::after {
+		background: #ff2bc7;
+	}
+	.avatar,
+	.avatar.ghost {
+		border: 0;
+		border-radius: 0;
+		background: #d515aa;
+		box-shadow: none;
+		clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+	}
+	.avatar.ghost {
+		background: #2b1260;
+		color: #24d4ff;
+	}
+	.pop {
+		width: min(370px, calc(100vw - 40px));
+		border: 0;
+		border-radius: 0;
+		background: #0d061f;
+		box-shadow: none;
+		backdrop-filter: none;
+		clip-path: polygon(0 0, 92% 0, 100% 7%, 100% 93%, 88% 100%, 0 100%);
+	}
+	.pop-head {
+		border: 0;
+		background: #43178f;
+		clip-path: polygon(0 0, 100% 0, 92% 100%, 0 100%);
+	}
+	.tag {
+		border-radius: 0;
+		background: #170a35 !important;
+	}
+	.name-form input {
+		border: 0;
+		border-bottom: 3px solid #24d4ff;
+		border-radius: 0;
+		background: #110829;
+	}
+	.stats {
+		border: 0;
+		background: #150b34;
+	}
+	.actions {
+		gap: 2px;
+		padding: 6px 0 0;
+	}
+	.act {
+		padding: 13px 24px 13px 18px;
+		background: #1d0d45;
+		clip-path: polygon(0 0, 96% 0, 100% 50%, 96% 100%, 0 100%);
+	}
+	.act:nth-child(even) {
+		width: 94%;
+		background: #27115b;
+	}
+	.act::after {
+		display: none;
+	}
+	.act:hover,
+	.act:focus-visible {
+		background: #24d4ff;
+		color: #080311;
+	}
+	.act.danger:hover,
+	.act.danger:focus-visible {
+		background: #ff2bc7;
+		color: #080311;
+	}
+	.act .gem {
+		border: 0;
+		background: #ff2bc7;
+		box-shadow: none;
+	}
+	.act:hover .gem,
+	.act:focus-visible .gem {
+		background: #080311;
+		box-shadow: none;
+	}
+	.btn-primary.block,
+	.btn-primary.sm,
+	.btn-ghost.sm {
+		border-radius: 0;
+		clip-path: polygon(0 0, 93% 0, 100% 50%, 93% 100%, 0 100%);
+	}
+
+	/* Organized upper-right account utility, opening inward. */
+	.dock {
+		left: auto;
+		right: max(24px, env(safe-area-inset-right));
+		top: max(82px, calc(72px + env(safe-area-inset-top)));
+		align-items: flex-end;
+		gap: 8px;
+	}
+	.chip,
+	.chip:hover,
+	.chip.active {
+		position: relative;
+		flex-direction: row-reverse;
+		min-width: 260px;
+		padding: 9px 18px 9px 30px;
+		background: #24104d;
+		clip-path: polygon(18px 0, 100% 0, 100% 100%, 18px 100%, 0 50%);
+	}
+	.chip::before {
+		content: '';
+		position: absolute;
+		right: 0;
+		top: 0;
+		width: 8px;
+		height: 100%;
+		background: #24d4ff;
+	}
+	.chip::after {
+		left: auto;
+		right: 0;
+		width: 82%;
+		height: 5px;
+	}
+	.chip-text {
+		align-items: flex-end;
+		text-align: right;
+	}
+	.chip-chevron {
+		margin: 0 auto 0 0;
+		transform: rotate(90deg);
+	}
+	.chip-chevron.up {
+		transform: rotate(270deg);
+	}
+	.pop {
+		width: min(390px, calc(100vw - 40px));
+		background: #080413;
+		clip-path: polygon(8% 0, 100% 0, 100% 92%, 91% 100%, 0 100%, 0 9%);
+	}
+	.pop-head {
+		background: #24104d;
+		clip-path: polygon(8% 0, 100% 0, 100% 100%, 0 86%);
+	}
+	.act:nth-child(odd) {
+		width: 100%;
+		margin-left: 0;
+		clip-path: polygon(0 0, 100% 0, 100% 100%, 5% 100%);
+	}
+	.act:nth-child(even) {
+		width: 100%;
+		clip-path: polygon(0 0, 100% 0, 100% 100%, 5% 100%);
+	}
+
+	@media (orientation: landscape) and (max-height: 650px) {
+		.dock {
+			top: 68px;
+			right: max(16px, env(safe-area-inset-right));
+		}
+		.pop {
+			max-height: calc(100dvh - 126px);
+			overflow-y: auto;
+		}
+		.chip,
+		.chip:hover,
+		.chip.active {
+			min-width: 230px;
+			padding-block: 7px;
+		}
+		.avatar {
+			width: 32px;
+			height: 32px;
+		}
+	}
+
+	@media (orientation: portrait) {
+		.dock {
+			top: max(82px, env(safe-area-inset-top));
+			right: max(12px, env(safe-area-inset-right));
+			left: auto;
+		}
+		.chip,
+		.chip:hover,
+		.chip.active {
+			min-width: 218px;
+		}
+		.pop {
+			width: min(94vw, 390px);
 		}
 	}
 </style>

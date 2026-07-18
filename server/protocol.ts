@@ -3,8 +3,13 @@
  * the message union, discriminated on `t`. Framed as JSON text; every server frame carries
  * enough for the client to stay authoritative without re-fetching the SvelteKit /view route.
  *
- * Auth model mirrors the HTTP path exactly: the credential is the member UUID (there is no
- * signed room token). See the join-message doc + the M0c-contract design notes.
+ * AUTH MODEL: the ONLY join credential is a short-lived, ONE-USE, room-scoped ticket
+ * minted by the authenticated HTTP endpoint (`POST /api/play/sessions/<code>/ws-ticket`;
+ * see src/lib/play/server/wsTickets.ts). No durable credential — no account token, no
+ * room secret, no cookie — ever crosses this boundary, and the public member UUID that
+ * labels seats in every projection/frame never authorizes anything. An expired, forged,
+ * replayed, wrong-room, wrong-user or bot-bound ticket FAILS the join fatally (the
+ * socket is closed) — it never silently downgrades an intended member to spectator.
  *
  * IMPORTS: this file lives OUTSIDE `src/`, so the SvelteKit `$lib` path alias does not
  * resolve here (and svelte-check's include globs — `../src/**` — do not cover it, so it is
@@ -29,23 +34,22 @@ export interface WsError {
 // ── Client → Server ─────────────────────────────────────────────────────────────
 
 /**
- * First frame on a fresh socket. Identity resolution mirrors getRoomMemberId +
- * fallbackUserId:
- *   1. `memberToken` (the member UUID) — the primary credential for the cookieless
- *      Godot/Capacitor client;
- *   2. else the httpOnly `arc_spirits_play_member_<ROOMCODE>` cookie that same-origin
- *      browsers send automatically on the WS upgrade request (server reads it off the
- *      handshake, not this frame);
- *   3. else `authToken` (Supabase access token) → user → getMemberBySessionAndUser, for a
- *      matchmade player with no member cookie/token.
- * `resumeFromRevision` set ⇒ this is a reconnect; the server replies with a `delta` from
- * that revision (see reconnect semantics) instead of a fresh `joined`.
+ * First frame on a fresh socket. `ticket` is the short-lived one-use room-scoped
+ * join ticket from the authenticated mint endpoint — the ONLY credential this
+ * boundary accepts. The server consumes it atomically (a replay fails), verifies
+ * its exact (room, user, member, permission) binding against current authoritative
+ * rows, and joins the socket as that identity: 'member' tickets command as the
+ * bound membership; 'spectator' tickets watch and can never command. ANY ticket
+ * failure is a FATAL join error (socket closed) — never a silent spectator
+ * downgrade. Reconnects mint a fresh ticket first.
+ *
+ * `resumeFromRevision` set ⇒ this is a reconnect; the server replies with a `delta`
+ * from that revision (see reconnect semantics) instead of a fresh `joined`.
  */
 export interface JoinMessage {
 	t: 'join';
 	roomCode: string;
-	memberToken?: string; // member UUID; omit to rely on the upgrade cookie
-	authToken?: string; // Supabase bearer, matchmade fallback only
+	ticket: string;
 	resumeFromRevision?: number;
 }
 
@@ -93,15 +97,32 @@ export interface JoinedMessage {
  *     RoomViewV2 for this connection (viewer-filtered + own-seat affordances), so the
  *     client reconciles it exactly as it reconciles a delta and retires its optimistic
  *     guess against authoritative state.
+ *   - ok:true + `duplicateOfRevision` → this cmdId had ALREADY committed (an honest
+ *     retry after a lost ack). INVARIANT: `revision` and `view` are the CURRENT durable
+ *     head at answer time — `revision === view.projection.revision` always holds, no
+ *     matter how many unrelated commits landed since the original. The revision the
+ *     command originally committed at rides in `duplicateOfRevision` (informational);
+ *     clients that predate this field simply reconcile the current view, which is the
+ *     same convergence a broadcast delta would have produced.
  *   - ok:false → `error` explains the rejection; the client rolls back its optimistic
- *     mutation. No `view` (state is unchanged for a rejected command).
+ *     mutation. No `view` (state is unchanged for a rejected command). A re-used cmdId
+ *     whose actor/type/payload does not match the committed original rejects with
+ *     code `idempotency_conflict` (the original action is never silently substituted).
  * NOTE: because other players act simultaneously, a broadcast `delta` for a newer revision
  * may arrive BEFORE this ack. The client applies by revision (mirrors isStaleRoomUpdate) —
  * an ack whose `view.projection.revision` is older than what's already applied only retires
  * the cmdId; it must not regress the board.
  */
 export type AckMessage =
-	| { t: 'ack'; cmdId: CommandId; ok: true; revision: number; view: RoomViewV2 }
+	| {
+			t: 'ack';
+			cmdId: CommandId;
+			ok: true;
+			revision: number;
+			view: RoomViewV2;
+			/** Present on a duplicate retry: the revision this cmdId ORIGINALLY committed at. */
+			duplicateOfRevision?: number;
+	  }
 	| { t: 'ack'; cmdId: CommandId; ok: false; error: WsError };
 
 /**
@@ -168,3 +189,12 @@ export type ServerMessage =
 
 export const HEARTBEAT_INTERVAL_MS = 15_000;
 export const HEARTBEAT_TIMEOUT_MS = 45_000;
+
+/** Hard cap on a single client→server frame. Legitimate frames (join / command /
+ *  resync / ping) are tiny; anything larger is hostile or broken and the socket is
+ *  closed at the transport layer (`ws` maxPayload) before JSON parsing. */
+export const MAX_CLIENT_FRAME_BYTES = 32 * 1024;
+
+/** The exact HTTP path the WebSocket upgrade must arrive on. Any other path is
+ *  refused at the upgrade — the room is chosen by the `join` frame, never the URL. */
+export const WS_UPGRADE_PATH = '/ws';

@@ -113,6 +113,18 @@ export async function loadCatalog(): Promise<PlayCatalog> {
 	const now = Date.now();
 	if (cached && now - cachedAt < CACHE_TTL_MS) return cached;
 
+	// Offline/dev override: load a canned PlayCatalog JSON (e.g. ml/catalog.json, the
+	// same fixture the ML tooling replays) instead of fetching the assets schema.
+	// Lets the room server run against a local store with no Supabase reachability —
+	// used by the authority smoke's local PostgREST emulator.
+	const fileOverride = process.env.ARC_WS_CATALOG_FILE;
+	if (fileOverride) {
+		const { readFileSync } = await import('node:fs');
+		cached = JSON.parse(readFileSync(fileOverride, 'utf8')) as PlayCatalog;
+		cachedAt = now;
+		return cached;
+	}
+
 	const db = getAssetsClient();
 	const [
 		spiritsRes,

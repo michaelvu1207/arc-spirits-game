@@ -11,21 +11,38 @@ WS server: `node bench/action-latency.mjs --base=http://localhost:8787`.
 No build step — plain Node ESM (`.mjs`). Requires Node 18+ (uses global `fetch`).
 `@supabase/supabase-js` (already a repo dependency) is used only by `update-propagation`.
 
-## How auth works (needed by the WS server task)
+## Local release gates
+
+`npm run gate:human-loop` owns an isolated loopback auth/store emulator, builds
+and previews the production web bundle, starts the authoritative room server,
+then drives `e2e/play-full.spec.ts`. The two human players run in separate
+Chromium processes, and every in-game choice is a rendered control activation;
+setup alone uses authenticated APIs. The gate refuses skips and proves all owned
+ports close on exit. It never contacts or mutates production.
+
+`npm run gate:mixed-full-games` owns the same isolated production-preview stack
+and pairs one Chromium player with one native Godot player in each room. Setup is
+authenticated API traffic; every in-game action is a rendered control activation.
+It runs three fresh games through the natural round-30 terminal, records both
+clients' revision/state-hash traces, rejects any command failure or test-only phase
+advance, and writes `bench/results/<date>-mixed-full-games.json`. The gate never
+contacts production and proves all owned ports close when it exits.
+
+## How auth works
 
 Headless Node has no cookie jar, so these scripts authenticate the way the **Capacitor
-shell** does — not the web cookie way:
+shell** does — a VALIDATED Supabase identity carried as a Bearer token:
 
-1. `POST /api/play/sessions {displayName}` (create) or `POST .../join` returns a `RoomView`
-   whose `member.id` is the caller's session-member id. (It also sets an httpOnly cookie,
-   which we ignore.)
-2. Every subsequent call passes that id back in the **`x-play-member`** request header.
-   `/view` additionally accepts it as a `?member=<id>` query param.
-
-Server side this is `getRoomMemberId(cookies, roomCode, request)` →
-`getRoomMemberHeader` (header `x-play-member`) in `src/lib/play/server/cookies.ts`. The
-commands / claim-seat / start / bots / view endpoints all honour it. No login, no Supabase
-auth token — the member id **is** the room credential (unguessable UUID, scoped to one room).
+1. `createIdentity(base)` reads `/api/play/config` for the store's URL + anon key and
+   creates an **anonymous account** (`POST <supabase>/auth/v1/signup`) — the same
+   one-tap guest identity the web client mints. The returned `access_token` is the
+   only credential.
+2. Every play call sends `Authorization: Bearer <token>`. The public `member.id` in
+   responses is a seat label only — it never authorizes anything, there are no room
+   secrets/cookies, and nothing rides a URL.
+3. The WS bench additionally mints a short-lived ONE-USE join ticket per connection
+   from `POST /api/play/sessions/<code>/ws-ticket` (authenticated, no-store) and
+   joins `ws(s)://…/ws` with `{t:'join', roomCode, ticket}`.
 
 Room/bot setup mirrors `e2e/helpers.ts` and `src/lib/play/server/botSim.ts`:
 create → `bots/fill {targetSeats,difficulty}` → `start` → `bots/tick` (host-only).

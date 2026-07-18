@@ -21,7 +21,29 @@ export default defineConfig({
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
 	},
-	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+	projects: [
+		{
+			name: 'chromium',
+			use: {
+				...devices['Desktop Chrome'],
+				// Multiplayer specs model separate foreground devices. Chromium otherwise
+				// treats all but one page as a background tab and stretches the app's 3 s
+				// safety poll to 20–60 s, producing delivery failures no real two-device
+				// session has. Keep renderer/timers live for every player context.
+				launchOptions: {
+					args: [
+						'--disable-gpu',
+						'--disable-webgl',
+						'--disable-webgl2',
+						'--disable-accelerated-2d-canvas',
+						'--disable-background-timer-throttling',
+						'--disable-backgrounding-occluded-windows',
+						'--disable-renderer-backgrounding'
+					]
+				}
+			}
+		}
+	],
 	webServer: {
 		command: 'npm run dev -- --port 4173 --strictPort',
 		url: 'http://localhost:4173',

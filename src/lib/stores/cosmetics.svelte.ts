@@ -1,26 +1,19 @@
 import { browser } from '$app/environment';
+import { auth } from '$lib/auth/auth.svelte';
+import { apiUrl, isCrossOrigin } from '$lib/play/apiBase';
 import {
-	PROGRESSION_STORAGE_KEY,
 	SHOP_ITEMS,
-	calculateMatchAward,
 	defaultProgression,
-	hasItem,
 	itemById,
 	nextRankForXp,
 	rankForXp,
 	type CosmeticItem,
-	type MatchAward,
-	type MatchAwardInput,
 	type ProgressionState,
-	type RankDefinition
 } from '$lib/cosmetics/progression';
-
-type ClaimResult =
-	| { claimed: true; award: MatchAward; previousRank: RankDefinition; currentRank: RankDefinition }
-	| { claimed: false; award: null; previousRank: null; currentRank: null };
 
 let progression = $state<ProgressionState>(defaultProgression());
 let loaded = false;
+let syncing: Promise<ProgressionState> | null = null;
 
 function normalize(raw: unknown): ProgressionState {
 	const fallback = defaultProgression();
@@ -43,28 +36,58 @@ function normalize(raw: unknown): ProgressionState {
 						)
 					)
 				: {},
+		equippedBoardEnvironmentId: typeof value.equippedBoardEnvironmentId === 'string' ? value.equippedBoardEnvironmentId : null,
+		equippedSummonTrailId: typeof value.equippedSummonTrailId === 'string' ? value.equippedSummonTrailId : null,
+		equippedCardFinishId: typeof value.equippedCardFinishId === 'string' ? value.equippedCardFinishId : null,
+		equippedNameplateId: typeof value.equippedNameplateId === 'string' ? value.equippedNameplateId : null,
+		equippedEmoteId: typeof value.equippedEmoteId === 'string' ? value.equippedEmoteId : null,
+		equippedVictoryPoseId: typeof value.equippedVictoryPoseId === 'string' ? value.equippedVictoryPoseId : null,
+		equippedProfileSceneId: typeof value.equippedProfileSceneId === 'string' ? value.equippedProfileSceneId : null,
+		guardianMastery: Array.isArray(value.guardianMastery) ? value.guardianMastery : [],
 		claimedMatchIds: Array.isArray(value.claimedMatchIds)
 			? value.claimedMatchIds.filter((id): id is string => typeof id === 'string')
 			: []
 	};
 }
 
-function save() {
-	if (!browser) return;
-	localStorage.setItem(PROGRESSION_STORAGE_KEY, JSON.stringify(progression));
-}
-
 export function loadCosmetics(): ProgressionState {
 	if (loaded) return progression;
 	loaded = true;
-	if (!browser) return progression;
-	try {
-		progression = normalize(JSON.parse(localStorage.getItem(PROGRESSION_STORAGE_KEY) ?? 'null'));
-	} catch {
-		progression = defaultProgression();
-	}
-	save();
+	// Never hydrate currency/ownership from localStorage: those values are canonical
+	// server state. The default is a paint-only placeholder until the authenticated
+	// reconciliation request returns.
+	if (browser) void syncCosmetics().catch(() => {});
 	return progression;
+}
+
+async function progressionRequest(path: string, method = 'GET', body?: Record<string, unknown>): Promise<ProgressionState> {
+	const headers: Record<string, string> = { Accept: 'application/json' };
+	if (body) headers['content-type'] = 'application/json';
+	if (isCrossOrigin && auth.session?.access_token) headers.Authorization = `Bearer ${auth.session.access_token}`;
+	const response = await fetch(apiUrl(path), {
+		method, headers, body: body ? JSON.stringify(body) : undefined,
+		credentials: isCrossOrigin ? 'include' : 'same-origin'
+	});
+	const payload = await response.json().catch(() => ({}));
+	if (!response.ok) throw new Error(typeof payload?.message === 'string' ? payload.message : 'Progression request failed.');
+	progression = normalize(payload);
+	return progression;
+}
+
+export function syncCosmetics(): Promise<ProgressionState> {
+	if (!browser) return Promise.resolve(progression);
+	if (syncing) return syncing;
+	// Layout children can ask for cosmetics before the auth store has finished
+	// restoring/creating the canonical identity. Firing the protected endpoint in
+	// that gap produces a noisy 401 and can briefly paint ownership as an error.
+	// Wait for the one shared auth initialization fence, then fetch only when a
+	// real (permanent or anonymous) identity exists.
+	syncing = (async () => {
+		await auth.whenInitialized();
+		if (!auth.isSignedIn) return progression;
+		return progressionRequest('/api/play/progression');
+	})().finally(() => { syncing = null; });
+	return syncing;
 }
 
 export function getCosmeticsState() {
@@ -88,57 +111,24 @@ export function getCosmeticsState() {
 	};
 }
 
-export function buyItem(itemId: string): { ok: true; item: CosmeticItem } | { ok: false; message: string } {
-	loadCosmetics();
+export async function buyItem(itemId: string): Promise<{ ok: true; item: CosmeticItem } | { ok: false; message: string }> {
 	const item = SHOP_ITEMS.find((entry) => entry.id === itemId);
 	if (!item) return { ok: false, message: 'That cosmetic is no longer in the shop.' };
-	if (hasItem(progression, item.id)) return { ok: false, message: 'Already owned.' };
-	if (progression.credits < item.price) return { ok: false, message: 'Not enough Abyss Credits.' };
-	progression = {
-		...progression,
-		credits: progression.credits - item.price,
-		ownedItemIds: [...progression.ownedItemIds, item.id]
-	};
-	save();
-	return { ok: true, item };
+	try {
+		await progressionRequest('/api/play/progression/purchase', 'POST', { itemId });
+		return { ok: true, item };
+	} catch (error) {
+		return { ok: false, message: error instanceof Error ? error.message : 'Purchase failed.' };
+	}
 }
 
-export function equipItem(itemId: string): { ok: true; item: CosmeticItem } | { ok: false; message: string } {
-	loadCosmetics();
+export async function equipItem(itemId: string, guardianName?: string): Promise<{ ok: true; item: CosmeticItem } | { ok: false; message: string }> {
 	const item = SHOP_ITEMS.find((entry) => entry.id === itemId);
 	if (!item) return { ok: false, message: 'That cosmetic is unavailable.' };
-	if (!hasItem(progression, item.id)) return { ok: false, message: 'Buy this cosmetic before equipping it.' };
-
-	if (item.kind === 'border') {
-		progression = { ...progression, equippedBorderId: item.id };
-	} else if (item.kind === 'banner') {
-		progression = { ...progression, equippedBannerId: item.id };
-	} else {
-		const key = item.targetGuardian ?? 'Any Guardian';
-		progression = {
-			...progression,
-			equippedGuardianSkinIds: { ...progression.equippedGuardianSkinIds, [key]: item.id }
-		};
+	try {
+		await progressionRequest('/api/play/progression/equip', 'POST', { itemId, guardianName });
+		return { ok: true, item };
+	} catch (error) {
+		return { ok: false, message: error instanceof Error ? error.message : 'Equip failed.' };
 	}
-	save();
-	return { ok: true, item };
-}
-
-export function claimMatchAward(input: MatchAwardInput): ClaimResult {
-	loadCosmetics();
-	if (progression.claimedMatchIds.includes(input.matchId)) {
-		return { claimed: false, award: null, previousRank: null, currentRank: null };
-	}
-	const award = calculateMatchAward(input);
-	const previousRank = rankForXp(progression.rankXp);
-	const currentRank = rankForXp(progression.rankXp + award.rankXp);
-	progression = {
-		...progression,
-		credits: progression.credits + award.credits,
-		lifetimeCredits: progression.lifetimeCredits + award.credits,
-		rankXp: progression.rankXp + award.rankXp,
-		claimedMatchIds: [...progression.claimedMatchIds, input.matchId].slice(-80)
-	};
-	save();
-	return { claimed: true, award, previousRank, currentRank };
 }

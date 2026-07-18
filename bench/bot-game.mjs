@@ -57,12 +57,12 @@ const PHASE_SECONDS = {
 
 async function main() {
 	console.log(`[bot-game] target=${args.base} cap=${CAP_SECONDS}s interval=${INTERVAL_MS}ms navMs=${NAV_MS}`);
-	const { code, memberId } = await createRoom(args.base, 'BenchBotGame');
+	const { code, token } = await createRoom(args.base, 'BenchBotGame');
 
 	// Shrink the navigation timer (the one deadline we can set) before starting.
-	await sendCommand(args.base, code, memberId, { type: 'setNavigationTimer', durationMs: NAV_MS });
-	await fillBots(args.base, code, memberId, 4, 'neural');
-	const started = await startGame(args.base, code, memberId);
+	await sendCommand(args.base, code, token, { type: 'setNavigationTimer', durationMs: NAV_MS });
+	await fillBots(args.base, code, token, 4, 'neural');
+	const started = await startGame(args.base, code, token);
 	console.log(`[bot-game] room ${code} active: round ${started.projection.round} / ${started.projection.phase}`);
 
 	const tickMs = [];
@@ -76,7 +76,7 @@ async function main() {
 	const t0 = performance.now();
 	const deadline = t0 + CAP_SECONDS * 1000;
 	while (performance.now() < deadline) {
-		const r = await tickBots(args.base, code, memberId);
+		const r = await tickBots(args.base, code, token);
 		ticks += 1;
 		if (r.ok) {
 			tickMs.push(r.ms);
@@ -101,7 +101,7 @@ async function main() {
 	const elapsedS = (performance.now() - t0) / 1000;
 
 	// Final state read (owner view) for good measure.
-	const finalView = (await getView(args.base, code, memberId)).json;
+	const finalView = (await getView(args.base, code, token)).json;
 	finalStatus = finalView?.projection?.status ?? finalStatus;
 	finalPhase = finalView?.projection?.phase ?? finalPhase;
 	maxRound = Math.max(maxRound, finalView?.projection?.round ?? 0);

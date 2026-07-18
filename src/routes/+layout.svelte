@@ -1,26 +1,83 @@
 <script lang="ts">
 	import './layout.css';
+	import { onMount } from 'svelte';
+	import { browser, dev } from '$app/environment';
 	import { page } from '$app/stores';
 	import { invalidate } from '$app/navigation';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { stopMenu } from '$lib/stores/menuAudio.svelte';
 	import { auth } from '$lib/auth/auth.svelte';
+	import { capacitorOAuthDeps, isNativeShell, resumeColdStartOAuth } from '$lib/auth/nativeOAuth';
+	import { resetPlayIdentityState } from '$lib/stores/playStore.svelte';
+	import { isE2eHarness } from '$lib/play/e2eHarness';
+	import { getAccessibilitySettings } from '$lib/stores/accessibilitySettings.svelte';
 
 	let { data, children } = $props();
-	const capacitorBuild = import.meta.env.VITE_BUILD_TARGET === 'capacitor';
-	const playSurface = $derived($page.url.pathname === '/' || $page.url.pathname.startsWith('/play'));
+	const accessibility = getAccessibilitySettings();
+	const playSurface = $derived(
+		$page.url.pathname === '/' || $page.url.pathname.startsWith('/play')
+	);
+
+	// NATIVE COLD START ONLY: if iOS killed the app while the OAuth browser sheet
+	// was up, the callback deep link arrives as this process's LAUNCH URL instead of
+	// a warm appUrlOpen event. Resume the PKCE exchange exactly once (nativeOAuth's
+	// shared consumed-code ledger dedupes against any warm duplicate) and refresh
+	// auth-derived state iff a session materialized. Web builds never enter this.
+	onMount(() => {
+		if (!isNativeShell()) return;
+		resumeColdStartOAuth(data.supabase.auth, {
+			...capacitorOAuthDeps(),
+			// A wrong-identity session the resume cannot provably sign out escalates
+			// to the store's fail-closed quarantine (blocks all authenticated
+			// activity until the cleanup verifiably lands).
+			onQuarantineUnclean: () => auth.enterAuthQuarantine()
+		})
+			.then((established) => (established ? invalidate('supabase:auth') : undefined))
+			.catch((err: unknown) => {
+				// Non-secret by construction — nativeOAuth never embeds codes/tokens.
+				console.warn(
+					'OAuth cold-start resume failed:',
+					err instanceof Error ? err.message : String(err)
+				);
+			});
+	});
+
+	// DEV/E2E-ONLY test hook: Playwright suites establish the same anonymous guest
+	// identity a real player gets (auth.resolvePlayIdentity) before driving the play
+	// API from their browser context. The `?e2e` gate exists because the journey's
+	// deterministic lane runs the BUILT preview bundle (dev=false); the hook is
+	// READ-ONLY introspection of the viewer's own auth state — no secrets, no
+	// overrides (see $lib/play/e2eHarness.ts).
+	if (browser && (dev || isE2eHarness())) {
+		(window as unknown as { __arcAuth?: typeof auth }).__arcAuth = auth;
+	}
 
 	// Push the freshest SSR→CSR auth state into the shared auth store (reactive on
-	// every layout re-load, i.e. every `invalidate('supabase:auth')`).
+	// every layout re-load, i.e. every `invalidate('supabase:auth')`), and reset all
+	// account-specific play state the moment the durable identity CHANGES (sign-out,
+	// account switch, deletion). ORDER MATTERS: the auth store is synchronized FIRST,
+	// so the reset's fenced re-entry (and any request it issues) already speaks for
+	// the NEW identity — cookie and Bearer alike; the reset then bumps the identity
+	// generation and tears the live room transport/timers down synchronously, so a
+	// cached socket/member or a held in-flight response can never keep acting (or
+	// repopulate state) as the previous account.
+	let lastUserId: string | null | undefined = undefined;
 	$effect(() => {
+		const nextUserId = data.user?.id ?? null;
+		const identityChanged = browser && lastUserId !== undefined && lastUserId !== nextUserId;
+		lastUserId = nextUserId;
 		auth.sync(data.supabase, data.session, data.user, data.profile);
+		if (identityChanged) {
+			resetPlayIdentityState();
+		}
 	});
 
 	// Re-validate when the session changes anywhere (token refresh, sign in/out, a
-	// second tab) so all tabs converge.
+	// second tab) so all tabs converge. This runs on EVERY build target — the
+	// Capacitor shell must observe its in-app sign-ins too, or auth.session stays
+	// null and cross-origin requests never carry their Bearer token.
 	$effect(() => {
 		const { data: sub } = data.supabase.auth.onAuthStateChange((event, newSession) => {
-			if (capacitorBuild) return;
 			// Re-sync on a token change (refresh) OR an explicit identity event from any
 			// tab (sign in/out elsewhere, email/name change → USER_UPDATED). INITIAL_SESSION
 			// (fired on every re-subscribe) is intentionally excluded to avoid a loop.
@@ -44,6 +101,17 @@
 		if (!playSurface) {
 			stopMenu();
 		}
+	});
+
+	// One document-level contract keeps browser zoom, scalable type, contrast and
+	// pseudo-localization consistent across every route (including portals/dialogs).
+	$effect(() => {
+		if (!browser) return;
+		const root = document.documentElement;
+		root.lang = accessibility.locale;
+		root.dataset.textScale = accessibility.textScale;
+		root.dataset.highContrast = accessibility.highContrast ? 'true' : 'false';
+		root.dataset.locale = accessibility.locale;
 	});
 
 	// ── Social embeds (Open Graph + Twitter/X cards) ─────────────────────────────

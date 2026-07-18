@@ -32,6 +32,18 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let lastRefresh = $state<Date | null>(null);
+	// Fence for the list poll: a slow response landing after a NEWER one (or after
+	// unmount) must not regress the list, resurrect a cleared error, or clear a
+	// newer poll's loading state. Each refresh claims the next sequence number and
+	// only the latest may write.
+	let refreshSeq = 0;
+	let destroyed = false;
+	// Unmount cancellation for the room-entering lanes (create / debug / join): the
+	// navigation fence in the store stops OLDER navigations from clobbering NEWER
+	// ones, but only this signal stops a navigation whose component is simply GONE —
+	// aborted, the store neither installs/connects the room nor rejects with a real
+	// error, and the dead handler's goto/error writes below are skipped explicitly.
+	const unmount = new AbortController();
 	let name = $state('');
 	/** Holds a roomCode or 'create' while that action is in flight. */
 	let busy = $state<string | null>(null);
@@ -42,6 +54,7 @@
 	let sheetTimerMs = $state<number | null>(DEFAULT_NAVIGATION_DURATION_MS);
 	let sheetBots = $state(0);
 	let sheetInvite = $state(false);
+	let sheetPrivate = $state(false);
 	let sheetNameInput = $state<HTMLInputElement | null>(null);
 	const MAX_SHEET_BOTS = 5;
 
@@ -88,18 +101,22 @@
 	}
 
 	async function refresh() {
+		const seq = ++refreshSeq;
+		const current = () => !destroyed && seq === refreshSeq;
 		// Only show the blocking loading state on the first load — the 4s poll must
 		// not flicker the list.
 		if (rooms.length === 0) loading = true;
 		try {
-			rooms = await fetchOpenRooms();
+			const next = await fetchOpenRooms();
+			if (!current()) return; // an older poll never overwrites a newer list
+			rooms = next;
 			error = null;
 			lastRefresh = new Date();
 		} catch (e) {
 			console.error('Failed to load rooms:', e);
-			error = e instanceof Error ? e.message : 'Failed to load rooms';
+			if (current()) error = e instanceof Error ? e.message : 'Failed to load rooms';
 		} finally {
-			loading = false;
+			if (current()) loading = false;
 		}
 	}
 
@@ -122,7 +139,11 @@
 		try {
 			// Anonymous-first: a first-time guest becomes a real (owned) guest account here.
 			const player = await auth.resolvePlayIdentity(typed);
-			const view = await createPlayRoom(player);
+			if (unmount.signal.aborted) return; // left the page — never install/goto
+			const view = await createPlayRoom(player, {
+				signal: unmount.signal,
+				visibility: sheetPrivate ? 'private' : 'public'
+			});
 			const code = view.projection.roomCode;
 			// Apply the sheet's config as host commands before entering the lobby.
 			// Best-effort: a hiccup here still lands us in a working room.
@@ -138,8 +159,10 @@
 			} catch (configErr) {
 				console.warn('Room created; applying lobby config failed:', configErr);
 			}
+			if (unmount.signal.aborted) return;
 			await goto(`/play/${encodeURIComponent(code)}${sheetInvite ? '?invite=1' : ''}`);
 		} catch (e) {
+			if (unmount.signal.aborted) return; // cancelled — no error, no state writes
 			error = e instanceof Error ? e.message : 'Failed to create room.';
 			busy = null;
 		}
@@ -171,9 +194,13 @@
 		busy = 'debug';
 		playMenuSfx('game-start', { volume: 0.8 });
 		try {
-			const view = await createDebugPlayRoom(debugClass, name.trim() || 'Debug Player');
+			const view = await createDebugPlayRoom(debugClass, name.trim() || 'Debug Player', {
+				signal: unmount.signal
+			});
+			if (unmount.signal.aborted) return;
 			await goto(`/play/${encodeURIComponent(view.projection.roomCode)}`);
 		} catch (e) {
+			if (unmount.signal.aborted) return;
 			error = e instanceof Error ? e.message : 'Failed to spawn debug room.';
 			busy = null;
 		}
@@ -188,9 +215,12 @@
 		playMenuSfx('game-start', { volume: 0.8 });
 		try {
 			const player = await auth.resolvePlayIdentity(typed);
-			await joinPlayRoom(room.roomCode, player);
+			if (unmount.signal.aborted) return;
+			await joinPlayRoom(room.roomCode, player, { signal: unmount.signal });
+			if (unmount.signal.aborted) return;
 			await goto(`/play/${encodeURIComponent(room.roomCode)}`);
 		} catch (e) {
+			if (unmount.signal.aborted) return;
 			error = e instanceof Error ? e.message : 'Failed to join room.';
 			busy = null;
 		}
@@ -223,7 +253,15 @@
 			// Don't thrash the list mid-navigation.
 			if (!busy) void refresh();
 		}, REFRESH_MS);
-		return () => clearInterval(timer);
+		return () => {
+			// Unmount fences every in-flight poll (state writes AND its finally) AND
+			// aborts any room-entering navigation still in flight: the store neither
+			// installs nor connects its room, and the dead handlers here never goto.
+			unmount.abort();
+			destroyed = true;
+			refreshSeq += 1;
+			clearInterval(timer);
+		};
 	});
 
 	$effect(() => {
@@ -365,7 +403,10 @@
 									<span class="room-age">{formatRelative(room.createdAt)}</span>
 								</div>
 								<div class="room-foot">
-									<span class="seat-pips" aria-label="{room.occupiedSeats} of {room.totalSeats} seats taken">
+									<span
+										class="seat-pips"
+										aria-label="{room.occupiedSeats} of {room.totalSeats} seats taken"
+									>
 										{#each Array(room.totalSeats) as _, i (i)}
 											<span class="pip" class:filled={i < room.occupiedSeats}></span>
 										{/each}
@@ -462,13 +503,15 @@
 <!-- ── Create sheet: the room is configured AT creation ───────── -->
 {#if sheetOpen}
 	<div class="sheet-layer">
-		<button
-			type="button"
-			class="sheet-backdrop"
-			aria-label="Close create room"
-			onclick={closeSheet}
+		<button type="button" class="sheet-backdrop" aria-label="Close create room" onclick={closeSheet}
 		></button>
-		<div class="sheet" role="dialog" aria-modal="true" aria-label="Create a room" data-testid="create-sheet">
+		<div
+			class="sheet"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Create a room"
+			data-testid="create-sheet"
+		>
 			<header class="sheet-head">
 				<div>
 					<span class="sheet-eyebrow">New room</span>
@@ -548,7 +591,9 @@
 						}}>+</button
 					>
 					<span class="step-hint"
-						>{sheetBots === 0 ? 'Humans only' : `You + ${sheetBots} bot${sheetBots === 1 ? '' : 's'}`}</span
+						>{sheetBots === 0
+							? 'Humans only'
+							: `You + ${sheetBots} bot${sheetBots === 1 ? '' : 's'}`}</span
 					>
 				</div>
 			</div>
@@ -557,6 +602,12 @@
 				<input type="checkbox" bind:checked={sheetInvite} />
 				<span class="toggle-ui" aria-hidden="true"></span>
 				<span class="toggle-lbl">Show the invite link when the room opens</span>
+			</label>
+
+			<label class="toggle-row">
+				<input type="checkbox" bind:checked={sheetPrivate} data-testid="create-private-room" />
+				<span class="toggle-ui" aria-hidden="true"></span>
+				<span class="toggle-lbl">Private room · invitation required</span>
 			</label>
 
 			<div class="sheet-foot">
@@ -1526,5 +1577,163 @@
 		.sheet {
 			animation: none;
 		}
+	}
+
+	/* Rooms are stage rails and sigils, never cards. */
+	.playing-chip,
+	:global(.btn-ghost) {
+		border: 0;
+		border-radius: 0;
+		background: #20104a;
+		clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%);
+	}
+	.debug-bar,
+	.action-error {
+		border: 0;
+		border-radius: 0;
+		background: #43178f;
+		clip-path: polygon(0 0, 97% 0, 100% 50%, 97% 100%, 0 100%);
+	}
+	.group-count,
+	.full-chip {
+		border-radius: 0;
+		clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+	}
+	.group-rule {
+		height: 6px;
+		background: #ff2bc7;
+		opacity: 1;
+	}
+	.room-grid {
+		grid-template-columns: 1fr;
+		gap: 3px;
+	}
+	.room-card,
+	.room-card:hover:not(:disabled),
+	.room-card:focus-visible,
+	.room-card.live:hover:not(:disabled),
+	.room-card.live:focus-visible {
+		min-height: 116px;
+		padding: 17px 54px 17px 22px;
+		border: 0;
+		border-radius: 0;
+		background: #1d0d45;
+		box-shadow: none;
+		clip-path: polygon(0 0, 96% 0, 100% 50%, 96% 100%, 1% 100%, 0 78%);
+	}
+	.room-card:nth-child(even) {
+		width: 95%;
+		background: #28115b;
+	}
+	.room-card:hover:not(:disabled),
+	.room-card:focus-visible {
+		background: #d515aa;
+	}
+	.room-card.live {
+		background: #075c6c;
+	}
+	.room-card.live:hover:not(:disabled),
+	.room-card.live:focus-visible {
+		background: #24d4ff;
+		color: #080311;
+	}
+	.room-card::after {
+		display: none;
+	}
+	.host-medallion,
+	.host-medallion.live {
+		border-radius: 0;
+		background: #ff2bc7;
+		box-shadow: none;
+		clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+	}
+	.host-medallion.live {
+		background: #24d4ff;
+		color: #080311;
+	}
+	.room-foot {
+		border-top: 3px solid rgba(255, 255, 255, 0.18);
+	}
+	.pip,
+	.full-chip {
+		border-radius: 0;
+	}
+	.pip.filled {
+		background: #ff2bc7;
+		box-shadow: none;
+	}
+	.create-dock {
+		justify-content: flex-end;
+		padding-right: 7vw;
+		background: none;
+	}
+	.create-btn,
+	.create-btn:hover:not(:disabled) {
+		min-width: min(440px, 88vw);
+		border-radius: 0;
+		background: #d515aa;
+		box-shadow: none;
+		clip-path: polygon(0 0, 94% 0, 100% 50%, 94% 100%, 0 100%, 3% 50%);
+	}
+	.sheet-backdrop {
+		background: rgba(5, 3, 16, 0.82);
+		backdrop-filter: none;
+	}
+	.sheet {
+		width: min(680px, 100%);
+		border: 0;
+		border-radius: 0;
+		background: #100725;
+		box-shadow: none;
+		clip-path: polygon(7% 0, 100% 0, 100% 90%, 92% 100%, 0 100%, 0 10%);
+	}
+	.sheet-head {
+		margin: -24px -26px 0;
+		padding: 24px 38px;
+		background: #43178f;
+		clip-path: polygon(0 0, 100% 0, 93% 100%, 0 100%);
+	}
+	.sheet-close,
+	.field-input,
+	.seg,
+	.step,
+	.sheet-cancel,
+	.sheet-create {
+		border-radius: 0;
+	}
+	.field-input {
+		border: 0;
+		border-bottom: 3px solid #24d4ff;
+		background: #080413;
+	}
+	.seg,
+	.step,
+	.sheet-cancel {
+		border: 0;
+		background: #28115b;
+		clip-path: polygon(0 0, 88% 0, 100% 50%, 88% 100%, 0 100%);
+	}
+	.seg.on,
+	.sheet-create {
+		border: 0;
+		background: #d515aa;
+		box-shadow: none;
+		clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%);
+	}
+	.toggle-ui {
+		border: 0;
+		border-radius: 0;
+		background: #28115b;
+	}
+	.toggle-ui::after {
+		border-radius: 0;
+		background: #24d4ff;
+		transform: translateY(-50%) rotate(45deg);
+	}
+	.toggle-row input:checked + .toggle-ui {
+		background: #d515aa;
+	}
+	.sheet-foot {
+		background: #100725;
 	}
 </style>

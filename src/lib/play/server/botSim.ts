@@ -169,7 +169,7 @@ export async function fillBots(
 	hostMemberId: string,
 	opts: FillBotsOptions = {}
 ): Promise<RoomView> {
-	const hostView = await loadRoomView(roomCode, hostMemberId);
+	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') {
 		throw new Error('Only the host can add bots.');
 	}
@@ -202,14 +202,15 @@ export async function fillBots(
 			null,
 			{
 				isBot: true,
-				botProfile: normalizeDifficulty(difficulty)
+				botProfile: normalizeDifficulty(difficulty),
+				admission: 'internal'
 			}
 		);
 
 		// 2) Claim the seat as the bot.
 		await runRoomCommand({
 			roomCode,
-			memberId: botMemberId,
+			trustedMemberId: botMemberId,
 			expectedRevision: null,
 			command: { type: 'claimSeat', seatColor: seat }
 		});
@@ -221,7 +222,7 @@ export async function fillBots(
 		if (guardian) {
 			await runRoomCommand({
 				roomCode,
-				memberId: botMemberId,
+				trustedMemberId: botMemberId,
 				expectedRevision: null,
 				command: { type: 'selectGuardian', guardianName: guardian }
 			});
@@ -230,7 +231,7 @@ export async function fillBots(
 		state = await loadRawRoomState(roomCode);
 	}
 
-	return loadRoomView(roomCode, hostMemberId);
+	return loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 }
 
 /**
@@ -257,11 +258,12 @@ async function seatOneBot(
 	const displayName = opts?.displayName ?? botDisplayNameFor(seat, difficulty);
 	const { memberId: botMemberId } = await joinRoom(roomCode, displayName, opts?.userId ?? null, {
 		isBot: true,
-		botProfile: profile
+		botProfile: profile,
+		admission: 'internal'
 	});
 	await runRoomCommand({
 		roomCode,
-		memberId: botMemberId,
+		trustedMemberId: botMemberId,
 		expectedRevision: null,
 		command: { type: 'claimSeat', seatColor: seat }
 	});
@@ -274,7 +276,7 @@ async function seatOneBot(
 	if (guardian) {
 		await runRoomCommand({
 			roomCode,
-			memberId: botMemberId,
+			trustedMemberId: botMemberId,
 			expectedRevision: null,
 			command: { type: 'selectGuardian', guardianName: guardian }
 		});
@@ -308,7 +310,7 @@ export async function addBot(
 	hostMemberId: string,
 	opts: { seat?: SeatColor; guardianName?: string; difficulty?: string } = {}
 ): Promise<RoomView> {
-	const hostView = await loadRoomView(roomCode, hostMemberId);
+	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') throw new Error('Only the host can add bots.');
 	if ((await getSessionModeByRoomCode(roomCode)) === 'ranked') {
 		throw new Error('Bots are not allowed in ranked games.');
@@ -323,7 +325,7 @@ export async function addBot(
 	const seat = opts.seat && open.includes(opts.seat) ? opts.seat : open[0];
 
 	await seatOneBot(roomCode, seat, opts.guardianName, opts.difficulty ?? DEFAULT_BOT_PROFILE_KEY);
-	return loadRoomView(roomCode, hostMemberId);
+	return loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 }
 
 /** Host-only: set the guardian for the bot seated at `seat`. */
@@ -333,7 +335,7 @@ export async function setBotGuardian(
 	seat: SeatColor,
 	guardianName: string
 ): Promise<RoomView> {
-	const hostView = await loadRoomView(roomCode, hostMemberId);
+	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') throw new Error('Only the host can set a bot guardian.');
 
 	const state = await loadRawRoomState(roomCode);
@@ -345,11 +347,11 @@ export async function setBotGuardian(
 
 	await runRoomCommand({
 		roomCode,
-		memberId: botMemberId,
+		trustedMemberId: botMemberId,
 		expectedRevision: null,
 		command: { type: 'selectGuardian', guardianName }
 	});
-	return loadRoomView(roomCode, hostMemberId);
+	return loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 }
 
 /** Host-only: remove the bot seated at `seat` (frees the seat). */
@@ -358,7 +360,7 @@ export async function removeBot(
 	hostMemberId: string,
 	seat: SeatColor
 ): Promise<RoomView> {
-	const hostView = await loadRoomView(roomCode, hostMemberId);
+	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') throw new Error('Only the host can remove bots.');
 
 	const state = await loadRawRoomState(roomCode);
@@ -370,11 +372,11 @@ export async function removeBot(
 
 	await runRoomCommand({
 		roomCode,
-		memberId: botMemberId,
+		trustedMemberId: botMemberId,
 		expectedRevision: null,
 		command: { type: 'releaseSeat', seatColor: seat }
 	});
-	return loadRoomView(roomCode, hostMemberId);
+	return loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 }
 
 export interface TickBotsResult {
@@ -400,7 +402,7 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 	let state = await loadRawRoomState(roomCode);
 
 	if (state.status !== 'active') {
-		const view = await loadRoomView(roomCode, hostMemberId ?? null);
+		const view = await loadRoomView(roomCode, { trustedMemberId: hostMemberId ?? null });
 		return { view, commandsIssued: 0 };
 	}
 
@@ -411,7 +413,7 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 	await enforceRoomDeadlines(roomCode);
 	state = await loadRawRoomState(roomCode);
 	if (state.status !== 'active') {
-		const view = await loadRoomView(roomCode, hostMemberId ?? null);
+		const view = await loadRoomView(roomCode, { trustedMemberId: hostMemberId ?? null });
 		return { view, commandsIssued: 0 };
 	}
 
@@ -496,7 +498,7 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 			try {
 				await runRoomCommand({
 					roomCode,
-					memberId: botMemberId,
+					trustedMemberId: botMemberId,
 					expectedRevision: null,
 					command
 				});
@@ -511,6 +513,6 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		if (state.status !== 'active') break;
 	}
 
-	const view = await loadRoomView(roomCode, hostMemberId ?? null);
+	const view = await loadRoomView(roomCode, { trustedMemberId: hostMemberId ?? null });
 	return { view, commandsIssued };
 }

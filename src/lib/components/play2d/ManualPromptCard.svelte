@@ -11,9 +11,25 @@
 		busy?: boolean;
 		testid?: string;
 		onDismiss: (id: string) => void;
+		/** Confirm an awaken-sourced prompt: sends manualAwaken (flip + clear). */
+		onConfirmAwaken?: (slotIndex: number) => void;
 	}
 
-	let { prompt, classIcon = null, busy = false, testid, onDismiss }: Props = $props();
+	let {
+		prompt,
+		classIcon = null,
+		busy = false,
+		testid,
+		onDismiss,
+		onConfirmAwaken
+	}: Props = $props();
+
+	// An awaken-sourced prompt is a blocked FLIP, not dead text: confirming it must
+	// send manualAwaken{slotIndex} (the server flips the spirit and clears the
+	// prompt). Dismiss stays available as the deliberate "leave it face-down" out.
+	const isAwaken = $derived(
+		prompt.source === 'awaken' && prompt.slotIndex != null && onConfirmAwaken != null
+	);
 </script>
 
 <section class="manual-card" data-testid={testid ?? `ability-manual-${prompt.id}`}>
@@ -30,9 +46,32 @@
 			<p class="text">{prompt.text}</p>
 		</span>
 	</header>
-	<button type="button" class="done" disabled={busy} onclick={() => onDismiss(prompt.id)}>
-		Done
-	</button>
+	{#if isAwaken}
+		<div class="actions">
+			<button
+				type="button"
+				class="done ghost"
+				disabled={busy}
+				data-testid="manual-dismiss"
+				onclick={() => onDismiss(prompt.id)}
+			>
+				Not yet
+			</button>
+			<button
+				type="button"
+				class="done confirm"
+				disabled={busy}
+				data-testid="manual-awaken"
+				onclick={() => onConfirmAwaken?.(prompt.slotIndex!)}
+			>
+				Resolved — Awaken
+			</button>
+		</div>
+	{:else}
+		<button type="button" class="done" disabled={busy} onclick={() => onDismiss(prompt.id)}>
+			Done
+		</button>
+	{/if}
 </section>
 
 <style>
@@ -93,6 +132,18 @@
 		font-size: clamp(0.9rem, 1.3vw, 1.02rem);
 		line-height: 1.4;
 		color: var(--color-bone, #efeaf7);
+	}
+	.actions {
+		display: flex;
+		align-self: flex-end;
+		gap: 0.5rem;
+	}
+	.done.confirm {
+		border-color: color-mix(in srgb, var(--brand-amber, #ffba3d) 55%, rgba(255, 255, 255, 0.2));
+		background: color-mix(in srgb, var(--brand-amber, #ffba3d) 18%, transparent);
+	}
+	.done.ghost {
+		opacity: 0.85;
 	}
 	.done {
 		align-self: flex-end;

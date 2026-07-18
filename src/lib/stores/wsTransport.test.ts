@@ -85,11 +85,28 @@ function makeTransport(opts: Partial<WsTransportOptions> = {}) {
 	);
 }
 
+/** Ticket provider: mints a fresh one-use ticket per (re)connect, like the store. */
+let ticketSeq = 0;
+const mintedTickets: string[] = [];
+function nextTicket(): Promise<string | null> {
+	ticketSeq += 1;
+	const ticket = `pwt_test-ticket-${ticketSeq}`;
+	mintedTickets.push(ticket);
+	return Promise.resolve(ticket);
+}
+
+/** Flush the microtask queue so the async ticket mint inside the join path settles
+ *  (fake-timer safe: microtasks are not virtualized). */
+async function flushJoin(): Promise<void> {
+	for (let i = 0; i < 4; i += 1) await Promise.resolve();
+}
+
 /** Connect, open the first socket, and complete the join handshake at `revision`. */
-function connectAndJoin(revision = 5): FakeSocket {
-	transport.connect('wss://rooms.test', 'ROOM', 'member-token-1');
+async function connectAndJoin(revision = 5): Promise<FakeSocket> {
+	transport.connect('wss://rooms.test', 'ROOM', nextTicket);
 	const socket = sockets[0];
 	socket.open();
+	await flushJoin();
 	socket.emit({ t: 'joined', revision, seat: 'Red', role: 'player', view: viewAt(revision) });
 	return socket;
 }
@@ -99,6 +116,8 @@ beforeEach(() => {
 	views = [];
 	statuses = [];
 	fatals = [];
+	ticketSeq = 0;
+	mintedTickets.length = 0;
 	transport = makeTransport();
 });
 
@@ -108,14 +127,15 @@ afterEach(() => {
 });
 
 describe('WsTransport', () => {
-	it('sends a join frame with roomCode + memberToken on open, applies the joined view', () => {
-		transport.connect('wss://rooms.test', 'ROOM', 'member-token-1');
+	it('sends a join frame with roomCode + a freshly-minted ONE-USE ticket on open, applies the joined view', async () => {
+		transport.connect('wss://rooms.test', 'ROOM', nextTicket);
 		expect(sockets).toHaveLength(1);
 		sockets[0].open();
+		await flushJoin();
 
 		const join = sockets[0].framesOfType('join');
 		expect(join).toHaveLength(1);
-		expect(join[0]).toMatchObject({ roomCode: 'ROOM', memberToken: 'member-token-1' });
+		expect(join[0]).toMatchObject({ roomCode: 'ROOM', ticket: mintedTickets[0] });
 		expect(join[0].resumeFromRevision).toBeUndefined();
 
 		sockets[0].emit({ t: 'joined', revision: 5, seat: 'Red', role: 'player', view: viewAt(5) });
@@ -126,7 +146,7 @@ describe('WsTransport', () => {
 	});
 
 	it('resolves sendCommand against the cmdId-matched ack and applies its fresh view', async () => {
-		const socket = connectAndJoin(5);
+		const socket = await connectAndJoin(5);
 		const pending = transport.sendCommand({ type: 'passEncounter' }, 5);
 
 		const cmd = socket.framesOfType('command');
@@ -142,15 +162,15 @@ describe('WsTransport', () => {
 		expect(views.at(-1)?.projection.revision).toBe(6);
 	});
 
-	it('applies an unsolicited delta and advances the revision watermark', () => {
-		const socket = connectAndJoin(5);
+	it('applies an unsolicited delta and advances the revision watermark', async () => {
+		const socket = await connectAndJoin(5);
 		socket.emit({ t: 'delta', fromRevision: 5, toRevision: 7, patch: viewAt(7) });
 		expect(views.at(-1)?.projection.revision).toBe(7);
 		expect(transport.revision).toBe(7);
 	});
 
 	it('STALENESS: a delta at rev 7 then an ack whose view is rev 6 does not regress the board, but retires the cmdId', async () => {
-		const socket = connectAndJoin(5);
+		const socket = await connectAndJoin(5);
 		socket.emit({ t: 'delta', fromRevision: 5, toRevision: 7, patch: viewAt(7) });
 		const viewsAfterDelta = views.length;
 		expect(views.at(-1)?.projection.revision).toBe(7);
@@ -168,7 +188,7 @@ describe('WsTransport', () => {
 	});
 
 	it('rejects sendCommand with WsCommandRejected when the server rejects (ok:false)', async () => {
-		const socket = connectAndJoin(5);
+		const socket = await connectAndJoin(5);
 		const pending = transport.sendCommand({ type: 'passEncounter' }, 5);
 		const cmdId = socket.framesOfType('command').at(-1)!.cmdId as string;
 		socket.emit({ t: 'ack', cmdId, ok: false, error: { code: 'illegal_move', message: 'Not your turn' } });
@@ -181,17 +201,18 @@ describe('WsTransport', () => {
 	});
 
 	it('rejects an in-flight command with WsTransportUnavailable when the socket drops (→ HTTP fallback)', async () => {
-		const socket = connectAndJoin(5);
+		const socket = await connectAndJoin(5);
 		const pending = transport.sendCommand({ type: 'passEncounter' }, 5);
 		socket.drop();
 		await expect(pending).rejects.toBeInstanceOf(WsTransportUnavailable);
 		expect(statuses.at(-1)).toEqual({ connected: false, reconnecting: true });
 	});
 
-	it('queues commands submitted before join and flushes them once joined', () => {
-		transport.connect('wss://rooms.test', 'ROOM', 'member-token-1');
+	it('queues commands submitted before join and flushes them once joined', async () => {
+		transport.connect('wss://rooms.test', 'ROOM', nextTicket);
 		const socket = sockets[0];
 		socket.open(); // join sent, not yet acknowledged
+		await flushJoin();
 		// Never acked in this test; swallow the teardown rejection so it isn't "unhandled".
 		transport.sendCommand({ type: 'passEncounter' }, 0).catch(() => {});
 		expect(socket.framesOfType('command')).toHaveLength(0); // still queued
@@ -200,9 +221,9 @@ describe('WsTransport', () => {
 		expect(socket.framesOfType('command')).toHaveLength(1); // flushed
 	});
 
-	it('reconnects with resumeFromRevision after a drop', async () => {
+	it('reconnects with resumeFromRevision and a FRESH one-use ticket after a drop', async () => {
 		vi.useFakeTimers();
-		const socket = connectAndJoin(5);
+		const socket = await connectAndJoin(5);
 		socket.emit({ t: 'delta', fromRevision: 5, toRevision: 7, patch: viewAt(7) });
 		expect(transport.revision).toBe(7);
 
@@ -211,15 +232,19 @@ describe('WsTransport', () => {
 		expect(sockets).toHaveLength(2); // reconnected
 
 		sockets[1].open();
+		await flushJoin();
 		const join = sockets[1].framesOfType('join');
 		expect(join).toHaveLength(1);
 		expect(join[0].resumeFromRevision).toBe(7); // resume from last applied revision
+		// One-use tickets: the reconnect minted a NEW ticket, never reusing the first.
+		expect(mintedTickets).toHaveLength(2);
+		expect(join[0].ticket).toBe(mintedTickets[1]);
 	});
 
 	it('emits a heartbeat ping on the configured interval and reconnects on heartbeat timeout', async () => {
 		vi.useFakeTimers();
 		transport = makeTransport({ heartbeatIntervalMs: 100, heartbeatTimeoutMs: 250 });
-		const socket = connectAndJoin(5);
+		const socket = await connectAndJoin(5);
 
 		await vi.advanceTimersByTimeAsync(100);
 		expect(socket.framesOfType('ping')).toHaveLength(1);
@@ -231,15 +256,24 @@ describe('WsTransport', () => {
 		expect(sockets.length).toBeGreaterThanOrEqual(2);
 	});
 
-	it('closes cleanly on fatal error and reports it', () => {
-		const socket = connectAndJoin(5);
+	it('closes cleanly on fatal error and reports it', async () => {
+		const socket = await connectAndJoin(5);
 		socket.emit({ t: 'error', code: 'room_gone', message: 'Room closed', fatal: true });
 		expect(fatals).toEqual([{ code: 'room_gone', message: 'Room closed' }]);
 		expect(transport.isConnected).toBe(false);
 	});
 
-	it('resync sends a resync frame carrying the last applied revision', () => {
-		const socket = connectAndJoin(5);
+	it('a failed ticket mint is FATAL (no credential-less join, no silent spectator downgrade)', async () => {
+		transport.connect('wss://rooms.test', 'ROOM', () => Promise.resolve(null));
+		sockets[0].open();
+		await flushJoin();
+		expect(sockets[0].framesOfType('join')).toHaveLength(0); // no join without a ticket
+		expect(fatals.at(-1)?.code).toBe('no_ticket');
+		expect(transport.isConnected).toBe(false);
+	});
+
+	it('resync sends a resync frame carrying the last applied revision', async () => {
+		const socket = await connectAndJoin(5);
 		socket.emit({ t: 'delta', fromRevision: 5, toRevision: 7, patch: viewAt(7) });
 		transport.resync();
 		const resync = socket.framesOfType('resync');

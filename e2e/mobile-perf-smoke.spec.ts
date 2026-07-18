@@ -15,6 +15,10 @@ test.describe('mobile-perf smoke', () => {
 	test('play landing loads clean, touch CSS applied, primary CTA opens ranked search', async ({
 		page
 	}) => {
+		await page.addInitScript(() => {
+			localStorage.setItem('asp:splat-quality', '"off"::v1');
+			localStorage.setItem('asp:visual-quality', '"off"::v1');
+		});
 		const errors: string[] = [];
 		page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
 		page.on('console', (m) => {
@@ -49,15 +53,21 @@ test.describe('mobile-perf smoke', () => {
 	});
 
 	test('splat quality setting toggles the background and persists', async ({ page }) => {
+		await page.addInitScript(() => localStorage.setItem('asp:splat-quality', '"off"::v1'));
 		await page.goto('/play');
 		await expect(page.getByTestId('play-home')).toHaveAttribute('data-hydrated', 'true');
 
 		// The persistent /play layout owns the splat now; MenuShell is transparent.
 		const splatCanvas = page.locator('.play-bg .splat-canvas');
+		await expect(splatCanvas).toHaveCount(0);
+
+		// Mount the renderer explicitly, proving the setting is live without paying
+		// its multi-megabyte world decode during every unrelated platform test.
+		await page.getByTestId('menu-settings').click({ force: true });
+		await page.getByTestId('splat-quality-30').click();
 		await expect(splatCanvas).toHaveCount(1);
 
 		// Open the graphics settings popover and switch the background Off.
-		await page.getByTestId('menu-settings').click({ force: true });
 		await expect(page.getByTestId('menu-settings-panel')).toBeVisible();
 		await page.getByTestId('splat-quality-off').click();
 		await expect(page.getByTestId('splat-quality-off')).toHaveAttribute('aria-checked', 'true');

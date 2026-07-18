@@ -49,7 +49,7 @@ export const LOBBY_PRESENCE_WINDOW_MS = 60_000;
 export const ACTIVE_PRESENCE_WINDOW_MS = 120_000;
 
 export type RoomStatus = 'lobby' | 'active' | 'finished' | 'closed';
-export type RoomCloseReason = 'expired' | 'abandoned';
+export type RoomCloseReason = 'expired' | 'abandoned' | 'security_upgrade';
 
 /** The minimal liveness facts about a session needed to judge whether it's alive. */
 export interface RoomLiveness {
@@ -60,6 +60,14 @@ export interface RoomLiveness {
 	startedAtMs: number | null;
 	/** `last_seen_at` (epoch ms) for every NON-bot member of the session. */
 	humanLastSeenMs: number[];
+	/**
+	 * True when the room contains a HUMAN membership with no owning account
+	 * (`user_id IS NULL`, `is_bot = false`). Such memberships predate the
+	 * account-identity trust model and have NO safe claim path — a UUID or display
+	 * name can never prove ownership — so the room is closed for security upgrade
+	 * rather than letting anyone impersonate the legacy member.
+	 */
+	hasUnownedHumans?: boolean;
 }
 
 /** True if any human was seen within `windowMs` of now. */
@@ -74,6 +82,11 @@ function hasPresentHuman(humanLastSeenMs: number[], nowMs: number, windowMs: num
  * `finished`/`closed` are terminal (always `null`).
  */
 export function roomCloseReason(input: RoomLiveness, nowMs: number): RoomCloseReason | null {
+	// Legacy unowned human memberships cannot be re-authenticated under the account
+	// trust model; quarantine the room explicitly instead of impersonating.
+	if ((input.status === 'lobby' || input.status === 'active') && input.hasUnownedHumans) {
+		return 'security_upgrade';
+	}
 	if (input.status === 'lobby') {
 		// A started session is `active`, not `lobby` — guard defensively anyway.
 		if (input.startedAtMs != null) return null;

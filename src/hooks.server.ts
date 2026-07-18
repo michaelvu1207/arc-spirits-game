@@ -2,6 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { createServerClient } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { checkPlayApiRequest, securityHeaders } from '$lib/server/httpGuards';
 
 /**
  * Supabase Auth (SSR). Creates a per-request server client bound to the request's
@@ -56,8 +57,7 @@ const supabaseHandle: Handle = async ({ event, resolve }) => {
 		// server (getUser(jwt)) — same trust level as the cookie path. Returns the user so
 		// play actions are attributed to a real uid on mobile too.
 		const authz = event.request.headers.get('authorization');
-		const token =
-			authz && authz.toLowerCase().startsWith('bearer ') ? authz.slice(7).trim() : null;
+		const token = authz && authz.toLowerCase().startsWith('bearer ') ? authz.slice(7).trim() : null;
 		if (token) {
 			const {
 				data: { user },
@@ -71,16 +71,18 @@ const supabaseHandle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event, {
 		// supabase-js needs these headers to pass through SvelteKit's serialization.
-		filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
+		filterSerializedResponseHeaders: (name) =>
+			name === 'content-range' || name === 'x-supabase-api-version'
 	});
 };
 
 /**
  * CORS for the play API so the Capacitor native shell (which runs on a
  * cross-origin custom scheme and has no same-origin session cookie) can call
- * `/api/play/*` (commands + the `/view` poll). The member id travels in the
- * `X-Play-Member` header / `?member=` query (see playStore). Live updates ride a
- * Supabase Realtime broadcast channel straight from the client, not this API.
+ * `/api/play/*` (commands + the `/view` poll). Identity travels EXCLUSIVELY as
+ * the validated Supabase access token in the `Authorization: Bearer` header —
+ * never a room credential, never a URL query. Live updates ride a Supabase
+ * Realtime broadcast channel straight from the client, not this API.
  *
  * Web requests are same-origin, so their Origin is never in this allow-list and
  * NO CORS headers are added — web behavior is unchanged.
@@ -98,7 +100,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
 		'Access-Control-Allow-Origin': origin,
 		'Access-Control-Allow-Credentials': 'true',
 		'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-		'Access-Control-Allow-Headers': 'Content-Type, X-Play-Member, Authorization',
+		'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 		Vary: 'Origin'
 	};
 }
@@ -112,12 +114,38 @@ const corsHandle: Handle = async ({ event, resolve }) => {
 		return new Response(null, { status: 204, headers: corsHeaders(origin) });
 	}
 
+	// CSRF / content-type / Origin coherence for every state-changing play call.
+	// Cookie-authenticated mutations must not be forgeable by a hostile page — even
+	// a SAME-SITE sibling origin whose requests still carry SameSite=Lax cookies.
+	// CORS alone cannot protect this (it gates reads, not effects).
+	if (isPlayApi) {
+		const verdict = checkPlayApiRequest({
+			method: event.request.method,
+			origin,
+			contentType: event.request.headers.get('content-type'),
+			selfOrigin: event.url.origin,
+			trustedOrigins: ALLOWED_ORIGINS
+		});
+		if (!verdict.ok) {
+			return new Response(JSON.stringify({ message: verdict.message }), {
+				status: verdict.status,
+				headers: { 'content-type': 'application/json' }
+			});
+		}
+	}
+
 	const response = await resolve(event);
 
 	if (isPlayApi) {
 		for (const [key, value] of Object.entries(corsHeaders(origin))) {
 			response.headers.set(key, value);
 		}
+	}
+	// Baseline security headers on EVERY response. X-Frame-Options mirrors the CSP
+	// frame-ancestors directive (svelte.config.js) for older browsers; the CSP header
+	// itself is emitted by SvelteKit from the kit.csp config.
+	for (const [key, value] of Object.entries(securityHeaders())) {
+		if (!response.headers.has(key)) response.headers.set(key, value);
 	}
 	return response;
 };

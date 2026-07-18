@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth, type OAuthProvider } from '$lib/auth/auth.svelte';
+	import CosmeticLoadout from '$lib/components/CosmeticLoadout.svelte';
 
 	type Mode = 'signin' | 'signup';
 	let mode = $state<Mode>('signin');
@@ -75,6 +76,18 @@
 		error = null;
 		try {
 			await auth.signInWithProvider(provider);
+		} catch (e) {
+			fail(e);
+		}
+	}
+
+	/** Claim-card OAuth: LINK the provider identity to the CURRENT anonymous uid so
+	 *  the promised "keep all progress" is actually true — never a sign-in that
+	 *  lands in a different account. */
+	async function oauthClaim(provider: OAuthProvider) {
+		error = null;
+		try {
+			await auth.linkOAuthProvider(provider);
 		} catch (e) {
 			fail(e);
 		}
@@ -184,7 +197,12 @@
 			error = 'Enter your current password to confirm account deletion.';
 			return;
 		}
-		if (!confirm('Permanently delete your account? This cannot be undone. Your game history is kept but anonymized.')) return;
+		if (
+			!confirm(
+				'Permanently delete your account? This cannot be undone. Your game history is kept but anonymized.'
+			)
+		)
+			return;
 		busy = true;
 		error = null;
 		try {
@@ -221,7 +239,9 @@
 				<div class="who">
 					<span class="avatar">{initial}</span>
 					<div class="who-text">
-						<div class="who-name" data-testid="account-displayname">{auth.displayName ?? 'Nameless Spirit'}</div>
+						<div class="who-name" data-testid="account-displayname">
+							{auth.displayName ?? 'Nameless Spirit'}
+						</div>
 						{#if auth.isAnonymous}
 							<span class="badge guest">Guest account</span>
 						{:else}
@@ -239,24 +259,64 @@
 						aria-label="Display name"
 						data-testid="displayname-input"
 					/>
-					<button class="btn-ghost" type="submit" disabled={busy} data-testid="displayname-save">Save</button>
+					<button class="btn-ghost" type="submit" disabled={busy} data-testid="displayname-save"
+						>Save</button
+					>
 				</form>
 			</section>
+			<CosmeticLoadout />
 
 			{#if auth.isAnonymous}
 				<!-- Claim flow: attach a real identity to the same uid → keep all progress. -->
 				<section class="card" data-testid="claim-card">
 					<h2>Claim your account</h2>
-					<p class="lead">Add an email + password (or a provider) to make your guest account permanent and keep your stats across devices.</p>
+					<p class="lead">
+						Add an email + password (or a provider) to make your guest account permanent and keep
+						your stats across devices.
+					</p>
 					<form class="stack" onsubmit={claimAccount}>
-						<input class="input" bind:value={email} type="email" placeholder="you@email.com" autocomplete="email" data-testid="claim-email" required />
-						<input class="input" bind:value={password} type="password" placeholder="Password (min 8 chars)" autocomplete="new-password" minlength="8" data-testid="claim-password" required />
-						<button class="btn-primary" type="submit" disabled={busy} data-testid="claim-submit">{busy ? 'Linking…' : 'Claim account'}</button>
+						<input
+							class="input"
+							bind:value={email}
+							type="email"
+							placeholder="you@email.com"
+							autocomplete="email"
+							data-testid="claim-email"
+							required
+						/>
+						<input
+							class="input"
+							bind:value={password}
+							type="password"
+							placeholder="Password (min 8 chars)"
+							autocomplete="new-password"
+							minlength="8"
+							data-testid="claim-password"
+							required
+						/>
+						<button class="btn-primary" type="submit" disabled={busy} data-testid="claim-submit"
+							>{busy ? 'Linking…' : 'Claim account'}</button
+						>
 					</form>
 					<div class="oauth">
-						<button class="oauth-btn" type="button" onclick={() => oauth('google')} data-testid="oauth-google">Google</button>
-						<button class="oauth-btn" type="button" onclick={() => oauth('apple')} data-testid="oauth-apple">Apple</button>
-						<button class="oauth-btn" type="button" onclick={() => oauth('discord')} data-testid="oauth-discord">Discord</button>
+						<button
+							class="oauth-btn"
+							type="button"
+							onclick={() => oauthClaim('google')}
+							data-testid="oauth-google">Google</button
+						>
+						<button
+							class="oauth-btn"
+							type="button"
+							onclick={() => oauthClaim('apple')}
+							data-testid="oauth-apple">Apple</button
+						>
+						<button
+							class="oauth-btn"
+							type="button"
+							onclick={() => oauthClaim('discord')}
+							data-testid="oauth-discord">Discord</button
+						>
 					</div>
 				</section>
 			{/if}
@@ -266,37 +326,118 @@
 				<details class="manage" data-testid="manage-card">
 					<summary>Manage account</summary>
 					<div class="manage-body">
-						<input class="input" bind:value={currentPassword} type="password" placeholder="Current password (required below)" autocomplete="current-password" data-testid="current-password" />
+						<input
+							class="input"
+							bind:value={currentPassword}
+							type="password"
+							placeholder="Current password (required below)"
+							autocomplete="current-password"
+							data-testid="current-password"
+						/>
 						<form class="row" onsubmit={changePassword}>
-							<input class="input" bind:value={newPassword} type="password" placeholder="New password" autocomplete="new-password" minlength="8" data-testid="new-password" />
-							<button class="btn-ghost" type="submit" disabled={busy || newPassword.length < 8 || !currentPassword} data-testid="change-password">Update</button>
+							<input
+								class="input"
+								bind:value={newPassword}
+								type="password"
+								placeholder="New password"
+								autocomplete="new-password"
+								minlength="8"
+								data-testid="new-password"
+							/>
+							<button
+								class="btn-ghost"
+								type="submit"
+								disabled={busy || newPassword.length < 8 || !currentPassword}
+								data-testid="change-password">Update</button
+							>
 						</form>
 						<form class="row" onsubmit={changeEmail}>
-							<input class="input" bind:value={newEmail} type="email" placeholder="New email" autocomplete="email" data-testid="new-email" />
-							<button class="btn-ghost" type="submit" disabled={busy || !newEmail} data-testid="change-email">Send</button>
+							<input
+								class="input"
+								bind:value={newEmail}
+								type="email"
+								placeholder="New email"
+								autocomplete="email"
+								data-testid="new-email"
+							/>
+							<button
+								class="btn-ghost"
+								type="submit"
+								disabled={busy || !newEmail}
+								data-testid="change-email">Send</button
+							>
 						</form>
 						<div class="manage-actions">
-							<button class="link" type="button" onclick={signOutEverywhere} disabled={busy} data-testid="signout-everywhere">Sign out everywhere</button>
-							<button class="link danger" type="button" onclick={deleteAccount} disabled={busy} data-testid="delete-account">Delete account</button>
+							<button
+								class="link"
+								type="button"
+								onclick={signOutEverywhere}
+								disabled={busy}
+								data-testid="signout-everywhere">Sign out everywhere</button
+							>
+							<button
+								class="link danger"
+								type="button"
+								onclick={deleteAccount}
+								disabled={busy}
+								data-testid="delete-account">Delete account</button
+							>
 						</div>
 					</div>
 				</details>
 			{/if}
 
-			<button class="btn-primary block" type="button" onclick={doSignOut} disabled={busy} data-testid="signout">Sign out</button>
+			<button
+				class="btn-primary block"
+				type="button"
+				onclick={doSignOut}
+				disabled={busy}
+				data-testid="signout">Sign out</button
+			>
 		{:else}
 			<!-- ───────────── Signed out ───────────── -->
 			<section class="card">
 				<div class="seg" role="tablist">
-					<button class="seg-btn" class:active={mode === 'signin'} role="tab" aria-selected={mode === 'signin'} type="button" onclick={() => (mode = 'signin')} data-testid="tab-signin">Sign in</button>
-					<button class="seg-btn" class:active={mode === 'signup'} role="tab" aria-selected={mode === 'signup'} type="button" onclick={() => (mode = 'signup')} data-testid="tab-signup">Create account</button>
+					<button
+						class="seg-btn"
+						class:active={mode === 'signin'}
+						role="tab"
+						aria-selected={mode === 'signin'}
+						type="button"
+						onclick={() => (mode = 'signin')}
+						data-testid="tab-signin">Sign in</button
+					>
+					<button
+						class="seg-btn"
+						class:active={mode === 'signup'}
+						role="tab"
+						aria-selected={mode === 'signup'}
+						type="button"
+						onclick={() => (mode = 'signup')}
+						data-testid="tab-signup">Create account</button
+					>
 				</div>
 
 				<form class="stack" onsubmit={submitCredentials}>
 					{#if mode === 'signup'}
-						<input class="input" bind:value={displayName} maxlength="40" placeholder="Display name" autocomplete="nickname" data-testid="signup-name" />
+						<input
+							class="input"
+							bind:value={displayName}
+							maxlength="40"
+							placeholder="Display name"
+							autocomplete="nickname"
+							data-testid="signup-name"
+						/>
 					{/if}
-					<input class="input" bind:value={email} type="email" placeholder="you@email.com" autocomplete="email" data-testid="auth-email" required />
+					<input
+						class="input"
+						bind:value={email}
+						type="email"
+						placeholder="you@email.com"
+						autocomplete="email"
+						data-testid="auth-email"
+						required
+					/>
 					<input
 						class="input"
 						bind:value={password}
@@ -313,19 +454,39 @@
 				</form>
 
 				{#if mode === 'signin'}
-					<button class="link" type="button" onclick={resetPassword} data-testid="forgot">Forgot password?</button>
+					<button class="link" type="button" onclick={resetPassword} data-testid="forgot"
+						>Forgot password?</button
+					>
 				{/if}
 
 				<div class="divider"><span>or</span></div>
 
 				<div class="oauth">
-					<button class="oauth-btn" type="button" onclick={() => oauth('google')} data-testid="oauth-google">Google</button>
-					<button class="oauth-btn" type="button" onclick={() => oauth('apple')} data-testid="oauth-apple">Apple</button>
-					<button class="oauth-btn" type="button" onclick={() => oauth('discord')} data-testid="oauth-discord">Discord</button>
+					<button
+						class="oauth-btn"
+						type="button"
+						onclick={() => oauth('google')}
+						data-testid="oauth-google">Google</button
+					>
+					<button
+						class="oauth-btn"
+						type="button"
+						onclick={() => oauth('apple')}
+						data-testid="oauth-apple">Apple</button
+					>
+					<button
+						class="oauth-btn"
+						type="button"
+						onclick={() => oauth('discord')}
+						data-testid="oauth-discord">Discord</button
+					>
 				</div>
 			</section>
 
-			<p class="foot">No account needed to play — head to <a href="/play">Play</a> and jump in as a guest. Create an account anytime to save your stats.</p>
+			<p class="foot">
+				No account needed to play — head to <a href="/play">Play</a> and jump in as a guest. Create an
+				account anytime to save your stats.
+			</p>
 		{/if}
 	</div>
 </main>
@@ -680,5 +841,169 @@
 		border-left: 3px solid var(--brand-teal);
 		background: rgba(32, 224, 193, 0.12);
 		color: var(--color-bone);
+	}
+
+	/* Sign-in as a full graphic poster: sharp fields, no centered app card. */
+	.auth {
+		display: grid;
+		grid-template-columns: minmax(420px, 560px) minmax(240px, 1fr);
+		align-items: center;
+		justify-content: stretch;
+		padding: clamp(72px, 9vh, 110px) clamp(32px, 7vw, 112px) clamp(40px, 6vh, 72px);
+		background: #050310;
+		overflow-x: hidden;
+		overflow-y: auto;
+	}
+	.auth::before,
+	.auth::after {
+		content: '';
+		position: absolute;
+		pointer-events: none;
+	}
+	.auth::before {
+		right: -12vw;
+		top: -8vh;
+		width: 54vw;
+		height: 116vh;
+		background: #24104d;
+		clip-path: polygon(42% 0, 100% 0, 100% 100%, 8% 88%, 30% 48%);
+	}
+	.auth::after {
+		right: 3vw;
+		bottom: 5vh;
+		width: 25vw;
+		height: 19vh;
+		background: #24d4ff;
+		opacity: 0.38;
+		clip-path: polygon(12% 0, 100% 20%, 80% 100%, 0 72%);
+	}
+	.back,
+	.shell {
+		position: relative;
+		z-index: 1;
+	}
+	.back {
+		position: absolute;
+		top: max(24px, env(safe-area-inset-top));
+		left: max(24px, env(safe-area-inset-left));
+		width: max-content;
+		padding: 8px 34px 8px 12px;
+		background: #20104a;
+		color: #fff;
+		clip-path: polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%);
+	}
+	.back:hover {
+		transform: none;
+		background: #24d4ff;
+		color: #080311;
+	}
+	.shell {
+		grid-column: 1;
+		width: 100%;
+		max-width: 520px;
+		gap: 12px;
+	}
+	.brand {
+		text-align: left;
+	}
+	.title {
+		font-size: clamp(3rem, 6vw, 5rem);
+		color: #ff2bc7;
+		background: none;
+		-webkit-text-fill-color: currentColor;
+		filter: none;
+		text-shadow: none;
+	}
+	.card {
+		gap: 12px;
+		padding: 18px;
+		border: 0;
+		border-radius: 0;
+		background: #100725;
+		box-shadow: none;
+		clip-path: polygon(0 0, 94% 0, 100% 7%, 100% 93%, 92% 100%, 0 100%);
+	}
+	.seg {
+		gap: 2px;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+	}
+	.seg-btn,
+	.seg-btn.active {
+		border-radius: 0;
+		background: #28115b;
+		clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%);
+	}
+	.seg-btn.active {
+		background: #d515aa;
+	}
+	.input {
+		border: 0;
+		border-bottom: 3px solid #24d4ff;
+		border-radius: 0;
+		background: #090416;
+	}
+	.oauth-btn,
+	.btn-ghost,
+	.btn-primary {
+		border-radius: 0;
+		clip-path: polygon(0 0, 91% 0, 100% 50%, 91% 100%, 0 100%);
+	}
+	.avatar {
+		border-radius: 0;
+		background: #d515aa;
+		box-shadow: none;
+		clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0 50%);
+	}
+	.badge {
+		border-radius: 0;
+		background: #28115b;
+	}
+	.msg {
+		border-radius: 0;
+	}
+
+	@media (orientation: landscape) and (max-height: 650px) {
+		.auth {
+			grid-template-columns: minmax(360px, 520px) minmax(180px, 1fr);
+			align-items: start;
+			padding: 52px 7vw 24px;
+		}
+		.title {
+			font-size: clamp(2.5rem, 10vh, 3.6rem);
+		}
+		.eyebrow {
+			margin-bottom: 4px;
+		}
+		.card {
+			gap: 9px;
+			padding: 14px 16px;
+		}
+		.seg-btn {
+			padding-block: 7px;
+		}
+		.input {
+			padding-block: 10px;
+		}
+		.oauth-btn {
+			padding-block: 9px;
+		}
+		.foot {
+			font-size: 0.74rem;
+			line-height: 1.35;
+		}
+	}
+
+	@media (max-width: 760px) and (orientation: portrait) {
+		.auth {
+			display: flex;
+			align-items: stretch;
+			padding: 76px 20px 36px;
+		}
+		.shell {
+			margin-inline: auto;
+		}
 	}
 </style>

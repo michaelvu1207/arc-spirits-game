@@ -101,6 +101,8 @@
 		) => void;
 		/** Dismiss a hand-resolved (manual) prompt. */
 		onDismissManual: (id: string) => void;
+		/** Confirm an awaken-sourced manual prompt: manualAwaken (flip + clear). */
+		onConfirmManualAwaken?: (slotIndex: number) => void;
 		/** Place a chosen Spirit Augment (class) onto a spirit (in-stage placement). */
 		onPlaceAugment: (
 			augmentIndex: number,
@@ -154,6 +156,7 @@
 		onClaimAwakenReward,
 		onResolveDecision,
 		onDismissManual,
+		onConfirmManualAwaken,
 		onPlaceAugment,
 		onDiscardAugments,
 		onDiscardSpirits,
@@ -1406,6 +1409,7 @@
 									classIcon={classIconFor(prompt.source)}
 									{busy}
 									onDismiss={onDismissManual}
+									onConfirmAwaken={onConfirmManualAwaken}
 								/>
 							{/each}
 						{/if}

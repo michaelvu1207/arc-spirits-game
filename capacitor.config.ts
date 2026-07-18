@@ -13,18 +13,10 @@ const config: CapacitorConfig = {
 	appName: 'Arc Spirits',
 	// adapter-static (SPA fallback) writes the client bundle here.
 	webDir: 'build',
+	// No `plugins` block: only @capacitor/{app,browser} are installed (the OAuth
+	// deep-link round trip) and neither takes config. The splash-screen/status-bar
+	// plugins are NOT installed — configuring them here would be dead config.
 	backgroundColor: '#050310',
-	plugins: {
-		SplashScreen: {
-			backgroundColor: '#050310',
-			showSpinner: false,
-			launchAutoHide: true
-		},
-		StatusBar: {
-			style: 'DARK',
-			backgroundColor: '#050310'
-		}
-	},
 	...(devServerUrl
 		? {
 				server: {
