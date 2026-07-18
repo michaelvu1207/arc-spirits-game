@@ -76,7 +76,9 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run gate:journey
       - run: npm run gate:human-loop
-      - run: npm run gate:mixed-full-games
+      # The mixed web/Godot full-game gate requires the private sibling Godot
+      # checkout and is run by the integrated rc:full release workflow, not this
+      # repository-isolated web job.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
