@@ -16,8 +16,6 @@ env:
   PUBLIC_SUPABASE_URL: https://ci-supabase.invalid
   PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-key
   HOST_SECRET_KEY: ci-host-secret
-  PUBLIC_API_BASE_URL: https://ci-api.invalid
-  PUBLIC_WS_SERVER_URL: wss://ci-rooms.invalid
 
 jobs:
   portable-web:
@@ -30,6 +28,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Install Chromium for the CSP browser proof
+        run: npx playwright install --with-deps chromium
       - name: Install real PostgreSQL test runtime
         run: |
           sudo apt-get update
