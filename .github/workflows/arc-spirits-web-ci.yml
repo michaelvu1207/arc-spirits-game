@@ -9,6 +9,16 @@ on:
 permissions:
   contents: read
 
+# Public placeholders let SvelteKit compile the same source in an isolated CI
+# environment. Runtime integration gates replace these with their own local
+# services; production values remain managed by Vercel.
+env:
+  PUBLIC_SUPABASE_URL: https://ci-supabase.invalid
+  PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-key
+  HOST_SECRET_KEY: ci-host-secret
+  PUBLIC_API_BASE_URL: https://ci-api.invalid
+  PUBLIC_WS_SERVER_URL: wss://ci-rooms.invalid
+
 jobs:
   portable-web:
     runs-on: ubuntu-24.04

@@ -1,7 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { createServerClient } from '@supabase/ssr';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env as publicEnv } from '$env/dynamic/public';
 import { checkPlayApiRequest, securityHeaders } from '$lib/server/httpGuards';
 
 /**
@@ -12,7 +12,9 @@ import { checkPlayApiRequest, securityHeaders } from '$lib/server/httpGuards';
  * identity layer.
  */
 const supabaseHandle: Handle = async ({ event, resolve }) => {
-	event.locals.supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL || 'https://unconfigured.invalid';
+	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY || 'unconfigured-public-anon-key';
+	event.locals.supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
 		cookies: {
 			getAll: () => event.cookies.getAll(),
 			setAll: (cookiesToSet) => {

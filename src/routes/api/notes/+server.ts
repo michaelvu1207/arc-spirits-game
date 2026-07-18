@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { HOST_SECRET_KEY } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import { upsertGameNotes } from '$lib/supabase';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Validate secret against environment variable
-		if (hostSecret !== HOST_SECRET_KEY) {
+		if (!env.HOST_SECRET_KEY || hostSecret !== env.HOST_SECRET_KEY) {
 			throw error(403, 'Invalid host secret');
 		}
 
