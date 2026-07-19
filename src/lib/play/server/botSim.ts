@@ -40,6 +40,7 @@ import {
 	planNeuralPhaseActions,
 	planUniformLegalPhaseActions
 } from '../ml/neuralBot';
+import { getRemoteV2Client, planNeuralPhaseActionsV2, resetRemoteV2Client } from '../ml/remoteV2';
 
 /** Backward-compatible export for older callers/tests. New code should import
  *  ML_BOT_PROFILE_KEY from bots/contract. */
@@ -185,7 +186,9 @@ export async function fillBots(
 		throw new Error('Bots can only be added while the room is in the lobby.');
 	}
 
-	const guardianPool = opts.shuffleGuardians ? shuffled(state.guardianPool) : [...state.guardianPool];
+	const guardianPool = opts.shuffleGuardians
+		? shuffled(state.guardianPool)
+		: [...state.guardianPool];
 
 	for (const seat of SEAT_COLORS) {
 		const occupied = SEAT_COLORS.filter(
@@ -427,6 +430,14 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 	// case the live bot uses the same legal-action contract with uniform selection, not
 	// the retired strategic heuristic profiles.
 	const neuralPolicy = await getNeuralPolicy();
+	// Remote v2 champion (ARC_INFER_URL/ARC_INFER_TOKEN). Null when unconfigured or the
+	// handshake recently failed; every seat below then plays the bundled v1 policy.
+	const remoteV2 = await getRemoteV2Client();
+	// The v2 champion was validated (gauntlet + human benchmark) sampling ALL phases at
+	// 0.55, unlike v1's nav-only 0.65 — different model, different in-distribution knobs.
+	const v2Temp = process.env.ARC_V2_TEMP !== undefined ? parseFloat(process.env.ARC_V2_TEMP) : 0.55;
+	const v2TempScope: 'all' | 'navigation' =
+		process.env.ARC_V2_TEMP_SCOPE === 'navigation' ? 'navigation' : 'all';
 
 	let commandsIssued = 0;
 
@@ -464,24 +475,41 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 			process.env.ARC_LIVE_BOT_TEMP_SCOPE === 'all' ? 'all' : 'navigation';
 		// A planner exception must never escape: it would abort the whole tick (HTTP 500) and
 		// strand this seat AND every seat after it, forever (ticks re-plan seats in order, so a
-		// deterministic throw repeats every poll). Degrade to uniform-legal for the seat; if
-		// even that throws, skip the seat this tick and let the deadline drain advance it.
-		let commands: GameCommand[];
+		// deterministic throw repeats every poll). Degrade remote-v2 → bundled v1 → uniform-legal;
+		// if even that throws, skip the seat this tick and let the deadline drain advance it.
+		let commands: GameCommand[] | null = null;
+		if ((profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && remoteV2) {
+			try {
+				commands = await planNeuralPhaseActionsV2(state, seat, catalog, remoteV2, {
+					temperature: v2Temp,
+					temperatureScope: v2TempScope
+				});
+			} catch (err) {
+				console.error(`[botSim] remote v2 planner failed for seat ${seat}; using v1`, err);
+				resetRemoteV2Client();
+				commands = null;
+			}
+		}
 		try {
 			commands =
-				(profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && neuralPolicy
+				commands ??
+				((profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) &&
+				neuralPolicy
 					? planNeuralPhaseActions(state, seat, catalog, neuralPolicy, {
 							search: expert,
 							temperature: liveTemp,
 							temperatureScope: liveTempScope
 						})
-					: planUniformLegalPhaseActions(state, seat, catalog);
+					: planUniformLegalPhaseActions(state, seat, catalog));
 		} catch (err) {
 			console.error(`[botSim] planner threw for seat ${seat}; degrading to uniform`, err);
 			try {
 				commands = planUniformLegalPhaseActions(state, seat, catalog);
 			} catch (fallbackErr) {
-				console.error(`[botSim] uniform fallback also threw for seat ${seat}; skipping`, fallbackErr);
+				console.error(
+					`[botSim] uniform fallback also threw for seat ${seat}; skipping`,
+					fallbackErr
+				);
 				commands = [];
 			}
 		}
