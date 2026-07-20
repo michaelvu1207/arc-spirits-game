@@ -748,7 +748,8 @@ export async function loadPlayRoom(roomCode: string, options: RoomNavigationOpti
 		return view;
 	} catch (err) {
 		// A cancelled operation surfaces NO error — its component is gone.
-		if (cancelled()) throw err instanceof RoomNavigationCancelled ? err : new RoomNavigationCancelled();
+		if (cancelled())
+			throw err instanceof RoomNavigationCancelled ? err : new RoomNavigationCancelled();
 		if (current()) {
 			error = err instanceof Error ? err.message : 'Failed to load room.';
 		}
@@ -804,10 +805,7 @@ export function setActiveMember(memberId: string): RoomView['member'] | null {
 /** Roll back a {@link setActiveMember} seed after a FAILED navigation: restore the
  *  member picture of the room still on screen — but only while the seed is still
  *  the live value (a completed navigation/authoritative view wins otherwise). */
-export function restoreActiveMember(
-	previous: RoomView['member'] | null,
-	seededMemberId: string
-) {
+export function restoreActiveMember(previous: RoomView['member'] | null, seededMemberId: string) {
 	if (member?.id === seededMemberId) member = previous;
 }
 
@@ -899,17 +897,28 @@ export async function createPlayRoom(
 	return runRoomNavigation(
 		'Failed to create room.',
 		(signal, opId) =>
-			postPlayJson<RoomView>('/api/play/sessions', {
-				displayName, opId, visibility: options.visibility ?? 'public'
-			}, { signal }),
+			postPlayJson<RoomView>(
+				'/api/play/sessions',
+				{
+					displayName,
+					opId,
+					visibility: options.visibility ?? 'public'
+				},
+				{ signal }
+			),
 		options
 	);
 }
 
-export async function createSoloPlayRoom(displayName: string, options: RoomNavigationOptions = {}) {
+export async function createSoloPlayRoom(
+	displayName: string,
+	options: RoomNavigationOptions & { mode?: 'solo' | 'heads-up' } = {}
+) {
+	const mode = options.mode ?? 'solo';
 	return runRoomNavigation(
-		'Failed to start solo game.',
-		(signal, opId) => postPlayJson<RoomView>('/api/play/solo', { displayName, opId }, { signal }),
+		mode === 'heads-up' ? 'Failed to start heads-up game.' : 'Failed to start solo game.',
+		(signal, opId) =>
+			postPlayJson<RoomView>('/api/play/solo', { displayName, opId, mode }, { signal }),
 		options
 	);
 }
@@ -1013,11 +1022,7 @@ export async function loadRoomChat(
 	// Coalesce onto an in-flight SAME-room load only while that load still speaks
 	// for the current account + room scope — a fenced-out (identity change,
 	// re-target) load will discard everything, so a new caller must never ride it.
-	if (
-		chatInFlight &&
-		chatInFlight.roomCode === normalized &&
-		!staleRoomOp(chatInFlight.token)
-	) {
+	if (chatInFlight && chatInFlight.roomCode === normalized && !staleRoomOp(chatInFlight.token)) {
 		return chatInFlight.promise;
 	}
 	const token = roomOpToken();

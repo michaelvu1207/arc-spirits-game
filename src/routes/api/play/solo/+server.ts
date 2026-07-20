@@ -29,6 +29,12 @@ export const POST: RequestHandler = async (event) => {
 		throw error(401, 'Sign in (a guest identity is created automatically) to start solo play.');
 	}
 
+	// Table size: 'solo' fills to a 4-seat table (1 human + 3 bots); 'heads-up' is a
+	// 2-seat duel (1 human + 1 bot), where a single champion bot plays undiluted by
+	// mirror competition. Allow-listed — never trust a raw seat count from the client.
+	const mode = body?.mode === 'heads-up' ? 'heads-up' : 'solo';
+	const targetSeats = mode === 'heads-up' ? 2 : 4;
+
 	// Client-minted ENTRY-OP id (abort compensation): the created solo session is
 	// stamped with it, so an abort at ANY later point of this multi-step setup —
 	// even with no response delivered — resolves and unwinds exactly this room.
@@ -57,7 +63,7 @@ export const POST: RequestHandler = async (event) => {
 	}
 
 	await fillBots(created.roomCode, created.memberId, {
-		targetSeats: 4,
+		targetSeats,
 		shuffleGuardians: true
 	});
 
