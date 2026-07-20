@@ -81,6 +81,8 @@
 	let mounted = $state(false);
 	let soloStarting = $state(false);
 	let soloError = $state<string | null>(null);
+	let headsUpStarting = $state(false);
+	let headsUpError = $state<string | null>(null);
 
 	/** Whether THIS player's Quick Play would actually be RANKED: only a verified
 	 *  (permanent) account plays rated — a guest plays a casual, unrated match. The
@@ -325,6 +327,38 @@
 		}
 	}
 
+	// Heads-Up: a 2-seat duel (you vs ONE champion bot). Mirrors startSolo exactly,
+	// differing only in the `mode: 'heads-up'` passed to the solo endpoint, which
+	// fills a single bot instead of three so the champion plays undiluted.
+	const unmountHeadsUp = new AbortController();
+
+	async function startHeadsUp() {
+		if (headsUpStarting) return;
+		headsUpStarting = true;
+		headsUpError = null;
+		playMenuSfx('ui-click');
+		try {
+			if (!(await auth.whenInitialized())) {
+				throw new Error('Sign-in could not initialize — check your connection and try again.');
+			}
+			const typed = (browser ? localStorage.getItem(NAME_KEY) : null) ?? '';
+			const displayName = await auth.resolvePlayIdentity(typed);
+			if (unmountHeadsUp.signal.aborted) return;
+			const view = await createSoloPlayRoom(displayName, {
+				mode: 'heads-up',
+				signal: unmountHeadsUp.signal
+			});
+			if (unmountHeadsUp.signal.aborted) return;
+			playMenuSfx('game-start', { volume: 0.8 });
+			await goto(matchedRoomUrl(view.projection.roomCode, window.location.search));
+		} catch (e) {
+			if (unmountHeadsUp.signal.aborted) return;
+			headsUpError = e instanceof Error ? e.message : 'Could not start heads-up play.';
+		} finally {
+			headsUpStarting = false;
+		}
+	}
+
 	/** Cancel: leave the queue (best-effort, inside the controller's fence) and
 	 *  return to the main menu. Every in-flight poll/timer of the cancelled search
 	 *  is silenced by the search-generation bump. */
@@ -367,6 +401,7 @@
 		return `/play?${params.toString()}`;
 	}
 	const soloHref = $derived(actionHref('solo'));
+	const headsUpHref = $derived(actionHref('heads-up'));
 	const rankedHref = $derived(actionHref('ranked'));
 
 	onMount(() => {
@@ -381,6 +416,7 @@
 		if (action) {
 			if (action === 'ranked') void startRanked();
 			else if (action === 'solo') void startSolo();
+			else if (action === 'heads-up') void startHeadsUp();
 			// Strip ?action so refresh/back doesn't re-trigger it. On the initial
 			// (post-reload) mount SvelteKit's router isn't initialized yet and its
 			// replaceState throws — fall back to the native call, preserving
@@ -406,6 +442,7 @@
 			// permanently fences every outstanding poll/timer/navigation, and the
 			// solo lane's in-flight create (if any) is aborted the same way.
 			unmountSolo.abort();
+			unmountHeadsUp.abort();
 			search.destroy();
 			// Unmount: another navigation owns the router — silence a held matched
 			// goto and roll its member seed back without issuing a superseding one.
@@ -475,7 +512,28 @@
 					<span class="m-gem"><GameIcon name="solo" size={36} /></span>
 					<span class="m-text">
 						<span class="m-title">{soloStarting ? 'Starting…' : 'Solo Play'}</span>
-						<span class="m-sub">Jump in now · you vs ML bots</span>
+						<span class="m-sub">Jump in now · you vs 3 ML bots</span>
+					</span>
+					<span class="m-go" aria-hidden="true">→</span>
+				</a>
+
+				<a
+					data-testid="heads-up"
+					class="mode"
+					class:busy={headsUpStarting}
+					style="--mc: var(--brand-gold, #ffb020)"
+					href={headsUpHref}
+					onclick={(e) => {
+						e.preventDefault();
+						void startHeadsUp();
+					}}
+					onpointerenter={hover}
+					aria-busy={headsUpStarting}
+				>
+					<span class="m-gem"><GameIcon name="solo" size={36} /></span>
+					<span class="m-text">
+						<span class="m-title">{headsUpStarting ? 'Starting…' : 'Heads-Up Duel'}</span>
+						<span class="m-sub">1v1 · you vs the champion bot</span>
 					</span>
 					<span class="m-go" aria-hidden="true">→</span>
 				</a>
@@ -525,6 +583,10 @@
 
 				{#if soloError}
 					<p class="menu-error" data-testid="solo-play-error">{soloError}</p>
+				{/if}
+
+				{#if headsUpError}
+					<p class="menu-error" data-testid="heads-up-error">{headsUpError}</p>
 				{/if}
 
 				<div class="minor">
