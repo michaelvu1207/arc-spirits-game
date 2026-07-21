@@ -174,7 +174,7 @@ describe('encodeV2 vocab + dims (frozen catalog contract)', () => {
 
 	it('obsV2Meta round-trips the flat layout', () => {
 		const meta = obsV2Meta(catalog);
-		expect(meta.versionCode).toBe(2);
+		expect(meta.versionCode).toBe(3);
 		expect(meta.flatHeader).toHaveLength(2 + meta.tokenTypes.length * 3);
 		expect(meta.flatLength).toBe(obsV2FlatLength(buildObsV2Vocab(catalog)));
 		expect(meta.vocab.classes).toEqual([...meta.vocab.classes].sort());
@@ -196,15 +196,18 @@ describe('encodeV2 determinism + shape', () => {
 		expect(encodeEntityObsV2(structuredClone(state), 'Red', catalog)).toEqual(a);
 	});
 
-	it('seat row 0 is always the acting seat', () => {
+	it('seat row 0 is always the acting seat, encoded seat-invariantly', () => {
 		const state = captureMidGameState(11, 4, 3);
 		const names = obsV2FieldNames(catalog);
 		const isSelfIdx = names.seat.indexOf('isSelf');
+		// obs-v3: seat identity is a rotation-invariant offset-from-self rank, so
+		// there is no absolute seat-colour field, and self is ALWAYS rank 0.
+		expect(names.seat.some((n) => n.startsWith('seat:'))).toBe(false);
+		const selfRankIdx = names.seat.indexOf('relSeat:0');
 		for (const seat of state.activeSeats) {
 			const obs = encodeEntityObsV2(state, seat, catalog);
 			expect(obs.seats[0][isSelfIdx]).toBe(1);
-			const seatIdx = names.seat.indexOf(`seat:${seat}`);
-			expect(obs.seats[0][seatIdx]).toBe(1);
+			expect(obs.seats[0][selfRankIdx]).toBe(1);
 			for (let i = 1; i < SEATS_CAP; i++) expect(obs.seats[i][isSelfIdx]).toBe(0);
 		}
 	});
