@@ -61,8 +61,18 @@ import {
 } from '../types';
 
 export const OBS_V2_VERSION = 'arc-obs-v2' as const;
-/** Numeric version stamped into the flat header (v1 summary obs = 1). */
-export const OBS_V2_VERSION_CODE = 2;
+/**
+ * Numeric version stamped into the flat header.
+ *   1 = v1 fixed-width summary obs.
+ *   2 = v2 entity obs with ABSOLUTE seat/owner colour one-hots.
+ *   3 = v2 entity obs, SEAT-INVARIANT: the absolute seat/owner colour one-hots are
+ *       replaced by rotation-invariant offset-from-self ranks (self = slot 0). The
+ *       policy can no longer condition on physical seat colour, so a model plays the
+ *       same strength in every seat. Same dims/flat length as code 2 — only the
+ *       semantics of the seat/owner one-hot bits change, so a code-3 model MUST be
+ *       trained on code-3 data (never serve a code-2 checkpoint with a code-3 obs).
+ */
+export const OBS_V2_VERSION_CODE = 3;
 
 // ── Caps (token counts are padded/masked to these) ──────────────────────────
 export const SEATS_CAP = SEAT_COLORS.length; // 6
@@ -192,7 +202,7 @@ export function obsV2FieldNames(catalog: PlayCatalog): ObsV2FieldNames {
 		seat: [
 			'present',
 			'isSelf',
-			...SEAT_COLORS.map((c) => `seat:${c}`),
+			...SEAT_COLORS.map((_, i) => `relSeat:${i}`),
 			'vp',
 			'vpToWin',
 			'barrier',
@@ -234,7 +244,7 @@ export function obsV2FieldNames(catalog: PlayCatalog): ObsV2FieldNames {
 		],
 		spirit: [
 			'present',
-			...SEAT_COLORS.map((c) => `owner:${c}`),
+			...SEAT_COLORS.map((_, i) => `relOwner:${i}`),
 			'ownerIsSelf',
 			'slot',
 			'faceDown',
@@ -338,6 +348,7 @@ function seatToken(
 	state: PublicGameState,
 	seat: SeatColor,
 	viewer: SeatColor,
+	seatRank: Map<SeatColor, number>,
 	catalog: PlayCatalog
 ): number[] {
 	const p = state.players[seat];
@@ -346,7 +357,11 @@ function seatToken(
 	const f: number[] = [];
 	f.push(1); // present
 	f.push(isSelf ? 1 : 0);
-	for (const c of SEAT_COLORS) f.push(seat === c ? 1 : 0);
+	// Rotation-invariant seat identity: offset-from-self rank (self = 0), NOT the
+	// absolute seat colour. Every player sees itself in slot 0, so the policy cannot
+	// learn seat-colour-specific behaviour (obs-v3 seat-invariance fix).
+	const rank = seatRank.get(seat) ?? 0;
+	for (let i = 0; i < SEAT_COLORS.length; i++) f.push(i === rank ? 1 : 0);
 
 	f.push(clamp01(p.victoryPoints / VP_TO_WIN));
 	f.push(clamp01((VP_TO_WIN - p.victoryPoints) / VP_TO_WIN));
@@ -419,11 +434,14 @@ function spiritToken(
 	owner: SeatColor,
 	ownerState: PrivatePlayerState,
 	viewer: SeatColor,
+	seatRank: Map<SeatColor, number>,
 	vocab: ObsV2Vocab
 ): number[] {
 	const f: number[] = [];
 	f.push(1);
-	for (const c of SEAT_COLORS) f.push(owner === c ? 1 : 0);
+	// Rotation-invariant owner identity (offset-from-self rank), matching seatToken.
+	const rank = seatRank.get(owner) ?? 0;
+	for (let i = 0; i < SEAT_COLORS.length; i++) f.push(i === rank ? 1 : 0);
 	f.push(owner === viewer ? 1 : 0);
 	f.push(clamp01(spirit.slotIndex / MAX_SPIRITS));
 	f.push(spirit.isFaceDown ? 1 : 0);
@@ -543,13 +561,20 @@ export function encodeEntityObsV2(
 		...SEAT_COLORS.filter((s) => s !== seat && state.activeSeats.includes(s))
 	].filter((s) => !!state.players[s]);
 
-	const seatRows = seatOrder.map((s) => seatToken(state, s, seat, catalog));
+	// Rotation-invariant seat identity map: self → 0, every other seat → its
+	// offset-from-self in the SEAT_COLORS ring. A pure rotation of the colour ring,
+	// so the obs is identical under any relabelling that preserves offsets — the
+	// policy can no longer condition on absolute seat colour (obs-v3 fix).
+	const relOrder: SeatColor[] = [seat, ...SEAT_COLORS.filter((s) => s !== seat)];
+	const seatRank = new Map<SeatColor, number>(relOrder.map((s, i) => [s, i]));
+
+	const seatRows = seatOrder.map((s) => seatToken(state, s, seat, seatRank, catalog));
 
 	const spiritRows: number[][] = [];
 	for (const s of seatOrder) {
 		const p = state.players[s]!;
 		const boardSpirits = [...(p.spirits ?? [])].sort((a, b) => a.slotIndex - b.slotIndex);
-		for (const sp of boardSpirits) spiritRows.push(spiritToken(sp, s, p, seat, vocab));
+		for (const sp of boardSpirits) spiritRows.push(spiritToken(sp, s, p, seat, seatRank, vocab));
 	}
 
 	const marketRows = (state.market ?? []).map((slot) =>
