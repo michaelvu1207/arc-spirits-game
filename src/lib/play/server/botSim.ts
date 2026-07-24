@@ -40,7 +40,7 @@ import {
 	planNeuralPhaseActions,
 	planUniformLegalPhaseActions
 } from '../ml/neuralBot';
-import { getRemoteV2Client, planNeuralPhaseActionsV2, resetRemoteV2Client } from '../ml/remoteV2';
+import { getRemoteV2Fleet, planNeuralPhaseActionsV2, resetRemoteV2Client } from '../ml/remoteV2';
 
 /** Backward-compatible export for older callers/tests. New code should import
  *  ML_BOT_PROFILE_KEY from bots/contract. */
@@ -430,9 +430,12 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 	// case the live bot uses the same legal-action contract with uniform selection, not
 	// the retired strategic heuristic profiles.
 	const neuralPolicy = await getNeuralPolicy();
-	// Remote v2 champion (ARC_INFER_URL/ARC_INFER_TOKEN). Null when unconfigured or the
-	// handshake recently failed; every seat below then plays the bundled v1 policy.
-	const remoteV2 = await getRemoteV2Client();
+	// Remote v2 champion fleet (ARC_INFER_URL/ARC_INFER_TOKEN). Empty when unconfigured or
+	// the handshake recently failed; every seat below then plays the bundled v1 policy.
+	// Multi-bot rooms deal DIFFERENT champions across bot seats (fleet[ordinal % n]) so
+	// identical clones don't chase the same plan and starve each other; the strongest
+	// champion is always fleet[0], so heads-up rooms get exactly the current champion.
+	const remoteV2Fleet = await getRemoteV2Fleet();
 	// The v2 champion was validated (gauntlet + human benchmark) sampling ALL phases at
 	// 0.55, unlike v1's nav-only 0.65 — different model, different in-distribution knobs.
 	const v2Temp = process.env.ARC_V2_TEMP !== undefined ? parseFloat(process.env.ARC_V2_TEMP) : 0.55;
@@ -440,10 +443,18 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		process.env.ARC_V2_TEMP_SCOPE === 'navigation' ? 'navigation' : 'all';
 
 	let commandsIssued = 0;
+	// Stable bot ordinal (seat iteration order is fixed), used to deal fleet champions
+	// across seats. Counted for every seated bot — not just ones acting this tick — so a
+	// seat keeps the same champion for the whole game.
+	let botOrdinal = -1;
 
 	for (const seat of seatedBotSeats(state, botMembers)) {
 		const botMemberId = botMemberIdAt(state, seat, botMembers);
 		if (!botMemberId) continue;
+		botOrdinal += 1;
+		const remoteV2 = remoteV2Fleet.length
+			? remoteV2Fleet[botOrdinal % remoteV2Fleet.length]
+			: null;
 		if (!botSeatNeedsToAct(state, seat)) continue;
 
 		// Strategy comes from the member's bot_profile column; fall back to parsing the

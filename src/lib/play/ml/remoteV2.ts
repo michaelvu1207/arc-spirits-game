@@ -134,7 +134,39 @@ export async function getRemoteV2Client(): Promise<RemoteV2Client | null> {
 /** Drop the cached client so the next tick re-handshakes (called on scoring failures). */
 export function resetRemoteV2Client(): void {
 	cachedClient = undefined;
+	cachedFleet = undefined;
 	lastFailureAt = Date.now();
+}
+
+let cachedFleet: RemoteV2Client[] | undefined;
+
+/**
+ * Champion fleet for multi-bot rooms. The shim optionally serves extra frozen champions
+ * at `/m/b` and `/m/c` (same protocol, same token); seating DIFFERENT champions across a
+ * room's bot seats breaks the mirror-clone starvation where identical policies chase the
+ * same plan and split the shared monster ladder. Index 0 is always the primary (current)
+ * champion, so single-bot rooms — heads-up — are unaffected. Endpoints that don't exist
+ * or fail the handshake are simply absent: the fleet degrades toward [primary] and play
+ * continues. ARC_FLEET=0 forces single-champion serving.
+ */
+export async function getRemoteV2Fleet(): Promise<RemoteV2Client[]> {
+	const primary = await getRemoteV2Client();
+	if (!primary) return [];
+	if (process.env.ARC_FLEET === '0') return [primary];
+	if (cachedFleet) return cachedFleet;
+	const url = process.env.ARC_INFER_URL?.replace(/\/+$/, '');
+	const token = process.env.ARC_INFER_TOKEN;
+	if (!url || !token) return [primary];
+	const extras: RemoteV2Client[] = [];
+	for (const key of ['b', 'c']) {
+		try {
+			extras.push(await RemoteV2Client.connect(`${url}/m/${key}`, token));
+		} catch {
+			// Absent or down — serve without it. Never block play on a fleet member.
+		}
+	}
+	cachedFleet = [primary, ...extras];
+	return cachedFleet;
 }
 
 /** Port of net.ts `pick` semantics onto precomputed logits: argmax, or softmax sample. */
