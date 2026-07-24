@@ -3,6 +3,10 @@ import type { RequestHandler } from './$types';
 import { loadRoomView, authenticateRoomMember } from '$lib/play/server/service';
 import { tickBots } from '$lib/play/server/botSim';
 
+// Serve-time search plans a whole phase on the GPU host (seconds per nav decision,
+// several bot seats per tick) — give the tick room beyond the platform default.
+export const config = { maxDuration: 60 };
+
 export const POST: RequestHandler = async ({ params, locals }) => {
 	const roomCode = String(params.roomCode ?? '');
 	// Resolve the validated account to the trusted internal member id at the edge —

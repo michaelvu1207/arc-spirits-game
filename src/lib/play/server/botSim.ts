@@ -40,7 +40,13 @@ import {
 	planNeuralPhaseActions,
 	planUniformLegalPhaseActions
 } from '../ml/neuralBot';
-import { getRemoteV2Fleet, planNeuralPhaseActionsV2, resetRemoteV2Client } from '../ml/remoteV2';
+import {
+	getRemoteV2Fleet,
+	markSearchPlanningFailure,
+	planNeuralPhaseActionsV2,
+	resetRemoteV2Client,
+	searchPlanningEnabled
+} from '../ml/remoteV2';
 
 /** Backward-compatible export for older callers/tests. New code should import
  *  ML_BOT_PROFILE_KEY from bots/contract. */
@@ -490,15 +496,31 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		// if even that throws, skip the seat this tick and let the deadline drain advance it.
 		let commands: GameCommand[] | null = null;
 		if ((profileKey === NEURAL_PROFILE_KEY || profileKey === EXPERT_BOT_PROFILE_KEY) && remoteV2) {
-			try {
-				commands = await planNeuralPhaseActionsV2(state, seat, catalog, remoteV2, {
-					temperature: v2Temp,
-					temperatureScope: v2TempScope
-				});
-			} catch (err) {
-				console.error(`[botSim] remote v2 planner failed for seat ${seat}; using v1`, err);
-				resetRemoteV2Client();
-				commands = null;
+			// Serve-time search: seats holding the PRIMARY champion plan their whole phase on
+			// the GPU host's search sidecar (champion-leaf Gumbel at nav/encounter — measured
+			// 59.24% vs the raw policy). Fleet-b/c seats keep raw scoring: their point is
+			// strategic diversity, and the sidecar's leaf policy is the primary champion.
+			// Any failure falls through to the raw per-decision path below.
+			if (remoteV2 === remoteV2Fleet[0] && searchPlanningEnabled()) {
+				try {
+					commands = (await remoteV2.planPhase(state, seat, { temperature: v2Temp })).commands;
+				} catch (err) {
+					console.error(`[botSim] search plan failed for seat ${seat}; using raw scoring`, err);
+					markSearchPlanningFailure();
+					commands = null;
+				}
+			}
+			if (!commands) {
+				try {
+					commands = await planNeuralPhaseActionsV2(state, seat, catalog, remoteV2, {
+						temperature: v2Temp,
+						temperatureScope: v2TempScope
+					});
+				} catch (err) {
+					console.error(`[botSim] remote v2 planner failed for seat ${seat}; using v1`, err);
+					resetRemoteV2Client();
+					commands = null;
+				}
 			}
 		}
 		try {

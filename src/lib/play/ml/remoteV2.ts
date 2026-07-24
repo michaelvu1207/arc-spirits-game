@@ -33,6 +33,9 @@ import { isProgressTransition } from './neuralBot';
 const MAX_ACTIONS_PER_PHASE = 40;
 /** Per-request timeout: a poll tick must never hang on a dead remote. */
 const REQUEST_TIMEOUT_MS = 8_000;
+/** /plan timeout: search runs seconds per nav decision on the GPU host — give a whole
+ *  phase room to finish, but never let it eat the serverless function budget. */
+const PLAN_TIMEOUT_MS = 25_000;
 /** After a handshake failure, don't retry the remote for this long. */
 const FAILURE_COOLDOWN_MS = 60_000;
 
@@ -63,6 +66,37 @@ export class RemoteV2Client {
 			throw new Error(`remoteV2 handshake: unexpected format ${String(info.format)}`);
 		}
 		return new RemoteV2Client(baseUrl, token, info);
+	}
+
+	/**
+	 * Plan one seat's whole phase on the GPU host's search sidecar (`/plan`). The sidecar
+	 * runs champion-leaf Gumbel search at nav/encounter decisions — measured 59.24% vs the
+	 * raw policy (768g, sig) — and reproduces the raw hybrid contract everywhere else.
+	 * Throws on any failure; callers fall back to per-decision raw scoring.
+	 */
+	async planPhase(
+		state: PublicGameState,
+		seat: SeatColor,
+		opts: { temperature?: number } = {}
+	): Promise<{ commands: GameCommand[]; searched: number }> {
+		const res = await fetchWithTimeout(
+			`${this.baseUrl}/plan`,
+			{
+				method: 'POST',
+				headers: { 'X-Arc-Token': this.token, 'Content-Type': 'application/json' },
+				body: JSON.stringify({ state, seat, temperature: opts.temperature ?? 0 })
+			},
+			PLAN_TIMEOUT_MS
+		);
+		if (!res.ok) throw new Error(`remoteV2 plan: HTTP ${res.status}`);
+		const payload = (await res.json()) as {
+			commands?: GameCommand[];
+			searched?: number;
+			error?: string;
+		};
+		if (payload.error) throw new Error(`remoteV2 plan: ${payload.error}`);
+		if (!Array.isArray(payload.commands)) throw new Error('remoteV2 plan: malformed commands');
+		return { commands: payload.commands, searched: payload.searched ?? 0 };
 	}
 
 	/** Raw logits for one decision's candidate set (batch of 1). */
@@ -97,14 +131,32 @@ export class RemoteV2Client {
 	}
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(
+	url: string,
+	init: RequestInit,
+	timeoutMs: number = REQUEST_TIMEOUT_MS
+): Promise<Response> {
 	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	try {
 		return await fetch(url, { ...init, signal: controller.signal });
 	} finally {
 		clearTimeout(timer);
 	}
+}
+
+let searchFailedAt = 0;
+
+/** Should this tick even try the search sidecar? False during the post-failure cooldown
+ *  or when ARC_SEARCH=0. Never blocks raw scoring — search is a strict upgrade attempt. */
+export function searchPlanningEnabled(): boolean {
+	if (process.env.ARC_SEARCH === '0') return false;
+	return Date.now() - searchFailedAt >= FAILURE_COOLDOWN_MS;
+}
+
+/** Note a /plan failure so the next ticks skip straight to raw scoring for a while. */
+export function markSearchPlanningFailure(): void {
+	searchFailedAt = Date.now();
 }
 
 let cachedClient: RemoteV2Client | null | undefined;
