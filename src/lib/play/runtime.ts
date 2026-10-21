@@ -1,3 +1,4 @@
+import { currentClassCounts, currentClassName } from './classNames';
 import type { BagsData } from '$lib/types';
 import type {
 	CommandResult,
@@ -264,10 +265,12 @@ function buildPlayerState(seatColor: SeatColor, seat: LobbySeatState): PrivatePl
 		attackRollAdvantage: false,
 		halveIncoming: false,
 		skipTakeDamage: false,
+		alwaysAttackFirst: false,
 		// P5 per-turn / per-round flags (reset at navigation start each round).
 		doubleRunes: false,
 		redrawAvailable: false,
 		freeNextRelicTrade: false,
+		attackDiceChangedThisTurn: false,
 		becameTaintedThisRound: false,
 		becameCorruptThisRound: false,
 		becameFallenThisRound: false,
@@ -673,14 +676,14 @@ function applyAwakenRewardClaim(
 				runAction(ctx, { kind: 'gainAttackDice', tier: grant.tier, amount: grant.amount });
 		} else if (grant.kind === 'vp') {
 			if (grant.amount > 0) runAction(ctx, { kind: 'gainVP', amount: grant.amount });
-			// Golden Ruler: being Evil costs you one awakened Golden Ruler spirit.
+			// 'Golden Ruler': being Evil costs you one awakened Dawn Sovereign spirit.
 			if (grant.source === 'Golden Ruler' && isEvilAlignment(player.statusLevel)) {
 				const idx = player.spirits.findIndex(
 					(s) => !s.isFaceDown && (s.classes?.['Golden Ruler'] ?? 0) > 0
 				);
 				if (idx >= 0) {
 					const [discarded] = player.spirits.splice(idx, 1);
-					log.push(`Golden Ruler: you are evil — discarded ${discarded.name}.`);
+					log.push(`'Golden Ruler': you are evil — discarded ${discarded.name}.`);
 					const vpSettled = settleUnpayableCorruptionDebt(player);
 					if (vpSettled > 0)
 						log.push(`No spirits left for the corruption sacrifice — lost ${vpSettled} VP instead.`);
@@ -933,6 +936,12 @@ function refillEmptyMarketSlots(state: PublicGameState) {
 }
 
 function ensurePlayerCollections(player: PrivatePlayerState) {
+ // Migrate saved spirit traits and bound augments without changing their IDs.
+ for (const spirit of player.spirits ?? []) spirit.classes = currentClassCounts(spirit.classes ?? {});
+ for (const augment of player.unplacedAugments ?? []) {
+  if (augment.hostClass) augment.hostClass = currentClassName(augment.hostClass);
+ }
+
 	player.handDraws ??= [];
 	player.vpHistory ??= [];
 	player.mats ??= [];
@@ -985,10 +994,12 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
 	player.attackRollAdvantage ??= false;
 	player.halveIncoming ??= false;
 	player.skipTakeDamage ??= false;
+	player.alwaysAttackFirst ??= false;
 	// P5 per-turn / per-round flags.
 	player.doubleRunes ??= false;
 	player.redrawAvailable ??= false;
 	player.freeNextRelicTrade ??= false;
+	player.attackDiceChangedThisTurn ??= false;
 	player.becameTaintedThisRound ??= false;
 	player.becameCorruptThisRound ??= false;
 	player.becameFallenThisRound ??= false;
@@ -1451,6 +1462,21 @@ function reduceCommand(
 				command,
 				counts: spirit.classes
 			});
+			if (
+				pendingDraw.sourceBag === SPIRIT_WORLD_BAG &&
+				(awakenedClassCounts(activePlayer.player)['Abyss Summoner'] ?? 0) > 0
+			) {
+				activePlayer.player.pendingDecisions.push({
+					id: nextId(state.rng, 'dec'),
+					source: 'class',
+					kind: 'abyssSummonerDraw',
+					prompt: 'Abyss Summoner: draw from the Arcane Abyss Bag?',
+					options: [
+						{ id: 'yes', label: 'Draw from the Arcane Abyss' },
+						{ id: 'no', label: 'Not now' }
+					]
+				});
+			}
 
 			// Keep cleanup awaken offers/eligibility consistent if an abyss spirit
 			// auto-awakened mid-summon, and surface that awaken result.
@@ -1813,6 +1839,11 @@ function reduceCommand(
 			if (!spirit) {
 				return failure('spirit_missing', 'No spirit exists in that slot.');
 			}
+			const sourceBag =
+				bagForSpiritCost(spirit.cost) ??
+				(spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
+			const hadAbyssSummoner =
+				(awakenedClassCounts(player)['Abyss Summoner'] ?? 0) > 0;
 
 			// Remove it from the tableau (freeing the slot for a new summon) and drop
 			// any runes attached to that slot.
@@ -1827,11 +1858,13 @@ function reduceCommand(
 					counts: spirit.classes ?? {}
 				});
 			}
+			if (sourceBag === ARCANE_ABYSS_BAG && hadAbyssSummoner) {
+				player.victoryPoints += 4;
+				discardLog.push('Abyss Summoner: gained 4 VP for discarding an Arcane Abyss spirit.');
+			}
 
 			// Return the card to the bag it came from (face-down ⇒ Arcane Abyss,
 			// otherwise by cost) and reshuffle so it isn't predictably drawn next.
-			const sourceBag =
-				bagForSpiritCost(spirit.cost) ?? (spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
 			const runtimeBag = runtimeBagForSource(state, sourceBag);
 			runtimeBag.contents.push({
 				name: spirit.name,
@@ -1890,7 +1923,7 @@ function reduceCommand(
 				return failure('spirit_missing', 'No spirit exists in that slot.');
 			}
 
-			// Designated-target binding: some augments (e.g. Fairy Droid's "gain 2 augments
+			// Designated-target binding: some augments (e.g. Runebound Vessel's "gain 2 augments
 			// for THIS spirit") may only be placed on a specific spirit, not just anyone.
 			if (augment.boundSlotIndex != null && augment.boundSlotIndex !== spirit.slotIndex) {
 				return failure(
@@ -2077,7 +2110,7 @@ function reduceCommand(
 			}
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can confirm benefits.');
-			// Awakening-Phase class grants (Cursed Spirit, Golden Ruler, …) must be claimed
+			// Awakening-Phase class grants (Cursed Spirit, Dawn Sovereign, …) must be claimed
 			// before the Benefits step can advance to Awakening.
 			if (active.player.pendingAwakenReward) {
 				return failure('claim_pending', 'Claim your benefits first.');
@@ -2173,6 +2206,8 @@ function reduceCommand(
 		}
 
 		case 'infiltratorSwap': {
+			return failure('ability_changed', 'Infiltrator no longer swaps attack dice.');
+			/* Legacy validation retained for replay schema compatibility.
 			// Infiltrator (ENCODER): "swap 1 Attack Die with all players in your Location."
 			// A standalone Location-phase action — once per round, while an awakened
 			// Infiltrator shares a location with the targets. One swap per co-located
@@ -2185,7 +2220,7 @@ function reduceCommand(
 			if (!active) return failure('seat_required', 'Only seated players can swap dice.');
 			const me = active.player;
 			const hasInfiltrator = me.spirits.some(
-				(s) => !s.isFaceDown && (s.classes?.Infiltrator ?? 0) > 0
+				(s) => !s.isFaceDown && (s.classes?.['Cursed Fighter'] ?? 0) > 0
 			);
 			if (!hasInfiltrator) return failure('no_infiltrator', 'You have no awakened Infiltrator.');
 			if (me.actionsUsedThisRound.includes('infiltratorSwap')) {
@@ -2233,6 +2268,7 @@ function reduceCommand(
 			me.actionsUsedThisRound.push('infiltratorSwap');
 			me.lastAction = { key: 'infiltrate', label: 'Infiltrator — dice swap', log };
 			return success(state);
+			*/
 		}
 
 		case 'forceAdvancePhase': {
@@ -2271,7 +2307,7 @@ function reduceCommand(
 			if (!decision.options.some((o) => o.id === command.optionId)) {
 				return failure('invalid_option', 'That option is not available for this decision.');
 			}
-			// Picker decisions (Arc Mage / Strategist attack-die trades): when the client SENDS a
+			// Picker decisions (Arcane Alchemist / Strategist attack-die trades): when the client SENDS a
 			// non-empty selection it must be exactly the required count of eligible instances —
 			// a wrong-count / non-owned pick is rejected instead of silently auto-picking the 4
 			// lowest dice. An omitted or empty selection keeps the resolver's auto-pick (bots
@@ -2299,12 +2335,10 @@ function reduceCommand(
 				});
 				resolver(ctx, command.optionId, command.selectedInstanceIds);
 			}
-			// Abyss Summoner (Florality): Yes starts an Abyss draw (3 → summon 1) flagged
-			// autoAwaken, so the summoned spirit flips + awakens in spawnHandSpirit. Driven
-			// here (not in DECISION_RESOLVERS) because it needs the runtime draw machinery.
-			if (decision.kind === 'abyssSummonFlorality' && command.optionId === 'yes') {
-				queueOrBeginDraw(state, active.player, ARCANE_ABYSS_BAG, true);
-				log.push('Drawing 3 from the Abyss to summon and awaken 1.');
+			// Abyss Summoner: after a Spirit World summon, Yes opens a normal Abyss draw.
+			if (decision.kind === 'abyssSummonerDraw' && command.optionId === 'yes') {
+				queueOrBeginDraw(state, active.player, ARCANE_ABYSS_BAG);
+				log.push('Abyss Summoner: drawing from the Arcane Abyss Bag.');
 			}
 			// Remove the resolved decision regardless of the option taken.
 			active.player.pendingDecisions = active.player.pendingDecisions.filter(
@@ -2600,7 +2634,7 @@ function reduceCommand(
 				return failure('no_interaction', 'That location has no such interaction.');
 			}
 
-			// Gain rows are normally once per round. Child Prodigy ("do ALL location interactions
+			// Gain rows are normally once per round. Wayfarer ("do ALL location interactions
 			// up to two times") raises the per-row allowance via extraActions['locationInteraction'],
 			// exactly like Ironmane raises the combat allowance — count how many times THIS row has
 			// already run and reject only once the allowance is spent. TRADE rows are REPEATABLE:
@@ -2649,7 +2683,7 @@ function reduceCommand(
 			// queued).
 			let choiceCursor = 0;
 			const doublesAugments =
-				interaction.kind === 'trade' && (awakenedClassCounts(player)['Mod Injector'] ?? 0) >= 1;
+				interaction.kind === 'trade' && (awakenedClassCounts(player)['Runic Duplicator'] ?? 0) >= 1;
 			let cultivateTokens = 0;
 			let restTokens = 0;
 			for (const gain of interaction.gains) {
@@ -2702,7 +2736,7 @@ function reduceCommand(
 						if (doublesAugments && gain.rune.type === 'augment') addGainedRune(player, gain.rune);
 						log.push(`Gained ${gain.rune.name}.`);
 						if (doublesAugments && gain.rune.type === 'augment')
-							log.push(`Mod Injector: gained a second ${gain.rune.name}.`);
+							log.push(`Runic Duplicator: gained a second ${gain.rune.name}.`);
 						break;
 					}
 					case 'chooseRune': {
@@ -2714,7 +2748,7 @@ function reduceCommand(
 							if (doublesAugments && chosen.type === 'augment') addGainedRune(player, chosen);
 							log.push(`Gained ${chosen.name}.`);
 							if (doublesAugments && chosen.type === 'augment')
-								log.push(`Mod Injector: gained a second ${chosen.name}.`);
+								log.push(`Runic Duplicator: gained a second ${chosen.name}.`);
 						}
 						break;
 					}
@@ -2760,7 +2794,7 @@ function reduceCommand(
 			}
 			if (!state.monster) return failure('no_monster', 'There is no monster to fight.');
 			// Combat is once per round, but a class that grants extra combat actions
-			// (Ironmane: "initiate Monster Combat two times") raises the allowance via
+			// ('Monster Hunter': "initiate Monster Combat two times") raises the allowance via
 			// extraActions['combat']. The base allowance is 1; each prior use consumes
 			// one, and an extra-action credit lets the player exceed the base limit.
 			const combatsUsed = active.player.actionsUsedThisRound.filter((a) => a === 'combat').length;

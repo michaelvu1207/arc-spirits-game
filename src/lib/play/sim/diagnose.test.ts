@@ -171,7 +171,7 @@ describe.skipIf(!RUN_SIM)('diagnose solo stall', () => {
 		}
 
 		// Detailed per-round trace for the ARCANE profile on seed 1 — watch for arcane dice (×a)
-		// and an Arcane Advisor (Arc) appearing once it claims an Abyss summon + awakens it.
+		// and an Arcane Ascendant (Arc) appearing once it claims an Abyss summon + awakens it.
 		const trace: RoundSnap[] = [];
 		instrumentedSolo(catalog, 1, arcaneProfile, 50, trace);
 		console.log('\n--- arcane seed=1 per-round trace ---');
@@ -306,7 +306,7 @@ describe.skipIf(!RUN_SIM)('diagnose solo stall', () => {
 		}
 		// Per-class cost/bag reachability — Spirit World = cost 1-5, Arcane Abyss = cost 7-9.
 		console.log('\n--- key class reachability (cost → bag) ---');
-		for (const cls of ['Healer', 'Spirit Animal', 'Cultivator', 'Fighter', 'Elementalist', 'Arcane Advisor', 'Sharpshooter']) {
+		for (const cls of ['Healer', 'Spirit Animal', 'Cultivator', 'Fighter', 'Elementalist', 'Arcane Ascendant', 'Sharpshooter']) {
 			const costs = catalog.spirits.filter((s) => (s.classes?.[cls] ?? 0) > 0).map((s) => s.cost).sort((a, b) => a - b);
 			const sw = costs.filter((c) => c >= 1 && c <= 5).length;
 			const ab = costs.filter((c) => c >= 7 && c <= 9).length;

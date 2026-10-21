@@ -153,7 +153,7 @@ describe('Rest effects', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			attackDice: [{ instanceId: 'd0', tier: 'basic' }],
-			spirits: [spirit(1, 'A', { Elementalist: 2 }, {})]
+			spirits: [spirit(1, 'A', { 'Elementalist': 2 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
 		expect(p.attackDice[0].tier).toBe('enchanted');
@@ -163,7 +163,7 @@ describe('Rest effects', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			attackDice: [{ instanceId: 'd0', tier: 'basic' }],
-			spirits: [spirit(1, 'A', { Elementalist: 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Elementalist': 1 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
 		expect(p.attackDice[0].tier).toBe('basic');
@@ -177,7 +177,7 @@ describe('Rest effects', () => {
 				{ instanceId: 'd0', tier: 'exalted' },
 				{ instanceId: 'd1', tier: 'basic' }
 			],
-			spirits: [spirit(1, 'A', { Elementalist: 4 }, {})]
+			spirits: [spirit(1, 'A', { 'Elementalist': 4 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
 		// The basic die climbs to exalted; the exalted die is left alone; no arcane.
@@ -380,64 +380,17 @@ describe('Soul Weaver (engine-handled breakpoints)', () => {
 
 // Soul Weaver's active rules are covered at their engine integration points.
 
-describe('Strategist (onRest)', () => {
-	it('enqueues ONE decision card (no immediate discard) when it has ≥3 dice', () => {
+describe('Strategist (onTakeDamage)', () => {
+	it('reduces incoming damage by one per placed Spirit Augment', () => {
 		const p = makePlayer({
-			maxBarrier: 10,
-			attackDice: [
-				attackDie('d0', 'basic'),
-				attackDie('d1', 'basic'),
-				attackDie('d2', 'basic'),
-				attackDie('d3', 'basic')
-			],
-			spirits: [spirit(1, 'A', { Strategist: 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Runic Bulwark': 1 }, {})],
+			spiritAugmentAttachments: [
+				{ spiritSlotIndex: 1, runeId: 'a' },
+				{ spiritSlotIndex: 1, runeId: 'b' }
+			] as never
 		});
-		applyTrigger(makeState(p), 'Red', 'onRest', []);
-		// Nothing applied yet — just the opt-in card.
-		expect(p.attackDice).toHaveLength(4);
-		expect(p.unplacedAugments?.length ?? 0).toBe(0);
-		expect(p.pendingDecisions).toHaveLength(1);
-		expect(p.pendingDecisions[0].kind).toBe('strategistTrade');
-	});
-
-	it("resolving 'yes' discards 3 dice and grants the augment; 'no' does nothing", () => {
-		const yes = makePlayer({
-			maxBarrier: 10,
-			attackDice: [
-				attackDie('d0', 'basic'),
-				attackDie('d1', 'basic'),
-				attackDie('d2', 'basic'),
-				attackDie('d3', 'basic')
-			]
-		});
-		DECISION_RESOLVERS.strategistTrade(ctxFor(yes), 'yes');
-		expect(yes.attackDice).toHaveLength(1); // 4 − 3
-		expect(yes.unplacedAugments?.length ?? 0).toBe(1);
-
-		const no = makePlayer({
-			maxBarrier: 10,
-			attackDice: [
-				attackDie('d0', 'basic'),
-				attackDie('d1', 'basic'),
-				attackDie('d2', 'basic'),
-				attackDie('d3', 'basic')
-			]
-		});
-		DECISION_RESOLVERS.strategistTrade(ctxFor(no), 'no');
-		expect(no.attackDice).toHaveLength(4);
-		expect(no.unplacedAugments?.length ?? 0).toBe(0);
-	});
-
-	it('enqueues no decision (no discard, no augment) with fewer than 3 dice', () => {
-		const p = makePlayer({
-			maxBarrier: 10,
-			attackDice: [attackDie('d0', 'basic'), attackDie('d1', 'basic')],
-			spirits: [spirit(1, 'A', { Strategist: 1 }, {})]
-		});
-		applyTrigger(makeState(p), 'Red', 'onRest', []);
-		expect(p.attackDice).toHaveLength(2);
-		expect(p.unplacedAugments?.length ?? 0).toBe(0);
-		expect(p.pendingDecisions).toHaveLength(0);
+		applyTrigger(makeState(p), 'Red', 'onTakeDamage', []);
+		expect(p.damageReduction).toBe(2);
 	});
 });
 
@@ -469,11 +422,11 @@ describe('Captain (onCultivate)', () => {
 
 // ── P4: combat-trigger class coverage (onMonsterKill / awakening) ─────────────
 
-describe('Adaptive Fighter (onMonsterKill)', () => {
+describe('Battle Adept (onMonsterKill)', () => {
 	it('gains 1 potential when overkilling by ≥2 on a kill', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
-			spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Battle Adept': 1 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
 			combat: { dealt: 7, overkill: 3, killed: true }
@@ -485,7 +438,7 @@ describe('Adaptive Fighter (onMonsterKill)', () => {
 	it('does NOT gain potential when overkill is below 2', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
-			spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Battle Adept': 1 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
 			combat: { dealt: 5, overkill: 1, killed: true }
@@ -496,7 +449,7 @@ describe('Adaptive Fighter (onMonsterKill)', () => {
 	it('gains 1 Enchanted attack die when it does NOT kill', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
-			spirits: [spirit(1, 'A', { 'Adaptive Fighter': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Battle Adept': 1 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
 			combat: { dealt: 2, overkill: 0, killed: false }
@@ -510,8 +463,8 @@ describe('Adaptive Fighter (onMonsterKill)', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			spirits: [
-				spirit(1, 'A', { 'Adaptive Fighter': 1 }, {}),
-				spirit(2, 'B', { 'Adaptive Fighter': 1 }, {})
+				spirit(1, 'A', { 'Battle Adept': 1 }, {}),
+				spirit(2, 'B', { 'Battle Adept': 1 }, {})
 			]
 		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
@@ -525,8 +478,8 @@ describe('Adaptive Fighter (onMonsterKill)', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			spirits: [
-				spirit(1, 'A', { 'Adaptive Fighter': 1 }, {}),
-				spirit(2, 'B', { 'Adaptive Fighter': 1 }, {})
+				spirit(1, 'A', { 'Battle Adept': 1 }, {}),
+				spirit(2, 'B', { 'Battle Adept': 1 }, {})
 			]
 		});
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
@@ -542,7 +495,7 @@ describe('Fairy (awakening)', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			spirits: [
-				spirit(1, 'F', { Fairy: 1 }, { Forest: 1 }),
+				spirit(1, 'F', { 'Fairy': 1 }, { Forest: 1 }),
 				spirit(2, 'B', {}, { Forest: 1 }),
 				spirit(3, 'C', {}, { Cyber: 1 })
 			]
@@ -557,7 +510,7 @@ describe('Fairy (awakening)', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			spirits: [
-				spirit(1, 'F', { Fairy: 1 }, { Forest: 1 }),
+				spirit(1, 'F', { 'Fairy': 1 }, { Forest: 1 }),
 				spirit(2, 'X', { Fighter: 1 }, { Forest: 1 })
 			]
 		});
@@ -568,11 +521,11 @@ describe('Fairy (awakening)', () => {
 	});
 });
 
-describe('Dragon Warrior (awakening)', () => {
+describe('Arcane Vanguard (awakening)', () => {
 	it('gains 3 Arcane attack dice on the awakening trigger', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
-			spirits: [spirit(1, 'A', { 'Dragon Warrior': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Arcane Vanguard': 1 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'awakening', []);
 		expect(p.attackDice).toHaveLength(3);
@@ -580,30 +533,21 @@ describe('Dragon Warrior (awakening)', () => {
 	});
 
 	it('gains 2 initiative on the inCombat trigger', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Dragon Warrior': 1 }, {})] });
+		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Arcane Vanguard': 1 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'inCombat', []);
 		expect(p.initiative).toBe(2);
 	});
 });
 
-describe('Abyss Summoner (onNavigate, Floral Patch decision)', () => {
-	it('offers an abyssSummon decision at the Floral Patch (no manual prompt)', () => {
+describe('Abyss Summoner (runtime bag behavior)', () => {
+	it('does not use the obsolete Floral Patch navigation trigger', () => {
 		const p = makePlayer({
 			spirits: [spirit(1, 'A', { 'Abyss Summoner': 1 }, {})],
 			navigationDestination: 'Floral Patch'
 		});
 		applyTrigger(makeState(p), 'Red', 'onNavigate', []);
 		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
-		expect(p.pendingDecisions.some((d) => d.kind === 'abyssSummonFlorality')).toBe(true);
-	});
-
-	it('does NOT offer the decision away from the Floral Patch', () => {
-		const p = makePlayer({
-			spirits: [spirit(1, 'A', { 'Abyss Summoner': 1 }, {})],
-			navigationDestination: 'Cyber City'
-		});
-		applyTrigger(makeState(p), 'Red', 'onNavigate', []);
-		expect(p.pendingDecisions.some((d) => d.kind === 'abyssSummonFlorality')).toBe(false);
+		expect(p.pendingDecisions).toHaveLength(0);
 	});
 
 	it('is no longer in MANUAL_CLASSES (opt-in decision now)', () => {
@@ -611,9 +555,9 @@ describe('Abyss Summoner (onNavigate, Floral Patch decision)', () => {
 	});
 });
 
-describe('Fairy Droid (awakening)', () => {
+describe('Runebound Vessel (awakening)', () => {
 	it('grants 2 spirit augments bound to this spirit when it awakens (no manual prompt)', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Fairy Droid': 1 }, {})] });
+		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Runebound Vessel': 1 }, {})] });
 		// The handler fires for the awakening spirit named by the command's slotIndex.
 		applyTrigger(makeState(p), 'Red', 'awakening', [], { command: { slotIndex: 1 } });
 		expect(p.unplacedAugments?.length ?? 0).toBe(2);
@@ -622,17 +566,17 @@ describe('Fairy Droid (awakening)', () => {
 	});
 
 	it('is no longer listed in MANUAL_CLASSES', () => {
-		expect(MANUAL_CLASSES.has('Fairy Droid')).toBe(false);
+		expect(MANUAL_CLASSES.has('Runebound Vessel')).toBe(false);
 	});
 });
 
 // ── P5: onNavigate coverage ───────────────────────────────────────────────────
 
-describe('Deep Sea Hunter (onNavigate)', () => {
-	it('gains 4 initiative and offers a change-destination decision (no manual prompt)', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Deep Sea Hunter': 1 }, {})] });
+describe('Tide Stalker (onNavigate)', () => {
+	it('offers a change-destination decision without the removed +4 initiative', () => {
+		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Tide Stalker': 1 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'onNavigate', []);
-		expect(p.initiative).toBe(4);
+		expect(p.initiative).toBe(0);
 		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
 		const dec = p.pendingDecisions.find((d) => d.kind === 'deepSeaHunterRedirect');
 		expect(dec).toBeDefined();
@@ -641,7 +585,7 @@ describe('Deep Sea Hunter (onNavigate)', () => {
 	});
 
 	it('is no longer in MANUAL_CLASSES (built-in decision now)', () => {
-		expect(MANUAL_CLASSES.has('Deep Sea Hunter')).toBe(false);
+		expect(MANUAL_CLASSES.has('Tide Stalker')).toBe(false);
 	});
 });
 
@@ -692,7 +636,7 @@ describe('Cursed Spirit (cleanup claim — no longer an awakeningPhase auto-gran
 	});
 });
 
-describe('The Corruptor (inCombat; Awakening grant is a Cleanup claim)', () => {
+describe('Abyss Harbinger (inCombat; Awakening grant is a Cleanup claim)', () => {
 	it('grants +2 initiative passively in combat', () => {
 		const p = makePlayer({ spirits: [spirit(1, 'A', { 'The Corruptor': 1 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'inCombat', []);
@@ -718,7 +662,7 @@ describe('The Corruptor (inCombat; Awakening grant is a Cleanup claim)', () => {
 // (which would double-grant alongside the claim). ────────────────────────────────
 
 describe('Awakening-Phase win-cons no longer auto-apply on the trigger', () => {
-	it('Golden Ruler grants no VP and discards nothing on the trigger', () => {
+	it('Dawn Sovereign grants no VP and discards nothing on the trigger', () => {
 		const good = makePlayer({
 			statusLevel: 0,
 			spirits: [spirit(1, 'A', { 'Golden Ruler': 1 }, {})]
@@ -736,24 +680,24 @@ describe('Awakening-Phase win-cons no longer auto-apply on the trigger', () => {
 		expect(evil.spirits).toHaveLength(1); // the Evil discard happens on claim, not the trigger
 	});
 
-	it('World Guardian grants no VP on the trigger even at ≥24 VP while Good', () => {
+	it('Relic Sentinel grants no VP on the trigger even at ≥24 VP while Good', () => {
 		const p = makePlayer({
 			statusLevel: 0,
 			victoryPoints: 24,
-			spirits: [spirit(1, 'A', { 'World Guardian': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Relic Sentinel': 1 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'awakeningPhase', []);
 		expect(p.victoryPoints).toBe(24);
 	});
 
-	it('World Ender grants a flat +1 VP on the awakeningPhase trigger (reworked)', () => {
+	it('Void Sovereign grants a flat +1 VP on the awakeningPhase trigger (reworked)', () => {
 		const red = makePlayer({
 			playerColor: 'Red',
 			statusLevel: 0,
-			spirits: [spirit(1, 'A', { 'World Ender': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Void Sovereign': 1 }, {})]
 		});
 		applyTrigger(makeState(red), 'Red', 'awakeningPhase', []);
-		// World Ender is now a flat +1 VP handler (no longer the all-Evil Cleanup claim).
+		// Void Sovereign is now a flat +1 VP handler (no longer the all-Evil Cleanup claim).
 		expect(red.victoryPoints).toBe(1);
 	});
 });

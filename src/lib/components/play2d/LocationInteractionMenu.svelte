@@ -65,7 +65,7 @@
 
 	const interactions = $derived(buildLocationInteractions(location?.reward_rows));
 	const usedRows = $derived(player?.actionsUsedThisRound ?? []);
-	// Per-row use allowance: 1 + Child Prodigy's locationInteraction credit ("you may
+	// Per-row use allowance: 1 + Wayfarer's locationInteraction credit ("you may
 	// do ALL location interactions up to two times"). When >1 we render one card per
 	// allowed use, each spent left-to-right as the player resolves the row.
 	const rowAllowance = $derived(1 + (player?.extraActions?.locationInteraction ?? 0));

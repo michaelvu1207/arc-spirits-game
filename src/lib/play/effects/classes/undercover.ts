@@ -30,7 +30,7 @@ const onPlayerInteraction: ClassHandler = (ctx) => {
 			{ id: 'no', label: 'No' }
 		]
 	});
-	ctx.log.push('Undercover: may give both players a Fairy Relic.');
+	ctx.log.push('Relic Envoy: may give both players a Fairy Relic.');
 };
 
 export const ability: ClassAbility[] = [{ on: 'onPlayerInteraction', run: onPlayerInteraction }];
@@ -43,6 +43,6 @@ export const decisions: ClassDecisions = {
 		if (!other) return;
 		gainFairyRelic(ctx.player);
 		gainFairyRelic(other);
-		ctx.log.push(`Undercover: ${ctx.seat} and ${opponent} each gained a Fairy Relic.`);
+		ctx.log.push(`Relic Envoy: ${ctx.seat} and ${opponent} each gained a Fairy Relic.`);
 	}
 };

@@ -47,42 +47,42 @@ const BARRIER_NORM = 20;
 // array order: checkpoint meaning must remain stable across catalog serialization changes.
 const FULL_CLASS_FEATURES = [
 	'Abyss Summoner',
-	'Adaptive Fighter',
-	'Ancient Magus',
-	'Aquamaiden',
-	'Arc Mage',
-	'Arcane Advisor',
-	'Blood Hunter',
+	'Battle Adept',
+	'Relic Warden',
+	'Tide Warden',
+	'Arcane Alchemist',
+	'Arcane Ascendant',
+	'Woundreaver',
 	'Captain',
-	'Child Prodigy',
+	'Wayfarer',
 	'Cultivator',
 	'Cursed Spirit',
-	'Dark Assassin',
-	'Dark Fighter',
-	'Deep Sea Hunter',
+	'Aegis Weaver',
+	'Fatestriker',
+	'Tide Stalker',
 	'Disruptor',
-	'Dragon Warrior',
+	'Arcane Vanguard',
 	'Elementalist',
 	'Fairy',
-	'Fairy Droid',
+	'Runebound Vessel',
 	'Fighter',
-	'Firekeeper',
+	'Emberguard',
 	'Golden Ruler',
-	'Golem of Wishes',
+	'Living Bastion',
 	'Healer',
-	'Infiltrator',
-	'Ironmane',
-	'Mod Injector',
-	'Tree of Growth',
+	'Cursed Fighter',
+	'Monster Hunter',
+	'Runic Duplicator',
+	'Growth Warden',
 	'Rune Mage',
 	'Sharpshooter',
 	'Soul Weaver',
 	'Spirit Animal',
-	'Strategist',
+	'Runic Bulwark',
 	'The Corruptor',
-	'Undercover',
-	'World Ender',
-	'World Guardian'
+	'Relic Envoy',
+	'Void Sovereign',
+	'Relic Sentinel'
 ] as const;
 const FULL_ORIGIN_FEATURES = [
 	'Astral Zone',
@@ -204,14 +204,14 @@ function spiritRouteFeatures(classes: Record<string, number> | undefined): numbe
 	return [
 		classFeature(classes, 'Spirit Animal'),
 		classFeature(classes, 'Elementalist', 5),
-		classFeature(classes, 'Arc Mage'),
-		clamp01(sumClasses(classes, ['Fighter', 'Adaptive Fighter']) / 5),
-		clamp01(sumClasses(classes, ['Dragon Warrior', 'Fairy', 'Dark Fighter']) / 3),
+		classFeature(classes, 'Arcane Alchemist'),
+		clamp01(sumClasses(classes, ['Fighter', 'Battle Adept']) / 5),
+		clamp01(sumClasses(classes, ['Arcane Vanguard', 'Fairy', 'Fatestriker']) / 3),
 		classFeature(classes, 'Cultivator', 5),
-		clamp01(sumClasses(classes, ['World Ender', 'Golden Ruler', 'World Guardian', 'Healer']) / 3),
-		clamp01(sumClasses(classes, ['Cursed Spirit', 'The Corruptor', 'Dark Assassin']) / 3),
-		clamp01(sumClasses(classes, ['Soul Weaver', 'Sharpshooter', 'Ironmane']) / 3),
-		clamp01(sumClasses(classes, ['Abyss Summoner', 'Tree of Growth', 'Strategist', 'Rune Mage']) / 3)
+		clamp01(sumClasses(classes, ['Void Sovereign', 'Golden Ruler', 'Relic Sentinel', 'Healer']) / 3),
+		clamp01(sumClasses(classes, ['Cursed Spirit', 'The Corruptor', 'Aegis Weaver']) / 3),
+		clamp01(sumClasses(classes, ['Soul Weaver', 'Sharpshooter', 'Monster Hunter']) / 3),
+		clamp01(sumClasses(classes, ['Abyss Summoner', 'Growth Warden', 'Runic Bulwark', 'Rune Mage']) / 3)
 	];
 }
 
@@ -336,18 +336,18 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	// the non-corrupt economy/class-win lines. Append-only.
 	const cc = me ? awakenedClassCounts(me) : {};
 	f.push(clamp01((cc['Cultivator'] ?? 0) / 5)); // 2/3/4/5 = maxBarrier breakpoints
-	f.push(clamp01((cc['World Ender'] ?? 0) / 3)); // +1 VP / round
+	f.push(clamp01((cc['Void Sovereign'] ?? 0) / 3)); // +1 VP / round
 	f.push(clamp01((cc['Golden Ruler'] ?? 0) / 3)); // +1 VP / round
-	f.push(clamp01((cc['World Guardian'] ?? 0) / 3)); // +6 VP capstone
+	f.push(clamp01((cc['Relic Sentinel'] ?? 0) / 3)); // +6 VP capstone
 	f.push(clamp01((cc['Healer'] ?? 0) / 3)); // +1 VP on rest
 	f.push(clamp01((cc['Sharpshooter'] ?? 0) / 3)); // PvP enabler
 	f.push(clamp01((cc['Cursed Spirit'] ?? 0) / 3)); // corruption enabler
 	f.push(clamp01((cc['Spirit Animal'] ?? 0) / 7)); // flat monster-damage route
 	f.push(clamp01((cc['Elementalist'] ?? 0) / 3)); // dice quality / damage scaling
-	f.push(clamp01((cc['Arc Mage'] ?? 0) / 3)); // arcane dice conversion
+	f.push(clamp01((cc['Arcane Alchemist'] ?? 0) / 3)); // arcane dice conversion
 	f.push(clamp01((cc['Fighter'] ?? 0) / 3)); // direct combat scaling
-	f.push(clamp01((cc['Adaptive Fighter'] ?? 0) / 3)); // flexible combat scaling
-	f.push(clamp01((cc['Dragon Warrior'] ?? 0) / 3)); // combat scaling
+	f.push(clamp01((cc['Battle Adept'] ?? 0) / 3)); // flexible combat scaling
+	f.push(clamp01((cc['Arcane Vanguard'] ?? 0) / 3)); // combat scaling
 	f.push(clamp01((cc['Fairy'] ?? 0) / 3)); // combat/support scaling
 
 	// ── Ladder forward-value block (obs v1.1, Phase 3 "crack the monster ladder").
@@ -381,8 +381,8 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 		me ? (me.spirits ?? []).filter((s) => s.isFaceDown && (s.classes?.[cls] ?? 0) > 0).length : 0;
 	f.push(clamp01(fdClass('Fighter') / 5));
 	f.push(clamp01(fdClass('Elementalist') / 5));
-	f.push(clamp01(fdClass('Arc Mage') / 3));
-	f.push(clamp01(fdClass('Dragon Warrior') / 3));
+	f.push(clamp01(fdClass('Arcane Alchemist') / 3));
+	f.push(clamp01(fdClass('Arcane Vanguard') / 3));
 	// Awakened Fighter/Elementalist on a /5 scale: the /3 one-hots above saturate at 3,
 	// hiding the 4→5 breakpoints (+5/+10 dice) that gate the boss-rung pool.
 	f.push(clamp01((cc['Fighter'] ?? 0) / 5));
@@ -933,9 +933,9 @@ export function encodeAction(
 			f[p + 2] = spirit ? clamp01((spirit.cost ?? 0) / 8) : 0;
 			f[p + 3] = classFeature(classes, 'Spirit Animal'); // flat monster damage
 			f[p + 4] = classFeature(classes, 'Elementalist'); // dice-quality scaling
-			f[p + 5] = classFeature(classes, 'Arc Mage'); // dice conversion to arcane
-			f[p + 6] = clamp01(((classes?.Fighter ?? 0) + (classes?.['Adaptive Fighter'] ?? 0)) / 3);
-			f[p + 7] = clamp01(((classes?.['Dragon Warrior'] ?? 0) + (classes?.Fairy ?? 0)) / 3);
+			f[p + 5] = classFeature(classes, 'Arcane Alchemist'); // dice conversion to arcane
+			f[p + 6] = clamp01(((classes?.Fighter ?? 0) + (classes?.['Battle Adept'] ?? 0)) / 3);
+			f[p + 7] = clamp01(((classes?.['Arcane Vanguard'] ?? 0) + (classes?.['Fairy'] ?? 0)) / 3);
 			f[p + 8] = classFeature(classes, 'Sharpshooter'); // die on summon + simultaneous attack
 			f[p + 9] = classFeature(classes, 'Cultivator', 5); // max-barrier route support
 			break;

@@ -138,6 +138,23 @@ function buildCatalog() {
 	});
 }
 
+test('renamed region display names preserve existing origin-based rules and repeated traits', () => {
+	const assets = emptyAssets();
+	assets.origins = [
+		['ad555f03-9b89-4a71-a47c-464fd67d2c05', 'Forest'],
+		['fa7db249-d99d-4c1d-a37d-9027c9f5a31e', 'Mountain'],
+		['178449e9-cc6b-45ab-8522-5183fe1d9307', 'Fire'],
+		['294cee31-a7ac-4292-9b61-d4293c05c146', 'Water']
+	].map(([id, name]) => ({ id, name, position: 0, color: '#fff', icon_png: null, icon_token_png: null, description: null }));
+	assets.spirits = [spirit({ id: 'renamed', name: 'Tidewarden', traits: {
+		class_ids: [], origin_ids: [...assets.origins.map(o => o.id), assets.origins[3].id]
+	} })];
+	expect(buildPlayCatalog(assets).spirits[0].origins).toEqual({
+		'Floral Patch': 1, 'Cyber City': 1, 'Lantern Lights': 1, 'Moon Tide': 2
+	});
+	expect(assets.origins.map(o => o.name)).toEqual(['Forest', 'Mountain', 'Fire', 'Water']);
+});
+
 function awakenOf(name: string): NormalizedAwaken | undefined {
 	const catalog = buildCatalog();
 	return catalog.spirits.find((s) => s.name === name)?.awaken;
@@ -204,7 +221,7 @@ describe('buildPlayCatalog — classes', () => {
 		const astro = catalog.spirits.find((s) => s.name === 'Astrobiologist');
 		// Three Elementalist class_ids must total 3 (not collapse to 1), and a
 		// distinct Fighter grant is counted alongside it.
-		expect(astro?.classes).toEqual({ Elementalist: 3, Fighter: 1 });
+		expect(astro?.classes).toEqual({ 'Elementalist': 3, Fighter: 1 });
 	});
 });
 

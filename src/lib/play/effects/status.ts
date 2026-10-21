@@ -11,7 +11,7 @@
  * The threshold flags are engine bookkeeping (they apply regardless of class), so
  * they're set here at the single dispatch point rather than in a class handler.
  * They are reset at the start of each round in `beginNavigation`. `corruptedThisRound`
- * marks any upward status move (The Corruptor); the per-stage `became*` flags mark
+ * marks any upward status move (Abyss Harbinger); the per-stage `became*` flags mark
  * the specific stage entered (Cursed Spirit's per-stage grants).
  */
 

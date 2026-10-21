@@ -132,7 +132,7 @@ function inferStrategy(row: {
 	}
 	if (row.monster_kills_per_seat_game >= 1 || row.monster_combats_per_seat_game >= 3) return 'abyss-monster-farm';
 	if ((row.top_classes.Cultivator ?? 0) >= 2 || row.avg_max_barrier >= 9) return 'cultivator-barrier-economy';
-	if ((row.top_classes['Golden Ruler'] ?? 0) + (row.top_classes['World Ender'] ?? 0) >= 2) return 'passive-vp-engine';
+	if ((row.top_classes['Golden Ruler'] ?? 0) + (row.top_classes['Void Sovereign'] ?? 0) >= 2) return 'passive-vp-engine';
 	if (row.avg_attack_dice >= 4) return 'combat-dice-scaling';
 	if (row.abyss_navs_per_seat_game >= 2) return 'abyss-probing';
 	return 'mixed-or-unresolved';

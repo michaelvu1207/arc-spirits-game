@@ -848,21 +848,21 @@ function goodBuilderClassScore(
 	vp: number
 ): number {
 	const awakened =
-		(counts['World Ender'] ?? 0) * 70 +
-		(counts['World Guardian'] ?? 0) * (vp >= 20 ? 90 : 45) +
+		(counts['Void Sovereign'] ?? 0) * 70 +
+		(counts['Relic Sentinel'] ?? 0) * (vp >= 20 ? 90 : 45) +
 		(counts.Healer ?? 0) * 38 +
 		(counts['Spirit Animal'] ?? 0) * 24 +
 		(counts.Fighter ?? 0) * 9 +
-		(counts.Elementalist ?? 0) * 12 +
+		(counts['Elementalist'] ?? 0) * 12 +
 		(counts.Cultivator ?? 0) * 13 +
 		(counts['Soul Weaver'] ?? 0) * 8;
 	const potential =
-		Math.max(0, (raw['World Ender'] ?? 0) - (counts['World Ender'] ?? 0)) * 30 +
-		Math.max(0, (raw['World Guardian'] ?? 0) - (counts['World Guardian'] ?? 0)) * 26 +
+		Math.max(0, (raw['Void Sovereign'] ?? 0) - (counts['Void Sovereign'] ?? 0)) * 30 +
+		Math.max(0, (raw['Relic Sentinel'] ?? 0) - (counts['Relic Sentinel'] ?? 0)) * 26 +
 		Math.max(0, (raw.Healer ?? 0) - (counts.Healer ?? 0)) * 14 +
 		Math.max(0, (raw['Spirit Animal'] ?? 0) - (counts['Spirit Animal'] ?? 0)) * 10 +
 		Math.max(0, (raw.Fighter ?? 0) - (counts.Fighter ?? 0)) * 5 +
-		Math.max(0, (raw.Elementalist ?? 0) - (counts.Elementalist ?? 0)) * 5 +
+		Math.max(0, (raw['Elementalist'] ?? 0) - (counts['Elementalist'] ?? 0)) * 5 +
 		Math.max(0, (raw.Cultivator ?? 0) - (counts.Cultivator ?? 0)) * 6;
 	const corruptionPull = (raw['Cursed Spirit'] ?? 0) * 80;
 	return awakened + potential - corruptionPull;
@@ -874,15 +874,15 @@ function goodBuilderSpiritScore(
 	if (!spirit) return 0;
 	const cls = spirit.classes ?? {};
 	let score = 0;
-	score += (cls['World Ender'] ?? 0) * 40;
-	score += (cls['World Guardian'] ?? 0) * 34;
+	score += (cls['Void Sovereign'] ?? 0) * 40;
+	score += (cls['Relic Sentinel'] ?? 0) * 34;
 	score += (cls.Healer ?? 0) * 24;
 	score += (cls['Spirit Animal'] ?? 0) * 18;
 	score += (cls.Cultivator ?? 0) * 13;
-	score += (cls.Elementalist ?? 0) * 12;
+	score += (cls['Elementalist'] ?? 0) * 12;
 	score += (cls.Fighter ?? 0) * 10;
 	score += (cls['Soul Weaver'] ?? 0) * 8;
-	score += (cls.Sharpshooter ?? 0) * 3;
+	score += (cls['Sharpshooter'] ?? 0) * 3;
 	score -= (cls['Cursed Spirit'] ?? 0) * 25;
 	score -= Math.max(0, (spirit.cost ?? 1) - 5) * 2;
 	return score;
@@ -920,7 +920,7 @@ function goodBuilderStateScore(
 	const survivalTarget = monster ? (monster.damage ?? 0) + 1 : 0;
 	const canSurvive = survivalTarget <= 0 || (player.barrier ?? 0) >= survivalTarget;
 	const nearKill = monsterHp > 0 ? clamp01(attack / Math.max(1, monsterHp)) : 0;
-	const worldGuardianFinish = (counts['World Guardian'] ?? 0) > 0 && vp >= 24 ? 500 : 0;
+	const worldGuardianFinish = (counts['Relic Sentinel'] ?? 0) > 0 && vp >= 24 ? 500 : 0;
 	const healerRestEngine = (counts.Healer ?? 0) > 0 && (player.maxBarrier ?? 0) >= 10 ? 80 : 0;
 	return (
 		vp * 130 +
@@ -1055,9 +1055,9 @@ function classCountScoreForHp4Floor(
 	const cultivator = counts.Cultivator ?? 0;
 	const healer = counts.Healer ?? 0;
 	const fighter = counts.Fighter ?? 0;
-	const elementalist = counts.Elementalist ?? 0;
-	const worldGuardian = counts['World Guardian'] ?? 0;
-	const worldEnder = counts['World Ender'] ?? 0;
+	const elementalist = counts['Elementalist'] ?? 0;
+	const worldGuardian = counts['Relic Sentinel'] ?? 0;
+	const worldEnder = counts['Void Sovereign'] ?? 0;
 	return (
 		Math.min(spiritAnimal, Math.max(4, hp + 1)) * 260 +
 		(cultivator >= 2 ? 900 : cultivator * (survivalShort ? 420 : 180)) +
@@ -1233,7 +1233,7 @@ function goodBuilderHp4ScoreFloorActionScore(
 		score += cultivatorProgressDelta * (hp4SurvivalWall ? 2_800 : 900);
 	if ((afterCounts.Fighter ?? 0) > (beforeCounts.Fighter ?? 0))
 		score += damageFloorMissing ? 1_600 : 650;
-	if ((afterCounts.Elementalist ?? 0) > (beforeCounts.Elementalist ?? 0))
+	if ((afterCounts['Elementalist'] ?? 0) > (beforeCounts['Elementalist'] ?? 0))
 		score += damageFloorMissing ? 1_450 : 600;
 	if ((afterCounts.Cultivator ?? 0) >= 2 && (beforeCounts.Cultivator ?? 0) < 2)
 		score += hp4SurvivalWall ? 5_200 : 2_400;
@@ -1312,7 +1312,7 @@ function goodBuilderHp4ScoreFloorActionScore(
 				Math.max(0, (afterCounts.Cultivator ?? 0) - (beforeCounts.Cultivator ?? 0)) * 1_200 +
 				Math.max(0, (afterCounts.Fighter ?? 0) - (beforeCounts.Fighter ?? 0)) *
 					(damageFloorMissing ? 1_400 : 650) +
-				Math.max(0, (afterCounts.Elementalist ?? 0) - (beforeCounts.Elementalist ?? 0)) *
+				Math.max(0, (afterCounts['Elementalist'] ?? 0) - (beforeCounts['Elementalist'] ?? 0)) *
 					(damageFloorMissing ? 1_300 : 600) +
 				Math.max(0, (afterCounts.Healer ?? 0) - (beforeCounts.Healer ?? 0)) * 450;
 			break;
@@ -1327,7 +1327,7 @@ function goodBuilderHp4ScoreFloorActionScore(
 					(hp4SurvivalWall ? 3_800 : 1_350) +
 				Math.max(0, (afterCounts.Fighter ?? 0) - (beforeCounts.Fighter ?? 0)) *
 					(damageFloorMissing ? 1_700 : 750) +
-				Math.max(0, (afterCounts.Elementalist ?? 0) - (beforeCounts.Elementalist ?? 0)) *
+				Math.max(0, (afterCounts['Elementalist'] ?? 0) - (beforeCounts['Elementalist'] ?? 0)) *
 					(damageFloorMissing ? 1_550 : 700) +
 				Math.max(0, (afterCounts.Healer ?? 0) - (beforeCounts.Healer ?? 0)) * 550;
 			break;
@@ -1476,13 +1476,13 @@ function goodBuilderOracleDestinations(
 		(counts.Cultivator ?? 0) >= 2;
 	const damageShort = monsterHp > 0 && attack < monsterHp + 0.5 && firepower < threshold;
 	const wantsPassiveScorer =
-		(raw['World Ender'] ?? 0) <= 0 ||
-		((raw['World Guardian'] ?? 0) <= 0 && vp >= 15) ||
+		(raw['Void Sovereign'] ?? 0) <= 0 ||
+		((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 15) ||
 		((counts.Healer ?? 0) <= 0 && (player.maxBarrier ?? 0) >= 8);
 	const wantsTeam =
 		player.spirits.length < 6 || wantsPassiveScorer || (counts['Spirit Animal'] ?? 0) < 2;
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
-	const hasWorldGuardianFinish = (counts['World Guardian'] ?? 0) > 0 && vp >= 24;
+	const hasWorldGuardianFinish = (counts['Relic Sentinel'] ?? 0) > 0 && vp >= 24;
 	const hasHealerRestVp = (counts.Healer ?? 0) > 0 && (player.maxBarrier ?? 0) >= 10;
 	const cleanFarmReady =
 		farm.valid &&
@@ -1570,10 +1570,10 @@ function goodBuilderSupportOracleDestinations(
 		(player.maxBarrier ?? 0) >= survivalTarget &&
 		(player.barrier ?? 0) < survivalTarget;
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
-	const hasWorldGuardianFinish = (counts['World Guardian'] ?? 0) > 0 && vp >= 24;
+	const hasWorldGuardianFinish = (counts['Relic Sentinel'] ?? 0) > 0 && vp >= 24;
 	const hasHealerRestVp = (counts.Healer ?? 0) > 0 && (player.maxBarrier ?? 0) >= 10;
 	const wantsScorer =
-		(raw['World Ender'] ?? 0) <= 0 || ((raw['World Guardian'] ?? 0) <= 0 && vp >= 12);
+		(raw['Void Sovereign'] ?? 0) <= 0 || ((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12);
 	if (hasWorldGuardianFinish || hasHealerRestVp || needsRestore)
 		return ['Floral Patch', 'Lantern Canyon'];
 	if (farm.valid && farm.farmable && farm.opportunityVp > 0) {
@@ -1621,8 +1621,8 @@ function goodBuilderNoncontestSupportDestinations(
 		survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2;
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
 	const wantsPassiveScorer =
-		(raw['World Ender'] ?? 0) <= 0 ||
-		((raw['World Guardian'] ?? 0) <= 0 && vp >= 12) ||
+		(raw['Void Sovereign'] ?? 0) <= 0 ||
+		((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12) ||
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
 
 	if (needsRestore) {
@@ -1862,8 +1862,8 @@ function goodNonfallenFarmTargetPivotDestinations(
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
 	const wantsScorer =
 		vp >= 18 ||
-		(raw['World Ender'] ?? 0) <= 0 ||
-		((raw['World Guardian'] ?? 0) <= 0 && vp >= 12) ||
+		(raw['Void Sovereign'] ?? 0) <= 0 ||
+		((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12) ||
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
 	const needsDamage =
 		monsterHp > 0 && attack < monsterHp + 0.5 && firepower < threshold && clean < threshold;
@@ -2065,8 +2065,8 @@ function goodNonfallenScoreFloorDestinations(
 
 	const wantsPassiveScorer =
 		vp >= 18 ||
-		(vp >= 12 && (raw['World Ender'] ?? 0) <= 0) ||
-		(vp >= 15 && (raw['World Guardian'] ?? 0) <= 0) ||
+		(vp >= 12 && (raw['Void Sovereign'] ?? 0) <= 0) ||
+		(vp >= 15 && (raw['Relic Sentinel'] ?? 0) <= 0) ||
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
 	if (wantsPassiveScorer) append('Floral Patch');
 	if (hasRelic || state.round >= 6) append('Cyber City');

@@ -8,7 +8,7 @@ import { fire, ctxFor, makePlayer } from './testHelpers';
 describe('Disruptor', () => {
 	it('flags halveIncoming when the opponent (pooled) has higher initiative', () => {
 		const player = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { Disruptor: 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 2
 		});
 		const ctx = ctxFor(player, { trigger: 'onTakeDamage' });
@@ -20,7 +20,7 @@ describe('Disruptor', () => {
 
 	it('surfaces to the player via a log line (no silent no-op)', () => {
 		const player = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { Disruptor: 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 2
 		});
 		const ctx = ctxFor(player, { trigger: 'onTakeDamage' });
@@ -31,7 +31,7 @@ describe('Disruptor', () => {
 
 	it('reads a single opponent seat initiative when no pooled total is present', () => {
 		const me = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { Disruptor: 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 1
 		});
 		const foe = makePlayer({ playerColor: 'Blue', initiative: 3 });
@@ -43,7 +43,7 @@ describe('Disruptor', () => {
 
 	it('does NOT halve when the opponent has equal or lower initiative', () => {
 		const me = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { Disruptor: 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 5
 		});
 		const ctx = ctxFor(me, { trigger: 'onTakeDamage' });
@@ -55,7 +55,7 @@ describe('Disruptor', () => {
 
 	it('does NOT halve when there is no opponent initiative to compare (e.g. monster fight)', () => {
 		const me = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { Disruptor: 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 0
 		});
 		const ctx = ctxFor(me, { trigger: 'onTakeDamage' });
@@ -66,7 +66,7 @@ describe('Disruptor', () => {
 
 	it('is registered for the onTakeDamage trigger and dispatches without error', () => {
 		// Through the real dispatcher: no opponent threaded, so no halve, but it must not throw.
-		const { player } = fire({ Disruptor: 1 }, 'onTakeDamage');
+		const { player } = fire({ 'Disruptor': 1 }, 'onTakeDamage');
 		expect(player.halveIncoming).toBe(false);
 		expect(ability[0].on).toBe('onTakeDamage');
 	});

@@ -620,7 +620,7 @@ describe('fightMonster', () => {
 		const p = makePlayer({
 			barrier: 1,
 			attackDice: dice('arcane', 5),
-			spirits: [spirit(1, { Sharpshooter: 1 })]
+			spirits: [spirit(1, { 'Sharpshooter': 1 })]
 		});
 		const monster = makeMonster({ hp: 3, maxHp: 3, damage: 5 }); // 5 > 1 barrier → corrupt; arcane×5 ≥ 3 hp
 		const state = makeState(p, monster, 2);
@@ -677,13 +677,13 @@ describe('Spirit Animal (inCombat)', () => {
 	});
 });
 
-describe('Golem of Wishes (inCombat)', () => {
+describe('Living Bastion (inCombat)', () => {
 	it('deflects 4 damage so a 4-damage hit is fully absorbed', () => {
 		const p = makePlayer({
 			barrier: 4,
 			maxBarrier: 4,
 			attackDice: [],
-			spirits: [spirit(1, { 'Golem of Wishes': 1 })]
+			spirits: [spirit(1, { 'Living Bastion': 1 })]
 		});
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 4 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
@@ -693,14 +693,14 @@ describe('Golem of Wishes (inCombat)', () => {
 	});
 });
 
-describe('Blood Hunter (inCombat)', () => {
+describe('Woundreaver (inCombat)', () => {
 	it('deals +1 damage per Broken Barrier, capped at 4', () => {
 		// Broken barrier = maxTokens − barrier ⇒ 10 − 4 = 6.
 		const p = makePlayer({
 			barrier: 4,
 			maxBarrier: 10,
 			attackDice: [],
-			spirits: [spirit(1, { 'Blood Hunter': 1 })]
+			spirits: [spirit(1, { 'Woundreaver': 1 })]
 		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
@@ -713,7 +713,7 @@ describe('Blood Hunter (inCombat)', () => {
 			barrier: 4,
 			maxBarrier: 6,
 			attackDice: [],
-			spirits: [spirit(1, { 'Blood Hunter': 1 })]
+			spirits: [spirit(1, { 'Woundreaver': 1 })]
 		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
@@ -722,21 +722,24 @@ describe('Blood Hunter (inCombat)', () => {
 });
 
 describe('Aquamaiden (onTakeDamage)', () => {
-	it('takes 3 less damage when hit', () => {
+	it('takes 1 less damage per awakened Moon Tide spirit', () => {
 		const p = makePlayer({
 			barrier: 4,
 			maxBarrier: 4,
 			attackDice: [],
-			spirits: [spirit(1, { Aquamaiden: 1 })]
+			spirits: [
+				{ ...spirit(1, { 'Tide Warden': 1 }), origins: { 'Moon Tide': 1 } },
+				{ ...spirit(2, {}), origins: { 'Moon Tide': 1 } }
+			]
 		});
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 4 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
-		expect(result!.barrierLost).toBe(1); // 4 − 3 reduction = 1
-		expect(p.barrier).toBe(3);
+		expect(result!.barrierLost).toBe(2);
+		expect(p.barrier).toBe(2);
 	});
 });
 
-// Dark Assassin's combat damage now scales by Cursed Spirit traits (not barrier
+// Aegis Weaver's combat damage now scales by Cursed Spirit traits (not barrier
 // parity) — covered in classes/darkAssassin.test.ts. The rollAttack multiplier +
 // advantage primitives it relies on are exercised here.
 describe('rollAttack (damage multiplier + advantage)', () => {
@@ -745,7 +748,7 @@ describe('rollAttack (damage multiplier + advantage)', () => {
 		expect(rollAttack(makeState(p, null, 1), p)).toBe(10); // (0 + 5) × 2
 	});
 
-	it('attackRollAdvantage (Dark Fighter) rolls twice and keeps the higher total', () => {
+	it('attackRollAdvantage (Fatestriker) rolls twice and keeps the higher total', () => {
 		const dice = Array.from({ length: 4 }, (_, i) => ({
 			instanceId: `d${i}`,
 			tier: 'basic' as const
@@ -784,7 +787,7 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 			barrier: 10,
 			maxBarrier: 10,
 			initiative: 1,
-			spirits: [spirit(1, { Disruptor: 1 })]
+			spirits: [spirit(1, { 'Disruptor': 1 })]
 		});
 		const attacker = makePlayer({ playerColor: 'Red', initiative: 5 });
 		const state = twoSeatState(attacker, defender);
@@ -799,7 +802,7 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 			barrier: 10,
 			maxBarrier: 10,
 			initiative: 5,
-			spirits: [spirit(1, { Disruptor: 1 })]
+			spirits: [spirit(1, { 'Disruptor': 1 })]
 		});
 		const attacker = makePlayer({ playerColor: 'Red', initiative: 1 });
 		const state = twoSeatState(attacker, defender);
@@ -831,24 +834,24 @@ describe('per-combat flags reset between combats', () => {
 		expect(p.combatDamageBonus).toBe(1);
 	});
 
-	it('Golem deflect does not leak into a later combat without Golem', () => {
+	it('Golem mitigation does not leak into a later combat without Golem', () => {
 		const p = makePlayer({
 			barrier: 6,
 			maxBarrier: 6,
 			attackDice: [],
-			spirits: [spirit(1, { 'Golem of Wishes': 1 })]
+			spirits: [spirit(1, { 'Living Bastion': 1 })]
 		});
 		const monster = makeMonster({ hp: 100, maxHp: 100, damage: 4 });
 		const state = makeState(p, monster, 1);
 
 		const first = fightMonster(state, 'Red');
-		expect(first!.barrierLost).toBe(0); // fully deflected
-		expect(p.deflect).toBe(4);
+		expect(first!.barrierLost).toBe(0); // reduced by 6
+		expect(p.damageReduction).toBe(6);
 
 		// Remove Golem; the next combat must NOT carry the stale deflect.
 		p.spirits = [];
 		const second = fightMonster(state, 'Red');
-		expect(p.deflect).toBe(0); // reset at combat start, not re-granted
+		expect(p.damageReduction).toBe(0); // reset at combat start, not re-granted
 		expect(second!.barrierLost).toBe(4); // full damage now lands
 	});
 
@@ -858,7 +861,7 @@ describe('per-combat flags reset between combats', () => {
 			// not preserve or increment this arbitrary value.
 			initiative: 4,
 			spirits: [
-				spirit(1, { Fairy: 1 }),
+				spirit(1, { 'Fairy': 1 }),
 				spirit(2, { 'Spirit Animal': 6 })
 			]
 		});

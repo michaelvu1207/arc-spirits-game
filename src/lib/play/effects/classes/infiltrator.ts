@@ -1,7 +1,15 @@
-import type { ClassAbility } from './types';
+import type { ClassAbility, ClassHandler } from './types';
 
-// Infiltrator — "swap 1 Attack Die with all players in your Location." An ENGINE-handled
-// standalone Location-phase action (the `infiltratorSwap` command + a dedicated swap UI),
-// not a trigger effect — so it carries no effect-system entry. Listed in the coverage
-// harness's ENGINE_HANDLED_CLASSES.
-export const ability: ClassAbility[] = [];
+// Infiltrator — "For every Cursed Spirit trait you have, gain 1 Attack Damage."
+const gainCursedDamage: ClassHandler = (ctx) => {
+	const cursed = ctx.player.spirits.reduce(
+		(total, spirit) =>
+			spirit.isFaceDown ? total : total + (spirit.classes?.['Cursed Spirit'] ?? 0),
+		0
+	);
+	if (cursed <= 0) return;
+	ctx.player.combatDamageBonus += cursed;
+	ctx.log.push(`'Cursed Fighter': gained +${cursed} combat damage from ${cursed} Cursed Spirit trait(s).`);
+};
+
+export const ability: ClassAbility[] = [{ on: 'inCombat', run: gainCursedDamage }];

@@ -218,7 +218,7 @@ function classCounts(player: PrivatePlayerState | undefined): Record<string, num
 
 function targetNeedScore(counts: Record<string, number>, cfg: Config): number {
 	const cursedNeed = Math.max(0, cfg.cursedTarget - (counts['Cursed Spirit'] ?? 0));
-	const sharpshooterNeed = Math.max(0, cfg.sharpshooterTarget - (counts.Sharpshooter ?? 0));
+	const sharpshooterNeed = Math.max(0, cfg.sharpshooterTarget - (counts['Sharpshooter'] ?? 0));
 	return cursedNeed * 1.2 + sharpshooterNeed;
 }
 
@@ -257,7 +257,7 @@ function hasPvpCoreSeed(player: PrivatePlayerState | undefined, cfg: Config): bo
 	if (!player) return false;
 	const counts = classCounts(player);
 	const cursed = counts['Cursed Spirit'] ?? 0;
-	const sharp = counts.Sharpshooter ?? 0;
+	const sharp = counts['Sharpshooter'] ?? 0;
 	return cursed >= 1 || sharp >= 1 || player.spirits.length >= Math.min(5, cfg.cursedTarget + cfg.sharpshooterTarget + 1);
 }
 

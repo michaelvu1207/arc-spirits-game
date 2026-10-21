@@ -1,5 +1,5 @@
 /**
- * Dark Fighter — bespoke `inCombat` handler.
+ * Fatestriker — bespoke `inCombat` handler.
  *
  * DB-intended behavior (source of truth):
  *   - Gain 4 Initiative.
@@ -15,26 +15,26 @@ import { describe, it, expect } from 'vitest';
 import { fire, makePlayer, ctxFor } from './testHelpers';
 import { ability } from './darkFighter';
 
-describe('Dark Fighter', () => {
+describe('Fatestriker', () => {
 	it('grants exactly 4 initiative on inCombat (changed from 6)', () => {
-		const { player } = fire({ 'Dark Fighter': 1 }, 'inCombat');
+		const { player } = fire({ 'Fatestriker': 1 }, 'inCombat');
 		expect(player.initiative).toBe(4);
 	});
 
 	it('sets attackRollAdvantage so the Battle Step rolls twice and keeps the higher', () => {
-		const { player } = fire({ 'Dark Fighter': 1 }, 'inCombat');
+		const { player } = fire({ 'Fatestriker': 1 }, 'inCombat');
 		expect(player.attackRollAdvantage).toBe(true);
 	});
 
 	it('surfaces both halves as an attributed log line (no silent no-op)', () => {
-		const { log } = fire({ 'Dark Fighter': 1 }, 'inCombat');
+		const { log } = fire({ 'Fatestriker': 1 }, 'inCombat');
 		expect(
 			log.some((l) => l.includes('Gained 4 initiative; will roll attack twice and take the higher.'))
 		).toBe(true);
 	});
 
 	it('adds 4 on top of any pre-existing initiative', () => {
-		const { player } = fire({ 'Dark Fighter': 1 }, 'inCombat', {
+		const { player } = fire({ 'Fatestriker': 1 }, 'inCombat', {
 			player: { initiative: 3 }
 		});
 		expect(player.initiative).toBe(7);
@@ -51,8 +51,8 @@ describe('Dark Fighter', () => {
 		).toBe(true);
 	});
 
-	it('is inactive when the Dark Fighter spirit is face-down (unawakened)', () => {
-		const { player, log } = fire({ 'Dark Fighter': 1 }, 'inCombat', {
+	it('is inactive when the Fatestriker spirit is face-down (unawakened)', () => {
+		const { player, log } = fire({ 'Fatestriker': 1 }, 'inCombat', {
 			player: {
 				spirits: [
 					{
@@ -60,7 +60,7 @@ describe('Dark Fighter', () => {
 						id: 's1',
 						name: 'Spirit 1',
 						cost: 2,
-						classes: { 'Dark Fighter': 1 },
+						classes: { 'Fatestriker': 1 },
 						origins: {},
 						isFaceDown: true
 					}

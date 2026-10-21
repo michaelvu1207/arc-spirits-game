@@ -1,21 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { fire } from './testHelpers';
+import { describe, expect, it } from 'vitest';
+import { fire, spirit } from './testHelpers';
 
-// Aquamaiden — DB intent: "When you Take Damage, take 3 less damage."
-// Surfaces as a passive combat number (player.damageReduction) plus a log line.
-describe('Aquamaiden', () => {
-	it('reduces incoming damage by 3 on Take Damage', () => {
-		const { player } = fire({ Aquamaiden: 1 }, 'onTakeDamage');
-		expect(player.damageReduction).toBe(3);
-	});
-
-	it('surfaces to the player via a log line (no silent no-op)', () => {
-		const { log } = fire({ Aquamaiden: 1 }, 'onTakeDamage');
-		expect(log.join("\n")).toContain('Reduced incoming damage by 3.');
-	});
-
-	it('does not stack on a non-damage trigger', () => {
-		const { player } = fire({ Aquamaiden: 1 }, 'awakening');
-		expect(player.damageReduction).toBe(0);
+describe('Tide Warden', () => {
+	it('reduces incoming damage by each awakened Moon Tide spirit', () => {
+		const { player } = fire({ 'Tide Warden': 1 }, 'onTakeDamage', {
+			player: {
+				spirits: [
+					spirit(1, { 'Tide Warden': 1 }, { origins: { 'Moon Tide': 1 } }),
+					spirit(2, {}, { origins: { 'Moon Tide': 1 } })
+				]
+			}
+		});
+		expect(player.damageReduction).toBe(2);
 	});
 });

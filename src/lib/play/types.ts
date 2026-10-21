@@ -189,7 +189,7 @@ export type MatItemKind = 'rune' | 'augment' | 'relic';
 // ── Rules-engine additions (2D play mode) ─────────────────────────────────────
 
 // The post-location resolution is split into three sequential steps: `benefits`
-// (claim Awakening-Phase class grants — Cursed Spirit, Golden Ruler, …), `awakening`
+// (claim Awakening-Phase class grants — Cursed Spirit, Dawn Sovereign, …), `awakening`
 // (flip & pay for face-down spirits), then `cleanup` (trim runes to the carry limit,
 // resolve corruption, pass). Each is a full phase with its own deadline + sync barrier.
 export type GamePhase =
@@ -280,7 +280,7 @@ export function setCorruptionDiscardObligation(
  * every still-owed discard converts to VP loss instead — 1 VP per owed spirit, clamped at 0
  * (the rule Michael stated: "discard four with three spirits — the last one subtracts a
  * point instead"). The debt is payable at creation ({@link setCorruptionDiscardObligation}
- * caps it), but effects that remove spirits OUTSIDE `discardSpirit` (Golden Ruler's evil
+ * caps it), but effects that remove spirits OUTSIDE `discardSpirit` (Dawn Sovereign's evil
  * discard, Undercover self-discards, …) can strand a remainder afterwards — before this
  * helper, that remainder hard-blocked `commitCleanup` with no legal move and froze the
  * seat. Call it after any such removal, and defensively before honoring the debt in phase
@@ -409,7 +409,7 @@ export type AwakenGrant =
 	| { kind: 'relicChoice'; amount: number; source: string };
 /**
  * Awakening-Phase rewards awaiting this player in the Cleanup phase (Cursed Spirit,
- * Golden Ruler, The Corruptor, World Ender, World Guardian). Owner-only in the
+ * Dawn Sovereign, Abyss Harbinger, Void Sovereign, Relic Sentinel). Owner-only in the
  * projection; blocks committing cleanup until claimed via `resolveAwakenReward`.
  */
 export interface PendingAwakenRewardState {
@@ -762,7 +762,7 @@ export interface PendingAugment {
 	name: string;
 	classId?: string;
 	/** When set, this augment may ONLY be placed on this spirit slot (its designated
-	 *  target — e.g. Fairy Droid's "gain 2 augments for THIS spirit"). Unset = the
+	 *  target — e.g. Runebound Vessel's "gain 2 augments for THIS spirit"). Unset = the
 	 *  owner may place it on any of their spirits (subject to the 1-augment cap). */
 	boundSlotIndex?: number;
 	/** Human label for the bound target (the spirit's name), for the placement UI. */
@@ -880,6 +880,10 @@ export interface PrivatePlayerState {
 	deflect: number;
 	/** Flat bonus added to the player's dealt combat damage. */
 	combatDamageBonus: number;
+	/** The attack value rolled for the current fight. Firekeeper reads its parity. */
+	combatValueThisFight?: number;
+	/** Tide Stalker priority for the current combat; reset with other combat flags. */
+	alwaysAttackFirst?: boolean;
 	/** When true, the player ignores Stun effects. */
 	stunImmune: boolean;
 	/** Knocked out of the CURRENT combat exchange (hit zero barrier / corrupted, and
@@ -901,12 +905,12 @@ export interface PrivatePlayerState {
 
 	// ── P4 per-combat flags (reset at the START of each combat ⇒ no leakage) ────
 	/**
-	 * Multiplier applied to dealt combat damage (default 1). Dark Assassin sets it
+	 * Multiplier applied to dealt combat damage (default 1). Aegis Weaver sets it
 	 * to 2 when its barrier is odd. Applied inside `rollAttack`.
 	 */
 	combatDamageMultiplier: number;
 	/**
-	 * When true, the attack is rolled TWICE and the higher total kept — Dark Fighter
+	 * When true, the attack is rolled TWICE and the higher total kept — Fatestriker
 	 * (Space Invader). Applied inside `rollAttack`. Default false ⇒ a single roll.
 	 */
 	attackRollAdvantage: boolean;
@@ -937,16 +941,18 @@ export interface PrivatePlayerState {
 	redrawAvailable: boolean;
 	/** Legacy replay field from the removed one-shot trade-cost waiver. */
 	freeNextRelicTrade: boolean;
+	/** True after this player gains or upgrades attack dice during the current round. */
+	attackDiceChangedThisTurn?: boolean;
 	/**
 	 * Status thresholds crossed this round, recorded by the `onStatusChange`
 	 * trigger and consumed in the Awakening Phase (cleanup) by the status-driven
-	 * grants (Cursed Spirit, The Corruptor). Reset at the start of navigation each
+	 * grants (Cursed Spirit, Abyss Harbinger). Reset at the start of navigation each
 	 * round so a single round's corruption grants exactly once.
 	 */
 	becameTaintedThisRound: boolean;
 	becameCorruptThisRound: boolean;
 	becameFallenThisRound: boolean;
-	/** True if the player corrupted (status rose) at all this round (The Corruptor). */
+	/** True if the player corrupted (status rose) at all this round (Abyss Harbinger). */
 	corruptedThisRound: boolean;
 
 	// ── P6 awakening-progress flags ─────────────────────────────────────────────
@@ -1186,7 +1192,7 @@ export type GameCommand =
 	| { type: 'dismissManualPrompt'; id: string }
 	/**
 	 * Resolve a pending class decision. `selectedInstanceIds` is an optional payload
-	 * for picker-style decisions (e.g. Arc Mage choosing WHICH 4 attack dice to
+	 * for picker-style decisions (e.g. Arcane Alchemist choosing WHICH 4 attack dice to
 	 * convert); plain Yes/No decisions ignore it, and bots that omit it fall back to
 	 * the resolver's auto-pick.
 	 */

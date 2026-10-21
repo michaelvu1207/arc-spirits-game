@@ -16,8 +16,8 @@ describe('augmentCapacityForSpirit', () => {
 		expect(augmentCapacityForSpirit(spirit(1, false, {}))).toBe(1);
 	});
 
-	test('a Fairy Droid holds unlimited augments (large finite cap)', () => {
-		expect(augmentCapacityForSpirit(spirit(1, false, { 'Fairy Droid': 1 }))).toBe(
+	test('a Runebound Vessel holds unlimited augments (large finite cap)', () => {
+		expect(augmentCapacityForSpirit(spirit(1, false, { 'Runebound Vessel': 1 }))).toBe(
 			UNLIMITED_AUGMENT_CAPACITY
 		);
 		// The cap is a plain integer (not Infinity) and is large enough to never bind.
@@ -26,11 +26,11 @@ describe('augmentCapacityForSpirit', () => {
 	});
 
 	test('a zero-count augment-capacity class does not raise capacity', () => {
-		expect(augmentCapacityForSpirit(spirit(1, false, { 'Fairy Droid': 0 }))).toBe(1);
+		expect(augmentCapacityForSpirit(spirit(1, false, { 'Runebound Vessel': 0 }))).toBe(1);
 	});
 
-	test('Fairy Droid is registered as an unlimited-capacity class', () => {
-		expect(UNLIMITED_AUGMENT_CLASSES.has('Fairy Droid')).toBe(true);
+	test('Runebound Vessel is registered as an unlimited-capacity class', () => {
+		expect(UNLIMITED_AUGMENT_CLASSES.has('Runebound Vessel')).toBe(true);
 	});
 });
 

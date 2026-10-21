@@ -35,17 +35,17 @@ function player(opts: {
 // Fixture exercising every ascend3 term:
 //   dice: 4 dice → 4/10 = 0.4;  maxBarrier 5 → 0.5;  attack: arcane,arcane,exalted,exalted = 6 → 6/20 = 0.3
 //   awakened (face-up): 2 → 2/7;  faceDown: 3 → 3/7
-//   awakened classes: World Ender + Cultivator → cultProg 1/5, vpClass 1/3;  status 2 (should be inert)
+//   awakened classes: Void Sovereign + Cultivator → cultProg 1/5, vpClass 1/3;  status 2 (should be inert)
 const FIX = player({
 	dice: ['arcane', 'arcane', 'exalted', 'exalted'],
 	maxBarrier: 5,
 	statusLevel: 2,
 	spirits: [
-		{ slotIndex: 0, isFaceDown: false, classes: { 'World Ender': 1 } },
+		{ slotIndex: 0, isFaceDown: false, classes: { 'Void Sovereign': 1 } },
 		{ slotIndex: 1, isFaceDown: false, classes: { Cultivator: 1 } },
 		{ slotIndex: 2, isFaceDown: true, classes: { Fighter: 1 } },
-		{ slotIndex: 3, isFaceDown: true, classes: { Elementalist: 1 } },
-		{ slotIndex: 4, isFaceDown: true, classes: { 'World Ender': 1 } }
+		{ slotIndex: 3, isFaceDown: true, classes: { 'Elementalist': 1 } },
+		{ slotIndex: 4, isFaceDown: true, classes: { 'Void Sovereign': 1 } }
 	]
 });
 

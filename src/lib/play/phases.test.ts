@@ -230,13 +230,14 @@ const toCleanup = (state: PublicGameState): PublicGameState => {
 };
 
 describe('P5 onNavigate fires on reveal', () => {
-	test('Deep Sea Hunter gains +4 initiative when destinations are revealed', () => {
+	test('Tide Stalker offers a destination change without adding initiative', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Deep Sea Hunter': 1 });
+		giveSpirit(state, 'Red', { 'Tide Stalker': 1 });
 		expect(state.players.Red!.initiative).toBe(0);
 		state = lockBoth(state);
 		expect(state.revealedDestinations).toBe(true);
-		expect(state.players.Red!.initiative).toBe(4);
+		expect(state.players.Red!.initiative).toBe(0);
+		expect(state.players.Red!.pendingDecisions[0]?.kind).toBe('deepSeaHunterRedirect');
 	});
 
 	test('doubleRunes stays false for a player with no navigate class', () => {
@@ -247,19 +248,19 @@ describe('P5 onNavigate fires on reveal', () => {
 });
 
 describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
-	test('World Ender grants a flat +1 VP at cleanup (reworked, unconditional)', () => {
+	test('Void Sovereign grants a flat +1 VP at cleanup (reworked, unconditional)', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'World Ender': 1 });
+		giveSpirit(state, 'Red', { 'Void Sovereign': 1 });
 		state = lockBoth(state);
 		state = toCleanup(state);
-		// Reworked: World Ender is now a flat +1 VP awakeningPhase handler that fires
+		// Reworked: Void Sovereign is now a flat +1 VP awakeningPhase handler that fires
 		// during cleanup — no alignment condition, no Cleanup claim.
 		expect(state.players.Red!.victoryPoints).toBe(1);
 	});
 
-	test('World Guardian grants +6 VP at ≥24 VP while Good', () => {
+	test('Relic Sentinel grants +6 VP at ≥24 VP while Good', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'World Guardian': 1 });
+		giveSpirit(state, 'Red', { 'Relic Sentinel': 1 });
 		state = lockBoth(state);
 		state.players.Red!.victoryPoints = 24; // Good (status 0)
 		state = toCleanup(state);
@@ -267,7 +268,7 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		expect(state.players.Red!.victoryPoints).toBe(30);
 	});
 
-	test('Golden Ruler grants +1 VP at cleanup and self-discards while Evil', () => {
+	test('Dawn Sovereign grants +1 VP at cleanup and self-discards while Evil', () => {
 		let state = startedGame();
 		giveSpirit(state, 'Red', { 'Golden Ruler': 1 });
 		state = lockBoth(state);
@@ -278,7 +279,7 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		expect(state.players.Red!.spirits).toHaveLength(0); // discarded on claim while Evil
 	});
 
-	test('Golden Ruler grants +1 VP and keeps the spirit while Good', () => {
+	test('Dawn Sovereign grants +1 VP and keeps the spirit while Good', () => {
 		let state = startedGame();
 		giveSpirit(state, 'Red', { 'Golden Ruler': 1 });
 		state = lockBoth(state);
@@ -290,9 +291,9 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 
 	test('a win-con pushing a player to the VP target makes findWinner declare them THAT round', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'World Guardian': 1 });
+		giveSpirit(state, 'Red', { 'Relic Sentinel': 1 });
 		state = lockBoth(state);
-		// 24 + 6 (World Guardian) = 30 = VP_TO_WIN. The +6 is a Benefits CLAIM; the
+		// 24 + 6 (Relic Sentinel) = 30 = VP_TO_WIN. The +6 is a Benefits CLAIM; the
 		// sequence holds open on it, and claiming (the last outstanding work) rolls the
 		// round through cleanup where findWinner runs.
 		state.players.Red!.victoryPoints = 24;
@@ -319,12 +320,12 @@ describe('P5 determinism', () => {
 	test('the same seed reproduces identical post-cleanup win-con state', () => {
 		const run = (seed: number): PublicGameState => {
 			let s = startedGame(seed);
-			giveSpirit(s, 'Red', { 'World Ender': 1 });
+			giveSpirit(s, 'Red', { 'Void Sovereign': 1 });
 			s = lockBoth(s);
 			return toCleanup(s);
 		};
 		expect(run(7).players.Red!.victoryPoints).toBe(run(7).players.Red!.victoryPoints);
-		// World Ender's flat +1 VP fires deterministically during cleanup.
+		// Void Sovereign's flat +1 VP fires deterministically during cleanup.
 		expect(run(7).players.Red!.victoryPoints).toBe(1);
 	});
 });

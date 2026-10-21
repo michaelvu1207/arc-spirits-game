@@ -81,7 +81,7 @@
 		/** Discard held runes/relics during Cleanup to get under the carry limit —
 		 *  the whole staged batch commits at once (W2c). */
 		onDiscardRunes: (slotIndexes: number[]) => void;
-		/** Infiltrator: swap one attack die with each co-located player. */
+		/** 'Cursed Fighter': swap one attack die with each co-located player. */
 		onInfiltratorSwap: (
 			swaps: { targetSeat: SeatColor; myInstanceId: string; theirInstanceId: string }[]
 		) => void;
@@ -305,7 +305,7 @@
 	// W2b: engine picker requirements (§5.4), keyed by decisionId — ship on the
 	// 'decision' pendingWork descriptor. That descriptor exists only in Awakening
 	// (pendingWork mirrors seatHasResolutionWork), but decisions also fire in the
-	// Location phase (Arc Mage's onCultivate) — there we call the engine's OWN
+	// Location phase (Arcane Alchemist's onCultivate) — there we call the engine's OWN
 	// decisionPickerSpec helper directly, the same single source the reducer
 	// validates against, so eligibility still cannot drift.
 	const decisionPickerSpecs = $derived(
@@ -519,7 +519,7 @@
 	});
 
 	// W2b: a decision's class (for the ability-card art header) is recovered from
-	// its `kind` ("arcMageTrade" → "Arc Mage") by prefix-matching the class-trait
+	// its `kind` ("arcMageTrade" → "Arcane Alchemist") by prefix-matching the class-trait
 	// catalog. Purely cosmetic — never a rules derivation.
 	function decisionClassName(kind: string): string | null {
 		const norm = kind.toLowerCase();
@@ -725,7 +725,7 @@
 		onDiscardAugments();
 	}
 
-	// ── Infiltrator: Location-phase dice swap (W2d — InfiltratorSwap takeover) ──
+	// ── 'Cursed Fighter': Location-phase dice swap (W2d — InfiltratorSwap takeover) ──
 	// The opportunity is ENGINE-OWNED (§5.4 `SeatAffordances.infiltratorSwap`,
 	// voluntary so it rides beside pendingWork): present exactly when the seat has
 	// an awakened, unused Infiltrator sharing a location. The client only decorates
@@ -1020,7 +1020,7 @@
 					</div>
 				{:else if needsAbilityDecision}
 					<!-- W2b: decisions as ability cards — class art header, prompt headline,
-					     full-width choice rows; pickers (Arc Mage dice) live inside the card. -->
+					     full-width choice rows; pickers (Arcane Alchemist dice) live inside the card. -->
 					<div class="scene-flow decision-flow" data-testid="decision-cards">
 						{#each awakeningChoices as choice (choice.id)}
 							{@const cls = decisionClassName(choice.kind)}
@@ -1141,7 +1141,7 @@
 									targets={infiltratorTargets}
 									myDice={infiltratorWork?.myDice ?? []}
 									dieImage={(tier) => attackDieImageUrl(assets, tier)}
-									classIcon={classIconFor('Infiltrator')}
+									classIcon={classIconFor('Cursed Fighter')}
 									{busy}
 									onConfirm={(swaps) => {
 										onInfiltratorSwap(swaps);

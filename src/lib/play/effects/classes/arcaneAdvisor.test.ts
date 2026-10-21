@@ -3,7 +3,7 @@ import { fire, makePlayer, ctxFor } from './testHelpers';
 import { decisions } from './arcaneAdvisor';
 import type { DiceTier } from '../../types';
 
-// Arcane Advisor — DB intent: "In the Awakening phase, you may upgrade 1 Exalted
+// Arcane Ascendant — DB intent: "In the Awakening phase, you may upgrade 1 Exalted
 // Attack to an Arcane Attack."
 //
 // CHANGED from an onRest auto-upgrade to an Awakening-phase opt-in: a bespoke `run`
@@ -16,9 +16,9 @@ function dice(tiers: DiceTier[]) {
 	return tiers.map((tier, i) => ({ instanceId: `d${i}`, tier }));
 }
 
-describe('Arcane Advisor (awakeningPhase opt-in)', () => {
+describe('Arcane Ascendant (awakeningPhase opt-in)', () => {
 	it('offers the upgrade decision when the player holds an Exalted die', () => {
-		const { player } = fire({ 'Arcane Advisor': 1 }, 'awakeningPhase', {
+		const { player } = fire({ 'Arcane Ascendant': 1 }, 'awakeningPhase', {
 			player: { attackDice: dice(['basic', 'exalted']) }
 		});
 		const decision = player.pendingDecisions.find((d) => d.kind === 'arcaneAdvisorUpgrade');
@@ -27,14 +27,14 @@ describe('Arcane Advisor (awakeningPhase opt-in)', () => {
 	});
 
 	it('surfaces the decision via the log (no silent no-op)', () => {
-		const { log } = fire({ 'Arcane Advisor': 1 }, 'awakeningPhase', {
+		const { log } = fire({ 'Arcane Ascendant': 1 }, 'awakeningPhase', {
 			player: { attackDice: dice(['exalted']) }
 		});
 		expect(log.some((line) => line.includes('Decision:'))).toBe(true);
 	});
 
 	it('is gated on holding an Exalted die — no decision when none held', () => {
-		const { player, log } = fire({ 'Arcane Advisor': 1 }, 'awakeningPhase', {
+		const { player, log } = fire({ 'Arcane Ascendant': 1 }, 'awakeningPhase', {
 			player: { attackDice: dice(['basic', 'enchanted', 'arcane']) }
 		});
 		expect(
@@ -45,7 +45,7 @@ describe('Arcane Advisor (awakeningPhase opt-in)', () => {
 	});
 
 	it('offers nothing when the player holds no dice at all', () => {
-		const { player } = fire({ 'Arcane Advisor': 1 }, 'awakeningPhase', {
+		const { player } = fire({ 'Arcane Ascendant': 1 }, 'awakeningPhase', {
 			player: { attackDice: [] }
 		});
 		expect(
@@ -54,7 +54,7 @@ describe('Arcane Advisor (awakeningPhase opt-in)', () => {
 	});
 
 	it('does not fire on unrelated triggers (no longer onRest)', () => {
-		const { player } = fire({ 'Arcane Advisor': 1 }, 'onRest', {
+		const { player } = fire({ 'Arcane Ascendant': 1 }, 'onRest', {
 			player: { attackDice: dice(['exalted']) }
 		});
 		expect(

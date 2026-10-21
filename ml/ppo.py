@@ -71,7 +71,7 @@ def parse_placement_rewards(spec: str) -> tuple[float, float, float, float]:
 
 
 def solo_lexicographic_terminal_reward(
-    *, won: bool, finish_round: int | None, final_vp: int
+    *, won: bool, finish_round: int | None, final_vp: int, tempo_weight: float = 0.001
 ) -> float:
     """Order-preserving scalarization of the solo objective.
 
@@ -95,8 +95,17 @@ def solo_lexicographic_terminal_reward(
         tempo = SOLO_OBJECTIVE_HORIZON + 1 - finish_round
     else:
         tempo = 0
+    if not isinstance(tempo_weight, (int, float)) or isinstance(tempo_weight, bool):
+        raise ValueError("tempo_weight must be a number")
+    tempo_weight = float(tempo_weight)
+    if not 0.0 <= tempo_weight <= 1.0:
+        raise ValueError("tempo_weight must be in [0, 1]")
     margin = max(-499, min(499, final_vp - SOLO_VP_TARGET))
-    return float(won) + 0.001 * tempo + 0.000001 * margin
+    # tempo_weight=0.001 (default) keeps the strict lexicographic ordering: the whole
+    # tempo span (0.030) and margin span (0.000998) stay below the unit win/loss gap.
+    # Larger weights deliberately trade a little win probability for finishing earlier,
+    # which is the speedrun objective; the ordering among wins is unchanged.
+    return float(won) + tempo_weight * tempo + 0.000001 * margin
 
 
 def compute_gae(
@@ -1037,6 +1046,7 @@ def load_trajectory_buffer(
     solo_reach30_coef: float = 0.0,
     solo_reach30_bands: tuple[tuple[int, float], ...] | None = None,
     solo_terminal_objective: str = "legacy",
+    solo_tempo_weight: float = 0.001,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     obs_key: str = "obs",
@@ -1596,6 +1606,7 @@ def load_trajectory_buffer(
                     won=won_objective,
                     finish_round=end_round,
                     final_vp=final_vp,
+                    tempo_weight=solo_tempo_weight,
                 )
 
         if learning_dones[-1]:

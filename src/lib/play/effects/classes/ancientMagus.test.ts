@@ -1,5 +1,5 @@
 /**
- * Ancient Magus — "For every unique Relic you hold, reduce incoming damage by 2."
+ * Relic Warden — "For every unique Relic you hold, reduce incoming damage by 2."
  *
  * Most cases drive the handler directly via `ability[0].run(ctxFor(...))` to unit-
  * test the unique-relic counting; the final case drives `fire(...)` to confirm the
@@ -31,7 +31,7 @@ function run(runes: MatSlotSnapshot[]) {
 	return { player, log: ctx.log };
 }
 
-describe('Ancient Magus', () => {
+describe('Relic Warden', () => {
 	it('hangs a single onTakeDamage handler', () => {
 		expect(ability).toHaveLength(1);
 		expect(ability[0].on).toBe('onTakeDamage');
@@ -64,7 +64,7 @@ describe('Ancient Magus', () => {
 	it('surfaces a log line when it reduces damage (no silent no-op)', () => {
 		const { player, log } = run([relic(1, 'Teapot'), relic(2, 'Keepsake')]);
 		expect(player.damageReduction).toBe(4);
-		expect(log.join('\n')).toMatch(/Ancient Magus.*reduced incoming damage by 4.*2 unique relics/i);
+		expect(log.join('\n')).toMatch(/Relic Warden.*reduced incoming damage by 4.*2 unique relics/i);
 	});
 
 	it('does nothing (no reduction, no log) when no relics are held', () => {
@@ -76,7 +76,7 @@ describe('Ancient Magus', () => {
 	// Integration: confirm the class is wired into the assembler and dispatched by
 	// applyTrigger on onTakeDamage (not just callable in isolation).
 	it('is dispatched through the assembler on onTakeDamage', () => {
-		const { player } = fire({ 'Ancient Magus': 1 }, 'onTakeDamage', {
+		const { player } = fire({ 'Relic Warden': 1 }, 'onTakeDamage', {
 			player: { mats: [relic(1, 'Teapot'), relic(2, 'Keepsake')] }
 		});
 		expect(player.damageReduction).toBe(4); // 2 unique relics × 2, via the real dispatch

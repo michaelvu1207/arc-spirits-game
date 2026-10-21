@@ -18,6 +18,7 @@ import type {
 	SeatColor
 } from './types';
 import { STATUS_LADDER, setCorruptionDiscardObligation } from './types';
+import { restoreAegisBarrier } from './effects/classes/darkAssassin';
 import { nextInt, nextId } from './rng';
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { applyStatusChange } from './effects/status';
@@ -38,16 +39,17 @@ export function resetCombatFlags(player: PrivatePlayerState): void {
 	player.attackRollAdvantage = false;
 	player.halveIncoming = false;
 	player.skipTakeDamage = false;
+	player.alwaysAttackFirst = false;
+	player.combatValueThisFight = undefined;
 	// Initiative granted by an in-combat effect must not accumulate between fights,
 	// but bonuses granted BEFORE combat must survive this reset. Rebuild that baseline
 	// from the active classes whose initiative text fires during Awakening/Navigation;
-	// the inCombat trigger below then layers Spirit Animal, Dragon Warrior, etc. on top.
+	// the inCombat trigger below then layers Spirit Animal, Arcane Vanguard, etc. on top.
 	// Numeric class breakpoints apply once even if duplicate trait stacks exist.
 	const classes = awakenedClassCounts(player);
 	player.initiative =
-		(classes.Fairy ? 3 : 0) +
-		(classes.Undercover ? 3 : 0) +
-		(classes['Deep Sea Hunter'] ? 4 : 0);
+		(classes['Fairy'] ? 3 : 0) +
+		(classes['Relic Envoy'] ? 3 : 0);
 	// `stunImmune` is a per-combat passive granted by inCombat effects (Sharpshooter);
 	// clear it so it does not persist into a later combat where the class is absent.
 	player.stunImmune = false;
@@ -170,7 +172,7 @@ export function takeDamage(
 	);
 	const mitigation = (player.damageReduction ?? 0) + (player.deflect ?? 0);
 	amount = Math.max(0, amount - mitigation);
-	// Disruptor: halve the (post-reduction) incoming damage, rounding up.
+	// 'Disruptor': halve the (post-reduction) incoming damage, rounding up.
 	if (player.halveIncoming) amount = Math.ceil(amount / 2);
 	if (amount <= 0) return { corrupted: false, barrierLost: 0, discarded: 0, deflected };
 	const barrierBefore = player.barrier;
@@ -201,6 +203,7 @@ export function takeDamage(
 			player.maxBarrier = Math.min(10, player.maxBarrier + 2);
 			player.brokenBarrier = player.maxBarrier - player.barrier;
 			const gained = player.maxBarrier - before;
+			restoreAegisBarrier(player, gained, log ?? []);
 			if (gained > 0) log?.push(`Soul Weaver: gained ${gained} max barrier after corruption.`);
 		}
 		player.corruptionCount = (player.corruptionCount ?? 0) + 1;
@@ -237,21 +240,23 @@ export function rollAttack(state: PublicGameState, player: PrivatePlayerState): 
 		}
 		return total;
 	};
-	// Dark Fighter (Space Invader) rolls the whole attack twice and keeps the higher
+	// Fatestriker (Space Invader) rolls the whole attack twice and keeps the higher
 	// total ("roll twice, take the higher roll"). Default ⇒ a single roll.
 	const total = player.attackRollAdvantage ? Math.max(rollOnce(), rollOnce()) : rollOnce();
-	// Flat bonus (combatBonus / Blood Hunter) added to the rolled dice, then the
-	// whole sum scaled by the per-combat multiplier (Dark Assassin's odd-barrier
+	// Flat bonus (combatBonus / Woundreaver) added to the rolled dice, then the
+	// whole sum scaled by the per-combat multiplier (Aegis Weaver's odd-barrier
 	// doubling). Default multiplier is 1 ⇒ no change.
 	const withBonus = total + (player.combatDamageBonus ?? 0);
-	return withBonus * (player.combatDamageMultiplier ?? 1);
+	const value = withBonus * (player.combatDamageMultiplier ?? 1);
+	player.combatValueThisFight = value;
+	return value;
 }
 
 /**
  * Expected (average) total damage of a player's attack roll AT REST: the mean of
  * each attack die's faces, plus the flat Spirit Animal bonus (+1 per awakened
  * Spirit Animal trait — its `inCombat` combatBonus, which only goes live mid-fight).
- * Situational modifiers (Blood Hunter, Dark Assassin) are excluded. Shared by the
+ * Situational modifiers (Woundreaver, Aegis Weaver) are excluded. Shared by the
  * scout dice-pool readout and the leaderboard so they always agree.
  */
 export function expectedAttack(player: PrivatePlayerState): number {
@@ -302,8 +307,8 @@ export function resolveEncounterCombat(
 	const repGood = good[0]?.seat;
 	const repEvil = evil[0]?.seat;
 	// The combat log is built up-front so the pre-roll triggers below write into it —
-	// otherwise class-buff lines (Spirit Animal's +dmg/+init, Dark Assassin's doubling,
-	// Dark Fighter's +init) would be discarded and the PvP overlay would show damage
+	// otherwise class-buff lines (Spirit Animal's +dmg/+init, Aegis Weaver's doubling,
+	// Fatestriker's +init) would be discarded and the PvP overlay would show damage
 	// change with no explanation (PvE already threads its real log into inCombat).
 	const log: string[] = [];
 	for (const { player } of [...evil, ...good]) resetCombatFlags(player);
@@ -324,11 +329,17 @@ export function resolveEncounterCombat(
 	const dealt = new Map<SeatColor, number>();
 	const rolledSeats = new Set<SeatColor>();
 	const corruptedSeats = new Set<SeatColor>();
+	// Lock every combat value before the first strike. Besides making simultaneous
+	// combat deterministic, Firekeeper needs its owner's roll parity when damage lands.
+	const lockedRolls = new Map<SeatColor, number>();
+	for (const { seat, player } of [...evil, ...good]) {
+		lockedRolls.set(seat, rollAttack(state, player));
+	}
 
 	const rollSide = (group: EncounterCombatant[]): number => {
 		let total = 0;
 		for (const { seat, player } of group) {
-			const r = rollAttack(state, player);
+			const r = lockedRolls.get(seat) ?? rollAttack(state, player);
 			dealt.set(seat, r);
 			rolledSeats.add(seat);
 			total += r;
@@ -379,7 +390,9 @@ export function resolveEncounterCombat(
 		}
 	};
 
-	if (initE === initG) {
+	const evilPriority = evil.some(({ player }) => player.alwaysAttackFirst);
+	const goodPriority = good.some(({ player }) => player.alwaysAttackFirst);
+	if (initE === initG && evilPriority === goodPriority) {
 		// Simultaneous: lock BOTH rolls (full rosters) before either hit lands.
 		const dmgE = rollSide(evil);
 		const dmgG = rollSide(good);
@@ -387,7 +400,7 @@ export function resolveEncounterCombat(
 		strike(good, dmgE, repEvil, initE, 'Evil', 'Good');
 		strike(evil, dmgG, repGood, initG, 'Good', 'Evil');
 	} else {
-		const evilFaster = initE > initG;
+		const evilFaster = evilPriority !== goodPriority ? evilPriority : initE > initG;
 		const first = evilFaster ? evil : good;
 		const second = evilFaster ? good : evil;
 		const firstRep = evilFaster ? repEvil : repGood;
@@ -396,7 +409,11 @@ export function resolveEncounterCombat(
 		const secondInit = evilFaster ? initG : initE;
 		const firstLabel = evilFaster ? 'Evil' : 'Good';
 		const secondLabel = evilFaster ? 'Good' : 'Evil';
-		log.push(`${firstLabel} is faster (initiative ${firstInit} vs ${secondInit}) and strikes first.`);
+		log.push(
+			evilPriority !== goodPriority
+				? `${firstLabel} attacks first through Tide Stalker.`
+				: `${firstLabel} is faster (initiative ${firstInit} vs ${secondInit}) and strikes first.`
+		);
 		strike(second, rollSide(first), firstRep, firstInit, firstLabel, secondLabel);
 		// Only un-stunned members of the slower side strike back.
 		const retaliators = second.filter(({ player }) => !player.stunned);
@@ -451,19 +468,30 @@ export function fightMonster(
 
 	// 0. Fresh combat: clear any per-combat flags from a previous fight, then fire
 	//    the `inCombat` trigger so this player's class effects (combatBonus,
-	//    initiative, deflect, damageReduction, Dark Assassin doubling, …) apply to
+	//    initiative, deflect, damageReduction, Aegis Weaver doubling, …) apply to
 	//    THIS combat before any roll happens.
 	resetCombatFlags(player);
 	applyTrigger(state, seat, 'inCombat', log, { catalog });
+	// Lock the combat value before damage so Firekeeper can inspect its parity.
+	const rolledDamage = rollAttack(state, player);
+	const attacksFirst = player.alwaysAttackFirst === true;
+	const firstStrikeKills = attacksFirst && rolledDamage >= monster.maxHp;
+	if (attacksFirst) {
+		log.push(`Tide Stalker: you attack first for ${rolledDamage} damage.`);
+	}
 
-	// 1. Monster attacks first. The take-damage context lets onTakeDamage class
+	// 1. Unless an attack-first strike already defeated it, the monster attacks.
+	//    The take-damage context lets onTakeDamage class
 	//    effects (Aquamaiden/Firekeeper/Guardian) fire before the hit is applied.
-	const { corrupted, barrierLost, discarded, deflected } = takeDamage(player, monster.damage, {
-		state,
-		seat,
-		catalog
-	}, log);
-	log.push(`${monster.name} attacks for ${monster.damage} (${barrierLost} barrier lost).`);
+	const damageResult = firstStrikeKills
+		? { corrupted: false, barrierLost: 0, discarded: 0, deflected: 0 }
+		: takeDamage(player, monster.damage, { state, seat, catalog }, log);
+	const { corrupted, barrierLost, discarded, deflected } = damageResult;
+	if (!firstStrikeKills) {
+		log.push(`${monster.name} attacks for ${monster.damage} (${barrierLost} barrier lost).`);
+	} else {
+		log.push(`${monster.name} was defeated before it could attack.`);
+	}
 	if (deflected > 0)
 		log.push(`Deflected ${deflected} damage back at ${monster.name}.`);
 	if (corrupted) log.push(`You were corrupted — status is now ${player.statusToken}.`);
@@ -474,17 +502,17 @@ export function fightMonster(
 	//    state. Normally a corrupted player cannot strike back — but a player with "attack at the
 	//    same time as the enemy" (Sharpshooter / Soul Weaver ≥2) strikes SIMULTANEOUSLY, so even a
 	//    corrupting hit still lands their damage (and can kill).
-	let playerDamage = 0;
+	let playerDamage = attacksFirst ? rolledDamage : 0;
 	const hpBeforeStrike = monster.maxHp;
 	const simultaneous = hasSimultaneousAttack(player);
-	if (!corrupted || simultaneous) {
-		playerDamage = rollAttack(state, player);
+	if (!attacksFirst && (!corrupted || simultaneous)) {
+		playerDamage = rolledDamage;
 		log.push(
 			corrupted
 				? `You attack at the same time as the monster for ${playerDamage} damage (despite corruption).`
 				: `You roll ${player.attackDice.length} attack dice for ${playerDamage} damage.`
 		);
-	} else {
+	} else if (!attacksFirst) {
 		log.push(`Corrupted players cannot strike back this combat.`);
 	}
 
@@ -492,7 +520,7 @@ export function fightMonster(
 	//    single combat. DEFLECTED damage from the monster's opening strike counts as damage
 	//    dealt to it (it is passive reflection, so it lands even for a corrupted player who
 	//    cannot strike back). The `onMonsterKill` trigger fires on EVERY combat resolution
-	//    (carrying `killed`), so Adaptive Fighter's no-kill branch runs; Fairy's rune is gated
+	//    (carrying `killed`), so Battle Adept's no-kill branch runs; Fairy's rune is gated
 	//    behind `killed`.
 	const endingHp = Math.max(0, monster.maxHp - playerDamage - deflected);
 	const killed = endingHp <= 0;

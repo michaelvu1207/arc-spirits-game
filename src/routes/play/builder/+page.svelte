@@ -81,8 +81,12 @@
 		list.sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
 		return list;
 	});
-	const catalog = $derived(liveCatalog.length > 0 ? liveCatalog : BUNDLED_SPIRIT_CATALOG);
-	const usingBundled = $derived(liveCatalog.length === 0);
+	// Do not flash the bundled snapshot while the authoritative live catalog is
+	// loading. The fallback is reserved for a real load failure.
+	const catalog = $derived(
+		liveCatalog.length > 0 ? liveCatalog : loadError ? BUNDLED_SPIRIT_CATALOG : []
+	);
+	const usingBundled = $derived(liveCatalog.length === 0 && Boolean(loadError));
 	const catalogById = $derived(new Map(catalog.map((spirit) => [spirit.id, spirit])));
 	const originOptions = $derived.by(() => {
 		const byId = new Map<string, { id: string; name: string }>();
@@ -267,7 +271,7 @@
 					</div>
 				{/if}
 				{#if catalog.length === 0}
-					<div class="loading">No spirits found.</div>
+					<div class="loading">{assets.isLoading ? 'Syncing live spirits…' : 'No spirits found.'}</div>
 				{:else}
 					<div class="cat-scroll" data-testid="builder-catalog">
 						<div class="cat-grid">

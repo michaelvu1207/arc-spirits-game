@@ -1,7 +1,7 @@
 import type { ClassAbility, ClassHandler } from './types';
 
 /**
- * Ancient Magus — "For every unique Relic you hold, reduce incoming damage by 2."
+ * Relic Warden — "For every unique Relic you hold, reduce incoming damage by 2."
  *
  * Bespoke `onTakeDamage` handler: it counts the UNIQUE relics the player holds
  * (`player.mats` entries with `type === 'relic'`, deduped by `name`) and raises
@@ -33,7 +33,7 @@ const reduceByRelics: ClassHandler = (ctx) => {
 	const amount = unique * 2;
 	ctx.player.damageReduction += amount;
 	ctx.log.push(
-		`Ancient Magus: reduced incoming damage by ${amount} (${unique} unique relic${unique === 1 ? '' : 's'}).`
+		`Relic Warden: reduced incoming damage by ${amount} (${unique} unique relic${unique === 1 ? '' : 's'}).`
 	);
 };
 

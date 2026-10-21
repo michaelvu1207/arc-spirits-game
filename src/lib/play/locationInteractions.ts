@@ -144,7 +144,7 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'specialRune',
 		runeId: '33f343e7-6bdb-43cc-8b27-115eaa16826f',
 		classId: '17e08cde-f3d2-480b-8386-1e3047e2f85a',
-		runeName: 'Strategist',
+		runeName: 'Runic Bulwark',
 		label: 'Strategist rune'
 	},
 	'66525fe8-e375-4473-b1c3-88d3c9fd2b1c': {

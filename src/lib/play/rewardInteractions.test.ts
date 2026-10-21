@@ -167,8 +167,8 @@ describe('resolveLocationInteraction (engine)', () => {
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Strategist
 		// Strategist is a class rune ⇒ a spirit augment: it lands in the to-place pouch,
 		// never a rune slot. Sorcerer (the unchosen option) is granted nowhere.
-		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Strategist')).toBe(true);
-		expect(s.players.Red!.mats.some((r) => r.name === 'Strategist')).toBe(false);
+		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Runic Bulwark')).toBe(true);
+		expect(s.players.Red!.mats.some((r) => r.name === 'Runic Bulwark')).toBe(false);
 		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Sorcerer')).toBe(false);
 		expect(s.players.Red!.mats.some((r) => r.name === 'Sorcerer')).toBe(false);
 		// One relic was spent to pay the "any relic" cost. (Starting Fairy Relics qualify
@@ -328,10 +328,10 @@ describe('bots resolve location interactions', () => {
 });
 
 describe('updated trade class rules', () => {
-	test('Mod Injector pays the trade cost and gains two copies of the selected augment', () => {
+	test('Runic Duplicator pays the trade cost and gains two copies of the selected augment', () => {
 		let s = atLocation('Cyber City');
 		s.players.Red!.spirits = [
-			{ slotIndex: 1, id: 'mod', name: 'Mole', cost: 2, classes: { 'Mod Injector': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 1, id: 'mod', name: 'Mole', cost: 2, classes: { 'Runic Duplicator': 1 }, origins: {}, isFaceDown: false }
 		];
 		s.players.Red!.mats = [
 			{ slotIndex: 1, hasRune: true, id: 'fairy', name: 'Fairy Relic', type: 'relic', special: true }
@@ -339,9 +339,9 @@ describe('updated trade class rules', () => {
 
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Strategist augment
 
-		expect(s.players.Red!.unplacedAugments?.filter((a) => a.name === 'Strategist')).toHaveLength(2);
+		expect(s.players.Red!.unplacedAugments?.filter((a) => a.name === 'Runic Bulwark')).toHaveLength(2);
 		expect(s.players.Red!.mats.filter((r) => r.hasRune).length).toBe(0);
-		expect(s.players.Red!.lastAction?.log.some((l) => /Mod Injector/i.test(l))).toBe(true);
+		expect(s.players.Red!.lastAction?.log.some((l) => /Runic Duplicator/i.test(l))).toBe(true);
 	});
 
 	test('the obsolete Undercover free-trade flag no longer waives a cost', () => {

@@ -132,9 +132,9 @@ describe('neural value action scoring', () => {
 			spirits: [
 				{
 					id: 'world-ender-a',
-					name: 'World Ender',
+					name: 'Void Sovereign',
 					cost: 9,
-					classes: { 'World Ender': 1 },
+					classes: { 'Void Sovereign': 1 },
 					origins: {}
 				},
 				{
@@ -147,7 +147,7 @@ describe('neural value action scoring', () => {
 			]
 		};
 		state.players.Red!.handDraws = [
-			{ guid: 'draw-a', id: 'world-ender-a', name: 'World Ender', cost: 9 },
+			{ guid: 'draw-a', id: 'world-ender-a', name: 'Void Sovereign', cost: 9 },
 			{ guid: 'draw-b', id: 'golden-ruler-b', name: 'Golden Ruler', cost: 9 }
 		];
 
@@ -178,9 +178,9 @@ describe('neural value action scoring', () => {
 			{
 				slotIndex: 6,
 				id: 'dark-fighter',
-				name: 'Dark Fighter',
+				name: 'Fatestriker',
 				cost: 4,
-				classes: { 'Dark Fighter': 1 },
+				classes: { 'Fatestriker': 1 },
 				origins: {},
 				isFaceDown: true
 			}
@@ -195,7 +195,7 @@ describe('neural value action scoring', () => {
 		state.players.Red!.awakenOffers = [
 			{
 				slotIndex: 6,
-				spiritName: 'Dark Fighter',
+				spiritName: 'Fatestriker',
 				requirement: 'Discard 4 Attack Dice',
 				discardCount: 4,
 				requiresSelection: true,
@@ -578,7 +578,7 @@ describe('neural value action scoring', () => {
 				id: 'animal-b',
 				name: 'Animal B',
 				cost: 1,
-				classes: { 'Spirit Animal': 1, Elementalist: 1 },
+				classes: { 'Spirit Animal': 1, 'Elementalist': 1 },
 				origins: {},
 				isFaceDown: false
 			},
@@ -587,7 +587,7 @@ describe('neural value action scoring', () => {
 				id: 'arc-fighter',
 				name: 'Arc Fighter',
 				cost: 2,
-				classes: { 'Arc Mage': 1, Fighter: 1 },
+				classes: { 'Arcane Alchemist': 1, Fighter: 1 },
 				origins: {},
 				isFaceDown: false
 			}

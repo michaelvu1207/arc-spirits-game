@@ -10,6 +10,7 @@
 
 import { DICE_TIER_ORDER, isEvilAlignment, MAX_ATTACK_DICE } from '../types';
 import type { DiceTier, PrivatePlayerState, PublicGameState } from '../types';
+import { restoreAegisBarrier } from './classes/darkAssassin';
 import { nextId } from '../rng';
 import type { EffectAction, EffectCondition } from './registry';
 import type { EffectContext } from './context';
@@ -19,9 +20,11 @@ function diceCap(): number {
 	return MAX_ATTACK_DICE;
 }
 
+
+
 /**
  * Synthetic rune id for a generic, classless Spirit Augment gained via `gainAugment`
- * (Captain, Fairy Droid, Strategist, Cursed-Spirit Fallen). It has no catalog icon,
+ * (Captain, Runebound Vessel, Strategist, Cursed-Spirit Fallen). It has no catalog icon,
  * so the placement UI shows the name-letter fallback; placement binds it with no
  * className, so it adds capacity-occupying weight but no class trait.
  */
@@ -36,7 +39,7 @@ function upgradeDice(
 ): void {
 	let upgraded = 0;
 
-	// Tier-targeted conversion (e.g. Arcane Advisor: exalted → arcane). Convert up
+	// Tier-targeted conversion (e.g. Arcane Ascendant: exalted → arcane). Convert up
 	// to `times` dice that sit at exactly the `from` tier into the `to` tier.
 	if (from && to) {
 		for (let t = 0; t < times; t += 1) {
@@ -51,7 +54,7 @@ function upgradeDice(
 
 	// Default ladder (Elementalist): step the lowest basic/enchanted die up one tier.
 	// This caps at EXALTED — arcane attack dice can only be obtained through specific
-	// methods (the targeted `from`/`to` conversions above, e.g. Arcane Advisor), never
+	// methods (the targeted `from`/`to` conversions above, e.g. Arcane Ascendant), never
 	// the generic upgrade ladder. So only basic/enchanted dice are ever targeted.
 	for (let t = 0; t < times; t += 1) {
 		let target: (typeof player.attackDice)[number] | undefined;
@@ -135,7 +138,10 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 				player.attackDice.push({ instanceId: nextId(state.rng, 'die'), tier: action.tier });
 				added += 1;
 			}
-			if (added > 0) log.push(`Gained ${added} ${action.tier} attack dice.`);
+			if (added > 0) {
+				player.attackDiceChangedThisTurn = true;
+				log.push(`Gained ${added} ${action.tier} attack dice.`);
+			}
 			else log.push(`Attack-dice pool is already at the cap (${cap}).`);
 			break;
 		}
@@ -149,11 +155,17 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			const grew = player.maxBarrier - oldMax;
 			player.brokenBarrier = Math.max(0, player.maxBarrier - player.barrier);
 			log.push(`Gained ${grew} max barrier.`);
+			restoreAegisBarrier(player, grew, log);
 			break;
 		}
-		case 'upgradeDice':
+		case 'upgradeDice': {
+			const before = player.attackDice.map((die) => die.tier).join(',');
 			upgradeDice(player, scaled(action.times), log, action.from, action.to);
+			if (player.attackDice.map((die) => die.tier).join(',') !== before) {
+				player.attackDiceChangedThisTurn = true;
+			}
 			break;
+		}
 		case 'restoreBarrier': {
 			const amount = scaled(action.amount);
 			restoreOne(player, amount, log);
@@ -207,7 +219,7 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			break;
 		}
 		case 'combatBonusFromBrokenBarrier': {
-			// Live-pool bonus: +1 damage per broken barrier, capped at `max` (Blood Hunter).
+			// Live-pool bonus: +1 damage per broken barrier, capped at `max` (Woundreaver).
 			// Broken barrier is the corrupted side of the max barrier pool (maxBarrier − barrier).
 			const brokenBarrier = player.maxBarrier - player.barrier;
 			const amount = Math.min(brokenBarrier, action.max);
@@ -225,7 +237,7 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			// These are generic (no classId), so they add no class trait once placed —
 			// matching "gain any Spirit Augment". (Previously this only bumped the
 			// server-only `spiritAugments` scalar, which the client never saw and could
-			// never place — Captain/Fairy Droid/Strategist/Cursed-Spirit augments were lost.)
+			// never place — Captain/Runebound Vessel/Strategist/Cursed-Spirit augments were lost.)
 			player.unplacedAugments ??= [];
 			for (let i = 0; i < amount; i += 1) {
 				player.unplacedAugments.push({ runeId: GENERIC_AUGMENT_RUNE_ID, name: 'Spirit Augment' });

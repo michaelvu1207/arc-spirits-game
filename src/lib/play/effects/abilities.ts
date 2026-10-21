@@ -13,10 +13,10 @@
  * under `./classes/`. Adding a `decisions` export there is picked up automatically
  * (namespace import), so no edit to this file is needed.
  *
- * Classes with an empty `ability` array (Cursed Spirit, Golden Ruler, World Guardian,
- * Infiltrator, Mod Injector) are engine/claim-handled elsewhere; the derived views
+ * Classes with an empty `ability` array (Cursed Spirit, Dawn Sovereign, Relic Sentinel,
+ * Infiltrator, Runic Duplicator) are engine/claim-handled elsewhere; the derived views
  * filter them out, so listing them is behavior-neutral and just documents them.
- * (World Ender is NOT empty — it has a flat +1 VP `awakeningPhase` run handler.)
+ * (Void Sovereign is NOT empty — it has a flat +1 VP `awakeningPhase` run handler.)
  */
 
 import type { ClassAbility, ClassDecisions, ClassModule } from './classes/types';
@@ -66,41 +66,41 @@ export type { ClassAbility } from './classes/types';
 const MODULES: Record<string, ClassModule> = {
 	Fighter: fighter,
 	Cultivator: cultivator,
-	Elementalist: elementalist,
+	'Elementalist': elementalist,
 	Healer: healer,
-	Fairy: fairy,
+	'Fairy': fairy,
 	'Soul Weaver': soulWeaver,
 	'Abyss Summoner': abyssSummoner,
-	'Mod Injector': modInjector,
-	'Deep Sea Hunter': deepSeaHunter,
-	Undercover: undercover,
+	'Runic Duplicator': modInjector,
+	'Tide Stalker': deepSeaHunter,
+	'Relic Envoy': undercover,
 	'Cursed Spirit': cursedSpirit,
 	'The Corruptor': theCorruptor,
-	'Arcane Advisor': arcaneAdvisor,
-	'Tree of Growth': treeOfGrowth,
-	Strategist: strategist,
-	'Arc Mage': arcMage,
+	'Arcane Ascendant': arcaneAdvisor,
+	'Growth Warden': treeOfGrowth,
+	'Runic Bulwark': strategist,
+	'Arcane Alchemist': arcMage,
 	Captain: captain,
-	Sharpshooter: sharpshooter,
+	'Sharpshooter': sharpshooter,
 	'Spirit Animal': spiritAnimal,
-	'Golem of Wishes': golemOfWishes,
-	'Blood Hunter': bloodHunter,
-	'Dragon Warrior': dragonWarrior,
-	'Dark Assassin': darkAssassin,
-	'Dark Fighter': darkFighter,
-	Aquamaiden: aquamaiden,
-	Firekeeper: firekeeper,
-	Disruptor: disruptor,
-	Ironmane: ironmane,
-	'Child Prodigy': childProdigy,
+	'Living Bastion': golemOfWishes,
+	'Woundreaver': bloodHunter,
+	'Arcane Vanguard': dragonWarrior,
+	'Aegis Weaver': darkAssassin,
+	'Fatestriker': darkFighter,
+	'Tide Warden': aquamaiden,
+	'Emberguard': firekeeper,
+	'Disruptor': disruptor,
+	'Monster Hunter': ironmane,
+	'Wayfarer': childProdigy,
 	'Rune Mage': runeMage,
-	'Fairy Droid': fairyDroid,
-	'Adaptive Fighter': adaptiveFighter,
-	'Ancient Magus': ancientMagus,
-	Infiltrator: infiltrator,
+	'Runebound Vessel': fairyDroid,
+	'Battle Adept': adaptiveFighter,
+	'Relic Warden': ancientMagus,
+	'Cursed Fighter': infiltrator,
 	'Golden Ruler': goldenRuler,
-	'World Ender': worldEnder,
-	'World Guardian': worldGuardian
+	'Void Sovereign': worldEnder,
+	'Relic Sentinel': worldGuardian
 };
 
 /**

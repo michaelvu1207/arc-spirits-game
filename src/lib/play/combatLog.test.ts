@@ -34,13 +34,13 @@ describe('mergeCombatLog', () => {
 			'Spirit Animal: Gained +1 combat damage.',
 			'Spirit Animal: Gained +2 combat damage.',
 			'Good is faster (initiative 3 vs 0) and strikes first.',
-			'Dark Assassin: Gained +1 combat damage.',
+			'Aegis Weaver: Gained +1 combat damage.',
 			'Red is stunned and cannot strike back.'
 		];
 		expect(mergeCombatLog(raw)).toEqual([
 			'Spirit Animal: Gained +3 combat damage.',
 			'Good is faster (initiative 3 vs 0) and strikes first.',
-			'Dark Assassin: Gained +1 combat damage.',
+			'Aegis Weaver: Gained +1 combat damage.',
 			'Red is stunned and cannot strike back.'
 		]);
 	});

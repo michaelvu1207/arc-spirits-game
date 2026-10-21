@@ -11,7 +11,7 @@ const fairyAwakening: ClassHandler = (ctx) => {
 	const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 	if (slot == null) return;
 	const fairy = ctx.player.spirits.find((s) => s.slotIndex === slot);
-	if (!fairy || (fairy.classes?.Fairy ?? 0) <= 0) return;
+	if (!fairy || (fairy.classes?.['Fairy'] ?? 0) <= 0) return;
 	// Origin-matched Exalted dice — skipped only when the Fairy has no origin (a
 	// degenerate spirit grants no dice, but still gets the unconditional initiative).
 	const fairyOrigins = Object.keys(fairy.origins ?? {});

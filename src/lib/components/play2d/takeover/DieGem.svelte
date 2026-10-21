@@ -2,7 +2,7 @@
 	import type { DiceTier } from '$lib/play/types';
 
 	/** Single source for attack-die visuals — every surface that shows a die
-	 *  (Arc Mage convert, Infiltrator swap, tainted split) uses the same gem. */
+	 *  (Arcane Alchemist convert, Infiltrator swap, tainted split) uses the same gem. */
 	export const TIER_COLOR: Record<DiceTier, string> = {
 		basic: '#8d8aa1',
 		enchanted: '#4d8bf0',

@@ -518,7 +518,7 @@ export function describePendingWork(
 			}
 			const decisions = player.pendingDecisions ?? [];
 			if (decisions.length > 0) {
-				// Picker specs for the decisions that need one (Arc Mage). The reducer validates
+				// Picker specs for the decisions that need one (Arcane Alchemist). The reducer validates
 				// selections against the SAME helper, so UI-offer and reducer-accept can't drift.
 				const pickerSpecs = decisions
 					.map((d) => decisionPickerSpec(d, player))
@@ -703,9 +703,16 @@ export function computeInfiltratorSwap(
 	player: PrivatePlayerState,
 	seat: SeatColor
 ): InfiltratorSwapAffordance | undefined {
+	// Kept as a replay-compatible API surface; the live Infiltrator ability is now
+	// a combat-damage passive and has no location dice-swap action.
+	void state;
+	void player;
+	void seat;
+	return undefined;
+	/*
 	if (state.phase !== 'location') return undefined;
 	const hasInfiltrator = (player.spirits ?? []).some(
-		(s) => !s.isFaceDown && (s.classes?.Infiltrator ?? 0) > 0
+		(s) => !s.isFaceDown && (s.classes?.['Cursed Fighter'] ?? 0) > 0
 	);
 	if (!hasInfiltrator) return undefined;
 	if ((player.actionsUsedThisRound ?? []).includes('infiltratorSwap')) return undefined;
@@ -725,6 +732,7 @@ export function computeInfiltratorSwap(
 		targets,
 		myDice: (player.attackDice ?? []).map((d) => ({ instanceId: d.instanceId, tier: d.tier }))
 	};
+	*/
 }
 
 /**
@@ -783,7 +791,6 @@ export function computeAffordances(
 	const locationInteractions = active ? computeLocationInteractions(state, active, catalog) : [];
 	const pendingReward = active ? computePendingReward(active) : undefined;
 	const encounter = active ? computeEncounter(state, active, seat) : undefined;
-	const infiltratorSwap = active ? computeInfiltratorSwap(state, active, seat) : undefined;
 	return {
 		seat,
 		phase,
@@ -798,7 +805,6 @@ export function computeAffordances(
 		...(locationInteractions.length > 0 ? { locationInteractions } : {}),
 		...(pendingReward ? { pendingReward } : {}),
 		...(encounter ? { encounter } : {}),
-		...(infiltratorSwap ? { infiltratorSwap } : {}),
 		deadline: state.phaseDeadline
 	};
 }

@@ -811,6 +811,7 @@ def train(
     solo_reach30_coef: float = 0.0,
     solo_reach30_bands: tuple[tuple[int, float], ...] | None = None,
     solo_terminal_objective: str = "legacy",
+    solo_tempo_weight: float = 0.001,
     strategic_mc_gamma: float = 1.0,
     strategic_outcome_coef: float = 0.0,
     model_version: str = "v1",
@@ -1000,6 +1001,7 @@ def train(
             solo_reach30_coef=solo_reach30_coef,
             solo_reach30_bands=solo_reach30_bands,
             solo_terminal_objective=solo_terminal_objective,
+            solo_tempo_weight=solo_tempo_weight,
             strategic_mc_gamma=strategic_mc_gamma,
             strategic_outcome_coef=strategic_outcome_coef,
             obs_key=obs_key,
@@ -1532,6 +1534,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        "--solo-tempo-weight",
+        type=float,
+        default=0.001,
+        help=(
+            "Per-round tempo weight of the lexicographic solo objective "
+            "(reward = won + w*(31-finishRound) + 1e-6*margin). 0.001 keeps the strict "
+            "lexicographic ordering; larger values trade win probability for finishing earlier."
+        ),
+    )
+    p.add_argument(
         "--solo-terminal-objective",
         choices=["legacy", "resolved", "lexicographic"],
         default="legacy",
@@ -1706,6 +1718,7 @@ if __name__ == "__main__":
         solo_reach30_coef=args.solo_reach30_coef,
         solo_reach30_bands=args.solo_reach30_bands,
         solo_terminal_objective=args.solo_terminal_objective,
+        solo_tempo_weight=args.solo_tempo_weight,
         strategic_mc_gamma=args.strategic_mc_gamma,
         strategic_outcome_coef=args.strategic_outcome_coef,
         model_version=args.model_version,

@@ -1,5 +1,5 @@
 /**
- * Adaptive Fighter — declarative `onMonsterKill` ability.
+ * Battle Adept — declarative `onMonsterKill` ability.
  *
  * DB-intended behavior (source of truth):
  *   - If you overkill by 2 damage, gain 1 potential.
@@ -12,7 +12,7 @@
  * breakpoint class, so there is no `run` handler to unit-test directly.
  *
  * UX channel: every branch surfaces as an attributed combat log line
- * ("Adaptive Fighter: Gained N potential." / "… Gained N enchanted attack dice."),
+ * ("Battle Adept: Gained N potential." / "… Gained N enchanted attack dice."),
  * so neither branch is a silent no-op.
  */
 
@@ -22,13 +22,13 @@ import type { EffectCombatInfo } from '../context';
 import { makePlayer, makeState, spirit } from './testHelpers';
 import type { PrivatePlayerState } from '../../types';
 
-/** Fire onMonsterKill for a Red Adaptive Fighter with the given combat outcome. */
+/** Fire onMonsterKill for a Red Battle Adept with the given combat outcome. */
 function fireKill(
 	combat: EffectCombatInfo,
 	playerOverrides: Partial<PrivatePlayerState> = {}
 ): { player: PrivatePlayerState; log: string[] } {
 	const player = makePlayer({
-		spirits: [spirit(1, { 'Adaptive Fighter': 1 })],
+		spirits: [spirit(1, { 'Battle Adept': 1 })],
 		...playerOverrides
 	});
 	const state = makeState(player);
@@ -37,7 +37,7 @@ function fireKill(
 	return { player, log };
 }
 
-describe('Adaptive Fighter', () => {
+describe('Battle Adept', () => {
 	it('overkill by 2: gains 1 potential', () => {
 		const before = makePlayer().maxBarrier; // 4
 		const { player, log } = fireKill(
@@ -49,7 +49,7 @@ describe('Adaptive Fighter', () => {
 		expect(player.barrier).toBe(2);
 		expect(player.brokenBarrier).toBe(3);
 		// Surfaces to the player as an attributed log line (no silent no-op).
-		expect(log.some((l) => l.includes('Adaptive Fighter: Gained 1 max barrier.'))).toBe(true);
+		expect(log.some((l) => l.includes('Battle Adept: Gained 1 max barrier.'))).toBe(true);
 		// Did NOT take the "not killed" branch.
 		expect(player.attackDice.length).toBe(0);
 	});
@@ -73,7 +73,7 @@ describe('Adaptive Fighter', () => {
 		expect(player.attackDice.length).toBe(1);
 		expect(player.attackDice[0].tier).toBe('enchanted');
 		// Surfaces to the player as an attributed log line (no silent no-op).
-		expect(log.some((l) => l.includes('Adaptive Fighter: Gained 1 enchanted attack dice.'))).toBe(true);
+		expect(log.some((l) => l.includes('Battle Adept: Gained 1 enchanted attack dice.'))).toBe(true);
 		// Did NOT take the overkill branch.
 		expect(player.maxBarrier).toBe(makePlayer().maxBarrier);
 	});
@@ -82,14 +82,14 @@ describe('Adaptive Fighter', () => {
 		const { player, log } = fireKill({ dealt: 8, overkill: 0, killed: true });
 		expect(player.maxBarrier).toBe(makePlayer().maxBarrier);
 		expect(player.attackDice.length).toBe(0);
-		// Neither breakpoint branch fired -> no Adaptive Fighter log lines.
-		expect(log.some((l) => l.startsWith('Adaptive Fighter:'))).toBe(false);
+		// Neither breakpoint branch fired -> no Battle Adept log lines.
+		expect(log.some((l) => l.startsWith('Battle Adept:'))).toBe(false);
 	});
 
-	it('is inactive when the Adaptive Fighter spirit is face-down (unawakened)', () => {
+	it('is inactive when the Battle Adept spirit is face-down (unawakened)', () => {
 		const { player } = fireKill(
 			{ dealt: 3, overkill: 0, killed: false },
-			{ spirits: [spirit(1, { 'Adaptive Fighter': 1 }, { faceDown: true })] }
+			{ spirits: [spirit(1, { 'Battle Adept': 1 }, { faceDown: true })] }
 		);
 		expect(player.attackDice.length).toBe(0);
 		expect(player.maxBarrier).toBe(makePlayer().maxBarrier);

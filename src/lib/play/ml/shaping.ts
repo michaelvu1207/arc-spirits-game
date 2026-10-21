@@ -29,7 +29,7 @@ export interface ShapingWeights {
 	awakened: number;
 	status: number;
 	/** Reward INTERMEDIATE progress toward the non-corrupt win engines — holding Cultivators
-	 *  (toward the maxBarrier breakpoint) and VP-classes (World Ender/Golden Ruler). This gives a
+	 *  (toward the maxBarrier breakpoint) and VP-classes (Void Sovereign/Dawn Sovereign). This gives a
 	 *  DENSE gradient to ASSEMBLE multi-spirit setups whose final payoff (maxBarrier / +1-VP-round)
 	 *  is otherwise invisible to a 1-step scorer until the breakpoint. Optional (defaults to 0). */
 	classProgress?: number;
@@ -117,7 +117,7 @@ export const SHAPING_PRESETS: Record<string, ShapingWeights> = {
 	// (~0.1) never overcame the noise, so bots stayed at base barrier 4 / scored 0. Crank them so the
 	// return-to-go (γ→1) credits the setup steps. With effect-aware encoding the net can now SEE+pick them.
 	banker: { dice: 0.05, maxBarrier: 0.35, awakened: 0.15, status: 0, classProgress: 0.4 }, // assemble Cultivators → maxBarrier → kill monsters
-	ascend: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: 0, classProgress: 0.4 }, // assemble + awaken VP-class spirits (World Ender +1/round)
+	ascend: { dice: 0.05, maxBarrier: 0.15, awakened: 0.35, status: 0, classProgress: 0.4 }, // assemble + awaken VP-class spirits (Void Sovereign +1/round)
 	// ascend2 (ladder4, ABLATION): tested whether a NEGATIVE status potential (−0.25) reduces the
 	// corruption→Fallen spiral. It did NOT — Fallen held ~100% across all 60 gens. The historical
 	// terminal-retention implementation also made this an explicit end-state preference, so the
@@ -169,7 +169,7 @@ export function buildPotential(p: PrivatePlayerState | undefined, w: ShapingWeig
 	const attack = Math.min(1, expectedAttack(p) / 20); // dice-pool expected roll (fight-winning engine power)
 	const cc = awakenedClassCounts(p);
 	const cultProg = Math.min(1, (cc['Cultivator'] ?? 0) / 5); // progress toward the 5-Cultivator maxBarrier breakpoint
-	const vpClass = Math.min(1, ((cc['World Ender'] ?? 0) + (cc['Golden Ruler'] ?? 0)) / 3); // +1 VP/round classes
+	const vpClass = Math.min(1, ((cc['Void Sovereign'] ?? 0) + (cc['Golden Ruler'] ?? 0)) / 3); // +1 VP/round classes
 	return (
 		w.dice * dice +
 		w.maxBarrier * barrier +

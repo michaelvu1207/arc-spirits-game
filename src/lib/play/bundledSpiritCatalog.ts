@@ -10,15 +10,15 @@ type SpiritSeed = readonly [
 
 const SEEDS: readonly SpiritSeed[] = [
 	['57b06434-0eeb-4e9e-a17f-c2bdce613e52', 'Hero Captain', 1, ['Captain'], ['Human Enclave']],
-	['cfccc89f-06fe-4bd7-85f9-c5f9416cd1b4', 'Hero Ironmane', 1, ['Ironmane'], ['Human Enclave']],
+	['cfccc89f-06fe-4bd7-85f9-c5f9416cd1b4', 'Hero Ironmane', 1, ['Monster Hunter'], ['Human Enclave']],
 	['a6c24fba-940e-4aa9-8729-a361f7209f9c', 'Hero Ivern', 1, ['Sharpshooter'], ['Human Enclave']],
 	['aa541f5d-f648-4964-9e8b-db891c2bbd81', 'Hero Mintyheart', 1, ['Healer'], ['Human Enclave']],
-	['3aefb245-b1d8-43ab-8aa2-cb2210abbb72', 'Hero Nyra', 1, ['Arc Mage'], ['Human Enclave']],
+	['3aefb245-b1d8-43ab-8aa2-cb2210abbb72', 'Hero Nyra', 1, ['Arcane Alchemist'], ['Human Enclave']],
 	[
 		'f043914f-9259-481f-960d-ab83a48b06ba',
 		'Hero Zarek',
 		1,
-		['Adaptive Fighter'],
+		['Battle Adept'],
 		['Human Enclave']
 	],
 	['9707edd6-fbc3-4433-99f2-a687f39505fd', 'CyberDive', 3, ['Elementalist'], ['Cyber City']],
@@ -67,24 +67,17 @@ const SEEDS: readonly SpiritSeed[] = [
 		['Cyber City']
 	],
 	['e95c775b-0677-4884-bc59-12ae2762ca8b', 'Turtle', 3, ['Spirit Animal'], ['Moon Tide']],
-	['955abfc0-fa04-4ab3-bcaf-5dc2839ddec0', 'Aquamaiden', 7, ['Aquamaiden'], ['Moon Tide']],
-	['e75cb10c-fee4-488b-a213-e663c0fecae7', 'Arcane Synthesizer', 7, ['Arcane Advisor'], ['Void']],
-	[
-		'67c591ab-4227-4656-8697-247243975076',
-		'Astrobiologist',
-		7,
-		['Elementalist', 'Elementalist', 'Elementalist'],
-		['Astral Zone']
-	],
-	['18154c10-1422-4655-a7cd-c637ac947916', 'Beefender', 7, ['Strategist'], ['Floral Patch']],
-	['728c5151-2da6-4202-b5b0-aae13dec68be', 'Child Prodigy', 7, ['Child Prodigy'], ['Royal Family']],
-	['ed612933-fd19-4b68-993e-6e61b52eb4ce', 'Comet Caller', 7, ['Rune Mage'], ['Astral Zone']],
-	['40016186-6b98-4dbb-8364-b50d27e9f394', 'ENCODER', 7, ['Infiltrator'], ['Cyber City']],
+	['955abfc0-fa04-4ab3-bcaf-5dc2839ddec0', 'Aquamaiden', 7, ['Tide Warden'], ['Moon Tide']],
+	['e75cb10c-fee4-488b-a213-e663c0fecae7', 'Arcane Synthesizer', 7, ['Arcane Ascendant'], ['Arcane Spirits']],
+	['18154c10-1422-4655-a7cd-c637ac947916', 'Beefender', 7, ['Runic Bulwark'], ['Floral Patch']],
+	['728c5151-2da6-4202-b5b0-aae13dec68be', 'Child Prodigy', 7, ['Wayfarer'], ['Arcane Spirits']],
+	['ed612933-fd19-4b68-993e-6e61b52eb4ce', 'Comet Caller', 7, ['Rune Mage'], ['Arcane Spirits']],
+	['40016186-6b98-4dbb-8364-b50d27e9f394', 'ENCODER', 7, ['Cursed Fighter'], ['Cyber City']],
 	[
 		'5c864c2d-20bd-4134-a829-09a2cc793e41',
 		'Fairy Droid',
 		7,
-		['Fairy Droid'],
+		['Runebound Vessel'],
 		['Cyber City']
 	],
 	['0a775e09-555f-43a7-ac5b-06aaeaa4b69c', 'Firewall', 7, ['Disruptor'], ['Cyber City']],
@@ -94,66 +87,57 @@ const SEEDS: readonly SpiritSeed[] = [
 		'Hollow Eyes',
 		7,
 		['Spirit Animal', 'Spirit Animal', 'Spirit Animal'],
-		['Void']
+		['Arcane Spirits']
 	],
 	['c0d12557-4615-4c60-a93c-622e5fc70eae', 'Lantern Fairy', 7, ['Fairy'], ['Lantern Lights']],
 	[
 		'25848694-6c69-408c-9b78-94948c6df3a6',
 		'Lightcatcher',
 		7,
-		['Dark Assassin'],
+		['Aegis Weaver'],
 		['Lantern Lights']
 	],
-	['5dc44c85-8224-4c49-89ff-90a37aa10040', 'Meteor Shower', 7, ['Ancient Magus'], ['Astral Zone']],
-	['b8314d8f-ea32-44de-a3ad-62944e5ccecb', 'Mod Injector', 7, ['Mod Injector'], ['Cyber City']],
-	['3b196b06-a047-4505-aad6-bf0c9fe05ac0', 'Rootguard', 7, ['Tree of Growth'], ['Floral Patch']],
-	['b3068fcf-d197-4030-ba55-29ac1621f9a9', 'Space Invader', 7, ['Dark Fighter'], ['Void']],
+	['5dc44c85-8224-4c49-89ff-90a37aa10040', 'Meteor Shower', 7, ['Relic Warden'], ['Arcane Spirits']],
+	['b8314d8f-ea32-44de-a3ad-62944e5ccecb', 'Mod Injector', 7, ['Runic Duplicator'], ['Cyber City']],
+	['3b196b06-a047-4505-aad6-bf0c9fe05ac0', 'Rootguard', 7, ['Growth Warden'], ['Floral Patch']],
+	['b3068fcf-d197-4030-ba55-29ac1621f9a9', 'Space Invader', 7, ['Fatestriker'], ['Arcane Spirits']],
 	[
 		'e24e9f91-7333-44c0-968e-15b900af3385',
 		'Stellar Songbird',
 		7,
 		['Spirit Animal', 'Spirit Animal', 'Spirit Animal'],
-		['Astral Zone']
+		['Arcane Spirits']
 	],
 	['36bb656c-49fe-4d50-a037-b29dbd1bfa91', 'Tidal Fairy', 7, ['Fairy'], ['Moon Tide']],
-	['d89f5d3a-5519-4b96-baf0-1f0a49c0ada1', 'Wish Maker', 7, ['Firekeeper'], ['Lantern Lights']],
+	['d89f5d3a-5519-4b96-baf0-1f0a49c0ada1', 'Wish Maker', 7, ['Emberguard'], ['Lantern Lights']],
 	[
 		'cafb6cfb-11f8-476c-a275-a5b8179630d2',
 		'Arcane Huntress',
 		9,
-		['Deep Sea Hunter'],
+		['Tide Stalker'],
 		['Moon Tide']
 	],
-	['e4822f18-98f0-44fd-8711-756f946f6cd5', 'Contessa', 9, ['World Ender'], ['Void']],
-	[
-		'e9e12faa-0add-4fab-b251-a9dec5a8bae9',
-		'Cosmic Guardian',
-		9,
-		['World Guardian'],
-		['Astral Zone']
-	],
+	['e4822f18-98f0-44fd-8711-756f946f6cd5', 'Contessa', 9, ['Void Sovereign'], ['Arcane Spirits']],
 	['e5dff9be-ac58-47bb-bd9d-69efb03dc393', 'Florality', 9, ['Abyss Summoner'], ['Floral Patch']],
-	['a77653c5-69fa-4351-833d-59d302722365', 'Golden Ruler', 9, ['Golden Ruler'], ['Royal Family']],
+	['a77653c5-69fa-4351-833d-59d302722365', 'Golden Ruler', 9, ['Golden Ruler'], ['Arcane Spirits']],
 	[
 		'504c77b5-8f46-427d-a339-1ef11160b0d7',
 		'Golem of Embers',
 		9,
-		['Golem of Wishes'],
+		['Living Bastion'],
 		['Lantern Lights']
 	],
-	['fc667265-edd6-4c28-b96e-6e505188ce72', 'Shadowtaker', 9, ['The Corruptor'], ['Void']],
-	['be2072ea-ccdb-4941-b1b3-26890a7b64cf', 'Water Dragon', 9, ['Dragon Warrior'], ['Moon Tide']]
+	['fc667265-edd6-4c28-b96e-6e505188ce72', 'Shadowtaker', 9, ['The Corruptor'], ['Arcane Spirits']],
+	['be2072ea-ccdb-4941-b1b3-26890a7b64cf', 'Water Dragon', 9, ['Arcane Vanguard'], ['Moon Tide']]
 ];
 
 const ORIGIN_COLORS: Record<string, string> = {
-	'Astral Zone': '#4a7ad9',
+	'Arcane Spirits': '#8b5cf6',
 	'Cyber City': '#3b82f6',
 	'Floral Patch': '#10b981',
 	'Human Enclave': '#6b7280',
 	'Lantern Lights': '#a95189',
-	'Moon Tide': '#64748b',
-	'Royal Family': '#f59e0b',
-	Void: '#6b7280'
+	'Moon Tide': '#64748b'
 };
 
 function key(name: string): string {

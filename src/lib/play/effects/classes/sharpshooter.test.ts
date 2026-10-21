@@ -20,20 +20,20 @@ import { fire } from './testHelpers';
 
 describe('Sharpshooter', () => {
 	it('on discard: gains 1 enchanted attack die', () => {
-		const { player } = fire({ Sharpshooter: 1 }, 'onSpiritDiscard');
+		const { player } = fire({ 'Sharpshooter': 1 }, 'onSpiritDiscard');
 
 		expect(player.attackDice.length).toBe(1);
 		expect(player.attackDice[0].tier).toBe('enchanted');
 	});
 
 	it('on discard: surfaces the enchanted-die gain as a log line', () => {
-		const { log } = fire({ Sharpshooter: 1 }, 'onSpiritDiscard');
+		const { log } = fire({ 'Sharpshooter': 1 }, 'onSpiritDiscard');
 
 		expect(log.some((l) => l.includes('Gained 1 enchanted attack dice.'))).toBe(true);
 	});
 
 	it('does not grant on an unrelated trigger (no summon -> no die)', () => {
-		const { player } = fire({ Sharpshooter: 1 }, 'onRest');
+		const { player } = fire({ 'Sharpshooter': 1 }, 'onRest');
 
 		expect(player.attackDice.length).toBe(0);
 		expect(player.stunImmune).toBe(false);
@@ -41,9 +41,9 @@ describe('Sharpshooter', () => {
 
 	it('is inactive when the Sharpshooter spirit is face-down (unawakened)', () => {
 		const { player, log } = fire(
-			{ Sharpshooter: 1 },
+			{ 'Sharpshooter': 1 },
 			'onSpiritDiscard',
-			{ player: { spirits: [{ slotIndex: 1, id: 's1', name: 'Spirit 1', cost: 2, classes: { Sharpshooter: 1 }, origins: {}, isFaceDown: true }] } }
+			{ player: { spirits: [{ slotIndex: 1, id: 's1', name: 'Spirit 1', cost: 2, classes: { 'Sharpshooter': 1 }, origins: {}, isFaceDown: true }] } }
 		);
 
 		expect(player.attackDice.length).toBe(0);

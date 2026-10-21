@@ -1,5 +1,5 @@
 /**
- * The Corruptor — one declarative breakpoint ability.
+ * Abyss Harbinger — one declarative breakpoint ability.
  *
  * DB-intended behavior (source of truth):
  *   - Gain 2 Initiative (inCombat).

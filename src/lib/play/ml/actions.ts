@@ -110,7 +110,7 @@ function infiltratorSwapCommands(
 	if (!me || state.phase !== 'location') return [];
 	if (
 		!(me.spirits ?? []).some(
-			(spirit) => !spirit.isFaceDown && (spirit.classes?.Infiltrator ?? 0) > 0
+			(spirit) => !spirit.isFaceDown && (spirit.classes?.['Cursed Fighter'] ?? 0) > 0
 		)
 	) {
 		return [];
@@ -338,7 +338,7 @@ function buildCombatPolicyPreview(
 			};
 		}
 	} else if (guaranteedKillProbability <= 1e-12) {
-		// Adaptive Fighter's no-kill branch is deterministic when every roll misses.
+		// Battle Adept's no-kill branch is deterministic when every roll misses.
 		applyTrigger(preview, seat, 'onMonsterKill', [], {
 			catalog,
 			combat: { dealt: 0, overkill: 0, killed: false }

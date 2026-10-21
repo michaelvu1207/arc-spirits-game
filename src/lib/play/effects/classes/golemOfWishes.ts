@@ -1,9 +1,18 @@
 import type { ClassAbility } from './types';
 
-// Golem of Wishes — "In combat, deflect 4 damage."
+// Living Bastion — take 6 less damage, gain 6 attack damage and 6 initiative.
 export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
-		breakpoints: [{ count: 1, actions: [{ kind: 'deflect', amount: 4 }] }]
+		breakpoints: [
+			{
+				count: 1,
+				actions: [
+					{ kind: 'reduceIncomingDamage', amount: 6 },
+					{ kind: 'combatBonus', amount: 6 },
+					{ kind: 'gainInitiative', amount: 6 }
+				]
+			}
+		]
 	}
 ];

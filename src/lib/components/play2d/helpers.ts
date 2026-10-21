@@ -3,7 +3,7 @@ import { STORAGE_BASE_URL } from '$lib/supabase';
 import type { HexSpiritAsset, IconPoolEntry, MatAsset, MatSlotSnapshot } from '$lib/types';
 import { PLAYER_COLOR_HEX, type PlayerColor } from '$lib/types';
 import type { DiceTier, SeatColor } from '$lib/play/types';
-import type { getAssetState } from '$lib/stores/assetStore.svelte';
+import { getAssetState } from '$lib/stores/assetStore.svelte';
 
 /** icon_pool ids for the core resource icons shown on the player bar. */
 export const RESOURCE_ICON_IDS = {
@@ -134,12 +134,11 @@ export function spiritImageMap(spiritAssets: Map<string, HexSpiritAsset>): Map<s
 }
 
 /**
- * The unawakened (face-down) back-side art for a hex spirit. Back faces follow a
- * fixed export convention rather than living on the asset record, so we build the
- * URL by id. Shown for face-down spirits on the board and for Arcane Abyss draws.
+ * Use the active versioned back on the asset record. Retain the legacy path for
+ * older catalogs that do not expose a back-side field.
  */
 export function spiritBackImageUrl(id: string): string {
-	return `${STORAGE_BASE_URL}/hex_spirits/${id}_back_side_export.png`;
+	return storageUrl(getAssetState().spiritAssets.get(id)?.back_side_export) ?? `${STORAGE_BASE_URL}/hex_spirits/${id}_back_side_export.png`;
 }
 
 /**

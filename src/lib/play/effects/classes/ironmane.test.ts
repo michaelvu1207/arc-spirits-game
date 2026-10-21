@@ -18,24 +18,24 @@ import { fire } from './testHelpers';
  */
 describe('Ironmane (onNavigate → +1 combat allowance, initiate Monster Combat twice)', () => {
 	it('raises the monster-combat allowance by exactly 1 on navigate', () => {
-		const { player } = fire({ Ironmane: 1 }, 'onNavigate');
+		const { player } = fire({ 'Monster Hunter': 1 }, 'onNavigate');
 		// base 1 + this grant = 2 ⇒ "initiate Monster Combat two times".
 		expect(player.extraActions.combat).toBe(1);
 	});
 
 	it('yields a total monster-combat allowance of 2 (base 1 + grant)', () => {
-		const { player } = fire({ Ironmane: 1 }, 'onNavigate');
+		const { player } = fire({ 'Monster Hunter': 1 }, 'onNavigate');
 		const combatAllowance = 1 + (player.extraActions.combat ?? 0);
 		expect(combatAllowance).toBe(2);
 	});
 
 	it('surfaces to the player via a log line (no silent no-op)', () => {
-		const { log } = fire({ Ironmane: 1 }, 'onNavigate');
+		const { log } = fire({ 'Monster Hunter': 1 }, 'onNavigate');
 		expect(log.some((l) => /extra combat action/i.test(l))).toBe(true);
 	});
 
 	it('does not grant the allowance on an unrelated trigger', () => {
-		const { player } = fire({ Ironmane: 1 }, 'onTakeDamage');
+		const { player } = fire({ 'Monster Hunter': 1 }, 'onTakeDamage');
 		expect(player.extraActions.combat ?? 0).toBe(0);
 	});
 

@@ -190,6 +190,7 @@ export interface HexSpiritAsset {
 	};
 	awaken_condition: AwakenCondition | null;
 	game_print_image_path: string | null;
+	back_side_export?: string | null;
 	art_raw_image_path: string | null;
 }
 

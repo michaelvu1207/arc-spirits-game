@@ -2,7 +2,7 @@
 	/**
 	 * W2b — a class decision as an ability card (plans/ux-overhaul.md §4.2): art
 	 * header, prompt headline, options as full-width choice rows. Decisions that
-	 * embed a picker (Arc Mage's 4 attack dice) use the engine `pickerSpec`
+	 * embed a picker (Arcane Alchemist's 4 attack dice) use the engine `pickerSpec`
 	 * (§5.4) to light ONLY eligible dice — the same helper the reducer validates
 	 * against, so UI-eligibility and acceptance cannot drift. Without a spec the
 	 * card is a plain option choice (an omitted selection keeps reducer auto-pick).
@@ -19,7 +19,7 @@
 		dieImage?: (tier: DiceTier) => string | null;
 		/** Class art for the header (resolved by the parent from the decision kind). */
 		classIcon?: string | null;
-		/** Header eyebrow ("Arc Mage"); falls back to a generic label. */
+		/** Header eyebrow ("Arcane Alchemist"); falls back to a generic label. */
 		sourceLabel?: string | null;
 		busy?: boolean;
 		/** Preserves per-surface testids: `${testidPrefix}-${id}-${optionId}`. */

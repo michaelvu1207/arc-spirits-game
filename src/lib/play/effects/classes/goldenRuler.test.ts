@@ -6,16 +6,16 @@ import { enterBenefits } from '../../phases';
 import type { AwakenGrant } from '../../types';
 
 /**
- * Golden Ruler — DB-intended behavior:
+ * Dawn Sovereign — DB-intended behavior:
  *   "In the Awakening Phase, gain 1 VP. If you are evil, you must discard this spirit."
  *
  * This is ENGINE-handled, not effect-system handled. The class `ability` array is
  * intentionally empty. The grant surfaces to the player as a CLEANUP CLAIM card:
  * `enterBenefits` (phases.ts) pushes a `{ kind: 'vp', amount: 1, source: 'Golden Ruler' }`
  * line into `player.pendingAwakenReward.grants` whenever the player holds ≥1 awakened
- * Golden Ruler — and, when the player is Evil, it tags the line with a note warning that
- * claiming also discards a Golden Ruler spirit. `resolveAwakenReward` (runtime.ts) then
- * applies the +1 VP and, for Evil claimants, discards one awakened Golden Ruler spirit.
+ * Dawn Sovereign — and, when the player is Evil, it tags the line with a note warning that
+ * claiming also discards a Dawn Sovereign spirit. `resolveAwakenReward` (runtime.ts) then
+ * applies the +1 VP and, for Evil claimants, discards one awakened Dawn Sovereign spirit.
  *
  * These tests assert the claim-building behavior through the real engine entry point
  * (`enterBenefits`) — the channel the player actually sees — and guard that nothing is
@@ -30,7 +30,7 @@ function grants(player: ReturnType<typeof makePlayer>): AwakenGrant[] {
 	return player.pendingAwakenReward?.grants ?? [];
 }
 
-/** A state whose Red player holds one awakened Golden Ruler at the given statusLevel. */
+/** A state whose Red player holds one awakened Dawn Sovereign at the given statusLevel. */
 function stateForRuler(statusLevel = 0) {
 	const player = makePlayer({
 		statusLevel,
@@ -39,12 +39,12 @@ function stateForRuler(statusLevel = 0) {
 	return { player, state: makeState(player) };
 }
 
-describe('Golden Ruler — engine-handled Cleanup claim', () => {
+describe('Dawn Sovereign — engine-handled Cleanup claim', () => {
 	it('the class ability array is intentionally empty (engine-handled, not effect-handled)', () => {
 		expect(ability).toEqual([]);
 	});
 
-	it('holding an awakened Golden Ruler → a +1 VP claim line (Good: no note)', () => {
+	it('holding an awakened Dawn Sovereign → a +1 VP claim line (Good: no note)', () => {
 		const { player, state } = stateForRuler(0);
 		enterBenefits(state);
 		expect(grants(player)).toEqual([{ kind: 'vp', amount: 1, source: 'Golden Ruler' }]);
@@ -60,7 +60,7 @@ describe('Golden Ruler — engine-handled Cleanup claim', () => {
 		expect((lines[0] as { note?: string }).note).toMatch(/discard/i);
 	});
 
-	it('a face-down (un-awakened) Golden Ruler grants no claim', () => {
+	it('a face-down (un-awakened) Dawn Sovereign grants no claim', () => {
 		const player = makePlayer({
 			spirits: [spirit(1, { 'Golden Ruler': 1 }, { faceDown: true })]
 		});
@@ -69,7 +69,7 @@ describe('Golden Ruler — engine-handled Cleanup claim', () => {
 		expect(player.pendingAwakenReward).toBeNull();
 	});
 
-	it('no Golden Ruler held → no claim', () => {
+	it('no Dawn Sovereign held → no claim', () => {
 		const player = makePlayer({ spirits: [] });
 		const state = makeState(player);
 		enterBenefits(state);
@@ -91,7 +91,7 @@ describe('Golden Ruler — engine-handled Cleanup claim', () => {
 
 	// TODO: exercise resolveAwakenReward directly once a fully-active game state is
 	// reachable from testHelpers: a Good claimant gains +1 VP and keeps the spirit; an
-	// Evil claimant gains +1 VP AND loses one awakened Golden Ruler spirit, and the
+	// Evil claimant gains +1 VP AND loses one awakened Dawn Sovereign spirit, and the
 	// pendingAwakenReward is cleared. Covered today by runtime.test.ts / phases.test.ts.
 	it.skip('resolveAwakenReward: +1 VP for Good; +1 VP and self-discard for Evil', () => {});
 });

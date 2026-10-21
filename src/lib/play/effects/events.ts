@@ -12,22 +12,22 @@
 
 export type GameEvent =
 	// ── Navigation Phase ──────────────────────────────────────────────────────
-	/** Destinations revealed + occupancy computed (Deep Sea Hunter, Rune Traveler). */
+	/** Destinations revealed + occupancy computed (Tide Stalker, Rune Traveler). */
 	| 'onNavigate'
 	// ── Encounter Phase ───────────────────────────────────────────────────────
 	/** A player-vs-player interaction / pre-combat beat (Infiltrator dice swap). */
 	| 'onPlayerInteraction'
 	// ── Location Interaction Phase ────────────────────────────────────────────
 	/**
-	 * A spirit was summoned (Soul Weaver redraw, Abyss Summoner, Mod Injector).
+	 * A spirit was summoned (Soul Weaver redraw, Abyss Summoner, Runic Duplicator).
 	 * PLANNED SPLIT: carry `{ world: 'spiritWorld' | 'abyss' }` so the redraw scopes.
 	 */
 	| 'onSpiritSummon'
 	/** A spirit leaves the player's tableau (Healer, Captain, Sharpshooter). */
 	| 'onSpiritDiscard'
-	/** The Cultivate action (Cultivator, Arc Mage, Captain). */
+	/** The Cultivate action (Cultivator, Arcane Alchemist, Captain). */
 	| 'onCultivate'
-	/** The Rest action (Fighter, Elementalist, Healer, Soul Weaver, Strategist, Arcane Advisor). */
+	/** The Rest action (Fighter, Elementalist, Healer, Soul Weaver, Strategist, Arcane Ascendant). */
 	| 'onRest'
 	/**
 	 * A location interaction — e.g. a rune/relic trade (Rune Mage).
@@ -39,17 +39,17 @@ export type GameEvent =
 	| 'inCombat'
 	/** Inside `takeDamage`, BEFORE damage applies (Guardian, Disruptor, Aquamaiden, Firekeeper). */
 	| 'onTakeDamage'
-	/** A combat killed its target (Adaptive Fighter). */
+	/** A combat killed its target (Battle Adept). */
 	| 'onMonsterKill'
 	// ── Awakening & Cleanup Phase ─────────────────────────────────────────────
-	/** A single spirit awakens (Fairy, Dragon Warrior, Firekeeper, Fairy Droid). */
+	/** A single spirit awakens (Fairy, Arcane Vanguard, Firekeeper, Runebound Vessel). */
 	| 'awakening'
 	/** A player's corruption status changed (carries old/new); sets the round's threshold flags. */
 	| 'onStatusChange'
 	/**
 	 * The Awakening Phase, folded into cleanup. Fires once per active player at
 	 * `enterCleanup`, BEFORE `findWinner` — status-driven grants (Cursed Spirit,
-	 * The Corruptor) and VP win-cons (Golden Ruler, World Ender/Guardian).
+	 * Abyss Harbinger) and VP win-cons (Dawn Sovereign, Void Sovereign/Guardian).
 	 */
 	| 'awakeningPhase';
 

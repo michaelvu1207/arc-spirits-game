@@ -1,6 +1,6 @@
 import type { ClassAbility } from './types';
 
-// Blood Hunter — "In Combat, deal 1 damage per broken barrier (max 4)."
+// Woundreaver — "In Combat, deal 1 damage per broken barrier (max 4)."
 export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',

@@ -166,8 +166,8 @@ function expectedAttackApprox(player: PrivatePlayerState | undefined): number {
 	}
 	const counts = awakenedClassCounts(player);
 	total += counts['Spirit Animal'] ?? 0;
-	total += counts.Sharpshooter ?? 0;
-	total += counts['Dragon Warrior'] ?? 0;
+	total += counts['Sharpshooter'] ?? 0;
+	total += counts['Arcane Vanguard'] ?? 0;
 	return total;
 }
 
@@ -400,7 +400,7 @@ describe('normal-start clean farm oracle', () => {
 						total.sumExpectedAttack += expectedAttackApprox(player);
 						total.sumSpiritAnimal += classes['Spirit Animal'] ?? 0;
 						total.sumCultivator += classes.Cultivator ?? 0;
-						total.sumElementalist += classes.Elementalist ?? 0;
+						total.sumElementalist += classes['Elementalist'] ?? 0;
 						total.sumHealer += classes.Healer ?? 0;
 						total.maxKillProb = Math.max(total.maxKillProb, trace.maxKillProb);
 						total.maxFirepowerProb = Math.max(total.maxFirepowerProb, trace.maxFirepowerProb);

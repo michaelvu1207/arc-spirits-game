@@ -2,7 +2,7 @@ import { DICE_TIER_ORDER } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Arc Mage — "When you cultivate, you may discard 4 attack dice to gain 1 Arcane
+// Arcane Alchemist — "When you cultivate, you may discard 4 attack dice to gain 1 Arcane
 // Attack Dice." (CHANGED: was 3 → now 4.) Gated on ≥4 dice, then an opt-in
 // `arcMageTrade` card. The owner PICKS which 4 dice to spend (client sends their
 // instance ids) so they never lose an Arcane die by accident; bots (and any

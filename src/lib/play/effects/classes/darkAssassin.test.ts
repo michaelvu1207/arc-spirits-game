@@ -1,56 +1,46 @@
-import { describe, it, expect } from 'vitest';
-import { fire, spirit } from './testHelpers';
+import { describe, expect, it } from 'vitest';
+import { applyTrigger } from '../apply';
+import { resetCombatFlags } from '../../combat';
+import { runAction } from '../actions';
+import { ctxFor, makePlayer, spirit, makeState } from './testHelpers';
 
-/**
- * Dark Assassin — "For every Cursed Spirit trait you have, gain 2 Attack Damage."
- *
- * Bespoke `inCombat` handler: counts `Cursed Spirit` trait values across the
- * player's face-up spirits and adds `2 * count` to `combatDamageBonus`. UX
- * channel: a passive combat number + a log line, never a silent no-op when
- * Cursed Spirit traits are present.
- */
-describe('Dark Assassin (inCombat, handler — +2 combat damage per Cursed Spirit trait)', () => {
-	it('adds +2 combat damage per Cursed Spirit trait (single spirit)', () => {
-		// Dark Assassin spirit also carries 1 Cursed Spirit trait → +2.
-		const { player } = fire({ 'Dark Assassin': 1, 'Cursed Spirit': 1 }, 'inCombat');
-		expect(player.combatDamageBonus).toBe(2);
-	});
-
-	it('sums Cursed Spirit traits across all face-up spirits', () => {
-		// Two spirits: one Dark Assassin w/ 2 Cursed Spirit, one w/ 1 Cursed Spirit → 3 traits → +6.
-		const { player } = fire({ 'Dark Assassin': 1, 'Cursed Spirit': 2 }, 'inCombat', {
-			player: {
-				spirits: [
-					spirit(1, { 'Dark Assassin': 1, 'Cursed Spirit': 2 }),
-					spirit(2, { 'Cursed Spirit': 1 })
-				]
-			}
+describe('Aegis Weaver', () => {
+	it('restores matching barriers without changing initiative when max barrier grows', () => {
+		const player = makePlayer({
+			barrier: 2,
+			maxBarrier: 4,
+			spirits: [spirit(1, { 'Aegis Weaver': 1 })]
 		});
-		expect(player.combatDamageBonus).toBe(6);
+		const ctx = ctxFor(player, { trigger: 'onCultivate' });
+		runAction(ctx, { kind: 'gainMaxBarrier', amount: 2 });
+		expect(player).toMatchObject({ maxBarrier: 6, barrier: 4, brokenBarrier: 2, initiative: 0 });
 	});
+});
 
-	it('ignores Cursed Spirit traits on face-down spirits', () => {
-		const { player } = fire({ 'Dark Assassin': 1 }, 'inCombat', {
-			player: {
-				spirits: [
-					spirit(1, { 'Dark Assassin': 1 }),
-					spirit(2, { 'Cursed Spirit': 3 }, { faceDown: true })
-				]
-			}
-		});
-		expect(player.combatDamageBonus).toBe(0);
-	});
+it.each([[1,4,2,5,3,0],[2,9,3,10,4,0],[2,10,3,10,3,0],[4,4,1,8,5,0]])('restores actual gain %s at max %s', (amount,maxBarrier,barrier,maxAfter,barrierAfter,initiative) => {
+ const player=makePlayer({maxBarrier,barrier,spirits:[spirit(1,{'Aegis Weaver':1})]});
+ runAction(ctxFor(player,{trigger:'onCultivate'}),{kind:'gainMaxBarrier',amount});
+ expect(player).toMatchObject({maxBarrier:maxAfter,barrier:barrierAfter,brokenBarrier:maxAfter-barrierAfter,initiative});
+});
+it('does not restore for a face-down class', () => {
+ const unit=spirit(1,{'Aegis Weaver':1}); unit.isFaceDown=true;
+ const player=makePlayer({maxBarrier:4,barrier:2,spirits:[unit]});
+ runAction(ctxFor(player,{trigger:'onCultivate'}),{kind:'gainMaxBarrier',amount:2});
+ expect(player).toMatchObject({maxBarrier:6,barrier:2,initiative:0});
+});
 
-	it('surfaces a combat log line when Cursed Spirit traits are present (no silent no-op)', () => {
-		const { log } = fire({ 'Dark Assassin': 1, 'Cursed Spirit': 1 }, 'inCombat');
-		expect(log.some((l) => /dark assassin/i.test(l) && /cursed spirit/i.test(l) && /\+2/.test(l))).toBe(
-			true
-		);
-	});
-
-	it('adds nothing and logs nothing with zero Cursed Spirit traits', () => {
-		const { player, log } = fire({ 'Dark Assassin': 1 }, 'inCombat');
-		expect(player.combatDamageBonus).toBe(0);
-		expect(log.some((l) => /dark assassin/i.test(l))).toBe(false);
-	});
+it('grants a fixed four initiative each combat without requiring max-barrier gains', () => {
+ const player=makePlayer({maxBarrier:10,barrier:3,spirits:[spirit(1,{'Aegis Weaver':2})]});
+ const state=makeState(player);
+ for(let fight=0;fight<2;fight++) {
+  resetCombatFlags(player);
+  applyTrigger(state,'Red','inCombat',[]);
+  expect(player.initiative).toBe(4);
+  runAction(ctxFor(player,{trigger:'onCultivate'}),{kind:'gainMaxBarrier',amount:2});
+  expect(player.initiative).toBe(4);
+ }
+ player.spirits[0].isFaceDown=true;
+ resetCombatFlags(player);
+ applyTrigger(state,'Red','inCombat',[]);
+ expect(player.initiative).toBe(0);
 });

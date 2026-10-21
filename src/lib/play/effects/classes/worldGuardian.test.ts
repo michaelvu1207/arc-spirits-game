@@ -6,14 +6,14 @@ import { enterBenefits } from '../../phases';
 import type { AwakenGrant } from '../../types';
 
 /**
- * World Guardian — DB-intended behavior:
+ * Relic Sentinel — DB-intended behavior:
  *   "If you have 24 or more VP, and you are Good, gain 6 VP."
  *
  * This is ENGINE-handled, not effect-system handled. The class `ability` array is
  * intentionally empty. The grant surfaces to the player as a CLEANUP CLAIM card:
- * `enterBenefits` (phases.ts) gates on `awakenedClassCounts['World Guardian'] >= 1 &&
+ * `enterBenefits` (phases.ts) gates on `awakenedClassCounts['Relic Sentinel'] >= 1 &&
  * !evil && victoryPoints >= 24` and pushes a
- * `{ kind: 'vp', amount: 6, source: 'World Guardian' }` line into
+ * `{ kind: 'vp', amount: 6, source: 'Relic Sentinel' }` line into
  * `player.pendingAwakenReward.grants`. `resolveAwakenReward` (runtime.ts) applies the
  * +6 VP when the player claims.
  *
@@ -32,17 +32,17 @@ function grants(player: ReturnType<typeof makePlayer>): AwakenGrant[] {
 	return player.pendingAwakenReward?.grants ?? [];
 }
 
-/** A state whose Red player holds one awakened World Guardian at the given VP/alignment. */
+/** A state whose Red player holds one awakened Relic Sentinel at the given VP/alignment. */
 function stateForGuardian(victoryPoints: number, statusLevel = 0) {
 	const player = makePlayer({
 		victoryPoints,
 		statusLevel,
-		spirits: [spirit(1, { 'World Guardian': 1 })]
+		spirits: [spirit(1, { 'Relic Sentinel': 1 })]
 	});
 	return { player, state: makeState(player) };
 }
 
-describe('World Guardian — engine-handled Cleanup claim', () => {
+describe('Relic Sentinel — engine-handled Cleanup claim', () => {
 	it('the class ability array is intentionally empty (engine-handled, not effect-handled)', () => {
 		expect(ability).toEqual([]);
 	});
@@ -50,13 +50,13 @@ describe('World Guardian — engine-handled Cleanup claim', () => {
 	it('Good holder with ≥24 VP → a +6 VP claim line', () => {
 		const { player, state } = stateForGuardian(24, 0);
 		enterBenefits(state);
-		expect(grants(player)).toEqual([{ kind: 'vp', amount: 6, source: 'World Guardian' }]);
+		expect(grants(player)).toEqual([{ kind: 'vp', amount: 6, source: 'Relic Sentinel' }]);
 	});
 
 	it('Good holder with well over 24 VP still grants the +6 VP claim line', () => {
 		const { player, state } = stateForGuardian(40, 2); // statusLevel 2 is still Good
 		enterBenefits(state);
-		expect(grants(player)).toEqual([{ kind: 'vp', amount: 6, source: 'World Guardian' }]);
+		expect(grants(player)).toEqual([{ kind: 'vp', amount: 6, source: 'Relic Sentinel' }]);
 	});
 
 	it('Good holder with 23 VP (just under the threshold) → no claim', () => {
@@ -71,17 +71,17 @@ describe('World Guardian — engine-handled Cleanup claim', () => {
 		expect(player.pendingAwakenReward).toBeNull();
 	});
 
-	it('a face-down (un-awakened) World Guardian grants no claim even with ≥24 VP', () => {
+	it('a face-down (un-awakened) Relic Sentinel grants no claim even with ≥24 VP', () => {
 		const player = makePlayer({
 			victoryPoints: 30,
-			spirits: [spirit(1, { 'World Guardian': 1 }, { faceDown: true })]
+			spirits: [spirit(1, { 'Relic Sentinel': 1 }, { faceDown: true })]
 		});
 		const state = makeState(player);
 		enterBenefits(state);
 		expect(player.pendingAwakenReward).toBeNull();
 	});
 
-	it('no World Guardian held → no claim', () => {
+	it('no Relic Sentinel held → no claim', () => {
 		const player = makePlayer({ victoryPoints: 30, spirits: [] });
 		const state = makeState(player);
 		enterBenefits(state);
@@ -93,7 +93,7 @@ describe('World Guardian — engine-handled Cleanup claim', () => {
 	it('the awakeningPhase effect trigger grants no VP (claim is the only channel)', () => {
 		const player = makePlayer({
 			victoryPoints: 30,
-			spirits: [spirit(1, { 'World Guardian': 1 })]
+			spirits: [spirit(1, { 'Relic Sentinel': 1 })]
 		});
 		applyTrigger(makeState(player), 'Red', 'awakeningPhase', []);
 		expect(player.victoryPoints).toBe(30);

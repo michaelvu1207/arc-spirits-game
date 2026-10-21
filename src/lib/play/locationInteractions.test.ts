@@ -164,7 +164,7 @@ describe('buildLocationInteractions — live map', () => {
 		const choose = interactions[1].gains[0];
 		expect(choose.type).toBe('chooseRune');
 		if (choose.type === 'chooseRune') {
-			expect(choose.options.map((o) => o.name)).toEqual(['Sorcerer', 'Strategist']);
+			expect(choose.options.map((o) => o.name)).toEqual(['Sorcerer', 'Runic Bulwark']);
 			expect(choose.options.every((o) => o.type === 'augment')).toBe(true);
 		}
 

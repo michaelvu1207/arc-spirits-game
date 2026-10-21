@@ -3,8 +3,7 @@ import type { NavigationDestination, SeatColor } from '../../types';
 import type { EffectContext } from '../context';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Deep Sea Hunter — "On Navigation Reveal, you may change your destination. Gain 4
-// Initiative." +4 init + a change-destination decision (`deepSeaHunterRedirect`).
+// Tide Stalker — redirect after Navigation Reveal and always attack first.
 export const ability: ClassAbility[] = [
 	{
 		on: 'onNavigate',
@@ -12,7 +11,6 @@ export const ability: ClassAbility[] = [
 			{
 				count: 1,
 				actions: [
-					{ kind: 'gainInitiative', amount: 4 },
 					{
 						kind: 'choose',
 						decisionKind: 'deepSeaHunterRedirect',
@@ -29,11 +27,16 @@ export const ability: ClassAbility[] = [
 				]
 			}
 		]
+	},
+	{
+		on: 'inCombat',
+		run(ctx) {
+			ctx.player.alwaysAttackFirst = true;
+			ctx.log.push('Tide Stalker: attacks first.');
+		}
 	}
 ];
 
-/** Rebuild `locationOccupancy` from every active seat's current destination —
- *  used after a mid-flow destination change. */
 function rebuildOccupancy(ctx: EffectContext): void {
 	const occ: Partial<Record<NavigationDestination, SeatColor[]>> = {};
 	for (const seat of ctx.state.activeSeats) {
@@ -43,17 +46,14 @@ function rebuildOccupancy(ctx: EffectContext): void {
 	ctx.state.locationOccupancy = occ;
 }
 
-// Colocated resolver: the option id is a destination name (or 'keep'). Moving the
-// player rebuilds occupancy so co-location stays correct for the upcoming phase.
 export const decisions: ClassDecisions = {
 	deepSeaHunterRedirect(ctx, optionId) {
-		if (optionId === 'keep') return;
-		if (!(optionId in LOCATIONS)) return;
+		if (optionId === 'keep' || !(optionId in LOCATIONS)) return;
 		const dest = optionId as NavigationDestination;
 		if (ctx.player.navigationDestination === dest) return;
 		ctx.player.navigationDestination = dest;
 		ctx.player.pendingDestination = dest;
 		rebuildOccupancy(ctx);
-		ctx.log.push(`Deep Sea Hunter: changed destination to ${dest}.`);
+		ctx.log.push(`Tide Stalker: changed destination to ${dest}.`);
 	}
 };

@@ -165,19 +165,18 @@ const ALL_CLASS_NAMES = CATALOG_CLASSES.map((c) => c.name);
  * Their Awakening-Phase grants are surfaced as Cleanup CLAIM cards — `enterCleanup`
  * (phases.ts) builds the player's `pendingAwakenReward` and `resolveAwakenReward`
  * (runtime.ts) applies the picks — so they carry no declarative/handler/manual
- * effect, yet are fully handled. (The Corruptor keeps its inCombat breakpoint, so it
+ * effect, yet are fully handled. (Abyss Harbinger keeps its inCombat breakpoint, so it
  * stays declarative and is NOT listed here.)
  */
 const ENGINE_HANDLED_CLASSES = new Set<string>([
+	'Abyss Summoner',
 	'Cursed Spirit',
+	'Aegis Weaver',
 	'Golden Ruler',
-	'World Guardian',
-	// Infiltrator is a standalone runtime action (`infiltratorSwap` command + swap UI),
-	// not a trigger effect — handled by the engine, no declarative/handler entry.
-	'Infiltrator',
-		// Mod Injector duplicates the exact augment gained by a paid trade in the
+	'Relic Sentinel',
+		// Runic Duplicator duplicates the exact augment gained by a paid trade in the
 		// interaction reducer, so it has no effect-system entry.
-	'Mod Injector'
+	'Runic Duplicator'
 	,'Soul Weaver'
 ]);
 const ALL_SPIRITS = CATALOG_SPIRITS;

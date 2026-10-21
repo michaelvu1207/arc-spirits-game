@@ -131,12 +131,13 @@ function beginNavigation(state: PublicGameState): void {
 			// round's Awakening-Phase grants.
 			player.doubleRunes = false;
 			player.redrawAvailable = false;
+			player.attackDiceChangedThisTurn = false;
 			player.becameTaintedThisRound = false;
 			player.becameCorruptThisRound = false;
 			player.becameFallenThisRound = false;
 			player.corruptedThisRound = false;
 			// Per-round extra-action credits (Ironmane's extra Monster Combat,
-			// Child Prodigy's doubled location interactions) are re-granted each
+			// Wayfarer's doubled location interactions) are re-granted each
 			// round by onNavigate, so clear last round's allowance here first.
 			player.extraActions = {};
 			// Compact rune slots for the new round: drop spent/discarded slots,
@@ -180,7 +181,7 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 
 	// onNavigate fires once per active player AFTER every destination is public, so
 	// co-location is correct (Rune Traveler shares its doubleRunes flag with the
-	// players already revealed at the same location). Deep Sea Hunter gains its +4
+	// players already revealed at the same location). Tide Stalker gains its +4
 	// initiative here; manual destination-change / Undercover prompts surface too.
 	for (const seat of state.activeSeats) {
 		if (!state.players[seat]?.navigationDestination) continue;
@@ -256,8 +257,8 @@ export function tryAdvanceFromLocation(state: PublicGameState, catalog?: PlayCat
  *
  * Fire the `awakeningPhase` trigger for EACH active player, in seat order. Within
  * one player the dispatch resolves declarative breakpoints FIRST — the status-driven
- * grants (Cursed Spirit, The Corruptor) — then the bespoke handlers — the VP win-cons
- * (Golden Ruler's VP + self-discard, World Ender, World Guardian). So the order is:
+ * grants (Cursed Spirit, Abyss Harbinger) — then the bespoke handlers — the VP win-cons
+ * (Dawn Sovereign's VP + self-discard, Void Sovereign, Relic Sentinel). So the order is:
  * status grants → VP win-cons, and every VP grant lands before any winner is declared
  * (findWinner runs in tryAdvanceFromCleanup, strictly after this whole sequence).
  *
@@ -276,8 +277,8 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 		if (!player) continue;
 		const awakeningLog: string[] = [];
 		applyTrigger(state, seat, 'awakeningPhase', awakeningLog, { catalog });
-		// Surface the awakening-phase grants (Cursed Spirit rewards, The Corruptor,
-		// Golden Ruler VP, …) so the player sees what they earned this round.
+		// Surface the awakening-phase grants (Cursed Spirit rewards, Abyss Harbinger,
+		// Dawn Sovereign VP, …) so the player sees what they earned this round.
 		if (awakeningLog.length > 0) {
 			player.lastAction = { key: 'awakening', label: 'Benefits', log: awakeningLog };
 		}
@@ -329,24 +330,24 @@ function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
 		if (player.becameFallenThisRound)
 			grants.push({ kind: 'fallenChoice', amount: cursed, source: 'Cursed Spirit' });
 	}
-	// Golden Ruler — +1 VP (the Evil self-discard penalty is applied on claim).
+	// Dawn Sovereign — +1 VP (the Evil self-discard penalty is applied on claim).
 	if ((counts['Golden Ruler'] ?? 0) >= 1) {
 		grants.push({
 			kind: 'vp',
 			amount: 1,
 			source: 'Golden Ruler',
-			...(evil ? { note: 'You are Evil — claiming also discards a Golden Ruler spirit.' } : {})
+			...(evil ? { note: 'You are Evil — claiming also discards a Dawn Sovereign spirit.' } : {})
 		});
 	}
-	// The Corruptor — +1 Arcane Attack die, only if you corrupted this round.
+	// Abyss Harbinger — +1 Arcane Attack die, only if you corrupted this round.
 	if ((counts['The Corruptor'] ?? 0) >= 1 && player.corruptedThisRound) {
 		grants.push({ kind: 'attackDice', tier: 'arcane', amount: 1, source: 'The Corruptor' });
 	}
-	// World Ender — now a flat +1 VP via its awakeningPhase `run` handler
+	// Void Sovereign — now a flat +1 VP via its awakeningPhase `run` handler
 	// (classes/worldEnder.ts), no longer a Cleanup claim.
-	// World Guardian — +6 VP, only when you are Good with ≥24 VP.
-	if ((counts['World Guardian'] ?? 0) >= 1 && !evil && player.victoryPoints >= 24) {
-		grants.push({ kind: 'vp', amount: 6, source: 'World Guardian' });
+	// Relic Sentinel — +6 VP, only when you are Good with ≥24 VP.
+	if ((counts['Relic Sentinel'] ?? 0) >= 1 && !evil && player.victoryPoints >= 24) {
+		grants.push({ kind: 'vp', amount: 6, source: 'Relic Sentinel' });
 	}
 
 	return grants;
@@ -358,8 +359,8 @@ function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
  * out in — at a physical table players count those points anyway (rules decision,
  * 2026-07-03). So when the game ends on the {@link MAX_ROUNDS} cap, run one last
  * benefits pass for every seat, for scoring only: the `awakeningPhase` trigger (bespoke
- * VP handlers like World Ender) plus the DIRECT application of every VP-kind Benefits
- * grant (World Guardian, Golden Ruler). Non-VP grants (dice, relics, augment picks) are
+ * VP handlers like Void Sovereign) plus the DIRECT application of every VP-kind Benefits
+ * grant (Relic Sentinel, Dawn Sovereign). Non-VP grants (dice, relics, augment picks) are
  * skipped — they cannot affect the result of a finished game. The last vpHistory point
  * is re-synced so the points-over-time chart shows the final score.
  */

@@ -233,12 +233,12 @@ describe('checkAwakenCondition', () => {
 
 	// Regression: wildcard costs are KIND-STRICT. "Any Relic" counts ONLY relic-kind
 	// held items — origin runes never pay it; "Any Rune" counts ONLY origin runes —
-	// relics never pay it. Modeled on "Mod Injector" = three of any relic.
+	// relics never pay it. Modeled on "Runic Duplicator" = three of any relic.
 	// See runeMatch.ts wildcardMatch.
 	const FAIRY_RELIC = 'e02af831-e599-4676-9e37-820d19bfc3e1';
-	it('Mod Injector (3 "any relic"): 2 relics + 2 origin runes held → NOT awakenable', () => {
+	it('Runic Duplicator (3 "any relic"): 2 relics + 2 origin runes held → NOT awakenable', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, 'mod', 'Mod Injector')],
+			spirits: [spirit(1, 'mod', 'Runic Duplicator')],
 			mats: [
 				rune(1, { id: FAIRY_RELIC, name: 'Fairy' }), // relic (no originId/classId)
 				rune(2, { id: FAIRY_RELIC, name: 'Fairy' }), // relic
@@ -262,7 +262,7 @@ describe('checkAwakenCondition', () => {
 	//     never pays a relic cost).
 	it('any-relic cost (×3): 3 origin RUNES held → NOT awakenable (rune ≠ relic)', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, 'mod', 'Mod Injector')],
+			spirits: [spirit(1, 'mod', 'Runic Duplicator')],
 			mats: [
 				rune(1, { id: WATER_RUNE, name: 'Water', originId: 'water-origin' }),
 				rune(2, { id: 'fire', name: 'Fire', originId: 'fire-origin' }),
@@ -299,9 +299,9 @@ describe('checkAwakenCondition', () => {
 	});
 
 	// (c) positive controls: 3 relics → any-relic ok; 1 origin rune → any-rune ok.
-	it('Mod Injector (3 "any relic"): 3 relics held → awakenable (positive control)', () => {
+	it('Runic Duplicator (3 "any relic"): 3 relics held → awakenable (positive control)', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, 'mod', 'Mod Injector')],
+			spirits: [spirit(1, 'mod', 'Runic Duplicator')],
 			mats: [
 				rune(1, { id: FAIRY_RELIC, name: 'Fairy' }),
 				rune(2, { id: FAIRY_RELIC, name: 'Fairy' }),
@@ -335,7 +335,7 @@ describe('checkAwakenCondition', () => {
 	});
 
 	it('a text condition is never auto-satisfiable and carries the verbatim text', () => {
-		const player = makePlayer({ spirits: [spirit(1, 'txt', 'Aquamaiden')] });
+		const player = makePlayer({ spirits: [spirit(1, 'txt', 'Tide Warden')] });
 		const awaken: NormalizedAwaken = { kind: 'text', text: 'Discard 2 Teapots at the Tidal Cove' };
 		const check = checkAwakenCondition(ctxFor(player, catalogWith('txt', awaken)), {
 			spirit: player.spirits[0]
@@ -1694,8 +1694,8 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		expect(prompts).toHaveLength(0);
 	});
 
-	it('Infiltrator: infiltratorSwap exchanges a die with a co-located player (no prompt)', () => {
-		const { state, catalog } = startedClassGame({ Infiltrator: 1 });
+	it('Hexblade: the obsolete dice-swap command is rejected', () => {
+		const { state, catalog } = startedClassGame({ 'Cursed Fighter': 1 });
 		const red = state.players.Red!;
 		const blue = makePlayer({
 			playerColor: 'Blue',
@@ -1717,30 +1717,13 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 			},
 			catalog
 		);
-		expect(res.ok).toBe(true);
-		if (!res.ok) throw new Error(res.error.message);
-		// Red takes Blue's arcane die; Blue is left with Red's basic die.
-		expect(res.state.players.Red!.attackDice.map((d) => d.tier)).toEqual(['arcane']);
-		expect(res.state.players.Blue!.attackDice.map((d) => d.tier)).toEqual(['basic']);
-		// Built-in action — no manual prompt.
-		expect(res.state.players.Red!.manualPrompts.filter((p) => p.source === 'class')).toHaveLength(
-			0
-		);
-		// Once per round — a second swap is rejected.
-		const again = applyGameCommand(
-			res.state,
-			{ ...HOST, seatColor: 'Red' },
-			{
-				type: 'infiltratorSwap',
-				swaps: [{ targetSeat: 'Blue', myInstanceId: 'b0', theirInstanceId: 'r0' }]
-			},
-			catalog
-		);
-		expect(again.ok).toBe(false);
+		expect(res.ok).toBe(false);
+		if (res.ok) throw new Error('obsolete command unexpectedly succeeded');
+		expect(res.error.code).toBe('ability_changed');
 	});
 
-	it('Ironmane: extraActions["combat"] lets the player fight the monster twice', () => {
-		const { state, catalog } = startedClassGame({ Ironmane: 1 });
+	it('Monster Hunter: extraActions["combat"] lets the player fight the monster twice', () => {
+		const { state, catalog } = startedClassGame({ 'Monster Hunter': 1 });
 		const red = state.players.Red!;
 		red.navigationDestination = 'Arcane Abyss';
 		red.attackDice = [{ instanceId: 'd0', tier: 'basic' }];
@@ -1809,18 +1792,16 @@ describe('Phase 6 coverage closure', () => {
 
 	it('the Phase-6 interaction classes are all accounted for', () => {
 		// Ironmane is encoded (extraAction); Rune Mage is now a real trade handler;
-		// Fairy Droid is now a run-handler (grants 2 augments bound to itself).
-		expect(CLASS_EFFECTS.Ironmane).toBeDefined();
-		expect(CLASS_EFFECTS['Child Prodigy']).toBeDefined();
-		expect(MANUAL_CLASSES.has('Child Prodigy')).toBe(false);
+		// Runebound Vessel is now a run-handler (grants 2 augments bound to itself).
+		expect(CLASS_EFFECTS['Monster Hunter']).toBeDefined();
+		expect(CLASS_EFFECTS['Wayfarer']).toBeDefined();
+		expect(MANUAL_CLASSES.has('Wayfarer')).toBe(false);
 		expect(HANDLER_CLASSES.has('Rune Mage')).toBe(true);
-		// Infiltrator is now an ENGINE-handled standalone action (infiltratorSwap command
-		// + swap UI) — no longer a manual prompt, and carries no CLASS_EFFECTS entry.
-		expect(MANUAL_CLASSES.has('Infiltrator'), 'Infiltrator is engine-handled now').toBe(false);
-		expect(CLASS_EFFECTS['Infiltrator'], 'Infiltrator has no effect-system entry').toBeUndefined();
-		// Fairy Droid is no longer manual — it is a run-handler (bound-augment grant).
-		expect(MANUAL_CLASSES.has('Fairy Droid'), 'Fairy Droid is handler-driven now').toBe(false);
-		expect(HANDLER_CLASSES.has('Fairy Droid'), 'Fairy Droid must be a handler class').toBe(true);
+		expect(MANUAL_CLASSES.has('Cursed Fighter')).toBe(false);
+		expect(HANDLER_CLASSES.has('Cursed Fighter')).toBe(true);
+		// Runebound Vessel is no longer manual — it is a run-handler (bound-augment grant).
+		expect(MANUAL_CLASSES.has('Runebound Vessel'), 'Runebound Vessel is handler-driven now').toBe(false);
+		expect(HANDLER_CLASSES.has('Runebound Vessel'), 'Runebound Vessel must be a handler class').toBe(true);
 	});
 
 	it('every class in the game is encoded, handled, or allowlisted (no silent no-op)', () => {
@@ -1832,14 +1813,14 @@ describe('Phase 6 coverage closure', () => {
 		// the picks — so it carries no declarative/handler/manual effect, yet is fully
 		// handled. Mirrors ENGINE_HANDLED_CLASSES in coverage.test.ts.
 		const ENGINE_HANDLED_CLASSES = new Set<string>([
+			'Abyss Summoner',
 			'Cursed Spirit',
+			'Aegis Weaver',
 			'Golden Ruler',
 			'Soul Weaver',
-			'World Guardian',
-			// Infiltrator: standalone `infiltratorSwap` runtime action + swap UI.
-			'Infiltrator',
-			// Mod Injector: duplicates the selected augment after a paid trade.
-			'Mod Injector'
+			'Relic Sentinel',
+			// Runic Duplicator: duplicates the selected augment after a paid trade.
+			'Runic Duplicator'
 		]);
 		for (const cls of allClasses) {
 			const handled =

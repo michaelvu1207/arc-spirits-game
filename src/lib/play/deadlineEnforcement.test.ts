@@ -329,7 +329,7 @@ describe('resolution-phase deadline extension (resolvePassedDeadline)', () => {
 		// a forced advance drains it via applyAwakenRewardClaim with default picks.
 		function grantReward(state: PublicGameState) {
 			state.players.Red!.pendingAwakenReward = {
-				grants: [{ kind: 'vp', amount: 1, source: 'World Guardian' }]
+				grants: [{ kind: 'vp', amount: 1, source: 'Relic Sentinel' }]
 			};
 		}
 

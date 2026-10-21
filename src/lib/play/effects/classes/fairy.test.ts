@@ -28,11 +28,11 @@ describe('Fairy', () => {
 	it('gains 1 exalted die per origin-matching spirit and +3 initiative on awakening', () => {
 		// Fairy in slot 1 (origin Floral). Two other spirits share the Floral origin,
 		// one does not. Matching count includes the Fairy itself = 3.
-		const fairy = spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } });
+		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
 		const ally1 = spirit(2, { Fighter: 1 }, { origins: { Floral: 1 } });
 		const ally2 = spirit(3, { Healer: 1 }, { origins: { Floral: 1 } });
 		const other = spirit(4, { Fighter: 1 }, { origins: { Tidal: 1 } });
-		const { player } = fire({ Fairy: 1 }, 'awakening', {
+		const { player } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy, ally1, ally2, other] },
 			command: { slotIndex: 1 }
 		});
@@ -42,9 +42,9 @@ describe('Fairy', () => {
 	});
 
 	it('surfaces both halves as attributed log lines (no silent no-op)', () => {
-		const fairy = spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } });
+		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
 		const ally = spirit(2, { Fighter: 1 }, { origins: { Floral: 1 } });
-		const { log } = fire({ Fairy: 1 }, 'awakening', {
+		const { log } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy, ally] },
 			command: { slotIndex: 1 }
 		});
@@ -54,10 +54,10 @@ describe('Fairy', () => {
 
 	it('counts only spirits whose origin overlaps the Fairy', () => {
 		// Fairy is Floral; only itself matches (the other two are Tidal/Lantern).
-		const fairy = spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } });
+		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
 		const t = spirit(2, { Fighter: 1 }, { origins: { Tidal: 1 } });
 		const l = spirit(3, { Healer: 1 }, { origins: { Lantern: 1 } });
-		const { player } = fire({ Fairy: 1 }, 'awakening', {
+		const { player } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy, t, l] },
 			command: { slotIndex: 1 }
 		});
@@ -66,9 +66,9 @@ describe('Fairy', () => {
 	});
 
 	it('matches a multi-origin spirit if ANY of its origins overlap', () => {
-		const fairy = spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } });
+		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
 		const multi = spirit(2, { Fighter: 1 }, { origins: { Tidal: 1, Floral: 1 } });
-		const { player } = fire({ Fairy: 1 }, 'awakening', {
+		const { player } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy, multi] },
 			command: { slotIndex: 1 }
 		});
@@ -78,8 +78,8 @@ describe('Fairy', () => {
 	it('still grants the +3 initiative even when the Fairy has no origin (no dice)', () => {
 		// No origins on the Fairy => no origin matches => no dice, but the spec's
 		// "+3 Initiative" is unconditional and must still apply in that degenerate case.
-		const fairy = spirit(1, { Fairy: 1 }, { origins: {} });
-		const { player } = fire({ Fairy: 1 }, 'awakening', {
+		const fairy = spirit(1, { 'Fairy': 1 }, { origins: {} });
+		const { player } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy] },
 			command: { slotIndex: 1 }
 		});
@@ -89,8 +89,8 @@ describe('Fairy', () => {
 
 	it('does nothing when the awakened spirit (slotIndex) is not a Fairy', () => {
 		const notFairy = spirit(1, { Fighter: 1 }, { origins: { Floral: 1 } });
-		const fairyElsewhere = spirit(2, { Fairy: 1 }, { origins: { Floral: 1 } });
-		const { player, log } = fire({ Fairy: 1 }, 'awakening', {
+		const fairyElsewhere = spirit(2, { 'Fairy': 1 }, { origins: { Floral: 1 } });
+		const { player, log } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [notFairy, fairyElsewhere] },
 			command: { slotIndex: 1 }
 		});
@@ -100,8 +100,8 @@ describe('Fairy', () => {
 	});
 
 	it('does nothing when no command.slotIndex is threaded', () => {
-		const fairy = spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } });
-		const { player } = fire({ Fairy: 1 }, 'awakening', {
+		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
+		const { player } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy] }
 		});
 		expect(player.attackDice).toHaveLength(0);
@@ -110,11 +110,11 @@ describe('Fairy', () => {
 
 	it('caps the exalted dice grant at the flat attack-dice cap of 10', () => {
 		// 12 Floral spirits (Fairy + 11) would request 12 dice; the pool caps at 10.
-		const spirits = [spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } })];
+		const spirits = [spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } })];
 		for (let i = 2; i <= 12; i += 1) {
 			spirits.push(spirit(i, { Fighter: 1 }, { origins: { Floral: 1 } }));
 		}
-		const { player } = fire({ Fairy: 1 }, 'awakening', {
+		const { player } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits },
 			command: { slotIndex: 1 }
 		});
@@ -123,7 +123,7 @@ describe('Fairy', () => {
 	});
 
 	it('handler unit test: mutates ctx.player directly via ctxFor', () => {
-		const fairy = spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } });
+		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
 		const ally = spirit(2, { Fighter: 1 }, { origins: { Floral: 1 } });
 		const player = makePlayer({ spirits: [fairy, ally] });
 		const ctx = ctxFor(player, { trigger: 'awakening', command: { slotIndex: 1 } });

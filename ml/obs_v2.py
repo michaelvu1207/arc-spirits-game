@@ -30,7 +30,10 @@ from typing import Union
 import numpy as np
 import torch
 
-OBS_V2_VERSION_CODE = 2
+# 3 = obs-v3 (seat-invariant offset-from-self ranks, encodeV2.ts:75). The bump only changed
+# feature SEMANTICS, not the self-describing flat layout this parser reads, so the spec is
+# still built entirely from the header dims below.
+OBS_V2_VERSION_CODE = 3
 
 # typeId -> family name, fixed by the encoder contract (OBS_V2_TOKEN_TYPES).
 TOKEN_TYPE_NAMES = ("global", "seat", "spirit", "market", "rune", "monster")

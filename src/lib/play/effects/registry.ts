@@ -36,7 +36,7 @@ export type EffectAction =
 	 * Upgrade attack dice. With no `from`/`to`, upgrades the `times` lowest-tier
 	 * non-arcane dice one step (the classic Elementalist ladder). When `from`/`to`
 	 * are given, it instead converts up to `times` dice that are *exactly* at the
-	 * `from` tier into the `to` tier (e.g. Arcane Advisor: exalted → arcane).
+	 * `from` tier into the `to` tier (e.g. Arcane Ascendant: exalted → arcane).
 	 */
 	| { kind: 'upgradeDice'; times: number; from?: DiceTier; to?: DiceTier }
 	| { kind: 'gainRune'; amount: number }
@@ -60,12 +60,12 @@ export type EffectAction =
 	| { kind: 'setStunImmune' }
 	/** Discard up to `amount` attack dice (cost half of a discard-to-gain trade). */
 	| { kind: 'discardAttackDice'; amount: number }
-	/** Discard specific attack dice by instance id (Arc Mage's player-chosen convert). */
+	/** Discard specific attack dice by instance id (Arcane Alchemist's player-chosen convert). */
 	| { kind: 'discardAttackDiceByIds'; instanceIds: string[] }
 	// ── P4 kinds (Combat-trigger coverage) ───────────────────────────────────
 	/**
 	 * Add combat damage equal to the player's current broken barrier, capped at
-	 * `max` (Blood Hunter: "deal 1 damage per broken barrier, max 4"). The amount
+	 * `max` (Woundreaver: "deal 1 damage per broken barrier, max 4"). The amount
 	 * is computed at trigger time from the live pool, so it can't be expressed
 	 * with the static `combatBonus` amount.
 	 */
@@ -100,7 +100,7 @@ export type EffectCondition =
 	| { kind: 'isGood' }
 	/** True when this combat killed the target. */
 	| { kind: 'killed' }
-	/** True when this combat did NOT kill the target (Adaptive Fighter's else-branch). */
+	/** True when this combat did NOT kill the target (Battle Adept's else-branch). */
 	| { kind: 'notKilled' }
 	/** True when overkill damage this combat is at least `amount`. */
 	| { kind: 'overkillAtLeast'; amount: number }

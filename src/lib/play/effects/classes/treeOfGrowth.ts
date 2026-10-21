@@ -1,24 +1,26 @@
-import { originRuneForName } from '../../locationInteractions';
-import type { ClassAbility, ClassHandler } from './types';
+import { runAction } from '../actions';
+import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 
-/** Tree of Growth — "In the awakening phase, gain 1 Forest Rune." */
-const gainForestRune: ClassHandler = (ctx) => {
-	const rune = originRuneForName('Floral Patch');
-	if (!rune) return;
-	const amount = ctx.player.doubleRunes ? 2 : 1;
-	for (let i = 0; i < amount; i += 1) {
-		ctx.player.mats.push({
-			slotIndex: ctx.player.mats.length + 1,
-			hasRune: true,
-			id: rune.runeId,
-			name: rune.name,
-			originId: rune.originId ?? undefined,
-			classId: rune.classId ?? undefined,
-			special: rune.special,
-			type: rune.type
-		});
-	}
-	ctx.log.push(`Tree of Growth: gained ${amount} Forest Rune${amount === 1 ? '' : 's'}.`);
+// Growth Warden — after gaining or upgrading attack dice this round, choose
+// either 2 max barrier or any Spirit Augment during the Awakening phase.
+const offerGrowthReward: ClassHandler = (ctx) => {
+	if (!ctx.player.attackDiceChangedThisTurn) return;
+	runAction(ctx, {
+		kind: 'choose',
+		decisionKind: 'treeOfGrowthReward',
+		prompt: 'You gained or upgraded attack dice this turn. Choose a Growth Warden reward.',
+		options: [
+			{ id: 'barrier', label: 'Gain 2 max barrier' },
+			{ id: 'augment', label: 'Gain 1 Spirit Augment' }
+		]
+	});
 };
 
-export const ability: ClassAbility[] = [{ on: 'awakeningPhase', run: gainForestRune }];
+export const ability: ClassAbility[] = [{ on: 'awakeningPhase', run: offerGrowthReward }];
+
+export const decisions: ClassDecisions = {
+	treeOfGrowthReward(ctx, optionId) {
+		if (optionId === 'barrier') runAction(ctx, { kind: 'gainMaxBarrier', amount: 2 });
+		if (optionId === 'augment') runAction(ctx, { kind: 'gainAugment', amount: 1 });
+	}
+};

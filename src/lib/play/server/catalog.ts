@@ -4,6 +4,14 @@ import type { PlayCatalog, PlayCatalogClass, PlayCatalogRune } from '../types';
 
 const CACHE_TTL_MS = 60_000;
 
+// Persisted origin IDs retain their rules identity when display names change.
+const RULE_ORIGIN_NAMES: Record<string, string> = {
+	'ad555f03-9b89-4a71-a47c-464fd67d2c05': 'Floral Patch',
+	'fa7db249-d99d-4c1d-a37d-9027c9f5a31e': 'Cyber City',
+	'178449e9-cc6b-45ab-8522-5183fe1d9307': 'Lantern Lights',
+	'294cee31-a7ac-4292-9b61-d4293c05c146': 'Moon Tide'
+};
+
 let cachedCatalog: PlayCatalog | null = null;
 let cachedAt = 0;
 
@@ -36,7 +44,7 @@ function countRolesByName(ids: string[], names: Map<string, string>): Record<str
  */
 export function buildPlayCatalog(assets: AssetsData): PlayCatalog {
 	const classNames = new Map(assets.classes.map((entry) => [entry.id, entry.name]));
-	const originNames = new Map(assets.origins.map((entry) => [entry.id, entry.name]));
+	const originNames = new Map(assets.origins.map((entry) => [entry.id, RULE_ORIGIN_NAMES[entry.id] ?? entry.name]));
 	// Mat name+kind by id, for normalizing each spirit's awaken mat cost.
 	const runesById = new Map<string, AwakenRuneInfo>(
 		assets.mats.map((mat) => [mat.id, { name: mat.name, kind: matKind(mat) }])

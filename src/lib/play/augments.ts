@@ -6,7 +6,7 @@
  *  - One augment per spirit by default; it cannot be removed, replaced, or moved.
  *  - Once placed it is permanent — if the host spirit is removed/discarded, the
  *    augment goes with it (the engine cleans the attachment by spirit slot).
- *  - Some spirits raise their own augment capacity. The Fairy Droid class — "You may
+ *  - Some spirits raise their own augment capacity. The Runebound Vessel class — "You may
  *    place unlimited Spirit Augments on this spirit" — is the current example.
  *  - An augment contributes its class toward the owner's trait totals, but only while
  *    its host spirit is awakened (face-up); face-down, it's dormant — i.e. it follows
@@ -40,10 +40,10 @@ export function isSpiritAugmentClass(name: string): boolean {
 
 /**
  * Classes that, when present on a spirit, let it hold MORE than the default one
- * augment. Fairy Droid grants unlimited placement. Add future "augment-capacity"
+ * augment. Runebound Vessel grants unlimited placement. Add future "augment-capacity"
  * classes here.
  */
-export const UNLIMITED_AUGMENT_CLASSES: ReadonlySet<string> = new Set(['Fairy Droid']);
+export const UNLIMITED_AUGMENT_CLASSES: ReadonlySet<string> = new Set(['Runebound Vessel']);
 
 /**
  * A spirit with an {@link UNLIMITED_AUGMENT_CLASSES} class can hold "unlimited"
@@ -55,7 +55,7 @@ export const UNLIMITED_AUGMENT_CAPACITY = 99;
 
 /**
  * Maximum number of augments that may be permanently placed on this spirit. Default
- * 1; a spirit with an {@link UNLIMITED_AUGMENT_CLASSES} class (e.g. Fairy Droid —
+ * 1; a spirit with an {@link UNLIMITED_AUGMENT_CLASSES} class (e.g. Runebound Vessel —
  * "You may place unlimited Spirit Augments on this spirit") can hold up to
  * {@link UNLIMITED_AUGMENT_CAPACITY}.
  */

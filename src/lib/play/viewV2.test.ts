@@ -387,7 +387,7 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 		expect(row1.costSlots[0].eligibleMatSlotIndexes).toEqual([0, 1]);
 		// The "or" augment gain surfaces as a choice group with no pre-selected default (S6).
 		expect(row1.choiceGroups).toHaveLength(1);
-		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Sorcerer', 'Strategist']);
+		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Sorcerer', 'Runic Bulwark']);
 	});
 
 	test('affordability + usesRemaining reflect held mats and per-row allowance', () => {
@@ -396,7 +396,7 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 		expect(broke.find((r) => r.rowIndex === 0)!.affordable).toBe(false);
 		expect(broke.find((r) => r.rowIndex === 2)!.affordable).toBe(true);
 
-		// Child Prodigy allowance (2) minus one recorded use of row 2 → 1 remaining.
+		// Wayfarer allowance (2) minus one recorded use of row 2 → 1 remaining.
 		const rows = computeAffordances(
 			locationState([], { extraActions: { locationInteraction: 1 }, actionsUsedThisRound: ['row:2'] }),
 			'Red',
@@ -414,10 +414,10 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 		expect(broken.noEffectNow).toBeUndefined();
 	});
 
-	test('a Mod Injector still pays the normal augment-trade cost', () => {
+	test('a Runic Duplicator still pays the normal augment-trade cost', () => {
 		const state = locationState([], {
 			spirits: [
-				{ slotIndex: 1, id: 'mi', name: 'Mod Injector', cost: 2, classes: { 'Mod Injector': 1 }, origins: {}, isFaceDown: false }
+				{ slotIndex: 1, id: 'mi', name: 'Runic Duplicator', cost: 2, classes: { 'Runic Duplicator': 1 }, origins: {}, isFaceDown: false }
 			]
 		});
 		const row1 = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!.find(
@@ -642,7 +642,7 @@ describe('decision pickerSpec (§5.4)', () => {
 			prompt: 'p',
 			options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }]
 		};
-		expect(decisionPickerSpec(strategist, red)).toMatchObject({ count: 3, kind: 'attackDice' });
+		expect(decisionPickerSpec(strategist, red)).toBeNull();
 		expect(
 			decisionPickerSpec(strategist, {
 				...red,
@@ -677,14 +677,14 @@ describe('encounter + infiltrator affordances (§5.4)', () => {
 		expect(computeEncounter(state, blue, 'Blue')).toBeUndefined();
 	});
 
-	test('an awakened, unused Infiltrator co-located with a player gets a swap affordance', () => {
+	test('Infiltrator no longer exposes the obsolete dice-swap affordance', () => {
 		const state = inPhase(4, 'location');
 		const red = state.players.Red!;
 		const blue = state.players.Blue!;
 		red.navigationDestination = 'Cyber City';
 		red.actionsUsedThisRound = [];
 		red.spirits = [
-			{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { Infiltrator: 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { 'Cursed Fighter': 1 }, origins: {}, isFaceDown: false }
 		];
 		red.attackDice = [{ instanceId: 'r1', tier: 'basic' }];
 		blue.navigationDestination = 'Cyber City';
@@ -692,16 +692,7 @@ describe('encounter + infiltrator affordances (§5.4)', () => {
 			{ instanceId: 'b1', tier: 'enchanted' },
 			{ instanceId: 'b2', tier: 'exalted' }
 		];
-		expect(computeAffordances(state, 'Red', CATALOG).infiltratorSwap).toEqual({
-			targets: [{ seat: 'Blue', dice: [{ instanceId: 'b1', tier: 'enchanted' }, { instanceId: 'b2', tier: 'exalted' }] }],
-			myDice: [{ instanceId: 'r1', tier: 'basic' }]
-		});
-		// A face-down Infiltrator can't act.
-		red.spirits[0].isFaceDown = true;
-		expect(computeInfiltratorSwap(state, red, 'Red')).toBeUndefined();
-		// Already used this round.
-		red.spirits[0].isFaceDown = false;
-		red.actionsUsedThisRound = ['infiltratorSwap'];
+		expect(computeAffordances(state, 'Red', CATALOG).infiltratorSwap).toBeUndefined();
 		expect(computeInfiltratorSwap(state, red, 'Red')).toBeUndefined();
 	});
 
@@ -855,7 +846,7 @@ describe('bot enumerator never generates the now-rejected command shapes', () =>
 				id: 'inf',
 				name: 'Infil',
 				cost: 2,
-				classes: { Infiltrator: 1 },
+				classes: { 'Cursed Fighter': 1 },
 				origins: {},
 				isFaceDown: false
 			}

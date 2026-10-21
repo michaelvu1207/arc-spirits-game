@@ -984,7 +984,7 @@ export async function fetchAssetsData(): Promise<AssetsData> {
 	] = await Promise.all([
 		supabaseAssets
 			.from(TABLES.HEX_SPIRITS)
-			.select('id, name, cost, traits, awaken_condition, game_print_image_path, art_raw_image_path'),
+			.select('id, name, cost, traits, awaken_condition, game_print_image_path, back_side_export, art_raw_image_path'),
 		supabaseAssets.from(TABLES.MAT_ITEMS).select('id, name, origin_id, icon_path'),
 		supabaseAssets
 			.from(TABLES.CUSTOM_DICE)

@@ -300,8 +300,8 @@ function destinationOfferingAbyssSummon(catalog: PlayCatalog): NavigationDestina
 }
 
 /** Should the bot detour to fish the Arcane Abyss bag for an ARCANE source? Only once the core
- *  build is done (dice exalted, max barrier maxed, sustain) but it still lacks arcane — Dragon Warrior
- *  (+3 arcane on awaken) / Arcane Advisor (exalted→arcane on rest) are the ~16+ damage the hp14 boss
+ *  build is done (dice exalted, max barrier maxed, sustain) but it still lacks arcane — Arcane Vanguard
+ *  (+3 arcane on awaken) / Arcane Ascendant (exalted→arcane on rest) are the ~16+ damage the hp14 boss
  *  one-shot needs that a 10-exalted pool (mean 10) + scarce Spirit Animals can't reach. ~4 arcane
  *  sources in the 37-card bag → a few Cyber visits find one. Gated on pursueArcane + a relic to pay
  *  + no pending arcane recruit, so it neither over-fishes nor blocks the core build. */
@@ -319,9 +319,9 @@ function wantsArcaneFish(player: BotPlayer, profile: BotProfile): boolean {
 
 /**
  * Should the bot fish the Arcane Abyss bag NOW — for a CLIMB-COMPRESSOR (Aquamaiden/Golem/Firekeeper/
- * Guardian damage-mitigation, or Dark Assassin's damage-double) or, for pursueArcane builds, an arcane
+ * Guardian damage-mitigation, or Aegis Weaver's damage-double) or, for pursueArcane builds, an arcane
  * source? These cost-7-9 spirits are the levers that collapse the ~17-round climb (mitigation lets
- * barrier survive two top-rung hits → far fewer restore-barrier rounds; Dark Assassin one-shots the boss). Unlike
+ * barrier survive two top-rung hits → far fewer restore-barrier rounds; Aegis Weaver one-shots the boss). Unlike
  * wantsArcaneFish (late, post-cap, arcane-only) this fires EARLIER — once a real dice pool has started
  * (≥4 dice) — so the compressor is awakened BEFORE the hard rungs. Gated on: a relic to pay the Cyber
  * City "relic → abyssSummon" trade, no recruit already pending (so it never stacks unawakened fishes),
@@ -367,7 +367,7 @@ function chooseBuildDestination(
 	}
 	// 1a. Fish the Arcane Abyss for a COMPRESSOR (Cyber City: relic → abyssSummon) — HIGH priority so a
 	//     Fairy relic is reserved for it before augments. Damage-mitigation (Aquamaiden/Golem/Firekeeper
-	//     /Guardian) lets barrier survive two top-rung hits → far fewer climb restore-barrier rounds; Dark Assassin
+	//     /Guardian) lets barrier survive two top-rung hits → far fewer climb restore-barrier rounds; Aegis Weaver
 	//     doubles the roll on odd barrier → one-shots the boss. These cost-7-9 spirits collapse the
 	//     ~17-round climb, worth far more than an augment. wantsAbyssFish gates on ≥4 dice (core started),
 	//     a relic, room, and lacking a compressor, so it fires once mid-build and not again until awakened.
@@ -612,7 +612,7 @@ export interface BotProfile {
 	searchMultiplayer?: boolean;
 	/**
 	 * Pursue ARCANE BURST: spend a monster-reward token on an Arcane Abyss Summon to fish for an
-	 * arcane source (Arcane Advisor / Dragon Warrior), keep + awaken it (the starting Fairy relics
+	 * arcane source (Arcane Ascendant / Arcane Vanguard), keep + awaken it (the starting Fairy relics
 	 * + claimed relics pay the "any relic" awaken cost), then rest to convert exalted dice → arcane
 	 * (mean 2.0 vs 1.0). Roughly doubles firepower → one-shots the hp14 boss → collapses the round
 	 * count. The "full-scope" lever for the top tiers.
@@ -680,7 +680,7 @@ export const RANDOM_PROFILE: BotProfile = {
 };
 
 /** Classes that always add raw combat power (flat damage and/or arcane dice). */
-const DAMAGE_CLASSES = ['Spirit Animal', 'Sharpshooter', 'Arcane Advisor', 'Dragon Warrior', 'The Corruptor'];
+const DAMAGE_CLASSES = ['Spirit Animal', 'Sharpshooter', 'Arcane Ascendant', 'Arcane Vanguard', 'The Corruptor'];
 
 /**
  * The default strategic bot — a SAFE SCALER tuned for the escalating 8-rung ladder
@@ -1086,7 +1086,7 @@ BOT_PROFILES['mcts'] = { ...BOT_PROFILES['cullean'], ismctsIterations: 64, ismct
 // EA-tuned economy config (src/lib/play/sim/_ea — corruption-fixed base): climb sooner
 // (climbReadyFactor 0.6 → less Spirit-Animal over-stacking), pot 9, 2 Cultivators, 3 Elementalists.
 // The fastest robust single-action economy line (~46 rounds / ~83% solo). Action-economy spirits
-// (Ironmane 2x combat, Child Prodigy 2x location) push it lower once recruited.
+// (Ironmane 2x combat, Wayfarer 2x location) push it lower once recruited.
 BOT_PROFILES['fast'] = {
 	...BOT_PROFILES['cullean'],
 	killThreshold: 0.55,
@@ -1196,7 +1196,7 @@ export function computeKillProbability(
 	applyTrigger(sim, seat, 'inCombat', [], { catalog });
 
 	// The monster hits first. Account for any defensive mitigation the inCombat trigger
-	// granted (deflect / damageReduction — e.g. Golem of Wishes). If the surviving hit
+	// granted (deflect / damageReduction — e.g. Living Bastion). If the surviving hit
 	// still exceeds current barrier, the player corrupts and normally cannot counter ⇒ kill
 	// is impossible. (skipTakeDamage from a Guardian dodges the hit entirely.)
 	const mitigation = (player.damageReduction ?? 0) + (player.deflect ?? 0);
@@ -1368,8 +1368,8 @@ function canRestoreBarrierViaEconomy(player: BotPlayer): boolean {
 
 /**
  * Does the player already have an ARCANE damage source — arcane dice, or an awakened spirit
- * that produces them (Arcane Advisor converts exalted→arcane on rest; Dragon Warrior grants
- * arcane on awaken; The Corruptor on corruption)? Arcane dice average 2.0 vs exalted's 1.0, so
+ * that produces them (Arcane Ascendant converts exalted→arcane on rest; Arcane Vanguard grants
+ * arcane on awaken; Abyss Harbinger on corruption)? Arcane dice average 2.0 vs exalted's 1.0, so
  * an arcane source roughly DOUBLES firepower — the lever that one-shots the hp14 boss. When a
  * `pursueArcane` bot lacks one, it spends a monster-reward token on an Arcane Abyss Summon to
  * fish for it (its starting Fairy relics fuel the "any relic" awaken cost).
@@ -1378,24 +1378,25 @@ function hasArcaneSource(player: BotPlayer): boolean {
 	if (player.attackDice.some((d) => d.tier === 'arcane')) return true;
 	const c = awakenedClassCounts(player);
 	return (
-		(c['Arcane Advisor'] ?? 0) > 0 ||
-		(c['Dragon Warrior'] ?? 0) > 0 ||
-		(c['The Corruptor'] ?? 0) > 0 ||
-		(c['Firekeeper'] ?? 0) > 0 // grants a free arcane die on awaken
+		(c['Arcane Ascendant'] ?? 0) > 0 ||
+		(c['Arcane Vanguard'] ?? 0) > 0 ||
+		(c['The Corruptor'] ?? 0) > 0
 	);
 }
 
-/** Climb-compressors the bot fishes the Abyss for: combat damage MITIGATION (so barrier survives two
- *  top-rung hits → fewer restore-barrier rounds) or Dark Assassin's odd-barrier damage-double (one-shot the boss).
- *  These are the levers that collapse the ~17-round climb; all are Abyss-only (cost 7-9). */
+/** Climb-compressors the bot fishes the Abyss for: mitigation, attack-first,
+ * flat damage, or build acceleration from the current live class abilities. */
 function hasClimbCompressor(player: BotPlayer): boolean {
 	const c = awakenedClassCounts(player);
 	return (
-		(c['Aquamaiden'] ?? 0) > 0 ||
-		(c['Golem of Wishes'] ?? 0) > 0 ||
-		(c['Firekeeper'] ?? 0) > 0 ||
+		(c['Tide Warden'] ?? 0) > 0 ||
+		(c['Living Bastion'] ?? 0) > 0 ||
+		(c['Emberguard'] ?? 0) > 0 ||
+		(c['Runic Bulwark'] ?? 0) > 0 ||
+		(c['Tide Stalker'] ?? 0) > 0 ||
+		(c['Cursed Fighter'] ?? 0) > 0 ||
 		(c['Guardian'] ?? 0) > 0 ||
-		(c['Dark Assassin'] ?? 0) > 0
+		(c['Growth Warden'] ?? 0) > 0
 	);
 }
 
@@ -1475,43 +1476,46 @@ function classNeedValue(
 			// the count-3 barrier restore. Worthless once a Healer already covers sustain.
 			if ((counts['Healer'] ?? 0) >= HEALER_WANTED || c >= SOUL_WEAVER_WANTED) return 0;
 			return needDice ? 2 : 6;
-		case 'Ironmane':
+		case 'Monster Hunter':
 			// ACTION ECONOMY: +1 Monster-Combat per round (fight TWICE per Abyss visit) → climbs the
 			// 8-rung ladder in roughly half the Abyss visits. One is plenty; barrier can't usually
 			// fuel more than two fights between heals anyway. A top recruit (cheap, cost-1 Hero).
 			return c < 1 ? 9 : 0;
-		case 'Child Prodigy':
+		case 'Wayfarer':
 			// ACTION ECONOMY: +1 of EVERY location interaction per round → ~doubles build throughput
 			// (rest/cultivate/summon twice per visit). The single biggest build-compressor; worth the
 			// Arcane-Abyss recruit. One is plenty (the allowance doesn't stack).
 			return c < 1 ? 9 : 0;
-		case 'Aquamaiden':
-		case 'Golem of Wishes':
+		case 'Tide Warden':
+		case 'Living Bastion':
+		case 'Runic Bulwark':
 		case 'Guardian':
-			// CLIMB-COMPRESSORS — combat damage MITIGATION (Aquamaiden −3 / Golem deflect 4 / Guardian
+			// CLIMB-COMPRESSORS — scalable/fixed combat mitigation.
 			// skip-a-corrupting-hit). Powerful (barrier survives two top-rung hits → far fewer restore-barrier
 			// rounds), and the kill model already reads damageReduction/deflect/skipTakeDamage. BUT their
 			// host spirits awaken via a rune_cost / "discard 2 Teapots" the solo bot rarely holds, so a
 			// fished copy usually strands FACE-DOWN (un-awakable) and blocks re-fishing. Value moderate:
 			// kept if drawn alongside nothing better, never fished-for as a primary plan.
 			return c < 1 ? 5 : 1;
-		case 'Firekeeper':
-			// −3 incoming PLUS a free Arcane die on awaken — but rune_cost awaken, same un-awakable risk.
+		case 'Emberguard':
+			// Strong conditional mitigation when the combat roll is even.
 			return c < 1 ? 5 : 1;
-		case 'Dark Assassin':
-			// OFFENSE climb-compressor: ODD barrier DOUBLES the whole combat roll → one-shots the boss
-			// from a 10-exalted pool (avg 10 → 20). RELIABLY AWAKABLE — its host (Lightcatcher) flips by
-			// "discard 3 Elementalist Traits", which the bot holds once dice are exalted (spent
-			// Elementalists). So this is a real fish target. Gate the high value on having ≥3 Elementalist
-			// traits to discard, else it would strand face-down. One is plenty.
-			return (awakenedClassCounts(player)['Elementalist'] ?? 0) >= 3 ? (c < 1 ? 9 : 1) : 2;
+		case 'Aegis Weaver':
+			// Restores barrier matching max-barrier gains, with a separate +4 combat initiative.
+			return needMaxBarrier ? (c < 1 ? 8 : 1) : 2;
+		case 'Tide Stalker':
+			return c < 1 ? 8 : 1;
+		case 'Growth Warden':
+			return needDice || needMaxBarrier ? (c < 1 ? 7 : 2) : 1;
+		case 'Abyss Summoner':
+			return c < 1 ? 7 : 2;
 		case 'Rune Mage':
 			// BUILD-COMPRESSOR: trade a Rune → Enchanted die, a Relic → Exalted die — dice straight from
 			// the rune/relic economy, bypassing the Fighter(add)→Elementalist(upgrade) two-stage grind.
 			// Only while the dice pool is still below cap.
 			return !atDiceCap(player, profile) ? (c < 1 ? 8 : 2) : 0;
 		default:
-			// Flat-damage / arcane classes (Spirit Animal, Sharpshooter, Dragon Warrior, …): the
+			// Flat-damage / arcane classes (Spirit Animal, Sharpshooter, Arcane Vanguard, …): the
 			// FINAL firepower lever, and the TOP recruit once the dice+max barrier foundation is laid.
 			// A 10-exalted pool only averages ~10 damage; one-shotting the hp12/hp14 boss rungs needs
 			// ~14-16, and the only way to get there is to STACK flat damage (each Spirit Animal = +1)
@@ -1601,7 +1605,7 @@ function keepValue(
 
 /**
  * Would Rest pay off now? Fighter adds dice (only under the cap), Elementalist upgrades
- * basic/enchanted dice, Arcane Advisor converts an exalted die to arcane, and Healer
+ * basic/enchanted dice, Arcane Ascendant converts an exalted die to arcane, and Healer
  * restores barrier (sustain between Abyss fights, worth it only below full).
  */
 function hasRestPayoff(
@@ -1613,7 +1617,7 @@ function hasRestPayoff(
 	const counts = awakenedClassCounts(player);
 	const fighter = counts['Fighter'] ?? 0;
 	const elementalist = counts['Elementalist'] ?? 0;
-	const advisor = counts['Arcane Advisor'] ?? 0;
+	const advisor = counts['Arcane Ascendant'] ?? 0;
 	const healer = counts['Healer'] ?? 0;
 	const soulWeaver = counts['Soul Weaver'] ?? 0;
 	const dice = player.attackDice;
@@ -1972,7 +1976,7 @@ export function planMediumPhaseActions(
 			if (config?.combatOnly) {
 				// Arcane Abyss: fight, then claim rewards. Default = VP-first; a `pursueArcane` bot
 				// that has no arcane source yet instead banks an Arcane Abyss Summon (to fish for
-				// Arcane Advisor / Dragon Warrior) + a relic (awaken fuel), then VP for the rest.
+				// Arcane Ascendant / Arcane Vanguard) + a relic (awaken fuel), then VP for the rest.
 				// Fight UP TO the combat allowance (Ironmane → 2 fights per Abyss visit): the first
 				// fight is justified by the navigation gate; each bonus fight proceeds only if the
 				// now-advanced rung is survivable AND a likely kill (pk≥0.5), so barrier isn't wasted.
@@ -2006,14 +2010,14 @@ export function planMediumPhaseActions(
 						// Summon (the starting Fairy relics pay its "any relic" awaken cost). Stop the
 						// moment we own one — awakened OR face-down OR currently in hand — so we never
 						// pile up summons; and we ALWAYS keep a VP token alongside (the vpRanked fill
-						// below), so VP never stalls. Arcane then converts in via Arcane Advisor's rest.
+						// below), so VP never stalls. Arcane then converts in via Arcane Ascendant's rest.
 						const ownsArcane =
 							rp != null &&
 							(hasArcaneSource(rp) ||
 								rp.spirits.some(
 									(s) =>
-										(s.classes?.['Arcane Advisor'] ?? 0) > 0 ||
-										(s.classes?.['Dragon Warrior'] ?? 0) > 0
+										(s.classes?.['Arcane Ascendant'] ?? 0) > 0 ||
+										(s.classes?.['Arcane Vanguard'] ?? 0) > 0
 								) ||
 								rp.spirits.some((s) => s.isFaceDown) ||
 								(rp.pendingDraw ?? false));
@@ -2114,7 +2118,7 @@ export function planMediumPhaseActions(
 						if (!placePreferred() && !tryEmit({ type: 'discardHandDraws' })) break;
 						continue;
 					}
-					// Each row is repeatable up to its allowance (Child Prodigy's locationInteraction
+					// Each row is repeatable up to its allowance (Wayfarer's locationInteraction
 					// credit lets the build action — rest/cultivate/summon/trade — run twice per visit,
 					// ~doubling build throughput per round).
 					const rowAllowance = 1 + (p.extraActions?.locationInteraction ?? 0);
@@ -2148,7 +2152,7 @@ export function planMediumPhaseActions(
 				// Cursed/Soul-Weaver duals, and used-up Elementalists clog the boss-killing slots.
 				{
 					const dmgClasses = profile.damageClasses ?? [];
-					const keepers = new Set(['Healer', 'Ironmane']);
+					const keepers = new Set(['Healer', 'Monster Hunter']);
 					let g2 = 0;
 					while (g2 < 8) {
 						g2 += 1;

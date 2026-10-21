@@ -140,7 +140,7 @@ const CATALOG: PlayCatalog = {
 			id: 'spirit-10',
 			name: 'Meteor Shower',
 			cost: 9,
-			classes: { Elementalist: 1 },
+			classes: { 'Elementalist': 1 },
 			origins: {}
 		},
 		{
@@ -993,12 +993,12 @@ describe('play runtime', () => {
 		expect(res.state.players.Red!.victoryPoints).toBe(3);
 	});
 
-	test('round-cap end runs FINAL SCORING: last-round World Guardian pays its +6 VP (U94RP3 case)', () => {
+	test('round-cap end runs FINAL SCORING: last-round Relic Sentinel pays its +6 VP (U94RP3 case)', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
 		const state = started.state;
-		// Michael's game: 25 VP, Good (Corrupt L2), Cosmic Guardian (World Guardian class)
+		// Michael's game: 25 VP, Good (Corrupt L2), Cosmic Guardian (Relic Sentinel class)
 		// awakened in round 30's awakening phase — benefits phase never comes back, so
 		// without final scoring the +6 ("24+ VP and Good") evaporates. He really hit 31.
 		state.phase = 'cleanup';
@@ -1008,7 +1008,7 @@ describe('play runtime', () => {
 		red.statusLevel = 2; // Corrupt — still Good (only Fallen is Evil)
 		red.spirits = [
 			...red.spirits.filter((s) => s.slotIndex !== 6),
-			{ slotIndex: 6, id: 'cg', name: 'Cosmic Guardian', cost: 9, classes: { 'World Guardian': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 6, id: 'cg', name: 'Cosmic Guardian', cost: 9, classes: { 'Relic Sentinel': 1 }, origins: {}, isFaceDown: false }
 		];
 		for (const seat of state.activeSeats) {
 			if (seat !== 'Red') state.players[seat]!.phaseReady = true;
@@ -1069,7 +1069,7 @@ describe('play runtime', () => {
 		red.statusLevel = 2;
 		red.spirits = [
 			...red.spirits.filter((s) => s.slotIndex !== 6),
-			{ slotIndex: 6, id: 'cg', name: 'Cosmic Guardian', cost: 9, classes: { 'World Guardian': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 6, id: 'cg', name: 'Cosmic Guardian', cost: 9, classes: { 'Relic Sentinel': 1 }, origins: {}, isFaceDown: false }
 		];
 		for (const seat of state.activeSeats) {
 			if (seat !== 'Red') state.players[seat]!.phaseReady = true;
@@ -1466,7 +1466,7 @@ describe('P5 onSpiritSummon wiring', () => {
 	// A Sharpshooter-class spirit to summon (the base CATALOG has none). onSpiritSummon now
 	// fires scoped to the JUST-SUMMONED spirit's classes, so the summoned spirit must itself
 	// be the Sharpshooter for the grant to land.
-	const SHARP = { id: 'spirit-sharp', name: 'Sniper', cost: 2, classes: { Sharpshooter: 1 }, origins: {} };
+	const SHARP = { id: 'spirit-sharp', name: 'Sniper', cost: 2, classes: { 'Sharpshooter': 1 }, origins: {} };
 	const sharpCatalog: PlayCatalog = { ...CATALOG, spirits: [...CATALOG.spirits, SHARP] };
 
 	test('summoning Sharpshooter does not grant its discard-only reward', () => {
@@ -1500,7 +1500,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		// A Sharpshooter sits in the tableau, but the spirit being summoned is NOT one —
 		// under per-spirit scoping the grant must NOT fire just because a Sharpshooter is in play.
 		state.players.Red!.spirits = [
-			{ slotIndex: 6, id: 'ss', name: 'Sharp', cost: 2, classes: { Sharpshooter: 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 6, id: 'ss', name: 'Sharp', cost: 2, classes: { 'Sharpshooter': 1 }, origins: {}, isFaceDown: false }
 		];
 		state.players.Red!.stunImmune = false;
 		const open = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] }, sharpCatalog);
@@ -1511,6 +1511,58 @@ describe('P5 onSpiritSummon wiring', () => {
 		if (!summoned.ok) throw new Error(summoned.error.message);
 		state = summoned.state;
 		expect(state.players.Red!.stunImmune).toBe(false);
+	});
+
+	test('Abyss Summoner offers an Arcane Abyss draw after a Spirit World summon', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(
+			lobby,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'startGame' },
+			CATALOG
+		);
+		if (!started.ok) throw new Error(started.error.message);
+		let state = locationPhase(started.state, 'Tidal Cove');
+		state.players.Red!.spirits = [
+			{ slotIndex: 6, id: 'as', name: 'Summoner', cost: 7, classes: { 'Abyss Summoner': 1 }, origins: {}, isFaceDown: false }
+		];
+		state = apply(state, 'Red', {
+			type: 'resolveLocationInteraction',
+			rowIndex: 0,
+			choices: []
+		});
+		const guid = state.players.Red!.handDraws[0]!.guid;
+		state = apply(state, 'Red', { type: 'spawnHandSpirit', guid });
+		const decision = state.players.Red!.pendingDecisions.find(
+			(entry) => entry.kind === 'abyssSummonerDraw'
+		);
+		expect(decision).toBeDefined();
+		state = apply(state, 'Red', {
+			type: 'resolveDecision',
+			decisionId: decision!.id,
+			optionId: 'yes'
+		});
+		expect(state.players.Red!.pendingDrawQueue.some((draw) => draw.sourceBag === 'Arcane Abyss Bag')).toBe(true);
+	});
+
+	test('Abyss Summoner grants 4 VP when an Arcane Abyss spirit is discarded', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(
+			lobby,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'startGame' },
+			CATALOG
+		);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = locationPhase(started.state, 'Tidal Cove');
+		const player = state.players.Red!;
+		player.spirits = [
+			{ slotIndex: 5, id: 'as', name: 'Summoner', cost: 7, classes: { 'Abyss Summoner': 1 }, origins: {}, isFaceDown: false },
+			{ slotIndex: 6, id: 'abyss', name: 'Abyss Spirit', cost: 8, classes: {}, origins: {}, isFaceDown: false }
+		];
+		const before = player.victoryPoints;
+		const next = apply(state, 'Red', { type: 'discardSpirit', slotIndex: 6 });
+		expect(next.players.Red!.victoryPoints).toBe(before + 4);
 	});
 
 	test('Soul Weaver: opening a summon draw arms a redraw; redrawHandDraws refreshes the hand', () => {
@@ -1615,7 +1667,7 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 		expect(state.players.Red!.attackDice).toHaveLength(0);
 	});
 
-	test('The Corruptor records corruption this round', () => {
+	test('Abyss Harbinger records corruption this round', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
@@ -1640,11 +1692,11 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 			{
 				id: 'dec-1',
 				source: 'class',
-				kind: 'strategistTrade',
-				prompt: 'On rest, you may discard 3 attack dice to gain 1 Spirit Augment.',
+				kind: 'treeOfGrowthReward',
+				prompt: 'Choose a Growth Warden reward.',
 				options: [
-					{ id: 'yes', label: 'Discard 3 dice → 1 Augment' },
-					{ id: 'no', label: 'No' }
+					{ id: 'barrier', label: 'Gain 2 max barrier' },
+					{ id: 'augment', label: 'Gain 1 Spirit Augment' }
 				]
 			}
 		];
@@ -1652,14 +1704,14 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 		const resolved = applyGameCommand(
 			started.state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'resolveDecision', decisionId: 'dec-1', optionId: 'yes' },
+			{ type: 'resolveDecision', decisionId: 'dec-1', optionId: 'augment' },
 			CATALOG
 		);
 		expect(resolved.ok).toBe(true);
 		if (!resolved.ok) return;
 		const after = resolved.state.players.Red!;
 		expect(after.pendingDecisions).toHaveLength(0); // cleared
-		expect(after.attackDice).toHaveLength(0); // 3 − 3 discarded
+		expect(after.attackDice).toHaveLength(3);
 		expect(after.unplacedAugments?.length ?? 0).toBe(1); // granted (placeable)
 	});
 
@@ -1796,7 +1848,7 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		expect(committed.ok).toBe(true);
 	});
 
-	test('Golden Ruler builds a +1 VP claim; claiming grants the VP', () => {
+	test('Dawn Sovereign builds a +1 VP claim; claiming grants the VP', () => {
 		const state = started();
 		state.players.Red!.spirits = [classSpirit('Golden Ruler')];
 		const vp0 = state.players.Red!.victoryPoints;
@@ -1809,7 +1861,7 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		expect(r.state.players.Red!.victoryPoints).toBe(vp0 + 1);
 	});
 
-	test('Golden Ruler while Evil discards a Golden Ruler spirit on claim', () => {
+	test('Dawn Sovereign while Evil discards a Dawn Sovereign spirit on claim', () => {
 		const state = started();
 		state.players.Red!.spirits = [classSpirit('Golden Ruler')];
 		state.players.Red!.statusLevel = 3; // Fallen → Evil
@@ -1822,7 +1874,7 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		expect(r.state.players.Red!.spirits.some((s) => s.classes?.['Golden Ruler'])).toBe(false);
 	});
 
-	test('The Corruptor claims an Arcane die only when corrupted this round', () => {
+	test('Abyss Harbinger claims an Arcane die only when corrupted this round', () => {
 		const noCorrupt = started();
 		noCorrupt.players.Red!.spirits = [classSpirit('The Corruptor')];
 		enterBenefits(noCorrupt, CATALOG);
@@ -1841,31 +1893,31 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		expect(r.state.players.Red!.attackDice.filter((d) => d.tier === 'arcane')).toHaveLength(1);
 	});
 
-	test('World Guardian claims +6 VP only when Good with ≥24 VP', () => {
+	test('Relic Sentinel claims +6 VP only when Good with ≥24 VP', () => {
 		const low = started();
-		low.players.Red!.spirits = [classSpirit('World Guardian')];
+		low.players.Red!.spirits = [classSpirit('Relic Sentinel')];
 		low.players.Red!.victoryPoints = 10;
 		enterBenefits(low, CATALOG);
 		expect(low.players.Red!.pendingAwakenReward).toBeNull();
 
 		const hi = started();
-		hi.players.Red!.spirits = [classSpirit('World Guardian')];
+		hi.players.Red!.spirits = [classSpirit('Relic Sentinel')];
 		hi.players.Red!.victoryPoints = 24;
 		enterBenefits(hi, CATALOG);
 		expect(hi.players.Red!.pendingAwakenReward!.grants).toEqual([
-			{ kind: 'vp', amount: 6, source: 'World Guardian' }
+			{ kind: 'vp', amount: 6, source: 'Relic Sentinel' }
 		]);
 	});
 
-	test('World Ender grants a flat +1 VP at cleanup (no longer a claim)', () => {
+	test('Void Sovereign grants a flat +1 VP at cleanup (no longer a claim)', () => {
 		const state = started();
-		state.players.Red!.spirits = [classSpirit('World Ender')];
+		state.players.Red!.spirits = [classSpirit('Void Sovereign')];
 		enterBenefits(state, CATALOG);
-		// Reworked: World Ender is now a flat +1 VP awakeningPhase handler (fires during
+		// Reworked: Void Sovereign is now a flat +1 VP awakeningPhase handler (fires during
 		// enterBenefits), not an all-Evil Cleanup claim.
 		expect(state.players.Red!.victoryPoints).toBe(1);
 		const grants = state.players.Red!.pendingAwakenReward?.grants ?? [];
-		expect(grants.some((g) => g.source === 'World Ender')).toBe(false);
+		expect(grants.some((g) => g.source === 'Void Sovereign')).toBe(false);
 	});
 
 	test('Cursed Spirit Corrupt choice grants the picked basic runes', () => {

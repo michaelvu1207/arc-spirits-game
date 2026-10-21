@@ -1,6 +1,6 @@
 /**
  * Picker-style decision specs — the SINGLE source of truth for which pending
- * decisions carry an instance picker (Arc Mage and Strategist attack-die trades)
+ * decisions carry an instance picker (currently Arcane Alchemist's attack-die trade)
  * and, for those, exactly how many instances must be chosen and which are
  * eligible.
  *
@@ -13,10 +13,9 @@
 
 import type { PendingDecision, PrivatePlayerState } from './types';
 import { ARC_MAGE_TRADE_COST } from './effects/classes/arcMage';
-import { STRATEGIST_TRADE_COST } from './effects/classes/strategist';
 
 /** A decision that requires the owner to pick a fixed number of their own instances
- *  (e.g. Arc Mage choosing WHICH 4 attack dice to convert). */
+ *  (e.g. Arcane Alchemist choosing WHICH 4 attack dice to convert). */
 export interface DecisionPickerSpec {
 	/** The decision this picker belongs to (so a client with several pending decisions
 	 *  can route each picker to its card). */
@@ -39,12 +38,7 @@ export function decisionPickerSpec(
 	decision: PendingDecision,
 	player: PrivatePlayerState
 ): DecisionPickerSpec | null {
-	const count =
-		decision.kind === 'arcMageTrade'
-			? ARC_MAGE_TRADE_COST
-			: decision.kind === 'strategistTrade'
-				? STRATEGIST_TRADE_COST
-				: null;
+	const count = decision.kind === 'arcMageTrade' ? ARC_MAGE_TRADE_COST : null;
 	if (count !== null) {
 		const dice = player.attackDice ?? [];
 		// If every held die is consumed, or every possible payer has the same tier,

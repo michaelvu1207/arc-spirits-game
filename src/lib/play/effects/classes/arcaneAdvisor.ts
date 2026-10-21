@@ -2,7 +2,7 @@ import { runAction } from '../actions';
 import { nextId } from '../../rng';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Arcane Advisor — "In the Awakening phase, you may upgrade 1 Exalted Attack to an
+// Arcane Ascendant — "In the Awakening phase, you may upgrade 1 Exalted Attack to an
 // Arcane Attack." Was an onRest auto-upgrade; now an Awakening-phase opt-in.
 //
 // Implemented as a bespoke `run` handler on `awakeningPhase` (fires once per active
@@ -20,7 +20,7 @@ export const ability: ClassAbility[] = [
 				// No-silent-no-op: a player with no Exalted die simply isn't offered the
 				// choice. The eligibility itself (offering only when holdable) is the UX
 				// surface; we still leave a log breadcrumb so the gate is observable.
-				log.push('Arcane Advisor: no Exalted attack die to upgrade.');
+				log.push('Arcane Ascendant: no Exalted attack die to upgrade.');
 				return;
 			}
 			player.pendingDecisions.push({

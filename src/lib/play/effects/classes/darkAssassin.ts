@@ -1,24 +1,16 @@
-import type { ClassAbility, ClassHandler } from './types';
+import type { ClassAbility } from './types';
+import type { PrivatePlayerState } from '../../types';
 
-/**
- * Dark Assassin — "For every Cursed Spirit trait you have, gain 2 Attack Damage."
- *
- * Bespoke `inCombat` handler: sum the `Cursed Spirit` trait count across the
- * player's face-up (awakened) spirits and add `2 * count` to the per-combat
- * `combatDamageBonus` read by `rollAttack`. UX channel: a passive combat number
- * plus a log line, so it is never a silent no-op when Cursed Spirit traits are
- * present. Zero Cursed Spirit traits ⇒ untouched, no log.
- */
-const darkAssassinInCombat: ClassHandler = (ctx) => {
-	const cursedSpirits = ctx.player.spirits.reduce(
-		(sum, s) => (s.isFaceDown ? sum : sum + (s.classes?.['Cursed Spirit'] ?? 0)),
-		0
-	);
-	if (cursedSpirits > 0) {
-		const bonus = 2 * cursedSpirits;
-		ctx.player.combatDamageBonus += bonus;
-		ctx.log.push(`Dark Assassin — +${bonus} combat damage from ${cursedSpirits} Cursed Spirit trait(s).`);
-	}
-};
+export const ability: ClassAbility[] = [{
+ on: 'inCombat',
+ breakpoints: [{ count: 1, actions: [{ kind: 'gainInitiative', amount: 4 }] }]
+}];
 
-export const ability: ClassAbility[] = [{ on: 'inCombat', run: darkAssassinInCombat }];
+/** Restore only the capacity actually gained, including gains clipped by the cap. */
+export function restoreAegisBarrier(player: PrivatePlayerState, gained: number, log: string[]): void {
+ if (gained <= 0 || !player.spirits.some(s => !s.isFaceDown && (s.classes?.['Aegis Weaver'] ?? 0) > 0)) return;
+ const restored = Math.min(gained, player.maxBarrier - player.barrier);
+ player.barrier += restored;
+ player.brokenBarrier = Math.max(0, player.maxBarrier - player.barrier);
+ log.push(`Aegis Weaver: restored ${restored} barrier after gaining ${gained} max barrier.`);
+}
