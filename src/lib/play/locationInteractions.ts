@@ -137,15 +137,15 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'specialRune',
 		runeId: 'd0b484ed-733c-4d55-b549-30e631eec857',
 		classId: '173589ed-9bec-4965-94e6-dadbc6b5310a',
-		runeName: 'Sorcerer',
-		label: 'Sorcerer rune'
+		runeName: 'Elementalist',
+		label: 'Elementalist augment'
 	},
 	'88facdb6-3374-4891-af8a-fca2e81b79ef': {
 		kind: 'specialRune',
 		runeId: '33f343e7-6bdb-43cc-8b27-115eaa16826f',
 		classId: '17e08cde-f3d2-480b-8386-1e3047e2f85a',
-		runeName: 'Runic Bulwark',
-		label: 'Strategist rune'
+		runeName: 'Soul Weaver',
+		label: 'Soul Weaver augment'
 	},
 	'66525fe8-e375-4473-b1c3-88d3c9fd2b1c': {
 		kind: 'specialRune',

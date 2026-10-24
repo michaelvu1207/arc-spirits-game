@@ -387,7 +387,7 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 		expect(row1.costSlots[0].eligibleMatSlotIndexes).toEqual([0, 1]);
 		// The "or" augment gain surfaces as a choice group with no pre-selected default (S6).
 		expect(row1.choiceGroups).toHaveLength(1);
-		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Sorcerer', 'Runic Bulwark']);
+		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Elementalist', 'Soul Weaver']);
 	});
 
 	test('affordability + usesRemaining reflect held mats and per-row allowance', () => {

@@ -164,13 +164,13 @@ describe('resolveLocationInteraction (engine)', () => {
 	test('an "or" gain grants the chosen option', () => {
 		let s = atLocation('Cyber City');
 		s.players.Red!.mats.push({ slotIndex: 90, hasRune: true, special: true, type: 'relic', name: 'Spare Relic' });
-		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Strategist
-		// Strategist is a class rune ⇒ a spirit augment: it lands in the to-place pouch,
-		// never a rune slot. Sorcerer (the unchosen option) is granted nowhere.
-		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Runic Bulwark')).toBe(true);
-		expect(s.players.Red!.mats.some((r) => r.name === 'Runic Bulwark')).toBe(false);
-		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Sorcerer')).toBe(false);
-		expect(s.players.Red!.mats.some((r) => r.name === 'Sorcerer')).toBe(false);
+		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Soul Weaver
+		// Soul Weaver is a class rune ⇒ a spirit augment: it lands in the to-place pouch,
+		// never a rune slot. Elementalist (the unchosen option) is granted nowhere.
+		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Soul Weaver')).toBe(true);
+		expect(s.players.Red!.mats.some((r) => r.name === 'Soul Weaver')).toBe(false);
+		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Elementalist')).toBe(false);
+		expect(s.players.Red!.mats.some((r) => r.name === 'Elementalist')).toBe(false);
 		// One relic was spent to pay the "any relic" cost. (Starting Fairy Relics qualify
 		// too, so the greedy matcher may spend one of those before the spare relic — either
 		// way exactly one of the three held relics is consumed.)
@@ -337,9 +337,9 @@ describe('updated trade class rules', () => {
 			{ slotIndex: 1, hasRune: true, id: 'fairy', name: 'Fairy Relic', type: 'relic', special: true }
 		];
 
-		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Strategist augment
+		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Soul Weaver augment
 
-		expect(s.players.Red!.unplacedAugments?.filter((a) => a.name === 'Runic Bulwark')).toHaveLength(2);
+		expect(s.players.Red!.unplacedAugments?.filter((a) => a.name === 'Soul Weaver')).toHaveLength(2);
 		expect(s.players.Red!.mats.filter((r) => r.hasRune).length).toBe(0);
 		expect(s.players.Red!.lastAction?.log.some((l) => /Runic Duplicator/i.test(l))).toBe(true);
 	});

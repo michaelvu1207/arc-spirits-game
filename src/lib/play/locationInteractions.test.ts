@@ -31,7 +31,7 @@ const FOREST = '8dd2b283-122b-4965-9184-f1f84e1216f4';
 const FLORAL_ORIGIN = 'ad555f03-9b89-4a71-a47c-464fd67d2c05';
 const LANTERN = '7248cdca-9b03-4951-bfba-a4d17f7b97c8';
 const LANTERN_ORIGIN = '178449e9-cc6b-45ab-8522-5183fe1d9307';
-// Special / named runes. Class-linked ones (Sorcerer/Strategist/Swordsman/Support/
+// Special / named runes. Class-linked ones (Elementalist/Soul Weaver/Swordsman/Support/
 // Animal/Cursed Spirit) are spirit AUGMENTS; named ones (Teapot/Magnet/Flower/
 // Firecracker) are class-less relics.
 const TEAPOT = 'c8ef5d48-2289-4fee-a34d-b041d3e8bea6';
@@ -164,7 +164,7 @@ describe('buildLocationInteractions — live map', () => {
 		const choose = interactions[1].gains[0];
 		expect(choose.type).toBe('chooseRune');
 		if (choose.type === 'chooseRune') {
-			expect(choose.options.map((o) => o.name)).toEqual(['Sorcerer', 'Runic Bulwark']);
+			expect(choose.options.map((o) => o.name)).toEqual(['Elementalist', 'Soul Weaver']);
 			expect(choose.options.every((o) => o.type === 'augment')).toBe(true);
 		}
 
