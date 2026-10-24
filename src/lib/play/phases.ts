@@ -120,6 +120,8 @@ function beginNavigation(state: PublicGameState): void {
 		const player = state.players[seat];
 		if (player) {
 			player.pendingDestination = null;
+			player.pendingNavigationPower = null;
+			player.navigationPower = null;
 			player.navigationDestination = null;
 			player.phaseReady = false;
 			player.actionsUsedThisRound = [];
@@ -175,6 +177,7 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 		const destination = player?.pendingDestination ?? null;
 		if (!player || !destination) continue;
 		player.navigationDestination = destination; // now public
+		player.navigationPower = player.pendingNavigationPower ?? null;
 		(occupancy[destination] ??= []).push(seat);
 	}
 	state.locationOccupancy = occupancy;

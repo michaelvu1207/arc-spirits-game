@@ -72,7 +72,7 @@ describe('phase machine', () => {
 
 	test("a player's pending destination is hidden from other viewers until reveal", () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City', navigationPowerId: 'thorn-ward' });
 
 		const blueView = buildSessionProjection(state, { role: 'player', seatColor: 'Blue', displayName: 'Guest' });
 		expect(blueView.players.Red?.pendingDestination).toBeNull();
@@ -80,6 +80,17 @@ describe('phase machine', () => {
 
 		const redView = buildSessionProjection(state, { role: 'host', seatColor: 'Red', displayName: 'Host' });
 		expect(redView.players.Red?.pendingDestination).toBe('Cyber City');
+		expect(redView.players.Red?.pendingNavigationPower).toBe('thorn-ward');
+		expect(blueView.players.Red?.pendingNavigationPower).toBeNull();
+	});
+
+	test('navigation power is consumed into the revealed round state', () => {
+		let state = startedGame();
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City', navigationPowerId: 'thorn-ward' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
+		state = apply(state, RED, { type: 'forceAdvancePhase' });
+		expect(state.players.Red?.pendingNavigationPower).toBe('thorn-ward');
+		expect(state.players.Red?.navigationPower).toBe('thorn-ward');
 	});
 
 	test('full round: with no resolution work, ending location collapses straight to the next round', () => {

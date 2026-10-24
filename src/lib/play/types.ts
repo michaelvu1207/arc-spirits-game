@@ -133,6 +133,7 @@ export const RUNE_CARRY_LIMIT = 4;
 export type SeatColor = (typeof SEAT_COLORS)[number];
 export type SpiritWorldLocation = (typeof SPIRIT_WORLD_LOCATIONS)[number];
 export type NavigationDestination = (typeof ALL_DESTINATIONS)[number];
+import type { NavigationPowerId } from './navigationPowers';
 // `closed` is a terminal state for a lobby that was abandoned or aged out before
 // the game ever started, or an active game everyone abandoned (see roomLifecycle.ts)
 // — distinct from `finished`, which means a real game ran to completion. Closed rooms
@@ -846,6 +847,10 @@ export interface PrivatePlayerState {
 	// ── Rules-engine fields (2D play mode) ──────────────────────────────────
 	/** Secret navigation choice; hidden from other viewers until all seats lock. */
 	pendingDestination: NavigationDestination | null;
+	/** Consumable Navigation Power committed with the pending destination. */
+	pendingNavigationPower: NavigationPowerId | null;
+	/** Consumable Navigation Power committed for the revealed round. */
+	navigationPower: NavigationPowerId | null;
 	/** Combat dice pool, with tiers (separate from the free-form spawnedDice tool). */
 	attackDice: AttackDie[];
 	/** Combat initiative accumulated this combat. */
@@ -1165,7 +1170,7 @@ export type GameCommand =
 	| { type: 'startGame'; seed?: number }
 	| { type: 'selectNavigationDestination'; destination: string }
 	// ── Phase machine (2D play mode) ──────────────────────────────────────
-	| { type: 'lockNavigation'; destination: NavigationDestination }
+	| { type: 'lockNavigation'; destination: NavigationDestination; navigationPowerId?: NavigationPowerId | null }
 	| { type: 'unlockNavigation' }
 	| { type: 'endLocationActions' }
 	/** Confirm the Benefits step (rewards claimed) → advance to the Awakening step. */

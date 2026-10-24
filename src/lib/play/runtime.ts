@@ -1,4 +1,5 @@
 import { currentClassCounts, currentClassName } from './classNames';
+import { isNavigationPowerId } from './navigationPowers';
 import type { BagsData } from '$lib/types';
 import type {
 	CommandResult,
@@ -240,6 +241,8 @@ function buildPlayerState(seatColor: SeatColor, seat: LobbySeatState): PrivatePl
 		spawnedItems: [],
 		spiritAugmentAttachments: [],
 		pendingDestination: null,
+		pendingNavigationPower: null,
+		navigationPower: null,
 		attackDice: [],
 		initiative: 0,
 		actionsUsedThisRound: [],
@@ -966,6 +969,8 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
 	player.initiative ??= 0;
 	player.phaseReady ??= false;
 	player.pendingDestination ??= null;
+	player.pendingNavigationPower ??= null;
+	player.navigationPower ??= null;
 	player.lastAction ??= null;
 	// Effect-framework fields (tolerate snapshots persisted before these existed).
 	player.damageReduction ??= 0;
@@ -2026,7 +2031,11 @@ function reduceCommand(
 			if (!(ALL_DESTINATIONS as readonly string[]).includes(command.destination)) {
 				return failure('destination_invalid', `${command.destination} is not a valid destination.`);
 			}
+			if (command.navigationPowerId != null && !isNavigationPowerId(command.navigationPowerId)) {
+				return failure('navigation_power_invalid', 'That Navigation Power is not available.');
+			}
 			active.player.pendingDestination = command.destination;
+			active.player.pendingNavigationPower = command.navigationPowerId ?? null;
 			state.navigation[active.seatColor] = { locked: true };
 			// NOTE: locking no longer reveals immediately, even when all seats are locked.
 			// The reveal now happens when the navigation deadline expires (forceAdvance /
@@ -2043,6 +2052,7 @@ function reduceCommand(
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can change a destination.');
 			active.player.pendingDestination = null;
+			active.player.pendingNavigationPower = null;
 			state.navigation[active.seatColor] = { locked: false };
 			return success(state);
 		}
@@ -3083,6 +3093,7 @@ export function buildSessionProjection(
 			pendingCorruptionDiscard: isOwner ? (player.pendingCorruptionDiscard ?? null) : null,
 			// A player's secret destination + personal prompts are theirs alone.
 			pendingDestination: isOwner ? player.pendingDestination : null,
+			pendingNavigationPower: isOwner ? player.pendingNavigationPower : null,
 			manualPrompts: isOwner ? player.manualPrompts : [],
 			pendingDecisions: isOwner ? player.pendingDecisions : [],
 			lastAction: isOwner ? player.lastAction : null,
