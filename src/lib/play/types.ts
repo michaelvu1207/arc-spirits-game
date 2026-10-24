@@ -848,9 +848,9 @@ export interface PrivatePlayerState {
 	/** Secret navigation choice; hidden from other viewers until all seats lock. */
 	pendingDestination: NavigationDestination | null;
 	/** Consumable Navigation Power committed with the pending destination. */
-	pendingNavigationPower: NavigationPowerId | null;
+	pendingNavigationPower?: NavigationPowerId | null;
 	/** Consumable Navigation Power committed for the revealed round. */
-	navigationPower: NavigationPowerId | null;
+	navigationPower?: NavigationPowerId | null;
 	/** Combat dice pool, with tiers (separate from the free-form spawnedDice tool). */
 	attackDice: AttackDie[];
 	/** Combat initiative accumulated this combat. */

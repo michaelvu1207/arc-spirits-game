@@ -15,6 +15,7 @@
 	import { PHASE_LABELS } from '$lib/play/viewV2';
 	import { buildLocationInteractions } from '$lib/play/locationInteractions';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
+	import { NAVIGATION_POWERS, type NavigationPowerId } from '$lib/play/navigationPowers';
 	import {
 		LOCATION_ACCENT,
 		getLocationConfig,
@@ -229,6 +230,7 @@
 	// Browsing the carousel, the world under the cursor previews as a live "portal";
 	// null clears the preview back to the locked / committed pick.
 	let hoveredDestination = $state<NavigationDestination | null>(null);
+	let pendingPowerDestination = $state<NavigationDestination | null>(null);
 	// The carousel unmounts on commit, and a disabled card never fires mouseleave, so
 	// clear the hover whenever the pick UI closes — otherwise a stale hover bleeds a
 	// phantom "Live" portal into the next navigation round.
@@ -729,14 +731,25 @@
 			});
 			send('unlock', { type: 'unlockNavigation' });
 		} else {
-			playSfx('nav-lock');
-			applyOptimistic((r) => {
-				const p = seat ? r.players[seat] : null;
-				if (p) p.pendingDestination = destination;
-				if (seat && r.navigation[seat]) r.navigation[seat].locked = true;
-			});
-			send('lock', { type: 'lockNavigation', destination });
+			pendingPowerDestination = destination;
 		}
+	}
+
+	function commitNavigationPower(powerId: NavigationPowerId | null) {
+		if (!pendingPowerDestination) return;
+		const destination = pendingPowerDestination;
+		pendingPowerDestination = null;
+		const seat = mySeat;
+		playSfx('nav-lock');
+		applyOptimistic((r) => {
+			const p = seat ? r.players[seat] : null;
+			if (p) {
+				p.pendingDestination = destination;
+				p.pendingNavigationPower = powerId;
+			}
+			if (seat && r.navigation[seat]) r.navigation[seat].locked = true;
+		});
+		send('lock', { type: 'lockNavigation', destination, navigationPowerId: powerId });
 	}
 
 	// Navigation timeout is enforced SERVER-side (the SSE poll's deadline enforcement
@@ -1148,6 +1161,31 @@
 		};
 	});
 </script>
+
+{#if pendingPowerDestination}
+	<div class="navigation-power-overlay" role="dialog" aria-modal="true" aria-label="Choose a Navigation Power">
+		<div class="navigation-power-card">
+			<div class="navigation-power-heading">
+				<div>
+					<span class="eyebrow">{pendingPowerDestination}</span>
+					<h2>Choose a Navigation Power</h2>
+				</div>
+				<button type="button" class="ghost-btn" onclick={() => (pendingPowerDestination = null)}>Cancel</button>
+			</div>
+			<p class="navigation-power-copy">Commit one consumable power with this destination, or continue without one.</p>
+			<div class="navigation-power-list">
+				<button type="button" class="navigation-power-option navigation-power-none" onclick={() => commitNavigationPower(null)}>
+					<strong>No Power</strong><span>Lock this destination without a power.</span>
+				</button>
+				{#each NAVIGATION_POWERS as power (power.id)}
+					<button type="button" class="navigation-power-option" onclick={() => commitNavigationPower(power.id)}>
+						<strong>{power.name}</strong><span>{power.text}</span>
+					</button>
+				{/each}
+			</div>
+		</div>
+	</div>
+{/if}
 
 <svelte:window onkeydown={onSplatFlyKey} />
 
@@ -1599,6 +1637,77 @@
 </div>
 
 <style>
+	.navigation-power-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 80;
+		display: grid;
+		place-items: center;
+		padding: 24px;
+		background: rgba(4, 3, 12, 0.78);
+		backdrop-filter: blur(12px);
+	}
+	.navigation-power-card {
+		width: min(680px, 100%);
+		max-height: min(760px, 90vh);
+		overflow: auto;
+		padding: 24px;
+		border: 1px solid rgba(255, 255, 255, 0.16);
+		border-radius: 20px;
+		background: linear-gradient(145deg, rgba(25, 22, 48, 0.98), rgba(11, 10, 26, 0.98));
+		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+	}
+	.navigation-power-heading {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+	.navigation-power-heading h2 {
+		margin: 4px 0 0;
+		font-size: 1.35rem;
+	}
+	.navigation-power-copy {
+		margin: 10px 0 18px;
+		color: rgba(255, 255, 255, 0.7);
+		font-size: 0.88rem;
+	}
+	.eyebrow {
+		font-size: 0.7rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--brand-cyan, #5cdfff);
+	}
+	.navigation-power-list {
+		display: grid;
+		gap: 8px;
+	}
+	.navigation-power-option {
+		display: grid;
+		gap: 4px;
+		padding: 12px 14px;
+		border: 1px solid rgba(255, 255, 255, 0.11);
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.045);
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+	.navigation-power-option:hover,
+	.navigation-power-option:focus-visible {
+		border-color: rgba(92, 223, 255, 0.65);
+		background: rgba(92, 223, 255, 0.12);
+		outline: none;
+	}
+	.navigation-power-option span {
+		color: rgba(255, 255, 255, 0.7);
+		font-size: 0.8rem;
+		line-height: 1.35;
+	}
+	.navigation-power-none {
+		border-color: rgba(255, 255, 255, 0.2);
+		background: rgba(255, 255, 255, 0.08);
+	}
 	.tft {
 		position: absolute;
 		inset: 0;
