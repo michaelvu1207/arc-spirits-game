@@ -379,7 +379,7 @@ test.describe('M0 gate — two-browser WS game', () => {
 		console.log('[ws] pages settled; beginning measured play');
 
 		// ── ROUND 1 ────────────────────────────────────────────────────────────────────────
-		await playNavigationRound(host, guest, 1, 'Cyber City', 'Tidal Cove', latencies, { hostObs, guestObs });
+		await playNavigationRound(host, guest, 1, 'Mountain Region', 'Water Region', latencies, { hostObs, guestObs });
 		// Location: one location-phase action (endLocationActions) from each seat, cross-measured.
 		latencies.push(await actAndMeasure('R1 host location-pass → guest', guestObs, () => passTurnUi(host)));
 		latencies.push(await actAndMeasure('R1 guest location-pass → host', hostObs, () => passTurnUi(guest)));
@@ -388,7 +388,7 @@ test.describe('M0 gate — two-browser WS game', () => {
 		console.log('[ws] reached round 2 navigation in both browsers');
 
 		// ── ROUND 2 ────────────────────────────────────────────────────────────────────────
-		await playNavigationRound(host, guest, 2, 'Floral Patch', 'Cyber City', latencies, { hostObs, guestObs });
+		await playNavigationRound(host, guest, 2, 'Forest Region', 'Mountain Region', latencies, { hostObs, guestObs });
 		latencies.push(await actAndMeasure('R2 host location-pass → guest', guestObs, () => passTurnUi(host)));
 		latencies.push(await actAndMeasure('R2 guest location-pass → host', hostObs, () => passTurnUi(guest)));
 		await passUntilNavigation([host, guest], 3);
@@ -424,7 +424,7 @@ test.describe('M0 gate — two-browser WS game', () => {
 
 		// Host acts (round 3 navigation lock) — with WS down this routes over HTTP POST. Single
 		// verified click (no re-click: clicking a locked compass tile would UNLOCK it).
-		const fbTile = host.getByTestId('location-Tidal Cove').first();
+		const fbTile = host.getByTestId('location-Water Region').first();
 		await expect(fbTile).toBeVisible({ timeout: 10_000 });
 		await fbTile.scrollIntoViewIfNeeded().catch(() => {});
 		await fbTile.dispatchEvent('click');

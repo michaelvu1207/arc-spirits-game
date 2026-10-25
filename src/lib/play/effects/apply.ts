@@ -205,8 +205,8 @@ export function applyCultivate(
 	// Intrinsic Cultivate yield (every player, no class required): gain ONE origin rune
 	// for every TWO spirit origin traits sharing that origin.
 	// Awakened and face-down spirits both count (origin is always active; only class
-	// abilities need awakening). Only the four core origins with a basic rune (Cyber
-	// City / Floral Patch / Lantern Lights / Moon Tide) produce pairs. Rune Traveler's
+	// abilities need awakening). Only the four core origins with a basic rune (Mountain
+	// Region / Forest Region / Fire Region / Water Region) produce pairs. Rune Traveler's
 	// per-turn `doubleRunes` doubles the rune yield.
 	const originTraits: Record<string, number> = {};
 	for (const spirit of player.spirits) {

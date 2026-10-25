@@ -223,7 +223,7 @@ describe('encodeV2 information safety', () => {
 		p.pendingReward = { monsterId: 'm', monsterName: 'M', rewardTrack: ['x', 'y'], chooseAmount: 2 };
 		p.pendingAwakenReward = { grants: [{ kind: 'vp', amount: 3, source: 'Test' }] };
 		p.pendingCorruptionDiscard = { count: 2, reason: 'test' };
-		p.pendingDestination = p.pendingDestination === 'Tidal Cove' ? 'Cyber City' : 'Tidal Cove';
+		p.pendingDestination = p.pendingDestination === 'Water Region' ? 'Mountain Region' : 'Water Region';
 		p.manualPrompts = [{ id: 'mp', source: 'Test', text: 'do a thing' }];
 		p.pendingDecisions = [
 			{ id: 'd1', source: 'class', kind: 'k', prompt: 'p', options: [{ id: 'a', label: 'A' }] }
@@ -259,10 +259,10 @@ describe('encodeV2 information safety', () => {
 
 		const mutated = structuredClone(state);
 		const p = mutated.players[opp]!;
-		p.pendingDestination = p.pendingDestination === 'Arcane Abyss' ? 'Floral Patch' : 'Arcane Abyss';
+		p.pendingDestination = p.pendingDestination === 'Arcane Abyss' ? 'Forest Region' : 'Arcane Abyss';
 		// Even if the legacy selectNavigationDestination path wrote the public field
 		// early, the encoder must not read it pre-reveal.
-		p.navigationDestination = 'Lantern Canyon';
+		p.navigationDestination = 'Fire Region';
 		const after = flattenObsV2(encodeEntityObsV2(mutated, viewer, catalog), catalog);
 		expect(after).toEqual(base);
 	});
@@ -289,7 +289,7 @@ describe('encodeV2 information safety', () => {
 		const base = flattenObsV2(encodeEntityObsV2(state, viewer, catalog), catalog);
 		const mutated = structuredClone(state);
 		const p = mutated.players[opp]!;
-		p.navigationDestination = p.navigationDestination === 'Arcane Abyss' ? 'Floral Patch' : 'Arcane Abyss';
+		p.navigationDestination = p.navigationDestination === 'Arcane Abyss' ? 'Forest Region' : 'Arcane Abyss';
 		const after = flattenObsV2(encodeEntityObsV2(mutated, viewer, catalog), catalog);
 		expect(after).not.toEqual(base);
 	});

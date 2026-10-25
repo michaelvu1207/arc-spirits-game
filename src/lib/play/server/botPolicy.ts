@@ -181,7 +181,7 @@ function locationInteractionsFor(catalog: PlayCatalog, destination: string): Loc
 
 /**
  * The Spirit World whose reward rows grant `action` for FREE (a `gain` row). Locations are
- * SPECIALIZED: Cultivate → Lantern Canyon, Rest → Floral Patch, Spirit World Summon → Tidal
+ * SPECIALIZED: Cultivate → Fire Region, Rest → Forest Region, Spirit World Summon → Tidal
  * Cove. Returns null if no location offers it free.
  */
 function destinationOfferingAction(
@@ -198,8 +198,8 @@ function destinationOfferingAction(
 
 /**
  * The Spirit World that SELLS a class augment for one of `classNames` (a chooseRune trade). Class
- * augments live at specific realms — Fighter/Cultivator/Spirit Animal at Tidal Cove, Elementalist
- * /Soul Weaver at Cyber City — and are a DETERMINISTIC way to push a class count PAST what the
+ * augments live at specific realms — Fighter/Cultivator/Spirit Animal at Water Region, Elementalist
+ * /Soul Weaver at Mountain Region — and are a DETERMINISTIC way to push a class count PAST what the
  * shared spirit pool yields, up to a steep breakpoint. (Unlike praying for draws, buying an augment
  * is reliable, so committing relics to it is not the luck-based force-stacking we avoid for spirits.)
  */
@@ -233,7 +233,7 @@ function hasAugmentCapacity(player: BotPlayer): boolean {
 }
 
 /**
- * Should the bot detour to Cyber City to BUY an Elementalist augment? Only when it's worth crossing
+ * Should the bot detour to Mountain Region to BUY an Elementalist augment? Only when it's worth crossing
  * a steep upgrade breakpoint it can't otherwise reach: dice are still upgradable, the Elementalist
  * count is adjacent to a big jump (3→4 lifts the Rest from 2→5 dice, 4→5 from 5→10), and it holds a
  * relic to pay AND an awakened spirit to host the augment. This is the DETERMINISTIC path past the
@@ -291,7 +291,7 @@ function teamIncomplete(player: BotPlayer, profile: BotProfile, counts: Record<s
 	return false;
 }
 
-/** The Spirit World whose reward rows grant an Arcane-Abyss summon (Cyber City: relic → abyssSummon).
+/** The Spirit World whose reward rows grant an Arcane-Abyss summon (Mountain Region: relic → abyssSummon).
  *  Deterministic access to the Abyss bag, where the arcane sources + action-economy spirits live. */
 function destinationOfferingAbyssSummon(catalog: PlayCatalog): NavigationDestination | null {
 	for (const d of SPIRIT_WORLD_ONLY as readonly NavigationDestination[]) {
@@ -367,7 +367,7 @@ function chooseBuildDestination(
 		const d = legalDest(destinationOfferingAction(catalog, 'spiritWorldSummon'));
 		if (d) return d;
 	}
-	// 1a. Fish the Arcane Abyss for a COMPRESSOR (Cyber City: relic → abyssSummon) — HIGH priority so a
+	// 1a. Fish the Arcane Abyss for a COMPRESSOR (Mountain Region: relic → abyssSummon) — HIGH priority so a
 	//     Fairy relic is reserved for it before augments. Damage-mitigation (Aquamaiden/Golem/Firekeeper
 	//     /Guardian) lets barrier survive two top-rung hits → far fewer climb restore-barrier rounds; Aegis Weaver
 	//     doubles the roll on odd barrier → one-shots the boss. These cost-7-9 spirits collapse the
@@ -377,7 +377,7 @@ function chooseBuildDestination(
 		const d = legalDest(destinationOfferingAbyssSummon(catalog));
 		if (d) return d;
 	}
-	// 1b. Detour to buy an Elementalist augment (Cyber City) to cross a steep upgrade breakpoint the
+	// 1b. Detour to buy an Elementalist augment (Mountain Region) to cross a steep upgrade breakpoint the
 	//     spirit pool can't reach — turns the basic→exalted Rest grind into 1–2 Rests. Deterministic,
 	//     so worth a relic + a round, unlike fishing draws for a 4th/5th Elementalist spirit.
 	if (wantsElementalistAugment(player, profile)) {
@@ -1354,7 +1354,7 @@ function hasSustain(player: BotPlayer): boolean {
  * Can the bot restore barrier the SAFE way via the location economy instead of corrupting?
  * The restore barrier path is: Cultivate → origin runes → a rune trade that restores barrier
  * (every location's rune→relic row restores barrier), or a held relic → restore barrier at
- * Floral Patch. True if it holds a relic, holds an origin rune, or has ≥2 same-origin spirits
+ * Forest Region. True if it holds a relic, holds an origin rune, or has ≥2 same-origin spirits
  * to Cultivate runes from.
  */
 function canRestoreBarrierViaEconomy(player: BotPlayer): boolean {
@@ -1950,7 +1950,7 @@ export function planMediumPhaseActions(
 				break;
 			}
 			// Build at a SPECIALIZED Spirit World — each location offers exactly one build action
-			// (Cultivate @ Lantern Canyon, Rest @ Floral Patch, Summon @ Tidal Cove), and you visit
+			// (Cultivate @ Fire Region, Rest @ Forest Region, Summon @ Water Region), and you visit
 			// only ONE per round. Pick the action the build needs most right now.
 			const buildDest = chooseBuildDestination(working, seat, catalog, profile, rng);
 			if (buildDest) tryEmit({ type: 'lockNavigation', destination: buildDest });
@@ -2735,7 +2735,7 @@ export function planBotPhaseActions(
 				// affordable row (default 'or' choice), then summon/discard any spirits a
 				// summon gain drew so the seat can still become ready and pass.
 				const locEntry = (catalog.locations ?? []).find((l) => l.name === destination);
-				const interactions = buildLocationInteractions(locEntry?.rewardRows);
+				const interactions = buildLocationInteractions(locEntry?.rewardRows, destination);
 				if (interactions.length > 0 && rng.chance()) {
 					const affordable = interactions.filter(
 						(it) =>

@@ -58,7 +58,7 @@ const RUN = process.env.PVPPIVOTCURRICULUM === '1';
 const MAX_TICKS = 80_000;
 const MAX_ACTIONS_PER_PHASE = 30;
 const TARGET_CLASSES = ['Cursed Spirit', 'Sharpshooter'] as const;
-const HUNT_DESTINATIONS: NavigationDestination[] = ['Floral Patch', 'Cyber City', 'Tidal Cove', 'Lantern Canyon'];
+const HUNT_DESTINATIONS: NavigationDestination[] = ['Forest Region', 'Mountain Region', 'Water Region', 'Fire Region'];
 
 type TeacherKind =
 	| 'pvp-class'
@@ -374,12 +374,12 @@ function predictedHuntDestinations(
 			const maxBarrier = target.maxBarrier ?? 0;
 			const attackDice = target.attackDice?.length ?? 0;
 
-			if (survivalTarget > 0 && barrier < Math.min(maxBarrier, survivalTarget)) destinations.push('Floral Patch');
-			if (barrier < maxBarrier - 1) destinations.push('Floral Patch');
-			if (survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2) destinations.push('Lantern Canyon');
-			if (attackDice < 2 || target.spirits.length < 5 || (hp > 0 && targetAttack < hp)) destinations.push('Tidal Cove');
-			if ((target.mats ?? []).some((r) => r.hasRune && r.type === 'relic')) destinations.push('Cyber City');
-			if (destinations.length === 0 && (target.victoryPoints ?? 0) >= cfg.pivotMinVp) destinations.push('Floral Patch');
+			if (survivalTarget > 0 && barrier < Math.min(maxBarrier, survivalTarget)) destinations.push('Forest Region');
+			if (barrier < maxBarrier - 1) destinations.push('Forest Region');
+			if (survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2) destinations.push('Fire Region');
+			if (attackDice < 2 || target.spirits.length < 5 || (hp > 0 && targetAttack < hp)) destinations.push('Water Region');
+			if ((target.mats ?? []).some((r) => r.hasRune && r.type === 'relic')) destinations.push('Mountain Region');
+			if (destinations.length === 0 && (target.victoryPoints ?? 0) >= cfg.pivotMinVp) destinations.push('Forest Region');
 			if (destinations.length === 0) return null;
 			return {
 				vp: target.victoryPoints ?? 0,
@@ -505,10 +505,10 @@ function chooseBuildNav(
 	if (!needsBarrier && !needsCore && !needsDamage && !needsSafeFarm && state.round < cfg.pivotMinRound) return null;
 
 	const priorities: NavigationDestination[] = [];
-	if (needsBarrier || needsSafeFarm) priorities.push('Floral Patch', 'Lantern Canyon');
-	if (needsCore) priorities.push('Tidal Cove', 'Lantern Canyon', 'Cyber City');
-	if (needsDamage) priorities.push('Cyber City', 'Tidal Cove', 'Lantern Canyon');
-	priorities.push('Lantern Canyon', 'Tidal Cove', 'Cyber City', 'Floral Patch');
+	if (needsBarrier || needsSafeFarm) priorities.push('Forest Region', 'Fire Region');
+	if (needsCore) priorities.push('Water Region', 'Fire Region', 'Mountain Region');
+	if (needsDamage) priorities.push('Mountain Region', 'Water Region', 'Fire Region');
+	priorities.push('Fire Region', 'Water Region', 'Mountain Region', 'Forest Region');
 
 	const deduped = priorities.filter((destination, index) => priorities.indexOf(destination) === index);
 	const idx = chooseNavDestination(withNext, deduped);

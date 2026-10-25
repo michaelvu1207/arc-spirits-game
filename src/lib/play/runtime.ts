@@ -1,3 +1,4 @@
+import { regionText } from './regions';
 import { currentClassCounts, currentClassName } from './classNames';
 import {
 	isNavigationPowerId,
@@ -1196,6 +1197,9 @@ export function applyGameCommand(
 		? ensureStateShape(currentState)
 		: ensureStateShape(cloneState(currentState));
 
+	if ('destination' in command && typeof command.destination === 'string') {
+		command = { ...command, destination: regionText(command.destination) } as GameCommand;
+	}
 	const result = reduceCommand(state, actor, command, catalog);
 	// Whenever a command resolves the last piece of a seat's resolution-phase work
 	// (claimed the benefits grant, awakened the last eligible spirit, trimmed the last
@@ -1255,6 +1259,13 @@ function reduceCommand(
 			const choices = a.player.pendingPowerDrafts?.[0];
 			if (!choices?.includes(command.powerId))
 				return failure('power_not_offered', 'Choose one of the revealed powers.');
+			if (a.player.pendingPowerReplacement) {
+				const oldIndex = a.player.powerInventory?.indexOf(command.replacePowerId!) ?? -1;
+				if (oldIndex < 0 || command.replacePowerId === command.powerId)
+					return failure('power_replacement_required', 'Choose a held Power to replace.');
+				a.player.powerInventory!.splice(oldIndex, 1);
+				a.player.pendingPowerReplacement = false;
+			}
 			(a.player.powerInventory ??= []).push(command.powerId);
 			a.player.pendingPowerDrafts!.shift();
 			a.player.phaseReady = false;
@@ -1262,26 +1273,14 @@ function reduceCommand(
 		}
 		case 'acquireNavigationPower': {
 			const a = activePlayerForActor(state, actor);
-			if (
-				state.status !== 'active' ||
-				state.phase !== 'location' ||
-				!a ||
-				a.player.phaseReady ||
-				a.player.navigationDestination === 'Arcane Abyss'
-			)
-				return failure('wrong_phase', 'Gain powers at a Spirit World location.');
-			if (a.player.actionsUsedThisRound.includes('gain-power'))
-				return failure('action_used', 'You already gained a power here this round.');
-			if (a.player.pendingPowerDrafts?.length)
-				return failure('power_pending', 'Choose your revealed power first.');
-			const rune = a.player.mats.find(
-				(m) => m.slotIndex === command.runeSlot && isNavigationPowerRune(m)
-			);
-			if (!rune) return failure('rune_missing', 'Pay one Origin Rune.');
-			rune.hasRune = false;
-			a.player.actionsUsedThisRound.push('gain-power');
-			a.player.pendingPowerDrafts = [drawPowerChoices(state)];
-			return success(state);
+			if (!a || state.phase !== 'location') return failure('wrong_phase', 'Trade for Powers at a region.');
+			const runeIndex = a.player.mats.findIndex(m => m.slotIndex === command.runeSlot && isNavigationPowerRune(m));
+			if (runeIndex < 0) return failure('rune_missing', 'Pay one Origin Rune.');
+			const destination = a.player.navigationDestination;
+			const loc = catalog.locations?.find(l => l.name === destination);
+			const row = buildLocationInteractions(loc?.rewardRows, destination ?? undefined).find(i => i.gains.some(g => g.type === 'navigationPower'));
+			if (!row) return failure('no_interaction', 'This region has no Power trade.');
+			return reduceCommand(state, actor, { type: 'resolveLocationInteraction', rowIndex: row.rowIndex, costChoices: [runeIndex] }, catalog);
 		}
 		case 'resolveNavigationPower': {
 			const a = activePlayerForActor(state, actor);
@@ -2764,6 +2763,7 @@ function reduceCommand(
 			const active = activePlayerForActor(state, actor);
 			if (!active) return failure('seat_required', 'Only seated players can act at a location.');
 			const player = active.player;
+			if (player.phaseReady || player.pendingPowerDrafts?.length) return failure('power_pending', 'Finish your Power choice first.');
 			if (player.pendingDraw || player.handDraws.length > 0) {
 				return failure('draw_pending', 'Resolve your drawn spirits first.');
 			}
@@ -2774,10 +2774,14 @@ function reduceCommand(
 			// Any rows the data DOES assign to a location resolve here like any other.
 
 			const locEntry = (catalog.locations ?? []).find((l) => l.name === destination);
-			const interactions = buildLocationInteractions(locEntry?.rewardRows);
+			const interactions = buildLocationInteractions(locEntry?.rewardRows, destination);
 			const interaction = interactions.find((i) => i.rowIndex === command.rowIndex);
 			if (!interaction) {
 				return failure('no_interaction', 'That location has no such interaction.');
+			}
+
+			if (interaction.gains.some(g => g.type === 'navigationPower' && g.replace) && !player.powerInventory?.length) {
+				return failure('power_missing', 'You need a held Power to replace.');
 			}
 
 			// Gain rows are normally once per round. Wayfarer ("do ALL location interactions
@@ -2834,6 +2838,13 @@ function reduceCommand(
 			let restTokens = 0;
 			for (const gain of interaction.gains) {
 				switch (gain.type) {
+					case 'navigationPower': {
+						player.pendingPowerDrafts = [drawPowerChoices(state, gain.replace ? player.powerInventory : [])];
+						player.pendingPowerReplacement = gain.replace;
+						player.actionsUsedThisRound.push('gain-power');
+						log.push(gain.replace ? 'Choose a held Power to replace, then choose its replacement.' : 'Reveal 3 Powers and choose 1.');
+						break;
+					}
 					case 'action': {
 						if (gain.action === 'spiritWorldSummon') {
 							queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG);
@@ -3240,6 +3251,7 @@ export function buildSessionProjection(
 			pendingNavigationPower: isOwner ? player.pendingNavigationPower : null,
 			powerInventory: isOwner ? player.powerInventory : [],
 			pendingPowerDrafts: isOwner ? player.pendingPowerDrafts : [],
+			pendingPowerReplacement: isOwner ? player.pendingPowerReplacement : false,
 			navigationPowerOffers: isOwner ? player.navigationPowerOffers : [],
 			pendingNavigationTrade: isOwner ? player.pendingNavigationTrade : null,
 			manualPrompts: isOwner ? player.manualPrompts : [],
@@ -3332,8 +3344,9 @@ export function buildHistorySnapshotRows(
 }
 
 /** Three distinct seeded offers; neither the deck nor another player's hand is public. */
-function drawPowerChoices(state: PublicGameState): NavigationPowerId[] {
-	const pool = NAVIGATION_POWERS.map((p) => p.id);
+function drawPowerChoices(state: PublicGameState, exclude: NavigationPowerId[] = []): NavigationPowerId[] {
+	const remaining = NAVIGATION_POWERS.map((p) => p.id).filter(id => !exclude.includes(id));
+	const pool = remaining.length >= 3 ? remaining : NAVIGATION_POWERS.map(p => p.id);
 	const choices: NavigationPowerId[] = [];
 	for (let n = 0; n < 3; n++) choices.push(pool.splice(nextInt(state.rng, pool.length), 1)[0]);
 	return choices;

@@ -98,9 +98,9 @@ async function driveWebToPostgame(page: Page, coord: string): Promise<TraceStep[
 
 		let action = '';
 		if (projection.phase === 'navigation') {
-			const target = page.getByTestId('location-Floral Patch');
+			const target = page.getByTestId('location-Forest Region');
 			if (await target.isVisible().catch(() => false) && await target.isEnabled().catch(() => false)) {
-				action = 'lockNavigation:Floral Patch';
+				action = 'lockNavigation:Forest Region';
 				await target.dispatchEvent('click');
 			}
 		} else {

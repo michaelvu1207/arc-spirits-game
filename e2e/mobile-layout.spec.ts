@@ -284,7 +284,7 @@ async function drainResolutionPhases(pages: Page[]): Promise<void> {
 }
 
 async function finishGameWithHostVp(host: Page, guest: Page): Promise<void> {
-	await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+	await enterLocationPhase(host, guest, 'Forest Region', 'Mountain Region');
 	// Grant the winning VP BEFORE the round wraps: seats with no resolution work are
 	// auto-readied by the engine, so the benefits→awakening→cleanup sequence may
 	// collapse the moment both seats end their location actions.
@@ -306,7 +306,7 @@ async function finishGameWithHostVp(host: Page, guest: Page): Promise<void> {
 }
 
 async function enterCleanupPhase(host: Page, guest: Page): Promise<void> {
-	await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+	await enterLocationPhase(host, guest, 'Forest Region', 'Mountain Region');
 	// Overflow the host's runes BEFORE the round wraps — cleanup only stops for seats
 	// with housekeeping to do, and a no-work cleanup is now skipped entirely.
 	for (let i = 0; i < 6; i += 1) {
@@ -382,11 +382,11 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 			{ allowInstructionOverlap: ['leaderboard', 'rune-slots'] }
 		);
 
-		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Floral Patch' });
+		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Forest Region' });
 		await refreshRoomPage(host);
 		await expectMobileLayoutClear(host, 'confirmed destination', ['confirm-circle']);
 
-		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Cyber City' });
+		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Mountain Region' });
 		await refreshRoomPage(host);
 		await forceUntilPhase(host, 'location');
 		await expectMobileLayoutClear(
@@ -464,8 +464,8 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 		await setupTwoPlayerGame(host, guest);
 		await refreshRoomPage(host);
 		await makeHostEvilWithoutPendingDiscard(host);
-		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Floral Patch' });
-		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Floral Patch' });
+		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Forest Region' });
+		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Forest Region' });
 		await refreshRoomPage(host);
 		await forceUntilPhase(host, 'encounter');
 
@@ -524,8 +524,8 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 
 	test('destination reveal and postgame overlays stay inside the viewport', async () => {
 		const { code } = await setupTwoPlayerGame(host, guest);
-		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Floral Patch' });
-		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Cyber City' });
+		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Forest Region' });
+		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Mountain Region' });
 		await runRoomCommand(host, { type: 'forceAdvancePhase' });
 		await host.goto(`/play/${code}?e2e=1&showDestinationReveal=1`, {
 			waitUntil: 'domcontentloaded'
@@ -560,7 +560,7 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 			type: 'debugGrant',
 			grant: { kind: 'spirit', spiritId: ABYSS_SUMMONER_SPIRIT_ID, faceDown: false }
 		});
-		await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+		await enterLocationPhase(host, guest, 'Forest Region', 'Mountain Region');
 
 		await expectMobileLayoutClear(host, 'ability decision cards', ['decision-cards']);
 	});
@@ -580,7 +580,7 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 			type: 'debugGrant',
 			grant: { kind: 'attackDice', tier: 'basic', amount: 1 }
 		});
-		await enterLocationPhase(host, guest, 'Floral Patch');
+		await enterLocationPhase(host, guest, 'Forest Region');
 
 		await expectMobileLayoutClear(host, 'infiltrator action entry', [
 			'infiltrator-open',
@@ -596,14 +596,14 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 	test('summon and resolved interaction panels stay clear', async () => {
 		await setupTwoPlayerGame(host, guest);
 		await refreshRoomPage(host);
-		await enterLocationPhase(host, guest, 'Tidal Cove');
+		await enterLocationPhase(host, guest, 'Water Region');
 
 		await host.getByTestId('interaction-0').click({ force: true });
 		await expectMobileLayoutClear(host, 'summon draw tray', ['draw-tray']);
 
 		await setupTwoPlayerGame(host, guest);
 		await refreshRoomPage(host);
-		await enterLocationPhase(host, guest, 'Floral Patch');
+		await enterLocationPhase(host, guest, 'Forest Region');
 		await host.getByTestId('interaction-0').click({ force: true });
 		await expectMobileLayoutClear(host, 'resolved location interaction card', [
 			'interaction-grid',
@@ -618,7 +618,7 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 			type: 'debugGrant',
 			grant: { kind: 'augment', amount: 2 }
 		});
-		await enterLocationPhase(host, guest, 'Floral Patch');
+		await enterLocationPhase(host, guest, 'Forest Region');
 		await expectMobileLayoutClear(host, 'augment placement', [
 			'augment-placement',
 			'augment-icons'
@@ -626,7 +626,7 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 
 		await setupTwoPlayerGame(host, guest);
 		await refreshRoomPage(host);
-		await enterLocationPhase(host, guest, 'Floral Patch');
+		await enterLocationPhase(host, guest, 'Forest Region');
 		await runRoomCommand(host, { type: 'adjustStatus', amount: 1 });
 		await refreshRoomPage(host);
 		await expectMobileLayoutClear(host, 'corruption discard', [

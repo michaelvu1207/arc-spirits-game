@@ -86,11 +86,11 @@ const FULL_CLASS_FEATURES = [
 ] as const;
 const FULL_ORIGIN_FEATURES = [
 	'Astral Zone',
-	'Cyber City',
-	'Floral Patch',
+	'Mountain Region',
+	'Forest Region',
 	'Human Enclave',
-	'Lantern Lights',
-	'Moon Tide',
+	'Fire Region',
+	'Water Region',
 	'Royal Family',
 	'Void'
 ] as const;
@@ -394,7 +394,7 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 
 	// ── Own-location block (obs v1.2): WHICH destination am I currently resolving? ──
 	// encodeObs previously carried NO own-location feature, so a resolveLocationInteraction
-	// row looked identical whether it belonged to Cyber City or the Arcane Abyss — the net
+	// row looked identical whether it belonged to Mountain Region or the Arcane Abyss — the net
 	// could not tell which location's interaction it was scoring (e.g. the Abyss Summon vs an
 	// ordinary market row). This mirrors the lockNavigation destination one-hot in encodeAction.
 	// Append-only per the header rule.
@@ -587,10 +587,10 @@ const ACTION_EXTENSION_SLOTS = 32;
 export const MONSTER_REWARD_SEMANTIC_SLOTS = 20;
 // Stable rules identities. Never derive this ordering from catalog/track serialization.
 const REWARD_ORIGIN_RUNE_IDS = [
-	'356f3ad2-4cac-4b69-a3cc-7559f8891d8e', // Cyber City
-	'34b2a963-f8c6-4fc0-8272-ddc50b0036a8', // Forest / Floral Patch
-	'480cd5f7-adea-481d-8ea9-aad776599d7b', // Lantern Lights
-	'5eba8681-16b8-4563-b017-22c80a84b35b' // Tidal Tribe / Moon Tide
+	'356f3ad2-4cac-4b69-a3cc-7559f8891d8e', // Mountain Region
+	'34b2a963-f8c6-4fc0-8272-ddc50b0036a8', // Forest / Forest Region
+	'480cd5f7-adea-481d-8ea9-aad776599d7b', // Fire Region
+	'5eba8681-16b8-4563-b017-22c80a84b35b' // Water Region / Water Region
 ] as const;
 const REWARD_RELIC_IDS = [
 	'e02af831-e599-4676-9e37-820d19bfc3e1', // Fairy

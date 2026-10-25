@@ -616,10 +616,10 @@ export function recordCultivateAwakenProgress(
 	}
 	const uniqueAt = (origin: string) =>
 		new Set(player.spirits.filter((s) => (s.origins?.[origin] ?? 0) > 0).map((s) => s.id ?? s.name)).size;
-	if (holds(IDS.floralFairy) && uniqueAt('Floral Patch') >= 4)
+	if (holds(IDS.floralFairy) && uniqueAt('Forest Region') >= 4)
 		player.awakenProgress[KEYS.floralFairy] = true;
-	if (holds(IDS.lanternFairy) && uniqueAt('Lantern Lights') >= 4)
+	if (holds(IDS.lanternFairy) && uniqueAt('Fire Region') >= 4)
 		player.awakenProgress[KEYS.lanternFairy] = true;
-	if (holds(IDS.tidalFairy) && uniqueAt('Moon Tide') >= 4)
+	if (holds(IDS.tidalFairy) && uniqueAt('Water Region') >= 4)
 		player.awakenProgress[KEYS.tidalFairy] = true;
 }

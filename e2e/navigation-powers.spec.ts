@@ -15,7 +15,7 @@ type View = {
 };
 const view = async (page: Page) => (await getRoomView(page)) as unknown as View;
 const catalog = JSON.parse(readFileSync(new URL('../ml/catalog.json', import.meta.url), 'utf8'));
-const runeId = catalog.mats.find((item: any) => item.name === 'Cyber City')?.id;
+const runeId = catalog.mats.find((item: any) => item.name === 'Mountain Region')?.id;
 const regularSpirit = catalog.spirits.find((spirit: any) => spirit.cost >= 2 && spirit.cost <= 5);
 const arcaneSpirit = catalog.spirits.find((spirit: any) => spirit.cost >= 7);
 const augmentClass = catalog.classes.find((entry: any) => entry.name === 'Fighter');
@@ -156,11 +156,11 @@ test('all 22 consumables can be selected, resolved, and followed by a completed 
 				});
 			}
 			const destination = ['cinder-awakening', 'fires-rhythm'].includes(power.id)
-				? 'Lantern Canyon'
+				? 'Fire Region'
 				: ['forest-bounty', 'forests-rhythm'].includes(power.id)
-					? 'Floral Patch'
+					? 'Forest Region'
 					: power.id === 'tidal-arsenal'
-						? 'Tidal Cove'
+						? 'Water Region'
 						: [
 									'abyssal-execution',
 									'battle-fury',
@@ -169,7 +169,7 @@ test('all 22 consumables can be selected, resolved, and followed by a completed 
 									'duelists-prize'
 							  ].includes(power.id)
 							? 'Arcane Abyss'
-							: 'Cyber City';
+							: 'Mountain Region';
 			await host.reload();
 			await expect(host.getByTestId(`location-${destination}`)).toBeVisible();
 			await host.getByTestId(`location-${destination}`).dispatchEvent('click');
@@ -217,8 +217,8 @@ test('all 22 consumables can be selected, resolved, and followed by a completed 
 		}
 		expect(problems).toEqual([]);
 		// The same UI also acquires powers through the real one-Rune purchase.
-		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Cyber City' });
-		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Tidal Cove' });
+		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Mountain Region' });
+		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Water Region' });
 		await runRoomCommand(host, { type: 'forceAdvancePhase' });
 		await host.reload();
 		const inventoryBeforePurchase = (await view(host)).projection.players.Red.powerInventory.length;

@@ -63,7 +63,7 @@
 		return runeIconUrl(assets, slot);
 	}
 
-	const interactions = $derived(buildLocationInteractions(location?.reward_rows));
+	const interactions = $derived(buildLocationInteractions(location?.reward_rows, location?.name));
 	const usedRows = $derived(player?.actionsUsedThisRound ?? []);
 	// Per-row use allowance: 1 + Wayfarer's locationInteraction credit ("you may
 	// do ALL location interactions up to two times"). When >1 we render one card per
@@ -88,7 +88,7 @@
 	// Icon sizing: a consistent set size for every icon, larger when an icon stands
 	// alone, and much larger for game-action tokens (Summon / Cultivate / Rest).
 	function iconSize(token: string, soloRow: boolean): 'act' | 'solo' | 'base' {
-		if (meaningFor(token)?.kind === 'action') return 'act';
+		if (['action', 'navigationPower'].includes(meaningFor(token)?.kind ?? '')) return 'act';
 		return soloRow ? 'solo' : 'base';
 	}
 
@@ -115,7 +115,7 @@
 	function affordable(interaction: LocationInteraction): boolean {
 		const aff = rowAffordances.get(interaction.rowIndex);
 		if (aff) return aff.affordable;
-		return canAfford(interaction, player?.mats ?? []);
+		return canAfford(interaction, player?.mats ?? []) && (!interaction.gains.some(g => g.type === 'navigationPower' && g.replace) || !!player?.powerInventory?.length);
 	}
 	function noEffectNow(interaction: LocationInteraction): boolean {
 		return rowAffordances.get(interaction.rowIndex)?.noEffectNow ?? false;
@@ -368,6 +368,7 @@
 	});
 	function gainSummary(interaction: LocationInteraction): string {
 		const parts = interaction.gains.map((g) => {
+			if (g.type === 'navigationPower') return g.replace ? 'Replace a Power' : 'Gain a Power';
 			if (g.type === 'rune') return g.rune.name;
 			if (g.type === 'restoreBarrier') return 'Restore Barrier';
 			if (g.type === 'vp') return `${g.amount} VP`;

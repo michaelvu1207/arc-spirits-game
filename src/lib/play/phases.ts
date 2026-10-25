@@ -629,6 +629,12 @@ export function forceAdvancePhase(state: PublicGameState, catalog?: PlayCatalog)
 					}
 				} else if (cmd?.type === 'chooseNavigationPower') {
 					const p = state.players[seat]!;
+					if (p.pendingPowerReplacement && cmd.replacePowerId) {
+						const index = p.powerInventory?.indexOf(cmd.replacePowerId) ?? -1;
+						if (index < 0) continue;
+						p.powerInventory!.splice(index, 1);
+						p.pendingPowerReplacement = false;
+					}
 					(p.powerInventory ??= []).push(cmd.powerId);
 					p.pendingPowerDrafts!.shift();
 					progressed = true;

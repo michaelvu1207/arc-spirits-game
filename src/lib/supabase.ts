@@ -1,3 +1,5 @@
+import { regionRewardRows } from './play/regionRules';
+import { normalizeRegionContent, REGION_ORIGIN_NAMES } from './play/regions';
 /**
  * Supabase client for Arc Spirits Spectate app
  * Configured with realtime support for live game updates
@@ -232,7 +234,7 @@ export function unsubscribeAll(): void {
 // ============ Game Snapshot Functions ============
 
 export function unwrapGameSnapshotRow(row: GameSnapshotRow): GameSnapshot {
-	return {
+	return normalizeRegionContent({
 		id: row.id,
 		game_id: row.game_id,
 		navigation_count: row.navigation_count,
@@ -259,7 +261,7 @@ export function unwrapGameSnapshotRow(row: GameSnapshotRow): GameSnapshot {
 		dice: parseJsonColumn<PlayerDiceEntry[]>(row.dice, []),
 		created_at: row.created_at,
 		updated_at: row.updated_at
-	};
+	});
 }
 
 export async function fetchGameSnapshotsForRound(
@@ -1084,10 +1086,10 @@ export async function fetchAssetsData(): Promise<AssetsData> {
 	}
 	const gameLocations = rawLocations.map((loc) => ({
 		...loc,
-		reward_rows: rewardRowsByLocation.get(loc.id) ?? []
+		reward_rows: regionRewardRows(loc.name, rewardRowsByLocation.get(loc.id) ?? [])
 	}));
 
-	return {
+	return normalizeRegionContent({
 		spirits: (spiritsResult.data as HexSpiritAsset[]) ?? [],
 		mats: (matsResult.data as MatAsset[]) ?? [],
 		customDice: (((customDiceResult.data as Omit<CustomDiceAsset, 'sides'>[]) ?? []).map((die) => ({
@@ -1100,9 +1102,9 @@ export async function fetchAssetsData(): Promise<AssetsData> {
 		gameLocations,
 		guardians: (guardiansResult.data as GuardianAsset[]) ?? [],
 		classes: (classesResult.data as ClassTrait[]) ?? [],
-		origins: (originsResult.data as OriginTrait[]) ?? [],
+		origins: ((originsResult.data as OriginTrait[]) ?? []).map(origin => ({ ...origin, name: REGION_ORIGIN_NAMES[origin.id] ?? origin.name })),
 		costDuplicates: playEdition?.cost_duplicates ?? null
-	};
+	});
 }
 
 // ============ Game Notes Functions ============

@@ -150,7 +150,7 @@ test('renamed region display names preserve existing origin-based rules and repe
 		class_ids: [], origin_ids: [...assets.origins.map(o => o.id), assets.origins[3].id]
 	} })];
 	expect(buildPlayCatalog(assets).spirits[0].origins).toEqual({
-		'Floral Patch': 1, 'Cyber City': 1, 'Lantern Lights': 1, 'Moon Tide': 2
+		'Forest Region': 1, 'Mountain Region': 1, 'Fire Region': 1, 'Water Region': 2
 	});
 	expect(assets.origins.map(o => o.name)).toEqual(['Forest', 'Mountain', 'Fire', 'Water']);
 });

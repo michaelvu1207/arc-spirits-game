@@ -1,3 +1,5 @@
+import { REGION_ORIGIN_NAMES } from '../src/lib/play/regions';
+import { regionCatalog } from '../src/lib/play/regionRules';
 /**
  * PlayCatalog loader for the room server.
  *
@@ -120,7 +122,7 @@ export async function loadCatalog(): Promise<PlayCatalog> {
 	const fileOverride = process.env.ARC_WS_CATALOG_FILE;
 	if (fileOverride) {
 		const { readFileSync } = await import('node:fs');
-		cached = JSON.parse(readFileSync(fileOverride, 'utf8')) as PlayCatalog;
+		cached = regionCatalog(JSON.parse(readFileSync(fileOverride, 'utf8')) as PlayCatalog);
 		cachedAt = now;
 		return cached;
 	}
@@ -218,7 +220,7 @@ export async function loadCatalog(): Promise<PlayCatalog> {
 
 	// ── Pure transform: faithful port of buildPlayCatalog (src/lib/play/server/catalog.ts) ──
 	const classNames = new Map(classes.map((c) => [c.id, c.name]));
-	const originNames = new Map(origins.map((o) => [o.id, o.name]));
+	const originNames = new Map(origins.map((o) => [o.id, REGION_ORIGIN_NAMES[o.id] ?? o.name]));
 	const runesById = new Map<string, AwakenRuneInfo>(
 		mats.map((mat) => [mat.id, { name: mat.name, kind: matKind(mat) }])
 	);
@@ -288,7 +290,7 @@ export async function loadCatalog(): Promise<PlayCatalog> {
 		costDuplicates: playEdition?.cost_duplicates ?? null
 	};
 
-	cached = catalog;
+	cached = regionCatalog(catalog);
 	cachedAt = now;
-	return catalog;
+	return cached;
 }

@@ -213,8 +213,8 @@ const GOOD_BUILDER_HP4_CONVERSION_OVERLAY_MIN_ROUND = envInt(
 );
 const GOOD_BUILDER_HP4_CONVERSION_OVERLAY_DESTINATIONS = new Set<NavigationDestination>([
 	'Arcane Abyss',
-	'Lantern Canyon',
-	'Floral Patch'
+	'Fire Region',
+	'Forest Region'
 ]);
 
 function routeHandDrawBuildScore(
@@ -994,10 +994,10 @@ function goodBuilderActionScore(
 			score += 120;
 		if (interaction?.gains.some((gain) => gain.type === 'action' && gain.action === 'cultivate'))
 			score += 70;
-		if (destination === 'Tidal Cove') score += 85;
-		if (destination === 'Floral Patch') score += 55;
-		if (destination === 'Lantern Canyon') score += 45;
-		if (destination === 'Cyber City') score += 45;
+		if (destination === 'Water Region') score += 85;
+		if (destination === 'Forest Region') score += 55;
+		if (destination === 'Fire Region') score += 45;
+		if (destination === 'Mountain Region') score += 45;
 	}
 	if (action.cmd.type === 'spawnHandSpirit') {
 		const guid = (action.cmd as Extract<GameCommand, { type: 'spawnHandSpirit' }>).guid;
@@ -1451,7 +1451,7 @@ function goodBuilderOracleDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player) return ['Tidal Cove', 'Floral Patch', 'Lantern Canyon', 'Cyber City'];
+	if (!player) return ['Water Region', 'Forest Region', 'Fire Region', 'Mountain Region'];
 	const destinations: NavigationDestination[] = [];
 	const append = (destination: NavigationDestination): void =>
 		appendUniqueDestination(destinations, destination);
@@ -1493,21 +1493,21 @@ function goodBuilderOracleDestinations(
 	if (farm.valid && farm.farmable && farm.opportunityVp >= (vp < 18 ? 2 : 1))
 		return ['Arcane Abyss'];
 	if (cleanFarmReady && (vp < 24 || farm.livesRemaining >= 1)) return ['Arcane Abyss'];
-	if (hasWorldGuardianFinish || hasHealerRestVp) return ['Floral Patch'];
-	if (needsRestore) return ['Floral Patch', 'Lantern Canyon'];
+	if (hasWorldGuardianFinish || hasHealerRestVp) return ['Forest Region'];
+	if (needsRestore) return ['Forest Region', 'Fire Region'];
 	if (wantsTeam || damageShort || (player.attackDice?.length ?? 0) < 2) {
-		append('Tidal Cove');
-		if (hasRelic && state.round >= 4) append('Cyber City');
+		append('Water Region');
+		if (hasRelic && state.round >= 4) append('Mountain Region');
 		return destinations;
 	}
 	if (needsMaxBarrier || ((player.maxBarrier ?? 0) < 7 && (counts.Cultivator ?? 0) >= 3))
-		return ['Lantern Canyon'];
+		return ['Fire Region'];
 	if (farm.valid && farm.opportunityVp > 0) return ['Arcane Abyss'];
-	if (hasRelic && vp >= 12) append('Cyber City');
-	append('Tidal Cove');
-	append('Floral Patch');
-	append('Cyber City');
-	append('Lantern Canyon');
+	if (hasRelic && vp >= 12) append('Mountain Region');
+	append('Water Region');
+	append('Forest Region');
+	append('Mountain Region');
+	append('Fire Region');
 	return destinations;
 }
 
@@ -1533,17 +1533,17 @@ function goodBuilderFarmerOracleDestinations(
 	const nearDamage =
 		monsterHp <= 0 || attack >= monsterHp - 1.25 || firepower >= 0.2 || clean >= 0.2;
 	if (farm.valid && farm.opportunityVp > 0 && nearDamage) {
-		if (needsRestore && state.round < 29) return ['Floral Patch', 'Lantern Canyon'];
+		if (needsRestore && state.round < 29) return ['Forest Region', 'Fire Region'];
 		return ['Arcane Abyss'];
 	}
-	if (needsRestore) return ['Floral Patch', 'Lantern Canyon'];
+	if (needsRestore) return ['Forest Region', 'Fire Region'];
 	const counts = awakenedClassCounts(player);
 	if (survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2) {
-		return ['Lantern Canyon', 'Floral Patch'];
+		return ['Fire Region', 'Forest Region'];
 	}
 	const needsDamage = monsterHp > 0 && attack < monsterHp + 0.5 && firepower < threshold;
 	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || (counts['Spirit Animal'] ?? 0) < 3) {
-		return ['Tidal Cove', 'Cyber City'];
+		return ['Water Region', 'Mountain Region'];
 	}
 	return goodBuilderOracleDestinations(state, seat, catalog, threshold);
 }
@@ -1556,7 +1556,7 @@ function goodBuilderSupportOracleDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player) return ['Tidal Cove', 'Floral Patch', 'Cyber City', 'Lantern Canyon'];
+	if (!player) return ['Water Region', 'Forest Region', 'Mountain Region', 'Fire Region'];
 	const destinations: NavigationDestination[] = [];
 	const append = (destination: NavigationDestination): void =>
 		appendUniqueDestination(destinations, destination);
@@ -1575,19 +1575,19 @@ function goodBuilderSupportOracleDestinations(
 	const wantsScorer =
 		(raw['Void Sovereign'] ?? 0) <= 0 || ((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12);
 	if (hasWorldGuardianFinish || hasHealerRestVp || needsRestore)
-		return ['Floral Patch', 'Lantern Canyon'];
+		return ['Forest Region', 'Fire Region'];
 	if (farm.valid && farm.farmable && farm.opportunityVp > 0) {
 		const monsterHp = monster?.maxHp ?? monster?.hp ?? 99;
 		if (vp < 18 || farm.opportunityVp >= 2 || monsterHp <= 4) return ['Arcane Abyss'];
 	}
 	if (player.spirits.length < 7 || wantsScorer || (counts['Spirit Animal'] ?? 0) < 2)
-		append('Tidal Cove');
-	if (hasRelic && (state.round >= 4 || player.spirits.length >= 5)) append('Cyber City');
-	if ((player.maxBarrier ?? 0) < 8 && (counts.Cultivator ?? 0) >= 2) append('Lantern Canyon');
-	append('Floral Patch');
-	append('Tidal Cove');
-	append('Cyber City');
-	append('Lantern Canyon');
+		append('Water Region');
+	if (hasRelic && (state.round >= 4 || player.spirits.length >= 5)) append('Mountain Region');
+	if ((player.maxBarrier ?? 0) < 8 && (counts.Cultivator ?? 0) >= 2) append('Fire Region');
+	append('Forest Region');
+	append('Water Region');
+	append('Mountain Region');
+	append('Fire Region');
 	return destinations;
 }
 
@@ -1599,7 +1599,7 @@ function goodBuilderNoncontestSupportDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player || !monster) return ['Tidal Cove', 'Cyber City', 'Floral Patch', 'Lantern Canyon'];
+	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Forest Region', 'Fire Region'];
 	const destinations: NavigationDestination[] = [];
 	const append = (destination: NavigationDestination): void =>
 		appendUniqueDestination(destinations, destination);
@@ -1626,20 +1626,20 @@ function goodBuilderNoncontestSupportDestinations(
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
 
 	if (needsRestore) {
-		append('Floral Patch');
-		append('Lantern Canyon');
+		append('Forest Region');
+		append('Fire Region');
 	}
-	if (needsMaxBarrier) append('Lantern Canyon');
+	if (needsMaxBarrier) append('Fire Region');
 	if (needsDamage || player.spirits.length < 7 || (counts['Spirit Animal'] ?? 0) < 2) {
-		append('Tidal Cove');
-		if (hasRelic || state.round >= 4) append('Cyber City');
+		append('Water Region');
+		if (hasRelic || state.round >= 4) append('Mountain Region');
 	}
-	if (hasRelic) append('Cyber City');
-	if (wantsPassiveScorer || vp >= 18) append('Floral Patch');
-	append('Tidal Cove');
-	append('Cyber City');
-	append('Floral Patch');
-	append('Lantern Canyon');
+	if (hasRelic) append('Mountain Region');
+	if (wantsPassiveScorer || vp >= 18) append('Forest Region');
+	append('Water Region');
+	append('Mountain Region');
+	append('Forest Region');
+	append('Fire Region');
 	return destinations;
 }
 
@@ -1651,10 +1651,10 @@ function goodNonfallenFarmBuildDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player || !monster) return ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
+	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region'];
 	const status = player.statusLevel ?? 0;
 	if (isEvilAlignment(status))
-		return ['Floral Patch', 'Tidal Cove', 'Cyber City', 'Lantern Canyon'];
+		return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const clean = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
@@ -1683,13 +1683,13 @@ function goodNonfallenFarmBuildDestinations(
 	const needsDamage = monsterHp > 0 && attack < monsterHp + 0.5 && firepower < threshold;
 	const canRestoreWithLantern = (counts.Cultivator ?? 0) >= 2 || maxBarrier < survivalTarget;
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
-	if (needsDamage) return ['Tidal Cove', 'Cyber City'];
+	if (needsDamage) return ['Water Region', 'Mountain Region'];
 	if (barrier < Math.min(maxBarrier, survivalTarget) && hasRelic)
-		return ['Floral Patch', 'Lantern Canyon'];
+		return ['Forest Region', 'Fire Region'];
 	if (barrier < Math.min(maxBarrier, survivalTarget) || canRestoreWithLantern)
-		return ['Lantern Canyon', 'Tidal Cove'];
+		return ['Fire Region', 'Water Region'];
 	if (farm.valid && farm.rewardVp > 0) return ['Arcane Abyss'];
-	return ['Tidal Cove', 'Cyber City', 'Lantern Canyon', 'Floral Patch'];
+	return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
 }
 
 function shouldGoodTargetContinueAbyssFarm(
@@ -1804,10 +1804,10 @@ function goodTargetExposureDestinations(
 ): NavigationDestination[] {
 	const legal = legalDestinations(state, seat, catalog);
 	const preferred: NavigationDestination[] = [
-		'Lantern Canyon',
-		'Floral Patch',
-		'Tidal Cove',
-		'Cyber City',
+		'Fire Region',
+		'Forest Region',
+		'Water Region',
+		'Mountain Region',
 		'Arcane Abyss'
 	];
 	return preferred.filter((destination) => legal.includes(destination));
@@ -1841,9 +1841,9 @@ function goodNonfallenFarmTargetPivotDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player || !monster) return ['Tidal Cove', 'Cyber City', 'Lantern Canyon', 'Floral Patch'];
+	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
 	if (isEvilAlignment(player.statusLevel ?? 0))
-		return ['Floral Patch', 'Tidal Cove', 'Cyber City', 'Lantern Canyon'];
+		return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, threshold)) return ['Arcane Abyss'];
 
 	const destinations: NavigationDestination[] = [];
@@ -1873,31 +1873,31 @@ function goodNonfallenFarmTargetPivotDestinations(
 		survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2;
 
 	if (needsDamage && monsterHp >= GOOD_TARGET_DAMAGE_REBUILD_MIN_HP) {
-		if (needsMaxBarrier) return ['Lantern Canyon', 'Tidal Cove', 'Cyber City'];
-		if (needsRestore) return ['Lantern Canyon', 'Floral Patch'];
-		return ['Tidal Cove', 'Cyber City'];
+		if (needsMaxBarrier) return ['Fire Region', 'Water Region', 'Mountain Region'];
+		if (needsRestore) return ['Fire Region', 'Forest Region'];
+		return ['Water Region', 'Mountain Region'];
 	}
 
-	if (vp >= 24 || wantsScorer) append('Floral Patch');
+	if (vp >= 24 || wantsScorer) append('Forest Region');
 	if (needsRestore) {
-		append('Floral Patch');
-		append('Lantern Canyon');
+		append('Forest Region');
+		append('Fire Region');
 	}
-	if (needsMaxBarrier) append('Lantern Canyon');
+	if (needsMaxBarrier) append('Fire Region');
 	if (
 		needsDamage ||
 		(player.attackDice?.length ?? 0) < 2 ||
 		player.spirits.length < 6 ||
 		(counts['Spirit Animal'] ?? 0) < 2
 	) {
-		append('Tidal Cove');
-		if (hasRelic || state.round >= 4) append('Cyber City');
+		append('Water Region');
+		if (hasRelic || state.round >= 4) append('Mountain Region');
 	}
-	if (hasRelic) append('Cyber City');
-	append('Floral Patch');
-	append('Tidal Cove');
-	append('Cyber City');
-	append('Lantern Canyon');
+	if (hasRelic) append('Mountain Region');
+	append('Forest Region');
+	append('Water Region');
+	append('Mountain Region');
+	append('Fire Region');
 	return destinations;
 }
 
@@ -1946,19 +1946,19 @@ function goodNonfallenFarmTargetEvadeDestinations(
 		monsterHp > 0 && attack < monsterHp + 0.5 && firepower < threshold && clean < threshold;
 	const evasion: NavigationDestination[] = [];
 
-	if (needsRestore || needsMaxBarrier || base[0] === 'Floral Patch') {
-		appendExistingDestination(evasion, base, 'Lantern Canyon');
+	if (needsRestore || needsMaxBarrier || base[0] === 'Forest Region') {
+		appendExistingDestination(evasion, base, 'Fire Region');
 		if (hunterCount >= 2 && vp >= 12) appendUniqueDestination(evasion, 'Arcane Abyss');
-		appendExistingDestination(evasion, base, 'Floral Patch');
+		appendExistingDestination(evasion, base, 'Forest Region');
 	}
-	if (needsDamage || base[0] === 'Tidal Cove' || base[0] === 'Cyber City') {
-		if (hasRelic || state.round >= 4) appendExistingDestination(evasion, base, 'Cyber City');
-		appendExistingDestination(evasion, base, 'Tidal Cove');
+	if (needsDamage || base[0] === 'Water Region' || base[0] === 'Mountain Region') {
+		if (hasRelic || state.round >= 4) appendExistingDestination(evasion, base, 'Mountain Region');
+		appendExistingDestination(evasion, base, 'Water Region');
 	}
 	if (vp >= 18 && hunterCount >= 2) {
 		appendUniqueDestination(evasion, 'Arcane Abyss');
-		appendExistingDestination(evasion, base, 'Lantern Canyon');
-		appendExistingDestination(evasion, base, 'Cyber City');
+		appendExistingDestination(evasion, base, 'Fire Region');
+		appendExistingDestination(evasion, base, 'Mountain Region');
 	}
 	for (const destination of base) appendUniqueDestination(evasion, destination);
 	return evasion.length > 0 ? evasion : base;
@@ -1972,9 +1972,9 @@ function goodNonfallenScoreFloorDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player || !monster) return ['Tidal Cove', 'Cyber City', 'Lantern Canyon', 'Floral Patch'];
+	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
 	if (isEvilAlignment(player.statusLevel ?? 0))
-		return ['Floral Patch', 'Tidal Cove', 'Cyber City', 'Lantern Canyon'];
+		return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, threshold)) return ['Arcane Abyss'];
 
 	const destinations: NavigationDestination[] = [];
@@ -2032,48 +2032,48 @@ function goodNonfallenScoreFloorDestinations(
 	if (farmStillValuable && damageReady && canSurviveNow) return ['Arcane Abyss'];
 	if (farmStillValuable && nearDamage && canSurviveNow && (vp < 24 || monsterHp <= 4))
 		return ['Arcane Abyss'];
-	if (farmStillValuable && nearDamage && restoreNeeded) return ['Lantern Canyon', 'Floral Patch'];
+	if (farmStillValuable && nearDamage && restoreNeeded) return ['Fire Region', 'Forest Region'];
 	if (hp4SurvivalWall && !canRestore) {
 		if (cultivatorProgress >= 2)
-			return ['Lantern Canyon', 'Floral Patch', 'Arcane Abyss', 'Tidal Cove', 'Cyber City'];
-		return hasRelic ? ['Tidal Cove'] : ['Tidal Cove', 'Cyber City'];
+			return ['Fire Region', 'Forest Region', 'Arcane Abyss', 'Water Region', 'Mountain Region'];
+		return hasRelic ? ['Water Region'] : ['Water Region', 'Mountain Region'];
 	}
 	if (farmHasVp && monsterHp >= 4 && maxBarrierNeeded && vp >= 6) {
-		return ['Lantern Canyon', 'Tidal Cove', 'Cyber City'];
+		return ['Fire Region', 'Water Region', 'Mountain Region'];
 	}
 	if (farmStillValuable && nearDamage && !canSurviveNow && !canRestore) {
 		return (counts.Cultivator ?? 0) >= 2
-			? ['Lantern Canyon', 'Tidal Cove', 'Cyber City']
-			: ['Tidal Cove', 'Cyber City'];
+			? ['Fire Region', 'Water Region', 'Mountain Region']
+			: ['Water Region', 'Mountain Region'];
 	}
-	if (maxBarrierNeeded && nearDamage) return ['Lantern Canyon', 'Tidal Cove', 'Cyber City'];
+	if (maxBarrierNeeded && nearDamage) return ['Fire Region', 'Water Region', 'Mountain Region'];
 
 	if (damageFloorMissing || (!scoreFloorReady && attack < 4 && firepower < threshold * 0.65)) {
-		append('Tidal Cove');
-		append('Cyber City');
-		if (restoreNeeded && nearDamage) append('Lantern Canyon');
+		append('Water Region');
+		append('Mountain Region');
+		if (restoreNeeded && nearDamage) append('Fire Region');
 		return destinations;
 	}
 
 	if (farmStillValuable && canSurviveNow) append('Arcane Abyss');
 	if (restoreNeeded) {
-		append('Lantern Canyon');
-		append('Floral Patch');
+		append('Fire Region');
+		append('Forest Region');
 		if (farmHasVp && nearDamage && !canSurviveNow) return destinations;
 	}
-	if (maxBarrierNeeded) append('Lantern Canyon');
+	if (maxBarrierNeeded) append('Fire Region');
 
 	const wantsPassiveScorer =
 		vp >= 18 ||
 		(vp >= 12 && (raw['Void Sovereign'] ?? 0) <= 0) ||
 		(vp >= 15 && (raw['Relic Sentinel'] ?? 0) <= 0) ||
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
-	if (wantsPassiveScorer) append('Floral Patch');
-	if (hasRelic || state.round >= 6) append('Cyber City');
-	append('Tidal Cove');
-	append('Cyber City');
-	append('Lantern Canyon');
-	append('Floral Patch');
+	if (wantsPassiveScorer) append('Forest Region');
+	if (hasRelic || state.round >= 6) append('Mountain Region');
+	append('Water Region');
+	append('Mountain Region');
+	append('Fire Region');
+	append('Forest Region');
 	append('Arcane Abyss');
 	return destinations;
 }
@@ -2119,8 +2119,8 @@ function nearFinishNavigationOracleDestination(
 	if (canSurviveNow && (!needsBuffer || state.round >= maxRounds - 1)) return abyss;
 	if (!canRestore)
 		return firstLegalNavigationDestination(state, seat, catalog, [
-			'Floral Patch',
-			'Lantern Canyon'
+			'Forest Region',
+			'Fire Region'
 		]);
 
 	const largeDeficit = survivalTarget - currentBarrier >= 3;
@@ -2128,21 +2128,21 @@ function nearFinishNavigationOracleDestination(
 		lateNearMiss && currentBarrier < Math.min(maxBarrier, survivalTarget + 3);
 	if ((largeDeficit || deepBufferDeficit) && state.round <= maxRounds - 2) {
 		return (
-			firstLegalNavigationDestination(state, seat, catalog, ['Floral Patch', 'Lantern Canyon']) ??
+			firstLegalNavigationDestination(state, seat, catalog, ['Forest Region', 'Fire Region']) ??
 			abyss
 		);
 	}
 	return (
-		firstLegalNavigationDestination(state, seat, catalog, ['Lantern Canyon', 'Floral Patch']) ??
+		firstLegalNavigationDestination(state, seat, catalog, ['Fire Region', 'Forest Region']) ??
 		abyss
 	);
 }
 
 const PVP_HUNT_DESTINATIONS: NavigationDestination[] = [
-	'Floral Patch',
-	'Cyber City',
-	'Tidal Cove',
-	'Lantern Canyon'
+	'Forest Region',
+	'Mountain Region',
+	'Water Region',
+	'Fire Region'
 ];
 
 function pvpHuntDestinations(state: PublicGameState, seat: SeatColor): NavigationDestination[] {
@@ -2211,14 +2211,14 @@ function predictedDestinationsForGoodTarget(
 	const targetAttack = expectedAttack(target);
 	const monsterHp = targetMonster ? (targetMonster.maxHp ?? targetMonster.hp ?? 0) : 0;
 
-	if (survivalTarget > 0 && barrier < Math.min(maxBarrier, survivalTarget)) append('Floral Patch');
-	if (barrier < maxBarrier - 1) append('Floral Patch');
+	if (survivalTarget > 0 && barrier < Math.min(maxBarrier, survivalTarget)) append('Forest Region');
+	if (barrier < maxBarrier - 1) append('Forest Region');
 	if (survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2)
-		append('Lantern Canyon');
+		append('Fire Region');
 	if (attackDice < 2 || target.spirits.length < 5 || (monsterHp > 0 && targetAttack < monsterHp))
-		append('Tidal Cove');
-	if ((target.mats ?? []).some((r) => r.hasRune && r.type === 'relic')) append('Cyber City');
-	if (destinations.length === 0 && (target.victoryPoints ?? 0) >= 18) append('Floral Patch');
+		append('Water Region');
+	if ((target.mats ?? []).some((r) => r.hasRune && r.type === 'relic')) append('Mountain Region');
+	if (destinations.length === 0 && (target.victoryPoints ?? 0) >= 18) append('Forest Region');
 	return destinations;
 }
 
@@ -2509,13 +2509,13 @@ function fallenRebuildDestinations(
 	const destinations: NavigationDestination[] = [];
 
 	if (needsDamage) {
-		appendUniqueDestination(destinations, 'Tidal Cove');
-		appendUniqueDestination(destinations, 'Cyber City');
-		appendUniqueDestination(destinations, 'Lantern Canyon');
+		appendUniqueDestination(destinations, 'Water Region');
+		appendUniqueDestination(destinations, 'Mountain Region');
+		appendUniqueDestination(destinations, 'Fire Region');
 	}
 	if (needsSurvival) {
-		appendUniqueDestination(destinations, 'Floral Patch');
-		appendUniqueDestination(destinations, 'Lantern Canyon');
+		appendUniqueDestination(destinations, 'Forest Region');
+		appendUniqueDestination(destinations, 'Fire Region');
 	}
 	if (!needsDamage && !needsSurvival) {
 		for (const destination of PVP_HUNT_DESTINATIONS)

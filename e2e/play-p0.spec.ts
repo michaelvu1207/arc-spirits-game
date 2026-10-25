@@ -41,14 +41,14 @@ test.describe('2D play — P0 round loop', () => {
 		// animated transparent board hit targets.
 		const hostLocked = await runRoomCommand(host, {
 			type: 'lockNavigation',
-			destination: 'Cyber City'
+			destination: 'Mountain Region'
 		});
 		expect(hostLocked.projection.phase).toBe('navigation');
 		expect(hostLocked.projection.revealedDestinations).toBe(false);
 
 		// Guest locks; P0 then uses the host's deterministic force-advance path to
 		// reveal destinations without waiting on wall-clock deadline enforcement.
-		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Tidal Cove' });
+		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Water Region' });
 		let view = await runRoomCommand(host, { type: 'forceAdvancePhase' });
 		// The stable browser invariant is that both clients converge on round 2 navigation
 		// after the server resolves the reveal, empty location work, and cleanup.

@@ -163,15 +163,13 @@ function region(destination: string | null) {
 	return (
 		(
 			{
-				'Floral Patch': 'forest',
+				'Forest Region': 'forest',
 				Forest: 'forest',
-				'Lantern Canyon': 'fire',
-				'Lantern Lights': 'fire',
+				'Fire Region': 'fire',
 				Fire: 'fire',
-				'Cyber City': 'mountain',
+				'Mountain Region': 'mountain',
 				Mountain: 'mountain',
-				'Tidal Cove': 'water',
-				'Moon Tide': 'water',
+				'Water Region': 'water',
 				Water: 'water'
 			} as Record<string, string>
 		)[destination ?? ''] ?? destination

@@ -40,7 +40,7 @@ export function getPowerAutoCommand(state: PublicGameState, seat: SeatColor): Ga
 	if (state.phase !== 'navigation' && !player.actionsUsedThisRound.includes('gain-power'))
 		return null;
 	const firstOffered = player.pendingPowerDrafts?.[0]?.[0];
-	return firstOffered ? { type: 'chooseNavigationPower', powerId: firstOffered } : null;
+	return firstOffered ? { type: 'chooseNavigationPower', powerId: firstOffered, ...(player.pendingPowerReplacement ? { replacePowerId: player.powerInventory?.find(id => id !== firstOffered) } : {}) } : null;
 }
 
 /** Bounded compatibility wrapper: at most one action from any one snapshot. */

@@ -565,7 +565,7 @@ export function enumerateCandidates(
 				: undefined;
 			const rowCount = rewardRows?.length ?? MAX_LOCATION_ROWS;
 			const interactions = new Map(
-				buildLocationInteractions(rewardRows).map((interaction) => [
+				buildLocationInteractions(rewardRows, dest ?? undefined).map((interaction) => [
 					interaction.rowIndex,
 					interaction
 				])

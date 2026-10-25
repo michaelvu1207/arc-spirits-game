@@ -14,14 +14,14 @@ import type { GameLocationRewardRow } from '$lib/types';
 
 // Reward-row icon ids (mirror the live DB content). A Spirit World location's available
 // actions ARE its reward rows: the only way to summon is to resolve a row whose gain is a
-// Summon action token. Tidal Cove offers a free Spirit World Summon; Cyber City a
+// Summon action token. Water Region offers a free Spirit World Summon; Mountain Region a
 // relic-paid Arcane Abyss Summon.
 const SUMMON_ICON = '76e58219-e805-4b94-acf4-6d62dfe4c515';
 const ABYSS_SUMMON_ICON = '12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e';
 const ANY_RELIC_ICON = '6a85e06a-52cc-483c-aa59-38395a377307';
-// Tidal Cove row 0: free Spirit World Summon (draw 4, summon 2).
+// Water Region row 0: free Spirit World Summon (draw 4, summon 2).
 const TIDAL_COVE_ROWS: GameLocationRewardRow[] = [{ type: 'gain', gain_icon_ids: [SUMMON_ICON] }];
-// Cyber City row 0: Arcane Abyss Summon (draw 3, summon 1), paid with any relic.
+// Mountain Region row 0: Arcane Abyss Summon (draw 3, summon 1), paid with any relic.
 const CYBER_CITY_ROWS: GameLocationRewardRow[] = [
 	{ type: 'trade', cost_icon_ids: [ANY_RELIC_ICON], gain_icon_ids: [ABYSS_SUMMON_ICON] }
 ];
@@ -183,8 +183,8 @@ const CATALOG: PlayCatalog = {
 		{ id: 'spirit-24', name: 'Lumen Fox', cost: 2, classes: { Scout: 1 }, origins: { Lantern: 1 } }
 	],
 	locations: [
-		{ name: 'Tidal Cove', originId: null, rewardRows: TIDAL_COVE_ROWS },
-		{ name: 'Cyber City', originId: null, rewardRows: CYBER_CITY_ROWS }
+		{ name: 'Water Region', originId: null, rewardRows: TIDAL_COVE_ROWS },
+		{ name: 'Mountain Region', originId: null, rewardRows: CYBER_CITY_ROWS }
 	]
 };
 
@@ -233,12 +233,12 @@ function withLobbySelections(): PublicGameState {
 /**
  * Drive an already-started game (navigation phase) into the Location phase with RED
  * standing at `dest`. Both seats lock onto the same Good location, so the encounter
- * phase auto-skips straight to Location. `dest` defaults to Tidal Cove (free Spirit
- * World Summon at row 0); pass 'Cyber City' for the relic-paid Arcane Abyss Summon.
+ * phase auto-skips straight to Location. `dest` defaults to Water Region (free Spirit
+ * World Summon at row 0); pass 'Mountain Region' for the relic-paid Arcane Abyss Summon.
  */
 function locationPhase(
 	started: PublicGameState,
-	dest: NavigationDestination = 'Tidal Cove'
+	dest: NavigationDestination = 'Water Region'
 ): PublicGameState {
 	let state = started;
 	for (const actor of [
@@ -515,32 +515,32 @@ describe('play runtime', () => {
 		const inNav = applyGameCommand(
 			started.state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'selectNavigationDestination', destination: 'Tidal Cove' },
+			{ type: 'selectNavigationDestination', destination: 'Water Region' },
 			CATALOG
 		);
 		expect(inNav.ok).toBe(true);
 
 		// Location phase (destinations revealed): switching destinations mid-round
 		// would break the one-location-per-round commitment — rejected.
-		const located = locationPhase(started.state, 'Tidal Cove');
+		const located = locationPhase(started.state, 'Water Region');
 		const midRound = applyGameCommand(
 			located,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'selectNavigationDestination', destination: 'Floral Patch' },
+			{ type: 'selectNavigationDestination', destination: 'Forest Region' },
 			CATALOG
 		);
 		expect(midRound.ok).toBe(false);
 		if (midRound.ok) return;
 		expect(midRound.error.code).toBe('wrong_phase');
-		expect(located.players.Red!.navigationDestination).toBe('Tidal Cove');
+		expect(located.players.Red!.navigationDestination).toBe('Water Region');
 	});
 
 	test('draws four spirit world spirits into the private tray and tracks picks remaining', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		// Tidal Cove's row 0 is a free Spirit World Summon (draw 4, summon up to 2).
-		const located = locationPhase(started.state, 'Tidal Cove');
+		// Water Region's row 0 is a free Spirit World Summon (draw 4, summon up to 2).
+		const located = locationPhase(started.state, 'Water Region');
 
 		const drawn = applyGameCommand(
 			located,
@@ -569,8 +569,8 @@ describe('play runtime', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		// Tidal Cove's row 0 is a free Spirit World Summon (draw 4, summon up to 2).
-		const located = locationPhase(started.state, 'Tidal Cove');
+		// Water Region's row 0 is a free Spirit World Summon (draw 4, summon up to 2).
+		const located = locationPhase(started.state, 'Water Region');
 
 		const drawn = applyGameCommand(
 			located,
@@ -617,9 +617,9 @@ describe('play runtime', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		// Cyber City's row 0 is an Arcane Abyss Summon (draw 3, summon 1), paid with a
+		// Mountain Region's row 0 is an Arcane Abyss Summon (draw 3, summon 1), paid with a
 		// relic — the starting Fairy relic covers it.
-		const located = locationPhase(started.state, 'Cyber City');
+		const located = locationPhase(started.state, 'Mountain Region');
 
 		const drawn = applyGameCommand(
 			located,
@@ -665,9 +665,9 @@ describe('play runtime', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		// Cyber City's row 0 is an Arcane Abyss Summon (draw 3, summon 1), paid with the
+		// Mountain Region's row 0 is an Arcane Abyss Summon (draw 3, summon 1), paid with the
 		// starting Fairy relic.
-		const located = locationPhase(started.state, 'Cyber City');
+		const located = locationPhase(started.state, 'Mountain Region');
 
 		const drawn = applyGameCommand(
 			located,
@@ -1304,10 +1304,10 @@ describe('play runtime', () => {
 		if (!placed.ok) throw new Error(placed.error.message);
 		expect(placed.state.players.Red!.spiritAugmentAttachments).toHaveLength(1);
 
-		// Summon a fresh spirit and aim it at the OCCUPIED slot (Tidal Cove row 0 = free
+		// Summon a fresh spirit and aim it at the OCCUPIED slot (Water Region row 0 = free
 		// Spirit World Summon). F8: this is rejected — the engine never overwrites (and so
 		// never destroys) the resident spirit + its augment.
-		let state = locationPhase(placed.state, 'Tidal Cove');
+		let state = locationPhase(placed.state, 'Water Region');
 		const open = applyGameCommand(
 			state,
 			{ ...HOST, seatColor: 'Red' },
@@ -1403,7 +1403,7 @@ describe('play runtime', () => {
 		const redDestination = applyGameCommand(
 			state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'selectNavigationDestination', destination: 'Tidal Cove' },
+			{ type: 'selectNavigationDestination', destination: 'Water Region' },
 			CATALOG
 		);
 		if (!redDestination.ok) throw new Error(redDestination.error.message);
@@ -1473,8 +1473,8 @@ describe('P5 onSpiritSummon wiring', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, sharpCatalog);
 		if (!started.ok) throw new Error(started.error.message);
-		// Drive to the Location phase at Tidal Cove (free Spirit World Summon at row 0).
-		let state = locationPhase(started.state, 'Tidal Cove');
+		// Drive to the Location phase at Water Region (free Spirit World Summon at row 0).
+		let state = locationPhase(started.state, 'Water Region');
 		expect(state.players.Red!.stunImmune).toBe(false);
 
 		// Open the draw, then point the first drawn card at the Sharpshooter and summon it.
@@ -1496,7 +1496,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, sharpCatalog);
 		if (!started.ok) throw new Error(started.error.message);
-		let state = locationPhase(started.state, 'Tidal Cove');
+		let state = locationPhase(started.state, 'Water Region');
 		// A Sharpshooter sits in the tableau, but the spirit being summoned is NOT one —
 		// under per-spirit scoping the grant must NOT fire just because a Sharpshooter is in play.
 		state.players.Red!.spirits = [
@@ -1522,7 +1522,7 @@ describe('P5 onSpiritSummon wiring', () => {
 			CATALOG
 		);
 		if (!started.ok) throw new Error(started.error.message);
-		let state = locationPhase(started.state, 'Tidal Cove');
+		let state = locationPhase(started.state, 'Water Region');
 		state.players.Red!.spirits = [
 			{ slotIndex: 6, id: 'as', name: 'Summoner', cost: 7, classes: { 'Abyss Summoner': 1 }, origins: {}, isFaceDown: false }
 		];
@@ -1554,7 +1554,7 @@ describe('P5 onSpiritSummon wiring', () => {
 			CATALOG
 		);
 		if (!started.ok) throw new Error(started.error.message);
-		const state = locationPhase(started.state, 'Tidal Cove');
+		const state = locationPhase(started.state, 'Water Region');
 		const player = state.players.Red!;
 		player.spirits = [
 			{ slotIndex: 5, id: 'as', name: 'Summoner', cost: 7, classes: { 'Abyss Summoner': 1 }, origins: {}, isFaceDown: false },
@@ -1569,7 +1569,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		let state = locationPhase(started.state, 'Tidal Cove');
+		let state = locationPhase(started.state, 'Water Region');
 
 		// An awakened Soul Weaver in play → the redraw arms when the draw opens.
 		state.players.Red!.spirits = [
@@ -1606,7 +1606,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		let state = locationPhase(started.state, 'Tidal Cove');
+		let state = locationPhase(started.state, 'Water Region');
 		state.players.Red!.spirits = [
 			{ slotIndex: 6, id: 'sw', name: 'Weaver', cost: 2, classes: { 'Soul Weaver': 1 }, origins: {}, isFaceDown: false }
 		];
@@ -1628,7 +1628,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		let state = locationPhase(started.state, 'Tidal Cove');
+		let state = locationPhase(started.state, 'Water Region');
 		state = apply(state, 'Red', { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] });
 		expect(state.players.Red!.redrawAvailable).toBe(false);
 		const r = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'redrawHandDraws' }, CATALOG);

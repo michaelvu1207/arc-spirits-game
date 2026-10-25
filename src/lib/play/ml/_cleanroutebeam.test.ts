@@ -620,13 +620,13 @@ function routeActionBonus(
 				if (farm.valid && farm.farmable && farm.opportunityVp > 0) score += 8_000 + farm.opportunityVp * 900;
 				else if (cleanProb >= 0.5 || firepowerProb >= 0.5) score += 2_500;
 				else score -= 2_500;
-			} else if (cmd.destination === 'Lantern Canyon') {
+			} else if (cmd.destination === 'Fire Region') {
 				score += (restoreDeficit ? 6_000 : 1_500) + (maxBarrierDeficit ? 2_500 : 0);
-			} else if (cmd.destination === 'Tidal Cove' || cmd.destination === 'Cyber City') {
-				score += (damageDeficit ? (cmd.destination === 'Tidal Cove' ? 4_800 : 3_800) : 1_200) +
+			} else if (cmd.destination === 'Water Region' || cmd.destination === 'Mountain Region') {
+				score += (damageDeficit ? (cmd.destination === 'Water Region' ? 4_800 : 3_800) : 1_200) +
 					Math.max(0, attackDelta) * 900 +
 					Math.max(0, firepowerDelta) * 1_200;
-			} else if (cmd.destination === 'Floral Patch') {
+			} else if (cmd.destination === 'Forest Region') {
 				score += (restoreDeficit ? 2_500 : 900) + (maxBarrierDeficit ? 2_800 : 0) + Math.max(0, maxBarrierDelta) * 800;
 			}
 			break;

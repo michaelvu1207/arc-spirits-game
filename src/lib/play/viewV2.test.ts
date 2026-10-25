@@ -303,7 +303,7 @@ const BARRIER = '6746f875-a1bc-453c-94b5-718d6ebeb025';
 const SORCERER = 'c9b3225f-c8a9-4aa8-8e43-56c39cf68974';
 const STRATEGIST = '88facdb6-3374-4891-af8a-fca2e81b79ef';
 
-const LOC = 'Cyber City';
+const LOC = 'Mountain Region';
 const LOC_CATALOG: PlayCatalog = {
 	...CATALOG,
 	locations: [
@@ -335,6 +335,8 @@ function locationState(mats: MatSlotSnapshot[], patch: Partial<PrivatePlayerStat
 	red.navigationDestination = LOC;
 	red.mats = mats;
 	red.actionsUsedThisRound = [];
+	red.pendingPowerDrafts = [];
+	red.phaseReady = false;
 	red.extraActions = {};
 	red.brokenBarrier = 0;
 	red.pendingDraw = null;
@@ -348,31 +350,20 @@ function locationState(mats: MatSlotSnapshot[], patch: Partial<PrivatePlayerStat
 }
 
 describe('computeAffordances — location interactions (§5.2)', () => {
-	test('a specific-rune trade lists only the matching mat slots; autoPick = auto-match', () => {
+	test('a Power trade lists only held Origin Runes and costs one Rune', () => {
 		const state = locationState([
-			mat(1, { id: CYBER_RUNE, originId: CYBER_ORIGIN, name: 'Cyber City Rune' }),
-			mat(2, { id: CYBER_RUNE, originId: CYBER_ORIGIN, name: 'Cyber City Rune' }),
+			mat(1, { id: CYBER_RUNE, originId: CYBER_ORIGIN, name: 'Mountain Region Rune' }),
+			mat(2, { id: CYBER_RUNE, originId: CYBER_ORIGIN, name: 'Mountain Region Rune' }),
 			mat(3, { id: MAGNET_RUNE, name: 'Magnet', type: 'relic' })
 		]);
-		const rows = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!;
-		const row0 = rows.find((r) => r.rowIndex === 0)!;
-		expect(row0.affordable).toBe(true);
-		expect(row0.costSlots).toHaveLength(2);
-		expect(row0.costSlots.every((s) => s.wildcard === false)).toBe(true);
-		// Only the two Cyber runes (array indexes 0,1) can pay; the Magnet relic (2) can't.
-		expect(row0.costSlots[0].eligibleMatSlotIndexes).toEqual([0, 1]);
-		expect(row0.costSlots[1].eligibleMatSlotIndexes).toEqual([0, 1]);
-		// autoPick pre-fill == exactly what matchRewardCost (auto-match) would spend.
-		const interaction = buildLocationInteractions(LOC_CATALOG.locations![0].rewardRows).find(
-			(i) => i.rowIndex === 0
-		)!;
-		const expected = matchRewardCost(interaction.cost, state.players.Red!.mats)
-			.consumedArrayIndexes.slice()
-			.sort();
-		expect(row0.costSlots.map((s) => s.autoPick).sort()).toEqual(expected);
+		const row = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!.find(r => r.rowIndex === 0)!;
+		expect(row.affordable).toBe(true);
+		expect(row.costSlots).toHaveLength(1);
+		expect(row.costSlots[0].wildcard).toBe(true);
+		expect(row.costSlots[0].eligibleMatSlotIndexes).toEqual([0, 1]);
 	});
 
-	test('a wildcard trade lists ALL held relics (never a rune); its "or" gain is a choice group', () => {
+	test('a region augment trade accepts Origin Runes instead of relics; its gain remains a choice group', () => {
 		const state = locationState([
 			mat(1, { id: MAGNET_RUNE, name: 'Magnet', type: 'relic' }),
 			mat(2, { id: 'fairy', name: 'Fairy', type: 'relic' }),
@@ -383,8 +374,8 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 		)!;
 		expect(row1.costSlots).toHaveLength(1);
 		expect(row1.costSlots[0].wildcard).toBe(true);
-		// Both relics (array indexes 0,1) are eligible; the rune (2) is not.
-		expect(row1.costSlots[0].eligibleMatSlotIndexes).toEqual([0, 1]);
+		// Only the Origin Rune is eligible; relics cannot pay for this map trade.
+		expect(row1.costSlots[0].eligibleMatSlotIndexes).toEqual([2]);
 		// The "or" augment gain surfaces as a choice group with no pre-selected default (S6).
 		expect(row1.choiceGroups).toHaveLength(1);
 		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Elementalist', 'Soul Weaver']);
@@ -665,10 +656,10 @@ describe('encounter + infiltrator affordances (§5.4)', () => {
 		const red = state.players.Red!;
 		const blue = state.players.Blue!;
 		red.statusLevel = 3; // Fallen ⇒ Evil
-		red.navigationDestination = 'Cyber City';
+		red.navigationDestination = 'Mountain Region';
 		red.encounterVote = null;
 		blue.statusLevel = 0;
-		blue.navigationDestination = 'Cyber City';
+		blue.navigationDestination = 'Mountain Region';
 		expect(computeAffordances(state, 'Red', CATALOG).encounter).toEqual({
 			eligibleTargets: ['Blue'],
 			votesPending: ['Red']
@@ -681,13 +672,15 @@ describe('encounter + infiltrator affordances (§5.4)', () => {
 		const state = inPhase(4, 'location');
 		const red = state.players.Red!;
 		const blue = state.players.Blue!;
-		red.navigationDestination = 'Cyber City';
+		red.navigationDestination = 'Mountain Region';
 		red.actionsUsedThisRound = [];
+	red.pendingPowerDrafts = [];
+	red.phaseReady = false;
 		red.spirits = [
 			{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { 'Cursed Fighter': 1 }, origins: {}, isFaceDown: false }
 		];
 		red.attackDice = [{ instanceId: 'r1', tier: 'basic' }];
-		blue.navigationDestination = 'Cyber City';
+		blue.navigationDestination = 'Mountain Region';
 		blue.attackDice = [
 			{ instanceId: 'b1', tier: 'enchanted' },
 			{ instanceId: 'b2', tier: 'exalted' }
@@ -701,10 +694,10 @@ describe('encounter + infiltrator affordances (§5.4)', () => {
 		const red = state.players.Red!;
 		clearWork(state, 'Red');
 		red.statusLevel = 3;
-		red.navigationDestination = 'Cyber City';
+		red.navigationDestination = 'Mountain Region';
 		red.encounterVote = null;
 		state.players.Blue!.statusLevel = 0;
-		state.players.Blue!.navigationDestination = 'Cyber City';
+		state.players.Blue!.navigationDestination = 'Mountain Region';
 		// An encounter opportunity exists, but the seat has NO resolution work.
 		expect(computeAffordances(state, 'Red', CATALOG).encounter).toBeDefined();
 		expect(seatHasResolutionWork(state, 'Red')).toBe(false);
@@ -812,7 +805,7 @@ describe('bot enumerator never generates the now-rejected command shapes', () =>
 		const state = startedGame();
 		state.phase = 'location';
 		const red = state.players.Red!;
-		red.navigationDestination = 'Cyber City';
+		red.navigationDestination = 'Mountain Region';
 		red.handDraws = [{ guid: 'g1', id: 's-1' }, { guid: 'g2', id: 's-2' }] as never;
 		const spawns = collect(state, 'Red').filter(
 			(c): c is Extract<GameCommand, { type: 'spawnHandSpirit' }> => c.type === 'spawnHandSpirit'
@@ -839,7 +832,7 @@ describe('bot enumerator never generates the now-rejected command shapes', () =>
 		const state = startedGame();
 		state.phase = 'location';
 		const red = state.players.Red!;
-		red.navigationDestination = 'Cyber City';
+		red.navigationDestination = 'Mountain Region';
 		red.spirits = [
 			{
 				slotIndex: 1,
@@ -855,7 +848,7 @@ describe('bot enumerator never generates the now-rejected command shapes', () =>
 			{ instanceId: 'r1', tier: 'basic' },
 			{ instanceId: 'r2', tier: 'enchanted' }
 		];
-		state.players.Blue!.navigationDestination = 'Cyber City';
+		state.players.Blue!.navigationDestination = 'Mountain Region';
 		state.players.Blue!.attackDice = [
 			{ instanceId: 'b1', tier: 'basic' },
 			{ instanceId: 'b2', tier: 'exalted' }

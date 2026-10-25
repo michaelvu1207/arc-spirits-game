@@ -59,20 +59,20 @@ describe('phase machine', () => {
 
 	test('navigation only reveals once every active seat has locked', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
 		expect(state.revealedDestinations).toBe(false);
 		expect(state.phase).toBe('navigation');
 
-		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Water Region' });
 		// Locking no longer reveals instantly — the round waits for the deadline.
 		expect(state.revealedDestinations).toBe(false);
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		expect(state.revealedDestinations).toBe(true);
 		// Encounter auto-skips in P0 → straight to location.
 		expect(state.phase).toBe('location');
-		expect(state.locationOccupancy['Cyber City']).toEqual(['Red']);
-		expect(state.locationOccupancy['Tidal Cove']).toEqual(['Blue']);
-		expect(state.players.Red?.navigationDestination).toBe('Cyber City');
+		expect(state.locationOccupancy['Mountain Region']).toEqual(['Red']);
+		expect(state.locationOccupancy['Water Region']).toEqual(['Blue']);
+		expect(state.players.Red?.navigationDestination).toBe('Mountain Region');
 	});
 
 	test("a player's pending destination is hidden from other viewers until reveal", () => {
@@ -80,7 +80,7 @@ describe('phase machine', () => {
 		state.players.Red!.powerInventory = ['thorn-ward'];
 		state = apply(state, RED, {
 			type: 'lockNavigation',
-			destination: 'Cyber City',
+			destination: 'Mountain Region',
 			navigationPowerId: 'thorn-ward'
 		});
 
@@ -97,7 +97,7 @@ describe('phase machine', () => {
 			seatColor: 'Red',
 			displayName: 'Host'
 		});
-		expect(redView.players.Red?.pendingDestination).toBe('Cyber City');
+		expect(redView.players.Red?.pendingDestination).toBe('Mountain Region');
 		expect(redView.players.Red?.pendingNavigationPower).toBe('thorn-ward');
 		expect(blueView.players.Red?.pendingNavigationPower).toBeNull();
 	});
@@ -107,10 +107,10 @@ describe('phase machine', () => {
 		state.players.Red!.powerInventory = ['thorn-ward'];
 		state = apply(state, RED, {
 			type: 'lockNavigation',
-			destination: 'Cyber City',
+			destination: 'Mountain Region',
 			navigationPowerId: 'thorn-ward'
 		});
-		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Water Region' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		expect(state.players.Red?.pendingNavigationPower).toBeNull();
 		expect(state.players.Red?.powerInventory).toEqual([]);
@@ -119,8 +119,8 @@ describe('phase machine', () => {
 
 	test('full round: with no resolution work, ending location collapses straight to the next round', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
-		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Water Region' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		expect(state.phase).toBe('location');
 
@@ -141,8 +141,8 @@ describe('phase machine', () => {
 
 	test('reaching the VP target finishes the game when cleanup closes', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
-		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Water Region' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		state = apply(state, RED, { type: 'endLocationActions' });
 		// Simulate Red having amassed enough VP this round — set BEFORE the round wraps,
@@ -155,7 +155,7 @@ describe('phase machine', () => {
 
 	test('host can force navigation to reveal without all locks', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
 		// Blue has not locked; host forces the phase forward.
 		state = apply(state, HOST, { type: 'forceAdvancePhase' });
 		expect(state.revealedDestinations).toBe(true);
@@ -191,20 +191,20 @@ describe('phase machine', () => {
 describe('encounter / PvP', () => {
 	test('no mixed alignment auto-skips the encounter to the location phase', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
-		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Mountain Region' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		expect(state.phase).toBe('location');
 	});
 
 	test('an Evil player can strike a co-located Good player, then the encounter resolves', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
 		// Turn Red Evil (Fallen) with an attack die before the reveal fires.
 		state.players.Red!.statusLevel = 3;
 		state.players.Red!.statusToken = 'Fallen';
 		state.players.Red!.attackDice = [{ instanceId: 'a', tier: 'arcane' }];
-		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Mountain Region' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		expect(state.phase).toBe('encounter');
 
@@ -220,10 +220,10 @@ describe('encounter / PvP', () => {
 
 	test('Good players cannot initiate PvP', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
 		state.players.Red!.statusLevel = 3;
 		state.players.Red!.statusToken = 'Fallen';
-		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Cyber City' });
+		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Mountain Region' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
 		const result = applyGameCommand(state, BLUE, { type: 'initiatePvp' }, CATALOG);
 		expect(result.ok).toBe(false);
@@ -253,8 +253,8 @@ const giveSpirit = (
 };
 
 const lockBoth = (state: PublicGameState): PublicGameState => {
-	let s = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
-	s = apply(s, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
+	let s = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
+	s = apply(s, BLUE, { type: 'lockNavigation', destination: 'Water Region' });
 	// Locking no longer reveals instantly — force-advance past the grace to reveal
 	// (both seats already locked → their chosen destinations are kept).
 	s = apply(s, RED, { type: 'forceAdvancePhase' });

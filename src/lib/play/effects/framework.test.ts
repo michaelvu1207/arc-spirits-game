@@ -435,9 +435,9 @@ describe('conditional action', () => {
 
 describe('colocatedPlayers helper', () => {
 	it('returns active seats sharing the destination, in activeSeats order, excluding self', () => {
-		const red = makePlayer({ playerColor: 'Red', navigationDestination: 'Tidal Cove' });
-		const blue = makePlayer({ playerColor: 'Blue', navigationDestination: 'Tidal Cove' });
-		const green = makePlayer({ playerColor: 'Green', navigationDestination: 'Cyber City' });
+		const red = makePlayer({ playerColor: 'Red', navigationDestination: 'Water Region' });
+		const blue = makePlayer({ playerColor: 'Blue', navigationDestination: 'Water Region' });
+		const green = makePlayer({ playerColor: 'Green', navigationDestination: 'Mountain Region' });
 		const state = makeState({ Red: red, Blue: blue, Green: green });
 		const out = colocatedPlayers(state, 'Red');
 		expect(out.map((p) => p.playerColor)).toEqual(['Blue']);
@@ -445,7 +445,7 @@ describe('colocatedPlayers helper', () => {
 
 	it('is empty when the acting seat has no destination', () => {
 		const red = makePlayer({ playerColor: 'Red', navigationDestination: null });
-		const blue = makePlayer({ playerColor: 'Blue', navigationDestination: 'Tidal Cove' });
+		const blue = makePlayer({ playerColor: 'Blue', navigationDestination: 'Water Region' });
 		expect(colocatedPlayers(makeState({ Red: red, Blue: blue }), 'Red')).toHaveLength(0);
 	});
 
@@ -469,10 +469,10 @@ describe('colocatedPlayers helper', () => {
 		]);
 		const red = makePlayer({
 			playerColor: 'Red',
-			navigationDestination: 'Tidal Cove',
+			navigationDestination: 'Water Region',
 			spirits: [spirit(1, 'A', { SynthColo: 1 })]
 		});
-		const blue = makePlayer({ playerColor: 'Blue', navigationDestination: 'Tidal Cove' });
+		const blue = makePlayer({ playerColor: 'Blue', navigationDestination: 'Water Region' });
 		applyTrigger(makeState({ Red: red, Blue: blue }), 'Red', 'onRest', []);
 		expect(red.victoryPoints).toBe(4);
 	});
@@ -485,7 +485,7 @@ const HOST: GameActor = { memberId: 'm-host', displayName: 'Host', role: 'host',
 // The Rest action icon id (REWARD_ICON_SEMANTICS). A location's available actions ARE
 // its reward rows: the only way to Rest is to resolve a row whose gain is a Rest token.
 const REST_ICON = 'bdded3f5-e405-4b68-b63a-9f5c2139beea';
-// Floral Patch row 0: a free Rest (fires the onRest trigger).
+// Forest Region row 0: a free Rest (fires the onRest trigger).
 const FLORAL_PATCH_ROWS: GameLocationRewardRow[] = [{ type: 'gain', gain_icon_ids: [REST_ICON] }];
 
 const SMOKE_CATALOG: PlayCatalog = {
@@ -497,7 +497,7 @@ const SMOKE_CATALOG: PlayCatalog = {
 		{ id: 'spirit-fighter', name: 'Duelist', cost: 2, classes: { Fighter: 4 }, origins: {} }
 	],
 	monsters: [],
-	locations: [{ name: 'Floral Patch', originId: null, rewardRows: FLORAL_PATCH_ROWS }]
+	locations: [{ name: 'Forest Region', originId: null, rewardRows: FLORAL_PATCH_ROWS }]
 };
 
 function startedLocationGame(): PublicGameState {
@@ -525,12 +525,12 @@ function startedLocationGame(): PublicGameState {
 		SMOKE_CATALOG
 	);
 	if (!started.ok) throw new Error(started.error.message);
-	// Lock RED onto Floral Patch (free Rest at row 0) so the later force-advance reveal
+	// Lock RED onto Forest Region (free Rest at row 0) so the later force-advance reveal
 	// stands RED there rather than at a random destination.
 	const locked = applyGameCommand(
 		started.state,
 		{ ...HOST, seatColor: 'Red' },
-		{ type: 'lockNavigation', destination: 'Floral Patch' },
+		{ type: 'lockNavigation', destination: 'Forest Region' },
 		SMOKE_CATALOG
 	);
 	if (!locked.ok) throw new Error(locked.error.message);
@@ -558,7 +558,7 @@ describe('full-runtime smoke (startGame → rest)', () => {
 			s = adv.state;
 		}
 		expect(s.phase).toBe('location');
-		expect(s.players.Red!.navigationDestination).toBe('Floral Patch');
+		expect(s.players.Red!.navigationDestination).toBe('Forest Region');
 		// forceAdvancePhase rebuilds players from a clone — re-assert the controlled tableau.
 		s.players.Red!.spirits = [spirit(1, 'Duelist', { Fighter: 5 })];
 		s.players.Red!.maxBarrier = 10;
@@ -567,7 +567,7 @@ describe('full-runtime smoke (startGame → rest)', () => {
 			(a) => a !== 'row:0'
 		);
 
-		// Floral Patch row 0 is a free Rest — resolving it fires the onRest trigger.
+		// Forest Region row 0 is a free Rest — resolving it fires the onRest trigger.
 		const rested = applyGameCommand(
 			s,
 			{ ...HOST, seatColor: 'Red' },

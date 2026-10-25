@@ -17,10 +17,10 @@ export const ability: ClassAbility[] = [
 						prompt: 'On Navigation Reveal, you may change your destination.',
 						options: [
 							{ id: 'keep', label: 'Keep my destination' },
-							{ id: 'Floral Patch', label: 'Move to Floral Patch' },
-							{ id: 'Cyber City', label: 'Move to Cyber City' },
-							{ id: 'Tidal Cove', label: 'Move to Tidal Cove' },
-							{ id: 'Lantern Canyon', label: 'Move to Lantern Canyon' },
+							{ id: 'Forest Region', label: 'Move to Forest Region' },
+							{ id: 'Mountain Region', label: 'Move to Mountain Region' },
+							{ id: 'Water Region', label: 'Move to Water Region' },
+							{ id: 'Fire Region', label: 'Move to Fire Region' },
 							{ id: 'Arcane Abyss', label: 'Move to Arcane Abyss' }
 						]
 					}

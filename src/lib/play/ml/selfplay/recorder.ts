@@ -228,6 +228,7 @@ function costRequirementLabel(cost: CostRequirement): string {
 
 function gainEffectLabel(gain: GainEffect): string {
 	switch (gain.type) {
+		case 'navigationPower': return gain.replace ? 'Replace a Power' : 'Gain a Power';
 		case 'action': return gain.action;
 		case 'gainMaxBarrier': return 'gainMaxBarrier';
 		case 'restoreBarrier': return 'restoreBarrier';

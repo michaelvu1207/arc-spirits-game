@@ -48,7 +48,7 @@ describe('mergeCombatLog', () => {
 	test('a non-numeric grant (loot) breaks the run and is left alone', () => {
 		const raw = [
 			'Cultivator: Gained 1 max barrier.',
-			'Cultivator: Gained Floral Patch Rune.',
+			'Cultivator: Gained Forest Region Rune.',
 			'Cultivator: Gained 1 max barrier.'
 		];
 		// The middle (non-numeric) line interrupts, so the two numeric lines do not merge.

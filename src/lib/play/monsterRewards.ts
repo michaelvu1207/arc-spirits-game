@@ -41,6 +41,7 @@ export function monsterGainFor(iconId: string): GainEffect | null {
 	const m = meaningFor(iconId);
 	if (!m) return null;
 	switch (m.kind) {
+		case 'navigationPower': return null;
 		case 'victoryPoints':
 			return { type: 'vp', amount: m.amount };
 		case 'action':

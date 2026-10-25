@@ -135,7 +135,7 @@ export interface LocationInteractionAffordance {
 	freeTrade?: 'modInjector' | 'undercover';
 	/** One entry per cost requirement, in cost order. Empty for a free (gain) row. */
 	costSlots: {
-		/** Requirement label ("Cyber City rune", "Any relic"). */
+		/** Requirement label ("Mountain Region rune", "Any relic"). */
 		need: string;
 		/** True for a wildcard cost ("any relic" / "any basic rune") — the only kind with a real
 		 *  choice of WHICH held copy to spend. */
@@ -169,7 +169,7 @@ export interface ResolvedRewardOption {
 	/** icon_pool id, for rendering the reward glyph. */
 	iconToken: string;
 	/** The claimable effect's discriminant. */
-	effect: 'vp' | 'rune' | 'chooseRune' | 'action' | 'gainMaxBarrier' | 'restoreBarrier';
+	effect: 'navigationPower' | 'vp' | 'rune' | 'chooseRune' | 'action' | 'gainMaxBarrier' | 'restoreBarrier';
 	/** For a `chooseRune` reward: the runes the player picks among (the `choices` payload of
 	 *  `resolveMonsterReward` indexes into this, in pick order). Absent otherwise. */
 	chooseOptions?: { runeId: string; name: string }[];
@@ -414,7 +414,7 @@ function representativeCommand(
 	switch (type) {
 		case 'chooseNavigationPower':
 			return player.pendingPowerDrafts?.[0]?.[0]
-				? { type, powerId: player.pendingPowerDrafts[0][0] }
+				? { type, powerId: player.pendingPowerDrafts[0][0], ...(player.pendingPowerReplacement ? { replacePowerId: player.powerInventory?.find(id => id !== player.pendingPowerDrafts?.[0]?.[0]) } : {}) }
 				: null;
 		case 'resolveNavigationPower': {
 			const offer = player.navigationPowerOffers?.[0];
@@ -662,7 +662,7 @@ export function computeLocationInteractions(
 	const destination = player.navigationDestination;
 	if (!destination) return [];
 	const locEntry = (catalog.locations ?? []).find((l) => l.name === destination);
-	const interactions = buildLocationInteractions(locEntry?.rewardRows);
+	const interactions = buildLocationInteractions(locEntry?.rewardRows, destination);
 	if (interactions.length === 0) return [];
 
 	const mats = player.mats ?? [];
@@ -681,7 +681,7 @@ export function computeLocationInteractions(
 		const choiceGroups = interaction.gains
 			.filter((g): g is Extract<GainEffect, { type: 'chooseRune' }> => g.type === 'chooseRune')
 			.map((g) => ({ options: g.options.map((o) => ({ runeId: o.runeId, name: o.name })) }));
-		const affordable = canAfford(interaction, mats);
+		const affordable = !player.phaseReady && !player.pendingPowerDrafts?.length && canAfford(interaction, mats) && (!interaction.gains.some(g => g.type === 'navigationPower' && g.replace) || !!player.powerInventory?.length);
 		const noEffectNow = interactionHasNoEffect(interaction, player);
 
 		const repeatable = interaction.kind === 'trade';

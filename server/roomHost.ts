@@ -1,3 +1,4 @@
+import { normalizeRegionContent } from '../src/lib/play/regions';
 /**
  * RoomHost — the per-room actor. One in-memory PublicGameState per room used as a
  * LATENCY CACHE over the single durable authority: the `play_game_sessions` row,
@@ -760,6 +761,5 @@ function parseState(session: PlaySessionRow): PublicGameState {
 	if (raw == null) {
 		throw new Error(`Session ${session.room_code} has no public_state snapshot to load.`);
 	}
-	if (typeof raw === 'string') return JSON.parse(raw) as PublicGameState;
-	return raw;
+	return normalizeRegionContent(typeof raw === 'string' ? JSON.parse(raw) as PublicGameState : raw);
 }

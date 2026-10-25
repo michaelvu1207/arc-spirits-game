@@ -556,50 +556,50 @@ export function playPlannerSelfPlayGame(
 	const navigationPolicyGate = opts.navigationPolicyGate ?? 'all';
 	const scalingNavigationPolicyGate = opts.scalingNavigationPolicyGate ?? 'route-option-scaling';
 	const buildOptionDestinations: NavigationDestination[] = [
-		'Lantern Canyon',
-		'Floral Patch',
-		'Cyber City',
-		'Tidal Cove'
+		'Fire Region',
+		'Forest Region',
+		'Mountain Region',
+		'Water Region'
 	];
 	const scalingOptionDestinations: NavigationDestination[] = [
-		'Tidal Cove',
-		'Cyber City',
-		'Lantern Canyon'
+		'Water Region',
+		'Mountain Region',
+		'Fire Region'
 	];
-	const restoreOptionDestinations: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
+	const restoreOptionDestinations: NavigationDestination[] = ['Fire Region', 'Forest Region'];
 	const hp4FirstWallDestinations: NavigationDestination[] = [
 		'Arcane Abyss',
-		'Lantern Canyon',
-		'Floral Patch'
+		'Fire Region',
+		'Forest Region'
 	];
 	const closerDamageDestinations: NavigationDestination[] = [
-		'Tidal Cove',
-		'Cyber City',
-		'Lantern Canyon'
+		'Water Region',
+		'Mountain Region',
+		'Fire Region'
 	];
 	const closerMaxBarrierDestinations: NavigationDestination[] = [
-		'Floral Patch',
-		'Lantern Canyon',
-		'Cyber City'
+		'Forest Region',
+		'Fire Region',
+		'Mountain Region'
 	];
-	const closerRestoreDestinations: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
+	const closerRestoreDestinations: NavigationDestination[] = ['Fire Region', 'Forest Region'];
 	const survivalRebuildDestinations: NavigationDestination[] = [
-		'Floral Patch',
-		'Lantern Canyon',
-		'Cyber City',
-		'Tidal Cove'
+		'Forest Region',
+		'Fire Region',
+		'Mountain Region',
+		'Water Region'
 	];
 	const survivalDamageDestinations: NavigationDestination[] = [
-		'Cyber City',
-		'Tidal Cove',
-		'Lantern Canyon'
+		'Mountain Region',
+		'Water Region',
+		'Fire Region'
 	];
-	const survivalRestoreDestinations: NavigationDestination[] = ['Floral Patch', 'Lantern Canyon'];
-	const pureDamageBuildDestinations: NavigationDestination[] = ['Tidal Cove', 'Cyber City'];
+	const survivalRestoreDestinations: NavigationDestination[] = ['Forest Region', 'Fire Region'];
+	const pureDamageBuildDestinations: NavigationDestination[] = ['Water Region', 'Mountain Region'];
 	const pureEconomyBuildDestinations: NavigationDestination[] = [
-		'Lantern Canyon',
-		'Tidal Cove',
-		'Cyber City'
+		'Fire Region',
+		'Water Region',
+		'Mountain Region'
 	];
 	const fallenHuntMemory: Record<
 		string,
@@ -982,7 +982,7 @@ export function playPlannerSelfPlayGame(
 				firepowerProb >= farmNavigationThreshold ||
 				attack >= monsterHp - 0.01;
 			if (survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget) {
-				return ['Lantern Canyon'];
+				return ['Fire Region'];
 			}
 			if ((survivalTarget <= 0 || barrier >= survivalTarget) && enoughFirepower) {
 				return ['Arcane Abyss'];
@@ -1003,7 +1003,7 @@ export function playPlannerSelfPlayGame(
 		if (gate === 'pvp-pivot') {
 			const player = state.players[seat];
 			if ((player?.statusLevel ?? 0) >= 3) return visiblePvpHuntDestinations(state, seat);
-			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+			return ['Arcane Abyss', 'Fire Region', 'Water Region', 'Forest Region'];
 		}
 		if (gate === 'pvp-predictive-pivot') {
 			const player = state.players[seat];
@@ -1013,7 +1013,7 @@ export function playPlannerSelfPlayGame(
 					? visible
 					: predictedGoodTargetDestinations(state, seat, catalog, farmNavigationThreshold);
 			}
-			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+			return ['Arcane Abyss', 'Fire Region', 'Water Region', 'Forest Region'];
 		}
 		if (gate === 'pvp-predictive-mode-pivot') {
 			const player = state.players[seat];
@@ -1025,7 +1025,7 @@ export function playPlannerSelfPlayGame(
 					? visible
 					: predictedGoodTargetDestinations(state, seat, catalog, farmNavigationThreshold);
 			}
-			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+			return ['Arcane Abyss', 'Fire Region', 'Water Region', 'Forest Region'];
 		}
 		if (
 			gate === 'pvp-predictive-mode-hunt-fallback-pivot' ||
@@ -1058,14 +1058,14 @@ export function playPlannerSelfPlayGame(
 							memory?.lastDestination
 						);
 			}
-			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+			return ['Arcane Abyss', 'Fire Region', 'Water Region', 'Forest Region'];
 		}
 		if (gate === 'pvp-predictive-flex-pivot') {
 			const player = state.players[seat];
 			if ((player?.statusLevel ?? 0) >= 3) {
 				return pvpHuntOrAbyssDestinations(state, seat, catalog, farmNavigationThreshold);
 			}
-			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+			return ['Arcane Abyss', 'Fire Region', 'Water Region', 'Forest Region'];
 		}
 		if (gate === 'pvp-predictive-value-pivot') {
 			const player = state.players[seat];
@@ -1075,7 +1075,7 @@ export function playPlannerSelfPlayGame(
 					? visible
 					: predictedGoodTargetDestinations(state, seat, catalog, farmNavigationThreshold);
 			}
-			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+			return ['Arcane Abyss', 'Fire Region', 'Water Region', 'Forest Region'];
 		}
 		if (gate === 'pvp-predictive-finish-pivot') {
 			const player = state.players[seat];
@@ -1085,7 +1085,7 @@ export function playPlannerSelfPlayGame(
 					? visible
 					: predictedGoodTargetDestinations(state, seat, catalog, farmNavigationThreshold);
 			}
-			return ['Arcane Abyss', 'Lantern Canyon', 'Tidal Cove', 'Floral Patch'];
+			return ['Arcane Abyss', 'Fire Region', 'Water Region', 'Forest Region'];
 		}
 		if (gate === 'pvp-good-target-value-pivot') {
 			const player = state.players[seat];

@@ -1,3 +1,5 @@
+import { isNavigationPowerRune } from './navigationPowers';
+import { POWER_ICON, REPLACE_POWER_ICON, regionRewardRows } from './regionRules';
 /**
  * Location interactions — derived from each Spirit World location's DB reward
  * rows (`game_locations.reward_rows`). A location's available actions ARE its
@@ -26,6 +28,7 @@ export type RewardActionKind = 'spiritWorldSummon' | 'abyssSummon' | 'cultivate'
 
 /** What a single reward-row icon means, once resolved against the catalog. */
 export type RewardIconMeaning =
+	| { kind: 'navigationPower'; replace: boolean; label: string }
 	| { kind: 'action'; action: RewardActionKind; label: string }
 	| { kind: 'gainMaxBarrier'; label: string }
 	| { kind: 'restoreBarrier'; label: string }
@@ -64,6 +67,8 @@ const ANY_RUNE_ICON = '36aab6c9-b98c-4e84-b097-e743f45dde82';
  * Generated from icon_pool + runes + origins/classes joins.
  */
 export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
+	[POWER_ICON]: { kind: 'navigationPower', replace: false, label: 'Gain a Power' },
+	[REPLACE_POWER_ICON]: { kind: 'navigationPower', replace: true, label: 'Replace a Power' },
 	// Action tokens (uploaded icons; resolving the row performs the action).
 	[SUMMON_ICON]: { kind: 'action', action: 'spiritWorldSummon', label: 'Spirit World Summon' },
 	[ABYSS_SUMMON_ICON]: { kind: 'action', action: 'abyssSummon', label: 'Arcane Abyss Summon' },
@@ -96,15 +101,15 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'originRune',
 		runeId: '356f3ad2-4cac-4b69-a3cc-7559f8891d8e',
 		originId: 'fa7db249-d99d-4c1d-a37d-9027c9f5a31e',
-		originName: 'Cyber City',
-		runeName: 'Cyber City',
-		label: 'Cyber City rune'
+		originName: 'Mountain Region',
+		runeName: 'Mountain Region',
+		label: 'Mountain Region rune'
 	},
 	'8dd2b283-122b-4965-9184-f1f84e1216f4': {
 		kind: 'originRune',
 		runeId: '34b2a963-f8c6-4fc0-8272-ddc50b0036a8',
 		originId: 'ad555f03-9b89-4a71-a47c-464fd67d2c05',
-		originName: 'Floral Patch',
+		originName: 'Forest Region',
 		runeName: 'Forest',
 		label: 'Forest rune'
 	},
@@ -112,17 +117,17 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'originRune',
 		runeId: '480cd5f7-adea-481d-8ea9-aad776599d7b',
 		originId: '178449e9-cc6b-45ab-8522-5183fe1d9307',
-		originName: 'Lantern Lights',
-		runeName: 'Lantern Lights',
-		label: 'Lantern Lights rune'
+		originName: 'Fire Region',
+		runeName: 'Fire Region',
+		label: 'Fire Region rune'
 	},
 	'4d34484d-4345-448d-b192-a425841ddbc4': {
 		kind: 'originRune',
 		runeId: '5eba8681-16b8-4563-b017-22c80a84b35b',
 		originId: '294cee31-a7ac-4292-9b61-d4293c05c146',
-		originName: 'Moon Tide',
-		runeName: 'Tidal Tribe',
-		label: 'Tidal Tribe rune'
+		originName: 'Water Region',
+		runeName: 'Water Region',
+		label: 'Water Region rune'
 	},
 
 	// Special (class) runes — class-linked.
@@ -239,8 +244,8 @@ export function relicOptions(): ResolvedRune[] {
 
 /**
  * The basic origin rune (if any) for an origin display name — the key used in
- * `spirit.origins` (e.g. "Floral Patch", "Cyber City"). Only the FOUR core origins
- * with a rune (Cyber City / Floral Patch / Lantern Lights / Moon Tide) resolve; every
+ * `spirit.origins` (e.g. "Forest Region", "Mountain Region"). Only the FOUR core origins
+ * with a rune (Mountain Region / Forest Region / Fire Region / Water Region) resolve; every
  * other origin (Royal Family, Human Enclave, Abyss, …) returns null. The Cultivate
  * action uses this to grant origin runes per the player's spirit origins.
  */
@@ -267,6 +272,7 @@ export interface ResolvedRune {
 }
 
 export type GainEffect =
+	| { type: 'navigationPower'; replace: boolean }
 	| { type: 'action'; action: RewardActionKind }
 	| { type: 'gainMaxBarrier'; amount: number }
 	| { type: 'restoreBarrier'; amount: number }
@@ -335,6 +341,8 @@ function gainEffectFor(token: RewardIconToken): GainEffect | null {
 	const m = meaningFor(token);
 	if (!m) return null;
 	switch (m.kind) {
+		case 'navigationPower':
+			return { type: 'navigationPower', replace: m.replace };
 		case 'action':
 			return { type: 'action', action: m.action };
 		case 'gainMaxBarrier':
@@ -380,10 +388,11 @@ function costRequirementFor(token: RewardIconToken): CostRequirement | null {
 
 /** Convert a location's reward rows into resolved, interactive interactions. */
 export function buildLocationInteractions(
-	rewardRows: GameLocationRewardRow[] | null | undefined
+	rewardRows: GameLocationRewardRow[] | null | undefined,
+	destination?: string
 ): LocationInteraction[] {
 	const out: LocationInteraction[] = [];
-	(rewardRows ?? []).forEach((row, rowIndex) => {
+	(destination ? regionRewardRows(destination, rewardRows ?? []) : rewardRows ?? []).forEach((row, rowIndex) => {
 		if (row.type === 'text') return;
 		const gains = row.gain_icon_ids
 			.map(gainEffectFor)
@@ -432,7 +441,7 @@ export function slotSatisfies(slot: MatSlotSnapshot, req: CostRequirement): bool
 		case 'anyBasic':
 			// A basic rune is an origin rune (Cyber / Forest / Lantern / Tidal) — it
 			// carries an origin and is not a relic.
-			return slot.originId != null && !isRelic(slot);
+			return isNavigationPowerRune(slot);
 	}
 }
 

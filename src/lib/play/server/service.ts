@@ -1,3 +1,4 @@
+import { normalizeRegionContent } from '../regions';
 import { BOTS_ENABLED } from '../botAvailability';
 import { error as kitError } from '@sveltejs/kit';
 import {
@@ -192,10 +193,10 @@ function createRoomCode(): string {
 }
 
 function asState(row: PlaySessionRow): PublicGameState {
-	return parseJsonValue(
+	return normalizeRegionContent(parseJsonValue(
 		row.public_state,
 		createLobbyState({ roomCode: row.room_code, guardianNames: [] })
-	);
+	));
 }
 
 async function getSessionByRoomCode(roomCode: string): Promise<PlaySessionRow | null> {

@@ -59,10 +59,10 @@ const CATALOG: PlayCatalog = {
 		{ id: 'm-1', name: 'Abyss Maw', damage: 2, barrier: 6, rewardTrack: [], dicePool: [], chooseAmount: 2, stage: 1, order: 0 }
 	],
 	locations: [
-		{ name: 'Tidal Cove', originId: null, rewardRows: TIDAL_COVE_ROWS },
-		{ name: 'Cyber City', originId: 'fa7db249-d99d-4c1d-a37d-9027c9f5a31e', rewardRows: CYBER_CITY_ROWS },
-		{ name: 'Lantern Canyon', originId: null, rewardRows: LANTERN_CANYON_ROWS },
-		{ name: 'Floral Patch', originId: null, rewardRows: FLORAL_PATCH_ROWS }
+		{ name: 'Water Region', originId: null, rewardRows: TIDAL_COVE_ROWS },
+		{ name: 'Mountain Region', originId: 'fa7db249-d99d-4c1d-a37d-9027c9f5a31e', rewardRows: CYBER_CITY_ROWS },
+		{ name: 'Fire Region', originId: null, rewardRows: LANTERN_CANYON_ROWS },
+		{ name: 'Forest Region', originId: null, rewardRows: FLORAL_PATCH_ROWS }
 	]
 };
 
@@ -95,7 +95,7 @@ function atLocation(dest: NavigationDestination): PublicGameState {
 
 describe('resolveLocationInteraction (engine)', () => {
 	test('a free "gain" summon row opens a Spirit World draw', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] });
 		expect(s.players.Red?.pendingDraw).not.toBeNull();
 		expect(s.players.Red?.pendingDraw?.summonLimit).toBe(2);
@@ -103,7 +103,7 @@ describe('resolveLocationInteraction (engine)', () => {
 	});
 
 	test('each row is once-per-round', () => {
-		let s = atLocation('Cyber City');
+		let s = atLocation('Mountain Region');
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 2, choices: [] }); // free Rest
 		const again = applyGameCommand(s, RED, { type: 'resolveLocationInteraction', rowIndex: 2, choices: [] }, CATALOG);
 		expect(again.ok).toBe(false);
@@ -111,7 +111,7 @@ describe('resolveLocationInteraction (engine)', () => {
 	});
 
 	test('Rest intrinsically restores exactly two barrier and needs no barrier reward icons', () => {
-		let s = atLocation('Cyber City');
+		let s = atLocation('Mountain Region');
 		s.players.Red!.barrier = Math.max(0, s.players.Red!.maxBarrier - 3);
 		s.players.Red!.brokenBarrier = s.players.Red!.maxBarrier - s.players.Red!.barrier;
 		const before = s.players.Red!.barrier;
@@ -120,8 +120,8 @@ describe('resolveLocationInteraction (engine)', () => {
 		expect(s.players.Red!.brokenBarrier).toBe(s.players.Red!.maxBarrier - s.players.Red!.barrier);
 	});
 
-	test('Floral Patch relic trade gains one max barrier without restoring current barrier', () => {
-		let s = atLocation('Floral Patch');
+	test('Forest Region relic trade gains one max barrier without restoring current barrier', () => {
+		let s = atLocation('Forest Region');
 		s.players.Red!.barrier = Math.max(0, s.players.Red!.maxBarrier - 2);
 		s.players.Red!.brokenBarrier = s.players.Red!.maxBarrier - s.players.Red!.barrier;
 		const beforeMax = s.players.Red!.maxBarrier;
@@ -133,26 +133,26 @@ describe('resolveLocationInteraction (engine)', () => {
 	});
 
 	test('a trade rejects when the player cannot pay the cost', () => {
-		const s = atLocation('Tidal Cove'); // Red holds only Fairy relics → no Moon Tide runes
+		const s = atLocation('Water Region'); // Red holds only Fairy relics → no Water Region runes
 		const res = applyGameCommand(s, RED, { type: 'resolveLocationInteraction', rowIndex: 2, choices: [] }, CATALOG);
 		expect(res.ok).toBe(false);
 		if (!res.ok) expect(res.error.code).toBe('cannot_afford');
 	});
 
 	test('a trade consumes the cost runes and grants the reward', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		// Take 3 damage first to prove the updated relic trade does not restore barrier.
 		s.players.Red!.barrier = Math.max(0, s.players.Red!.maxBarrier - 3);
 		s.players.Red!.brokenBarrier = s.players.Red!.maxBarrier - s.players.Red!.barrier;
 		const beforeTokens = s.players.Red!.maxBarrier;
 		const beforeBarrier = s.players.Red!.barrier;
 		s.players.Red!.mats.push(
-			{ slotIndex: 90, hasRune: true, originId: MOON_TIDE_ORIGIN, name: 'Moon Tide Rune', type: 'rune' },
-			{ slotIndex: 91, hasRune: true, originId: MOON_TIDE_ORIGIN, name: 'Moon Tide Rune', type: 'rune' }
+			{ slotIndex: 90, hasRune: true, originId: MOON_TIDE_ORIGIN, name: 'Water Region Rune', type: 'rune' },
+			{ slotIndex: 91, hasRune: true, originId: MOON_TIDE_ORIGIN, name: 'Water Region Rune', type: 'rune' }
 		);
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 2, choices: [] });
 
-		// Both Moon Tide runes were spent.
+		// Both Water Region runes were spent.
 		expect(s.players.Red!.mats.filter((r) => r.originId === MOON_TIDE_ORIGIN && r.hasRune)).toHaveLength(0);
 		// Gained a Teapot relic (a rune slot), with no barrier reward.
 		expect(s.players.Red!.mats.some((r) => r.name === 'Teapot' && r.hasRune && r.special)).toBe(true);
@@ -162,7 +162,7 @@ describe('resolveLocationInteraction (engine)', () => {
 	});
 
 	test('an "or" gain grants the chosen option', () => {
-		let s = atLocation('Cyber City');
+		let s = atLocation('Mountain Region');
 		s.players.Red!.mats.push({ slotIndex: 90, hasRune: true, special: true, type: 'relic', name: 'Spare Relic' });
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Soul Weaver
 		// Soul Weaver is a class rune ⇒ a spirit augment: it lands in the to-place pouch,
@@ -178,26 +178,26 @@ describe('resolveLocationInteraction (engine)', () => {
 	});
 
 	test('Cultivate grants runes without restoring barriers', () => {
-		let s = atLocation('Lantern Canyon');
-		// Four Floral Patch spirits → two pairs → two runes and no barrier restoration.
+		let s = atLocation('Fire Region');
+		// Four Forest Region spirits → two pairs → two runes and no barrier restoration.
 		s.players.Red!.barrier = Math.max(0, s.players.Red!.maxBarrier - 3);
 		s.players.Red!.brokenBarrier = s.players.Red!.maxBarrier - s.players.Red!.barrier;
 		const beforeBarrier = s.players.Red!.barrier;
 		s.players.Red!.spirits = [
-			{ slotIndex: 1, id: 'x1', name: 'F A', cost: 1, classes: {}, origins: { 'Floral Patch': 1 }, isFaceDown: false },
-			{ slotIndex: 2, id: 'x2', name: 'F B', cost: 1, classes: {}, origins: { 'Floral Patch': 1 }, isFaceDown: false },
-			{ slotIndex: 3, id: 'x3', name: 'F C', cost: 1, classes: {}, origins: { 'Floral Patch': 1 }, isFaceDown: false },
-			{ slotIndex: 4, id: 'x4', name: 'F D', cost: 1, classes: {}, origins: { 'Floral Patch': 1 }, isFaceDown: false }
+			{ slotIndex: 1, id: 'x1', name: 'F A', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false },
+			{ slotIndex: 2, id: 'x2', name: 'F B', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false },
+			{ slotIndex: 3, id: 'x3', name: 'F C', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false },
+			{ slotIndex: 4, id: 'x4', name: 'F D', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false }
 		];
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] });
-		const forestRunes = s.players.Red!.mats.filter((r) => r.name === 'Floral Patch Rune' && r.hasRune);
+		const forestRunes = s.players.Red!.mats.filter((r) => r.name === 'Forest Region Rune' && r.hasRune);
 		expect(forestRunes).toHaveLength(2);
 		expect(s.players.Red!.barrier).toBe(beforeBarrier);
 		expect(s.players.Red!.brokenBarrier).toBe(s.players.Red!.maxBarrier - s.players.Red!.barrier);
 	});
 
 	test('a row granting two summons queues the second draw', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		s.players.Red!.mats.push({ slotIndex: 90, hasRune: true, special: true, type: 'relic', name: 'Spare Relic' });
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 1, choices: [] }); // Summon + Abyss
 		expect(s.players.Red!.pendingDraw?.summonLimit).toBe(2); // Spirit World first
@@ -224,7 +224,7 @@ describe('resolveLocationInteraction (engine)', () => {
 
 describe('summon draw-and-pick flow', () => {
 	test('Spirit World Summon draws 4 and lets the player summon up to 2', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		s.players.Red!.spirits = []; // clear opening spirits so all 7 slots are open
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] }); // free SW summon
 
@@ -246,7 +246,7 @@ describe('summon draw-and-pick flow', () => {
 	});
 
 	test('Arcane Abyss Summon draws 3 (face-down) and lets the player summon up to 1', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		s.players.Red!.spirits = [];
 		s.players.Red!.mats.push({ slotIndex: 90, hasRune: true, special: true, type: 'relic', name: 'Spare Relic' });
 		// Row 1 grants Spirit World Summon + a queued Arcane Abyss Summon.
@@ -267,7 +267,7 @@ describe('summon draw-and-pick flow', () => {
 
 describe('draw-leak guards', () => {
 	test('ending the phase is blocked while a reward draw is pending', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] }); // free summon → pendingDraw
 		expect(s.players.Red!.pendingDraw).not.toBeNull();
 		const res = applyGameCommand(s, RED, { type: 'endLocationActions' }, CATALOG);
@@ -276,7 +276,7 @@ describe('draw-leak guards', () => {
 	});
 
 	test('force-advancing returns an in-progress draw to its bag (no leak)', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		const bagBefore = s.bags.hexSpirits.contents.length;
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] });
 		expect(s.bags.hexSpirits.contents.length).toBe(bagBefore - 4); // 4 drawn out
@@ -290,7 +290,7 @@ describe('draw-leak guards', () => {
 	});
 
 	test('force-advancing also drops a queued (un-started) summon without leaking', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		s.players.Red!.mats.push({ slotIndex: 90, hasRune: true, special: true, type: 'relic', name: 'Spare Relic' });
 		const bagBefore = s.bags.hexSpirits.contents.length;
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 1, choices: [] }); // Summon + queued Abyss
@@ -307,7 +307,7 @@ describe('bots resolve location interactions', () => {
 	const ALWAYS: BotRandom = { int: () => 0, chance: () => true };
 
 	test('a bot resolves a free reward row and ends the phase with only legal commands', () => {
-		const s = atLocation('Tidal Cove');
+		const s = atLocation('Water Region');
 		const commands = planBotPhaseActions(s, 'Red', CATALOG, ALWAYS);
 
 		// It chose the only affordable row (free summon) and finished the phase.
@@ -329,7 +329,7 @@ describe('bots resolve location interactions', () => {
 
 describe('updated trade class rules', () => {
 	test('Runic Duplicator pays the trade cost and gains two copies of the selected augment', () => {
-		let s = atLocation('Cyber City');
+		let s = atLocation('Mountain Region');
 		s.players.Red!.spirits = [
 			{ slotIndex: 1, id: 'mod', name: 'Mole', cost: 2, classes: { 'Runic Duplicator': 1 }, origins: {}, isFaceDown: false }
 		];
@@ -345,7 +345,7 @@ describe('updated trade class rules', () => {
 	});
 
 	test('the obsolete Undercover free-trade flag no longer waives a cost', () => {
-		let s = atLocation('Tidal Cove');
+		let s = atLocation('Water Region');
 		s.players.Red!.freeNextRelicTrade = true;
 		s.players.Red!.mats = [];
 		const result = applyGameCommand(s, RED, { type: 'resolveLocationInteraction', rowIndex: 2, choices: [] }, CATALOG);

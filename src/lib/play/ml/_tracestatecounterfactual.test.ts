@@ -77,12 +77,12 @@ const FULL_LOOKAHEAD_DEPTH = 2;
 const FULL_LOOKAHEAD_BEAM = 8;
 const FULL_LOOKAHEAD_ROOT_BEAM = 24;
 const FULL_TARGET_TEMPERATURE = 0.25;
-const BUILD_OPTION_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch', 'Cyber City', 'Tidal Cove'];
-const SCALING_OPTION_DESTINATIONS: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
-const RESTORE_OPTION_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
-const CLOSER_DAMAGE_DESTINATIONS: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
-const CLOSER_MAX_BARRIER_DESTINATIONS: NavigationDestination[] = ['Floral Patch', 'Lantern Canyon', 'Cyber City'];
-const CLOSER_RESTORE_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
+const BUILD_OPTION_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region', 'Mountain Region', 'Water Region'];
+const SCALING_OPTION_DESTINATIONS: NavigationDestination[] = ['Water Region', 'Mountain Region', 'Fire Region'];
+const RESTORE_OPTION_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region'];
+const CLOSER_DAMAGE_DESTINATIONS: NavigationDestination[] = ['Water Region', 'Mountain Region', 'Fire Region'];
+const CLOSER_MAX_BARRIER_DESTINATIONS: NavigationDestination[] = ['Forest Region', 'Fire Region', 'Mountain Region'];
+const CLOSER_RESTORE_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region'];
 const GOOD_TARGET_CONTROLLED_CORRUPT_FARM =
 	(process.env.ARC_GOOD_TARGET_CONTROLLED_CORRUPT_FARM ?? process.env.TRACEQ_GOOD_TARGET_CONTROLLED_CORRUPT_FARM ?? '0') === '1';
 const GOOD_TARGET_CONTROLLED_CORRUPT_MAX_VP =
@@ -721,8 +721,8 @@ function goodTargetPivotDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player || !monster) return ['Tidal Cove', 'Cyber City', 'Lantern Canyon', 'Floral Patch'];
-	if ((player.statusLevel ?? 0) > 2) return ['Floral Patch', 'Tidal Cove', 'Cyber City', 'Lantern Canyon'];
+	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
+	if ((player.statusLevel ?? 0) > 2) return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, cfg)) return ['Arcane Abyss'];
 	const destinations: NavigationDestination[] = [];
 	const counts = awakenedClassCounts(player);
@@ -737,22 +737,22 @@ function goodTargetPivotDestinations(
 	const needsRestore = survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget;
 	const needsMaxBarrier = survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2;
 	const conversion = hp4ConversionNeed(state, seat, catalog);
-	if (conversion.needCultivatorTicket) return conversion.hasRelic ? ['Tidal Cove'] : ['Tidal Cove', 'Cyber City'];
-	if (conversion.needCultivate) return ['Lantern Canyon', 'Tidal Cove', 'Cyber City'];
-	if ((player.victoryPoints ?? 0) >= 18 || ((counts.Healer ?? 0) > 0 && maxBarrier >= 8)) appendDestination(destinations, 'Floral Patch');
+	if (conversion.needCultivatorTicket) return conversion.hasRelic ? ['Water Region'] : ['Water Region', 'Mountain Region'];
+	if (conversion.needCultivate) return ['Fire Region', 'Water Region', 'Mountain Region'];
+	if ((player.victoryPoints ?? 0) >= 18 || ((counts.Healer ?? 0) > 0 && maxBarrier >= 8)) appendDestination(destinations, 'Forest Region');
 	if (needsRestore) {
-		appendDestination(destinations, 'Floral Patch');
-		appendDestination(destinations, 'Lantern Canyon');
+		appendDestination(destinations, 'Forest Region');
+		appendDestination(destinations, 'Fire Region');
 	}
-	if (needsMaxBarrier) appendDestination(destinations, 'Lantern Canyon');
+	if (needsMaxBarrier) appendDestination(destinations, 'Fire Region');
 	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || player.spirits.length < 6 || (counts['Spirit Animal'] ?? 0) < 2) {
-		appendDestination(destinations, 'Tidal Cove');
-		appendDestination(destinations, 'Cyber City');
+		appendDestination(destinations, 'Water Region');
+		appendDestination(destinations, 'Mountain Region');
 	}
-	appendDestination(destinations, 'Floral Patch');
-	appendDestination(destinations, 'Tidal Cove');
-	appendDestination(destinations, 'Cyber City');
-	appendDestination(destinations, 'Lantern Canyon');
+	appendDestination(destinations, 'Forest Region');
+	appendDestination(destinations, 'Water Region');
+	appendDestination(destinations, 'Mountain Region');
+	appendDestination(destinations, 'Fire Region');
 	return destinations;
 }
 
@@ -880,10 +880,10 @@ function rootDestinationsForGate(
 		return goodTargetPivotDestinations(state, seat, catalog, cfg);
 	}
 	if (gate === 'good-target-exposure') {
-		return ['Lantern Canyon', 'Floral Patch', 'Tidal Cove', 'Cyber City', 'Arcane Abyss'];
+		return ['Fire Region', 'Forest Region', 'Water Region', 'Mountain Region', 'Arcane Abyss'];
 	}
 	if (gate === 'good-target-rendezvous-exposure') {
-		return ['Floral Patch', 'Tidal Cove', 'Cyber City', 'Lantern Canyon', 'Arcane Abyss'];
+		return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region', 'Arcane Abyss'];
 	}
 	if (gate === 'unsafe-firepower-build-option') {
 		return combatReadyButNeedsRestore(state, seat, catalog) ? RESTORE_OPTION_DESTINATIONS : BUILD_OPTION_DESTINATIONS;
@@ -892,7 +892,7 @@ function rootDestinationsForGate(
 		return combatReadyButNeedsRestore(state, seat, catalog) ? RESTORE_OPTION_DESTINATIONS : SCALING_OPTION_DESTINATIONS;
 	}
 	if (gate === 'hp2-survival-deficit') return RESTORE_OPTION_DESTINATIONS;
-	if (gate === 'hp4-first-wall') return ['Arcane Abyss', 'Lantern Canyon', 'Floral Patch'];
+	if (gate === 'hp4-first-wall') return ['Arcane Abyss', 'Fire Region', 'Forest Region'];
 	if (gate === 'route-closer') {
 		const player = state.players[seat];
 		const monster = state.monster;
@@ -918,7 +918,7 @@ function rootDestinationsForGate(
 		const firepowerProb = firepowerKillProbability(state, seat, catalog);
 		const attack = expectedAttack(player);
 		const enoughFirepower = cleanProb >= 0.5 || firepowerProb >= 0.5 || attack >= monsterHp - 0.01;
-		if (survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget) return ['Lantern Canyon'];
+		if (survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget) return ['Fire Region'];
 		if ((survivalTarget <= 0 || barrier >= survivalTarget) && enoughFirepower) return ['Arcane Abyss'];
 		return CLOSER_DAMAGE_DESTINATIONS;
 	}
@@ -930,8 +930,8 @@ function rootDestinationsForGate(
 		const attack = expectedAttack(player);
 		const firepowerProb = firepowerKillProbability(state, seat, catalog);
 		return monsterHp > 0 && (attack < monsterHp + 0.5 || firepowerProb < 0.5)
-			? ['Cyber City', 'Tidal Cove', 'Lantern Canyon']
-			: ['Floral Patch', 'Lantern Canyon'];
+			? ['Mountain Region', 'Water Region', 'Fire Region']
+			: ['Forest Region', 'Fire Region'];
 	}
 	return undefined;
 }
@@ -1028,15 +1028,15 @@ function hp4SurvivalOracleNavigation(
 			state,
 			seat,
 			catalog,
-			conversion.hasRelic ? ['Tidal Cove'] : ['Tidal Cove', 'Cyber City']
+			conversion.hasRelic ? ['Water Region'] : ['Water Region', 'Mountain Region']
 		) ?? plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	}
 	if (conversion.needCultivate) {
-		return firstLegalDestination(state, seat, catalog, ['Lantern Canyon', 'Tidal Cove', 'Cyber City']) ??
+		return firstLegalDestination(state, seat, catalog, ['Fire Region', 'Water Region', 'Mountain Region']) ??
 			plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	}
 	if (needsMaxBarrier && cultivator >= 2) {
-		return firstLegalDestination(state, seat, catalog, ['Lantern Canyon', 'Tidal Cove', 'Cyber City']) ??
+		return firstLegalDestination(state, seat, catalog, ['Fire Region', 'Water Region', 'Mountain Region']) ??
 			plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	}
 	if (needsDamage) {
@@ -1102,8 +1102,8 @@ function finishLineOracleNavigation(
 	if (canRestore && !survivalReady) {
 		const largeDeficit = survivalTarget - currentBarrier >= 3;
 		const restoreOrder: NavigationDestination[] = largeDeficit && state.round <= cfg.maxRounds - 2
-			? ['Floral Patch', 'Lantern Canyon']
-			: ['Lantern Canyon', 'Floral Patch'];
+			? ['Forest Region', 'Fire Region']
+			: ['Fire Region', 'Forest Region'];
 		return firstLegalDestination(state, seat, catalog, restoreOrder) ??
 			abyss ??
 			plannerNavigationCommand(state, seat, catalog, cfg, seed);
@@ -1144,19 +1144,19 @@ function scriptedNavigationCommand(
 	if (script === 'policy') return plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	if (script === 'abyss-probe') return abyss ?? plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	if (script === 'expose-floral') {
-		return firstLegalDestination(state, seat, catalog, ['Floral Patch']) ??
+		return firstLegalDestination(state, seat, catalog, ['Forest Region']) ??
 			plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	}
 	if (script === 'expose-tidal') {
-		return firstLegalDestination(state, seat, catalog, ['Tidal Cove']) ??
+		return firstLegalDestination(state, seat, catalog, ['Water Region']) ??
 			plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	}
 	if (script === 'expose-cyber') {
-		return firstLegalDestination(state, seat, catalog, ['Cyber City']) ??
+		return firstLegalDestination(state, seat, catalog, ['Mountain Region']) ??
 			plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	}
 	if (script === 'expose-lantern') {
-		return firstLegalDestination(state, seat, catalog, ['Lantern Canyon']) ??
+		return firstLegalDestination(state, seat, catalog, ['Fire Region']) ??
 			plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	}
 	if (script === 'restore-loop') {
@@ -1172,17 +1172,17 @@ function scriptedNavigationCommand(
 					state,
 					seat,
 					catalog,
-					conversion.hasRelic ? ['Tidal Cove'] : ['Tidal Cove', 'Cyber City']
+					conversion.hasRelic ? ['Water Region'] : ['Water Region', 'Mountain Region']
 				) ?? plannerNavigationCommand(state, seat, catalog, cfg, seed);
 			}
 			if (conversion.needCultivate) {
-				return firstLegalDestination(state, seat, catalog, ['Lantern Canyon', 'Tidal Cove', 'Cyber City']) ??
+				return firstLegalDestination(state, seat, catalog, ['Fire Region', 'Water Region', 'Mountain Region']) ??
 					plannerNavigationCommand(state, seat, catalog, cfg, seed);
 			}
 			if (needsMaxBarrier || (counts.Cultivator ?? 0) < 2) {
 				const destinations: NavigationDestination[] = (counts.Cultivator ?? 0) >= 2
-					? ['Lantern Canyon', 'Tidal Cove', 'Cyber City']
-					: ['Tidal Cove', 'Cyber City'];
+					? ['Fire Region', 'Water Region', 'Mountain Region']
+					: ['Water Region', 'Mountain Region'];
 				return firstLegalDestination(state, seat, catalog, destinations) ?? plannerNavigationCommand(state, seat, catalog, cfg, seed);
 			}
 			return abyss ?? plannerNavigationCommand(state, seat, catalog, cfg, seed);

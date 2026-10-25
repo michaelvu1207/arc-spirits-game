@@ -194,21 +194,21 @@ describe('Rest effects', () => {
 });
 
 describe('Cultivate action (intrinsic origin-rune yield)', () => {
-	// Origin keys are origin DISPLAY NAMES (e.g. "Floral Patch"), as built by the catalog
-	// loader. The basic rune for the Floral Patch origin is displayed as "Forest", but its
-	// resolved slot name is "<Origin> Rune" → "Floral Patch Rune".
+	// Origin keys are origin DISPLAY NAMES (e.g. "Forest Region"), as built by the catalog
+	// loader. The basic rune for the Forest Region origin is displayed as "Forest", but its
+	// resolved slot name is "<Origin> Rune" → "Forest Region Rune".
 	it('grants 1 origin rune without restoring barriers', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			barrier: 2,
 			brokenBarrier: 2,
 			spirits: [
-				spirit(1, 'A', {}, { 'Floral Patch': 1 }),
-				spirit(2, 'B', {}, { 'Floral Patch': 1 })
+				spirit(1, 'A', {}, { 'Forest Region': 1 }),
+				spirit(2, 'B', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Floral Patch Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(1);
 		expect(p.barrier).toBe(2);
 		expect(p.brokenBarrier).toBe(2);
 		expect(p.maxBarrier).toBe(4); // no Cultivator → no potential
@@ -221,7 +221,7 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			maxBarrier: 4,
 			barrier: 4,
 			spirits: [
-				spirit(1, 'A', { Fighter: 2 }, { 'Floral Patch': 1 }),
+				spirit(1, 'A', { Fighter: 2 }, { 'Forest Region': 1 }),
 				spirit(2, 'B', { Healer: 1 }, {})
 			]
 		});
@@ -252,50 +252,50 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			barrier: 1,
 			brokenBarrier: 3,
 			spirits: [
-				spirit(1, 'A', {}, { 'Floral Patch': 1 }),
-				spirit(2, 'B', {}, { 'Floral Patch': 1 }),
-				spirit(3, 'C', {}, { 'Floral Patch': 1 }),
-				spirit(4, 'D', {}, { 'Floral Patch': 1 })
+				spirit(1, 'A', {}, { 'Forest Region': 1 }),
+				spirit(2, 'B', {}, { 'Forest Region': 1 }),
+				spirit(3, 'C', {}, { 'Forest Region': 1 }),
+				spirit(4, 'D', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Floral Patch Rune')).toHaveLength(2);
+		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(2);
 		expect(p.barrier).toBe(1);
 		expect(p.brokenBarrier).toBe(3);
 	});
 
-	it('grants one rune PER origin (two Floral Patch + two Lantern Lights → one each)', () => {
+	it('grants one rune PER origin (two Forest Region + two Fire Region → one each)', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			spirits: [
-				spirit(1, 'A', {}, { 'Floral Patch': 1 }),
-				spirit(2, 'B', {}, { 'Floral Patch': 1 }),
-				spirit(3, 'C', {}, { 'Lantern Lights': 1 }),
-				spirit(4, 'D', {}, { 'Lantern Lights': 1 })
+				spirit(1, 'A', {}, { 'Forest Region': 1 }),
+				spirit(2, 'B', {}, { 'Forest Region': 1 }),
+				spirit(3, 'C', {}, { 'Fire Region': 1 }),
+				spirit(4, 'D', {}, { 'Fire Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Floral Patch Rune')).toHaveLength(1);
-		expect(p.mats.filter((r) => r.name === 'Lantern Lights Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Fire Region Rune')).toHaveLength(1);
 	});
 
 	it('counts face-down (unawakened) spirits — origin is always active', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			spirits: [
-				spirit(1, 'A', {}, { 'Floral Patch': 1 }, true), // face-down still counts
-				spirit(2, 'B', {}, { 'Floral Patch': 1 })
+				spirit(1, 'A', {}, { 'Forest Region': 1 }, true), // face-down still counts
+				spirit(2, 'B', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Floral Patch Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(1);
 	});
 
 	it('grants nothing for a lone spirit, or for an origin without a basic rune', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			spirits: [
-				spirit(1, 'Solo', {}, { 'Floral Patch': 1 }), // only one of the origin → 0
+				spirit(1, 'Solo', {}, { 'Forest Region': 1 }), // only one of the origin → 0
 				spirit(2, 'Royal A', {}, { 'Royal Family': 1 }), // Royal Family has no basic rune
 				spirit(3, 'Royal B', {}, { 'Royal Family': 1 })
 			]
@@ -308,7 +308,7 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 
 describe('Cultivator (onCultivate → potential by awakened count)', () => {
 	const cult = (slot: number, name: string, faceDown = false) =>
-		spirit(slot, name, { Cultivator: 1 }, { 'Floral Patch': 1 }, faceDown);
+		spirit(slot, name, { Cultivator: 1 }, { 'Forest Region': 1 }, faceDown);
 
 	it('two awakened Cultivators → +1 potential', () => {
 		const p = makePlayer({ maxBarrier: 4, spirits: [cult(1, 'C1'), cult(2, 'C2')] });
@@ -540,10 +540,10 @@ describe('Arcane Vanguard (awakening)', () => {
 });
 
 describe('Abyss Summoner (runtime bag behavior)', () => {
-	it('does not use the obsolete Floral Patch navigation trigger', () => {
+	it('does not use the obsolete Forest Region navigation trigger', () => {
 		const p = makePlayer({
 			spirits: [spirit(1, 'A', { 'Abyss Summoner': 1 }, {})],
-			navigationDestination: 'Floral Patch'
+			navigationDestination: 'Forest Region'
 		});
 		applyTrigger(makeState(p), 'Red', 'onNavigate', []);
 		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
@@ -580,7 +580,7 @@ describe('Tide Stalker (onNavigate)', () => {
 		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
 		const dec = p.pendingDecisions.find((d) => d.kind === 'deepSeaHunterRedirect');
 		expect(dec).toBeDefined();
-		expect(dec!.options.map((o) => o.id)).toContain('Tidal Cove');
+		expect(dec!.options.map((o) => o.id)).toContain('Water Region');
 		expect(dec!.options.map((o) => o.id)).toContain('keep');
 	});
 
@@ -599,14 +599,14 @@ describe('doubleRunes primitive (Cultivate yield)', () => {
 			barrier: 1,
 			brokenBarrier: 3,
 			spirits: [
-				spirit(1, 'A', {}, { 'Floral Patch': 1 }),
-				spirit(2, 'B', {}, { 'Floral Patch': 1 }),
-				spirit(3, 'C', {}, { 'Floral Patch': 1 }),
-				spirit(4, 'D', {}, { 'Floral Patch': 1 })
+				spirit(1, 'A', {}, { 'Forest Region': 1 }),
+				spirit(2, 'B', {}, { 'Forest Region': 1 }),
+				spirit(3, 'C', {}, { 'Forest Region': 1 }),
+				spirit(4, 'D', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Floral Patch Rune')).toHaveLength(4); // floor(4/2)=2 → doubled
+		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(4); // floor(4/2)=2 → doubled
 		// Cultivate does not restore barriers, even when rune yield is doubled.
 		expect(p.barrier).toBe(1);
 		expect(p.brokenBarrier).toBe(3);

@@ -39,6 +39,9 @@
 			null
 	);
 	const inventory = $derived(player?.powerInventory ?? []);
+	let replacementPower = $state<NavigationPowerId | ''>('');
+	const replacing = $derived(!!player?.pendingPowerReplacement);
+	const replacementTrade = $derived(player?.navigationDestination === 'Fire Region');
 	const committed = $derived(
 		navigationPowerById(player?.navigationPower ?? player?.pendingNavigationPower)
 	);
@@ -60,7 +63,7 @@
 			!!player &&
 			!player.phaseReady &&
 			player.navigationDestination !== 'Arcane Abyss' &&
-			!player.actionsUsedThisRound.includes('gain-power') &&
+			(!replacementTrade || inventory.length > 0) &&
 			availableRunes.length > 0
 	);
 	let partner = $state<SeatColor | ''>('');
@@ -76,6 +79,7 @@
 	);
 
 	$effect(() => {
+		if (replacementPower && !inventory.includes(replacementPower)) replacementPower = '';
 		if (!tradeEnabled || room.status !== 'active') tradeOpen = false;
 		if (!canAcquire || room.status !== 'active') acquireOpen = false;
 	});
@@ -268,16 +272,38 @@
 					>
 				</div>
 			{:else if draft.length && !offer?.mandatory}
-				<p>Choose one to keep. The other Powers return to the pool.</p>
+				<p>
+					{replacing
+						? 'Choose a held Power to replace, then choose its replacement.'
+						: 'Choose one to keep. The other Powers return to the pool.'}
+				</p>
+				{#if replacing}
+					<label class="partner"
+						>Replace<select
+							data-testid="power-to-replace"
+							bind:value={replacementPower}
+							disabled={busy}
+						>
+							<option value="">Choose a held Power</option>
+							{#each [...new Set(inventory)] as held}<option value={held}
+									>{navigationPowerById(held)?.name}</option
+								>{/each}
+						</select></label
+					>
+				{/if}
 				<div class="options" data-testid="navigation-power-draft">
 					{#each draft as id, index (`${id}:${index}`)}
 						{@const power = navigationPowerById(id)}
 						<button
 							type="button"
-							disabled={busy}
+							disabled={busy || (replacing && (!replacementPower || replacementPower === id))}
 							data-testid={`draft-power-${id}`}
-							onclick={() => onCommand({ type: 'chooseNavigationPower', powerId: id })}
-							><strong>{power?.name ?? id}</strong><span>{power?.text ?? ''}</span></button
+							onclick={() =>
+								onCommand({
+									type: 'chooseNavigationPower',
+									powerId: id,
+									...(replacing && replacementPower ? { replacePowerId: replacementPower } : {})
+								})}><strong>{power?.name ?? id}</strong><span>{power?.text ?? ''}</span></button
 						>
 					{/each}
 				</div>
@@ -300,7 +326,11 @@
 					{/each}
 				</div>
 			{:else if acquireOpen}
-				<p>Pay 1 Origin Rune. Reveal 3 Powers and choose 1 to keep.</p>
+				<p>
+					{replacementTrade
+						? 'Pay 1 Origin Rune to replace a held Power. Reveal 3 and choose 1.'
+						: 'Pay 1 Origin Rune. Reveal 3 Powers and choose 1 to keep.'}
+				</p>
 				<div class="options">
 					{#each availableRunes as rune (rune.slotIndex)}
 						<button
@@ -505,7 +535,7 @@
 	}
 	.power-status {
 		position: fixed;
-		bottom: max(12px, env(safe-area-inset-bottom));
+		bottom: max(80px, calc(env(safe-area-inset-bottom) + 68px));
 		left: 50%;
 		transform: translateX(-50%);
 		z-index: 60;

@@ -71,10 +71,10 @@ const TIDAL_COVE_ROWS: GameLocationRewardRow[] = [
 ];
 
 const LIVE_LOCATIONS: Record<string, GameLocationRewardRow[]> = {
-	'Cyber City': CYBER_CITY_ROWS,
-	'Floral Patch': FLORAL_PATCH_ROWS,
-	'Lantern Canyon': LANTERN_CANYON_ROWS,
-	'Tidal Cove': TIDAL_COVE_ROWS
+	'Mountain Region': CYBER_CITY_ROWS,
+	'Forest Region': FLORAL_PATCH_ROWS,
+	'Fire Region': LANTERN_CANYON_ROWS,
+	'Water Region': TIDAL_COVE_ROWS
 };
 
 function rune(partial: Partial<MatSlotSnapshot>): MatSlotSnapshot {
@@ -123,7 +123,7 @@ describe('buildLocationInteractions — live map', () => {
 		}
 	});
 
-	test('Tidal Cove: free summon, a "various augments" choice, and a Moon-Tide trade', () => {
+	test('Water Region: free summon, a "various augments" choice, and a Moon-Tide trade', () => {
 		const interactions = buildLocationInteractions(TIDAL_COVE_ROWS);
 		expect(interactions).toHaveLength(3);
 
@@ -142,7 +142,7 @@ describe('buildLocationInteractions — live map', () => {
 			expect(choose.options.every((o) => o.special && o.classId != null)).toBe(true);
 		}
 
-		// Row 2: pay 2 Moon Tide runes → a Teapot relic.
+		// Row 2: pay 2 Water Region runes → a Teapot relic.
 		expect(interactions[2].cost).toEqual([
 			expect.objectContaining({ match: 'origin', originId: MOON_TIDE_ORIGIN }),
 			expect.objectContaining({ match: 'origin', originId: MOON_TIDE_ORIGIN })
@@ -152,7 +152,7 @@ describe('buildLocationInteractions — live map', () => {
 		]);
 	});
 
-	test('Cyber City: a Cyber-rune Abyss summon, an "or" augment choice, and a Cyber trade', () => {
+	test('Mountain Region: a Cyber-rune Abyss summon, an "or" augment choice, and a Cyber trade', () => {
 		const interactions = buildLocationInteractions(CYBER_CITY_ROWS);
 		expect(interactions).toHaveLength(3);
 
@@ -175,7 +175,7 @@ describe('buildLocationInteractions — live map', () => {
 		expect(interactions[2].gains[0]).toMatchObject({ type: 'rune', rune: { name: 'Magnet' } });
 	});
 
-	test('Lantern Canyon: an any-basic-rune trade for a Cursed Spirit augment', () => {
+	test('Fire Region: an any-basic-rune trade for a Cursed Spirit augment', () => {
 		const interactions = buildLocationInteractions(LANTERN_CANYON_ROWS);
 		expect(interactions).toHaveLength(3);
 
@@ -191,7 +191,7 @@ describe('buildLocationInteractions — live map', () => {
 
 		// Row 1: free Cultivate. Its pair-based restoration is resolved by the action.
 		expect(interactions[1].gains).toEqual([{ type: 'action', action: 'cultivate' }]);
-		// Row 2: pay 2 Lantern Lights → Firecracker relic.
+		// Row 2: pay 2 Fire Region → Firecracker relic.
 		expect(interactions[2].cost).toEqual([
 			expect.objectContaining({ match: 'origin', originId: LANTERN_ORIGIN }),
 			expect.objectContaining({ match: 'origin', originId: LANTERN_ORIGIN })
@@ -199,7 +199,7 @@ describe('buildLocationInteractions — live map', () => {
 		expect(interactions[2].gains[0]).toMatchObject({ type: 'rune', rune: { name: 'Firecracker' } });
 	});
 
-	test('Floral Patch: max-barrier trade, forest trade, and free Rest', () => {
+	test('Forest Region: max-barrier trade, forest trade, and free Rest', () => {
 		const interactions = buildLocationInteractions(FLORAL_PATCH_ROWS);
 		expect(interactions).toHaveLength(3);
 		expect(interactions[0].gains).toEqual([{ type: 'gainMaxBarrier', amount: 1 }]);
@@ -235,7 +235,7 @@ describe('buildLocationInteractions — live map', () => {
 });
 
 describe('matchRewardCost / canAfford', () => {
-	const tidalTrade = buildLocationInteractions(TIDAL_COVE_ROWS)[2]; // 2× Moon Tide origin
+	const tidalTrade = buildLocationInteractions(TIDAL_COVE_ROWS)[2]; // 2× Water Region origin
 	const anyRelicTrade = buildLocationInteractions(CYBER_CITY_ROWS)[1]; // pay any relic
 	const anyBasicTrade = buildLocationInteractions(LANTERN_CANYON_ROWS)[0]; // pay any basic rune
 
@@ -248,7 +248,7 @@ describe('matchRewardCost / canAfford', () => {
 	});
 
 	test('origin cost matches by cultivate name fallback ("<Origin> Rune")', () => {
-		const runes = [rune({ name: 'Moon Tide Rune' }), rune({ name: 'Moon Tide Rune' })];
+		const runes = [rune({ name: 'Water Region Rune' }), rune({ name: 'Water Region Rune' })];
 		expect(canAfford(tidalTrade, runes)).toBe(true);
 	});
 
@@ -287,7 +287,7 @@ describe('matchRewardCost / canAfford', () => {
 
 	test('a wildcard never steals a rune a specific requirement needs', () => {
 		const cost: CostRequirement[] = [
-			{ match: 'origin', originId: MOON_TIDE_ORIGIN, originName: 'Moon Tide', label: 'Moon Tide' },
+			{ match: 'origin', originId: MOON_TIDE_ORIGIN, originName: 'Water Region', label: 'Water Region' },
 			{ match: 'anyRelic', label: 'Any relic' }
 		];
 		const ok = matchRewardCost(cost, [rune({ type: 'relic' }), rune({ originId: MOON_TIDE_ORIGIN })]);

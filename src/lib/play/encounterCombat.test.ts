@@ -54,16 +54,16 @@ function started3(seed = 1): PublicGameState {
 const arcane = (n: number): AttackDie[] =>
 	Array.from({ length: n }, (_, i) => ({ instanceId: `d${i}`, tier: 'arcane' as const }));
 
-/** Lock everyone into Cyber City, configure sides, then force the reveal into the
+/** Lock everyone into Mountain Region, configure sides, then force the reveal into the
  *  Encounter phase. `setup` runs after locks (statusLevel/dice survive the reveal). */
 function intoEncounter(
 	seed: number,
 	setup: (s: PublicGameState) => void
 ): PublicGameState {
 	let state = started3(seed);
-	state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
-	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Cyber City' });
-	state = apply(state, ORANGE, { type: 'lockNavigation', destination: 'Cyber City' });
+	state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
+	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Mountain Region' });
+	state = apply(state, ORANGE, { type: 'lockNavigation', destination: 'Mountain Region' });
 	// All spirits cleared so no awaken/trigger noise perturbs barriers.
 	for (const seat of state.activeSeats) {
 		const p = state.players[seat]!;

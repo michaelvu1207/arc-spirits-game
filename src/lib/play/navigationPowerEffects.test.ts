@@ -25,7 +25,7 @@ const catalog: PlayCatalog = {
 		effectSchema: []
 	}))
 };
-function setup(id: NavigationPowerId, destination = 'Cyber City') {
+function setup(id: NavigationPowerId, destination = 'Mountain Region') {
 	const p = makePlayer({
 		navigationPower: id,
 		navigationDestination: destination,
@@ -55,7 +55,7 @@ describe('Navigation Power offers', () => {
 	});
 	it('does not offer a co-location effect when alone or double-offer on reveal retry', () => {
 		const { state, p, b } = setup('ember-charge');
-		b.navigationDestination = 'Tidal Cove';
+		b.navigationDestination = 'Water Region';
 		resolveNavigationPowerReveal(state, catalog);
 		expect(p.navigationPowerOffers).toBeUndefined();
 		const c = setup('ember-charge');
@@ -72,7 +72,7 @@ describe('Navigation Power offers', () => {
 		expect(p.navigationPowerOffers).toHaveLength(1);
 	});
 	it('gains all three individually selected augments without reusing an offer id', () => {
-		const { state, p } = setup('forest-bounty', 'Floral Patch');
+		const { state, p } = setup('forest-bounty', 'Forest Region');
 		resolveNavigationPowerReveal(state, catalog);
 		const ids: string[] = [];
 		for (const name of ['Fighter', 'Elementalist', 'Soul Weaver']) {
@@ -121,7 +121,7 @@ describe('Navigation Power offers', () => {
 		const green = makePlayer({
 			playerColor: 'Green',
 			navigationPower: 'stone-shelter',
-			navigationDestination: 'Cyber City'
+			navigationDestination: 'Mountain Region'
 		});
 		state.players.Green = green;
 		state.activeSeats.push('Green');
@@ -169,7 +169,7 @@ describe('Navigation Power offers', () => {
 		expect(p.maxBarrier).toBe(8);
 	});
 	it('random powers reproduce after JSON reload', () => {
-		const { state, p } = setup('tidal-arsenal', 'Tidal Cove');
+		const { state, p } = setup('tidal-arsenal', 'Water Region');
 		const reloaded = JSON.parse(JSON.stringify(state));
 		grantRandomNavigationPowers(state, 'Red', 3);
 		grantRandomNavigationPowers(reloaded, 'Red', 3);

@@ -722,14 +722,14 @@ describe('Woundreaver (inCombat)', () => {
 });
 
 describe('Aquamaiden (onTakeDamage)', () => {
-	it('takes 1 less damage per awakened Moon Tide spirit', () => {
+	it('takes 1 less damage per awakened Water Region spirit', () => {
 		const p = makePlayer({
 			barrier: 4,
 			maxBarrier: 4,
 			attackDice: [],
 			spirits: [
-				{ ...spirit(1, { 'Tide Warden': 1 }), origins: { 'Moon Tide': 1 } },
-				{ ...spirit(2, {}), origins: { 'Moon Tide': 1 } }
+				{ ...spirit(1, { 'Tide Warden': 1 }), origins: { 'Water Region': 1 } },
+				{ ...spirit(2, {}), origins: { 'Water Region': 1 } }
 			]
 		});
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 4 });

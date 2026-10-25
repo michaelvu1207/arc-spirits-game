@@ -21,67 +21,67 @@ const SEEDS: readonly SpiritSeed[] = [
 		['Battle Adept'],
 		['Human Enclave']
 	],
-	['9707edd6-fbc3-4433-99f2-a687f39505fd', 'CyberDive', 3, ['Elementalist'], ['Cyber City']],
-	['9ef2c6f9-c6b3-4ec0-8e6e-4ddd5b26b344', 'Cyberwolf', 3, ['Spirit Animal'], ['Cyber City']],
-	['e368f98d-fa19-47b0-bb54-1dd26d902b23', 'Dandelion', 3, ['Soul Weaver'], ['Floral Patch']],
-	['a5e1965a-4b51-4de4-ad42-2f8ac085ff0e', 'Firefox', 3, ['Spirit Animal'], ['Floral Patch']],
-	['c6548ffd-4852-4e62-9c5a-9329e40d222e', 'Fish Guide', 3, ['Cultivator'], ['Moon Tide']],
+	['9707edd6-fbc3-4433-99f2-a687f39505fd', 'CyberDive', 3, ['Elementalist'], ['Mountain Region']],
+	['9ef2c6f9-c6b3-4ec0-8e6e-4ddd5b26b344', 'Cyberwolf', 3, ['Spirit Animal'], ['Mountain Region']],
+	['e368f98d-fa19-47b0-bb54-1dd26d902b23', 'Dandelion', 3, ['Soul Weaver'], ['Forest Region']],
+	['a5e1965a-4b51-4de4-ad42-2f8ac085ff0e', 'Firefox', 3, ['Spirit Animal'], ['Forest Region']],
+	['c6548ffd-4852-4e62-9c5a-9329e40d222e', 'Fish Guide', 3, ['Cultivator'], ['Water Region']],
 	[
 		'afcb8700-c12e-45b5-b844-bf4339354e76',
 		'Floral Fighter',
 		3,
 		['Fighter', 'Cursed Spirit'],
-		['Floral Patch']
+		['Forest Region']
 	],
-	['d19f66b7-787b-4c5b-b498-e1f8fb7688e0', 'Flowercracker', 3, ['Elementalist'], ['Floral Patch']],
+	['d19f66b7-787b-4c5b-b498-e1f8fb7688e0', 'Flowercracker', 3, ['Elementalist'], ['Forest Region']],
 	[
 		'cb20dc2d-f486-45ac-a1b7-3f7d97805d09',
 		'Forbidden Child',
 		3,
 		['Cultivator', 'Cursed Spirit'],
-		['Lantern Lights']
+		['Fire Region']
 	],
-	['ee907abd-2f0a-4b8b-a004-f6012d2ab6ad', 'Girl of Souls', 3, ['Soul Weaver'], ['Lantern Lights']],
-	['7e3d88c0-6854-4c13-882c-ddf78c0d2b58', 'KO Fighter', 3, ['Fighter'], ['Cyber City']],
-	['b5ceee38-e08f-44e4-b87a-93cb024cbfd8', 'Lantern Child', 3, ['Cultivator'], ['Lantern Lights']],
-	['47504f4d-bfab-4e7c-98d7-3476b28d922d', 'Lantern Fighter', 3, ['Fighter'], ['Lantern Lights']],
+	['ee907abd-2f0a-4b8b-a004-f6012d2ab6ad', 'Girl of Souls', 3, ['Soul Weaver'], ['Fire Region']],
+	['7e3d88c0-6854-4c13-882c-ddf78c0d2b58', 'KO Fighter', 3, ['Fighter'], ['Mountain Region']],
+	['b5ceee38-e08f-44e4-b87a-93cb024cbfd8', 'Lantern Child', 3, ['Cultivator'], ['Fire Region']],
+	['47504f4d-bfab-4e7c-98d7-3476b28d922d', 'Lantern Fighter', 3, ['Fighter'], ['Fire Region']],
 	[
 		'1781a426-913b-4446-a062-a0ecfe401027',
 		'Pond Girl',
 		3,
 		['Elementalist', 'Cursed Spirit'],
-		['Moon Tide']
+		['Water Region']
 	],
 	[
 		'241c977c-d1c8-4ef5-856b-8100ef228f72',
 		'Squid Girl',
 		3,
 		['Soul Weaver', 'Cursed Spirit'],
-		['Moon Tide']
+		['Water Region']
 	],
 	[
 		'5f719599-3914-440e-b518-2426ab1e83c5',
 		'SUPERBUG',
 		3,
 		['Cursed Spirit', 'Cursed Spirit'],
-		['Cyber City']
+		['Mountain Region']
 	],
-	['e95c775b-0677-4884-bc59-12ae2762ca8b', 'Turtle', 3, ['Spirit Animal'], ['Moon Tide']],
-	['955abfc0-fa04-4ab3-bcaf-5dc2839ddec0', 'Aquamaiden', 7, ['Tide Warden'], ['Moon Tide']],
+	['e95c775b-0677-4884-bc59-12ae2762ca8b', 'Turtle', 3, ['Spirit Animal'], ['Water Region']],
+	['955abfc0-fa04-4ab3-bcaf-5dc2839ddec0', 'Aquamaiden', 7, ['Tide Warden'], ['Water Region']],
 	['e75cb10c-fee4-488b-a213-e663c0fecae7', 'Arcane Synthesizer', 7, ['Arcane Ascendant'], ['Arcane Spirits']],
-	['18154c10-1422-4655-a7cd-c637ac947916', 'Beefender', 7, ['Runic Bulwark'], ['Floral Patch']],
+	['18154c10-1422-4655-a7cd-c637ac947916', 'Beefender', 7, ['Runic Bulwark'], ['Forest Region']],
 	['728c5151-2da6-4202-b5b0-aae13dec68be', 'Child Prodigy', 7, ['Wayfarer'], ['Arcane Spirits']],
 	['ed612933-fd19-4b68-993e-6e61b52eb4ce', 'Comet Caller', 7, ['Rune Mage'], ['Arcane Spirits']],
-	['40016186-6b98-4dbb-8364-b50d27e9f394', 'ENCODER', 7, ['Cursed Fighter'], ['Cyber City']],
+	['40016186-6b98-4dbb-8364-b50d27e9f394', 'ENCODER', 7, ['Cursed Fighter'], ['Mountain Region']],
 	[
 		'5c864c2d-20bd-4134-a829-09a2cc793e41',
 		'Fairy Droid',
 		7,
 		['Runebound Vessel'],
-		['Cyber City']
+		['Mountain Region']
 	],
-	['0a775e09-555f-43a7-ac5b-06aaeaa4b69c', 'Firewall', 7, ['Disruptor'], ['Cyber City']],
-	['ae827012-29ff-406e-bcbe-afe3a5258607', 'Floral Fairy', 7, ['Fairy'], ['Floral Patch']],
+	['0a775e09-555f-43a7-ac5b-06aaeaa4b69c', 'Firewall', 7, ['Disruptor'], ['Mountain Region']],
+	['ae827012-29ff-406e-bcbe-afe3a5258607', 'Floral Fairy', 7, ['Fairy'], ['Forest Region']],
 	[
 		'70ed3fcd-a7c2-4443-b5e7-9b6de8491917',
 		'Hollow Eyes',
@@ -89,17 +89,17 @@ const SEEDS: readonly SpiritSeed[] = [
 		['Spirit Animal', 'Spirit Animal', 'Spirit Animal'],
 		['Arcane Spirits']
 	],
-	['c0d12557-4615-4c60-a93c-622e5fc70eae', 'Lantern Fairy', 7, ['Fairy'], ['Lantern Lights']],
+	['c0d12557-4615-4c60-a93c-622e5fc70eae', 'Lantern Fairy', 7, ['Fairy'], ['Fire Region']],
 	[
 		'25848694-6c69-408c-9b78-94948c6df3a6',
 		'Lightcatcher',
 		7,
 		['Aegis Weaver'],
-		['Lantern Lights']
+		['Fire Region']
 	],
 	['5dc44c85-8224-4c49-89ff-90a37aa10040', 'Meteor Shower', 7, ['Relic Warden'], ['Arcane Spirits']],
-	['b8314d8f-ea32-44de-a3ad-62944e5ccecb', 'Mod Injector', 7, ['Runic Duplicator'], ['Cyber City']],
-	['3b196b06-a047-4505-aad6-bf0c9fe05ac0', 'Rootguard', 7, ['Growth Warden'], ['Floral Patch']],
+	['b8314d8f-ea32-44de-a3ad-62944e5ccecb', 'Mod Injector', 7, ['Runic Duplicator'], ['Mountain Region']],
+	['3b196b06-a047-4505-aad6-bf0c9fe05ac0', 'Rootguard', 7, ['Growth Warden'], ['Forest Region']],
 	['b3068fcf-d197-4030-ba55-29ac1621f9a9', 'Space Invader', 7, ['Fatestriker'], ['Arcane Spirits']],
 	[
 		'e24e9f91-7333-44c0-968e-15b900af3385',
@@ -108,36 +108,36 @@ const SEEDS: readonly SpiritSeed[] = [
 		['Spirit Animal', 'Spirit Animal', 'Spirit Animal'],
 		['Arcane Spirits']
 	],
-	['36bb656c-49fe-4d50-a037-b29dbd1bfa91', 'Tidal Fairy', 7, ['Fairy'], ['Moon Tide']],
-	['d89f5d3a-5519-4b96-baf0-1f0a49c0ada1', 'Wish Maker', 7, ['Emberguard'], ['Lantern Lights']],
+	['36bb656c-49fe-4d50-a037-b29dbd1bfa91', 'Tidal Fairy', 7, ['Fairy'], ['Water Region']],
+	['d89f5d3a-5519-4b96-baf0-1f0a49c0ada1', 'Wish Maker', 7, ['Emberguard'], ['Fire Region']],
 	[
 		'cafb6cfb-11f8-476c-a275-a5b8179630d2',
 		'Arcane Huntress',
 		9,
 		['Tide Stalker'],
-		['Moon Tide']
+		['Water Region']
 	],
 	['e4822f18-98f0-44fd-8711-756f946f6cd5', 'Contessa', 9, ['Void Sovereign'], ['Arcane Spirits']],
-	['e5dff9be-ac58-47bb-bd9d-69efb03dc393', 'Florality', 9, ['Abyss Summoner'], ['Floral Patch']],
+	['e5dff9be-ac58-47bb-bd9d-69efb03dc393', 'Florality', 9, ['Abyss Summoner'], ['Forest Region']],
 	['a77653c5-69fa-4351-833d-59d302722365', 'Golden Ruler', 9, ['Golden Ruler'], ['Arcane Spirits']],
 	[
 		'504c77b5-8f46-427d-a339-1ef11160b0d7',
 		'Golem of Embers',
 		9,
 		['Living Bastion'],
-		['Lantern Lights']
+		['Fire Region']
 	],
 	['fc667265-edd6-4c28-b96e-6e505188ce72', 'Shadowtaker', 9, ['The Corruptor'], ['Arcane Spirits']],
-	['be2072ea-ccdb-4941-b1b3-26890a7b64cf', 'Water Dragon', 9, ['Arcane Vanguard'], ['Moon Tide']]
+	['be2072ea-ccdb-4941-b1b3-26890a7b64cf', 'Water Dragon', 9, ['Arcane Vanguard'], ['Water Region']]
 ];
 
 const ORIGIN_COLORS: Record<string, string> = {
 	'Arcane Spirits': '#8b5cf6',
-	'Cyber City': '#3b82f6',
-	'Floral Patch': '#10b981',
+	'Mountain Region': '#3b82f6',
+	'Forest Region': '#10b981',
 	'Human Enclave': '#6b7280',
-	'Lantern Lights': '#a95189',
-	'Moon Tide': '#64748b'
+	'Fire Region': '#a95189',
+	'Water Region': '#64748b'
 };
 
 function key(name: string): string {

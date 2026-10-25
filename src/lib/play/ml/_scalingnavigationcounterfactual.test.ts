@@ -66,12 +66,12 @@ const ROLLOUT_FULL_LOOKAHEAD_DEPTH = 2;
 const ROLLOUT_FULL_LOOKAHEAD_BEAM = 8;
 const ROLLOUT_FULL_LOOKAHEAD_ROOT_BEAM = 24;
 const ROLLOUT_FULL_TARGET_TEMPERATURE = 0.25;
-const BUILD_OPTION_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch', 'Cyber City', 'Tidal Cove'];
-const SCALING_OPTION_DESTINATIONS: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
-const RESTORE_OPTION_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
-const CLOSER_DAMAGE_DESTINATIONS: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
-const CLOSER_MAX_BARRIER_DESTINATIONS: NavigationDestination[] = ['Floral Patch', 'Lantern Canyon', 'Cyber City'];
-const CLOSER_RESTORE_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
+const BUILD_OPTION_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region', 'Mountain Region', 'Water Region'];
+const SCALING_OPTION_DESTINATIONS: NavigationDestination[] = ['Water Region', 'Mountain Region', 'Fire Region'];
+const RESTORE_OPTION_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region'];
+const CLOSER_DAMAGE_DESTINATIONS: NavigationDestination[] = ['Water Region', 'Mountain Region', 'Fire Region'];
+const CLOSER_MAX_BARRIER_DESTINATIONS: NavigationDestination[] = ['Forest Region', 'Fire Region', 'Mountain Region'];
+const CLOSER_RESTORE_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region'];
 const FARM_ACTION_TYPES = new Set<GameCommand['type']>([
 	'startCombat',
 	'resolveMonsterReward',
@@ -542,8 +542,8 @@ function navigationRootDestinations(
 			firepowerProb < 0.5
 		);
 		return damageDeficit
-			? ['Cyber City', 'Tidal Cove', 'Lantern Canyon']
-			: ['Floral Patch', 'Lantern Canyon'];
+			? ['Mountain Region', 'Water Region', 'Fire Region']
+			: ['Forest Region', 'Fire Region'];
 	}
 	return undefined;
 }

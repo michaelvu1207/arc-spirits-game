@@ -290,8 +290,8 @@ test.describe('2D play — human-operated full game loop', () => {
 		await setupTwoPlayerGame(host, guest);
 
 		// Round 1: Spirit World Summon + Rest.
-		await lockDestination(host, 'Tidal Cove');
-		await lockDestination(guest, 'Floral Patch');
+		await lockDestination(host, 'Water Region');
+		await lockDestination(guest, 'Forest Region');
 		await expectPhase(host, 'location');
 		await chooseInteraction(host, /Spirit World Summon/i);
 		await resolveDraw(host);
@@ -300,8 +300,8 @@ test.describe('2D play — human-operated full game loop', () => {
 		await finishRoundThroughUi([host, guest], 2);
 
 		// Round 2: Cultivate.
-		await lockDestination(host, 'Lantern Canyon');
-		await lockDestination(guest, 'Cyber City');
+		await lockDestination(host, 'Fire Region');
+		await lockDestination(guest, 'Mountain Region');
 		await expectPhase(host, 'location');
 		await chooseInteraction(host, /\bCultivate\b/i);
 		await clickIfReady(host, 'result-continue');
@@ -309,7 +309,7 @@ test.describe('2D play — human-operated full game loop', () => {
 
 		// Round 3: Arcane Abyss combat, including explicit reward choice when won.
 		await lockDestination(host, 'Arcane Abyss');
-		await lockDestination(guest, 'Tidal Cove');
+		await lockDestination(guest, 'Water Region');
 		await expectPhase(host, 'location');
 		await foreground(host);
 		await host.getByTestId('action-monsterCombat').click();

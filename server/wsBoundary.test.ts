@@ -556,7 +556,7 @@ describe('command admission over the wire', () => {
 		await ws.deliver({
 			t: 'command',
 			cmdId: 'nav-1',
-			command: { type: 'lockNavigation', destination: 'Tidal Cove' }
+			command: { type: 'lockNavigation', destination: 'Water Region' }
 		});
 		await until(() => ws.frames('ack').some((a) => a.cmdId === 'nav-1'));
 		const ack = ws.frames('ack').find((a) => a.cmdId === 'nav-1')!;
@@ -590,7 +590,7 @@ describe('established-socket authority is never stale', () => {
 		await ws.deliver({
 			t: 'command',
 			cmdId: 'stale-1',
-			command: { type: 'lockNavigation', destination: 'Tidal Cove' }
+			command: { type: 'lockNavigation', destination: 'Water Region' }
 		});
 		await until(() => ws.frames('error').length === 1);
 		expect(ws.last('error')!.code).toBe('authority_revoked');
@@ -640,7 +640,7 @@ describe('established-socket authority is never stale', () => {
 		await hostWs.deliver({
 			t: 'command',
 			cmdId: 'bcast-1',
-			command: { type: 'lockNavigation', destination: 'Tidal Cove' }
+			command: { type: 'lockNavigation', destination: 'Water Region' }
 		});
 		await until(() => guestWs.frames('error').length === 1);
 		expect(guestWs.last('error')!.code).toBe('authority_revoked');

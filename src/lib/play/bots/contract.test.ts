@@ -30,7 +30,7 @@ describe('bot contract', () => {
 	});
 
 	test('resolves a decision back to one of the advertised legal commands', () => {
-		const command = { type: 'lockNavigation', destination: 'Cyber City' } as GameCommand;
+		const command = { type: 'lockNavigation', destination: 'Mountain Region' } as GameCommand;
 		const observation = buildBotObservation({} as PublicGameState, 'Red', [command]);
 
 		expect(

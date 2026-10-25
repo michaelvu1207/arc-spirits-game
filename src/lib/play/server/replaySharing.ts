@@ -1,3 +1,4 @@
+import { normalizeRegionContent } from '../regions';
 import { randomBytes } from 'node:crypto';
 import { error as kitError } from '@sveltejs/kit';
 import { getSupabaseAdmin } from '$lib/server/supabaseAdmin';
@@ -156,7 +157,7 @@ export function sanitizeReplayFrame(row: Record<string, unknown>): PublicReplayF
 		revision: Number(row.revision ?? 0),
 		round: Number(row.round ?? 0),
 		phase: String(row.phase ?? ''),
-		public_state: sanitizeFrameValue(row.public_state) as Record<string, unknown>,
+		public_state: normalizeRegionContent(sanitizeFrameValue(row.public_state)) as Record<string, unknown>,
 		created_at: String(row.created_at ?? '')
 	};
 }

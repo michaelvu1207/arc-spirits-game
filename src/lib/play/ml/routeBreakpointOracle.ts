@@ -113,9 +113,9 @@ function commandProgressBonus(
 					firepowerProb >= (opts.firepowerThreshold ?? 0.5))
 			)
 				score += 70;
-			if (needsDamage && (destination === 'Cyber City' || destination === 'Tidal Cove'))
+			if (needsDamage && (destination === 'Mountain Region' || destination === 'Water Region'))
 				score += 35;
-			if (needsRestore && (destination === 'Lantern Canyon' || destination === 'Floral Patch'))
+			if (needsRestore && (destination === 'Fire Region' || destination === 'Forest Region'))
 				score += 35;
 			if (!needsDamage && !needsRestore && destination === 'Arcane Abyss') score += 20;
 			break;

@@ -20,7 +20,7 @@ test('Solo Play has one human, no bot controls, and advances through a round', a
 	await expect(page.getByTestId('navigation-power-draft')).toBeVisible();
 	await page.getByTestId('navigation-power-draft').locator('button').first().click();
 	await expect(page.getByTestId('navigation-power-draft')).toHaveCount(0);
-	await runRoomCommand(page, { type: 'lockNavigation', destination: 'Tidal Cove' });
+	await runRoomCommand(page, { type: 'lockNavigation', destination: 'Water Region' });
 	await expect.poll(async () => (await getRoomView(page)).projection.phase).not.toBe('navigation');
 	for (let step = 0; step < 10; step++) {
 		view = await getRoomView(page);

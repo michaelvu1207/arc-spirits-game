@@ -336,13 +336,13 @@ describe('checkAwakenCondition', () => {
 
 	it('a text condition is never auto-satisfiable and carries the verbatim text', () => {
 		const player = makePlayer({ spirits: [spirit(1, 'txt', 'Tide Warden')] });
-		const awaken: NormalizedAwaken = { kind: 'text', text: 'Discard 2 Teapots at the Tidal Cove' };
+		const awaken: NormalizedAwaken = { kind: 'text', text: 'Discard 2 Teapots at the Water Region' };
 		const check = checkAwakenCondition(ctxFor(player, catalogWith('txt', awaken)), {
 			spirit: player.spirits[0]
 		});
 		expect(check.ok).toBe(false);
 		expect(check.kind).toBe('text');
-		expect(check.text).toBe('Discard 2 Teapots at the Tidal Cove');
+		expect(check.text).toBe('Discard 2 Teapots at the Water Region');
 	});
 });
 
@@ -934,7 +934,7 @@ describe('runtime awakenSpirit gate', () => {
 		// prompt (so the runtime clone carrying it is observable) and leaves the
 		// spirit face-down. checkAwakenCondition itself returns ok:false (unit test
 		// above) — the runtime represents "blocked" by NOT flipping.
-		const text = 'Discard 2 Teapots at the Tidal Cove';
+		const text = 'Discard 2 Teapots at the Water Region';
 		const awaken: NormalizedAwaken = { kind: 'text', text };
 		const catalog = awakenCatalog(awaken);
 		const state = startedGame(catalog);
@@ -1361,9 +1361,9 @@ describe('AWAKEN_HANDLERS alignment + cultivate (Contessa)', () => {
 
 describe('AWAKEN_HANDLERS unique-origin cultivate progress', () => {
 	const cases = [
-		[IDS.floralFairy, 'Floral Fairy', 'Floral Patch', AWAKEN_PROGRESS_KEYS.floralFairy],
-		[IDS.lanternFairy, 'Lantern Fairy', 'Lantern Lights', AWAKEN_PROGRESS_KEYS.lanternFairy],
-		[IDS.tidalFairy, 'Tidal Fairy', 'Moon Tide', AWAKEN_PROGRESS_KEYS.tidalFairy]
+		[IDS.floralFairy, 'Floral Fairy', 'Forest Region', AWAKEN_PROGRESS_KEYS.floralFairy],
+		[IDS.lanternFairy, 'Lantern Fairy', 'Fire Region', AWAKEN_PROGRESS_KEYS.lanternFairy],
+		[IDS.tidalFairy, 'Tidal Fairy', 'Water Region', AWAKEN_PROGRESS_KEYS.tidalFairy]
 	] as const;
 
 	for (const [id, name, origin, progressKey] of cases) {
@@ -1457,7 +1457,7 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 			const r = applyGameCommand(
 				s,
 				{ ...HOST, seatColor: seat },
-				{ type: 'lockNavigation', destination: 'Cyber City' },
+				{ type: 'lockNavigation', destination: 'Mountain Region' },
 				catalog
 			);
 			if (!r.ok) throw new Error(r.error.message);
@@ -1675,7 +1675,7 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 	it('Rune Mage: grants per-trade now (no manual prompt on the bare end-of-location beat)', () => {
 		const { state, catalog } = startedClassGame({ 'Rune Mage': 1 });
 		const red = state.players.Red!;
-		red.navigationDestination = 'Cyber City';
+		red.navigationDestination = 'Mountain Region';
 		// Drive to the location phase so endLocationActions is legal.
 		state.phase = 'location';
 		red.phaseReady = false;
@@ -1700,11 +1700,11 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		const blue = makePlayer({
 			playerColor: 'Blue',
 			statusLevel: 0,
-			navigationDestination: 'Cyber City'
+			navigationDestination: 'Mountain Region'
 		});
 		state.players.Blue = blue;
 		state.activeSeats = ['Red', 'Blue'];
-		red.navigationDestination = 'Cyber City';
+		red.navigationDestination = 'Mountain Region';
 		red.attackDice = [{ instanceId: 'r0', tier: 'basic' }];
 		blue.attackDice = [{ instanceId: 'b0', tier: 'arcane' }];
 		state.phase = 'location';

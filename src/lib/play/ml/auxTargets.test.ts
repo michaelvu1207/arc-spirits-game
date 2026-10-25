@@ -20,12 +20,12 @@ describe('live auxiliary targets', () => {
 	it('labels actual Fallen navigation as hunt versus return-to-Abyss', () => {
 		const fallen = stateAtStatus(3);
 		expect(fallenRouteModeTarget(fallen, 'Red', navigation('Arcane Abyss'))).toBe(0);
-		expect(fallenRouteModeTarget(fallen, 'Red', navigation('Floral Patch'))).toBe(1);
+		expect(fallenRouteModeTarget(fallen, 'Red', navigation('Forest Region'))).toBe(1);
 	});
 
 	it('does not invent route labels for non-Fallen or non-navigation decisions', () => {
 		expect(
-			fallenRouteModeTarget(stateAtStatus(2), 'Red', navigation('Floral Patch'))
+			fallenRouteModeTarget(stateAtStatus(2), 'Red', navigation('Forest Region'))
 		).toBeUndefined();
 		expect(
 			fallenRouteModeTarget(stateAtStatus(3), 'Red', {

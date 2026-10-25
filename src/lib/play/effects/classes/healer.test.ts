@@ -78,9 +78,9 @@ describe('Healer — healerRestore resolver (the "may restore + gain VP")', () =
 			playerColor: 'Blue',
 			maxBarrier: 10,
 			barrier: 5,
-			navigationDestination: 'Floral Patch'
+			navigationDestination: 'Forest Region'
 		});
-		self.navigationDestination = 'Floral Patch';
+		self.navigationDestination = 'Forest Region';
 		const ctx = ctxFor(self, { extra: { Blue: ally } });
 		decisions.healerRestore(ctx, 'yes');
 		expect(self.barrier).toBe(8);

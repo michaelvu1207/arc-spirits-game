@@ -35,7 +35,7 @@ const BLUE: GameActor = { ...GUEST, seatColor: 'Blue' };
 // ARE its reward rows — the only way to summon is to resolve a row whose gain is a
 // Summon action token.
 const SUMMON = '76e58219-e805-4b94-acf4-6d62dfe4c515';
-// Tidal Cove row 0 is a free Spirit World Summon (draw 4, summon 2).
+// Water Region row 0 is a free Spirit World Summon (draw 4, summon 2).
 const TIDAL_COVE_ROWS: GameLocationRewardRow[] = [{ type: 'gain', gain_icon_ids: [SUMMON] }];
 
 // A generous spirit pool so a 4-card Spirit World summon always has stock after the
@@ -55,7 +55,7 @@ const CATALOG: PlayCatalog = {
 		classes: {},
 		origins: {}
 	})),
-	locations: [{ name: 'Tidal Cove', originId: null, rewardRows: TIDAL_COVE_ROWS }]
+	locations: [{ name: 'Water Region', originId: null, rewardRows: TIDAL_COVE_ROWS }]
 };
 
 function apply(state: PublicGameState, actor: GameActor, command: GameCommand): PublicGameState {
@@ -77,10 +77,10 @@ function startedGame(seed = 1): PublicGameState {
 /**
  * Drive a fresh game into the location phase. Both seats lock onto `redDest` (a Good
  * location), so the encounter phase auto-skips straight to the Location phase with RED
- * standing at `redDest`. Defaults to Tidal Cove, whose row 0 is a free Spirit World
+ * standing at `redDest`. Defaults to Water Region, whose row 0 is a free Spirit World
  * Summon.
  */
-function locationPhase(seed = 1, redDest: NavigationDestination = 'Tidal Cove'): PublicGameState {
+function locationPhase(seed = 1, redDest: NavigationDestination = 'Water Region'): PublicGameState {
 	let state = startedGame(seed);
 	state = apply(state, RED, { type: 'lockNavigation', destination: redDest });
 	state = apply(state, BLUE, { type: 'lockNavigation', destination: redDest });
@@ -123,7 +123,7 @@ describe('deadline enforcement (applyDeadlineAdvance)', () => {
 	});
 
 	test('a location timeout with an open summon returns the drawn spirits to the bag (no leak)', () => {
-		// RED stands at Tidal Cove, whose row 0 is a free Spirit World Summon.
+		// RED stands at Water Region, whose row 0 is a free Spirit World Summon.
 		const state = locationPhase();
 		const before = state.bags.hexSpirits.count;
 		const round = state.round;

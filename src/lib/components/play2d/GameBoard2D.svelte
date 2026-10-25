@@ -377,7 +377,7 @@
 	//
 	// Music continuity: a world's ambient theme keeps playing once you've VISITED
 	// that location — across the following cleanup and back through the navigation
-	// phase — until you step into your NEXT location. (Visit Cyber City and its
+	// phase — until you step into your NEXT location. (Visit Mountain Region and its
 	// music plays until you next commit to a world.) Before any location is visited
 	// (round 1) we fall back to the navigation / cleanup scene themes.
 	let lastVisitedWorldMusic = $state<string | null>(null);

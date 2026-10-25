@@ -20,8 +20,8 @@ export function iconPoolUrl(iconPool: Map<string, IconPoolEntry>, id: string): s
 /**
  * Resolve a rune slot to its OWN rune art. Slots store varying identity depending
  * on how they were gained — a rune id (reward gains), an origin/class link, or just
- * a name ("Cyber City Rune", "Fairy Relic"). Resolve in that order, bridging an
- * origin NAME → origin id → its rune (handles e.g. "Floral Patch" → "Forest").
+ * a name ("Mountain Region Rune", "Fairy Relic"). Resolve in that order, bridging an
+ * origin NAME → origin id → its rune (handles e.g. "Forest Region" → "Forest").
  */
 export function runeAssetFor(
 	assets: ReturnType<typeof getAssetState>,

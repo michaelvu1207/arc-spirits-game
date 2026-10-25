@@ -90,10 +90,10 @@ export function canApply(
 	)
 		return false;
 	switch (command.type) {
-		case 'chooseNavigationPower':
-			return (
-				active && !!seatPlayer(state, actor)?.pendingPowerDrafts?.[0]?.includes(command.powerId)
-			);
+		case 'chooseNavigationPower': {
+			const me = seatPlayer(state, actor);
+			return active && !!me?.pendingPowerDrafts?.[0]?.includes(command.powerId) && (!me.pendingPowerReplacement || (!!command.replacePowerId && command.replacePowerId !== command.powerId && !!me.powerInventory?.includes(command.replacePowerId)));
+		}
 		case 'resolveNavigationPower':
 			return (
 				active &&
@@ -215,14 +215,15 @@ export function canApply(
 			if (me.pendingDraw != null || (me.handDraws?.length ?? 0) > 0) return false;
 			if (!me.navigationDestination) return false;
 			const rows = buildLocationInteractions(
-				(catalog.locations ?? []).find((l) => l.name === me.navigationDestination)?.rewardRows
+				(catalog.locations ?? []).find((l) => l.name === me.navigationDestination)?.rewardRows, me.navigationDestination
 			);
 			const interaction = rows.find((i) => i.rowIndex === command.rowIndex);
-			if (!interaction) return false;
+			if (!interaction || me.phaseReady || me.pendingPowerDrafts?.length) return false;
+			if (interaction.gains.some(g => g.type === 'navigationPower' && g.replace) && !me.powerInventory?.length) return false;
 			const usedForRow = (me.actionsUsedThisRound ?? []).filter(
 				(a) => a === `row:${command.rowIndex}`
 			).length;
-			if (usedForRow >= 1 + (me.extraActions?.locationInteraction ?? 0)) return false;
+			if (interaction.kind !== 'trade' && usedForRow >= 1 + (me.extraActions?.locationInteraction ?? 0)) return false;
 			// Affordability always follows the database-authored trade cost.
 			if (interaction.cost.length > 0) {
 				if (!matchRewardCost(interaction.cost, me.mats, command.costChoices).ok) return false;

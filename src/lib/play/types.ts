@@ -14,19 +14,19 @@ export const SEAT_COLORS = ['Red', 'Blue', 'Orange', 'Green', 'Purple', 'Yellow'
 // list mixed the SW locations and the Abyss together; keep that for backward
 // compatibility, but prefer SPIRIT_WORLD_ONLY / ALL_DESTINATIONS below.
 export const SPIRIT_WORLD_LOCATIONS = [
-	'Floral Patch',
-	'Cyber City',
-	'Tidal Cove',
-	'Lantern Canyon',
+	'Forest Region',
+	'Mountain Region',
+	'Water Region',
+	'Fire Region',
 	'Arcane Abyss'
 ] as const;
 
 /** The four navigable Spirit World locations (no Abyss). */
 export const SPIRIT_WORLD_ONLY = [
-	'Floral Patch',
-	'Cyber City',
-	'Tidal Cove',
-	'Lantern Canyon'
+	'Forest Region',
+	'Mountain Region',
+	'Water Region',
+	'Fire Region'
 ] as const;
 
 /** Every destination a player can navigate to, including the Abyss. */
@@ -790,6 +790,8 @@ export interface NavigationPowerTrade {
 export interface PrivatePlayerState {
 	powerInventory?: NavigationPowerId[];
 	pendingPowerDrafts?: NavigationPowerId[][];
+	/** The current paid draft replaces one owned power when confirmed. */
+	pendingPowerReplacement?: boolean;
 	navigationPowerOffers?: NavigationPowerOffer[];
 	navigationPowerUsed?: boolean;
 	navigationPowerTradeEnabled?: boolean;
@@ -840,7 +842,7 @@ export interface PrivatePlayerState {
 	pendingAwakenReward: PendingAwakenRewardState | null;
 	/**
 	 * Draws queued behind the active one — used when a single reward row grants
-	 * more than one summon (e.g. Tidal Cove's "Summon + Abyss Summon"). The next
+	 * more than one summon (e.g. Water Region's "Summon + Abyss Summon"). The next
 	 * queued draw auto-starts once the current draw is resolved or discarded.
 	 */
 	pendingDrawQueue: {
@@ -1198,7 +1200,7 @@ export type GameCommand =
 			navigationPowerId?: NavigationPowerId | null;
 	  }
 	| { type: 'unlockNavigation' }
-	| { type: 'chooseNavigationPower'; powerId: NavigationPowerId }
+	| { type: 'chooseNavigationPower'; powerId: NavigationPowerId; replacePowerId?: NavigationPowerId }
 	| { type: 'acquireNavigationPower'; runeSlot: number }
 	| { type: 'resolveNavigationPower'; offerId: string; optionId: string }
 	| {

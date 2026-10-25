@@ -389,12 +389,12 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const host = await hostCtx.newPage();
 			const guest = await guestCtx.newPage();
 			await setupTwoPlayerGame(host, guest);
-			await runRoomCommand(host, { type: 'lockNavigation', destination: 'Floral Patch' });
+			await runRoomCommand(host, { type: 'lockNavigation', destination: 'Forest Region' });
 			await refreshRoomPage(host);
 			await expect(host.getByTestId('confirm-circle')).toBeVisible({ timeout: 30_000 });
 			await capture(host, '03', 'navigation-locked', 'Red', [
 				'setupTwoPlayerGame',
-				'host lockNavigation Floral Patch (guest not locked)',
+				'host lockNavigation Forest Region (guest not locked)',
 				'refresh host → confirm-circle'
 			]);
 		} finally {
@@ -410,8 +410,8 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const host = await hostCtx.newPage();
 			const guest = await guestCtx.newPage();
 			const { code } = await setupTwoPlayerGame(host, guest);
-			await runRoomCommand(host, { type: 'lockNavigation', destination: 'Floral Patch' });
-			await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Cyber City' });
+			await runRoomCommand(host, { type: 'lockNavigation', destination: 'Forest Region' });
+			await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Mountain Region' });
 			await runRoomCommand(host, { type: 'forceAdvancePhase' });
 			await host.goto(`/play/${code}?e2e=1&showDestinationReveal=1`, {
 				waitUntil: 'domcontentloaded'
@@ -419,7 +419,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 			await expect(host.getByTestId('destination-reveal')).toBeVisible({ timeout: 30_000 });
 			await capture(host, '04', 'destination-reveal', 'Red', [
 				'setupTwoPlayerGame',
-				'both seats lockNavigation (Floral Patch / Cyber City)',
+				'both seats lockNavigation (Forest Region / Mountain Region)',
 				'forceAdvancePhase',
 				'goto ?showDestinationReveal=1 (client reveal overlay)'
 			]);
@@ -436,11 +436,11 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const host = await hostCtx.newPage();
 			const guest = await guestCtx.newPage();
 			await setupTwoPlayerGame(host, guest);
-			await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+			await enterLocationPhase(host, guest, 'Forest Region', 'Mountain Region');
 			await expect(host.getByTestId('interaction-grid')).toBeVisible({ timeout: 30_000 });
 			await capture(host, '05', 'location-interaction', 'Red', [
 				'setupTwoPlayerGame',
-				'both lockNavigation (Floral Patch / Cyber City)',
+				'both lockNavigation (Forest Region / Mountain Region)',
 				'advance to location phase → interaction-grid'
 			]);
 		} finally {
@@ -583,7 +583,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 				type: 'debugGrant',
 				grant: { kind: 'spirit', spiritId: goldenRulerId, faceDown: false }
 			});
-			await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+			await enterLocationPhase(host, guest, 'Forest Region', 'Mountain Region');
 			await runRoomCommand(host, { type: 'endLocationActions' });
 			await runRoomCommand(guest, { type: 'endLocationActions' });
 			await expect
@@ -615,7 +615,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const host = await hostCtx.newPage();
 			const guest = await guestCtx.newPage();
 			await setupTwoPlayerGame(host, guest);
-			await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+			await enterLocationPhase(host, guest, 'Forest Region', 'Mountain Region');
 			for (let i = 0; i < 6; i += 1) {
 				await runRoomCommand(host, {
 					type: 'debugGrant',
@@ -666,12 +666,12 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const host = await hostCtx.newPage();
 			const guest = await guestCtx.newPage();
 			await setupTwoPlayerGame(host, guest);
-			await enterLocationPhase(host, guest, 'Floral Patch');
+			await enterLocationPhase(host, guest, 'Forest Region');
 			await runRoomCommand(host, { type: 'adjustStatus', amount: 1 });
 			await refreshRoomPage(host);
 			await expect(host.getByTestId('corruption-discard')).toBeVisible({ timeout: 30_000 });
 			await capture(host, '11', 'corruption-discard', 'Red', [
-				'setupTwoPlayerGame → location (Floral Patch)',
+				'setupTwoPlayerGame → location (Forest Region)',
 				'adjustStatus +1 (raise corruption)',
 				'refresh host → corruption-discard'
 			]);
@@ -688,7 +688,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const host = await hostCtx.newPage();
 			const guest = await guestCtx.newPage();
 			const { code } = await setupTwoPlayerGame(host, guest);
-			await enterLocationPhase(host, guest, 'Floral Patch', 'Cyber City');
+			await enterLocationPhase(host, guest, 'Forest Region', 'Mountain Region');
 			await runRoomCommand(host, { type: 'debugGrant', grant: { kind: 'vp', amount: 30 } });
 			await runRoomCommand(host, { type: 'endLocationActions' });
 			await runRoomCommand(guest, { type: 'endLocationActions' });

@@ -68,7 +68,7 @@ const DRAW_CATALOG: PlayCatalog = {
 		classes: { Fighter: 1 },
 		origins: { Forest: 1 }
 	})),
-	locations: [{ name: 'Tidal Cove', originId: null, rewardRows: MIXED_REWARD_ROWS }]
+	locations: [{ name: 'Water Region', originId: null, rewardRows: MIXED_REWARD_ROWS }]
 };
 
 const RED: GameActor = { memberId: 'm-red', displayName: 'Red', role: 'host', seatColor: 'Red' };
@@ -152,13 +152,13 @@ function drawState(seed: number): PublicGameState {
 	state = applyWithCatalog(
 		state,
 		RED,
-		{ type: 'lockNavigation', destination: 'Tidal Cove' },
+		{ type: 'lockNavigation', destination: 'Water Region' },
 		DRAW_CATALOG
 	);
 	state = applyWithCatalog(
 		state,
 		BLUE,
-		{ type: 'lockNavigation', destination: 'Tidal Cove' },
+		{ type: 'lockNavigation', destination: 'Water Region' },
 		DRAW_CATALOG
 	);
 	return applyWithCatalog(state, RED, { type: 'forceAdvancePhase' }, DRAW_CATALOG);
@@ -171,8 +171,8 @@ function pvpState(seed: number): PublicGameState {
 	state = apply(state, RED, { type: 'selectGuardian', guardianName: 'Red Guard' });
 	state = apply(state, BLUE, { type: 'selectGuardian', guardianName: 'Blue Guard' });
 	state = apply(state, RED, { type: 'startGame', seed });
-	state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City' });
-	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Cyber City' });
+	state = apply(state, RED, { type: 'lockNavigation', destination: 'Mountain Region' });
+	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Mountain Region' });
 	state.players.Red!.statusLevel = 3;
 	state.players.Red!.statusToken = 'Fallen';
 	state.players.Red!.attackDice = [{ instanceId: 'red-arcane', tier: 'arcane' }];

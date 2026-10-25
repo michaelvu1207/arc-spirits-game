@@ -16,7 +16,7 @@ import type {
 const REST = 'bdded3f5-e405-4b68-b63a-9f5c2139beea';
 const CULTIVATE = '60e40dd5-c3cc-4f26-9aa3-2043b4106ade';
 const VP5 = '9cf8e1dd-55e0-4926-8dc8-2fb5b7b96bd4';
-const ORIGINS = ['Floral Patch', 'Lantern Lights', 'Cyber City', 'Moon Tide'];
+const ORIGINS = ['Forest Region', 'Fire Region', 'Mountain Region', 'Water Region'];
 const RUNES = originRuneOptions();
 const CATALOG: PlayCatalog = {
 	guardians: [
@@ -77,24 +77,24 @@ const CATALOG: PlayCatalog = {
 	],
 	locations: [
 		{
-			name: 'Floral Patch',
+			name: 'Forest Region',
 			originId: RUNES[0].originId,
-			rewardRows: [{ type: 'gain', gain_icon_ids: [CULTIVATE] }]
+			rewardRows: [{ type: 'gain', gain_icon_ids: [CULTIVATE] }, { type: 'trade', cost_icon_ids: ['36aab6c9-b98c-4e84-b097-e743f45dde82'], gain_icon_ids: ['navigation-power'] }]
 		},
 		{
-			name: 'Lantern Canyon',
+			name: 'Fire Region',
 			originId: RUNES[2].originId,
-			rewardRows: [{ type: 'gain', gain_icon_ids: [REST] }]
+			rewardRows: [{ type: 'gain', gain_icon_ids: [REST] }, { type: 'trade', cost_icon_ids: ['36aab6c9-b98c-4e84-b097-e743f45dde82'], gain_icon_ids: ['navigation-power'] }]
 		},
 		{
-			name: 'Cyber City',
+			name: 'Mountain Region',
 			originId: RUNES[1].originId,
-			rewardRows: [{ type: 'gain', gain_icon_ids: [REST] }]
+			rewardRows: [{ type: 'gain', gain_icon_ids: [REST] }, { type: 'trade', cost_icon_ids: ['36aab6c9-b98c-4e84-b097-e743f45dde82'], gain_icon_ids: ['navigation-power'] }]
 		},
 		{
-			name: 'Tidal Cove',
+			name: 'Water Region',
 			originId: RUNES[3].originId,
-			rewardRows: [{ type: 'gain', gain_icon_ids: [REST] }]
+			rewardRows: [{ type: 'gain', gain_icon_ids: [REST] }, { type: 'trade', cost_icon_ids: ['36aab6c9-b98c-4e84-b097-e743f45dde82'], gain_icon_ids: ['navigation-power'] }]
 		}
 	]
 };
@@ -134,7 +134,7 @@ function spirit(slotIndex: number, overrides: Partial<PlaySpirit> = {}): PlaySpi
 		name: `Owned ${slotIndex}`,
 		cost: 3,
 		classes: {},
-		origins: { 'Floral Patch': 1 },
+		origins: { 'Forest Region': 1 },
 		isFaceDown: false,
 		...overrides
 	};
@@ -154,7 +154,7 @@ function giveRune(s: PublicGameState, seat: SeatColor, index = 0) {
 function reveal(
 	s: PublicGameState,
 	power: NavigationPowerId,
-	destination: NavigationDestination = 'Cyber City',
+	destination: NavigationDestination = 'Mountain Region',
 	blueDestination = destination
 ) {
 	s.players.Red!.powerInventory = [power];
@@ -228,13 +228,13 @@ describe('Navigation Powers through live game commands', () => {
 		const invalid = applyGameCommand(
 			s,
 			actor('Red'),
-			{ type: 'lockNavigation', destination: 'Cyber City', navigationPowerId: 'battle-fury' },
+			{ type: 'lockNavigation', destination: 'Mountain Region', navigationPowerId: 'battle-fury' },
 			CATALOG
 		);
 		expect(invalid.ok).toBe(false);
 		s = run(s, 'Red', {
 			type: 'lockNavigation',
-			destination: 'Cyber City',
+			destination: 'Mountain Region',
 			navigationPowerId: 'ember-charge'
 		});
 		const otherView = buildSessionProjection(s, {
@@ -274,12 +274,12 @@ describe('Navigation Powers through live game commands', () => {
 				id === 'abyssal-execution'
 					? 'Arcane Abyss'
 					: ['cinder-awakening', 'fires-rhythm'].includes(id)
-						? 'Lantern Canyon'
+						? 'Fire Region'
 						: ['forest-bounty', 'forests-rhythm'].includes(id)
-							? 'Floral Patch'
+							? 'Forest Region'
 							: ['tidal-arsenal'].includes(id)
-								? 'Tidal Cove'
-								: 'Cyber City';
+								? 'Water Region'
+								: 'Mountain Region';
 			s = reveal(s, id, dest);
 			const offer = s.players.Red!.navigationPowerOffers?.[0];
 			if (offer) {
@@ -419,11 +419,11 @@ describe('Navigation Powers through live game commands', () => {
 		s.players.Red!.powerInventory = ['abyssal-reckoning'];
 		s = run(s, 'Red', {
 			type: 'lockNavigation',
-			destination: 'Cyber City',
+			destination: 'Mountain Region',
 			navigationPowerId: 'abyssal-reckoning'
 		});
-		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Cyber City' });
-		s = run(s, 'Orange', { type: 'lockNavigation', destination: 'Floral Patch' });
+		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Mountain Region' });
+		s = run(s, 'Orange', { type: 'lockNavigation', destination: 'Forest Region' });
 		s = run(s, 'Red', { type: 'forceAdvancePhase' });
 		s = choose(s, 'Red');
 		expect(s.players.Blue!.barrier).toBe(6);
@@ -433,7 +433,7 @@ describe('Navigation Powers through live game commands', () => {
 		let s = start();
 		s.players.Blue!.statusLevel = 3;
 		s.players.Red!.spirits = [spirit(1, { isFaceDown: true })];
-		s = reveal(s, 'cinder-awakening', 'Lantern Canyon');
+		s = reveal(s, 'cinder-awakening', 'Fire Region');
 		s = choose(s, 'Red');
 		expect(s.players.Red!.spirits[0].isFaceDown).toBe(false);
 		expect(s.players.Red!.mats).toEqual([]);
@@ -453,7 +453,7 @@ describe('Navigation Powers through live game commands', () => {
 	it('12 all three requested augments can be picked separately', () => {
 		let s = start();
 		s.players.Blue!.statusLevel = 3;
-		s = reveal(s, 'forest-bounty', 'Floral Patch');
+		s = reveal(s, 'forest-bounty', 'Forest Region');
 		s = choose(s, 'Red', 'Fighter');
 		s = choose(s, 'Red', 'Elementalist');
 		s = choose(s, 'Red', 'Soul Weaver');
@@ -482,7 +482,7 @@ describe('Navigation Powers through live game commands', () => {
 		const play = () => {
 			let s = start();
 			s.players.Blue!.statusLevel = 3;
-			s = reveal(s, 'tidal-arsenal', 'Tidal Cove');
+			s = reveal(s, 'tidal-arsenal', 'Water Region');
 			return choose(s, 'Red');
 		};
 		const a = play(),
@@ -534,14 +534,14 @@ describe('Navigation Powers through live game commands', () => {
 		let s = start();
 		s.players.Red!.barrier = 2;
 		s.players.Red!.brokenBarrier = 8;
-		s = reveal(s, 'fires-rhythm', 'Lantern Canyon');
+		s = reveal(s, 'fires-rhythm', 'Fire Region');
 		s = choose(s, 'Red', '2');
 		expect(s.players.Red!.barrier).toBe(6);
 	});
 	it('21 Cultivate twice produces both rune grants', () => {
 		let s = start();
 		s.players.Red!.spirits = [spirit(1), spirit(2)];
-		s = reveal(s, 'forests-rhythm', 'Floral Patch');
+		s = reveal(s, 'forests-rhythm', 'Forest Region');
 		s = choose(s, 'Red', '2');
 		expect(s.players.Red!.mats.filter((m) => m.hasRune)).toHaveLength(2);
 	});
@@ -557,7 +557,7 @@ describe('Navigation Powers through live game commands', () => {
 	it('a region-specific power fails harmlessly at another destination', () => {
 		let s = start();
 		s.players.Blue!.statusLevel = 3;
-		s = reveal(s, 'forest-bounty', 'Cyber City');
+		s = reveal(s, 'forest-bounty', 'Mountain Region');
 		expect(s.players.Red!.navigationPowerOffers ?? []).toEqual([]);
 		expect(s.players.Red!.unplacedAugments ?? []).toEqual([]);
 	});
@@ -573,7 +573,7 @@ describe('Navigation Powers through live game commands', () => {
 		expect(s.players.Red!.navigationPower).toBeNull();
 		expect(s.players.Red!.attackDice).toHaveLength(1);
 		s = run(s, 'Red', { type: 'lockNavigation', destination: 'Arcane Abyss' });
-		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Cyber City' });
+		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Mountain Region' });
 		s = run(s, 'Red', { type: 'forceAdvancePhase' });
 		s = run(s, 'Red', { type: 'startCombat' });
 		s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });
@@ -585,8 +585,8 @@ describe('Navigation Powers through live game commands', () => {
 	it('power acquisition pays exactly once and reveals three distinct choices', () => {
 		let s = start();
 		giveRune(s, 'Red');
-		s = run(s, 'Red', { type: 'lockNavigation', destination: 'Cyber City' });
-		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Tidal Cove' });
+		s = run(s, 'Red', { type: 'lockNavigation', destination: 'Mountain Region' });
+		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Water Region' });
 		s = run(s, 'Red', { type: 'forceAdvancePhase' });
 		s = run(s, 'Red', { type: 'acquireNavigationPower', runeSlot: 1 });
 		expect(s.players.Red!.mats.filter((m) => m.hasRune)).toHaveLength(0);
@@ -687,13 +687,13 @@ describe('Navigation Powers through live game commands', () => {
 		s.players.Orange!.powerInventory = ['augment-relay'];
 		s = run(s, 'Red', {
 			type: 'lockNavigation',
-			destination: 'Cyber City',
+			destination: 'Mountain Region',
 			navigationPowerId: 'augment-relay'
 		});
-		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Cyber City' });
+		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Mountain Region' });
 		s = run(s, 'Orange', {
 			type: 'lockNavigation',
-			destination: 'Cyber City',
+			destination: 'Mountain Region',
 			navigationPowerId: 'augment-relay'
 		});
 		s = run(s, 'Red', { type: 'forceAdvancePhase' });
@@ -747,12 +747,12 @@ describe('Navigation Powers through live game commands', () => {
 			].includes(id)
 				? 'Arcane Abyss'
 				: ['fires-rhythm', 'cinder-awakening'].includes(id)
-					? 'Lantern Canyon'
+					? 'Fire Region'
 					: ['forests-rhythm', 'forest-bounty'].includes(id)
-						? 'Floral Patch'
+						? 'Forest Region'
 						: id === 'tidal-arsenal'
-							? 'Tidal Cove'
-							: 'Cyber City';
+							? 'Water Region'
+							: 'Mountain Region';
 			s = reveal(s, id, dest);
 			s = settleOffers(s);
 			if (s.phase === 'encounter') {
@@ -771,7 +771,7 @@ describe('Navigation Powers through live game commands', () => {
 			s = closeRound(s);
 			for (let round = 0; round < 3 && s.status === 'active'; round++) {
 				s = run(s, 'Red', { type: 'lockNavigation', destination: 'Arcane Abyss' });
-				s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Cyber City' });
+				s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Mountain Region' });
 				s = run(s, 'Red', { type: 'forceAdvancePhase' });
 				s = run(s, 'Red', { type: 'startCombat' });
 				s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });

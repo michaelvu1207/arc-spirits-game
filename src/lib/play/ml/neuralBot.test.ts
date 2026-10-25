@@ -119,8 +119,8 @@ function atQuietLocation(): PublicGameState {
 	state = apply(state, RED, { type: 'selectGuardian', guardianName: 'Red Guard' });
 	state = apply(state, BLUE, { type: 'selectGuardian', guardianName: 'Blue Guard' });
 	state = apply(state, RED, { type: 'startGame', seed: 9 });
-	state = apply(state, RED, { type: 'lockNavigation', destination: 'Floral Patch' });
-	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Floral Patch' });
+	state = apply(state, RED, { type: 'lockNavigation', destination: 'Forest Region' });
+	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Forest Region' });
 	return apply(state, RED, { type: 'forceAdvancePhase' });
 }
 
@@ -626,7 +626,7 @@ describe('neural value action scoring', () => {
 		const abyss = encodeObs(atAbyss(), 'Red', CATALOG);
 		expect(abyss).toHaveLength(OBS_DIM);
 		expect(abyss.slice(77, 83)).toEqual([0, 0, 0, 0, 1, 1]);
-		// At a Spirit World location (Floral Patch, index 0): one-hot slot 0, at-Abyss flag clear.
+		// At a Spirit World location (Forest Region, index 0): one-hot slot 0, at-Abyss flag clear.
 		const floral = encodeObs(atQuietLocation(), 'Red', CATALOG);
 		expect(floral.slice(77, 83)).toEqual([1, 0, 0, 0, 0, 0]);
 	});

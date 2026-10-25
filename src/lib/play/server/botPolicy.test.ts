@@ -247,7 +247,7 @@ describe('bot policy — full simultaneous round loop', () => {
 		const locked = applyGameCommand(
 			state,
 			botActorFor(state, seat),
-			{ type: 'lockNavigation', destination: 'Cyber City' },
+			{ type: 'lockNavigation', destination: 'Mountain Region' },
 			CATALOG
 		);
 		expect(locked.ok).toBe(true);

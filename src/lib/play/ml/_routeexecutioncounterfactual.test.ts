@@ -76,12 +76,12 @@ const ROLLOUT_FULL_LOOKAHEAD_DEPTH = 2;
 const ROLLOUT_FULL_LOOKAHEAD_BEAM = 8;
 const ROLLOUT_FULL_LOOKAHEAD_ROOT_BEAM = 24;
 const ROLLOUT_FULL_TARGET_TEMPERATURE = 0.25;
-const BUILD_OPTION_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch', 'Cyber City', 'Tidal Cove'];
-const SCALING_OPTION_DESTINATIONS: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
-const RESTORE_OPTION_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
-const CLOSER_DAMAGE_DESTINATIONS: NavigationDestination[] = ['Tidal Cove', 'Cyber City', 'Lantern Canyon'];
-const CLOSER_MAX_BARRIER_DESTINATIONS: NavigationDestination[] = ['Floral Patch', 'Lantern Canyon', 'Cyber City'];
-const CLOSER_RESTORE_DESTINATIONS: NavigationDestination[] = ['Lantern Canyon', 'Floral Patch'];
+const BUILD_OPTION_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region', 'Mountain Region', 'Water Region'];
+const SCALING_OPTION_DESTINATIONS: NavigationDestination[] = ['Water Region', 'Mountain Region', 'Fire Region'];
+const RESTORE_OPTION_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region'];
+const CLOSER_DAMAGE_DESTINATIONS: NavigationDestination[] = ['Water Region', 'Mountain Region', 'Fire Region'];
+const CLOSER_MAX_BARRIER_DESTINATIONS: NavigationDestination[] = ['Forest Region', 'Fire Region', 'Mountain Region'];
+const CLOSER_RESTORE_DESTINATIONS: NavigationDestination[] = ['Fire Region', 'Forest Region'];
 const GOOD_TARGET_CONTROLLED_CORRUPT_FARM =
 	(process.env.ARC_GOOD_TARGET_CONTROLLED_CORRUPT_FARM ?? process.env.ROUTEEXECQ_GOOD_TARGET_CONTROLLED_CORRUPT_FARM ?? '0') === '1';
 const GOOD_TARGET_CONTROLLED_CORRUPT_MAX_VP =
@@ -412,6 +412,7 @@ function costRequirementLabel(cost: CostRequirement): string {
 
 function gainEffectLabel(gain: GainEffect): string {
 	switch (gain.type) {
+		case 'navigationPower': return gain.replace ? 'Replace a Power' : 'Gain a Power';
 		case 'action': return gain.action;
 		case 'gainMaxBarrier': return 'gainMaxBarrier';
 		case 'restoreBarrier': return 'restoreBarrier';
@@ -660,8 +661,8 @@ function goodTargetPivotDestinations(
 ): NavigationDestination[] {
 	const player = state.players[seat];
 	const monster = state.monster;
-	if (!player || !monster) return ['Tidal Cove', 'Cyber City', 'Lantern Canyon', 'Floral Patch'];
-	if ((player.statusLevel ?? 0) > 2) return ['Floral Patch', 'Tidal Cove', 'Cyber City', 'Lantern Canyon'];
+	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
+	if ((player.statusLevel ?? 0) > 2) return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, cfg)) return ['Arcane Abyss'];
 	const destinations: NavigationDestination[] = [];
 	const counts = awakenedClassCounts(player);
@@ -675,20 +676,20 @@ function goodTargetPivotDestinations(
 	const needsDamage = monsterHp > 0 && attack < monsterHp + 0.5 && firepower < cfg.firepowerThreshold && clean < cfg.cleanThreshold;
 	const needsRestore = survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget;
 	const needsMaxBarrier = survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2;
-	if ((player.victoryPoints ?? 0) >= 18 || ((counts.Healer ?? 0) > 0 && maxBarrier >= 8)) appendDestination(destinations, 'Floral Patch');
+	if ((player.victoryPoints ?? 0) >= 18 || ((counts.Healer ?? 0) > 0 && maxBarrier >= 8)) appendDestination(destinations, 'Forest Region');
 	if (needsRestore) {
-		appendDestination(destinations, 'Floral Patch');
-		appendDestination(destinations, 'Lantern Canyon');
+		appendDestination(destinations, 'Forest Region');
+		appendDestination(destinations, 'Fire Region');
 	}
-	if (needsMaxBarrier) appendDestination(destinations, 'Lantern Canyon');
+	if (needsMaxBarrier) appendDestination(destinations, 'Fire Region');
 	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || player.spirits.length < 6 || (counts['Spirit Animal'] ?? 0) < 2) {
-		appendDestination(destinations, 'Tidal Cove');
-		appendDestination(destinations, 'Cyber City');
+		appendDestination(destinations, 'Water Region');
+		appendDestination(destinations, 'Mountain Region');
 	}
-	appendDestination(destinations, 'Floral Patch');
-	appendDestination(destinations, 'Tidal Cove');
-	appendDestination(destinations, 'Cyber City');
-	appendDestination(destinations, 'Lantern Canyon');
+	appendDestination(destinations, 'Forest Region');
+	appendDestination(destinations, 'Water Region');
+	appendDestination(destinations, 'Mountain Region');
+	appendDestination(destinations, 'Fire Region');
 	return destinations;
 }
 
@@ -902,7 +903,7 @@ function navigationRootDestinationsForGate(
 		return RESTORE_OPTION_DESTINATIONS;
 	}
 	if (gate === 'hp4-first-wall') {
-		return ['Arcane Abyss', 'Lantern Canyon', 'Floral Patch'];
+		return ['Arcane Abyss', 'Fire Region', 'Forest Region'];
 	}
 	if (gate === 'route-closer') {
 		const player = state.players[seat];
@@ -939,7 +940,7 @@ function navigationRootDestinationsForGate(
 			cleanProb >= cfg.cleanThreshold ||
 			firepowerProb >= cfg.firepowerThreshold ||
 			attack >= monsterHp - 0.01;
-		if (survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget) return ['Lantern Canyon'];
+		if (survivalTarget > 0 && maxBarrier >= survivalTarget && barrier < survivalTarget) return ['Fire Region'];
 		if ((survivalTarget <= 0 || barrier >= survivalTarget) && enoughFirepower) return ['Arcane Abyss'];
 		return CLOSER_DAMAGE_DESTINATIONS;
 	}
@@ -955,8 +956,8 @@ function navigationRootDestinationsForGate(
 			firepowerProb < cfg.firepowerThreshold
 		);
 		return damageDeficit
-			? ['Cyber City', 'Tidal Cove', 'Lantern Canyon']
-			: ['Floral Patch', 'Lantern Canyon'];
+			? ['Mountain Region', 'Water Region', 'Fire Region']
+			: ['Forest Region', 'Fire Region'];
 	}
 	return undefined;
 }

@@ -17,7 +17,7 @@ export interface LocationConfig {
 	/**
 	 * Abyss is combat-only (fight the monster). Every Spirit World location's available
 	 * actions ARE its DB reward rows (see `locationInteractions.ts` + `game_locations`):
-	 * Rest lives at Floral Patch, Cultivate at Lantern Canyon, Summon at Tidal Cove, etc.
+	 * Rest lives at Forest Region, Cultivate at Fire Region, Summon at Water Region, etc.
 	 * There is NO generic always-available action set — reward-row interactions are the
 	 * only way to act at a location.
 	 */
@@ -25,19 +25,19 @@ export interface LocationConfig {
 }
 
 export const LOCATIONS: Record<NavigationDestination, LocationConfig> = {
-	'Floral Patch': { name: 'Floral Patch', origin: 'Forest', combatOnly: false },
-	'Cyber City': { name: 'Cyber City', origin: 'Cyber', combatOnly: false },
-	'Tidal Cove': { name: 'Tidal Cove', origin: 'Tidal', combatOnly: false },
-	'Lantern Canyon': { name: 'Lantern Canyon', origin: 'Lantern', combatOnly: false },
+	'Forest Region': { name: 'Forest Region', origin: 'Forest', combatOnly: false },
+	'Mountain Region': { name: 'Mountain Region', origin: 'Mountain', combatOnly: false },
+	'Water Region': { name: 'Water Region', origin: 'Water', combatOnly: false },
+	'Fire Region': { name: 'Fire Region', origin: 'Fire', combatOnly: false },
 	'Arcane Abyss': { name: 'Arcane Abyss', origin: null, combatOnly: true }
 };
 
 /** Accent color per location, aligned with the brand palette. */
 export const LOCATION_ACCENT: Record<NavigationDestination, string> = {
-	'Floral Patch': '#4cba6a',
-	'Cyber City': '#5cdfff',
-	'Tidal Cove': '#4d8bf0',
-	'Lantern Canyon': '#ffba3d',
+	'Forest Region': '#4cba6a',
+	'Mountain Region': '#5cdfff',
+	'Water Region': '#4d8bf0',
+	'Fire Region': '#ffba3d',
 	'Arcane Abyss': '#ff2bc7'
 };
 
@@ -51,10 +51,10 @@ export function getLocationConfig(name: string): LocationConfig | null {
 
 /** Gaussian-splat world (static .spz under /static/splats) per destination. */
 export const SPLAT_BY_DESTINATION: Partial<Record<NavigationDestination, string>> = {
-	'Cyber City': '/splats/cyber-city.spz',
-	'Floral Patch': '/splats/forest-clearing.spz',
-	'Tidal Cove': '/splats/underwater-cave.spz',
-	'Lantern Canyon': '/splats/lantern-market.spz',
+	'Mountain Region': '/splats/cyber-city.spz',
+	'Forest Region': '/splats/forest-clearing.spz',
+	'Water Region': '/splats/underwater-cave.spz',
+	'Fire Region': '/splats/lantern-market.spz',
 	'Arcane Abyss': '/splats/abyssal-portal.spz'
 };
 /** Shown before a destination is picked (the sunset valley). */
@@ -62,20 +62,20 @@ export const DEFAULT_SPLAT = '/splats/misty-valley.spz';
 
 /** Ambient world theme per destination (location/interaction phase). */
 export const WORLD_MUSIC: Partial<Record<NavigationDestination, string>> = {
-	'Cyber City': '/music/worlds/cyber-city.mp3',
-	'Floral Patch': '/music/worlds/forest-clearing.mp3',
-	'Tidal Cove': '/music/worlds/underwater-cave.mp3',
-	'Lantern Canyon': '/music/worlds/lantern-market.mp3',
+	'Mountain Region': '/music/worlds/cyber-city.mp3',
+	'Forest Region': '/music/worlds/forest-clearing.mp3',
+	'Water Region': '/music/worlds/underwater-cave.mp3',
+	'Fire Region': '/music/worlds/lantern-market.mp3',
 	'Arcane Abyss': '/music/worlds/abyssal-portal.mp3'
 };
 export const DEFAULT_WORLD_MUSIC = '/music/worlds/misty-valley.mp3';
 
 /** Combat theme per destination (encounter phase / monster fight). */
 export const COMBAT_MUSIC: Partial<Record<NavigationDestination, string>> = {
-	'Cyber City': '/music/combat/cyber-city.mp3',
-	'Floral Patch': '/music/combat/floral-patch.mp3',
-	'Tidal Cove': '/music/combat/tidal-cove.mp3',
-	'Lantern Canyon': '/music/combat/lantern-canyon.mp3',
+	'Mountain Region': '/music/combat/cyber-city.mp3',
+	'Forest Region': '/music/combat/floral-patch.mp3',
+	'Water Region': '/music/combat/tidal-cove.mp3',
+	'Fire Region': '/music/combat/lantern-canyon.mp3',
 	'Arcane Abyss': '/music/combat/arcane-abyss.mp3'
 };
 export const DEFAULT_COMBAT_MUSIC = '/music/combat/arcane-abyss.mp3';
