@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest';
 import { applyGameCommand, buildSessionProjection, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { getPowerAutoCommand } from './navigationPowerProgress';
-import { regionCatalog } from './regionRules';
+import { regionCatalog, upgradeRegionActionUses } from './regionRules';
 import { normalizeRegionContent } from './regions';
 import { computeLocationInteractions } from './viewV2';
 import { canApply } from './legality';
@@ -53,79 +53,148 @@ function rowAt(destination: string) {
 	)!.rowIndex;
 }
 
-describe('region Power trades', () => {
-	test('all four maps replace relic currency and rewards', () => {
-		for (const loc of catalog.locations!.filter((l) => l.name !== 'Arcane Abyss')) {
-			const rows = buildLocationInteractions(loc.rewardRows, loc.name);
-			expect(rows.some((row) => row.gains.some((g) => g.type === 'navigationPower'))).toBe(true);
-			expect(rows.some((row) => row.cost.some((c) => c.match === 'anyRelic'))).toBe(false);
-			expect(
-				rows.some((row) => row.gains.some((g) => g.type === 'rune' && g.rune.type === 'relic'))
-			).toBe(false);
+describe('two-action region rules', () => {
+	test('every region has exactly the agreed two actions', () => {
+		for (const name of ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region']) {
+			const loc = catalog.locations!.find((l) => l.name === name)!;
+			const rows = buildLocationInteractions(loc.rewardRows, name);
+			expect(rows).toHaveLength(2);
+			expect(rows.map((r) => r.rowIndex)).toEqual([0, 1]);
+			expect(rows.some((r) => r.cost.some((c) => c.match === 'anyRelic'))).toBe(false);
 		}
+		const rows = (name: string) =>
+			buildLocationInteractions(catalog.locations!.find((l) => l.name === name)!.rewardRows, name);
+		expect(rows('Forest Region').map((r) => r.gains)).toMatchObject([
+			[{ type: 'action', action: 'rest' }],
+			[{ type: 'navigationPower', replace: false }]
+		]);
+		expect(rows('Water Region')[0].gains).toMatchObject([
+			{ type: 'action', action: 'spiritWorldSummon' }
+		]);
+		expect(rows('Water Region')[1].gains).toMatchObject([
+			{
+				type: 'chooseRune',
+				options: [{ name: 'Fighter' }, { name: 'Cultivator' }, { name: 'Spirit Animal' }]
+			}
+		]);
+		expect(rows('Mountain Region')[0].gains).toMatchObject([
+			{ type: 'chooseRune', options: [{ name: 'Elementalist' }, { name: 'Soul Weaver' }] }
+		]);
+		expect(rows('Mountain Region')[1].gains).toEqual([{ type: 'navigationPower', replace: true }]);
+		expect(rows('Fire Region').map((r) => r.gains)).toMatchObject([
+			[{ type: 'action', action: 'cultivate' }],
+			[{ type: 'rune', rune: { type: 'augment', name: 'Cursed Spirit' } }]
+		]);
 	});
-	test.each(['Forest Region', 'Mountain Region', 'Water Region'])(
-		'%s pays one Rune to choose one of three Powers',
-		(destination) => {
-			let state = setup(destination);
+	test.each(['resolveLocationInteraction', 'acquireNavigationPower'])(
+		'Forest %s immediately grants one random Power for one Rune',
+		(entry) => {
+			let state = setup('Forest Region');
 			const before = state.players.Red!.powerInventory!.length;
-			state = run(state, {
-				type: 'resolveLocationInteraction',
-				rowIndex: rowAt(destination),
-				costChoices: [state.players.Red!.mats.length - 1]
-			});
-			expect(state.players.Red!.mats.at(-1)!.hasRune).toBe(false);
-			const offers = state.players.Red!.pendingPowerDrafts![0];
-			expect(new Set(offers).size).toBe(3);
-			expect(canApply(state, actor, { type: 'endLocationActions' }, catalog)).toBe(false);
-			state = run(state, { type: 'chooseNavigationPower', powerId: offers[0] });
-			expect(state.players.Red!.powerInventory).toHaveLength(before + 1);
-			expect(state.players.Red!.pendingPowerDrafts).toEqual([]);
+			const command: GameCommand =
+				entry === 'acquireNavigationPower'
+					? { type: 'acquireNavigationPower', runeSlot: 9 }
+					: {
+							type: 'resolveLocationInteraction',
+							rowIndex: 1,
+							costChoices: [state.players.Red!.mats.length - 1]
+						};
+			const replay = run(state, command);
+			state = run(state, command);
+			const p = state.players.Red!;
+			expect(p.mats.at(-1)!.hasRune).toBe(false);
+			expect(p.powerInventory).toHaveLength(before + 1);
+			expect(p.powerInventory).toEqual(replay.players.Red!.powerInventory);
+			expect(p.pendingPowerDrafts).toEqual([]);
+			expect(p.lastAction?.log?.join(' ')).toContain('Gained 1 random Power');
+			expect(canApply(state, actor, { type: 'endLocationActions' }, catalog)).toBe(true);
 		}
 	);
-	test('Fire requires a held Power and atomically replaces it after the paid draft', () => {
-		let state = setup('Fire Region');
-		state = run(state, { type: 'acquireNavigationPower', runeSlot: 9 });
+	test.each(['Water Region', 'Fire Region'])(
+		'%s cannot buy or replace Powers through the shortcut',
+		(name) => {
+			const state = setup(name);
+			expect(
+				applyGameCommand(state, actor, { type: 'acquireNavigationPower', runeSlot: 9 }, catalog).ok
+			).toBe(false);
+			expect(state.players.Red!.mats.at(-1)!.hasRune).toBe(true);
+		}
+	);
+	test.each(['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'])(
+		'%s rejects removed row 2 without spending currency',
+		(name) => {
+			const state = setup(name);
+			expect(
+				applyGameCommand(state, actor, { type: 'resolveLocationInteraction', rowIndex: 2 }, catalog)
+					.ok
+			).toBe(false);
+			expect(state.players.Red!.mats.at(-1)!.hasRune).toBe(true);
+		}
+	);
+	test('Mountain requires an owned Power and atomically replaces it after a paid draft', () => {
+		let state = run(setup('Mountain Region'), { type: 'acquireNavigationPower', runeSlot: 9 });
 		const p = state.players.Red!;
 		expect(p.pendingPowerReplacement).toBe(true);
 		expect(p.powerInventory).toEqual(['thorn-ward']);
+		expect(p.pendingPowerDrafts![0]).toHaveLength(3);
 		expect(p.pendingPowerDrafts![0]).not.toContain('thorn-ward');
 		const powerId = p.pendingPowerDrafts![0][0];
 		expect(canApply(state, actor, { type: 'chooseNavigationPower', powerId }, catalog)).toBe(false);
 		expect(
-			applyGameCommand(state, actor, { type: 'chooseNavigationPower', powerId }, catalog).ok
-		).toBe(false);
-		expect(
 			buildSessionProjection(state, { role: 'host', seatColor: 'Red', displayName: 'Host' }).players
-				.Red?.pendingPowerReplacement
+				.Red!.pendingPowerReplacement
 		).toBe(true);
 		state = run(state, { type: 'chooseNavigationPower', powerId, replacePowerId: 'thorn-ward' });
 		expect(state.players.Red!.powerInventory).toEqual([powerId]);
 		expect(state.players.Red!.pendingPowerReplacement).toBe(false);
 	});
-	test('an unavailable replacement cannot consume a Rune', () => {
-		const state = setup('Fire Region');
+	test('Mountain cannot consume a Rune when there is no Power to replace', () => {
+		const state = setup('Mountain Region');
 		state.players.Red!.powerInventory = [];
-		const command: GameCommand = {
-			type: 'resolveLocationInteraction',
-			rowIndex: rowAt('Fire Region')
-		};
-		expect(applyGameCommand(state, actor, command, catalog).ok).toBe(false);
-		expect(state.players.Red!.mats.at(-1)!.hasRune).toBe(true);
 		expect(
-			computeLocationInteractions(state, state.players.Red!, catalog).find(
-				(r) => r.rowIndex === rowAt('Fire Region')
-			)?.affordable
+			applyGameCommand(state, actor, { type: 'resolveLocationInteraction', rowIndex: 1 }, catalog)
+				.ok
 		).toBe(false);
+		expect(state.players.Red!.mats.at(-1)!.hasRune).toBe(true);
+		expect(computeLocationInteractions(state, state.players.Red!, catalog)[1].affordable).toBe(
+			false
+		);
 	});
-	test('deadline resolution completes a replacement without creating an extra Power', () => {
-		let state = setup('Fire Region');
-		state = run(state, { type: 'acquireNavigationPower', runeSlot: 9 });
-		const command = getPowerAutoCommand(state, 'Red');
-		expect(command).toMatchObject({ type: 'chooseNavigationPower', replacePowerId: 'thorn-ward' });
+	test('Mountain deadline resolution preserves the hand size', () => {
+		let state = run(setup('Mountain Region'), { type: 'acquireNavigationPower', runeSlot: 9 });
+		expect(getPowerAutoCommand(state, 'Red')).toMatchObject({
+			type: 'chooseNavigationPower',
+			replacePowerId: 'thorn-ward'
+		});
 		state = run(state, { type: 'forceAdvancePhase' });
 		expect(state.players.Red!.powerInventory).toHaveLength(1);
 		expect(state.players.Red!.powerInventory).not.toContain('thorn-ward');
+	});
+	test('Forest cannot gain a Power without paying', () => {
+		const state = setup('Forest Region');
+		state.players.Red!.mats = [];
+		expect(
+			applyGameCommand(state, actor, { type: 'resolveLocationInteraction', rowIndex: 1 }, catalog)
+				.ok
+		).toBe(false);
+		expect(state.players.Red!.powerInventory).toEqual(['thorn-ward']);
+	});
+	test('saved action use follows the surviving action and migrates only once', () => {
+		const cases: [string, string[], string[]][] = [
+			['Forest Region', ['row:0', 'row:1', 'row:2'], ['row:1', 'row:0']],
+			['Water Region', ['row:0', 'row:1', 'row:2'], ['row:0', 'row:1']],
+			['Mountain Region', ['row:0', 'row:1', 'row:2'], ['row:0']],
+			['Fire Region', ['row:0', 'row:1', 'row:2'], ['row:1', 'row:0']]
+		];
+		for (const [region, old, expected] of cases) {
+			const state = setup(region);
+			delete state.regionActionsVersion;
+			state.players.Red!.actionsUsedThisRound = old;
+			upgradeRegionActionUses(state);
+			expect(state.players.Red!.actionsUsedThisRound).toEqual(expected);
+			upgradeRegionActionUses(state);
+			expect(state.players.Red!.actionsUsedThisRound).toEqual(expected);
+		}
 	});
 	test('existing state and content convert names while preserving region occupancy', () => {
 		const legacy = {

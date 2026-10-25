@@ -96,7 +96,7 @@ describe('meaningFor', () => {
 		expect(meaningFor(LANTERN)).toMatchObject({ kind: 'originRune', originId: LANTERN_ORIGIN });
 		expect(meaningFor(CYBER)).toMatchObject({ kind: 'originRune', originId: CYBER_ORIGIN });
 		expect(meaningFor(TEAPOT)).toMatchObject({ kind: 'specialRune', runeName: 'Teapot' });
-		expect(meaningFor(SWORDSMAN)).toMatchObject({ kind: 'specialRune', runeName: 'Swordsman' });
+		expect(meaningFor(SWORDSMAN)).toMatchObject({ kind: 'specialRune', runeName: 'Fighter' });
 		expect(meaningFor(CURSED_SPIRIT)).toMatchObject({ kind: 'specialRune', runeName: 'Cursed Spirit' });
 	});
 
@@ -137,7 +137,7 @@ describe('buildLocationInteractions — live map', () => {
 		const choose = interactions[1].gains[0];
 		expect(choose.type).toBe('chooseRune');
 		if (choose.type === 'chooseRune') {
-			expect(choose.options.map((o) => o.name)).toEqual(['Swordsman', 'Support', 'Animal']);
+			expect(choose.options.map((o) => o.name)).toEqual(['Fighter', 'Cultivator', 'Spirit Animal']);
 			expect(choose.options.every((o) => o.type === 'augment')).toBe(true);
 			expect(choose.options.every((o) => o.special && o.classId != null)).toBe(true);
 		}

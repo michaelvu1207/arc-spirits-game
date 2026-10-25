@@ -997,6 +997,8 @@ export interface PrivatePlayerState {
 }
 
 export interface PublicGameState {
+	/** Version of the two-action region map applied to saved row-use markers. */
+	regionActionsVersion?: number;
 	roomCode: string;
 	revision: number;
 	status: GameSessionStatus;

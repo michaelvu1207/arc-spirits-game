@@ -54,79 +54,117 @@ test.beforeAll(async () => {
 });
 
 for (const region of regions) {
-	test(`${region} map trade resolves a paid Power draft`, async ({ page }, testInfo) => {
+	test(`${region} exposes exactly two working actions`, async ({ page }, testInfo) => {
 		if (region === 'Fire Region') await page.setViewportSize({ width: 844, height: 390 });
+		await page.addInitScript(() => {
+			localStorage.setItem('asp:splat-quality', '\"off\"::v1');
+			localStorage.setItem('asp:visual-quality', '\"off\"::v1');
+		});
 		await page.goto('/play?e2e=1&ws=off');
-		await expect(async () => {
-			await ensureGuestIdentity(page, 'Region Explorer');
-		}).toPass({ timeout: 30_000 });
 		await page.getByTestId('solo-play').click();
 		await page.waitForURL(/\/play\/[A-Z0-9]+/);
 		await expect(page.getByTestId('navigation-power-draft')).toBeVisible();
 		await page.getByTestId('navigation-power-draft').locator('button').first().click();
 		await expect(page.getByTestId('navigation-power-draft')).toHaveCount(0);
-		const indicator = page.getByTestId('navigation-power-status');
-		const runesRow = page.getByTestId('player-runes');
-		await expect(indicator).toBeVisible();
-		const indicatorBox = (await indicator.boundingBox())!;
-		const runeBox = (await runesRow.boundingBox())!;
-		expect(indicatorBox.y + indicatorBox.height).toBeLessThanOrEqual(runeBox.y);
-		expect(Math.abs(indicatorBox.x - runeBox.x)).toBeLessThan(12);
-		await page.screenshot({
-			path: testInfo.outputPath('power-indicator-left.png'),
-			fullPage: true
-		});
-
-		for (const name of regions) await expect(page.getByTestId(`location-${name}`)).toBeVisible();
-		await expect(page.locator('body')).not.toContainText(
-			/Floral Patch|Cyber City|Tidal Cove|Lantern Canyon/
-		);
-		await runRoomCommand(page, {
-			type: 'debugGrant',
-			grant: { kind: 'rune', runeId: '356f3ad2-4cac-4b69-a3cc-7559f8891d8e' }
-		});
-		const before: any = await getRoomView(page);
-		const seat = before.member.seatColor;
-		const oldPowers: string[] = before.projection.players[seat].powerInventory;
-		const runes = before.projection.players[seat].mats.filter((m: any) => m.hasRune).length;
+		for (let n = 0; n < 3; n++)
+			await runRoomCommand(page, {
+				type: 'debugGrant',
+				grant: { kind: 'rune', runeId: '356f3ad2-4cac-4b69-a3cc-7559f8891d8e' }
+			});
 		await page.getByTestId(`location-${region}`).dispatchEvent('click');
 		await page.getByRole('button', { name: 'No Power — lock destination' }).click();
 		await expect.poll(async () => (await getRoomView(page)).projection.phase).toBe('location');
-		await expect(page.getByTestId('gain-navigation-power')).toHaveText(
-			region === 'Fire Region' ? 'Replace a Power' : 'Gain a Power'
-		);
-		const loc = catalog.locations.find((l: any) => l.name === region);
-		const row = buildLocationInteractions(loc.rewardRows, region).find((i) =>
-			i.gains.some((g) => g.type === 'navigationPower')
-		)!;
-		const trade = page.getByTestId(`interaction-${row.rowIndex}`);
-		await expect(trade).toBeVisible();
-		await expect(trade.locator('img[src*="navigation-power.svg"]')).toHaveAttribute(
-			'src',
-			region === 'Fire Region'
-				? '/icons/replace-navigation-power.svg'
-				: '/icons/navigation-power.svg'
-		);
-		await expect(trade).toHaveAccessibleName(
-			new RegExp(region === 'Fire Region' ? 'Replace a Power' : 'Gain a Power')
-		);
-		await trade.click();
-		await expect(page.getByTestId('navigation-power-draft').locator('button')).toHaveCount(3);
-		if (region === 'Fire Region') {
-			await expect(page.getByTestId('power-to-replace')).toBeVisible();
-			await page.getByTestId('power-to-replace').selectOption(oldPowers[0]);
+		await expect(page.getByTestId('interaction-grid').locator('.int-card')).toHaveCount(2);
+		const state = async () => {
+			const v: any = await getRoomView(page);
+			return v.projection.players[v.member.seatColor];
+		};
+		const payArmedRune = async () => {
+			const rack = page.getByTestId('armed-cost-pick');
+			if (await rack.isVisible()) await rack.getByRole('button').first().click();
+		};
+
+		const placeAugments = async () => {
+			for (let n = 0; n < 8; n++) {
+				const pending = (await state()).unplacedAugments.length;
+				if (!pending) return;
+				await page
+					.getByRole('button', { name: /^Place augment on / })
+					.first()
+					.dispatchEvent('click');
+				await expect
+					.poll(async () => (await state()).unplacedAugments.length)
+					.toBeLessThan(pending);
+			}
+			throw new Error('Augment placement did not finish');
+		};
+		await page.screenshot({ path: testInfo.outputPath('two-actions.png'), fullPage: true });
+
+		if (region === 'Forest Region' || region === 'Fire Region') {
+			await page.getByTestId('interaction-0').click();
+			await expect
+				.poll(
+					async () =>
+						(await state()).actionsUsedThisRound.filter((x: string) => x === 'row:0').length
+				)
+				.toBe(1);
+		} else if (region === 'Water Region') {
+			await page.getByTestId('interaction-0').click();
+			await expect(page.getByTestId('draw-tray')).toBeVisible();
+			await page.getByTestId('draw-discard').click();
+			await expect(page.getByTestId('draw-tray')).toHaveCount(0);
+		} else {
+			await page.getByTestId('interaction-0').click();
+			await expect(page.getByTestId('armed-choice-0-0')).toContainText('Elementalist');
+			await page.getByTestId('armed-choice-0-0').click();
+			await payArmedRune();
+			await page.getByTestId('armed-confirm').click();
+			await expect.poll(async () => (await state()).unplacedAugments.length).toBeGreaterThan(0);
+			await placeAugments();
 		}
-		await page.screenshot({ path: testInfo.outputPath('power-trade.png'), fullPage: true });
-		await page.getByTestId('navigation-power-draft').locator('button').first().click();
-		await expect(page.getByTestId('navigation-power-draft')).toHaveCount(0);
-		const after: any = await getRoomView(page);
-		const p = after.projection.players[seat];
-		expect(p.mats.filter((m: any) => m.hasRune)).toHaveLength(runes - 1);
-		expect(p.powerInventory).toHaveLength(oldPowers.length + (region === 'Fire Region' ? 0 : 1));
-		if (region === 'Fire Region') expect(p.powerInventory).not.toContain(oldPowers[0]);
-		await expect(page.getByTestId('pass-turn')).toBeVisible();
-		await page.screenshot({ path: testInfo.outputPath('trade-complete.png'), fullPage: true });
-		await page.getByTestId('pass-turn').click();
-		await expect.poll(async () => (await getRoomView(page)).projection.round).toBe(2);
+		const before = await state();
+		await page.getByTestId('interaction-1').click();
+		if (region === 'Forest Region') {
+			await expect
+				.poll(async () => (await state()).powerInventory.length)
+				.toBe(before.powerInventory.length + 1);
+			await expect(page.getByTestId('navigation-power-draft')).toHaveCount(0);
+			expect((await state()).pendingPowerDrafts).toEqual([]);
+		} else if (region === 'Mountain Region') {
+			await expect(page.getByTestId('navigation-power-draft').locator('button')).toHaveCount(3);
+			await page.getByTestId('power-to-replace').selectOption(before.powerInventory[0]);
+			await page.getByTestId('navigation-power-draft').locator('button').first().click();
+			await expect(page.getByTestId('navigation-power-draft')).toHaveCount(0);
+			expect((await state()).powerInventory).toHaveLength(before.powerInventory.length);
+			expect((await state()).powerInventory).not.toContain(before.powerInventory[0]);
+		} else if (region === 'Water Region') {
+			await expect(page.getByTestId('armed-choice-0-0')).toContainText('Fighter');
+			await expect(page.getByTestId('armed-choice-0-1')).toContainText('Cultivator');
+			await expect(page.getByTestId('armed-choice-0-2')).toContainText('Spirit Animal');
+			await page.getByTestId('armed-choice-0-0').click();
+			await payArmedRune();
+			await page.getByTestId('armed-confirm').click();
+			await expect
+				.poll(async () => (await state()).unplacedAugments.length)
+				.toBe(before.unplacedAugments.length + 1);
+			await expect(page.getByTestId('gain-navigation-power')).toHaveCount(0);
+		} else {
+			await expect
+				.poll(
+					async () =>
+						(await page.getByTestId('armed-confirm').isVisible()) ||
+						(await state()).unplacedAugments.length > before.unplacedAugments.length
+				)
+				.toBe(true);
+			if (await page.getByTestId('armed-confirm').isVisible()) {
+				await payArmedRune();
+				await page.getByTestId('armed-confirm').click();
+			}
+			await expect
+				.poll(async () => (await state()).unplacedAugments.length)
+				.toBe(before.unplacedAugments.length + 1);
+			await expect(page.getByTestId('gain-navigation-power')).toHaveCount(0);
+		}
+		await page.screenshot({ path: testInfo.outputPath('two-actions.png'), fullPage: true });
 	});
 }

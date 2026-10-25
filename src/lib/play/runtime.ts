@@ -1,3 +1,4 @@
+import { REGION_ACTIONS_VERSION, upgradeRegionActionUses } from './regionRules';
 import { regionText } from './regions';
 import { currentClassCounts, currentClassName } from './classNames';
 import {
@@ -1038,6 +1039,7 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
  * and projection robust against older JSON snapshots.
  */
 export function ensureStateShape(state: PublicGameState): PublicGameState {
+	upgradeRegionActionUses(state);
 	state.rng ??= createRng(hashString(state.roomCode));
 	state.phase ??= 'navigation';
 	state.navigation ??= {};
@@ -1152,6 +1154,7 @@ export function createLobbyState(input: {
 	guardianNames: string[];
 }): PublicGameState {
 	return {
+		regionActionsVersion: REGION_ACTIONS_VERSION,
 		roomCode: input.roomCode.toUpperCase(),
 		revision: 0,
 		status: 'lobby',
@@ -2839,10 +2842,16 @@ function reduceCommand(
 			for (const gain of interaction.gains) {
 				switch (gain.type) {
 					case 'navigationPower': {
-						player.pendingPowerDrafts = [drawPowerChoices(state, gain.replace ? player.powerInventory : [])];
-						player.pendingPowerReplacement = gain.replace;
+						if (gain.replace) {
+							player.pendingPowerDrafts = [drawPowerChoices(state, player.powerInventory)];
+							player.pendingPowerReplacement = true;
+							log.push('Choose a held Power to replace, then choose its replacement.');
+						} else {
+							const power = NAVIGATION_POWERS[nextInt(state.rng, NAVIGATION_POWERS.length)];
+							(player.powerInventory ??= []).push(power.id);
+							log.push(`Gained 1 random Power: ${power.name}.`);
+						}
 						player.actionsUsedThisRound.push('gain-power');
-						log.push(gain.replace ? 'Choose a held Power to replace, then choose its replacement.' : 'Reveal 3 Powers and choose 1.');
 						break;
 					}
 					case 'action': {

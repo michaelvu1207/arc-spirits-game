@@ -1,43 +1,62 @@
-import type { GameLocationRewardRow, RewardIconToken } from '../types';
+import type { GameLocationRewardRow } from '../types';
+import type { PublicGameState } from './types';
 import { normalizeRegionContent, regionText } from './regions';
 
 export const POWER_ICON = 'navigation-power';
 export const REPLACE_POWER_ICON = 'replace-navigation-power';
 export const ANY_RUNE_ICON = '36aab6c9-b98c-4e84-b097-e743f45dde82';
-const ANY_RELIC_ICON = '6a85e06a-52cc-483c-aa59-38395a377307';
-const RELIC_ICONS = new Set([
-	'895144a1-e0f6-4bdc-a4db-322423f1b922',
-	'75134075-3347-49de-a740-eb99d20b1f1a',
-	'ca4df196-67fb-4507-973d-1dfac277953d',
-	'c8ef5d48-2289-4fee-a34d-b041d3e8bea6'
-]);
+const REST = 'bdded3f5-e405-4b68-b63a-9f5c2139beea';
+const SUMMON = '76e58219-e805-4b94-acf4-6d62dfe4c515';
+const CULTIVATE = '60e40dd5-c3cc-4f26-9aa3-2043b4106ade';
+const CURSED_SPIRIT = 'faa39f61-98ec-4f63-a873-766dc4e111f3';
 
-/** Apply the current map rules to old database rows and frozen catalogs alike. */
+/** The current map has exactly two actions per region, independent of legacy DB rows. */
+const REGION_ACTIONS: Record<string, GameLocationRewardRow[]> = {
+	'Forest Region': [
+		{ type: 'gain', gain_icon_ids: [REST] },
+		{ type: 'trade', cost_icon_ids: [ANY_RUNE_ICON], gain_icon_ids: [POWER_ICON] }
+	],
+	'Water Region': [
+		{ type: 'gain', gain_icon_ids: [SUMMON] },
+		{
+			type: 'trade',
+			cost_icon_ids: [ANY_RUNE_ICON],
+			gain_icon_ids: [
+				{
+					kind: 'or',
+					icon_ids: [
+						'de816c21-aa17-4e41-9217-20511c11e9c9',
+						'66525fe8-e375-4473-b1c3-88d3c9fd2b1c',
+						'40934631-35fc-4936-943a-c607a9c607be'
+					]
+				}
+			]
+		}
+	],
+	'Mountain Region': [
+		{
+			type: 'trade',
+			cost_icon_ids: [ANY_RUNE_ICON],
+			gain_icon_ids: [
+				{
+					kind: 'or',
+					icon_ids: ['c9b3225f-c8a9-4aa8-8e43-56c39cf68974', '88facdb6-3374-4891-af8a-fca2e81b79ef']
+				}
+			]
+		},
+		{ type: 'trade', cost_icon_ids: [ANY_RUNE_ICON], gain_icon_ids: [REPLACE_POWER_ICON] }
+	],
+	'Fire Region': [
+		{ type: 'gain', gain_icon_ids: [CULTIVATE] },
+		{ type: 'trade', cost_icon_ids: [ANY_RUNE_ICON], gain_icon_ids: [CURSED_SPIRIT] }
+	]
+};
+
 export function regionRewardRows(
 	name: string,
 	rows: GameLocationRewardRow[] = []
 ): GameLocationRewardRow[] {
-	if (
-		!['Forest Region', 'Fire Region', 'Water Region', 'Mountain Region'].includes(regionText(name))
-	)
-		return rows;
-	const ids = (token: RewardIconToken) => (typeof token === 'string' ? [token] : token.icon_ids);
-	return rows.map((row) => {
-		if (row.type !== 'trade') return row;
-		if (row.gain_icon_ids.some((token) => ids(token).some((id) => RELIC_ICONS.has(id)))) {
-			return {
-				type: 'trade',
-				cost_icon_ids: [ANY_RUNE_ICON],
-				gain_icon_ids: [regionText(name) === 'Fire Region' ? REPLACE_POWER_ICON : POWER_ICON]
-			};
-		}
-		return {
-			...row,
-			cost_icon_ids: row.cost_icon_ids.map((token) =>
-				token === ANY_RELIC_ICON ? ANY_RUNE_ICON : token
-			)
-		};
-	});
+	return normalizeRegionContent(REGION_ACTIONS[regionText(name)] ?? rows);
 }
 
 export function regionCatalog<
@@ -54,4 +73,28 @@ export function powerIconUrl(id: string): string | null {
 	if (id === POWER_ICON) return '/icons/navigation-power.svg';
 	if (id === REPLACE_POWER_ICON) return '/icons/replace-navigation-power.svg';
 	return null;
+}
+
+export const REGION_ACTIONS_VERSION = 2;
+/** Keep actions already used in saved rounds attached to the surviving action. */
+export function upgradeRegionActionUses(state: PublicGameState): void {
+	if (state.regionActionsVersion === REGION_ACTIONS_VERSION) return;
+	const indexes: Record<string, Record<number, number>> = {
+		'Forest Region': { 1: 1, 2: 0 },
+		'Water Region': { 0: 0, 1: 1 },
+		'Mountain Region': { 1: 0 },
+		'Fire Region': { 0: 1, 1: 0 }
+	};
+	for (const player of Object.values(state.players ?? {})) {
+		if (!player) continue;
+		const map = indexes[regionText(player.navigationDestination ?? '')];
+		if (!map) continue;
+		player.actionsUsedThisRound = (player.actionsUsedThisRound ?? []).flatMap((key) => {
+			const match = /^row:(\d+)$/.exec(key);
+			if (!match) return [key];
+			const index = map[Number(match[1])];
+			return index === undefined ? [] : [`row:${index}`];
+		});
+	}
+	state.regionActionsVersion = REGION_ACTIONS_VERSION;
 }

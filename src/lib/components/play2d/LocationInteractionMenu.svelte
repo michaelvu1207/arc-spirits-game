@@ -369,7 +369,7 @@
 	});
 	function gainSummary(interaction: LocationInteraction): string {
 		const parts = interaction.gains.map((g) => {
-			if (g.type === 'navigationPower') return g.replace ? 'Replace a Power' : 'Gain a Power';
+			if (g.type === 'navigationPower') return g.replace ? 'Replace a Power' : 'Gain 1 random Power';
 			if (g.type === 'rune') return g.rune.name;
 			if (g.type === 'restoreBarrier') return 'Restore Barrier';
 			if (g.type === 'vp') return `${g.amount} VP`;

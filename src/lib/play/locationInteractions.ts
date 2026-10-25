@@ -67,7 +67,7 @@ const ANY_RUNE_ICON = '36aab6c9-b98c-4e84-b097-e743f45dde82';
  * Generated from icon_pool + runes + origins/classes joins.
  */
 export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
-	[POWER_ICON]: { kind: 'navigationPower', replace: false, label: 'Gain a Power' },
+	[POWER_ICON]: { kind: 'navigationPower', replace: false, label: 'Gain 1 random Power' },
 	[REPLACE_POWER_ICON]: { kind: 'navigationPower', replace: true, label: 'Replace a Power' },
 	// Action tokens (uploaded icons; resolving the row performs the action).
 	[SUMMON_ICON]: { kind: 'action', action: 'spiritWorldSummon', label: 'Spirit World Summon' },
@@ -135,8 +135,8 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'specialRune',
 		runeId: 'f1c4f059-61e0-40ad-ad9a-4e25a8531f49',
 		classId: 'f5438f3c-2052-4093-b402-893a45cf7046',
-		runeName: 'Animal',
-		label: 'Animal rune'
+		runeName: 'Spirit Animal',
+		label: 'Spirit Animal augment'
 	},
 	'c9b3225f-c8a9-4aa8-8e43-56c39cf68974': {
 		kind: 'specialRune',
@@ -156,22 +156,22 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'specialRune',
 		runeId: 'a844c161-3f67-42d7-ba59-d5efd5df5f98',
 		classId: 'aa90084b-a07a-4b00-9448-9f5dae83bd03',
-		runeName: 'Support',
-		label: 'Support rune'
+		runeName: 'Cultivator',
+		label: 'Cultivator augment'
 	},
 	'de816c21-aa17-4e41-9217-20511c11e9c9': {
 		kind: 'specialRune',
 		runeId: 'efa4b29a-06f0-43af-bd11-d60c180e793e',
 		classId: 'dd17c072-159c-4b43-831f-1f51bb8b7720',
-		runeName: 'Swordsman',
-		label: 'Swordsman rune'
+		runeName: 'Fighter',
+		label: 'Fighter augment'
 	},
 	'faa39f61-98ec-4f63-a873-766dc4e111f3': {
 		kind: 'specialRune',
 		runeId: '44d0b158-8892-42c7-9ce8-1a033da9440d',
 		classId: '20d2a252-3655-4839-93a4-04db111c0617',
 		runeName: 'Cursed Spirit',
-		label: 'Cursed Spirit rune'
+		label: 'Cursed Spirit augment'
 	},
 
 	// Named relics — no class FK. As class-less specials they resolve to the 'relic'

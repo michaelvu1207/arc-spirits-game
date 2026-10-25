@@ -41,7 +41,7 @@
 	const inventory = $derived(player?.powerInventory ?? []);
 	let replacementPower = $state<NavigationPowerId | ''>('');
 	const replacing = $derived(!!player?.pendingPowerReplacement);
-	const replacementTrade = $derived(player?.navigationDestination === 'Fire Region');
+	const replacementTrade = $derived(player?.navigationDestination === 'Mountain Region');
 	const committed = $derived(
 		navigationPowerById(player?.navigationPower ?? player?.pendingNavigationPower)
 	);
@@ -62,7 +62,7 @@
 		room.phase === 'location' &&
 			!!player &&
 			!player.phaseReady &&
-			player.navigationDestination !== 'Arcane Abyss' &&
+			['Forest Region', 'Mountain Region'].includes(player.navigationDestination ?? '') &&
 			(!replacementTrade || inventory.length > 0) &&
 			availableRunes.length > 0
 	);
@@ -191,7 +191,7 @@
 				onclick={() => {
 					acquireOpen = true;
 					tradeOpen = false;
-				}}>{replacementTrade ? 'Replace a Power' : 'Gain a Power'}</button
+				}}>{replacementTrade ? 'Replace a Power' : 'Gain 1 random Power'}</button
 			>{/if}
 		{#if tradeEnabled && !trade}
 			<button
@@ -239,7 +239,7 @@
 											: acquireOpen
 												? replacementTrade
 													? 'Replace a Power'
-													: 'Gain a Power'
+													: 'Gain 1 random Power'
 												: 'Play a Power?'}
 					</h2>
 				</div>
@@ -341,7 +341,7 @@
 				<p>
 					{replacementTrade
 						? 'Pay 1 Origin Rune to replace a held Power. Reveal 3 and choose 1.'
-						: 'Pay 1 Origin Rune. Reveal 3 Powers and choose 1 to keep.'}
+						: 'Pay 1 Origin Rune to gain 1 random Power.'}
 				</p>
 				<div class="options">
 					{#each availableRunes as rune (rune.slotIndex)}
@@ -349,9 +349,10 @@
 							type="button"
 							disabled={busy}
 							data-testid={`power-pay-rune-${rune.slotIndex}`}
-							onclick={() =>
-								onCommand({ type: 'acquireNavigationPower', runeSlot: rune.slotIndex })}
-							>Pay {rune.name ?? 'Rune'}</button
+							onclick={() => {
+								acquireOpen = false;
+								onCommand({ type: 'acquireNavigationPower', runeSlot: rune.slotIndex });
+							}}>Pay {rune.name ?? 'Rune'}</button
 						>
 					{/each}
 				</div>

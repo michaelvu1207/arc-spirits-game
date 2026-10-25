@@ -329,7 +329,7 @@ describe('Navigation Powers through live game commands', () => {
 		expect(s.players.Red!.mats.find((m) => m.hasRune)?.id).toBe(RUNES[1].runeId);
 	});
 	it('4 each location row can resolve one additional time but never a third time', () => {
-		let s = reveal(start(), 'tidal-tempo');
+		let s = reveal(start(), 'tidal-tempo', 'Forest Region');
 		s = choose(s, 'Red');
 		s = run(s, 'Red', { type: 'resolveLocationInteraction', rowIndex: 0 });
 		s = run(s, 'Red', { type: 'resolveLocationInteraction', rowIndex: 0 });
@@ -582,31 +582,17 @@ describe('Navigation Powers through live game commands', () => {
 		expect(s.winnerSeat).toBe('Red');
 		expect(s.players.Red!.victoryPoints).toBe(30);
 	});
-	it('power acquisition pays exactly once and reveals three distinct choices', () => {
-		let s = start();
-		giveRune(s, 'Red');
-		s = run(s, 'Red', { type: 'lockNavigation', destination: 'Mountain Region' });
-		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Water Region' });
-		s = run(s, 'Red', { type: 'forceAdvancePhase' });
-		s = run(s, 'Red', { type: 'acquireNavigationPower', runeSlot: 1 });
-		expect(s.players.Red!.mats.filter((m) => m.hasRune)).toHaveLength(0);
-		const draft = s.players.Red!.pendingPowerDrafts![0];
-		expect(draft).toHaveLength(3);
-		expect(new Set(draft).size).toBe(3);
-		expect(applyGameCommand(s, actor('Red'), { type: 'endLocationActions' }, CATALOG).ok).toBe(
-			false
-		);
-		s = run(s, 'Red', { type: 'chooseNavigationPower', powerId: draft[1] });
-		expect(s.players.Red!.powerInventory).toEqual([draft[1]]);
-		expect(
-			applyGameCommand(
-				s,
-				actor('Red'),
-				{ type: 'acquireNavigationPower', runeSlot: 1 } as GameCommand,
-				CATALOG
-			).ok
-		).toBe(false);
-	});
+	it('Forest acquisition pays one Rune and gains one random Power without a draft', () => {
+  let s=start();giveRune(s,'Red');
+  s=run(s,'Red',{type:'lockNavigation',destination:'Forest Region'});
+  s=run(s,'Blue',{type:'lockNavigation',destination:'Water Region'});
+  s=run(s,'Red',{type:'forceAdvancePhase'});
+  s=run(s,'Red',{type:'acquireNavigationPower',runeSlot:1});
+  expect(s.players.Red!.mats.filter(m=>m.hasRune)).toHaveLength(0);
+  expect(s.players.Red!.powerInventory).toHaveLength(1);
+  expect(s.players.Red!.pendingPowerDrafts).toEqual([]);
+  expect(applyGameCommand(s,actor('Red'),{type:'acquireNavigationPower',runeSlot:1},CATALOG).ok).toBe(false);
+ });
 	it('an offer cannot be resolved by another seat, and malformed choices change nothing', () => {
 		let s = reveal(start(), 'ember-charge');
 		const offer = s.players.Red!.navigationPowerOffers![0];
@@ -893,18 +879,19 @@ it('accepts an unchanged trade after JSONB reorders persisted object keys', () =
 
 it('lets an older untyped Origin Rune pay for a power but never wildcard assets', () => {
 	let s = start();
-	s = reveal(s, 'ember-charge');
+	s = reveal(s, 'ember-charge', 'Forest Region');
 	s = choose(s, 'Red');
 	giveRune(s, 'Red');
 	delete s.players.Red!.mats[0].type;
 	s = run(s, 'Red', { type: 'acquireNavigationPower', runeSlot: 1 });
-	expect(s.players.Red!.pendingPowerDrafts?.[0]).toHaveLength(3);
+	expect(s.players.Red!.pendingPowerDrafts).toEqual([]);
+	expect(s.players.Red!.powerInventory).toHaveLength(1);
 	for (const id of [
 		'19d72567-4ac8-4214-a21f-596bc88de8f7',
 		'7ca279f0-1ca8-484a-a86e-0a87aaa7b312'
 	]) {
 		let other = start();
-		other = reveal(other, 'ember-charge');
+		other = reveal(other, 'ember-charge', 'Forest Region');
 		other = choose(other, 'Red');
 		other.players.Red!.mats = [
 			{ slotIndex: 1, id, hasRune: true, type: 'rune', originId: 'wildcard-origin' }

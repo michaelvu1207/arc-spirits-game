@@ -336,6 +336,7 @@ function locationState(mats: MatSlotSnapshot[], patch: Partial<PrivatePlayerStat
 	red.mats = mats;
 	red.actionsUsedThisRound = [];
 	red.pendingPowerDrafts = [];
+	red.powerInventory = ['thorn-ward'];
 	red.phaseReady = false;
 	red.extraActions = {};
 	red.brokenBarrier = 0;
@@ -370,7 +371,7 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 			mat(3, { id: CYBER_RUNE, originId: CYBER_ORIGIN, type: 'rune' })
 		]);
 		const row1 = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!.find(
-			(r) => r.rowIndex === 1
+			(r) => r.rowIndex === 0
 		)!;
 		expect(row1.costSlots).toHaveLength(1);
 		expect(row1.costSlots[0].wildcard).toBe(true);
@@ -381,29 +382,18 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Elementalist', 'Soul Weaver']);
 	});
 
-	test('affordability + usesRemaining reflect held mats and per-row allowance', () => {
-		// No mats → the two costed trades are unaffordable, the free gain is not.
-		const broke = computeAffordances(locationState([]), 'Red', LOC_CATALOG).locationInteractions!;
-		expect(broke.find((r) => r.rowIndex === 0)!.affordable).toBe(false);
-		expect(broke.find((r) => r.rowIndex === 2)!.affordable).toBe(true);
-
-		// Wayfarer allowance (2) minus one recorded use of row 2 → 1 remaining.
-		const rows = computeAffordances(
-			locationState([], { extraActions: { locationInteraction: 1 }, actionsUsedThisRound: ['row:2'] }),
-			'Red',
-			LOC_CATALOG
-		).locationInteractions!;
-		expect(rows.find((r) => r.rowIndex === 2)!.usesRemaining).toBe(1);
-	});
-
-	test('noEffectNow flags a barrier restore only while barrier is full', () => {
-		const full = computeAffordances(locationState([], { brokenBarrier: 0 }), 'Red', LOC_CATALOG)
-			.locationInteractions!.find((r) => r.rowIndex === 2)!;
-		expect(full.noEffectNow).toBe(true);
-		const broken = computeAffordances(locationState([], { brokenBarrier: 3 }), 'Red', LOC_CATALOG)
-			.locationInteractions!.find((r) => r.rowIndex === 2)!;
-		expect(broken.noEffectNow).toBeUndefined();
-	});
+	test('both Mountain trades are repeatable and require one Rune', () => {
+  const broke=computeAffordances(locationState([]),'Red',LOC_CATALOG).locationInteractions!;
+  expect(broke).toHaveLength(2);expect(broke.every(r=>!r.affordable)).toBe(true);
+  const funded=locationState([mat(1,{id:CYBER_RUNE,originId:CYBER_ORIGIN})],{actionsUsedThisRound:['row:0','row:1']});
+  const rows=computeAffordances(funded,'Red',LOC_CATALOG).locationInteractions!;
+  expect(rows.every(r=>r.affordable && r.repeatable && r.usesRemaining >= 1)).toBe(true);
+ });
+ test('removed Mountain Barrier rewards do not leave a third affordance', () => {
+  const rows=computeAffordances(locationState([]),'Red',LOC_CATALOG).locationInteractions!;
+  expect(rows.map(r=>r.rowIndex)).toEqual([0,1]);
+  expect(rows.every(r=>!r.noEffectNow)).toBe(true);
+ });
 
 	test('a Runic Duplicator still pays the normal augment-trade cost', () => {
 		const state = locationState([], {
@@ -675,6 +665,7 @@ describe('encounter + infiltrator affordances (§5.4)', () => {
 		red.navigationDestination = 'Mountain Region';
 		red.actionsUsedThisRound = [];
 	red.pendingPowerDrafts = [];
+	red.powerInventory = ['thorn-ward'];
 	red.phaseReady = false;
 		red.spirits = [
 			{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { 'Cursed Fighter': 1 }, origins: {}, isFaceDown: false }
