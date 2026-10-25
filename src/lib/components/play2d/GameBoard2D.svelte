@@ -15,7 +15,7 @@
 	import { PHASE_LABELS } from '$lib/play/viewV2';
 	import { buildLocationInteractions } from '$lib/play/locationInteractions';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
-	import { isNavigationPowerRune, type NavigationPowerId } from '$lib/play/navigationPowers';
+	import type { NavigationPowerId } from '$lib/play/navigationPowers';
 	import NavigationPowerPanel from './NavigationPowerPanel.svelte';
 	import {
 		LOCATION_ACCENT,
@@ -1122,7 +1122,6 @@
 		const dest = myPlayer?.navigationDestination ?? null;
 		if (room.phase !== 'location' || !myPlayer || !dest) return false;
 		if (myPlayer.pendingDraw || myPlayer.pendingReward) return true; // must resolve these
-		if (!myPlayer.actionsUsedThisRound.includes('gain-power') && myPlayer.mats.some(isNavigationPowerRune) && ['Forest Region', 'Mountain Region'].includes(dest)) return true;
 		// A prospective trade is a real available action for both players. Keep
 		// counterparts at the location until they explicitly pass, so auto-pass
 		// cannot silently reject a proposal that is still being composed.
@@ -1132,8 +1131,8 @@
 		})) return true;
 		if (getLocationConfig(dest)?.combatOnly) return !myCombatUsed; // can still fight
 		const loc = assets.gameLocations.get(dest) ?? null;
-		return buildLocationInteractions(loc?.reward_rows).some(
-			(it) => !(myPlayer.actionsUsedThisRound ?? []).includes(`row:${it.rowIndex}`)
+		return buildLocationInteractions(loc?.reward_rows, dest).some(
+			(it) => it.kind === 'trade' || !(myPlayer.actionsUsedThisRound ?? []).includes(`row:${it.rowIndex}`)
 		);
 	});
 	const hasManualPrompts = $derived(
