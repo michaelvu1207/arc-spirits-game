@@ -1,3 +1,4 @@
+import { buildRoomViewV2 } from './viewV2';
 import { readFileSync } from 'node:fs';
 import { describe, test, expect } from 'vitest';
 import {
@@ -192,6 +193,12 @@ describe('live relic awakening migration', () => {
 		).toEqual(['Crown', 'Fairy Rune']);
 		expect(state.players.Red!.mats.filter((m) => m.type === 'rune')).toHaveLength(4);
 	});
+ test('a resumed old room refreshes its awakening offer after inventory conversion', () => {
+  const state=game('25848694-6c69-408c-9b78-94948c6df3a6',[1,2].map(slotIndex=>({slotIndex,hasRune:true,type:'relic' as const,id:'8a0d54ca-aeab-405c-9e5c-1c1425d1aa86',name:'Firecracker'})));
+  const view=buildRoomViewV2(state,{role:'host',seatColor:'Red',displayName:'Host'},{id:'host',role:'host',seatColor:'Red',displayName:'Host'},catalog);
+  expect(view.projection.players.Red!.awakenOffers[0].requirement).toContain('Fire Rune');
+  expect(view.projection.players.Red!.awakenLocked).toHaveLength(0);
+ });
 	test('normalizes legacy frozen-catalog costs too', () => {
 		const legacy = {
 			locations: [],

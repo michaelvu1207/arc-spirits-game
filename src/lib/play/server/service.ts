@@ -1,3 +1,4 @@
+import { upgradeRelicRuneSlots } from '../baseRunes';
 import { normalizeRegionContent } from '../regions';
 import { BOTS_ENABLED } from '../botAvailability';
 import { error as kitError } from '@sveltejs/kit';
@@ -193,10 +194,12 @@ function createRoomCode(): string {
 }
 
 function asState(row: PlaySessionRow): PublicGameState {
-	return normalizeRegionContent(parseJsonValue(
+	const state = normalizeRegionContent(parseJsonValue(
 		row.public_state,
 		createLobbyState({ roomCode: row.room_code, guardianNames: [] })
 	));
+	upgradeRelicRuneSlots(state);
+	return state;
 }
 
 async function getSessionByRoomCode(roomCode: string): Promise<PlaySessionRow | null> {

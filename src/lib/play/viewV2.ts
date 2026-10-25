@@ -1,3 +1,4 @@
+import { upgradeRelicRuneSlots } from './baseRunes';
 import { recomputeAwakenEligibility } from './phases';
 import { isNavigationPowerRune } from './navigationPowers';
 /**
@@ -877,6 +878,7 @@ export function buildRoomViewV2(
 	member: RoomViewMember,
 	catalog: PlayCatalog
 ): RoomViewV2 {
+	upgradeRelicRuneSlots(state);
 	if (state.phase === 'awakening' || state.phase === 'cleanup') recomputeAwakenEligibility(state, catalog);
 	const projection = buildSessionProjection(state, viewer);
 	const affordances: Partial<Record<SeatColor, SeatAffordances>> = viewer.seatColor
