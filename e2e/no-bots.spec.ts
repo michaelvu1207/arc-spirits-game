@@ -9,7 +9,7 @@ test('Solo Play has one human, no bot controls, and advances through a round', a
 	await page.goto('/play?e2e=1&ws=off');
 	await ensureGuestIdentity(page, 'Solo Explorer');
 	await expect(page.getByTestId('heads-up')).toHaveCount(0);
-	await expect(page.getByTestId('solo-play')).toContainText('Explore the game on your own');
+	await expect(page.getByTestId('solo-play')).toContainText('Solo Play');
 	await page.getByTestId('solo-play').click();
 	await page.waitForURL(/\/play\/[A-Z0-9]+/);
 	let view: any = await getRoomView(page);

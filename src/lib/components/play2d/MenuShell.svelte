@@ -37,11 +37,6 @@
 	<!-- The living world lives in /play/+layout.svelte (mounted once for the whole
 	     section) and shows through this shell's transparent background, so navigating
 	     between screens never re-initialises the splat. -->
-	<!-- Directional scrim so content stays legible over the splat -->
-	<div class="scrim"></div>
-	<!-- Slow aurora wash + fine grain for depth -->
-	<div class="aurora"></div>
-	<div class="grain"></div>
 
 	<div class="menu-controls">
 		<button
