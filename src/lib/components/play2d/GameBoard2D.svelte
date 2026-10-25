@@ -1177,16 +1177,7 @@
 	});
 </script>
 
-<NavigationPowerPanel
-	{room}
-	{mySeat}
-	{busy}
-	destination={pendingPowerDestination}
-	error={actionError}
-	onCommit={commitNavigationPower}
-	onCancel={() => (pendingPowerDestination = null)}
-	onCommand={(command) => send('power', command)}
-/>
+
 
 <svelte:window onkeydown={onSplatFlyKey} />
 
@@ -1410,8 +1401,18 @@
 			     rune/relic carry slots sit as a row directly above it. -->
 			<div class="trait-col">
 				<div class="trait-center">
+					<NavigationPowerPanel
+						{room}
+						{mySeat}
+						{busy}
+						destination={pendingPowerDestination}
+						error={actionError}
+						onCommit={commitNavigationPower}
+						onCancel={() => (pendingPowerDestination = null)}
+						onCommand={(command) => send('power', command)}
+					/>
 					{#if traitPlayer}
-						<div class="rune-row">
+						<div class="rune-row" data-testid="player-runes">
 							<MatSlots player={traitPlayer} {assets} orientation="row" />
 						</div>
 					{/if}

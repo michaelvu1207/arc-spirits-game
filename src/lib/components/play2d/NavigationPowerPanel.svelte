@@ -83,6 +83,16 @@
 		if (!tradeEnabled || room.status !== 'active') tradeOpen = false;
 		if (!canAcquire || room.status !== 'active') acquireOpen = false;
 	});
+	// Dialogs stay attached to the viewport when the indicator is inside the left HUD.
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				node.remove();
+			}
+		};
+	}
+
 	function focusModal(node: HTMLElement) {
 		const previous = document.activeElement as HTMLElement | null;
 		const focusable = () =>
@@ -202,7 +212,7 @@
 {/if}
 
 {#if show}
-	<div class="power-overlay" role="presentation">
+	<div class="power-overlay" role="presentation" use:portal>
 		<div
 			class="power-card"
 			role="dialog"
@@ -536,22 +546,22 @@
 		background: rgb(255 255 255 / 0.05);
 	}
 	.power-status {
-		position: fixed;
-		bottom: max(80px, calc(env(safe-area-inset-bottom) + 68px));
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 60;
+		position: static;
 		display: flex;
+		flex: 0 0 auto;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 12px;
-		max-width: 90vw;
-		padding: 8px 14px;
+		gap: 6px;
+		width: fit-content;
+		max-width: 100%;
+		box-sizing: border-box;
+		padding: 4px 8px;
 		border: 1px solid rgb(92 223 255 / 0.2);
-		border-radius: 12px;
+		border-radius: 8px;
 		background: #141027;
 		color: #ece9fa;
-		box-shadow: 0 4px 20px #0006;
 		font-size: 0.76rem;
+		pointer-events: auto;
 	}
 	.power-status span {
 		display: grid;

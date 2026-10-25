@@ -65,6 +65,18 @@ for (const region of regions) {
 		await expect(page.getByTestId('navigation-power-draft')).toBeVisible();
 		await page.getByTestId('navigation-power-draft').locator('button').first().click();
 		await expect(page.getByTestId('navigation-power-draft')).toHaveCount(0);
+		const indicator = page.getByTestId('navigation-power-status');
+		const runesRow = page.getByTestId('player-runes');
+		await expect(indicator).toBeVisible();
+		const indicatorBox = (await indicator.boundingBox())!;
+		const runeBox = (await runesRow.boundingBox())!;
+		expect(indicatorBox.y + indicatorBox.height).toBeLessThanOrEqual(runeBox.y);
+		expect(Math.abs(indicatorBox.x - runeBox.x)).toBeLessThan(12);
+		await page.screenshot({
+			path: testInfo.outputPath('power-indicator-left.png'),
+			fullPage: true
+		});
+
 		for (const name of regions) await expect(page.getByTestId(`location-${name}`)).toBeVisible();
 		await expect(page.locator('body')).not.toContainText(
 			/Floral Patch|Cyber City|Tidal Cove|Lantern Canyon/
@@ -95,7 +107,9 @@ for (const region of regions) {
 				? '/icons/replace-navigation-power.svg'
 				: '/icons/navigation-power.svg'
 		);
-		await expect(trade).toHaveAccessibleName(new RegExp(region === 'Fire Region' ? 'Replace a Power' : 'Gain a Power'));
+		await expect(trade).toHaveAccessibleName(
+			new RegExp(region === 'Fire Region' ? 'Replace a Power' : 'Gain a Power')
+		);
 		await trade.click();
 		await expect(page.getByTestId('navigation-power-draft').locator('button')).toHaveCount(3);
 		if (region === 'Fire Region') {
