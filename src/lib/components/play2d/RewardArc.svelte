@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { powerIconUrl } from '$lib/play/regionRules';
 	import type { SeatColor, NavigationDestination } from '$lib/play/types';
 	import type {
 		GameLocationAsset,
@@ -58,7 +59,7 @@
 
 	function tokenIcons(token: RewardIconToken): { id: string; url: string | null }[] {
 		const ids = typeof token === 'string' ? [token] : token.icon_ids;
-		return ids.map((id) => ({ id, url: storageUrl(iconPool.get(id)?.file_path ?? null) }));
+		return ids.map((id) => ({ id, url: powerIconUrl(id) ?? storageUrl(iconPool.get(id)?.file_path ?? null) }));
 	}
 
 	function pushGroup(out: Item[], tokens: RewardIconToken[]) {

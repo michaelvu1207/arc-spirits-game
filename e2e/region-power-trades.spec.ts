@@ -89,9 +89,13 @@ for (const region of regions) {
 		)!;
 		const trade = page.getByTestId(`interaction-${row.rowIndex}`);
 		await expect(trade).toBeVisible();
-		await expect(trade).toContainText(
-			region === 'Fire Region' ? 'Replace a Power' : 'Gain a Power'
+		await expect(trade.locator('img[src*="navigation-power.svg"]')).toHaveAttribute(
+			'src',
+			region === 'Fire Region'
+				? '/icons/replace-navigation-power.svg'
+				: '/icons/navigation-power.svg'
 		);
+		await expect(trade).toHaveAccessibleName(new RegExp(region === 'Fire Region' ? 'Replace a Power' : 'Gain a Power'));
 		await trade.click();
 		await expect(page.getByTestId('navigation-power-draft').locator('button')).toHaveCount(3);
 		if (region === 'Fire Region') {

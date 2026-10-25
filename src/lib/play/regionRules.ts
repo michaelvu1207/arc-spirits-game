@@ -48,3 +48,10 @@ export function regionCatalog<
 		loc.rewardRows = regionRewardRows(loc.name, loc.rewardRows);
 	return normalized;
 }
+
+/** Bundled glyphs for app-defined reward tokens, which have no database icon row. */
+export function powerIconUrl(id: string): string | null {
+	if (id === POWER_ICON) return '/icons/navigation-power.svg';
+	if (id === REPLACE_POWER_ICON) return '/icons/replace-navigation-power.svg';
+	return null;
+}

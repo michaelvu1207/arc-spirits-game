@@ -1,3 +1,4 @@
+import { powerIconUrl } from '$lib/play/regionRules';
 /** Shared helpers for the 2D play board. */
 import { STORAGE_BASE_URL } from '$lib/supabase';
 import type { HexSpiritAsset, IconPoolEntry, MatAsset, MatSlotSnapshot } from '$lib/types';
@@ -14,7 +15,7 @@ export const RESOURCE_ICON_IDS = {
 } as const;
 
 export function iconPoolUrl(iconPool: Map<string, IconPoolEntry>, id: string): string | null {
-	return storageUrl(iconPool.get(id)?.file_path ?? null);
+	return powerIconUrl(id) ?? storageUrl(iconPool.get(id)?.file_path ?? null);
 }
 
 /**

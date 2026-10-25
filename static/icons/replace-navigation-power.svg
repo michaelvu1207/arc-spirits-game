@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Replace Power">
+ <rect x="16" y="11" width="32" height="43" rx="6" fill="#2a1646" stroke="#9b72ee" stroke-width="3"/>
+ <path d="m35 18-11 17h9l-3 12 15-21h-9l3-8Z" fill="#e4d5ff"/>
+ <path d="M8 24a25 25 0 0 1 42-9M50 5v10H40M56 40a25 25 0 0 1-42 9M14 59V49h10" fill="none" stroke="#ffcf6a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { powerIconUrl } from '$lib/play/regionRules';
 	import type { NavigationDestination, MonsterState } from '$lib/play/types';
 	import type { GameLocationAsset, IconPoolEntry, RewardIconToken } from '$lib/types';
 	import { displayName, storageUrl } from './helpers';
@@ -32,7 +33,7 @@
 
 	function tokenIcons(token: RewardIconToken): { id: string; url: string | null }[] {
 		const ids = typeof token === 'string' ? [token] : token.icon_ids;
-		return ids.map((id) => ({ id, url: storageUrl(iconPool.get(id)?.file_path ?? null) }));
+		return ids.map((id) => ({ id, url: powerIconUrl(id) ?? storageUrl(iconPool.get(id)?.file_path ?? null) }));
 	}
 </script>
 

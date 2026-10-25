@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { powerIconUrl } from '$lib/play/regionRules';
 	import type { PlayerProjection } from '$lib/play/types';
 	import type {
 		GameLocationAsset,
@@ -78,7 +79,7 @@
 		return typeof token !== 'string';
 	}
 	function iconUrl(id: string): string | null {
-		return storageUrl(iconPool.get(id)?.file_path ?? null);
+		return powerIconUrl(id) ?? storageUrl(iconPool.get(id)?.file_path ?? null);
 	}
 	// Display label for a reward token — drives the placeholder (and its tooltip)
 	// when the icon pool has no art for it. Presentation only.
@@ -423,7 +424,7 @@
 {#snippet icon(url: string | null, size: 'act' | 'solo' | 'base', label: string | null = null)}
 	<span class="ico {size}" title={label ?? undefined}>
 		{#if url}
-			<img src={url} alt="" loading="lazy" />
+			<img src={url} alt={label ?? ''} loading="lazy" />
 		{:else}
 			<!-- Themed placeholder for tokens with no art — never a blank hole. The big
 			     action size carries its label; small sizes tooltip it instead. -->
