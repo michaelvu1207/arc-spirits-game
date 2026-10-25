@@ -15,7 +15,8 @@
 	import { PHASE_LABELS } from '$lib/play/viewV2';
 	import { buildLocationInteractions } from '$lib/play/locationInteractions';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
-	import { NAVIGATION_POWERS, type NavigationPowerId } from '$lib/play/navigationPowers';
+	import { isNavigationPowerRune, type NavigationPowerId } from '$lib/play/navigationPowers';
+	import NavigationPowerPanel from './NavigationPowerPanel.svelte';
 	import {
 		LOCATION_ACCENT,
 		getLocationConfig,
@@ -198,7 +199,8 @@
 
 	// Navigation is interactive whenever it's open — clicking a card locks it in,
 	// clicking the locked card unlocks, clicking another switches the choice.
-	const canPickDestination = $derived(navOpen && !!mySeat);
+	const hasPowerWork = $derived((myPlayer?.pendingPowerDrafts?.length ?? 0) > 0 || (myPlayer?.navigationPowerOffers?.length ?? 0) > 0 || !!myPlayer?.pendingNavigationTrade);
+	const canPickDestination = $derived(navOpen && !!mySeat && !hasPowerWork && !busy);
 	const lockedDestination = $derived(myPlayer?.pendingDestination ?? null);
 	// The local player has locked a destination (navigation still open) → show the
 	// full-screen "confirmed" zoom panel instead of the carousel, with a back-out.
@@ -719,24 +721,28 @@
 	function handleSelectDestination(destination: NavigationDestination) {
 		if (!canPickDestination) return;
 		const seat = mySeat;
-		// Clicking a location locks it in immediately; clicking the locked one unlocks.
-		// Reflect the lock LOCALLY before the round-trip so the tap feels instant; the
-		// authoritative /view reconciles over it and self-corrects on any divergence.
+		// Choose a held consumable only after choosing a location. With an empty
+		// inventory, lock directly; choosing a destination should not add a dead step.
 		if (lockedDestination === destination) {
 			playSfx('nav-unlock');
 			applyOptimistic((r) => {
 				const p = seat ? r.players[seat] : null;
-				if (p) p.pendingDestination = null;
+				if (p) { p.pendingDestination = null; p.pendingNavigationPower = null; }
 				if (seat && r.navigation[seat]) r.navigation[seat].locked = false;
 			});
 			send('unlock', { type: 'unlockNavigation' });
 		} else {
 			pendingPowerDestination = destination;
+			if (!(myPlayer?.powerInventory?.length)) commitNavigationPower(null);
 		}
 	}
 
+	$effect(() => {
+		if (!navOpen || room.status !== 'active') pendingPowerDestination = null;
+	});
+
 	function commitNavigationPower(powerId: NavigationPowerId | null) {
-		if (!pendingPowerDestination) return;
+		if (!pendingPowerDestination || !navOpen || busy) return;
 		const destination = pendingPowerDestination;
 		pendingPowerDestination = null;
 		const seat = mySeat;
@@ -1116,6 +1122,14 @@
 		const dest = myPlayer?.navigationDestination ?? null;
 		if (room.phase !== 'location' || !myPlayer || !dest) return false;
 		if (myPlayer.pendingDraw || myPlayer.pendingReward) return true; // must resolve these
+		if (!myPlayer.actionsUsedThisRound.includes('gain-power') && myPlayer.mats.some(isNavigationPowerRune) && dest !== 'Arcane Abyss') return true;
+		// A prospective trade is a real available action for both players. Keep
+		// counterparts at the location until they explicitly pass, so auto-pass
+		// cannot silently reject a proposal that is still being composed.
+		if (room.activeSeats.some((seat) => {
+			const peer = room.players[seat];
+			return peer?.navigationDestination === dest && (peer.navigationPowerTradeEnabled || peer.pendingNavigationTrade);
+		})) return true;
 		if (getLocationConfig(dest)?.combatOnly) return !myCombatUsed; // can still fight
 		const loc = assets.gameLocations.get(dest) ?? null;
 		return buildLocationInteractions(loc?.reward_rows).some(
@@ -1138,7 +1152,8 @@
 			canPassTurn &&
 			!busy &&
 			!hasLocationContent &&
-			!hasManualPrompts
+			!hasManualPrompts &&
+			!hasPowerWork
 	);
 	// Pass for the player after a short beat (so a just-flipped result card is read).
 	let locationPassTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1162,30 +1177,16 @@
 	});
 </script>
 
-{#if pendingPowerDestination}
-	<div class="navigation-power-overlay" role="dialog" aria-modal="true" aria-label="Choose a Navigation Power">
-		<div class="navigation-power-card">
-			<div class="navigation-power-heading">
-				<div>
-					<span class="eyebrow">{pendingPowerDestination}</span>
-					<h2>Choose a Navigation Power</h2>
-				</div>
-				<button type="button" class="ghost-btn" onclick={() => (pendingPowerDestination = null)}>Cancel</button>
-			</div>
-			<p class="navigation-power-copy">Commit one consumable power with this destination, or continue without one.</p>
-			<div class="navigation-power-list">
-				<button type="button" class="navigation-power-option navigation-power-none" onclick={() => commitNavigationPower(null)}>
-					<strong>No Power</strong><span>Lock this destination without a power.</span>
-				</button>
-				{#each NAVIGATION_POWERS as power (power.id)}
-					<button type="button" class="navigation-power-option" onclick={() => commitNavigationPower(power.id)}>
-						<strong>{power.name}</strong><span>{power.text}</span>
-					</button>
-				{/each}
-			</div>
-		</div>
-	</div>
-{/if}
+<NavigationPowerPanel
+	{room}
+	{mySeat}
+	{busy}
+	destination={pendingPowerDestination}
+	error={actionError}
+	onCommit={commitNavigationPower}
+	onCancel={() => (pendingPowerDestination = null)}
+	onCommand={(command) => send('power', command)}
+/>
 
 <svelte:window onkeydown={onSplatFlyKey} />
 
@@ -1637,77 +1638,6 @@
 </div>
 
 <style>
-	.navigation-power-overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 80;
-		display: grid;
-		place-items: center;
-		padding: 24px;
-		background: rgba(4, 3, 12, 0.78);
-		backdrop-filter: blur(12px);
-	}
-	.navigation-power-card {
-		width: min(680px, 100%);
-		max-height: min(760px, 90vh);
-		overflow: auto;
-		padding: 24px;
-		border: 1px solid rgba(255, 255, 255, 0.16);
-		border-radius: 20px;
-		background: linear-gradient(145deg, rgba(25, 22, 48, 0.98), rgba(11, 10, 26, 0.98));
-		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-	}
-	.navigation-power-heading {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 16px;
-	}
-	.navigation-power-heading h2 {
-		margin: 4px 0 0;
-		font-size: 1.35rem;
-	}
-	.navigation-power-copy {
-		margin: 10px 0 18px;
-		color: rgba(255, 255, 255, 0.7);
-		font-size: 0.88rem;
-	}
-	.eyebrow {
-		font-size: 0.7rem;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: var(--brand-cyan, #5cdfff);
-	}
-	.navigation-power-list {
-		display: grid;
-		gap: 8px;
-	}
-	.navigation-power-option {
-		display: grid;
-		gap: 4px;
-		padding: 12px 14px;
-		border: 1px solid rgba(255, 255, 255, 0.11);
-		border-radius: 12px;
-		background: rgba(255, 255, 255, 0.045);
-		color: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-	.navigation-power-option:hover,
-	.navigation-power-option:focus-visible {
-		border-color: rgba(92, 223, 255, 0.65);
-		background: rgba(92, 223, 255, 0.12);
-		outline: none;
-	}
-	.navigation-power-option span {
-		color: rgba(255, 255, 255, 0.7);
-		font-size: 0.8rem;
-		line-height: 1.35;
-	}
-	.navigation-power-none {
-		border-color: rgba(255, 255, 255, 0.2);
-		background: rgba(255, 255, 255, 0.08);
-	}
 	.tft {
 		position: absolute;
 		inset: 0;

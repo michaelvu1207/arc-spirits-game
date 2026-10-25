@@ -7,6 +7,7 @@ import type {
 	SpiritAugmentAttachment
 } from '$lib/types';
 import type { RngState } from './rng';
+import type { NavigationPowerOffer } from './navigationPowerEffects';
 
 export const SEAT_COLORS = ['Red', 'Blue', 'Orange', 'Green', 'Purple', 'Yellow'] as const;
 // The four Spirit World locations plus the Arcane Abyss. NOTE: historically this
@@ -776,7 +777,27 @@ export interface PendingAugment {
 	hostCapacity?: number;
 }
 
+export interface NavigationPowerTrade {
+	id: string;
+	fromSeat: SeatColor;
+	toSeat: SeatColor;
+	giveSpiritSlots: number[];
+	receiveSpiritSlots: number[];
+	giveRuneSlots: number[];
+	receiveRuneSlots: number[];
+}
+
 export interface PrivatePlayerState {
+	powerInventory?: NavigationPowerId[];
+	pendingPowerDrafts?: NavigationPowerId[][];
+	navigationPowerOffers?: NavigationPowerOffer[];
+	navigationPowerUsed?: boolean;
+	navigationPowerTradeEnabled?: boolean;
+	pendingNavigationTrade?: NavigationPowerTrade | null;
+	navigationPowerCombatEnabled?: boolean;
+	navigationPowerBattleTriggered?: boolean;
+	navigationPowerTemporaryDice?: string[];
+
 	playerColor: SeatColor;
 	displayName: string | null;
 	selectedGuardian: string;
@@ -1147,6 +1168,7 @@ export interface HistorySnapshotRow {
  * `debugGrant` reducer case.
  */
 export type DebugGrant =
+	| { kind: 'navigationPower'; powerId: NavigationPowerId }
 	| { kind: 'attackDice'; tier: DiceTier; amount: number }
 	| { kind: 'maxBarrier'; amount: number }
 	| { kind: 'vp'; amount: number }
@@ -1170,8 +1192,24 @@ export type GameCommand =
 	| { type: 'startGame'; seed?: number }
 	| { type: 'selectNavigationDestination'; destination: string }
 	// ── Phase machine (2D play mode) ──────────────────────────────────────
-	| { type: 'lockNavigation'; destination: NavigationDestination; navigationPowerId?: NavigationPowerId | null }
+	| {
+			type: 'lockNavigation';
+			destination: NavigationDestination;
+			navigationPowerId?: NavigationPowerId | null;
+	  }
 	| { type: 'unlockNavigation' }
+	| { type: 'chooseNavigationPower'; powerId: NavigationPowerId }
+	| { type: 'acquireNavigationPower'; runeSlot: number }
+	| { type: 'resolveNavigationPower'; offerId: string; optionId: string }
+	| {
+			type: 'tradeNavigationPower';
+			targetSeat: SeatColor;
+			giveSpiritSlots?: number[];
+			receiveSpiritSlots?: number[];
+			giveRuneSlots?: number[];
+			receiveRuneSlots?: number[];
+	  }
+	| { type: 'respondNavigationPowerTrade'; tradeId: string; accept: boolean }
 	| { type: 'endLocationActions' }
 	/** Confirm the Benefits step (rewards claimed) → advance to the Awakening step. */
 	| { type: 'commitBenefits' }

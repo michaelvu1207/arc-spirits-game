@@ -1,3 +1,4 @@
+import { getPowerAutoCommand } from '../navigationPowerProgress';
 /**
  * legalActions — the COMPLETE legal move set for the ML policy at one decision point.
  *
@@ -537,6 +538,11 @@ export function enumerateCandidates(
 ): void {
 	const me = state.players[seat];
 	const tryAdd = emit;
+	const powerCommand = getPowerAutoCommand(state, seat);
+	if (powerCommand) {
+		tryAdd(powerCommand);
+		return;
+	}
 
 	switch (state.phase) {
 		case 'navigation': {
@@ -647,8 +653,12 @@ export function enumerateCandidates(
 				const tainted = grants.find((g) => g.kind === 'taintedChoice') as
 					| { amount: number }
 					| undefined;
-				const corrupt = grants.find((g) => g.kind === 'corruptChoice') as { amount: number } | undefined;
-				const fallen = grants.find((g) => g.kind === 'fallenChoice') as { amount: number } | undefined;
+				const corrupt = grants.find((g) => g.kind === 'corruptChoice') as
+					| { amount: number }
+					| undefined;
+				const fallen = grants.find((g) => g.kind === 'fallenChoice') as
+					| { amount: number }
+					| undefined;
 				const taintedChoices: Array<number | undefined> = tainted
 					? Array.from({ length: tainted.amount + 1 }, (_, amount) => amount)
 					: [undefined];
@@ -923,7 +933,9 @@ export function commandMatches(a: GameCommand, b: GameCommand): boolean {
 				return false;
 			if (other.fallenMaxBarrier !== undefined && a.fallenMaxBarrier !== other.fallenMaxBarrier)
 				return false;
-			return !other.corruptRunePicks?.length || sameNumbers(a.corruptRunePicks, other.corruptRunePicks);
+			return (
+				!other.corruptRunePicks?.length || sameNumbers(a.corruptRunePicks, other.corruptRunePicks)
+			);
 		}
 		default:
 			return true; // type-only commands: passEncounter, initiatePvp, commit*, refillMarket, etc.

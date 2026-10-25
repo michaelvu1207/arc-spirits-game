@@ -1,5 +1,15 @@
 import { currentClassCounts, currentClassName } from './classNames';
-import { isNavigationPowerId } from './navigationPowers';
+import {
+	isNavigationPowerId,
+	isNavigationPowerRune,
+	NAVIGATION_POWERS,
+	type NavigationPowerId
+} from './navigationPowers';
+import {
+	resolveNavigationPowerChoice,
+	refreshNavigationPowerOffers
+} from './navigationPowerEffects';
+import { proposePowerTrade, respondPowerTrade } from './navigationPowerTrades';
 import type { BagsData } from '$lib/types';
 import type {
 	CommandResult,
@@ -55,6 +65,8 @@ import {
 	forceAdvancePhase as forceAdvancePhaseMachine
 } from './phases';
 import {
+	resetCombatFlags,
+	takeDamage,
 	fightMonster,
 	monsterLivesForPlayerCount,
 	pvpVpForAttack,
@@ -689,7 +701,9 @@ function applyAwakenRewardClaim(
 					log.push(`'Golden Ruler': you are evil — discarded ${discarded.name}.`);
 					const vpSettled = settleUnpayableCorruptionDebt(player);
 					if (vpSettled > 0)
-						log.push(`No spirits left for the corruption sacrifice — lost ${vpSettled} VP instead.`);
+						log.push(
+							`No spirits left for the corruption sacrifice — lost ${vpSettled} VP instead.`
+						);
 				}
 			}
 		}
@@ -795,7 +809,8 @@ function autoResolveCorruptionDiscard(
 				catalog,
 				counts: victim.classes ?? {}
 			});
-			if (discardLog.length > 0) player.lastAction = { key: 'discard', label: 'Discard', log: discardLog };
+			if (discardLog.length > 0)
+				player.lastAction = { key: 'discard', label: 'Discard', log: discardLog };
 		}
 		owed -= 1;
 	}
@@ -838,7 +853,7 @@ function locationDeadlineBlockingSeats(state: PublicGameState): SeatColor[] {
 	return state.activeSeats.filter((seat) => {
 		const p = state.players[seat];
 		if (!p) return false;
-		if (p.pendingReward) return true;
+		if (p.pendingReward || p.navigationPowerOffers?.length || p.pendingNavigationTrade) return true;
 		if (inUnresolvedCombat.has(seat)) return true;
 		if (p.pendingDraw || (p.handDraws?.length ?? 0) > 0 || (p.pendingDrawQueue?.length ?? 0) > 0)
 			return true;
@@ -910,9 +925,7 @@ export function resolvePassedDeadline(
 	botSeats: readonly SeatColor[]
 ): 'extended' | 'advanced' {
 	if (state.status === 'active') {
-		const humanBlocking = deadlineBlockingSeats(state).filter(
-			(seat) => !botSeats.includes(seat)
-		);
+		const humanBlocking = deadlineBlockingSeats(state).filter((seat) => !botSeats.includes(seat));
 		if (humanBlocking.length > 0 && state.phaseDeadlineExtensions < DEADLINE_MAX_EXTENSIONS) {
 			state.phaseDeadlineExtensions += 1;
 			state.phaseDeadline = now + DEADLINE_EXTENSION_MS;
@@ -939,11 +952,12 @@ function refillEmptyMarketSlots(state: PublicGameState) {
 }
 
 function ensurePlayerCollections(player: PrivatePlayerState) {
- // Migrate saved spirit traits and bound augments without changing their IDs.
- for (const spirit of player.spirits ?? []) spirit.classes = currentClassCounts(spirit.classes ?? {});
- for (const augment of player.unplacedAugments ?? []) {
-  if (augment.hostClass) augment.hostClass = currentClassName(augment.hostClass);
- }
+	// Migrate saved spirit traits and bound augments without changing their IDs.
+	for (const spirit of player.spirits ?? [])
+		spirit.classes = currentClassCounts(spirit.classes ?? {});
+	for (const augment of player.unplacedAugments ?? []) {
+		if (augment.hostClass) augment.hostClass = currentClassName(augment.hostClass);
+	}
 
 	player.handDraws ??= [];
 	player.vpHistory ??= [];
@@ -969,6 +983,10 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
 	player.initiative ??= 0;
 	player.phaseReady ??= false;
 	player.pendingDestination ??= null;
+	player.powerInventory ??= [];
+	player.pendingPowerDrafts ??= [];
+	player.navigationPowerOffers ??= [];
+	player.pendingNavigationTrade ??= null;
 	player.pendingNavigationPower ??= null;
 	player.navigationPower ??= null;
 	player.lastAction ??= null;
@@ -1184,7 +1202,10 @@ export function applyGameCommand(
 	// overflow rune, paid off the corruption debt, …), silently ready that seat — and
 	// advance the phase if that was everyone. This keeps players from ever facing an
 	// empty "Continue" step; phase entry does the same via the enter* helpers.
-	if (result.ok) autoAdvanceResolution(result.state, catalog);
+	if (result.ok) {
+		refreshNavigationPowerOffers(result.state);
+		autoAdvanceResolution(result.state, catalog);
+	}
 	return result;
 }
 
@@ -1194,7 +1215,110 @@ function reduceCommand(
 	command: GameCommand,
 	catalog: PlayCatalog
 ): CommandResult {
+	const powerWork = state.activeSeats.some(
+		(s) => (state.players[s]?.navigationPowerOffers?.length ?? 0) > 0
+	);
+	if (
+		powerWork &&
+		![
+			'resolveNavigationPower',
+			'chooseNavigationPower',
+			'forceAdvancePhase',
+			'debugGrant'
+		].includes(command.type)
+	) {
+		return failure('power_pending', 'Resolve Navigation Power effects first.');
+	}
+	const actorPlayer = actor.seatColor ? state.players[actor.seatColor] : null;
+	const mandatory = actorPlayer?.navigationPowerOffers?.filter((o) => o.mandatory) ?? [];
+	if (
+		mandatory.length &&
+		command.type !== 'forceAdvancePhase' &&
+		!(command.type === 'resolveNavigationPower' && mandatory.some((o) => o.id === command.offerId))
+	)
+		return failure('power_pending', 'Choose which Rune to give first.');
+	if (
+		actorPlayer &&
+		['endLocationActions', 'commitBenefits', 'commitAwakening', 'commitCleanup'].includes(
+			command.type
+		) &&
+		((actorPlayer.pendingPowerDrafts?.length &&
+			actorPlayer.actionsUsedThisRound.includes('gain-power')) ||
+			actorPlayer.pendingNavigationTrade)
+	)
+		return failure('power_pending', 'Finish your power choice or trade first.');
 	switch (command.type) {
+		case 'chooseNavigationPower': {
+			const a = activePlayerForActor(state, actor);
+			if (state.status !== 'active' || !a)
+				return failure('seat_required', 'Only active players may choose a power.');
+			const choices = a.player.pendingPowerDrafts?.[0];
+			if (!choices?.includes(command.powerId))
+				return failure('power_not_offered', 'Choose one of the revealed powers.');
+			(a.player.powerInventory ??= []).push(command.powerId);
+			a.player.pendingPowerDrafts!.shift();
+			a.player.phaseReady = false;
+			return success(state);
+		}
+		case 'acquireNavigationPower': {
+			const a = activePlayerForActor(state, actor);
+			if (
+				state.status !== 'active' ||
+				state.phase !== 'location' ||
+				!a ||
+				a.player.phaseReady ||
+				a.player.navigationDestination === 'Arcane Abyss'
+			)
+				return failure('wrong_phase', 'Gain powers at a Spirit World location.');
+			if (a.player.actionsUsedThisRound.includes('gain-power'))
+				return failure('action_used', 'You already gained a power here this round.');
+			if (a.player.pendingPowerDrafts?.length)
+				return failure('power_pending', 'Choose your revealed power first.');
+			const rune = a.player.mats.find(
+				(m) => m.slotIndex === command.runeSlot && isNavigationPowerRune(m)
+			);
+			if (!rune) return failure('rune_missing', 'Pay one Origin Rune.');
+			rune.hasRune = false;
+			a.player.actionsUsedThisRound.push('gain-power');
+			a.player.pendingPowerDrafts = [drawPowerChoices(state)];
+			return success(state);
+		}
+		case 'resolveNavigationPower': {
+			const a = activePlayerForActor(state, actor);
+			if (state.status !== 'active' || !a)
+				return failure('seat_required', 'Only active players may resolve powers.');
+			const resolved = resolveNavigationPowerChoice(
+				state,
+				a.seatColor,
+				command,
+				catalog,
+				navigationPowerHooks
+			);
+			if (!resolved.ok)
+				return failure('power_invalid', resolved.error ?? 'That power effect is unavailable.');
+			if (
+				!state.activeSeats.some(
+					(s) => (state.players[s]?.navigationPowerOffers?.length ?? 0) > 0
+				) &&
+				state.phase === 'encounter'
+			)
+				tryAdvanceFromEncounter(state);
+			return success(state);
+		}
+		case 'tradeNavigationPower': {
+			const a = activePlayerForActor(state, actor);
+			if (state.status !== 'active' || !a)
+				return failure('seat_required', 'Only active players may trade.');
+			const trade = proposePowerTrade(state, a.seatColor, command);
+			return trade.ok ? success(state) : failure('trade_invalid', trade.error!);
+		}
+		case 'respondNavigationPowerTrade': {
+			const a = activePlayerForActor(state, actor);
+			if (state.status !== 'active' || !a)
+				return failure('seat_required', 'Only active players may trade.');
+			const trade = respondPowerTrade(state, a.seatColor, command.tradeId, command.accept);
+			return trade.ok ? success(state) : failure('trade_invalid', trade.error!);
+		}
 		case 'claimSeat': {
 			if (state.status !== 'lobby') {
 				return failure('seat_locked', 'Seats can only be claimed before the game starts.');
@@ -1363,6 +1487,10 @@ function reduceCommand(
 			state.monster = spawnMonster(catalog, state.activeSeats.length);
 			// Initialize the simultaneous round loop (round 1, navigation phase).
 			initRoundLoop(state);
+			for (const seat of state.activeSeats) {
+				const p = state.players[seat];
+				if (p) p.pendingPowerDrafts = [drawPowerChoices(state)];
+			}
 			return success(state);
 		}
 
@@ -1845,10 +1973,8 @@ function reduceCommand(
 				return failure('spirit_missing', 'No spirit exists in that slot.');
 			}
 			const sourceBag =
-				bagForSpiritCost(spirit.cost) ??
-				(spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
-			const hadAbyssSummoner =
-				(awakenedClassCounts(player)['Abyss Summoner'] ?? 0) > 0;
+				bagForSpiritCost(spirit.cost) ?? (spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
+			const hadAbyssSummoner = (awakenedClassCounts(player)['Abyss Summoner'] ?? 0) > 0;
 
 			// Remove it from the tableau (freeing the slot for a new summon) and drop
 			// any runes attached to that slot.
@@ -2034,6 +2160,12 @@ function reduceCommand(
 			if (command.navigationPowerId != null && !isNavigationPowerId(command.navigationPowerId)) {
 				return failure('navigation_power_invalid', 'That Navigation Power is not available.');
 			}
+			if (
+				command.navigationPowerId &&
+				!(active.player.powerInventory ?? []).includes(command.navigationPowerId)
+			) {
+				return failure('power_not_owned', 'You do not hold that Navigation Power.');
+			}
 			active.player.pendingDestination = command.destination;
 			active.player.pendingNavigationPower = command.navigationPowerId ?? null;
 			state.navigation[active.seatColor] = { locked: true };
@@ -2101,9 +2233,7 @@ function reduceCommand(
 			if (
 				active.player.navigationDestination === 'Arcane Abyss' &&
 				!active.player.actionsUsedThisRound.includes('combat') &&
-				active.player.spirits.some(
-					(s) => s.id === AWAKEN_SPIRIT_IDS.shadowtaker && s.isFaceDown
-				)
+				active.player.spirits.some((s) => s.id === AWAKEN_SPIRIT_IDS.shadowtaker && s.isFaceDown)
 			) {
 				active.player.awakenProgress ??= {};
 				active.player.awakenProgress[AWAKEN_PROGRESS_KEYS.shadowtaker] = true;
@@ -2541,6 +2671,11 @@ function reduceCommand(
 			});
 
 			switch (grant.kind) {
+				case 'navigationPower':
+					if (!isNavigationPowerId(grant.powerId))
+						return failure('navigation_power_invalid', 'Unknown power.');
+					(player.powerInventory ??= []).push(grant.powerId);
+					break;
 				case 'attackDice':
 					runAction(ctx, { kind: 'gainAttackDice', tier: grant.tier, amount: grant.amount });
 					break;
@@ -2592,6 +2727,7 @@ function reduceCommand(
 						hasRune: true,
 						id: r.id,
 						name: r.name,
+						type: r.kind,
 						originId: r.originId ?? undefined
 					});
 					log.push(`Debug: added ${r.name}.`);
@@ -2958,7 +3094,10 @@ export function encounterGoodTargets(state: PublicGameState, seat: SeatColor): S
 /** Evil aggressors at `dest`: Fallen players sharing the (non-Abyss) location with ≥1 Good.
  *  Exported so the view layer computes `votesPending` from the same aggressor set the
  *  group-attack resolver waits on. */
-export function encounterEvilAggressorsAt(state: PublicGameState, dest: string | null): SeatColor[] {
+export function encounterEvilAggressorsAt(
+	state: PublicGameState,
+	dest: string | null
+): SeatColor[] {
 	if (!dest || dest === 'Arcane Abyss') return [];
 	const hasGood = state.activeSeats.some(
 		(s) =>
@@ -3047,9 +3186,11 @@ function summarizeBagSpirits(contents: RuntimeBagEntry[]): BagSpiritSummary[] {
  * it separately — the reducer rejects a non-host, and the projection exposes this
  * ONLY to the host.
  */
-export function canStartGame(
-	state: PublicGameState
-): { ok: boolean; code?: string; reason?: string } {
+export function canStartGame(state: PublicGameState): {
+	ok: boolean;
+	code?: string;
+	reason?: string;
+} {
 	if (state.status !== 'lobby') {
 		return { ok: false, code: 'already_started', reason: 'The game has already started.' };
 	}
@@ -3059,7 +3200,11 @@ export function canStartGame(
 	}
 	for (const seatColor of occupied) {
 		if (!state.seats[seatColor].selectedGuardian) {
-			return { ok: false, code: 'guardian_required', reason: `Seat ${seatColor} must choose a guardian.` };
+			return {
+				ok: false,
+				code: 'guardian_required',
+				reason: `Seat ${seatColor} must choose a guardian.`
+			};
 		}
 	}
 	return { ok: true };
@@ -3073,8 +3218,7 @@ export function buildSessionProjection(
 	const players: Partial<Record<SeatColor, PlayerProjection>> = {};
 
 	// Host-only lobby start-gate (fixes S4). Absent for players/spectators + started games.
-	const startGate =
-		viewer.role === 'host' && state.status === 'lobby' ? canStartGame(state) : null;
+	const startGate = viewer.role === 'host' && state.status === 'lobby' ? canStartGame(state) : null;
 
 	for (const seatColor of state.activeSeats) {
 		const player = state.players[seatColor];
@@ -3094,6 +3238,10 @@ export function buildSessionProjection(
 			// A player's secret destination + personal prompts are theirs alone.
 			pendingDestination: isOwner ? player.pendingDestination : null,
 			pendingNavigationPower: isOwner ? player.pendingNavigationPower : null,
+			powerInventory: isOwner ? player.powerInventory : [],
+			pendingPowerDrafts: isOwner ? player.pendingPowerDrafts : [],
+			navigationPowerOffers: isOwner ? player.navigationPowerOffers : [],
+			pendingNavigationTrade: isOwner ? player.pendingNavigationTrade : null,
 			manualPrompts: isOwner ? player.manualPrompts : [],
 			pendingDecisions: isOwner ? player.pendingDecisions : [],
 			lastAction: isOwner ? player.lastAction : null,
@@ -3182,3 +3330,65 @@ export function buildHistorySnapshotRows(
 			};
 		});
 }
+
+/** Three distinct seeded offers; neither the deck nor another player's hand is public. */
+function drawPowerChoices(state: PublicGameState): NavigationPowerId[] {
+	const pool = NAVIGATION_POWERS.map((p) => p.id);
+	const choices: NavigationPowerId[] = [];
+	for (let n = 0; n < 3; n++) choices.push(pool.splice(nextInt(state.rng, pool.length), 1)[0]);
+	return choices;
+}
+
+const navigationPowerHooks = {
+	damage(state: PublicGameState, seat: SeatColor, amount: number, log: string[]) {
+		const p = state.players[seat];
+		if (!p) return 0;
+		resetCombatFlags(p);
+		return takeDamage(p, amount, { state, seat }, log).barrierLost;
+	},
+	rest(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) {
+		applyRest(state, seat, [], { catalog });
+	},
+	cultivate(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) {
+		applyCultivate(state, seat, [], { catalog });
+	},
+	awaken(state: PublicGameState, seat: SeatColor, slot: number, catalog: PlayCatalog) {
+		const player = state.players[seat];
+		const spirit = player?.spirits.find((s) => s.slotIndex === slot);
+		if (!player || !spirit?.isFaceDown) return;
+		spirit.isFaceDown = false;
+		applyTrigger(state, seat, 'awakening', [], {
+			catalog,
+			command: { type: 'awakenSpirit', slotIndex: slot }
+		});
+	},
+	defeatMonster(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) {
+		const monster = state.monster;
+		const player = state.players[seat];
+		if (!monster || !player) return;
+		const fought = { ...monster, hp: 0 };
+		monster.livesRemaining = Math.max(0, monster.livesRemaining - 1);
+		player.actionsUsedThisRound.push('combat');
+		applyTrigger(state, seat, 'onMonsterKill', [], {
+			catalog,
+			combat: { dealt: monster.maxHp, overkill: 0, killed: true }
+		});
+		const claim = rewardClaimCount(fought.rewardTrack, fought.chooseAmount);
+		if (claim > 0)
+			player.pendingReward = {
+				monsterId: fought.id,
+				monsterName: fought.name,
+				rewardTrack: [...fought.rewardTrack],
+				chooseAmount: claim
+			};
+		state.combats.push({
+			id: nextId(state.rng, 'power-kill'),
+			kind: 'monster',
+			step: 'resolved',
+			killed: true,
+			sides: [{ seat, initiative: 0, rolled: false, damageDealt: 0 }],
+			monster: fought,
+			log: ['Abyssal Execution: defeated the monster without battle.']
+		});
+	}
+};
