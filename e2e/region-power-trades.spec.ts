@@ -57,7 +57,9 @@ for (const region of regions) {
 	test(`${region} map trade resolves a paid Power draft`, async ({ page }, testInfo) => {
 		if (region === 'Fire Region') await page.setViewportSize({ width: 844, height: 390 });
 		await page.goto('/play?e2e=1&ws=off');
-		await expect(async () => { await ensureGuestIdentity(page, 'Region Explorer'); }).toPass({ timeout: 30_000 });
+		await expect(async () => {
+			await ensureGuestIdentity(page, 'Region Explorer');
+		}).toPass({ timeout: 30_000 });
 		await page.getByTestId('solo-play').click();
 		await page.waitForURL(/\/play\/[A-Z0-9]+/);
 		await expect(page.getByTestId('navigation-power-draft')).toBeVisible();
@@ -78,6 +80,9 @@ for (const region of regions) {
 		await page.getByTestId(`location-${region}`).dispatchEvent('click');
 		await page.getByRole('button', { name: 'No Power — lock destination' }).click();
 		await expect.poll(async () => (await getRoomView(page)).projection.phase).toBe('location');
+		await expect(page.getByTestId('gain-navigation-power')).toHaveText(
+			region === 'Fire Region' ? 'Replace a Power' : 'Gain a Power'
+		);
 		const loc = catalog.locations.find((l: any) => l.name === region);
 		const row = buildLocationInteractions(loc.rewardRows, region).find((i) =>
 			i.gains.some((g) => g.type === 'navigationPower')

@@ -181,7 +181,7 @@
 				onclick={() => {
 					acquireOpen = true;
 					tradeOpen = false;
-				}}>Gain a Power</button
+				}}>{replacementTrade ? 'Replace a Power' : 'Gain a Power'}</button
 			>{/if}
 		{#if tradeEnabled && !trade}
 			<button
@@ -227,7 +227,9 @@
 										: tradeOpen
 											? 'Trade at your location'
 											: acquireOpen
-												? 'Gain a Power'
+												? replacementTrade
+													? 'Replace a Power'
+													: 'Gain a Power'
 												: 'Play a Power?'}
 					</h2>
 				</div>
