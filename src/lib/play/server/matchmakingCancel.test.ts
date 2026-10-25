@@ -34,7 +34,15 @@ const beforeNextOps: { table: string; mode: string; fn: () => void }[] = [];
 /** Configurable try_form_ranked_match result (default: no group formed). */
 let rpcClaim: Row[] = [];
 
-const { createRankedSessionMock } = vi.hoisted(() => ({ createRankedSessionMock: vi.fn() }));
+const { createRankedSessionMock, botAvailability } = vi.hoisted(() => ({
+	createRankedSessionMock: vi.fn(),
+	botAvailability: { enabled: true }
+}));
+vi.mock('../botAvailability', () => ({
+	get BOTS_ENABLED() {
+		return botAvailability.enabled;
+	}
+}));
 vi.mock('./service', () => ({ createRankedSession: createRankedSessionMock }));
 
 function reset(seed: Record<string, Row[]>) {
@@ -202,6 +210,7 @@ const CANCELS = 'match_search_cancellations';
 const attempt = (seed: string) => `mqa_${seed.padEnd(43, 'x').slice(0, 43)}`;
 
 beforeEach(() => {
+	botAvailability.enabled = true;
 	reset({ [QUEUE]: [], [MEMBERS]: [], [SESSIONS]: [], player_ratings: [] });
 });
 
@@ -236,7 +245,7 @@ describe('enqueueAndPoll search handle', () => {
 });
 
 describe('cancelSearch on a QUEUED row', () => {
-	test('cancels exactly the handle\'s row — a different user\'s search is untouched', async () => {
+	test("cancels exactly the handle's row — a different user's search is untouched", async () => {
 		const mine = await enqueueAndPoll('uid-old', 'Old Account', false);
 		const theirs = await enqueueAndPoll('uid-bystander', 'Bystander', false);
 
@@ -287,7 +296,7 @@ describe('cancelSearch when FORMATION won the race', () => {
 		});
 	}
 
-	test('retires the initiating uid\'s membership, cancels the row, and CLOSES the human-less room — no abandoned match survives', async () => {
+	test("retires the initiating uid's membership, cancels the row, and CLOSES the human-less room — no abandoned match survives", async () => {
 		seedFormedMatch('mqs_formed');
 		expect(await cancelSearch('mqs_formed')).toBe('retired_after_match');
 
@@ -1238,5 +1247,44 @@ describe('ATTEMPT ADOPTION: same-uid attempt 2 arrives while attempt 1 is matche
 		// A LEGACY caller (no attempt token) still gets the row's handle echo.
 		const legacy = await resolveQueueStatus('uid-echo', null);
 		expect(legacy.searchId).toBe(a1);
+	});
+});
+
+describe('live bots paused', () => {
+	test('retires stale queued bots before pairing', async () => {
+		botAvailability.enabled = false;
+		tables[QUEUE].push({ user_id: 'old-bot', status: 'queued', is_bot: true });
+		await tryFormRankedMatch();
+		expect(tables[QUEUE][0].status).toBe('cancelled');
+		expect(createRankedSessionMock).not.toHaveBeenCalled();
+	});
+	test('a stale bot claim cannot start a new game', async () => {
+		botAvailability.enabled = false;
+		rpcClaim = ['human', 'bot-a', 'bot-b', 'bot-c'].map((id, i) => ({
+			user_id: id,
+			is_bot: i > 0
+		}));
+		expect(await tryFormRankedMatch()).toBeNull();
+		expect(createRankedSessionMock).not.toHaveBeenCalled();
+	});
+	test('cancelling a formed game closes it without replacing the player', async () => {
+		botAvailability.enabled = false;
+		tables[QUEUE].push({
+			user_id: 'human',
+			status: 'matched',
+			claimed_session_id: 'session',
+			search_token: 'mqs_cancel',
+			is_bot: false
+		});
+		tables[MEMBERS].push({ id: 'member', session_id: 'session', user_id: 'human', is_bot: false });
+		tables[SESSIONS].push({
+			id: 'session',
+			status: 'active',
+			revision: 1,
+			public_state: { status: 'active' }
+		});
+		expect(await cancelSearch('mqs_cancel')).toBe('retired_after_match');
+		expect(tables[SESSIONS][0].status).toBe('closed');
+		expect(tables[MEMBERS][0].is_bot).toBe(false);
 	});
 });

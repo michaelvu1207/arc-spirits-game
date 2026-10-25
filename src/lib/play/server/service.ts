@@ -1,3 +1,4 @@
+import { BOTS_ENABLED } from '../botAvailability';
 import { error as kitError } from '@sveltejs/kit';
 import {
 	createLobbyState,
@@ -777,6 +778,7 @@ async function closeRoomSession(
  * bot handoff, room revision, and system event atomically. A migration gap is an
  * integrity failure for a live ranked match and therefore fails closed. */
 async function maybeTakeOverRankedDisconnects(session: PlaySessionRow): Promise<PlaySessionRow> {
+	if (!BOTS_ENABLED) return session;
 	if (session.status !== 'active' || session.mode !== 'ranked' || !session.ranked_season_id) {
 		return session;
 	}
@@ -1333,6 +1335,9 @@ export async function createRankedSession(
 	mode: PlayMode = 'ranked',
 	rankedSeasonId: string | null = null
 ): Promise<{ roomCode: string; sessionId: string; memberIdByUserId: Record<string, string> }> {
+	if (!BOTS_ENABLED && players.some((player) => player.isBot)) {
+		throw kitError(403, 'Bots are temporarily unavailable.');
+	}
 	if (players.length < 2) {
 		throw kitError(400, 'A ranked session needs at least two players.');
 	}
@@ -1748,6 +1753,7 @@ export async function joinRoom(
 	}
 ): Promise<{ memberId: string; created: boolean }> {
 	const isBot = opts?.isBot ?? false;
+	if (isBot && !BOTS_ENABLED) throw kitError(403, 'Bots are temporarily unavailable.');
 	const admission = opts?.admission ?? 'wire';
 	if (admission === 'wire' && isBot) {
 		throw kitError(403, 'Bots are server-managed and cannot join over the wire.');

@@ -1,3 +1,4 @@
+import { BOTS_ENABLED } from '$lib/play/botAvailability';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticateRoomMember } from '$lib/play/server/service';
@@ -5,6 +6,7 @@ import { setBotGuardian } from '$lib/play/server/botSim';
 import type { SeatColor } from '$lib/play/types';
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
+	if (!BOTS_ENABLED) throw error(403, 'Bots are temporarily unavailable.');
 	const roomCode = String(params.roomCode ?? '');
 	// Resolve the validated account to the trusted internal member id at the edge —
 	// botSim helpers only ever receive server-verified identities.

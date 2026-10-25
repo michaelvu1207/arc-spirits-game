@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { clearLegacyRoomCredentialCookies, setLastRoomCookie } from '$lib/play/server/cookies';
+import { BOTS_ENABLED } from '$lib/play/botAvailability';
 import { fillBots } from '$lib/play/server/botSim';
 import {
 	createRoom,
@@ -29,6 +30,7 @@ export const POST: RequestHandler = async (event) => {
 		throw error(401, 'Sign in (a guest identity is created automatically) to start solo play.');
 	}
 
+	// Bot modes are retained for re-enabling; while paused, every solo request starts one human.
 	// Table size: 'solo' fills to a 4-seat table (1 human + 3 bots); 'heads-up' is a
 	// 2-seat duel (1 human + 1 bot), where a single champion bot plays undiluted by
 	// mirror competition. Allow-listed — never trust a raw seat count from the client.
@@ -62,10 +64,9 @@ export const POST: RequestHandler = async (event) => {
 		});
 	}
 
-	await fillBots(created.roomCode, created.memberId, {
-		targetSeats,
-		shuffleGuardians: true
-	});
+	if (BOTS_ENABLED) {
+		await fillBots(created.roomCode, created.memberId, { targetSeats, shuffleGuardians: true });
+	}
 
 	await runRoomCommand({
 		roomCode: created.roomCode,

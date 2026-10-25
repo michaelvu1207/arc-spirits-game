@@ -1,5 +1,9 @@
 # Arc Spirits Bot Development Architecture
 
+## Live availability (2026-10-24)
+
+Bots are temporarily disabled by `src/lib/play/botAvailability.ts`. Solo Play starts one human; private lobbies and Quick Play do not add bots. Live inference ticks and ranked disconnect bot replacements are disabled. The bot code and training tools remain available for future development.
+
 This repo should treat bot development as a product surface, not a pile of one-off scripts. The organizing rule is:
 
 > The game engine owns the rules. Bots receive a versioned observation plus legal actions and return one legal action id.

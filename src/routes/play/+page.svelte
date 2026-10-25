@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { BOTS_ENABLED } from '$lib/play/botAvailability';
 	import { browser } from '$app/environment';
 	import { beforeNavigate, goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
@@ -416,7 +417,7 @@
 		if (action) {
 			if (action === 'ranked') void startRanked();
 			else if (action === 'solo') void startSolo();
-			else if (action === 'heads-up') void startHeadsUp();
+			else if (action === 'heads-up' && BOTS_ENABLED) void startHeadsUp();
 			// Strip ?action so refresh/back doesn't re-trigger it. On the initial
 			// (post-reload) mount SvelteKit's router isn't initialized yet and its
 			// replaceState throws — fall back to the native call, preserving
@@ -512,31 +513,37 @@
 					<span class="m-gem"><GameIcon name="solo" size={36} /></span>
 					<span class="m-text">
 						<span class="m-title">{soloStarting ? 'Starting…' : 'Solo Play'}</span>
-						<span class="m-sub">Jump in now · you vs 3 ML bots</span>
+						<span class="m-sub"
+							>{BOTS_ENABLED
+								? 'Jump in now · you vs 3 ML bots'
+								: 'Explore the game on your own'}</span
+						>
 					</span>
 					<span class="m-go" aria-hidden="true">→</span>
 				</a>
 
-				<a
-					data-testid="heads-up"
-					class="mode"
-					class:busy={headsUpStarting}
-					style="--mc: var(--brand-gold, #ffb020)"
-					href={headsUpHref}
-					onclick={(e) => {
-						e.preventDefault();
-						void startHeadsUp();
-					}}
-					onpointerenter={hover}
-					aria-busy={headsUpStarting}
-				>
-					<span class="m-gem"><GameIcon name="solo" size={36} /></span>
-					<span class="m-text">
-						<span class="m-title">{headsUpStarting ? 'Starting…' : 'Heads-Up Duel'}</span>
-						<span class="m-sub">1v1 · you vs the champion bot</span>
-					</span>
-					<span class="m-go" aria-hidden="true">→</span>
-				</a>
+				{#if BOTS_ENABLED}
+					<a
+						data-testid="heads-up"
+						class="mode"
+						class:busy={headsUpStarting}
+						style="--mc: var(--brand-gold, #ffb020)"
+						href={headsUpHref}
+						onclick={(e) => {
+							e.preventDefault();
+							void startHeadsUp();
+						}}
+						onpointerenter={hover}
+						aria-busy={headsUpStarting}
+					>
+						<span class="m-gem"><GameIcon name="solo" size={36} /></span>
+						<span class="m-text">
+							<span class="m-title">{headsUpStarting ? 'Starting…' : 'Heads-Up Duel'}</span>
+							<span class="m-sub">1v1 · you vs the champion bot</span>
+						</span>
+						<span class="m-go" aria-hidden="true">→</span>
+					</a>
+				{/if}
 
 				<a
 					data-testid="quick-play"

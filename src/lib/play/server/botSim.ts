@@ -1,3 +1,4 @@
+import { BOTS_ENABLED, requireBotsEnabled } from '../botAvailability';
 /**
  * Server-side driver for live room bots. A human hosts a live game; bots take
  * the remaining seats and, each phase, choose legal actions through the shared
@@ -176,6 +177,7 @@ export async function fillBots(
 	hostMemberId: string,
 	opts: FillBotsOptions = {}
 ): Promise<RoomView> {
+	requireBotsEnabled();
 	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') {
 		throw new Error('Only the host can add bots.');
@@ -307,6 +309,7 @@ export async function seatBotPlayer(
 	seat: SeatColor,
 	args: { userId: string; displayName: string; botProfile?: string; guardianName?: string }
 ): Promise<string> {
+	requireBotsEnabled();
 	return seatOneBot(roomCode, seat, args.guardianName, args.botProfile ?? DEFAULT_BOT_PROFILE_KEY, {
 		userId: args.userId,
 		displayName: args.displayName
@@ -319,6 +322,7 @@ export async function addBot(
 	hostMemberId: string,
 	opts: { seat?: SeatColor; guardianName?: string; difficulty?: string } = {}
 ): Promise<RoomView> {
+	requireBotsEnabled();
 	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') throw new Error('Only the host can add bots.');
 	if ((await getSessionModeByRoomCode(roomCode)) === 'ranked') {
@@ -344,6 +348,7 @@ export async function setBotGuardian(
 	seat: SeatColor,
 	guardianName: string
 ): Promise<RoomView> {
+	requireBotsEnabled();
 	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') throw new Error('Only the host can set a bot guardian.');
 
@@ -407,6 +412,12 @@ export interface TickBotsResult {
  * Returns the host's updated {@link RoomView} plus a count of commands issued.
  */
 export async function tickBots(roomCode: string, hostMemberId?: string): Promise<TickBotsResult> {
+	if (!BOTS_ENABLED) {
+		return {
+			view: await loadRoomView(roomCode, { trustedMemberId: hostMemberId ?? null }),
+			commandsIssued: 0
+		};
+	}
 	const catalog = await loadPlayCatalog();
 	let state = await loadRawRoomState(roomCode);
 
@@ -458,9 +469,7 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		const botMemberId = botMemberIdAt(state, seat, botMembers);
 		if (!botMemberId) continue;
 		botOrdinal += 1;
-		const remoteV2 = remoteV2Fleet.length
-			? remoteV2Fleet[botOrdinal % remoteV2Fleet.length]
-			: null;
+		const remoteV2 = remoteV2Fleet.length ? remoteV2Fleet[botOrdinal % remoteV2Fleet.length] : null;
 		if (!botSeatNeedsToAct(state, seat)) continue;
 
 		// Strategy comes from the member's bot_profile column; fall back to parsing the

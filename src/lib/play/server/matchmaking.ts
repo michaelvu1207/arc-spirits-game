@@ -1,3 +1,4 @@
+import { BOTS_ENABLED } from '../botAvailability';
 /**
  * Ranked matchmaking pairing.
  *
@@ -122,6 +123,14 @@ export async function tryFormRankedMatch(): Promise<{ roomCode: string } | null>
 	const admin = getAdmin();
 	if (!admin) return null;
 
+	// Retire stale bot entries before the SQL matcher sees them. Fail closed on errors.
+	if (!BOTS_ENABLED) {
+		const retired = await admin.from(QUEUE_TABLE)
+			.update({ status: 'cancelled', updated_at: new Date().toISOString() })
+			.eq('status', 'queued').eq('is_bot', true);
+		if (retired.error) throw new Error(`Failed to remove queued bots: ${retired.error.message}`);
+	}
+
 	// 1) Atomically claim an in-window group (advisory-locked SQL function). The chosen
 	//    rows come back already flipped to status='matched'.
 	const claimed = await admin.rpc('try_form_ranked_match', {
@@ -136,7 +145,7 @@ export async function tryFormRankedMatch(): Promise<{ roomCode: string } | null>
 	}
 
 	const rows = (claimed.data as QueueRow[] | null) ?? [];
-	if (rows.length < RANKED_LOBBY_SIZE) {
+	if ((!BOTS_ENABLED && rows.some((row) => row.is_bot)) || rows.length < RANKED_LOBBY_SIZE) {
 		// Either no in-window group, or a partial/empty claim — nothing to start.
 		// (A non-empty-but-short claim shouldn't happen given the SQL, but guard anyway:
 		// release any stray claimed rows back to the pool.)
@@ -398,6 +407,7 @@ async function seatedLiveBotIds(): Promise<Set<string>> {
  * match is guaranteed fillable by ~4-6s.
  */
 async function ensureBotPresence(humanUserId: string, humanOrdinal: number, rankedSeasonId: string | null): Promise<void> {
+	if (!BOTS_ENABLED) return;
 	const admin = getAdmin();
 	if (!admin) return;
 	try {
@@ -1182,6 +1192,11 @@ export async function cancelSearch(searchToken: string): Promise<CancelSearchOut
  * retirement that did not durably happen.
  */
 async function retireFormedMembership(sessionId: string, userId: string): Promise<void> {
+	// A cancelled hand-off must not create an AI replacement or leave a ghost seat.
+	if (!BOTS_ENABLED) {
+		await closeFormedSession(sessionId);
+		return;
+	}
 	const admin = getAdmin();
 	if (!admin) throw new Error('Matchmaking is unavailable (no service-role key).');
 

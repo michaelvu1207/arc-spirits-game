@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { BOTS_ENABLED } from '$lib/play/botAvailability';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -368,7 +369,7 @@
 				// name check: ranked matchmaking backfills human-named bots (no 🤖), so a
 				// name-based `hasBots` misses them and they'd freeze. The server's tickBots
 				// is authoritative and a cheap no-op when the session has no bot members.
-				if (!isHost || room?.status !== 'active') return;
+				if (!BOTS_ENABLED || !isHost || room?.status !== 'active') return;
 				tickBots();
 			}, 1300);
 
@@ -382,7 +383,7 @@
 			// by presence rules; this backup only matters when other humans remain.
 			const backupPeriod = 4000 + Math.floor(Math.random() * 1000); // 4–5s with jitter
 			backupBotTimer = setInterval(() => {
-				if (isHost || mySeat === null || room?.status !== 'active') return;
+				if (!BOTS_ENABLED || isHost || mySeat === null || room?.status !== 'active') return;
 				tickBots();
 			}, backupPeriod);
 		}
@@ -730,14 +731,16 @@
 									{/each}
 								</select>
 							</label>
-							<button
-								class="ctl btn"
-								data-testid="add-bot"
-								onclick={addBotAction}
-								disabled={pendingAction !== null || openSeats.length === 0}
-							>
-								{pendingAction === 'add-bot' ? 'Summoning…' : '+ Add bot'}
-							</button>
+							{#if BOTS_ENABLED}
+								<button
+									class="ctl btn"
+									data-testid="add-bot"
+									onclick={addBotAction}
+									disabled={pendingAction !== null || openSeats.length === 0}
+								>
+									{pendingAction === 'add-bot' ? 'Summoning…' : '+ Add bot'}
+								</button>
+							{/if}
 						{:else}
 							<span class="setting-chip" data-testid="nav-timer-readonly"
 								>Nav timer · {navTimerLabel}</span
