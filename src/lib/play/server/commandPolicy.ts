@@ -67,6 +67,11 @@ export type CommandAdmission = { ok: true } | CommandRejection;
 export const PLAYER_COMMANDS: ReadonlySet<string> = new Set([
 	'selectNavigationDestination',
 	'lockNavigation',
+	'chooseNavigationPower',
+	'acquireNavigationPower',
+	'resolveNavigationPower',
+	'tradeNavigationPower',
+	'respondNavigationPowerTrade',
 	'unlockNavigation',
 	'passEncounter',
 	'startCombat',
@@ -149,11 +154,15 @@ export const INTEGRITY_TOOLS: ReadonlySet<string> = new Set([
  *    local-test opt-in flags, because the standalone room server has no dev-mode
  *    notion of its own.
  */
-export function httpIntegrityToolsAllowed(env: Record<string, string | undefined> = process.env): boolean {
+export function httpIntegrityToolsAllowed(
+	env: Record<string, string | undefined> = process.env
+): boolean {
 	return env.NODE_ENV !== 'production';
 }
 
-export function wsIntegrityToolsAllowed(env: Record<string, string | undefined> = process.env): boolean {
+export function wsIntegrityToolsAllowed(
+	env: Record<string, string | undefined> = process.env
+): boolean {
 	if (env.NODE_ENV === 'production') return false;
 	return env.ARC_WS_ALLOW_DEBUG_SEED === '1' || env.ARC_ALLOW_INTEGRITY_COMMANDS === '1';
 }

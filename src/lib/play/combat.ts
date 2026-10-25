@@ -1,3 +1,4 @@
+import { beforeNavigationPowerCombat, afterNavigationPowerCombat } from './navigationPowerEffects';
 /**
  * Combat resolution (pure). Currently covers Arcane Abyss monster combat, fought
  * by each player independently. PvP reuses the same damage/corruption primitives
@@ -47,9 +48,7 @@ export function resetCombatFlags(player: PrivatePlayerState): void {
 	// the inCombat trigger below then layers Spirit Animal, Arcane Vanguard, etc. on top.
 	// Numeric class breakpoints apply once even if duplicate trait stacks exist.
 	const classes = awakenedClassCounts(player);
-	player.initiative =
-		(classes['Fairy'] ? 3 : 0) +
-		(classes['Relic Envoy'] ? 3 : 0);
+	player.initiative = (classes['Fairy'] ? 3 : 0) + (classes['Relic Envoy'] ? 3 : 0);
 	// `stunImmune` is a per-combat passive granted by inCombat effects (Sharpshooter);
 	// clear it so it does not persist into a later combat where the class is absent.
 	player.stunImmune = false;
@@ -318,9 +317,12 @@ export function resolveEncounterCombat(
 		applyTrigger(state, seat, 'onPlayerInteraction', log, { catalog, opponent: repGood });
 	for (const { seat } of good)
 		applyTrigger(state, seat, 'onPlayerInteraction', log, { catalog, opponent: repEvil });
-	for (const { seat } of evil) applyTrigger(state, seat, 'inCombat', log, { catalog, opponent: repGood });
-	for (const { seat } of good) applyTrigger(state, seat, 'inCombat', log, { catalog, opponent: repEvil });
+	for (const { seat } of evil)
+		applyTrigger(state, seat, 'inCombat', log, { catalog, opponent: repGood });
+	for (const { seat } of good)
+		applyTrigger(state, seat, 'inCombat', log, { catalog, opponent: repEvil });
 
+	for (const { seat } of [...evil, ...good]) beforeNavigationPowerCombat(state, seat, true);
 	const sumInit = (group: EncounterCombatant[]): number =>
 		group.reduce((s, { player }) => s + (player.initiative ?? 0), 0);
 	const initE = sumInit(evil);
@@ -424,6 +426,20 @@ export function resolveEncounterCombat(
 		}
 	}
 
+	for (const { seat } of evil)
+		afterNavigationPowerCombat(
+			state,
+			seat,
+			good.some((x) => corruptedSeats.has(x.seat)),
+			true
+		);
+	for (const { seat } of good)
+		afterNavigationPowerCombat(
+			state,
+			seat,
+			evil.some((x) => corruptedSeats.has(x.seat)),
+			true
+		);
 	const sideFor = (group: EncounterCombatant[], side: 'evil' | 'good'): CombatSide[] =>
 		group.map(({ seat, player }) => ({
 			seat,
@@ -472,6 +488,7 @@ export function fightMonster(
 	//    THIS combat before any roll happens.
 	resetCombatFlags(player);
 	applyTrigger(state, seat, 'inCombat', log, { catalog });
+	beforeNavigationPowerCombat(state, seat, false);
 	// Lock the combat value before damage so Firekeeper can inspect its parity.
 	const rolledDamage = rollAttack(state, player);
 	const attacksFirst = player.alwaysAttackFirst === true;
@@ -492,8 +509,7 @@ export function fightMonster(
 	} else {
 		log.push(`${monster.name} was defeated before it could attack.`);
 	}
-	if (deflected > 0)
-		log.push(`Deflected ${deflected} damage back at ${monster.name}.`);
+	if (deflected > 0) log.push(`Deflected ${deflected} damage back at ${monster.name}.`);
 	if (corrupted) log.push(`You were corrupted — status is now ${player.statusToken}.`);
 	if (discarded > 0) log.push(`Discarded ${discarded} spirit(s) to meet the new limit.`);
 
@@ -558,6 +574,7 @@ export function fightMonster(
 		);
 	}
 
+	afterNavigationPowerCombat(state, seat, killed, false);
 	return {
 		playerDamage,
 		monsterDamage: monster.damage,

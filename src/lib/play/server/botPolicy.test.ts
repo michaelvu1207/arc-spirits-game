@@ -262,7 +262,10 @@ describe('bot policy — full simultaneous round loop', () => {
 		for (const seat of state.activeSeats) {
 			const commands = planBotPhaseActions(state, seat, CATALOG);
 			expect(commands).toHaveLength(1);
-			expect(commands[0]?.type).toBe('lockNavigation');
+			expect(commands[0]?.type).toBe('chooseNavigationPower');
+			const next = applyGameCommand(state, botActorFor(state, seat), commands[0], CATALOG);
+			expect(next.ok).toBe(true);
+			if (next.ok) expect(planBotPhaseActions(next.state, seat, CATALOG)[0]?.type).toBe('lockNavigation');
 		}
 	});
 });

@@ -1,3 +1,4 @@
+import { isNavigationPowerRune } from './navigationPowers';
 /**
  * RoomView v2 — the existing per-viewer SpectatorProjection PLUS an engine-computed
  * per-seat "affordances" block, so a client (Godot, web) never re-derives the rules to
@@ -31,11 +32,7 @@ import type {
 import { ALL_DESTINATIONS, isEvilAlignment, RUNE_CARRY_LIMIT } from './types';
 import { canApply } from './legality';
 import { seatHasResolutionWork } from './phases';
-import {
-	buildSessionProjection,
-	encounterEvilAggressorsAt,
-	encounterGoodTargets
-} from './runtime';
+import { buildSessionProjection, encounterEvilAggressorsAt, encounterGoodTargets } from './runtime';
 import { buildMonsterRewards } from './monsterRewards';
 import {
 	augmentClassChoices,
@@ -71,6 +68,7 @@ export interface RoomViewMember {
  *  conditions seatHasResolutionWork checks (phases.ts:49). */
 export interface PendingWorkDescriptor {
 	kind:
+		| 'power'
 		| 'draw' // pendingDraw / pendingDrawQueue / handDraws — a summon in flight
 		| 'reward' // pendingReward — an unclaimed monster/location reward
 		| 'claim' // pendingAwakenReward — Benefits class grants to claim
@@ -353,9 +351,14 @@ export function computeLegalCommandTypes(
  * client uses `pendingWork` (not this list) to decide whether a prompt actually needs surfacing.
  */
 const CANDIDATE_TYPES_BY_PHASE: Record<GamePhase, GameCommandType[]> = {
-	navigation: ['lockNavigation', 'unlockNavigation'],
-	encounter: ['passEncounter', 'initiatePvp'],
+	navigation: ['lockNavigation', 'unlockNavigation', 'chooseNavigationPower'],
+	encounter: ['passEncounter', 'initiatePvp', 'resolveNavigationPower'],
 	location: [
+		'acquireNavigationPower',
+		'tradeNavigationPower',
+		'chooseNavigationPower',
+		'resolveNavigationPower',
+		'respondNavigationPowerTrade',
 		'spawnHandSpirit',
 		'discardHandDraws',
 		'redrawHandDraws',
@@ -364,8 +367,18 @@ const CANDIDATE_TYPES_BY_PHASE: Record<GamePhase, GameCommandType[]> = {
 		'resolveLocationInteraction',
 		'endLocationActions'
 	],
-	benefits: ['resolveAwakenReward', 'placeAugmentOnSpirit', 'commitBenefits'],
+	benefits: [
+		'chooseNavigationPower',
+		'resolveNavigationPower',
+		'respondNavigationPowerTrade',
+		'resolveAwakenReward',
+		'placeAugmentOnSpirit',
+		'commitBenefits'
+	],
 	awakening: [
+		'chooseNavigationPower',
+		'resolveNavigationPower',
+		'respondNavigationPowerTrade',
 		'awakenSpirit',
 		'manualAwaken',
 		'resolveDecision',
@@ -373,7 +386,14 @@ const CANDIDATE_TYPES_BY_PHASE: Record<GamePhase, GameCommandType[]> = {
 		'dismissManualPrompt',
 		'commitAwakening'
 	],
-	cleanup: ['discardSpirit', 'discardRune', 'commitCleanup']
+	cleanup: [
+		'chooseNavigationPower',
+		'resolveNavigationPower',
+		'respondNavigationPowerTrade',
+		'discardSpirit',
+		'discardRune',
+		'commitCleanup'
+	]
 };
 
 /** First face-down spirit's slot (the one that could actually awaken), else the first spirit's,
@@ -392,6 +412,24 @@ function representativeCommand(
 	player: PrivatePlayerState
 ): GameCommand | null {
 	switch (type) {
+		case 'chooseNavigationPower':
+			return player.pendingPowerDrafts?.[0]?.[0]
+				? { type, powerId: player.pendingPowerDrafts[0][0] }
+				: null;
+		case 'resolveNavigationPower': {
+			const offer = player.navigationPowerOffers?.[0];
+			return offer?.options[0] ? { type, offerId: offer.id, optionId: offer.options[0].id } : null;
+		}
+		case 'respondNavigationPowerTrade':
+			return player.pendingNavigationTrade
+				? { type, tradeId: player.pendingNavigationTrade.id, accept: false }
+				: null;
+		case 'acquireNavigationPower': {
+			const rune = player.mats.find(isNavigationPowerRune);
+			return rune ? { type, runeSlot: rune.slotIndex } : null;
+		}
+		case 'tradeNavigationPower':
+			return player.navigationPowerTradeEnabled ? { type, targetSeat: 'Red' } : null;
 		case 'lockNavigation':
 			return { type, destination: ALL_DESTINATIONS[0] };
 		case 'unlockNavigation':
@@ -458,6 +496,15 @@ export function describePendingWork(
 ): PendingWorkDescriptor[] {
 	const work: PendingWorkDescriptor[] = [];
 	if (!player) return work;
+	if (player.navigationPowerOffers?.length)
+		work.push({
+			kind: 'power',
+			label: 'Resolve Navigation Power',
+			count: player.navigationPowerOffers.length
+		});
+	if (player.pendingNavigationTrade) work.push({ kind: 'power', label: 'Resolve the trade offer' });
+	if (player.pendingPowerDrafts?.length && player.actionsUsedThisRound.includes('gain-power'))
+		work.push({ kind: 'power', label: 'Choose a Power', count: player.pendingPowerDrafts.length });
 
 	// Phase-independent obligations — mirror seatHasResolutionWork's pre-switch checks
 	// (an in-flight draw/reward or an unplaced augment holds the seat in ANY resolution step).
@@ -589,7 +636,10 @@ export function describePendingWork(
  *  read (like legalCommandTypes): the reducer re-checks against the actual choice. */
 /** A row does nothing useful right now iff every gain is a barrier effect that is
  * already capped: restore at full current barrier, or max-barrier gain at the cap. */
-function interactionHasNoEffect(interaction: LocationInteraction, player: PrivatePlayerState): boolean {
+function interactionHasNoEffect(
+	interaction: LocationInteraction,
+	player: PrivatePlayerState
+): boolean {
 	if (interaction.gains.length === 0) return false;
 	return interaction.gains.every(
 		(g) =>
@@ -656,7 +706,9 @@ export function computeLocationInteractions(
  * pending. Reuses `buildMonsterRewards` (the SAME resolver the `resolveMonsterReward`
  * reducer uses) so the icon→effect mapping never diverges from what actually gets claimed.
  */
-export function computePendingReward(player: PrivatePlayerState): ResolvedPendingReward | undefined {
+export function computePendingReward(
+	player: PrivatePlayerState
+): ResolvedPendingReward | undefined {
 	const pending = player.pendingReward;
 	if (!pending) return undefined;
 	const options: ResolvedRewardOption[] = buildMonsterRewards(pending.rewardTrack).map((o) => ({
@@ -686,9 +738,7 @@ export function computeEncounter(
 	const eligibleTargets = encounterGoodTargets(state, seat);
 	if (eligibleTargets.length === 0) return undefined;
 	const aggressors = encounterEvilAggressorsAt(state, player.navigationDestination ?? null);
-	const votesPending = aggressors.filter(
-		(s) => (state.players[s]?.encounterVote ?? null) === null
-	);
+	const votesPending = aggressors.filter((s) => (state.players[s]?.encounterVote ?? null) === null);
 	return { eligibleTargets, votesPending };
 }
 

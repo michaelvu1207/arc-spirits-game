@@ -21,12 +21,24 @@ import type {
 	PublicGameState,
 	SeatColor
 } from './types';
-import { VP_TO_WIN, MAX_ROUNDS, ALL_DESTINATIONS, RUNE_CARRY_LIMIT, STATUS_LADDER, isEvilAlignment } from './types';
+import {
+	VP_TO_WIN,
+	MAX_ROUNDS,
+	ALL_DESTINATIONS,
+	RUNE_CARRY_LIMIT,
+	STATUS_LADDER,
+	isEvilAlignment
+} from './types';
 import { nextInt } from './rng';
+import { getPowerAutoCommand } from './navigationPowerProgress';
 import { buildEffectContext } from './effects/context';
 import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effects/awaken';
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { advanceMonsterIfDefeated } from './combat';
+import {
+	resolveNavigationPowerReveal,
+	resolveNavigationPowerChoice
+} from './navigationPowerEffects';
 
 /** Reset the per-phase "ready" flag for every active seat. */
 function clearPhaseReady(state: PublicGameState): void {
@@ -49,6 +61,12 @@ function clearPhaseReady(state: PublicGameState): void {
 export function seatHasResolutionWork(state: PublicGameState, seat: SeatColor): boolean {
 	const player = state.players[seat];
 	if (!player) return false;
+	if (
+		player.navigationPowerOffers?.length ||
+		player.pendingNavigationTrade ||
+		(player.pendingPowerDrafts?.length && player.actionsUsedThisRound.includes('gain-power'))
+	)
+		return true;
 	// An in-flight draw/reward or an unplaced Spirit Augment holds the seat in ANY
 	// resolution step (advancing would abandon/forfeit it).
 	if (player.pendingDraw || player.pendingReward) return true;
@@ -122,6 +140,13 @@ function beginNavigation(state: PublicGameState): void {
 			player.pendingDestination = null;
 			player.pendingNavigationPower = null;
 			player.navigationPower = null;
+			player.navigationPowerUsed = false;
+			player.navigationPowerOffers = [];
+			player.navigationPowerTradeEnabled = false;
+			player.pendingNavigationTrade = null;
+			player.navigationPowerCombatEnabled = false;
+			player.navigationPowerBattleTriggered = false;
+			player.navigationPowerTemporaryDice = [];
 			player.navigationDestination = null;
 			player.phaseReady = false;
 			player.actionsUsedThisRound = [];
@@ -177,7 +202,11 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 		const destination = player?.pendingDestination ?? null;
 		if (!player || !destination) continue;
 		player.navigationDestination = destination; // now public
-		player.navigationPower = player.pendingNavigationPower ?? null;
+		const selected = player.pendingNavigationPower;
+		const index = selected ? (player.powerInventory ?? []).indexOf(selected) : -1;
+		player.navigationPower = index >= 0 ? selected : null;
+		if (index >= 0) player.powerInventory!.splice(index, 1);
+		player.pendingNavigationPower = null;
 		(occupancy[destination] ??= []).push(seat);
 	}
 	state.locationOccupancy = occupancy;
@@ -191,6 +220,7 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 		applyTrigger(state, seat, 'onNavigate', [], { catalog });
 	}
 
+	resolveNavigationPowerReveal(state, catalog!);
 	enterEncounter(state);
 }
 
@@ -581,6 +611,32 @@ function highestVpSeat(state: PublicGameState): SeatColor | null {
  * Host override: shove the current phase forward without waiting on stragglers.
  */
 export function forceAdvancePhase(state: PublicGameState, catalog?: PlayCatalog): void {
+	// Only deadlines force optional choices; normal play never auto-accepts a benefit.
+	if (state.phase !== 'navigation' && catalog) {
+		for (let count = 0; count < 200; count++) {
+			let progressed = false;
+			for (const seat of state.activeSeats) {
+				const cmd = getPowerAutoCommand(state, seat);
+				if (cmd?.type === 'resolveNavigationPower') {
+					const outcome = resolveNavigationPowerChoice(state, seat, cmd, catalog);
+					if (outcome.ok) progressed = true;
+				} else if (cmd?.type === 'respondNavigationPowerTrade') {
+					const trade = state.players[seat]?.pendingNavigationTrade;
+					if (trade) {
+						state.players[trade.fromSeat]!.pendingNavigationTrade = null;
+						state.players[trade.toSeat]!.pendingNavigationTrade = null;
+						progressed = true;
+					}
+				} else if (cmd?.type === 'chooseNavigationPower') {
+					const p = state.players[seat]!;
+					(p.powerInventory ??= []).push(cmd.powerId);
+					p.pendingPowerDrafts!.shift();
+					progressed = true;
+				}
+			}
+			if (!progressed) break;
+		}
+	}
 	switch (state.phase) {
 		case 'navigation': {
 			// Anyone who ran out the clock without choosing gets a random destination.

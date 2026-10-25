@@ -10,7 +10,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "node --stack-size=4096 node_modules/vite/bin/vite.js build",
 		"build:app": "BUILD_TARGET=capacitor VITE_BUILD_TARGET=capacitor PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-https://arc-spirits-spectate.vercel.app} vite build",
 		"cap:sync": "npm run build:app && PATH=/opt/homebrew/opt/node/bin:$PATH cap sync",
 		"cap:ios": "npm run cap:sync && PATH=/opt/homebrew/opt/node/bin:$PATH cap open ios",

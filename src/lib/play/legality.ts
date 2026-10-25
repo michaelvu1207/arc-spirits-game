@@ -27,7 +27,13 @@
  */
 
 import { ALL_DESTINATIONS, isEvilAlignment, RUNE_CARRY_LIMIT } from './types';
-import type { GameActor, GameCommand, PlayCatalog, PrivatePlayerState, PublicGameState } from './types';
+import type {
+	GameActor,
+	GameCommand,
+	PlayCatalog,
+	PrivatePlayerState,
+	PublicGameState
+} from './types';
 import { buildLocationInteractions, matchRewardCost } from './locationInteractions';
 
 /** Pure mirror of activePlayerForActor's null-ness (no mutating ensurePlayerCollections backfill). */
@@ -53,7 +59,53 @@ export function canApply(
 ): boolean | undefined {
 	const active = state.status === 'active';
 
+	const powerPending = state.activeSeats.some(
+		(s) => (state.players[s]?.navigationPowerOffers?.length ?? 0) > 0
+	);
+	if (
+		powerPending &&
+		![
+			'resolveNavigationPower',
+			'chooseNavigationPower',
+			'forceAdvancePhase',
+			'debugGrant'
+		].includes(command.type)
+	)
+		return false;
+	const owner = seatPlayer(state, actor);
+	const mandatory = owner?.navigationPowerOffers?.filter((o) => o.mandatory) ?? [];
+	if (
+		mandatory.length &&
+		command.type !== 'forceAdvancePhase' &&
+		!(command.type === 'resolveNavigationPower' && mandatory.some((o) => o.id === command.offerId))
+	)
+		return false;
+	if (
+		owner &&
+		['endLocationActions', 'commitBenefits', 'commitAwakening', 'commitCleanup'].includes(
+			command.type
+		) &&
+		(owner.pendingNavigationTrade ||
+			(owner.pendingPowerDrafts?.length && owner.actionsUsedThisRound.includes('gain-power')))
+	)
+		return false;
 	switch (command.type) {
+		case 'chooseNavigationPower':
+			return (
+				active && !!seatPlayer(state, actor)?.pendingPowerDrafts?.[0]?.includes(command.powerId)
+			);
+		case 'resolveNavigationPower':
+			return (
+				active &&
+				!!seatPlayer(state, actor)?.navigationPowerOffers?.some(
+					(o) => o.id === command.offerId && o.options.some((x) => x.id === command.optionId)
+				)
+			);
+		case 'acquireNavigationPower':
+		case 'tradeNavigationPower':
+		case 'respondNavigationPowerTrade':
+			return undefined;
+
 		// ─── No reducer case exists → switch `default` always returns failure('unsupported_command').
 		//     These are enumerated (× spirits / × mats) but rejected 100% of the time — pure free win.
 		case 'absorbSpirit':
@@ -69,7 +121,10 @@ export function canApply(
 		// ─── Navigation phase ───────────────────────────────────────────────
 		case 'lockNavigation': {
 			if (!active || state.phase !== 'navigation' || state.revealedDestinations) return false;
-			if (!seatPlayer(state, actor)) return false;
+			const p = seatPlayer(state, actor);
+			if (!p) return false;
+			if (command.navigationPowerId && !p.powerInventory?.includes(command.navigationPowerId))
+				return false;
 			return ALL_DESTINATIONS.includes(command.destination as (typeof ALL_DESTINATIONS)[number]);
 		}
 		case 'unlockNavigation': {
@@ -139,7 +194,12 @@ export function canApply(
 			if (!active || state.phase !== 'location') return false;
 			const me = seatPlayer(state, actor);
 			if (!me) return false;
-			if (me.pendingDraw || (me.handDraws?.length ?? 0) > 0 || (me.pendingDrawQueue?.length ?? 0) > 0) return false;
+			if (
+				me.pendingDraw ||
+				(me.handDraws?.length ?? 0) > 0 ||
+				(me.pendingDrawQueue?.length ?? 0) > 0
+			)
+				return false;
 			// A payable corruption debt blocks passing (must discard first); an UNPAYABLE one
 			// (zero spirits) does not — the reducer settles it as VP loss on this command.
 			if (me.pendingCorruptionDiscard && me.spirits.length > 0) return false;
@@ -159,7 +219,9 @@ export function canApply(
 			);
 			const interaction = rows.find((i) => i.rowIndex === command.rowIndex);
 			if (!interaction) return false;
-			const usedForRow = (me.actionsUsedThisRound ?? []).filter((a) => a === `row:${command.rowIndex}`).length;
+			const usedForRow = (me.actionsUsedThisRound ?? []).filter(
+				(a) => a === `row:${command.rowIndex}`
+			).length;
 			if (usedForRow >= 1 + (me.extraActions?.locationInteraction ?? 0)) return false;
 			// Affordability always follows the database-authored trade cost.
 			if (interaction.cost.length > 0) {

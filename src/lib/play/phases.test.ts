@@ -4,7 +4,12 @@ import { RUNE_CARRY_LIMIT } from './types';
 import type { GameActor, GameCommand, PlayCatalog, PublicGameState } from './types';
 
 const HOST: GameActor = { memberId: 'm-host', displayName: 'Host', role: 'host', seatColor: null };
-const GUEST: GameActor = { memberId: 'm-guest', displayName: 'Guest', role: 'player', seatColor: null };
+const GUEST: GameActor = {
+	memberId: 'm-guest',
+	displayName: 'Guest',
+	role: 'player',
+	seatColor: null
+};
 const RED: GameActor = { ...HOST, seatColor: 'Red' };
 const BLUE: GameActor = { ...GUEST, seatColor: 'Blue' };
 
@@ -72,13 +77,26 @@ describe('phase machine', () => {
 
 	test("a player's pending destination is hidden from other viewers until reveal", () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City', navigationPowerId: 'thorn-ward' });
+		state.players.Red!.powerInventory = ['thorn-ward'];
+		state = apply(state, RED, {
+			type: 'lockNavigation',
+			destination: 'Cyber City',
+			navigationPowerId: 'thorn-ward'
+		});
 
-		const blueView = buildSessionProjection(state, { role: 'player', seatColor: 'Blue', displayName: 'Guest' });
+		const blueView = buildSessionProjection(state, {
+			role: 'player',
+			seatColor: 'Blue',
+			displayName: 'Guest'
+		});
 		expect(blueView.players.Red?.pendingDestination).toBeNull();
 		expect(blueView.players.Red?.navigationDestination ?? null).toBeNull();
 
-		const redView = buildSessionProjection(state, { role: 'host', seatColor: 'Red', displayName: 'Host' });
+		const redView = buildSessionProjection(state, {
+			role: 'host',
+			seatColor: 'Red',
+			displayName: 'Host'
+		});
 		expect(redView.players.Red?.pendingDestination).toBe('Cyber City');
 		expect(redView.players.Red?.pendingNavigationPower).toBe('thorn-ward');
 		expect(blueView.players.Red?.pendingNavigationPower).toBeNull();
@@ -86,10 +104,16 @@ describe('phase machine', () => {
 
 	test('navigation power is consumed into the revealed round state', () => {
 		let state = startedGame();
-		state = apply(state, RED, { type: 'lockNavigation', destination: 'Cyber City', navigationPowerId: 'thorn-ward' });
+		state.players.Red!.powerInventory = ['thorn-ward'];
+		state = apply(state, RED, {
+			type: 'lockNavigation',
+			destination: 'Cyber City',
+			navigationPowerId: 'thorn-ward'
+		});
 		state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Tidal Cove' });
 		state = apply(state, RED, { type: 'forceAdvancePhase' });
-		expect(state.players.Red?.pendingNavigationPower).toBe('thorn-ward');
+		expect(state.players.Red?.pendingNavigationPower).toBeNull();
+		expect(state.players.Red?.powerInventory).toEqual([]);
 		expect(state.players.Red?.navigationPower).toBe('thorn-ward');
 	});
 
@@ -216,7 +240,15 @@ const giveSpirit = (
 	classes: Record<string, number>
 ): void => {
 	state.players[seat]!.spirits = [
-		{ slotIndex: 1, id: `x-${seat}`, name: `X-${seat}`, cost: 2, classes, origins: {}, isFaceDown: false }
+		{
+			slotIndex: 1,
+			id: `x-${seat}`,
+			name: `X-${seat}`,
+			cost: 2,
+			classes,
+			origins: {},
+			isFaceDown: false
+		}
 	];
 };
 
@@ -275,7 +307,11 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		state = lockBoth(state);
 		state.players.Red!.victoryPoints = 24; // Good (status 0)
 		state = toCleanup(state);
-		state = apply(state, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
+		state = apply(state, RED, {
+			type: 'resolveAwakenReward',
+			taintedMaxBarrier: 0,
+			relicPicks: []
+		});
 		expect(state.players.Red!.victoryPoints).toBe(30);
 	});
 
@@ -285,7 +321,11 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		state = lockBoth(state);
 		state.players.Red!.statusLevel = 3; // Evil (Fallen) → must discard
 		state = toCleanup(state);
-		state = apply(state, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
+		state = apply(state, RED, {
+			type: 'resolveAwakenReward',
+			taintedMaxBarrier: 0,
+			relicPicks: []
+		});
 		expect(state.players.Red!.victoryPoints).toBe(1);
 		expect(state.players.Red!.spirits).toHaveLength(0); // discarded on claim while Evil
 	});
@@ -295,7 +335,11 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		giveSpirit(state, 'Red', { 'Golden Ruler': 1 });
 		state = lockBoth(state);
 		state = toCleanup(state);
-		state = apply(state, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
+		state = apply(state, RED, {
+			type: 'resolveAwakenReward',
+			taintedMaxBarrier: 0,
+			relicPicks: []
+		});
 		expect(state.players.Red!.victoryPoints).toBe(1);
 		expect(state.players.Red!.spirits).toHaveLength(1); // kept (Good)
 	});
@@ -310,7 +354,11 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 		state.players.Red!.victoryPoints = 24;
 		state = toCleanup(state);
 		expect(state.phase).toBe('benefits'); // held open by Red's unclaimed reward
-		state = apply(state, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
+		state = apply(state, RED, {
+			type: 'resolveAwakenReward',
+			taintedMaxBarrier: 0,
+			relicPicks: []
+		});
 		expect(state.players.Red!.victoryPoints).toBe(30);
 		expect(state.status).toBe('finished');
 		expect(state.winnerSeat).toBe('Red');
@@ -430,7 +478,11 @@ describe('resolution sequence auto-skip', () => {
 		expect(state.players.Red!.phaseReady).toBe(false); // must claim
 		expect(state.players.Blue!.phaseReady).toBe(true); // idles silently
 
-		state = apply(state, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
+		state = apply(state, RED, {
+			type: 'resolveAwakenReward',
+			taintedMaxBarrier: 0,
+			relicPicks: []
+		});
 		// Claim was the last work anywhere → whole sequence collapses to round 2.
 		expect(state.players.Red!.victoryPoints).toBe(1);
 		expect(state.round).toBe(2);

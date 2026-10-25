@@ -1,3 +1,4 @@
+import { getPowerAutoCommand } from '../navigationPowerProgress';
 /**
  * Pure, unit-testable bot policy for the dev "fill the empty seats" feature.
  *
@@ -130,6 +131,7 @@ export function botSeatNeedsToAct(state: PublicGameState, seat: SeatColor): bool
 	if (state.status !== 'active') return false;
 	const player = state.players[seat];
 	if (!player) return false;
+	if (getPowerAutoCommand(state, seat)) return true;
 
 	switch (state.phase) {
 		case 'navigation':
@@ -1763,6 +1765,8 @@ export function planMediumPhaseActions(
 	rng: BotRandom,
 	profile: BotProfile
 ): GameCommand[] {
+	const powerCommand = getPowerAutoCommand(state, seat);
+	if (powerCommand) return [powerCommand];
 	if (!botSeatNeedsToAct(state, seat)) return [];
 
 	const commands: GameCommand[] = [];
@@ -2636,6 +2640,8 @@ export function planBotPhaseActions(
 	rng: BotRandom = defaultBotRandom(),
 	profile: BotProfile = RANDOM_PROFILE
 ): GameCommand[] {
+	const powerCommand = getPowerAutoCommand(state, seat);
+	if (powerCommand) return [powerCommand];
 	if (!botSeatNeedsToAct(state, seat)) return [];
 	if (profile.kind === 'medium') {
 		if (state.phase === 'navigation') {
