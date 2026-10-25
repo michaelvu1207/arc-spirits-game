@@ -1,3 +1,4 @@
+import { BASE_RUNES, canonicalAwakenRuneId, ANY_BASE_RUNE } from '../baseRunes';
 /**
  * Phase 7 — TOTAL COVERAGE HARNESS.
  *
@@ -124,8 +125,10 @@ function faceDownSpirit(id: string, name: string): PlaySpirit {
  * carry `originId`; everything else is relic-kind, which "Any Relic" accepts).
  */
 function heldRune(slotIndex: number, runeId: string): MatSlotSnapshot {
-	const originId = runeId === WILDCARD_MAT_IDS.anyRune ? 'fixture-origin' : undefined;
-	return { slotIndex, hasRune: true, id: runeId, name: runeId, type: 'rune', originId };
+ const id=canonicalAwakenRuneId(runeId);
+ const actual=id===ANY_BASE_RUNE ? Object.keys(BASE_RUNES)[0] : id;
+ const info=BASE_RUNES[actual];
+ return {slotIndex,hasRune:true,id:actual,name:info?.name ?? actual,type:'rune',originId:info?.originId};
 }
 
 /** A catalog whose single spirit carries the given normalized awaken condition. */

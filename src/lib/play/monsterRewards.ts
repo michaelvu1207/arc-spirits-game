@@ -1,3 +1,4 @@
+import { BASE_RUNES, RELIC_TO_RUNE } from './baseRunes';
 /**
  * Monster-kill rewards — derived from a monster's `reward_track` (a flat list of
  * icon_pool tokens). Defeating the Arcane Abyss monster lets the player claim up
@@ -37,6 +38,12 @@ export interface MonsterRewardOption {
  * has no engine meaning. Unlike the location `gainEffectFor`, the wildcard tokens
  * resolve to rune CHOICES (they are gains here, not costs).
  */
+function downgradedRune(rune: ReturnType<typeof relicOptions>[number]) {
+ const runeId=RELIC_TO_RUNE[rune.runeId];
+ const base=runeId ? BASE_RUNES[runeId] : undefined;
+ return base ? {...rune,runeId,name:base.name,originId:base.originId,classId:null,special:false,type:'rune' as const} : rune;
+}
+
 export function monsterGainFor(iconId: string): GainEffect | null {
 	const m = meaningFor(iconId);
 	if (!m) return null;
@@ -54,11 +61,11 @@ export function monsterGainFor(iconId: string): GainEffect | null {
 			return { type: 'chooseRune', options: originRuneOptions() };
 		case 'wildcardRelic':
 			// "Any relic" gain — choose one of the five relics.
-			return { type: 'chooseRune', options: relicOptions() };
+			return { type: 'chooseRune', options: relicOptions().map(downgradedRune) };
 		case 'originRune':
 		case 'specialRune': {
 			const rune = toResolvedRune(m);
-			return rune ? { type: 'rune', rune } : null;
+			return rune ? { type: 'rune', rune: downgradedRune(rune) } : null;
 		}
 	}
 }
@@ -75,7 +82,7 @@ export function buildMonsterRewards(
 	(rewardTrack ?? []).forEach((token, index) => {
 		const effect = monsterGainFor(token);
 		if (!effect) return;
-		out.push({ index, token, effect, label: meaningFor(token)?.label ?? 'Reward' });
+		out.push({ index, token, effect, label: effect.type === 'rune' && BASE_RUNES[effect.rune.runeId] ? effect.rune.name : meaningFor(token)?.label ?? 'Reward' });
 	});
 	return out;
 }

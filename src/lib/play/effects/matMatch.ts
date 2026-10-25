@@ -1,3 +1,4 @@
+import { baseRuneIdForSlot } from '../baseRunes';
 /**
  * Generic mat-cost matcher used by the awakening gate.
  *
@@ -84,7 +85,7 @@ function namedMatch(req: AwakenMatRequirement, mat: SpendableMat): boolean {
  * rune cost. An unrecognized wildcard id matches NOTHING (returns false).
  */
 function wildcardMatch(req: AwakenMatRequirement, mat: SpendableMat): boolean {
-	if (req.runeId === WILDCARD_MAT_IDS.anyRune) return mat.kind === 'rune';
+	if (req.runeId === WILDCARD_MAT_IDS.anyRune) return mat.kind === 'rune' && baseRuneIdForSlot(mat) !== null;
 	if (req.runeId === WILDCARD_MAT_IDS.anyRelic) return mat.kind === 'relic';
 	return false;
 }

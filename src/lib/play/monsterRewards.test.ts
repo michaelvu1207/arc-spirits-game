@@ -158,16 +158,16 @@ describe('buildMonsterRewards / monsterGainFor (reward semantics)', () => {
 	test('a named special rune resolves to a fixed rune gain', () => {
 		const gain = monsterGainFor(TEAPOT);
 		expect(gain?.type).toBe('rune');
-		if (gain?.type === 'rune') expect(gain.rune.name).toBe('Teapot');
+		if (gain?.type === 'rune') expect(gain.rune.name).toBe('Water Rune');
 	});
 
-	test('the "any relic" wildcard becomes a relic CHOICE (gain, not cost)', () => {
+	test('legacy relic rewards downgrade named relics while retaining Fairy Rune', () => {
 		const gain = monsterGainFor(ANY_RELIC);
 		expect(gain?.type).toBe('chooseRune');
 		if (gain?.type === 'chooseRune') {
 			expect(gain.options.length).toBeGreaterThan(1);
-			// Relic-only: every option is the 'relic' item kind (never a rune or augment).
-			expect(gain.options.every((o) => o.type === 'relic')).toBe(true);
+			expect(gain.options.filter(o => o.type === 'rune').map(o => o.name).sort()).toEqual(['Fire Rune', 'Forest Rune', 'Mountain Rune', 'Water Rune']);
+			expect(gain.options.filter(o => o.type === 'relic')).toHaveLength(1);
 		}
 	});
 
@@ -247,7 +247,7 @@ describe('monster-kill reward flow (engine)', () => {
 		s = apply(s, RED, { type: 'resolveMonsterReward', picks: [3] }); // Teapot
 		const after = s.players.Red!.mats.filter((r) => r.hasRune).length;
 		expect(after).toBe(before + 1);
-		expect(s.players.Red!.mats.some((r) => r.name === 'Teapot')).toBe(true);
+		expect(s.players.Red!.mats.some((r) => r.name === 'Water Rune')).toBe(true);
 	});
 
 	test('picking more than chooseAmount is rejected', () => {

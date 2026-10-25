@@ -10,7 +10,7 @@ import {
 	buildSessionProjection,
 	SEAT_MISSING_MESSAGE
 } from '../runtime';
-import { enterBenefits, enterAwakening } from '../phases';
+import { enterBenefits, enterAwakening, recomputeAwakenEligibility } from '../phases';
 import { WILDCARD_MAT_IDS } from '../awakenConditions';
 import { AWAKEN_PROGRESS_KEYS } from '../effects/awakenHandlers';
 import { nextId } from '../rng';
@@ -1983,6 +1983,7 @@ export async function loadRoomView(roomCode: string, viewer: RoomViewer = {}): P
 	session = await maybeCloseRoom(session);
 
 	const state = asState(session);
+	if (state.phase === 'awakening' || state.phase === 'cleanup') recomputeAwakenEligibility(state, await loadPlayCatalog());
 	const viewerContext = member?.is_bot && viewer.userId
 		? { role: 'spectator' as const, seatColor: null, displayName: member.display_name }
 		: viewerForMember(state, member);
@@ -2295,7 +2296,9 @@ export async function loadRawRoomState(roomCode: string): Promise<PublicGameStat
 	if (!session) {
 		throw kitError(404, 'Room not found.');
 	}
-	return asState(session);
+	const state = asState(session);
+	if (state.phase === 'awakening' || state.phase === 'cleanup') recomputeAwakenEligibility(state, await loadPlayCatalog());
+	return state;
 }
 
 export async function runRoomCommand(params: {

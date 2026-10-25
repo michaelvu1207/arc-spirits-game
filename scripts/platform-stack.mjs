@@ -93,8 +93,8 @@ try {
 		PUBLIC_SUPABASE_URL: storeUrl,
 		PUBLIC_SUPABASE_ANON_KEY: 'local-emu',
 		SUPABASE_SERVICE_ROLE_KEY: 'local-emu',
-		ARC_PLAY_CATALOG_FILE: join(root, 'ml/catalog.json'),
-		ARC_WS_CATALOG_FILE: join(root, 'ml/catalog.json')
+		ARC_PLAY_CATALOG_FILE: process.env.ARC_PLATFORM_CATALOG_FILE || join(root, 'ml/catalog.json'),
+		ARC_WS_CATALOG_FILE: process.env.ARC_PLATFORM_CATALOG_FILE || join(root, 'ml/catalog.json')
 	};
 	const store = own('store', process.execPath, [
 		'--import', 'tsx',

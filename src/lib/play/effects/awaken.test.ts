@@ -46,8 +46,8 @@ import { CATALOG_CLASSES, CATALOG_SPIRITS } from './__fixtures__/catalog-coverag
 
 const ANY_RELIC = '19d72567-4ac8-4214-a21f-596bc88de8f7';
 const ANY_RUNE = '7ca279f0-1ca8-484a-a86e-0a87aaa7b312';
-const FIRE_RUNE = '8a0d54ca-aeab-405c-9e5c-1c1425d1aa86';
-const WATER_RUNE = 'a6111d01-2c55-4b1f-854a-32887d92b8e1';
+const FIRE_RUNE = '480cd5f7-adea-481d-8ea9-aad776599d7b';
+const WATER_RUNE = '5eba8681-16b8-4563-b017-22c80a84b35b';
 
 function makePlayer(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerState {
 	return {
@@ -133,6 +133,8 @@ function rune(
 		special?: boolean;
 	} = {}
 ): MatSlotSnapshot {
+	const baseIds: Record<string,string> = { 'a': FIRE_RUNE, 'b': '34b2a963-f8c6-4fc0-8272-ddc50b0036a8', 'fire': FIRE_RUNE, 'cyber': '356f3ad2-4cac-4b69-a3cc-7559f8891d8e', 'cyber-id': '356f3ad2-4cac-4b69-a3cc-7559f8891d8e', 'forest-id': '34b2a963-f8c6-4fc0-8272-ddc50b0036a8', 'tidal-id': WATER_RUNE, 'lantern-id': FIRE_RUNE, 'misc': '34b2a963-f8c6-4fc0-8272-ddc50b0036a8' };
+	if (opts.originId && opts.id && baseIds[opts.id]) opts = { ...opts, id: baseIds[opts.id] };
 	return {
 		slotIndex,
 		hasRune: opts.hasRune ?? true,
@@ -1232,7 +1234,7 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		expect(result.state.players.Red!.spirits[0].isFaceDown).toBe(false);
 	});
 
-	it('Meteor Shower discards two different relics and awakens', () => {
+	it('The Solar Reliquarian discards two different Rune types and awakens', () => {
 		const catalog = textCatalog(
 			IDS.meteorShower,
 			'Meteor Shower',
@@ -1241,7 +1243,7 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, IDS.meteorShower, 'Meteor Shower')];
-		red.mats = [relic(1, 'Teapot'), relic(2, 'Keepsake'), relic(3, 'Teapot')];
+		red.mats = [rune(1, {id:WATER_RUNE}), rune(2, {id:FIRE_RUNE}), rune(3, {id:WATER_RUNE})];
 
 		const res = applyGameCommand(
 			state,
@@ -1258,7 +1260,7 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		expect(out.mats.filter((r) => r.hasRune).length).toBe(1);
 	});
 
-	it('Meteor Shower hard-blocks when the two relics are not unique', () => {
+	it('The Solar Reliquarian blocks two Runes of the same type', () => {
 		const catalog = textCatalog(
 			IDS.meteorShower,
 			'Meteor Shower',
@@ -1267,7 +1269,7 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
 		red.spirits = [spirit(1, IDS.meteorShower, 'Meteor Shower')];
-		red.mats = [relic(1, 'Teapot'), relic(2, 'Teapot')];
+		red.mats = [rune(1, {id:WATER_RUNE}), rune(2, {id:WATER_RUNE})];
 
 		const res = applyGameCommand(
 			state,

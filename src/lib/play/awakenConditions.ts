@@ -1,3 +1,4 @@
+import { ANY_BASE_RUNE, BASE_RUNES, canonicalAwakenRuneId, migrateAwakenCondition } from './baseRunes';
 /**
  * Normalizes a spirit's raw `awaken_condition` (from hex_spirits) into the
  * engine-facing {@link NormalizedAwaken} shape used by the play catalog.
@@ -48,13 +49,15 @@ export function normalizeRuneCost(
 	runesById: ReadonlyMap<string, AwakenRuneInfo>
 ): AwakenMatRequirement[] {
 	const byRune = new Map<string, AwakenMatRequirement>();
-	for (const runeId of runeIds) {
+	for (const originalId of runeIds) {
+		const runeId = canonicalAwakenRuneId(originalId);
 		const existing = byRune.get(runeId);
 		if (existing) {
 			existing.count += 1;
 			continue;
 		}
-		const info = runesById.get(runeId);
+		const base = BASE_RUNES[runeId];
+		const info = base ? { name: base.name, kind: 'rune' as const } : runeId === ANY_BASE_RUNE ? { name: 'Any Rune', kind: 'rune' as const } : runesById.get(runeId);
 		byRune.set(runeId, {
 			runeId,
 			name: info?.name ?? runeId,
@@ -75,6 +78,7 @@ export function normalizeAwaken(
 	condition: AwakenCondition | null | undefined,
 	runesById: ReadonlyMap<string, AwakenRuneInfo>
 ): NormalizedAwaken | undefined {
+	condition = migrateAwakenCondition(condition);
 	if (!condition) return undefined;
 	if (condition.type === 'rune_cost') {
 		return { kind: 'rune_cost', mats: normalizeRuneCost(condition.rune_ids ?? [], runesById) };

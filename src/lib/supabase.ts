@@ -1,3 +1,4 @@
+import { BASE_RUNES, migrateAwakenCondition } from './play/baseRunes';
 import { regionRewardRows } from './play/regionRules';
 import { normalizeRegionContent, REGION_ORIGIN_NAMES } from './play/regions';
 /**
@@ -1090,8 +1091,8 @@ export async function fetchAssetsData(): Promise<AssetsData> {
 	}));
 
 	return normalizeRegionContent({
-		spirits: (spiritsResult.data as HexSpiritAsset[]) ?? [],
-		mats: (matsResult.data as MatAsset[]) ?? [],
+		spirits: ((spiritsResult.data as HexSpiritAsset[]) ?? []).map(spirit => ({...spirit, awaken_condition: migrateAwakenCondition(spirit.awaken_condition) ?? null})),
+		mats: ((matsResult.data as MatAsset[]) ?? []).map(mat => ({ ...mat, name: BASE_RUNES[mat.id]?.name ?? mat.name })),
 		customDice: (((customDiceResult.data as Omit<CustomDiceAsset, 'sides'>[]) ?? []).map((die) => ({
 			...die,
 			sides: sidesByDiceId.get(die.id) ?? []

@@ -1,3 +1,4 @@
+import { BASE_RUNES, RELIC_TO_RUNE, upgradeRelicRuneSlots } from './baseRunes';
 import { REGION_ACTIONS_VERSION, upgradeRegionActionUses } from './regionRules';
 import { regionText } from './regions';
 import { currentClassCounts, currentClassName } from './classNames';
@@ -506,6 +507,9 @@ function advanceDrawQueue(state: PublicGameState, player: PrivatePlayerState) {
 
 /** Add a reward-gained rune to the player's rune slots, carrying its identity. */
 function addGainedRune(player: PrivatePlayerState, rune: ResolvedRune) {
+	const runeId = RELIC_TO_RUNE[rune.runeId];
+	const base = runeId ? BASE_RUNES[runeId] : undefined;
+	if (base) rune = { runeId, name: base.name, originId: base.originId, classId: null, special: false, type: 'rune' };
 	// Spirit augments (class-linked runes) never occupy rune slots — they wait in the
 	// to-place pouch until the owner attaches one to a hex spirit. Relics (special
 	// runes with no class) and origin runes still take a rune slot as before.
@@ -1040,6 +1044,7 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
  */
 export function ensureStateShape(state: PublicGameState): PublicGameState {
 	upgradeRegionActionUses(state);
+	upgradeRelicRuneSlots(state);
 	state.rng ??= createRng(hashString(state.roomCode));
 	state.phase ??= 'navigation';
 	state.navigation ??= {};

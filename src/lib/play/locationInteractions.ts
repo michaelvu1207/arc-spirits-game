@@ -1,3 +1,4 @@
+import { BASE_RUNES } from './baseRunes';
 import { isNavigationPowerRune } from './navigationPowers';
 import { POWER_ICON, REPLACE_POWER_ICON, regionRewardRows } from './regionRules';
 /**
@@ -304,7 +305,7 @@ export function toResolvedRune(m: RewardIconMeaning): ResolvedRune | null {
 	if (m.kind === 'originRune') {
 		return {
 			runeId: m.runeId,
-			name: `${m.originName} Rune`,
+			name: BASE_RUNES[m.runeId]?.name ?? `${m.originName} Rune`,
 			originId: m.originId,
 			classId: null,
 			special: false,

@@ -161,11 +161,11 @@ function awakenOf(name: string): NormalizedAwaken | undefined {
 }
 
 describe('buildPlayCatalog — normalized awaken', () => {
-	test('Stellar Songbird keeps Any Relic as relic-kind despite the sentinel origin_id', () => {
+	test('Stellar Songbird upgrades Any Relic to Any Rune', () => {
 		expect(awakenOf('Stellar Songbird')).toEqual({
 			kind: 'rune_cost',
 			mats: [
-				{ runeId: ANY_RELIC, name: 'Any Relic', kind: 'relic', count: 1, wildcard: true }
+				{ runeId: ANY_RUNE, name: 'Any Rune', kind: 'rune', count: 1, wildcard: true }
 			]
 		});
 	});
@@ -175,7 +175,7 @@ describe('buildPlayCatalog — normalized awaken', () => {
 		expect(awaken).toEqual({
 			kind: 'rune_cost',
 			mats: [
-				{ runeId: ANY_RELIC, name: 'Any Relic', kind: 'relic', count: 2, wildcard: true }
+				{ runeId: ANY_RUNE, name: 'Any Rune', kind: 'rune', count: 2, wildcard: true }
 			]
 		});
 	});
@@ -185,8 +185,8 @@ describe('buildPlayCatalog — normalized awaken', () => {
 		expect(awaken).toEqual({
 			kind: 'rune_cost',
 			mats: [
-				{ runeId: TEAPOT, name: 'Teapot', kind: 'relic', count: 2, wildcard: false },
-				{ runeId: ANY_RELIC, name: 'Any Relic', kind: 'relic', count: 1, wildcard: true }
+				{ runeId: '5eba8681-16b8-4563-b017-22c80a84b35b', name: 'Water Rune', kind: 'rune', count: 2, wildcard: false },
+				{ runeId: ANY_RUNE, name: 'Any Rune', kind: 'rune', count: 1, wildcard: true }
 			]
 		});
 	});

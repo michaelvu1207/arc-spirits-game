@@ -1,3 +1,4 @@
+import { baseRuneIdForSlot } from '../baseRunes';
 /**
  * Scripted `text`-awaken handlers (Phase 6).
  *
@@ -444,43 +445,48 @@ const spaceInvaderHandler: AwakenHandler = {
 	}
 };
 
-/** Meteor Shower: discard two different named relics. */
-const discardUniqueRelics: AwakenHandler = {
+/** The Solar Reliquarian: discard two different elemental Rune types. */
+const discardUniqueRunes: AwakenHandler = {
 	check(ctx) {
+		const selected = selectionFrom(ctx);
+		if (selected?.length) {
+			const ids = selected.map(ref => ref.kind === 'rune' ? baseRuneIdForSlot(ctx.player.mats.find(m => m.hasRune && m.slotIndex === ref.slotIndex) ?? {}) : null);
+			if (ids.length !== 2 || ids.some(id => !id) || new Set(ids).size !== 2) return { ok: false, reason: 'need_2_different_rune_types' };
+		}
 		const names = new Set(
 			ctx.player.mats
-				.filter((m) => m.hasRune && m.type === 'relic')
-				.map((m) => m.id ?? m.name)
+				.filter((m) => m.hasRune && baseRuneIdForSlot(m) !== null)
+				.map((m) => baseRuneIdForSlot(m))
 				.filter(Boolean)
 		);
-		return names.size >= 2 ? { ok: true } : { ok: false, reason: 'need_2_unique_relics' };
+		return names.size >= 2 ? { ok: true } : { ok: false, reason: 'need_2_different_rune_types' };
 	},
 	discardChoice(ctx) {
 		const options = ctx.player.mats
-			.filter((m) => m.hasRune && m.type === 'relic')
+			.filter((m) => m.hasRune && baseRuneIdForSlot(m) !== null)
 			.map((m) => ({
 				ref: { kind: 'rune' as const, slotIndex: m.slotIndex },
-				label: m.name ?? 'Relic',
-				runeId: m.id
+				label: m.name ?? 'Rune',
+				runeId: baseRuneIdForSlot(m)!
 			}));
 		return new Set(options.map((o) => o.runeId ?? o.label)).size >= 2
 			? { count: 2, options, requiresSelection: true }
 			: null;
 	},
 	pay(ctx) {
-		const candidates = ctx.player.mats.filter((m) => m.hasRune && m.type === 'relic');
+		const candidates = ctx.player.mats.filter((m) => m.hasRune && baseRuneIdForSlot(m) !== null);
 		const selected = selectionFrom(ctx)?.filter(
 			(ref): ref is Extract<AwakenDiscardRef, { kind: 'rune' }> => ref.kind === 'rune'
 		);
 		let refs: AwakenDiscardRef[] = [];
 		if (selected?.length === 2) {
 			const picked = selected.map((ref) => candidates.find((m) => m.slotIndex === ref.slotIndex));
-			if (picked.every(Boolean) && new Set(picked.map((m) => m?.id ?? m?.name)).size === 2) refs = selected;
+			if (picked.every(Boolean) && new Set(picked.map((m) => m ? baseRuneIdForSlot(m) : null)).size === 2) refs = selected;
 		}
 		if (refs.length === 0) {
 			const seen = new Set<string>();
 			for (const mat of candidates) {
-				const key = mat.id ?? mat.name ?? String(mat.slotIndex);
+				const key = baseRuneIdForSlot(mat)!;
 				if (seen.has(key)) continue;
 				seen.add(key);
 				refs.push({ kind: 'rune', slotIndex: mat.slotIndex });
@@ -566,7 +572,7 @@ export const AWAKEN_HANDLERS: Record<string, AwakenHandler> = {
 	[IDS.floralFairy]: progressFlagHandler(KEYS.floralFairy, 'cultivate_4_unique_forest_required'),
 	[IDS.lanternFairy]: progressFlagHandler(KEYS.lanternFairy, 'cultivate_4_unique_lantern_required'),
 	[IDS.tidalFairy]: progressFlagHandler(KEYS.tidalFairy, 'cultivate_4_unique_tidal_required'),
-	[IDS.meteorShower]: discardUniqueRelics,
+	[IDS.meteorShower]: discardUniqueRunes,
 
 	// ── Category 3: combat / pvp event ────────────────────────────────────────
 	[IDS.hollowEyes]: progressFlagHandler(KEYS.hollowEyes, 'failed_combat_corruption_required'),

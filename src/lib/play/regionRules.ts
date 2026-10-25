@@ -1,5 +1,6 @@
+import { BASE_RUNES, migrateNormalizedAwaken } from './baseRunes';
 import type { GameLocationRewardRow } from '../types';
-import type { PublicGameState } from './types';
+import type { PublicGameState, NormalizedAwaken } from './types';
 import { normalizeRegionContent, regionText } from './regions';
 
 export const POWER_ICON = 'navigation-power';
@@ -60,9 +61,11 @@ export function regionRewardRows(
 }
 
 export function regionCatalog<
-	T extends { locations?: { name: string; rewardRows: GameLocationRewardRow[] }[] }
+	T extends { locations?: { name: string; rewardRows: GameLocationRewardRow[] }[]; spirits?: { awaken?: NormalizedAwaken }[]; mats?: {id:string;name:string}[] }
 >(catalog: T): T {
 	const normalized = normalizeRegionContent(catalog);
+	for (const mat of normalized.mats ?? []) mat.name = BASE_RUNES[mat.id]?.name ?? mat.name;
+	for (const spirit of normalized.spirits ?? []) spirit.awaken = migrateNormalizedAwaken(spirit.awaken);
 	for (const loc of normalized.locations ?? [])
 		loc.rewardRows = regionRewardRows(loc.name, loc.rewardRows);
 	return normalized;
