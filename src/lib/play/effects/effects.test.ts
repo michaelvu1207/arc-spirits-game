@@ -204,7 +204,8 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			brokenBarrier: 2,
 			spirits: [
 				spirit(1, 'A', {}, { 'Forest Region': 1 }),
-				spirit(2, 'B', {}, { 'Forest Region': 1 })
+				spirit(2, 'B', {}, { 'Forest Region': 1 }),
+				spirit(3, 'C', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
@@ -246,7 +247,7 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 		expect(pool.maxBarrier).toBe(1); // count 2 → +1 potential
 	});
 
-	it('scales: four same-origin spirits → two runes', () => {
+	it('scales: six same-origin spirits → two runes', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			barrier: 1,
@@ -255,7 +256,9 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 				spirit(1, 'A', {}, { 'Forest Region': 1 }),
 				spirit(2, 'B', {}, { 'Forest Region': 1 }),
 				spirit(3, 'C', {}, { 'Forest Region': 1 }),
-				spirit(4, 'D', {}, { 'Forest Region': 1 })
+				spirit(4, 'D', {}, { 'Forest Region': 1 }),
+				spirit(5, 'E', {}, { 'Forest Region': 1 }),
+				spirit(6, 'F', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
@@ -264,14 +267,16 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 		expect(p.brokenBarrier).toBe(3);
 	});
 
-	it('grants one rune PER origin (two Forest Region + two Fire Region → one each)', () => {
+	it('grants one rune PER origin (three Forest Region + three Fire Region → one each)', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			spirits: [
 				spirit(1, 'A', {}, { 'Forest Region': 1 }),
 				spirit(2, 'B', {}, { 'Forest Region': 1 }),
-				spirit(3, 'C', {}, { 'Fire Region': 1 }),
-				spirit(4, 'D', {}, { 'Fire Region': 1 })
+				spirit(3, 'C', {}, { 'Forest Region': 1 }),
+				spirit(4, 'D', {}, { 'Fire Region': 1 }),
+				spirit(5, 'E', {}, { 'Fire Region': 1 }),
+				spirit(6, 'F', {}, { 'Fire Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
@@ -284,7 +289,8 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			maxBarrier: 4,
 			spirits: [
 				spirit(1, 'A', {}, { 'Forest Region': 1 }, true), // face-down still counts
-				spirit(2, 'B', {}, { 'Forest Region': 1 })
+				spirit(2, 'B', {}, { 'Forest Region': 1 }),
+				spirit(3, 'C', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
@@ -602,11 +608,13 @@ describe('doubleRunes primitive (Cultivate yield)', () => {
 				spirit(1, 'A', {}, { 'Forest Region': 1 }),
 				spirit(2, 'B', {}, { 'Forest Region': 1 }),
 				spirit(3, 'C', {}, { 'Forest Region': 1 }),
-				spirit(4, 'D', {}, { 'Forest Region': 1 })
+				spirit(4, 'D', {}, { 'Forest Region': 1 }),
+				spirit(5, 'E', {}, { 'Forest Region': 1 }),
+				spirit(6, 'F', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(4); // floor(4/2)=2 → doubled
+		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(4); // floor(6/3)=2 → doubled
 		// Cultivate does not restore barriers, even when rune yield is doubled.
 		expect(p.barrier).toBe(1);
 		expect(p.brokenBarrier).toBe(3);

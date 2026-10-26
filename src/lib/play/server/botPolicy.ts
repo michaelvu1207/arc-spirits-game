@@ -1302,7 +1302,7 @@ function originNameSets(player: BotPlayer): Map<string, Set<string>> {
 
 /**
  * The origin to concentrate recruiting on, to consolidate the Cultivate rune yield (one
- * rune per two same-origin spirits → fewer wasted odd remainders): the most-represented
+ * rune per three same-origin spirits → fewer wasted odd remainders): the most-represented
  * origin across the whole tableau (face-up or down). Null when the tableau is empty.
  */
 function focusOriginFor(player: BotPlayer): string | null {
@@ -1354,7 +1354,7 @@ function hasSustain(player: BotPlayer): boolean {
  * Can the bot restore barrier the SAFE way via the location economy instead of corrupting?
  * The restore barrier path is: Cultivate → origin runes → a rune trade that restores barrier
  * (every location's rune→relic row restores barrier), or a held relic → restore barrier at
- * Forest Region. True if it holds a relic, holds an origin rune, or has ≥2 same-origin spirits
+ * Forest Region. True if it holds a relic, holds an origin rune, or has ≥3 same-origin spirits
  * to Cultivate runes from.
  */
 function canRestoreBarrierViaEconomy(player: BotPlayer): boolean {
@@ -1365,7 +1365,7 @@ function canRestoreBarrierViaEconomy(player: BotPlayer): boolean {
 		if (sp.isFaceDown) continue;
 		for (const o of Object.keys(sp.origins ?? {})) byOrigin[o] = (byOrigin[o] ?? 0) + 1;
 	}
-	return Object.values(byOrigin).some((n) => n >= 2);
+	return Object.values(byOrigin).some((n) => n >= 3);
 }
 
 /**
@@ -1572,7 +1572,7 @@ function spiritNeedValue(
 		score += classNeedValue(cls, effCounts, player, profile, damaging);
 	}
 	// Origin focus is now only a MILD economy tiebreaker: concentrating origins squeezes a
-	// little more rune yield out of Cultivate (one rune per two same-origin spirits → fewer
+	// little more rune yield out of Cultivate (one rune per three same-origin spirits → fewer
 	// wasted odd remainders). Max barrier no longer needs an origin trio, so this is a small
 	// nudge rather than a build driver.
 	// …but only as a tiebreaker between spirits that are ALREADY pulling weight. It must never

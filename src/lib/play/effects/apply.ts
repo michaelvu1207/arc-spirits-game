@@ -177,7 +177,7 @@ export function applyRest(
 }
 
 /**
- * Cultivate grants one origin rune for every pair of same-origin spirit traits.
+ * Cultivate grants one origin rune for every three same-origin spirit traits.
  * Its class payoff remains separate: the Cultivator
  * trigger grants max barrier on the 2/3/4/5 → +1/+2/+5/+10 ladder, while Arc
  * Mage, Captain, and other classes hook into the same `onCultivate` event.
@@ -203,10 +203,10 @@ export function applyCultivate(
 	recordCultivateAwakenProgress(player, allPlayers);
 
 	// Intrinsic Cultivate yield (every player, no class required): gain ONE origin rune
-	// for every TWO spirit origin traits sharing that origin.
+	// for every THREE spirit origin traits sharing that origin.
 	// Awakened and face-down spirits both count (origin is always active; only class
 	// abilities need awakening). Only the four core origins with a basic rune (Mountain
-	// Region / Forest Region / Fire Region / Water Region) produce pairs. Rune Traveler's
+	// Region / Forest Region / Fire Region / Water Region) produce trios. Rune Traveler's
 	// per-turn `doubleRunes` doubles the rune yield.
 	const originTraits: Record<string, number> = {};
 	for (const spirit of player.spirits) {
@@ -218,8 +218,8 @@ export function applyCultivate(
 	for (const [origin, traits] of Object.entries(originTraits)) {
 		const rune = originRuneForName(origin);
 		if (!rune) continue;
-		const pairs = Math.floor(traits / 2);
-		const count = pairs * runeMult;
+		const trios = Math.floor(traits / 3);
+		const count = trios * runeMult;
 		for (let i = 0; i < count; i += 1) {
 			player.mats.push({
 				slotIndex: player.mats.length + 1,
