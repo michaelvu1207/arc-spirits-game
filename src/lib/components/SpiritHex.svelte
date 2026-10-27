@@ -100,9 +100,22 @@
 	let reasonRevealed = $state(false);
 	let reasonTimer: ReturnType<typeof setTimeout> | null = null;
 	let discardHoldTimer: ReturnType<typeof setTimeout> | null = null;
+	let discardHoldFrame: number | null = null;
+	let discardHoldStartedAt = 0;
+	let discardHoldProgress = $state(0);
+	const DISCARD_HOLD_MS = 650;
+	function animateDiscardHold(now: number) {
+		discardHoldProgress = Math.min(1, (now - discardHoldStartedAt) / DISCARD_HOLD_MS);
+		if (discardHoldTimer !== null && discardHoldProgress < 1) {
+			discardHoldFrame = requestAnimationFrame(animateDiscardHold);
+		}
+	}
 	function startDiscardHold(event: PointerEvent) {
 		if (!holdToDiscard || !onDiscard || event.button !== 0) return;
 		event.preventDefault();
+		cancelDiscardHold();
+		discardHoldStartedAt = performance.now();
+		discardHoldProgress = 0;
 		try {
 			(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 		} catch {
@@ -110,14 +123,21 @@
 		}
 		discardHoldTimer = setTimeout(() => {
 			discardHoldTimer = null;
+			discardHoldProgress = 1;
 			onDiscard(slotIndex);
-		}, 650);
+		}, DISCARD_HOLD_MS);
+		discardHoldFrame = requestAnimationFrame(animateDiscardHold);
 	}
 	function cancelDiscardHold() {
 		if (discardHoldTimer !== null) {
 			clearTimeout(discardHoldTimer);
 			discardHoldTimer = null;
 		}
+		if (discardHoldFrame !== null) {
+			cancelAnimationFrame(discardHoldFrame);
+			discardHoldFrame = null;
+		}
+		discardHoldProgress = 0;
 	}
 	function revealReason() {
 		if (!lockedReason) return;
@@ -229,9 +249,11 @@
 			class:staged
 			role="button"
 			tabindex="0"
-			aria-label={staged
-				? `Keep ${spirit?.name ?? 'spirit'}`
-				: `Discard ${spirit?.name ?? 'spirit'}`}
+			aria-label={holdToDiscard
+				? `Hold to discard ${spirit?.name ?? 'spirit'}`
+				: staged
+					? `Keep ${spirit?.name ?? 'spirit'}`
+					: `Discard ${spirit?.name ?? 'spirit'}`}
 			aria-pressed={staged}
 			onpointerdown={holdToDiscard ? startDiscardHold : undefined}
 			onpointerup={holdToDiscard ? cancelDiscardHold : undefined}
@@ -256,12 +278,36 @@
 			}}
 		>
 			<polygon points={polygonPoints} class="discard-tint" />
-			<text
-				x={center.x}
-				y={center.y}
-				text-anchor="middle"
-				dominant-baseline="middle"
-				class="discard-glyph">{staged ? '✕' : '🗑'}</text>
+			{#if holdToDiscard}
+				<g class="discard-hold-ui" class:active={discardHoldProgress > 0} aria-hidden="true">
+					<text x={center.x} y={center.y - hexHeight * 0.08} text-anchor="middle" class="discard-hold-label">
+						{discardHoldProgress > 0 ? 'Keep holding…' : 'Hold to discard'}
+					</text>
+					<rect
+						x={center.x - hexWidth * 0.34}
+						y={center.y + hexHeight * 0.12}
+						width={hexWidth * 0.68}
+						height={Math.max(4, hexHeight * 0.045)}
+						rx={Math.max(2, hexHeight * 0.02)}
+						class="discard-hold-track"
+					/>
+					<rect
+						x={center.x - hexWidth * 0.34}
+						y={center.y + hexHeight * 0.12}
+						width={hexWidth * 0.68 * discardHoldProgress}
+						height={Math.max(4, hexHeight * 0.045)}
+						rx={Math.max(2, hexHeight * 0.02)}
+						class="discard-hold-fill"
+					/>
+				</g>
+			{:else}
+				<text
+					x={center.x}
+					y={center.y}
+					text-anchor="middle"
+					dominant-baseline="middle"
+					class="discard-glyph">{staged ? '✕' : '🗑'}</text>
+			{/if}
 		</g>
 	{/if}
 
@@ -446,6 +492,40 @@
 		fill: rgba(180, 20, 30, 0.18);
 		stroke-opacity: 1;
 		filter: drop-shadow(0 0 10px rgba(224, 88, 88, 0.8));
+	}
+	.discard-hold-ui {
+		opacity: 0;
+		transition: opacity 120ms ease;
+	}
+	.discard-hit:hover .discard-hold-ui,
+	.discard-hold-ui.active {
+		opacity: 1;
+	}
+	.discard-hold-ui > * {
+		pointer-events: none;
+	}
+	.discard-hold-label {
+		fill: #fff4f4;
+		font-size: clamp(9px, 1.5vw, 15px);
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		paint-order: stroke;
+		stroke: rgba(40, 4, 10, 0.9);
+		stroke-width: 4px;
+	}
+	.discard-hold-track {
+		fill: rgba(20, 3, 10, 0.85);
+		stroke: rgba(255, 220, 220, 0.8);
+		stroke-width: 1.5;
+	}
+	.discard-hold-fill {
+		fill: #ff5a62;
+		filter: drop-shadow(0 0 5px rgba(255, 64, 78, 0.95));
+	}
+	@media (pointer: coarse) {
+		.discard-hold-ui {
+			opacity: 0.92;
+		}
 	}
 	.discard-hit:focus {
 		outline: none;
