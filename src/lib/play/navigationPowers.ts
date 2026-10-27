@@ -1,3 +1,5 @@
+import { isWildRune, WILDCARD_MAT_IDS } from './awakenConditions';
+
 /** Consumable powers committed alongside a navigation destination. */
 export const NAVIGATION_POWERS = [
 	{
@@ -132,10 +134,7 @@ export function isNavigationPowerRune(rune: {
 }): boolean {
 	if (!rune.hasRune || rune.classId || rune.type === 'relic' || rune.type === 'augment')
 		return false;
-	if (
-		rune.id === '19d72567-4ac8-4214-a21f-596bc88de8f7' ||
-		rune.id === '7ca279f0-1ca8-484a-a86e-0a87aaa7b312'
-	)
-		return false;
+	if (isWildRune(rune)) return true;
+	if (rune.id === WILDCARD_MAT_IDS.anyRelic || rune.id === WILDCARD_MAT_IDS.anyRune) return false;
 	return rune.type === 'rune' || (!rune.type && !!rune.originId);
 }

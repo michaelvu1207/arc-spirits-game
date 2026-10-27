@@ -15,10 +15,12 @@ import { baseRuneIdForSlot } from '../baseRunes';
 
 import type { MatSlotSnapshot } from '$lib/types';
 import type { AwakenMatRequirement, MatItemKind } from '../types';
-import { WILDCARD_MAT_IDS } from '../awakenConditions';
+import { isWildRune, WILDCARD_MAT_IDS } from '../awakenConditions';
 
 /** A held mat the player could spend (a slot with `hasRune === true`). */
 export interface SpendableMat {
+	/** Held star rune that substitutes for any origin rune. */
+	wildRune?: boolean;
 	/** Index into the player's `mats` array (the slot we'd flip to hasRune:false). */
 	arrayIndex: number;
 	/**
@@ -57,10 +59,12 @@ export function spendableMats(mats: MatSlotSnapshot[]): SpendableMat[] {
 		const slot = mats[arrayIndex];
 		if (!slot?.hasRune) continue;
 		// Derive kind from the slot's FK columns, mirroring the catalog `matKind`
-		// rule (server/catalog.ts): origin ⇒ rune, else relic.
-		const kind: MatItemKind = slot.originId ? 'rune' : 'relic';
+		// rule (server/catalog.ts): origin ⇒ rune, else relic. Held wild runes
+		// have no fixed origin, so classify them explicitly.
+		const kind: MatItemKind = isWildRune(slot) || slot.originId ? 'rune' : 'relic';
 		out.push({
 			arrayIndex,
+			wildRune: isWildRune(slot),
 			slotIndex: slot.slotIndex,
 			instanceId: slot.guid,
 			id: slot.id,
@@ -73,6 +77,7 @@ export function spendableMats(mats: MatSlotSnapshot[]): SpendableMat[] {
 
 /** Does a held mat satisfy a NAMED (non-wildcard) requirement? */
 function namedMatch(req: AwakenMatRequirement, mat: SpendableMat): boolean {
+	if (mat.wildRune && req.kind === 'rune') return true;
 	if (mat.id && mat.id === req.runeId) return true;
 	// Fall back to display name when the held mat carries no catalog id.
 	return !mat.id && mat.name != null && mat.name === req.name;
@@ -151,8 +156,13 @@ export function matchMatCost(
 		return a.arrayIndex - b.arrayIndex;
 	});
 
-	const take = (predicate: (mat: SpendableMat) => boolean): boolean => {
-		for (const mat of ordered) {
+	const take = (predicate: (mat: SpendableMat) => boolean, preferConcrete = false): boolean => {
+		// Save flexible runes for named costs with no concrete match. Generic costs
+		// keep the caller's preferred payment order.
+		const candidates = preferConcrete
+			? [...ordered].sort((a, b) => Number(a.wildRune ?? false) - Number(b.wildRune ?? false))
+			: ordered;
+		for (const mat of candidates) {
 			if (used.has(mat.arrayIndex)) continue;
 			if (!predicate(mat)) continue;
 			used.add(mat.arrayIndex);
@@ -166,7 +176,7 @@ export function matchMatCost(
 	for (const req of requirements) {
 		if (req.wildcard) continue;
 		for (let n = 0; n < req.count; n += 1) {
-			if (!take((mat) => namedMatch(req, mat))) {
+			if (!take((mat) => namedMatch(req, mat), true)) {
 				return { ok: false, consumedIndices: [] };
 			}
 		}
@@ -217,8 +227,11 @@ function matchMatCostStrict(
 
 	const used = new Set<number>();
 	const consumedIndices: number[] = [];
-	const take = (predicate: (mat: SpendableMat) => boolean): boolean => {
-		for (const mat of pool) {
+	const take = (predicate: (mat: SpendableMat) => boolean, preferConcrete = false): boolean => {
+		const candidates = preferConcrete
+			? [...pool].sort((a, b) => Number(a.wildRune ?? false) - Number(b.wildRune ?? false))
+			: pool;
+		for (const mat of candidates) {
 			if (used.has(mat.arrayIndex)) continue;
 			if (!predicate(mat)) continue;
 			used.add(mat.arrayIndex);
@@ -231,7 +244,7 @@ function matchMatCostStrict(
 	for (const req of requirements) {
 		if (req.wildcard) continue;
 		for (let n = 0; n < req.count; n += 1) {
-			if (!take((mat) => namedMatch(req, mat))) return { ok: false, consumedIndices: [] };
+			if (!take((mat) => namedMatch(req, mat), true)) return { ok: false, consumedIndices: [] };
 		}
 	}
 	for (const req of requirements) {

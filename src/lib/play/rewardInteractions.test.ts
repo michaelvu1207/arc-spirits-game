@@ -179,19 +179,18 @@ describe('resolveLocationInteraction (engine)', () => {
 
 	test('Cultivate grants runes without restoring barriers', () => {
 		let s = atLocation('Fire Region');
-		// Four Forest Region spirits → two pairs → two runes and no barrier restoration.
+		// Three Forest Region spirits → one trio → one rune and no barrier restoration.
 		s.players.Red!.barrier = Math.max(0, s.players.Red!.maxBarrier - 3);
 		s.players.Red!.brokenBarrier = s.players.Red!.maxBarrier - s.players.Red!.barrier;
 		const beforeBarrier = s.players.Red!.barrier;
 		s.players.Red!.spirits = [
 			{ slotIndex: 1, id: 'x1', name: 'F A', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false },
 			{ slotIndex: 2, id: 'x2', name: 'F B', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false },
-			{ slotIndex: 3, id: 'x3', name: 'F C', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false },
-			{ slotIndex: 4, id: 'x4', name: 'F D', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false }
+			{ slotIndex: 3, id: 'x3', name: 'F C', cost: 1, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false }
 		];
 		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [] });
 		const forestRunes = s.players.Red!.mats.filter((r) => r.name === 'Forest Region Rune' && r.hasRune);
-		expect(forestRunes).toHaveLength(2);
+		expect(forestRunes).toHaveLength(1);
 		expect(s.players.Red!.barrier).toBe(beforeBarrier);
 		expect(s.players.Red!.brokenBarrier).toBe(s.players.Red!.maxBarrier - s.players.Red!.barrier);
 	});

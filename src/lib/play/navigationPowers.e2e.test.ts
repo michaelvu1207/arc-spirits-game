@@ -877,7 +877,7 @@ it('accepts an unchanged trade after JSONB reorders persisted object keys', () =
 	expect(s.players.Blue!.mats.find((m) => m.hasRune)?.id).toBe(RUNES[0].runeId);
 });
 
-it('lets an older untyped Origin Rune pay for a power but never wildcard assets', () => {
+it('accepts older Origin Runes and held wild runes for powers, but rejects Any Relic', () => {
 	let s = start();
 	s = reveal(s, 'ember-charge', 'Forest Region');
 	s = choose(s, 'Red');
@@ -903,7 +903,7 @@ it('lets an older untyped Origin Rune pay for a power but never wildcard assets'
 				{ type: 'acquireNavigationPower', runeSlot: 1 },
 				CATALOG
 			).ok
-		).toBe(false);
+		).toBe(id === '7ca279f0-1ca8-484a-a86e-0a87aaa7b312');
 	}
 });
 

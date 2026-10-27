@@ -14,6 +14,7 @@
 		id: string;
 		name: string;
 		imageUrl: string;
+		imageSource: 'raw' | 'finished-card';
 		origin: string;
 		frame: FrameConfig;
 	};
@@ -84,12 +85,22 @@ void main() {
 			.map((spirit) => {
 				const originId = spirit.traits.origin_ids[0];
 				const origin = originById.get(originId) ?? 'Arcane Spirits';
-				const imageUrl = spirit.game_print_image_path
-					? spirit.game_print_image_path.startsWith('http')
-						? spirit.game_print_image_path
-						: `${STORAGE_BASE_URL}/${spirit.game_print_image_path}`
+				const rawPath = spirit.art_raw_image_path || null;
+				const finishedPath = spirit.game_print_image_path || null;
+				const sourcePath = rawPath ?? finishedPath;
+				const imageUrl = sourcePath
+					? sourcePath.startsWith('http')
+						? sourcePath
+						: `${STORAGE_BASE_URL}/${sourcePath}`
 					: '';
-				return { id: spirit.id, name: spirit.name, imageUrl, origin, frame: frameForOrigin(origin) };
+				return {
+					id: spirit.id,
+					name: spirit.name,
+					imageUrl,
+					imageSource: rawPath ? 'raw' : 'finished-card',
+					origin,
+					frame: frameForOrigin(origin)
+				};
 			})
 			.filter((spirit) => spirit.imageUrl)
 			.sort((a, b) => a.name.localeCompare(b.name));
@@ -239,7 +250,7 @@ void main() {
 			</div>
 		</aside>
 		<main class="stage-panel">
-			<div class="stage-head"><div><span class="eyebrow">LIVE PREVIEW</span><h2>{previewAsset?.name ?? 'Choose a spirit'}</h2></div><span class="status">{status}</span></div>
+			<div class="stage-head"><div><span class="eyebrow">LIVE PREVIEW · {previewAsset?.imageSource === 'raw' ? 'RAW ART' : 'FINISHED CARD FALLBACK'}</span><h2>{previewAsset?.name ?? 'Choose a spirit'}</h2></div><span class="status">{status}</span></div>
 			<div class="canvas-wrap" bind:this={canvasHost}><canvas bind:this={canvas} aria-label="Shader frame preview"></canvas><div class="canvas-hint">Drag the controls on the right to shape the frame</div></div>
 		</main>
 		<aside class="inspector-panel">

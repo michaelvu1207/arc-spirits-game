@@ -17,6 +17,11 @@ export const WILDCARD_MAT_IDS = {
 	anyRune: '7ca279f0-1ca8-484a-a86e-0a87aaa7b312'
 } as const;
 
+/** A held star rune can stand in for any origin rune, but never a relic. */
+export function isWildRune(mat: { id?: string; type?: string }): boolean {
+	return mat.id === WILDCARD_MAT_IDS.anyRune && mat.type === 'rune';
+}
+
 const WILDCARD_MAT_ID_SET: ReadonlySet<string> = new Set(Object.values(WILDCARD_MAT_IDS));
 
 export function isWildcardRuneId(runeId: string): boolean {

@@ -912,11 +912,15 @@ export async function createPlayRoom(
 
 export async function createSoloPlayRoom(
 	displayName: string,
-	options: RoomNavigationOptions & { mode?: 'solo' | 'heads-up' } = {}
+	options: RoomNavigationOptions & { mode?: 'solo' | 'heads-up' | 'solo-only' } = {}
 ) {
 	const mode = options.mode ?? 'solo';
 	return runRoomNavigation(
-		mode === 'heads-up' ? 'Failed to start heads-up game.' : 'Failed to start solo game.',
+		mode === 'heads-up'
+			? 'Failed to start heads-up game.'
+			: mode === 'solo-only'
+				? 'Failed to start solo mode.'
+				: 'Failed to start solo game.',
 		(signal, opId) =>
 			postPlayJson<RoomView>('/api/play/solo', { displayName, opId, mode }, { signal }),
 		options
