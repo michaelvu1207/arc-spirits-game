@@ -39,6 +39,8 @@
 		backImageBySlot?: Map<number, string>;
 		/** Inspect mode: occupied hexes are clickable to open a spirit detail card. */
 		selectable?: boolean;
+		/** Profile discard mode: use press-and-hold instead of the normal staged click. */
+		holdToDiscard?: boolean;
 		/** Slot whose spirit is currently shown in the detail card (highlighted). */
 		selectedSlot?: number | null;
 		onSelect?: (slotIndex: number) => void;
@@ -60,6 +62,7 @@
 		onDropAugment,
 		backImageBySlot,
 		selectable = false,
+		holdToDiscard = false,
 		selectedSlot = null,
 		onSelect
 	}: Props = $props();
@@ -340,6 +343,7 @@
 					{slotIndex}
 					externalImage={usesHeroOverlay}
 					discardable={discardMode && !!baseSpirit && discardEligible}
+					holdToDiscard={holdToDiscard && !!baseSpirit && discardEligible}
 					{onDiscard}
 					staged={stagedSlots?.includes(slotIndex) ?? false}
 					dimmed={lockedOut}

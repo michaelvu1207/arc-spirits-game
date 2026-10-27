@@ -37,6 +37,8 @@
 		onDropAugment?: (slotIndex: number) => void;
 		/** Inspect mode: clicking this occupied hex opens its detail card. */
 		selectable?: boolean;
+		/** Profile mode: discard only after a deliberate press-and-hold gesture. */
+		holdToDiscard?: boolean;
 		/** This hex's spirit is the one currently shown in the detail card. */
 		selected?: boolean;
 		onSelect?: (slotIndex: number) => void;
@@ -57,6 +59,7 @@
 		augmentDroppable = false,
 		onDropAugment,
 		selectable = false,
+		holdToDiscard = false,
 		selected = false,
 		onSelect
 	}: Props = $props();
@@ -96,6 +99,26 @@
 	// Tap reveals the locked-reason chip (hover shows it too, see CSS).
 	let reasonRevealed = $state(false);
 	let reasonTimer: ReturnType<typeof setTimeout> | null = null;
+	let discardHoldTimer: ReturnType<typeof setTimeout> | null = null;
+	function startDiscardHold(event: PointerEvent) {
+		if (!holdToDiscard || !onDiscard || event.button !== 0) return;
+		event.preventDefault();
+		try {
+			(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		} catch {
+			// Pointer capture is best effort on SVG nodes.
+		}
+		discardHoldTimer = setTimeout(() => {
+			discardHoldTimer = null;
+			onDiscard(slotIndex);
+		}, 650);
+	}
+	function cancelDiscardHold() {
+		if (discardHoldTimer !== null) {
+			clearTimeout(discardHoldTimer);
+			discardHoldTimer = null;
+		}
+	}
 	function revealReason() {
 		if (!lockedReason) return;
 		reasonRevealed = true;
@@ -210,7 +233,21 @@
 				? `Keep ${spirit?.name ?? 'spirit'}`
 				: `Discard ${spirit?.name ?? 'spirit'}`}
 			aria-pressed={staged}
-			onclick={() => onDiscard?.(slotIndex)}
+			onpointerdown={holdToDiscard ? startDiscardHold : undefined}
+			onpointerup={holdToDiscard ? cancelDiscardHold : undefined}
+			onpointercancel={holdToDiscard ? cancelDiscardHold : undefined}
+			onpointerleave={holdToDiscard ? cancelDiscardHold : undefined}
+			oncontextmenu={(event) => {
+				if (holdToDiscard) event.preventDefault();
+			}}
+			onclick={(event) => {
+				if (holdToDiscard) {
+					event.preventDefault();
+					event.stopPropagation();
+					return;
+				}
+				onDiscard?.(slotIndex);
+			}}
 			onkeydown={(e) => {
 				if (e.key === 'Enter' || e.key === ' ') {
 					e.preventDefault();
@@ -401,6 +438,14 @@
 	/* Discard mode: a clickable red overlay on occupied hexes. */
 	.discard-hit {
 		cursor: pointer;
+	}
+	.discard-hit .discard-tint {
+		pointer-events: all;
+	}
+	.discard-hit:not(:focus-visible):hover .discard-tint {
+		fill: rgba(180, 20, 30, 0.18);
+		stroke-opacity: 1;
+		filter: drop-shadow(0 0 10px rgba(224, 88, 88, 0.8));
 	}
 	.discard-hit:focus {
 		outline: none;

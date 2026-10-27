@@ -8,9 +8,7 @@
 		SpectatorProjection
 	} from '$lib/play/types';
 	import { DICE_TIER_ORDER, MAX_ATTACK_DICE, STATUS_LADDER } from '$lib/play/types';
-	import type { ClassTrait } from '$lib/types';
 	import { seatAccent, statusAccent, storageUrl, spiritBackImageUrl, augmentIconForClass } from './helpers';
-	import { WILDCARD_MAT_IDS } from '$lib/play/awakenConditions';
 	import { expectedAttack } from '$lib/play/combat';
 	import HexGrid from '$lib/components/HexGrid.svelte';
 
@@ -100,79 +98,6 @@
 		Array.from({ length: MAX_ATTACK_DICE }, (_, i) => diceList[i] ?? null)
 	);
 
-	// ── Spirit inspection ───────────────────────────────────────────────────────
-	// Clicking a hex opens that spirit's detail card. Re-clicking the same hex (or
-	// switching to another viewed player) closes it.
-	let selectedSlot = $state<number | null>(null);
-	// Discard is destructive (the spirit + its augments go back to a bag), so the
-	// button arms a confirm beat instead of firing immediately. Any selection change
-	// disarms it.
-	let confirmingDiscard = $state(false);
-	$effect(() => {
-		void selectedSlot;
-		confirmingDiscard = false;
-	});
-	$effect(() => {
-		// Reset the selection whenever we switch to a different player's board.
-		void viewedSeat;
-		selectedSlot = null;
-	});
-	$effect(() => {
-		// Self-heal: if the selected slot is no longer occupied (discarded, replaced,
-		// reshuffled), drop the selection so the card can't silently re-open on a
-		// different spirit that later reuses the same slot index.
-		if (selectedSlot != null && !player?.spirits.some((s) => s.slotIndex === selectedSlot)) {
-			selectedSlot = null;
-		}
-	});
-
-	const selectedSpirit = $derived(
-		selectedSlot != null ? (player?.spirits.find((s) => s.slotIndex === selectedSlot) ?? null) : null
-	);
-	const selectedAsset = $derived(
-		selectedSpirit ? (assets.spiritAssets.get(selectedSpirit.id) ?? null) : null
-	);
-	// Resolved class traits (name + description) for the selected spirit's classes.
-	const selectedClasses = $derived.by(() => {
-		const out: ClassTrait[] = [];
-		for (const id of selectedAsset?.traits.class_ids ?? []) {
-			const cls = assets.classTraits.get(id);
-			if (cls) out.push(cls);
-		}
-		return out;
-	});
-	// Awakening requirement, ready to render: free text, or a list of rune chips.
-	const awakenView = $derived.by(() => {
-		const a = selectedAsset?.awaken_condition;
-		if (!a) return null;
-		if (a.type === 'text') return { kind: 'text' as const, text: a.text };
-		// rune_cost: a UUID repeated N times means "N of that rune" — collapse to counts.
-		const counts = new Map<string, number>();
-		for (const id of a.rune_ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-		const runes = [...counts.entries()].map(([id, count]) => {
-			// The two wildcard cost-matchers aren't real rune records, so a direct lookup
-			// would mislabel them — name them explicitly.
-			if (id === WILDCARD_MAT_IDS.anyRune)
-				return { id, count, name: 'Any Rune', icon: null, wildcard: true };
-			if (id === WILDCARD_MAT_IDS.anyRelic)
-				return { id, count, name: 'Any Relic', icon: null, wildcard: true };
-			const asset = assets.matAssets.get(id);
-			return {
-				id,
-				count,
-				name: asset?.name ?? 'Special',
-				icon: storageUrl(asset?.icon_path ?? null),
-				wildcard: false
-			};
-		});
-		return { kind: 'rune_cost' as const, runes };
-	});
-
-	function discardSelected() {
-		if (selectedSpirit) onDiscardSpirit?.(selectedSpirit.slotIndex);
-		selectedSlot = null;
-	}
-
 	// ── Augments ──────────────────────────────────────────────────────────────
 	// Placed Spirit Augment badges (the class-linked augment token icon), keyed by the
 	// host spirit slot. Only class-linked attachments are Spirit Augments.
@@ -192,11 +117,6 @@
 		}
 		return map;
 	});
-	// The augments riding on the selected spirit are destroyed with it — the discard
-	// confirm copy calls that out.
-	const selectedAugmentCount = $derived(
-		selectedSlot != null ? (augmentsBySlot.get(selectedSlot)?.length ?? 0) : 0
-	);
 	// Unawakened (face-down) spirits show their back face on the hex board, keyed by slot.
 	const backImageBySlot = $derived.by(() => {
 		const map = new Map<number, string>();
@@ -227,122 +147,16 @@
 				spiritAssets={spiritImages}
 				{backImageBySlot}
 				{augmentsBySlot}
-				selectable={true}
-				{selectedSlot}
-				onSelect={(slot) => (selectedSlot = selectedSlot === slot ? null : slot)}
+				discardMode={isMe && !busy}
+				holdToDiscard={isMe && !busy}
+				onDiscard={onDiscardSpirit}
 			/>
 		</div>
 	</div>
 
-	<!-- Bottom info slot: a spirit's details when a hex is selected, otherwise the
-	     player's Dice Pool. Selecting a spirit swaps this same area instead of
-	     floating a card — keeps the layout streamlined under the board. -->
+	<!-- The profile does not open spirit detail panels. On your own profile, a deliberate
+	     press-and-hold on a spirit sends it back to the bag. -->
 	<div class="info-slot">
-		{#if selectedSpirit}
-		<aside class="detail-card" data-testid="spirit-detail-card">
-			<header class="dc-head">
-				<span class="dc-name">{selectedSpirit.name}</span>
-				{#if selectedSpirit.isFaceDown}<span class="dc-tag">Unawakened</span>{/if}
-				<button
-					type="button"
-					class="dc-close"
-					data-testid="spirit-detail-close"
-					aria-label="Close spirit details"
-					onclick={() => (selectedSlot = null)}
-				>✕</button>
-			</header>
-
-			<div class="dc-body">
-				{#if selectedClasses.length > 0}
-					<section class="dc-section">
-						<span class="dc-label">{selectedClasses.length > 1 ? 'Classes' : 'Class'}</span>
-						{#each selectedClasses as cls (cls.id)}
-							<div class="dc-class">
-								<span class="dc-class-name" style="--c: {cls.color || 'var(--brand-cyan, #5cdfff)'}">{cls.name}</span>
-								{#if cls.description}<p class="dc-desc">{cls.description}</p>{/if}
-							</div>
-						{/each}
-					</section>
-				{/if}
-
-				{#if awakenView}
-					<section class="dc-section">
-						<span class="dc-label">Awakens with</span>
-						{#if awakenView.kind === 'text'}
-							<p class="dc-desc">{awakenView.text}</p>
-						{:else if awakenView.runes.length > 0}
-							<div class="dc-runes">
-								{#each awakenView.runes as r (r.id)}
-									<span class="dc-rune" class:wild={r.wildcard} title={r.count > 1 ? `${r.name} ×${r.count}` : r.name}>
-										{#if r.wildcard}
-											<span class="dc-rune-wild" aria-hidden="true">✦</span>
-											<span class="dc-rune-label">{r.name}</span>
-										{:else if r.icon}
-											<img src={r.icon} alt={r.name} />
-										{:else}
-											<span class="dc-rune-fb">{r.name.slice(0, 1)}</span>
-										{/if}
-										{#if r.count > 1}<span class="dc-rune-x">×{r.count}</span>{/if}
-									</span>
-								{/each}
-							</div>
-						{:else}
-							<p class="dc-desc muted">No requirement.</p>
-						{/if}
-					</section>
-				{/if}
-			</div>
-
-			{#if isMe}
-				<!-- Sticky action footer: pinned under the scrolling body so it can never
-				     sit over the text, and the destructive discard needs a confirm beat. -->
-				<footer class="dc-actions" class:confirming={confirmingDiscard}>
-					{#if confirmingDiscard}
-						<span class="dc-confirm-copy" role="alert">
-							Discard {selectedSpirit.name}?
-							{#if selectedAugmentCount > 0}
-								Its {selectedAugmentCount === 1
-									? 'augment is'
-									: `${selectedAugmentCount} augments are`} destroyed with it.
-							{:else}
-								It returns to its bag.
-							{/if}
-						</span>
-						<div class="dc-confirm-row">
-							<button
-								type="button"
-								class="dc-discard confirm"
-								data-testid="spirit-discard-confirm"
-								disabled={busy}
-								onclick={discardSelected}
-							>
-								<span aria-hidden="true">🗑</span> Discard
-							</button>
-							<button
-								type="button"
-								class="dc-keep"
-								data-testid="spirit-discard-cancel"
-								disabled={busy}
-								onclick={() => (confirmingDiscard = false)}
-							>
-								Keep
-							</button>
-						</div>
-					{:else}
-						<button
-							type="button"
-							class="dc-discard"
-							data-testid="spirit-detail-discard"
-							disabled={busy}
-							onclick={() => (confirmingDiscard = true)}
-						>
-							<span aria-hidden="true">🗑</span> Discard
-						</button>
-					{/if}
-				</footer>
-			{/if}
-		</aside>
-		{:else}
 			<section
 				class="dice-pool"
 				data-testid="scout-dice-pool"
@@ -382,13 +196,11 @@
 					</span>
 				</div>
 			</section>
-		{/if}
 	</div>
-</div>
+	</div>
 
 <style>
-	/* Fills the map-layer slot. The board centers; a spirit detail card appears beside
-	   it on landscape (row) and below it on portrait/narrow screens (column). */
+	/* Fills the map-layer slot and keeps the profile board compact. */
 	.composition {
 		position: relative;
 		width: 100%;
