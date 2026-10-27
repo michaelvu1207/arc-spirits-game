@@ -118,6 +118,7 @@
 		"honeycomb-grid": "^4.1.5",
 		"marked": "^17.0.1",
 		"openskill": "^4.1.1",
+		"pixi.js": "^8.22.0",
 		"three": "^0.184.0"
 	}
 }
