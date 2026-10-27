@@ -9,6 +9,7 @@ import {
 import { deckCopiesForCost } from './bags';
 import { enterBenefits } from './phases';
 import { GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
+import { WILDCARD_MAT_IDS } from './awakenConditions';
 import type { GameActor, NavigationDestination, PlayCatalog, PublicGameState } from './types';
 import type { GameLocationRewardRow } from '$lib/types';
 
@@ -241,6 +242,20 @@ function locationPhase(
 	dest: NavigationDestination = 'Water Region'
 ): PublicGameState {
 	let state = started;
+	// Each player starts with a three-card Navigation Power draft. Resolve the
+	// first offer so this helper can exercise the later location interaction.
+	for (const seatColor of ['Red', 'Blue'] as const) {
+		const draft = state.players[seatColor]?.pendingPowerDrafts?.[0];
+		if (!draft?.length) continue;
+		const chosen = applyGameCommand(
+			state,
+			{ ...(seatColor === 'Red' ? HOST : GUEST), seatColor },
+			{ type: 'chooseNavigationPower', powerId: draft[0]! },
+			CATALOG
+		);
+		if (!chosen.ok) throw new Error(chosen.error.message);
+		state = chosen.state;
+	}
 	for (const actor of [
 		{ ...HOST, seatColor: 'Red' as const },
 		{ ...GUEST, seatColor: 'Blue' as const }
@@ -319,6 +334,13 @@ describe('play runtime', () => {
 		expect(started.state.status).toBe('active');
 		expect(started.state.gameId).toMatch(/^game_/);
 		expect(started.state.round).toBe(1);
+		for (const player of Object.values(started.state.players)) {
+			if (!player) continue;
+			expect(player.mats).toEqual([
+				{ slotIndex: 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' },
+				{ slotIndex: 2, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' }
+			]);
+		}
 
 		// The Spirit World bag is SHUFFLED at startGame (TTS shuffle = true), so the
 		// market is no longer dealt in catalog/alphabetical order. The Spirit World
