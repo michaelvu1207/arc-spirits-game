@@ -242,10 +242,9 @@ function buildPlayerState(seatColor: SeatColor, seat: LobbySeatState): PrivatePl
 		statusToken: STATUS_LADDER[0],
 		corruptionCount: 0,
 		spirits: [],
-		// Every player begins with two flexible Any Runes occupying their first mat slots.
+		// Every player begins with one flexible Any Rune.
 		mats: [
-			{ slotIndex: 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' },
-			{ slotIndex: 2, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' }
+			{ slotIndex: 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' }
 		],
 		handDraws: [],
 		pendingDraw: null,

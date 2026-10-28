@@ -337,8 +337,7 @@ describe('play runtime', () => {
 		for (const player of Object.values(started.state.players)) {
 			if (!player) continue;
 			expect(player.mats).toEqual([
-				{ slotIndex: 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' },
-				{ slotIndex: 2, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' }
+				{ slotIndex: 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' }
 			]);
 		}
 
