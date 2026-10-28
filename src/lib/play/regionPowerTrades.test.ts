@@ -53,13 +53,13 @@ function rowAt(destination: string) {
 	)!.rowIndex;
 }
 
-describe('two-action region rules', () => {
-	test('every region has exactly the agreed two actions', () => {
+describe('region rules', () => {
+	test('every region exposes the current action set', () => {
 		for (const name of ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region']) {
 			const loc = catalog.locations!.find((l) => l.name === name)!;
 			const rows = buildLocationInteractions(loc.rewardRows, name);
-			expect(rows).toHaveLength(2);
-			expect(rows.map((r) => r.rowIndex)).toEqual([0, 1]);
+		expect(rows).toHaveLength(name === 'Mountain Region' ? 1 : 2);
+			expect(rows.map((r) => r.rowIndex)).toEqual(name === 'Mountain Region' ? [0] : [0, 1]);
 			expect(rows.some((r) => r.cost.some((c) => c.match === 'anyRelic'))).toBe(false);
 		}
 		const rows = (name: string) =>
@@ -77,13 +77,10 @@ describe('two-action region rules', () => {
 				options: [{ name: 'Fighter' }, { name: 'Cultivator' }, { name: 'Spirit Animal' }]
 			}
 		]);
-		expect(rows('Mountain Region')[0].gains).toMatchObject([
-			{ type: 'chooseRune', options: [{ name: 'Elementalist' }, { name: 'Soul Weaver' }] }
-		]);
-		expect(rows('Mountain Region')[1].gains).toEqual([{ type: 'navigationPower', replace: true }]);
+		expect(rows('Mountain Region')[0].gains).toEqual([{ type: 'navigationPower', replace: true }]);
 		expect(rows('Fire Region').map((r) => r.gains)).toMatchObject([
 			[{ type: 'action', action: 'cultivate' }],
-			[{ type: 'rune', rune: { type: 'augment', name: 'Cursed Spirit' } }]
+			[{ type: 'chooseRune', options: [{ name: 'Cursed Spirit' }, { name: 'Elementalist' }, { name: 'Soul Weaver' }] }]
 		]);
 	});
 	test.each(['resolveLocationInteraction', 'acquireNavigationPower'])(
@@ -156,7 +153,7 @@ describe('two-action region rules', () => {
 				.ok
 		).toBe(false);
 		expect(state.players.Red!.mats.at(-1)!.hasRune).toBe(true);
-		expect(computeLocationInteractions(state, state.players.Red!, catalog)[1].affordable).toBe(
+		expect(computeLocationInteractions(state, state.players.Red!, catalog)[0].affordable).toBe(
 			false
 		);
 	});

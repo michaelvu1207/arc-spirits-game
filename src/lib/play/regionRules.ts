@@ -35,21 +35,20 @@ const REGION_ACTIONS: Record<string, GameLocationRewardRow[]> = {
 		}
 	],
 	'Mountain Region': [
+		{ type: 'trade', cost_icon_ids: [ANY_RUNE_ICON], gain_icon_ids: [REPLACE_POWER_ICON] }
+	],
+	'Fire Region': [
+		{ type: 'gain', gain_icon_ids: [CULTIVATE] },
 		{
 			type: 'trade',
 			cost_icon_ids: [ANY_RUNE_ICON],
 			gain_icon_ids: [
 				{
 					kind: 'or',
-					icon_ids: ['c9b3225f-c8a9-4aa8-8e43-56c39cf68974', '88facdb6-3374-4891-af8a-fca2e81b79ef']
+					icon_ids: [CURSED_SPIRIT, 'c9b3225f-c8a9-4aa8-8e43-56c39cf68974', '88facdb6-3374-4891-af8a-fca2e81b79ef']
 				}
 			]
-		},
-		{ type: 'trade', cost_icon_ids: [ANY_RUNE_ICON], gain_icon_ids: [REPLACE_POWER_ICON] }
-	],
-	'Fire Region': [
-		{ type: 'gain', gain_icon_ids: [CULTIVATE] },
-		{ type: 'trade', cost_icon_ids: [ANY_RUNE_ICON], gain_icon_ids: [CURSED_SPIRIT] }
+		}
 	]
 };
 
@@ -78,7 +77,7 @@ export function powerIconUrl(id: string): string | null {
 	return null;
 }
 
-export const REGION_ACTIONS_VERSION = 2;
+export const REGION_ACTIONS_VERSION = 3;
 /** Keep actions already used in saved rounds attached to the surviving action. */
 export function upgradeRegionActionUses(state: PublicGameState): void {
 	if (state.regionActionsVersion === REGION_ACTIONS_VERSION) return;
