@@ -15,7 +15,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) throw new Error('Missing Supabase credentials
 
 const BUCKET = 'game_assets';
 const ASSETS_SCHEMA = 'arc_spirits_assets';
-const OUTPUT_TAG = 'rework-2026-10-28-origin-icons-v3';
+const OUTPUT_TAG = 'rework-2026-10-29-hero-class-icons-v1';
 const BASE_VERSION = 'rework-2026-10-15/game-fit-v2';
 const OUT_DIR = path.resolve('verification/regenerated-spirit-fronts');
 const ORIGIN_TOKEN_REGION = { left: 710, top: 1940, right: 1115, bottom: 2360 };
@@ -115,32 +115,33 @@ async function regenerate(row, originMap, classMap, assetCache) {
 	}
 	const origin = originMap.get(row.traits?.origin_ids?.[0]);
 	const originName = origin?.name ?? '';
+	const isHero = /^hero\b/i.test(row.name);
 	const kind = originKind(originName);
 	const originPath = origin?.icon_token_png;
 	const classIds = Array.isArray(row.traits?.class_ids) ? row.traits.class_ids : [];
 	const layers = [
 		{ input: await sharp(overlay, { raw: { width, height, channels: 4 } }).png().toBuffer(), left: 0, top: 0 }
 	];
-	if (originPath || kind) {
+	if (!isHero && (originPath || kind)) {
 		const cacheKey = kind ? `replacement:${kind}` : originPath;
 		if (!assetCache.has(cacheKey)) assetCache.set(cacheKey, kind ? replacementIcon(kind) : await bytes(publicUrl(originPath), `${originName} origin icon`));
 		layers.push({ input: await sharp(assetCache.get(cacheKey)).resize(350, 350).png().toBuffer(), left: 725, top: 1980 });
 	}
 	const classCount = classIds.length;
-	const classLeft = classCount <= 1 ? 1300 : classCount === 2 ? 1160 : 1030;
+	const classLeft = isHero ? 725 : classCount <= 1 ? 1300 : classCount === 2 ? 1160 : 1030;
 	const classStep = classCount <= 2 ? 340 : 300;
 	for (let index = 0; index < classCount; index += 1) {
 		const classInfo = classMap.get(classIds[index]);
 		if (!classInfo?.icon_png) continue;
 		const cacheKey = `class:${classInfo.icon_png}`;
 		if (!assetCache.has(cacheKey)) assetCache.set(cacheKey, await bytes(publicUrl(classInfo.icon_png), `${classInfo.name} class icon`));
-		const left = classLeft + index * classStep;
+		const left = classLeft + (isHero ? index * 320 : index * classStep);
 		const sample = await sharp(baseBytes).extract({ left, top: 2040, width: 220, height: 220 }).raw().toBuffer({ resolveWithObject: true });
 		let luminance = 0;
 		for (let i = 0; i < sample.data.length; i += sample.info.channels) luminance += sample.data[i] * 0.2126 + sample.data[i + 1] * 0.7152 + sample.data[i + 2] * 0.0722;
 		luminance /= sample.data.length / sample.info.channels;
 		let icon = sharp(assetCache.get(cacheKey));
-		if (luminance < 105) icon = icon.tint('#ffffff');
+		if (luminance < 105 || isHero) icon = icon.negate({ alpha: false });
 		layers.push({ input: await icon.resize(300, 300, { fit: 'contain' }).png().toBuffer(), left, top: 1985 });
 	}
 	const output = await sharp(baseBytes).composite(layers).png({ compressionLevel: 9 }).toBuffer();

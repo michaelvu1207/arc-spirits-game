@@ -9,11 +9,11 @@ type SpiritSeed = readonly [
 ];
 
 const SEEDS: readonly SpiritSeed[] = [
-	['57b06434-0eeb-4e9e-a17f-c2bdce613e52', 'Hero Captain', 1, ['Captain'], ['Human Enclave']],
-	['cfccc89f-06fe-4bd7-85f9-c5f9416cd1b4', 'Hero Ironmane', 1, ['Monster Hunter'], ['Human Enclave']],
-	['a6c24fba-940e-4aa9-8729-a361f7209f9c', 'Hero Ivern', 1, ['Sharpshooter'], ['Human Enclave']],
-	['aa541f5d-f648-4964-9e8b-db891c2bbd81', 'Hero Mintyheart', 1, ['Healer'], ['Human Enclave']],
-	['3aefb245-b1d8-43ab-8aa2-cb2210abbb72', 'Hero Nyra', 1, ['Arcane Alchemist'], ['Human Enclave']],
+	['57b06434-0eeb-4e9e-a17f-c2bdce613e52', 'Hero Captain', 1, ['Captain'], []],
+	['cfccc89f-06fe-4bd7-85f9-c5f9416cd1b4', 'Hero Ironmane', 1, ['Monster Hunter'], []],
+	['a6c24fba-940e-4aa9-8729-a361f7209f9c', 'Hero Ivern', 1, ['Sharpshooter'], []],
+	['aa541f5d-f648-4964-9e8b-db891c2bbd81', 'Hero Mintyheart', 1, ['Healer'], []],
+	['3aefb245-b1d8-43ab-8aa2-cb2210abbb72', 'Hero Nyra', 1, ['Arcane Alchemist'], []],
 	[
 		'f043914f-9259-481f-960d-ab83a48b06ba',
 		'Hero Zarek',
