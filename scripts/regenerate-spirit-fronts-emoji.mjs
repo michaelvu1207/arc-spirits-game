@@ -15,7 +15,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) throw new Error('Missing Supabase credentials
 
 const BUCKET = 'game_assets';
 const ASSETS_SCHEMA = 'arc_spirits_assets';
-const OUTPUT_TAG = 'rework-2026-10-28-emoji';
+const OUTPUT_TAG = 'rework-2026-10-28-origin-icons-v3';
 const BASE_VERSION = 'rework-2026-10-15/game-fit-v2';
 const OUT_DIR = path.resolve('verification/regenerated-spirit-fronts');
 const ORIGIN_TOKEN_REGION = { left: 710, top: 1940, right: 1115, bottom: 2360 };
