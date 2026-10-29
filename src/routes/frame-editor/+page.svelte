@@ -93,11 +93,12 @@ void main() {
 						? sourcePath
 						: `${STORAGE_BASE_URL}/${sourcePath}`
 					: '';
+				const imageSource: SpiritChoice['imageSource'] = rawPath ? 'raw' : 'finished-card';
 				return {
 					id: spirit.id,
 					name: spirit.name,
 					imageUrl,
-					imageSource: rawPath ? 'raw' : 'finished-card',
+					imageSource,
 					origin,
 					frame: frameForOrigin(origin)
 				};

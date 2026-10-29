@@ -19,6 +19,7 @@ const OUTPUT_TAG = 'rework-2026-10-28-emoji';
 const BASE_VERSION = 'rework-2026-10-15/game-fit-v2';
 const OUT_DIR = path.resolve('verification/regenerated-spirit-fronts');
 const ORIGIN_TOKEN_REGION = { left: 710, top: 1940, right: 1115, bottom: 2360 };
+const TOKEN_STRIP_REGION = { left: 650, top: 1880, right: 2080, bottom: 2400 };
 const headers = {
 	apikey: SERVICE_KEY,
 	Authorization: `Bearer ${SERVICE_KEY}`,
@@ -61,10 +62,18 @@ async function getRows() {
 }
 
 async function getOrigins() {
-	const response = await fetch(`${SUPABASE_URL}/rest/v1/origins?select=id,name`, {
+	const response = await fetch(`${SUPABASE_URL}/rest/v1/origins?select=id,name,icon_token_png`, {
 		headers: { ...headers, 'Accept-Profile': ASSETS_SCHEMA }
 	});
 	if (!response.ok) throw new Error(`Read origins failed (${response.status})`);
+	return response.json();
+}
+
+async function getClasses() {
+	const response = await fetch(`${SUPABASE_URL}/rest/v1/classes?select=id,name,icon_png`, {
+		headers: { ...headers, 'Accept-Profile': ASSETS_SCHEMA }
+	});
+	if (!response.ok) throw new Error(`Read classes failed (${response.status})`);
 	return response.json();
 }
 
@@ -74,7 +83,7 @@ async function bytes(url, label) {
 	return Buffer.from(await response.arrayBuffer());
 }
 
-async function regenerate(row, originNames) {
+async function regenerate(row, originMap, classMap, assetCache) {
 	const basePath = `hex_spirits/${row.id}/${BASE_VERSION}/front-base.png`;
 	const oldPath = `hex_spirits/${row.id}/${BASE_VERSION}/front.png`;
 	const [baseBytes, oldBytes] = await Promise.all([
@@ -91,12 +100,8 @@ async function regenerate(row, originNames) {
 	for (let y = 0; y < height; y += 1) {
 		for (let x = 0; x < width; x += 1) {
 			const i = (y * width + x) * 4;
-			const inOriginRegion =
-				x >= ORIGIN_TOKEN_REGION.left &&
-				x <= ORIGIN_TOKEN_REGION.right &&
-				y >= ORIGIN_TOKEN_REGION.top &&
-				y <= ORIGIN_TOKEN_REGION.bottom;
-			if (inOriginRegion) continue;
+			const inTokenStrip = x >= TOKEN_STRIP_REGION.left && x <= TOKEN_STRIP_REGION.right && y >= TOKEN_STRIP_REGION.top && y <= TOKEN_STRIP_REGION.bottom;
+			if (inTokenStrip) continue;
 			const difference =
 				Math.abs(base.data[i] - old.data[i]) +
 				Math.abs(base.data[i + 1] - old.data[i + 1]) +
@@ -108,29 +113,49 @@ async function regenerate(row, originNames) {
 			overlay[i + 3] = 255;
 		}
 	}
-	const originName = originNames.get(row.traits?.origin_ids?.[0]) ?? '';
+	const origin = originMap.get(row.traits?.origin_ids?.[0]);
+	const originName = origin?.name ?? '';
 	const kind = originKind(originName);
+	const originPath = origin?.icon_token_png;
+	const classIds = Array.isArray(row.traits?.class_ids) ? row.traits.class_ids : [];
 	const layers = [
 		{ input: await sharp(overlay, { raw: { width, height, channels: 4 } }).png().toBuffer(), left: 0, top: 0 }
 	];
-	if (kind) {
-		layers.push({
-			input: await sharp(replacementIcon(kind)).resize(350, 350).png().toBuffer(),
-			left: 725,
-			top: 1980
-		});
+	if (originPath || kind) {
+		const cacheKey = kind ? `replacement:${kind}` : originPath;
+		if (!assetCache.has(cacheKey)) assetCache.set(cacheKey, kind ? replacementIcon(kind) : await bytes(publicUrl(originPath), `${originName} origin icon`));
+		layers.push({ input: await sharp(assetCache.get(cacheKey)).resize(350, 350).png().toBuffer(), left: 725, top: 1980 });
+	}
+	const classCount = classIds.length;
+	const classLeft = classCount <= 1 ? 1300 : classCount === 2 ? 1160 : 1030;
+	const classStep = classCount <= 2 ? 340 : 300;
+	for (let index = 0; index < classCount; index += 1) {
+		const classInfo = classMap.get(classIds[index]);
+		if (!classInfo?.icon_png) continue;
+		const cacheKey = `class:${classInfo.icon_png}`;
+		if (!assetCache.has(cacheKey)) assetCache.set(cacheKey, await bytes(publicUrl(classInfo.icon_png), `${classInfo.name} class icon`));
+		const left = classLeft + index * classStep;
+		const sample = await sharp(baseBytes).extract({ left, top: 2040, width: 220, height: 220 }).raw().toBuffer({ resolveWithObject: true });
+		let luminance = 0;
+		for (let i = 0; i < sample.data.length; i += sample.info.channels) luminance += sample.data[i] * 0.2126 + sample.data[i + 1] * 0.7152 + sample.data[i + 2] * 0.0722;
+		luminance /= sample.data.length / sample.info.channels;
+		let icon = sharp(assetCache.get(cacheKey));
+		if (luminance < 105) icon = icon.tint('#ffffff');
+		layers.push({ input: await icon.resize(300, 300, { fit: 'contain' }).png().toBuffer(), left, top: 1985 });
 	}
 	const output = await sharp(baseBytes).composite(layers).png({ compressionLevel: 9 }).toBuffer();
-	return { output, originName, replaced: kind };
+	return { output, originName, replaced: kind, classCount };
 }
 
 const apply = process.argv.includes('--apply');
 await fs.mkdir(OUT_DIR, { recursive: true });
-const [rows, origins] = await Promise.all([getRows(), getOrigins()]);
-const originNames = new Map(origins.map((origin) => [origin.id, origin.name]));
+const [rows, origins, classes] = await Promise.all([getRows(), getOrigins(), getClasses()]);
+const originMap = new Map(origins.map((origin) => [origin.id, origin]));
+const classMap = new Map(classes.map((item) => [item.id, item]));
+const assetCache = new Map();
 const report = [];
 for (const row of rows) {
-	const { output, originName, replaced } = await regenerate(row, originNames);
+	const { output, originName, replaced, classCount } = await regenerate(row, originMap, classMap, assetCache);
 	const outputPath = `hex_spirits/${row.id}/${OUTPUT_TAG}/game-fit-v2/front.png`;
 	await fs.writeFile(path.join(OUT_DIR, `${row.id}-front.png`), output);
 	if (apply) {
@@ -149,7 +174,7 @@ for (const row of rows) {
 		const check = await fetch(publicUrl(outputPath), { method: 'HEAD' });
 		if (!check.ok) throw new Error(`Public asset check failed for ${row.name}`);
 	}
-	report.push({ id: row.id, name: row.name, origin: originName, replaced, bytes: output.byteLength, outputPath });
+	report.push({ id: row.id, name: row.name, origin: originName, replaced, classCount, bytes: output.byteLength, outputPath });
 }
 await fs.writeFile(path.join(OUT_DIR, 'manifest.json'), JSON.stringify({ apply, count: report.length, report }, null, 2));
 console.log(JSON.stringify({ mode: apply ? 'apply' : 'dry-run', count: report.length, replaced: report.filter((x) => x.replaced), outputDir: OUT_DIR }, null, 2));

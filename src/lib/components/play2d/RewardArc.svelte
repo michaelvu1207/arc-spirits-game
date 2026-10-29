@@ -45,8 +45,8 @@
 	const F_TOKENS = 0.49; // occupant pips, between the top shell and the rim
 	const TITLE_HALF = 44; // half-sweep of the title arc (deg)
 	const MAX_HALF = 40; // max half-sweep of a shell (deg)
-	const UNIT_PX = 46; // baseline icon centre-to-centre spacing
-	const ICON_PX = 38; // rendered icon size (keep in sync with .ico)
+	const UNIT_PX = 58; // baseline icon centre-to-centre spacing
+	const ICON_PX = 50; // rendered icon size (keep in sync with .ico)
 	const EDGE_GAP = 4; // clear channel (deg) the dividing spokes keep from any icon
 	const RAD = Math.PI / 180;
 	const WEIGHT: Record<string, number> = { icon: 1, or: 0.5, arrow: 0.85, text: 2 };
@@ -339,8 +339,8 @@
 		place-items: center;
 	}
 	.ico {
-		width: 38px;
-		height: 38px;
+		width: 50px;
+		height: 50px;
 		display: grid;
 		place-items: center;
 	}
