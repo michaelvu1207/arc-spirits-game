@@ -46,8 +46,8 @@ describe('Battle Adept', () => {
 		);
 
 		expect(player.maxBarrier).toBe(before + 1);
-		expect(player.barrier).toBe(2);
-		expect(player.brokenBarrier).toBe(3);
+		expect(player.barrier).toBe(3);
+		expect(player.brokenBarrier).toBe(2);
 		// Surfaces to the player as an attributed log line (no silent no-op).
 		expect(log.some((l) => l.includes('Battle Adept: Gained 1 max barrier.'))).toBe(true);
 		// Did NOT take the "not killed" branch.

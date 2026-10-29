@@ -139,7 +139,7 @@ export function spiritImageMap(spiritAssets: Map<string, HexSpiritAsset>): Map<s
  * older catalogs that do not expose a back-side field.
  */
 export function spiritBackImageUrl(id: string): string {
-	return storageUrl(getAssetState().spiritAssets.get(id)?.back_side_export) ?? `${STORAGE_BASE_URL}/hex_spirits/${id}_back_side_export.png`;
+	return storageUrl(getAssetState().spiritAssets.get(id)?.back_side_export) ?? `${STORAGE_BASE_URL}/hex_spirits/${id}/rework-2026-10-29-card-icons-v2/game-fit-v2/back.png`;
 }
 
 /**

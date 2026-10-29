@@ -26,7 +26,7 @@ it('does not restore for a face-down class', () => {
  const unit=spirit(1,{'Aegis Weaver':1}); unit.isFaceDown=true;
  const player=makePlayer({maxBarrier:4,barrier:2,spirits:[unit]});
  runAction(ctxFor(player,{trigger:'onCultivate'}),{kind:'gainMaxBarrier',amount:2});
- expect(player).toMatchObject({maxBarrier:6,barrier:2,initiative:0});
+ expect(player).toMatchObject({maxBarrier:6,barrier:4,initiative:0});
 });
 
 it('grants a fixed four initiative each combat without requiring max-barrier gains', () => {

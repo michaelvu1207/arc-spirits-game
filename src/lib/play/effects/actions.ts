@@ -10,7 +10,6 @@
 
 import { DICE_TIER_ORDER, isEvilAlignment, MAX_ATTACK_DICE } from '../types';
 import type { DiceTier, PrivatePlayerState, PublicGameState } from '../types';
-import { restoreAegisBarrier } from './classes/darkAssassin';
 import { nextId } from '../rng';
 import type { EffectAction, EffectCondition } from './registry';
 import type { EffectContext } from './context';
@@ -149,13 +148,12 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			const amount = scaled(action.amount);
 			const oldMax = player.maxBarrier;
 			player.maxBarrier = Math.min(10, player.maxBarrier + amount);
-			// Gaining potential raises capacity only. It does not restore barrier:
-			// the newly-added capacity begins broken until a separate restore effect
-			// flips it to the intact side.
 			const grew = player.maxBarrier - oldMax;
+			// A new maximum barrier token arrives intact: increase both capacity and
+			// current barrier, so 1/6 becomes 2/7 rather than 1/7.
+			player.barrier = Math.min(player.maxBarrier, player.barrier + grew);
 			player.brokenBarrier = Math.max(0, player.maxBarrier - player.barrier);
 			log.push(`Gained ${grew} max barrier.`);
-			restoreAegisBarrier(player, grew, log);
 			break;
 		}
 		case 'upgradeDice': {

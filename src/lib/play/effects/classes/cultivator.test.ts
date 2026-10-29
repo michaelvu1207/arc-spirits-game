@@ -6,7 +6,7 @@ import { fire } from './testHelpers';
 // A lone Cultivator (count 1) grants nothing. gainPotential is capped at maxTokens 10.
 //
 // UX channel: an engine action (gainPotential) that surfaces as a "Gained N potential."
-// log line and grows the acting player's max barrier without restoring current barrier.
+// log line and grows the acting player's max barrier while restoring each new barrier.
 //
 // `fire` builds ONE awakened spirit carrying the class counts, so {Cultivator: N}
 // gives an awakened pool of N. maxTokens defaults to 4 (cap 10), so to observe the
@@ -18,9 +18,8 @@ describe('Cultivator', () => {
 			player: { maxBarrier: 4, barrier: 2, brokenBarrier: 2 }
 		});
 		expect(player.maxBarrier).toBe(5);
-		// Potential increases capacity only; it does not restore current barrier.
-		expect(player.barrier).toBe(2);
-		expect(player.brokenBarrier).toBe(3);
+		expect(player.barrier).toBe(3);
+		expect(player.brokenBarrier).toBe(2);
 		expect(log.join("\n")).toContain('Gained 1 max barrier.');
 	});
 
