@@ -15,7 +15,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) throw new Error('Missing Supabase credentials
 
 const BUCKET = 'game_assets';
 const ASSETS_SCHEMA = 'arc_spirits_assets';
-const OUTPUT_TAG = 'rework-2026-10-30-originless-arcane-v8';
+const OUTPUT_TAG = 'rework-2026-10-30-originless-arcane-v10';
 const BASE_VERSION = 'rework-2026-10-15/game-fit-v2';
 const OUT_DIR = path.resolve('verification/regenerated-spirit-fronts');
 const ORIGIN_TOKEN_REGION = { left: 710, top: 1940, right: 1115, bottom: 2360 };
@@ -84,10 +84,29 @@ async function bytes(url, label) {
 }
 
 async function cleanClassIcon(input) {
-	return Buffer.from(input);
+	const raw = await sharp(input).raw().toBuffer({ resolveWithObject: true });
+	const { width, height, channels } = raw.info;
+	const seen = new Uint8Array(width * height);
+	const component = [];
+	for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+		const start = y * width + x;
+		if (seen[start] || raw.data[start * channels + 3] < 10) continue;
+		component.length = 0; const queue = [start]; seen[start] = 1; let minX = x, maxX = x, minY = y, maxY = y;
+		while (queue.length) { const p = queue.pop(); component.push(p); const px = p % width, py = Math.floor(p / width); minX = Math.min(minX, px); maxX = Math.max(maxX, px); minY = Math.min(minY, py); maxY = Math.max(maxY, py); for (const [nx, ny] of [[px-1,py],[px+1,py],[px,py-1],[px,py+1]]) { if (nx<0||ny<0||nx>=width||ny>=height) continue; const np=ny*width+nx; if (!seen[np] && raw.data[np*channels+3] >= 10) { seen[np]=1; queue.push(np); } } }
+		const narrowEdge = (minX <= width * .12 || maxX >= width * .88) && maxX - minX < width * .34;
+		if (narrowEdge) for (const p of component) raw.data[p * channels + 3] = 0;
+	}
+	return sharp(raw.data, { raw: raw.info }).png().toBuffer();
 }
 async function clearIconEdges(input) {
-	return Buffer.from(input);
+	const raw = await sharp(input).raw().toBuffer({ resolveWithObject: true });
+	const { width, height, channels } = raw.info;
+	for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+		if (x > width * .18 && x < width * .82) continue;
+		const i = (y * width + x) * channels;
+		if (raw.data[i] > 205 && raw.data[i + 1] > 205 && raw.data[i + 2] > 205) raw.data[i + 3] = 0;
+	}
+	return sharp(raw.data, { raw: raw.info }).png().toBuffer();
 }
 
 async function regenerate(row, originMap, classMap, assetCache) {
