@@ -84,18 +84,10 @@ async function bytes(url, label) {
 }
 
 async function cleanClassIcon(input) {
-	const meta = await sharp(input).metadata();
-	const inset = Math.max(12, Math.round(Math.min(meta.width ?? 256, meta.height ?? 256) * 0.28));
-	const cropped = await sharp(input).extract({ left: inset, top: inset, width: (meta.width ?? 256) - inset * 2, height: (meta.height ?? 256) - inset * 2 }).raw().toBuffer({ resolveWithObject: true });
-	const edge = 12;
-	for (let y = 0; y < cropped.info.height; y++) for (let x = 0; x < cropped.info.width; x++) if (x < edge || x >= cropped.info.width - edge) cropped.data[(y * cropped.info.width + x) * cropped.info.channels + 3] = 0;
-	return sharp(cropped.data, { raw: cropped.info }).png().toBuffer();
+	return Buffer.from(input);
 }
 async function clearIconEdges(input) {
-	const raw = await sharp(input).raw().toBuffer({ resolveWithObject: true });
-	const edge = 20;
-	for (let y = 0; y < raw.info.height; y++) for (let x = 0; x < raw.info.width; x++) if (x < edge || x >= raw.info.width - edge) raw.data[(y * raw.info.width + x) * raw.info.channels + 3] = 0;
-	return sharp(raw.data, { raw: raw.info }).png().toBuffer();
+	return Buffer.from(input);
 }
 
 async function regenerate(row, originMap, classMap, assetCache) {
