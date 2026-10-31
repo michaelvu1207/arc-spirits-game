@@ -83,6 +83,21 @@ async function bytes(url, label) {
 	return Buffer.from(await response.arrayBuffer());
 }
 
+async function cleanClassIcon(input) {
+	const meta = await sharp(input).metadata();
+	const inset = Math.max(12, Math.round(Math.min(meta.width ?? 256, meta.height ?? 256) * 0.28));
+	const cropped = await sharp(input).extract({ left: inset, top: inset, width: (meta.width ?? 256) - inset * 2, height: (meta.height ?? 256) - inset * 2 }).raw().toBuffer({ resolveWithObject: true });
+	const edge = 12;
+	for (let y = 0; y < cropped.info.height; y++) for (let x = 0; x < cropped.info.width; x++) if (x < edge || x >= cropped.info.width - edge) cropped.data[(y * cropped.info.width + x) * cropped.info.channels + 3] = 0;
+	return sharp(cropped.data, { raw: cropped.info }).png().toBuffer();
+}
+async function clearIconEdges(input) {
+	const raw = await sharp(input).raw().toBuffer({ resolveWithObject: true });
+	const edge = 20;
+	for (let y = 0; y < raw.info.height; y++) for (let x = 0; x < raw.info.width; x++) if (x < edge || x >= raw.info.width - edge) raw.data[(y * raw.info.width + x) * raw.info.channels + 3] = 0;
+	return sharp(raw.data, { raw: raw.info }).png().toBuffer();
+}
+
 async function regenerate(row, originMap, classMap, assetCache) {
 	const basePath = `hex_spirits/${row.id}/${BASE_VERSION}/front-base.png`;
 	const oldPath = `hex_spirits/${row.id}/${BASE_VERSION}/front.png`;
@@ -135,7 +150,7 @@ async function regenerate(row, originMap, classMap, assetCache) {
 		const classInfo = classMap.get(classIds[index]);
 		if (!classInfo?.icon_png) continue;
 		const cacheKey = `class:${classInfo.icon_png}`;
-		if (!assetCache.has(cacheKey)) assetCache.set(cacheKey, await bytes(publicUrl(classInfo.icon_png), `${classInfo.name} class icon`));
+		if (!assetCache.has(cacheKey)) assetCache.set(cacheKey, await cleanClassIcon(await bytes(publicUrl(classInfo.icon_png), `${classInfo.name} class icon`)));
 		const left = classLeft + (hideOrigin ? index * 320 : index * classStep);
 		const sample = await sharp(baseBytes).extract({ left, top: 2040, width: 220, height: 220 }).raw().toBuffer({ resolveWithObject: true });
 		let luminance = 0;
@@ -143,7 +158,7 @@ async function regenerate(row, originMap, classMap, assetCache) {
 		luminance /= sample.data.length / sample.info.channels;
 		let icon = sharp(assetCache.get(cacheKey));
 		if (luminance < 105 || hideOrigin) icon = icon.negate({ alpha: false });
-		layers.push({ input: await icon.resize(300, 300, { fit: 'contain' }).png().toBuffer(), left, top: 1985 });
+		layers.push({ input: await clearIconEdges(await icon.resize(300, 300, { fit: 'contain' }).png().toBuffer()), left, top: 1985 });
 	}
 	const output = await sharp(baseBytes).composite(layers).png({ compressionLevel: 9 }).toBuffer();
 	return { output, originName, replaced: kind, classCount };
