@@ -569,9 +569,9 @@ export const AWAKEN_HANDLERS: Record<string, AwakenHandler> = {
 		KEYS.arcaneHuntress,
 		'cultivate_fallen_10_max_barrier_required'
 	),
-	[IDS.floralFairy]: progressFlagHandler(KEYS.floralFairy, 'cultivate_4_unique_forest_required'),
-	[IDS.lanternFairy]: progressFlagHandler(KEYS.lanternFairy, 'cultivate_4_unique_lantern_required'),
-	[IDS.tidalFairy]: progressFlagHandler(KEYS.tidalFairy, 'cultivate_4_unique_tidal_required'),
+	[IDS.floralFairy]: progressFlagHandler(KEYS.floralFairy, 'cultivate_4_forest_required'),
+	[IDS.lanternFairy]: progressFlagHandler(KEYS.lanternFairy, 'cultivate_4_fire_required'),
+	[IDS.tidalFairy]: progressFlagHandler(KEYS.tidalFairy, 'cultivate_4_water_required'),
 	[IDS.meteorShower]: discardUniqueRunes,
 
 	// ── Category 3: combat / pvp event ────────────────────────────────────────
@@ -620,12 +620,12 @@ export function recordCultivateAwakenProgress(
 	if (holds(IDS.arcaneHuntress) && selfFallen && player.maxBarrier >= 10) {
 		player.awakenProgress[KEYS.arcaneHuntress] = true;
 	}
-	const uniqueAt = (origin: string) =>
-		new Set(player.spirits.filter((s) => (s.origins?.[origin] ?? 0) > 0).map((s) => s.id ?? s.name)).size;
-	if (holds(IDS.floralFairy) && uniqueAt('Forest Region') >= 4)
+	const countAt = (origin: string) =>
+		player.spirits.reduce((total, spirit) => total + (spirit.origins?.[origin] ?? 0), 0);
+	if (holds(IDS.floralFairy) && countAt('Forest Region') >= 4)
 		player.awakenProgress[KEYS.floralFairy] = true;
-	if (holds(IDS.lanternFairy) && uniqueAt('Fire Region') >= 4)
+	if (holds(IDS.lanternFairy) && countAt('Fire Region') >= 4)
 		player.awakenProgress[KEYS.lanternFairy] = true;
-	if (holds(IDS.tidalFairy) && uniqueAt('Water Region') >= 4)
+	if (holds(IDS.tidalFairy) && countAt('Water Region') >= 4)
 		player.awakenProgress[KEYS.tidalFairy] = true;
 }

@@ -1361,7 +1361,7 @@ describe('AWAKEN_HANDLERS alignment + cultivate (Contessa)', () => {
 	});
 });
 
-describe('AWAKEN_HANDLERS unique-origin cultivate progress', () => {
+describe('AWAKEN_HANDLERS origin cultivate progress', () => {
 	const cases = [
 		[IDS.floralFairy, 'Floral Fairy', 'Forest Region', AWAKEN_PROGRESS_KEYS.floralFairy],
 		[IDS.lanternFairy, 'Lantern Fairy', 'Fire Region', AWAKEN_PROGRESS_KEYS.lanternFairy],
@@ -1369,7 +1369,7 @@ describe('AWAKEN_HANDLERS unique-origin cultivate progress', () => {
 	] as const;
 
 	for (const [id, name, origin, progressKey] of cases) {
-		it(`${name}: cultivating with four unique ${origin} spirits sets the flag`, () => {
+		it(`${name}: cultivating with four ${origin} spirits sets the flag`, () => {
 			const fairy = { ...spirit(1, id, name), origins: { [origin]: 1 } };
 			const actor = makePlayer({
 				playerColor: 'Red',
