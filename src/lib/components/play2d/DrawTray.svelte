@@ -50,7 +50,8 @@
 		}
 	});
 
-	function preview(draw: { id?: string; sourceBag?: string }): string | null {
+	function preview(draw: { id?: string; sourceBag?: string; rewardId?: string }): string | null {
+		if (draw.rewardId) return null;
 		if (!draw.id) return null;
 		// Arcane Abyss spirits enter unawakened (face-down) — show their back face.
 		// Hero (Human Enclave) spirits are likewise drawn face-down — show their back.
@@ -85,7 +86,7 @@
 	}
 
 	function summon(
-		draw: { guid: string; id?: string; name?: string; sourceBag?: string },
+		draw: { guid: string; id?: string; name?: string; sourceBag?: string; rewardId?: string; rewardLabel?: string },
 		event: MouseEvent
 	) {
 		if (disabled || picksLeft <= 0) return;
@@ -160,6 +161,8 @@
 							<span class="aura" aria-hidden="true"></span>
 							{#if preview(draw)}
 								<img src={preview(draw)} alt={draw.name ?? 'Spirit'} loading="lazy" />
+							{:else if draw.rewardId}
+								<span class="reward-fallback"><strong>SPIRIT WORLD REWARD</strong><span>{draw.rewardLabel ?? draw.name}</span></span>
 							{:else}
 								<span class="card-fallback">{draw.name ?? 'Spirit'}</span>
 							{/if}
@@ -307,6 +310,22 @@
 		z-index: 1;
 		backface-visibility: hidden;
 	}
+	.reward-fallback {
+		display: grid;
+		place-items: center;
+		align-content: center;
+		gap: 0.75rem;
+		aspect-ratio: 1;
+		padding: 1rem;
+		border: 2px solid var(--brand-cyan, #5cdfff);
+		border-radius: 12px;
+		background: radial-gradient(circle, rgba(92, 223, 255, 0.3), rgba(8, 5, 16, 0.9));
+		color: var(--color-bone, #f5f0ff);
+		text-align: center;
+		font-family: var(--font-display);
+	}
+	.reward-fallback strong { color: var(--brand-cyan, #5cdfff); font-size: 0.7rem; letter-spacing: .14em; }
+	.reward-fallback span { font-size: 1rem; line-height: 1.2; }
 	.card img {
 		filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.55));
 		transition: filter 200ms ease;

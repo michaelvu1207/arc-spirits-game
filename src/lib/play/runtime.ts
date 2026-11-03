@@ -48,6 +48,7 @@ import {
 	phaseDurationMs
 } from './types';
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
+import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
 import {
 	bagForSpiritCost,
@@ -204,6 +205,7 @@ function createEmptyBags(): RuntimeBagsState {
 		monsters: { count: 0, contents: [] },
 		abyssFallen: { count: 0, contents: [] },
 		stageDeck: { count: 0, contents: [] },
+		rewardHexes: { count: 0, contents: [] },
 		purgeBags: [] as []
 	};
 
@@ -414,6 +416,12 @@ function returnHandDrawsToBags(state: PublicGameState, player: PrivatePlayerStat
 	let returnedToWorld = false;
 	let returnedToAbyss = false;
 	for (const draw of player.handDraws) {
+		if (draw.rewardId) {
+			state.bags.rewardHexes ??= { count: 0, contents: [] };
+			state.bags.rewardHexes.contents.push({ guid: draw.guid, name: draw.name ?? 'Reward Hex', rewardId: draw.rewardId, rewardLabel: draw.rewardLabel });
+			state.bags.rewardHexes.count = state.bags.rewardHexes.contents.length;
+			continue;
+		}
 		const sourceBag = draw.sourceBag === ARCANE_ABYSS_BAG ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG;
 		runtimeBagForSource(state, sourceBag).contents.push({
 			guid: draw.guid,
@@ -433,6 +441,10 @@ function returnHandDrawsToBags(state: PublicGameState, player: PrivatePlayerStat
 
 	state.bags.hexSpirits.count = state.bags.hexSpirits.contents.length;
 	state.bags.abyssFallen.count = state.bags.abyssFallen.contents.length;
+	if (state.bags.rewardHexes) {
+		shuffleBag(state.bags.rewardHexes.contents, state.rng);
+		state.bags.rewardHexes.count = state.bags.rewardHexes.contents.length;
+	}
 	state.bags.history = buildHistoryBags(state.bags);
 	player.handDraws = [];
 	player.pendingDraw = null;
@@ -455,10 +467,14 @@ function startDraw(
 	const runtimeBag = runtimeBagForSource(state, sourceBag);
 	// Draw as many as the bag can offer (a near-empty bag still lets you summon
 	// fewer rather than the action silently doing nothing). Empty ⇒ no draw.
-	const drawCount = Math.min(requested, runtimeBag.contents.length);
+	// Reward hexes occupy a slot in the Spirit World draw. Keep the tray size at
+	// four cards rather than silently adding a fifth card beside the normal draw.
+	const includeReward = sourceBag === SPIRIT_WORLD_BAG && !!state.bags.rewardHexes?.contents.length;
+	const spiritDrawCount = Math.min(requested - (includeReward ? 1 : 0), runtimeBag.contents.length);
+	const drawCount = spiritDrawCount + (includeReward ? 1 : 0);
 	if (drawCount <= 0) return false;
 	const summonLimit = Math.min(baseLimit, drawCount);
-	const draws = runtimeBag.contents.splice(0, drawCount);
+	const draws = runtimeBag.contents.splice(0, spiritDrawCount);
 	player.handDraws = draws.map((entry) => ({
 		guid: entry.guid,
 		id: entry.id,
@@ -466,6 +482,12 @@ function startDraw(
 		cost: entry.cost,
 		sourceBag
 	}));
+	if (includeReward) {
+		const rewardBag = state.bags.rewardHexes!;
+		const reward = rewardBag.contents.shift()!;
+		player.handDraws.push({ guid: reward.guid, name: reward.name, rewardId: reward.rewardId, rewardLabel: reward.rewardLabel, sourceBag });
+		rewardBag.count = rewardBag.contents.length;
+	}
 	player.pendingDraw = { sourceBag, drawCount, summonLimit, summonedCount: 0, autoAwaken };
 	runtimeBag.count = runtimeBag.contents.length;
 	state.bags.history = buildHistoryBags(state.bags);
@@ -1460,6 +1482,7 @@ function reduceCommand(
 				count: 0,
 				contents: []
 			};
+			state.bags.rewardHexes = { count: rewardEntries().length, contents: rewardEntries().map((entry) => ({ ...entry })) };
 			// Both TTS bags carry `shuffle = true`, so the opening hands, the market,
 			// and every subsequent draw are randomized — not dealt in alphabetical
 			// (catalog) order. Shuffle in place via the seeded RNG BEFORE dealing
@@ -1480,6 +1503,7 @@ function reduceCommand(
 				count: arcaneAbyssBagContents.length,
 				contents: arcaneAbyssBagContents
 			};
+			state.bags.rewardHexes = { count: rewardEntries().length, contents: shuffleBag(rewardEntries().map((entry) => ({ ...entry })), state.rng) };
 			state.bags.history = buildHistoryBags(state.bags);
 
 			// Deal each player their opening four Spirit World spirits before the
@@ -1517,6 +1541,34 @@ function reduceCommand(
 			}
 
 			const draw = activePlayer.player.handDraws.find((entry) => entry.guid === command.guid);
+			if (draw?.rewardId) {
+				applySpiritWorldReward(state, activePlayer.player, draw.rewardId as SpiritWorldRewardId, drawPowerChoices);
+				// Reward hexes are reusable one-shot tokens: resolve the effect, then
+				// immediately return this token to its own bag for a later draw.
+				state.bags.rewardHexes ??= { count: 0, contents: [] };
+				state.bags.rewardHexes.contents.push({
+					guid: draw.guid,
+					name: draw.name ?? 'Reward Hex',
+					rewardId: draw.rewardId,
+					rewardLabel: draw.rewardLabel
+				});
+				shuffleBag(state.bags.rewardHexes.contents, state.rng);
+				state.bags.rewardHexes.count = state.bags.rewardHexes.contents.length;
+				activePlayer.player.handDraws = activePlayer.player.handDraws.filter((entry) => entry.guid !== command.guid);
+				activePlayer.player.pendingDraw = {
+					...pendingDraw,
+					summonedCount: pendingDraw.summonedCount + 1
+				};
+				activePlayer.player.redrawAvailable = false;
+				if (
+					activePlayer.player.pendingDraw.summonedCount >= pendingDraw.summonLimit ||
+					activePlayer.player.handDraws.length === 0
+				) {
+					returnHandDrawsToBags(state, activePlayer.player);
+					advanceDrawQueue(state, activePlayer.player);
+				}
+				return success(state);
+			}
 			if (!draw?.id) {
 				return failure('draw_missing', 'That drawn spirit is no longer available.');
 			}

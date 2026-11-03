@@ -738,6 +738,8 @@ export interface RuntimeBagEntry {
 	state?: string;
 	barrier?: number;
 	damage?: number;
+	rewardId?: string;
+	rewardLabel?: string;
 }
 
 export interface RuntimeBagSnapshot {
@@ -750,6 +752,8 @@ export interface RuntimeBagsState {
 	monsters: RuntimeBagSnapshot;
 	abyssFallen: RuntimeBagSnapshot;
 	stageDeck: RuntimeBagSnapshot;
+	/** One-shot Spirit World reward hexes; selected rewards return here. */
+	rewardHexes?: RuntimeBagSnapshot;
 	purgeBags: [];
 	history: BagsData;
 }

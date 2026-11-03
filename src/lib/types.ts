@@ -58,6 +58,8 @@ export interface HandDrawSnapshot {
 	name?: string;
 	cost?: number;
 	sourceBag?: string;
+	rewardId?: string;
+	rewardLabel?: string;
 }
 
 // Generic entry from a bag's contents (bag.getObjects())
