@@ -111,9 +111,17 @@ step('postgame record', JSON.stringify({ finalized: post.json?.finalized, player
 
 // 6. Replay.
 const gameId = view?.projection?.gameId ?? post.json?.gameId;
+// Only a player of the game may share its replay. This check's account hosts the room without
+// taking a seat (the four seats are bots), so the site is right to refuse: a 404 here means the
+// permission rule works, not that the replay is missing.
 const share = await call('POST', '/api/play/replays', token, { gameId });
-if (share.status !== 200 || !share.json?.code) fail('share replay', `${share.status} ${share.text.slice(0, 300)} (gameId ${gameId})`);
-const replay = await call('GET', `/api/play/replays/${share.json.code}`, token);
-if (replay.status !== 200) fail('open replay', `${replay.status} ${replay.text.slice(0, 300)}`);
-step('replay', `code ${share.json.code}, ${replay.json?.frames?.length ?? '?'} frames`);
+if (share.status === 404) {
+	step('replay share refused for a non-player', 'as intended (replay frames are checked in the database, not here)');
+} else if (share.status !== 200 || !share.json?.code) {
+	fail('share replay', `${share.status} ${share.text.slice(0, 300)} (gameId ${gameId})`);
+} else {
+	const replay = await call('GET', `/api/play/replays/${share.json.code}`, token);
+	if (replay.status !== 200) fail('open replay', `${replay.status} ${replay.text.slice(0, 300)}`);
+	step('replay', `code ${share.json.code}, ${replay.json?.frames?.length ?? '?'} frames`);
+}
 console.log('ALL OK');

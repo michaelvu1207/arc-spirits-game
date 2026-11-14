@@ -31,6 +31,12 @@ if (!git('status', '--porcelain', 'packages')) {
 	console.log(`committed: live package ${before ?? 'none'} → ${version}`);
 }
 if (rest.includes('--no-push')) process.exit(0);
+// Production deploys from `main` (Vercel's GitHub integration). Publishing from another branch
+// would only make a preview, so refuse instead of surprising anyone.
 const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
-execFileSync('git', ['push', 'origin', branch], { cwd: repoRoot, stdio: 'inherit' });
-console.log(`pushed ${branch}; Vercel deploys it`);
+if (branch !== 'main') {
+	console.error(`on branch ${branch}: the commit is made, but only a push of main goes live. Merge to main and push.`);
+	process.exit(1);
+}
+execFileSync('git', ['push', 'origin', 'main'], { cwd: repoRoot, stdio: 'inherit' });
+console.log('pushed main; Vercel builds and deploys it (about 2 minutes). Check https://arcspirits.com/versions');

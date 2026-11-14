@@ -1,0 +1,50 @@
+# Game packages
+
+The website (https://arcspirits.com) runs on ONE published game-data package at a time. It never
+reads working data: a change reaches players only when a package is published.
+
+| Where | What it reads |
+|---|---|
+| Local game on the laptop (`npm run local`, port 5317) | the working data folder `~/ArcSpiritsArt/game`, live |
+| Website | the live package in `packages/` (this repo), fixed at deploy time |
+
+## Workflow
+
+1. Change the data in `~/ArcSpiritsArt/game` (and the engine, if the change needs code) and play
+   it in the local game.
+2. Make a package (nothing goes live yet):
+
+       npm run package:release -- 0.2.0 --notes "Sun spirits cost 2 runes; monsters have initiative"
+
+   It checks the data with the engine (random players, no AI model), writes
+   `packages/0.2.0/` and a change list against the live package. `--from <dir>` takes the data
+   from another folder (for example an experiment folder).
+3. Publish it:
+
+       npm run package:publish -- 0.2.0
+
+   It marks the package live, commits and pushes `main`. Vercel deploys the push in about two
+   minutes. Engine code committed on `main` ships in the same deploy, so data and code cannot
+   get out of step.
+4. Roll back: `npm run package:publish -- 0.1.0` (any older version).
+
+The site lists every package, which one is live, and its change list at `/versions`.
+
+## What a package is
+
+`packages/<version>/tables.json` (the design tables: spirits, classes, monsters, locations,
+dice, guardians, rule switches…), `manifest.json` and `CHANGES.md`. A package is immutable.
+`packages/index.json` lists them and names the live one. Art is not in a package: image paths in
+the tables point into the art storage bucket.
+
+## Checking a deployment
+
+    SUPABASE_URL=… SUPABASE_ANON_KEY=… node scripts/package/web-smoke.mjs https://arcspirits.com
+
+plays a whole game with the built-in bots over HTTP (guest sign-in, room, bots, postgame record).
+
+## Limits to know
+
+- A deploy changes the game data for rooms that are in progress. Publish when nobody is playing.
+- Play data (accounts, rooms, finished games, replays) lives in the Supabase project
+  `arc-spirits-play`; the game data does not.
