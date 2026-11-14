@@ -16,8 +16,15 @@
 	import { loadAssets, getGuardianAsset, getSpiritAsset } from '$lib/stores/assetStore.svelte';
 	import type { FavoriteSpiritEntry, GameResultRow, PlayerStatsRow, RatingLeaderboardRow } from '$lib/types';
 
-	interface Props { data: { username: string } }
-	let { data }: Props = $props();
+	import SpiritInfo from '$lib/components/SpiritInfo.svelte';
+	import { SPIRIT_GROUPS, spiritGroup, explorerLinks, fetchAgentProfile, runLabel, type AgentProfile } from '$lib/explorer';
+
+	// `explorer`: the local game explorer shows the profile on one screen; an AI player also
+	// has an Agent tab (its model, strategy and notebook).
+	interface Props { data: { username: string }; explorer?: boolean }
+	let { data, explorer = false }: Props = $props();
+	let agent = $state<AgentProfile | null>(null);
+	let tab = $state<'stats' | 'agent'>('stats');
 
 	let stats = $state<RatingLeaderboardRow | PlayerStatsRow | null>(null);
 	let games = $state<GameResultRow[]>([]);
@@ -168,6 +175,7 @@
 			const ratingRow = await fetchRatingLeaderboardByUsernameKey(usernameKey());
 			let allRanks: RatingLeaderboardRow[] = [];
 			try { allRanks = await fetchRatingLeaderboard(); } catch {}
+			if (explorer) agent = await fetchAgentProfile(usernameKey()).catch(() => null);
 			totalRanked = allRanks.length;
 			if (ratingRow) {
 				const sorted = [...allRanks].sort((a, b) => (b.ordinal ?? -Infinity) - (a.ordinal ?? -Infinity));
@@ -203,8 +211,8 @@
 	<title>{displayUsername()} | Arc Spirits Spectate</title>
 </svelte:head>
 
-<div class="page">
-	<a href="/admin/players" class="back-link">← All Players</a>
+<div class="page" class:explorer>
+	<a href={explorerLinks.players()} class="back-link">← All Players</a>
 
 	{#if loading}
 		<div class="msg"><div class="spin-ring"></div><p>Summoning profile…</p></div>
@@ -258,6 +266,26 @@
 			</div>
 		</div>
 
+		{#if agent}
+			<div class="tabs-underline agent-tabs">
+				<button class="tab-btn" class:active={tab === 'stats'} onclick={() => (tab = 'stats')}>Stats</button>
+				<button class="tab-btn" class:active={tab === 'agent'} onclick={() => (tab = 'agent')}>Agent</button>
+			</div>
+		{/if}
+
+		{#if agent && tab === 'agent'}
+			<div class="agent-panel">
+				<div class="agent-line">{agent.model} {agent.effort} · {runLabel(agent.run)}</div>
+				{#if agent.strategy}
+					<div class="agent-head">Strategy</div>
+					<pre class="agent-text">{agent.strategy}</pre>
+				{/if}
+				{#if agent.notebook}
+					<div class="agent-head">Notebook</div>
+					<pre class="agent-text">{agent.notebook}</pre>
+				{/if}
+			</div>
+		{:else}
 		<div class="profile-grid">
 			<!-- ============ LEFT RAIL ============ -->
 			<aside class="rail">
@@ -304,8 +332,11 @@
 				{#if favoriteSpirits.length > 0}
 					<div class="rail-section">
 						<div class="rail-sub">Favorite Spirits</div>
+						{#each explorer ? SPIRIT_GROUPS : [null] as g (g?.id ?? '')}
+						{@const list = g ? favoriteSpirits.filter((s) => { const a = getSpiritAsset(s.spiritId); return spiritGroup(a?.cost ?? 0, a?.traits?.origins?.length ?? 0) === g.id; }).slice(0, 5) : favoriteSpirits.slice(0, 7)}
+						{#if g && list.length > 0}<div class="rail-group">{g.label}</div>{/if}
 						<div class="rail-spirits">
-							{#each favoriteSpirits.slice(0, 7) as s (s.spiritId)}
+							{#each list as s (s.spiritId)}
 								{@const asset = getSpiritAsset(s.spiritId)}
 								<div class="rs-chip" title={`${asset?.name ?? s.name} — ${s.games} game${s.games === 1 ? '' : 's'}`}>
 									<div class="rsc-portrait">
@@ -316,12 +347,13 @@
 										{/if}
 									</div>
 									<div class="rsc-meta">
-										<div class="rsc-name">{asset?.name ?? s.name}</div>
-										<div class="rsc-games">{s.games} game{s.games === 1 ? '' : 's'}</div>
+										<div class="rsc-name">{asset?.name ?? s.name}{#if explorer}<SpiritInfo id={s.spiritId} name={asset?.name ?? s.name} />{/if}</div>
+										<div class="rsc-games">{#if explorer && asset?.traits.classes.length}{asset.traits.classes.map((c) => c.name).join(', ')} · {/if}{s.games} game{s.games === 1 ? '' : 's'}</div>
 									</div>
 								</div>
 							{/each}
 						</div>
+						{/each}
 					</div>
 				{/if}
 			</aside>
@@ -433,7 +465,7 @@
 							{@const dur = gameDurationMs(g)}
 							{@const tpt = dur && g.navigation_count > 0 ? dur / g.navigation_count : null}
 							{@const vpt = g.navigation_count > 0 ? g.victory_points / g.navigation_count : null}
-							<a href={`/game/${encodeURIComponent(g.game_id)}`} class="rg-row rg-{placementColor(g.placement, g.player_count)}">
+							<a href={explorerLinks.game(g.game_id, `?player=${encodeURIComponent(g.player_color)}`)} class="rg-row rg-{placementColor(g.placement, g.player_count)}">
 								<div class="rg-place">
 									<div class="rgp-num">{g.placement}</div>
 									<div class="rgp-of">/ {g.player_count}</div>
@@ -461,6 +493,7 @@
 				{/if}
 			</main>
 		</div>
+		{/if}
 	{/if}
 </div>
 
@@ -476,6 +509,27 @@
 	.back-link:hover { color: var(--brand-magenta); }
 
 	/* ===== PROFILE HERO ===== */
+	/* Local explorer: one screen. The hero stays, the rest scrolls inside its panel. */
+	.page.explorer { height: 100%; width: 100%; padding: 12px 32px 0; display: flex; flex-direction: column; }
+	.page.explorer .back-link { margin-bottom: 10px; }
+	.page.explorer .profile-hero { padding: 16px 32px; margin-bottom: 12px; flex: none; }
+	.page.explorer .hero-username { font-size: 2.6rem; }
+	.page.explorer .hero-stat-num { font-size: 1.8rem; }
+	.page.explorer .profile-grid,
+	.page.explorer .agent-panel { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 16px; }
+	.rail-group { margin: 10px 0 4px; font-size: 12px; color: var(--color-fog); }
+	.agent-tabs { align-self: flex-start; margin-bottom: 14px; flex: none; }
+	.agent-line { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-fog); }
+	.agent-head {
+		margin: 18px 0 6px;
+		font-family: var(--font-display); font-size: 0.66rem; letter-spacing: 0.22em;
+		text-transform: uppercase; color: var(--color-fog);
+	}
+	.agent-text {
+		margin: 0; max-width: 90ch; white-space: pre-wrap;
+		font-family: var(--font-body); font-size: 0.9rem; line-height: 1.55; color: var(--color-parchment);
+	}
+
 	.profile-hero {
 		display: flex;
 		gap: 32px;

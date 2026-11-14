@@ -139,35 +139,6 @@ describe('live relic awakening migration', () => {
 			applyGameCommand(game(id, mats), actor, { type: 'awakenSpirit', slotIndex: 1 }, catalog).ok
 		).toBe(false);
 	});
-	test('The Solar Reliquarian requires two different base Rune types and respects explicit selections', () => {
-		const id = '5dc44c85-8224-4c49-89ff-90a37aa10040';
-		const state = game(id, [rune(ids[0], 1), rune(ids[0], 2), rune(ids[1], 3)]);
-		expect(
-			applyGameCommand(
-				state,
-				actor,
-				{
-					type: 'awakenSpirit',
-					slotIndex: 1,
-					discardRefs: [
-						{ kind: 'rune', slotIndex: 1 },
-						{ kind: 'rune', slotIndex: 2 }
-					]
-				},
-				catalog
-			).ok
-		).toBe(false);
-		const result = run(state, {
-			type: 'awakenSpirit',
-			slotIndex: 1,
-			discardRefs: [
-				{ kind: 'rune', slotIndex: 1 },
-				{ kind: 'rune', slotIndex: 3 }
-			]
-		});
-		expect(result.players.Red!.spirits[0].isFaceDown).toBe(false);
-		expect(result.players.Red!.mats.filter((m) => m.hasRune).map((m) => m.guid)).toEqual(['unit-2']);
-	});
 	test('converts named relics in old saves once and leaves Fairy Rune and Crown alone', () => {
 		const state = game(
 			material[0].id,

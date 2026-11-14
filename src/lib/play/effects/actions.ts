@@ -9,7 +9,7 @@
  */
 
 import { DICE_TIER_ORDER, isEvilAlignment, MAX_ATTACK_DICE } from '../types';
-import type { DiceTier, PrivatePlayerState, PublicGameState } from '../types';
+import type { DiceTier, PendingAugment, PrivatePlayerState, PublicGameState } from '../types';
 import { nextId } from '../rng';
 import type { EffectAction, EffectCondition } from './registry';
 import type { EffectContext } from './context';
@@ -23,11 +23,40 @@ function diceCap(): number {
 
 /**
  * Synthetic rune id for a generic, classless Spirit Augment gained via `gainAugment`
- * (Captain, Runebound Vessel, Strategist, Cursed-Spirit Fallen). It has no catalog icon,
+ * (Captain, Herder, Strategist, Cursed-Spirit Fallen). It has no catalog icon,
  * so the placement UI shows the name-letter fallback; placement binds it with no
  * className, so it adds capacity-occupying weight but no class trait.
  */
 export const GENERIC_AUGMENT_RUNE_ID = 'generic-spirit-augment';
+
+/**
+ * The ONE path for gaining Spirit Augments (class abilities, location and Falconer trades,
+ * monster/claim rewards, relic tools, navigation Powers): the augments go to the to-place pouch.
+ *
+ * Smith — "When you gain a Spirit Augment, you may gain 1 more of your choice. The extra augment
+ * does not cause this ability again." With an awakened Smith, each augment gained here adds 1
+ * generic augment (the owner picks its type at placement, or discards it: "you may"). The extras
+ * are pushed directly, so they never call this again. Returns the number of Smith extras.
+ */
+export function gainSpiritAugments(
+	player: PrivatePlayerState,
+	augments: PendingAugment[],
+	log?: string[]
+): number {
+	if (augments.length === 0) return 0;
+	player.unplacedAugments ??= [];
+	player.unplacedAugments.push(...augments);
+	if (!hasAwakenedClass(player, 'Smith')) return 0;
+	for (let i = 0; i < augments.length; i += 1) {
+		player.unplacedAugments.push({ runeId: GENERIC_AUGMENT_RUNE_ID, name: 'Spirit Augment' });
+	}
+	log?.push(
+		augments.length === 1
+			? 'Smith: gained 1 more Spirit Augment of your choice (you may discard it).'
+			: `Smith: gained ${augments.length} more Spirit Augments of your choice (you may discard them).`
+	);
+	return augments.length;
+}
 
 function upgradeDice(
 	player: PrivatePlayerState,
@@ -38,7 +67,7 @@ function upgradeDice(
 ): void {
 	let upgraded = 0;
 
-	// Tier-targeted conversion (e.g. Arcane Ascendant: exalted → arcane). Convert up
+	// Tier-targeted conversion (e.g. Sorcerer: exalted → arcane). Convert up
 	// to `times` dice that sit at exactly the `from` tier into the `to` tier.
 	if (from && to) {
 		for (let t = 0; t < times; t += 1) {
@@ -53,7 +82,7 @@ function upgradeDice(
 
 	// Default ladder (Elementalist): step the lowest basic/enchanted die up one tier.
 	// This caps at EXALTED — arcane attack dice can only be obtained through specific
-	// methods (the targeted `from`/`to` conversions above, e.g. Arcane Ascendant), never
+	// methods (the targeted `from`/`to` conversions above, e.g. Sorcerer), never
 	// the generic upgrade ladder. So only basic/enchanted dice are ever targeted.
 	for (let t = 0; t < times; t += 1) {
 		let target: (typeof player.attackDice)[number] | undefined;
@@ -121,6 +150,16 @@ function evalCondition(ctx: EffectContext, cond: EffectCondition): boolean {
 	}
 }
 
+/** True when an awakened spirit, or a Spirit Augment on an awakened spirit, gives `cls`. */
+export function hasAwakenedClass(player: PrivatePlayerState, cls: string): boolean {
+	if (player.spirits.some((s) => !s.isFaceDown && (s.classes?.[cls] ?? 0) > 0)) return true;
+	return (player.spiritAugmentAttachments ?? []).some(
+		(att) =>
+			att.className === cls &&
+			player.spirits.some((s) => s.slotIndex === att.spiritSlotIndex && !s.isFaceDown)
+	);
+}
+
 /**
  * Apply one effect action. `multiplier` scales numeric "amount" kinds (1 for the
  * classic numeric ladder; the trait count for a `'1+'` breakpoint).
@@ -138,8 +177,28 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 				added += 1;
 			}
 			if (added > 0) {
-				player.attackDiceChangedThisTurn = true;
 				log.push(`Gained ${added} ${action.tier} attack dice.`);
+				// Exalted dice gained so far in this gain (Druid gives one more for each).
+				let exaltedGained = action.tier === 'exalted' ? added : 0;
+				// Wildling: "When you gain an attack dice, gain 1 Exalted Attack Dice." One extra die
+				// per gain, within the cap. It is pushed directly, so it does not trigger Wildling again.
+				if (hasAwakenedClass(player, 'Wildling') && player.attackDice.length < cap) {
+					player.attackDice.push({ instanceId: nextId(state.rng, 'die'), tier: 'exalted' });
+					log.push('Wildling: gained 1 exalted attack dice.');
+					exaltedGained += 1;
+				}
+				// Druid: "When you gain an Exalted Attack Dice, you may gain 1 more. The extra dice does
+				// not cause this ability again." One more Exalted die for each Exalted die gained above
+				// (the source's and Wildling's), within the cap, taken automatically. Druid dice are
+				// pushed directly: they trigger neither Druid nor Wildling, so the two cannot loop.
+				if (exaltedGained > 0 && hasAwakenedClass(player, 'Druid')) {
+					let extra = 0;
+					for (let i = 0; i < exaltedGained && player.attackDice.length < cap; i += 1) {
+						player.attackDice.push({ instanceId: nextId(state.rng, 'die'), tier: 'exalted' });
+						extra += 1;
+					}
+					if (extra > 0) log.push(`Druid: gained ${extra} more exalted attack dice.`);
+				}
 			}
 			else log.push(`Attack-dice pool is already at the cap (${cap}).`);
 			break;
@@ -157,11 +216,8 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			break;
 		}
 		case 'upgradeDice': {
-			const before = player.attackDice.map((die) => die.tier).join(',');
+			// An upgrade is not a gain: it triggers neither Wildling nor Druid.
 			upgradeDice(player, scaled(action.times), log, action.from, action.to);
-			if (player.attackDice.map((die) => die.tier).join(',') !== before) {
-				player.attackDiceChangedThisTurn = true;
-			}
 			break;
 		}
 		case 'restoreBarrier': {
@@ -232,18 +288,18 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			// A gained Spirit Augment must be PLACEABLE — it goes into the to-place pouch
 			// (unplacedAugments) so the AugmentPlacement drag-modal lets the owner attach it
 			// to a spirit (counting toward capacity), exactly like reward/awaken augments.
-			// These are generic (no classId), so they add no class trait once placed —
-			// matching "gain any Spirit Augment". (Previously this only bumped the
-			// server-only `spiritAugments` scalar, which the client never saw and could
-			// never place — Captain/Runebound Vessel/Strategist/Cursed-Spirit augments were lost.)
-			player.unplacedAugments ??= [];
-			for (let i = 0; i < amount; i += 1) {
-				player.unplacedAugments.push({ runeId: GENERIC_AUGMENT_RUNE_ID, name: 'Spirit Augment' });
-			}
+			// These are generic (no classId): the owner picks the type at placement — matching
+			// "gain any Spirit Augment". Smith's extra is added by gainSpiritAugments.
+			if (amount <= 0) break;
 			log.push(
 				amount === 1
 					? 'Gained a Spirit Augment — place it on a spirit.'
 					: `Gained ${amount} Spirit Augments — place them on a spirit.`
+			);
+			gainSpiritAugments(
+				player,
+				Array.from({ length: amount }, () => ({ runeId: GENERIC_AUGMENT_RUNE_ID, name: 'Spirit Augment' })),
+				log
 			);
 			break;
 		}

@@ -33,14 +33,14 @@ describe.skipIf(!RUN_SIM)('single-game trace', () => {
 		const lines: string[] = [];
 		let cur = state.round, dest = '?', combats = 0, rows = 0, augs = 0, ticks = 0;
 		const flush = () => {
-			const p = state.players[seat]!; const mon = state.monster;
+			const p = state.players[seat]!; const mon = p.monsterHand?.[0];
 			const cc = awakenedClassCounts(p);
 			const tiers = p.attackDice.reduce<Record<string, number>>((a, d) => ((a[d.tier] = (a[d.tier] ?? 0) + 1), a), {});
 			const tstr = Object.entries(tiers).map(([k, v]) => `${v}${TI[k] ?? k[0]}`).join('+') || '—';
 			const team = Object.entries(cc).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v}${k.slice(0, 3)}`).join('+') || '∅';
 			const relics = p.mats.filter((r: any) => r.hasRune && r.type === 'relic').length;
 			lines.push(
-				`r${String(cur).padStart(2)} ${dest.split(' ')[0].padEnd(7)} L${mon?.ladderIndex ?? -1} hp${String(mon?.hp ?? 0).padStart(2)}d${mon?.damage ?? 0} | bar${p.barrier}/${p.maxBarrier} dice${String(p.attackDice.length).padStart(2)}(${tstr}) ele${cc['Elementalist'] ?? 0} rel${relics} | fight${combats} row${rows} aug${augs} | vp${String(p.victoryPoints).padStart(2)} st${p.statusLevel} | ${team}`
+				`r${String(cur).padStart(2)} ${dest.split(' ')[0].padEnd(7)} D${mon?.difficulty ?? 0} hp${String(mon?.hp ?? 0).padStart(2)}d${mon?.damage ?? 0} | bar${p.barrier}/${p.maxBarrier} dice${String(p.attackDice.length).padStart(2)}(${tstr}) ele${cc['Elementalist'] ?? 0} rel${relics} | fight${combats} row${rows} aug${augs} | vp${String(p.victoryPoints).padStart(2)} st${p.statusLevel} | ${team}`
 			);
 			dest = '?'; combats = 0; rows = 0; augs = 0;
 		};

@@ -87,6 +87,7 @@ import {
 	goodTargetExposureDestinations,
 	goodTargetRendezvousExposureDestinations,
 	goodTargetValuePivotDestinations,
+	holdsLiveMonster,
 	isGoodBuilderHp4ConversionOverlayAction,
 	isGoodBuilderHp4ConversionOverlayState,
 	isGoodTargetExposureNavigationState,
@@ -105,6 +106,7 @@ import {
 	pvpStatus2ConversionDescendOracleDestination,
 	pvpStatus2TargetDescendOracleDestination,
 	routeModeHuntProbability,
+	seatFightMonster,
 	shouldFallenRebuildRoute,
 	shouldForceHardMonsterPvpAttack,
 	shouldGoodTargetLowTailHunt,
@@ -621,7 +623,8 @@ export function playPlannerSelfPlayGame(
 		if (gate === 'all') return true;
 		if (gate === 'unsafe-firepower' || gate === 'unsafe-firepower-build-option') {
 			const player = state.players[seat];
-			if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+			if (!player || !holdsLiveMonster(state, seat) || (player.statusLevel ?? 0) !== 0)
+				return false;
 			const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
 			return firepowerProb >= farmNavigationThreshold && cleanProb < farmNavigationThreshold;
@@ -635,7 +638,8 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'route-option-scaling') {
 			const player = state.players[seat];
-			if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+			const monster = seatFightMonster(state, seat, catalog);
+			if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 			const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
 			if (farm.valid && farm.farmable && farm.opportunityVp > 0) return false;
 			const vp = player.victoryPoints ?? 0;
@@ -643,7 +647,7 @@ export function playPlannerSelfPlayGame(
 			const counts = awakenedClassCounts(player);
 			const attackDice = player.attackDice?.length ?? 0;
 			const attack = expectedAttack(player);
-			const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
+			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
 			const needsDamage =
 				monsterHp > 0 && (firepowerProb < farmNavigationThreshold || attack < monsterHp + 1);
@@ -666,26 +670,26 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'pure-farm-build') {
 			const player = state.players[seat];
-			return !!player && (player.statusLevel ?? 0) === 0 && !!state.monster;
+			return !!player && (player.statusLevel ?? 0) === 0 && holdsLiveMonster(state, seat);
 		}
 		if (gate === 'good-nonfallen-farm-build') {
 			const player = state.players[seat];
-			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && holdsLiveMonster(state, seat);
 		}
 		if (gate === 'good-nonfallen-farm-target-pivot') {
 			const player = state.players[seat];
-			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && holdsLiveMonster(state, seat);
 		}
 		if (gate === 'good-target-exposure' || gate === 'good-target-rendezvous-exposure') {
 			return isGoodTargetExposureNavigationState(state, seat, catalog, farmNavigationThreshold);
 		}
 		if (gate === 'good-nonfallen-farm-target-evade') {
 			const player = state.players[seat];
-			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && holdsLiveMonster(state, seat);
 		}
 		if (gate === 'good-nonfallen-score-floor') {
 			const player = state.players[seat];
-			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && holdsLiveMonster(state, seat);
 		}
 		if (gate === 'good-builder-oracle') {
 			const player = state.players[seat];
@@ -701,7 +705,7 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'hp2-survival-deficit') {
 			const player = state.players[seat];
-			const monster = state.monster;
+			const monster = seatFightMonster(state, seat, catalog);
 			if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 			const vp = player.victoryPoints ?? 0;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -725,7 +729,7 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'hp4-first-wall') {
 			const player = state.players[seat];
-			const monster = state.monster;
+			const monster = seatFightMonster(state, seat, catalog);
 			if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 			const vp = player.victoryPoints ?? 0;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -756,15 +760,16 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'route-closer') {
 			const player = state.players[seat];
-			if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+			const monster = seatFightMonster(state, seat, catalog);
+			if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 			const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
 			if (farm.valid && farm.farmable && farm.opportunityVp > 0) return false;
 			const vp = player.victoryPoints ?? 0;
-			const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
+			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 			if (state.round < 12 || vp < 15 || vp >= 30 || monsterHp < 4) return false;
 			const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 			if (cleanProb >= farmNavigationThreshold) return false;
-			const monsterDamage = state.monster.damage ?? 0;
+			const monsterDamage = monster.damage ?? 0;
 			const attack = expectedAttack(player);
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
 			const survivalTarget = monsterDamage + 1;
@@ -782,11 +787,12 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'survival-rebuild') {
 			const player = state.players[seat];
-			if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+			const monster = seatFightMonster(state, seat, catalog);
+			if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 			const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
 			if (farm.valid && farm.farmable && farm.opportunityVp > 0) return false;
-			const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
-			const monsterDamage = state.monster.damage ?? 0;
+			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
+			const monsterDamage = monster.damage ?? 0;
 			const vp = player.victoryPoints ?? 0;
 			if (state.round < 5 || vp < 9 || monsterHp < 2) return false;
 			const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
@@ -877,7 +883,7 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'pure-farm-build') {
 			const player = state.players[seat];
-			const monster = state.monster;
+			const monster = seatFightMonster(state, seat, catalog);
 			if (!player || !monster) return pureEconomyBuildDestinations;
 			const farm = evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold });
 			if (farm.valid && farm.farmable && farm.opportunityVp >= 1) return ['Arcane Abyss'];
@@ -888,7 +894,7 @@ export function playPlannerSelfPlayGame(
 			const firepowerProb = firepowerKillProbability(state, seat, catalog);
 			const counts = awakenedClassCounts(player);
 			const needsDamage = attack < monsterHp + 0.5 || firepowerProb < farmNavigationThreshold;
-			const spiritAnimal = counts['Spirit Animal'] ?? 0;
+			const spiritAnimal = counts['Beast'] ?? 0;
 			if (needsDamage || spiritAnimal < 2 || (player.attackDice?.length ?? 0) < 2)
 				return pureDamageBuildDestinations;
 			if ((player.maxBarrier ?? 0) < (monster.damage ?? 0) + 2) return pureEconomyBuildDestinations;
@@ -949,7 +955,7 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'route-closer') {
 			const player = state.players[seat];
-			const monster = state.monster;
+			const monster = seatFightMonster(state, seat, catalog);
 			if (!player || !monster) return closerDamageDestinations;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 			const monsterDamage = monster.damage ?? 0;
@@ -967,7 +973,7 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'route-finish-loop') {
 			const player = state.players[seat];
-			const monster = state.monster;
+			const monster = seatFightMonster(state, seat, catalog);
 			if (!player || !monster) return closerRestoreDestinations;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 			const monsterDamage = monster.damage ?? 0;
@@ -991,7 +997,7 @@ export function playPlannerSelfPlayGame(
 		}
 		if (gate === 'survival-rebuild') {
 			const player = state.players[seat];
-			const monster = state.monster;
+			const monster = seatFightMonster(state, seat, catalog);
 			if (!player || !monster) return survivalRebuildDestinations;
 			const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 			const attack = expectedAttack(player);
@@ -1200,25 +1206,26 @@ export function playPlannerSelfPlayGame(
 		if (gate === 'good-builder-oracle') return (state.players[seat]?.statusLevel ?? 0) === 0;
 		if (gate === 'good-builder-hp4-oracle' || gate === 'good-builder-hp4-pick-oracle') {
 			const player = state.players[seat];
-			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && holdsLiveMonster(state, seat);
 		}
 		if (
 			gate === 'good-builder-hp4-conversion-oracle' ||
 			gate === 'good-builder-hp4-scorefloor-oracle'
 		) {
 			const player = state.players[seat];
-			const hp = state.monster?.maxHp ?? state.monster?.hp ?? 0;
+			const monster = seatFightMonster(state, seat, catalog);
+			const hp = monster?.maxHp ?? monster?.hp ?? 0;
 			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && hp >= 4;
 		}
 		if (gate === 'good-builder-hp4-conversion-overlay') {
-			return isGoodBuilderHp4ConversionOverlayState(state, seat);
+			return isGoodBuilderHp4ConversionOverlayState(state, seat, catalog);
 		}
 		if (
 			gate === 'good-builder-score-pick-oracle' ||
 			gate === 'good-builder-score-conversion-oracle'
 		) {
 			const player = state.players[seat];
-			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && !!state.monster;
+			return !!player && !isEvilAlignment(player.statusLevel ?? 0) && holdsLiveMonster(state, seat);
 		}
 		if (gate === 'good-builder-farmer-oracle' || gate === 'good-builder-support-oracle') {
 			return (state.players[seat]?.statusLevel ?? 0) === 0;

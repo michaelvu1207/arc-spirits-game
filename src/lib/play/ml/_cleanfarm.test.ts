@@ -23,6 +23,7 @@ import {
 	type BotRandom
 } from '../server/botPolicy';
 import { DICE_TIER_FACES } from '../combat';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import { awakenedClassCounts } from '../effects/apply';
 import { buildMonsterRewards } from '../monsterRewards';
 import {
@@ -165,9 +166,9 @@ function expectedAttackApprox(player: PrivatePlayerState | undefined): number {
 		total += faces.reduce((sum, face) => sum + face, 0) / faces.length;
 	}
 	const counts = awakenedClassCounts(player);
-	total += counts['Spirit Animal'] ?? 0;
+	total += counts['Beast'] ?? 0;
 	total += counts['Sharpshooter'] ?? 0;
-	total += counts['Arcane Vanguard'] ?? 0;
+	total += counts['Huntress'] ?? 0;
 	return total;
 }
 
@@ -213,7 +214,8 @@ function recordFarmability(
 	farmableThreshold: number
 ): void {
 	const player = state.players[seat];
-	if (!player || !state.monster) return;
+	// The seat fights cards from its own hand; nothing to measure while it holds no live card.
+	if (!player || !bestHandMonster(state, seat, catalog)) return;
 	const cleanKillProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const firepower = firepowerKillProbability(state, seat, catalog);
 	const expected = expectedAttackApprox(player);
@@ -398,7 +400,7 @@ describe('normal-start clean farm oracle', () => {
 						total.sumMaxBarrier += player.maxBarrier ?? 0;
 						total.sumDice += player.attackDice?.length ?? 0;
 						total.sumExpectedAttack += expectedAttackApprox(player);
-						total.sumSpiritAnimal += classes['Spirit Animal'] ?? 0;
+						total.sumSpiritAnimal += classes['Beast'] ?? 0;
 						total.sumCultivator += classes.Cultivator ?? 0;
 						total.sumElementalist += classes['Elementalist'] ?? 0;
 						total.sumHealer += classes.Healer ?? 0;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ability } from './soulWeaver';
 
-describe('Soul Weaver', () => {
+describe('Mystic', () => {
 	it('uses engine-owned behavior for all four breakpoints', () => {
 		expect(ability).toEqual([]);
 	});

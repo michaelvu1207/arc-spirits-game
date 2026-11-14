@@ -24,6 +24,7 @@ import {
 	type BotRandom
 } from '../server/botPolicy';
 import { buildMonsterRewards } from '../monsterRewards';
+import { bestStartCombatCommand } from '../bots/monsterCardAutopilot';
 import {
 	SEAT_COLORS,
 	VP_TO_WIN,
@@ -248,7 +249,9 @@ function chooseTeacherDecision(
 		}
 		const signal = evaluateFarmValue(state, seat, catalog, { threshold: cfg.killThreshold });
 		if (!qualifies(signal, cfg)) return null;
-		const idx = firstCommandIndex(withNext, { type: 'startCombat' });
+		// Fight the hand card this seat is most likely to kill.
+		const fight = bestStartCombatCommand(state, seat, catalog);
+		const idx = fight ? firstCommandIndex(withNext, fight) : -1;
 		return idx >= 0 ? { idx, kind: 'farm-combat', record: true, signal } : null;
 	}
 

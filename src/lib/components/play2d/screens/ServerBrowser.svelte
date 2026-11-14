@@ -170,22 +170,22 @@
 
 	// ── Dev-only: spawn straight into the Awakening phase to test ability UX ──────
 	const DEBUG_CLASSES = [
-		'Growth Warden',
-		'Cursed Fighter',
+		'Druid',
+		'Ram',
 		'Fairy',
 		'Sharpshooter',
-		'Wayfarer',
+		'Nomad',
 		'Monster Hunter',
-		'Arcane Ascendant',
-		'Soul Weaver',
-		'Abyss Summoner',
-		'Runic Duplicator',
+		'Sorcerer',
+		'Mystic',
+		'Summoner',
+		'Smith',
 		'Healer',
-		'Emberguard',
-		'Rune Mage',
+		'Sentinel',
+		'Mage',
 		'Cursed Spirit',
-		'Golden Ruler',
-		'The Corruptor'
+		'King',
+		'Corruptor'
 	];
 	let debugClass = $state(DEBUG_CLASSES[0]);
 

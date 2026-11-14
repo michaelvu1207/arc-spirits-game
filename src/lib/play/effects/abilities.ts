@@ -14,9 +14,9 @@
  * (namespace import), so no edit to this file is needed.
  *
  * Classes with an empty `ability` array (Cursed Spirit, Dawn Sovereign, Relic Sentinel,
- * Infiltrator, Runic Duplicator) are engine/claim-handled elsewhere; the derived views
+ * Infiltrator, Smith) are engine/claim-handled elsewhere; the derived views
  * filter them out, so listing them is behavior-neutral and just documents them.
- * (Void Sovereign is NOT empty — it has a flat +1 VP `awakeningPhase` run handler.)
+ * (Queen is NOT empty — it has a flat +1 VP `awakeningPhase` run handler.)
  */
 
 import type { ClassAbility, ClassDecisions, ClassModule } from './classes/types';
@@ -58,6 +58,26 @@ import * as infiltrator from './classes/infiltrator';
 import * as goldenRuler from './classes/goldenRuler';
 import * as worldEnder from './classes/worldEnder';
 import * as worldGuardian from './classes/worldGuardian';
+// November 2026 special classes.
+import * as falconer from './classes/falconer';
+import * as princess from './classes/princess';
+import * as feral from './classes/feral';
+import * as trader from './classes/trader';
+import * as master from './classes/master';
+import * as wildling from './classes/wildling';
+import * as wanderer from './classes/wanderer';
+import * as prince from './classes/prince';
+import * as hunter from './classes/hunter';
+import * as rider from './classes/rider';
+import * as salamander from './classes/salamander';
+import * as firetail from './classes/firetail';
+import * as chorus from './classes/chorus';
+// Moon rework (approved 2026-11-12).
+import * as witch from './classes/witch';
+import * as acolyte from './classes/acolyte';
+// Sun (approved 2026-11-12).
+import * as shieldbearer from './classes/shieldbearer';
+import * as gardener from './classes/gardener';
 
 /** Re-exported so existing importers (`registry.ts`, `handlers.ts`, tests) keep working. */
 export type { ClassAbility } from './classes/types';
@@ -69,38 +89,55 @@ const MODULES: Record<string, ClassModule> = {
 	'Elementalist': elementalist,
 	Healer: healer,
 	'Fairy': fairy,
-	'Soul Weaver': soulWeaver,
-	'Abyss Summoner': abyssSummoner,
-	'Runic Duplicator': modInjector,
-	'Tide Stalker': deepSeaHunter,
+	'Mystic': soulWeaver,
+	'Summoner': abyssSummoner,
+	'Smith': modInjector,
+	'Spellblade': deepSeaHunter,
 	'Relic Envoy': undercover,
 	'Cursed Spirit': cursedSpirit,
-	'The Corruptor': theCorruptor,
-	'Arcane Ascendant': arcaneAdvisor,
-	'Growth Warden': treeOfGrowth,
-	'Runic Bulwark': strategist,
+	'Corruptor': theCorruptor,
+	'Sorcerer': arcaneAdvisor,
+	'Druid': treeOfGrowth,
+	'Monk': strategist,
 	'Arcane Alchemist': arcMage,
 	Captain: captain,
 	'Sharpshooter': sharpshooter,
-	'Spirit Animal': spiritAnimal,
-	'Living Bastion': golemOfWishes,
+	'Beast': spiritAnimal,
+	'Titan': golemOfWishes,
 	'Woundreaver': bloodHunter,
-	'Arcane Vanguard': dragonWarrior,
-	'Aegis Weaver': darkAssassin,
-	'Fatestriker': darkFighter,
-	'Tide Warden': aquamaiden,
-	'Emberguard': firekeeper,
-	'Disruptor': disruptor,
+	'Huntress': dragonWarrior,
+	'Paladin': darkAssassin,
+	'Assassin': darkFighter,
+	'Warden': aquamaiden,
+	'Sentinel': firekeeper,
+	'Bastion': disruptor,
 	'Monster Hunter': ironmane,
-	'Wayfarer': childProdigy,
-	'Rune Mage': runeMage,
-	'Runebound Vessel': fairyDroid,
+	'Nomad': childProdigy,
+	'Mage': runeMage,
+	'Herder': fairyDroid,
 	'Battle Adept': adaptiveFighter,
-	'Relic Warden': ancientMagus,
-	'Cursed Fighter': infiltrator,
-	'Golden Ruler': goldenRuler,
-	'Void Sovereign': worldEnder,
-	'Relic Sentinel': worldGuardian
+	'Cleric': ancientMagus,
+	'Ram': infiltrator,
+	'King': goldenRuler,
+	'Queen': worldEnder,
+	'Relic Sentinel': worldGuardian,
+	Falconer: falconer,
+	Princess: princess,
+	Feral: feral,
+	Trader: trader,
+	Master: master,
+	Wildling: wildling,
+	Wanderer: wanderer,
+	Prince: prince,
+	Hunter: hunter,
+	Rider: rider,
+	Salamander: salamander,
+	Firetail: firetail,
+	Chorus: chorus,
+	Witch: witch,
+	Acolyte: acolyte,
+	Shieldbearer: shieldbearer,
+	Gardener: gardener
 };
 
 /**

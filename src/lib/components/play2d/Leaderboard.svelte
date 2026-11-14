@@ -3,7 +3,14 @@
 	import type { PrivatePlayerState, SeatColor, SpectatorProjection } from '$lib/play/types';
 	import { expectedAttack } from '$lib/play/combat';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
-	import { statusAccent, seatAccent, storageUrl, iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
+	import {
+		displayName,
+		statusAccent,
+		seatAccent,
+		storageUrl,
+		iconPoolUrl,
+		RESOURCE_ICON_IDS
+	} from './helpers';
 
 	interface Props {
 		room: SpectatorProjection;
@@ -34,7 +41,7 @@
 					// Combat initiative — only meaningful (non-zero) during a fight; shown
 					// only when the player actually has some.
 					init: Math.max(0, player?.initiative ?? 0),
-					// Resting average attack of a roll (dice-tier averages + Spirit Animal
+					// Resting average attack of a roll (dice-tier averages + Beast
 					// bonus) — same number as the scout dice-pool readout.
 					atk: player ? expectedAttack(player as unknown as PrivatePlayerState) : 0,
 					barrierFull: Math.max(0, player?.barrier ?? 0),
@@ -53,13 +60,23 @@
 			)
 	);
 
-	// The Arcane Abyss monster rides the leaderboard as a boss "competitor" — pinned at the
-	// top, purple, and styled apart from the human players. Its art, stats (HP / DMG), lives,
-	// and kill rewards all come from the live monster state + asset map.
-	const monster = $derived(room.monster);
+	// My monster hand rides the top of the standings: how many monster cards I hold, and
+	// the one I am fighting (the card from my latest Abyss fight while it is still in my
+	// hand, else the first damaged card). Monster cards are private, so spectators and
+	// other seats see nothing here.
+	const HAND_LIMIT = 3;
+	const myHand = $derived(mySeat ? (room.players[mySeat]?.monsterHand ?? []) : []);
+	const underAttack = $derived.by(() => {
+		if (!mySeat || myHand.length === 0) return null;
+		const fought = room.combats
+			.filter((c) => c.kind === 'monster' && c.sides[0]?.seat === mySeat && c.monster)
+			.at(-1)?.monster;
+		const live = fought ? myHand.find((card) => card.id === fought.id && card.hp > 0) : null;
+		return live ?? myHand.find((card) => card.hp > 0 && card.hp < card.maxHp) ?? null;
+	});
 	const monsterRewards = $derived(
-		monster
-			? buildMonsterRewards(monster.rewardTrack)
+		underAttack
+			? buildMonsterRewards(underAttack.rewardTrack)
 					.map((opt) => ({
 						index: opt.index,
 						label: opt.label,
@@ -71,52 +88,53 @@
 </script>
 
 <aside class="leaderboard" data-testid="leaderboard">
-	{#if monster}
-		<!-- The Arcane Abyss monster sits at the apex of the standings in the SAME row grammar
-		     as the players (meta-left, avatar-right, threaded on the spine) — but it's the
-		     shared antagonist, not a rival: a hexagonal abyssal sigil instead of a soul circle,
-		     stat chips for its threat, a bounty for the payoff, and a blood badge counting the
-		     kills still needed to bring it down. -->
-		<div class="boss" data-testid="lb-monster">
+	{#if myHand.length > 0}
+		<!-- My monster hand sits at the apex of the standings in the SAME row grammar as the
+		     players (meta-left, sigil-right, threaded on the spine): the hexagonal abyssal
+		     sigil carries the card count, the chips show the card I am fighting. -->
+		<div
+			class="boss"
+			data-testid="lb-monster"
+			title={underAttack
+				? `${displayName(underAttack.name)}: Barrier ${underAttack.hp}/${underAttack.maxHp}, hits for ${underAttack.damage}`
+				: `${myHand.length} monster card${myHand.length === 1 ? '' : 's'} in your hand`}
+		>
 			<span class="meta">
-				<span class="boss-name" title="The Arcane Abyss monster">Monster</span>
-				<span class="meta-row">
-					<span class="chip dmg" title="Damage it deals to you">
-						<span class="chip-g" aria-hidden="true">⚔️</span>{monster.damage}
-					</span>
-					<span class="chip hp" title="Health — damage to defeat it once">
-						{#if barrierIcon}<img class="chip-ic" src={barrierIcon} alt="" />{:else}<span
-								class="chip-g"
-								aria-hidden="true">❤</span
-							>{/if}{monster.maxHp}
-					</span>
-				</span>
-				{#if monsterRewards.length > 0}
-					<span class="bounty" title="Defeat it to claim {monster.chooseAmount}">
-						<span class="bounty-label">Bounty</span>
-						<span class="bounty-icons">
-							{#each monsterRewards as r (r.index)}
-								<span class="bounty-ic"
-									><img src={r.url} alt={r.label} title={r.label} loading="lazy" /></span
-								>
-							{/each}
+				<span class="boss-name">{underAttack ? displayName(underAttack.name) : 'Monsters'}</span>
+				{#if underAttack}
+					<span class="meta-row">
+						<span class="chip dmg" title="It hits first for this much">
+							<span class="chip-g" aria-hidden="true">⚔️</span>{underAttack.damage}
+						</span>
+						<span class="chip hp" title="Barrier left: the damage still needed to defeat it (damage stays on the card)">
+							{#if barrierIcon}<img class="chip-ic" src={barrierIcon} alt="" />{:else}<span
+									class="chip-g"
+									aria-hidden="true">❤</span
+								>{/if}{underAttack.hp}/{underAttack.maxHp}
 						</span>
 					</span>
+					{#if monsterRewards.length > 0}
+						<span class="bounty" title="Defeat it to gain every reward shown">
+							<span class="bounty-label">Bounty</span>
+							<span class="bounty-icons">
+								{#each monsterRewards as r (r.index)}
+									<span class="bounty-ic"
+										><img src={r.url} alt={r.label} title={r.label} loading="lazy" /></span
+									>
+								{/each}
+							</span>
+						</span>
+					{/if}
+				{:else}
+					<span class="hand-note">In hand</span>
 				{/if}
 			</span>
 
-			<span
-				class="boss-av"
-				title="{monster.livesRemaining} of {monster.livesTotal} {monster.livesTotal === 1
-					? 'kill'
-					: 'kills'} left to defeat it"
-			>
+			<span class="boss-av">
 				<span class="sigil" aria-hidden="true"></span>
-				{#if monster.livesRemaining > 0}
-					<span class="lives" aria-label="{monster.livesRemaining} kills remaining"
-						>×{monster.livesRemaining}</span
-					>
-				{/if}
+				<span class="lives" aria-label="{myHand.length} of {HAND_LIMIT} monster cards in your hand"
+					>{myHand.length}/{HAND_LIMIT}</span
+				>
 			</span>
 		</div>
 	{/if}
@@ -206,9 +224,8 @@
 		pointer-events: auto;
 	}
 
-	/* ── The Arcane Abyss monster — pinned at the apex of the standings in the SAME row
-	   grammar as the players (meta-left, sigil-right, threaded on the spine), so it reads as
-	   the thing everyone is racing against rather than a bolted-on banner. Its identity is the
+	/* ── My monster hand — pinned at the apex of the standings in the SAME row grammar as
+	   the players (meta-left, sigil-right, threaded on the spine). Its identity is the
 	   hexagonal abyssal sigil (see .sigil), without card chrome behind the row. */
 	.boss {
 		--mon: #a855f7;
@@ -223,6 +240,10 @@
 		padding: 2px 0;
 	}
 	.boss-name {
+		max-width: var(--lb-name-w, 8rem);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		font-family: var(--font-display);
 		font-size: 0.95rem;
 		letter-spacing: 0.05em;
@@ -263,8 +284,11 @@
 	/* Bounty — the payoff for the kill, sitting where a player's barrier pips sit. */
 	.bounty {
 		display: inline-flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 		align-items: center;
-		gap: 6px;
+		gap: 2px 6px;
+		max-width: 100%;
 	}
 	.bounty-label {
 		font-size: 0.54rem;
@@ -289,9 +313,17 @@
 		object-fit: contain;
 	}
 
-	/* ── Signature: the abyssal sigil. Where players are circular souls, the monster is a
+	.hand-note {
+		white-space: nowrap;
+		font-size: 0.6rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: color-mix(in srgb, var(--mon) 38%, #fff 50%);
+	}
+
+	/* ── Signature: the abyssal sigil. Where players are circular souls, monsters are a
 	   hexagon holding a slow void vortex with a vertical slit eye — pulsing, ringed in abyss
-	   purple. The blood badge counts the kills still needed to bring it down. ───────────── */
+	   purple. The badge counts the monster cards in my hand. ───────────────────────────── */
 	.boss-av {
 		position: relative;
 		flex: 0 0 auto;
@@ -529,7 +561,7 @@
 	.self-score {
 		gap: 5px;
 	}
-	/* Attack chip — the resting average roll damage (dice + Spirit Animal), shown to
+	/* Attack chip — the resting average roll damage (dice + Beast), shown to
 	   the left of the initiative chip. Coral, distinct from amber VP / cyan initiative. */
 	.atk {
 		display: inline-flex;

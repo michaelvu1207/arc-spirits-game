@@ -53,11 +53,11 @@
 		</div>
 		<div class="insight">
 			<div class="insight-k">≥7</div>
-			<div class="insight-t"><b>Potential ≥ 7</b> (= the boss's damage) to survive the climb — pot 5 wins only ~5%. On the slower one-action-per-round economy, over-building to 10 isn't punished; 5–6 also works with an "attack at the same time" spirit.</div>
+			<div class="insight-t"><b>Max Barrier ≥ 7</b> (= the boss's damage) to survive the climb — pot 5 wins only ~5%. On the slower one-action-per-round economy, over-building to 10 isn't punished; 5–6 also works with an "attack at the same time" spirit.</div>
 		</div>
 		<div class="insight">
 			<div class="insight-k">0</div>
-			<div class="insight-t">Win rate with <b>no potential at all</b> — potential is mandatory in some amount; below ~5 you can't survive the climb.</div>
+			<div class="insight-t">Win rate with <b>no Max Barrier gain at all</b> — Max Barrier is mandatory in some amount; below ~5 you can't survive the climb.</div>
 		</div>
 	</section>
 

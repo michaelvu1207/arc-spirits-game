@@ -32,7 +32,7 @@
 <script lang="ts">
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
 	import type { DiceTier } from '$lib/play/types';
-	import { DICE_TIER_ORDER, STATUS_LADDER, SPIRIT_LIMIT_BY_STATUS } from '$lib/play/types';
+	import { DICE_TIER_ORDER, STATUS_LADDER, MAX_SPIRITS } from '$lib/play/types';
 	import { DICE_TIER_FACES } from '$lib/play/combat';
 	import { iconPoolUrl, storageUrl, statusAccent } from './helpers';
 
@@ -58,7 +58,7 @@
 				'Shared reference for the board icons, player status ladder, realm actions and attack dice.',
 			tips: [
 				'Victory Points decide the winner: the first player to 30 points wins.',
-				'Potential absorbs combat damage before corruption lowers your status.',
+				'Max Barrier absorbs combat damage before corruption lowers your status.',
 				'Runes and relics awaken face-down spirits and are capped during Cleanup.'
 			]
 		},
@@ -77,7 +77,7 @@
 			title: 'Players Guide',
 			eyebrow: 'Right screen',
 			summary:
-				'The player list compares seats, score, status, potential and destination readiness.',
+				'The player list compares seats, score, status, Max Barrier and destination readiness.',
 			tips: [
 				'Clicking a player opens their spirit composition in the stage.',
 				'Status color follows the Pure, Tainted, Corrupt and Fallen ladder.',
@@ -112,7 +112,7 @@
 				'Navigation is where each seated player chooses the realm they will visit this round.',
 			tips: [
 				'Spirit World realms offer action cards such as Summon, Cultivate and Rest.',
-				'Arcane Abyss is the monster route, with combat and monster rewards.',
+				'At the Arcane Abyss you draw monster cards into your hand and fight them.',
 				'Locked destinations reveal together when everyone is ready or the timer expires.'
 			]
 		},
@@ -132,7 +132,7 @@
 			summary: 'The reveal shows where each player committed before the round enters those realms.',
 			tips: [
 				'Players sharing a Spirit World realm may become encounter targets.',
-				'Players at Arcane Abyss face the monster route instead.',
+				'Players at the Arcane Abyss draw or fight monster cards instead.',
 				'The reveal is informational; the next screen hosts the active choices.'
 			]
 		},
@@ -153,17 +153,17 @@
 			tips: [
 				'Summon actions add spirits to your board and may open a draw tray.',
 				'Cultivate converts matching origins into runes.',
-				'Rest grows your combat dice or potential through class effects.'
+				'Rest grows your combat dice or Max Barrier through class effects.'
 			]
 		},
 		abyssActions: {
 			title: 'Abyss Actions',
 			eyebrow: 'Monster route',
-			summary: 'Arcane Abyss focuses on monster combat, abyss summons and kill rewards.',
+			summary: 'At the Arcane Abyss you draw monster cards into your own hand and fight them.',
 			tips: [
-				'Fight the Monster rolls your attack dice against the current monster.',
-				'Damage can cost potential and trigger corruption.',
-				'Monster kills award Victory Points plus reward-track picks.'
+				'Once per visit, pick a deck (I, II or III), reveal 2 cards and keep 1. Your hand holds 3.',
+				'Tap a card in your hand to fight it. It hits first, and its damage stays on the card.',
+				'A kill gives you every reward on the card, and the card leaves the game.'
 			]
 		},
 		draw: {
@@ -183,7 +183,7 @@
 				'Combat rolls your attack dice and compares damage against the monster or player fight.',
 			tips: [
 				'Attack dice tiers get stronger from Basic to Arcane.',
-				'Potential absorbs incoming damage before corruption applies.',
+				'Max Barrier absorbs incoming damage before corruption applies.',
 				'Combat can produce pending rewards or forced spirit discards.'
 			]
 		},
@@ -191,11 +191,11 @@
 			title: 'Reward Guide',
 			eyebrow: 'Claim rewards',
 			summary:
-				'Reward screens let you choose the gains earned from monster kills or action effects.',
+				'Reward screens show the gains from a monster kill (every reward on the card) or from action effects.',
 			tips: [
-				'Some rewards grant direct VP, runes, relics, potential or dice.',
+				'Some rewards grant direct VP, runes, relics, Max Barrier or dice.',
 				'Some rewards branch into another summon draw.',
-				'Pick limits are enforced by the reward track shown on the screen.'
+				'A rune reward asks you to pick which rune you take.'
 			]
 		},
 		actionResult: {
@@ -204,7 +204,7 @@
 			summary:
 				'The result view summarizes what the last action changed before returning to the action grid.',
 			tips: [
-				'Resource changes can include runes, relics, potential, dice and VP.',
+				'Resource changes can include runes, relics, Max Barrier, dice and VP.',
 				'Class effects may add extra grants after the base action resolves.',
 				'Continue returns to the current phase once the result is reviewed.'
 			]
@@ -356,13 +356,13 @@
 			},
 			{
 				ids: ['6746f875-a1bc-453c-94b5-718d6ebeb025'],
-				label: 'Potential (Health)',
-				desc: 'Health tokens that absorb combat damage. When a hit exceeds your potential you corrupt (your status drops a rung).'
+				label: 'Max Barrier (Health)',
+				desc: 'Health tokens that absorb combat damage. When a hit exceeds your Barrier you corrupt (your status drops a rung).'
 			},
 			{
 				ids: ['80f1d5a8-812e-4bb2-b341-68e69d9a3e38'],
 				label: 'Broken Barrier',
-				desc: 'Corrupted potential — health flipped to its dark side when you take damage.'
+				desc: 'Broken Barrier — health flipped to its dark side when you take damage.'
 			},
 			{
 				ids: ['36aab6c9-b98c-4e84-b097-e743f45dde82', '6a85e06a-52cc-483c-aa59-38395a377307'],
@@ -382,19 +382,20 @@
 	);
 
 	// ── Player status / corruption ladder (grounded in the engine) ───────────────
-	// STATUS_LADDER + SPIRIT_LIMIT_BY_STATUS: Pure 7 → Tainted 6 → Corrupt 5 → Fallen 4;
-	// only Fallen is Evil (isEvilAlignment); corrupting past the bottom discards a spirit.
+	// STATUS_LADDER; the spirit board is MAX_SPIRITS (7) at every status. Each corruption costs a
+	// one-time sacrifice (Nth corruption → N spirits; types.ts setCorruptionDiscardObligation).
+	// Only Fallen is Evil (isEvilAlignment).
 	const STATUS_NOTE: Record<string, string> = {
 		Pure: 'Uncorrupted and fully Good — your strongest standing.',
 		Tainted: 'Lightly corrupted. Still Good-aligned.',
 		Corrupt: 'Deeply corrupted. Still Good-aligned.',
 		Fallen:
-			'Evil-aligned. In the Encounter phase you may attack co-located Good players for +2 VP each. You can’t fall any further — corrupting damage now forces you to discard a spirit instead.'
+			'Evil-aligned. In the Encounter phase you may attack co-located Good players for +2 VP each. You can’t fall any further; further corruptions still cost their sacrifice, and each spirit you can’t pay costs 1 VP.'
 	};
 	const statusLevels = STATUS_LADDER.map((name, i) => ({
 		name,
 		color: statusAccent(name),
-		slots: SPIRIT_LIMIT_BY_STATUS[i],
+		slots: MAX_SPIRITS,
 		note: STATUS_NOTE[name] ?? ''
 	}));
 
@@ -532,8 +533,9 @@
 				</div>
 				<p class="section-note">
 					Every player sits on a corruption ladder. Taking more combat damage than your remaining
-					Potential corrupts you — your status drops one level and your spirit board shrinks to the
-					new cap (you discard spirits down to the new limit).
+					Barrier corrupts you — your status drops one level, your Barrier refills, and you discard
+					spirits of your choice: 1 the first time, 2 the second, 3 the third, 4 the fourth. Your
+					spirit board stays at {MAX_SPIRITS} slots, so you may refill it afterwards.
 				</p>
 				<div class="status-list">
 					{#each statusLevels as s (s.name)}

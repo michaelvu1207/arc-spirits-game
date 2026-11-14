@@ -22,6 +22,7 @@ import { dirname } from 'node:path';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { applyDeadlineAdvance, applyGameCommand, createLobbyState } from '../runtime';
 import { createRng, nextInt } from '../rng';
+import { bestHandMonster, bestStartCombatCommand } from '../bots/monsterCardAutopilot';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -39,6 +40,7 @@ import {
 	isEvilAlignment,
 	type GameActor,
 	type GameCommand,
+	type MonsterState,
 	type NavigationDestination,
 	type PlayCatalog,
 	type PrivatePlayerState,
@@ -244,8 +246,14 @@ function isAtAbyss(state: PublicGameState, seat: SeatColor): boolean {
 	return state.players[seat]?.navigationDestination === 'Arcane Abyss';
 }
 
-function monsterHp(state: PublicGameState): number {
-	return state.monster ? state.monster.maxHp ?? state.monster.hp ?? 0 : 0;
+/** The card `seat` would fight: the best live card in its own monster hand (null when empty). */
+function seatMonster(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): MonsterState | null {
+	return bestHandMonster(state, seat, catalog)?.card ?? null;
+}
+
+function monsterHp(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): number {
+	const monster = seatMonster(state, seat, catalog);
+	return monster ? monster.maxHp ?? monster.hp ?? 0 : 0;
 }
 
 function farmStillGood(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, cfg: Config): boolean {
@@ -268,7 +276,7 @@ function damageReadyForMonsterPivot(
 	cfg: Config
 ): boolean {
 	const player = state.players[seat];
-	const hp = monsterHp(state);
+	const hp = monsterHp(state, seat, catalog);
 	if (!player || hp <= 0) return false;
 	const firepowerProb = firepowerKillProbability(state, seat, catalog);
 	return firepowerProb >= cfg.farmThreshold || expectedAttack(player) >= Math.max(1, hp - 0.5);
@@ -288,7 +296,7 @@ function readyToDescend(
 	const vp = player.victoryPoints ?? 0;
 	if (!hasCore || vp >= VP_TO_WIN) return false;
 	if (farmStillGood(state, seat, catalog, cfg) && vp < cfg.pivotMinVp) return false;
-	const monsterIsHard = monsterHp(state) >= cfg.pivotMonsterHp;
+	const monsterIsHard = monsterHp(state, seat, catalog) >= cfg.pivotMonsterHp;
 	const routeIsLate = state.round >= cfg.pivotMinRound || vp >= cfg.pivotMinVp || monsterIsHard;
 	return routeIsLate && (state.round >= 10 || !stillNeedsPvp || damageReadyForMonsterPivot(state, seat, catalog, cfg));
 }
@@ -366,10 +374,12 @@ function predictedHuntDestinations(
 				return null;
 			}
 			const destinations: NavigationDestination[] = [];
-			const hp = monsterHp(state);
+			// The target fights cards from its own hand (offline teacher: full state is visible).
+			const targetMonster = seatMonster(state, targetSeat, catalog);
+			const hp = monsterHp(state, targetSeat, catalog);
 			const targetAttack = expectedAttack(target);
 			const counts = classCounts(target);
-			const survivalTarget = state.monster ? (state.monster.damage ?? 0) + 1 : 0;
+			const survivalTarget = targetMonster ? (targetMonster.damage ?? 0) + 1 : 0;
 			const barrier = target.barrier ?? 0;
 			const maxBarrier = target.maxBarrier ?? 0;
 			const attackDice = target.attackDice?.length ?? 0;
@@ -415,9 +425,9 @@ function shouldPredictiveHunt(
 		farm.valid &&
 		farm.rewardVp > 0 &&
 		(clean >= cfg.farmThreshold || firepower >= cfg.farmThreshold) &&
-		farm.rewardVp * Math.max(1, farm.livesRemaining) >= finishNeeded;
+		farm.rewardVp >= finishNeeded; // each monster card is a single kill
 	if (monsterCanFinish) return false;
-	if (vp < 24) return clean < 0.25 && firepower < 0.25 && monsterHp(state) >= cfg.pivotMonsterHp;
+	if (vp < 24) return clean < 0.25 && firepower < 0.25 && monsterHp(state, seat, catalog) >= cfg.pivotMonsterHp;
 	if (vp < 27 && (clean >= cfg.farmThreshold * 0.7 || firepower >= cfg.farmThreshold * 0.7)) return false;
 	return true;
 }
@@ -442,27 +452,23 @@ function choosePvpFarmReturnNav(
 	if (!hasHuntOption) return null;
 
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold: cfg.farmThreshold });
-	if (!farm.valid || farm.rewardVp <= 0 || farm.livesRemaining <= 0) return null;
+	if (!farm.valid || farm.rewardVp <= 0) return null;
 	const clean = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const firepower = firepowerKillProbability(state, seat, catalog);
 	const killProb = Math.max(clean, firepower * 0.85);
 	const nextFarmEv = farm.rewardVp * killProb;
 	const reliableFarm = clean >= cfg.farmThreshold || firepower >= cfg.farmThreshold;
-	const lowRungBank =
-		farm.rewardVp >= cfg.preserveFarmVp &&
-		farm.livesRemaining >= 2 &&
-		monsterHp(state) <= Math.max(cfg.pivotMonsterHp, 4) &&
-		killProb >= 0.35;
+	// (The old multi-life "low rung bank" case is gone: each monster card is a single kill.)
 	const usefulImmediateFarm = reliableFarm && nextFarmEv >= Math.max(1.1, cfg.preserveFarmVp * 0.55);
 	const usefulFarmBank =
-		farm.rewardVp * Math.max(1, farm.livesRemaining) >= Math.min(finishNeeded, 4) &&
-		monsterHp(state) <= Math.max(cfg.pivotMonsterHp + 1, 5) &&
+		farm.rewardVp >= Math.min(finishNeeded, 4) &&
+		monsterHp(state, seat, catalog) <= Math.max(cfg.pivotMonsterHp + 1, 5) &&
 		killProb >= 0.25;
 	const finishableByMonster =
 		reliableFarm &&
-		farm.rewardVp * Math.max(1, farm.livesRemaining) >= finishNeeded &&
+		farm.rewardVp >= finishNeeded &&
 		nextFarmEv >= 1.5;
-	if (!lowRungBank && !usefulImmediateFarm && !usefulFarmBank && !finishableByMonster) return null;
+	if (!usefulImmediateFarm && !usefulFarmBank && !finishableByMonster) return null;
 
 	const idx = legalIndex(withNext, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 	return idx >= 0 ? { idx, kind: 'pvp-farm-return-nav', score: 2.75, record: true } : null;
@@ -494,13 +500,14 @@ function chooseBuildNav(
 	if (farmStillGood(state, seat, catalog, cfg) && (player.victoryPoints ?? 0) < cfg.pivotMinVp) return null;
 	if (readyToDescend(state, seat, catalog, cfg)) return null;
 
-	const hp = monsterHp(state);
+	const hp = monsterHp(state, seat, catalog);
 	const damageReady = damageReadyForMonsterPivot(state, seat, catalog, cfg);
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
-	const needsBarrier = !!state.monster && player.barrier <= state.monster.damage && player.maxBarrier > state.monster.damage;
+	const monster = seatMonster(state, seat, catalog);
+	const needsBarrier = !!monster && player.barrier <= monster.damage && player.maxBarrier > monster.damage;
 	const needsCore = !hasPvpCoreSeed(player, cfg) || targetNeedScore(classCounts(player), cfg) > 0;
 	const needsDamage = hp > 0 && !damageReady;
-	const needsSafeFarm = hp > 0 && cleanProb < cfg.farmThreshold && player.maxBarrier <= (state.monster?.damage ?? 0);
+	const needsSafeFarm = hp > 0 && cleanProb < cfg.farmThreshold && player.maxBarrier <= (monster?.damage ?? 0);
 
 	if (!needsBarrier && !needsCore && !needsDamage && !needsSafeFarm && state.round < cfg.pivotMinRound) return null;
 
@@ -557,7 +564,8 @@ function chooseTeacherDecision(
 	if (classGain) return classGain;
 
 	if (state.phase === 'location' && isAtAbyss(state, seat) && (player.statusLevel ?? 0) < 3) {
-		const idx = legalIndex(withNext, { type: 'startCombat' });
+		const fight = bestStartCombatCommand(state, seat, catalog);
+		const idx = fight ? legalIndex(withNext, fight) : -1;
 		if (idx >= 0 && readyToDescend(state, seat, catalog, cfg)) {
 			return { idx, kind: 'pvp-descend-combat', score: 2, record: true };
 		}

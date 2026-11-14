@@ -1,5 +1,12 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import { setupTwoPlayerGame, expectPhase, getRoomView, runRoomCommand } from './helpers';
+import {
+	setupTwoPlayerGame,
+	expectPhase,
+	getRoomView,
+	runRoomCommand,
+	drawMonsterCardViaApi,
+	clearPowerDraftsViaApi
+} from './helpers';
 
 const PHONE_LANDSCAPE = { width: 932, height: 430 };
 const EDGE_TOLERANCE = 2;
@@ -417,16 +424,19 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 		await runRoomCommand(host, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 		await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 		await runRoomCommand(host, { type: 'forceAdvancePhase' });
+		await drawMonsterCardViaApi(host, 1);
+		// An open Navigation Power draft is a full-screen dialog over the stage.
+		await clearPowerDraftsViaApi(host);
 		await refreshRoomPage(host);
 
 		await expectMobileLayoutClear(
 			host,
-			'arcane abyss action lane',
-			['action-monsterCombat', 'interaction-grid', 'leaderboard'],
+			'arcane abyss stage',
+			['abyss-draw-stack', 'monster-hand-0', 'leaderboard'],
 			{ allowInstructionOverlap: ['leaderboard'] }
 		);
 
-		await host.getByTestId('action-monsterCombat').click({ force: true });
+		await host.getByTestId('monster-hand-0').click({ force: true });
 		const combatTarget = await waitForAnyVisible(host, ['combat-overlay', 'monster-reward-menu']);
 		await expectMobileLayoutClear(
 			host,
@@ -436,7 +446,7 @@ test.describe('2D play — iPhone landscape layout integrity', () => {
 
 		if (combatTarget === 'combat-overlay') {
 			await host.getByTestId('combat-continue').click({ force: true });
-			await waitForAnyVisible(host, ['monster-reward-menu', 'interaction-grid', 'stage-waiting']);
+			await waitForAnyVisible(host, ['monster-reward-menu', 'abyss-stage', 'stage-waiting']);
 		}
 		if (await hasVisibleTestId(host, 'monster-reward-menu')) {
 			await expectMobileLayoutClear(host, 'monster reward controls', [

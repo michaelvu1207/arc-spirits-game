@@ -76,9 +76,9 @@ function routeSpiritAnimal(seat: SeatColor, count: number): PlaySpirit {
 	return {
 		slotIndex: 7,
 		id: `curriculum-spirit-animal-${seat}-${count}`,
-		name: `Curriculum Spirit Animal x${count}`,
+		name: `Curriculum Beast x${count}`,
 		cost: 3,
-		classes: { 'Spirit Animal': count },
+		classes: { 'Beast': count },
 		origins: {},
 		isFaceDown: false
 	};

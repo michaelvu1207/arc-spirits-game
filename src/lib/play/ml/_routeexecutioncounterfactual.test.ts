@@ -18,6 +18,7 @@ import { applyDeadlineAdvance, applyGameCommand, createLobbyState } from '../run
 import { createRng, nextInt } from '../rng';
 import { expectedAttack } from '../combat';
 import { awakenedClassCounts } from '../effects/apply';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -39,6 +40,7 @@ import {
 	VP_TO_WIN,
 	type GameActor,
 	type GameCommand,
+	type MonsterState,
 	type NavigationDestination,
 	type PlayCatalog,
 	type PublicGameState,
@@ -418,6 +420,7 @@ function gainEffectLabel(gain: GainEffect): string {
 		case 'restoreBarrier': return 'restoreBarrier';
 		case 'rune': return gain.rune.name.replace(/\s+/g, '');
 		case 'vp': return `${gain.amount}VP`;
+		case 'attackDice': return `${gain.amount}${gain.tier}Die`;
 		case 'chooseRune': {
 			const options = gain.options.map((o) => o.name.replace(/\s+/g, '')).slice(0, 3).join('/');
 			return options ? `chooseRune:${options}` : 'chooseRune';
@@ -569,9 +572,14 @@ function branchActionsForScope(withNext: LegalAction[], cfg: Config): LegalActio
 	return scoped.filter((x) => cfg.branchTypes?.has(x.cmd.type));
 }
 
+/** The card `seat` would fight: the best live card in its own monster hand (null when empty). */
+function seatMonster(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): MonsterState | null {
+	return bestHandMonster(state, seat, catalog)?.card ?? null;
+}
+
 function combatReadyButNeedsRestore(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, cfg: Config): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	if (cleanProb >= cfg.cleanThreshold) return false;
@@ -601,7 +609,7 @@ function shouldGoodTargetContinueAbyssFarm(
 	cfg: Config
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	const status = player?.statusLevel ?? 0;
 	if (!player || !monster || status > 2) return false;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold: cfg.cleanThreshold });
@@ -610,7 +618,6 @@ function shouldGoodTargetContinueAbyssFarm(
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const vp = player.victoryPoints ?? 0;
 	if (vp >= GOOD_TARGET_EXPOSE_AFTER_VP) return false;
-	const lives = Math.max(1, farm.livesRemaining ?? monster.livesRemaining ?? 1);
 	const clean = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const corrupt = computeKillProbability(state, seat, catalog, { allowCorruptKill: true });
 	const firepower = firepowerKillProbability(state, seat, catalog);
@@ -638,11 +645,11 @@ function shouldGoodTargetContinueAbyssFarm(
 			canSpendCorruptionAndRemainGood &&
 			(corrupt >= cfg.cleanThreshold * 0.65 || firepower >= cfg.firepowerThreshold * 0.65 || attack >= monsterHp - 0.75)
 		);
-	if (farm.rewardVp >= 3 && controlledOpportunityVp >= 2 && lives >= 2 && monsterHp <= 2 && nearDamage && vp < 24) return true;
+	// (The old multi-life hp≤2 farm case is gone: each monster card is a single kill.)
 	const efficientHp4Farm =
 		controlledOpportunityVp >= 2 &&
 		monsterHp <= 4 &&
-		(vp < 18 || farm.rewardVp >= 3 || lives >= 2) &&
+		(vp < 18 || farm.rewardVp >= 3) &&
 		nearDamage;
 	if (efficientHp4Farm && vp < 24) return true;
 	const reliablePrePivotHardFarm =
@@ -650,7 +657,7 @@ function shouldGoodTargetContinueAbyssFarm(
 		monsterHp <= 5 &&
 		(damageReady || clean >= cfg.cleanThreshold * 0.65 || firepower >= cfg.firepowerThreshold * 0.65);
 	if (reliablePrePivotHardFarm) return true;
-	return vp + farm.rewardVp * lives >= VP_TO_WIN && (damageReady || nearDamage);
+	return vp + farm.rewardVp >= VP_TO_WIN && (damageReady || nearDamage);
 }
 
 function goodTargetPivotDestinations(
@@ -660,7 +667,7 @@ function goodTargetPivotDestinations(
 	cfg: Config
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
 	if ((player.statusLevel ?? 0) > 2) return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, cfg)) return ['Arcane Abyss'];
@@ -682,7 +689,7 @@ function goodTargetPivotDestinations(
 		appendDestination(destinations, 'Fire Region');
 	}
 	if (needsMaxBarrier) appendDestination(destinations, 'Fire Region');
-	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || player.spirits.length < 6 || (counts['Spirit Animal'] ?? 0) < 2) {
+	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || player.spirits.length < 6 || (counts['Beast'] ?? 0) < 2) {
 		appendDestination(destinations, 'Water Region');
 		appendDestination(destinations, 'Mountain Region');
 	}
@@ -703,9 +710,11 @@ function shouldUseNavigationGate(
 ): boolean {
 	if (!policy) return false;
 	if (gate === 'all') return true;
+	// The card this seat would fight (its best live hand card); the gates below read it.
+	const gateMonster = seatMonster(state, seat, catalog);
 	if (gate === 'good-nonfallen-farm-build' || gate === 'good-nonfallen-farm-target-pivot') {
 		const player = state.players[seat];
-		return !!player && !!state.monster && (cfg.maxStatusLevel === undefined || (player.statusLevel ?? 0) <= cfg.maxStatusLevel);
+		return !!player && !!gateMonster && (cfg.maxStatusLevel === undefined || (player.statusLevel ?? 0) <= cfg.maxStatusLevel);
 	}
 	if (gate === 'midroute-scaling') {
 		const player = state.players[seat];
@@ -716,7 +725,7 @@ function shouldUseNavigationGate(
 	}
 		if (gate === 'route-option-scaling') {
 		const player = state.players[seat];
-		if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+		if (!player || !gateMonster || (player.statusLevel ?? 0) !== 0) return false;
 		const farm = evaluateFarmValue(state, seat, catalog, { threshold: cfg.cleanThreshold });
 		if (farm.valid && farm.farmable && farm.opportunityVp > 0) return false;
 		const vp = player.victoryPoints ?? 0;
@@ -724,7 +733,7 @@ function shouldUseNavigationGate(
 		const counts = awakenedClassCounts(player);
 		const attackDice = player.attackDice?.length ?? 0;
 		const attack = expectedAttack(player);
-		const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
+		const monsterHp = gateMonster.maxHp ?? gateMonster.hp ?? 0;
 		const firepowerProb = firepowerKillProbability(state, seat, catalog);
 		const needsDamage = monsterHp > 0 && (firepowerProb < cfg.cleanThreshold || attack < monsterHp + 1);
 		if (needsDamage) return true;
@@ -746,7 +755,7 @@ function shouldUseNavigationGate(
 		}
 		if (gate === 'hp2-survival-deficit') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 		const vp = player.victoryPoints ?? 0;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -761,7 +770,7 @@ function shouldUseNavigationGate(
 	}
 	if (gate === 'hp4-first-wall') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 		const vp = player.victoryPoints ?? 0;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -782,15 +791,15 @@ function shouldUseNavigationGate(
 	}
 	if (gate === 'route-closer') {
 		const player = state.players[seat];
-		if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+		if (!player || !gateMonster || (player.statusLevel ?? 0) !== 0) return false;
 		const farm = evaluateFarmValue(state, seat, catalog, { threshold: cfg.cleanThreshold });
 		if (farm.valid && farm.farmable && farm.opportunityVp > 0) return false;
 		const vp = player.victoryPoints ?? 0;
-		const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
+		const monsterHp = gateMonster.maxHp ?? gateMonster.hp ?? 0;
 		if (state.round < 12 || vp < 15 || vp >= 30 || monsterHp < 4) return false;
 		const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 		if (cleanProb >= cfg.cleanThreshold) return false;
-		const monsterDamage = state.monster.damage ?? 0;
+		const monsterDamage = gateMonster.damage ?? 0;
 		const attack = expectedAttack(player);
 		const firepowerProb = firepowerKillProbability(state, seat, catalog);
 		const survivalTarget = monsterDamage + 1;
@@ -806,11 +815,11 @@ function shouldUseNavigationGate(
 	}
 	if (gate === 'survival-rebuild') {
 		const player = state.players[seat];
-		if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+		if (!player || !gateMonster || (player.statusLevel ?? 0) !== 0) return false;
 		const farm = evaluateFarmValue(state, seat, catalog, { threshold: cfg.cleanThreshold });
 		if (farm.valid && farm.farmable && farm.opportunityVp > 0) return false;
-		const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
-		const monsterDamage = state.monster.damage ?? 0;
+		const monsterHp = gateMonster.maxHp ?? gateMonster.hp ?? 0;
+		const monsterDamage = gateMonster.damage ?? 0;
 		const vp = player.victoryPoints ?? 0;
 		if (state.round < 5 || vp < 9 || monsterHp < 2) return false;
 		const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
@@ -823,7 +832,7 @@ function shouldUseNavigationGate(
 		return monsterHp >= 4 || barrierDeficit || maxBarrierDeficit || damageDeficit;
 	}
 	const player = state.players[seat];
-	if (!player || !state.monster || (player.statusLevel ?? 0) !== 0) return false;
+	if (!player || !gateMonster || (player.statusLevel ?? 0) !== 0) return false;
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const firepowerProb = firepowerKillProbability(state, seat, catalog);
 	return firepowerProb >= cfg.firepowerThreshold && cleanProb < cfg.cleanThreshold;
@@ -831,7 +840,7 @@ function shouldUseNavigationGate(
 
 function routeCloserFullActionState(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, cfg: Config): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const vp = player.victoryPoints ?? 0;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -857,7 +866,7 @@ function routeCloserFullActionState(state: PublicGameState, seat: SeatColor, cat
 
 function routeCloserRestoreFinishState(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, cfg: Config): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const vp = player.victoryPoints ?? 0;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -865,7 +874,7 @@ function routeCloserRestoreFinishState(state: PublicGameState, seat: SeatColor, 
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold: cfg.cleanThreshold });
 	const finishOpportunity = farm.valid &&
 		farm.rewardVp > 0 &&
-		vp + farm.rewardVp * Math.max(1, farm.livesRemaining) >= VP_TO_WIN;
+		vp + farm.rewardVp >= VP_TO_WIN; // each monster card is a single kill
 	if (!finishOpportunity) return false;
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const firepowerProb = firepowerKillProbability(state, seat, catalog);
@@ -907,7 +916,7 @@ function navigationRootDestinationsForGate(
 	}
 	if (gate === 'route-closer') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster) return CLOSER_DAMAGE_DESTINATIONS;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 		const monsterDamage = monster.damage ?? 0;
@@ -927,7 +936,7 @@ function navigationRootDestinationsForGate(
 	}
 	if (gate === 'route-finish-loop') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster) return CLOSER_RESTORE_DESTINATIONS;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 		const survivalTarget = (monster.damage ?? 0) + 1;
@@ -946,7 +955,7 @@ function navigationRootDestinationsForGate(
 	}
 	if (gate === 'survival-rebuild') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster) return BUILD_OPTION_DESTINATIONS;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 		const attack = expectedAttack(player);
@@ -1019,7 +1028,7 @@ function recordBuild(metrics: RouteBranchMetrics, state: PublicGameState, seat: 
 	metrics.maxBarrier = Math.max(metrics.maxBarrier, player.maxBarrier ?? 0);
 	metrics.maxCurrentBarrier = Math.max(metrics.maxCurrentBarrier, player.barrier ?? 0);
 	metrics.maxAttackDice = Math.max(metrics.maxAttackDice, player.attackDice?.length ?? 0);
-	metrics.maxSpiritAnimal = Math.max(metrics.maxSpiritAnimal, counts['Spirit Animal'] ?? 0);
+	metrics.maxSpiritAnimal = Math.max(metrics.maxSpiritAnimal, counts['Beast'] ?? 0);
 	metrics.maxCultivator = Math.max(metrics.maxCultivator, counts.Cultivator ?? 0);
 	metrics.maxHealer = Math.max(metrics.maxHealer, counts.Healer ?? 0);
 }
@@ -1492,7 +1501,7 @@ function playerWindowBuild(state: PublicGameState, seat: SeatColor): PlayerWindo
 		maxBarrier: player.maxBarrier ?? 0,
 		currentBarrier: player.barrier ?? 0,
 		attackDice: player.attackDice?.length ?? 0,
-		spiritAnimal: counts['Spirit Animal'] ?? 0,
+		spiritAnimal: counts['Beast'] ?? 0,
 		cultivator: counts.Cultivator ?? 0
 	};
 }
@@ -1506,7 +1515,7 @@ interface MonsterWindowSignal {
 }
 
 function monsterWindowSignal(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): MonsterWindowSignal {
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!monster) {
 		return {
 			monsterHp: 0,
@@ -1519,7 +1528,7 @@ function monsterWindowSignal(state: PublicGameState, seat: SeatColor, catalog: P
 	return {
 		monsterHp: monster.maxHp ?? monster.hp ?? 0,
 		monsterDamage: monster.damage ?? 0,
-		monsterLives: monster.livesRemaining ?? 0,
+		monsterLives: 1, // a live hand card (each card is a single kill)
 		cleanKillProb: computeKillProbability(state, seat, catalog, { allowCorruptKill: false }),
 		firepowerKillProb: firepowerKillProbability(state, seat, catalog)
 	};

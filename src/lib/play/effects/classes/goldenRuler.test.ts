@@ -11,7 +11,7 @@ import type { AwakenGrant } from '../../types';
  *
  * This is ENGINE-handled, not effect-system handled. The class `ability` array is
  * intentionally empty. The grant surfaces to the player as a CLEANUP CLAIM card:
- * `enterBenefits` (phases.ts) pushes a `{ kind: 'vp', amount: 1, source: 'Golden Ruler' }`
+ * `enterBenefits` (phases.ts) pushes a `{ kind: 'vp', amount: 1, source: 'King' }`
  * line into `player.pendingAwakenReward.grants` whenever the player holds ≥1 awakened
  * Dawn Sovereign — and, when the player is Evil, it tags the line with a note warning that
  * claiming also discards a Dawn Sovereign spirit. `resolveAwakenReward` (runtime.ts) then
@@ -34,7 +34,7 @@ function grants(player: ReturnType<typeof makePlayer>): AwakenGrant[] {
 function stateForRuler(statusLevel = 0) {
 	const player = makePlayer({
 		statusLevel,
-		spirits: [spirit(1, { 'Golden Ruler': 1 })]
+		spirits: [spirit(1, { 'King': 1 })]
 	});
 	return { player, state: makeState(player) };
 }
@@ -47,7 +47,7 @@ describe('Dawn Sovereign — engine-handled Cleanup claim', () => {
 	it('holding an awakened Dawn Sovereign → a +1 VP claim line (Good: no note)', () => {
 		const { player, state } = stateForRuler(0);
 		enterBenefits(state);
-		expect(grants(player)).toEqual([{ kind: 'vp', amount: 1, source: 'Golden Ruler' }]);
+		expect(grants(player)).toEqual([{ kind: 'vp', amount: 1, source: 'King' }]);
 	});
 
 	it('Evil holder → the +1 VP claim line carries the self-discard warning note', () => {
@@ -55,14 +55,14 @@ describe('Dawn Sovereign — engine-handled Cleanup claim', () => {
 		enterBenefits(state);
 		const lines = grants(player);
 		expect(lines).toHaveLength(1);
-		expect(lines[0]).toMatchObject({ kind: 'vp', amount: 1, source: 'Golden Ruler' });
+		expect(lines[0]).toMatchObject({ kind: 'vp', amount: 1, source: 'King' });
 		expect((lines[0] as { note?: string }).note).toMatch(/evil/i);
 		expect((lines[0] as { note?: string }).note).toMatch(/discard/i);
 	});
 
 	it('a face-down (un-awakened) Dawn Sovereign grants no claim', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, { 'Golden Ruler': 1 }, { faceDown: true })]
+			spirits: [spirit(1, { 'King': 1 }, { faceDown: true })]
 		});
 		const state = makeState(player);
 		enterBenefits(state);
@@ -81,7 +81,7 @@ describe('Dawn Sovereign — engine-handled Cleanup claim', () => {
 	it('the awakeningPhase effect trigger grants no VP (claim is the only channel)', () => {
 		const player = makePlayer({
 			victoryPoints: 5,
-			spirits: [spirit(1, { 'Golden Ruler': 1 })]
+			spirits: [spirit(1, { 'King': 1 })]
 		});
 		applyTrigger(makeState(player), 'Red', 'awakeningPhase', []);
 		expect(player.victoryPoints).toBe(5);

@@ -3,7 +3,8 @@
  * Manages spirit and guardian assets for display
  */
 
-import { fetchAssetsData, STORAGE_BASE_URL } from '$lib/supabase';
+import { fetchAssetsData } from '$lib/supabase';
+import { gameImageUrl } from '$lib/storageImages';
 import { preloadImages } from '$lib/utils/preloadImages';
 import { prefersReducedData } from '$lib/play/dataSaver';
 import type {
@@ -41,12 +42,9 @@ let imagesReady = $state<boolean>(false);
 let imageProgress = $state<{ loaded: number; total: number }>({ loaded: 0, total: 0 });
 let imagePreloadStarted = false;
 
-// Build full storage URL from path
+// Display-size URL for a storage path (see storageImages.ts — originals are print-size).
 function getStorageUrl(path: string | null): string | null {
-	if (!path) return null;
-	// Path may already be a full URL or a relative path
-	if (path.startsWith('http')) return path;
-	return `${STORAGE_BASE_URL}/${path}`;
+	return gameImageUrl(path);
 }
 
 function statusKeyFromIconName(name: string): string | null {
@@ -150,7 +148,8 @@ function collectCompressedImageUrls(): string[] {
 		add(die.exported_template_path);
 		for (const side of die.sides) add(side.image_path);
 	}
-	for (const monster of monsterAssets.values()) add(monster.card_image_path);
+	// Monster card faces are NOT preloaded: 108 printed cards, of which a player sees a few.
+	// MonsterCard loads a face when its card is dealt and draws the card until it is in.
 	for (const icon of statusIcons.values()) add(icon.file_path);
 	for (const icon of iconPool.values()) add(icon.file_path);
 	for (const loc of gameLocations.values()) add(loc.background_image_path);

@@ -108,10 +108,10 @@
 >
 	{#snippet source()}
 		<SourcePanel
-			title="Cursed Fighter"
+			title="Ram"
 			subtitle="Swap one attack die with each player here — take one of theirs, give one of yours."
 			image={classIcon}
-			imageAlt="Cursed Fighter"
+			imageAlt="Ram"
 			accent="var(--brand-violet, #5a2bff)"
 		/>
 	{/snippet}

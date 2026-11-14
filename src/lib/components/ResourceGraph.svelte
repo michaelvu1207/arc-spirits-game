@@ -47,9 +47,11 @@
 		data: GraphDataPoint[];
 		currentRound: number;
 		onRoundClick?: (round: number) => void;
+		/** The game explorer's plain look: thin lines, no points, neutral axes. */
+		plain?: boolean;
 	}
 
-	let { type, data, currentRound, onRoundClick }: Props = $props();
+	let { type, data, currentRound, onRoundClick, plain = false }: Props = $props();
 
 	let canvasElement: HTMLCanvasElement;
 	let chartInstance: Chart | null = null;
@@ -126,9 +128,9 @@
 				data: playerData,
 				borderColor: CHART_COLORS[color] ?? '#888888',
 				backgroundColor: CHART_COLORS[color] ?? '#888888',
-				borderWidth: 2,
-				pointRadius: 4,
-				pointHoverRadius: 6,
+				borderWidth: plain ? 1.5 : 2,
+				pointRadius: plain ? 0 : 4,
+				pointHoverRadius: plain ? 3 : 6,
 				tension: 0.1,
 				spanGaps: true
 			};
@@ -159,7 +161,7 @@
 			ctx.moveTo(x, chartArea.top);
 			ctx.lineTo(x, chartArea.bottom);
 			ctx.lineWidth = 2;
-			ctx.strokeStyle = 'rgba(255, 43, 199, 0.75)';
+			ctx.strokeStyle = plain ? '#9a9eab' : 'rgba(255, 43, 199, 0.75)';
 			ctx.setLineDash([5, 5]);
 			ctx.stroke();
 			ctx.restore();
@@ -171,7 +173,7 @@
 			ctx.lineTo(x - 6, chartArea.top - 12);
 			ctx.lineTo(x + 6, chartArea.top - 12);
 			ctx.closePath();
-			ctx.fillStyle = 'rgba(255, 43, 199, 0.9)';
+			ctx.fillStyle = plain ? '#9a9eab' : 'rgba(255, 43, 199, 0.9)';
 			ctx.fill();
 			ctx.restore();
 		}
@@ -331,7 +333,21 @@
 	// Create chart on mount
 	onMount(() => {
 		if (canvasElement) {
-			chartInstance = new Chart(canvasElement, getChartConfig());
+			const config = getChartConfig();
+			if (plain) {
+				const text = '#9a9eab';
+				const line = '#23262f';
+				const font = { family: "'Figtree', system-ui, sans-serif", size: 12, weight: 500 as const };
+				const plugins = config.options?.plugins as Record<string, { color?: string; font?: unknown; labels?: { color?: string; font?: unknown; boxWidth?: number; boxHeight?: number } }> | undefined;
+				if (plugins?.title) Object.assign(plugins.title, { color: '#e6e7eb', font });
+				if (plugins?.legend?.labels) Object.assign(plugins.legend.labels, { color: text, font, boxWidth: 6, boxHeight: 6 });
+				for (const axis of Object.values((config.options?.scales ?? {}) as Record<string, { grid?: { color?: string }; ticks?: { color?: string }; border?: { color?: string } }>)) {
+					if (axis.grid) axis.grid.color = line;
+					if (axis.ticks) axis.ticks.color = text;
+					if (axis.border) axis.border.color = line;
+				}
+			}
+			chartInstance = new Chart(canvasElement, config);
 		}
 	});
 

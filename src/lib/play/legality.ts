@@ -35,6 +35,8 @@ import type {
 	PublicGameState
 } from './types';
 import { buildLocationInteractions, matchRewardCost } from './locationInteractions';
+import { runesAreWild } from './effects/matMatch';
+import { ruleValue } from './rules';
 
 /** Pure mirror of activePlayerForActor's null-ness (no mutating ensurePlayerCollections backfill). */
 function seatPlayer(state: PublicGameState, actor: GameActor): PrivatePlayerState | null {
@@ -94,13 +96,19 @@ export function canApply(
 			const me = seatPlayer(state, actor);
 			return active && !!me?.pendingPowerDrafts?.[0]?.includes(command.powerId) && (!me.pendingPowerReplacement || (!!command.replacePowerId && command.replacePowerId !== command.powerId && !!me.powerInventory?.includes(command.replacePowerId)));
 		}
-		case 'resolveNavigationPower':
-			return (
-				active &&
-				!!seatPlayer(state, actor)?.navigationPowerOffers?.some(
-					(o) => o.id === command.offerId && o.options.some((x) => x.id === command.optionId)
-				)
-			);
+		case 'resolveNavigationPower': {
+			const me = seatPlayer(state, actor);
+			const offer = me?.navigationPowerOffers?.find((o) => o.id === command.offerId);
+			if (!active || !offer || !offer.options.some((x) => x.id === command.optionId)) return false;
+			// A rune-payment option (Watchful Eye "slot:rune", Stone Shelter "slot") is built when
+			// the offer is made; a rune given away since then (e.g. to a Stone Shelter holder in the
+			// same reveal) leaves the option stale, and the reducer rejects it.
+			if (command.optionId !== 'decline' && (offer.kind === 'exchange' || offer.kind === 'give-rune')) {
+				const slot = Number(command.optionId.split(':')[0]);
+				if (!(me?.mats ?? []).some((m) => m.slotIndex === slot && m.hasRune)) return false;
+			}
+			return true;
+		}
 		case 'acquireNavigationPower':
 		case 'tradeNavigationPower':
 		case 'respondNavigationPowerTrade':
@@ -152,8 +160,17 @@ export function canApply(
 			if (!me) return false;
 			if (!me.pendingDraw || (me.handDraws?.length ?? 0) === 0) return false;
 			const draw = (me.handDraws ?? []).find((e) => e.guid === command.guid);
+			// A Spirit World reward hex has no spirit id; the reducer resolves it without a slot.
+			if (draw?.rewardId) return command.replaceSlotIndex === undefined;
 			if (!draw?.id) return false;
 			if (!catalog.spirits.find((e) => e.id === draw.id)) return false;
+			// Replace-on-summon (rule `summonReplaceWhenFull`): all 7 slots full, an occupied slot named.
+			if (command.replaceSlotIndex !== undefined) {
+				if (!ruleValue(catalog, 'summonReplaceWhenFull') || firstOpenSpiritSlot(me)) return false;
+				if (command.slotIndex !== undefined && command.slotIndex !== command.replaceSlotIndex)
+					return false;
+				return me.spirits.some((e) => e.slotIndex === command.replaceSlotIndex);
+			}
 			const slotIndex = command.slotIndex ?? firstOpenSpiritSlot(me);
 			if (!slotIndex || slotIndex < 1 || slotIndex > 7) return false;
 			return true;
@@ -178,10 +195,28 @@ export function canApply(
 			const me = seatPlayer(state, actor);
 			if (!me) return false;
 			if (me.navigationDestination !== 'Arcane Abyss') return false;
-			if (!state.monster) return false;
+			const card = me.monsterHand?.[command.handIndex];
+			if (!Number.isInteger(command.handIndex) || !card || card.hp <= 0) return false;
 			const used = (me.actionsUsedThisRound ?? []).filter((a) => a === 'combat').length;
 			if (used >= 1 + (me.extraActions?.combat ?? 0)) return false;
 			return undefined; // mutate-before-reject handler; all reachable rejects covered, defer on pass (1 candidate)
+		}
+		case 'drawMonsterCards': {
+			if (!active || state.phase !== 'location') return false;
+			const me = seatPlayer(state, actor);
+			return (
+				!!me &&
+				me.navigationDestination === 'Arcane Abyss' &&
+				!me.pendingMonsterDraw?.cards.length &&
+				(me.monsterHand?.length ?? 0) < 3 &&
+				me.monsterDrawRound !== state.round &&
+				state.bags.monsters.contents.some((entry) => entry.difficulty === command.difficulty)
+			);
+		}
+		case 'keepMonsterCard': {
+			if (!active || state.phase !== 'location') return false;
+			const me = seatPlayer(state, actor);
+			return !!me && me.navigationDestination === 'Arcane Abyss' && !!me.pendingMonsterDraw && (me.monsterHand?.length ?? 0) < 3 && Number.isInteger(command.index) && command.index >= 0 && command.index < me.pendingMonsterDraw.cards.length;
 		}
 		case 'resolveMonsterReward': {
 			if (!active || state.phase !== 'location') return false;
@@ -197,7 +232,8 @@ export function canApply(
 			if (
 				me.pendingDraw ||
 				(me.handDraws?.length ?? 0) > 0 ||
-				(me.pendingDrawQueue?.length ?? 0) > 0
+				(me.pendingDrawQueue?.length ?? 0) > 0 ||
+				(me.pendingMonsterDraw?.cards.length ?? 0) > 0
 			)
 				return false;
 			// A payable corruption debt blocks passing (must discard first); an UNPAYABLE one
@@ -226,7 +262,7 @@ export function canApply(
 			if (interaction.kind !== 'trade' && usedForRow >= 1 + (me.extraActions?.locationInteraction ?? 0)) return false;
 			// Affordability always follows the database-authored trade cost.
 			if (interaction.cost.length > 0) {
-				if (!matchRewardCost(interaction.cost, me.mats, command.costChoices).ok) return false;
+				if (!matchRewardCost(interaction.cost, me.mats, command.costChoices, { runesWild: runesAreWild(me) }).ok) return false;
 			}
 			return true;
 		}

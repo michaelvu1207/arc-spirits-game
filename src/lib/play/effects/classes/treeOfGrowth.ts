@@ -1,26 +1,10 @@
-import { runAction } from '../actions';
-import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
+import type { ClassAbility } from './types';
 
-// Growth Warden — after gaining or upgrading attack dice this round, choose
-// either 2 max barrier or any Spirit Augment during the Awakening phase.
-const offerGrowthReward: ClassHandler = (ctx) => {
-	if (!ctx.player.attackDiceChangedThisTurn) return;
-	runAction(ctx, {
-		kind: 'choose',
-		decisionKind: 'treeOfGrowthReward',
-		prompt: 'You gained or upgraded attack dice this turn. Choose a Growth Warden reward.',
-		options: [
-			{ id: 'barrier', label: 'Gain 2 max barrier' },
-			{ id: 'augment', label: 'Gain 1 Spirit Augment' }
-		]
-	});
-};
-
-export const ability: ClassAbility[] = [{ on: 'awakeningPhase', run: offerGrowthReward }];
-
-export const decisions: ClassDecisions = {
-	treeOfGrowthReward(ctx, optionId) {
-		if (optionId === 'barrier') runAction(ctx, { kind: 'gainMaxBarrier', amount: 2 });
-		if (optionId === 'augment') runAction(ctx, { kind: 'gainAugment', amount: 1 });
-	}
-};
+// Druid — "When you gain an Exalted Attack Dice, you may gain 1 more. The extra dice does not
+// cause this ability again." (It replaces "If you gained or upgraded attack dice this turn,
+// gain 2 max barrier or any 1 Spirit Augment".)
+// Engine-handled inside the `gainAttackDice` action (effects/actions.ts), the one dice-gain
+// path: each Exalted die gained (from any source, and the Wildling die) gives one more Exalted
+// die, within the dice cap, taken automatically. An upgrade to Exalted is not a gain. The extra
+// die triggers neither Druid nor Wildling. Nothing fires on a trigger here.
+export const ability: ClassAbility[] = [];

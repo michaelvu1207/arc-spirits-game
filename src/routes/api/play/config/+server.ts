@@ -14,8 +14,8 @@ import { env as publicEnv } from '$env/dynamic/public';
  * exposed on any code path here.
  */
 export const GET: RequestHandler = async () => {
-	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL;
-	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY;
+	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL?.trim();
+	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY?.trim();
 	if (!supabaseUrl || !supabaseAnonKey) {
 		throw error(503, 'Native authentication is not configured');
 	}

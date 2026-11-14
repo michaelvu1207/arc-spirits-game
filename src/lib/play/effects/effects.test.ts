@@ -193,10 +193,34 @@ describe('Rest effects', () => {
 	});
 });
 
-describe('Cultivate action (intrinsic origin-rune yield)', () => {
-	// Origin keys are origin DISPLAY NAMES (e.g. "Forest Region"), as built by the catalog
-	// loader. The basic rune for the Forest Region origin is displayed as "Forest", but its
-	// resolved slot name is "<Origin> Rune" → "Forest Region Rune".
+describe('Cultivate action (origin rewards: 3 spirits → 1 rune, 5 → relic once)', () => {
+	// Origin keys are the engine origin names (e.g. "Forest Region", regions.ts); the rune
+	// slot carries the BASE_RUNES name ("Forest Rune"). Calling card (origins.json):
+	// 3 spirits → "On Cultivate: 1 <origin> Rune"; 5 → "On Cultivate: <relic> (one time)".
+	it('Sun and Moon (origins with no reward) give nothing: 3 or 5 spirits, no rune, no relic', () => {
+		for (const origin of ['Sun', 'Moon']) {
+			for (const n of [3, 5]) {
+				const p = makePlayer({
+					spirits: Array.from({ length: n }, (_, i) => spirit(i + 1, `${origin} ${i}`, {}, { [origin]: 1 }))
+				});
+				const log: string[] = [];
+				expect(() => applyCultivate(makeState(p), 'Red', log)).not.toThrow();
+				expect(p.mats).toHaveLength(0);
+				expect(p.relics ?? 0).toBe(0);
+				expect(p.originRelicsGained ?? []).toHaveLength(0);
+			}
+		}
+		// Mixed with a region: only the region pays (3 Forest + 5 Sun → 1 Forest Rune).
+		const mixed = makePlayer({
+			spirits: [
+				...Array.from({ length: 3 }, (_, i) => spirit(i + 1, `F${i}`, {}, { 'Forest Region': 1 })),
+				...Array.from({ length: 5 }, (_, i) => spirit(i + 4, `S${i}`, {}, { Sun: 1 }))
+			]
+		});
+		applyCultivate(makeState(mixed), 'Red', []);
+		expect(mixed.mats.map((m) => m.name)).toEqual(['Forest Rune']);
+	});
+
 	it('grants 1 origin rune without restoring barriers', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
@@ -209,7 +233,7 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Forest Rune')).toHaveLength(1);
 		expect(p.barrier).toBe(2);
 		expect(p.brokenBarrier).toBe(2);
 		expect(p.maxBarrier).toBe(4); // no Cultivator → no potential
@@ -247,7 +271,7 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 		expect(pool.maxBarrier).toBe(1); // count 2 → +1 potential
 	});
 
-	it('scales: six same-origin spirits → two runes', () => {
+	it('six same-origin spirits still give ONE rune (a breakpoint, not one per three)', () => {
 		const p = makePlayer({
 			maxBarrier: 4,
 			barrier: 1,
@@ -262,7 +286,7 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(2);
+		expect(p.mats.filter((r) => r.name === 'Forest Rune')).toHaveLength(1);
 		expect(p.barrier).toBe(1);
 		expect(p.brokenBarrier).toBe(3);
 	});
@@ -280,8 +304,8 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(1);
-		expect(p.mats.filter((r) => r.name === 'Fire Region Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Forest Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Fire Rune')).toHaveLength(1);
 	});
 
 	it('counts face-down (unawakened) spirits — origin is always active', () => {
@@ -294,7 +318,7 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(1);
+		expect(p.mats.filter((r) => r.name === 'Forest Rune')).toHaveLength(1);
 	});
 
 	it('grants nothing for a lone spirit, or for an origin without a basic rune', () => {
@@ -309,6 +333,53 @@ describe('Cultivate action (intrinsic origin-rune yield)', () => {
 		applyCultivate(makeState(p), 'Red', []);
 		expect(p.mats).toHaveLength(0);
 		expect(p.maxBarrier).toBe(4);
+	});
+
+	it('five spirits of an origin also give its relic tool, one time only', () => {
+		const p = makePlayer({
+			spirits: Array.from({ length: 5 }, (_, i) => spirit(i + 1, `W${i}`, {}, { 'Water Region': 1 }))
+		});
+		const state = makeState(p);
+		applyCultivate(state, 'Red', []);
+		const teapots = () => p.mats.filter((m) => m.name === 'Cleansing Teapot' && m.type === 'relic');
+		expect(p.mats.filter((m) => m.name === 'Water Rune')).toHaveLength(1);
+		expect(teapots()).toHaveLength(1);
+		expect(teapots()[0].relicTool).toBe(true);
+		expect(p.relics).toBe(1);
+		expect(p.originRelicsGained).toEqual(['Water Region']);
+		applyCultivate(state, 'Red', []);
+		expect(teapots()).toHaveLength(1); // one time per player
+		expect(p.mats.filter((m) => m.name === 'Water Rune')).toHaveLength(2); // the rune repeats
+	});
+
+	it('four spirits give the rune but not the relic; each land has its own relic', () => {
+		const four = makePlayer({
+			spirits: Array.from({ length: 4 }, (_, i) => spirit(i + 1, `F${i}`, {}, { 'Fire Region': 1 }))
+		});
+		applyCultivate(makeState(four), 'Red', []);
+		expect(four.mats.map((m) => m.name)).toEqual(['Fire Rune']);
+		const relicFor = (origin: string) => {
+			const p = makePlayer({
+				spirits: Array.from({ length: 5 }, (_, i) => spirit(i + 1, `S${i}`, {}, { [origin]: 1 }))
+			});
+			applyCultivate(makeState(p), 'Red', []);
+			return p.mats.find((m) => m.type === 'relic')?.name;
+		};
+		expect(relicFor('Fire Region')).toBe('Firecracker');
+		expect(relicFor('Forest Region')).toBe('Flower');
+		expect(relicFor('Mountain Region')).toBe('Diamond');
+		expect(relicFor('Water Region')).toBe('Cleansing Teapot');
+	});
+
+	it('a spirit counts once even with a doubled origin trait', () => {
+		const p = makePlayer({
+			spirits: [
+				spirit(1, 'A', {}, { 'Forest Region': 2 }),
+				spirit(2, 'B', {}, { 'Forest Region': 1 })
+			]
+		});
+		applyCultivate(makeState(p), 'Red', []);
+		expect(p.mats).toHaveLength(0); // 2 spirits < 3
 	});
 });
 
@@ -357,13 +428,13 @@ const attackDie = (id: string, tier: PrivatePlayerState['attackDice'][number]['t
 	tier
 });
 
-describe('Soul Weaver (engine-handled breakpoints)', () => {
+describe('Mystic (engine-handled breakpoints)', () => {
 	it('does not use the old onRest stun-immunity effect at 2 traits', () => {
 		const p = makePlayer({
 			barrier: 2,
 			maxBarrier: 4,
 			brokenBarrier: 2,
-			spirits: [spirit(1, 'A', { 'Soul Weaver': 2 }, {})]
+			spirits: [spirit(1, 'A', { 'Mystic': 2 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
 		expect(p.stunImmune).toBe(false);
@@ -375,7 +446,7 @@ describe('Soul Weaver (engine-handled breakpoints)', () => {
 			barrier: 1,
 			maxBarrier: 4,
 			brokenBarrier: 3,
-			spirits: [spirit(1, 'A', { 'Soul Weaver': 3 }, {})]
+			spirits: [spirit(1, 'A', { 'Mystic': 3 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
 		expect(p.stunImmune).toBe(false);
@@ -384,19 +455,19 @@ describe('Soul Weaver (engine-handled breakpoints)', () => {
 	});
 });
 
-// Soul Weaver's active rules are covered at their engine integration points.
+// Mystic's active rules are covered at their engine integration points.
 
-describe('Strategist (onTakeDamage)', () => {
-	it('reduces incoming damage by one per placed Spirit Augment', () => {
+describe('Monk (the old onTakeDamage rule is gone)', () => {
+	it('placed Spirit Augments no longer reduce incoming damage', () => {
 		const p = makePlayer({
-			spirits: [spirit(1, 'A', { 'Runic Bulwark': 1 }, {})],
+			spirits: [spirit(1, 'A', { 'Monk': 1 }, {})],
 			spiritAugmentAttachments: [
 				{ spiritSlotIndex: 1, runeId: 'a' },
 				{ spiritSlotIndex: 1, runeId: 'b' }
 			] as never
 		});
 		applyTrigger(makeState(p), 'Red', 'onTakeDamage', []);
-		expect(p.damageReduction).toBe(2);
+		expect(p.damageReduction).toBe(0);
 	});
 });
 
@@ -527,28 +598,28 @@ describe('Fairy (awakening)', () => {
 	});
 });
 
-describe('Arcane Vanguard (awakening)', () => {
+describe('Huntress (awakening)', () => {
 	it('gains 3 Arcane attack dice on the awakening trigger', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
-			spirits: [spirit(1, 'A', { 'Arcane Vanguard': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Huntress': 1 }, {})]
 		});
-		applyTrigger(makeState(p), 'Red', 'awakening', []);
+		applyTrigger(makeState(p), 'Red', 'awakening', [], { command: { slotIndex: 1 } });
 		expect(p.attackDice).toHaveLength(3);
 		expect(p.attackDice.every((d) => d.tier === 'arcane')).toBe(true);
 	});
 
 	it('gains 2 initiative on the inCombat trigger', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Arcane Vanguard': 1 }, {})] });
+		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Huntress': 1 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'inCombat', []);
 		expect(p.initiative).toBe(2);
 	});
 });
 
-describe('Abyss Summoner (runtime bag behavior)', () => {
+describe('Summoner (runtime bag behavior)', () => {
 	it('does not use the obsolete Forest Region navigation trigger', () => {
 		const p = makePlayer({
-			spirits: [spirit(1, 'A', { 'Abyss Summoner': 1 }, {})],
+			spirits: [spirit(1, 'A', { 'Summoner': 1 }, {})],
 			navigationDestination: 'Forest Region'
 		});
 		applyTrigger(makeState(p), 'Red', 'onNavigate', []);
@@ -557,30 +628,31 @@ describe('Abyss Summoner (runtime bag behavior)', () => {
 	});
 
 	it('is no longer in MANUAL_CLASSES (opt-in decision now)', () => {
-		expect(MANUAL_CLASSES.has('Abyss Summoner')).toBe(false);
+		expect(MANUAL_CLASSES.has('Summoner')).toBe(false);
 	});
 });
 
-describe('Runebound Vessel (awakening)', () => {
-	it('grants 2 spirit augments bound to this spirit when it awakens (no manual prompt)', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Runebound Vessel': 1 }, {})] });
+describe('Herder (awakening)', () => {
+	it('gains a rune for an adjacent Beast when it awakens (no manual prompt)', () => {
+		const p = makePlayer({
+			spirits: [spirit(4, 'A', { 'Herder': 1 }, {}), spirit(2, 'B', { Beast: 1 }, { 'Water Region': 1 })]
+		});
 		// The handler fires for the awakening spirit named by the command's slotIndex.
-		applyTrigger(makeState(p), 'Red', 'awakening', [], { command: { slotIndex: 1 } });
-		expect(p.unplacedAugments?.length ?? 0).toBe(2);
-		expect((p.unplacedAugments ?? []).every((a) => a.boundSlotIndex === 1)).toBe(true);
+		applyTrigger(makeState(p), 'Red', 'awakening', [], { command: { slotIndex: 4 } });
+		expect(p.mats.map((m) => m.name)).toEqual(['Water Rune']);
 		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
 	});
 
 	it('is no longer listed in MANUAL_CLASSES', () => {
-		expect(MANUAL_CLASSES.has('Runebound Vessel')).toBe(false);
+		expect(MANUAL_CLASSES.has('Herder')).toBe(false);
 	});
 });
 
 // ── P5: onNavigate coverage ───────────────────────────────────────────────────
 
-describe('Tide Stalker (onNavigate)', () => {
+describe('Spellblade (onNavigate)', () => {
 	it('offers a change-destination decision without the removed +4 initiative', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Tide Stalker': 1 }, {})] });
+		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Spellblade': 1 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'onNavigate', []);
 		expect(p.initiative).toBe(0);
 		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
@@ -591,7 +663,7 @@ describe('Tide Stalker (onNavigate)', () => {
 	});
 
 	it('is no longer in MANUAL_CLASSES (built-in decision now)', () => {
-		expect(MANUAL_CLASSES.has('Tide Stalker')).toBe(false);
+		expect(MANUAL_CLASSES.has('Spellblade')).toBe(false);
 	});
 });
 
@@ -614,7 +686,7 @@ describe('doubleRunes primitive (Cultivate yield)', () => {
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Forest Region Rune')).toHaveLength(4); // floor(6/3)=2 → doubled
+		expect(p.mats.filter((r) => r.name === 'Forest Rune')).toHaveLength(2); // 1 rune (6 ≥ 3) → doubled
 		// Cultivate does not restore barriers, even when rune yield is doubled.
 		expect(p.barrier).toBe(1);
 		expect(p.brokenBarrier).toBe(3);
@@ -646,7 +718,7 @@ describe('Cursed Spirit (cleanup claim — no longer an awakeningPhase auto-gran
 
 describe('Abyss Harbinger (inCombat; Awakening grant is a Cleanup claim)', () => {
 	it('grants +2 initiative passively in combat', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'The Corruptor': 1 }, {})] });
+		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Corruptor': 1 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'inCombat', []);
 		expect(p.initiative).toBe(2);
 	});
@@ -655,7 +727,7 @@ describe('Abyss Harbinger (inCombat; Awakening grant is a Cleanup claim)', () =>
 		const p = makePlayer({
 			maxBarrier: 10,
 			corruptedThisRound: true,
-			spirits: [spirit(1, 'A', { 'The Corruptor': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Corruptor': 1 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'awakeningPhase', []);
 		// The Arcane die is now granted via the Cleanup claim (resolveAwakenReward),
@@ -673,7 +745,7 @@ describe('Awakening-Phase win-cons no longer auto-apply on the trigger', () => {
 	it('Dawn Sovereign grants no VP and discards nothing on the trigger', () => {
 		const good = makePlayer({
 			statusLevel: 0,
-			spirits: [spirit(1, 'A', { 'Golden Ruler': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'King': 1 }, {})]
 		});
 		applyTrigger(makeState(good), 'Red', 'awakeningPhase', []);
 		expect(good.victoryPoints).toBe(0);
@@ -681,7 +753,7 @@ describe('Awakening-Phase win-cons no longer auto-apply on the trigger', () => {
 
 		const evil = makePlayer({
 			statusLevel: 3,
-			spirits: [spirit(1, 'A', { 'Golden Ruler': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'King': 1 }, {})]
 		});
 		applyTrigger(makeState(evil), 'Red', 'awakeningPhase', []);
 		expect(evil.victoryPoints).toBe(0);
@@ -698,14 +770,14 @@ describe('Awakening-Phase win-cons no longer auto-apply on the trigger', () => {
 		expect(p.victoryPoints).toBe(24);
 	});
 
-	it('Void Sovereign grants a flat +1 VP on the awakeningPhase trigger (reworked)', () => {
+	it('Queen grants a flat +1 VP on the awakeningPhase trigger (reworked)', () => {
 		const red = makePlayer({
 			playerColor: 'Red',
 			statusLevel: 0,
-			spirits: [spirit(1, 'A', { 'Void Sovereign': 1 }, {})]
+			spirits: [spirit(1, 'A', { 'Queen': 1 }, {})]
 		});
 		applyTrigger(makeState(red), 'Red', 'awakeningPhase', []);
-		// Void Sovereign is now a flat +1 VP handler (no longer the all-Evil Cleanup claim).
+		// Queen is now a flat +1 VP handler (no longer the all-Evil Cleanup claim).
 		expect(red.victoryPoints).toBe(1);
 	});
 });

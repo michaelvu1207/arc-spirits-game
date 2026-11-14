@@ -30,6 +30,7 @@ import type { NeuralPolicy } from '../net';
 import type { LegalAction } from '../actions';
 import { sampleAuxTargets } from '../auxTargets';
 import { evaluateFarmValue } from '../farmValue';
+import { bestHandMonster } from '../../bots/monsterCardAutopilot';
 import type { Sample } from '../driver';
 import {
 	bestGoodTargetVp,
@@ -234,6 +235,7 @@ function gainEffectLabel(gain: GainEffect): string {
 		case 'restoreBarrier': return 'restoreBarrier';
 		case 'rune': return gain.rune.name;
 		case 'vp': return `${gain.amount}VP`;
+		case 'attackDice': return `${gain.amount}${gain.tier}Die`;
 		case 'chooseRune': {
 			const options = gain.options.map((o) => o.name.replace(/\s+/g, '')).slice(0, 3).join('/');
 			return options ? `chooseRune:${options}` : 'chooseRune';
@@ -415,7 +417,7 @@ export function createSelfPlayRecorder(deps: SelfPlayRecorderDeps) {
 		stat.maxBarrier = Math.max(stat.maxBarrier, player.maxBarrier ?? 0);
 		stat.maxCurrentBarrier = Math.max(stat.maxCurrentBarrier, player.barrier ?? 0);
 		stat.maxAttackDice = Math.max(stat.maxAttackDice, player.attackDice?.length ?? 0);
-		stat.maxSpiritAnimal = Math.max(stat.maxSpiritAnimal, counts['Spirit Animal'] ?? 0);
+		stat.maxSpiritAnimal = Math.max(stat.maxSpiritAnimal, counts['Beast'] ?? 0);
 		stat.maxCultivator = Math.max(stat.maxCultivator, counts.Cultivator ?? 0);
 		stat.maxHealer = Math.max(stat.maxHealer, counts.Healer ?? 0);
 	};
@@ -537,8 +539,11 @@ export function createSelfPlayRecorder(deps: SelfPlayRecorderDeps) {
 		const player = state.players[seat];
 		if (!player) return;
 		const counts = awakenedClassCounts(player);
-		const monster = state.monster;
-		const farm = monster ? evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold }) : null;
+		// The card this seat would fight: its best live hand card (no shared Abyss monster).
+		const monster = bestHandMonster(state, seat, catalog)?.card ?? null;
+		const farm = monster
+			? evaluateFarmValue(state, seat, catalog, { threshold: farmNavigationThreshold, monster })
+			: null;
 		plannerTrace.push({
 			seat,
 			round: state.round,
@@ -551,16 +556,20 @@ export function createSelfPlayRecorder(deps: SelfPlayRecorderDeps) {
 			maxBarrier: player.maxBarrier ?? 0,
 			expectedAttack: +expectedAttack(player).toFixed(2),
 			attackDice: player.attackDice?.length ?? 0,
-			spiritAnimal: counts['Spirit Animal'] ?? 0,
+			spiritAnimal: counts['Beast'] ?? 0,
 			cultivator: counts.Cultivator ?? 0,
 			navigationDestination: player.navigationDestination,
 			monsterHp: monster?.hp,
 			monsterMaxHp: monster?.maxHp,
 			monsterDamage: monster?.damage,
-			monsterLives: monster?.livesRemaining,
+			monsterLives: monster ? 1 : undefined, // each card is a single kill
 			rewardVp: farm?.rewardVp,
-			cleanKillProb: monster ? +computeKillProbability(state, seat, catalog, { allowCorruptKill: false }).toFixed(3) : undefined,
-			firepowerKillProb: monster ? +firepowerKillProbability(state, seat, catalog).toFixed(3) : undefined,
+			cleanKillProb: monster
+				? +computeKillProbability(state, seat, catalog, { allowCorruptKill: false, monster }).toFixed(3)
+				: undefined,
+			firepowerKillProb: monster
+				? +firepowerKillProbability(state, seat, catalog, { monster }).toFixed(3)
+				: undefined,
 			farmable: farm?.valid ? farm.farmable : undefined,
 			farmOpportunityVp: farm?.valid ? +farm.opportunityVp.toFixed(2) : undefined,
 			...extra

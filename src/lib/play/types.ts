@@ -36,13 +36,13 @@ export const ALL_DESTINATIONS = [...SPIRIT_WORLD_ONLY, 'Arcane Abyss'] as const;
 export const VP_TO_WIN = 30;
 
 /**
- * Hard round cap — round 30 is the last round (≈99% of real games end before then). If cleanup
+ * Hard round cap — round 40 is the last round (Michael, 2026-11-12; was 30) (≈99% of real games end before then). If cleanup
  * closes on round {@link MAX_ROUNDS} with no VP-target winner, the game ends and the player with
  * the most Victory Points wins (ties → seat order). This bounds episode length for ML training and
  * makes the economy / VP-accumulation line viable: you win by LEADING on VP at the cap, not only by
  * racing to {@link VP_TO_WIN}. (Distinct from the analytics CURVE_POINTS/ROUND_NORM=36 constants.)
  */
-export const MAX_ROUNDS = 30;
+export const MAX_ROUNDS = 40;
 
 /**
  * Target player count for a ranked matchmaking lobby. The matchmaker forms a group
@@ -212,8 +212,12 @@ export const GAME_PHASES: GamePhase[] = [
 
 /** Corruption ladder, indexed by `statusLevel` (0 = Pure … 3 = Fallen). */
 export const STATUS_LADDER = ['Pure', 'Tainted', 'Corrupt', 'Fallen'] as const;
-/** Spirit Tableau capacity per corruption stage (Pure most, Fallen fewest). */
-export const SPIRIT_LIMIT_BY_STATUS = [7, 6, 5, 4] as const;
+/**
+ * @deprecated NOT a rule and not enforced: the spirit board is {@link MAX_SPIRITS} at every status
+ * (Michael 2026-11-13: a status drop only costs a one-time sacrifice of N spirits on the Nth
+ * corruption). Kept only so old imports compile; do not show it to players.
+ */
+export const SPIRIT_LIMIT_BY_STATUS = [7, 7, 7, 7] as const;
 
 /** Only Fallen (3) is Evil-aligned; Pure/Tainted/Corrupt are Good. Drives player-vs-player
  *  combat: an Evil (Fallen) player may attack co-located Good players in the encounter phase. */
@@ -243,13 +247,34 @@ export function spiritLimitFor(_statusLevel?: number): number {
  * discard, clamped at 0 VP (the adjustVictoryPoints convention). Pre-Fallen corruptions
  * keep the old forgiveness — the descent stays cheap; the Fallen treadmill no longer is.
  * Returns the VP charged (0 when the rule did not fire) so combat callers can log it.
+ *
+ * Rule switch `fallenDebtBelowZero` (rules.ts; callers pass `opts.vpBelowZero` from it): that VP
+ * loss is not clamped at 0, so VP may go negative (a seat at 0 VP pays too).
+ * `opts.maxOwed` (rule `pvpAttackerSacrificeCap`): caps what THIS corruption owes.
  */
 export function setCorruptionDiscardObligation(
 	player: PrivatePlayerState,
 	reason?: string,
-	opts?: { wasFallen?: boolean }
+	opts?: { wasFallen?: boolean; vpBelowZero?: boolean; maxOwed?: number }
 ): number {
-	const owed = player.corruptionCount ?? 0;
+	// Cultist: "When you become Corrupted, sacrifice 1 fewer spirit …" (awakened Cultist only).
+	const cultist = (player.spirits ?? []).some(
+		(spirit) => !spirit.isFaceDown && (spirit.classes?.['Cultist'] ?? 0) > 0
+	);
+	// Rule `powerRework` Powers (their ids exist only in that set), first corruption of the round:
+	// Dark Bargain pays 3 VP; Soul Ward cancels this corruption's sacrifice (and its VP debt).
+	if (!player.navigationPowerBattleTriggered) {
+		if (player.navigationPower === 'dark-bargain') {
+			player.navigationPowerBattleTriggered = true;
+			player.victoryPoints = (player.victoryPoints ?? 0) + 3;
+		} else if (player.navigationPower === 'soul-ward') {
+			player.navigationPowerBattleTriggered = true;
+			return 0;
+		}
+	}
+	let owed = Math.max(0, (player.corruptionCount ?? 0) - (cultist ? 1 : 0));
+	// Rule `pvpAttackerSacrificeCap`: this corruption owes at most `maxOwed`.
+	if (opts?.maxOwed != null) owed = Math.min(owed, opts.maxOwed);
 	if (owed <= 0) return 0;
 	const existing = player.pendingCorruptionDiscard;
 	// You can only ever sacrifice spirits you actually have. Cap the obligation at the
@@ -262,7 +287,8 @@ export function setCorruptionDiscardObligation(
 	let vpCharged = 0;
 	if (opts?.wasFallen && desired > count) {
 		vpCharged = desired - count;
-		player.victoryPoints = Math.max(0, (player.victoryPoints ?? 0) - vpCharged);
+		const vp = (player.victoryPoints ?? 0) - vpCharged;
+		player.victoryPoints = opts.vpBelowZero ? vp : Math.max(0, vp);
 	}
 	if (count <= 0) {
 		player.pendingCorruptionDiscard = null;
@@ -287,8 +313,12 @@ export function setCorruptionDiscardObligation(
  * helper, that remainder hard-blocked `commitCleanup` with no legal move and froze the
  * seat. Call it after any such removal, and defensively before honoring the debt in phase
  * gates. Returns the VP charged (0 when nothing settled) so callers can log it.
+ * `opts.vpBelowZero` (rule `fallenDebtBelowZero`): a Fallen player's VP is not clamped at 0.
  */
-export function settleUnpayableCorruptionDebt(player: PrivatePlayerState): number {
+export function settleUnpayableCorruptionDebt(
+	player: PrivatePlayerState,
+	opts?: { vpBelowZero?: boolean }
+): number {
 	const debt = player.pendingCorruptionDiscard;
 	if (!debt) return 0;
 	if (debt.count <= 0) {
@@ -297,7 +327,8 @@ export function settleUnpayableCorruptionDebt(player: PrivatePlayerState): numbe
 	}
 	if ((player.spirits?.length ?? 0) > 0) return 0;
 	const vpCharged = debt.count;
-	player.victoryPoints = Math.max(0, (player.victoryPoints ?? 0) - vpCharged);
+	const vp = (player.victoryPoints ?? 0) - vpCharged;
+	player.victoryPoints = opts?.vpBelowZero && isEvilAlignment(player.statusLevel) ? vp : Math.max(0, vp);
 	player.pendingCorruptionDiscard = null;
 	return vpCharged;
 }
@@ -305,6 +336,10 @@ export function settleUnpayableCorruptionDebt(player: PrivatePlayerState): numbe
 /** Attack-dice tiers, weakest → strongest. Elementalist upgrades climb this list. */
 export type DiceTier = 'basic' | 'enchanted' | 'exalted' | 'arcane';
 export const DICE_TIER_ORDER: DiceTier[] = ['basic', 'enchanted', 'exalted', 'arcane'];
+
+/** Relic Sentinel guard rule: discard a relic only for a hit that would corrupt, for every
+ *  hit, or never. */
+export type RelicGuardMode = 'lethal' | 'everyHit' | 'never';
 
 /**
  * Flat cap on a player's attack-dice pool. Every player may hold up to this many
@@ -351,6 +386,14 @@ export interface PendingDecision {
 	kind: string;
 	prompt: string;
 	options: { id: string; label: string }[];
+	/** Card header text when the card does not come from a class (e.g. "Relic: Firecracker").
+	 *  Without it, the UI derives the class name from `kind`. */
+	sourceLabel?: string;
+	/** A Location-Phase card that ends when the Benefits step starts. An unanswered card is
+	 *  then resolved with `expiryOptionId` (if set) or removed. */
+	expiresAt?: 'benefits';
+	/** Option the engine applies when the card expires unanswered (bots never answer). */
+	expiryOptionId?: string;
 }
 
 /** Outcome of the player's most recent resolved action — drives the result-card view. */
@@ -361,18 +404,18 @@ export interface ActionResult {
 }
 
 /**
- * A monster-kill reward selection awaiting the player. Created when a player
- * defeats the Arcane Abyss monster: the player chooses up to `chooseAmount`
- * tokens from the monster's `rewardTrack` (the full reward pool). Mirrors the
+ * A monster-kill reward claim awaiting the player. Created when a player defeats
+ * the Arcane Abyss monster: the player gets EVERY token on the monster's
+ * `rewardTrack` (and picks a rune where a token asks for one). Mirrors the
  * `pendingDraw` lifecycle — owner-only, blocks ending the Location phase until
  * resolved, and is cleared at navigation each round.
  */
 export interface PendingRewardState {
 	monsterId: string;
 	monsterName: string;
-	/** The full reward pool (icon_pool ids) to choose from. */
+	/** Every reward on the defeated card (icon_pool ids). */
 	rewardTrack: string[];
-	/** How many tokens the player may claim (already capped at the resolvable count). */
+	/** How many rewards the claim grants (every resolvable token). */
 	chooseAmount: number;
 }
 
@@ -411,7 +454,7 @@ export type AwakenGrant =
 	| { kind: 'relicChoice'; amount: number; source: string };
 /**
  * Awakening-Phase rewards awaiting this player in the Cleanup phase (Cursed Spirit,
- * Dawn Sovereign, Abyss Harbinger, Void Sovereign, Relic Sentinel). Owner-only in the
+ * Dawn Sovereign, Abyss Harbinger, Queen, Relic Sentinel). Owner-only in the
  * projection; blocks committing cleanup until claimed via `resolveAwakenReward`.
  */
 export interface PendingAwakenRewardState {
@@ -452,6 +495,14 @@ export interface AwakenDiscardOption {
  * slot; `requiresSelection` says whether choosing changes what materially remains.
  * Owner-derived from public tableau, so it carries no hidden info.
  */
+/** One way to pay an "X or Y" discard awaken (Keeper of the Twin Pyres: 2 Fire Runes, or
+ *  5 attack dice). The owner picks the way, then `discardCount` items from its `options`. */
+export interface AwakenPaymentAlternative {
+	label: string;
+	discardCount: number;
+	options: AwakenDiscardOption[];
+}
+
 export interface AwakenOffer {
 	/** The face-down spirit slot this offer awakens. */
 	slotIndex: number;
@@ -485,6 +536,11 @@ export interface AwakenOffer {
 	 * hiding them. Only populated for `rune_cost` awakens.
 	 */
 	ineligible?: AwakenIneligibleMat[];
+	/**
+	 * Set when two or more different ways to pay are possible now. The offer's own
+	 * `discardCount` / `options` are the first way; the UI lets the owner switch.
+	 */
+	alternatives?: AwakenPaymentAlternative[];
 }
 
 /** One unit of a `rune_cost` awaken cost, with the exact mats that can pay it. */
@@ -530,11 +586,17 @@ export interface AwakenLockedOffer {
 export interface MonsterState {
 	id: string;
 	name: string;
+	/** The monster's Barrier left: the damage still needed to defeat it. Persists between fights. */
 	hp: number;
+	/** The card's printed Barrier. */
 	maxHp: number;
+	/** Difficulty deck (1–3) used when drawing Abyss cards. */
+	difficulty?: 1 | 2 | 3;
 	damage: number;
+	/** Combat initiative; absent ⇒ infinite (always strikes first). See PlayCatalogMonster. */
+	initiative?: number;
 	rewardTrack: string[]; // icon_pool ids
-	chooseAmount: number; // rewards picked on kill (default 2)
+	chooseAmount: number; // rewards a kill grants (every resolvable token on the card)
 	/** Kills still needed to defeat THIS monster. Starts at the active player count; each
 	 *  kill resets HP to full and decrements this, floored at 0 so excess kills (overkill)
 	 *  never carry over to the next monster. */
@@ -546,6 +608,31 @@ export interface MonsterState {
 	ladderIndex: number;
 	/** Total monsters in the escalation ladder. */
 	ladderMax: number;
+}
+
+export interface MonsterDrawState {
+	cards: MonsterState[];
+	maxCards: number;
+}
+
+/** Static facts about one Abyss difficulty deck, shown on its card back. Computed from the
+ *  catalog at game start; `count` (cards left) is filled in by the projection. */
+export interface MonsterDeckSummary {
+	difficulty: 1 | 2 | 3;
+	/** Cards dealt into this deck at game start. */
+	total: number;
+	/** Cards left to draw (projection only). */
+	count?: number;
+	/** Range of the cards' Barrier (damage needed to defeat them). */
+	barrierMin: number;
+	barrierMax: number;
+	/** Distinct Victory Point totals one kill grants across the deck's cards, ascending (a kill grants every reward). */
+	vpValues: number[];
+	/** Arcane Abyss Summons one kill grants, across the deck's cards. */
+	summonMin: number;
+	summonMax: number;
+	/** Other reward kinds found on the deck's cards (e.g. "Rune", "Restore Barrier"). */
+	extraRewards: string[];
 }
 
 export type CombatKind = 'monster' | 'pvp';
@@ -637,10 +724,13 @@ export interface PlayCatalogMonster {
 	barrier: number; // hit points to defeat
 	rewardTrack: string[]; // icon_pool ids
 	dicePool: string[]; // icon_pool ids (monster's own dice — informational for now)
-	chooseAmount: number; // rewards picked on kill
+	chooseAmount: number; // catalog value; ignored — a kill grants every reward
 	stage: number;
 	/** Difficulty rung within a stage (0 = weakest). Drives the escalation ladder. */
 	order: number;
+	/** Combat initiative (monsters_v2 `initiative`). Absent ⇒ infinite: the monster always strikes
+	 *  first unless the player has an always-strike-first effect (the rule before 2026-11-13). */
+	initiative?: number;
 }
 
 /** A class trait carried into the engine, with its breakpoint effect schema intact. */
@@ -671,6 +761,64 @@ export interface PlayCatalog {
 	locations?: PlayCatalogLocation[];
 	/** Per-cost bag copy-counts (editions table; Complete edition). Null ⇒ engine default. */
 	costDuplicates?: Record<string, number> | null;
+	/**
+	 * Monster pool sizes (monster_pools.json): how many cards of each difficulty are dealt into
+	 * the Abyss decks for a player count. Absent / empty / no row for the player count ⇒ every
+	 * catalog card of that difficulty is dealt (the behaviour before 2026-11-13).
+	 */
+	monsterPools?: MonsterPoolRow[];
+	/**
+	 * VP of a relic tool's "gain N VP or …" side, from relics.json ability text. Absent ⇒ 2 (every
+	 * catalog saved before 2026-11-13); loaders write it only when it is not 2, so those hashes stay.
+	 */
+	relicToolVp?: number;
+	/**
+	 * Rule switches (rules.json, see `rules.ts`). Absent ⇒ every rule has its default, which is
+	 * the behaviour before 2026-11-13; loaders write only the switches that differ from the
+	 * default, so catalogs without the table keep their hash.
+	 */
+	rules?: PlayRules;
+}
+
+/** rules.json: named rule switches. Each one is optional; see `rules.ts` for the defaults. */
+export interface PlayRules {
+	/** Feral strikes first against monsters (default true). false ⇒ only +3 damage vs monsters. */
+	feralMonsterStrikeFirst?: boolean;
+	/** With all 7 spirit slots full, a summon may replace one spirit (default false). */
+	summonReplaceWhenFull?: boolean;
+	/** Cultivator (5) grants its relic only the first time per game (default false). */
+	cultivatorRelicOnce?: boolean;
+	/** PvP pays only per Good player corrupted (3 each) + a Good bounty (default false). */
+	pvpPaysOnCorrupt?: boolean;
+	/** Under pvpPaysOnCorrupt: Good players get 2 VP per Evil attacker corrupted (default true). */
+	pvpGoodBounty?: boolean;
+	/** Arcane Abyss Summon draws 4 and summons up to 2 (default false: draw 3, summon 1). */
+	abyssSummonDraw4Pick2?: boolean;
+	/** Firetail's +3 Initiative also in monster combat (default false). */
+	firetailVsMonsters?: boolean;
+	/** Queen's VP and Sorcerer's die only in a round you attacked a player (default false). */
+	moonPerksNeedAttack?: boolean;
+	/** Corruptor's drop to Fallen counts as one corruption (default false). */
+	corruptorCountsAsCorruption?: boolean;
+	/** While Fallen, unpaid sacrifices cost VP even below 0 (default false). */
+	fallenDebtBelowZero?: boolean;
+	/** Sun rework: new Mage, Chorus, Shieldbearer, Nomad, Gardener, Cleric texts (default false). */
+	sunRework?: boolean;
+	/** Bastion halves every monster hit, whatever its initiative (default false). */
+	bastionVsMonsters?: boolean;
+	/** Under pvpPaysOnCorrupt: the Evil attacker also gets 2 VP for the attack (default false). */
+	pvpEngageVp?: boolean;
+	/** An Evil attacker corrupted in its own PvP attack owes at most 1 sacrifice (default false). */
+	pvpAttackerSacrificeCap?: boolean;
+	/** The 2026-11-13 Navigation Power set, 11 general + 11 niche (default false: the old 22). */
+	powerRework?: boolean;
+}
+
+/** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
+export interface MonsterPoolRow {
+	players: number;
+	difficulty: 1 | 2 | 3;
+	size: number;
 }
 
 export interface PlaySpirit {
@@ -689,7 +837,7 @@ export interface PendingDrawState {
 	summonLimit: number;
 	summonedCount: number;
 	/** When true, a spirit summoned from this draw is flipped face-up and its
-	 *  awakening fires immediately (Abyss Summoner / Florality "then awaken it"). */
+	 *  awakening fires immediately (Summoner / Florality "then awaken it"). */
 	autoAwaken?: boolean;
 }
 
@@ -738,6 +886,7 @@ export interface RuntimeBagEntry {
 	state?: string;
 	barrier?: number;
 	damage?: number;
+	difficulty?: 1 | 2 | 3;
 	rewardId?: string;
 	rewardLabel?: string;
 }
@@ -768,7 +917,7 @@ export interface PendingAugment {
 	name: string;
 	classId?: string;
 	/** When set, this augment may ONLY be placed on this spirit slot (its designated
-	 *  target — e.g. Runebound Vessel's "gain 2 augments for THIS spirit"). Unset = the
+	 *  target — e.g. Herder's "gain 2 augments for THIS spirit"). Unset = the
 	 *  owner may place it on any of their spirits (subject to the 1-augment cap). */
 	boundSlotIndex?: number;
 	/** Human label for the bound target (the spirit's name), for the placement UI. */
@@ -829,6 +978,12 @@ export interface PrivatePlayerState {
 	 *  (1st corruption sheds 1 spirit, 2nd sheds 2, …). Optional/defaults to 0. */
 	corruptionCount?: number;
 	spirits: PlaySpirit[];
+	/** Private saved Abyss cards; omitted from other players' projections. */
+	monsterHand?: MonsterState[];
+	/** Current two-card Abyss reveal awaiting a keep choice. */
+	pendingMonsterDraw?: MonsterDrawState | null;
+	/** Round of this player's last monster-deck draw (one draw per Abyss visit). */
+	monsterDrawRound?: number;
 	mats: MatSlotSnapshot[];
 	handDraws: HandDrawSnapshot[];
 	pendingDraw: PendingDrawState | null;
@@ -912,10 +1067,49 @@ export interface PrivatePlayerState {
 	deflect: number;
 	/** Flat bonus added to the player's dealt combat damage. */
 	combatDamageBonus: number;
-	/** The attack value rolled for the current fight. Firekeeper reads its parity. */
+	/** The attack value rolled for the current fight (dice + flat bonus, × multiplier). */
 	combatValueThisFight?: number;
-	/** Tide Stalker priority for the current combat; reset with other combat flags. */
+	/** Spellblade priority for the current combat; reset with other combat flags. */
 	alwaysAttackFirst?: boolean;
+	/** Paladin: "If initiative is tied, your side strikes first." Per combat. */
+	winsInitiativeTies?: boolean;
+	/**
+	 * Sentinel: attack-die instance ids the owner chose (Sentinel decision card) to discard
+	 * before the roll of their NEXT combat. Kept until that combat spends them.
+	 */
+	sentinelDiscardIds?: string[];
+	/** Witch: attack dice taken from an opponent for the current PvP combat; given back when
+	 *  that combat ends. */
+	witchBorrowedDice?: { fromSeat: SeatColor; die: AttackDie }[];
+	/** Sentinel: +2 damage per die discarded before this combat's roll. Per combat. */
+	discardDamageBonus?: number;
+	/** Salamander: roll again each attack die that shows 0, once. Per combat. */
+	rerollZeroDice?: boolean;
+	/** Relic Sentinel: may discard a relic to take 0 damage from a hit. Per combat. */
+	relicGuard?: boolean;
+	/**
+	 * Relic Sentinel: the owner's choice of WHEN to discard a relic for a hit ("you may
+	 * choose"). Combat resolves in one step, so the owner sets the rule in advance with the
+	 * Relic Sentinel decision card. Unset reads as 'lethal'. Persists between rounds.
+	 */
+	relicGuardMode?: RelicGuardMode;
+	/** Firecracker relic used for its effect: strike first in the next combat (count of uses). */
+	strikeFirstCharges?: number;
+	/** Wanderer: the location of the previous round (set when a new round begins). */
+	previousDestination?: string | null;
+	/** Origins whose 5-spirit relic this player already gained (a one-time reward). */
+	originRelicsGained?: string[];
+	/**
+	 * Cultivator (5) already granted its relic this game. Written only under the
+	 * `cultivatorRelicOnce` rule (catalog.rules), so games without that rule never carry it.
+	 */
+	cultivatorRelicGained?: boolean;
+	/**
+	 * This player attacked a player (an Evil attacker in a resolved PvP exchange) this round.
+	 * Written only under the `moonPerksNeedAttack` rule (catalog.rules), so games without that
+	 * rule never carry it; reset to false at the start of the next round once it was set.
+	 */
+	attackedPlayerThisRound?: boolean;
 	/** When true, the player ignores Stun effects. */
 	stunImmune: boolean;
 	/** Knocked out of the CURRENT combat exchange (hit zero barrier / corrupted, and
@@ -937,18 +1131,18 @@ export interface PrivatePlayerState {
 
 	// ── P4 per-combat flags (reset at the START of each combat ⇒ no leakage) ────
 	/**
-	 * Multiplier applied to dealt combat damage (default 1). Aegis Weaver sets it
+	 * Multiplier applied to dealt combat damage (default 1). Paladin sets it
 	 * to 2 when its barrier is odd. Applied inside `rollAttack`.
 	 */
 	combatDamageMultiplier: number;
 	/**
-	 * When true, the attack is rolled TWICE and the higher total kept — Fatestriker
+	 * When true, the attack is rolled TWICE and the higher total kept — Assassin
 	 * (Space Invader). Applied inside `rollAttack`. Default false ⇒ a single roll.
 	 */
 	attackRollAdvantage: boolean;
 	/**
 	 * When true, incoming damage is halved (rounded up) after flat reductions —
-	 * Disruptor, when the opponent has higher initiative. Applied in `takeDamage`.
+	 * Bastion, when the opponent has higher initiative. Applied in `takeDamage`.
 	 */
 	halveIncoming: boolean;
 	/**
@@ -966,15 +1160,13 @@ export interface PrivatePlayerState {
 	 */
 	doubleRunes: boolean;
 	/**
-	 * A summon redraw is available this summon (Soul Weaver). The summon path
+	 * A summon redraw is available this summon (Mystic). The summon path
 	 * surfaces a redraw affordance; cleared when the summon resolves / a new draw
 	 * begins. Modeled as a flag honored by the summon UI + bots.
 	 */
 	redrawAvailable: boolean;
 	/** Legacy replay field from the removed one-shot trade-cost waiver. */
 	freeNextRelicTrade: boolean;
-	/** True after this player gains or upgrades attack dice during the current round. */
-	attackDiceChangedThisTurn?: boolean;
 	/**
 	 * Status thresholds crossed this round, recorded by the `onStatusChange`
 	 * trigger and consumed in the Awakening Phase (cleanup) by the status-driven
@@ -1055,15 +1247,15 @@ export interface PublicGameState {
 	phaseDeadlineExtensions: number;
 	/** Which seats are at each destination (computed at reveal). */
 	locationOccupancy: Partial<Record<NavigationDestination, SeatColor[]>>;
-	/** The monster currently invading the Abyss, if any. */
-	monster: MonsterState | null;
 	/** Active combats this round. */
 	combats: CombatState[];
 	/** Set when a player reaches the VP target; game then finishes. */
 	winnerSeat: SeatColor | null;
-	/** Set when the FINAL ladder monster is defeated — the spirit world is saved and the
+	/** Set when every monster card is defeated — the spirit world is saved and the
 	 *  game ends at that cleanup with final scoring (Michael's ruling, 2026-07-07). */
 	spiritWorldSaved?: boolean;
+	/** The three Abyss difficulty decks (static facts for the card backs). */
+	monsterDecks?: MonsterDeckSummary[];
 }
 
 export interface PlayerProjection extends Omit<PrivatePlayerState, 'displayName'> {
@@ -1129,7 +1321,8 @@ export interface SpectatorProjection {
 	navigationFullDeadline: number | null;
 	phaseDeadline: number | null;
 	locationOccupancy: Partial<Record<NavigationDestination, SeatColor[]>>;
-	monster: MonsterState | null;
+	/** Abyss difficulty decks with cards-left counts (card order and contents stay hidden). */
+	monsterDecks?: MonsterDeckSummary[];
 	combats: CombatState[];
 	winnerSeat: SeatColor | null;
 	/**
@@ -1299,22 +1492,31 @@ export type GameCommand =
 			choices?: number[];
 			costChoices?: number[];
 	  }
-	// ── Combat (P1: single-step monster fight) ────────────────────────────
-	| { type: 'startCombat' }
+	// ── Combat: fight one monster card from your own hand ─────────────────
+	| { type: 'startCombat'; handIndex: number }
+	/** Draw two monster cards from an Abyss difficulty deck. */
+	| { type: 'drawMonsterCards'; difficulty: 1 | 2 | 3 }
+	/** Keep one card from the current two-card reveal and return the other. */
+	| { type: 'keepMonsterCard'; index: number }
 	/**
-	 * Claim monster-kill rewards. `picks` are indices into the pending reward's
-	 * `rewardTrack` (≤ `chooseAmount`); `choices[k]` selects which option to take
-	 * for the k-th "choose a rune" pick, in pick order (defaults to the first).
+	 * Claim monster-kill rewards. A kill grants EVERY reward on the card, so `picks`
+	 * is ignored by the engine (clients send every index; kept for bot/ML encoders);
+	 * `choices[k]` selects the rune for the k-th "choose a rune" reward, in card
+	 * order (default: first).
 	 */
 	| { type: 'resolveMonsterReward'; picks: number[]; choices?: number[] }
 	// ── Encounter / PvP (P2) ──────────────────────────────────────────────
 	| { type: 'initiatePvp' }
 	| { type: 'passEncounter' }
 	| { type: 'refillMarket' }
-	| { type: 'spawnHandSpirit'; guid: string; slotIndex?: number }
+	/**
+	 * `replaceSlotIndex` (only under the `summonReplaceWhenFull` rule, only with all 7 slots
+	 * full): discard the spirit in that slot (as `discardSpirit`) and summon into its slot.
+	 */
+	| { type: 'spawnHandSpirit'; guid: string; slotIndex?: number; replaceSlotIndex?: number }
 	| { type: 'discardHandDraws' }
 	/**
-	 * Soul Weaver: "On a Spirit World or Abyss Summon, you may put all spirits back
+	 * Mystic: "On a Spirit World or Abyss Summon, you may put all spirits back
 	 * and draw again." Returns the current hand draws to their bag (reshuffled) and
 	 * draws a fresh set from the same bag, preserving how many picks are still left.
 	 * Legal only while `redrawAvailable` is set (one-shot per summon; re-armed each

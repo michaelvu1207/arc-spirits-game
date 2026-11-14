@@ -1,6 +1,6 @@
 import type { ClassAbility } from './types';
 
-// Living Bastion — take 6 less damage, gain 6 attack damage and 6 initiative.
+// Titan — take 6 less damage, gain 6 attack damage and 6 initiative.
 export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',

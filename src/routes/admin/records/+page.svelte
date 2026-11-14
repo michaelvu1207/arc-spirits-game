@@ -11,6 +11,16 @@
 		safeDurationMs
 	} from '$lib/features/stats/format';
 	import { shortenGameId } from '$lib/features/records/records';
+	import { explorerLinks, fetchGameRuns, fetchGameStories, fetchGameWinners, runLabel, runsOf, type GameStory } from '$lib/explorer';
+
+	// `explorer`: the local game explorer shows this page on one screen, without the hero.
+	let { explorer = false }: { explorer?: boolean } = $props();
+	let gameRuns = $state(new Map<string, { run: string; version: string }>());
+	let runFilter = $state('all');
+	let winners = $state(new Map<string, string>());
+	let winnerSearch = $state('');
+	let stories = $state(new Map<string, GameStory>());
+	const runs = $derived(runsOf([...gameRuns.values()]));
 
 	interface GameListItem {
 		game_id: string;
@@ -38,6 +48,9 @@
 
 	const filteredGames = $derived(() => {
 		let list = games;
+		if (runFilter !== 'all') list = list.filter((g) => gameRuns.get(g.game_id)?.run === runFilter);
+		const q = winnerSearch.trim().toLowerCase();
+		if (q) list = list.filter((g) => (winners.get(g.game_id) ?? '').toLowerCase().includes(q));
 		if (verificationFilter === 'verified') list = list.filter((g) => g.verified);
 		else if (verificationFilter === 'unverified') list = list.filter((g) => !g.verified);
 		if (gameFilter === 'all') return list;
@@ -93,7 +106,7 @@
 		return turns.length % 2 === 0 ? (turns[mid - 1] + turns[mid]) / 2 : turns[mid];
 	});
 
-	function navigateToGame(gameId: string) { goto(`/admin/game/${encodeURIComponent(gameId)}`); }
+	function navigateToGame(gameId: string) { goto(explorer ? explorerLinks.game(gameId) : `/admin/game/${encodeURIComponent(gameId)}`); }
 
 	function handleRowClick(event: MouseEvent, gameId: string) {
 		const t = event.target as HTMLElement | null;
@@ -123,6 +136,7 @@
 		error = null;
 		try {
 			const rows = await fetchGameSummaries();
+			if (explorer) [gameRuns, winners, stories] = await Promise.all([fetchGameRuns(), fetchGameWinners(), fetchGameStories()]);
 			games = rows
 				.map((row) => {
 					const guardianAsset = row.winner_guardian ? getGuardianAsset(row.winner_guardian) : null;
@@ -176,8 +190,9 @@
 	<title>Game Records | Arc Spirits Spectate</title>
 </svelte:head>
 
-<div class="page">
+<div class="page" class:explorer>
 	<!-- ======= HERO ======= -->
+	{#if !explorer}
 	<section class="hero">
 		<div class="hero-content">
 			<div class="hero-eyebrow">SPECTATE</div>
@@ -217,8 +232,10 @@
 			</svg>
 		</div>
 	</section>
+	{/if}
 
 	<!-- ======= AT A GLANCE ======= -->
+	{#if !explorer}
 	<section class="stats-section">
 		<div class="stats-header">
 			<span class="eyebrow">At a Glance</span>
@@ -263,6 +280,8 @@
 		</div>
 	</section>
 
+	{/if}
+
 	<!-- ======= RECORDS ARCHIVE ======= -->
 	<section class="archive-section">
 		<div class="archive-head-row">
@@ -276,6 +295,14 @@
 				</p>
 			</div>
 			<div class="archive-filters">
+				{#if explorer && runs.length > 1}
+					<div class="tabs-underline">
+						<button class="tab-btn" class:active={runFilter === 'all'} onclick={() => (runFilter = 'all')}>All runs</button>
+						{#each runs as run (run)}
+							<button class="tab-btn" class:active={runFilter === run} onclick={() => (runFilter = run)}>{runLabel(run)}</button>
+						{/each}
+					</div>
+				{/if}
 				<div class="tabs-underline">
 					<button class="tab-btn" class:active={verificationFilter === 'verified'} onclick={() => (verificationFilter = 'verified')}>Verified <span class="tab-num">{verifiedCount()}</span></button>
 					<button class="tab-btn" class:active={verificationFilter === 'unverified'} onclick={() => (verificationFilter = 'unverified')}>Pending <span class="tab-num">{unverifiedCount()}</span></button>
@@ -286,6 +313,7 @@
 					<button class="tab-btn" class:active={gameFilter === 'under15'} onclick={() => (gameFilter = 'under15')}>Under {MIN_TURNS_TO_SHOW}</button>
 					<button class="tab-btn" class:active={gameFilter === 'all'} onclick={() => (gameFilter = 'all')}>All</button>
 				</div>
+				{#if explorer}<input bind:value={winnerSearch} placeholder="Winner…" aria-label="Filter by winner" class="winner-search" />{/if}
 				<button onclick={fetchGames} disabled={loading} class="btn-ghost" type="button">
 					<svg class={loading ? 'spin' : ''} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -338,11 +366,14 @@
 								{#if game.winner_guardian_icon}
 									<img src={game.winner_guardian_icon} alt={game.winner_guardian} loading="lazy" />
 								{:else}
-									<div class="winner-empty">—</div>
+									<div class="winner-empty">{explorer && game.winner_guardian ? game.winner_guardian.slice(0, 2) : '—'}</div>
 								{/if}
 							</div>
 							<div class="winner-meta">
-								{#if game.winner_guardian}
+								{#if explorer && winners.get(game.game_id)}
+									<div class="winner-name" title={winners.get(game.game_id)}>{winners.get(game.game_id)}</div>
+									<div class="winner-vp">{game.winner_guardian} · {game.winner_vp} VP</div>
+								{:else if game.winner_guardian}
 									<div class="winner-name">{game.winner_guardian}</div>
 									<div class="winner-vp">{game.winner_vp} VP</div>
 								{:else}
@@ -351,8 +382,13 @@
 							</div>
 						</div>
 						<div class="gt-col-id">
-							<div class="game-id">{shortenGameId(game.game_id)}</div>
-							<div class="game-date">{game.ended_at ? formatDate(game.ended_at) : '—'}</div>
+							<div class="game-id">{explorer ? game.game_id : shortenGameId(game.game_id)}</div>
+							{#if explorer && stories.get(game.game_id)}
+								{@const st = stories.get(game.game_id)!}
+								<div class="game-date story-line" title={`${st.headline} (${st.luck})`}>{st.headline}{st.luck ? ` · ${st.luck}` : ''}</div>
+							{:else}
+								<div class="game-date">{game.ended_at ? formatDate(game.ended_at) : '—'}</div>
+							{/if}
 						</div>
 						<div class="gt-col-stat"><span class="stat-num">{game.navigation_count}</span></div>
 						<div class="gt-col-stat"><span class="stat-num">{game.player_count}</span></div>
@@ -372,7 +408,7 @@
 							<span class="status-tag" class:verified={game.verified}>{game.verified ? 'Verified' : 'Pending'}</span>
 						</div>
 						<div class="gt-col-action">
-							<a href={`/game/${encodeURIComponent(game.game_id)}`} class="open-arrow" aria-label="Open game">→</a>
+							<a href={explorerLinks.game(game.game_id)} class="open-arrow" aria-label="Open game">→</a>
 						</div>
 					</div>
 				{/each}
@@ -383,6 +419,7 @@
 	</section>
 
 	<!-- ======= FOOTER ======= -->
+	{#if !explorer}
 	<footer class="page-foot">
 		<div>
 			<div class="foot-brand">LANTERN <span>LIGHT</span> GAMES</div>
@@ -390,6 +427,7 @@
 		</div>
 		<div class="foot-meta">Arc Spirits Spectate · Companion app for Tabletop Simulator</div>
 	</footer>
+	{/if}
 </div>
 
 <style>
@@ -400,6 +438,31 @@
 		position: relative;
 		z-index: 1;
 	}
+
+	/* Local explorer: one screen. The table scrolls inside its panel, the page does not. */
+	.page.explorer {
+		height: 100%;
+		width: 100%;
+		padding-bottom: 10px;
+		display: flex;
+		flex-direction: column;
+	}
+	.page.explorer .archive-section { margin: 14px 0 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+	.page.explorer .archive-head-row { margin-bottom: 0; }
+	.page.explorer .section-title { font-size: 2rem; }
+	.page.explorer .games-table { margin-top: 12px; flex: 1; min-height: 0; overflow-y: auto; }
+	.page.explorer .game-id { max-width: none; overflow: visible; white-space: nowrap; }
+	.page.explorer .story-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.page.explorer .gt-col-id { min-width: 0; }
+	.page.explorer .winner-search { width: 120px; }
+	.page.explorer .open-arrow { padding: 0 !important; }
+	.page.explorer .archive-filters { gap: 12px; flex-wrap: nowrap; }
+	.page.explorer .gt-header, .page.explorer .gt-row { grid-template-columns: minmax(250px, 1.6fr) minmax(190px, 1.6fr) 60px 60px 80px 80px 120px 70px 24px; }
+	.page.explorer .winner-vp { color: var(--dim); }
+	.page.explorer .gt-header { position: sticky; top: 0; background: var(--color-void); z-index: 1; }
+	.page.explorer .gt-row { padding-top: 8px; padding-bottom: 8px; }
+	.page.explorer .archive-foot { margin-top: 8px; }
+	.page.explorer .msg { padding: 40px 20px; }
 
 	/* ===== HERO ===== */
 	.hero {

@@ -1,11 +1,30 @@
-import type { ClassAbility, ClassHandler } from './types';
+import { isEvilAlignment, type PrivatePlayerState } from '../../types';
+import { runAction } from '../actions';
+import type { ClassAbility } from './types';
 
-// Strategist — reduce incoming damage by 1 for every placed Spirit Augment.
-const reduceFromAugments: ClassHandler = (ctx) => {
-	const augments = ctx.player.spiritAugmentAttachments?.length ?? 0;
-	if (augments <= 0) return;
-	ctx.player.damageReduction += augments;
-	ctx.log.push(`Runic Bulwark: ${augments} Spirit Augment(s) reduce incoming damage by ${augments}.`);
-};
+/** Monk's Initiative gain and per-hit damage reduction while its condition holds. */
+export const MONK_INITIATIVE = 5;
+export const MONK_DAMAGE_REDUCTION = 2;
 
-export const ability: ClassAbility[] = [{ on: 'onTakeDamage', run: reduceFromAugments }];
+/**
+ * "Have a Cursed Spirit": any owned spirit — face-down included — whose OWN card has the
+ * Cursed Spirit class. A Cursed Spirit augment does not make its host a Cursed Spirit.
+ */
+export function hasCursedSpirit(player: PrivatePlayerState): boolean {
+	return (player.spirits ?? []).some((s) => (s.classes?.['Cursed Spirit'] ?? 0) > 0);
+}
+
+// Monk — "While you are not Evil and have no Cursed Spirits, gain 5 Initiative and take 2
+// less damage." Checked each time a combat starts (`inCombat`, monster and PvP), so a change
+// of alignment or of the spirit line-up between two combats is picked up. Like Titan: the
+// Initiative is for that combat and the reduction comes off each hit taken in it.
+export const ability: ClassAbility[] = [
+	{
+		on: 'inCombat',
+		run(ctx) {
+			if (isEvilAlignment(ctx.player.statusLevel) || hasCursedSpirit(ctx.player)) return;
+			runAction(ctx, { kind: 'gainInitiative', amount: MONK_INITIATIVE });
+			runAction(ctx, { kind: 'reduceIncomingDamage', amount: MONK_DAMAGE_REDUCTION });
+		}
+	}
+];

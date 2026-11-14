@@ -6,7 +6,7 @@ import { currentClassCounts, currentClassName } from './classNames';
 import {
 	isNavigationPowerId,
 	isNavigationPowerRune,
-	NAVIGATION_POWERS,
+	navigationPowerPool,
 	type NavigationPowerId
 } from './navigationPowers';
 import {
@@ -23,11 +23,14 @@ import type {
 	HistorySnapshotRow,
 	BagSpiritSummary,
 	LobbySeatState,
+	MonsterPoolRow,
 	PlayCatalog,
 	PlayCatalogDie,
 	PlayCatalogRune,
 	PlayCatalogSpirit,
+	PlayCatalogMonster,
 	PlayerProjection,
+	PlaySpirit,
 	PendingRewardState,
 	PrivatePlayerState,
 	PublicGameState,
@@ -35,7 +38,9 @@ import type {
 	RuntimeBagsState,
 	SeatColor,
 	SpiritSourceBag,
-	SpectatorProjection
+	SpectatorProjection,
+	MonsterDeckSummary,
+	MonsterState
 } from './types';
 import {
 	SEAT_COLORS,
@@ -50,6 +55,7 @@ import {
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
+import { ruleValue } from './rules';
 import {
 	bagForSpiritCost,
 	deckCopiesForCost,
@@ -73,12 +79,12 @@ import {
 	resetCombatFlags,
 	takeDamage,
 	fightMonster,
-	monsterLivesForPlayerCount,
 	pvpVpForAttack,
+	pvpGoodBounty,
 	resolveEncounterCombat
 } from './combat';
 import { applyTrigger, applyCultivate, applyRest, awakenedClassCounts } from './effects/apply';
-import { runAction, GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
+import { gainSpiritAugments, runAction, GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 import { ownerAugmentCapacity, isSpiritAugmentClass } from './augments';
 import {
 	buildLocationInteractions,
@@ -91,8 +97,11 @@ import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
 import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
+import { RELIC_TOOLS, grantRelicTool, keepUnansweredRelicTools } from './effects/relicTools';
 import { decisionPickerSpec, validateDecisionSelection } from './decisionPicker';
 import { checkAwakenCondition, payAwakenCondition, needsManualAwaken } from './effects/awaken';
+import { runesAreWild } from './effects/matMatch';
+import { applyCorruptionEffects, recordSacrifice } from './effects/corruption';
 import {
 	AWAKEN_HANDLERS,
 	AWAKEN_PROGRESS_KEYS,
@@ -244,6 +253,8 @@ function buildPlayerState(seatColor: SeatColor, seat: LobbySeatState): PrivatePl
 		statusToken: STATUS_LADDER[0],
 		corruptionCount: 0,
 		spirits: [],
+		monsterHand: [],
+		pendingMonsterDraw: null,
 		// Every player begins with one flexible Any Rune.
 		mats: [
 			{ slotIndex: 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' }
@@ -290,7 +301,6 @@ function buildPlayerState(seatColor: SeatColor, seat: LobbySeatState): PrivatePl
 		doubleRunes: false,
 		redrawAvailable: false,
 		freeNextRelicTrade: false,
-		attackDiceChangedThisTurn: false,
 		becameTaintedThisRound: false,
 		becameCorruptThisRound: false,
 		becameFallenThisRound: false,
@@ -456,14 +466,32 @@ function returnHandDrawsToBags(state: PublicGameState, player: PrivatePlayerStat
  * the bag lacks enough spirits. Shared by the draw commands, reward-row summon
  * gains, and the draw queue.
  */
+/** Draw size and summon limit of a summon from `sourceBag`. Spirit World: draw 4, summon 2.
+ *  Arcane Abyss: draw 3, summon 1; rule `abyssSummonDraw4Pick2`: draw 4, summon 2. */
+export function summonDrawSizes(
+	sourceBag: SpiritSourceBag,
+	catalog?: Pick<PlayCatalog, 'rules'> | null,
+	player?: Pick<PrivatePlayerState, 'navigationPower' | 'navigationDestination'> | null
+): { draw: number; pick: number } {
+	if (sourceBag !== ARCANE_ABYSS_BAG) {
+		// Power "Tidal Calling" (rule `powerRework`), committed at the Water Region: draw 8.
+		const tidalCalling =
+			player?.navigationPower === 'tidal-calling' &&
+			player.navigationDestination === 'Water Region';
+		return { draw: tidalCalling ? 8 : 4, pick: 2 };
+	}
+	return ruleValue(catalog, 'abyssSummonDraw4Pick2') ? { draw: 4, pick: 2 } : { draw: 3, pick: 1 };
+}
+
 function startDraw(
 	state: PublicGameState,
 	player: PrivatePlayerState,
 	sourceBag: SpiritSourceBag,
-	autoAwaken = false
+	autoAwaken = false,
+	sizes: { draw: number; pick: number } = summonDrawSizes(sourceBag)
 ): boolean {
-	const requested = sourceBag === ARCANE_ABYSS_BAG ? 3 : 4;
-	const baseLimit = sourceBag === ARCANE_ABYSS_BAG ? 1 : 2;
+	const requested = sizes.draw;
+	const baseLimit = sizes.pick;
 	const runtimeBag = runtimeBagForSource(state, sourceBag);
 	// Draw as many as the bag can offer (a near-empty bag still lets you summon
 	// fewer rather than the action silently doing nothing). Empty ⇒ no draw.
@@ -491,10 +519,10 @@ function startDraw(
 	player.pendingDraw = { sourceBag, drawCount, summonLimit, summonedCount: 0, autoAwaken };
 	runtimeBag.count = runtimeBag.contents.length;
 	state.bags.history = buildHistoryBags(state.bags);
-	// Soul Weaver: "On a Spirit World or Abyss Summon, you may put all spirits back
+	// Mystic: "On a Spirit World or Abyss Summon, you may put all spirits back
 	// and draw again." Arm the redraw the moment the fresh hand opens (when it is most
 	// useful — before any pick), so the DrawTray surfaces the ↻ Redraw affordance.
-	if ((awakenedClassCounts(player)['Soul Weaver'] ?? 0) >= 1) {
+	if ((awakenedClassCounts(player)['Mystic'] ?? 0) >= 1) {
 		player.redrawAvailable = true;
 	}
 	return true;
@@ -505,15 +533,20 @@ function queueOrBeginDraw(
 	state: PublicGameState,
 	player: PrivatePlayerState,
 	sourceBag: SpiritSourceBag,
-	autoAwaken = false
+	autoAwaken = false,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
 ) {
+	const sizes = summonDrawSizes(sourceBag, catalog, player);
 	if (player.pendingDraw || player.handDraws.length > 0) {
-		const drawCount = sourceBag === ARCANE_ABYSS_BAG ? 3 : 4;
-		const summonLimit = sourceBag === ARCANE_ABYSS_BAG ? 1 : 2;
-		player.pendingDrawQueue.push({ sourceBag, drawCount, summonLimit, autoAwaken });
+		player.pendingDrawQueue.push({
+			sourceBag,
+			drawCount: sizes.draw,
+			summonLimit: sizes.pick,
+			autoAwaken
+		});
 	} else {
 		// No spirits left ⇒ silently skip (the reward simply yields no summon).
-		startDraw(state, player, sourceBag, autoAwaken);
+		startDraw(state, player, sourceBag, autoAwaken, sizes);
 	}
 }
 
@@ -522,13 +555,28 @@ function advanceDrawQueue(state: PublicGameState, player: PrivatePlayerState) {
 	if (player.pendingDraw) return;
 	while (player.pendingDrawQueue.length > 0) {
 		const next = player.pendingDrawQueue.shift();
-		if (next && startDraw(state, player, next.sourceBag, next.autoAwaken)) return;
+		// A queued draw keeps the sizes it was queued with.
+		if (
+			next &&
+			startDraw(state, player, next.sourceBag, next.autoAwaken, {
+				draw: next.drawCount,
+				pick: next.summonLimit
+			})
+		)
+			return;
 		// bag shortage for this queued draw ⇒ drop it and try the next.
 	}
 }
 
-/** Add a reward-gained rune to the player's rune slots, carrying its identity. */
-function addGainedRune(player: PrivatePlayerState, rune: ResolvedRune) {
+/** Add a reward-gained rune to the player's rune slots, carrying its identity. Exported for tests. */
+export function addGainedRune(player: PrivatePlayerState, rune: ResolvedRune, log?: string[]) {
+	// A gained Firecracker / Flower / Diamond / Cleansing Teapot is a relic TOOL (November 2026
+	// relics.json: "You may <effect>, then discard this."; no VP since 2026-11-13), not a base rune.
+	if (RELIC_TOOLS[rune.runeId]) {
+		grantRelicTool(player, rune.runeId, []);
+		return;
+	}
+	// Other relic ids (the "Any relic" wildcard) still resolve to a base rune.
 	const runeId = RELIC_TO_RUNE[rune.runeId];
 	const base = runeId ? BASE_RUNES[runeId] : undefined;
 	if (base) rune = { runeId, name: base.name, originId: base.originId, classId: null, special: false, type: 'rune' };
@@ -536,11 +584,7 @@ function addGainedRune(player: PrivatePlayerState, rune: ResolvedRune) {
 	// to-place pouch until the owner attaches one to a hex spirit. Relics (special
 	// runes with no class) and origin runes still take a rune slot as before.
 	if (rune.type === 'augment' && rune.classId) {
-		(player.unplacedAugments ??= []).push({
-			runeId: rune.runeId,
-			name: rune.name,
-			classId: rune.classId
-		});
+		gainSpiritAugments(player, [{ runeId: rune.runeId, name: rune.name, classId: rune.classId }], log);
 		return;
 	}
 	player.mats.push({
@@ -592,6 +636,20 @@ function applyRewardGain(
 			runAction(ctx, { kind: 'gainMaxBarrier', amount: gain.amount });
 			break;
 		}
+		case 'attackDice': {
+			// The engine's one dice-gain path: the cap of 10 and Wildling apply as for any gain.
+			const ctx = buildEffectContext({
+				state,
+				seat,
+				player,
+				trigger: 'onLocationInteraction',
+				log,
+				traitCount: 0,
+				catalog
+			});
+			runAction(ctx, { kind: 'gainAttackDice', tier: gain.tier, amount: gain.amount });
+			break;
+		}
 		case 'restoreBarrier': {
 			// Restore barrier: flip broken-barrier tokens back to the intact side. Does NOT
 			// raise max barrier — that requires a separate gain-max-barrier effect.
@@ -602,23 +660,23 @@ function applyRewardGain(
 			break;
 		}
 		case 'rune':
-			addGainedRune(player, gain.rune);
 			log.push(`Gained ${gain.rune.name}.`);
+			addGainedRune(player, gain.rune, log);
 			break;
 		case 'chooseRune': {
 			const chosen = gain.options[choice] ?? gain.options[0];
 			if (chosen) {
-				addGainedRune(player, chosen);
 				log.push(`Gained ${chosen.name}.`);
+				addGainedRune(player, chosen, log);
 			}
 			break;
 		}
 		case 'action':
 			if (gain.action === 'spiritWorldSummon') {
-				queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG);
+				queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG, false, catalog);
 				log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 			} else if (gain.action === 'abyssSummon') {
-				queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG);
+				queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
 				log.push('Summon from the Arcane Abyss — draw 3, summon up to 1.');
 			} else if (gain.action === 'cultivate') {
 				applyCultivate(state, seat, log, { catalog });
@@ -630,9 +688,9 @@ function applyRewardGain(
 }
 
 /**
- * Auto-claim a player's pending monster reward by taking the first `chooseAmount`
- * resolvable tokens (default `chooseRune` option). Used when the host force-
- * advances the Location phase so a timeout never silently forfeits rewards.
+ * Auto-claim a player's pending monster reward: every reward on the card (the first
+ * option of any "choose a rune" token). Used when the host force-advances the
+ * Location phase so a timeout never silently forfeits rewards.
  */
 function autoClaimReward(
 	state: PublicGameState,
@@ -642,7 +700,7 @@ function autoClaimReward(
 ): void {
 	const pending = player.pendingReward;
 	if (!pending) return;
-	const picks = buildMonsterRewards(pending.rewardTrack).slice(0, pending.chooseAmount);
+	const picks = buildMonsterRewards(pending.rewardTrack);
 	const log: string[] = [];
 	for (const opt of picks) {
 		applyRewardGain(state, seat, player, opt.effect, 0, log, catalog);
@@ -703,8 +761,8 @@ function applyAwakenRewardClaim(
 				runeCursor += 1;
 				const rune = runes[Math.max(0, Math.min(runes.length - 1, pick))];
 				if (rune) {
-					addGainedRune(player, rune);
 					log.push(`Gained ${rune.name}.`);
+					addGainedRune(player, rune, log);
 				}
 			}
 		} else if (grant.kind === 'fallenChoice') {
@@ -719,15 +777,17 @@ function applyAwakenRewardClaim(
 				runAction(ctx, { kind: 'gainAttackDice', tier: grant.tier, amount: grant.amount });
 		} else if (grant.kind === 'vp') {
 			if (grant.amount > 0) runAction(ctx, { kind: 'gainVP', amount: grant.amount });
-			// 'Golden Ruler': being Evil costs you one awakened Dawn Sovereign spirit.
-			if (grant.source === 'Golden Ruler' && isEvilAlignment(player.statusLevel)) {
+			// King: being Evil costs you one awakened King spirit.
+			if (grant.source === 'King' && isEvilAlignment(player.statusLevel)) {
 				const idx = player.spirits.findIndex(
-					(s) => !s.isFaceDown && (s.classes?.['Golden Ruler'] ?? 0) > 0
+					(s) => !s.isFaceDown && (s.classes?.['King'] ?? 0) > 0
 				);
 				if (idx >= 0) {
 					const [discarded] = player.spirits.splice(idx, 1);
-					log.push(`'Golden Ruler': you are evil — discarded ${discarded.name}.`);
-					const vpSettled = settleUnpayableCorruptionDebt(player);
+					log.push(`King: you are evil — discarded ${discarded.name}.`);
+					const vpSettled = settleUnpayableCorruptionDebt(player, {
+						vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+					});
 					if (vpSettled > 0)
 						log.push(
 							`No spirits left for the corruption sacrifice — lost ${vpSettled} VP instead.`
@@ -831,6 +891,7 @@ function autoResolveCorruptionDiscard(
 		});
 		shuffleBag(runtimeBag.contents, state.rng);
 		runtimeBag.count = runtimeBag.contents.length;
+		recordSacrifice(player); // Moon Cultist awaken: "Sacrifice a spirit."
 		if (!victim.isFaceDown) {
 			const discardLog: string[] = [];
 			applyTrigger(state, seat, 'onSpiritDiscard', discardLog, {
@@ -971,6 +1032,56 @@ function firstOpenSpiritSlot(player: PrivatePlayerState) {
 	);
 }
 
+/**
+ * Discard one spirit from a player's board (the `discardSpirit` command, and the spirit a summon
+ * replaces under the `summonReplaceWhenFull` rule): remove it and its augment, fire its discard
+ * effects when it is awake, Summoner's 4 VP for an Arcane Abyss spirit, and return the card to
+ * the bag it came from (reshuffled). Returns the effect log lines.
+ */
+function discardBoardSpirit(
+	state: PublicGameState,
+	seat: SeatColor,
+	spirit: PlaySpirit,
+	catalog: PlayCatalog
+): string[] {
+	const player = state.players[seat]!;
+	const sourceBag =
+		bagForSpiritCost(spirit.cost) ?? (spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
+	const hadAbyssSummoner = (awakenedClassCounts(player)['Summoner'] ?? 0) > 0;
+
+	// Remove it from the tableau (freeing the slot for a new summon) and drop
+	// any runes attached to that slot.
+	player.spirits = player.spirits.filter((entry) => entry.slotIndex !== spirit.slotIndex);
+	player.spiritAugmentAttachments = (player.spiritAugmentAttachments ?? []).filter(
+		(attachment) => attachment.spiritSlotIndex !== spirit.slotIndex
+	);
+	const discardLog: string[] = [];
+	if (!spirit.isFaceDown) {
+		applyTrigger(state, seat, 'onSpiritDiscard', discardLog, {
+			catalog,
+			counts: spirit.classes ?? {}
+		});
+	}
+	if (sourceBag === ARCANE_ABYSS_BAG && hadAbyssSummoner) {
+		player.victoryPoints += 4;
+		discardLog.push('Summoner: gained 4 VP for discarding an Arcane Abyss spirit.');
+	}
+
+	// Return the card to the bag it came from (face-down ⇒ Arcane Abyss,
+	// otherwise by cost) and reshuffle so it isn't predictably drawn next.
+	const runtimeBag = runtimeBagForSource(state, sourceBag);
+	runtimeBag.contents.push({
+		name: spirit.name,
+		guid: nextId(state.rng, 'discard'),
+		id: spirit.id,
+		cost: spirit.cost
+	});
+	shuffleBag(runtimeBag.contents, state.rng);
+	runtimeBag.count = runtimeBag.contents.length;
+	state.bags.history = buildHistoryBags(state.bags);
+	return discardLog;
+}
+
 function refillEmptyMarketSlots(state: PublicGameState) {
 	for (const slot of state.market) {
 		if (!slot.spiritId) {
@@ -986,6 +1097,11 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
 	for (const augment of player.unplacedAugments ?? []) {
 		if (augment.hostClass) augment.hostClass = currentClassName(augment.hostClass);
 	}
+	// Placed Spirit Augments count toward class totals by className (Soul Weaver → Mystic, …).
+	for (const attachment of player.spiritAugmentAttachments ?? []) {
+		if (typeof attachment.className === 'string')
+			attachment.className = currentClassName(attachment.className);
+	}
 
 	player.handDraws ??= [];
 	player.vpHistory ??= [];
@@ -996,6 +1112,8 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
 	player.spiritAugmentAttachments ??= [];
 	player.unplacedAugments ??= [];
 	player.pendingDraw ??= null;
+	player.monsterHand ??= [];
+	player.pendingMonsterDraw ??= null;
 	player.pendingReward ??= null;
 	player.pendingAwakenReward ??= null;
 	player.pendingCorruptionDiscard ??= null;
@@ -1050,7 +1168,6 @@ function ensurePlayerCollections(player: PrivatePlayerState) {
 	player.doubleRunes ??= false;
 	player.redrawAvailable ??= false;
 	player.freeNextRelicTrade ??= false;
-	player.attackDiceChangedThisTurn ??= false;
 	player.becameTaintedThisRound ??= false;
 	player.becameCorruptThisRound ??= false;
 	player.becameFallenThisRound ??= false;
@@ -1081,7 +1198,6 @@ export function ensureStateShape(state: PublicGameState): PublicGameState {
 	state.phaseDeadline ??= null;
 	state.phaseDeadlineExtensions ??= 0;
 	state.locationOccupancy ??= {};
-	state.monster ??= null;
 	state.combats ??= [];
 	state.winnerSeat ??= null;
 	for (const seat of state.activeSeats ?? []) {
@@ -1152,28 +1268,172 @@ function makeGameId(rng: RngState, now = new Date()): string {
 	return `game_${y}${m}${d}_${hh}${mm}${ss}_${random}`;
 }
 
-/** Build the opening monster: the weakest rung of the ladder. Kills needed to defeat it
- *  scale with player count (1p→1, 2-3p→2, 4+p→3); only then does the next, stronger
- *  monster come out (at the round boundary). Null when the catalog has no monsters. */
-function spawnMonster(catalog: PlayCatalog, playerCount: number): PublicGameState['monster'] {
-	const ladder = catalog.monsters ?? [];
-	const monster = ladder[0];
-	if (!monster) return null;
-	const lives = monsterLivesForPlayerCount(playerCount);
+/** Abyss deck for a catalog monster, by HP: 1–3 → Difficulty 1, 4–7 → 2, 8+ → 3. */
+export function monsterDifficulty(monster: { barrier: number }): 1 | 2 | 3 {
+	if (monster.barrier >= 8) return 3;
+	if (monster.barrier >= 4) return 2;
+	return 1;
+}
+
+/** Deck names shown on the card backs; also name cards whose catalog name is only a code. */
+export const MONSTER_DECK_NAMES: Record<1 | 2 | 3, string> = { 1: 'Restless', 2: 'Ravenous', 3: 'Calamity' };
+
+/** The catalog's placeholder names ("S1Monster") are codes, not names; show the deck instead. */
+function monsterCardName(name: string, difficulty: 1 | 2 | 3): string {
+	return /^s\d+monster$/i.test(name.trim()) ? `${MONSTER_DECK_NAMES[difficulty]} Monster` : name;
+}
+
+/** A monster card in play. Its catalog `barrier` (damage to defeat it) is tracked in hp/maxHp. */
+export function monsterCardFromCatalog(monster: PlayCatalogMonster): MonsterState {
+	const difficulty = monsterDifficulty(monster);
 	return {
 		id: monster.id,
-		name: monster.name,
+		name: monsterCardName(monster.name, difficulty),
 		hp: monster.barrier,
 		maxHp: monster.barrier,
+		difficulty,
 		damage: monster.damage,
 		rewardTrack: [...monster.rewardTrack],
-		chooseAmount: monster.chooseAmount,
-		livesRemaining: lives,
-		livesTotal: lives,
-		// Start at the bottom rung; the next rung appears once these lives are spent.
-		ladderIndex: 0,
-		ladderMax: ladder.length
+		// A kill grants every reward on the card; the catalog's choose_amount is ignored.
+		chooseAmount: rewardClaimCount(monster.rewardTrack),
+		livesRemaining: 1,
+		livesTotal: 1,
+		ladderIndex: monster.order,
+		ladderMax: 0,
+		...(typeof monster.initiative === 'number' ? { initiative: monster.initiative } : {})
 	};
+}
+
+/** Victory Points a kill of `monster` grants (every VP reward on the card). */
+function rewardVp(monster: PlayCatalogMonster): number {
+	return buildMonsterRewards(monster.rewardTrack).reduce(
+		(sum, option) => sum + (option.effect.type === 'vp' ? option.effect.amount : 0),
+		0
+	);
+}
+
+/** Arcane Abyss Summons a kill of `monster` grants. */
+function rewardSummons(monster: PlayCatalogMonster): number {
+	return buildMonsterRewards(monster.rewardTrack).filter(
+		(option) => option.effect.type === 'action' && option.effect.action === 'abyssSummon'
+	).length;
+}
+
+/** Short reward-kind label for the card backs. */
+function rewardKind(effect: ReturnType<typeof buildMonsterRewards>[number]['effect']): string {
+	switch (effect.type) {
+		case 'vp':
+			return 'VP';
+		case 'action':
+			return effect.action === 'abyssSummon' ? 'Abyss Summon' : 'Action';
+		case 'chooseRune':
+		case 'rune':
+			return 'Rune';
+		case 'restoreBarrier':
+			return 'Restore Barrier';
+		case 'gainMaxBarrier':
+			return 'Max Barrier';
+		case 'attackDice':
+			return 'Attack Dice';
+		default:
+			return 'Reward';
+	}
+}
+
+/** Pool size for `difficulty` at `players` seats, or null (unlimited: deal every card). */
+export function monsterPoolSize(
+	pools: MonsterPoolRow[] | undefined,
+	players: number,
+	difficulty: 1 | 2 | 3
+): number | null {
+	const row = (pools ?? []).find((r) => Number(r.players) === players && Number(r.difficulty) === difficulty);
+	const size = Number(row?.size);
+	return row && Number.isFinite(size) && size >= 0 ? Math.floor(size) : null;
+}
+
+/** The shuffled deck cut to the pool sizes: the first `size` cards of each difficulty. */
+function limitMonsterPools<T extends { difficulty?: number }>(
+	deck: T[],
+	pools: MonsterPoolRow[] | undefined,
+	players: number
+): T[] {
+	if (!pools?.length) return deck;
+	const taken: Record<number, number> = {};
+	return deck.filter((card) => {
+		const d = (card.difficulty ?? 1) as 1 | 2 | 3;
+		const size = monsterPoolSize(pools, players, d);
+		if (size === null) return true;
+		taken[d] = (taken[d] ?? 0) + 1;
+		return taken[d] <= size;
+	});
+}
+
+/** Card-back facts for the three Abyss difficulty decks, from the catalog. `total` is the
+ *  number of cards dealt into each deck (the pool size when the catalog limits it). */
+function buildMonsterDecks(
+	catalog: PlayCatalog,
+	dealt?: { difficulty?: number }[]
+): MonsterDeckSummary[] {
+	return ([1, 2, 3] as const).map((difficulty) => {
+		const cards = (catalog.monsters ?? []).filter((m) => monsterDifficulty(m) === difficulty);
+		const barriers = cards.map((m) => m.barrier);
+		const vps = cards.map(rewardVp);
+		const summons = cards.map(rewardSummons);
+		const extras = new Set(
+			cards.flatMap((m) => buildMonsterRewards(m.rewardTrack).map((o) => rewardKind(o.effect)))
+		);
+		const span = (values: number[]) =>
+			values.length ? [Math.min(...values), Math.max(...values)] : [0, 0];
+		const [summonMin, summonMax] = span(summons);
+		const [barrierMin, barrierMax] = span(barriers);
+		return {
+			difficulty,
+			total: dealt ? dealt.filter((c) => c.difficulty === difficulty).length : cards.length,
+			barrierMin,
+			barrierMax,
+			vpValues: [...new Set(vps)].sort((a, b) => a - b),
+			summonMin,
+			summonMax,
+			extraRewards: ['Attack Dice', 'Rune', 'Restore Barrier', 'Max Barrier', 'Action', 'Reward'].filter((k) =>
+				extras.has(k)
+			)
+		};
+	});
+}
+
+/** Reveal up to two cards from one difficulty deck into the player's pending draw. */
+function drawMonsterCardsForPlayer(
+	state: PublicGameState,
+	player: PrivatePlayerState,
+	difficulty: 1 | 2 | 3,
+	catalog: PlayCatalog
+): boolean {
+	if (player.pendingMonsterDraw?.cards.length) return false;
+	const selected = state.bags.monsters.contents.filter((entry) => entry.difficulty === difficulty).slice(0, 2);
+	if (selected.length === 0) return false;
+	const selectedGuids = new Set(selected.map((entry) => entry.guid));
+	state.bags.monsters.contents = state.bags.monsters.contents.filter((entry) => !selectedGuids.has(entry.guid));
+	state.bags.monsters.count = state.bags.monsters.contents.length;
+	player.pendingMonsterDraw = {
+		cards: selected.map((entry) => {
+			const catalogMonster = (catalog.monsters ?? []).find((monster) => monster.id === entry.id);
+			return catalogMonster
+				? monsterCardFromCatalog(catalogMonster)
+				: monsterCardFromCatalog({
+						id: entry.id ?? entry.guid,
+						name: entry.name,
+						damage: entry.damage ?? 0,
+						barrier: entry.barrier ?? 1,
+						rewardTrack: [],
+						dicePool: [],
+						chooseAmount: 2,
+						stage: 1,
+						order: 0
+					});
+		}),
+		maxCards: 2
+	};
+	return true;
 }
 
 export function createLobbyState(input: {
@@ -1204,7 +1464,6 @@ export function createLobbyState(input: {
 		phaseDeadline: null,
 		phaseDeadlineExtensions: 0,
 		locationOccupancy: {},
-		monster: null,
 		combats: [],
 		winnerSeat: null
 	};
@@ -1331,7 +1590,7 @@ function reduceCommand(
 				) &&
 				state.phase === 'encounter'
 			)
-				tryAdvanceFromEncounter(state);
+				tryAdvanceFromEncounter(state, catalog);
 			return success(state);
 		}
 		case 'tradeNavigationPower': {
@@ -1482,6 +1741,23 @@ function reduceCommand(
 				count: 0,
 				contents: []
 			};
+			const monsterDeck = shuffleBag(
+				(catalog.monsters ?? []).map((monster) => ({
+					guid: `monster-card-${monster.id}`,
+					id: monster.id,
+					name: monster.name,
+					barrier: monster.barrier,
+					damage: monster.damage,
+					difficulty: monsterDifficulty(monster)
+				})),
+				state.rng
+			);
+			// Limited pools (catalog.monsterPools): keep the first N cards of each difficulty in the
+			// shuffled order — a seeded random subset that draws no extra RNG, so a catalog without
+			// pools deals exactly as before.
+			const dealt = limitMonsterPools(monsterDeck, catalog.monsterPools, occupiedSeats.length);
+			state.bags.monsters = { count: dealt.length, contents: dealt };
+			state.monsterDecks = buildMonsterDecks(catalog, dealt);
 			state.bags.rewardHexes = { count: rewardEntries().length, contents: rewardEntries().map((entry) => ({ ...entry })) };
 			// Both TTS bags carry `shuffle = true`, so the opening hands, the market,
 			// and every subsequent draw are randomized — not dealt in alphabetical
@@ -1515,12 +1791,11 @@ function reduceCommand(
 			state.bags.history = buildHistoryBags(state.bags);
 
 			refillEmptyMarketSlots(state);
-			state.monster = spawnMonster(catalog, state.activeSeats.length);
 			// Initialize the simultaneous round loop (round 1, navigation phase).
 			initRoundLoop(state);
 			for (const seat of state.activeSeats) {
 				const p = state.players[seat];
-				if (p) p.pendingPowerDrafts = [drawPowerChoices(state)];
+				if (p) p.pendingPowerDrafts = [drawPowerChoices(state, [], catalog)];
 			}
 			return success(state);
 		}
@@ -1541,8 +1816,11 @@ function reduceCommand(
 			}
 
 			const draw = activePlayer.player.handDraws.find((entry) => entry.guid === command.guid);
+			if (draw?.rewardId && command.replaceSlotIndex !== undefined) {
+				return failure('slot_mismatch', 'A reward hex does not take a spirit slot.');
+			}
 			if (draw?.rewardId) {
-				applySpiritWorldReward(state, activePlayer.player, draw.rewardId as SpiritWorldRewardId, drawPowerChoices);
+				applySpiritWorldReward(state, activePlayer.player, draw.rewardId as SpiritWorldRewardId, (s, exclude) => drawPowerChoices(s, exclude, catalog));
 				// Reward hexes are reusable one-shot tokens: resolve the effect, then
 				// immediately return this token to its own bag for a later draw.
 				state.bags.rewardHexes ??= { count: 0, contents: [] };
@@ -1578,7 +1856,32 @@ function reduceCommand(
 				return failure('spirit_missing', 'That spirit could not be found in the catalog.');
 			}
 
-			const slotIndex = command.slotIndex ?? firstOpenSpiritSlot(activePlayer.player);
+			// Rule switch `summonReplaceWhenFull` (rules.ts): with all 7 slots full, the summon may
+			// name a spirit to replace. That spirit is discarded first (exactly as `discardSpirit`, but
+			// not a corruption sacrifice) and the new spirit takes its slot.
+			let replaceLog: string[] = [];
+			let replacedName: string | null = null;
+			if (command.replaceSlotIndex !== undefined) {
+				if (!ruleValue(catalog, 'summonReplaceWhenFull')) {
+					return failure('unsupported_command', 'A summon cannot replace a spirit in this game.');
+				}
+				if (firstOpenSpiritSlot(activePlayer.player)) {
+					return failure('slot_open', 'You have an open spirit slot: summon into it instead.');
+				}
+				if (command.slotIndex !== undefined && command.slotIndex !== command.replaceSlotIndex) {
+					return failure('slot_mismatch', 'The summon slot must be the replaced slot.');
+				}
+				const replaced = activePlayer.player.spirits.find(
+					(entry) => entry.slotIndex === command.replaceSlotIndex
+				);
+				if (!replaced) {
+					return failure('spirit_missing', 'No spirit exists in that slot.');
+				}
+				replacedName = replaced.name;
+				replaceLog = discardBoardSpirit(state, activePlayer.seatColor, replaced, catalog);
+			}
+			const slotIndex =
+				command.replaceSlotIndex ?? command.slotIndex ?? firstOpenSpiritSlot(activePlayer.player);
 			if (!slotIndex || slotIndex < 1 || slotIndex > 7) {
 				return failure('slot_missing', 'No open spirit slot is available.');
 			}
@@ -1615,11 +1918,11 @@ function reduceCommand(
 				...pendingDraw,
 				summonedCount: pendingDraw.summonedCount + 1
 			};
-			// Soul Weaver: a redraw is only available BEFORE the first pick — committing to
+			// Mystic: a redraw is only available BEFORE the first pick — committing to
 			// a summon spends it for this draw (you can't redraw after picking a spirit).
 			activePlayer.player.redrawAvailable = false;
 
-			// Abyss Summoner / Florality: a draw flagged `autoAwaken` flips the spirit it
+			// Summoner / Florality: a draw flagged `autoAwaken` flips the spirit it
 			// just summoned face-up immediately and fires its awakening effects (rather
 			// than leaving the abyss spirit face-down for the Cleanup awaken flow).
 			const summonLog: string[] = [];
@@ -1656,13 +1959,13 @@ function reduceCommand(
 			});
 			if (
 				pendingDraw.sourceBag === SPIRIT_WORLD_BAG &&
-				(awakenedClassCounts(activePlayer.player)['Abyss Summoner'] ?? 0) > 0
+				(awakenedClassCounts(activePlayer.player)['Summoner'] ?? 0) > 0
 			) {
 				activePlayer.player.pendingDecisions.push({
 					id: nextId(state.rng, 'dec'),
 					source: 'class',
 					kind: 'abyssSummonerDraw',
-					prompt: 'Abyss Summoner: draw from the Arcane Abyss Bag?',
+					prompt: 'Summoner: draw from the Arcane Abyss Bag?',
 					options: [
 						{ id: 'yes', label: 'Draw from the Arcane Abyss' },
 						{ id: 'no', label: 'Not now' }
@@ -1675,6 +1978,13 @@ function reduceCommand(
 			if (summonLog.length > 0) {
 				recomputeAwakenEligibility(state, catalog);
 				activePlayer.player.lastAction = { key: 'awaken', label: 'Abyss Summon', log: summonLog };
+			}
+			if (replacedName !== null) {
+				activePlayer.player.lastAction = {
+					key: 'discard',
+					label: `Summoned ${spirit.name}, replacing ${replacedName}`,
+					log: [`Discarded ${replacedName} to make room.`, ...replaceLog, ...summonLog]
+				};
 			}
 
 			return success(state);
@@ -1712,7 +2022,7 @@ function reduceCommand(
 
 			const player = activePlayer.player;
 			if (!player.redrawAvailable) {
-				return failure('redraw_unavailable', 'No Soul Weaver redraw is available right now.');
+				return failure('redraw_unavailable', 'No Mystic redraw is available right now.');
 			}
 
 			const pendingDraw = player.pendingDraw;
@@ -1724,7 +2034,7 @@ function reduceCommand(
 			// it does not refund summons. Cap the kept summon limit at the new draw size.
 			const { sourceBag, summonLimit, summonedCount, autoAwaken } = pendingDraw;
 			returnHandDrawsToBags(state, player);
-			if (!startDraw(state, player, sourceBag, autoAwaken)) {
+			if (!startDraw(state, player, sourceBag, autoAwaken, summonDrawSizes(sourceBag, catalog, player))) {
 				// Bag emptied out (the returned spirits should still be there, so this is
 				// only reachable if the bag is otherwise empty) — leave the player draw-less.
 				player.redrawAvailable = false;
@@ -1739,7 +2049,7 @@ function reduceCommand(
 			player.redrawAvailable = false;
 			player.lastAction = {
 				key: 'redraw',
-				label: 'Soul Weaver Redraw',
+				label: 'Mystic Redraw',
 				log: ['Returned the draw and drew again.']
 			};
 			return success(state);
@@ -1967,6 +2277,10 @@ function reduceCommand(
 					activePlayer.player.barrier = activePlayer.player.maxBarrier;
 					activePlayer.player.brokenBarrier = 0;
 					activePlayer.player.corruptionCount = (activePlayer.player.corruptionCount ?? 0) + 1;
+					// (An upward step can never start from Fallen, so Night Witch's flag never fires here.)
+					applyCorruptionEffects(activePlayer.player, undefined, {
+						wasFallen: oldStatus === STATUS_LADDER.length - 1
+					});
 					// wasFallen is structurally false here (an upward move FROM Fallen is
 					// impossible — the ladder clamps), but pass the real check for parity
 					// with the combat site.
@@ -1990,8 +2304,12 @@ function reduceCommand(
 			const activePlayer = activePlayerForActor(state, actor);
 			if (!activePlayer)
 				return failure('seat_required', 'Only seated players can adjust victory points.');
+			// Rule `fallenDebtBelowZero`: VP may be negative, so a manual adjustment never lifts a
+			// negative total to 0 (the floor is the lower of 0 and the current VP).
 			activePlayer.player.victoryPoints = Math.max(
-				0,
+				ruleValue(catalog, 'fallenDebtBelowZero')
+					? Math.min(0, activePlayer.player.victoryPoints)
+					: 0,
 				activePlayer.player.victoryPoints + command.amount
 			);
 			return success(state);
@@ -2031,52 +2349,23 @@ function reduceCommand(
 			if (!spirit) {
 				return failure('spirit_missing', 'No spirit exists in that slot.');
 			}
-			const sourceBag =
-				bagForSpiritCost(spirit.cost) ?? (spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
-			const hadAbyssSummoner = (awakenedClassCounts(player)['Abyss Summoner'] ?? 0) > 0;
-
-			// Remove it from the tableau (freeing the slot for a new summon) and drop
-			// any runes attached to that slot.
-			player.spirits = player.spirits.filter((entry) => entry.slotIndex !== command.slotIndex);
-			player.spiritAugmentAttachments = (player.spiritAugmentAttachments ?? []).filter(
-				(attachment) => attachment.spiritSlotIndex !== command.slotIndex
-			);
-			const discardLog: string[] = [];
-			if (!spirit.isFaceDown) {
-				applyTrigger(state, activePlayer.seatColor, 'onSpiritDiscard', discardLog, {
-					catalog,
-					counts: spirit.classes ?? {}
-				});
-			}
-			if (sourceBag === ARCANE_ABYSS_BAG && hadAbyssSummoner) {
-				player.victoryPoints += 4;
-				discardLog.push('Abyss Summoner: gained 4 VP for discarding an Arcane Abyss spirit.');
-			}
-
-			// Return the card to the bag it came from (face-down ⇒ Arcane Abyss,
-			// otherwise by cost) and reshuffle so it isn't predictably drawn next.
-			const runtimeBag = runtimeBagForSource(state, sourceBag);
-			runtimeBag.contents.push({
-				name: spirit.name,
-				guid: nextId(state.rng, 'discard'),
-				id: spirit.id,
-				cost: spirit.cost
-			});
-			shuffleBag(runtimeBag.contents, state.rng);
-			runtimeBag.count = runtimeBag.contents.length;
-			state.bags.history = buildHistoryBags(state.bags);
+			const discardLog = discardBoardSpirit(state, activePlayer.seatColor, spirit, catalog);
 
 			// If the player owes a forced corruption discard, this discard pays it down; once
 			// the owed count reaches 0 the obligation clears so the round can advance again.
 			// (Voluntary discards with no obligation are a no-op.)
 			const obligation = player.pendingCorruptionDiscard;
 			if (obligation && obligation.count > 0) {
+				recordSacrifice(player); // Moon Cultist awaken: "Sacrifice a spirit."
 				obligation.count -= 1;
 				if (obligation.count <= 0) player.pendingCorruptionDiscard = null;
 				// Out of spirits with debt remaining: the unpayable part converts to VP
 				// loss (1 VP each) instead of being forgiven, and the debt clears so the
 				// round can advance.
-				else settleUnpayableCorruptionDebt(player);
+				else
+					settleUnpayableCorruptionDebt(player, {
+						vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+					});
 			}
 			if (discardLog.length > 0) {
 				player.lastAction = { key: 'discard', label: `Discarded ${spirit.name}`, log: discardLog };
@@ -2113,7 +2402,7 @@ function reduceCommand(
 				return failure('spirit_missing', 'No spirit exists in that slot.');
 			}
 
-			// Designated-target binding: some augments (e.g. Runebound Vessel's "gain 2 augments
+			// Designated-target binding: some augments (e.g. Herder's "gain 2 augments
 			// for THIS spirit") may only be placed on a specific spirit, not just anyone.
 			if (augment.boundSlotIndex != null && augment.boundSlotIndex !== spirit.slotIndex) {
 				return failure(
@@ -2265,13 +2554,18 @@ function reduceCommand(
 			) {
 				return failure('draw_pending', 'Resolve your drawn spirits before ending your turn.');
 			}
+			if (active.player.pendingMonsterDraw?.cards.length) {
+				return failure('monster_draw_pending', 'Keep one of the revealed monster cards before ending your turn.');
+			}
 			// A corruption this turn forces its escalating spirit sacrifice IMMEDIATELY: you
 			// can't end your location actions until you've shed the owed spirit(s). (Corruption
 			// already restored your barrier instantly — this is the cost.) With zero spirits
 			// left the debt is unpayable — settle it as VP loss (1 VP each) so the seat can
 			// never be frozen; while spirits remain the player must keep discarding.
 			if (active.player.pendingCorruptionDiscard) {
-				settleUnpayableCorruptionDebt(active.player);
+				settleUnpayableCorruptionDebt(active.player, {
+					vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+				});
 				if (active.player.pendingCorruptionDiscard) {
 					return failure(
 						'corruption_pending',
@@ -2284,11 +2578,12 @@ function reduceCommand(
 				return failure('reward_pending', 'Claim your monster rewards before ending your turn.');
 			}
 			// onLocationInteraction fires once per player as they finish their location
-			// interactions (Rune Mage's rune/relic-trade prompt → manual, since the
+			// interactions (Mage's rune/relic-trade prompt → manual, since the
 			// engine has no first-class trade command to hook each individual trade).
 			if (!active.player.phaseReady) {
 				applyTrigger(state, active.seatColor, 'onLocationInteraction', [], { catalog });
 			}
+			// Nhal: "Navigate to the Arcane Abyss, but don't fight the monster." (no Fallen needed)
 			if (
 				active.player.navigationDestination === 'Arcane Abyss' &&
 				!active.player.actionsUsedThisRound.includes('combat') &&
@@ -2330,6 +2625,12 @@ function reduceCommand(
 			// — so there is no hard gate here. Augment placement / ability decisions are
 			// surfaced in-stage but never block (consistent with prior behavior); the Cleanup
 			// step still gates rune overflow + corruption.
+			// An unanswered relic card resolves as "keep" (the relic stays; it is offered again
+			// next round), so it is never carried open across Cleanup. "Done" is not blocked.
+			const keptLog: string[] = [];
+			if (keepUnansweredRelicTools(active.player, keptLog) > 0) {
+				active.player.lastAction = { key: 'awaken', label: 'Relic kept', log: keptLog };
+			}
 			active.player.phaseReady = true;
 			tryAdvanceFromAwakening(state, catalog);
 			return success(state);
@@ -2356,7 +2657,9 @@ function reduceCommand(
 			// it as VP loss (1 VP each) right here so the seat can never be frozen; while
 			// spirits remain the player must keep discarding.
 			if (active.player.pendingCorruptionDiscard) {
-				settleUnpayableCorruptionDebt(active.player);
+				settleUnpayableCorruptionDebt(active.player, {
+					vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+				});
 				if (active.player.pendingCorruptionDiscard) {
 					return failure('corruption_pending', 'Resolve corruption before ending the round.');
 				}
@@ -2419,7 +2722,7 @@ function reduceCommand(
 			if (!active) return failure('seat_required', 'Only seated players can swap dice.');
 			const me = active.player;
 			const hasInfiltrator = me.spirits.some(
-				(s) => !s.isFaceDown && (s.classes?.['Cursed Fighter'] ?? 0) > 0
+				(s) => !s.isFaceDown && (s.classes?.['Ram'] ?? 0) > 0
 			);
 			if (!hasInfiltrator) return failure('no_infiltrator', 'You have no awakened Infiltrator.');
 			if (me.actionsUsedThisRound.includes('infiltratorSwap')) {
@@ -2516,7 +2819,12 @@ function reduceCommand(
 			if (picker && (command.selectedInstanceIds?.length ?? 0) > 0) {
 				const selectionError = validateDecisionSelection(picker, command.selectedInstanceIds!);
 				if (selectionError) {
-					return failure(selectionError, `Choose exactly ${picker.count} of your attack dice.`);
+					return failure(
+						selectionError,
+						picker.minCount != null
+							? `Choose ${picker.minCount} to ${picker.count} of your attack dice.`
+							: `Choose exactly ${picker.count} of your attack dice.`
+					);
 				}
 			}
 
@@ -2534,10 +2842,10 @@ function reduceCommand(
 				});
 				resolver(ctx, command.optionId, command.selectedInstanceIds);
 			}
-			// Abyss Summoner: after a Spirit World summon, Yes opens a normal Abyss draw.
+			// Summoner: after a Spirit World summon, Yes opens a normal Abyss draw.
 			if (decision.kind === 'abyssSummonerDraw' && command.optionId === 'yes') {
-				queueOrBeginDraw(state, active.player, ARCANE_ABYSS_BAG);
-				log.push('Abyss Summoner: drawing from the Arcane Abyss Bag.');
+				queueOrBeginDraw(state, active.player, ARCANE_ABYSS_BAG, false, catalog);
+				log.push('Summoner: drawing from the Arcane Abyss Bag.');
 			}
 			// Remove the resolved decision regardless of the option taken.
 			active.player.pendingDecisions = active.player.pendingDecisions.filter(
@@ -2780,6 +3088,12 @@ function reduceCommand(
 				case 'rune': {
 					const r = catalog.mats.find((x) => x.id === grant.runeId);
 					if (!r) return failure('rune_missing', 'That rune is not in the catalog.');
+					// A named relic (Firecracker / Flower / Diamond / Cleansing Teapot) is a relic tool;
+					// without the flag, upgradeRelicRuneSlots would turn it into a base rune.
+					if (RELIC_TOOLS[r.id]) {
+						grantRelicTool(player, r.id, log);
+						break;
+					}
 					const slot = (player.mats.at(-1)?.slotIndex ?? 0) + 1;
 					player.mats.push({
 						slotIndex: slot,
@@ -2844,7 +3158,7 @@ function reduceCommand(
 				return failure('power_missing', 'You need a held Power to replace.');
 			}
 
-			// Gain rows are normally once per round. Wayfarer ("do ALL location interactions
+			// Gain rows are normally once per round. Nomad ("do ALL location interactions
 			// up to two times") raises the per-row allowance via extraActions['locationInteraction'],
 			// exactly like Ironmane raises the combat allowance — count how many times THIS row has
 			// already run and reject only once the allowance is spent. TRADE rows are REPEATABLE:
@@ -2869,7 +3183,9 @@ function reduceCommand(
 			// Pay the cost first for every trade row. Class abilities may change what is
 			// gained, but they do not waive the database-authored cost.
 			if (interaction.cost.length > 0) {
-				const matched = matchRewardCost(interaction.cost, player.mats, command.costChoices);
+				const matched = matchRewardCost(interaction.cost, player.mats, command.costChoices, {
+					runesWild: runesAreWild(player)
+				});
 				if (!matched.ok) {
 					return failure('cannot_afford', 'You cannot pay the cost for that interaction.');
 				}
@@ -2892,19 +3208,18 @@ function reduceCommand(
 			// fires onRest once. Summons stay per-token (each draws separately, possibly
 			// queued).
 			let choiceCursor = 0;
-			const doublesAugments =
-				interaction.kind === 'trade' && (awakenedClassCounts(player)['Runic Duplicator'] ?? 0) >= 1;
 			let cultivateTokens = 0;
 			let restTokens = 0;
 			for (const gain of interaction.gains) {
 				switch (gain.type) {
 					case 'navigationPower': {
 						if (gain.replace) {
-							player.pendingPowerDrafts = [drawPowerChoices(state, player.powerInventory)];
+							player.pendingPowerDrafts = [drawPowerChoices(state, player.powerInventory, catalog)];
 							player.pendingPowerReplacement = true;
 							log.push('Choose a held Power to replace, then choose its replacement.');
 						} else {
-							const power = NAVIGATION_POWERS[nextInt(state.rng, NAVIGATION_POWERS.length)];
+							const powers = navigationPowerPool(catalog);
+							const power = powers[nextInt(state.rng, powers.length)];
 							(player.powerInventory ??= []).push(power.id);
 							log.push(`Gained 1 random Power: ${power.name}.`);
 						}
@@ -2913,10 +3228,10 @@ function reduceCommand(
 					}
 					case 'action': {
 						if (gain.action === 'spiritWorldSummon') {
-							queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG);
+							queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG, false, catalog);
 							log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 						} else if (gain.action === 'abyssSummon') {
-							queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG);
+							queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
 							log.push('Summon from the Arcane Abyss — draw 3, summon up to 1.');
 						} else if (gain.action === 'cultivate') {
 							cultivateTokens += 1;
@@ -2947,6 +3262,21 @@ function reduceCommand(
 						runAction(ctx, { kind: 'gainMaxBarrier', amount: gain.amount });
 						break;
 					}
+					case 'attackDice': {
+						// Locations have no attack-dice rewards today (monster tokens only); same
+						// engine gain as everywhere else, so the union stays exhaustive.
+						const ctx = buildEffectContext({
+							state,
+							seat: active.seatColor,
+							player,
+							trigger: 'onLocationInteraction',
+							log,
+							traitCount: 0,
+							catalog
+						});
+						runAction(ctx, { kind: 'gainAttackDice', tier: gain.tier, amount: gain.amount });
+						break;
+					}
 					case 'vp': {
 						// Locations have no VP rewards today, but the shared GainEffect can
 						// carry one — grant it directly so the union stays exhaustive.
@@ -2955,11 +3285,8 @@ function reduceCommand(
 						break;
 					}
 					case 'rune': {
-						addGainedRune(player, gain.rune);
-						if (doublesAugments && gain.rune.type === 'augment') addGainedRune(player, gain.rune);
 						log.push(`Gained ${gain.rune.name}.`);
-						if (doublesAugments && gain.rune.type === 'augment')
-							log.push(`Runic Duplicator: gained a second ${gain.rune.name}.`);
+						addGainedRune(player, gain.rune, log);
 						break;
 					}
 					case 'chooseRune': {
@@ -2967,11 +3294,8 @@ function reduceCommand(
 						choiceCursor += 1;
 						const chosen = gain.options[choiceIndex] ?? gain.options[0];
 						if (chosen) {
-							addGainedRune(player, chosen);
-							if (doublesAugments && chosen.type === 'augment') addGainedRune(player, chosen);
 							log.push(`Gained ${chosen.name}.`);
-							if (doublesAugments && chosen.type === 'augment')
-								log.push(`Runic Duplicator: gained a second ${chosen.name}.`);
+							addGainedRune(player, chosen, log);
 						}
 						break;
 					}
@@ -2989,7 +3313,7 @@ function reduceCommand(
 			}
 
 			// A trade just happened — fire the location-interaction hook carrying what
-			// was given up (Rune Mage: +1 Enchanted per rune traded, +1 Exalted per relic).
+			// was given up (Mage: +1 Enchanted per rune traded, +1 Exalted per relic).
 			if (tradedRunes > 0 || tradedRelics > 0) {
 				applyTrigger(state, active.seatColor, 'onLocationInteraction', log, {
 					catalog,
@@ -3006,6 +3330,37 @@ function reduceCommand(
 			return success(state);
 		}
 
+		case 'drawMonsterCards': {
+			if (state.status !== 'active' || state.phase !== 'location') return failure('wrong_phase', 'Monster cards can only be drawn at the Abyss.');
+			const active = activePlayerForActor(state, actor);
+			if (!active || active.player.navigationDestination !== 'Arcane Abyss') return failure('not_in_abyss', 'You must be at the Arcane Abyss to draw monster cards.');
+			if (active.player.pendingMonsterDraw?.cards.length) return failure('monster_draw_pending', 'Keep one of the revealed monster cards first.');
+			if ((active.player.monsterHand?.length ?? 0) >= 3) return failure('monster_hand_full', 'Your hand is full (3/3). Defeat a monster card before you draw again.');
+			if (active.player.monsterDrawRound === state.round) return failure('monster_draw_used', 'You already drew monster cards this visit.');
+			if (!drawMonsterCardsForPlayer(state, active.player, command.difficulty, catalog)) return failure('monster_deck_empty', `The Difficulty ${command.difficulty} deck is empty.`);
+			active.player.monsterDrawRound = state.round;
+			return success(state);
+		}
+
+		case 'keepMonsterCard': {
+			const active = activePlayerForActor(state, actor);
+			const pending = active?.player.pendingMonsterDraw;
+			if (!active || state.phase !== 'location' || !pending?.cards.length) return failure('monster_draw_missing', 'Draw monster cards first.');
+			if (active.player.navigationDestination !== 'Arcane Abyss') return failure('not_in_abyss', 'Keep monster cards at the Abyss.');
+			if (!Number.isInteger(command.index) || command.index < 0 || command.index >= pending.cards.length) return failure('monster_card_invalid', 'Choose one of the revealed monster cards.');
+			active.player.monsterHand ??= [];
+			if (active.player.monsterHand.length >= 3) return failure('monster_hand_full', 'Your monster hand is full.');
+			active.player.monsterHand.push(pending.cards[command.index]);
+			// The other revealed card goes back to the bottom of its difficulty deck.
+			for (const [index, card] of pending.cards.entries()) {
+				if (index === command.index) continue;
+				state.bags.monsters.contents.push({ guid: `monster-card-${card.id}-${nextId(state.rng, 'return')}`, id: card.id, name: card.name, barrier: card.maxHp, damage: card.damage, difficulty: card.difficulty });
+			}
+			state.bags.monsters.count = state.bags.monsters.contents.length;
+			active.player.pendingMonsterDraw = null;
+			return success(state);
+		}
+
 		case 'startCombat': {
 			if (state.status !== 'active') return failure('inactive', 'The game has not started yet.');
 			if (state.phase !== 'location')
@@ -3015,7 +3370,11 @@ function reduceCommand(
 			if (active.player.navigationDestination !== 'Arcane Abyss') {
 				return failure('not_in_abyss', 'You must be at the Arcane Abyss to fight the monster.');
 			}
-			if (!state.monster) return failure('no_monster', 'There is no monster to fight.');
+			const hand = active.player.monsterHand ?? [];
+			if (hand.length === 0) return failure('no_monster', 'You have no monster card to fight. Draw one first.');
+			if (!Number.isInteger(command.handIndex) || command.handIndex < 0 || command.handIndex >= hand.length)
+				return failure('monster_card_invalid', 'Choose a monster card from your hand.');
+			if (hand[command.handIndex].hp <= 0) return failure('monster_defeated', 'This monster card is already defeated.');
 			// Combat is once per round, but a class that grants extra combat actions
 			// ('Monster Hunter': "initiate Monster Combat two times") raises the allowance via
 			// extraActions['combat']. The base allowance is 1; each prior use consumes
@@ -3025,7 +3384,7 @@ function reduceCommand(
 			if (combatsUsed >= combatAllowance) {
 				return failure('action_used', 'You have no monster-combat actions left this round.');
 			}
-			const result = fightMonster(state, active.seatColor, catalog);
+			const result = fightMonster(state, active.seatColor, catalog, command.handIndex);
 			if (!result) return failure('combat_failed', 'Combat could not be resolved.');
 			active.player.actionsUsedThisRound.push('combat');
 			// Replace any prior combat entry for this seat with the fresh result.
@@ -3038,16 +3397,15 @@ function reduceCommand(
 				sides: [
 					{ seat: active.seatColor, initiative: 0, rolled: true, damageDealt: result.playerDamage }
 				],
-				// The monster AS FOUGHT (a kill has already advanced state.monster to the
-				// next rung), so the combat card shows what was actually battled.
+				// The card as fought (a kill has already removed it from the hand).
 				monster: result.fought ?? null,
 				log: result.log
 			});
-			// Defeating the monster opens a reward selection: the player claims up to
-			// `chooseAmount` tokens from the DEFEATED monster's reward track (capped at the
-			// resolvable count). This blocks ending the Location phase until claimed.
+			// Defeating the monster opens the reward claim: the player gets EVERY reward on
+			// the DEFEATED card (and picks a rune where a token asks for one). This blocks
+			// ending the Location phase until claimed.
 			if (result.killed && result.fought) {
-				const claim = rewardClaimCount(result.fought.rewardTrack, result.fought.chooseAmount);
+				const claim = rewardClaimCount(result.fought.rewardTrack);
 				if (claim > 0) {
 					active.player.pendingReward = {
 						monsterId: result.fought.id,
@@ -3071,26 +3429,11 @@ function reduceCommand(
 			const pending = player.pendingReward;
 			if (!pending) return failure('no_reward', 'You have no monster rewards to claim.');
 
-			const options = buildMonsterRewards(pending.rewardTrack);
-			const byIndex = new Map(options.map((o) => [o.index, o]));
-			// Dedupe + validate the picked token indices against the resolvable pool.
-			const picks: number[] = [];
-			for (const idx of command.picks ?? []) {
-				if (byIndex.has(idx) && !picks.includes(idx)) picks.push(idx);
-			}
-			if (picks.length === 0) return failure('no_picks', 'Select at least one reward to claim.');
-			if (picks.length > pending.chooseAmount) {
-				return failure(
-					'too_many',
-					`You may claim only ${pending.chooseAmount} reward${pending.chooseAmount === 1 ? '' : 's'}.`
-				);
-			}
-
+			// A kill grants EVERY reward on the card; `picks` is ignored. `choices` aligns
+			// to the card's "choose a rune" rewards, in card order.
 			const log: string[] = [];
-			// `choices` aligns to the picked options that are rune CHOICES, in pick order.
 			let choiceCursor = 0;
-			for (const idx of picks) {
-				const opt = byIndex.get(idx)!;
+			for (const opt of buildMonsterRewards(pending.rewardTrack)) {
 				const choice =
 					opt.effect.type === 'chooseRune' ? (command.choices?.[choiceCursor++] ?? 0) : 0;
 				applyRewardGain(state, active.seatColor, player, opt.effect, choice, log, catalog);
@@ -3122,7 +3465,7 @@ function reduceCommand(
 				active.player.encounterVote = 'decline';
 				resolveEncounterLocationIfReady(state, catalog, active.player.navigationDestination);
 			}
-			tryAdvanceFromEncounter(state);
+			tryAdvanceFromEncounter(state, catalog);
 			return success(state);
 		}
 
@@ -3145,7 +3488,7 @@ function reduceCommand(
 			active.player.encounterVote = 'attack';
 			active.player.phaseReady = true;
 			resolveEncounterLocationIfReady(state, catalog, active.player.navigationDestination);
-			tryAdvanceFromEncounter(state);
+			tryAdvanceFromEncounter(state, catalog);
 			return success(state);
 		}
 
@@ -3223,12 +3566,33 @@ function resolveEncounterLocationIfReady(
 	state.combats.push(combat);
 
 	// Each Evil attacker scores 2 VP for engaging plus 2 VP per Good player
-	// corrupted in the exchange — see pvpVpForAttack.
+	// corrupted in the exchange — see pvpVpForAttack. Rule `pvpPaysOnCorrupt`: 3 VP per
+	// Good player corrupted and nothing for the attack; each Good player of the exchange
+	// gets 2 VP per Evil attacker corrupted (pvpGoodBounty); `pvpEngageVp` adds 2 VP for the attack.
+	const paysOnCorrupt = ruleValue(catalog, 'pvpPaysOnCorrupt');
 	const corruptedGood = combat.sides.filter((s) => s.side === 'good' && s.corrupted).length;
 	for (const s of evilSeats) {
 		const p = state.players[s];
 		if (!p) continue;
-		p.victoryPoints += pvpVpForAttack(corruptedGood);
+		p.victoryPoints += pvpVpForAttack(
+			corruptedGood,
+			paysOnCorrupt,
+			paysOnCorrupt && ruleValue(catalog, 'pvpEngageVp')
+		);
+		// Rule `moonPerksNeedAttack`: Queen / Sorcerer read this flag in the Awakening Phase.
+		if (ruleValue(catalog, 'moonPerksNeedAttack')) p.attackedPlayerThisRound = true;
+	}
+	const bounty = pvpGoodBounty(
+		combat.sides.filter((s) => s.side === 'evil' && s.corrupted).length,
+		paysOnCorrupt && ruleValue(catalog, 'pvpGoodBounty')
+	);
+	if (bounty > 0) {
+		for (const side of combat.sides) {
+			if (side.side !== 'good') continue;
+			const p = state.players[side.seat];
+			if (p) p.victoryPoints += bounty;
+		}
+		combat.log.push(`PvP bounty: each Good player gains ${bounty} VP.`);
 	}
 	for (const side of combat.sides) {
 		if (!side.corrupted) continue;
@@ -3307,6 +3671,8 @@ export function buildSessionProjection(
 			...player,
 			handDraws: isOwner ? player.handDraws : [],
 			pendingDraw: isOwner ? player.pendingDraw : null,
+			monsterHand: isOwner ? (player.monsterHand ?? []) : [],
+			pendingMonsterDraw: isOwner ? (player.pendingMonsterDraw ?? null) : null,
 			pendingReward: isOwner ? player.pendingReward : null,
 			pendingAwakenReward: isOwner ? player.pendingAwakenReward : null,
 			// The corruption-discard obligation is the owner's private business; other
@@ -3360,7 +3726,10 @@ export function buildSessionProjection(
 		navigationFullDeadline: state.navigationFullDeadline,
 		phaseDeadline: state.phaseDeadline,
 		locationOccupancy: structuredClone(state.locationOccupancy),
-		monster: state.monster ? { ...state.monster } : null,
+		monsterDecks: (state.monsterDecks ?? []).map((deck) => ({
+			...deck,
+			count: state.bags.monsters.contents.filter((entry) => entry.difficulty === deck.difficulty).length
+		})),
 		combats: structuredClone(state.combats),
 		winnerSeat: state.winnerSeat,
 		...(startGate
@@ -3410,20 +3779,25 @@ export function buildHistorySnapshotRows(
 }
 
 /** Three distinct seeded offers; neither the deck nor another player's hand is public. */
-function drawPowerChoices(state: PublicGameState, exclude: NavigationPowerId[] = []): NavigationPowerId[] {
-	const remaining = NAVIGATION_POWERS.map((p) => p.id).filter(id => !exclude.includes(id));
-	const pool = remaining.length >= 3 ? remaining : NAVIGATION_POWERS.map(p => p.id);
+function drawPowerChoices(
+	state: PublicGameState,
+	exclude: NavigationPowerId[] = [],
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): NavigationPowerId[] {
+	const all = navigationPowerPool(catalog).map((p) => p.id);
+	const remaining = all.filter(id => !exclude.includes(id));
+	const pool = remaining.length >= 3 ? remaining : [...all];
 	const choices: NavigationPowerId[] = [];
 	for (let n = 0; n < 3; n++) choices.push(pool.splice(nextInt(state.rng, pool.length), 1)[0]);
 	return choices;
 }
 
 const navigationPowerHooks = {
-	damage(state: PublicGameState, seat: SeatColor, amount: number, log: string[]) {
+	damage(state: PublicGameState, seat: SeatColor, amount: number, log: string[], catalog?: PlayCatalog) {
 		const p = state.players[seat];
 		if (!p) return 0;
 		resetCombatFlags(p);
-		return takeDamage(p, amount, { state, seat }, log).barrierLost;
+		return takeDamage(p, amount, { state, seat }, log, catalog).barrierLost;
 	},
 	rest(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) {
 		applyRest(state, seat, [], { catalog });
@@ -3441,18 +3815,23 @@ const navigationPowerHooks = {
 			command: { type: 'awakenSpirit', slotIndex: slot }
 		});
 	},
-	defeatMonster(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) {
-		const monster = state.monster;
+	defeatMonster(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, handIndex?: number) {
 		const player = state.players[seat];
-		if (!monster || !player) return;
+		const hand = player?.monsterHand ?? [];
+		// Execute the chosen card (reworked Abyssal Execution) or, without one, the toughest card in
+		// hand: the one the player would least like to fight.
+		const index =
+			handIndex ?? hand.reduce((best, card, i) => (card.hp > (hand[best]?.hp ?? -1) ? i : best), -1);
+		const monster = hand[index];
+		if (!player || !monster || monster.hp <= 0) return;
 		const fought = { ...monster, hp: 0 };
-		monster.livesRemaining = Math.max(0, monster.livesRemaining - 1);
+		player.monsterHand = hand.filter((_, i) => i !== index);
 		player.actionsUsedThisRound.push('combat');
 		applyTrigger(state, seat, 'onMonsterKill', [], {
 			catalog,
 			combat: { dealt: monster.maxHp, overkill: 0, killed: true }
 		});
-		const claim = rewardClaimCount(fought.rewardTrack, fought.chooseAmount);
+		const claim = rewardClaimCount(fought.rewardTrack);
 		if (claim > 0)
 			player.pendingReward = {
 				monsterId: fought.id,

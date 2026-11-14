@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { ability } from './disruptor';
 import { fire, ctxFor, makePlayer } from './testHelpers';
 
-// Disruptor — DB intent: "If the opponent has higher initiative, when you Take Damage,
+// Bastion — DB intent: "If the opponent has higher initiative, when you Take Damage,
 // half it (rounding up)." Surfaces as a passive combat flag (player.halveIncoming),
 // which combat.ts consumes to halve the post-mitigation hit, plus a log line.
-describe('Disruptor', () => {
+describe('Bastion', () => {
 	it('flags halveIncoming when the opponent (pooled) has higher initiative', () => {
 		const player = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Bastion': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 2
 		});
 		const ctx = ctxFor(player, { trigger: 'onTakeDamage' });
@@ -20,7 +20,7 @@ describe('Disruptor', () => {
 
 	it('surfaces to the player via a log line (no silent no-op)', () => {
 		const player = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Bastion': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 2
 		});
 		const ctx = ctxFor(player, { trigger: 'onTakeDamage' });
@@ -31,7 +31,7 @@ describe('Disruptor', () => {
 
 	it('reads a single opponent seat initiative when no pooled total is present', () => {
 		const me = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Bastion': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 1
 		});
 		const foe = makePlayer({ playerColor: 'Blue', initiative: 3 });
@@ -43,7 +43,7 @@ describe('Disruptor', () => {
 
 	it('does NOT halve when the opponent has equal or lower initiative', () => {
 		const me = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Bastion': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 5
 		});
 		const ctx = ctxFor(me, { trigger: 'onTakeDamage' });
@@ -53,9 +53,9 @@ describe('Disruptor', () => {
 		expect(ctx.log).toHaveLength(0);
 	});
 
-	it('does NOT halve when there is no opponent initiative to compare (e.g. monster fight)', () => {
+	it('does NOT halve when there is no opponent initiative to compare (a monster fight passes Infinity)', () => {
 		const me = makePlayer({
-			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Disruptor': 1 }, origins: {}, isFaceDown: false }],
+			spirits: [{ slotIndex: 1, id: 's1', name: 'S1', cost: 2, classes: { 'Bastion': 1 }, origins: {}, isFaceDown: false }],
 			initiative: 0
 		});
 		const ctx = ctxFor(me, { trigger: 'onTakeDamage' });
@@ -66,7 +66,7 @@ describe('Disruptor', () => {
 
 	it('is registered for the onTakeDamage trigger and dispatches without error', () => {
 		// Through the real dispatcher: no opponent threaded, so no halve, but it must not throw.
-		const { player } = fire({ 'Disruptor': 1 }, 'onTakeDamage');
+		const { player } = fire({ 'Bastion': 1 }, 'onTakeDamage');
 		expect(player.halveIncoming).toBe(false);
 		expect(ability[0].on).toBe('onTakeDamage');
 	});

@@ -1,5 +1,6 @@
 import { createBrowserClient, createServerClient, isBrowser } from '@supabase/ssr';
 import { env as publicEnv } from '$env/dynamic/public';
+import { authCookieOptions, supabaseUrl as resolveSupabaseUrl } from '$lib/supabaseOrigin';
 import type { LayoutLoad } from './$types';
 
 const capacitorBuild = import.meta.env.VITE_BUILD_TARGET === 'capacitor';
@@ -25,15 +26,17 @@ export const load: LayoutLoad = async ({ data, depends, fetch }) => {
 	// their Bearer token and 401'd until a full app restart.
 	depends('supabase:auth');
 	const serverData = data as unknown as RootServerData | undefined;
-	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL || 'https://unconfigured.invalid';
-	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY || 'unconfigured-public-anon-key';
+	const supabaseUrl = resolveSupabaseUrl();
+	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY?.trim() || 'unconfigured-public-anon-key';
 
 	const supabase = isBrowser()
 		? createBrowserClient(supabaseUrl, supabaseAnonKey, {
-				global: { fetch }
+				global: { fetch },
+				cookieOptions: authCookieOptions
 			})
 		: createServerClient(supabaseUrl, supabaseAnonKey, {
 				global: { fetch },
+				cookieOptions: authCookieOptions,
 				cookies: { getAll: () => serverData?.cookies ?? [] }
 			});
 

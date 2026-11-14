@@ -22,6 +22,7 @@ import { dirname } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { applyDeadlineAdvance, applyGameCommand, createLobbyState } from '../runtime';
 import { createRng, nextInt } from '../rng';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -121,7 +122,6 @@ interface WindowRow {
 		name: string;
 		damage: number;
 		hp: number;
-		livesRemaining: number;
 		rewardVp: number;
 	};
 	player: {
@@ -490,15 +490,16 @@ function isUnsafeFirepowerWindow(
 	cfg: Config
 ): { ok: boolean; cleanProb: number; firepowerProb: number; rewardVp: number } {
 	const player = state.players[seat];
-	const monster = state.monster;
-	if (!player || !monster || monster.livesRemaining <= 0) {
+	// The seat fights the best live card in its own monster hand.
+	const monster = bestHandMonster(state, seat, catalog)?.card ?? null;
+	if (!player || !monster) {
 		return { ok: false, cleanProb: 0, firepowerProb: 0, rewardVp: 0 };
 	}
 	if ((player.statusLevel ?? 0) !== 0) return { ok: false, cleanProb: 0, firepowerProb: 0, rewardVp: 0 };
 	const rewardVp = claimableMonsterRewardVp(monster.rewardTrack, monster.chooseAmount);
 	if (rewardVp <= 0) return { ok: false, cleanProb: 0, firepowerProb: 0, rewardVp: 0 };
-	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
-	const firepowerProb = firepowerKillProbability(state, seat, catalog);
+	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false, monster });
+	const firepowerProb = firepowerKillProbability(state, seat, catalog, { monster });
 	return {
 		ok: firepowerProb >= cfg.firepowerThreshold && cleanProb < cfg.cleanThreshold,
 		cleanProb,
@@ -658,7 +659,7 @@ describe('survivability counterfactual diagnostics', () => {
 											);
 											const delta = compareBuild(bestMetrics, abyssMetrics, cfg.labelHorizon);
 											const player = state.players[seat]!;
-											const monster = state.monster!;
+											const monster = bestHandMonster(state, seat, catalog)!.card;
 											const buildNowCorrect =
 												delta.statusDelta <= 0 &&
 												(
@@ -676,7 +677,6 @@ describe('survivability counterfactual diagnostics', () => {
 													name: monster.name,
 													damage: monster.damage,
 													hp: monster.maxHp,
-													livesRemaining: monster.livesRemaining,
 													rewardVp: signal.rewardVp
 												},
 												player: {

@@ -1,9 +1,9 @@
 import type { ClassAbility } from './types';
 
-// Soul Weaver — DB intent:
+// Mystic — DB intent:
 //   (1) "On a Spirit World or Abyss Summon, you may put all spirits back and draw
 //       again." → the redraw mechanic. `redrawAvailable` is armed when a summon DRAW
-//       OPENS (runtime.startDraw, gated on awakened Soul Weaver count) so the ↻ Redraw
+//       OPENS (runtime.startDraw, gated on awakened Mystic count) so the ↻ Redraw
 //       button shows BEFORE the first pick, and is cleared once the player picks a
 //       spirit (runtime spawnHandSpirit). It is NOT re-armed per-summon — hence no
 //       onSpiritSummon breakpoint here.

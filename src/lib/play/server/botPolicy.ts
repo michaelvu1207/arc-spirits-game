@@ -18,6 +18,7 @@ import { canApply } from '../legality';
 import { createRng, nextInt, type RngState } from '../rng';
 import { getLocationConfig } from '../locations';
 import { ownerAugmentCapacity } from '../augments';
+import { runesAreWild } from '../effects/matMatch';
 import {
 	buildLocationInteractions,
 	canAfford,
@@ -26,8 +27,15 @@ import {
 	type ResolvedRune
 } from '../locationInteractions';
 import { buildMonsterRewards } from '../monsterRewards';
-import { DICE_TIER_FACES, resetCombatFlags } from '../combat';
+import { DICE_TIER_FACES, monsterBarrierLeft, resetCombatFlags } from '../combat';
+import {
+	abyssPreviewMonster,
+	bestStartCombatCommand,
+	isLiveMonster,
+	nextMonsterCardCommand
+} from '../bots/monsterCardAutopilot';
 import { applyTrigger, awakenedClassCounts } from '../effects/apply';
+import { ORIGIN_REWARDS } from '../effects/relicTools';
 import {
 	ALL_DESTINATIONS,
 	SPIRIT_WORLD_ONLY,
@@ -37,6 +45,7 @@ import {
 	type AttackDie,
 	type GameActor,
 	type GameCommand,
+	type MonsterState,
 	type NavigationDestination,
 	type PlayCatalog,
 	type PlayCatalogSpirit,
@@ -123,6 +132,26 @@ function advanceWorking(
 }
 
 /**
+ * Play this seat's Abyss monster cards (draw from a deck / keep a revealed card) through `emit`,
+ * which advances the caller's working copy. Runs before the fight decision. Returns true iff a new
+ * card went into the hand — navigation only previewed it, so the fight must re-check its odds.
+ */
+function playMonsterCards(
+	getWorking: () => PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog,
+	emit: (command: GameCommand) => boolean
+): boolean {
+	let kept = false;
+	for (let guard = 0; guard < 4; guard++) {
+		const command = nextMonsterCardCommand(getWorking(), seat, catalog);
+		if (!command || !emit(command)) break;
+		if (command.type === 'keepMonsterCard') kept = true;
+	}
+	return kept;
+}
+
+/**
  * Does this seat still need to act this phase? A seat is "done" when its
  * phaseReady flag is set (encounter / location / cleanup) or — for navigation —
  * once its destination is locked.
@@ -198,8 +227,8 @@ function destinationOfferingAction(
 
 /**
  * The Spirit World that SELLS a class augment for one of `classNames` (a chooseRune trade). Class
- * augments live at specific realms — Fighter/Cultivator/Spirit Animal at Water Region, Elementalist
- * /Soul Weaver at Mountain Region — and are a DETERMINISTIC way to push a class count PAST what the
+ * augments live at specific realms — Fighter/Cultivator/Beast at Water Region, Elementalist
+ * /Mystic at Mountain Region — and are a DETERMINISTIC way to push a class count PAST what the
  * shared spirit pool yields, up to a steep breakpoint. (Unlike praying for draws, buying an augment
  * is reliable, so committing relics to it is not the luck-based force-stacking we avoid for spirits.)
  */
@@ -302,8 +331,8 @@ function destinationOfferingAbyssSummon(catalog: PlayCatalog): NavigationDestina
 }
 
 /** Should the bot detour to fish the Arcane Abyss bag for an ARCANE source? Only once the core
- *  build is done (dice exalted, max barrier maxed, sustain) but it still lacks arcane — Arcane Vanguard
- *  (+3 arcane on awaken) / Arcane Ascendant (exalted→arcane on rest) are the ~16+ damage the hp14 boss
+ *  build is done (dice exalted, max barrier maxed, sustain) but it still lacks arcane — Huntress
+ *  (+3 arcane on awaken) / Sorcerer (exalted→arcane on rest) are the ~16+ damage the hp14 boss
  *  one-shot needs that a 10-exalted pool (mean 10) + scarce Spirit Animals can't reach. ~4 arcane
  *  sources in the 37-card bag → a few Cyber visits find one. Gated on pursueArcane + a relic to pay
  *  + no pending arcane recruit, so it neither over-fishes nor blocks the core build. */
@@ -321,9 +350,9 @@ function wantsArcaneFish(player: BotPlayer, profile: BotProfile): boolean {
 
 /**
  * Should the bot fish the Arcane Abyss bag NOW — for a CLIMB-COMPRESSOR (Aquamaiden/Golem/Firekeeper/
- * Guardian damage-mitigation, or Aegis Weaver's damage-double) or, for pursueArcane builds, an arcane
+ * Guardian damage-mitigation, or Paladin's damage-double) or, for pursueArcane builds, an arcane
  * source? These cost-7-9 spirits are the levers that collapse the ~17-round climb (mitigation lets
- * barrier survive two top-rung hits → far fewer restore-barrier rounds; Aegis Weaver one-shots the boss). Unlike
+ * barrier survive two top-rung hits → far fewer restore-barrier rounds; Paladin one-shots the boss). Unlike
  * wantsArcaneFish (late, post-cap, arcane-only) this fires EARLIER — once a real dice pool has started
  * (≥4 dice) — so the compressor is awakened BEFORE the hard rungs. Gated on: a relic to pay the Cyber
  * City "relic → abyssSummon" trade, no recruit already pending (so it never stacks unawakened fishes),
@@ -369,7 +398,7 @@ function chooseBuildDestination(
 	}
 	// 1a. Fish the Arcane Abyss for a COMPRESSOR (Mountain Region: relic → abyssSummon) — HIGH priority so a
 	//     Fairy relic is reserved for it before augments. Damage-mitigation (Aquamaiden/Golem/Firekeeper
-	//     /Guardian) lets barrier survive two top-rung hits → far fewer climb restore-barrier rounds; Aegis Weaver
+	//     /Guardian) lets barrier survive two top-rung hits → far fewer climb restore-barrier rounds; Paladin
 	//     doubles the roll on odd barrier → one-shots the boss. These cost-7-9 spirits collapse the
 	//     ~17-round climb, worth far more than an augment. wantsAbyssFish gates on ≥4 dice (core started),
 	//     a relic, room, and lacking a compressor, so it fires once mid-build and not again until awakened.
@@ -401,7 +430,7 @@ function chooseBuildDestination(
 		if (d) return d;
 	}
 	// 3c. Late-game DAMAGE CAP: once the core build is done but expected attack can't one-shot the
-	//     toughest rung, buy Spirit Animal augments (+1 combat damage each, slot-free). Relics are
+	//     toughest rung, buy Beast augments (+1 combat damage each, slot-free). Relics are
 	//     action economy: spend a held one on the Tidal "Animal" augment, else Cultivate for origin
 	//     runes (which trade up to relics) so the augment spree keeps funding itself.
 	{
@@ -413,7 +442,7 @@ function chooseBuildDestination(
 		if (coreBuilt && belowOneShot && hasAugmentCapacity(player)) {
 			const heldRelics = player.mats.filter((r) => r.hasRune && r.type === 'relic').length;
 			if (heldRelics >= 1) {
-				const d = legalDest(destinationOfferingAugment(catalog, ['Spirit Animal']));
+				const d = legalDest(destinationOfferingAugment(catalog, ['Beast']));
 				if (d) return d;
 			}
 		}
@@ -465,7 +494,7 @@ function augmentWorth(
 		if (cls === 'Fighter' && needDice && c >= 2 && c < 5) score = c + 6;
 		else if (cls === 'Cultivator' && needMaxBarrier && c >= 3 && c < 5) score = c;
 		// Elementalist augment is the dice-QUALITY throughput lever (super-linear): top priority once the
-		// dice exist. Spirit Animal augment = the slot-free flat-damage cap once dice are done.
+		// dice exist. Beast augment = the slot-free flat-damage cap once dice are done.
 		else if (cls === 'Elementalist' && hasUpgradable && c >= 1 && c < 5) score = c + 5;
 		else if ((profile.damageClasses ?? []).includes(cls) && !hasUpgradable && !needDice) score = 3;
 		if (score > bestScore) {
@@ -500,7 +529,7 @@ function wantsInteraction(player: BotPlayer, profile: BotProfile, it: LocationIn
 		if (it.gains.every((g) => g.type === 'restoreBarrier')) return hurt;
 		return true;
 	}
-	if (!canAfford(it, player.mats)) return false;
+	if (!canAfford(it, player.mats, { runesWild: runesAreWild(player) })) return false;
 	let want = false;
 	for (const g of it.gains) {
 		if (g.type === 'restoreBarrier') want ||= hurt;
@@ -614,7 +643,7 @@ export interface BotProfile {
 	searchMultiplayer?: boolean;
 	/**
 	 * Pursue ARCANE BURST: spend a monster-reward token on an Arcane Abyss Summon to fish for an
-	 * arcane source (Arcane Ascendant / Arcane Vanguard), keep + awaken it (the starting Fairy relics
+	 * arcane source (Sorcerer / Huntress), keep + awaken it (the starting Fairy relics
 	 * + claimed relics pay the "any relic" awaken cost), then rest to convert exalted dice → arcane
 	 * (mean 2.0 vs 1.0). Roughly doubles firepower → one-shots the hp14 boss → collapses the round
 	 * count. The "full-scope" lever for the top tiers.
@@ -682,7 +711,7 @@ export const RANDOM_PROFILE: BotProfile = {
 };
 
 /** Classes that always add raw combat power (flat damage and/or arcane dice). */
-const DAMAGE_CLASSES = ['Spirit Animal', 'Sharpshooter', 'Arcane Ascendant', 'Arcane Vanguard', 'The Corruptor'];
+const DAMAGE_CLASSES = ['Beast', 'Sharpshooter', 'Sorcerer', 'Huntress', 'Corruptor'];
 
 /**
  * The default strategic bot — a SAFE SCALER tuned for the escalating 8-rung ladder
@@ -701,8 +730,8 @@ export const MEDIUM_DEFAULTS: BotProfile = {
 	builtOutThreshold: 0.25,
 	diceCapTarget: 10,
 	maxBarrierTarget: 10,
-	preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-	postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+	preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+	postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 	damageClasses: DAMAGE_CLASSES,
 	cultivateForMaxBarrier: true,
 	restForDice: true,
@@ -725,7 +754,7 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		diceCapTarget: 10,
 		maxBarrierTarget: 4,
 		preCapClasses: ['Fighter', 'Elementalist'],
-		postCapClasses: ['Spirit Animal'],
+		postCapClasses: ['Beast'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: false,
 		restForDice: true,
@@ -738,8 +767,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.3,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Cultivator', 'Healer', 'Fighter', 'Elementalist', 'Spirit Animal'],
-		postCapClasses: ['Cultivator', 'Healer', 'Spirit Animal'],
+		preCapClasses: ['Cultivator', 'Healer', 'Fighter', 'Elementalist', 'Beast'],
+		postCapClasses: ['Cultivator', 'Healer', 'Beast'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -752,8 +781,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.2,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Spirit Animal', 'Elementalist'],
-		postCapClasses: ['Spirit Animal', 'Cultivator', 'Elementalist'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Beast', 'Elementalist'],
+		postCapClasses: ['Beast', 'Cultivator', 'Elementalist'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -766,8 +795,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.25,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Healer'],
+		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -781,8 +810,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.25,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -797,8 +826,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -812,8 +841,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -830,8 +859,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -848,8 +877,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -867,8 +896,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -889,8 +918,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -905,8 +934,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -921,8 +950,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Fighter', 'Cultivator', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -939,8 +968,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.25,
 		diceCapTarget: 10,
 		maxBarrierTarget: 10,
-		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Healer'],
+		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -958,8 +987,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.3,
 		diceCapTarget: 10,
 		maxBarrierTarget: 6,
-		preCapClasses: ['Sharpshooter', 'Fighter', 'Cursed Spirit', 'Elementalist', 'Spirit Animal', 'Cultivator'],
-		postCapClasses: ['Sharpshooter', 'Spirit Animal', 'Cursed Spirit', 'Elementalist'],
+		preCapClasses: ['Sharpshooter', 'Fighter', 'Cursed Spirit', 'Elementalist', 'Beast', 'Cultivator'],
+		postCapClasses: ['Sharpshooter', 'Beast', 'Cursed Spirit', 'Elementalist'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -978,8 +1007,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.3,
 		diceCapTarget: 10,
 		maxBarrierTarget: 5,
-		preCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Fighter', 'Spirit Animal', 'Elementalist'],
-		postCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Spirit Animal'],
+		preCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Fighter', 'Beast', 'Elementalist'],
+		postCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Beast'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -999,8 +1028,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.3,
 		diceCapTarget: 10,
 		maxBarrierTarget: 6,
-		preCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Fighter', 'Elementalist', 'Spirit Animal'],
-		postCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Spirit Animal', 'Elementalist'],
+		preCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Fighter', 'Elementalist', 'Beast'],
+		postCapClasses: ['Cursed Spirit', 'Sharpshooter', 'Beast', 'Elementalist'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -1018,8 +1047,8 @@ export const BOT_PROFILES: Record<string, BotProfile> = {
 		builtOutThreshold: 0.4,
 		diceCapTarget: 10,
 		maxBarrierTarget: 9,
-		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Spirit Animal', 'Healer'],
-		postCapClasses: ['Cultivator', 'Spirit Animal', 'Elementalist', 'Healer'],
+		preCapClasses: ['Cultivator', 'Fighter', 'Elementalist', 'Beast', 'Healer'],
+		postCapClasses: ['Cultivator', 'Beast', 'Elementalist', 'Healer'],
 		damageClasses: DAMAGE_CLASSES,
 		cultivateForMaxBarrier: true,
 		restForDice: true,
@@ -1046,8 +1075,8 @@ for (const pt of [4, 5, 6]) {
 		maxBarrierTarget: pt,
 		pursueCorruption: true,
 		originFocus: false,
-		preCapClasses: ['Sharpshooter', 'Fighter', 'Elementalist', 'Spirit Animal', 'Cultivator'],
-		postCapClasses: ['Sharpshooter', 'Spirit Animal', 'Elementalist']
+		preCapClasses: ['Sharpshooter', 'Fighter', 'Elementalist', 'Beast', 'Cultivator'],
+		postCapClasses: ['Sharpshooter', 'Beast', 'Elementalist']
 	};
 }
 
@@ -1088,7 +1117,7 @@ BOT_PROFILES['mcts'] = { ...BOT_PROFILES['cullean'], ismctsIterations: 64, ismct
 // EA-tuned economy config (src/lib/play/sim/_ea — corruption-fixed base): climb sooner
 // (climbReadyFactor 0.6 → less Spirit-Animal over-stacking), pot 9, 2 Cultivators, 3 Elementalists.
 // The fastest robust single-action economy line (~46 rounds / ~83% solo). Action-economy spirits
-// (Ironmane 2x combat, Wayfarer 2x location) push it lower once recruited.
+// (Ironmane 2x combat, Nomad 2x location) push it lower once recruited.
 BOT_PROFILES['fast'] = {
 	...BOT_PROFILES['cullean'],
 	killThreshold: 0.55,
@@ -1140,7 +1169,7 @@ function diceSumPMF(dice: readonly AttackDie[]): Map<number, number> {
 }
 
 /**
- * Probability that `seat`'s attack roll would kill the current Abyss monster.
+ * Probability that `seat`'s attack roll would kill a monster card (see `computeKillProbability`).
  *
  * The monster strikes FIRST, and a corrupted player (its hit exceeds barrier) cannot
  * strike back at all — so a fight the bot can't survive deals zero and can never kill.
@@ -1182,23 +1211,58 @@ function cloneForCombatSim(state: PublicGameState): PublicGameState {
 	return { ...state, players: structClonePlain(state.players) };
 }
 
+/** Options for the kill-probability helpers. */
+export interface KillProbabilityOptions {
+	/** Opt in to a corrupting fight when a simultaneous-attack class can still strike. */
+	allowCorruptKill?: boolean;
+	/**
+	 * The card to evaluate. Omitted → the best live card in `seat`'s own monster hand (0 when the
+	 * hand is empty). Pass a card explicitly to score a preview (a deck card not yet drawn).
+	 */
+	monster?: MonsterState | null;
+}
+
+/** The cards a kill-probability call evaluates: the explicit card, else the seat's live hand. */
+function killTargets(state: PublicGameState, seat: SeatColor, opts: KillProbabilityOptions): MonsterState[] {
+	if (opts.monster !== undefined) return isLiveMonster(opts.monster) ? [opts.monster] : [];
+	return (state.players[seat]?.monsterHand ?? []).filter(isLiveMonster);
+}
+
+/**
+ * Probability that `seat`'s attack roll would kill `opts.monster` (default: the best card in the
+ * seat's own monster hand — the result is the max over the hand).
+ */
 export function computeKillProbability(
 	state: PublicGameState,
 	seat: SeatColor,
 	catalog: PlayCatalog,
-	opts: { allowCorruptKill?: boolean } = {}
+	opts: KillProbabilityOptions = {}
 ): number {
-	const monster = state.monster;
-	if (!monster) return 0;
+	const targets = killTargets(state, seat, opts);
+	if (targets.length === 0) return 0; // empty hand, or only defeated cards
 	const sim = cloneForCombatSim(state);
 	const player = sim.players[seat];
 	if (!player) return 0;
 
 	resetCombatFlags(player);
 	applyTrigger(sim, seat, 'inCombat', [], { catalog });
+	let best = 0;
+	for (const monster of targets) {
+		best = Math.max(best, killProbabilityAfterTrigger(sim, player, monster, opts.allowCorruptKill === true));
+		if (best >= 1) break;
+	}
+	return best;
+}
 
+/** One card's kill probability, given a clone whose `inCombat` trigger has already fired. */
+function killProbabilityAfterTrigger(
+	sim: PublicGameState,
+	player: NonNullable<PublicGameState['players'][SeatColor]>,
+	monster: MonsterState,
+	allowCorruptKill: boolean
+): number {
 	// The monster hits first. Account for any defensive mitigation the inCombat trigger
-	// granted (deflect / damageReduction — e.g. Living Bastion). If the surviving hit
+	// granted (deflect / damageReduction — e.g. Titan). If the surviving hit
 	// still exceeds current barrier, the player corrupts and normally cannot counter ⇒ kill
 	// is impossible. (skipTakeDamage from a Guardian dodges the hit entirely.)
 	const mitigation = (player.damageReduction ?? 0) + (player.deflect ?? 0);
@@ -1209,20 +1273,21 @@ export function computeKillProbability(
 	const deflected = player.skipTakeDamage
 		? 0
 		: Math.min(player.deflect ?? 0, Math.max(0, monster.damage - (player.damageReduction ?? 0)));
-	const hpTarget = Math.max(0, monster.maxHp - deflected);
+	// Monster cards are persistent: the kill needs their CURRENT Barrier + HP, not a fresh maxHp.
+	const hpTarget = Math.max(0, monsterBarrierLeft(monster) - deflected);
 	if (!player.skipTakeDamage && hpTarget === 0) return 1; // deflection alone finishes it
 	if (!player.skipTakeDamage && incoming >= player.barrier) {
 		// Would corrupt at the CURRENT barrier. If a FULL barrier (maxBarrier) WOULD survive this hit,
 		// don't corrupt — return 0 so the bot restores barrier first and fights cleanly. Corruption is NOT free:
-		// it decays status, which shrinks the spirit-slot cap (Pure 7 → Corrupt 5 → Fallen 4), costing
+		// it decays status and costs an escalating spirit sacrifice (Nth corruption → N spirits), costing
 		// flat-damage spirits (Spirit Animals) — the very firepower the hp-rich rungs need. So only
 		// punch through when corruption is UNAVOIDABLE (incoming > maxBarrier, i.e. even a full barrier
 		// dies), the caller opts in (pursueCorruption), we have a simultaneous-attack class
-		// (Sharpshooter / Soul Weaver ≥2) to still strike, and status ≤ 1 so we don't fall to Fallen.
+		// (Sharpshooter / Mystic ≥2) to still strike, and status ≤ 1 so we don't fall to Fallen.
 		if (incoming < player.maxBarrier) return 0;
 		const c = awakenedClassCounts(player);
-		const simultaneous = (c['Sharpshooter'] ?? 0) >= 1 || (c['Soul Weaver'] ?? 0) >= 2;
-		if (opts.allowCorruptKill && simultaneous && (player.statusLevel ?? 0) <= 1) {
+		const simultaneous = (c['Sharpshooter'] ?? 0) >= 1 || (c['Mystic'] ?? 0) >= 2;
+		if (allowCorruptKill && simultaneous && (player.statusLevel ?? 0) <= 1) {
 			return firepowerFromClone(sim, player, hpTarget);
 		}
 		return 0;
@@ -1240,16 +1305,19 @@ export function computeKillProbability(
 export function firepowerKillProbability(
 	state: PublicGameState,
 	seat: SeatColor,
-	catalog: PlayCatalog
+	catalog: PlayCatalog,
+	opts: Pick<KillProbabilityOptions, 'monster'> = {}
 ): number {
-	const monster = state.monster;
-	if (!monster) return 0;
+	const targets = killTargets(state, seat, opts);
+	if (targets.length === 0) return 0;
 	const sim = cloneForCombatSim(state);
 	const player = sim.players[seat];
 	if (!player) return 0;
 	resetCombatFlags(player);
 	applyTrigger(sim, seat, 'inCombat', [], { catalog });
-	return firepowerFromClone(sim, player, monster.maxHp);
+	let best = 0;
+	for (const monster of targets) best = Math.max(best, firepowerFromClone(sim, player, monsterBarrierLeft(monster)));
+	return best;
 }
 
 /** Shared tail of the two kill-prob helpers: convolve the dice faces (post inCombat
@@ -1289,6 +1357,9 @@ function originNameSets(player: BotPlayer): Map<string, Set<string>> {
 	const m = new Map<string, Set<string>>();
 	for (const s of player.spirits) {
 		for (const origin of Object.keys(s.origins ?? {})) {
+			// Only origins with a Cultivate reward (the four regions) yield runes; Sun, Moon,
+			// Human Enclave … give nothing on Cultivate, so they are no recruiting focus.
+			if (!ORIGIN_REWARDS[origin]) continue;
 			let set = m.get(origin);
 			if (!set) {
 				set = new Set<string>();
@@ -1334,7 +1405,7 @@ function awakenedCultivators(player: BotPlayer): number {
  *  then cull the spent Fighters for Elementalists/Spirit Animals. */
 const FIGHTER_SOFT_CAP = 5; // 5 Fighters fill all 10 dice in a single Rest — never grind at the 2-Fighter floor
 const HEALER_WANTED = 1; // one Healer's +3/rest sustain doesn't stack
-const SOUL_WEAVER_WANTED = 3; // Soul Weaver heals (+2/rest) only at count 3 — the Healer-less fallback
+const SOUL_WEAVER_WANTED = 3; // Mystic heals (+2/rest) only at count 3 — the Healer-less fallback
 const ELEMENTALIST_WANTED = 3; // upgrades dice toward exalted (more = faster basic→exalted, N dice/rest)
 const CULTIVATOR_WANTED = 3; // 3 awakened Cultivators → +2 max barrier/Cultivate (caps max barrier ~3× faster than 2)
 const CURSED_WANTED = 3; // corruption build: each awakened Cursed Spirit → +1 max barrier on the Tainted corruption
@@ -1347,7 +1418,7 @@ const CURSED_WANTED = 3; // corruption build: each awakened Cursed Spirit → +1
  */
 function hasSustain(player: BotPlayer): boolean {
 	const c = awakenedClassCounts(player);
-	return (c['Healer'] ?? 0) >= HEALER_WANTED || (c['Soul Weaver'] ?? 0) >= SOUL_WEAVER_WANTED;
+	return (c['Healer'] ?? 0) >= HEALER_WANTED || (c['Mystic'] ?? 0) >= SOUL_WEAVER_WANTED;
 }
 
 /**
@@ -1363,14 +1434,17 @@ function canRestoreBarrierViaEconomy(player: BotPlayer): boolean {
 	const byOrigin: Record<string, number> = {};
 	for (const sp of player.spirits) {
 		if (sp.isFaceDown) continue;
-		for (const o of Object.keys(sp.origins ?? {})) byOrigin[o] = (byOrigin[o] ?? 0) + 1;
+		for (const o of Object.keys(sp.origins ?? {})) {
+			// Only an origin with a Cultivate reward (3 spirits → 1 rune) gives a rune.
+			if (ORIGIN_REWARDS[o]) byOrigin[o] = (byOrigin[o] ?? 0) + 1;
+		}
 	}
 	return Object.values(byOrigin).some((n) => n >= 3);
 }
 
 /**
  * Does the player already have an ARCANE damage source — arcane dice, or an awakened spirit
- * that produces them (Arcane Ascendant converts exalted→arcane on rest; Arcane Vanguard grants
+ * that produces them (Sorcerer converts exalted→arcane on rest; Huntress grants
  * arcane on awaken; Abyss Harbinger on corruption)? Arcane dice average 2.0 vs exalted's 1.0, so
  * an arcane source roughly DOUBLES firepower — the lever that one-shots the hp14 boss. When a
  * `pursueArcane` bot lacks one, it spends a monster-reward token on an Arcane Abyss Summon to
@@ -1379,11 +1453,7 @@ function canRestoreBarrierViaEconomy(player: BotPlayer): boolean {
 function hasArcaneSource(player: BotPlayer): boolean {
 	if (player.attackDice.some((d) => d.tier === 'arcane')) return true;
 	const c = awakenedClassCounts(player);
-	return (
-		(c['Arcane Ascendant'] ?? 0) > 0 ||
-		(c['Arcane Vanguard'] ?? 0) > 0 ||
-		(c['The Corruptor'] ?? 0) > 0
-	);
+	return (c['Huntress'] ?? 0) > 0 || (c['Corruptor'] ?? 0) > 0;
 }
 
 /** Climb-compressors the bot fishes the Abyss for: mitigation, attack-first,
@@ -1391,14 +1461,13 @@ function hasArcaneSource(player: BotPlayer): boolean {
 function hasClimbCompressor(player: BotPlayer): boolean {
 	const c = awakenedClassCounts(player);
 	return (
-		(c['Tide Warden'] ?? 0) > 0 ||
-		(c['Living Bastion'] ?? 0) > 0 ||
-		(c['Emberguard'] ?? 0) > 0 ||
-		(c['Runic Bulwark'] ?? 0) > 0 ||
-		(c['Tide Stalker'] ?? 0) > 0 ||
-		(c['Cursed Fighter'] ?? 0) > 0 ||
+		(c['Warden'] ?? 0) > 0 ||
+		(c['Titan'] ?? 0) > 0 ||
+		(c['Sentinel'] ?? 0) > 0 ||
+		(c['Monk'] ?? 0) > 0 ||
+		(c['Spellblade'] ?? 0) > 0 ||
 		(c['Guardian'] ?? 0) > 0 ||
-		(c['Growth Warden'] ?? 0) > 0
+		(c['Druid'] ?? 0) > 0
 	);
 }
 
@@ -1450,7 +1519,7 @@ function classNeedValue(
 		case 'Elementalist': {
 			// Dice QUALITY is the single biggest firepower lever: upgrading a die basic→enchanted
 			// →exalted adds ~0.67 expected per tier, so across a full 10-die pool it is worth ~+6.7
-			// damage — it dwarfs a Spirit Animal's flat +1. Make it the TOP recruit once a real pool
+			// damage — it dwarfs a Beast's flat +1. Make it the TOP recruit once a real pool
 			// of upgradable dice exists, and stack several (each Elementalist upgrades one more die
 			// per Rest, so 3 turns the basic→exalted climb from a ~10-round grind into ~3). Falls to
 			// 0 once every die is exalted+ (nothing left to upgrade — Elementalists are spent → cull for
@@ -1470,10 +1539,10 @@ function classNeedValue(
 		case 'Healer':
 			// Sustain is a PREREQUISITE for the climb (restore barrier between fights instead of burning the
 			// scarce corruption budget), so the one Healer outranks even the flat-damage stack —
-			// never let a Spirit Animal displace it, or the build strands itself unable to restore barrier.
+			// never let a Beast displace it, or the build strands itself unable to restore barrier.
 			// Worthless beyond the first (its +3/rest doesn't stack).
 			return c < HEALER_WANTED ? 11 : 0;
-		case 'Soul Weaver':
+		case 'Mystic':
 			// Healer-less sustain. Hold off while still laying the dice foundation, then assemble
 			// the count-3 barrier restore. Worthless once a Healer already covers sustain.
 			if ((counts['Healer'] ?? 0) >= HEALER_WANTED || c >= SOUL_WEAVER_WANTED) return 0;
@@ -1483,14 +1552,14 @@ function classNeedValue(
 			// 8-rung ladder in roughly half the Abyss visits. One is plenty; barrier can't usually
 			// fuel more than two fights between heals anyway. A top recruit (cheap, cost-1 Hero).
 			return c < 1 ? 9 : 0;
-		case 'Wayfarer':
+		case 'Nomad':
 			// ACTION ECONOMY: +1 of EVERY location interaction per round → ~doubles build throughput
 			// (rest/cultivate/summon twice per visit). The single biggest build-compressor; worth the
 			// Arcane-Abyss recruit. One is plenty (the allowance doesn't stack).
 			return c < 1 ? 9 : 0;
-		case 'Tide Warden':
-		case 'Living Bastion':
-		case 'Runic Bulwark':
+		case 'Warden':
+		case 'Titan':
+		case 'Monk':
 		case 'Guardian':
 			// CLIMB-COMPRESSORS — scalable/fixed combat mitigation.
 			// skip-a-corrupting-hit). Powerful (barrier survives two top-rung hits → far fewer restore-barrier
@@ -1499,28 +1568,30 @@ function classNeedValue(
 			// fished copy usually strands FACE-DOWN (un-awakable) and blocks re-fishing. Value moderate:
 			// kept if drawn alongside nothing better, never fished-for as a primary plan.
 			return c < 1 ? 5 : 1;
-		case 'Emberguard':
-			// Strong conditional mitigation when the combat roll is even.
+		case 'Sentinel':
+			// November 2026: may discard attack dice before the roll for +2 damage each. Bots do
+			// not resolve the choice card (they discard nothing), so this weight is not re-tuned.
 			return c < 1 ? 5 : 1;
-		case 'Aegis Weaver':
-			// Restores barrier matching max-barrier gains, with a separate +4 combat initiative.
+		case 'Paladin':
+			// +4 combat initiative and wins initiative ties (November 2026). The weight below was tuned
+			// for the old max-barrier restore text and is not re-tuned yet.
 			return needMaxBarrier ? (c < 1 ? 8 : 1) : 2;
-		case 'Tide Stalker':
+		case 'Spellblade':
 			return c < 1 ? 8 : 1;
-		case 'Growth Warden':
+		case 'Druid':
 			return needDice || needMaxBarrier ? (c < 1 ? 7 : 2) : 1;
-		case 'Abyss Summoner':
+		case 'Summoner':
 			return c < 1 ? 7 : 2;
-		case 'Rune Mage':
-			// BUILD-COMPRESSOR: trade a Rune → Enchanted die, a Relic → Exalted die — dice straight from
-			// the rune/relic economy, bypassing the Fighter(add)→Elementalist(upgrade) two-stage grind.
+		case 'Mage':
+			// BUILD-COMPRESSOR: trade a Rune → Enchanted die in the Awakening Phase — dice straight from
+			// the rune economy, bypassing the Fighter(add)→Elementalist(upgrade) two-stage grind.
 			// Only while the dice pool is still below cap.
 			return !atDiceCap(player, profile) ? (c < 1 ? 8 : 2) : 0;
 		default:
-			// Flat-damage / arcane classes (Spirit Animal, Sharpshooter, Arcane Vanguard, …): the
+			// Flat-damage / arcane classes (Beast, Sharpshooter, Huntress, …): the
 			// FINAL firepower lever, and the TOP recruit once the dice+max barrier foundation is laid.
 			// A 10-exalted pool only averages ~10 damage; one-shotting the hp12/hp14 boss rungs needs
-			// ~14-16, and the only way to get there is to STACK flat damage (each Spirit Animal = +1)
+			// ~14-16, and the only way to get there is to STACK flat damage (each Beast = +1)
 			// in every slot the build no longer needs for dice/max barrier/sustain. So value them low
 			// while still building the foundation, then high enough to displace spent dead weight.
 			if (!damaging) return 0;
@@ -1607,7 +1678,7 @@ function keepValue(
 
 /**
  * Would Rest pay off now? Fighter adds dice (only under the cap), Elementalist upgrades
- * basic/enchanted dice, Arcane Ascendant converts an exalted die to arcane, and Healer
+ * basic/enchanted dice, Sorcerer converts an exalted die to arcane, and Healer
  * restores barrier (sustain between Abyss fights, worth it only below full).
  */
 function hasRestPayoff(
@@ -1619,19 +1690,16 @@ function hasRestPayoff(
 	const counts = awakenedClassCounts(player);
 	const fighter = counts['Fighter'] ?? 0;
 	const elementalist = counts['Elementalist'] ?? 0;
-	const advisor = counts['Arcane Ascendant'] ?? 0;
 	const healer = counts['Healer'] ?? 0;
-	const soulWeaver = counts['Soul Weaver'] ?? 0;
+	const soulWeaver = counts['Mystic'] ?? 0;
 	const dice = player.attackDice;
 	const hasUpgradable = dice.some((d) => d.tier === 'basic' || d.tier === 'enchanted');
-	const hasExalted = dice.some((d) => d.tier === 'exalted');
 	// Restore barrier only up to `barrierCeiling` (the caller passes combat-ready = toughest damage + 1; defaults
 	// to "to full" for the built-out check). Restoring past combat-ready just burns Floral rounds.
 	const wounded = player.barrier < Math.min(player.maxBarrier, barrierCeiling);
 	return (
 		(!atDiceCap(player, profile) && fighter >= 2) ||
 		(elementalist >= 2 && hasUpgradable) || // count 1 upgrades nothing on the super-linear curve
-		(advisor >= 1 && hasExalted) ||
 		(wounded && (healer >= HEALER_WANTED || soulWeaver >= SOUL_WEAVER_WANTED))
 	);
 }
@@ -1725,7 +1793,7 @@ function readyToClimb(
  *  • arcane is wanted but not yet sourced (a `pursueArcane` build), or
  *  • there's a FREE slot to summon another flat-damage spirit into.
  * Deliberately does NOT count "cullable dead weight" as improvable: on a full tableau the bot
- * often CAN'T actually convert that slot to damage soon (the replacement Spirit Animal hasn't been
+ * often CAN'T actually convert that slot to damage soon (the replacement Beast hasn't been
  * drawn), so treating it as improvable made the boss-rung gate STALL for dozens of rounds. When
  * none of the above hold, the build is damage-maxed FOR NOW → take the best shot; the normal cull
  * + recruit loop still raises damage between attempts, so a miss isn't wasted.
@@ -1743,7 +1811,7 @@ function canStillRaiseDamage(player: BotPlayer, profile: BotProfile): boolean {
 	}
 	if (profile.pursueArcane && !hasArcaneSource(player)) return true;
 	if (player.spirits.length < spiritLimitFor(player.statusLevel)) return true;
-	// Slot-free flat damage: a Spirit Animal augment (+1 combat damage each) placed on any awakened
+	// Slot-free flat damage: a Beast augment (+1 combat damage each) placed on any awakened
 	// host. The relic that pays for it is pure action economy (Cultivate → origin runes → relic
 	// trade, plus monster-reward relics), so this is a near-unlimited damage cap — keep buying until
 	// the boss one-shots. Gated on having augment capacity AND a way to fund a relic.
@@ -1850,7 +1918,9 @@ export function planMediumPhaseActions(
 	switch (state.phase) {
 		case 'navigation': {
 			const player = working.players[seat];
-			const monster = working.monster;
+			// Score the Abyss against the card this seat would fight there: the best card in its own
+			// monster hand, else the most killable card of the lowest deck (it draws one on arrival).
+			const monster = abyssPreviewMonster(working, seat, catalog);
 			// Evil-hunter line. Once Fallen, stop fighting monsters and HUNT: lock the first
 			// Spirit-World location (where the Good economy bots cluster) so we share a location
 			// and can launch the +3-VP group attack. Before Fallen, once we hold a couple of
@@ -1880,26 +1950,24 @@ export function planMediumPhaseActions(
 			}
 			const pKill = monster
 				? computeKillProbability(working, seat, catalog, {
-						allowCorruptKill: profile.pursueCorruption === true
+						allowCorruptKill: profile.pursueCorruption === true,
+						monster
 					})
 				: 0;
 			const abyssLegal =
 				monster != null &&
 				isLegal(working, seat, { type: 'lockNavigation', destination: 'Arcane Abyss' }, catalog);
-			// Hold at rung 0 only while STILL building (the build is improving and we haven't
-			// reached a sane floor). Once climbing (ladderIndex > 0), the build has plateaued,
-			// or we're battle-ready, never block — advancing the ladder before a reasonable
-			// floor just bleeds the tableau to corruption, but over-gating strands builds whose
-			// max barrier plateaus below the full target.
-			const climbFloor =
-				(monster?.ladderIndex ?? 0) > 0 ||
-				readyToClimb(working, seat, catalog, profile) ||
-				isBuiltOut(player, profile);
-			// Demand a high kill bar only for the FIRST step (deciding to start climbing); once
-			// committed (ladderIndex > 0) or topped out, stalling can't improve the build, so take
-			// every survivable shot at the low bar. The hp-rich boss rungs are never a hard wall.
-			const committed =
-				(monster?.ladderIndex ?? 0) > 0 || isBuiltOut(player, profile) || profile.fightUrgency === true;
+			// Hold back while STILL building (the build is improving and we haven't reached a sane
+			// floor). Once the build has plateaued or we're battle-ready, never block — fighting before
+			// a reasonable floor just bleeds the tableau to corruption, but over-gating strands builds
+			// whose max barrier plateaus below the full target. Monster cards are private and a kill
+			// never makes the next card harder (there is no shared ladder), so a high-odds kill
+			// (pKill ≥ killThreshold) is worth the visit even while building. (The legacy ladderIndex
+			// is only a card's catalog order, not progress, so it no longer opens this gate.)
+			const climbFloor = readyToClimb(working, seat, catalog, profile) || isBuiltOut(player, profile);
+			// Demand a high kill bar until topped out (or urgent); after that, stalling can't improve
+			// the build, so take every survivable shot at the low bar. Boss cards are never a hard wall.
+			const committed = isBuiltOut(player, profile) || profile.fightUrgency === true;
 			// High-HP "boss" rungs (hp ≥ 10) must be (near-)ONE-SHOT, not ground out: grinding one at
 			// coin-flip odds wastes the fight AND the restore-barrier round after each miss — the dominant time sink
 			// in long games. So while we can still RAISE firepower (upgrade dice, source arcane, or stack
@@ -1907,13 +1975,13 @@ export function planMediumPhaseActions(
 			// demand a high kill bar at a boss rung — routing the bot to BUILD more damage instead. Once
 			// the build is damage-maxed (`canStillRaiseDamage` false) this clears, the low bar applies,
 			// and it takes its best shot — never deadlocking. Easy rungs (hp < 10) stay urgent.
-			const bossRung = (monster?.maxHp ?? monster?.hp ?? 0) >= 10;
+			const bossRung = (monster ? monsterBarrierLeft(monster) : 0) >= 10;
 			const exp = player != null && monster != null ? expectedAttack(working, seat, catalog) : 0;
 			const canRaise = player != null && canStillRaiseDamage(player, profile);
 			// At a boss rung, only keep BUILDING damage while we're FAR from a kill (expected attack
 			// more than ~2 below the rung HP) AND can still raise it. Once we're within striking range —
 			// or damage-maxed — stop stalling and take realistic shots at a low bar, grinding the rung
-			// through restore-barrier+retry; chasing the last point or a Spirit Animal that never draws is what
+			// through restore-barrier+retry; chasing the last point or a Beast that never draws is what
 			// caused the 35-round boss stall. Easy rungs (hp < 10) stay urgent at the normal bar.
 			const wantMoreDamage = bossRung && exp < maxLadderHp(catalog) && canRaise;
 			const bar = wantMoreDamage
@@ -1923,7 +1991,7 @@ export function planMediumPhaseActions(
 					: committed
 						? profile.builtOutThreshold
 						: profile.killThreshold;
-			const canFight = abyssLegal && climbFloor && pKill >= bar;
+			const canFight = abyssLegal && (climbFloor || pKill >= profile.killThreshold) && pKill >= bar;
 			// Deliberate corruption-reset: corrupting instantly restores barrier to full, a legitimate tempo play —
 			// it is FINE for the bot to corrupt itself. But it should PREFER the safe barrier restore when one is
 			// available (Cultivate → runes → a rune/relic trade that restores barrier, or a held relic →
@@ -1944,7 +2012,7 @@ export function planMediumPhaseActions(
 				player.maxBarrier > monster.damage &&
 				!hasSustain(player) &&
 				!canRestoreBarrierViaEconomy(player) &&
-				firepowerKillProbability(working, seat, catalog) >= profile.builtOutThreshold;
+				firepowerKillProbability(working, seat, catalog, { monster }) >= profile.builtOutThreshold;
 			if (canFight || corruptReset) {
 				tryEmit({ type: 'lockNavigation', destination: 'Arcane Abyss' });
 				break;
@@ -1980,21 +2048,26 @@ export function planMediumPhaseActions(
 			if (config?.combatOnly) {
 				// Arcane Abyss: fight, then claim rewards. Default = VP-first; a `pursueArcane` bot
 				// that has no arcane source yet instead banks an Arcane Abyss Summon (to fish for
-				// Arcane Ascendant / Arcane Vanguard) + a relic (awaken fuel), then VP for the rest.
-				// Fight UP TO the combat allowance (Ironmane → 2 fights per Abyss visit): the first
-				// fight is justified by the navigation gate; each bonus fight proceeds only if the
-				// now-advanced rung is survivable AND a likely kill (pk≥0.5), so barrier isn't wasted.
+				// Sorcerer / Huntress) + a relic (awaken fuel), then VP for the rest.
+				// Fight UP TO the combat allowance (Ironmane → 2 fights per Abyss visit), always the
+				// hand card this seat is most likely to kill: the first fight is justified by the
+				// navigation gate; each bonus fight proceeds only if that card is survivable AND a
+				// likely kill (pk≥0.5), so barrier isn't wasted. A card drawn just now (navigation only
+				// previewed it) must at least be survivable and killable (pk>0) before the first fight.
 				let combatGuard = 0;
-				while (
-					combatGuard < 4 &&
-					isLegal(working, seat, { type: 'startCombat' }, catalog) &&
-					(combatGuard === 0 ||
-						computeKillProbability(working, seat, catalog, {
-							allowCorruptKill: profile.pursueCorruption === true
-						}) >= 0.5)
-				) {
+				const freshCard = playMonsterCards(() => working, seat, catalog, tryEmit);
+				while (combatGuard < 4) {
+					const fight = bestStartCombatCommand(working, seat, catalog);
+					if (!fight || !isLegal(working, seat, fight, catalog)) break;
+					if (combatGuard > 0 || freshCard) {
+						const pk = computeKillProbability(working, seat, catalog, {
+							allowCorruptKill: profile.pursueCorruption === true,
+							monster: working.players[seat]?.monsterHand?.[fight.handIndex] ?? null
+						});
+						if (combatGuard > 0 ? pk < 0.5 : pk <= 0) break;
+					}
 					combatGuard += 1;
-					tryEmit({ type: 'startCombat' });
+					tryEmit(fight);
 					const pending = working.players[seat]?.pendingReward;
 					if (pending) {
 						const opts = buildMonsterRewards(pending.rewardTrack);
@@ -2014,14 +2087,12 @@ export function planMediumPhaseActions(
 						// Summon (the starting Fairy relics pay its "any relic" awaken cost). Stop the
 						// moment we own one — awakened OR face-down OR currently in hand — so we never
 						// pile up summons; and we ALWAYS keep a VP token alongside (the vpRanked fill
-						// below), so VP never stalls. Arcane then converts in via Arcane Ascendant's rest.
+						// below), so VP never stalls. Arcane then converts in via Sorcerer's rest.
 						const ownsArcane =
 							rp != null &&
 							(hasArcaneSource(rp) ||
 								rp.spirits.some(
-									(s) =>
-										(s.classes?.['Arcane Ascendant'] ?? 0) > 0 ||
-										(s.classes?.['Arcane Vanguard'] ?? 0) > 0
+									(s) => (s.classes?.['Huntress'] ?? 0) > 0
 								) ||
 								rp.spirits.some((s) => s.isFaceDown) ||
 								(rp.pendingDraw ?? false));
@@ -2034,7 +2105,7 @@ export function planMediumPhaseActions(
 								choices.push(0);
 							}
 						}
-						// Grab ONE relic from the kill while the build still needs to fund Spirit Animal
+						// Grab ONE relic from the kill while the build still needs to fund Beast
 						// augments to reach the boss one-shot — the climb's reward track is the free relic
 						// supply for the late-game damage cap (each relic → a +1-damage Animal augment).
 						{
@@ -2070,6 +2141,9 @@ export function planMediumPhaseActions(
 						}
 						tryEmit({ type: 'resolveMonsterReward', picks, choices });
 						placePreferred();
+						// The kill removed that card from the hand: draw a fresh one (if this visit's draw
+						// is still unused) for a bonus fight.
+						playMonsterCards(() => working, seat, catalog, tryEmit);
 					} else {
 						break; // no kill → stop swinging (don't loop on a still-legal startCombat)
 					}
@@ -2089,7 +2163,7 @@ export function planMediumPhaseActions(
 						const aug = p?.unplacedAugments?.[0];
 						if (!p || !aug) break;
 						// Place on the awakened spirit with free capacity AND the HIGHEST keep-value, so the
-						// augment lands on a PERMANENT host (Healer / Elementalist / Spirit Animal) rather than
+						// augment lands on a PERMANENT host (Healer / Elementalist / Beast) rather than
 						// spent dead weight (a Fighter about to be culled). Augments count toward a class
 						// breakpoint only while their host is awakened, so an augment on a soon-culled host is
 						// thrown away — exactly what was collapsing the held Elementalist count mid-upgrade.
@@ -2122,7 +2196,7 @@ export function planMediumPhaseActions(
 						if (!placePreferred() && !tryEmit({ type: 'discardHandDraws' })) break;
 						continue;
 					}
-					// Each row is repeatable up to its allowance (Wayfarer's locationInteraction
+					// Each row is repeatable up to its allowance (Nomad's locationInteraction
 					// credit lets the build action — rest/cultivate/summon/trade — run twice per visit,
 					// ~doubling build throughput per round).
 					const rowAllowance = 1 + (p.extraActions?.locationInteraction ?? 0);
@@ -2136,7 +2210,7 @@ export function planMediumPhaseActions(
 					placeAugments(); // place any augment that row just granted — same turn, never unplaced
 				}
 				// Release dead-weight spirits (value 0). Their banked dice / max barrier persist, so
-				// freeing the slot lets the tableau pivot to sustain (Soul Weaver / Healer) + damage.
+				// freeing the slot lets the tableau pivot to sustain (Mystic / Healer) + damage.
 				let cullGuard = 0;
 				while (cullGuard < 8) {
 					cullGuard += 1;
@@ -2339,12 +2413,11 @@ function rolloutValue(
 	}
 
 	if (p.victoryPoints >= 30) return 1000 - elapsed; // win inside the horizon: sooner = better
-	// Otherwise value progress toward a win: VP banked, ladder climbed, and build quality
-	// (max barrier, dice, damage, sustain, barrier headroom), minus a small time cost.
+	// Otherwise value progress toward a win: VP banked and build quality (max barrier, dice,
+	// damage, sustain, barrier headroom), minus a small time cost.
 	const dmg = expectedAttack(s, ourSeat, catalog);
 	return (
 		p.victoryPoints * 12 +
-		(s.monster?.ladderIndex ?? 0) * 5 +
 		Math.min(p.maxBarrier, 10) +
 		Math.min(p.attackDice.length, 10) * 0.8 +
 		dmg * 1.5 +
@@ -2367,7 +2440,7 @@ function searchNavigation(
 ): GameCommand[] | null {
 	const rollouts = profile.searchRollouts ?? 0;
 	if (rollouts <= 0 || state.phase !== 'navigation') return null;
-	const monster = state.monster;
+	const monster = abyssPreviewMonster(state, seat, catalog);
 	const player = state.players[seat];
 	if (!monster || !player) return null;
 
@@ -2517,7 +2590,6 @@ function ismctsSimValue(
 	const dmg = expectedAttack(s, seat, catalog);
 	return (
 		p.victoryPoints * 10 +
-		(s.monster?.ladderIndex ?? 0) * 5 +
 		Math.min(p.maxBarrier, 10) +
 		Math.min(p.attackDice.length, 10) * 0.8 +
 		dmg * 1.5 +
@@ -2706,9 +2778,17 @@ export function planBotPhaseActions(
 			const config = destination ? getLocationConfig(destination) : null;
 
 			if (config?.combatOnly) {
-				// Arcane Abyss: maybe fight the invading monster.
-				if (rng.chance() && isLegal(working, seat, { type: 'startCombat' }, catalog)) {
-					tryEmit({ type: 'startCombat' });
+				// Arcane Abyss: draw a monster card into the hand if needed, then maybe fight one.
+				playMonsterCards(() => working, seat, catalog, tryEmit);
+				const hand = working.players[seat]?.monsterHand ?? [];
+				const live = hand.flatMap((card, handIndex) => (isLiveMonster(card) ? [handIndex] : []));
+				const wantsFight = rng.chance();
+				// A random hand card (the RNG is only consulted when there is a real choice).
+				const handIndex = live.length > 1 ? pick(rng, live) : (live[0] ?? null);
+				const fight: GameCommand | null =
+					wantsFight && handIndex != null ? { type: 'startCombat', handIndex } : null;
+				if (fight && isLegal(working, seat, fight, catalog)) {
+					tryEmit(fight);
 					// A kill opens a reward pick — claim the first `chooseAmount` tokens
 					// (it blocks passing otherwise), then drain any summon it opened.
 					const pending = working.players[seat]?.pendingReward;
@@ -2739,7 +2819,9 @@ export function planBotPhaseActions(
 				if (interactions.length > 0 && rng.chance()) {
 					const affordable = interactions.filter(
 						(it) =>
-							canAfford(it, working.players[seat]?.mats ?? []) &&
+							canAfford(it, working.players[seat]?.mats ?? [], {
+								runesWild: runesAreWild(working.players[seat] ?? {})
+							}) &&
 							isLegal(
 								working,
 								seat,

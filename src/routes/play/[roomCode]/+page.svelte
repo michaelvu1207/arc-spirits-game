@@ -239,6 +239,7 @@
 		'.trait-host .traits',
 		'.players-col',
 		'.int-scroll',
+		'.combat-action-lane',
 		'.legend-body',
 		'.tip.touch',
 		'.panel',

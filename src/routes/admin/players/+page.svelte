@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { explorerLinks } from '$lib/explorer';
 	import { onMount } from 'svelte';
 	import { fetchRatingLeaderboard } from '$lib/supabase';
 	import type { RatingLeaderboardRow } from '$lib/types';
@@ -38,6 +39,9 @@
 		return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 	}
 
+	// `explorer`: the local game explorer shows the roster on one screen.
+	let { explorer = false }: { explorer?: boolean } = $props();
+
 	async function refreshPlayers() {
 		loading = true;
 		error = null;
@@ -58,8 +62,9 @@
 	<title>Players | Arc Spirits Spectate</title>
 </svelte:head>
 
-<div class="page">
+<div class="page" class:explorer>
 	<!-- PAGE HEADER -->
+	{#if !explorer}
 	<div class="page-header">
 		<div>
 			<span class="eyebrow">Player Leaderboard</span>
@@ -70,6 +75,8 @@
 			</p>
 		</div>
 	</div>
+
+	{/if}
 
 	<!-- CONTROLS -->
 	<div class="controls">
@@ -112,7 +119,7 @@
 				<div class="num">Last Played</div>
 			</div>
 			{#each filteredPlayers() as p (p.username_key)}
-				<a href={`/players/${encodeURIComponent(p.username)}`} class="pt-row">
+				<a href={explorerLinks.player(p.username)} class="pt-row">
 					<div class="player-cell">
 						<span class="player-name">{p.username}</span>
 					</div>
@@ -134,6 +141,12 @@
 
 <style>
 	.page { max-width: 1280px; margin: 0 auto; padding: 56px 32px 80px; position: relative; z-index: 1; }
+
+	/* Local explorer: one screen. The table scrolls inside its panel, the page does not. */
+	.page.explorer { height: 100%; width: 100%; padding: 14px 32px 10px; display: flex; flex-direction: column; }
+	.page.explorer .controls { margin-bottom: 8px; gap: 8px; }
+	.page.explorer .players-table { flex: 1; min-height: 0; overflow-y: auto; }
+	.page.explorer .pt-head { position: sticky; top: 0; background: var(--color-void); z-index: 1; }
 
 	/* PAGE HEADER */
 	.page-header {

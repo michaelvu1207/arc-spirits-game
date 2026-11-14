@@ -1,7 +1,14 @@
 import { test, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { setupTwoPlayerGame, getRoomView, runRoomCommand, ensureGuestIdentity } from './helpers';
+import {
+	setupTwoPlayerGame,
+	getRoomView,
+	runRoomCommand,
+	ensureGuestIdentity,
+	drawMonsterCardViaApi,
+	clearPowerDraftsViaApi
+} from './helpers';
 
 /**
  * Parity-harness fixture + golden capture for the Arc Spirits Godot port.
@@ -465,14 +472,17 @@ test.describe('capture parity fixtures + web goldens', () => {
 			await runRoomCommand(host, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 			await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 			await runRoomCommand(host, { type: 'forceAdvancePhase' });
+			await drawMonsterCardViaApi(host, 1);
+			await clearPowerDraftsViaApi(host);
 			await refreshRoomPage(host);
-			await host.getByTestId('action-monsterCombat').click({ force: true });
+			await host.getByTestId('monster-hand-0').click({ force: true });
 			await expect(host.getByTestId('combat-overlay')).toBeVisible({ timeout: 30_000 });
 			await capture(host, '06', 'combat-overlay', 'Red', [
 				'setupTwoPlayerGame',
 				'debugGrant 8 arcane attack dice',
 				'both lockNavigation Arcane Abyss → location',
-				'click action-monsterCombat → combat-overlay'
+				'drawMonsterCards 1 + keepMonsterCard 0 via API',
+				'click monster-hand-0 → combat-overlay'
 			]);
 		} finally {
 			await hostCtx.close();
@@ -501,8 +511,10 @@ test.describe('capture parity fixtures + web goldens', () => {
 			await runRoomCommand(host, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 			await runRoomCommand(guest, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 			await runRoomCommand(host, { type: 'forceAdvancePhase' });
-			// startCombat via API (no page click legs); combat resolves server-side immediately.
-			await runRoomCommand(host, { type: 'startCombat' });
+			// Draw a Difficulty I card into the hand, then fight it via API (no page click
+			// legs); combat resolves server-side immediately.
+			await drawMonsterCardViaApi(host, 1);
+			await runRoomCommand(host, { type: 'startCombat', handIndex: 0 });
 			await refreshRoomPage(host);
 			// The page opens onto the resolved combat; continue is client-side dismissal that
 			// reveals the reward takeover (routing falls through to pendingReward).
@@ -523,7 +535,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 					[
 						'setupTwoPlayerGame + debugGrant 8 arcane dice',
 						'both lockNavigation Arcane Abyss → location',
-						'startCombat via API (monster defeated) → reward takeover'
+						'draw + keep a Difficulty I card, startCombat handIndex 0 via API (monster defeated) → reward takeover'
 					],
 					{ anchorTestId: 'reward-grid' }
 				);
@@ -562,12 +574,12 @@ test.describe('capture parity fixtures + web goldens', () => {
 		let goldenRulerId: string | null = null;
 		try {
 			const probe = await probeCtx.newPage();
-			goldenRulerId = await discoverSpiritIdByClass(probe, 'Golden Ruler');
+			goldenRulerId = await discoverSpiritIdByClass(probe, 'King');
 		} finally {
 			await probeCtx.close();
 		}
 		if (!goldenRulerId) {
-			throw new Error('09 benefits-claim: no Golden Ruler spirit in catalog to seed the grant.');
+			throw new Error('09 benefits-claim: no King spirit in catalog to seed the grant.');
 		}
 
 		const hostCtx = await newDesktop(browser);
@@ -577,7 +589,7 @@ test.describe('capture parity fixtures + web goldens', () => {
 			const guest = await guestCtx.newPage();
 			await setupTwoPlayerGame(host, guest);
 			await refreshRoomPage(host);
-			// Face-up Golden Ruler counts as awakened → its unconditional +1 VP Benefits grant
+			// Face-up King counts as awakened → its unconditional +1 VP Benefits grant
 			// becomes a pending claim the moment we enter the Benefits step.
 			await runRoomCommand(host, {
 				type: 'debugGrant',
@@ -589,15 +601,15 @@ test.describe('capture parity fixtures + web goldens', () => {
 			await expect
 				.poll(async () => (await getRoomView(host)).projection.phase, {
 					timeout: 25_000,
-					message: 'Expected Benefits step to hold on the Golden Ruler claim'
+					message: 'Expected Benefits step to hold on the King claim'
 				})
 				.toBe('benefits');
 			await refreshRoomPage(host);
 			await expect(host.getByTestId('awaken-claim')).toBeVisible({ timeout: 30_000 });
 			await capture(host, '09', 'benefits-claim', 'Red', [
-				'discover Golden Ruler spirit id via debug room',
+				'discover King spirit id via debug room',
 				'setupTwoPlayerGame',
-				'debugGrant face-up Golden Ruler spirit (awakened)',
+				'debugGrant face-up King spirit (awakened)',
 				'both lockNavigation → location → endLocationActions',
 				'Benefits step holds on pending claim → awaken-claim'
 			]);

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest';
 import { applyGameCommand, applyDeadlineAdvance, createLobbyState } from '../runtime';
-import { monsterLivesForPlayerCount } from '../combat';
 import { createRng, nextInt, type RngState } from '../rng';
 import {
 	botActorFor,
@@ -119,9 +118,10 @@ function startedFourBotGame(seed: number): PublicGameState {
 }
 
 describe('monster horde size', () => {
-	test('opening monster is the weakest rung; ladder length is player-count-independent', () => {
-		// CATALOG has 4 guardians, so we can seat 1–4 players. The monster ladder no
-		// longer scales with player count — it's the full escalation sequence either way.
+	test('every hand starts empty and every monster card is dealt, whatever the player count', () => {
+		// CATALOG has 4 guardians, so we can seat 1–4 players. There is no ladder and no shared
+		// Abyss monster: players draw cards into their own hands, and every catalog monster goes into
+		// its difficulty deck (HP 6 → Difficulty 2, HP 99 → Difficulty 3) regardless of player count.
 		for (const players of [1, 2, 3, 4]) {
 			let state = createLobbyState({ roomCode: 'HORDE', guardianNames: GUARDIAN_NAMES });
 			const seats = SEAT_COLORS.slice(0, players) as SeatColor[];
@@ -147,13 +147,14 @@ describe('monster horde size', () => {
 			const started = applyGameCommand(state, hostActor(), { type: 'startGame', seed: 1 }, CATALOG);
 			expect(started.ok).toBe(true);
 			if (!started.ok) throw new Error(started.error.message);
-			expect(started.state.monster?.ladderIndex).toBe(0);
-			expect(started.state.monster?.ladderMax).toBe((CATALOG.monsters ?? []).length);
-			// The opening rung is non-final (the apex sits above it), so kills needed
-			// scale with player count: 1-2p→1, 3p→2, 4+p→3.
-			const expectedLives = monsterLivesForPlayerCount(players);
-			expect(started.state.monster?.livesTotal).toBe(expectedLives);
-			expect(started.state.monster?.livesRemaining).toBe(expectedLives);
+			// Nothing is placed in the Abyss: every hand starts empty and the cards wait in the decks.
+			for (const seat of started.state.activeSeats) {
+				expect(started.state.players[seat]?.monsterHand ?? []).toEqual([]);
+			}
+			const deck = started.state.bags.monsters.contents
+				.map((entry) => `${entry.id}:${entry.difficulty}`)
+				.sort();
+			expect(deck).toEqual(['m-1:2', 'm-apex:3']);
 		}
 	});
 });
@@ -292,7 +293,7 @@ const SPACE_INVADER_ID = 'b3068fcf-d197-4030-ba55-29ac1621f9a9'; // text: discar
  * that fires on a common bot trigger, so the effect dispatch runs every round.
  * Two of the catalog spirits carry awaken conditions so the gate is exercised.
  */
-const FX_CLASSES = ['Fighter', 'Healer', 'Arcane Alchemist', 'Spirit Animal', 'Fairy', 'Sharpshooter'];
+const FX_CLASSES = ['Fighter', 'Healer', 'Arcane Alchemist', 'Beast', 'Fairy', 'Sharpshooter'];
 const FX_CATALOG: PlayCatalog = {
 	guardians: CATALOG.guardians,
 	mats: [],
@@ -328,7 +329,7 @@ function heldRune(slotIndex: number, runeId: string) {
 
 /**
  * Seed each active player with face-down spirits + the runes/dice to awaken them:
- *   - a FREE face-down spirit (Arcane Vanguard class → fires the `awakening`
+ *   - a FREE face-down spirit (Huntress class → fires the `awakening`
  *     trigger when flipped),
  *   - a rune_cost spirit (Field Nurse, payable with one held Any-Rune),
  *   - a scripted-text spirit (Space Invader, payable by discarding 4 attack dice).
@@ -354,7 +355,7 @@ function seedAwakenables(state: PublicGameState, catalog: PlayCatalog): void {
 			origins: { Forest: 1 },
 			awaken: { kind: 'text', text: 'Discard 4 of any attack dice.' }
 		},
-		{ id: 'fx-free', name: 'FX Free', cost: 2, classes: { 'Arcane Vanguard': 1 }, origins: { Forest: 1 } }
+		{ id: 'fx-free', name: 'FX Free', cost: 2, classes: { 'Huntress': 1 }, origins: { Forest: 1 } }
 	);
 
 	for (const seat of state.activeSeats) {
@@ -362,7 +363,7 @@ function seedAwakenables(state: PublicGameState, catalog: PlayCatalog): void {
 		if (!player) continue;
 		const base = player.spirits.length;
 		player.spirits.push(
-			faceDownSlot(base + 1, 'fx-free', 'FX Free', { 'Arcane Vanguard': 1 }),
+			faceDownSlot(base + 1, 'fx-free', 'FX Free', { 'Huntress': 1 }),
 			faceDownSlot(base + 2, FIELD_NURSE_ID, 'Field Nurse', { Healer: 1 }),
 			faceDownSlot(base + 3, SPACE_INVADER_ID, 'Space Invader', { Fighter: 1 })
 		);

@@ -9,7 +9,7 @@ const reduceFromTidalSpirits: ClassHandler = (ctx) => {
 	);
 	if (tidal <= 0) return;
 	ctx.player.damageReduction += tidal;
-	ctx.log.push(`Tide Warden: ${tidal} Water Spirit(s) reduce incoming damage by ${tidal}.`);
+	ctx.log.push(`Warden: ${tidal} Water Spirit(s) reduce incoming damage by ${tidal}.`);
 };
 
 export const ability: ClassAbility[] = [{ on: 'onTakeDamage', run: reduceFromTidalSpirits }];

@@ -16,7 +16,7 @@ import {
 import { originRuneOptions, type ResolvedRune } from './locationInteractions';
 import { SPIRIT_AUGMENT_CLASSES } from './augments';
 import { nextId, nextInt } from './rng';
-import { runAction } from './effects/actions';
+import { gainSpiritAugments, runAction } from './effects/actions';
 import { buildEffectContext } from './effects/context';
 
 export interface NavigationPowerOffer {
@@ -43,9 +43,22 @@ export interface NavigationPowerPlayer extends PrivatePlayerState {
 	navigationPowerTradeEnabled?: boolean;
 }
 export interface NavigationPowerHooks {
-	damage?: (state: PublicGameState, seat: SeatColor, amount: number, log: string[]) => number;
+	damage?: (
+		state: PublicGameState,
+		seat: SeatColor,
+		amount: number,
+		log: string[],
+		/** For rule switches only (rules.ts); the damage itself fires no catalog-reading effects. */
+		catalog?: PlayCatalog
+	) => number;
 	awaken?: (state: PublicGameState, seat: SeatColor, slot: number, catalog: PlayCatalog) => void;
-	defeatMonster?: (state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) => void;
+	/** `handIndex`: the card to defeat (reworked Abyssal Execution); absent ⇒ the toughest card. */
+	defeatMonster?: (
+		state: PublicGameState,
+		seat: SeatColor,
+		catalog: PlayCatalog,
+		handIndex?: number
+	) => void;
 	rest?: (state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) => void;
 	cultivate?: (state: PublicGameState, seat: SeatColor, catalog: PlayCatalog) => void;
 }
@@ -147,6 +160,23 @@ function augmentOffer(
 		{ remaining }
 	);
 }
+/** Reworked Watchful Eye, second step: change one held Rune into a Rune of the player's choice. */
+function convertRuneOffer(state: PublicGameState, seat: SeatColor, id: NavigationPowerId) {
+	const p = state.players[seat]!;
+	const seen = new Set<string>();
+	const options = p.mats.filter(isNavigationPowerRune).flatMap((m) => {
+		const key = m.name ?? m.id ?? String(m.slotIndex);
+		if (seen.has(key)) return [];
+		seen.add(key);
+		return runeChoices()
+			.filter((r) => r.name !== m.name)
+			.map((r) => ({
+				id: `${m.slotIndex}:${r.runeId}`,
+				label: `Change ${m.name ?? 'Rune'} into ${r.name}`
+			}));
+	});
+	if (options.length) offer(state, seat, id, 'convert-rune', options);
+}
 /** Fixed-seed random acquisition, separate from the reveal-3/keep-1 draft. */
 export function grantRandomNavigationPowers(
 	state: PublicGameState,
@@ -179,7 +209,7 @@ function region(destination: string | null) {
 /** Run once after all destinations and onNavigate effects are visible. Capture occupancy now. */
 export function resolveNavigationPowerReveal(
 	state: PublicGameState,
-	_catalog: PlayCatalog,
+	catalog: PlayCatalog,
 	_hooks: NavigationPowerHooks = {}
 ) {
 	const seats = [...state.activeSeats];
@@ -187,7 +217,9 @@ export function resolveNavigationPowerReveal(
 		seat,
 		p: navigationPowerPlayer(state.players[seat]!),
 		evil: isEvilAlignment(state.players[seat]!.statusLevel),
-		destination: state.players[seat]!.navigationDestination
+		destination: state.players[seat]!.navigationDestination,
+		// VP before any Power resolves, so two Underdog's Oaths do not depend on seat order.
+		vp: state.players[seat]!.victoryPoints ?? 0
 	}));
 	for (const { seat, p, destination } of info) {
 		const id = p.navigationPower;
@@ -257,6 +289,8 @@ export function resolveNavigationPowerReveal(
 			case 'abyssal-reckoning': {
 				const count = p.spirits.filter((s) =>
 					Object.keys(s.origins ?? {}).some((o) =>
+						// 'Arcane Spirits' is removed from the design data (its spirits are Sun / Moon now), but the
+						// live database keeps it until migration 20261111120000 runs: keep counting it for that gap.
 						['Arcane Spirits', 'Sun', 'Moon', 'Space', 'Astral Zone', 'Void'].includes(o)
 					)
 				).length;
@@ -279,7 +313,7 @@ export function resolveNavigationPowerReveal(
 				}
 				break;
 			case 'abyssal-execution':
-				if (evilPresent && destination === 'Arcane Abyss' && state.monster)
+				if (evilPresent && destination === 'Arcane Abyss' && (state.players[seat]?.monsterHand ?? []).some((c) => c.hp > 0))
 					acceptOffer(state, seat, id, 'defeat-monster');
 				break;
 			case 'forest-bounty':
@@ -288,7 +322,7 @@ export function resolveNavigationPowerReveal(
 			case 'mountain-bastion':
 				if (evilPresent && region(destination) === 'mountain')
 					offer(state, seat, id, 'bastion', [
-						{ id: 'potential', label: 'Gain 3 Potential' },
+						{ id: 'potential', label: 'Gain 3 Max Barrier' },
 						{ id: 'barrier', label: 'Restore 6 Barrier' }
 					]);
 				break;
@@ -320,6 +354,90 @@ export function resolveNavigationPowerReveal(
 			case 'mountains-wealth':
 				if (region(destination) === 'mountain') runeOffer(state, seat, id, 2);
 				break;
+
+			// ── Rule `powerRework` (NAVIGATION_POWERS_V2). Effects with no choice in them apply
+			// here, at the reveal, so there is nothing to answer and nothing to misread. ──────────
+			case 'ember-charge-2': {
+				const before = p.barrier;
+				effect(state, seat, catalog, { kind: 'restoreBarrier', amount: 5 });
+				logEffect(p, id, `restored ${p.barrier - before} Barrier.`);
+				break;
+			}
+			case 'underdogs-oath': {
+				const mine = info.find((x) => x.seat === seat)!.vp;
+				const ahead = info.filter((x) => x.seat !== seat && x.vp > mine).length;
+				p.victoryPoints += ahead;
+				logEffect(p, id, `gained ${ahead} VP (${ahead} player${ahead === 1 ? '' : 's'} ahead).`);
+				break;
+			}
+			case 'abyssal-reckoning-2': {
+				const gain = [0, 1, 2, 4][Math.max(0, Math.min(3, p.statusLevel ?? 0))];
+				p.victoryPoints += gain;
+				logEffect(p, id, `gained ${gain} VP for your status.`);
+				break;
+			}
+			case 'mountain-bastion-2':
+				if (region(destination) === 'mountain') {
+					const over = Math.max(0, p.maxBarrier + 3 - 10);
+					effect(state, seat, catalog, { kind: 'gainMaxBarrier', amount: 3 });
+					effect(state, seat, catalog, { kind: 'restoreBarrier', amount: p.maxBarrier });
+					p.victoryPoints += over;
+					logEffect(
+						p,
+						id,
+						`gained ${3 - over} Max Barrier, restored all Barrier${over ? ` and gained ${over} VP` : ''}.`
+					);
+				}
+				break;
+			case 'tempered-dice': {
+				const tiers = () => p.attackDice.map((d) => d.tier).join(',');
+				const before = tiers();
+				effect(state, seat, catalog, { kind: 'upgradeDice', times: 5 });
+				logEffect(p, id, before === tiers() ? 'no die could be upgraded.' : 'upgraded your dice.');
+				break;
+			}
+			case 'watchful-eye-2':
+				runeOffer(state, seat, id, 1);
+				break;
+			case 'cinder-awakening-2':
+				if (region(destination) === 'fire') {
+					const runeCost = (spiritId: string) =>
+						catalog.spirits.find((row) => row.id === spiritId)?.awaken?.kind === 'rune_cost';
+					const options = p.spirits
+						.filter((s) => s.isFaceDown && runeCost(s.id))
+						.map((s) => ({ id: String(s.slotIndex), label: `Awaken ${s.name}` }));
+					if (options.length) offer(state, seat, id, 'awaken', options);
+				}
+				break;
+			case 'forest-bounty-2':
+				if (region(destination) === 'forest') augmentOffer(state, seat, id, 2);
+				break;
+			case 'abyssal-execution-2':
+				if (destination === 'Arcane Abyss') {
+					const options = (p.monsterHand ?? []).flatMap((card, index) =>
+						card.hp > 0 && card.hp * 2 <= card.maxHp
+							? [
+									{
+										id: String(index),
+										label: `Defeat ${card.name} (Barrier ${card.hp}/${card.maxHp}) without a battle`
+									}
+								]
+							: []
+					);
+					if (options.length) offer(state, seat, id, 'execute', options);
+				}
+				break;
+			case 'twin-rhythm':
+				acceptOffer(state, seat, id, 'rest-cultivate');
+				break;
+			case 'sudden-strike':
+			case 'unbroken-assault-2':
+			case 'duelists-prize-2':
+				// Battle Powers of the rework are on from the reveal: no "Use power" step before the fight.
+				p.navigationPowerCombatEnabled = true;
+				break;
+			// tidal-calling is read when the Spirit World Summon draws (runtime.ts summonDrawSizes);
+			// dark-bargain and soul-ward when a corruption is recorded (setCorruptionDiscardObligation).
 		}
 	}
 }
@@ -371,7 +489,7 @@ export function resolveNavigationPowerChoice(
 			let damaged = 0;
 			for (const target of targets)
 				if (state.players[target])
-					if (hooks.damage(state, target, Number(entry.data?.amount ?? 0), log) > 0) damaged++;
+					if (hooks.damage(state, target, Number(entry.data?.amount ?? 0), log, catalog) > 0) damaged++;
 			if (entry.data?.vp) p.victoryPoints += damaged;
 			break;
 		}
@@ -422,6 +540,30 @@ export function resolveNavigationPowerChoice(
 			gainRune(p, rune);
 			break;
 		}
+		case 'convert-rune': {
+			const split = optionId.indexOf(':');
+			const slot = Number(optionId.slice(0, split));
+			const rune = runeChoices().find((r) => r.runeId === optionId.slice(split + 1));
+			const mat = p.mats.find((m) => m.slotIndex === slot && m.hasRune);
+			if (!mat || !rune) return { ok: false, error: 'The rune is no longer available.' };
+			mat.hasRune = false;
+			gainRune(p, rune);
+			break;
+		}
+		case 'execute': {
+			const index = Number(optionId);
+			const card = (p.monsterHand ?? [])[index];
+			if (!card || card.hp <= 0 || card.hp * 2 > card.maxHp || !hooks.defeatMonster)
+				return { ok: false, error: 'That monster card can no longer be defeated this way.' };
+			hooks.defeatMonster(state, seat, catalog, index);
+			break;
+		}
+		case 'rest-cultivate':
+			if (!hooks.rest || !hooks.cultivate)
+				return { ok: false, error: 'Location action is unavailable.' };
+			hooks.rest(state, seat, catalog);
+			hooks.cultivate(state, seat, catalog);
+			break;
 		case 'steal-augment': {
 			const [ownerSeat, runeId, slot, classId] = JSON.parse(optionId);
 			const owner = state.players[ownerSeat as SeatColor];
@@ -433,12 +575,14 @@ export function resolveNavigationPowerChoice(
 			const attachment = owner?.spiritAugmentAttachments[index];
 			if (!owner || !attachment) return { ok: false, error: 'The augment is no longer available.' };
 			owner.spiritAugmentAttachments.splice(index, 1);
-			(p.unplacedAugments ??= []).push({
-				runeId: attachment.runeId,
-				name: attachment.name ?? attachment.className ?? 'Spirit Augment',
-				classId:
-					attachment.classId ?? catalog.classes.find((c) => c.name === attachment.className)?.id
-			});
+			gainSpiritAugments(p, [
+				{
+					runeId: attachment.runeId,
+					name: attachment.name ?? attachment.className ?? 'Spirit Augment',
+					classId:
+						attachment.classId ?? catalog.classes.find((c) => c.name === attachment.className)?.id
+				}
+			]);
 			break;
 		}
 		case 'combat':
@@ -451,18 +595,16 @@ export function resolveNavigationPowerChoice(
 			break;
 		}
 		case 'defeat-monster':
-			if (!state.monster || !hooks.defeatMonster)
-				return { ok: false, error: 'No monster is available.' };
+			if (!(p.monsterHand ?? []).some((c) => c.hp > 0) || !hooks.defeatMonster)
+				return { ok: false, error: 'You have no monster card to defeat.' };
 			else hooks.defeatMonster(state, seat, catalog);
 			break;
 		case 'augment': {
 			const classRow = catalog.classes.find((c) => c.name === optionId);
 			if (!classRow) return { ok: false, error: 'This augment is not available in the catalog.' };
-			(p.unplacedAugments ??= []).push({
-				runeId: `power-augment:${classRow.id}`,
-				name: `${optionId} Augment`,
-				classId: classRow.id
-			});
+			gainSpiritAugments(p, [
+				{ runeId: `power-augment:${classRow.id}`, name: `${optionId} Augment`, classId: classRow.id }
+			]);
 			if (Number(entry.data?.remaining) > 1)
 				augmentOffer(state, seat, id, Number(entry.data?.remaining) - 1);
 			break;
@@ -493,6 +635,7 @@ export function resolveNavigationPowerChoice(
 			gainRune(p, rune);
 			if (Number(entry.data?.remaining) > 1)
 				runeOffer(state, seat, id, Number(entry.data?.remaining) - 1);
+			else if (id === 'watchful-eye-2') convertRuneOffer(state, seat, id);
 			break;
 		}
 		case 'failed-potential':
@@ -524,6 +667,7 @@ export function beforeNavigationPowerCombat(state: PublicGameState, seat: SeatCo
 		p.navigationPowerTemporaryDice = ids;
 		p.navigationPowerBattleTriggered = true;
 	}
+	if (p.navigationPower === 'sudden-strike') p.alwaysAttackFirst = true;
 	if (p.navigationPower === 'battle-reward' && pvp && !p.navigationPowerBattleTriggered) {
 		p.victoryPoints += 2;
 		p.navigationPowerBattleTriggered = true;
@@ -548,6 +692,12 @@ export function afterNavigationPowerCombat(
 			acceptOffer(state, seat, p.navigationPower, 'failed-potential');
 		if (p.navigationPower === 'duelists-prize')
 			acceptOffer(state, seat, p.navigationPower, 'failed-vp');
+		if (p.navigationPower === 'unbroken-assault-2')
+			acceptOffer(state, seat, p.navigationPower, 'failed-potential');
+		if (p.navigationPower === 'duelists-prize-2') {
+			p.victoryPoints += 2;
+			logEffect(p, p.navigationPower, 'gained 2 VP.');
+		}
 		p.navigationPowerBattleTriggered = true;
 	}
 }

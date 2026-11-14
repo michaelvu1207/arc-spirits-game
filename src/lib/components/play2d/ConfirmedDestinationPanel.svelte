@@ -1,15 +1,14 @@
 <script lang="ts">
 	import { powerIconUrl } from '$lib/play/regionRules';
-	import type { NavigationDestination, MonsterState } from '$lib/play/types';
+	import type { NavigationDestination } from '$lib/play/types';
 	import type { GameLocationAsset, IconPoolEntry, RewardIconToken } from '$lib/types';
-	import { displayName, storageUrl } from './helpers';
+	import { storageUrl } from './helpers';
 
 	interface Props {
 		destination: NavigationDestination;
 		location?: GameLocationAsset | null;
 		iconPool?: Map<string, IconPoolEntry>;
 		accent?: string;
-		monster?: MonsterState | null;
 		/** Whether a back-out is still allowed (navigation open + time remaining). */
 		canExit?: boolean;
 		onExit: () => void;
@@ -20,7 +19,6 @@
 		location = null,
 		iconPool = new Map(),
 		accent = '#8d8aa1',
-		monster = null,
 		canExit = true,
 		onExit
 	}: Props = $props();
@@ -42,14 +40,7 @@
 	<h2 class="name">{destination}</h2>
 
 	{#if isAbyss}
-		{#if monster}
-			<div class="monster">
-				<span class="m-name">{displayName(monster.name)}</span>
-				<span class="m-stat">HP {monster.maxHp}</span>
-			</div>
-		{:else}
-			<span class="empty">No monster invading</span>
-		{/if}
+		<span class="abyss-note">Draw a monster card · fight from your hand</span>
 	{:else if orderedRows.length > 0}
 		<ul class="rows">
 			{#each orderedRows as row, i (i)}
@@ -214,24 +205,9 @@
 		font-size: 0.88rem;
 		color: var(--color-fog, #9a93b0);
 	}
-	.monster {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-	.m-name {
-		font-family: var(--font-display);
-		font-size: 1.1rem;
-		color: #fff;
-	}
-	.m-stat {
-		font-size: 0.82rem;
-		font-variant-numeric: tabular-nums;
-		color: var(--brand-coral, #ff7a7a);
-	}
-	.empty {
+	.abyss-note {
 		font-size: 0.85rem;
-		color: var(--color-whisper, #6a6680);
+		color: var(--color-fog, #9a93b0);
 	}
 	.back {
 		margin-top: 0.4rem;

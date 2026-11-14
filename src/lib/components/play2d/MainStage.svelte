@@ -11,9 +11,16 @@
 		DiceTier
 	} from '$lib/play/types';
 	import { RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
+	import { showsAugmentPlacement } from './stagePriority';
 	import { SPIRIT_AUGMENT_CLASSES, isSpiritAugmentClass } from '$lib/play/augments';
 	import { getLocationConfig, LOCATION_ACCENT, splatFor } from '$lib/play/locations';
-	import { originRuneOptions } from '$lib/play/locationInteractions';
+	import {
+		buildLocationInteractions,
+		locationCostRequiresSelection,
+		meaningFor,
+		originRuneOptions,
+		type LocationInteraction
+	} from '$lib/play/locationInteractions';
 	import { decisionPickerSpec } from '$lib/play/decisionPicker';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
 	import { attackDieImageUrl, augmentIconForClass, runeIconUrl, seatAccent, spiritBackImageUrl, storageUrl } from './helpers';
@@ -25,7 +32,6 @@
 	import CombatOverlay from './CombatOverlay.svelte';
 	import LocationInteractionMenu from './LocationInteractionMenu.svelte';
 	import ActionResult from './ActionResult.svelte';
-	import StageCard from './StageCard.svelte';
 	import TakeoverStage from './takeover/TakeoverStage.svelte';
 	import SourcePanel from './takeover/SourcePanel.svelte';
 	import CandidateRack from './takeover/CandidateRack.svelte';
@@ -35,6 +41,7 @@
 	import DecisionCard from './DecisionCard.svelte';
 	import ManualPromptCard from './ManualPromptCard.svelte';
 	import InfiltratorSwap from './InfiltratorSwap.svelte';
+	import AbyssStage, { type AbyssAction, type AbyssView } from './AbyssStage.svelte';
 	import EncounterStage from './EncounterStage.svelte';
 	import type { SeatAffordances } from '$lib/play/viewV2';
 	import { iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
@@ -66,12 +73,17 @@
 		onSelectDestination: (destination: NavigationDestination) => void;
 		onSceneControls?: (controls: NavigationSceneControls | null) => void;
 		onResolveInteraction: (rowIndex: number, choices: number[], costChoices: number[]) => void;
-		onStartCombat: () => void;
+		/** Fight the monster card at this index of the player's hand (Arcane Abyss). */
+		onStartCombat: (handIndex: number) => void;
+		/** Keep one of the two revealed monster cards; resolves once the room view updates. */
+		onKeepMonsterCard: (index: number) => void | Promise<unknown>;
+		/** Draw from a monster deck (reveal 2); resolves once the room view updates. */
+		onDrawMonsterCards: (difficulty: 1 | 2 | 3) => void | Promise<unknown>;
 		/** Claim monster-kill rewards (Arcane Abyss): picks = track indices. */
 		onClaimReward: (picks: number[], choices: number[]) => void;
 		onSummon: (guid: string) => void;
 		onDiscard: () => void;
-		/** Soul Weaver: return the current draw and draw again (one-shot per summon). */
+		/** Mystic: return the current draw and draw again (one-shot per summon). */
 		onRedraw: () => void;
 		/** Dismiss a result/combat stage → back to the action grid. */
 		onContinue: () => void;
@@ -81,7 +93,7 @@
 		/** Discard held runes/relics during Cleanup to get under the carry limit —
 		 *  the whole staged batch commits at once (W2c). */
 		onDiscardRunes: (slotIndexes: number[]) => void;
-		/** 'Cursed Fighter': swap one attack die with each co-located player. */
+		/** 'Ram': swap one attack die with each co-located player. */
 		onInfiltratorSwap: (
 			swaps: { targetSeat: SeatColor; myInstanceId: string; theirInstanceId: string }[]
 		) => void;
@@ -146,6 +158,8 @@
 		onSceneControls,
 		onResolveInteraction,
 		onStartCombat,
+		onKeepMonsterCard,
+		onDrawMonsterCards,
 		onClaimReward,
 		onSummon,
 		onDiscard,
@@ -291,12 +305,12 @@
 	}
 	const claimSummary = $derived.by(() => {
 		const parts: string[] = [];
-		if (taintedGrant) parts.push(`${taintedPotentialClamped} Potential · ${taintedEnchanted} Enchanted`);
+		if (taintedGrant) parts.push(`${taintedPotentialClamped} Max Barrier · ${taintedEnchanted} Enchanted`);
 		if (corruptGrant) {
-			parts.push(`${corruptSeg.filter(Boolean).length} Potential · ${corruptSeg.filter((v) => !v).length} Runes`);
+			parts.push(`${corruptSeg.filter(Boolean).length} Max Barrier · ${corruptSeg.filter((v) => !v).length} Runes`);
 		}
 		if (fallenGrant) {
-			parts.push(`${fallenSeg.filter(Boolean).length} Potential · ${fallenSeg.filter((v) => !v).length} Augments`);
+			parts.push(`${fallenSeg.filter(Boolean).length} Max Barrier · ${fallenSeg.filter((v) => !v).length} Augments`);
 		}
 		return parts.join(' — ') || null;
 	});
@@ -329,9 +343,22 @@
 	let pickingSlot = $state<number | null>(null);
 	/** The staged discard per cost-meter slot; nothing mutates until Confirm. */
 	let awakenFilled = $state<(AwakenDiscardRef | null)[]>([]);
-	const pickingOffer = $derived(
+	/** "X or Y" awaken costs (Keeper of the Twin Pyres): which way to pay the open offer. */
+	let pickingWay = $state(0);
+	const pickingRawOffer = $derived(
 		pickingSlot === null ? null : (awakenOffers.find((o) => o.slotIndex === pickingSlot) ?? null)
 	);
+	const pickingOffer = $derived.by(() => {
+		const offer = pickingRawOffer;
+		const way = offer?.alternatives?.[pickingWay];
+		return offer && way
+			? { ...offer, discardCount: way.discardCount, options: way.options, costSlots: undefined }
+			: offer;
+	});
+	function chooseWay(index: number) {
+		pickingWay = index;
+		awakenFilled = Array.from({ length: pickingRawOffer?.alternatives?.[index]?.discardCount ?? 0 }, () => null);
+	}
 	$effect(() => {
 		if (pickingSlot !== null && !pickingOffer) {
 			pickingSlot = null;
@@ -491,6 +518,7 @@
 	function clickOffer(offer: PlayerProjection['awakenOffers'][number]) {
 		if (offer.requiresSelection) {
 			pickingSlot = offer.slotIndex;
+			pickingWay = 0;
 			awakenFilled = [];
 			return;
 		}
@@ -513,7 +541,11 @@
 	// The board parks pass-turn while a takeover is staging a decision.
 	let interactionArmed = $state(false);
 	let showInfiltrator = $state(false);
-	const takeoverOpen = $derived(pickingSlot !== null || interactionArmed || showInfiltrator);
+	// The Abyss deck picker and reveal are one decision: pass-turn waits until it closes.
+	let abyssView = $state<AbyssView>('home');
+	const takeoverOpen = $derived(
+		pickingSlot !== null || interactionArmed || showInfiltrator || abyssView !== 'home'
+	);
 	$effect(() => {
 		onTakeoverOpenChange?.(takeoverOpen);
 	});
@@ -634,15 +666,67 @@
 			stagedCorruption = stagedCorruption.slice(0, corruptionCount);
 	});
 
-	// At the Abyss, monster combat is once per round (plus any extra-action credits).
-	// Once it's spent, the "Fight the Monster" card becomes a passive prompt.
-	// Monster-combat allowance is 1 + extra credits (Ironmane grants +1 ⇒ two fights),
-	// so we render ONE fight card per allowed fight; each is spent left-to-right as
-	// `combatUsedCount` rises.
+	// At the Abyss, monster combat is once per round plus any extra-action credits
+	// (Monster Hunter grants +1 ⇒ two fights). Each fight takes a card from the hand.
 	const combatUsedCount = $derived(
 		(myPlayer?.actionsUsedThisRound ?? []).filter((a) => a === 'combat').length
 	);
 	const combatAllowance = $derived(1 + (myPlayer?.extraActions?.combat ?? 0));
+
+	// The Abyss's own location actions (a free Arcane Abyss Summon) ride the Abyss stage as
+	// ghost buttons. A plain free gain resolves in one tap; a row that needs a payment or a
+	// choice opens the regular interaction menu instead.
+	let abyssMenuOpen = $state(false);
+	const abyssRows = $derived<LocationInteraction[]>(
+		myLocationConfig?.combatOnly
+			? buildLocationInteractions(myLocationAsset?.reward_rows, myLocationAsset?.name ?? undefined)
+			: []
+	);
+	function abyssRowNeedsMenu(row: LocationInteraction): boolean {
+		return (
+			row.gains.some((g) => g.type === 'chooseRune') ||
+			locationCostRequiresSelection(row.cost, myPlayer?.mats ?? [])
+		);
+	}
+	const abyssActions = $derived.by<AbyssAction[]>(() => {
+		const used = myPlayer?.actionsUsedThisRound ?? [];
+		const allowance = 1 + (myPlayer?.extraActions?.locationInteraction ?? 0);
+		const affordances = new Map(
+			(seatAffordances?.locationInteractions ?? []).map((a) => [a.rowIndex, a])
+		);
+		return abyssRows.flatMap((row) => {
+			const left =
+				row.kind === 'trade'
+					? Infinity
+					: allowance - used.filter((a) => a === `row:${row.rowIndex}`).length;
+			if (left <= 0) return [];
+			const token = row.gainTokens.find((t): t is string => typeof t === 'string');
+			const label =
+				row.gainTokens
+					.map((t) => (typeof t === 'string' ? meaningFor(t)?.label : 'Choose one'))
+					.filter(Boolean)
+					.join(' + ') || 'Location action';
+			return [
+				{
+					key: String(row.rowIndex),
+					label: Number.isFinite(left) && left > 1 ? `${label} ×${left}` : label,
+					icon: token ? iconPoolUrl(assets.iconPool, token) : null,
+					disabled: affordances.get(row.rowIndex)?.affordable === false,
+					testid: `interaction-${row.rowIndex}`
+				}
+			];
+		});
+	});
+	function runAbyssAction(key: string) {
+		const row = abyssRows.find((r) => String(r.rowIndex) === key);
+		if (!row || busy) return;
+		if (abyssRowNeedsMenu(row)) abyssMenuOpen = true;
+		else onResolveInteraction(row.rowIndex, [], []);
+	}
+	$effect(() => {
+		// Leaving the Abyss (or the phase) closes the fallback menu.
+		if (!myLocationConfig?.combatOnly || room.phase !== 'location') abyssMenuOpen = false;
+	});
 	const spiritAugmentsBySlot = $derived.by(() => {
 		const map = new Map<number, { runeId: string; name: string; icon: string | null }[]>();
 		for (const att of myPlayer?.spiritAugmentAttachments ?? []) {
@@ -725,7 +809,7 @@
 		onDiscardAugments();
 	}
 
-	// ── 'Cursed Fighter': Location-phase dice swap (W2d — InfiltratorSwap takeover) ──
+	// ── 'Ram': Location-phase dice swap (W2d — InfiltratorSwap takeover) ──
 	// The opportunity is ENGINE-OWNED (§5.4 `SeatAffordances.infiltratorSwap`,
 	// voluntary so it rides beside pendingWork): present exactly when the seat has
 	// an awakened, unused Infiltrator sharing a location. The client only decorates
@@ -809,8 +893,15 @@
 	const needsCorruptionDiscard = $derived(
 		activeAction !== 'combat' && (myPlayer?.pendingCorruptionDiscard?.count ?? 0) > 0
 	);
+	// In the Awakening step a pending decision card (a relic tool) comes before the augment
+	// placement screen, which used to cover it (play test 2; see stagePriority.ts).
 	const needsAugmentPlacement = $derived(
-		activeAction !== 'combat' && (myPlayer?.unplacedAugments?.length ?? 0) > 0
+		showsAugmentPlacement({
+			phase: room.phase,
+			activeAction,
+			unplacedAugments: myPlayer?.unplacedAugments?.length ?? 0,
+			pendingDecisions: myPlayer?.pendingDecisions?.length ?? 0
+		})
 	);
 	const needsAbilityDecision = $derived(
 		activeAction !== 'combat' &&
@@ -839,7 +930,12 @@
 			if (activeAction === 'rest' || activeAction === 'cultivate' || activeAction === 'reward') {
 				return 'Review Result.';
 			}
-			if (myReady) return 'Waiting for Players.';
+				if (myReady) return 'Waiting for Players.';
+			if (myLocationConfig?.combatOnly && !abyssMenuOpen) {
+				if (abyssView === 'reveal') return 'Choose a Monster.';
+				if (abyssView === 'decks') return 'Choose a Deck.';
+				return 'Arcane Abyss';
+			}
 			if (showInfiltrator) return 'Swap Dice.';
 			return 'Choose an Action.';
 		}
@@ -882,7 +978,6 @@
 						location={assets.gameLocations.get(confirmedDestination) ?? null}
 						iconPool={assets.iconPool}
 						accent={LOCATION_ACCENT[confirmedDestination] ?? '#8d8aa1'}
-						monster={room.monster}
 						splatSrc={splatFor(confirmedDestination)}
 						canExit={true}
 						onExit={() => onExitConfirmed?.()}
@@ -897,7 +992,6 @@
 						onHover={onHoverDestination}
 						onSelect={onSelectDestination}
 						{onSceneControls}
-						monster={room.monster}
 						gameLocations={assets.gameLocations}
 						iconPool={assets.iconPool}
 					/>
@@ -1030,7 +1124,7 @@
 								attackDice={myPlayer?.attackDice ?? []}
 								dieImage={(tier) => attackDieImageUrl(assets, tier)}
 								classIcon={cls ? classIconFor(cls) : null}
-								sourceLabel={cls}
+								sourceLabel={choice.sourceLabel ?? cls}
 								{busy}
 								testidPrefix="decision"
 								onResolve={onResolveDecision}
@@ -1094,54 +1188,56 @@
 					<ActionResult result={myPlayer?.lastAction ?? null} {onContinue} />
 				{:else if myReady}
 					<div class="waiting" data-testid="stage-waiting">Waiting for other players…</div>
+				{:else if myLocationConfig?.combatOnly && !abyssMenuOpen}
+					<!-- The Arcane Abyss: draw a monster card, or fight one from the hand. -->
+					<AbyssStage
+						hand={myPlayer?.monsterHand ?? []}
+						pending={myPlayer?.pendingMonsterDraw}
+						decks={room.monsterDecks ?? []}
+						drawUsed={myPlayer?.monsterDrawRound === room.round}
+						fightsLeft={Math.max(0, combatAllowance - combatUsedCount)}
+						fightAllowance={combatAllowance}
+						barrier={myPlayer?.barrier ?? 0}
+						actions={abyssActions}
+						{busy}
+						onDraw={onDrawMonsterCards}
+						onKeep={onKeepMonsterCard}
+						onFight={onStartCombat}
+						onAction={runAbyssAction}
+						onViewChange={(view) => (abyssView = view)}
+					/>
 				{:else}
 					<div class="location-action-view">
 						<div class="location-action-body">
 							{#if myLocationConfig?.combatOnly}
-								<div class="combat-action-lane">
-									<div class="card-grid">
-										{#each Array(combatAllowance) as _, i (i)}
-											{@const spent = i < combatUsedCount}
-											<StageCard
-												title="Fight the Monster"
-												subtitle={combatAllowance > 1
-													? spent
-														? `Fight ${i + 1} of ${combatAllowance} — done.`
-														: `Fight ${i + 1} of ${combatAllowance} — battle the invading monster.`
-													: spent
-														? 'You have fought this round — pass your turn.'
-														: 'Battle the invading monster for Victory Points and rewards.'}
-												glyph="⚔"
-												accent={myAccent}
-												disabled={busy || spent}
-												testid={combatAllowance > 1
-													? `action-monsterCombat-${i}`
-													: 'action-monsterCombat'}
-												onClick={() => onStartCombat()}
-											/>
-										{/each}
-									</div>
-									<!-- The Abyss also carries its own location actions (a free Arcane Abyss
-							     Summon), shown alongside the monster fight. -->
-									<LocationInteractionMenu
-										location={myLocationAsset}
-										iconPool={assets.iconPool}
-										{assets}
-										player={myPlayer}
-										accent={myAccent}
-										{busy}
-										{seatAffordances}
-										onArmedChange={(armed) => (interactionArmed = armed)}
-										onResolve={onResolveInteraction}
-									/>
-								</div>
+								<!-- An Abyss location action that needs a payment or a choice. -->
+								<LocationInteractionMenu
+									location={myLocationAsset}
+									iconPool={assets.iconPool}
+									{assets}
+									player={myPlayer}
+									accent={myAccent}
+									{busy}
+									{seatAffordances}
+									onArmedChange={(armed) => (interactionArmed = armed)}
+									onResolve={onResolveInteraction}
+								/>
+								{#if !interactionArmed}
+									<button
+										type="button"
+										class="ghost-btn"
+										disabled={busy}
+										data-testid="abyss-menu-back"
+										onclick={() => (abyssMenuOpen = false)}>Back</button
+									>
+								{/if}
 							{:else if showInfiltrator}
 								<!-- W2d: real gem-token dice in facing rows, staged pairs, commit bar. -->
 								<InfiltratorSwap
 									targets={infiltratorTargets}
 									myDice={infiltratorWork?.myDice ?? []}
 									dieImage={(tier) => attackDieImageUrl(assets, tier)}
-									classIcon={classIconFor('Cursed Fighter')}
+									classIcon={classIconFor('Ram')}
 									{busy}
 									onConfirm={(swaps) => {
 										onInfiltratorSwap(swaps);
@@ -1208,7 +1304,7 @@
 										<span class="grant-body">
 											<span class="grant-source">Cursed Spirit · Tainted</span>
 											<span class="grant-what"
-												>Split {taintedMax} between Potential and Enchanted Attack — tap a token to
+												>Split {taintedMax} between Max Barrier and Enchanted Attack — tap a token to
 												flip it.</span
 											>
 											<div class="tainted-row" role="group" aria-label="Split tainted units">
@@ -1218,7 +1314,7 @@
 														class="tainted-seg"
 														class:potential={seg}
 														disabled={busy}
-														aria-label={seg ? 'Potential — tap for Enchanted Attack' : 'Enchanted Attack — tap for Potential'}
+														aria-label={seg ? 'Max Barrier — tap for Enchanted Attack' : 'Enchanted Attack — tap for Max Barrier'}
 														data-testid={`tainted-seg-${i}`}
 														onclick={() => toggleTaintedSeg(i)}
 													>
@@ -1226,7 +1322,7 @@
 															{#if potentialIcon}<img src={potentialIcon} alt="" />{:else}<span
 																	class="seg-glyph">♥</span
 																>{/if}
-															<span class="seg-label">Potential</span>
+															<span class="seg-label">Max Barrier</span>
 														{:else}
 															<span class="seg-die" aria-hidden="true"></span>
 															<span class="seg-label">Attack</span>
@@ -1236,7 +1332,7 @@
 											</div>
 											<span class="tainted-total">
 												<strong data-testid="claim-potential">{taintedPotentialClamped}</strong>
-												Potential ·
+												Max Barrier ·
 												<strong data-testid="claim-enchanted">{taintedEnchanted}</strong> Enchanted
 												Attack
 											</span>
@@ -1254,7 +1350,7 @@
 										<span class="grant-body">
 											<span class="grant-source">Cursed Spirit · Corrupt</span>
 											<span class="grant-what"
-												>For each Cursed Spirit, choose 1 Potential or 1 basic Rune.</span
+												>For each Cursed Spirit, choose 1 Max Barrier or 1 basic Rune.</span
 											>
 											<div class="relic-rows" data-testid="claim-corrupt-picks">
 												{#each corruptRunePicks as pick, unit (unit)}
@@ -1262,7 +1358,7 @@
 														<span class="relic-row-tag">{unit + 1}</span>
 														<button type="button" class="tainted-seg" class:potential={corruptSeg[unit]}
 															onclick={() => toggleCorruptSeg(unit)} disabled={busy}>
-															<span class="seg-label">{corruptSeg[unit] ? 'Potential' : 'Rune'}</span>
+															<span class="seg-label">{corruptSeg[unit] ? 'Max Barrier' : 'Rune'}</span>
 														</button>
 														{#if !corruptSeg[unit]}
 															<CandidateRack size="md" candidates={runeChoices.map((rc, ri) => ({
@@ -1282,12 +1378,12 @@
 										<span class="grant-art"><span class="grant-fb">✦</span></span>
 										<span class="grant-body">
 											<span class="grant-source">Cursed Spirit · Fallen</span>
-											<span class="grant-what">For each Cursed Spirit, choose 1 Potential or 1 Spirit Augment.</span>
+											<span class="grant-what">For each Cursed Spirit, choose 1 Max Barrier or 1 Spirit Augment.</span>
 											<div class="tainted-row" role="group" aria-label="Split fallen units">
 												{#each fallenSeg as seg, i (i)}
 													<button type="button" class="tainted-seg" class:potential={seg} disabled={busy}
 														onclick={() => toggleFallenSeg(i)}>
-														<span class="seg-label">{seg ? 'Potential' : 'Augment'}</span>
+														<span class="seg-label">{seg ? 'Max Barrier' : 'Augment'}</span>
 													</button>
 												{/each}
 											</div>
@@ -1327,6 +1423,20 @@
 										flip
 									/>
 								{/snippet}
+								{#if (pickingRawOffer?.alternatives?.length ?? 0) > 1}
+									<div class="pay-ways" role="group" aria-label="Choose how to pay">
+										{#each pickingRawOffer?.alternatives ?? [] as way, w (way.label)}
+											<button
+												type="button"
+												class="pay-way"
+												class:active={w === pickingWay}
+												data-testid={`awaken-way-${w}`}
+												disabled={busy}
+												onclick={() => chooseWay(w)}>{way.label}</button
+											>
+										{/each}
+									</div>
+								{/if}
 								<p class="rack-hint">
 									Tap {awakenSlotCount === 1 ? 'the item' : `${awakenSlotCount} items`} to pay with —
 									locked cards can't pay this cost.
@@ -1359,7 +1469,7 @@
 									attackDice={myPlayer?.attackDice ?? []}
 									dieImage={(tier) => attackDieImageUrl(assets, tier)}
 									classIcon={cls ? classIconFor(cls) : null}
-									sourceLabel={cls}
+									sourceLabel={choice.sourceLabel ?? cls}
 									{busy}
 									testidPrefix="ability-choice"
 									onResolve={onResolveDecision}
@@ -1625,6 +1735,7 @@
 	}
 	.view-body :global([data-testid='confirmed-destination']),
 	.view-body :global([data-testid='monster-reward-menu']),
+	.view-body :global([data-testid='abyss-stage']),
 	.view-body :global([data-testid='draw-tray']),
 	.view-body :global([data-testid='action-result']),
 	.view-body :global([data-testid='awaken-claim']),
@@ -2196,6 +2307,25 @@
 			padding: 0;
 			gap: 0;
 		}
+		.pay-ways {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+			justify-content: center;
+		}
+		.pay-way {
+			padding: 6px 12px;
+			border-radius: 999px;
+			border: 1px solid rgba(255, 255, 255, 0.35);
+			background: rgba(0, 0, 0, 0.35);
+			color: inherit;
+			font: inherit;
+			cursor: pointer;
+		}
+		.pay-way.active {
+			border-color: var(--brand-magenta, #ff2bc7);
+			background: rgba(255, 43, 199, 0.25);
+		}
 		.rack-hint {
 			margin: 0;
 			font-size: clamp(0.78rem, 1.2vw, 0.92rem);
@@ -2457,24 +2587,6 @@
 			user-select: none;
 		}
 	}
-	.card-grid {
-		display: flex;
-		flex-wrap: nowrap; /* always a single row */
-		gap: var(--stage-card-gap, 0.85rem);
-		justify-content: center;
-		align-items: stretch;
-		/* The parent stage grid already reserves room for the side HUD columns. Keep
-		   action cards sized to this container instead of subtracting viewport guesses. */
-		width: 100%;
-		max-width: min(1100px, 100%);
-		margin: 0 auto;
-	}
-	.card-grid > :global(.stage-card) {
-		flex: 1 1 0;
-		min-width: 0;
-		width: auto;
-		max-width: var(--stage-card-max, 16rem);
-	}
 	.location-action-view {
 		box-sizing: border-box;
 		width: 100%;
@@ -2502,44 +2614,6 @@
 	.location-action-body :global(.int-scroll) {
 		flex: 1 1 auto;
 		align-self: stretch;
-	}
-	.combat-action-lane {
-		width: min(42rem, 100%);
-		height: 100%;
-		max-height: 100%;
-		min-height: 0;
-		display: grid;
-		grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr);
-		align-items: center;
-		justify-content: center;
-		gap: var(--stage-card-gap, 0.85rem);
-		margin: 0 auto;
-		overflow: hidden;
-	}
-	.combat-action-lane .card-grid {
-		width: 100%;
-		max-width: 100%;
-		min-width: 0;
-	}
-	.combat-action-lane .card-grid > :global(.stage-card) {
-		width: 100%;
-		max-width: 100%;
-	}
-	.combat-action-lane :global(.int-scroll) {
-		width: 100%;
-		height: 100%;
-		flex: 0 1 auto;
-		align-self: stretch;
-		align-items: center;
-		padding: 0;
-	}
-	.combat-action-lane :global(.int-grid) {
-		width: 100%;
-		max-width: 100%;
-		align-items: stretch;
-	}
-	.combat-action-lane :global(.int-card) {
-		max-width: 100%;
 	}
 	.waiting {
 		font-family: var(--font-display);
@@ -2584,6 +2658,11 @@
 		align-items: center;
 		gap: 0.9rem;
 		width: min(560px, 100%);
+		max-height: 100%;
+		min-height: 0;
+	}
+	.combat-stage > :global([data-testid='combat-overlay']) {
+		flex: 0 1 auto;
 	}
 	.continue {
 		padding: 10px 22px;
@@ -2615,18 +2694,6 @@
 		}
 		.location-action-body {
 			gap: 0.45rem;
-		}
-		.combat-action-lane {
-			width: min(31rem, 100%);
-			grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr);
-			gap: var(--stage-card-gap, 0.5rem);
-		}
-		.card-grid {
-			gap: var(--stage-card-gap, 0.55rem);
-			max-width: 100%;
-		}
-		.card-grid > :global(.stage-card) {
-			max-width: var(--stage-card-max, 11.5rem);
 		}
 		.waiting {
 			font-size: 1rem;

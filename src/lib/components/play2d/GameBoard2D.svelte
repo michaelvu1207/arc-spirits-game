@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { showsAugmentPlacement } from './stagePriority';
 	import { browser, dev } from '$app/environment';
 	import { sendPlayCommand, applyOptimistic, getPlayState, postPlayJson } from '$lib/stores/playStore.svelte';
 	import { getAssetState } from '$lib/stores/assetStore.svelte';
@@ -792,20 +793,41 @@
 		}
 	}
 
-	async function startCombat() {
+	/** Fight the monster card at `handIndex` of my hand (Arcane Abyss). */
+	async function startCombat(handIndex: number) {
 		if (busy) return;
 		pendingAction = 'combat';
 		actionError = null;
 		try {
 			playSfx('combat-start');
 			pulseHaptic('impact');
-			await sendPlayCommand({ type: 'startCombat' });
+			await sendPlayCommand({ type: 'startCombat', handIndex });
 			activeAction = 'combat';
 		} catch (err) {
 			pulseHaptic('error');
 			actionError = err instanceof Error ? err.message : 'Action failed.';
 		} finally {
 			pendingAction = null;
+		}
+	}
+
+	async function keepMonsterCard(index: number) {
+		if (busy) return;
+		try {
+			playSfx('ui-click');
+			await sendPlayCommand({ type: 'keepMonsterCard', index });
+		} catch (err) {
+			actionError = err instanceof Error ? err.message : 'Monster card choice failed.';
+		}
+	}
+
+	async function drawMonsterCards(difficulty: 1 | 2 | 3) {
+		if (busy) return;
+		try {
+			playSfx('ui-click');
+			await sendPlayCommand({ type: 'drawMonsterCards', difficulty });
+		} catch (err) {
+			actionError = err instanceof Error ? err.message : 'Monster deck draw failed.';
 		}
 	}
 
@@ -980,7 +1002,18 @@
 		const pendingAugments = (myPlayer?.unplacedAugments?.length ?? 0) > 0;
 		const pendingDecisions = (myPlayer?.pendingDecisions?.length ?? 0) > 0;
 		if (activeAction !== 'combat' && pendingCorruptionDiscard) return 'corruptionDiscard';
-		if (activeAction !== 'combat' && pendingAugments) return 'augmentPlacement';
+		// Same order as MainStage (stagePriority.ts): in Awakening a decision card comes first.
+		if (
+			pendingAugments &&
+			showsAugmentPlacement({
+				phase: room.phase,
+				activeAction,
+				unplacedAugments: myPlayer?.unplacedAugments?.length ?? 0,
+				pendingDecisions: myPlayer?.pendingDecisions?.length ?? 0
+			})
+		) {
+			return 'augmentPlacement';
+		}
 		if (
 			activeAction !== 'combat' &&
 			(room.phase === 'location' || room.phase === 'encounter') &&
@@ -1129,7 +1162,18 @@
 			const peer = room.players[seat];
 			return peer?.navigationDestination === dest && (peer.navigationPowerTradeEnabled || peer.pendingNavigationTrade);
 		})) return true;
-		if (getLocationConfig(dest)?.combatOnly) return !myCombatUsed; // can still fight
+		if (getLocationConfig(dest)?.combatOnly) {
+			// Monster cards: an open reveal, an unused draw, or a card in hand that can still
+			// be fought this round are all real options — never auto-pass past them.
+			if (myPlayer.pendingMonsterDraw?.cards.length) return true;
+			const hand = myPlayer.monsterHand ?? [];
+			const canDraw =
+				myPlayer.monsterDrawRound !== room.round &&
+				hand.length < 3 &&
+				(room.monsterDecks ?? []).some((deck) => (deck.count ?? 0) > 0);
+			const canFight = !myCombatUsed && hand.some((card) => card.hp > 0);
+			return canFight || canDraw;
+		}
 		const loc = assets.gameLocations.get(dest) ?? null;
 		return buildLocationInteractions(loc?.reward_rows, dest).some(
 			(it) => it.kind === 'trade' || !(myPlayer.actionsUsedThisRound ?? []).includes(`row:${it.rowIndex}`)
@@ -1457,6 +1501,8 @@
 							onSelectDestination={handleSelectDestination}
 							onResolveInteraction={resolveInteraction}
 							onStartCombat={startCombat}
+							onKeepMonsterCard={keepMonsterCard}
+							onDrawMonsterCards={drawMonsterCards}
 							onClaimReward={claimReward}
 							onSummon={summonDraw}
 							onDiscard={discardDraws}
@@ -1614,6 +1660,7 @@
 			mode={room.mode ?? 'casual'}
 			pendingKind={guidePendingKind}
 			{lockedDestination}
+			destination={myPlayer?.navigationDestination ?? null}
 		/>
 	{/if}
 

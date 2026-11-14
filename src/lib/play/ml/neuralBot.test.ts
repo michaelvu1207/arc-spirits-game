@@ -8,6 +8,7 @@ import {
 	type PublicGameState
 } from '../types';
 import { computeKillProbability } from '../server/botPolicy';
+import { monsterCardFromCatalog } from '../bots/monsterCardAutopilot';
 import {
 	enumerateCandidates,
 	legalActions,
@@ -108,7 +109,16 @@ function atAbyss(): PublicGameState {
 	state = apply(state, RED, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 	state = apply(state, RED, { type: 'forceAdvancePhase' });
+	// Red draws the Abyss Maw card into its own hand.
+	state = apply(state, RED, { type: 'drawMonsterCards', difficulty: 1 });
+	state = apply(state, RED, { type: 'keepMonsterCard', index: 0 });
 	state.players.Red!.attackDice = [{ instanceId: 'd-arcane', tier: 'arcane' }];
+	return state;
+}
+
+/** Put the catalog's Abyss Maw card in Red's hand directly (outside the location phase). */
+function withAbyssMaw(state: PublicGameState): PublicGameState {
+	state.players.Red!.monsterHand = [monsterCardFromCatalog(CATALOG.monsters![0])];
 	return state;
 }
 
@@ -132,23 +142,23 @@ describe('neural value action scoring', () => {
 			spirits: [
 				{
 					id: 'world-ender-a',
-					name: 'Void Sovereign',
+					name: 'Queen',
 					cost: 9,
-					classes: { 'Void Sovereign': 1 },
+					classes: { 'Queen': 1 },
 					origins: {}
 				},
 				{
 					id: 'golden-ruler-b',
-					name: 'Golden Ruler',
+					name: 'King',
 					cost: 9,
-					classes: { 'Golden Ruler': 1 },
+					classes: { 'King': 1 },
 					origins: {}
 				}
 			]
 		};
 		state.players.Red!.handDraws = [
-			{ guid: 'draw-a', id: 'world-ender-a', name: 'Void Sovereign', cost: 9 },
-			{ guid: 'draw-b', id: 'golden-ruler-b', name: 'Golden Ruler', cost: 9 }
+			{ guid: 'draw-a', id: 'world-ender-a', name: 'Queen', cost: 9 },
+			{ guid: 'draw-b', id: 'golden-ruler-b', name: 'King', cost: 9 }
 		];
 
 		const ender = encodeAction(
@@ -178,9 +188,9 @@ describe('neural value action scoring', () => {
 			{
 				slotIndex: 6,
 				id: 'dark-fighter',
-				name: 'Fatestriker',
+				name: 'Assassin',
 				cost: 4,
-				classes: { 'Fatestriker': 1 },
+				classes: { 'Assassin': 1 },
 				origins: {},
 				isFaceDown: true
 			}
@@ -195,7 +205,7 @@ describe('neural value action scoring', () => {
 		state.players.Red!.awakenOffers = [
 			{
 				slotIndex: 6,
-				spiritName: 'Fatestriker',
+				spiritName: 'Assassin',
 				requirement: 'Discard 4 Attack Dice',
 				discardCount: 4,
 				requiresSelection: true,
@@ -259,8 +269,8 @@ describe('neural value action scoring', () => {
 				'Fighter',
 				'Elementalist',
 				'Cultivator',
-				'Soul Weaver',
-				'Spirit Animal',
+				'Mystic',
+				'Beast',
 				'Cursed Spirit'
 			])
 		);
@@ -332,18 +342,17 @@ describe('neural value action scoring', () => {
 		expect(rewards.map((command) => command.corruptRunePicks?.length ?? 0)).toEqual([2, 1, 0]);
 	});
 
-	it('exposes every small monster reward pick combination to the ML candidate surface', () => {
+	it('exposes the single claim-all monster reward to the ML candidate surface', () => {
 		let state = atAbyss();
-		state = apply(state, RED, { type: 'startCombat' });
+		state = apply(state, RED, { type: 'startCombat', handIndex: 0 });
 		expect(state.players.Red!.pendingReward).not.toBeNull();
 
 		const actions = legalActionsWithNext(state, 'Red', CATALOG)
 			.filter((a) => a.cmd.type === 'resolveMonsterReward')
 			.map((a) => a.cmd as Extract<GameCommand, { type: 'resolveMonsterReward' }>);
 		const pickSets = new Set(actions.map((cmd) => [...cmd.picks].sort((a, b) => a - b).join(',')));
-		expect(pickSets).toEqual(
-			new Set(['0', '1', '2', '3', '0,1', '0,2', '0,3', '1,2', '1,3', '2,3'])
-		);
+		// A kill grants every reward on the card, so the only claim is all four tokens.
+		expect(pickSets).toEqual(new Set(['0,1,2,3']));
 		for (const cmd of actions) {
 			const result = applyGameCommand(state, RED, cmd, CATALOG);
 			expect(result.ok, JSON.stringify(cmd)).toBe(true);
@@ -352,7 +361,7 @@ describe('neural value action scoring', () => {
 
 	it('builds a reward-pick auxiliary target from immediate VP choices', () => {
 		let state = atAbyss();
-		state = apply(state, RED, { type: 'startCombat' });
+		state = apply(state, RED, { type: 'startCombat', handIndex: 0 });
 		const actions = legalActionsWithNext(state, 'Red', CATALOG).filter(
 			(a) => a.cmd.type === 'resolveMonsterReward'
 		);
@@ -361,19 +370,9 @@ describe('neural value action scoring', () => {
 		expect(target).toHaveLength(actions.length);
 		expect(target!.reduce((sum, x) => sum + x, 0)).toBeCloseTo(1);
 
-		const byPick = new Map(
-			actions.map((a, i) => [
-				(a.cmd as Extract<GameCommand, { type: 'resolveMonsterReward' }>).picks
-					.slice()
-					.sort((a, b) => a - b)
-					.join(','),
-				target![i]
-			])
-		);
-		expect(byPick.get('0,1')).toBeCloseTo(4 / 16);
-		expect(byPick.get('1')).toBeCloseTo(3 / 16);
-		expect(byPick.get('0')).toBeCloseTo(1 / 16);
-		expect(byPick.get('2,3')).toBe(0);
+		// Claim-all: the one reward candidate carries the whole target.
+		expect(actions).toHaveLength(1);
+		expect(target![0]).toBeCloseTo(1);
 	});
 
 	it('exposes monster reward wildcard rune choices as distinct legal ML candidates', () => {
@@ -498,14 +497,14 @@ describe('neural value action scoring', () => {
 					id: 'spirit-animal-1',
 					name: 'Route Cub',
 					cost: 2,
-					classes: { 'Spirit Animal': 1 },
+					classes: { 'Beast': 1 },
 					origins: {}
 				},
 				{
 					id: 'spirit-animal-2',
 					name: 'Route Cub Twin',
 					cost: 2,
-					classes: { 'Spirit Animal': 1 },
+					classes: { 'Beast': 1 },
 					origins: {}
 				},
 				{
@@ -569,7 +568,7 @@ describe('neural value action scoring', () => {
 				id: 'animal-a',
 				name: 'Animal A',
 				cost: 1,
-				classes: { 'Spirit Animal': 1 },
+				classes: { 'Beast': 1 },
 				origins: {},
 				isFaceDown: false
 			},
@@ -578,7 +577,7 @@ describe('neural value action scoring', () => {
 				id: 'animal-b',
 				name: 'Animal B',
 				cost: 1,
-				classes: { 'Spirit Animal': 1, 'Elementalist': 1 },
+				classes: { 'Beast': 1, 'Elementalist': 1 },
 				origins: {},
 				isFaceDown: false
 			},
@@ -605,7 +604,7 @@ describe('neural value action scoring', () => {
 		expect(obs).toHaveLength(OBS_DIM);
 		// Frozen v1.2 prefix: ladder block 62..76, before location 77..82.
 		const block = obs.slice(62, 77);
-		const mon = state.monster!;
+		const mon = state.players.Red!.monsterHand![0];
 		// killProb feature must MATCH the bot helper (no train/serve skew).
 		expect(block[0]).toBeCloseTo(
 			Math.min(1, Math.max(0, computeKillProbability(state, 'Red', CATALOG)))
@@ -738,24 +737,20 @@ describe('neural value action scoring', () => {
 		expect(encoded[ACTION_EFFECT_OFFSET + 8]).toBe(1);
 	});
 
-	it('scores low-rung multi-life farm value and can boost Abyss navigation priors', () => {
+	it('scores hand-card farm value and can boost Abyss navigation priors', () => {
 		let state = createLobbyState({ roomCode: 'FARMV', guardianNames: ['Red Guard', 'Blue Guard'] });
 		state = apply(state, RED, { type: 'claimSeat', seatColor: 'Red' });
 		state = apply(state, BLUE, { type: 'claimSeat', seatColor: 'Blue' });
 		state = apply(state, RED, { type: 'selectGuardian', guardianName: 'Red Guard' });
 		state = apply(state, BLUE, { type: 'selectGuardian', guardianName: 'Blue Guard' });
-		state = apply(state, RED, { type: 'startGame', seed: 11 });
+		state = withAbyssMaw(apply(state, RED, { type: 'startGame', seed: 11 }));
 		state.players.Red!.attackDice = [{ instanceId: 'd-arcane', tier: 'arcane' }];
-		// Force a multi-life monster (2 players now spawn a single-life one) — this test
-		// exercises farm-value scoring across remaining lives, not the spawn rule.
-		state.monster!.livesRemaining = 2;
-		state.monster!.livesTotal = 2;
 
 		expect(claimableMonsterRewardVp(CATALOG.monsters![0].rewardTrack, 2)).toBe(4);
 		const farm = evaluateFarmValue(state, 'Red', CATALOG, { threshold: 0.5 });
 		expect(farm.farmable).toBe(true);
 		expect(farm.rewardVp).toBe(4);
-		expect(farm.livesRemaining).toBe(2);
+		expect(farm.livesRemaining).toBe(1); // a card is a single kill
 		expect(farm.opportunityVp).toBeCloseTo(4);
 		expect(farm.score).toBeGreaterThan(0);
 
@@ -780,7 +775,7 @@ describe('neural value action scoring', () => {
 		s = apply(s, BLUE, { type: 'claimSeat', seatColor: 'Blue' });
 		s = apply(s, RED, { type: 'selectGuardian', guardianName: 'Red Guard' });
 		s = apply(s, BLUE, { type: 'selectGuardian', guardianName: 'Blue Guard' });
-		s = apply(s, RED, { type: 'startGame', seed: 12 });
+		s = withAbyssMaw(apply(s, RED, { type: 'startGame', seed: 12 }));
 
 		const headFarmPolicy = {
 			...neutralPolicy,

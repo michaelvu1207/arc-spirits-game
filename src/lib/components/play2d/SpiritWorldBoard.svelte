@@ -3,8 +3,7 @@
 	import type {
 		SpectatorProjection,
 		SeatColor,
-		NavigationDestination,
-		MonsterState
+		NavigationDestination
 	} from '$lib/play/types';
 	import { SPIRIT_WORLD_ONLY } from '$lib/play/types';
 	import { LOCATIONS, LOCATION_ACCENT } from '$lib/play/locations';
@@ -23,7 +22,6 @@
 		onHover?: (destination: NavigationDestination | null) => void;
 		onSelect?: (destination: NavigationDestination) => void;
 		onSceneControls?: (controls: NavigationSceneControls | null) => void;
-		monster: MonsterState | null;
 		gameLocations?: Map<string, GameLocationAsset>;
 		iconPool?: Map<string, IconPoolEntry>;
 	}
@@ -37,7 +35,6 @@
 		onHover,
 		onSelect,
 		onSceneControls,
-		monster,
 		gameLocations = new Map(),
 		iconPool = new Map()
 	}: Props = $props();
@@ -541,7 +538,6 @@
 								selectable={selectable && !carouselSelectBlocked}
 								focused={focusedDestination === dest}
 								selected={selectedDestination === dest}
-								monster={dest === ABYSS ? monster : null}
 								{mySeat}
 								{onHover}
 								onSelect={selectCarouselDestination}
@@ -584,7 +580,6 @@
 					hub
 					focused={focusedDestination === ABYSS}
 					selected={selectedDestination === ABYSS}
-					{monster}
 					{mySeat}
 					{onHover}
 					{onSelect}

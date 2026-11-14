@@ -1,74 +1,59 @@
-/**
- * Fatestriker — bespoke `inCombat` handler.
- *
- * DB-intended behavior (source of truth):
- *   - Gain 4 Initiative.
- *   - In the Battle Step, roll your attack twice and take the higher roll
- *     (the `attackRollAdvantage` flag consumed by `rollAttack`).
- *
- * UX channel: both halves surface as a single combat log line
- * ("Gained 4 initiative; will roll attack twice and take the higher."), plus the
- * mechanical +4 initiative and the `attackRollAdvantage` flag — never a silent no-op.
- */
+import { describe, expect, it } from 'vitest';
+import { fire, makePlayer, makeState, spirit } from './testHelpers';
+import { applyTrigger } from '../apply';
+import { resetCombatFlags, resolveEncounterCombat } from '../../combat';
+import type { AttackDie, PrivatePlayerState } from '../../types';
 
-import { describe, it, expect } from 'vitest';
-import { fire, makePlayer, ctxFor } from './testHelpers';
-import { ability } from './darkFighter';
+/** Assassin — "In combat with a player who has more attack dice than you, strike first and deal
+ *  3 more damage." */
+const dice = (n: number): AttackDie[] => Array.from({ length: n }, (_, i) => ({ instanceId: `x${i}`, tier: 'basic' }));
 
-describe('Fatestriker', () => {
-	it('grants exactly 4 initiative on inCombat (changed from 6)', () => {
-		const { player } = fire({ 'Fatestriker': 1 }, 'inCombat');
-		expect(player.initiative).toBe(4);
+function inCombat(me: Partial<PrivatePlayerState>, them: Partial<PrivatePlayerState>) {
+	const red = makePlayer({ spirits: [spirit(1, { Assassin: 1 })], ...me });
+	const blue = makePlayer({ playerColor: 'Blue', ...them });
+	const state = makeState(red, { Blue: blue });
+	resetCombatFlags(red);
+	applyTrigger(state, 'Red', 'inCombat', [], { opponent: 'Blue' });
+	return red;
+}
+
+describe('Assassin', () => {
+	it('opponent has more dice: strike first and +3 damage', () => {
+		const red = inCombat({ attackDice: dice(2) }, { attackDice: dice(3) });
+		expect(red.alwaysAttackFirst).toBe(true);
+		expect(red.combatDamageBonus).toBe(3);
 	});
 
-	it('sets attackRollAdvantage so the Battle Step rolls twice and keeps the higher', () => {
-		const { player } = fire({ 'Fatestriker': 1 }, 'inCombat');
-		expect(player.attackRollAdvantage).toBe(true);
+	it('equal or fewer dice: nothing', () => {
+		for (const n of [2, 1]) {
+			const red = inCombat({ attackDice: dice(2) }, { attackDice: dice(n) });
+			expect(red.alwaysAttackFirst).toBe(false);
+			expect(red.combatDamageBonus).toBe(0);
+		}
 	});
 
-	it('surfaces both halves as an attributed log line (no silent no-op)', () => {
-		const { log } = fire({ 'Fatestriker': 1 }, 'inCombat');
-		expect(
-			log.some((l) => l.includes('Gained 4 initiative; will roll attack twice and take the higher.'))
-		).toBe(true);
+	it('monster combat, or face-down: nothing', () => {
+		expect(fire({ Assassin: 1 }, 'inCombat').player.combatDamageBonus).toBe(0);
+		const red = inCombat({ spirits: [spirit(1, { Assassin: 1 }, { faceDown: true })] }, { attackDice: dice(3) });
+		expect(red.combatDamageBonus).toBe(0);
 	});
 
-	it('adds 4 on top of any pre-existing initiative', () => {
-		const { player } = fire({ 'Fatestriker': 1 }, 'inCombat', {
-			player: { initiative: 3 }
+	it('the old rule is gone: no +4 Initiative and no roll-twice', () => {
+		const red = inCombat({}, { attackDice: dice(3) });
+		expect(red.initiative).toBe(0);
+		expect(red.attackRollAdvantage).toBe(false);
+	});
+
+	it('PvP: the Assassin side strikes first even with less Initiative', () => {
+		const red = makePlayer({ navigationDestination: 'Forest Region', spirits: [spirit(1, { Assassin: 1 })] });
+		const blue = makePlayer({
+			playerColor: 'Blue',
+			statusLevel: 3,
+			navigationDestination: 'Forest Region',
+			attackDice: dice(2),
+			spirits: [spirit(1, { Titan: 1 })]
 		});
-		expect(player.initiative).toBe(7);
-	});
-
-	it('handler unit test: mutates ctx.player directly with +4 and the advantage flag', () => {
-		const player = makePlayer();
-		const ctx = ctxFor(player, { trigger: 'inCombat' });
-		ability[0].run!(ctx);
-		expect(player.initiative).toBe(4);
-		expect(player.attackRollAdvantage).toBe(true);
-		expect(
-			ctx.log.some((l) => l.includes('Gained 4 initiative; will roll attack twice and take the higher.'))
-		).toBe(true);
-	});
-
-	it('is inactive when the Fatestriker spirit is face-down (unawakened)', () => {
-		const { player, log } = fire({ 'Fatestriker': 1 }, 'inCombat', {
-			player: {
-				spirits: [
-					{
-						slotIndex: 1,
-						id: 's1',
-						name: 'Spirit 1',
-						cost: 2,
-						classes: { 'Fatestriker': 1 },
-						origins: {},
-						isFaceDown: true
-					}
-				]
-			}
-		});
-		expect(player.initiative).toBe(0);
-		expect(player.attackRollAdvantage).toBe(false);
-		expect(log.some((l) => l.includes('initiative'))).toBe(false);
+		const combat = resolveEncounterCombat(makeState(red, { Blue: blue }), undefined, ['Blue'], ['Red']);
+		expect(combat.log.some((l) => l.startsWith('Good attacks first'))).toBe(true);
 	});
 });

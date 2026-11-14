@@ -60,7 +60,9 @@ export const FRAME_CONFIGS: FrameConfig[] = [
 		id: 'arcane',
 		name: 'Arcane Spirits',
 		shortName: 'Arcane',
-		aliases: ['Arcane Spirits'],
+		// No origin alias: the origin "Arcane Spirits" is gone (2026-11-12). This frame is the
+		// fallback (FRAME_CONFIGS[4]) for the Sun / Moon spirits and spirits with no origin.
+		aliases: [],
 		colors: { outer: '#9d4dff', inner: '#ff4bdb', accent: '#f7c8ff', glow: '#b46cff' },
 		blendMode: 'add',
 		pattern: 'aether',

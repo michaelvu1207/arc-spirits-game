@@ -15,7 +15,9 @@
  * so this never breaks a build or a live game.
  */
 
-import { botSeatNeedsToAct, computeKillProbability } from '../server/botPolicy';
+import { botActorFor, botSeatNeedsToAct, computeKillProbability } from '../server/botPolicy';
+import { applyGameCommand } from '../runtime';
+import { monsterBarrierLeft } from '../combat';
 import {
 	VP_TO_WIN,
 	type GameCommand,
@@ -24,8 +26,9 @@ import {
 	type SeatColor
 } from '../types';
 import { buildBotObservation, type BotObservationV1 } from '../bots/contract';
+import { isLiveMonster, nextMonsterCardCommand } from '../bots/monsterCardAutopilot';
 import { buildMonsterRewards } from '../monsterRewards';
-import { ACT_DIM, OBS_DIM, encodeAction, encodeObs } from './encode';
+import { ACT_DIM, OBS_DIM, encodeAction, encodeObs, seatTargetMonster, startCombatMonster } from './encode';
 import { legalActionsWithNext, policyPreviewState, type LegalAction } from './actions';
 import { claimableMonsterRewardVp } from './farmValue';
 import { planDecisionGumbel } from './gumbelPlanner';
@@ -154,9 +157,9 @@ export function progressSignature(state: PublicGameState, seat: SeatColor): stri
 		.map((a) => `${a.runeId}:${a.classId ?? ''}:${a.boundSlotIndex ?? ''}:${a.hostClass ?? ''}`)
 		.sort()
 		.join(',');
-	const monster = state.monster
-		? `${state.monster.id}:${state.monster.hp}:${state.monster.livesRemaining}:${state.monster.ladderIndex}`
-		: '';
+	// The seat's own monster hand (cards are private and fought only by their holder).
+	const monster = (p.monsterHand ?? []).map((card) => `${card.id}:${card.hp}`).join(',');
+	const monsterDraw = (p.pendingMonsterDraw?.cards ?? []).map((card) => card.id).join(',');
 	return [
 		state.phase,
 		state.round,
@@ -186,7 +189,8 @@ export function progressSignature(state: PublicGameState, seat: SeatColor): stri
 		p.manualPrompts?.length ?? 0,
 		attachments,
 		unplacedAugments,
-		monster
+		monster,
+		monsterDraw
 	].join('|');
 }
 
@@ -269,11 +273,11 @@ function expectedHiddenOutcomeReward(
 	catalog: PlayCatalog
 ): number {
 	if (!action.hasHiddenOutcome || action.cmd.type !== 'startCombat') return 0;
-	const monster = state.monster;
+	const monster = startCombatMonster(state, seat, action.cmd);
 	if (!monster) return 0;
 	const killProbability = Math.max(
-		computeKillProbability(state, seat, catalog),
-		computeKillProbability(state, seat, catalog, { allowCorruptKill: true })
+		computeKillProbability(state, seat, catalog, { monster }),
+		computeKillProbability(state, seat, catalog, { allowCorruptKill: true, monster })
 	);
 	const rewardVp = claimableMonsterRewardVp(monster.rewardTrack, monster.chooseAmount);
 	return (PENDING_REWARD_VP_SHAPE * (killProbability * rewardVp)) / VP_TO_WIN;
@@ -308,9 +312,10 @@ function farmNavigationActionBonus(
 	)
 		return 0;
 	const player = state.players[seat];
-	const monster = state.monster;
-	if (!player || !monster || monster.livesRemaining <= 0) return 0;
-	const monsterHp = monster.hp ?? monster.maxHp ?? 0;
+	// The card this seat would fight at the Abyss: its best hand card (none → no bonus).
+	const monster = seatTargetMonster(state, seat, catalog);
+	if (!player || !isLiveMonster(monster)) return 0;
+	const monsterHp = monsterBarrierLeft(monster);
 	if (monsterHp < FARM_NAV_AUX_MIN_MONSTER_HP || monsterHp > FARM_NAV_AUX_MAX_MONSTER_HP) return 0;
 	if ((player.statusLevel ?? 0) > FARM_NAV_AUX_MAX_STATUS) return 0;
 	const farm = farmValueRaw(policy, encodeObs(state, seat, catalog));
@@ -718,6 +723,22 @@ export function buildNeuralBotObservation(
 	);
 }
 
+/**
+ * The next Abyss monster-card step (draw / keep) applied to `state`, or null. The ML action
+ * surface has no card commands, so every neural tier (and uniform-legal) runs this deterministic
+ * autopilot before its own pick; `startCombat` candidates then cover every card in the hand.
+ */
+function monsterCardStep(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): { cmd: GameCommand; next: PublicGameState } | null {
+	const cmd = nextMonsterCardCommand(state, seat, catalog);
+	if (!cmd) return null;
+	const result = applyGameCommand(state, botActorFor(state, seat), cmd, catalog);
+	return result.ok ? { cmd, next: result.state } : null;
+}
+
 export function planUniformLegalPhaseActions(
 	state: PublicGameState,
 	seat: SeatColor,
@@ -731,6 +752,12 @@ export function planUniformLegalPhaseActions(
 	while (botSeatNeedsToAct(s, seat) && guard < MAX_ACTIONS_PER_PHASE) {
 		guard += 1;
 		if (s.players[seat]?.pendingCorruptionDiscard) resolvingCorruption = true;
+		const cardStep = resolvingCorruption ? null : monsterCardStep(s, seat, catalog);
+		if (cardStep) {
+			out.push(cardStep.cmd);
+			s = cardStep.next;
+			continue;
+		}
 		let withNext = legalActionsWithNext(s, seat, catalog);
 		if (withNext.length === 0) break;
 		if (resolvingCorruption) {
@@ -823,6 +850,12 @@ export function planNeuralPhaseActions(
 	while (botSeatNeedsToAct(s, seat) && guard < MAX_ACTIONS_PER_PHASE) {
 		guard += 1;
 		if (s.players[seat]?.pendingCorruptionDiscard) resolvingCorruption = true;
+		const cardStep = resolvingCorruption ? null : monsterCardStep(s, seat, catalog);
+		if (cardStep) {
+			out.push(cardStep.cmd);
+			s = cardStep.next;
+			continue;
+		}
 		let withNext = legalActionsWithNext(s, seat, catalog);
 		if (withNext.length === 0) break;
 		if (resolvingCorruption) {

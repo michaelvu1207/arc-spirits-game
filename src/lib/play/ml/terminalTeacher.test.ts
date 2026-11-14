@@ -18,6 +18,7 @@ import {
 	type TerminalRolloutOutcome
 } from './terminalTeacher';
 import { randomPolicy } from './nodeIo';
+import { drawMonsterViaCommands } from '../testing/monsterCards';
 
 const VP = '24278b1c-c935-4d4e-aed5-408ce9c9a043';
 const ABYSS_SUMMON = '12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e';
@@ -87,7 +88,7 @@ function rewardState(): PublicGameState {
 		tier: 'arcane'
 	}));
 	state.players.Red!.attackDice = dice;
-	state = apply(state, { type: 'startCombat' });
+	state = apply(state, { type: 'startCombat', handIndex: 0 });
 	if (!state.players.Red?.pendingReward) throw new Error('expected pending reward');
 	return state;
 }
@@ -104,7 +105,8 @@ function locationState(): PublicGameState {
 	let state = navigationState();
 	state = apply(state, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 	state = apply(state, { type: 'forceAdvancePhase' });
-	return state;
+	// Red draws the m-1 card into its own hand so combat is legal.
+	return drawMonsterViaCommands(state, RED, CATALOG, { catalogId: 'm-1' });
 }
 
 function outcome(won: boolean, vp: number, round = 30): TerminalRolloutOutcome {

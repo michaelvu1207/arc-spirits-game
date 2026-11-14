@@ -6,8 +6,7 @@
  *  - One augment per spirit by default; it cannot be removed, replaced, or moved.
  *  - Once placed it is permanent — if the host spirit is removed/discarded, the
  *    augment goes with it (the engine cleans the attachment by spirit slot).
- *  - Some spirits raise their own augment capacity. The Runebound Vessel class — "You may
- *    place unlimited Spirit Augments on this spirit" — is the current example.
+ *  - Mystic IV raises every owned spirit's capacity to two ({@link ownerAugmentCapacity}).
  *  - An augment contributes its class toward the owner's trait totals, but only while
  *    its host spirit is awakened (face-up); face-down, it's dormant — i.e. it follows
  *    the spirit, exactly like the spirit's own classes do.
@@ -28,8 +27,8 @@ export const SPIRIT_AUGMENT_CLASSES = [
 	'Fighter',
 	'Elementalist',
 	'Cultivator',
-	'Soul Weaver',
-	'Spirit Animal',
+	'Mystic',
+	'Beast',
 	'Cursed Spirit'
 ] as const;
 export type SpiritAugmentClass = (typeof SPIRIT_AUGMENT_CLASSES)[number];
@@ -39,50 +38,34 @@ export function isSpiritAugmentClass(name: string): boolean {
 }
 
 /**
- * Classes that, when present on a spirit, let it hold MORE than the default one
- * augment. Runebound Vessel grants unlimited placement. Add future "augment-capacity"
- * classes here.
+ * Maximum number of augments that may be permanently placed on this spirit by its own card:
+ * always 1. (Herder's old "unlimited Spirit Augments on this spirit" rule was removed in the
+ * November 2026 data.) The owner-wide raise is {@link ownerAugmentCapacity}.
  */
-export const UNLIMITED_AUGMENT_CLASSES: ReadonlySet<string> = new Set(['Runebound Vessel']);
-
-/**
- * A spirit with an {@link UNLIMITED_AUGMENT_CLASSES} class can hold "unlimited"
- * augments. We model that as a large finite cap (99) rather than `Infinity` so the
- * value stays a plain integer everywhere it flows (capacity checks, bot scoring,
- * UI) — 99 is far beyond any reachable augment count in a real game.
- */
-export const UNLIMITED_AUGMENT_CAPACITY = 99;
-
-/**
- * Maximum number of augments that may be permanently placed on this spirit. Default
- * 1; a spirit with an {@link UNLIMITED_AUGMENT_CLASSES} class (e.g. Runebound Vessel —
- * "You may place unlimited Spirit Augments on this spirit") can hold up to
- * {@link UNLIMITED_AUGMENT_CAPACITY}.
- */
-export function augmentCapacityForSpirit(spirit: Pick<PlaySpirit, 'classes'>): number {
-	for (const [cls, n] of Object.entries(spirit.classes ?? {})) {
-		const count = typeof n === 'number' ? n : 1;
-		if (count > 0 && UNLIMITED_AUGMENT_CLASSES.has(cls)) return UNLIMITED_AUGMENT_CAPACITY;
-	}
+export function augmentCapacityForSpirit(_spirit: Pick<PlaySpirit, 'classes'>): number {
 	return 1;
 }
 
-/** Soul Weaver IV raises every owned spirit's capacity from one augment to two. */
+/** Mystic IV raises every owned spirit's capacity from one augment to two. */
 export function ownerAugmentCapacity(
 	player: PrivatePlayerState,
 	spirit: Pick<PlaySpirit, 'classes'>
 ): number {
 	const base = augmentCapacityForSpirit(spirit);
-	if (base === UNLIMITED_AUGMENT_CAPACITY) return base;
 	let soulWeavers = 0;
 	for (const owned of player.spirits ?? []) {
-		if (!owned.isFaceDown) soulWeavers += owned.classes?.['Soul Weaver'] ?? 0;
+		if (!owned.isFaceDown) soulWeavers += owned.classes?.['Mystic'] ?? 0;
 	}
 	for (const attachment of player.spiritAugmentAttachments ?? []) {
 		const host = player.spirits.find((s) => s.slotIndex === attachment.spiritSlotIndex);
-		if (!host?.isFaceDown && attachment.className === 'Soul Weaver') soulWeavers += 1;
+		if (!host?.isFaceDown && attachment.className === 'Mystic') soulWeavers += 1;
 	}
-	return soulWeavers >= 4 ? Math.max(base, 2) : base;
+	// Power "Forest Bounty" (rule `powerRework`): committed at the Forest, every spirit may hold
+	// a second augment this round.
+	const forestBounty =
+		player.navigationPower === 'forest-bounty-2' &&
+		/^Forest/.test(String(player.navigationDestination ?? ''));
+	return soulWeavers >= 4 || forestBounty ? Math.max(base, 2) : base;
 }
 
 /**

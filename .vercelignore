@@ -1,0 +1,8 @@
+/node_modules
+/ml
+/.git
+/.svelte-kit
+/.vercel
+/.gstack
+/playwright-report
+/test-results

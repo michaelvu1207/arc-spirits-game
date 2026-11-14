@@ -58,3 +58,7 @@ ml/warmstart/
 # version only their hashes and redacted diagnostic reports.
 ml/human_reference/*/events.json
 ml/human_reference/*/snapshot.json
+
+# Local game build caches and harness run output
+/.svelte-kit-local-*/
+/output/

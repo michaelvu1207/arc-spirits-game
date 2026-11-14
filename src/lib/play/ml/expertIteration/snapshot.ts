@@ -19,7 +19,7 @@ import {
 	type GameCommand,
 	type PlayCatalog
 } from '../../types';
-import type { PrivatePlayerState, PublicGameState, SeatColor } from '../../types';
+import type { MonsterState, PrivatePlayerState, PublicGameState, SeatColor } from '../../types';
 import { botSeatNeedsToAct } from '../../server/botPolicy';
 import {
 	legalActions,
@@ -32,7 +32,8 @@ import { encodeEntityObsV2, flattenObsV2 } from '../encodeV2';
 
 export const SNAPSHOT_SCHEMA = 'arc-v34-outcome-blind-snapshot-v1' as const;
 export const TRACE_EVENT_SCHEMA = 'arc-v34-reset-trace-event-v1' as const;
-export const STRUCTURAL_STATE_SCHEMA = 'arc-v34-structural-public-state-v1' as const;
+// v2: no shared Abyss monster; the acting seat's own monster hand is in its owner fields.
+export const STRUCTURAL_STATE_SCHEMA = 'arc-v34-structural-public-state-v2' as const;
 
 type JsonPrimitive = string | number | boolean | null;
 export type CanonicalJsonValue =
@@ -261,7 +262,7 @@ function publicBagSummary(contents: PublicGameState['bags']['hexSpirits']['conte
 	return [...grouped.values()].sort((a, b) => codeUnitCompare(canonicalJson(a), canonicalJson(b)));
 }
 
-function structuralMonster(monster: PublicGameState['monster']) {
+function structuralMonster(monster: MonsterState | null | undefined) {
 	return monster
 		? {
 				id: monster.id,
@@ -431,7 +432,13 @@ function structuralPlayer(player: PrivatePlayerState, isOwner: boolean, revealed
 				options: structuredClone(decision.options)
 			})),
 			lastAction: structuredClone(player.lastAction),
-			unplacedAugments: structuredClone(player.unplacedAugments ?? [])
+			unplacedAugments: structuredClone(player.unplacedAugments ?? []),
+			// Monster cards are private to their holder: only the owner sees its hand and reveal.
+			monsterHand: (player.monsterHand ?? []).map((card) => structuralMonster(card)),
+			pendingMonsterDraw: (player.pendingMonsterDraw?.cards ?? []).map((card) =>
+				structuralMonster(card)
+			),
+			monsterDrawRound: player.monsterDrawRound ?? null
 		}
 	};
 }
@@ -498,7 +505,6 @@ export function structuralPublicState(
 		navigation,
 		revealedDestinations: state.revealedDestinations,
 		locationOccupancy: occupancy,
-		monster: structuralMonster(state.monster),
 		combats: structuralCombats(state),
 		legalCommandHashes: legalCommands.map(commandHash).sort()
 	};

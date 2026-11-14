@@ -11,7 +11,7 @@
  * - max-barrier-loop: build max barrier/Cultivator before re-entry
  * - damage-assembly: build attack/firepower before re-entry
  * - hp4-survival-oracle: sequence damage, max barrier/Cultivator, restore, then re-enter
- * - finish-line-oracle: from VP 24-29, finish/restore/build only if the current monster lives can reach 30 VP
+ * - finish-line-oracle: from VP 24-29, finish/restore/build only if a kill of the seat's best hand card can reach 30 VP
  * - fixed-reentry: build for N navigation decisions, then re-enter Abyss
  * - expose-* scripts: force a non-Abyss destination to test Good-target exposure labels
  *
@@ -26,6 +26,7 @@ import { applyDeadlineAdvance, applyGameCommand } from '../runtime';
 import { createRng, nextInt } from '../rng';
 import { expectedAttack } from '../combat';
 import { awakenedClassCounts } from '../effects/apply';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -40,6 +41,7 @@ import {
 	SEAT_COLORS,
 	VP_TO_WIN,
 	type GameCommand,
+	type MonsterState,
 	type NavigationDestination,
 	type PlayCatalog,
 	type PublicGameState,
@@ -507,7 +509,7 @@ function buildOf(state: PublicGameState, seat: SeatColor): Omit<BuildSnapshot, '
 		maxBarrier: player.maxBarrier ?? 0,
 		currentBarrier: player.barrier ?? 0,
 		attackDice: player.attackDice?.length ?? 0,
-		spiritAnimal: counts['Spirit Animal'] ?? 0,
+		spiritAnimal: counts['Beast'] ?? 0,
 		cultivator: counts.Cultivator ?? 0,
 		exposedGoodTargetWindows: 0,
 		exposedGoodTargetVp: 0,
@@ -518,6 +520,11 @@ function buildOf(state: PublicGameState, seat: SeatColor): Omit<BuildSnapshot, '
 	};
 }
 
+/** The card `seat` would fight: the best live card in its own monster hand (null when empty). */
+function seatMonster(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): MonsterState | null {
+	return bestHandMonster(state, seat, catalog)?.card ?? null;
+}
+
 function monsterSignal(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): {
 	monsterHp: number;
 	monsterDamage: number;
@@ -525,14 +532,14 @@ function monsterSignal(state: PublicGameState, seat: SeatColor, catalog: PlayCat
 	cleanKillProb: number;
 	firepowerKillProb: number;
 } {
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!monster) {
 		return { monsterHp: 0, monsterDamage: 0, monsterLives: 0, cleanKillProb: 0, firepowerKillProb: 0 };
 	}
 	return {
 		monsterHp: monster.maxHp ?? monster.hp ?? 0,
 		monsterDamage: monster.damage ?? 0,
-		monsterLives: monster.livesRemaining ?? 0,
+		monsterLives: 1, // a live hand card (each card is a single kill)
 		cleanKillProb: computeKillProbability(state, seat, catalog, { allowCorruptKill: false }),
 		firepowerKillProb: firepowerKillProbability(state, seat, catalog)
 	};
@@ -540,7 +547,7 @@ function monsterSignal(state: PublicGameState, seat: SeatColor, catalog: PlayCat
 
 function combatReadyButNeedsRestore(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, threshold = 0.5): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	if (cleanProb >= threshold) return false;
@@ -628,7 +635,7 @@ function hp4ConversionNeed(
 	hasRelic: boolean;
 } {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster) {
 		return { active: false, needCultivatorTicket: false, needCultivate: false, cultivatorProgress: 0, hasRelic: false };
 	}
@@ -664,7 +671,7 @@ function shouldGoodTargetContinueAbyssFarm(
 	cfg: Config
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	const status = player?.statusLevel ?? 0;
 	if (!player || !monster || status > 2) return false;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold: 0.5 });
@@ -673,7 +680,6 @@ function shouldGoodTargetContinueAbyssFarm(
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const vp = player.victoryPoints ?? 0;
 	if (vp >= GOOD_TARGET_EXPOSE_AFTER_VP) return false;
-	const lives = Math.max(1, farm.livesRemaining ?? monster.livesRemaining ?? 1);
 	const clean = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const corrupt = computeKillProbability(state, seat, catalog, { allowCorruptKill: true });
 	const firepower = firepowerKillProbability(state, seat, catalog);
@@ -701,16 +707,16 @@ function shouldGoodTargetContinueAbyssFarm(
 			canSpendCorruptionAndRemainGood &&
 			(corrupt >= 0.325 || firepower >= 0.325 || attack >= monsterHp - 0.75)
 		);
-	if (farm.rewardVp >= 3 && controlledOpportunityVp >= 2 && lives >= 2 && monsterHp <= 2 && nearDamage && vp < 24) return true;
+	// (The old multi-life hp≤2 farm case is gone: each monster card is a single kill.)
 	const efficientHp4Farm =
 		controlledOpportunityVp >= 2 &&
 		monsterHp <= 4 &&
-		(vp < 18 || farm.rewardVp >= 3 || lives >= 2) &&
+		(vp < 18 || farm.rewardVp >= 3) &&
 		nearDamage;
 	if (efficientHp4Farm && vp < 24) return true;
 	const reliablePrePivotHardFarm = vp < 21 && monsterHp <= 5 && (damageReady || clean >= 0.325 || firepower >= 0.325);
 	if (reliablePrePivotHardFarm) return true;
-	return vp + farm.rewardVp * lives >= VP_TO_WIN && (damageReady || nearDamage);
+	return vp + farm.rewardVp >= VP_TO_WIN && (damageReady || nearDamage);
 }
 
 function goodTargetPivotDestinations(
@@ -720,7 +726,7 @@ function goodTargetPivotDestinations(
 	cfg: Config
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
 	if ((player.statusLevel ?? 0) > 2) return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, cfg)) return ['Arcane Abyss'];
@@ -745,7 +751,7 @@ function goodTargetPivotDestinations(
 		appendDestination(destinations, 'Fire Region');
 	}
 	if (needsMaxBarrier) appendDestination(destinations, 'Fire Region');
-	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || player.spirits.length < 6 || (counts['Spirit Animal'] ?? 0) < 2) {
+	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || player.spirits.length < 6 || (counts['Beast'] ?? 0) < 2) {
 		appendDestination(destinations, 'Water Region');
 		appendDestination(destinations, 'Mountain Region');
 	}
@@ -758,7 +764,7 @@ function goodTargetPivotDestinations(
 
 function isRouteCloserRestoreFinishState(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, threshold = 0.5): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const vp = player.victoryPoints ?? 0;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -766,7 +772,7 @@ function isRouteCloserRestoreFinishState(state: PublicGameState, seat: SeatColor
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
 	const finishOpportunity = farm.valid &&
 		farm.rewardVp > 0 &&
-		vp + farm.rewardVp * Math.max(1, farm.livesRemaining) >= 30;
+		vp + farm.rewardVp >= 30; // each monster card is a single kill
 	if (!finishOpportunity) return false;
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const firepowerProb = firepowerKillProbability(state, seat, catalog);
@@ -791,7 +797,7 @@ function shouldUseGate(
 	if (!policy) return false;
 	if (gate === 'all') return true;
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (gate === 'good-nonfallen-farm-build' || gate === 'good-nonfallen-farm-target-pivot') {
 		return !!player && !!monster && (cfg.maxStatusLevel === undefined || (player.statusLevel ?? 0) <= cfg.maxStatusLevel);
 	}
@@ -895,7 +901,7 @@ function rootDestinationsForGate(
 	if (gate === 'hp4-first-wall') return ['Arcane Abyss', 'Fire Region', 'Forest Region'];
 	if (gate === 'route-closer') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster) return CLOSER_DAMAGE_DESTINATIONS;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 		const monsterDamage = monster.damage ?? 0;
@@ -908,7 +914,7 @@ function rootDestinationsForGate(
 	}
 	if (gate === 'route-finish-loop') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster) return CLOSER_RESTORE_DESTINATIONS;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 		const survivalTarget = (monster.damage ?? 0) + 1;
@@ -924,7 +930,7 @@ function rootDestinationsForGate(
 	}
 	if (gate === 'survival-rebuild') {
 		const player = state.players[seat];
-		const monster = state.monster;
+		const monster = seatMonster(state, seat, catalog);
 		if (!player || !monster) return BUILD_OPTION_DESTINATIONS;
 		const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 		const attack = expectedAttack(player);
@@ -997,7 +1003,7 @@ function hp4SurvivalOracleNavigation(
 	seed: number
 ): GameCommand | null {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster) return plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const monsterDamage = monster.damage ?? 0;
@@ -1067,18 +1073,18 @@ function finishLineOracleNavigation(
 	seed: number
 ): GameCommand | null {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster) return plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	const vp = player.victoryPoints ?? 0;
 	if (state.round < 16 || vp < 24 || vp >= VP_TO_WIN) {
 		return hp4SurvivalOracleNavigation(state, seat, catalog, cfg, seed);
 	}
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold: 0.5 });
-	const livesRemaining = Math.max(1, farm.livesRemaining ?? monster.livesRemaining ?? 1);
+	// Each monster card is a single kill (legacy lives are always 1).
 	const finishOpportunity =
 		farm.valid &&
 		farm.rewardVp > 0 &&
-		vp + farm.rewardVp * livesRemaining >= VP_TO_WIN;
+		vp + farm.rewardVp >= VP_TO_WIN;
 	if (!finishOpportunity) {
 		return hp4SurvivalOracleNavigation(state, seat, catalog, cfg, seed);
 	}
@@ -1129,7 +1135,7 @@ function scriptedNavigationCommand(
 	seed: number
 ): GameCommand | null {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster) return plannerNavigationCommand(state, seat, catalog, cfg, seed);
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const monsterDamage = monster.damage ?? 0;
@@ -1274,7 +1280,7 @@ function chooseHp4ConversionOracleAction(
 	withNext: LegalAction[]
 ): { action: LegalAction; index: number } | null {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	if (!player || !monster) return null;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	if (monsterHp < 4 || monsterHp > 5) return null;
@@ -1692,12 +1698,14 @@ function recordTargetExposure(
 	metrics: BranchMetrics,
 	state: PublicGameState,
 	seat: SeatColor,
+	catalog: PlayCatalog,
 	cfg: Config,
 	seen: Set<string>
 ): void {
 	const player = state.players[seat];
 	const destination = player?.navigationDestination;
-	const monsterHp = state.monster?.maxHp ?? state.monster?.hp ?? 0;
+	const monster = seatMonster(state, seat, catalog);
+	const monsterHp = monster?.maxHp ?? monster?.hp ?? 0;
 	const vp = player?.victoryPoints ?? 0;
 	if (
 		!player ||
@@ -1778,7 +1786,7 @@ function rolloutScript(
 						actionCounter.set(key, used + 1);
 						metrics.navigationDecisions++;
 						recordBuild(metrics, state, seat);
-						recordTargetExposure(metrics, state, seat, cfg, exposureKeys);
+						recordTargetExposure(metrics, state, seat, catalog, cfg, exposureKeys);
 					}
 					if (state.status !== 'active' || state.round >= rolloutEndRound) break;
 					continue;
@@ -1810,7 +1818,7 @@ function rolloutScript(
 					progressed = true;
 					actionCounter.set(key, used + 1);
 					recordBuild(metrics, state, seat);
-					recordTargetExposure(metrics, state, seat, cfg, exposureKeys);
+					recordTargetExposure(metrics, state, seat, catalog, cfg, exposureKeys);
 					if (chosen.cmd.type === 'startCombat') {
 						metrics.combats++;
 						const combat = state.combats.find((x) => x.kind === 'monster' && x.sides[0]?.seat === seat);
@@ -1833,7 +1841,7 @@ function rolloutScript(
 				actionCounter.set(key, used + 1);
 				if (activeSeat === seat) {
 					recordBuild(metrics, state, seat);
-					recordTargetExposure(metrics, state, seat, cfg, exposureKeys);
+					recordTargetExposure(metrics, state, seat, catalog, cfg, exposureKeys);
 					if (cmd.type === 'startCombat') {
 						metrics.combats++;
 						const combat = state.combats.find((x) => x.kind === 'monster' && x.sides[0]?.seat === seat);
@@ -1852,7 +1860,7 @@ function rolloutScript(
 			const sig = `${state.phase}:${state.round}`;
 			applyDeadlineAdvance(state, catalog);
 			recordBuild(metrics, state, seat);
-			recordTargetExposure(metrics, state, seat, cfg, exposureKeys);
+			recordTargetExposure(metrics, state, seat, catalog, cfg, exposureKeys);
 			if (`${state.phase}:${state.round}` === sig) break;
 		}
 	}

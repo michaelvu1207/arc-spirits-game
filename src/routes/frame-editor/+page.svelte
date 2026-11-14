@@ -84,7 +84,7 @@ void main() {
 		return [...assets.spiritAssets.values()]
 			.map((spirit) => {
 				const originId = spirit.traits.origin_ids[0];
-				const origin = originById.get(originId) ?? 'Arcane Spirits';
+				const origin = originById.get(originId) ?? 'No origin';
 				const rawPath = spirit.art_raw_image_path || null;
 				const finishedPath = spirit.game_print_image_path || null;
 				const sourcePath = rawPath ?? finishedPath;

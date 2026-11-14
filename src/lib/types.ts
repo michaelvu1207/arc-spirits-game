@@ -25,6 +25,9 @@ export interface MatSlotSnapshot {
 	classId?: string;
 	/** True for class/named special runes (carried from the reward path's resolved rune). */
 	special?: boolean;
+	/** A one-time relic tool ("<effect>, then discard this"; no VP since 2026-11-13); never converted
+	 *  to a base rune by the legacy relic → rune save migration. */
+	relicTool?: boolean;
 }
 
 // Augment attached directly on a spirit card (from game sync)

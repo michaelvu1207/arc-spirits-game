@@ -58,6 +58,10 @@ beforeAll(async () => {
 	const started = applyGameCommand(state, host, { type: 'startGame', seed: 956300010 }, catalog);
 	if (!started.ok) throw new Error(`${started.error.code}: ${started.error.message}`);
 	state = started.state;
+	// startGame deals a Navigation Power draft, and the ML enumerator auto-resolves it as the ONLY
+	// candidate. Settle it first so the planner faces the real destination choice.
+	const draft = state.players[seat]?.pendingPowerDrafts?.[0];
+	if (draft?.length) apply({ type: 'chooseNavigationPower', powerId: draft[0] });
 });
 
 const options = {

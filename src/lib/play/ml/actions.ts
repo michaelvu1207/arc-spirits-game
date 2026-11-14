@@ -111,7 +111,7 @@ function infiltratorSwapCommands(
 	if (!me || state.phase !== 'location') return [];
 	if (
 		!(me.spirits ?? []).some(
-			(spirit) => !spirit.isFaceDown && (spirit.classes?.['Cursed Fighter'] ?? 0) > 0
+			(spirit) => !spirit.isFaceDown && (spirit.classes?.['Ram'] ?? 0) > 0
 		)
 	) {
 		return [];
@@ -310,12 +310,15 @@ export function policySafeAction(action: LegalAction): LegalAction {
 function buildCombatPolicyPreview(
 	before: PublicGameState,
 	seat: SeatColor,
-	catalog: PlayCatalog
+	catalog: PlayCatalog,
+	handIndex: number
 ): PublicGameState {
 	const preview = structuredClone(before) as PublicGameState;
 	const player = preview.players[seat];
-	const monster = preview.monster;
-	if (!player || !monster) return preview;
+	// The fought card is the acting seat's own hand card at `handIndex`.
+	const monster = player?.monsterHand?.[handIndex];
+	const fought = before.players[seat]?.monsterHand?.[handIndex] ?? null;
+	if (!player || !monster || !fought) return preview;
 
 	// Monster initiative is infinite, so this opening hit is known before commitment.
 	// Re-run only the deterministic pre-roll half of fightMonster.
@@ -324,12 +327,13 @@ function buildCombatPolicyPreview(
 	takeDamage(player, monster.damage, { state: preview, seat, catalog }, []);
 	player.actionsUsedThisRound.push('combat');
 	const guaranteedKillProbability = Math.max(
-		computeKillProbability(before, seat, catalog),
-		computeKillProbability(before, seat, catalog, { allowCorruptKill: true })
+		computeKillProbability(before, seat, catalog, { monster: fought }),
+		computeKillProbability(before, seat, catalog, { allowCorruptKill: true, monster: fought })
 	);
 	if (guaranteedKillProbability >= 1 - 1e-12) {
-		monster.livesRemaining = Math.max(0, monster.livesRemaining - 1);
-		const claim = rewardClaimCount(monster.rewardTrack, monster.chooseAmount);
+		// A certain kill removes the card from the hand and opens its reward claim.
+		player.monsterHand?.splice(handIndex, 1);
+		const claim = rewardClaimCount(monster.rewardTrack);
 		if (claim > 0) {
 			player.pendingReward = {
 				monsterId: monster.id,
@@ -448,7 +452,7 @@ function buildPolicyPreview(
 	after: PublicGameState,
 	catalog: PlayCatalog
 ): PublicGameState {
-	if (cmd.type === 'startCombat') return buildCombatPolicyPreview(before, seat, catalog);
+	if (cmd.type === 'startCombat') return buildCombatPolicyPreview(before, seat, catalog, cmd.handIndex);
 	if (resolvedNewPvpCombat(before, after)) return buildPvpPolicyPreview(before, after);
 	return buildRedactedOutcomePreview(before, after);
 }
@@ -606,8 +610,11 @@ export function enumerateCandidates(
 			for (const h of me?.handDraws ?? []) tryAdd({ type: 'spawnHandSpirit', guid: h.guid });
 			tryAdd({ type: 'redrawHandDraws' });
 			tryAdd({ type: 'discardHandDraws' });
-			// Monster combat + reward claim.
-			tryAdd({ type: 'startCombat' });
+			// Monster combat (one candidate per card in the seat's own hand) + reward claim.
+			// Drawing/keeping cards is the monster-card autopilot's job, not a policy choice.
+			(me?.monsterHand ?? []).forEach((card, handIndex) => {
+				if (card.hp > 0) tryAdd({ type: 'startCombat', handIndex });
+			});
 			if (me?.pendingReward) emitMonsterRewardCommands(me.pendingReward, tryAdd);
 			// Spirit/rune management actions that exist in real play.
 			for (const spirit of me?.spirits ?? [])
@@ -690,22 +697,31 @@ export function enumerateCandidates(
 		case 'awakening': {
 			// Flip & pay for face-down spirits — including discard-cost variants per offer.
 			for (const off of me?.awakenOffers ?? []) {
-				const orderedOptions = [...(off.options ?? [])].sort((a, b) => {
-					const aRef = a.ref;
-					const bRef = b.ref;
-					if (aRef.kind !== 'attackDie' || bRef.kind !== 'attackDie') return 0;
-					const aDie = me?.attackDice.find((die) => die.instanceId === aRef.instanceId);
-					const bDie = me?.attackDice.find((die) => die.instanceId === bRef.instanceId);
-					return (
-						DICE_TIER_ORDER.indexOf(aDie?.tier ?? 'basic') -
-						DICE_TIER_ORDER.indexOf(bDie?.tier ?? 'basic')
-					);
-				});
+				const sortByTier = (options: NonNullable<typeof off.options>) =>
+					[...options].sort((a, b) => {
+						const aRef = a.ref;
+						const bRef = b.ref;
+						if (aRef.kind !== 'attackDie' || bRef.kind !== 'attackDie') return 0;
+						const aDie = me?.attackDice.find((die) => die.instanceId === aRef.instanceId);
+						const bDie = me?.attackDice.find((die) => die.instanceId === bRef.instanceId);
+						return (
+							DICE_TIER_ORDER.indexOf(aDie?.tier ?? 'basic') -
+							DICE_TIER_ORDER.indexOf(bDie?.tier ?? 'basic')
+						);
+					});
+				// An "X or Y" offer lists every way to pay; each way is its own set of selections.
+				const ways = (
+					off.alternatives?.length
+						? off.alternatives.map((alt) => ({ options: alt.options, count: alt.discardCount }))
+						: [{ options: off.options ?? [], count: off.discardCount }]
+				).map((way) => ({ ...way, options: sortByTier(way.options) }));
 				const selections = off.requiresSelection
 					? uniqueBy(
-							combinations(
-								orderedOptions.map((option) => option.ref),
-								off.discardCount
+							ways.flatMap((way) =>
+								combinations(
+									way.options.map((option) => option.ref),
+									way.count
+								)
 							),
 							(refs) =>
 								refs
@@ -742,7 +758,12 @@ export function enumerateCandidates(
 								DICE_TIER_ORDER.indexOf(tierById.get(a) ?? 'basic') -
 								DICE_TIER_ORDER.indexOf(tierById.get(b) ?? 'basic')
 						);
-						const selections = uniqueBy(combinations(eligible, picker.count), (ids) =>
+						// A free-size picker (Sentinel's discard) offers every size from minCount up.
+						const sizes =
+							picker.minCount != null
+								? Array.from({ length: picker.count - picker.minCount + 1 }, (_, i) => picker.minCount! + i)
+								: [picker.count];
+						const selections = uniqueBy(sizes.flatMap((k) => combinations(eligible, k)), (ids) =>
 							ids
 								.map((id) => tierById.get(id) ?? 'unknown')
 								.sort()
@@ -891,6 +912,8 @@ export function commandMatches(a: GameCommand, b: GameCommand): boolean {
 			);
 		case 'spawnHandSpirit':
 			return a.guid === (b as typeof a).guid;
+		case 'startCombat':
+			return a.handIndex === (b as typeof a).handIndex;
 		case 'takeSpirit':
 			return a.marketIndex === (b as typeof a).marketIndex;
 		case 'replaceSpirit':

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { powerIconUrl } from '$lib/play/regionRules';
-	import type { SeatColor, NavigationDestination, MonsterState } from '$lib/play/types';
+	import type { SeatColor, NavigationDestination } from '$lib/play/types';
 	import { LOCATION_ACCENT, type LocationConfig } from '$lib/play/locations';
 	import type { GameLocationAsset, IconPoolEntry, RewardIconToken } from '$lib/types';
 	import { seatAccent, storageUrl } from './helpers';
@@ -18,8 +18,6 @@
 		/** Render as the circular compass hub (the Arcane Abyss core). */
 		hub?: boolean;
 		onHover?: (destination: NavigationDestination | null) => void;
-		/** Invading monster (Arcane Abyss only). */
-		monster?: MonsterState | null;
 		mySeat?: SeatColor | null;
 		onSelect?: (destination: NavigationDestination) => void;
 	}
@@ -35,7 +33,6 @@
 		focused = false,
 		hub = false,
 		onHover,
-		monster = null,
 		mySeat = null,
 		onSelect
 	}: Props = $props();
@@ -93,13 +90,9 @@
 	<span class="name">{config.name}</span>
 
 	{#if config.combatOnly}
-		{#if monster}
-			<!-- The monster's stats, lives, and rewards now live on the leaderboard boss
-			     card, so the Abyss core just issues the call to action. -->
-			<span class="fight">Fight the Monster</span>
-		{:else}
-			<span class="empty">No monster invading</span>
-		{/if}
+		<!-- Monster cards are private to each player, so the Abyss core only names what
+		     you can do there. -->
+		<span class="abyss-cta">Draw a monster card · fight from your hand</span>
 	{:else if orderedRows.length > 0}
 		<ul class="rows">
 			{#each orderedRows as row, i (i)}
@@ -290,9 +283,8 @@
 		line-height: 1.2;
 	}
 
-	/* Abyss core call-to-action — the monster's stats/lives/rewards now live on the
-	   leaderboard boss card, so the centre just reads as the fight prompt. */
-	.fight {
+	/* Abyss core call-to-action: what a player can do with the monster decks there. */
+	.abyss-cta {
 		font-family: var(--font-display);
 		font-size: clamp(0.78rem, 1vw, 0.98rem);
 		letter-spacing: 0.06em;

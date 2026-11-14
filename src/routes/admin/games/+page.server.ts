@@ -40,8 +40,8 @@ const GAME_TABLES_TO_DELETE = [
 ] as const;
 
 async function recomputeVerifiedStats(supabaseAdmin: NonNullable<ReturnType<typeof getSupabaseAdmin>>): Promise<void> {
-	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL;
-	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY;
+	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL?.trim();
+	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY?.trim();
 	if (!supabaseUrl || !supabaseAnonKey) {
 		throw error(500, 'Missing public Supabase configuration');
 	}

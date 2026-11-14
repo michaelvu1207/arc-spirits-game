@@ -58,7 +58,15 @@ describe('driver neuralSeats routing (medium-opponent bug regression)', () => {
 		// The bug routing is byte-identical to pure medium: the opponent's net was ignored.
 		expect(gBug.finalVP).toEqual(gMedium.finalVP);
 		expect(gBug.winnerSeat).toEqual(gMedium.winnerSeat);
-		// The fix routing diverges from medium: the opponent actually used its net.
-		expect(gNet.finalVP).not.toEqual(gMedium.finalVP);
+		// The fix routing diverges from medium: the opponent actually used its net. Compare the
+		// whole final state, not only VP: with the frozen catalog and this seed, all seats can
+		// end on 0 VP in both games (November 2026 rules), so VP alone does not show the split.
+		// `gameId` and the phase deadlines carry the wall clock, so they are left out.
+		const fingerprint = (g: typeof gNet) =>
+			JSON.stringify(g.finalState, (key, value) =>
+				key === 'gameId' || /deadline/i.test(key) ? undefined : value
+			);
+		expect(fingerprint(gBug)).toEqual(fingerprint(gMedium));
+		expect(fingerprint(gNet)).not.toEqual(fingerprint(gMedium));
 	});
 });

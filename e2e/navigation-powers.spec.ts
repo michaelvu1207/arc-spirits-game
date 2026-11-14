@@ -1,7 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { NAVIGATION_POWERS } from '../src/lib/play/navigationPowers';
-import { setupTwoPlayerGame, getRoomView, runRoomCommand } from './helpers';
+import {
+	setupTwoPlayerGame,
+	getRoomView,
+	runRoomCommand,
+	drawMonsterCardViaApi
+} from './helpers';
 
 type View = {
 	projection: {
@@ -190,7 +195,9 @@ test('all 22 consumables can be selected, resolved, and followed by a completed 
 			if (
 				['battle-fury', 'battle-guard', 'unbroken-assault', 'duelists-prize'].includes(power.id)
 			) {
-				await runRoomCommand(host, { type: 'startCombat' });
+				// Monster cards are fought from the hand: draw one first.
+				await drawMonsterCardViaApi(host, 1);
+				await runRoomCommand(host, { type: 'startCombat', handIndex: 0 });
 				await resolveOffers(host);
 			}
 			if (power.id === 'battle-reward') {

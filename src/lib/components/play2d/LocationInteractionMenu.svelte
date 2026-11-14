@@ -38,6 +38,8 @@
 		 *  until the engine ships them the menu falls back to the same client helpers
 		 *  it always used (status quo, no new rule derivation). */
 		seatAffordances?: SeatAffordances | null;
+		/** Render nothing (not the "pass your turn" note) when the location has no rows. */
+		hideEmpty?: boolean;
 		/** Fires when a trade arms/disarms (the board parks pass-turn meanwhile). */
 		onArmedChange?: (armed: boolean) => void;
 		onResolve?: (rowIndex: number, choices: number[], costChoices: number[]) => void;
@@ -51,6 +53,7 @@
 		accent = 'var(--brand-violet, #5a2bff)',
 		busy = false,
 		seatAffordances = null,
+		hideEmpty = false,
 		onArmedChange,
 		onResolve
 	}: Props = $props();
@@ -66,7 +69,7 @@
 
 	const interactions = $derived(buildLocationInteractions(location?.reward_rows, location?.name));
 	const usedRows = $derived(player?.actionsUsedThisRound ?? []);
-	// Per-row use allowance: 1 + Wayfarer's locationInteraction credit ("you may
+	// Per-row use allowance: 1 + Nomad's locationInteraction credit ("you may
 	// do ALL location interactions up to two times"). When >1 we render one card per
 	// allowed use, each spent left-to-right as the player resolves the row.
 	const rowAllowance = $derived(1 + (player?.extraActions?.locationInteraction ?? 0));
@@ -373,6 +376,7 @@
 			if (g.type === 'rune') return g.rune.name;
 			if (g.type === 'restoreBarrier') return 'Restore Barrier';
 			if (g.type === 'vp') return `${g.amount} VP`;
+			if (g.type === 'attackDice') return `${g.amount} ${g.tier} Attack Dice`;
 			if (g.type === 'chooseRune') return 'your pick';
 			if (g.type === 'action') {
 				return g.action === 'cultivate'
@@ -436,7 +440,9 @@
 	</span>
 {/snippet}
 
-{#if interactions.length === 0}
+{#if interactions.length === 0 && hideEmpty}
+	<!-- The host location shows its own actions (e.g. Abyss monster cards). -->
+{:else if interactions.length === 0}
 	<div class="empty" data-testid="no-interactions">No interactions here — pass your turn.</div>
 {:else if armedInteraction}
 	{@const it = armedInteraction}

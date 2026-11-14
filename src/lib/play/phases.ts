@@ -34,6 +34,9 @@ import { getPowerAutoCommand } from './navigationPowerProgress';
 import { buildEffectContext } from './effects/context';
 import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effects/awaken';
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
+import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
+import { DECISION_RESOLVERS } from './effects/decisions';
+import { recordTravelingTraderProgress } from './effects/awakenHandlers';
 import { advanceMonsterIfDefeated } from './combat';
 import {
 	resolveNavigationPowerReveal,
@@ -147,24 +150,27 @@ function beginNavigation(state: PublicGameState): void {
 			player.navigationPowerCombatEnabled = false;
 			player.navigationPowerBattleTriggered = false;
 			player.navigationPowerTemporaryDice = [];
+			// Wanderer reads where the player was last round.
+			player.previousDestination = player.navigationDestination ?? null;
 			player.navigationDestination = null;
 			player.phaseReady = false;
 			player.actionsUsedThisRound = [];
 			player.lastAction = null;
 			player.pendingReward = null;
 			// P5 per-turn / per-round flags reset at the start of each round, BEFORE
-			// onNavigate fires (so Rune Traveler's doubleRunes / Soul Weaver's redraw
+			// onNavigate fires (so Rune Traveler's doubleRunes / Mystic's redraw
 			// re-arm cleanly) and the corruption-tracking flags zero out for the new
 			// round's Awakening-Phase grants.
 			player.doubleRunes = false;
 			player.redrawAvailable = false;
-			player.attackDiceChangedThisTurn = false;
 			player.becameTaintedThisRound = false;
 			player.becameCorruptThisRound = false;
 			player.becameFallenThisRound = false;
 			player.corruptedThisRound = false;
+			// Rule `moonPerksNeedAttack` only: the field exists only once an attack set it.
+			if (player.attackedPlayerThisRound) player.attackedPlayerThisRound = false;
 			// Per-round extra-action credits (Ironmane's extra Monster Combat,
-			// Wayfarer's doubled location interactions) are re-granted each
+			// Nomad's doubled location interactions) are re-granted each
 			// round by onNavigate, so clear last round's allowance here first.
 			player.extraActions = {};
 			// Compact rune slots for the new round: drop spent/discarded slots,
@@ -213,7 +219,7 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 
 	// onNavigate fires once per active player AFTER every destination is public, so
 	// co-location is correct (Rune Traveler shares its doubleRunes flag with the
-	// players already revealed at the same location). Tide Stalker gains its +4
+	// players already revealed at the same location). Spellblade gains its +4
 	// initiative here; manual destination-change / Undercover prompts surface too.
 	for (const seat of state.activeSeats) {
 		if (!state.players[seat]?.navigationDestination) continue;
@@ -221,7 +227,7 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 	}
 
 	resolveNavigationPowerReveal(state, catalog!);
-	enterEncounter(state);
+	enterEncounter(state, catalog);
 }
 
 /** Evil seats that share a non-Abyss location with a Good seat (potential PvP). */
@@ -245,7 +251,7 @@ export function encounterAggressors(state: PublicGameState): Set<SeatColor> {
  * else is auto-ready. With no mixed-alignment co-location we skip straight to the
  * location phase (the common case — players only turn Evil late).
  */
-export function enterEncounter(state: PublicGameState): void {
+export function enterEncounter(state: PublicGameState, catalog?: PlayCatalog): void {
 	state.phase = 'encounter';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
 	// Fresh phase → clear last round's encounter votes for everyone.
@@ -255,7 +261,7 @@ export function enterEncounter(state: PublicGameState): void {
 	}
 	const aggressors = encounterAggressors(state);
 	if (aggressors.size === 0) {
-		enterLocation(state);
+		enterLocation(state, catalog);
 		return;
 	}
 	for (const seat of state.activeSeats) {
@@ -265,17 +271,54 @@ export function enterEncounter(state: PublicGameState): void {
 }
 
 /** Advance out of the encounter phase once every aggressor has acted. */
-export function tryAdvanceFromEncounter(state: PublicGameState): void {
+export function tryAdvanceFromEncounter(state: PublicGameState, catalog?: PlayCatalog): void {
 	if (state.phase !== 'encounter') return;
 	if (!allActiveSeatsReady(state)) return;
-	enterLocation(state);
+	enterLocation(state, catalog);
 }
 
-export function enterLocation(state: PublicGameState): void {
+export function enterLocation(state: PublicGameState, catalog?: PlayCatalog): void {
 	state.phase = 'location';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
 	state.phaseDeadlineExtensions = 0; // fresh grace budget for this phase
 	clearPhaseReady(state);
+	// Location-Phase class cards (Falconer's trade from any location) are offered here, so
+	// they show before the player's own location interactions.
+	for (const seat of state.activeSeats) {
+		if (!state.players[seat]?.navigationDestination) continue;
+		applyTrigger(state, seat, 'locationPhase', [], { catalog });
+	}
+}
+
+/**
+ * End the Location-Phase cards (`expiresAt: 'benefits'`) that the player did not answer:
+ * apply the card's `expiryOptionId` (Rider's "choose one" is not optional), else drop it.
+ */
+function expireLocationPhaseDecisions(
+	state: PublicGameState,
+	seat: SeatColor,
+	log: string[],
+	catalog?: PlayCatalog
+): void {
+	const player = state.players[seat];
+	if (!player) return;
+	const expiring = (player.pendingDecisions ?? []).filter((d) => d.expiresAt === 'benefits');
+	if (expiring.length === 0) return;
+	player.pendingDecisions = player.pendingDecisions.filter((d) => d.expiresAt !== 'benefits');
+	for (const decision of expiring) {
+		const resolver = DECISION_RESOLVERS[decision.kind];
+		if (!decision.expiryOptionId || !resolver) continue;
+		const ctx = buildEffectContext({
+			state,
+			seat,
+			player,
+			trigger: 'awakeningPhase',
+			log,
+			traitCount: 0,
+			catalog
+		});
+		resolver(ctx, decision.expiryOptionId);
+	}
 }
 
 /** Advance to the Benefits step once every seat has ended its location actions. */
@@ -291,7 +334,7 @@ export function tryAdvanceFromLocation(state: PublicGameState, catalog?: PlayCat
  * Fire the `awakeningPhase` trigger for EACH active player, in seat order. Within
  * one player the dispatch resolves declarative breakpoints FIRST — the status-driven
  * grants (Cursed Spirit, Abyss Harbinger) — then the bespoke handlers — the VP win-cons
- * (Dawn Sovereign's VP + self-discard, Void Sovereign, Relic Sentinel). So the order is:
+ * (Dawn Sovereign's VP + self-discard, Queen, Relic Sentinel). So the order is:
  * status grants → VP win-cons, and every VP grant lands before any winner is declared
  * (findWinner runs in tryAdvanceFromCleanup, strictly after this whole sequence).
  *
@@ -309,7 +352,12 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 		const player = state.players[seat];
 		if (!player) continue;
 		const awakeningLog: string[] = [];
+		// The Location step is over: record "went there and did no interaction" awaken progress.
+		recordTravelingTraderProgress(player);
+		expireLocationPhaseDecisions(state, seat, awakeningLog, catalog);
 		applyTrigger(state, seat, 'awakeningPhase', awakeningLog, { catalog });
+		// Relic tools: once per round, offer each held relic (keep / VP when the catalog's relic VP > 0 / its effect).
+		offerHeldRelicTools(state, player, awakeningLog, catalog);
 		// Surface the awakening-phase grants (Cursed Spirit rewards, Abyss Harbinger,
 		// Dawn Sovereign VP, …) so the player sees what they earned this round.
 		if (awakeningLog.length > 0) {
@@ -331,10 +379,9 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 		}
 	}
 
-	// Round boundary: if the Abyss monster's lives are spent (defeated this round), the
-	// next, stronger monster comes out for the coming round — one kill per active player
-	// to drive it off. Done here (not mid-fight) so every player faces the same listed
-	// monster all round and excess kills never carry over.
+	// Round boundary: a defeated Abyss monster card leaves the game, a surviving one recovers
+	// 1 Barrier, and any monster reveal left open is returned to its deck. Done here (not
+	// mid-fight) so the shared monster never changes during the Location phase.
 	advanceMonsterIfDefeated(state, catalog);
 
 	// Seats with nothing to claim skip the step silently; if that's everyone the whole
@@ -363,25 +410,21 @@ function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
 		if (player.becameFallenThisRound)
 			grants.push({ kind: 'fallenChoice', amount: cursed, source: 'Cursed Spirit' });
 	}
-	// Dawn Sovereign — +1 VP (the Evil self-discard penalty is applied on claim).
-	if ((counts['Golden Ruler'] ?? 0) >= 1) {
+	// King — +1 VP (the Evil self-discard penalty is applied on claim).
+	if ((counts['King'] ?? 0) >= 1) {
 		grants.push({
 			kind: 'vp',
 			amount: 1,
-			source: 'Golden Ruler',
-			...(evil ? { note: 'You are Evil — claiming also discards a Dawn Sovereign spirit.' } : {})
+			source: 'King',
+			...(evil ? { note: 'You are Evil — claiming also discards a King spirit.' } : {})
 		});
 	}
-	// Abyss Harbinger — +1 Arcane Attack die, only if you corrupted this round.
-	if ((counts['The Corruptor'] ?? 0) >= 1 && player.corruptedThisRound) {
-		grants.push({ kind: 'attackDice', tier: 'arcane', amount: 1, source: 'The Corruptor' });
-	}
-	// Void Sovereign — now a flat +1 VP via its awakeningPhase `run` handler
+	// (Corruptor's old "+1 Arcane die after a corruption" claim is not in the November 2026
+	// text; its effects live in effects/classes/theCorruptor.ts.)
+	// Queen — now a flat +1 VP via its awakeningPhase `run` handler
 	// (classes/worldEnder.ts), no longer a Cleanup claim.
-	// Relic Sentinel — +6 VP, only when you are Good with ≥24 VP.
-	if ((counts['Relic Sentinel'] ?? 0) >= 1 && !evil && player.victoryPoints >= 24) {
-		grants.push({ kind: 'vp', amount: 6, source: 'Relic Sentinel' });
-	}
+	// (Relic Sentinel's old "+6 VP at 24 VP while Good" claim is not in the November 2026
+	// text; its relic guard lives in effects/classes/worldGuardian.ts.)
 
 	return grants;
 }
@@ -392,7 +435,7 @@ function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
  * out in — at a physical table players count those points anyway (rules decision,
  * 2026-07-03). So when the game ends on the {@link MAX_ROUNDS} cap, run one last
  * benefits pass for every seat, for scoring only: the `awakeningPhase` trigger (bespoke
- * VP handlers like Void Sovereign) plus the DIRECT application of every VP-kind Benefits
+ * VP handlers like Queen) plus the DIRECT application of every VP-kind Benefits
  * grant (Relic Sentinel, Dawn Sovereign). Non-VP grants (dice, relics, augment picks) are
  * skipped — they cannot affect the result of a finished game. The last vpHistory point
  * is re-synced so the points-over-time chart shows the final score.
@@ -451,6 +494,12 @@ export function tryAdvanceFromAwakening(state: PublicGameState, catalog?: PlayCa
  * (Benefits) and awaken flips happened in the two prior phases.
  */
 export function enterCleanup(state: PublicGameState, catalog?: PlayCatalog): void {
+	// Backstop for seats that did not press "Done awakening" (auto-ready, host force-advance,
+	// deadline): an unanswered relic card resolves as "keep" before Cleanup.
+	for (const seat of state.activeSeats) {
+		const player = state.players[seat];
+		if (player) keepUnansweredRelicTools(player, []);
+	}
 	state.phase = 'cleanup';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase
 	state.phaseDeadlineExtensions = 0; // fresh grace budget for this phase
@@ -657,7 +706,7 @@ export function forceAdvancePhase(state: PublicGameState, catalog?: PlayCatalog)
 			return;
 		}
 		case 'encounter': {
-			enterLocation(state);
+			enterLocation(state, catalog);
 			return;
 		}
 		case 'location': {

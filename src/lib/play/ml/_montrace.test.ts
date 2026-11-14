@@ -1,8 +1,8 @@
 /**
  * Round-by-round MONSTER trace for one 4-player game. Logs per round: each seat's VP/barrier/dice/avgDmg
- * and the shared monster's rung (ladderIndex) + hp + damage + livesRemaining. Reveals where the ~13-VP
- * farming ceiling comes from — does the monster advance? do kills credit VP? how often does a seat fight
- * + kill? Is there a structural block (r30=0% for every bot)?
+ * and its own monster hand (Barrier left / printed Barrier + damage per card). Reveals where the ~13-VP
+ * farming ceiling comes from — do kills credit VP? how often does a seat fight + kill? Is there a
+ * structural block (r30=0% for every bot)?
  *
  *   MONTRACE=1 MONTRACE_PROFILE=godly npx vitest run src/lib/play/ml/_montrace.test.ts --disable-console-intercept
  */
@@ -44,10 +44,11 @@ describe('monster trace', () => {
 			for (const s of seats) { fights[s] = 0; kills[s] = 0; }
 			let curRound = state.round;
 			const logRound = (rnd: number) => {
-				const m = state.monster;
 				const avgDmg = (s: SeatColor) => (state.players[s]?.attackDice ?? []).reduce((sum, d) => { const f = DICE_TIER_FACES[d.tier]; return sum + f.reduce((a, b) => a + b, 0) / f.length; }, 0);
-				const vps = seats.map((s) => `${s}:vp${state.players[s]?.victoryPoints ?? 0}/b${state.players[s]?.maxBarrier ?? 0}/d${state.players[s]?.attackDice.length ?? 0}/dmg${avgDmg(s).toFixed(0)}`).join(' ');
-				console.log(`[montrace] end r${String(rnd).padStart(2)} | monster rung=${m?.ladderIndex ?? '-'} hp=${m?.maxHp ?? '-'} dmg=${m?.damage ?? '-'} lives=${m?.livesRemaining ?? '-'} | ${vps}`);
+				// Each seat fights cards from its own hand: show hp/maxHp:damage for every held card.
+				const hand = (s: SeatColor) => (state.players[s]?.monsterHand ?? []).map((m) => `${m.hp}/${m.maxHp}:${m.damage}`).join(',') || '-';
+				const vps = seats.map((s) => `${s}:vp${state.players[s]?.victoryPoints ?? 0}/b${state.players[s]?.maxBarrier ?? 0}/d${state.players[s]?.attackDice.length ?? 0}/dmg${avgDmg(s).toFixed(0)}/hand[${hand(s)}]`).join(' ');
+				console.log(`[montrace] end r${String(rnd).padStart(2)} | ${vps}`);
 			};
 
 			let ticks = 0;

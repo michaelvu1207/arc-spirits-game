@@ -30,7 +30,13 @@ import type {
 	PlaySpirit
 } from '../types';
 import type { EffectContext } from './context';
-import { matchMatCost, matSatisfiesRequirement, spendableMats, type SpendableMat } from './matMatch';
+import {
+	matchMatCost,
+	matSatisfiesRequirement,
+	spendableMats,
+	runesAreWild,
+	type SpendableMat
+} from './matMatch';
 import { AWAKEN_HANDLERS, type AwakenHandlerContext } from './awakenHandlers';
 
 /** Named requirements are fungible and auto-pay. Owner input is needed only
@@ -126,7 +132,7 @@ export function checkAwakenCondition(ctx: EffectContext, target: AwakenTarget): 
 	}
 
 	// rune_cost → generic resolver.
-	const match = matchMatCost(awaken.mats, spendableMats(ctx.player.mats));
+	const match = matchMatCost(awaken.mats, spendableMats(ctx.player.mats, { runesWild: runesAreWild(ctx.player) }));
 	if (!match.ok) {
 		return { ok: false, reason: 'insufficient_runes', kind: 'rune_cost' };
 	}
@@ -180,10 +186,11 @@ export function payAwakenCondition(
 		if (!handler.check(handlerCtx).ok) {
 			return { ok: false, reason: 'awaken_text', discarded: [] };
 		}
-		const before = ctx.log.length;
 		handler.pay(handlerCtx);
-		// Surface the handler's own log lines as the "discarded" summary.
-		return { ok: true, discarded: ctx.log.slice(before) };
+		// The handler writes its own log lines ("Discarded Fire Rune.", "Discarded 5 attack dice
+		// to awaken …") into ctx.log. Do not return them as `discarded` too: the caller wraps
+		// `discarded` in its own "Discarded … to awaken …" line, which doubled every text-awaken log.
+		return { ok: true, discarded: [] };
 	}
 
 	const mats = ctx.player.mats;
@@ -192,7 +199,12 @@ export function payAwakenCondition(
 	// auto-pick; a complete-but-wrong selection is rejected (F1).
 	const totalRequired = awaken.mats.reduce((sum, r) => sum + r.count, 0);
 	const bindExact = strict && !!runeSelection && runeSelection.length === totalRequired;
-	const match = matchMatCost(awaken.mats, spendableMats(mats), runeSelection, { strict: bindExact });
+	const match = matchMatCost(
+		awaken.mats,
+		spendableMats(mats, { runesWild: runesAreWild(ctx.player) }),
+		runeSelection,
+		{ strict: bindExact }
+	);
 	if (!match.ok) {
 		// A failed strict match means the player's explicit picks don't pay the cost
 		// (wrong items); otherwise the cost is simply unaffordable.
@@ -271,7 +283,7 @@ export function buildAwakenOffer(ctx: EffectContext, target: AwakenTarget): Awak
 			.map((r) => (r.count > 1 ? `${r.name} ×${r.count}` : r.name))
 			.join(', ');
 		const discardCount = awaken.mats.reduce((sum, r) => sum + r.count, 0);
-		const spendable = spendableMats(ctx.player.mats);
+		const spendable = spendableMats(ctx.player.mats, { runesWild: runesAreWild(ctx.player) });
 		const refFor = (m: SpendableMat): AwakenDiscardRef => ({
 			kind: 'rune',
 			slotIndex: ctx.player.mats[m.arrayIndex].slotIndex
@@ -330,7 +342,8 @@ export function buildAwakenOffer(ctx: EffectContext, target: AwakenTarget): Awak
 			requirement,
 			discardCount: choice.count,
 			options: choice.options,
-			...(choice.requiresSelection ? { requiresSelection: true as const } : {})
+			...(choice.requiresSelection ? { requiresSelection: true as const } : {}),
+			...((choice.alternatives?.length ?? 0) > 1 ? { alternatives: choice.alternatives } : {})
 		};
 	}
 	return { ...base, requirement, discardCount: 0, options: [] };

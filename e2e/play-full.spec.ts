@@ -7,6 +7,7 @@ import {
 	expectPhase,
 	expectRound,
 	claimMonsterRewardIfPresent,
+	drawMonsterCardThroughUi,
 	currentPhase,
 	currentRound,
 	getRoomView
@@ -208,7 +209,8 @@ async function foreground(page: Page): Promise<void> {
  * seat the two players; every in-game action below is a rendered UI click.
  * The destinations select catalog-defined free actions deterministically:
  * Tidal row 0 = Spirit World Summon, Floral row 2 = Rest, Lantern row 1 =
- * Cultivate, and Arcane Abyss exposes the monster-combat control.
+ * Cultivate, and at the Arcane Abyss the player draws a monster card into their hand
+ * and fights it from the hand.
  */
 test.describe('2D play — human-operated full game loop', () => {
 	test.setTimeout(300_000);
@@ -307,12 +309,14 @@ test.describe('2D play — human-operated full game loop', () => {
 		await clickIfReady(host, 'result-continue');
 		await finishRoundThroughUi([host, guest], 3);
 
-		// Round 3: Arcane Abyss combat, including explicit reward choice when won.
+		// Round 3: Arcane Abyss — draw a monster card, then fight it from the hand,
+		// including explicit reward choice when won.
 		await lockDestination(host, 'Arcane Abyss');
 		await lockDestination(guest, 'Water Region');
 		await expectPhase(host, 'location');
 		await foreground(host);
-		await host.getByTestId('action-monsterCombat').click();
+		await drawMonsterCardThroughUi(host, 1);
+		await host.getByTestId('monster-hand-0').click();
 		await expect(host.getByTestId('combat-overlay')).toBeVisible();
 		await host.getByTestId('combat-continue').click();
 		await claimMonsterRewardIfPresent(host);

@@ -3,7 +3,7 @@ import type { NavigationDestination, SeatColor } from '../../types';
 import type { EffectContext } from '../context';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Tide Stalker — redirect after Navigation Reveal and always attack first.
+// Spellblade — redirect after Navigation Reveal and always attack first.
 export const ability: ClassAbility[] = [
 	{
 		on: 'onNavigate',
@@ -32,7 +32,7 @@ export const ability: ClassAbility[] = [
 		on: 'inCombat',
 		run(ctx) {
 			ctx.player.alwaysAttackFirst = true;
-			ctx.log.push('Tide Stalker: attacks first.');
+			ctx.log.push('Spellblade: attacks first.');
 		}
 	}
 ];
@@ -54,6 +54,6 @@ export const decisions: ClassDecisions = {
 		ctx.player.navigationDestination = dest;
 		ctx.player.pendingDestination = dest;
 		rebuildOccupancy(ctx);
-		ctx.log.push(`Tide Stalker: changed destination to ${dest}.`);
+		ctx.log.push(`Spellblade: changed destination to ${dest}.`);
 	}
 };

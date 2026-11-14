@@ -3,6 +3,7 @@ import { sequence } from '@sveltejs/kit/hooks';
 import { createServerClient } from '@supabase/ssr';
 import { env as publicEnv } from '$env/dynamic/public';
 import { checkPlayApiRequest, securityHeaders } from '$lib/server/httpGuards';
+import { authCookieOptions } from '$lib/supabaseOrigin';
 
 /**
  * Supabase Auth (SSR). Creates a per-request server client bound to the request's
@@ -12,9 +13,10 @@ import { checkPlayApiRequest, securityHeaders } from '$lib/server/httpGuards';
  * identity layer.
  */
 const supabaseHandle: Handle = async ({ event, resolve }) => {
-	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL || 'https://unconfigured.invalid';
-	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY || 'unconfigured-public-anon-key';
+	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL?.trim() || 'https://unconfigured.invalid';
+	const supabaseAnonKey = publicEnv.PUBLIC_SUPABASE_ANON_KEY?.trim() || 'unconfigured-public-anon-key';
 	event.locals.supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+		cookieOptions: authCookieOptions,
 		cookies: {
 			getAll: () => event.cookies.getAll(),
 			setAll: (cookiesToSet) => {
@@ -147,6 +149,9 @@ const corsHandle: Handle = async ({ event, resolve }) => {
 	// frame-ancestors directive (svelte.config.js) for older browsers; the CSP header
 	// itself is emitted by SvelteKit from the kit.csp config.
 	for (const [key, value] of Object.entries(securityHeaders())) {
+		// Local game only (PUBLIC_ARC_LOCAL_EXPLORER=1): the data editor frames the explorer
+		// pages, so X-Frame-Options is left to the CSP frame-ancestors list (svelte.config.js).
+		if (key === 'X-Frame-Options' && publicEnv.PUBLIC_ARC_LOCAL_EXPLORER === '1') continue;
 		if (!response.headers.has(key)) response.headers.set(key, value);
 	}
 	return response;

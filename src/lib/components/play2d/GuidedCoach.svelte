@@ -7,9 +7,17 @@
 		mode?: 'casual' | 'ranked';
 		pendingKind?: string | null;
 		lockedDestination?: string | null;
+		/** Where the player is this round (the Arcane Abyss gets its own Location copy). */
+		destination?: string | null;
 	}
 
-	let { phase, mode = 'casual', pendingKind = null, lockedDestination = null }: Props = $props();
+	let {
+		phase,
+		mode = 'casual',
+		pendingKind = null,
+		lockedDestination = null,
+		destination = null
+	}: Props = $props();
 	const KEY = 'arc-spirits-guided-journey-v1';
 	const PHASES: GamePhase[] = ['navigation', 'encounter', 'location', 'benefits', 'awakening', 'cleanup'];
 	let mounted = $state(false);
@@ -77,7 +85,12 @@
 				certain: 'Certain: the button label states the vote you are committing.',
 				uncertain: 'Uncertain: unresolved dice and other players’ votes.'
 			};
-			case 'location': return {
+			case 'location': return destination === 'Arcane Abyss' ? {
+				title: 'Draw or fight', recommendation: 'Draw a monster card into your hand, or tap a monster in your hand to fight it.',
+				why: 'Your monster cards are yours alone. A kill gives you every reward on the card.',
+				certain: 'Certain: the monster hits first, and damage stays on the card between fights.',
+				uncertain: 'Uncertain: your attack roll and which two cards the deck reveals.'
+			} : {
 				title: 'Use the location', recommendation: 'Inspect an affordable visible action; staged trades can be cancelled before confirmation.',
 				why: 'Location actions are the main way to build spirits, resources, and scoring opportunities.',
 				certain: 'Certain: costs and immediate gains shown in the confirmation are deterministic.',
@@ -126,7 +139,7 @@
 {/if}
 
 <style>
-	.coach { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(92px, calc(env(safe-area-inset-bottom) + 76px)); z-index: 46; width: min(390px, calc(100vw - 32px)); box-sizing: border-box; padding: 14px; border-radius: 16px; color: #f5f0ff; background: rgba(9, 4, 25, .96); border: 1px solid rgba(123,29,255,.8); box-shadow: 0 16px 44px rgba(0,0,0,.5); pointer-events: auto; }
+	.coach { position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(92px, calc(env(safe-area-inset-bottom) + 76px)); z-index: 46; width: min(250px, calc(100vw - 32px)); box-sizing: border-box; padding: 14px; border-radius: 16px; color: #f5f0ff; background: rgba(9, 4, 25, .96); border: 1px solid rgba(123,29,255,.8); box-shadow: 0 16px 44px rgba(0,0,0,.5); pointer-events: auto; }
 	.coach-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #65f3e1; font: 700 .66rem/1 var(--font-display); letter-spacing: .13em; text-transform: uppercase; }
 	.coach-head button, .got-it { min-height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); color: white; background: rgba(255,255,255,.06); padding: 0 12px; }
 	h2 { margin: .55rem 0 .35rem; font: 400 1.15rem/1.1 var(--font-display); text-transform: uppercase; }

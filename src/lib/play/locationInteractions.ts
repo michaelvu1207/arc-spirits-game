@@ -24,6 +24,7 @@ import { POWER_ICON, REPLACE_POWER_ICON, regionRewardRows } from './regionRules'
  */
 
 import type { GameLocationRewardRow, RewardIconToken, MatSlotSnapshot } from '$lib/types';
+import type { DiceTier } from './types';
 
 export type RewardActionKind = 'spiritWorldSummon' | 'abyssSummon' | 'cultivate' | 'rest';
 
@@ -41,7 +42,9 @@ export type RewardIconMeaning =
 	/** Victory points (monster-kill reward token). */
 	| { kind: 'victoryPoints'; amount: number; label: string }
 	/** "Any basic rune" gain wildcard — choose one of the four origin runes. */
-	| { kind: 'anyRune'; label: string };
+	| { kind: 'anyRune'; label: string }
+	/** Gain attack dice of one tier (monster-kill reward: the die-face icon = that die). */
+	| { kind: 'attackDice'; tier: DiceTier; amount: number; label: string };
 
 // ── icon_pool ids (stable DB content) ────────────────────────────────────────
 const SUMMON_ICON = '76e58219-e805-4b94-acf4-6d62dfe4c515';
@@ -60,6 +63,14 @@ const VP_TWO_ICON = '22e7f408-fa65-417e-a555-56ad87ecb428';
 const VP_THREE_ICON = '54a61c34-6e05-44df-a4d1-115e004af31e';
 const VP_FIVE_ICON = '9cf8e1dd-55e0-4926-8dc8-2fb5b7b96bd4';
 const VICTORY_POINT_ICON = '70792514-aa43-4526-a7a4-0f1e4ca55d71';
+const VP_FOUR_ICON = '8254dc80-329c-4fc8-872b-b0b765c7b888';
+// Attack-die faces on monster reward tracks (owner rule, 2026-11-11: "gaining attack dice is
+// gaining attack dice" — one token = one die of that tier). Enchanted Attack is a local icon row.
+const BASIC_ATTACK_SIDE_1_ICON = '7d052532-89f1-44cf-8521-5a4f2aac5cd9';
+const BASIC_ATTACK_SIDE_2_ICON = '6279ea72-c08c-4e1c-8358-94afab489ecd';
+const ENCHANTED_ATTACK_ICON = '95e4a832-18d6-5ec3-8d57-2d90118050d6';
+const EXALTED_ATTACK_SIDE_1_ICON = 'e7f1c140-32bd-4603-8255-0be7a8ef34c4';
+const ARCANE_ATTACK_SIDE_1_ICON = '6d48e34b-e461-4deb-9cfd-662dd7127331';
 // "Any basic rune" wildcard gain — choose one of the four origin runes.
 const ANY_RUNE_ICON = '36aab6c9-b98c-4e84-b097-e743f45dde82';
 
@@ -92,7 +103,15 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 	[VICTORY_POINT_ICON]: { kind: 'victoryPoints', amount: 1, label: '1 Victory Point' },
 	[VP_TWO_ICON]: { kind: 'victoryPoints', amount: 2, label: '2 Victory Points' },
 	[VP_THREE_ICON]: { kind: 'victoryPoints', amount: 3, label: '3 Victory Points' },
+	[VP_FOUR_ICON]: { kind: 'victoryPoints', amount: 4, label: '4 Victory Points' },
 	[VP_FIVE_ICON]: { kind: 'victoryPoints', amount: 5, label: '5 Victory Points' },
+
+	// Attack-dice reward tokens (monster reward tracks): one die of the face's tier.
+	[BASIC_ATTACK_SIDE_1_ICON]: { kind: 'attackDice', tier: 'basic', amount: 1, label: '1 Basic Attack Dice' },
+	[BASIC_ATTACK_SIDE_2_ICON]: { kind: 'attackDice', tier: 'basic', amount: 1, label: '1 Basic Attack Dice' },
+	[ENCHANTED_ATTACK_ICON]: { kind: 'attackDice', tier: 'enchanted', amount: 1, label: '1 Enchanted Attack Dice' },
+	[EXALTED_ATTACK_SIDE_1_ICON]: { kind: 'attackDice', tier: 'exalted', amount: 1, label: '1 Exalted Attack Dice' },
+	[ARCANE_ATTACK_SIDE_1_ICON]: { kind: 'attackDice', tier: 'arcane', amount: 1, label: '1 Arcane Attack Dice' },
 
 	// "Any basic rune" wildcard gain — choose one of the four origin runes.
 	[ANY_RUNE_ICON]: { kind: 'anyRune', label: 'Any basic rune' },
@@ -136,8 +155,8 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'specialRune',
 		runeId: 'f1c4f059-61e0-40ad-ad9a-4e25a8531f49',
 		classId: 'f5438f3c-2052-4093-b402-893a45cf7046',
-		runeName: 'Spirit Animal',
-		label: 'Spirit Animal augment'
+		runeName: 'Beast',
+		label: 'Beast augment'
 	},
 	'c9b3225f-c8a9-4aa8-8e43-56c39cf68974': {
 		kind: 'specialRune',
@@ -150,8 +169,8 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'specialRune',
 		runeId: '33f343e7-6bdb-43cc-8b27-115eaa16826f',
 		classId: '17e08cde-f3d2-480b-8386-1e3047e2f85a',
-		runeName: 'Soul Weaver',
-		label: 'Soul Weaver augment'
+		runeName: 'Mystic',
+		label: 'Mystic augment'
 	},
 	'66525fe8-e375-4473-b1c3-88d3c9fd2b1c': {
 		kind: 'specialRune',
@@ -195,15 +214,15 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 		kind: 'specialRune',
 		runeId: 'ee1486a0-8b61-499c-809b-b4de9920aa8f',
 		classId: null,
-		runeName: 'Magnet',
-		label: 'Magnet rune'
+		runeName: 'Diamond',
+		label: 'Diamond relic'
 	},
 	'c8ef5d48-2289-4fee-a34d-b041d3e8bea6': {
 		kind: 'specialRune',
 		runeId: 'a6111d01-2c55-4b1f-854a-32887d92b8e1',
 		classId: null,
-		runeName: 'Teapot',
-		label: 'Teapot rune'
+		runeName: 'Cleansing Teapot',
+		label: 'Cleansing Teapot relic'
 	}
 };
 
@@ -226,10 +245,10 @@ export function originRuneOptions(): ResolvedRune[] {
  */
 const RELIC_RUNES: { runeId: string; name: string }[] = [
 	{ runeId: 'e02af831-e599-4676-9e37-820d19bfc3e1', name: 'Fairy' },
-	{ runeId: 'a6111d01-2c55-4b1f-854a-32887d92b8e1', name: 'Teapot' },
+	{ runeId: 'a6111d01-2c55-4b1f-854a-32887d92b8e1', name: 'Cleansing Teapot' },
 	{ runeId: '8a0d54ca-aeab-405c-9e5c-1c1425d1aa86', name: 'Firecracker' },
 	{ runeId: '690a7e3b-5737-4494-bb8a-b58bee13f473', name: 'Flower' },
-	{ runeId: 'ee1486a0-8b61-499c-809b-b4de9920aa8f', name: 'Magnet' }
+	{ runeId: 'ee1486a0-8b61-499c-809b-b4de9920aa8f', name: 'Diamond' }
 ];
 
 export function relicOptions(): ResolvedRune[] {
@@ -280,6 +299,8 @@ export type GainEffect =
 	| { type: 'rune'; rune: ResolvedRune }
 	/** Victory points (monster-kill reward). */
 	| { type: 'vp'; amount: number }
+	/** Attack dice of one tier, gained through the engine's `gainAttackDice` (cap 10). */
+	| { type: 'attackDice'; tier: DiceTier; amount: number }
 	/** Player/bot picks one of `options` (an "or" gain). */
 	| { type: 'chooseRune'; options: ResolvedRune[] };
 
@@ -352,6 +373,8 @@ function gainEffectFor(token: RewardIconToken): GainEffect | null {
 			return { type: 'restoreBarrier', amount: 1 };
 		case 'victoryPoints':
 			return { type: 'vp', amount: m.amount };
+		case 'attackDice':
+			return { type: 'attackDice', tier: m.tier, amount: m.amount };
 		case 'anyRune':
 			return { type: 'chooseRune', options: originRuneOptions() };
 		case 'originRune':
@@ -430,10 +453,17 @@ export function isRelic(slot: MatSlotSnapshot): boolean {
 	return slot.type === 'relic';
 }
 
-export function slotSatisfies(slot: MatSlotSnapshot, req: CostRequirement): boolean {
+/** Payment options of the payer. `runesWild`: Trader ("You may pay your runes as runes of any
+ *  type") — every held basic rune also pays a rune-of-an-origin cost. Relics never do. */
+export interface CostOptions {
+	runesWild?: boolean;
+}
+
+export function slotSatisfies(slot: MatSlotSnapshot, req: CostRequirement, opts?: CostOptions): boolean {
 	switch (req.match) {
 		case 'origin':
-			return slot.originId === req.originId || slot.name === `${req.originName} Rune`;
+			if (slot.originId === req.originId || slot.name === `${req.originName} Rune`) return true;
+			return opts?.runesWild === true && isNavigationPowerRune(slot);
 		case 'specialRune':
 			return slot.id === req.runeId || slot.name === req.runeName;
 		case 'anyRelic':
@@ -455,10 +485,14 @@ export function isWildcardCost(req: CostRequirement): boolean {
 
 /** Array indices into `mats` of every held slot that could pay `req` — the options
  *  the UI offers when letting the player pick which item to discard. */
-export function eligibleCostSlots(req: CostRequirement, mats: MatSlotSnapshot[]): number[] {
+export function eligibleCostSlots(
+	req: CostRequirement,
+	mats: MatSlotSnapshot[],
+	opts?: CostOptions
+): number[] {
 	const out: number[] = [];
 	mats.forEach((slot, i) => {
-		if (slot.hasRune && slotSatisfies(slot, req)) out.push(i);
+		if (slot.hasRune && slotSatisfies(slot, req, opts)) out.push(i);
 	});
 	return out;
 }
@@ -483,7 +517,8 @@ export interface CostMatch {
 export function matchRewardCost(
 	cost: CostRequirement[],
 	runes: MatSlotSnapshot[],
-	preferred: number[] = []
+	preferred: number[] = [],
+	opts?: CostOptions
 ): CostMatch {
 	if (cost.length === 0) return { ok: true, consumedArrayIndexes: [] };
 
@@ -513,14 +548,22 @@ export function matchRewardCost(
 		if (!hit) {
 			hit = available.find((entry) => !used.has(entry.arrayIndex) && slotSatisfies(entry.slot, req));
 		}
+		// Trader: only when no exact rune is left, spend another rune as a wild rune.
+		if (!hit && opts?.runesWild) {
+			hit = available.find((entry) => !used.has(entry.arrayIndex) && slotSatisfies(entry.slot, req, opts));
+		}
 		if (!hit) return { ok: false, consumedArrayIndexes: [] };
 		used.add(hit.arrayIndex);
 	}
 	return { ok: true, consumedArrayIndexes: [...used] };
 }
 
-export function canAfford(interaction: LocationInteraction, runes: MatSlotSnapshot[]): boolean {
-	return matchRewardCost(interaction.cost, runes).ok;
+export function canAfford(
+	interaction: LocationInteraction,
+	runes: MatSlotSnapshot[],
+	opts?: CostOptions
+): boolean {
+	return matchRewardCost(interaction.cost, runes, [], opts).ok;
 }
 
 /**
@@ -532,7 +575,11 @@ export function canAfford(interaction: LocationInteraction, runes: MatSlotSnapsh
  * the cost cannot currently be paid (no mat left for that slot). Returns `[]` for a
  * free (no-cost) row.
  */
-export function autoPickCostSlots(cost: CostRequirement[], mats: MatSlotSnapshot[]): (number | null)[] {
+export function autoPickCostSlots(
+	cost: CostRequirement[],
+	mats: MatSlotSnapshot[],
+	opts?: CostOptions
+): (number | null)[] {
 	const picks: (number | null)[] = cost.map(() => null);
 	if (cost.length === 0) return picks;
 
@@ -544,13 +591,17 @@ export function autoPickCostSlots(cost: CostRequirement[], mats: MatSlotSnapshot
 		.sort((a, b) => Number(isWildcardCost(a.req)) - Number(isWildcardCost(b.req)));
 
 	for (const { req, costIndex } of order) {
-		for (let arrayIndex = 0; arrayIndex < mats.length; arrayIndex += 1) {
-			const slot = mats[arrayIndex];
-			if (!slot?.hasRune || used.has(arrayIndex)) continue;
-			if (!slotSatisfies(slot, req)) continue;
-			used.add(arrayIndex);
-			picks[costIndex] = arrayIndex;
-			break;
+		// Exact payers first; with Trader, any other rune only when no exact one is left.
+		for (const pass of opts?.runesWild ? [undefined, opts] : [undefined]) {
+			if (picks[costIndex] !== null) break;
+			for (let arrayIndex = 0; arrayIndex < mats.length; arrayIndex += 1) {
+				const slot = mats[arrayIndex];
+				if (!slot?.hasRune || used.has(arrayIndex)) continue;
+				if (!slotSatisfies(slot, req, pass)) continue;
+				used.add(arrayIndex);
+				picks[costIndex] = arrayIndex;
+				break;
+			}
 		}
 	}
 	return picks;

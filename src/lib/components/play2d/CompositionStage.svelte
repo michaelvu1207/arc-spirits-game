@@ -48,7 +48,7 @@
 
 	// ── Combat readout ──────────────────────────────────────────────────────────
 	// The scouted player's attack-dice pool and the expected total damage of a roll —
-	// dice-tier averages + the flat Spirit Animal bonus (see expectedAttack). Shared
+	// dice-tier averages + the flat Beast bonus (see expectedAttack). Shared
 	// with the leaderboard so the two readouts always show the same number.
 	const attackDice = $derived(player?.attackDice ?? []);
 	const avgAttack = $derived(player ? expectedAttack(player as unknown as PrivatePlayerState) : 0);

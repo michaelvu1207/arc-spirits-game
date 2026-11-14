@@ -277,6 +277,47 @@ export async function reloadRoomPage(page: Page): Promise<Page> {
 }
 
 /**
+ * At the Arcane Abyss, draw a monster card into the hand through the real UI: tap the
+ * deck stack, pick a deck, keep the first revealed card. The kept card is the LAST
+ * hand entry, so with an empty hand it is `monster-hand-0`.
+ */
+export async function drawMonsterCardThroughUi(
+	page: Page,
+	difficulty: 1 | 2 | 3 = 1
+): Promise<void> {
+	await page.getByTestId('abyss-draw-stack').click({ force: true });
+	await page.getByTestId(`monster-difficulty-${difficulty}`).click({ force: true });
+	await page.getByTestId('monster-card-keep-0').click({ force: true });
+	await expect(page.getByTestId('abyss-draw-stack')).toBeVisible();
+}
+
+/**
+ * Take the first offered Navigation Power for every open draft of this seat (via the API).
+ * An open draft is a full-screen dialog; a forced click on the stage would land on it.
+ */
+export async function clearPowerDraftsViaApi(page: Page): Promise<void> {
+	for (let attempt = 0; attempt < 5; attempt += 1) {
+		const view = (await getRoomView(page)) as unknown as {
+			projection: { players: Record<string, { pendingPowerDrafts?: string[][] } | undefined> };
+			member: { seatColor?: string | null };
+		};
+		const seat = view.member.seatColor;
+		const draft = seat ? view.projection.players[seat]?.pendingPowerDrafts?.[0] : undefined;
+		if (!draft?.length) return;
+		await runRoomCommand(page, { type: 'chooseNavigationPower', powerId: draft[0] });
+	}
+}
+
+/** The same draw through the play API (no UI legs): reveal 2 from a deck, keep the first. */
+export async function drawMonsterCardViaApi(
+	page: Page,
+	difficulty: 1 | 2 | 3 = 1
+): Promise<void> {
+	await runRoomCommand(page, { type: 'drawMonsterCards', difficulty });
+	await runRoomCommand(page, { type: 'keepMonsterCard', index: 0 });
+}
+
+/**
  * If defeating the Arcane Abyss monster opened a reward selection, claim the first
  * available reward and dismiss whatever follow-up it produces. No-op when no menu
  * is shown (the monster survived) — keeps the combat flow robust whether or not the

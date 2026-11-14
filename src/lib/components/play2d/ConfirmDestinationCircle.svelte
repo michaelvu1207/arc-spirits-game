@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NavigationDestination, MonsterState } from '$lib/play/types';
+	import type { NavigationDestination } from '$lib/play/types';
 	import type { GameLocationAsset, IconPoolEntry } from '$lib/types';
 	import { splatFor } from '$lib/play/locations';
 	import { decideNavMode, compassDiameter, RING_OVERHANG } from '$lib/play/viewMode';
@@ -14,7 +14,6 @@
 		accent?: string;
 		location?: GameLocationAsset | null;
 		iconPool?: Map<string, IconPoolEntry>;
-		monster?: MonsterState | null;
 		/** Splat for the chosen world; defaults to splatFor(destination). */
 		splatSrc?: string;
 		/** Whether "Change selection" is allowed (navigation still open). */
@@ -27,7 +26,6 @@
 		accent = '#8d8aa1',
 		location = null,
 		iconPool = new Map(),
-		monster = null,
 		splatSrc,
 		canExit = true,
 		onExit
@@ -79,7 +77,6 @@
 							{location}
 							{iconPool}
 							{accent}
-							{monster}
 							{canExit}
 							{onExit}
 						/>
@@ -89,7 +86,7 @@
 		</div>
 	{:else}
 		<!-- Too small for a circle → the plain confirmed panel (small-screen fallback). -->
-		<ConfirmedDestinationPanel {destination} {location} {iconPool} {accent} {monster} {canExit} {onExit} />
+		<ConfirmedDestinationPanel {destination} {location} {iconPool} {accent} {canExit} {onExit} />
 	{/if}
 </div>
 

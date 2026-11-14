@@ -62,6 +62,17 @@ describe('deny-by-default classification', () => {
 	});
 });
 
+describe('Abyss monster-card commands', () => {
+	// Regression: these shipped in the reducer but were missing from PLAYER_COMMANDS, so the
+	// deny-by-default gate rejected every draw on the live site ("Unknown command type").
+	it('admit for seated casual and ranked players', () => {
+		for (const ctx of [seatedCasualPlayer, seatedRankedPlayer]) {
+			expect(admit(ctx, 'drawMonsterCards', { difficulty: 1 }).ok).toBe(true);
+			expect(admit(ctx, 'keepMonsterCard', { index: 0 }).ok).toBe(true);
+		}
+	});
+});
+
 describe('rules-driven play commands stay green', () => {
 	it('seated players may submit every player command in BOTH modes', () => {
 		for (const type of PLAYER_COMMANDS) {

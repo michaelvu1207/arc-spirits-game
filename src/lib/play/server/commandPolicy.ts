@@ -75,6 +75,8 @@ export const PLAYER_COMMANDS: ReadonlySet<string> = new Set([
 	'unlockNavigation',
 	'passEncounter',
 	'startCombat',
+	'drawMonsterCards',
+	'keepMonsterCard',
 	'initiatePvp',
 	'resolveMonsterReward',
 	'resolveLocationInteraction',

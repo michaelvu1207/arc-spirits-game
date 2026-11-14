@@ -1,0 +1,112 @@
+/* The local game explorer looks like the data editor (~/niji-batch/public/data.html): the same
+   colours, font, tabs, buttons and tables. Everything here is under .explorer-plain, which only
+   the /explorer pages have (src/routes/+layout.svelte); no other page changes. */
+.explorer-plain {
+	--bg: #0a0b0f; --panel: #12141a; --card: #171a21; --line: #23262f; --line-2: #30343f;
+	--text: #e6e7eb; --dim: #9a9eab; --faint: #646978; --seg: #20232b; --field: #0d0e13;
+	--accent: #f0532d; --ok: #4ecb8f; --bad: #f0616d;
+	--plain-font: 'Figtree', -apple-system, system-ui, sans-serif;
+
+	/* The app's own tokens, mapped to the editor's. */
+	--color-void: var(--bg); --color-obsidian: var(--bg); --color-shadow: var(--field);
+	--color-crypt: var(--card); --color-tomb: var(--panel); --color-mist: var(--line); --color-aether: var(--line-2);
+	--brand-magenta: var(--dim); --brand-magenta-soft: var(--dim); --brand-magenta-deep: var(--dim);
+	--brand-violet: var(--dim); --brand-violet-soft: var(--text); --brand-violet-deep: var(--dim); --brand-royal: var(--dim);
+	--brand-cyan: var(--text); --brand-cyan-soft: var(--dim); --brand-teal: var(--text);
+	--brand-amber: var(--text); --brand-amber-soft: var(--text); --brand-coral: var(--text);
+	--color-blood: var(--text); --color-gold: var(--text); --color-gold-glow: var(--text);
+	--color-bone: var(--text); --color-parchment: var(--text); --color-fog: var(--dim); --color-whisper: var(--faint);
+	--glow-magenta: none; --glow-violet: none; --glow-cyan: none; --glow-teal: none; --glow-amber: none; --glow-blood: none;
+	--gradient-flame: var(--text); --gradient-aurora: var(--text); --gradient-spectrum: var(--line); --gradient-ember: var(--text);
+	--font-display: var(--plain-font); --font-body: var(--plain-font); --font-script: var(--plain-font);
+	--vw-rule: var(--line); --vw-rule-strong: var(--line);
+
+	background: var(--bg) !important;
+	color: var(--text);
+	font: 14px/1.45 var(--plain-font);
+}
+html:has(.explorer-plain) { background: #0a0b0f; }
+.explorer-plain.haunted-bg::before, .explorer-plain.haunted-bg::after, .explorer-plain ~ .edge-blur { display: none !important; }
+
+/* One font and size, sentence case, nothing that glows or moves. */
+.explorer-plain *:not(svg *) {
+	font-family: var(--plain-font) !important;
+	font-size: 14px !important;
+	line-height: 1.45 !important;
+	letter-spacing: 0 !important;
+	text-transform: none !important;
+	text-shadow: none !important;
+	box-shadow: none !important;
+	background-image: none !important;
+	animation: none !important;
+	backdrop-filter: none !important;
+	font-variant-numeric: tabular-nums;
+}
+.explorer-plain *:not(svg *):not(.player-row) { border-color: var(--line) !important; }
+.explorer-plain :is(h1, h2, h3) { font-size: 16px !important; font-weight: 600 !important; margin: 0 0 4px !important; color: var(--text) !important; }
+.explorer-plain :is(.eyebrow, .section-eyebrow, .hero-eyebrow, .stat-unit, .hero-stat-lab, .th, th, .gt-header, .lb-head, .pt-head, .sort-label, .agent-head, small) {
+	font-size: 12px !important; font-weight: 500 !important; color: var(--dim) !important;
+}
+.explorer-plain :is(.stat-num, .hero-stat-num, .big, .big-num, .winner-name, .player-name, .hero-username, .td.name) { font-weight: 600 !important; }
+
+/* Tabs: the editor's sidebar buttons, in a row. */
+.explorer-plain .tabs-underline { gap: 4px; border-bottom: 0 !important; }
+.explorer-plain .tab-btn { padding: 6px 10px; border-radius: 8px; color: var(--dim); font-weight: 400 !important; }
+.explorer-plain .tab-btn:hover { color: var(--text); }
+.explorer-plain .tab-btn.active { background: var(--seg); color: var(--text); }
+.explorer-plain .tab-btn::after { display: none !important; }
+.explorer-plain .tab-num { color: var(--faint) !important; margin-left: 6px; }
+.explorer-plain .explorer-nav { padding: 8px 16px !important; border-bottom: 1px solid var(--line) !important; display: flex; }
+
+/* Buttons and fields: the editor's .tb and inputs. */
+.explorer-plain :is(.btn-ghost, .btn-primary, .btn-secondary, .text-btn-sm, .explorer-game button) {
+	padding: 7px 14px !important; border-radius: 8px !important; border: 0 !important;
+	background: var(--seg) !important; color: var(--text) !important; font-weight: 500 !important; font-size: 13px !important;
+	height: auto !important; width: auto !important;
+}
+.explorer-plain .text-btn-sm { padding: 2px 8px !important; }
+.explorer-plain .explorer-game button.player-row { padding: 12px !important; border-radius: 0 !important; background: transparent !important; border-left: 3px solid var(--accent, transparent) !important; }
+.explorer-plain .explorer-game button.player-row.selected { background: var(--seg) !important; }
+.explorer-plain .explorer-game button[class*='bg-gray-800'] { background: transparent !important; color: var(--dim) !important; }
+.explorer-plain :is(input:not([type='range']), select, textarea) {
+	background: var(--field) !important; border: 1px solid var(--line-2) !important; border-radius: 6px !important;
+	padding: 4px 7px !important; font-size: 13px !important; color: var(--text) !important;
+}
+.explorer-plain a { color: inherit; }
+.explorer-plain .back-link, .explorer-plain .player-link { color: var(--text) !important; }
+
+/* Flat surfaces. */
+.explorer-plain :is([class*='bg-gray-9'], [class*='bg-gray-8']):not(button),
+.explorer-plain :is(.viewer-side, .viewer-main, .pane, .pane-dice, .pane-augments, .profile-hero, .rail, .rail-section, .head-strip, .lb-row, .gt-row, .pt-row, .rg-row, .pod-card, .summary-shell *) {
+	background-color: transparent !important;
+}
+.explorer-plain :is(.gt-header, .lb-head, .pt-head) { background: var(--bg) !important; }
+.explorer-plain :is(.gt-row, .lb-row, .pt-row, .rg-row):hover { background-color: var(--panel) !important; }
+.explorer-plain :is(.gt-row, .gt-header, .lb-row, .lb-head, .pt-row, .pt-head) { padding-top: 6px !important; padding-bottom: 6px !important; }
+.explorer-plain .profile-hero { border-bottom: 1px solid var(--line) !important; margin-left: 0 !important; margin-right: 0 !important; padding-left: 0 !important; }
+.explorer-plain .resource-graph-container { background: transparent !important; border-radius: 8px !important; }
+
+/* Coloured pills become plain text. */
+.explorer-plain :is(.status-sticker, .status-tag, .rank-chip, .pod-rank-chip) {
+	background: transparent !important; border: 0 !important; padding: 0 !important; color: var(--dim) !important; border-radius: 0 !important;
+}
+.explorer-plain .status-sticker * { color: var(--dim) !important; }
+.explorer-plain .status-sticker img { display: none; }
+.explorer-plain .dot-pulse { display: none !important; }
+.explorer-plain :is(.avatar, .winner-portrait, .recent-hex, .hex-portrait) { filter: none !important; }
+
+/* The round slider. */
+.explorer-plain .round-slider { background-color: var(--line-2) !important; accent-color: var(--text); }
+.explorer-plain .round-slider::-webkit-slider-thumb { background-color: var(--text) !important; border-color: var(--bg) !important; }
+
+/* Text inside the hex board (a spirit with no art shows its name). */
+.explorer-plain svg text { font-family: var(--plain-font) !important; letter-spacing: 0 !important; }
+.explorer-plain .search-bare svg { display: none; }
+/* Empty slots and spirits with no art: flat editor colours instead of the purple fill. */
+.explorer-plain svg .hex-border[fill^='url'] { fill: var(--panel); }
+.explorer-plain svg .hex-border[fill^='rgba(17'] { fill: var(--card); }
+.explorer-plain svg rect[fill^='rgba(26, 15, 46'] { fill: transparent; }
+
+.explorer-plain .info { font-size: 10px !important; line-height: 1 !important; border-color: var(--line-2) !important; }
+.explorer-plain .count-rule { font-size: 12px !important; }
+.explorer-plain .pop { border-color: var(--line-2) !important; }

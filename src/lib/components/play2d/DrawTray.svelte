@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { STORAGE_BASE_URL } from '$lib/supabase';
+	import { gameImageUrl } from '$lib/storageImages';
 	import type { PlayerProjection } from '$lib/play/types';
 	import { launchSummonFx } from '$lib/stores/summonFx.svelte';
 	import { playSfx } from '$lib/stores/gameAudio.svelte';
@@ -34,7 +34,7 @@
 	const picksLeft = $derived(
 		pending ? Math.max(0, pending.summonLimit - pending.summonedCount) : 0
 	);
-	// Soul Weaver: while a redraw is armed, offer to put these back and draw again.
+	// Mystic: while a redraw is armed, offer to put these back and draw again.
 	const canRedraw = $derived(!!player?.redrawAvailable && draws.length > 0);
 
 	// Cards materialising into the tray → one-shot summon shimmer.
@@ -58,7 +58,7 @@
 		if (draw.sourceBag === 'Arcane Abyss Bag' || isHero(draw.id)) {
 			return spiritBackImageUrl(draw.id);
 		}
-		return spiritImages.get(draw.id) ?? `${STORAGE_BASE_URL}/hex_spirits/${draw.id}_game_print.png`;
+		return spiritImages.get(draw.id) ?? gameImageUrl(`hex_spirits/${draw.id}_game_print.png`);
 	}
 
 	// Guids mid-flight — the original card hides instantly so the flying clone (owned
@@ -181,7 +181,7 @@
 					{disabled}
 					onclick={() => onRedraw?.()}
 				>
-					↻ Redraw <span class="redraw-src">Soul Weaver</span>
+					↻ Redraw <span class="redraw-src">Mystic</span>
 				</button>
 			{/if}
 			<button
@@ -505,7 +505,7 @@
 			color 140ms ease,
 			box-shadow 140ms ease;
 	}
-	/* The redraw is the Soul Weaver's signature affordance — give it the brand cyan
+	/* The redraw is the Mystic's signature affordance — give it the brand cyan
 	   glow so it reads as a class power, not a plain secondary action. */
 	.redraw {
 		border-color: color-mix(in srgb, var(--brand-cyan, #5cdfff) 65%, transparent);

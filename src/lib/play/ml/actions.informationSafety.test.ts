@@ -26,6 +26,7 @@ import {
 	chooseRouteBreakpointOracleAction,
 	routeBreakpointActionScore
 } from './routeBreakpointOracle';
+import { drawMonsterViaCommands } from '../testing/monsterCards';
 
 const VP1 = '70792514-aa43-4526-a7a4-0f1e4ca55d71';
 const VP3 = '54a61c34-6e05-44df-a4d1-115e004af31e';
@@ -109,6 +110,8 @@ function combatState(): PublicGameState {
 	state = apply(state, RED, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 	state = apply(state, BLUE, { type: 'lockNavigation', destination: 'Arcane Abyss' });
 	state = apply(state, RED, { type: 'forceAdvancePhase' });
+	// Red draws the m-1 card into its own hand to fight it.
+	state = drawMonsterViaCommands(state, RED, CATALOG, { catalogId: 'm-1' });
 	state.players.Red!.attackDice = [{ instanceId: 'public-arcane-die', tier: 'arcane' }];
 	return state;
 }
@@ -216,7 +219,8 @@ describe('information-safe ML action previews', () => {
 			expect(isStochasticLegalAction(action)).toBe(true);
 			expect(commandHasHiddenOutcome(state, action.cmd, action.next)).toBe(true);
 			expect(action.policyNext.players.Red!.pendingReward).toBeNull();
-			expect(action.policyNext.monster!.livesRemaining).toBe(state.monster!.livesRemaining);
+			// The fought card stays in the hand at its pre-roll Barrier (the hit is hidden).
+			expect(action.policyNext.players.Red!.monsterHand).toEqual(state.players.Red!.monsterHand);
 			expect(action.policyNext.combats).toEqual(state.combats);
 			expect(action.policyNext.players.Red!.barrier).toBe(action.next.players.Red!.barrier);
 			expect(action.policyNext.players.Red!.statusLevel).toBe(action.next.players.Red!.statusLevel);
@@ -296,7 +300,9 @@ describe('information-safe ML action previews', () => {
 			monsterId: 'm-1',
 			chooseAmount: 2
 		});
-		expect(action.policyNext.monster!.livesRemaining).toBe(state.monster!.livesRemaining - 1);
+		// A certain kill removes the card from the hand.
+		expect(action.policyNext.players.Red!.monsterHand).toEqual([]);
+		expect(state.players.Red!.monsterHand).toHaveLength(1);
 		expect(action.policyNext.combats).toEqual(state.combats);
 	});
 
@@ -401,7 +407,7 @@ describe('information-safe ML action previews', () => {
 		expect(encoded[p + 2]).toBeCloseTo(1 / 6); // raw one-arcane-die firepower vs 3 HP
 		expect(encoded[p + 4]).toBeCloseTo(3 / 20); // public monster HP
 		expect(encoded[p + 5]).toBeCloseTo(1 / 20); // public monster damage
-		expect(encoded[p + 6]).toBe(1); // public remaining-lives fraction
+		expect(encoded[p + 6]).toBe(1); // legacy remaining-lives fraction (always 1 for a card)
 		expect(encoded[p + 8]).toBeCloseTo(4 / 10); // public claimable reward VP
 		expect(encoded[p + 9]).toBeCloseTo((cleanKill * 4) / 10); // expected reward VP
 		expect(encoded[p + 10]).toBeCloseTo(2 / 4); // public reward pick count
@@ -411,7 +417,7 @@ describe('information-safe ML action previews', () => {
 		expect(effects[7]).toBeCloseTo((cleanKill * 4) / 10); // expected pending reward VP
 		expect(effects[8]).toBeCloseTo(cleanKill); // P(reward choice is created)
 		expect(effects[9]).toBe(1); // committing the action is meaningful progress
-		expect(effects[10]).toBeCloseTo(cleanKill / 4); // expected monster-life progress
+		expect(effects[10]).toBeCloseTo(cleanKill / 4); // expected monster-card kill progress
 	});
 
 	it('keeps Gumbel search invariant to the already-realized hidden combat roll', () => {
@@ -477,7 +483,7 @@ describe('information-safe ML action previews', () => {
 		hiddenActualB.players.Red!.statusLevel = 2;
 		const makeActions = (actual: PublicGameState): LegalAction[] => [
 			{
-				cmd: { type: 'startCombat' },
+				cmd: { type: 'startCombat', handIndex: 0 },
 				next: actual,
 				policyNext: safe,
 				hasHiddenOutcome: true

@@ -4,13 +4,20 @@ import {
 	applyGameCommand,
 	buildHistorySnapshotRows,
 	buildSessionProjection,
-	createLobbyState
+	createLobbyState,
+	addGainedRune,
+	summonDrawSizes
 } from './runtime';
+import { ARCANE_ABYSS_BAG, SPIRIT_WORLD_BAG } from './bags';
 import { deckCopiesForCost } from './bags';
-import { enterBenefits } from './phases';
+import { upgradeRelicRuneSlots } from './baseRunes';
+import { enterBenefits, enterCleanup, enterLocation } from './phases';
+import { offerHeldRelicTools } from './effects/relicTools';
+import { applyTrigger } from './effects/apply';
 import { GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 import { WILDCARD_MAT_IDS } from './awakenConditions';
 import type { GameActor, NavigationDestination, PlayCatalog, PublicGameState } from './types';
+import { MAX_ROUNDS } from './types';
 import type { GameLocationRewardRow } from '$lib/types';
 
 // Reward-row icon ids (mirror the live DB content). A Spirit World location's available
@@ -118,7 +125,7 @@ const CATALOG: PlayCatalog = {
 		},
 		{
 			id: 'spirit-07',
-			name: 'Tide Warden',
+			name: 'Warden',
 			cost: 2,
 			classes: { Guardian: 1 },
 			origins: { Tide: 2 }
@@ -186,6 +193,11 @@ const CATALOG: PlayCatalog = {
 	locations: [
 		{ name: 'Water Region', originId: null, rewardRows: TIDAL_COVE_ROWS },
 		{ name: 'Mountain Region', originId: null, rewardRows: CYBER_CITY_ROWS }
+	],
+	// An undrawn monster card keeps the spirit world unsaved, so a round boundary never ends
+	// the game on its own ("every monster card is gone" would otherwise hold from round 1).
+	monsters: [
+		{ id: 'monster-imp', name: 'Imp', damage: 1, barrier: 3, rewardTrack: [], dicePool: [], chooseAmount: 2, stage: 1, order: 0 }
 	]
 };
 
@@ -682,6 +694,13 @@ describe('play runtime', () => {
 		expect(flipped.state.players.Red?.spirits[4]?.isFaceDown).toBe(false);
 	});
 
+	test('abyssSummonDraw4Pick2: Arcane Abyss Summon sizes', () => {
+		expect(summonDrawSizes(ARCANE_ABYSS_BAG)).toEqual({ draw: 3, pick: 1 });
+		expect(summonDrawSizes(ARCANE_ABYSS_BAG, CATALOG)).toEqual({ draw: 3, pick: 1 });
+		expect(summonDrawSizes(ARCANE_ABYSS_BAG, { rules: { abyssSummonDraw4Pick2: true } })).toEqual({ draw: 4, pick: 2 });
+		expect(summonDrawSizes(SPIRIT_WORLD_BAG, { rules: { abyssSummonDraw4Pick2: true } })).toEqual({ draw: 4, pick: 2 });
+	});
+
 	test('returns unchosen tray spirits to their source bag', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
@@ -1014,22 +1033,23 @@ describe('play runtime', () => {
 		expect(res.state.players.Red!.victoryPoints).toBe(3);
 	});
 
-	test('round-cap end runs FINAL SCORING: last-round Relic Sentinel pays its +6 VP (U94RP3 case)', () => {
+	test('round-cap end runs FINAL SCORING: a last-round King pays its +1 VP (U94RP3 case)', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
 		const state = started.state;
-		// Michael's game: 25 VP, Good (Corrupt L2), Cosmic Guardian (Relic Sentinel class)
-		// awakened in round 30's awakening phase — benefits phase never comes back, so
-		// without final scoring the +6 ("24+ VP and Good") evaporates. He really hit 31.
+		// U94RP3 shape: 25 VP, Good (Corrupt L2), a VP-claim spirit awakened in round 30's
+		// awakening phase — benefits phase never comes back, so without final scoring the
+		// claim evaporates. (The original case used Relic Sentinel's +6, which the November
+		// 2026 text removed; King's +1 claim exercises the same final-scoring path.)
 		state.phase = 'cleanup';
-		state.round = 30;
+		state.round = MAX_ROUNDS;
 		const red = state.players.Red!;
 		red.victoryPoints = 25;
 		red.statusLevel = 2; // Corrupt — still Good (only Fallen is Evil)
 		red.spirits = [
 			...red.spirits.filter((s) => s.slotIndex !== 6),
-			{ slotIndex: 6, id: 'cg', name: 'Cosmic Guardian', cost: 9, classes: { 'Relic Sentinel': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 6, id: 'king', name: 'King Spirit', cost: 9, classes: { King: 1 }, origins: {}, isFaceDown: false }
 		];
 		for (const seat of state.activeSeats) {
 			if (seat !== 'Red') state.players[seat]!.phaseReady = true;
@@ -1045,13 +1065,13 @@ describe('play runtime', () => {
 		if (!committed.ok) return;
 		expect(committed.state.status).toBe('finished');
 		expect(committed.state.winnerSeat).toBe('Red');
-		expect(committed.state.players.Red!.victoryPoints).toBe(31);
+		expect(committed.state.players.Red!.victoryPoints).toBe(26);
 		// The points-over-time chart's last point shows the final score.
 		const hist = committed.state.players.Red!.vpHistory!;
-		expect(hist[hist.length - 1]).toBe(31);
+		expect(hist[hist.length - 1]).toBe(26);
 	});
 
-	test('spirit world saved: final-monster defeat ends the game at cleanup with final scoring', () => {
+	test('spirit world saved: defeating the last monster card ends the game at cleanup with final scoring', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
@@ -1059,7 +1079,6 @@ describe('play runtime', () => {
 		state.phase = 'cleanup';
 		state.round = 12; // well before the round cap — the save ends it early
 		state.spiritWorldSaved = true; // set by advanceMonsterIfDefeated at cleanup entry
-		state.monster = null;
 		state.players.Red!.victoryPoints = 22;
 		state.players.Blue!.victoryPoints = 17;
 		for (const seat of state.activeSeats) {
@@ -1385,7 +1404,7 @@ describe('play runtime', () => {
 
 		const redPlayer = started.state.players.Red;
 		if (!redPlayer) throw new Error('Red player was not initialized.');
-		redPlayer.handDraws = [{ guid: 'draw-01', id: 'spirit-07', name: 'Tide Warden' }];
+		redPlayer.handDraws = [{ guid: 'draw-01', id: 'spirit-07', name: 'Warden' }];
 
 		const spectatorProjection = buildSessionProjection(started.state, {
 			role: 'spectator',
@@ -1534,7 +1553,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(state.players.Red!.stunImmune).toBe(false);
 	});
 
-	test('Abyss Summoner offers an Arcane Abyss draw after a Spirit World summon', () => {
+	test('Summoner offers an Arcane Abyss draw after a Spirit World summon', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(
 			lobby,
@@ -1545,7 +1564,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		if (!started.ok) throw new Error(started.error.message);
 		let state = locationPhase(started.state, 'Water Region');
 		state.players.Red!.spirits = [
-			{ slotIndex: 6, id: 'as', name: 'Summoner', cost: 7, classes: { 'Abyss Summoner': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 6, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false }
 		];
 		state = apply(state, 'Red', {
 			type: 'resolveLocationInteraction',
@@ -1566,7 +1585,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(state.players.Red!.pendingDrawQueue.some((draw) => draw.sourceBag === 'Arcane Abyss Bag')).toBe(true);
 	});
 
-	test('Abyss Summoner grants 4 VP when an Arcane Abyss spirit is discarded', () => {
+	test('Summoner grants 4 VP when an Arcane Abyss spirit is discarded', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(
 			lobby,
@@ -1578,7 +1597,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		const state = locationPhase(started.state, 'Water Region');
 		const player = state.players.Red!;
 		player.spirits = [
-			{ slotIndex: 5, id: 'as', name: 'Summoner', cost: 7, classes: { 'Abyss Summoner': 1 }, origins: {}, isFaceDown: false },
+			{ slotIndex: 5, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
 			{ slotIndex: 6, id: 'abyss', name: 'Abyss Spirit', cost: 8, classes: {}, origins: {}, isFaceDown: false }
 		];
 		const before = player.victoryPoints;
@@ -1586,15 +1605,15 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(next.players.Red!.victoryPoints).toBe(before + 4);
 	});
 
-	test('Soul Weaver: opening a summon draw arms a redraw; redrawHandDraws refreshes the hand', () => {
+	test('Mystic: opening a summon draw arms a redraw; redrawHandDraws refreshes the hand', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
 		let state = locationPhase(started.state, 'Water Region');
 
-		// An awakened Soul Weaver in play → the redraw arms when the draw opens.
+		// An awakened Mystic in play → the redraw arms when the draw opens.
 		state.players.Red!.spirits = [
-			{ slotIndex: 6, id: 'sw', name: 'Weaver', cost: 2, classes: { 'Soul Weaver': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 6, id: 'sw', name: 'Weaver', cost: 2, classes: { 'Mystic': 1 }, origins: {}, isFaceDown: false }
 		];
 		expect(state.players.Red!.redrawAvailable).toBe(false);
 
@@ -1623,13 +1642,13 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(retry.ok).toBe(false);
 	});
 
-	test('Soul Weaver: redraw is NOT available after picking a spirit', () => {
+	test('Mystic: redraw is NOT available after picking a spirit', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
 		let state = locationPhase(started.state, 'Water Region');
 		state.players.Red!.spirits = [
-			{ slotIndex: 6, id: 'sw', name: 'Weaver', cost: 2, classes: { 'Soul Weaver': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 6, id: 'sw', name: 'Weaver', cost: 2, classes: { 'Mystic': 1 }, origins: {}, isFaceDown: false }
 		];
 
 		// Open the draw (armed), then summon one spirit.
@@ -1645,7 +1664,7 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(retry.ok).toBe(false);
 	});
 
-	test('redrawHandDraws is rejected for a player without a Soul Weaver (no redraw armed)', () => {
+	test('redrawHandDraws is rejected for a player without a Mystic (no redraw armed)', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
@@ -1692,7 +1711,7 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		const state = corrupt(started.state, { 'The Corruptor': 1 });
+		const state = corrupt(started.state, { 'Corruptor': 1 });
 		expect(state.players.Red!.corruptedThisRound).toBe(true);
 	});
 
@@ -1701,7 +1720,8 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
 
-		// Seed a strategistTrade decision card + the dice it can trade.
+		// Seed a relic-tool decision card (Diamond: "gain 1 Spirit Augment of your choice").
+		const DIAMOND = 'ee1486a0-8b61-499c-809b-b4de9920aa8f';
 		const red = started.state.players.Red!;
 		red.maxBarrier = 10;
 		red.attackDice = [
@@ -1709,15 +1729,17 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 			{ instanceId: 'd1', tier: 'basic' },
 			{ instanceId: 'd2', tier: 'basic' }
 		];
+		const slot = (red.mats.at(-1)?.slotIndex ?? 0) + 1;
+		red.mats.push({ slotIndex: slot, hasRune: true, id: DIAMOND, name: 'Diamond', type: 'relic', special: true, relicTool: true });
 		red.pendingDecisions = [
 			{
 				id: 'dec-1',
 				source: 'class',
-				kind: 'treeOfGrowthReward',
-				prompt: 'Choose a Growth Warden reward.',
+				kind: 'relicTool',
+				prompt: 'Diamond: use the relic?',
 				options: [
-					{ id: 'barrier', label: 'Gain 2 max barrier' },
-					{ id: 'augment', label: 'Gain 1 Spirit Augment' }
+					{ id: `keep:${slot}:${DIAMOND}`, label: 'Keep' },
+					{ id: `effect:${slot}:${DIAMOND}`, label: 'Gain 1 Spirit Augment' }
 				]
 			}
 		];
@@ -1725,7 +1747,7 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 		const resolved = applyGameCommand(
 			started.state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'resolveDecision', decisionId: 'dec-1', optionId: 'augment' },
+			{ type: 'resolveDecision', decisionId: 'dec-1', optionId: `effect:${slot}:${DIAMOND}` },
 			CATALOG
 		);
 		expect(resolved.ok).toBe(true);
@@ -1734,6 +1756,39 @@ describe('P5 onStatusChange wiring (adjustStatus corrupts a player)', () => {
 		expect(after.pendingDecisions).toHaveLength(0); // cleared
 		expect(after.attackDice).toHaveLength(3);
 		expect(after.unplacedAugments?.length ?? 0).toBe(1); // granted (placeable)
+	});
+
+	test('an unanswered relic card resolves as "keep" when the player ends Awakening (and at Cleanup)', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const state = started.state;
+		const DIAMOND = 'ee1486a0-8b61-499c-809b-b4de9920aa8f';
+		for (const seat of ['Red', 'Blue'] as const) {
+			const p = state.players[seat]!;
+			p.mats = [{ slotIndex: 1, hasRune: true, id: DIAMOND, name: 'Diamond', type: 'relic', special: true, relicTool: true }];
+			p.pendingDecisions = [];
+			p.unplacedAugments = [];
+			offerHeldRelicTools(state, p, []);
+			expect(p.pendingDecisions.map((d) => d.kind)).toEqual(['relicTool']);
+		}
+		state.phase = 'awakening';
+		// Red presses "Done awakening" without answering: not blocked; the card closes as "keep".
+		const done = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'commitAwakening' }, CATALOG);
+		if (!done.ok) throw new Error(done.error.message);
+		const red = done.state.players.Red!;
+		expect(red.pendingDecisions.some((d) => d.kind === 'relicTool')).toBe(false);
+		expect(red.mats[0]).toMatchObject({ id: DIAMOND, hasRune: true }); // the relic stays
+		expect(red.lastAction?.log).toEqual(['Diamond: no answer — kept for later.']);
+		// Blue never pressed "Done" (force-advance / deadline): Cleanup closes its card the same way.
+		enterCleanup(done.state, CATALOG);
+		const blue = done.state.players.Blue!;
+		expect(['cleanup', 'navigation']).toContain(done.state.phase); // empty Cleanup may roll on at once
+		expect(blue.pendingDecisions.some((d) => d.kind === 'relicTool')).toBe(false);
+		expect(blue.mats[0]).toMatchObject({ id: DIAMOND, hasRune: true });
+		// The next round offers the kept relic again.
+		offerHeldRelicTools(done.state, red, []);
+		expect(red.pendingDecisions.map((d) => d.kind)).toEqual(['relicTool']);
 	});
 
 	test('resolveDecision rejects an unknown decision id', () => {
@@ -1871,11 +1926,11 @@ describe('Cursed Spirit cleanup claim flow', () => {
 
 	test('Dawn Sovereign builds a +1 VP claim; claiming grants the VP', () => {
 		const state = started();
-		state.players.Red!.spirits = [classSpirit('Golden Ruler')];
+		state.players.Red!.spirits = [classSpirit('King')];
 		const vp0 = state.players.Red!.victoryPoints;
 		enterBenefits(state, CATALOG);
 		expect(state.players.Red!.pendingAwakenReward!.grants).toEqual([
-			{ kind: 'vp', amount: 1, source: 'Golden Ruler' }
+			{ kind: 'vp', amount: 1, source: 'King' }
 		]);
 		const r = claim(state);
 		if (!r.ok) throw new Error(r.error.message);
@@ -1884,61 +1939,42 @@ describe('Cursed Spirit cleanup claim flow', () => {
 
 	test('Dawn Sovereign while Evil discards a Dawn Sovereign spirit on claim', () => {
 		const state = started();
-		state.players.Red!.spirits = [classSpirit('Golden Ruler')];
+		state.players.Red!.spirits = [classSpirit('King')];
 		state.players.Red!.statusLevel = 3; // Fallen → Evil
 		enterBenefits(state, CATALOG);
 		const grant = state.players.Red!.pendingAwakenReward!.grants[0];
-		expect(grant).toMatchObject({ kind: 'vp', source: 'Golden Ruler' });
+		expect(grant).toMatchObject({ kind: 'vp', source: 'King' });
 		expect((grant as { note?: string }).note).toBeTruthy();
 		const r = claim(state);
 		if (!r.ok) throw new Error(r.error.message);
-		expect(r.state.players.Red!.spirits.some((s) => s.classes?.['Golden Ruler'])).toBe(false);
+		expect(r.state.players.Red!.spirits.some((s) => s.classes?.['King'])).toBe(false);
 	});
 
-	test('Abyss Harbinger claims an Arcane die only when corrupted this round', () => {
-		const noCorrupt = started();
-		noCorrupt.players.Red!.spirits = [classSpirit('The Corruptor')];
-		enterBenefits(noCorrupt, CATALOG);
-		expect(noCorrupt.players.Red!.pendingAwakenReward).toBeNull();
-
+	test('Corruptor and Relic Sentinel have no Benefits claims (November 2026 texts)', () => {
+		// The old "+1 Arcane die after a corruption" (Corruptor) and "+6 VP at 24 VP while
+		// Good" (Relic Sentinel) claims are gone; their effects live in their class modules.
 		const corrupted = started();
-		corrupted.players.Red!.spirits = [classSpirit('The Corruptor')];
+		corrupted.players.Red!.spirits = [classSpirit('Corruptor')];
 		corrupted.players.Red!.corruptedThisRound = true;
-		corrupted.players.Red!.attackDice = [];
 		enterBenefits(corrupted, CATALOG);
-		expect(corrupted.players.Red!.pendingAwakenReward!.grants).toEqual([
-			{ kind: 'attackDice', tier: 'arcane', amount: 1, source: 'The Corruptor' }
-		]);
-		const r = claim(corrupted);
-		if (!r.ok) throw new Error(r.error.message);
-		expect(r.state.players.Red!.attackDice.filter((d) => d.tier === 'arcane')).toHaveLength(1);
-	});
-
-	test('Relic Sentinel claims +6 VP only when Good with ≥24 VP', () => {
-		const low = started();
-		low.players.Red!.spirits = [classSpirit('Relic Sentinel')];
-		low.players.Red!.victoryPoints = 10;
-		enterBenefits(low, CATALOG);
-		expect(low.players.Red!.pendingAwakenReward).toBeNull();
+		expect(corrupted.players.Red!.pendingAwakenReward).toBeNull();
 
 		const hi = started();
 		hi.players.Red!.spirits = [classSpirit('Relic Sentinel')];
 		hi.players.Red!.victoryPoints = 24;
 		enterBenefits(hi, CATALOG);
-		expect(hi.players.Red!.pendingAwakenReward!.grants).toEqual([
-			{ kind: 'vp', amount: 6, source: 'Relic Sentinel' }
-		]);
+		expect(hi.players.Red!.pendingAwakenReward).toBeNull();
 	});
 
-	test('Void Sovereign grants a flat +1 VP at cleanup (no longer a claim)', () => {
+	test('Queen grants a flat +1 VP at cleanup (no longer a claim)', () => {
 		const state = started();
-		state.players.Red!.spirits = [classSpirit('Void Sovereign')];
+		state.players.Red!.spirits = [classSpirit('Queen')];
 		enterBenefits(state, CATALOG);
-		// Reworked: Void Sovereign is now a flat +1 VP awakeningPhase handler (fires during
+		// Reworked: Queen is now a flat +1 VP awakeningPhase handler (fires during
 		// enterBenefits), not an all-Evil Cleanup claim.
 		expect(state.players.Red!.victoryPoints).toBe(1);
 		const grants = state.players.Red!.pendingAwakenReward?.grants ?? [];
-		expect(grants.some((g) => g.source === 'Void Sovereign')).toBe(false);
+		expect(grants.some((g) => g.source === 'Queen')).toBe(false);
 	});
 
 	test('Cursed Spirit Corrupt choice grants the picked basic runes', () => {
@@ -2014,5 +2050,188 @@ describe('lobby canStart projection', () => {
 		);
 		if (!started.ok) throw new Error(started.error.message);
 		expect(buildSessionProjection(started.state, hostViewer).canStart).toBeUndefined();
+	});
+});
+
+describe('debugGrant of a named relic', () => {
+	test('gives the relic tool (not a base rune), and it stays a relic after the save upgrade', () => {
+		const FIRECRACKER = '8a0d54ca-aeab-405c-9e5c-1c1425d1aa86';
+		const catalog: PlayCatalog = {
+			...CATALOG,
+			mats: [...CATALOG.mats, { id: FIRECRACKER, name: 'Firecracker', kind: 'relic', originId: null }]
+		};
+		const started = applyGameCommand(withLobbySelections(), { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, catalog);
+		if (!started.ok) throw new Error(started.error.message);
+		const granted = applyGameCommand(
+			started.state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'debugGrant', grant: { kind: 'rune', runeId: FIRECRACKER } },
+			catalog
+		);
+		if (!granted.ok) throw new Error(granted.error.message);
+		upgradeRelicRuneSlots(granted.state);
+		const slot = granted.state.players.Red!.mats.at(-1)!;
+		expect(slot).toMatchObject({ id: FIRECRACKER, name: 'Firecracker', type: 'relic', relicTool: true, hasRune: true });
+	});
+});
+
+describe('Mountain Region spirits (November 2026): Falconer and Rider through the reducer', () => {
+	const started = (): PublicGameState => {
+		const lobby = withLobbySelections();
+		const r = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!r.ok) throw new Error(r.error.message);
+		return r.state;
+	};
+	const classSpirit = (slotIndex: number, classes: Record<string, number>, name = `S${slotIndex}`) => ({
+		slotIndex,
+		id: `sp-${slotIndex}`,
+		name,
+		cost: 2,
+		classes,
+		origins: {},
+		isFaceDown: false
+	});
+	const red = { ...HOST, seatColor: 'Red' as const };
+
+	test('Smith: the owner keeps the bought augment and may decline the extra one', () => {
+		const state = started();
+		const p = state.players.Red!;
+		p.spirits = [classSpirit(1, { Smith: 1 }), classSpirit(2, { Fighter: 1 })];
+		p.spiritAugmentAttachments = [];
+		p.unplacedAugments = [];
+		addGainedRune(p, { runeId: 'augment-fighter', name: 'Fighter Augment', type: 'augment', classId: 'cls-x', originId: null, special: false });
+		expect(p.unplacedAugments!.map((a) => a.name)).toEqual(['Fighter Augment', 'Spirit Augment']);
+		const placed = applyGameCommand(
+			state,
+			red,
+			{ type: 'placeAugmentOnSpirit', augmentIndex: 0, augmentRuneId: 'augment-fighter', spiritSlotIndex: 2, className: 'Fighter' },
+			CATALOG
+		);
+		if (!placed.ok) throw new Error(placed.error.message);
+		const declined = applyGameCommand(placed.state, red, { type: 'discardUnplacedAugments' }, CATALOG);
+		if (!declined.ok) throw new Error(declined.error.message);
+		expect(declined.state.players.Red!.unplacedAugments).toEqual([]);
+		expect(declined.state.players.Red!.spiritAugmentAttachments).toHaveLength(1);
+	});
+
+	test('Falconer: the trade card is offered when the Location Phase starts (Arcane Abyss too) and ends at Benefits', () => {
+		const state = started();
+		const p = state.players.Red!;
+		p.spirits = [classSpirit(1, { Falconer: 1 })];
+		p.mats = [{ slotIndex: 1, hasRune: true, id: 'rune-forest', name: 'Forest Rune', type: 'rune', originId: 'forest' }];
+		p.navigationDestination = 'Arcane Abyss';
+		p.pendingDecisions = [];
+		enterLocation(state, CATALOG);
+		expect(state.phase).toBe('location');
+		const card = p.pendingDecisions.find((d) => d.kind === 'falconerTrade');
+		expect(card?.options[0].id).toBe('no');
+		expect(card!.options.length).toBeGreaterThan(1);
+		enterBenefits(state, CATALOG);
+		expect(state.players.Red!.pendingDecisions.some((d) => d.kind === 'falconerTrade')).toBe(false);
+		expect(state.players.Red!.mats[0].hasRune).toBe(true); // no trade was made
+		expect(state.players.Red!.unplacedAugments ?? []).toHaveLength(0);
+	});
+
+	test('Traveling Trader: the Location step at the Water Region with no interaction records its awaken', () => {
+		const state = started();
+		const p = state.players.Red!;
+		p.spirits = [{ ...classSpirit(1, { Trader: 1 }, 'Traveling Trader'), id: 'ac981bdb-c271-46df-be9e-55f698cd3f55', isFaceDown: true }];
+		p.navigationDestination = 'Water Region';
+		p.actionsUsedThisRound = [];
+		p.awakenProgress = {};
+		enterBenefits(state, CATALOG);
+		expect(state.players.Red!.awakenProgress['awaken:travelingTrader']).toBe(true);
+		const busy = started();
+		const q = busy.players.Red!;
+		q.spirits = [{ ...classSpirit(1, { Trader: 1 }, 'Traveling Trader'), id: 'ac981bdb-c271-46df-be9e-55f698cd3f55', isFaceDown: true }];
+		q.navigationDestination = 'Water Region';
+		q.actionsUsedThisRound = ['row:0'];
+		q.awakenProgress = {};
+		enterBenefits(busy, CATALOG);
+		expect(busy.players.Red!.awakenProgress['awaken:travelingTrader']).toBeUndefined();
+	});
+
+	test('Moon Cultist awaken: "While Fallen, sacrifice a spirit." — a corruption-sacrifice discard while Fallen', () => {
+		const MOON_CULTIST = '2f15b8f6-9ef0-4d6b-a495-a44730fcb5a2';
+		const sacrifice = (statusLevel: number, owed: boolean) => {
+			const state = started();
+			const p = state.players.Red!;
+			p.statusLevel = statusLevel;
+			p.spirits = [{ ...classSpirit(1, {}), id: MOON_CULTIST, isFaceDown: true }, classSpirit(2, { Fighter: 1 })];
+			p.awakenProgress = {};
+			p.pendingCorruptionDiscard = owed ? { count: 1, reason: 'corruption' } : null;
+			const res = applyGameCommand(state, red, { type: 'discardSpirit', slotIndex: 2 }, CATALOG);
+			if (!res.ok) throw new Error(res.error.message);
+			return res.state.players.Red!.awakenProgress['awaken:moonCultist'];
+		};
+		expect(sacrifice(3, true)).toBe(true);
+		// Not Fallen: the sacrifice does not count.
+		expect(sacrifice(2, true)).toBeUndefined();
+		// A voluntary discard (no sacrifice owed) does not count, also while Fallen.
+		expect(sacrifice(3, false)).toBeUndefined();
+	});
+
+	test('Nhal awaken: "Navigate to the Arcane Abyss, but don\'t fight the monster." (no Fallen needed)', () => {
+		const NHAL = 'fc667265-edd6-4c28-b96e-6e505188ce72';
+		const endAtAbyss = (statusLevel: number, actions: string[]) => {
+			const state = started();
+			state.phase = 'location';
+			const p = state.players.Red!;
+			p.statusLevel = statusLevel;
+			p.spirits = [{ ...classSpirit(1, {}), id: NHAL, isFaceDown: true }];
+			p.navigationDestination = 'Arcane Abyss';
+			p.actionsUsedThisRound = actions;
+			p.awakenProgress = {};
+			const res = applyGameCommand(state, red, { type: 'endLocationActions' }, CATALOG);
+			if (!res.ok) throw new Error(res.error.message);
+			return res.state.players.Red!.awakenProgress['awaken:shadowtaker'];
+		};
+		expect(endAtAbyss(3, [])).toBe(true);
+		expect(endAtAbyss(0, [])).toBe(true); // Nhal is the Moon exception: no Fallen needed
+		expect(endAtAbyss(0, ['combat'])).toBeUndefined(); // fought the monster
+	});
+
+	test('Rider and Ram: round 1 at the Mountain Region counts as an arrival from a different location', () => {
+		const state = started();
+		const p = state.players.Red!;
+		p.spirits = [classSpirit(1, { Rider: 1 }), classSpirit(2, { Ram: 1 })];
+		p.pendingDecisions = [];
+		expect(p.previousDestination ?? null).toBeNull();
+		const at = locationPhase(state, 'Mountain Region');
+		const kinds = at.players.Red!.pendingDecisions.map((d) => d.kind).sort();
+		expect(kinds).toEqual(['ramAugment', 'riderMountain']);
+	});
+
+	test('Rider: an unanswered Mountain Region card resolves to the engine default at Benefits', () => {
+		const state = started();
+		const p = state.players.Red!;
+		p.spirits = [classSpirit(1, { Rider: 1 })];
+		p.barrier = 4;
+		p.maxBarrier = 6;
+		p.pendingDecisions = [];
+		p.navigationDestination = 'Mountain Region';
+		applyTrigger(state, 'Red', 'onNavigate', [], { catalog: CATALOG });
+		expect(p.pendingDecisions.map((d) => d.kind)).toEqual(['riderMountain']);
+		enterBenefits(state, CATALOG);
+		const after = state.players.Red!;
+		expect(after.pendingDecisions.some((d) => d.kind === 'riderMountain')).toBe(false);
+		expect([after.barrier, after.maxBarrier]).toEqual([7, 9]); // +3 Max Barrier
+	});
+
+	test('Rider: an answered card applies once and leaves nothing to expire', () => {
+		const state = started();
+		const p = state.players.Red!;
+		p.spirits = [classSpirit(1, { Rider: 1 })];
+		p.attackDice = [];
+		p.pendingDecisions = [];
+		p.navigationDestination = 'Mountain Region';
+		applyTrigger(state, 'Red', 'onNavigate', [], { catalog: CATALOG });
+		const card = p.pendingDecisions[0];
+		const res = applyGameCommand(state, red, { type: 'resolveDecision', decisionId: card.id, optionId: 'dice' }, CATALOG);
+		if (!res.ok) throw new Error(res.error.message);
+		const barrierBefore = res.state.players.Red!.barrier;
+		enterBenefits(res.state, CATALOG);
+		expect(res.state.players.Red!.attackDice.filter((d) => d.tier === 'basic')).toHaveLength(3);
+		expect(res.state.players.Red!.barrier).toBe(barrierBefore);
 	});
 });

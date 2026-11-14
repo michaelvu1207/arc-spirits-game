@@ -31,7 +31,7 @@ const FOREST = '8dd2b283-122b-4965-9184-f1f84e1216f4';
 const FLORAL_ORIGIN = 'ad555f03-9b89-4a71-a47c-464fd67d2c05';
 const LANTERN = '7248cdca-9b03-4951-bfba-a4d17f7b97c8';
 const LANTERN_ORIGIN = '178449e9-cc6b-45ab-8522-5183fe1d9307';
-// Special / named runes. Class-linked ones (Elementalist/Soul Weaver/Swordsman/Support/
+// Special / named runes. Class-linked ones (Elementalist/Mystic/Swordsman/Support/
 // Animal/Cursed Spirit) are spirit AUGMENTS; named ones (Teapot/Magnet/Flower/
 // Firecracker) are class-less relics.
 const TEAPOT = 'c8ef5d48-2289-4fee-a34d-b041d3e8bea6';
@@ -95,7 +95,7 @@ describe('meaningFor', () => {
 		expect(meaningFor(FOREST)).toMatchObject({ kind: 'originRune', originId: FLORAL_ORIGIN });
 		expect(meaningFor(LANTERN)).toMatchObject({ kind: 'originRune', originId: LANTERN_ORIGIN });
 		expect(meaningFor(CYBER)).toMatchObject({ kind: 'originRune', originId: CYBER_ORIGIN });
-		expect(meaningFor(TEAPOT)).toMatchObject({ kind: 'specialRune', runeName: 'Teapot' });
+		expect(meaningFor(TEAPOT)).toMatchObject({ kind: 'specialRune', runeName: 'Cleansing Teapot' });
 		expect(meaningFor(SWORDSMAN)).toMatchObject({ kind: 'specialRune', runeName: 'Fighter' });
 		expect(meaningFor(CURSED_SPIRIT)).toMatchObject({ kind: 'specialRune', runeName: 'Cursed Spirit' });
 	});
@@ -137,7 +137,7 @@ describe('buildLocationInteractions — live map', () => {
 		const choose = interactions[1].gains[0];
 		expect(choose.type).toBe('chooseRune');
 		if (choose.type === 'chooseRune') {
-			expect(choose.options.map((o) => o.name)).toEqual(['Fighter', 'Cultivator', 'Spirit Animal']);
+			expect(choose.options.map((o) => o.name)).toEqual(['Fighter', 'Cultivator', 'Beast']);
 			expect(choose.options.every((o) => o.type === 'augment')).toBe(true);
 			expect(choose.options.every((o) => o.special && o.classId != null)).toBe(true);
 		}
@@ -148,7 +148,7 @@ describe('buildLocationInteractions — live map', () => {
 			expect.objectContaining({ match: 'origin', originId: MOON_TIDE_ORIGIN })
 		]);
 		expect(interactions[2].gains).toEqual([
-			{ type: 'rune', rune: expect.objectContaining({ name: 'Teapot', special: true, type: 'relic' }) }
+			{ type: 'rune', rune: expect.objectContaining({ name: 'Cleansing Teapot', special: true, type: 'relic' }) }
 		]);
 	});
 
@@ -164,7 +164,7 @@ describe('buildLocationInteractions — live map', () => {
 		const choose = interactions[1].gains[0];
 		expect(choose.type).toBe('chooseRune');
 		if (choose.type === 'chooseRune') {
-			expect(choose.options.map((o) => o.name)).toEqual(['Elementalist', 'Soul Weaver']);
+			expect(choose.options.map((o) => o.name)).toEqual(['Elementalist', 'Mystic']);
 			expect(choose.options.every((o) => o.type === 'augment')).toBe(true);
 		}
 
@@ -172,7 +172,7 @@ describe('buildLocationInteractions — live map', () => {
 			expect.objectContaining({ match: 'origin', originId: CYBER_ORIGIN }),
 			expect.objectContaining({ match: 'origin', originId: CYBER_ORIGIN })
 		]);
-		expect(interactions[2].gains[0]).toMatchObject({ type: 'rune', rune: { name: 'Magnet' } });
+		expect(interactions[2].gains[0]).toMatchObject({ type: 'rune', rune: { name: 'Diamond' } });
 	});
 
 	test('Fire Region: an any-basic-rune trade for a Cursed Spirit augment', () => {

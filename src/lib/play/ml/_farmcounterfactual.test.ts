@@ -23,6 +23,7 @@ import { dirname } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { applyDeadlineAdvance, applyGameCommand, createLobbyState } from '../runtime';
 import { createRng, nextInt } from '../rng';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -427,8 +428,9 @@ function heuristicNonAbyssBranch(
 	return branches[0];
 }
 
-function monsterHp(state: PublicGameState): number {
-	const monster = state.monster;
+/** Printed Barrier of the card `seat` would fight (its best hand card); 0 for an empty hand. */
+function monsterHp(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): number {
+	const monster = bestHandMonster(state, seat, catalog)?.card;
 	return monster ? (monster.maxHp ?? monster.hp ?? 0) : 0;
 }
 
@@ -447,7 +449,7 @@ function effectiveFarmSignal(
 	effectiveOpportunityVp: number;
 	monsterHp: number;
 } {
-	const hp = monsterHp(state);
+	const hp = monsterHp(state, seat, catalog);
 	const cleanKillProb = signal.cleanKillProb;
 	const firepowerKillProb = cfg.allowFirepowerFarm ? firepowerKillProbability(state, seat, catalog) : 0;
 	const corruptKillProb = cfg.allowCorruptFarm ? computeKillProbability(state, seat, catalog, { allowCorruptKill: true }) : 0;
@@ -694,7 +696,8 @@ describe('farm counterfactual diagnostics', () => {
 												playerVp: state.players[seat]?.victoryPoints ?? 0,
 												bestOpponentVp: bestOpponentVp(state, seat),
 												monsterHp: effectiveSignal.monsterHp,
-												monsterLives: state.monster?.livesRemaining ?? 0,
+												// 1 while the seat holds a live card (each card is one kill).
+												monsterLives: bestHandMonster(state, seat, catalog) ? 1 : 0,
 												farm: signal,
 												cleanKillProb: +effectiveSignal.cleanKillProb.toFixed(3),
 												firepowerKillProb: +effectiveSignal.firepowerKillProb.toFixed(3),

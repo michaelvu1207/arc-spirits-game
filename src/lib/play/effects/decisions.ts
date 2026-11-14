@@ -10,10 +10,13 @@
 
 import type { EffectContext } from './context';
 import { CLASS_DECISIONS } from './abilities';
+import { decisions as RELIC_TOOL_DECISIONS } from './relicToolDecisions';
 
 export const DECISION_RESOLVERS: Record<
 	string,
 	(ctx: EffectContext, optionId: string, selectedInstanceIds?: string[]) => void
 > = {
-	...CLASS_DECISIONS
+	...CLASS_DECISIONS,
+	// Relic tools (origin relics) are not a class, but resolve through the same cards.
+	...RELIC_TOOL_DECISIONS
 };

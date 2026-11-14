@@ -271,15 +271,15 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 			attackDice: [],
 			spirits: [spirit(1, 'A', { SynthInCombatBonus: 1 })]
 		});
+		p.monsterHand = [monster];
 		const state = makeState({ Red: p });
-		state.monster = monster;
-		const result = fightMonster(state, 'Red');
+		const result = fightMonster(state, 'Red', undefined, 0);
 		// No dice, +6 bonus from the inCombat effect, monster damage 0 → dealt 6.
 		expect(result!.playerDamage).toBe(6);
-		// The 6 lands against the monster's FULL health for this combat (snapshot), but shared
-		// state keeps maxHp — monster HP never persists between combats.
+		// The 6 lands on the card in Red's hand and persists there.
 		expect(result!.fought?.hp).toBe(monster.maxHp - 6);
-		expect(monster.hp).toBe(monster.maxHp);
+		expect(monster.hp).toBe(monster.maxHp - 6);
+		expect(p.monsterHand).toEqual([monster]);
 	});
 
 	it('gainAugment / gainRelic populate their fields', () => {

@@ -164,11 +164,11 @@ describe('resolveLocationInteraction (engine)', () => {
 	test('an "or" gain grants the chosen option', () => {
 		let s = atLocation('Mountain Region');
 		s.players.Red!.mats.push({ slotIndex: 90, hasRune: true, special: true, type: 'relic', name: 'Spare Relic' });
-		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Soul Weaver
-		// Soul Weaver is a class rune ⇒ a spirit augment: it lands in the to-place pouch,
+		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Mystic
+		// Mystic is a class rune ⇒ a spirit augment: it lands in the to-place pouch,
 		// never a rune slot. Elementalist (the unchosen option) is granted nowhere.
-		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Soul Weaver')).toBe(true);
-		expect(s.players.Red!.mats.some((r) => r.name === 'Soul Weaver')).toBe(false);
+		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Mystic')).toBe(true);
+		expect(s.players.Red!.mats.some((r) => r.name === 'Mystic')).toBe(false);
 		expect(s.players.Red!.unplacedAugments?.some((a) => a.name === 'Elementalist')).toBe(false);
 		expect(s.players.Red!.mats.some((r) => r.name === 'Elementalist')).toBe(false);
 		// One relic was spent to pay the "any relic" cost. (Starting Fairy Relics qualify
@@ -327,20 +327,20 @@ describe('bots resolve location interactions', () => {
 });
 
 describe('updated trade class rules', () => {
-	test('Runic Duplicator pays the trade cost and gains two copies of the selected augment', () => {
+	test('Smith pays the trade cost and gains the selected augment plus 1 augment of the owner\'s choice', () => {
 		let s = atLocation('Mountain Region');
 		s.players.Red!.spirits = [
-			{ slotIndex: 1, id: 'mod', name: 'Mole', cost: 2, classes: { 'Runic Duplicator': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 1, id: 'mod', name: 'Mole', cost: 2, classes: { 'Smith': 1 }, origins: {}, isFaceDown: false }
 		];
 		s.players.Red!.mats = [
 			{ slotIndex: 1, hasRune: true, id: 'fairy', name: 'Fairy Relic', type: 'relic', special: true }
 		];
 
-		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Soul Weaver augment
+		s = apply(s, RED, { type: 'resolveLocationInteraction', rowIndex: 0, choices: [1] }); // pick Mystic augment
 
-		expect(s.players.Red!.unplacedAugments?.filter((a) => a.name === 'Soul Weaver')).toHaveLength(2);
+		expect(s.players.Red!.unplacedAugments?.map((a) => a.name)).toEqual(['Mystic', 'Spirit Augment']);
 		expect(s.players.Red!.mats.filter((r) => r.hasRune).length).toBe(0);
-		expect(s.players.Red!.lastAction?.log.some((l) => /Runic Duplicator/i.test(l))).toBe(true);
+		expect(s.players.Red!.lastAction?.log.some((l) => /Smith/i.test(l))).toBe(true);
 	});
 
 	test('the obsolete Undercover free-trade flag no longer waives a cost', () => {

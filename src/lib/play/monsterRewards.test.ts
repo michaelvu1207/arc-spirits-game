@@ -11,6 +11,7 @@ import type {
 	PublicGameState
 } from './types';
 import { DEADLINE_MAX_EXTENSIONS, phaseDurationMs } from './types';
+import { drawMonsterViaCommands } from './testing/monsterCards';
 
 // Live monster-reward icon ids. The app loads monsters from the `monsters_v2`
 // table (supabase.ts MONSTERS = 'monsters_v2'); its full reward vocabulary is the
@@ -72,8 +73,9 @@ const CATALOG: PlayCatalog = {
 		origins: { Forest: 1 }
 	})),
 	// barrier 1 + damage 1 ⇒ a player with arcane dice one-shots it without corrupting.
-	// A second, unkillable apex rung keeps m-1 NON-final: defeating the final monster now
-	// saves the spirit world and ends the game, which these reward-flow tests don't want.
+	// m-1 is the only Difficulty 1 card. The unkillable Difficulty 3 apex card stays in the
+	// deck, so killing m-1 is never the LAST card (that would save the spirit world and end
+	// the game, which these reward-flow tests don't want).
 	monsters: [
 		{ id: 'm-1', name: 'Abyss Maw', damage: 1, barrier: 1, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 1, order: 0 },
 		{ id: 'm-apex', name: 'Abyss Apex', damage: 9, barrier: 99, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 1, order: 1 }
@@ -84,8 +86,13 @@ const CATALOG: PlayCatalog = {
 const RED: GameActor = { memberId: 'm-red', displayName: 'Red', role: 'host', seatColor: 'Red' };
 const BLUE: GameActor = { memberId: 'm-blue', displayName: 'Blue', role: 'player', seatColor: 'Blue' };
 
-function apply(state: PublicGameState, actor: GameActor, command: GameCommand): PublicGameState {
-	const result = applyGameCommand(state, actor, command, CATALOG);
+function apply(
+	state: PublicGameState,
+	actor: GameActor,
+	command: GameCommand,
+	catalog: PlayCatalog = CATALOG
+): PublicGameState {
+	const result = applyGameCommand(state, actor, command, catalog);
 	if (!result.ok) throw new Error(`${command.type} failed: ${result.error.message}`);
 	return result.state;
 }
@@ -98,29 +105,31 @@ const arcaneDice = (n: number): AttackDie[] =>
 	Array.from({ length: n }, (_, i) => ({ instanceId: `d-${i}`, tier: 'arcane' as const }));
 
 /** Drive a 2-player game to the Location phase, both at the Arcane Abyss, with Red
- *  holding enough arcane dice to one-shot the monster. */
-function atAbyss(): PublicGameState {
+ *  holding enough arcane dice to one-shot the monster. Red draws and keeps the m-1 monster
+ *  card through the real commands, so it is the only card in Red's hand (hand index 0). */
+function atAbyss(catalog: PlayCatalog = CATALOG): PublicGameState {
 	let s = createLobbyState({ roomCode: 'MONREW', guardianNames: ['Red Guard', 'Blue Guard'] });
-	s = apply(s, RED, { type: 'claimSeat', seatColor: 'Red' });
-	s = apply(s, BLUE, { type: 'claimSeat', seatColor: 'Blue' });
-	s = apply(s, RED, { type: 'selectGuardian', guardianName: 'Red Guard' });
-	s = apply(s, BLUE, { type: 'selectGuardian', guardianName: 'Blue Guard' });
-	s = apply(s, RED, { type: 'startGame', seed: 7 });
-	s = apply(s, RED, { type: 'lockNavigation', destination: 'Arcane Abyss' });
-	s = apply(s, BLUE, { type: 'lockNavigation', destination: 'Arcane Abyss' });
+	s = apply(s, RED, { type: 'claimSeat', seatColor: 'Red' }, catalog);
+	s = apply(s, BLUE, { type: 'claimSeat', seatColor: 'Blue' }, catalog);
+	s = apply(s, RED, { type: 'selectGuardian', guardianName: 'Red Guard' }, catalog);
+	s = apply(s, BLUE, { type: 'selectGuardian', guardianName: 'Blue Guard' }, catalog);
+	s = apply(s, RED, { type: 'startGame', seed: 7 }, catalog);
+	s = apply(s, RED, { type: 'lockNavigation', destination: 'Arcane Abyss' }, catalog);
+	s = apply(s, BLUE, { type: 'lockNavigation', destination: 'Arcane Abyss' }, catalog);
 	// Locking no longer reveals instantly (a back-out grace was added); force-advance
 	// past it to reach the Location phase. Both seats are already locked, so this just
 	// reveals their chosen destinations.
-	s = apply(s, RED, { type: 'forceAdvancePhase' });
+	s = apply(s, RED, { type: 'forceAdvancePhase' }, catalog);
 	if (s.phase !== 'location') throw new Error(`expected location phase, got ${s.phase}`);
+	s = drawMonsterViaCommands(s, RED, catalog, { catalogId: 'm-1' });
 	// Give Red a strong dice pool so the next fight is a guaranteed kill.
 	s.players.Red!.attackDice = arcaneDice(6);
 	return s;
 }
 
-/** Red fights and kills the monster, returning the post-kill state (pendingReward set). */
-function killMonster(): PublicGameState {
-	const s = apply(atAbyss(), RED, { type: 'startCombat' });
+/** Red fights and kills the card in their hand, returning the post-kill state (pendingReward set). */
+function killMonster(catalog: PlayCatalog = CATALOG): PublicGameState {
+	const s = apply(atAbyss(catalog), RED, { type: 'startCombat', handIndex: 0 }, catalog);
 	if (!s.players.Red?.pendingReward) throw new Error('expected a pending reward after the kill');
 	return s;
 }
@@ -155,10 +164,10 @@ describe('buildMonsterRewards / monsterGainFor (reward semantics)', () => {
 		expect(monsterGainFor(AVATAR_BARRIER)).toEqual({ type: 'gainMaxBarrier', amount: 1 });
 	});
 
-	test('a named special rune resolves to a fixed rune gain', () => {
+	test('a named relic token gives that relic (owner rule, 2026-11-12)', () => {
 		const gain = monsterGainFor(TEAPOT);
 		expect(gain?.type).toBe('rune');
-		if (gain?.type === 'rune') expect(gain.rune.name).toBe('Water Rune');
+		if (gain?.type === 'rune') expect(gain.rune).toMatchObject({ name: 'Cleansing Teapot', type: 'relic' });
 	});
 
 	test('legacy relic rewards downgrade named relics while retaining Fairy Rune', () => {
@@ -189,38 +198,49 @@ describe('buildMonsterRewards / monsterGainFor (reward semantics)', () => {
 		expect(opts.map((o) => o.index)).toEqual([0, 1, 2]);
 	});
 
-	test('rewardClaimCount caps the claim at the resolvable pool size', () => {
-		expect(rewardClaimCount([VP3], 2)).toBe(1); // only one token to take
-		expect(rewardClaimCount(REWARD_TRACK, 2)).toBe(2); // pick 2 of 4
-		expect(rewardClaimCount([], 2)).toBe(0);
+	test('rewardClaimCount is every resolvable token (a kill grants them all)', () => {
+		expect(rewardClaimCount([VP3])).toBe(1);
+		expect(rewardClaimCount(REWARD_TRACK)).toBe(4);
+		expect(rewardClaimCount([VP3, 'not-a-real-icon'])).toBe(1);
+		expect(rewardClaimCount([])).toBe(0);
 	});
 });
 
 describe('monster-kill reward flow (engine)', () => {
-	test('killing the monster opens a 2-pick reward selection from the full pool', () => {
+	test('killing the monster opens a claim of every reward on the card', () => {
 		const s = killMonster();
 		const pending = s.players.Red!.pendingReward!;
 		expect(pending.monsterName).toBe('Abyss Maw');
 		expect(pending.rewardTrack).toEqual(REWARD_TRACK);
-		expect(pending.chooseAmount).toBe(2);
-		// The fight itself granted no VP (it comes from the pick).
+		expect(pending.chooseAmount).toBe(4);
+		// The fight itself granted no VP (it comes from the claim).
 		expect(s.players.Red!.victoryPoints).toBe(0);
+		// The defeated card left Red's hand at once.
+		expect(s.players.Red!.monsterHand).toEqual([]);
 	});
 
-	test('claiming the two VP tokens grants their combined VP and clears the reward', () => {
-		let s = killMonster();
-		s = apply(s, RED, { type: 'resolveMonsterReward', picks: [0, 1] }); // 1 VP + 3 VP
-		expect(s.players.Red!.victoryPoints).toBe(4);
-		expect(s.players.Red!.pendingReward).toBeNull();
+	test('claiming grants EVERY reward, whatever the picks say', () => {
+		for (const picks of [[0, 1, 2, 3], [0], []]) {
+			let s = killMonster();
+			s = apply(s, RED, { type: 'resolveMonsterReward', picks });
+			const red = s.players.Red!;
+			expect(red.victoryPoints).toBe(4); // 1 VP + 3 VP
+			expect(red.pendingDraw?.sourceBag).toBe('Arcane Abyss Bag'); // the Abyss Summon
+			expect(red.mats.some((r) => r.name === 'Cleansing Teapot' && r.relicTool)).toBe(true); // the Teapot relic
+			expect(red.pendingReward).toBeNull();
+		}
 	});
 
-	test('claiming the abyss-summon token opens a face-down draw', () => {
-		let s = killMonster();
-		s = apply(s, RED, { type: 'resolveMonsterReward', picks: [0, 2] }); // 1 VP + Abyss Summon
+	test('two Abyss Summon tokens queue two draws', () => {
+		const catalog: PlayCatalog = {
+			...CATALOG,
+			monsters: [{ ...CATALOG.monsters![0], rewardTrack: [VICTORY_POINT, ABYSS_SUMMON, ABYSS_SUMMON] }]
+		};
+		let s = killMonster(catalog);
+		s = apply(s, RED, { type: 'resolveMonsterReward', picks: [] }, catalog);
 		expect(s.players.Red!.victoryPoints).toBe(1);
-		expect(s.players.Red!.pendingDraw).not.toBeNull();
 		expect(s.players.Red!.pendingDraw?.sourceBag).toBe('Arcane Abyss Bag');
-		expect(s.players.Red!.pendingReward).toBeNull();
+		expect(s.players.Red!.pendingDrawQueue.map((d) => d.sourceBag)).toEqual(['Arcane Abyss Bag']);
 	});
 
 	test('a newly opened Abyss summon gets a fresh choice window and cannot auto-pass', () => {
@@ -241,37 +261,29 @@ describe('monster-kill reward flow (engine)', () => {
 		if (!pass.ok) expect(pass.error.code).toBe('draw_pending');
 	});
 
-	test('claiming a fixed rune adds it to the rune slots', () => {
+	test('claiming a named relic puts the relic tool in a rune slot', () => {
 		let s = killMonster();
 		const before = s.players.Red!.mats.filter((r) => r.hasRune).length;
 		s = apply(s, RED, { type: 'resolveMonsterReward', picks: [3] }); // Teapot
 		const after = s.players.Red!.mats.filter((r) => r.hasRune).length;
 		expect(after).toBe(before + 1);
-		expect(s.players.Red!.mats.some((r) => r.name === 'Water Rune')).toBe(true);
-	});
-
-	test('picking more than chooseAmount is rejected', () => {
-		const s = killMonster();
-		const r = tryApply(s, RED, { type: 'resolveMonsterReward', picks: [0, 1, 2] });
-		expect(r.ok).toBe(false);
-		if (!r.ok) expect(r.error.code).toBe('too_many');
-	});
-
-	test('an empty pick is rejected', () => {
-		const s = killMonster();
-		const r = tryApply(s, RED, { type: 'resolveMonsterReward', picks: [] });
-		expect(r.ok).toBe(false);
-		if (!r.ok) expect(r.error.code).toBe('no_picks');
+		expect(s.players.Red!.mats.some((r) => r.name === 'Cleansing Teapot' && r.relicTool)).toBe(true);
 	});
 
 	test('a pending reward blocks ending the location phase until claimed', () => {
-		const s = killMonster();
-		const blocked = tryApply(s, RED, { type: 'endLocationActions' });
+		// A VP-only card, so the claim opens no summon draw.
+		const catalog: PlayCatalog = {
+			...CATALOG,
+			monsters: [{ ...CATALOG.monsters![0], rewardTrack: [VICTORY_POINT, VP3] }]
+		};
+		const s = killMonster(catalog);
+		const blocked = applyGameCommand(s, RED, { type: 'endLocationActions' }, catalog);
 		expect(blocked.ok).toBe(false);
 		if (!blocked.ok) expect(blocked.error.code).toBe('reward_pending');
 		// After claiming, the seat can end its actions.
-		const claimed = apply(s, RED, { type: 'resolveMonsterReward', picks: [1] });
-		const ended = tryApply(claimed, RED, { type: 'endLocationActions' });
+		const claimed = apply(s, RED, { type: 'resolveMonsterReward', picks: [] }, catalog);
+		expect(claimed.players.Red!.victoryPoints).toBe(4);
+		const ended = applyGameCommand(claimed, RED, { type: 'endLocationActions' }, catalog);
 		expect(ended.ok).toBe(true);
 	});
 
@@ -304,7 +316,8 @@ describe('monster-kill reward flow (engine)', () => {
 		s.players.Red!.attackDice = arcaneDice(6);
 		// Locking no longer reveals instantly — force-advance to reach the Location phase.
 		s = run(s, RED, { type: 'forceAdvancePhase' });
-		s = run(s, RED, { type: 'startCombat' });
+		s = drawMonsterViaCommands(s, RED, catalog);
+		s = run(s, RED, { type: 'startCombat', handIndex: 0 });
 		const options = buildMonsterRewards(s.players.Red!.pendingReward!.rewardTrack);
 		const chooseOpt = options[0];
 		expect(chooseOpt.effect.type).toBe('chooseRune');
@@ -324,13 +337,19 @@ describe('monster-kill reward flow (engine)', () => {
 		const s = killMonster();
 		const round = s.round;
 		const advanced = apply(s, RED, { type: 'forceAdvancePhase' });
-		// Auto-claim took the first two tokens (1 VP + 3 VP) before leaving the phase.
+		// Auto-claim granted every reward (1 VP + 3 VP + summon + rune) before leaving the
+		// phase; the summon's unresolved draw went back to its bag.
 		expect(advanced.players.Red!.pendingReward).toBeNull();
 		expect(advanced.players.Red!.victoryPoints).toBe(4);
-		// With the reward drained no seat has resolution work, so the forced advance
-		// chains through the empty benefits/awakening/cleanup steps to the next round.
-		expect(advanced.phase).toBe('navigation');
-		expect(advanced.round).toBe(round + 1);
+		expect(advanced.players.Red!.pendingDraw).toBeNull();
+		expect(advanced.players.Red!.mats.some((r) => r.name === 'Cleansing Teapot' && r.relicTool)).toBe(true);
+		// The claimed Teapot is a relic tool, so its keep / 2 VP / effect card stops the chain
+		// at that step; the next forced advance goes on to the next round.
+		expect(advanced.phase).toBe('awakening');
+		expect(advanced.players.Red!.pendingDecisions.map((d) => d.kind)).toContain('relicTool');
+		const next = apply(advanced, RED, { type: 'forceAdvancePhase' });
+		expect(next.phase).toBe('navigation');
+		expect(next.round).toBe(round + 1);
 	});
 
 	test('the pending reward is owner-only in the spectator projection', () => {

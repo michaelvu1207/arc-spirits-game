@@ -37,6 +37,8 @@
 		 * has an entry, its back face is rendered instead of the front game print.
 		 */
 		backImageBySlot?: Map<number, string>;
+		/** Slots drawn as a plain dark hex with a marker (the game explorer's face-down spirits). */
+		faceDownSlots?: number[];
 		/** Inspect mode: occupied hexes are clickable to open a spirit detail card. */
 		selectable?: boolean;
 		/** Profile discard mode: use press-and-hold instead of the normal staged click. */
@@ -61,6 +63,7 @@
 		augmentEligibleSlots,
 		onDropAugment,
 		backImageBySlot,
+		faceDownSlots,
 		selectable = false,
 		holdToDiscard = false,
 		selectedSlot = null,
@@ -336,6 +339,15 @@
 				{@const lockedOut =
 					!!baseSpirit &&
 					((discardMode && !discardEligible) || (augmentDropMode && !augmentEligible))}
+				{@const faceDown = !!baseSpirit && (faceDownSlots?.includes(slotIndex) ?? false)}
+				{#if faceDown}
+					{@const cx = hex.corners.reduce((sum, c) => sum + c.x, 0) / hex.corners.length}
+					{@const cy = hex.corners.reduce((sum, c) => sum + c.y, 0) / hex.corners.length}
+					<g class="face-down-mark" aria-label={`Face-down: ${baseSpirit?.name ?? ''}`}>
+						<polygon points={hex.corners.map((c) => `${c.x},${c.y}`).join(' ')} />
+						<path d={`M ${cx - 7} ${cy - 4} L ${cx + 7} ${cy - 4} L ${cx} ${cy + 7} Z`} />
+					</g>
+				{:else}
 				<SpiritHex
 					{hex}
 					{spirit}
@@ -355,6 +367,7 @@
 					selected={selectedSlot === slotIndex}
 					{onSelect}
 				/>
+				{/if}
 			{/if}
 		{/if}
 	{/each}
@@ -368,6 +381,15 @@
 		max-height: 100%;
 		display: block;
 		transition: opacity 0.3s ease;
+	}
+
+	.face-down-mark polygon {
+		fill: #171a21;
+		stroke: #30343f;
+		stroke-width: 2;
+	}
+	.face-down-mark path {
+		fill: #9a9eab;
 	}
 
 	.hex-grid.loading {

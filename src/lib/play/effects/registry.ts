@@ -36,7 +36,7 @@ export type EffectAction =
 	 * Upgrade attack dice. With no `from`/`to`, upgrades the `times` lowest-tier
 	 * non-arcane dice one step (the classic Elementalist ladder). When `from`/`to`
 	 * are given, it instead converts up to `times` dice that are *exactly* at the
-	 * `from` tier into the `to` tier (e.g. Arcane Ascendant: exalted → arcane).
+	 * `from` tier into the `to` tier (e.g. Sorcerer: exalted → arcane).
 	 */
 	| { kind: 'upgradeDice'; times: number; from?: DiceTier; to?: DiceTier }
 	| { kind: 'gainRune'; amount: number }
@@ -56,7 +56,7 @@ export type EffectAction =
 	/** Restore broken barrier. A fixed amount, or half rounded up. */
 	| { kind: 'restoreBrokenBarrier'; amount?: number; fraction?: 'halfRoundUp' }
 	// ── P3 kinds (Rest / Cultivate coverage) ────────────────────────────────
-	/** Set the passive stun-immunity flag (Soul Weaver). */
+	/** Set the passive stun-immunity flag (Mystic). */
 	| { kind: 'setStunImmune' }
 	/** Discard up to `amount` attack dice (cost half of a discard-to-gain trade). */
 	| { kind: 'discardAttackDice'; amount: number }

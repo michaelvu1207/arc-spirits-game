@@ -1,5 +1,5 @@
 /**
- * Arcane Vanguard — two declarative breakpoint abilities.
+ * Huntress — two declarative breakpoint abilities.
  *
  * DB-intended behavior (source of truth):
  *   - Gain 2 Initiative (inCombat).
@@ -14,38 +14,39 @@ import { describe, it, expect } from 'vitest';
 import { fire } from './testHelpers';
 import { ability } from './dragonWarrior';
 
-describe('Arcane Vanguard', () => {
+describe('Huntress', () => {
 	it('grants exactly 2 initiative on inCombat', () => {
-		const { player } = fire({ 'Arcane Vanguard': 1 }, 'inCombat');
+		const { player } = fire({ 'Huntress': 1 }, 'inCombat');
 		expect(player.initiative).toBe(2);
 	});
 
 	it('surfaces the initiative gain as a log line (no silent no-op)', () => {
-		const { log } = fire({ 'Arcane Vanguard': 1 }, 'inCombat');
+		const { log } = fire({ 'Huntress': 1 }, 'inCombat');
 		expect(log.some((l) => l.includes('Gained 2 initiative.'))).toBe(true);
 	});
 
 	it('adds 2 on top of any pre-existing initiative', () => {
-		const { player } = fire({ 'Arcane Vanguard': 1 }, 'inCombat', {
+		const { player } = fire({ 'Huntress': 1 }, 'inCombat', {
 			player: { initiative: 3 }
 		});
 		expect(player.initiative).toBe(5);
 	});
 
 	it('grants exactly 3 arcane attack dice on awakening', () => {
-		const { player } = fire({ 'Arcane Vanguard': 1 }, 'awakening');
+		const { player } = fire({ 'Huntress': 1 }, 'awakening', { command: { slotIndex: 1 } });
 		const arcane = player.attackDice.filter((d) => d.tier === 'arcane');
 		expect(arcane).toHaveLength(3);
 		expect(player.attackDice).toHaveLength(3);
 	});
 
 	it('surfaces the dice gain as a log line (no silent no-op)', () => {
-		const { log } = fire({ 'Arcane Vanguard': 1 }, 'awakening');
+		const { log } = fire({ 'Huntress': 1 }, 'awakening', { command: { slotIndex: 1 } });
 		expect(log.some((l) => l.includes('Gained 3 arcane attack dice.'))).toBe(true);
 	});
 
 	it('adds the 3 arcane dice on top of any pre-existing dice', () => {
-		const { player } = fire({ 'Arcane Vanguard': 1 }, 'awakening', {
+		const { player } = fire({ 'Huntress': 1 }, 'awakening', {
+			command: { slotIndex: 1 },
 			player: { attackDice: [{ instanceId: 'pre1', tier: 'basic' }] }
 		});
 		const arcane = player.attackDice.filter((d) => d.tier === 'arcane');
@@ -57,13 +58,24 @@ describe('Arcane Vanguard', () => {
 		const inCombat = ability.find((a) => a.on === 'inCombat');
 		const awakening = ability.find((a) => a.on === 'awakening');
 		expect(inCombat?.breakpoints?.[0].actions).toEqual([{ kind: 'gainInitiative', amount: 2 }]);
-		expect(awakening?.breakpoints?.[0].actions).toEqual([
-			{ kind: 'gainAttackDice', tier: 'arcane', amount: 3 }
-		]);
+		expect(typeof awakening?.run).toBe('function');
 	});
 
-	it('is inactive when the Arcane Vanguard spirit is face-down (unawakened)', () => {
-		const { player, log } = fire({ 'Arcane Vanguard': 1 }, 'inCombat', {
+	it("grants the dice only on THIS spirit's awakening, not when another spirit awakens", () => {
+		const { player } = fire({ 'Huntress': 1 }, 'awakening', {
+			command: { slotIndex: 2 },
+			player: {
+				spirits: [
+					{ slotIndex: 1, id: 'h', name: 'Tide Huntress', cost: 9, classes: { Huntress: 1 }, origins: {}, isFaceDown: false },
+					{ slotIndex: 2, id: 'o', name: 'Other', cost: 3, classes: { Fighter: 1 }, origins: {}, isFaceDown: false }
+				]
+			}
+		});
+		expect(player.attackDice).toHaveLength(0);
+	});
+
+	it('is inactive when the Huntress spirit is face-down (unawakened)', () => {
+		const { player, log } = fire({ 'Huntress': 1 }, 'inCombat', {
 			player: {
 				spirits: [
 					{
@@ -71,7 +83,7 @@ describe('Arcane Vanguard', () => {
 						id: 's1',
 						name: 'Spirit 1',
 						cost: 2,
-						classes: { 'Arcane Vanguard': 1 },
+						classes: { 'Huntress': 1 },
 						origins: {},
 						isFaceDown: true
 					}

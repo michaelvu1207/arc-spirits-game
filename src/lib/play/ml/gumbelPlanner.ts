@@ -45,7 +45,7 @@ import {
 } from '../server/botPolicy';
 import type { PlayCatalog, PublicGameState, SeatColor } from '../types';
 import { legalActionsWithNext, policyPreviewState, type LegalAction } from './actions';
-import { combatActionExpectation, encodeObs, encodeAction } from './encode';
+import { combatActionExpectation, encodeObs, encodeAction, startCombatMonster } from './encode';
 import type { NeuralPolicy } from './net';
 
 export type SearchLeafObjective = 'multiplayer' | 'solo-reach30';
@@ -378,7 +378,12 @@ export function planDecisionGumbel(
 			const publicState = policyPreviewState(action);
 			const combatExpectedVp =
 				action.cmd.type === 'startCombat'
-					? combatActionExpectation(state, seat, catalog).expectedRewardVp
+					? combatActionExpectation(
+						state,
+						seat,
+						catalog,
+						startCombatMonster(state, seat, action.cmd)
+					).expectedRewardVp
 					: 0;
 			const value = leafValue(
 				publicState,

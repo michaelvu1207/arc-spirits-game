@@ -1,0 +1,56 @@
+{
+	"version": 1,
+	"note": "Strategy texts for agent seats (Step 2). One goal per strategy, 1-2 sentences, only names that exist in the rules brief. `free` has no text: the seat gets the plain prompt.",
+	"strategies": [
+		{
+			"id": "free",
+			"name": "Free choice",
+			"text": ""
+		},
+		{
+			"id": "fire",
+			"name": "Fire: Initiative and damage",
+			"text": "Collect Fire Region spirits and build high Initiative and combat damage (Paladin, Prince, Firetail, Salamander, Fighter, Elementalist), then win by striking first and defeating monsters at the Arcane Abyss for VP."
+		},
+		{
+			"id": "water",
+			"name": "Water: Awakening and purity",
+			"text": "Collect Water Region spirits and awaken them quickly (Huntress, Princess, Fairy), and stay Pure by avoiding hits that would corrupt you."
+		},
+		{
+			"id": "sun",
+			"name": "Sun: Purity and Barrier",
+			"text": "Collect Sun spirits and save Any Rune to awaken them (3 each), stay Pure, and keep your Barrier and Max Barrier high (Shieldbearer, Chorus, Cleric, Gardener) while King scores VP each round."
+		},
+		{
+			"id": "forest",
+			"name": "Forest: Barrier and dice count",
+			"text": "Collect Forest Region spirits to protect and grow your Barrier (Master, Bastion) and the number of your attack dice (Fighter, Wildling, Wanderer, Druid), then fight monsters with many dice."
+		},
+		{
+			"id": "mountain",
+			"name": "Mountain: Augments",
+			"text": "Collect Mountain Region spirits and gather many Spirit Augments (Falconer, Ram, Smith), and place them to reach strong class breakpoints quickly."
+		},
+		{
+			"id": "moon",
+			"name": "Moon: Corruption and Initiative",
+			"text": "Collect Moon spirits and use corruption on purpose: become Fallen, then use Initiative and Moon classes (Assassin, Witch, Acolyte, Cultist, Queen) to strike first and score VP."
+		},
+		{
+			"id": "fire-dice",
+			"name": "Fire and attack dice",
+			"text": "Win through Fire Region spirits and attack dice: gain and upgrade as many attack dice as you can, then turn them into monster kills and VP."
+		},
+		{
+			"id": "moon-evil",
+			"name": "Go Evil early with Moon",
+			"text": "Go Evil (Fallen) early with Moon spirits, then attack Good players at your location for VP (2 per attack plus 2 per player you corrupt)."
+		},
+		{
+			"id": "barrier-hunter",
+			"name": "Max Barrier and Difficulty 3 hunting",
+			"text": "Build your Max Barrier toward 10 (Cultivate with Cultivator or Master spirits, Rider at the Mountain Region), then hunt Difficulty 3 monsters at the Arcane Abyss for VP."
+		}
+	]
+}

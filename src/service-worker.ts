@@ -11,8 +11,9 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const CACHE = `arc-spirits-shell-${version}`;
 
 // Heavy media must NEVER be precached or cached: iOS PWA storage is ~50MB and
-// would be evicted, and these stream fine from the network on demand.
-const HEAVY = /^\/(music|splats|sfx)\//;
+// would be evicted, and these stream fine from the network on demand. The printed
+// monster cards (~7 MB, 108 files) load one card at a time when a card is dealt.
+const HEAVY = /^\/(music|splats|sfx|monster-cards\/cards)\//;
 
 // App shell: hashed build chunks + small static files (icons, fonts, favicon…),
 // excluding the heavy media folders above.

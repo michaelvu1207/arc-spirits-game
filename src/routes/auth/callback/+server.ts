@@ -8,8 +8,8 @@ import type { RequestHandler } from './$types';
  */
 export const GET: RequestHandler = async ({ url, locals: { supabase } }) => {
 	const code = url.searchParams.get('code');
-	const next = url.searchParams.get('next') ?? '/';
-	const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/';
+	const next = url.searchParams.get('next') ?? '/game';
+	const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/game';
 
 	if (code) {
 		const { error } = await supabase.auth.exchangeCodeForSession(code);

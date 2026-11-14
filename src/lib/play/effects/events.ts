@@ -12,14 +12,16 @@
 
 export type GameEvent =
 	// ── Navigation Phase ──────────────────────────────────────────────────────
-	/** Destinations revealed + occupancy computed (Tide Stalker, Rune Traveler). */
+	/** Destinations revealed + occupancy computed (Spellblade, Rune Traveler). */
 	| 'onNavigate'
 	// ── Encounter Phase ───────────────────────────────────────────────────────
 	/** A player-vs-player interaction / pre-combat beat (Infiltrator dice swap). */
 	| 'onPlayerInteraction'
 	// ── Location Interaction Phase ────────────────────────────────────────────
+	/** The Location Phase starts (after the Encounter Phase), once per player (Falconer). */
+	| 'locationPhase'
 	/**
-	 * A spirit was summoned (Soul Weaver redraw, Abyss Summoner, Runic Duplicator).
+	 * A spirit was summoned (Mystic redraw, Summoner, Smith).
 	 * PLANNED SPLIT: carry `{ world: 'spiritWorld' | 'abyss' }` so the redraw scopes.
 	 */
 	| 'onSpiritSummon'
@@ -27,29 +29,29 @@ export type GameEvent =
 	| 'onSpiritDiscard'
 	/** The Cultivate action (Cultivator, Arcane Alchemist, Captain). */
 	| 'onCultivate'
-	/** The Rest action (Fighter, Elementalist, Healer, Soul Weaver, Strategist, Arcane Ascendant). */
+	/** The Rest action (Fighter, Elementalist, Healer, Mystic, Strategist, Sorcerer). */
 	| 'onRest'
 	/**
-	 * A location interaction — e.g. a rune/relic trade (Rune Mage).
+	 * A location interaction — e.g. a rune/relic trade (Mage).
 	 * PLANNED SPLIT: a dedicated trade event carrying `{ given: { kind }, gained }`.
 	 */
 	| 'onLocationInteraction'
 	// ── Combat (shared framework) ─────────────────────────────────────────────
 	/** Combat prep: fires for the attacker BEFORE rolling (combat-bonus / initiative classes). */
 	| 'inCombat'
-	/** Inside `takeDamage`, BEFORE damage applies (Guardian, Disruptor, Aquamaiden, Firekeeper). */
+	/** Inside `takeDamage`, BEFORE damage applies (Guardian, Bastion, Aquamaiden, Firekeeper). */
 	| 'onTakeDamage'
 	/** A combat killed its target (Battle Adept). */
 	| 'onMonsterKill'
 	// ── Awakening & Cleanup Phase ─────────────────────────────────────────────
-	/** A single spirit awakens (Fairy, Arcane Vanguard, Firekeeper, Runebound Vessel). */
+	/** A single spirit awakens (Fairy, Huntress, Firekeeper, Herder). */
 	| 'awakening'
 	/** A player's corruption status changed (carries old/new); sets the round's threshold flags. */
 	| 'onStatusChange'
 	/**
 	 * The Awakening Phase, folded into cleanup. Fires once per active player at
 	 * `enterCleanup`, BEFORE `findWinner` — status-driven grants (Cursed Spirit,
-	 * Abyss Harbinger) and VP win-cons (Dawn Sovereign, Void Sovereign/Guardian).
+	 * Abyss Harbinger) and VP win-cons (Dawn Sovereign, Queen/Guardian).
 	 */
 	| 'awakeningPhase';
 
@@ -61,6 +63,7 @@ export type GameEvent =
 export const EVENT_TIMELINE: readonly GameEvent[] = [
 	'onNavigate',
 	'onPlayerInteraction',
+	'locationPhase',
 	'onSpiritSummon',
 	'onSpiritDiscard',
 	'onCultivate',

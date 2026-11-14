@@ -9,7 +9,7 @@
 		busy = true;
 		try {
 			await auth.signOut();
-			await goto('/');
+			await goto('/game');
 		} finally {
 			busy = false;
 		}

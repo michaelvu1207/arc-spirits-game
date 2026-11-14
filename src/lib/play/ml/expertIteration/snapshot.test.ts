@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyDeadlineAdvance, applyGameCommand, createLobbyState } from '../../runtime';
 import type { GameActor, GameCommand, PlayCatalog, PublicGameState, SeatColor } from '../../types';
 import { legalActionsWithNext, type LegalAction } from '../actions';
@@ -139,6 +139,16 @@ describe('canonical JSON and hashes', () => {
 });
 
 describe('reset trace replay', () => {
+	// startGame stamps a wall-clock gameId (to the second). Freeze the clock so the fixture and
+	// its replays cannot fall on different seconds (a flake under a loaded full-suite run).
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it('replays command and deadline events deterministically from reset', () => {
 		const fixture = startedFixture(2);
 		fixture.events.push(deadlineTraceEvent(fixture.state));
@@ -414,7 +424,17 @@ describe('feature-shard safety and sampling seeds', () => {
 
 describe('outcome-blind snapshot row', () => {
 	it('combines visible state, v1/v2 observations, semantic candidates, and diagnostics', () => {
-		const { state, events } = startedFixture(2);
+		const fixture = startedFixture(2);
+		let state = fixture.state;
+		const events = fixture.events;
+		// The game opens with a forced single-option step (the navigation-power pick). Play
+		// forced singletons through the trace so the row lands on the first real choice.
+		for (let guard = 0; guard < 8; guard += 1) {
+			const only = legalActionsWithNext(state, 'Red', CATALOG);
+			if (only.length !== 1 || only[0].hasHiddenOutcome) break;
+			events.push(commandTraceEvent(RED, only[0].cmd));
+			state = apply(state, RED, only[0].cmd);
+		}
 		const actions = legalActionsWithNext(state, 'Red', CATALOG);
 		const probabilities = actions.map(() => 1 / actions.length);
 		const row = buildOutcomeBlindSnapshot({

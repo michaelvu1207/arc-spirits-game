@@ -4,13 +4,13 @@ import { mergeCombatLog } from './combatLog';
 describe('mergeCombatLog', () => {
 	test('collapses consecutive same-source grants, summing each effect', () => {
 		const raw = [
-			'Spirit Animal: Gained +1 combat damage.',
-			'Spirit Animal: Gained 1 initiative.',
-			'Spirit Animal: Gained +2 combat damage.',
-			'Spirit Animal: Gained 2 initiative.'
+			'Beast: Gained +1 combat damage.',
+			'Beast: Gained 1 initiative.',
+			'Beast: Gained +2 combat damage.',
+			'Beast: Gained 2 initiative.'
 		];
 		expect(mergeCombatLog(raw)).toEqual([
-			'Spirit Animal: Gained +3 combat damage and 3 initiative.'
+			'Beast: Gained +3 combat damage and 3 initiative.'
 		]);
 	});
 
@@ -24,23 +24,23 @@ describe('mergeCombatLog', () => {
 	});
 
 	test('leaves a single grant line untouched (original wording)', () => {
-		expect(mergeCombatLog(['Spirit Animal: Gained +1 combat damage.'])).toEqual([
-			'Spirit Animal: Gained +1 combat damage.'
+		expect(mergeCombatLog(['Beast: Gained +1 combat damage.'])).toEqual([
+			'Beast: Gained +1 combat damage.'
 		]);
 	});
 
 	test('does not merge across different sources, and keeps non-grant lines verbatim', () => {
 		const raw = [
-			'Spirit Animal: Gained +1 combat damage.',
-			'Spirit Animal: Gained +2 combat damage.',
+			'Beast: Gained +1 combat damage.',
+			'Beast: Gained +2 combat damage.',
 			'Good is faster (initiative 3 vs 0) and strikes first.',
-			'Aegis Weaver: Gained +1 combat damage.',
+			'Paladin: Gained +1 combat damage.',
 			'Red is stunned and cannot strike back.'
 		];
 		expect(mergeCombatLog(raw)).toEqual([
-			'Spirit Animal: Gained +3 combat damage.',
+			'Beast: Gained +3 combat damage.',
 			'Good is faster (initiative 3 vs 0) and strikes first.',
-			'Aegis Weaver: Gained +1 combat damage.',
+			'Paladin: Gained +1 combat damage.',
 			'Red is stunned and cannot strike back.'
 		]);
 	});

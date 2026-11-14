@@ -1,10 +1,9 @@
 <script lang="ts">
 	/**
-	 * W2a — the loot moment (plans/ux-overhaul.md §4.2). The reward track becomes
-	 * large medallion cards fanned across the stage; picks stage into the commit
-	 * bar's meter and nothing is claimed until Confirm. `chooseRune` rewards expand
-	 * rune sub-chips inside the selected card and demand an explicit pick — no
-	 * silent option-0 default.
+	 * W2a — the loot moment (plans/ux-overhaul.md §4.2). A kill grants EVERY reward on
+	 * the card (owner rule, 2026-11-03), so the reward track fans out as earned
+	 * medallions and Confirm claims them all. A `chooseRune` reward shows rune chips
+	 * and demands an explicit pick — no silent option-0 default.
 	 *
 	 * Data: the engine's RESOLVED reward options (§5.3, `SeatAffordances.pendingReward`)
 	 * — labelled, claimable, server-computed. The client never re-runs
@@ -13,7 +12,8 @@
 	import type { PendingRewardState } from '$lib/play/types';
 	import type { ResolvedPendingReward } from '$lib/play/viewV2';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
-	import { displayName, storageUrl } from './helpers';
+	import { displayName, rewardTokenIconUrl, storageUrl } from './helpers';
+	import { monsterCardFace } from './monsterCardFace';
 	import TakeoverStage from './takeover/TakeoverStage.svelte';
 	import SourcePanel from './takeover/SourcePanel.svelte';
 	import CommitBar from './takeover/CommitBar.svelte';
@@ -41,7 +41,7 @@
 	let { reward, resolved, assets, accent = '#ff704d', busy = false, onClaim }: Props = $props();
 
 	function tokenIcon(id: string): string | null {
-		return storageUrl(assets.iconPool.get(id)?.file_path ?? null);
+		return rewardTokenIconUrl(assets, id);
 	}
 	function runeIcon(runeId: string): string | null {
 		return storageUrl(assets.matAssets.get(runeId)?.icon_path ?? null);
@@ -56,77 +56,74 @@
 			chooseOptions: (o.chooseOptions ?? []).map((c) => ({ ...c, icon: runeIcon(c.runeId) }))
 		}))
 	);
-	const max = $derived(Math.min(resolved?.chooseAmount ?? reward.chooseAmount, cards.length));
+	const count = $derived(cards.length);
 
+	/** The defeated card's printed face (null: no image, the panel shows the title only). Its
+	 *  printed rewards must be the ones listed here; Barrier/Damage are checked when the
+	 *  catalog row is loaded. */
 	const monsterArt = $derived.by(() => {
-		const byId = assets.monsterAssets.get(reward.monsterId);
-		const found =
-			byId ??
-			Array.from(assets.monsterAssets.values()).find(
-				(m) => m.name?.toLowerCase() === reward.monsterName.toLowerCase()
-			);
-		return storageUrl(found?.card_image_path ?? null);
+		const row = assets.monsterAssets.get(reward.monsterId);
+		const face = monsterCardFace(
+			{
+				id: reward.monsterId,
+				barrier: row?.barrier ?? null,
+				damage: row?.damage ?? null,
+				rewardTrack: reward.rewardTrack
+			},
+			row?.card_image_path
+		);
+		return face?.url ?? null;
 	});
 
-	/** Picks in tap order (drives the meter fill left-to-right). */
-	let picked = $state<number[]>([]);
-	/** Explicit rune pick per chooseRune card — no default (S6 honesty). */
+	/** Explicit rune pick per chooseRune reward — no default (S6 honesty). */
 	let runeChoice = $state<Record<number, number>>({});
-	const atMax = $derived(picked.length >= max);
 
-	function isPicked(index: number): boolean {
-		return picked.includes(index);
-	}
-	function toggle(card: RewardCard) {
-		if (busy) return;
-		if (isPicked(card.index)) {
-			picked = picked.filter((i) => i !== card.index);
-		} else if (!atMax) {
-			picked = [...picked, card.index];
-		}
-	}
 	function chooseRune(card: RewardCard, oi: number) {
 		if (busy) return;
 		runeChoice = { ...runeChoice, [card.index]: oi };
-		if (!isPicked(card.index) && !atMax) picked = [...picked, card.index];
 	}
 
-	const byIndex = $derived(new Map(cards.map((c) => [c.index, c])));
-	const missingChoice = $derived(
-		picked.some((i) => byIndex.get(i)?.isChoice && runeChoice[i] === undefined)
-	);
+	const runeCards = $derived(cards.filter((c) => c.isChoice));
+	const missingChoice = $derived(runeCards.some((c) => runeChoice[c.index] === undefined));
+	/** The commit-bar slot is narrow: "2 VP", "Summon", "Fire". */
+	function meterLabel(label: string): string {
+		return label
+			.replace(/Victory Points?/, 'VP')
+			.replace(/^Arcane Abyss Summon$/, 'Summon')
+			.replace(/ Rune$/, '');
+	}
 	const meter = $derived<MeterSlot[]>(
-		Array.from({ length: max }, (_, i) => {
-			const card = picked[i] !== undefined ? byIndex.get(picked[i]) : null;
-			return {
-				need: 'Reward',
-				needIcon: null,
-				filled: card ? { label: card.label, icon: card.icon } : null
-			};
-		})
+		cards.map((card) => ({
+			need: card.isChoice ? 'Pick rune' : 'Reward',
+			needIcon: null,
+			filled:
+				card.isChoice && runeChoice[card.index] === undefined
+					? null
+					: {
+							label: meterLabel(
+								card.isChoice
+									? (card.chooseOptions[runeChoice[card.index]]?.name ?? card.label)
+									: card.label
+							),
+							icon: card.icon
+						}
+		}))
 	);
 	function confirm() {
-		if (busy || picked.length !== max || missingChoice) return;
-		const choices: number[] = [];
-		for (const idx of picked) {
-			const card = byIndex.get(idx);
-			if (card?.isChoice) choices.push(runeChoice[idx] ?? 0);
-		}
-		onClaim([...picked], choices);
+		if (busy || count === 0 || missingChoice) return;
+		// The engine grants every reward; `choices` follow the card's rune rewards in order.
+		onClaim(
+			cards.map((c) => c.index),
+			runeCards.map((c) => runeChoice[c.index] ?? 0)
+		);
 	}
-
-	// Drop stale picks if the pool changes out from under the selection.
-	$effect(() => {
-		const valid = new Set(cards.map((c) => c.index));
-		if (picked.some((i) => !valid.has(i))) picked = picked.filter((i) => valid.has(i));
-	});
 </script>
 
 <TakeoverStage {accent} testid="monster-reward-menu">
 	{#snippet source()}
 		<SourcePanel
 			title={displayName(reward.monsterName)}
-			subtitle={`Defeated — claim ${max} reward${max === 1 ? '' : 's'}`}
+			subtitle={`Defeated — you earn all ${count} reward${count === 1 ? '' : 's'}`}
 			image={monsterArt}
 			imageAlt={displayName(reward.monsterName)}
 			{accent}
@@ -136,31 +133,24 @@
 	{/snippet}
 
 	<p class="pick-hint" data-testid="reward-pick-count">
-		Choose {max} — {picked.length} picked
+		{#if runeCards.length > 0}
+			You earn every reward below. Pick {runeCards.length === 1 ? 'your rune' : 'a rune for each rune reward'}, then claim.
+		{:else}
+			You earn every reward below.
+		{/if}
 	</p>
 	<div class="fan" data-testid="reward-grid">
 		{#each cards as card, i (card.index)}
-			{@const chosen = isPicked(card.index)}
-			{@const limit = atMax && !chosen}
+			<!-- A rune reward is earned too, but shows its check only once the rune is picked. -->
 			<div
 				class="medallion"
-				class:selected={chosen}
-				class:limit
+				class:choice={card.isChoice}
+				class:selected={!card.isChoice || runeChoice[card.index] !== undefined}
+				class:awaiting={card.isChoice && runeChoice[card.index] === undefined}
 				style="--i: {i}; --n: {cards.length};"
-				role="button"
-				tabindex={busy || limit ? -1 : 0}
-				aria-pressed={chosen}
 				data-testid={`reward-${card.index}`}
-				onclick={() => !limit && toggle(card)}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						e.preventDefault();
-						if (!limit) toggle(card);
-					}
-				}}
 			>
 				<span class="check" aria-hidden="true">✓</span>
-				{#if limit}<span class="limit-chip">Pick limit</span>{/if}
 				<span class="coin">
 					{#if card.icon}
 						<img src={card.icon} alt="" loading="lazy" />
@@ -169,21 +159,22 @@
 					{/if}
 				</span>
 				<span class="medal-label">{card.label}</span>
-				{#if card.isChoice && (chosen || !limit)}
-					<div class="rune-chips" class:open={chosen} role="group" aria-label="Choose a rune">
+				{#if card.isChoice}
+					<div class="rune-chips open" role="group" aria-label="Choose a rune">
 						{#each card.chooseOptions as opt, oi (opt.runeId + oi)}
 							<button
 								type="button"
 								class="rune-chip"
-								class:active={chosen && runeChoice[card.index] === oi}
-								disabled={busy || limit}
-								onclick={(e) => {
-									e.stopPropagation();
-									chooseRune(card, oi);
-								}}
+								class:active={runeChoice[card.index] === oi}
+								aria-pressed={runeChoice[card.index] === oi}
+								disabled={busy}
+								aria-label={opt.name}
+								title={opt.name}
+								onclick={() => chooseRune(card, oi)}
 							>
 								{#if opt.icon}<img src={opt.icon} alt="" />{/if}
-								<span>{opt.name}</span>
+								<!-- The medallion already says "rune": "Mountain", not "Mountain Rune". -->
+								<span>{opt.name.replace(/ Rune$/, '')}</span>
 							</button>
 						{/each}
 					</div>
@@ -195,9 +186,8 @@
 	{#snippet bar()}
 		<CommitBar
 			slots={meter}
-			warning={missingChoice ? 'Pick a rune for your reward' : null}
-			confirmLabel={`Claim ${picked.length}/${max} reward${max === 1 ? '' : 's'}`}
-			confirmDisabled={picked.length !== max || missingChoice}
+			confirmLabel={count === 1 ? 'Claim reward' : `Claim all ${count} rewards`}
+			confirmDisabled={count === 0 || missingChoice}
 			confirmTestid="reward-claim"
 			onConfirm={confirm}
 			{busy}
@@ -245,7 +235,6 @@
 		padding: 0.9rem 0.5rem 0.5rem;
 		border: 0;
 		background: transparent;
-		cursor: pointer;
 		touch-action: manipulation;
 		-webkit-tap-highlight-color: transparent;
 		user-select: none;
@@ -269,7 +258,7 @@
 		}
 	}
 	@media (hover: hover) and (pointer: fine) {
-		.medallion:not(.limit):hover {
+		.medallion:hover {
 			transform: rotate(var(--lean)) translateY(-5px);
 			filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 45%, transparent));
 		}
@@ -278,14 +267,16 @@
 		transform: rotate(0deg) translateY(-6px) scale(1.04);
 		filter: drop-shadow(0 0 20px color-mix(in srgb, var(--accent) 60%, transparent));
 	}
-	.medallion.limit {
-		cursor: not-allowed;
-		opacity: 0.38;
+	/* A rune reward waiting for its pick: earned, but the outline pulses until chosen. */
+	.medallion.awaiting .coin {
+		border-radius: 50%;
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+		animation: await-pulse 1.6s ease-in-out infinite;
 	}
-	.medallion:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-		border-radius: 12px;
+	@keyframes await-pulse {
+		50% {
+			box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent);
+		}
 	}
 	.coin {
 		position: relative;
@@ -342,24 +333,7 @@
 	.medallion.selected .check {
 		opacity: 1;
 	}
-	.limit-chip {
-		position: absolute;
-		top: 38%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		z-index: 3;
-		padding: 0.26rem 0.55rem;
-		border-radius: 8px;
-		background: rgba(10, 6, 20, 0.95);
-		border: 1px solid rgba(255, 255, 255, 0.25);
-		color: var(--color-fog, #b9b4cc);
-		font-family: var(--font-display);
-		font-size: 0.58rem;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		white-space: nowrap;
-	}
-	/* Rune sub-chips live inside the card; they light up once the card is chosen. */
+	/* Rune sub-chips live inside a rune reward; the player must pick one. */
 	.rune-chips {
 		display: flex;
 		flex-wrap: wrap;
@@ -377,7 +351,7 @@
 		background: rgba(15, 10, 28, 0.6);
 		color: var(--color-fog, #b9b4cc);
 		font-family: var(--font-display);
-		font-size: 0.6rem;
+		font-size: 0.72rem;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		cursor: pointer;
@@ -411,19 +385,48 @@
 			gap: 0.25rem;
 		}
 		.coin {
-			width: clamp(3rem, 18vh, 4.4rem);
-			height: clamp(3rem, 18vh, 4.4rem);
+			width: clamp(2.4rem, 11vh, 3rem);
+			height: clamp(2.4rem, 11vh, 3rem);
 		}
 		.medal-label {
 			font-size: 0.62rem;
 		}
 		.rune-chip {
-			min-height: 28px;
-			font-size: 0.54rem;
+			min-height: 30px;
+			font-size: 0.66rem;
+		}
+		/* Phone landscape is short: put a rune reward's chips beside its coin, not under
+		   it, so the picks stay on screen without scrolling. */
+		/* The center column is ~340px wide here, so the medallions wrap: lead with the
+		   one that needs input so its chips are never the part pushed off screen. */
+		.medallion.choice {
+			order: -1;
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr);
+			grid-template-areas: 'coin label' 'coin chips';
+			align-items: center;
+			column-gap: 0.4rem;
+			max-width: 20rem;
+			text-align: left;
+		}
+		.medallion.choice .coin {
+			grid-area: coin;
+		}
+		.medallion.choice .medal-label {
+			grid-area: label;
+		}
+		.medallion.choice .rune-chips {
+			grid-area: chips;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.medallion.choice .check {
+			left: 1.7rem;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.medallion {
+		.medallion,
+		.medallion.awaiting .coin {
 			animation: none;
 			transition: none;
 		}

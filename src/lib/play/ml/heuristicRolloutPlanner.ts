@@ -11,7 +11,7 @@ import type { PlayCatalog, PublicGameState, SeatColor } from '../types';
 import { createRng, nextInt } from '../rng';
 import { profileFor, type BotRandom } from '../server/botPolicy';
 import { legalActionsWithNext, policyPreviewState, type LegalAction } from './actions';
-import { combatActionExpectation, encodeAction, encodeObs } from './encode';
+import { combatActionExpectation, encodeAction, encodeObs, startCombatMonster } from './encode';
 import {
 	determinizeForSearch,
 	rolloutPolicyToRound,
@@ -133,7 +133,12 @@ export function planDecisionBatchedHeuristic(
 				state: policyPreviewState(action),
 				expectedPublicRewardVp:
 					action.cmd.type === 'startCombat'
-						? combatActionExpectation(state, seat, catalog).expectedRewardVp
+						? combatActionExpectation(
+							state,
+							seat,
+							catalog,
+							startCombatMonster(state, seat, action.cmd)
+						).expectedRewardVp
 						: 0
 			});
 			continue;

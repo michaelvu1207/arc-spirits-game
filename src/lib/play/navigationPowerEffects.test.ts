@@ -75,7 +75,7 @@ describe('Navigation Power offers', () => {
 		const { state, p } = setup('forest-bounty', 'Forest Region');
 		resolveNavigationPowerReveal(state, catalog);
 		const ids: string[] = [];
-		for (const name of ['Fighter', 'Elementalist', 'Soul Weaver']) {
+		for (const name of ['Fighter', 'Elementalist', 'Mystic']) {
 			ids.push(p.navigationPowerOffers![0].id);
 			expect(choose(state, 'Red', name).ok).toBe(true);
 		}
@@ -137,7 +137,7 @@ describe('Navigation Power offers', () => {
 	it('Arcane Spirit count excludes expensive spirits of other origins', () => {
 		const { state, p } = setup('abyssal-reckoning');
 		p.spirits = [
-			spirit(1, {}, { origins: { 'Arcane Spirits': 1 } }),
+			spirit(1, {}, { origins: { Moon: 1 } }),
 			spirit(2, {}, { origins: { Forest: 1 } })
 		];
 		p.spirits[1].cost = 9;

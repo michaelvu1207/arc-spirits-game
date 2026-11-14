@@ -155,6 +155,16 @@ function imgSrcDirectives() {
 	return /** @type {any} */ ([...sources]);
 }
 
+/**
+ * frame-ancestors: 'none' everywhere, except on the local game (scripts/local-game/start.mjs
+ * sets PUBLIC_ARC_LOCAL_EXPLORER=1), where the data editor on port 8787 of this machine shows
+ * the explorer pages in a frame. Production never sets the variable.
+ */
+function frameAncestorsDirectives() {
+	if (process.env.PUBLIC_ARC_LOCAL_EXPLORER !== '1') return /** @type {any} */ (['none']);
+	return /** @type {any} */ (['self', 'http://127.0.0.1:8787', 'http://localhost:8787', 'https://*.ts.net:8787']);
+}
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	// Consult https://svelte.dev/docs/kit/integrations
@@ -162,6 +172,9 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
+		// The local game (scripts/local-game/start.mjs) gives its dev server its own folder, so it
+		// does not fight other dev servers or tools over .svelte-kit. Unset: the default.
+		outDir: process.env.ARC_SVELTEKIT_OUT_DIR || '.svelte-kit',
 		adapter: capacitor
 			? adapterStatic({ fallback: 'index.html', precompress: false, strict: false })
 			: adapterVercel({
@@ -205,7 +218,7 @@ const config = {
 				'object-src': ['none'],
 				'base-uri': ['self'],
 				'form-action': ['self'],
-				'frame-ancestors': ['none'],
+				'frame-ancestors': frameAncestorsDirectives(),
 				'frame-src': ['none'],
 				'manifest-src': ['self'],
 				'connect-src': connectSrcDirectives()

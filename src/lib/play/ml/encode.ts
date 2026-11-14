@@ -26,6 +26,7 @@ import {
 	ALL_DESTINATIONS,
 	isEvilAlignment,
 	type GameCommand,
+	type MonsterState,
 	type PlayCatalog,
 	type PrivatePlayerState,
 	type PublicGameState,
@@ -35,6 +36,7 @@ import { awakenedClassCounts } from '../effects/apply';
 import { buildMonsterRewards } from '../monsterRewards';
 import { expectedAttack } from '../combat';
 import { computeKillProbability, firepowerKillProbability } from '../server/botPolicy';
+import { bestHandMonster, isLiveMonster } from '../bots/monsterCardAutopilot';
 import { claimableMonsterRewardVp } from './farmValue';
 
 /** Rough horizon used to normalize the round counter. */
@@ -46,42 +48,42 @@ const BARRIER_NORM = 20;
 // Frozen semantic ordering for the full engine-composition tail. Never derive this from catalog
 // array order: checkpoint meaning must remain stable across catalog serialization changes.
 const FULL_CLASS_FEATURES = [
-	'Abyss Summoner',
+	'Summoner',
 	'Battle Adept',
-	'Relic Warden',
-	'Tide Warden',
+	'Cleric',
+	'Warden',
 	'Arcane Alchemist',
-	'Arcane Ascendant',
+	'Sorcerer',
 	'Woundreaver',
 	'Captain',
-	'Wayfarer',
+	'Nomad',
 	'Cultivator',
 	'Cursed Spirit',
-	'Aegis Weaver',
-	'Fatestriker',
-	'Tide Stalker',
-	'Disruptor',
-	'Arcane Vanguard',
+	'Paladin',
+	'Assassin',
+	'Spellblade',
+	'Bastion',
+	'Huntress',
 	'Elementalist',
 	'Fairy',
-	'Runebound Vessel',
+	'Herder',
 	'Fighter',
-	'Emberguard',
-	'Golden Ruler',
-	'Living Bastion',
+	'Sentinel',
+	'King',
+	'Titan',
 	'Healer',
-	'Cursed Fighter',
+	'Ram',
 	'Monster Hunter',
-	'Runic Duplicator',
-	'Growth Warden',
-	'Rune Mage',
+	'Smith',
+	'Druid',
+	'Mage',
 	'Sharpshooter',
-	'Soul Weaver',
-	'Spirit Animal',
-	'Runic Bulwark',
-	'The Corruptor',
+	'Mystic',
+	'Beast',
+	'Monk',
+	'Corruptor',
 	'Relic Envoy',
-	'Void Sovereign',
+	'Queen',
 	'Relic Sentinel'
 ] as const;
 const FULL_ORIGIN_FEATURES = [
@@ -128,14 +130,44 @@ export interface CombatActionExpectation {
 	expectedRewardVp: number;
 }
 
-/** Public, RNG-free combat facts shared by policy features and fair search leaves. */
-export function combatActionExpectation(
+/**
+ * The monster card a combat command fights: `hand[cmd.handIndex]` of the acting seat for a
+ * `startCombat`, else null. A player fights only cards from their own hand.
+ */
+export function startCombatMonster(
+	state: PublicGameState,
+	seat: SeatColor,
+	cmd: GameCommand
+): MonsterState | null {
+	if (cmd.type !== 'startCombat') return null;
+	const card = state.players[seat]?.monsterHand?.[cmd.handIndex];
+	return isLiveMonster(card) ? card : null;
+}
+
+/**
+ * The monster card `seat` would fight: its best hand card (highest kill probability), or null
+ * when the hand is empty. This replaces the removed shared Abyss monster in every feature.
+ */
+export function seatTargetMonster(
 	state: PublicGameState,
 	seat: SeatColor,
 	catalog: PlayCatalog = EMPTY_CATALOG
+): MonsterState | null {
+	return bestHandMonster(state, seat, catalog)?.card ?? null;
+}
+
+/**
+ * Public, RNG-free combat facts shared by policy features and fair search leaves. `monster` is
+ * the card to fight (pass `startCombatMonster(state, seat, cmd)` for a combat candidate);
+ * omitted → the seat's best hand card.
+ */
+export function combatActionExpectation(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog = EMPTY_CATALOG,
+	monster: MonsterState | null = seatTargetMonster(state, seat, catalog)
 ): CombatActionExpectation {
 	const player = state.players[seat];
-	const monster = state.monster;
 	if (!player || !monster) {
 		return {
 			killProbability: 0,
@@ -146,16 +178,16 @@ export function combatActionExpectation(
 			expectedRewardVp: 0
 		};
 	}
-	const cleanKillProbability = clampProbability(computeKillProbability(state, seat, catalog));
+	const cleanKillProbability = clampProbability(computeKillProbability(state, seat, catalog, { monster }));
 	const killAllowingPublicSimultaneous = clampProbability(
-		computeKillProbability(state, seat, catalog, { allowCorruptKill: true })
+		computeKillProbability(state, seat, catalog, { allowCorruptKill: true, monster })
 	);
 	const killProbability = Math.max(cleanKillProbability, killAllowingPublicSimultaneous);
 	const claimableRewardVp = claimableMonsterRewardVp(monster.rewardTrack, monster.chooseAmount);
 	return {
 		killProbability,
 		cleanKillProbability,
-		rawFirepowerProbability: clampProbability(firepowerKillProbability(state, seat, catalog)),
+		rawFirepowerProbability: clampProbability(firepowerKillProbability(state, seat, catalog, { monster })),
 		expectedAttackDamage: expectedAttack(player),
 		claimableRewardVp,
 		expectedRewardVp: killProbability * claimableRewardVp
@@ -202,16 +234,16 @@ function sumClasses(classes: Record<string, number> | undefined, names: readonly
  * build/convert/finish routes that were previously invisible for hand summons. */
 function spiritRouteFeatures(classes: Record<string, number> | undefined): number[] {
 	return [
-		classFeature(classes, 'Spirit Animal'),
+		classFeature(classes, 'Beast'),
 		classFeature(classes, 'Elementalist', 5),
 		classFeature(classes, 'Arcane Alchemist'),
 		clamp01(sumClasses(classes, ['Fighter', 'Battle Adept']) / 5),
-		clamp01(sumClasses(classes, ['Arcane Vanguard', 'Fairy', 'Fatestriker']) / 3),
+		clamp01(sumClasses(classes, ['Huntress', 'Fairy', 'Assassin']) / 3),
 		classFeature(classes, 'Cultivator', 5),
-		clamp01(sumClasses(classes, ['Void Sovereign', 'Golden Ruler', 'Relic Sentinel', 'Healer']) / 3),
-		clamp01(sumClasses(classes, ['Cursed Spirit', 'The Corruptor', 'Aegis Weaver']) / 3),
-		clamp01(sumClasses(classes, ['Soul Weaver', 'Sharpshooter', 'Monster Hunter']) / 3),
-		clamp01(sumClasses(classes, ['Abyss Summoner', 'Growth Warden', 'Runic Bulwark', 'Rune Mage']) / 3)
+		clamp01(sumClasses(classes, ['Queen', 'King', 'Relic Sentinel', 'Healer']) / 3),
+		clamp01(sumClasses(classes, ['Cursed Spirit', 'Corruptor', 'Paladin']) / 3),
+		clamp01(sumClasses(classes, ['Mystic', 'Sharpshooter', 'Monster Hunter']) / 3),
+		clamp01(sumClasses(classes, ['Summoner', 'Druid', 'Monk', 'Mage']) / 3)
 	];
 }
 
@@ -251,8 +283,11 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	f.push(clamp01(state.activeSeats.length / SEAT_COLORS.length));
 	f.push(state.revealedDestinations ? 1 : 0);
 
-	// Monster (Arcane Abyss) presence + threat.
-	const mon = state.monster;
+	// Monster (Arcane Abyss) presence + threat. There is no shared Abyss monster any more: these
+	// legacy slots (lengths unchanged, so saved models still load) describe the seat's best hand
+	// card (highest kill probability), or zeros when its hand is empty. Legacy lives/ladder fields
+	// are static on cards (1 / catalog order).
+	const mon = seatTargetMonster(state, seat, catalog);
 	f.push(mon ? 1 : 0);
 	f.push(mon ? clamp01(mon.hp / Math.max(1, mon.maxHp)) : 0);
 	f.push(mon ? clamp01(mon.livesRemaining / Math.max(1, mon.livesTotal)) : 0);
@@ -336,18 +371,18 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	// the non-corrupt economy/class-win lines. Append-only.
 	const cc = me ? awakenedClassCounts(me) : {};
 	f.push(clamp01((cc['Cultivator'] ?? 0) / 5)); // 2/3/4/5 = maxBarrier breakpoints
-	f.push(clamp01((cc['Void Sovereign'] ?? 0) / 3)); // +1 VP / round
-	f.push(clamp01((cc['Golden Ruler'] ?? 0) / 3)); // +1 VP / round
+	f.push(clamp01((cc['Queen'] ?? 0) / 3)); // +1 VP / round
+	f.push(clamp01((cc['King'] ?? 0) / 3)); // +1 VP / round
 	f.push(clamp01((cc['Relic Sentinel'] ?? 0) / 3)); // +6 VP capstone
 	f.push(clamp01((cc['Healer'] ?? 0) / 3)); // +1 VP on rest
 	f.push(clamp01((cc['Sharpshooter'] ?? 0) / 3)); // PvP enabler
 	f.push(clamp01((cc['Cursed Spirit'] ?? 0) / 3)); // corruption enabler
-	f.push(clamp01((cc['Spirit Animal'] ?? 0) / 7)); // flat monster-damage route
+	f.push(clamp01((cc['Beast'] ?? 0) / 7)); // flat monster-damage route
 	f.push(clamp01((cc['Elementalist'] ?? 0) / 3)); // dice quality / damage scaling
 	f.push(clamp01((cc['Arcane Alchemist'] ?? 0) / 3)); // arcane dice conversion
 	f.push(clamp01((cc['Fighter'] ?? 0) / 3)); // direct combat scaling
 	f.push(clamp01((cc['Battle Adept'] ?? 0) / 3)); // flexible combat scaling
-	f.push(clamp01((cc['Arcane Vanguard'] ?? 0) / 3)); // combat scaling
+	f.push(clamp01((cc['Huntress'] ?? 0) / 3)); // combat scaling
 	f.push(clamp01((cc['Fairy'] ?? 0) / 3)); // combat/support scaling
 
 	// ── Ladder forward-value block (obs v1.1, Phase 3 "crack the monster ladder").
@@ -358,7 +393,7 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	// Static expected roll of the pool (die-face means; inCombat trigger bonuses land in
 	// killProb below, which simulates them).
 	const expRoll = dt.basic / 3 + (dt.enchanted * 2) / 3 + dt.exalted + dt.arcane * 2;
-	const killProb = me && mon ? computeKillProbability(state, seat, catalog) : 0;
+	const killProb = me && mon ? computeKillProbability(state, seat, catalog, { monster: mon }) : 0;
 	f.push(clamp01(killProb)); // P(clean kill of the current rung) — the climb decision
 	f.push(clamp01(expRoll / 20));
 	f.push(me && mon ? clamp01((expRoll - mon.maxHp + 12) / 24) : 0); // one-shot margin (signed, centered)
@@ -382,7 +417,7 @@ export function encodeObs(state: PublicGameState, seat: SeatColor, catalog: Play
 	f.push(clamp01(fdClass('Fighter') / 5));
 	f.push(clamp01(fdClass('Elementalist') / 5));
 	f.push(clamp01(fdClass('Arcane Alchemist') / 3));
-	f.push(clamp01(fdClass('Arcane Vanguard') / 3));
+	f.push(clamp01(fdClass('Huntress') / 3));
 	// Awakened Fighter/Elementalist on a /5 scale: the /3 one-hots above saturate at 3,
 	// hiding the 4→5 breakpoints (+5/+10 dice) that gate the boss-rung pool.
 	f.push(clamp01((cc['Fighter'] ?? 0) / 5));
@@ -868,7 +903,9 @@ export function encodeAction(
 			if (di >= 0 && di < 5) f[p + di] = 1;
 			const isAbyss = cmd.destination === 'Arcane Abyss';
 			f[p + 5] = isAbyss ? 1 : 0;
-			f[p + 6] = isAbyss && state.monster ? clamp01(state.monster.damage / BARRIER_NORM) : 0;
+			// Threat of the card this seat would fight there (its best hand card; 0 for an empty hand).
+			const target = isAbyss ? seatTargetMonster(state, seat, catalog) : null;
+			f[p + 6] = target ? clamp01(target.damage / BARRIER_NORM) : 0;
 			// How crowded the destination already is (other seats whose secret choice we can't
 			// see pre-reveal → 0; post-reveal occupancy if available).
 			const occ =
@@ -931,11 +968,11 @@ export function encodeAction(
 			const classes = catalogSpiritClasses(catalog, slot?.spiritId);
 			const spirit = catalog?.spirits.find((entry) => entry.id === slot?.spiritId);
 			f[p + 2] = spirit ? clamp01((spirit.cost ?? 0) / 8) : 0;
-			f[p + 3] = classFeature(classes, 'Spirit Animal'); // flat monster damage
+			f[p + 3] = classFeature(classes, 'Beast'); // flat monster damage
 			f[p + 4] = classFeature(classes, 'Elementalist'); // dice-quality scaling
 			f[p + 5] = classFeature(classes, 'Arcane Alchemist'); // dice conversion to arcane
 			f[p + 6] = clamp01(((classes?.Fighter ?? 0) + (classes?.['Battle Adept'] ?? 0)) / 3);
-			f[p + 7] = clamp01(((classes?.['Arcane Vanguard'] ?? 0) + (classes?.['Fairy'] ?? 0)) / 3);
+			f[p + 7] = clamp01(((classes?.['Huntress'] ?? 0) + (classes?.['Fairy'] ?? 0)) / 3);
 			f[p + 8] = classFeature(classes, 'Sharpshooter'); // die on summon + simultaneous attack
 			f[p + 9] = classFeature(classes, 'Cultivator', 5); // max-barrier route support
 			break;
@@ -1052,8 +1089,8 @@ export function encodeAction(
 				'Fighter',
 				'Elementalist',
 				'Cultivator',
-				'Soul Weaver',
-				'Spirit Animal',
+				'Mystic',
+				'Beast',
 				'Cursed Spirit'
 			];
 			const classIndex = cmd.className ? augmentClasses.indexOf(cmd.className) : -1;
@@ -1123,12 +1160,12 @@ export function encodeAction(
 			break;
 		}
 		case 'startCombat': {
-			// The monster card, reward track, player build, and combat odds are public.
-			// Encode those EXPECTATIONS here, never facts read from the dry-run `next`
-			// state: that state has already consumed the upcoming attack roll.
-			const mon = state.monster;
+			// The monster card (the hand card at `cmd.handIndex`), reward track, player build,
+			// and combat odds are known to the acting player. Encode those EXPECTATIONS here,
+			// never facts read from the dry-run `next` state: it has consumed the attack roll.
+			const mon = startCombatMonster(state, seat, cmd);
 			if (me && mon) {
-				const expected = combatActionExpectation(state, seat, catalog);
+				const expected = combatActionExpectation(state, seat, catalog, mon);
 				f[p] = expected.killProbability;
 				f[p + 1] = expected.cleanKillProbability;
 				f[p + 2] = expected.rawFirepowerProbability;
@@ -1164,7 +1201,7 @@ export function encodeAction(
 		// itself grants no immediate VP and cannot directly win; a successful roll opens
 		// the public reward track and consumes one monster life. The continuous values are
 		// probabilities/expectations, not a peek at whether this particular roll succeeds.
-		const expected = combatActionExpectation(state, seat, catalog);
+		const expected = combatActionExpectation(state, seat, catalog, startCombatMonster(state, seat, cmd));
 		const previewPlayer = next?.players[seat];
 		const knownBarrierLoss =
 			a && previewPlayer ? Math.max(0, a.barrier - previewPlayer.barrier) : 0;
@@ -1180,7 +1217,7 @@ export function encodeAction(
 		f.push(clamp01(expected.expectedRewardVp / 10)); // expected claimable reward VP
 		f.push(expected.killProbability); // probability that combat creates a reward choice
 		f.push(1); // committing combat always consumes the combat action
-		f.push(clamp01(expected.killProbability / 4)); // expected monster-life progress
+		f.push(clamp01(expected.killProbability / 4)); // expected monster-card kill progress
 		f.push(0); // not table churn
 		appendActionExtension(f, state, seat, cmd, next);
 		appendMonsterRewardSemantics(f, state, seat, cmd);
@@ -1200,14 +1237,9 @@ export function encodeAction(
 		const createdMonsterReward = !a.pendingReward && !!b.pendingReward;
 		const advancedPhaseOrReady =
 			next.phase !== state.phase || next.round !== state.round || (!a.phaseReady && b.phaseReady);
-		const monsterProgress = state.monster
-			? Math.max(
-					0,
-					state.monster.livesRemaining -
-						(next.monster?.livesRemaining ?? 0) +
-						((next.monster?.ladderIndex ?? state.monster.ladderIndex) - state.monster.ladderIndex)
-				)
-			: 0;
+		// Monster cards this seat defeated (a kill removes the card from its hand; a draw adds one).
+		const liveCards = (p: PrivatePlayerState) => (p.monsterHand ?? []).filter(isLiveMonster).length;
+		const monsterProgress = Math.max(0, liveCards(a) - liveCards(b));
 		const noProgressTableChurn =
 			cmd.type === 'refillMarket' &&
 			!advancedPhaseOrReady &&
@@ -1230,7 +1262,7 @@ export function encodeAction(
 		f.push(clamp01(deltaPendingRewardVp / 10)); // Δclaimable monster-reward VP — delayed scoring
 		f.push(createdMonsterReward ? 1 : 0); // killing combat created a reward choice
 		f.push(advancedPhaseOrReady ? 1 : 0); // yield/phase progress marker
-		f.push(clamp01(monsterProgress / 4)); // shared monster ladder/lives progress
+		f.push(clamp01(monsterProgress / 4)); // monster cards defeated (was: shared ladder/lives progress)
 		f.push(noProgressTableChurn ? 1 : 0); // legal but strategically empty table churn
 	} else {
 		for (let i = 0; i < ACTION_EFFECT_SLOTS; i++) f.push(0);

@@ -23,6 +23,7 @@
 	} from '$lib/stores/gameStore.svelte';
 	import { loadAssets, getAssetState } from '$lib/stores/assetStore.svelte';
 	import { STORAGE_BASE_URL } from '$lib/supabase';
+	import { explorerLinks, fetchGameStories, fetchRoundHands, type GameStory, type RoundHand } from '$lib/explorer';
 
 	interface Props {
 		data: {
@@ -33,9 +34,52 @@
 			tagOptions: string[];
 		};
 		form?: { error?: string } | null;
+		/** The local game explorer: one screen, a short bar, and the time-lapse. */
+		explorer?: boolean;
 	}
 
-	let { data, form }: Props = $props();
+	let { data, form, explorer = false }: Props = $props();
+
+	// Time-lapse: the rounds play by themselves, from the round shown to the last one.
+	let roundHands = $state(new Map<string, RoundHand>());
+	let story = $state<GameStory | null>(null);
+	$effect(() => {
+		if (!explorer) return;
+		void fetchRoundHands(data.gameId).then((hands) => (roundHands = hands));
+		void fetchGameStories(data.gameId).then((stories) => (story = stories.get(data.gameId) ?? null));
+	});
+	const LAPSE_SPEEDS = [1, 2, 4];
+	let lapsePlaying = $state(false);
+	let lapseSpeed = $state(1);
+
+	function toggleLapse() {
+		if (!lapsePlaying && gameState.navigationCount >= gameState.maxNavigation) goToRound(1);
+		lapsePlaying = !lapsePlaying;
+	}
+
+	$effect(() => {
+		if (!lapsePlaying) return;
+		const timer = setInterval(() => {
+			if (gameState.navigationCount >= gameState.maxNavigation) lapsePlaying = false;
+			else goToRound(gameState.navigationCount + 1);
+		}, 900 / lapseSpeed);
+		return () => clearInterval(timer);
+	});
+
+	/** Space: play or pause. Left and right: one round back or forward. */
+	function handleLapseKeys(event: KeyboardEvent) {
+		if (!explorer || activeTab !== 'round') return;
+		const target = event.target as HTMLElement | null;
+		if (target?.closest('input:not([type=range]), textarea, select, button, a')) return;
+		if (event.key === ' ') {
+			event.preventDefault();
+			toggleLapse();
+		} else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+			event.preventDefault();
+			lapsePlaying = false;
+			goToRound(gameState.navigationCount + (event.key === 'ArrowRight' ? 1 : -1));
+		}
+	}
 
 	const gameState = getGameState();
 	const assetState = getAssetState();
@@ -224,7 +268,7 @@
 		return diff >= 0 ? diff : null;
 	});
 
-	let activeTab = $state<'round' | 'summary'>('round');
+	let activeTab = $state<'round' | 'summary' | 'story'>('round');
 	let copiedReplayValue = $state<string | null>(null);
 	let copyReplayTimer: ReturnType<typeof setTimeout> | null = null;
 	let copiedShareValue = $state<string | null>(null);
@@ -334,7 +378,7 @@
 		if (gameState.navigationCount > 0) params.set('round', String(gameState.navigationCount));
 		if (selectedPlayerColorForShare) params.set('player', selectedPlayerColorForShare);
 		const query = params.toString();
-		const path = `/game/${encodeURIComponent(data.gameId)}${query ? `?${query}` : ''}`;
+		const path = explorerLinks.game(data.gameId, query ? `?${query}` : '');
 		return shareBaseUrl ? `${shareBaseUrl}${path}` : path;
 	});
 
@@ -487,6 +531,7 @@
 	function handleRoundSliderInput(event: Event) {
 		const target = event.target as HTMLInputElement;
 		const nextRound = Number.parseInt(target.value, 10);
+		lapsePlaying = false;
 		if (Number.isFinite(nextRound)) handleRoundChange(nextRound);
 	}
 
@@ -546,7 +591,13 @@
 	<title>Game {data.gameId.slice(0, 8)}... | Arc Spirits Spectate</title>
 </svelte:head>
 
-<div class="flex min-h-screen flex-col bg-gray-950">
+<svelte:window onkeydown={handleLapseKeys} />
+
+{#snippet vpChart()}
+	<ResourceGraph plain={explorer} type="victoryPoints" data={graphData} currentRound={gameState.navigationCount} onRoundClick={handleRoundChange} />
+{/snippet}
+
+<div class={explorer ? 'explorer-game flex flex-col bg-gray-950' : 'flex min-h-screen flex-col bg-gray-950'}>
 	<!-- Main Content -->
 	<main class="flex flex-1 flex-col">
 		{#if isLoading && gameState.playerSnapshots.length === 0}
@@ -665,7 +716,7 @@
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div class="flex items-center gap-2">
 							<a
-								href="/"
+								href={explorerLinks.records('/')}
 								class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-800 bg-gray-950/60 text-gray-200 transition-colors hover:bg-gray-950/80"
 								aria-label="Back to Game Records"
 								title="Back to Game Records"
@@ -706,9 +757,21 @@
 							>
 								Summary
 							</button>
+							{#if explorer}
+								<button
+									type="button"
+									onclick={() => (activeTab = 'story')}
+									class={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+										activeTab === 'story' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+									}`}
+								>
+									Story
+								</button>
+							{/if}
 						</div>
 
 						<div class="flex flex-wrap items-center justify-end gap-2">
+{#if !explorer}
 							<button
 								type="button"
 								onclick={handleToggleLive}
@@ -732,6 +795,32 @@
 								</span>
 								Live
 							</button>
+							{:else}
+							<button
+								type="button"
+								onclick={toggleLapse}
+								class="inline-flex h-8 w-9 items-center justify-center rounded-md border border-gray-800 bg-gray-950/60 text-gray-200 transition-colors hover:bg-gray-950/80"
+								aria-pressed={lapsePlaying}
+								aria-label={lapsePlaying ? 'Pause' : 'Play the rounds'}
+								title={lapsePlaying ? 'Pause (space)' : 'Play (space)'}
+							>
+								<svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
+									{#if lapsePlaying}
+										<path d="M5 3h3.5v14H5zM11.5 3H15v14h-3.5z" />
+									{:else}
+										<path d="M5 3l11 7-11 7z" />
+									{/if}
+								</svg>
+							</button>
+							<button
+								type="button"
+								onclick={() => (lapseSpeed = LAPSE_SPEEDS[(LAPSE_SPEEDS.indexOf(lapseSpeed) + 1) % LAPSE_SPEEDS.length])}
+								class="rounded-md border border-gray-800 bg-gray-950/60 px-2.5 py-1.5 font-mono text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-950/80"
+								title="Speed"
+							>
+								{lapseSpeed}×
+							</button>
+							{/if}
 
 							<div
 								class="flex items-center gap-2 rounded-md border border-gray-800 bg-gray-950/60 px-2.5 py-1.5"
@@ -752,6 +841,7 @@
 								{/if}
 							</div>
 
+{#if !explorer}
 							<a
 								href={`/game/${encodeURIComponent(data.gameId)}/export?auto=1`}
 								target="_blank"
@@ -811,6 +901,7 @@
 								<span class="text-gray-500">Round time</span>
 								<span class="font-mono text-gray-200">{formatDuration(roundDeltaMs())}</span>
 							</div>
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -820,6 +911,8 @@
 						<div class="min-w-0 flex-1">
 							<!-- Game Viewer (Players Grid) -->
 							<GameViewer
+								plain={explorer}
+								handOf={explorer ? (color) => roundHands.get(`${gameState.navigationCount}:${color}`) ?? null : undefined}
 								playerSnapshots={gameState.playerSnapshots}
 								spiritAssets={assetState.spiritAssets}
 								matAssets={assetState.matAssets}
@@ -830,13 +923,16 @@
 								onPlayerSelect={(playerColor) => {
 									selectedPlayerColorForShare = playerColor;
 								}}
+								sideExtra={explorer && showGraphs ? vpChart : undefined}
 							/>
 
+							{#if !explorer}
 							<RoundBagsPanel
 								round={gameState.navigationCount}
 								bags={gameState.roundBags}
 								monsterImageUrls={monsterImageMap()}
 							/>
+							{/if}
 						</div>
 
 						{#if data.isAdmin}
@@ -954,6 +1050,16 @@
 									</div>
 								</div>
 							</aside>
+						{/if}
+					</div>
+				{:else if activeTab === 'story'}
+					<div class="story">
+						{#if story}
+							<h2>{story.headline}</h2>
+							{#if story.luck}<div class="story-luck">{story.luck}</div>{/if}
+							<p>{story.story}</p>
+						{:else}
+							<p class="story-luck">No story yet.</p>
 						{/if}
 					</div>
 				{:else}
@@ -1134,19 +1240,19 @@
 								</div>
 								<h3 class="subhead">Game Progress</h3>
 								<div class="graph-stack">
-									<ResourceGraph
+									<ResourceGraph plain={explorer}
 										type="brokenBarrier"
 										data={graphData}
 										currentRound={gameState.navigationCount}
 										onRoundClick={handleRoundChange}
 									/>
-									<ResourceGraph
+									<ResourceGraph plain={explorer}
 										type="barrierGained"
 										data={graphData}
 										currentRound={gameState.navigationCount}
 										onRoundClick={handleRoundChange}
 									/>
-									<ResourceGraph
+									<ResourceGraph plain={explorer}
 										type="victoryPoints"
 										data={graphData}
 										currentRound={gameState.navigationCount}
@@ -1194,6 +1300,16 @@
 </div>
 
 <style>
+	/* Local explorer: the viewer fills the frame; a longer tab scrolls inside it. */
+	.story { max-width: 70ch; padding: 24px 20px; }
+	.story p { margin: 10px 0 0; white-space: pre-wrap; }
+	.story-luck { color: var(--dim, #9a9eab); }
+	.explorer-game {
+		--viewer-offset: 53px;
+		height: 100%;
+		overflow-y: auto;
+	}
+
 	.loading-container {
 		animation: fade-in 0.3s ease-out;
 	}

@@ -140,7 +140,7 @@ for (const region of regions) {
 		} else if (region === 'Water Region') {
 			await expect(page.getByTestId('armed-choice-0-0')).toContainText('Fighter');
 			await expect(page.getByTestId('armed-choice-0-1')).toContainText('Cultivator');
-			await expect(page.getByTestId('armed-choice-0-2')).toContainText('Spirit Animal');
+			await expect(page.getByTestId('armed-choice-0-2')).toContainText('Beast');
 			await page.getByTestId('armed-choice-0-0').click();
 			await payArmedRune();
 			await page.getByTestId('armed-confirm').click();

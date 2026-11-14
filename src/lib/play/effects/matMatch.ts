@@ -52,8 +52,20 @@ export interface MatMatchResult {
 	consumedIndices: number[];
 }
 
+/**
+ * Trader: "You may pay your runes as runes of any type." True when the player has an
+ * awakened Trader; every held rune (each base rune, any origin) then pays like a wild rune.
+ * Relics stay relics.
+ */
+export function runesAreWild(player: { spirits?: { isFaceDown?: boolean; classes?: Record<string, number> }[] }): boolean {
+	return (player.spirits ?? []).some((s) => !s.isFaceDown && (s.classes?.['Trader'] ?? 0) > 0);
+}
+
 /** A mat slot is spendable iff it actually holds a mat. */
-export function spendableMats(mats: MatSlotSnapshot[]): SpendableMat[] {
+export function spendableMats(
+	mats: MatSlotSnapshot[],
+	opts: { runesWild?: boolean } = {}
+): SpendableMat[] {
 	const out: SpendableMat[] = [];
 	for (let arrayIndex = 0; arrayIndex < mats.length; arrayIndex += 1) {
 		const slot = mats[arrayIndex];
@@ -62,9 +74,10 @@ export function spendableMats(mats: MatSlotSnapshot[]): SpendableMat[] {
 		// rule (server/catalog.ts): origin ⇒ rune, else relic. Held wild runes
 		// have no fixed origin, so classify them explicitly.
 		const kind: MatItemKind = isWildRune(slot) || slot.originId ? 'rune' : 'relic';
+		const wayfinderWild = opts.runesWild === true && baseRuneIdForSlot(slot) !== null;
 		out.push({
 			arrayIndex,
-			wildRune: isWildRune(slot),
+			wildRune: isWildRune(slot) || wayfinderWild,
 			slotIndex: slot.slotIndex,
 			instanceId: slot.guid,
 			id: slot.id,

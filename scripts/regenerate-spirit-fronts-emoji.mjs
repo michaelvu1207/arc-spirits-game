@@ -15,7 +15,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) throw new Error('Missing Supabase credentials
 
 const BUCKET = 'game_assets';
 const ASSETS_SCHEMA = 'arc_spirits_assets';
-const OUTPUT_TAG = 'rework-2026-10-30-originless-arcane-v10';
+const OUTPUT_TAG = 'rework-2026-10-30-originless-arcane-v12';
 const BASE_VERSION = 'rework-2026-10-15/game-fit-v2';
 const OUT_DIR = path.resolve('verification/regenerated-spirit-fronts');
 const ORIGIN_TOKEN_REGION = { left: 710, top: 1940, right: 1115, bottom: 2360 };
@@ -146,15 +146,23 @@ async function regenerate(row, originMap, classMap, assetCache) {
 	const kind = originKind(originName);
 	const originPath = origin?.icon_token_png;
 	const classIds = Array.isArray(row.traits?.class_ids) ? row.traits.class_ids : [];
+	const classCount = classIds.length;
 	const layers = [
 		{ input: await sharp(overlay, { raw: { width, height, channels: 4 } }).png().toBuffer(), left: 0, top: 0 }
 	];
+	// Cover only the narrow legacy divider strokes at each class slot; preserve the
+	// panel artwork and the origin slot around them.
+	const classRailLeft = hideOrigin ? 725 : classCount <= 1 ? 1300 : classCount === 2 ? 1160 : 1030;
+	const classRailStep = hideOrigin ? 320 : classCount <= 2 ? 340 : 300;
+	for (let i = 0; i < classCount; i += 1) {
+		const x = classRailLeft + i * classRailStep;
+		layers.push({ input: Buffer.from('<svg width="28" height="420" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#d7dce1"/></svg>'), left: x - 14, top: 1940 });
+	}
 	if (!hideOrigin && (originPath || kind)) {
 		const cacheKey = kind ? `replacement:${kind}` : originPath;
 		if (!assetCache.has(cacheKey)) assetCache.set(cacheKey, kind ? replacementIcon(kind) : await bytes(publicUrl(originPath), `${originName} origin icon`));
 		layers.push({ input: await sharp(assetCache.get(cacheKey)).resize(350, 350).png().toBuffer(), left: 725, top: 1980 });
 	}
-	const classCount = classIds.length;
 	const classLeft = hideOrigin ? 725 : classCount <= 1 ? 1300 : classCount === 2 ? 1160 : 1030;
 	const classStep = classCount <= 2 ? 340 : 300;
 	for (let index = 0; index < classCount; index += 1) {

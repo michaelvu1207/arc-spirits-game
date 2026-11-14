@@ -29,12 +29,14 @@ export interface EffectCombatInfo {
 	/** The opposing seat in a PvP combat (absent for monster fights). */
 	opponent?: SeatColor;
 	/** The opposing SIDE's pooled initiative in a group Encounter (PvP) combat. When
-	 *  present, initiative-comparing effects (Disruptor) use this instead of a single
+	 *  present, initiative-comparing effects (Bastion) use this instead of a single
 	 *  representative seat's initiative, so they judge against the whole attacking side. */
 	opponentInitiative?: number;
+	/** True when a monster deals this hit (fightMonster); read by Bastion under `bastionVsMonsters`. */
+	vsMonster?: boolean;
 }
 
-/** What a resolved trade interaction gave up (Rune Mage hooks `onLocationInteraction`). */
+/** What a resolved trade interaction gave up (Mage hooks `onLocationInteraction`). */
 export interface TradePayload {
 	/** Number of (non-relic) runes spent on the trade's cost. */
 	runes: number;
@@ -73,7 +75,7 @@ export interface EffectContext {
 	newStatus?: number;
 	/** In-flight combat info, for combat triggers. */
 	combat?: EffectCombatInfo;
-	/** What a resolved trade gave up, for `onLocationInteraction` (Rune Mage). */
+	/** What a resolved trade gave up, for `onLocationInteraction` (Mage). */
 	trade?: TradePayload;
 	/** Active players sharing this player's location (excludes self, order-stable). */
 	colocated: PrivatePlayerState[];

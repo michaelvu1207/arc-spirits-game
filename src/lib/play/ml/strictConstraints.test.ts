@@ -25,6 +25,21 @@ function spirit(slotIndex: number, name: string, classes: Record<string, number>
 	};
 }
 
+/** Red's own HP4 monster card (a player fights cards from their own hand). */
+const HP4_CARD = {
+	id: 'hp4',
+	name: 'HP4 Test Monster',
+	hp: 4,
+	maxHp: 4,
+	damage: 4,
+	rewardTrack: ['vp_2'],
+	chooseAmount: 1,
+	livesRemaining: 1,
+	livesTotal: 1,
+	ladderIndex: 2,
+	ladderMax: 0
+};
+
 function player(statusLevel: number, spirits: PlaySpirit[]): PrivatePlayerState {
 	return {
 		playerColor: 'Red',
@@ -54,7 +69,8 @@ function player(statusLevel: number, spirits: PlaySpirit[]): PrivatePlayerState 
 		usedLocationRows: [],
 		awakenOffers: [],
 		pendingDecisions: [],
-		manualPrompts: []
+		manualPrompts: [],
+		monsterHand: [{ ...HP4_CARD }]
 	} as unknown as PrivatePlayerState;
 }
 
@@ -98,19 +114,6 @@ function stateWith(statusLevel: number, spirits: PlaySpirit[]): PublicGameState 
 		navigationFullDeadline: null,
 		phaseDeadline: null,
 		locationOccupancy: { 'Arcane Abyss': ['Red'] },
-		monster: {
-			id: 'hp4',
-			name: 'HP4 Test Monster',
-			hp: 4,
-			maxHp: 4,
-			damage: 4,
-			rewardTrack: ['vp_2'],
-			chooseAmount: 1,
-			livesRemaining: 4,
-			livesTotal: 4,
-			ladderIndex: 2,
-			ladderMax: 8
-		},
 		combats: [],
 		winnerSeat: null
 	} as unknown as PublicGameState;
@@ -171,8 +174,8 @@ describe('planner hard-constraint attribution', () => {
 		).toBe(0);
 	});
 
-	it('preserves route-critical Spirit Animal for non-Fallen status-2 Good builders', () => {
-		const spiritAnimal = spirit(0, 'Route Animal', { 'Spirit Animal': 1 });
+	it('preserves route-critical Beast for non-Fallen status-2 Good builders', () => {
+		const spiritAnimal = spirit(0, 'Route Animal', { 'Beast': 1 });
 		const filler = spirit(1, 'Filler', {});
 		const state = stateWith(2, [spiritAnimal, filler]);
 		const discardAnimal = stateWith(2, [filler]);
@@ -200,7 +203,7 @@ describe('planner hard-constraint attribution', () => {
 	});
 
 	it('does not apply the Good-route preservation guard to Fallen players', () => {
-		const spiritAnimal = spirit(0, 'Route Animal', { 'Spirit Animal': 1 });
+		const spiritAnimal = spirit(0, 'Route Animal', { 'Beast': 1 });
 		const filler = spirit(1, 'Filler', {});
 		const state = stateWith(3, [spiritAnimal, filler]);
 		const discardAnimal = stateWith(3, [filler]);

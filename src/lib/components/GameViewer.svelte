@@ -2,7 +2,9 @@
 	import type { Snippet } from 'svelte';
 	import HexGrid from '$lib/components/HexGrid.svelte';
 	import { buildSpiritAugmentRow } from '$lib/gameViewer/spiritAugments';
-	import { STORAGE_BASE_URL } from '$lib/supabase';
+	import { gameImageUrl } from '$lib/storageImages';
+	import { LOCAL_EXPLORER } from '$lib/explorer';
+	import { usableImage } from '$lib/explorerImages.svelte';
 	import type {
 		BagsData,
 		CustomDiceAsset,
@@ -23,13 +25,22 @@
 		statusIcons: Map<string, IconPoolEntry>; // key: normalized status token
 		guardianAssets: Map<string, GuardianAsset>;
 		customDiceAssets?: Map<string, CustomDiceAsset>;
+		/** Unused since the monster rework: monster cards are private to each player, so
+		 *  the viewer shows no shared "Now Fighting" monster. Kept for existing callers. */
 		monsterAssets?: Map<string, MonsterAsset>;
+		/** Unused (it only fed the removed monster section); kept for existing callers. */
 		bags?: BagsData | null;
 		initialSelectedPlayerColor?: string | null;
 		onPlayerSelect?: (playerColor: string | null) => void;
 		// Per-player admin tag editor snippet. Rendered inline inside each player
 		// row when admin mode is on; absent for non-admins.
 		playerAdmin?: Snippet<[PlayerSnapshot]>;
+		/** Shown under the player list when the column has room (the explorer's VP chart). */
+		sideExtra?: Snippet;
+		/** The game explorer's plain look: the dice pool is a line of counts per tier. */
+		plain?: boolean;
+		/** The explorer: a player's Navigation Powers and monster hand this round. */
+		handOf?: (playerColor: string) => { held_powers: { name: string; used: boolean }[]; monsters: { name: string; difficulty: number | null; hp: number; maxHp: number }[] } | null;
 	}
 
 	let {
@@ -40,41 +51,18 @@
 		statusIcons,
 		guardianAssets,
 		customDiceAssets = new Map<string, CustomDiceAsset>(),
-		monsterAssets = new Map<string, MonsterAsset>(),
-		bags = null,
 		initialSelectedPlayerColor = null,
 		onPlayerSelect,
-		playerAdmin
+		playerAdmin,
+		sideExtra,
+		plain = false,
+		handOf
 	}: Props = $props();
 
-	// Top of the Monsters V2 deck. TTS Container.getObjects() is bottom-to-top,
-	// so the next-to-draw card is the LAST element of contents. Falls back to
-	// the legacy `bags.monsters` key for snapshots predating the rename.
-	const currentMonster = $derived(() => {
-		const monsterBag = bags?.monstersV2 ?? bags?.monsters;
-		const contents = monsterBag?.contents;
-		const top = contents && contents.length > 0 ? contents[contents.length - 1] : null;
-		if (!top) return null;
-
-		const byId = top.id ? monsterAssets.get(top.id) : null;
-		const byName = !byId
-			? Array.from(monsterAssets.values()).find(
-					(m) => m.name?.toLowerCase() === top.name?.toLowerCase()
-				) ?? null
-			: null;
-		const asset = byId ?? byName ?? null;
-
-		const imagePath = asset?.card_image_path ?? null;
-		return {
-			name: asset?.name ?? top.name ?? 'Unknown Monster',
-			imageUrl: imagePath
-				? imagePath.startsWith('http')
-					? imagePath
-					: `${STORAGE_BASE_URL}/${imagePath}`
-				: null,
-			remaining: monsterBag?.count ?? 0
-		};
-	});
+	// The explorer draws a spirit that is not awakened as a dark hex with a marker.
+	const faceDownSlots = $derived.by(() =>
+		(selectedPlayer()?.spirits ?? []).filter((s) => (s as { isFaceDown?: boolean }).isFaceDown).map((s) => s.slotIndex)
+	);
 
 	let selectedPlayerColor = $state<string | null>(null);
 	let didUserSelectPlayerColor = $state(false);
@@ -128,8 +116,7 @@
 	);
 
 	function getStorageUrl(path: string | null): string | null {
-		if (!path) return null;
-		return path.startsWith('http') ? path : `${STORAGE_BASE_URL}/${path}`;
+		return gameImageUrl(path);
 	}
 
 	const spiritImageMap = $derived(() => {
@@ -137,8 +124,8 @@
 		for (const [id, asset] of spiritAssets) {
 			const imagePath = asset.game_print_image_path || asset.art_raw_image_path;
 			if (imagePath) {
-				const url = imagePath.startsWith('http') ? imagePath : `${STORAGE_BASE_URL}/${imagePath}`;
-				map.set(id, url);
+				const url = LOCAL_EXPLORER ? usableImage(gameImageUrl(imagePath)) : gameImageUrl(imagePath);
+				if (url) map.set(id, url);
 			}
 		}
 		return map;
@@ -148,10 +135,8 @@
 		const map = new Map<string, string>();
 		for (const [name, asset] of guardianAssets) {
 			if (asset.icon_image_path) {
-				const url = asset.icon_image_path.startsWith('http')
-					? asset.icon_image_path
-					: `${STORAGE_BASE_URL}/${asset.icon_image_path}`;
-				map.set(name, url);
+				const url = gameImageUrl(asset.icon_image_path);
+				if (url) map.set(name, url);
 			}
 		}
 		return map;
@@ -352,30 +337,6 @@
 <div class="viewer-root">
 	<!-- ── Left column ────────────────────────────────────────────── -->
 	<aside class="viewer-side">
-		<!-- Monster section -->
-		<section class="side-section">
-			<header class="section-head">
-				<span class="section-eyebrow">Now Fighting</span>
-				{#if currentMonster()}
-					<span class="section-meta">{currentMonster()?.remaining ?? 0} left</span>
-				{/if}
-			</header>
-			<div class="monster-frame">
-				{#if currentMonster()?.imageUrl}
-					{@const m = currentMonster()}
-					<img
-						class="monster-image"
-						src={m?.imageUrl ?? ''}
-						alt={m?.name ?? 'Monster'}
-						loading="lazy"
-						decoding="async"
-					/>
-				{:else}
-					<div class="monster-empty">No monster card</div>
-				{/if}
-			</div>
-		</section>
-
 		<!-- Players section -->
 		<section class="side-section">
 			<header class="section-head">
@@ -465,6 +426,11 @@
 				{/if}
 			</div>
 		</section>
+		{#if sideExtra}
+			<section class="side-section side-extra">
+				{@render sideExtra()}
+			</section>
+		{/if}
 	</aside>
 
 	<!-- ── Right side: composition top, dice pool bottom row ── -->
@@ -478,7 +444,7 @@
 				</header>
 				<div class="pane-body comp-body">
 					<div class="hex-shell">
-						<HexGrid spirits={player.spirits} spiritAssets={spiritImageMap()} />
+						<HexGrid spirits={player.spirits} spiritAssets={spiritImageMap()} faceDownSlots={faceDownSlots} />
 					</div>
 
 					{#if handDrawnSpirits().length > 0 || discardedSpirits().length > 0}
@@ -524,6 +490,22 @@
 			</div>
 
 			<!-- Spirit augments — compact row above dice pool -->
+			{@const hand = handOf?.(player?.playerColor ?? '') ?? null}
+			<div class="strip" class:two={!!handOf}>
+				{#if handOf}
+					<div class="pane-col">
+						<header class="pane-head"><span class="section-eyebrow">Powers</span></header>
+						<div class="pane-line">
+							{#each hand?.held_powers ?? [] as p, i (i)}<span class:used={p.used}>{p.name}{p.used ? ' (used)' : ''}</span>{:else}<span class="used">None</span>{/each}
+						</div>
+					</div>
+					<div class="pane-col">
+						<header class="pane-head"><span class="section-eyebrow">Monsters</span></header>
+						<div class="pane-line">
+							{#each hand?.monsters ?? [] as m, i (i)}<span>{m.name}{m.difficulty ? ` · D${m.difficulty}` : ''}{m.hp < m.maxHp ? ` · ${m.hp}/${m.maxHp} barrier` : ''}</span>{:else}<span class="used">None</span>{/each}
+						</div>
+					</div>
+				{/if}
 			<div class="pane pane-augments">
 				<header class="pane-head">
 					<span class="section-eyebrow">Spirit Augments</span>
@@ -555,6 +537,8 @@
 				<div class="pane-body dice-body">
 						{#if playerDicePool().length === 0}
 							<div class="dice-empty">No attack dice</div>
+					{:else if plain}
+						<div class="dice-plain">{playerDicePool().map((d) => `${d.name.replace(/ Attack$/, '')} ${d.count}`).join(' · ')}</div>
 					{:else}
 						<div class="dice-row">
 							{#each playerDicePool() as die (die.diceId)}
@@ -574,6 +558,7 @@
 						</div>
 					{/if}
 				</div>
+			</div>
 			</div>
 		{:else}
 			<div class="empty-main">No player data for this round yet.</div>
@@ -609,8 +594,33 @@
 		overflow: hidden;
 		/* Lock to viewport — no page scrolling. Offset (~140px) covers the
 		   site topbar + the round/summary bar that sit above us. */
-		height: calc(100vh - 140px);
+		height: calc(100vh - var(--viewer-offset, 140px));
 	}
+	/* Local explorer: powers, monsters, augments and dice share one strip under the board. */
+	.strip { display: contents; }
+	.strip.two {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px 24px;
+		flex: 0 0 auto;
+		padding: 12px 20px;
+		border-top: 1px solid var(--vw-rule-strong);
+	}
+	.strip.two .pane { border: 0; padding: 0; background: none; width: auto; }
+	.pane-line { display: flex; flex-wrap: wrap; gap: 2px 14px; padding-top: 4px; }
+	.pane-line .used { color: var(--dim, #9a9eab); }
+	/* Local explorer: the chart under the players takes what is left of the column. */
+	.side-section:has(+ .side-extra) { flex: 0 1 auto; }
+	.side-extra { flex: 1 1 0; padding-top: 0; }
+	.side-extra :global(.resource-graph-container) { height: 100%; max-height: 300px; }
+	@media (max-height: 800px) {
+		.viewer-side .side-section.side-extra { display: none; }
+	}
+	/* Local explorer: four stats fit the row also with two-digit values. */
+	:global(.explorer-game) .row-stats { gap: 0.45rem; }
+	:global(.explorer-game) .stat-num { font-size: 1.7rem; }
+	:global(.explorer-game) .stat-max { font-size: 1.25rem; }
+	:global(.explorer-game) .stat-unit { letter-spacing: 0.1em; margin-left: 2px; }
 	@media (min-width: 1024px) {
 		.viewer-root {
 			flex-direction: row;
@@ -648,8 +658,8 @@
 		padding: 1rem 1.1rem;
 		min-height: 0;
 	}
-	.side-section + .side-section {
-		border-top: 1px solid var(--vw-rule);
+	/* The player list fills the rest of the column and scrolls inside it. */
+	.side-section:last-child {
 		flex: 1 1 auto;
 		min-height: 0;
 		overflow: hidden;
@@ -754,36 +764,6 @@
 		text-transform: uppercase;
 		color: var(--vw-whisper);
 		font-variant-numeric: tabular-nums;
-	}
-
-	/* =============================================================
-	   Monster card frame
-	   ============================================================= */
-	.monster-frame {
-		width: 100%;
-		display: flex;
-		justify-content: center;
-		padding: 0.25rem 0;
-	}
-	.monster-image {
-		width: 100%;
-		max-width: 22rem;
-		height: auto;
-		object-fit: contain;
-		display: block;
-		border-radius: 10px;
-	}
-	.monster-empty {
-		font-family: var(--font-display);
-		font-size: 0.7rem;
-		letter-spacing: 0.18em;
-		text-transform: uppercase;
-		color: var(--vw-whisper);
-		padding: 1.5rem;
-		text-align: center;
-		width: 100%;
-		border: 1px dashed var(--vw-rule);
-		border-radius: 8px;
 	}
 
 	/* =============================================================

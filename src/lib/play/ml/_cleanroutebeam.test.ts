@@ -19,6 +19,7 @@ import { createRng, nextInt } from '../rng';
 import { expectedAttack } from '../combat';
 import { awakenedClassCounts } from '../effects/apply';
 import { buildMonsterRewards } from '../monsterRewards';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import {
 	botActorFor,
 	botSeatNeedsToAct,
@@ -34,6 +35,7 @@ import {
 	VP_TO_WIN,
 	type GameActor,
 	type GameCommand,
+	type MonsterState,
 	type PlayCatalog,
 	type PublicGameState,
 	type SeatColor
@@ -276,6 +278,11 @@ function actionAllowed(action: LegalAction, seat: SeatColor, cfg: Config): boole
 	return true;
 }
 
+/** The card `seat` would fight: the best live card in its own monster hand (null when empty). */
+function seatMonster(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): MonsterState | null {
+	return bestHandMonster(state, seat, catalog)?.card ?? null;
+}
+
 function buildScore(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog, stats: RouteStats): number {
 	const player = state.players[seat];
 	if (!player) return -1_000_000_000;
@@ -283,20 +290,21 @@ function buildScore(state: PublicGameState, seat: SeatColor, catalog: PlayCatalo
 	const status = player.statusLevel ?? 0;
 	const attack = expectedAttack(player);
 	const counts = awakenedClassCounts(player);
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	const monsterHp = monster?.maxHp ?? monster?.hp ?? 0;
 	const monsterDamage = monster?.damage ?? 0;
 	const survivalTarget = monsterDamage + 1;
 	const barrier = player.barrier ?? 0;
 	const maxBarrier = player.maxBarrier ?? 0;
-	const cleanProb = monster ? computeKillProbability(state, seat, catalog, { allowCorruptKill: false }) : 0;
-	const firepowerProb = monster ? firepowerKillProbability(state, seat, catalog) : 0;
+	const cleanProb = monster ? computeKillProbability(state, seat, catalog, { allowCorruptKill: false, monster }) : 0;
+	const firepowerProb = monster ? firepowerKillProbability(state, seat, catalog, { monster }) : 0;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold: 0.5 });
 	const pendingVp = pendingRewardVpPotential(state, seat);
-	const spiritAnimal = counts['Spirit Animal'] ?? 0;
+	const spiritAnimal = counts['Beast'] ?? 0;
 	const cultivator = counts.Cultivator ?? 0;
 	const attackDice = player.attackDice?.length ?? 0;
-	const finishReachable = farm.valid && farm.rewardVp > 0 && vp + farm.rewardVp * Math.max(1, farm.livesRemaining) >= VP_TO_WIN;
+	// Each monster card is a single kill (legacy lives are always 1).
+	const finishReachable = farm.valid && farm.rewardVp > 0 && vp + farm.rewardVp >= VP_TO_WIN;
 	const survivalGap = survivalTarget > 0 ? Math.max(0, survivalTarget - barrier) : 0;
 	const maxBarrierGap = survivalTarget > 0 ? Math.max(0, survivalTarget - maxBarrier) : 0;
 	const damageGap = monsterHp > 0 ? Math.max(0, monsterHp - attack) : 0;
@@ -307,7 +315,7 @@ function buildScore(state: PublicGameState, seat: SeatColor, catalog: PlayCatalo
 		stats.monsterKills * 850 +
 		stats.abyssNavs * 80 +
 		pendingVp * 900 +
-		(farm.valid ? farm.opportunityVp * 420 + farm.rewardVp * 220 + farm.livesRemaining * 45 : 0) +
+		(farm.valid ? farm.opportunityVp * 420 + farm.rewardVp * 220 + 45 : 0) +
 		(finishReachable ? 2_500 : 0) +
 		cleanProb * 420 +
 		firepowerProb * 260 +
@@ -338,10 +346,10 @@ function stateKey(state: PublicGameState, seat: SeatColor): string {
 		player?.barrier ?? 0,
 		player?.maxBarrier ?? 0,
 		player?.attackDice?.length ?? 0,
-		counts['Spirit Animal'] ?? 0,
+		counts['Beast'] ?? 0,
 		counts.Cultivator ?? 0,
-		state.monster?.maxHp ?? state.monster?.hp ?? 0,
-		state.monster?.livesRemaining ?? 0,
+		// The seat's own monster hand (Barrier left per card).
+		(player?.monsterHand ?? []).map((card) => `${card.id}:${card.hp}`).join(','),
 		!!player?.pendingReward
 	].join('|');
 }
@@ -349,19 +357,19 @@ function stateKey(state: PublicGameState, seat: SeatColor): string {
 function buildSnapshot(state: PublicGameState, seat: SeatColor, catalog: PlayCatalog): BuildSnapshot {
 	const player = state.players[seat];
 	const counts = player ? awakenedClassCounts(player) : {};
-	const monster = state.monster;
+	const monster = seatMonster(state, seat, catalog);
 	return {
 		expectedAttack: player ? +expectedAttack(player).toFixed(2) : 0,
 		barrier: player?.barrier ?? 0,
 		maxBarrier: player?.maxBarrier ?? 0,
 		attackDice: player?.attackDice?.length ?? 0,
-		spiritAnimal: counts['Spirit Animal'] ?? 0,
+		spiritAnimal: counts['Beast'] ?? 0,
 		cultivator: counts.Cultivator ?? 0,
 		monsterHp: monster?.maxHp ?? monster?.hp ?? 0,
 		monsterDamage: monster?.damage ?? 0,
-		monsterLives: monster?.livesRemaining ?? 0,
-		cleanKillProb: monster ? +computeKillProbability(state, seat, catalog, { allowCorruptKill: false }).toFixed(3) : 0,
-		firepowerKillProb: monster ? +firepowerKillProbability(state, seat, catalog).toFixed(3) : 0
+		monsterLives: monster ? 1 : 0, // 1 while the seat holds a live card (each card is one kill)
+		cleanKillProb: monster ? +computeKillProbability(state, seat, catalog, { allowCorruptKill: false, monster }).toFixed(3) : 0,
+		firepowerKillProb: monster ? +firepowerKillProbability(state, seat, catalog, { monster }).toFixed(3) : 0
 	};
 }
 
@@ -377,7 +385,7 @@ function diagnoseFrontier(state: PublicGameState, seat: SeatColor, catalog: Play
 	const vp = player?.victoryPoints ?? 0;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold: 0.5 });
 	const rewardVp = farm.valid ? farm.rewardVp : 0;
-	const finishPotentialVp = vp + rewardVp * Math.max(1, farm.valid ? farm.livesRemaining : build.monsterLives);
+	const finishPotentialVp = vp + rewardVp;
 	const survivalTarget = build.monsterDamage + 1;
 	const damageDeficit = build.monsterHp > 0 ? Math.max(0, build.monsterHp + 0.5 - build.expectedAttack) : 0;
 	const barrierDeficit = survivalTarget > 0 ? Math.max(0, survivalTarget - build.barrier) : 0;
@@ -409,8 +417,9 @@ function diagnoseFrontier(state: PublicGameState, seat: SeatColor, catalog: Play
 		nextStatus: action.next.players[seat]?.statusLevel ?? 0,
 		nextRound: action.next.round,
 		nextPhase: action.next.phase,
-		nextCleanKillProb: action.next.monster ? +computeKillProbability(action.next, seat, catalog, { allowCorruptKill: false }).toFixed(3) : 0,
-		nextFirepowerKillProb: action.next.monster ? +firepowerKillProbability(action.next, seat, catalog).toFixed(3) : 0
+		// Omitted `monster` = the best live card in the seat's own hand (0 when it holds none).
+		nextCleanKillProb: +computeKillProbability(action.next, seat, catalog, { allowCorruptKill: false }).toFixed(3),
+		nextFirepowerKillProb: +firepowerKillProbability(action.next, seat, catalog).toFixed(3)
 	}));
 	return {
 		...build,
@@ -594,14 +603,14 @@ function routeActionBonus(
 	const matDelta = (afterPlayer.mats?.length ?? 0) - (beforePlayer.mats?.length ?? 0);
 	const augmentDelta = (afterPlayer.unplacedAugments?.length ?? 0) - (beforePlayer.unplacedAugments?.length ?? 0);
 	const attackDiceDelta = (afterPlayer.attackDice?.length ?? 0) - (beforePlayer.attackDice?.length ?? 0);
-	const spiritAnimalDelta = (afterCounts['Spirit Animal'] ?? 0) - (beforeCounts['Spirit Animal'] ?? 0);
+	const spiritAnimalDelta = (afterCounts['Beast'] ?? 0) - (beforeCounts['Beast'] ?? 0);
 	const cultivatorDelta = (afterCounts.Cultivator ?? 0) - (beforeCounts.Cultivator ?? 0);
 	const firepowerDelta = firepowerKillProbability(after, seat, catalog) - firepowerKillProbability(before, seat, catalog);
-	const monster = before.monster;
+	const monster = seatMonster(before, seat, catalog);
 	const monsterHp = monster?.maxHp ?? monster?.hp ?? 0;
 	const survivalTarget = (monster?.damage ?? 0) + 1;
-	const cleanProb = monster ? computeKillProbability(before, seat, catalog, { allowCorruptKill: false }) : 0;
-	const firepowerProb = monster ? firepowerKillProbability(before, seat, catalog) : 0;
+	const cleanProb = monster ? computeKillProbability(before, seat, catalog, { allowCorruptKill: false, monster }) : 0;
+	const firepowerProb = monster ? firepowerKillProbability(before, seat, catalog, { monster }) : 0;
 	const restoreDeficit = survivalTarget > 0 && (beforePlayer.maxBarrier ?? 0) >= survivalTarget && (beforePlayer.barrier ?? 0) < survivalTarget;
 	const maxBarrierDeficit = survivalTarget > 0 && (beforePlayer.maxBarrier ?? 0) < survivalTarget;
 	const damageDeficit = monsterHp > 0 && (expectedAttack(beforePlayer) < monsterHp + 0.5 || firepowerProb < 0.5);

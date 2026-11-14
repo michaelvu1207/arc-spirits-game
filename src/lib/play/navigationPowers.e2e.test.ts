@@ -3,6 +3,7 @@ import { applyGameCommand, buildSessionProjection, createLobbyState } from './ru
 import { NAVIGATION_POWERS, type NavigationPowerId } from './navigationPowers';
 import { originRuneOptions } from './locationInteractions';
 import { SPIRIT_AUGMENT_CLASSES } from './augments';
+import { dealTestMonster, drawMonsterViaCommands } from './testing/monsterCards';
 import type {
 	GameActor,
 	GameCommand,
@@ -108,6 +109,15 @@ function run(s: PublicGameState, seat: SeatColor, cmd: GameCommand | Record<stri
 	const r = applyGameCommand(s, actor(seat), cmd as GameCommand, CATALOG);
 	if (!r.ok) throw Error(`${seat} ${cmd.type}: ${r.error.code}: ${r.error.message}`);
 	return r.state;
+}
+/** Red draws and keeps a monster card at the Abyss; it is the last card in Red's hand. */
+function drawMonster(s: PublicGameState) {
+	return drawMonsterViaCommands(s, actor('Red'), CATALOG);
+}
+/** Red fights the newest card in their hand (the one just drawn). */
+function fightNewest(s: PublicGameState) {
+	const handIndex = (s.players.Red!.monsterHand?.length ?? 0) - 1;
+	return run(s, 'Red', { type: 'startCombat', handIndex });
 }
 function start(seats: SeatColor[] = ['Red', 'Blue'], seed = 9) {
 	let s = createLobbyState({ roomCode: 'NAVPOW', guardianNames: seats.map((c) => `${c} Guard`) });
@@ -404,7 +414,8 @@ describe('Navigation Powers through live game commands', () => {
 		s.players.Red!.attackDice = [{ instanceId: 'arc', tier: 'arcane' }];
 		s = reveal(s, 'guardians-accord', 'Arcane Abyss');
 		s = choose(s, 'Red');
-		s = run(s, 'Red', { type: 'startCombat' });
+		s = drawMonster(s);
+		s = fightNewest(s);
 		expect(s.combats[0].sides[0].damageDealt % 2).toBe(0);
 		expect(s.players.Red!.attackDice).toHaveLength(1);
 	});
@@ -413,7 +424,7 @@ describe('Navigation Powers through live game commands', () => {
 		s.players.Blue!.statusLevel = 3;
 		s.players.Orange!.statusLevel = 3;
 		s.players.Red!.spirits = [
-			spirit(1, { cost: 7, origins: { 'Arcane Spirits': 1 } }),
+			spirit(1, { cost: 7, origins: { Moon: 1 } }),
 			spirit(2, { cost: 9, origins: { Sun: 1 } })
 		];
 		s.players.Red!.powerInventory = ['abyssal-reckoning'];
@@ -438,14 +449,16 @@ describe('Navigation Powers through live game commands', () => {
 		expect(s.players.Red!.spirits[0].isFaceDown).toBe(false);
 		expect(s.players.Red!.mats).toEqual([]);
 	});
-	it('11 free monster defeat spends a life and opens the normal monster reward picker', () => {
+	it('11 free monster defeat defeats the toughest card in the hand and opens the normal monster reward picker', () => {
 		let s = start();
 		s.players.Blue!.statusLevel = 3;
+		// The power needs a card in Red's hand at reveal: cards drawn in earlier rounds.
+		dealTestMonster(s, 'Red', CATALOG, { catalogId: 'monster-1' });
+		dealTestMonster(s, 'Red', CATALOG, { catalogId: 'monster-2', hp: 5, maxHp: 5 });
 		s = reveal(s, 'abyssal-execution', 'Arcane Abyss');
-		const lives = s.monster!.livesRemaining;
 		s = choose(s, 'Red');
-		expect(s.monster!.livesRemaining).toBe(lives - 1);
-		expect(s.players.Red!.pendingReward?.monsterId).toBe('monster-1');
+		expect(s.players.Red!.monsterHand?.map((c) => c.id)).toEqual(['monster-1']);
+		expect(s.players.Red!.pendingReward?.monsterId).toBe('monster-2');
 		expect(s.players.Red!.barrier).toBe(8);
 		s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });
 		expect(s.players.Red!.victoryPoints).toBe(15);
@@ -456,7 +469,7 @@ describe('Navigation Powers through live game commands', () => {
 		s = reveal(s, 'forest-bounty', 'Forest Region');
 		s = choose(s, 'Red', 'Fighter');
 		s = choose(s, 'Red', 'Elementalist');
-		s = choose(s, 'Red', 'Soul Weaver');
+		s = choose(s, 'Red', 'Mystic');
 		expect(s.players.Red!.unplacedAugments?.map((a) => a.classId)).toEqual([
 			'class-0',
 			'class-1',
@@ -493,14 +506,16 @@ describe('Navigation Powers through live game commands', () => {
 	it('15 temporary Arcane dice participate in the fight then leave the persistent pool', () => {
 		let s = reveal(start(), 'battle-fury', 'Arcane Abyss');
 		s = choose(s, 'Red');
-		s = run(s, 'Red', { type: 'startCombat' });
+		s = drawMonster(s);
+		s = fightNewest(s);
 		expect(s.combats[0].sides[0].damageDealt).toBeGreaterThanOrEqual(2);
 		expect(s.players.Red!.attackDice).toEqual([]);
 	});
 	it('16 battle guard reduces the incoming monster hit', () => {
 		let s = reveal(start(), 'battle-guard', 'Arcane Abyss');
 		s = choose(s, 'Red');
-		s = run(s, 'Red', { type: 'startCombat' });
+		s = drawMonster(s);
+		s = fightNewest(s);
 		expect(s.players.Red!.barrier).toBe(8);
 	});
 	it('17 engaging in PvP adds two VP alongside the ordinary engagement award', () => {
@@ -518,7 +533,8 @@ describe('Navigation Powers through live game commands', () => {
 		s.players.Red!.brokenBarrier = 0;
 		s = reveal(s, 'unbroken-assault', 'Arcane Abyss');
 		s = choose(s, 'Red');
-		s = run(s, 'Red', { type: 'startCombat' });
+		s = drawMonster(s);
+		s = fightNewest(s);
 		s = choose(s, 'Red');
 		expect(s.players.Red!.maxBarrier).toBe(8);
 		expect(s.players.Red!.barrier).toBe(7);
@@ -526,7 +542,8 @@ describe('Navigation Powers through live game commands', () => {
 	it('19 a failed fight offers two VP and remains optional', () => {
 		let s = reveal(start(), 'duelists-prize', 'Arcane Abyss');
 		s = choose(s, 'Red');
-		s = run(s, 'Red', { type: 'startCombat' });
+		s = drawMonster(s);
+		s = fightNewest(s);
 		s = choose(s, 'Red');
 		expect(s.players.Red!.victoryPoints).toBe(2);
 	});
@@ -566,7 +583,8 @@ describe('Navigation Powers through live game commands', () => {
 		s.players.Red!.attackDice = [{ instanceId: 'normal-arcane', tier: 'arcane' }];
 		s = reveal(s, 'battle-fury', 'Arcane Abyss');
 		s = choose(s, 'Red');
-		s = run(s, 'Red', { type: 'startCombat' });
+		s = drawMonster(s);
+		s = fightNewest(s);
 		s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });
 		expect(s.players.Red!.victoryPoints).toBe(15);
 		s = closeRound(s);
@@ -575,7 +593,8 @@ describe('Navigation Powers through live game commands', () => {
 		s = run(s, 'Red', { type: 'lockNavigation', destination: 'Arcane Abyss' });
 		s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Mountain Region' });
 		s = run(s, 'Red', { type: 'forceAdvancePhase' });
-		s = run(s, 'Red', { type: 'startCombat' });
+		s = drawMonster(s); // the first card left the game when it was defeated
+		s = fightNewest(s);
 		s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });
 		s = closeRound(s);
 		expect(s.status).toBe('finished');
@@ -739,6 +758,8 @@ describe('Navigation Powers through live game commands', () => {
 						: id === 'tidal-arsenal'
 							? 'Water Region'
 							: 'Mountain Region';
+			// Abyssal Execution needs a card in Red's hand at reveal: a card drawn in an earlier round.
+			if (id === 'abyssal-execution') dealTestMonster(s, 'Red', CATALOG);
 			s = reveal(s, id, dest);
 			s = settleOffers(s);
 			if (s.phase === 'encounter') {
@@ -746,8 +767,10 @@ describe('Navigation Powers through live game commands', () => {
 				else s = run(s, 'Blue', { type: 'passEncounter' });
 				s = settleOffers(s);
 			}
-			if (dest === 'Arcane Abyss' && !s.players.Red!.pendingReward)
-				s = run(s, 'Red', { type: 'startCombat' });
+			if (dest === 'Arcane Abyss' && !s.players.Red!.pendingReward) {
+				s = drawMonster(s);
+				s = fightNewest(s);
+			}
 			s = settleOffers(s);
 			if (s.players.Red!.pendingReward)
 				s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });
@@ -759,7 +782,8 @@ describe('Navigation Powers through live game commands', () => {
 				s = run(s, 'Red', { type: 'lockNavigation', destination: 'Arcane Abyss' });
 				s = run(s, 'Blue', { type: 'lockNavigation', destination: 'Mountain Region' });
 				s = run(s, 'Red', { type: 'forceAdvancePhase' });
-				s = run(s, 'Red', { type: 'startCombat' });
+				s = drawMonster(s);
+				s = fightNewest(s);
 				s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });
 				s = closeRound(s);
 			}
@@ -793,7 +817,8 @@ describe('power deadlines and bounded resolution', () => {
 	});
 	it('ordinary combat cannot skip an unresolved power, even from another seat', () => {
 		const s = reveal(start(), 'battle-fury', 'Arcane Abyss');
-		const result = applyGameCommand(s, actor('Blue'), { type: 'startCombat' }, CATALOG);
+		dealTestMonster(s, 'Blue', CATALOG);
+		const result = applyGameCommand(s, actor('Blue'), { type: 'startCombat', handIndex: 0 }, CATALOG);
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.error.code).toBe('power_pending');
 	});

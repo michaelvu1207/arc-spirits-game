@@ -95,6 +95,20 @@ beforeAll(async () => {
 		);
 	});
 	ok(applyGameCommand(state, host, { type: 'startGame', seed: 424242 }, catalog));
+	// startGame deals every seat a Navigation Power draft, and the ML enumerator auto-resolves it as
+	// the ONLY candidate. Settle the drafts first so the planner faces the real destination choice.
+	seats.forEach((seat) => {
+		const draft = state.players[seat]?.pendingPowerDrafts?.[0];
+		if (!draft?.length) return;
+		ok(
+			applyGameCommand(
+				state,
+				{ memberId: `bot-${seat}`, displayName: seat, role: 'player', seatColor: seat },
+				{ type: 'chooseNavigationPower', powerId: draft[0] },
+				catalog
+			)
+		);
+	});
 	if (state.phase !== 'navigation') throw new Error(`expected navigation, got ${state.phase}`);
 	navState = state;
 });

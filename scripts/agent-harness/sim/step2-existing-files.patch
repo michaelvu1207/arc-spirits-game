@@ -1,0 +1,657 @@
+# Step 2 (strategies) changes to existing harness files, as a unified diff against the seablue
+# copy rsynced here at 2026-11-12T23:42:34Z (see ~/arcspirits-harness/SOURCE.json). Apply from the
+# repo root with: patch -p1 < scripts/agent-harness/sim/step2-existing-files.patch
+
+--- a/src/lib/play/agents/prompt.ts
++++ b/src/lib/play/agents/prompt.ts
+@@ -39,9 +39,21 @@
+ 	].join('\n');
+ }
+ 
+-export function buildMessages(rulesBrief: string, request: DecisionRequest): ChatMessage[] {
++/** The rules brief (same bytes for every seat), then the seat's strategy message, if any. */
++export function systemMessages(rulesBrief: string, strategy?: string | null): ChatMessage[] {
+ 	return [
+ 		{ role: 'system', content: rulesBrief },
++		...(strategy ? [{ role: 'system' as const, content: strategy }] : [])
++	];
++}
++
++export function buildMessages(
++	rulesBrief: string,
++	request: DecisionRequest,
++	strategy?: string | null
++): ChatMessage[] {
++	return [
++		...systemMessages(rulesBrief, strategy),
+ 		{ role: 'user', content: renderDecisionMessage(request) }
+ 	];
+ }
+@@ -58,7 +70,7 @@
+ 	error: string | null;
+ }
+ 
+-function firstJsonObject(text: string): Record<string, unknown> | null {
++export function firstJsonObject(text: string): Record<string, unknown> | null {
+ 	const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text)?.[1];
+ 	const candidates = [fenced, text].filter((t): t is string => !!t);
+ 	for (const candidate of candidates) {
+--- a/src/lib/play/agents/llmSeat.ts
++++ b/src/lib/play/agents/llmSeat.ts
+@@ -12,10 +12,24 @@
+ 	DecideContext,
+ 	DecisionRequest,
+ 	OfferedAction,
+-	SeatController
++	SeatController,
++	StatementAnswer,
++	StatementRequest
+ } from './contract';
+-import { buildMessages, parseAnswer, repairMessage } from './prompt';
+-import { ProviderError, type ChatMessage, type ChatProvider } from './providers/types';
++import {
++	buildMessages,
++	parseAnswer,
++	repairMessage,
++	systemMessages,
++	type ParsedAnswer
++} from './prompt';
++import {
++	ProviderError,
++	type ChatMessage,
++	type ChatProvider,
++	type ChatRequest
++} from './providers/types';
++import { parseStatement, STATEMENT_PLACEHOLDER, strategyMessage, type Strategy } from './strategy';
+ 
+ export interface LlmSeatOptions {
+ 	provider: ChatProvider;
+@@ -27,6 +41,11 @@
+ 	label?: string;
+ 	/** Run-wide call gate (concurrency cap + back-off on rate/usage limits). */
+ 	gate?: CallGate;
++	/** The seat's goal for the whole game (a second system message; none for `free`). */
++	strategy?: Strategy | null;
++	/** End-of-game statement: `ask` the model, or a fixed `placeholder` without a call.
++	 *  Default: placeholder for the mock provider, ask for every other provider. */
++	statement?: 'ask' | 'placeholder';
+ }
+ 
+ const RAW_LIMIT = 2000;
+@@ -53,17 +72,21 @@
+ export class LlmSeatController implements SeatController {
+ 	readonly label: string;
+ 	readonly modelId: string;
++	readonly strategy: Strategy | null;
+ 	readonly #opts: LlmSeatOptions;
++	readonly #strategyMessage: string | null;
+ 
+ 	constructor(opts: LlmSeatOptions) {
+ 		this.#opts = opts;
+ 		this.modelId = `${opts.provider.name}:${opts.model}`;
+ 		this.label = opts.label ?? this.modelId;
++		this.strategy = opts.strategy ?? null;
++		this.#strategyMessage = strategyMessage(this.strategy);
+ 	}
+ 
+ 	async decide(request: DecisionRequest, ctx: DecideContext): Promise<ControllerAnswer> {
+ 		const attempts: AnswerAttempt[] = [];
+-		const messages: ChatMessage[] = buildMessages(ctx.rulesBrief, request);
++		const messages: ChatMessage[] = buildMessages(ctx.rulesBrief, request, this.#strategyMessage);
+ 		for (let attempt = 1; attempt <= 2; attempt++) {
+ 			let result: Awaited<ReturnType<LlmSeatController['callOnce']>>;
+ 			try {
+@@ -108,6 +131,43 @@
+ 		};
+ 	}
+ 
++	/**
++	 * After the game: one question in the seat's own conversation (same session key), with no
++	 * repair turn. Mock seats answer with a fixed placeholder and make no call.
++	 */
++	async explain(request: StatementRequest, ctx: DecideContext): Promise<StatementAnswer> {
++		const mode =
++			this.#opts.statement ?? (this.#opts.provider.name === 'mock' ? 'placeholder' : 'ask');
++		if (mode === 'placeholder')
++			return { text: STATEMENT_PLACEHOLDER, attempts: [], placeholder: true };
++		const result = await this.#send(
++			this.#chatRequest(
++				[
++					...systemMessages(ctx.rulesBrief, this.#strategyMessage),
++					{ role: 'user', content: request.prompt }
++				],
++				{
++					seat: request.seat,
++					requestId: `${request.gameId}-statement-${request.seat}`,
++					offeredIds: [],
++					attempt: 1,
++					sessionKey: `${request.gameId}:${request.seat}`
++				},
++				ctx
++			),
++			(text) => {
++				const parsed = parseStatement(text);
++				return { id: parsed.error ? null : 'statement', reason: parsed.text, error: parsed.error };
++			},
++			ctx
++		);
++		return {
++			text: result.reason,
++			attempts: [result.attempt],
++			...(result.attempt.error ? { error: result.attempt.error } : {})
++		};
++	}
++
+ 	/** One provider call (public only so `decide` can type its result). */
+ 	async callOnce(
+ 		messages: ChatMessage[],
+@@ -115,34 +175,54 @@
+ 		attempt: number,
+ 		ctx: DecideContext
+ 	): Promise<{ attempt: AnswerAttempt; reason: string; fatal: boolean }> {
+-		const chatRequest = {
+-			model: this.#opts.model,
++		const chatRequest = this.#chatRequest(
+ 			messages,
+-			maxTokens: this.#opts.maxTokens ?? 400,
+-			temperature: this.#opts.temperature,
+-			signal: ctx.signal,
+-			meta: {
++			{
+ 				seat: request.seat,
+ 				requestId: request.requestId,
+ 				offeredIds: request.actions.map((a) => a.id),
+ 				attempt,
+ 				sessionKey: `${request.gameId}:${request.seat}`
+-			}
++			},
++			ctx
++		);
++		return this.#send(chatRequest, (text) => parseAnswer(text, request.actions), ctx);
++	}
++
++	#chatRequest(
++		messages: ChatMessage[],
++		meta: NonNullable<ChatRequest['meta']>,
++		ctx: DecideContext
++	): ChatRequest {
++		return {
++			model: this.#opts.model,
++			messages,
++			maxTokens: this.#opts.maxTokens ?? 400,
++			temperature: this.#opts.temperature,
++			signal: ctx.signal,
++			meta
+ 		};
++	}
++
++	async #send(
++		chatRequest: ChatRequest,
++		parse: (text: string) => ParsedAnswer,
++		ctx: DecideContext
++	): Promise<{ attempt: AnswerAttempt; reason: string; fatal: boolean }> {
+ 		// Budget errors propagate: the runner stops the game.
+ 		const estimate = await this.#opts.provider.estimateCostUsd(chatRequest);
+ 		this.#opts.budget.beforeCall(estimate);
+ 		const started = performance.now();
+ 		try {
+-			return await this.#call(chatRequest, request, estimate, started, ctx);
++			return await this.#call(chatRequest, parse, estimate, started, ctx);
+ 		} finally {
+ 			this.#opts.budget.release(estimate);
+ 		}
+ 	}
+ 
+ 	async #call(
+-		chatRequest: Parameters<ChatProvider['complete']>[0],
+-		request: DecisionRequest,
++		chatRequest: ChatRequest,
++		parse: (text: string) => ParsedAnswer,
+ 		estimate: number,
+ 		started: number,
+ 		ctx: DecideContext
+@@ -157,7 +237,7 @@
+ 			const billedFailures = (res.possiblyBilledFailures ?? 0) * estimate;
+ 			if (extraAttempts > 0 || billedFailures > 0)
+ 				this.#opts.budget.recordFailure(extraAttempts, billedFailures);
+-			const parsed = parseAnswer(res.text, request.actions);
++			const parsed = parse(res.text);
+ 			return {
+ 				attempt: {
+ 					raw: res.text.slice(0, RAW_LIMIT),
+--- a/src/lib/play/agents/contract.ts
++++ b/src/lib/play/agents/contract.ts
+@@ -14,11 +14,12 @@
+ 
+ import type { BotActionId } from '../bots/contract';
+ import type { GameCommand, GamePhase, SeatColor } from '../types';
++import type { Strategy } from './strategy';
+ 
+ export const AGENT_CONTRACT_VERSION = 'arc-agent-v1';
+ /** Bump when the prompt text or its structure changes (benchmarks compare like with like). */
+ export const PROMPT_VERSION = 'agent-prompt-v2';
+-export const HARNESS_VERSION = 'agent-harness-0.2.0';
++export const HARNESS_VERSION = 'agent-harness-0.3.0';
+ 
+ /** What the decision is about, for prompts, summaries and metrics. */
+ export type DecisionKind =
+@@ -134,8 +135,27 @@
+ 	/** Model id / profile for records (e.g. "openrouter:openai/gpt-4o-mini", "mock:random"). */
+ 	readonly modelId: string;
+ 	decide(request: DecisionRequest, ctx: DecideContext): Promise<ControllerAnswer>;
++	/** The goal this seat keeps for the whole game (strategy.ts); absent = none. */
++	readonly strategy?: Strategy | null;
++	/** After the game: why it played as it did (one call in the same conversation). */
++	explain?(request: StatementRequest, ctx: DecideContext): Promise<StatementAnswer>;
+ }
+ 
++export interface StatementRequest {
++	gameId: string;
++	seat: SeatColor;
++	/** The question with the final result (strategy.ts `statementPrompt`). */
++	prompt: string;
++}
++
++export interface StatementAnswer {
++	text: string;
++	attempts: AnswerAttempt[];
++	/** True when no call was made (mock seats). */
++	placeholder?: boolean;
++	error?: string;
++}
++
+ export interface DecideContext {
+ 	/** The rules brief (identical for every decision in a run; first system message). */
+ 	rulesBrief: string;
+--- a/src/lib/play/agents/runner.ts
++++ b/src/lib/play/agents/runner.ts
+@@ -40,6 +40,7 @@
+ import { renderDecisionMessage } from './prompt';
+ import { sha256 } from './rulesBrief';
+ import { createAgentLobby, pickGuardians, seatsFor } from './setup';
++import { collectStatements } from './strategy';
+ import type { DecisionRecord, SeatSetup, TranscriptSink } from './transcript';
+ import { seatProjection, spectatorProjection } from './view';
+ 
+@@ -57,6 +58,10 @@
+ 	guardian: string;
+ 	controller: string;
+ 	model: string;
++	/** The seat's strategy (absent: none given). */
++	strategy?: { id: string; name: string; text: string };
++	/** The seat's end-of-game statement (strategy.ts). */
++	statement?: string;
+ 	finalVp: number;
+ 	/** VP at the end of each completed round (engine `vpHistory`). */
+ 	vpByRound: number[];
+@@ -149,6 +154,8 @@
+ 	maxProviderFailures?: number;
+ 	/** Ask seats in parallel where their decisions are truly simultaneous (navigation). Default true. */
+ 	parallel?: boolean;
++	/** After the game, ask each seat why it played as it did (statement records). Default off. */
++	statements?: boolean;
+ 	eventsPerPrompt?: number;
+ 	git?: { commit: string | null; dirtyFiles: number | null };
+ 	signal?: AbortSignal;
+@@ -161,6 +168,7 @@
+ 		guardian: setup.guardian,
+ 		controller: setup.controller,
+ 		model: setup.model,
++		...(setup.strategy ? { strategy: setup.strategy } : {}),
+ 		finalVp: 0,
+ 		vpByRound: [],
+ 		finalStatus: 'Pure',
+@@ -257,7 +265,8 @@
+ 		seat,
+ 		guardian: guardians[i],
+ 		controller: opts.controllers[i].label,
+-		model: opts.controllers[i].modelId
++		model: opts.controllers[i].modelId,
++		...(opts.controllers[i].strategy ? { strategy: opts.controllers[i].strategy! } : {})
+ 	}));
+ 	const controllerBySeat = new Map(seats.map((seat, i) => [seat, opts.controllers[i]]));
+ 	const gameIndex = opts.gameIndex ?? 0;
+@@ -686,6 +695,31 @@
+ 		sum.finalDice = p.attackDice.length;
+ 		sum.finalMaxBarrier = p.maxBarrier;
+ 	}
++	const finalStop: StopReason =
++		state.status === 'finished' ? 'finished' : stopReason === 'finished' ? 'stalled' : stopReason;
++	// After the game: each seat says why it played as it did (a failure never fails the game).
++	if (opts.statements && finalStop !== 'aborted') {
++		const statements = await collectStatements({
++			gameId,
++			outcome: {
++				finished: state.status === 'finished',
++				winner: state.winnerSeat ?? null,
++				rounds: state.round,
++				decisions,
++				stopReason: finalStop,
++				seats: [...summaries.values()]
++			},
++			controllers: controllerBySeat,
++			rulesBrief: opts.rulesBrief,
++			signal: opts.signal
++		});
++		for (const record of statements) {
++			sink?.write(record);
++			const sum = summaries.get(record.seat)!;
++			addAttemptStats(sum, record.attempts);
++			sum.statement = record.text;
++		}
++	}
+ 	const seatSummaries = [...summaries.values()];
+ 	const summary: GameSummary = {
+ 		runId: opts.runId,
+@@ -696,8 +730,7 @@
+ 		harnessVersion: HARNESS_VERSION,
+ 		contract: AGENT_CONTRACT_VERSION,
+ 		finished: state.status === 'finished',
+-		stopReason:
+-			state.status === 'finished' ? 'finished' : stopReason === 'finished' ? 'stalled' : stopReason,
++		stopReason: finalStop,
+ 		...(stopDetail ? { stopDetail } : {}),
+ 		winner: state.winnerSeat ?? null,
+ 		rounds: state.round,
+--- a/src/lib/play/agents/transcript.ts
++++ b/src/lib/play/agents/transcript.ts
+@@ -8,6 +8,8 @@
+  *               latency, tokens, cost), repaired/fallback/forced flags
+  *   advance   — the harness forced the phase machine forward (navigation reveal; nobody able
+  *               to act), exactly like the server's deadline enforcement
++ *   statement — after the game: the seat's own words on why it played as it did (strategy.ts);
++ *               replay ignores it
+  *   result    — the game summary (see runner.ts) and the final state hash
+  *
+  * Replay re-runs the engine from the header and the recorded commands, and checks the final
+@@ -36,6 +38,8 @@
+ 	guardian: string;
+ 	controller: string;
+ 	model: string;
++	/** The seat's strategy for this game (absent: none given). */
++	strategy?: { id: string; name: string; text: string };
+ }
+ 
+ export interface HeaderRecord {
+@@ -113,11 +117,27 @@
+ 	attempts: AnswerAttempt[];
+ }
+ 
++/** After the game: why the seat played as it did (one call in its own conversation). */
++export interface StatementRecord {
++	type: 'statement';
++	seat: SeatColor;
++	strategyId: string | null;
++	/** The question asked (null when no call was made). */
++	prompt: string | null;
++	text: string;
++	/** True for a mock seat's fixed text (no call). */
++	placeholder: boolean;
++	/** Why there is no statement (failed or refused call); the game result stands. */
++	error?: string;
++	attempts: AnswerAttempt[];
++}
++
+ export type TranscriptRecord =
+ 	| HeaderRecord
+ 	| DecisionRecord
+ 	| StaleRecord
+ 	| AdvanceRecord
++	| StatementRecord
+ 	| ResultRecord;
+ 
+ export interface TranscriptSink {
+--- a/src/lib/play/agents/providers/gateway.ts
++++ b/src/lib/play/agents/providers/gateway.ts
+@@ -219,13 +219,14 @@
+ 		const model = request.model || GATEWAY_DEFAULT_MODEL;
+ 		assertGatewayModel(model);
+ 		const key = request.meta?.sessionKey;
+-		const system = request.messages.find((m) => m.role === 'system');
++		// The rules brief, then the seat's strategy message when it has one (strategy.ts).
++		const system = request.messages.filter((m) => m.role === 'system');
+ 		const turns = request.messages.filter((m) => m.role !== 'system');
+ 		const stored = key ? (this.#history.get(key) ?? []) : [];
+ 		// The seat's conversation already holds its earlier turns and answers: add only what is
+ 		// new in this request (the decision, or a repair message after the stored bad answer).
+ 		const fresh = key && stored.length ? turns.slice(-1) : turns;
+-		const messages: StoredTurn[] = [...(system ? [system] : []), ...stored, ...fresh];
++		const messages: StoredTurn[] = [...system, ...stored, ...fresh];
+ 		let lastError: ProviderError | null = null;
+ 		for (let attempt = 0; attempt <= this.#maxRetries; attempt++) {
+ 			try {
+--- a/src/lib/play/agents/providers/codex.ts
++++ b/src/lib/play/agents/providers/codex.ts
+@@ -309,7 +309,11 @@
+ 	}
+ 
+ 	async #complete(request: ChatRequest): Promise<ChatResponse> {
+-		const system = request.messages.find((m) => m.role === 'system')?.content ?? '';
++		// The rules brief, then the seat's strategy message when it has one (strategy.ts).
++		const system = request.messages
++			.filter((m) => m.role === 'system')
++			.map((m) => m.content)
++			.join('\n\n');
+ 		const instructions = this.#instructionsFile(system);
+ 		const model = request.model || this.#opts.model;
+ 		const key = request.meta?.sessionKey;
+--- a/scripts/agent-harness/run.ts
++++ b/scripts/agent-harness/run.ts
+@@ -7,6 +7,8 @@
+  *   npx tsx scripts/agent-harness/run.ts --seats mock:random,mock:first,mock:random --games 5 --rotate
+  *   npx tsx scripts/agent-harness/run.ts --replay output/agent-harness/<run>/game-0.jsonl
+  *   npx tsx scripts/agent-harness/run.ts --brief            # print the rules brief and exit
++ *   npx tsx scripts/agent-harness/run.ts --strategies fire,moon-evil,barrier-hunter,free --rotate --games 4
++ *                                       # one model (--model, default gw:gpt-6.1-sol), a strategy per seat
+  *
+  * See scripts/agent-harness/README.md.
+  */
+@@ -14,7 +16,8 @@
+ import { execFileSync } from 'node:child_process';
+ import { randomBytes } from 'node:crypto';
+ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+-import { join, resolve } from 'node:path';
++import { dirname, join, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
+ import { parseArgs } from 'node:util';
+ import { BudgetGuard, DEFAULT_BUDGET } from '../../src/lib/play/agents/budget';
+ import { CallGate } from '../../src/lib/play/agents/callGate';
+@@ -36,6 +39,9 @@
+ import { OpenRouterProvider } from '../../src/lib/play/agents/providers/openrouter';
+ import { buildRulesBrief, sha256 } from '../../src/lib/play/agents/rulesBrief';
+ import { runAgentGame, type GameSummary } from '../../src/lib/play/agents/runner';
++import { saveRunCatalog } from '../../src/lib/play/agents/runCatalog';
++import { loadStrategies, pickStrategies, type Strategy } from '../../src/lib/play/agents/strategy';
++import { writeStrategyReport } from '../../src/lib/play/agents/strategyReport';
+ import {
+ 	JsonlStreamSink,
+ 	readTranscript,
+@@ -50,7 +56,14 @@
+ 
+ const { values } = parseArgs({
+ 	options: {
+-		seats: { type: 'string', default: 'mock:random,mock:random' },
++		// Default: mock:random,mock:random, or one --model seat per strategy with --strategies.
++		seats: { type: 'string' },
++		strategies: { type: 'string' },
++		'strategies-file': {
++			type: 'string',
++			default: join(dirname(fileURLToPath(import.meta.url)), 'strategies.json')
++		},
++		model: { type: 'string', default: 'gw:gpt-6.1-sol' },
+ 		games: { type: 'string', default: '1' },
+ 		seed: { type: 'string', default: '1' },
+ 		rotate: { type: 'boolean', default: false },
+@@ -193,7 +206,8 @@
+ 	spec: string,
+ 	index: number,
+ 	seed: number,
+-	budget: BudgetGuard
++	budget: BudgetGuard,
++	strategy: Strategy | null = null
+ ): SeatController {
+ 	if (isCodexSpec(spec) && spec !== 'codex' && !spec.startsWith('codex:')) spec = `codex:${spec}`;
+ 	const [kind, ...rest] = spec.split(':');
+@@ -211,6 +225,7 @@
+ 			budget,
+ 			maxTokens,
+ 			gate,
++			strategy,
+ 			label: `mock:${policy}`
+ 		});
+ 	}
+@@ -222,6 +237,7 @@
+ 			budget,
+ 			maxTokens,
+ 			gate,
++			strategy,
+ 			label: `codex:${model}`
+ 		});
+ 	}
+@@ -235,6 +251,7 @@
+ 			budget,
+ 			maxTokens,
+ 			gate,
++			strategy,
+ 			label: `gw:${model}@${effort}`
+ 		});
+ 	}
+@@ -247,6 +264,7 @@
+ 			maxTokens,
+ 			temperature,
+ 			gate,
++			strategy,
+ 			label: `openrouter:${arg}`
+ 		});
+ 	}
+@@ -297,8 +315,14 @@
+ 	const baseSeed0 = num('seed', values.seed, { int: true });
+ 	// The games to play: seat specs and seed per game. --tournament: a 2-seat round robin,
+ 	// each pair plays --pair-games games with the seats swapped and the same seed.
+-	let jobs: { specs: string[]; seed: number; pair?: string }[];
++	let jobs: { specs: string[]; seed: number; pair?: string; strategies?: Strategy[] }[];
+ 	let specs: string[];
++	// --strategies: one strategy per seat (strategy.ts); with --rotate they move with the seats.
++	const strategies = values.strategies
++		? pickStrategies(values.strategies, loadStrategies(resolve(values['strategies-file']!)))
++		: null;
++	if (strategies && values.tournament)
++		throw new Error('--strategies does not work with --tournament');
+ 	if (values.tournament) {
+ 		const field = values.tournament
+ 			.split(',')
+@@ -318,15 +342,23 @@
+ 					});
+ 		specs = field;
+ 	} else {
+-		specs = (values.seats ?? '')
++		specs = (
++			values.seats ??
++			(strategies ? strategies.map(() => values.model).join(',') : 'mock:random,mock:random')
++		)
+ 			.split(',')
+ 			.map((s) => s.trim())
+ 			.filter(Boolean);
+ 		if (specs.length < 2 || specs.length > 4) throw new Error('--seats needs 2 to 4 seat specs');
+-		// --rotate: shift seat order every game so no model keeps the first seat.
++		if (strategies && strategies.length !== specs.length)
++			throw new Error(`--strategies has ${strategies.length} entries for ${specs.length} seats`);
++		// --rotate: shift seat order every game so no model (or strategy) keeps the first seat.
++		const rotated = <T>(list: T[], g: number) =>
++			list.map((_, i) => list[(i + (values.rotate ? g : 0)) % list.length]);
+ 		jobs = Array.from({ length: games0 }, (_, g) => ({
+-			specs: specs.map((_, i) => specs[(i + (values.rotate ? g : 0)) % specs.length]),
+-			seed: baseSeed0 + g
++			specs: rotated(specs, g),
++			seed: baseSeed0 + g,
++			...(strategies ? { strategies: rotated(strategies, g) } : {})
+ 		}));
+ 	}
+ 	if (
+@@ -389,6 +421,7 @@
+ 	const outDir = resolve(values.out ?? 'output/agent-harness', runId);
+ 	if (existsSync(outDir)) throw new Error(`${outDir} already exists; choose another --run-id`);
+ 	mkdirSync(outDir, { recursive: true });
++	saveRunCatalog(outDir, loaded);
+ 	const gitInfo = git();
+ 	const failures: { game: number; seed: number; error: string }[] = [];
+ 	const summaries: GameSummary[] = [];
+@@ -423,8 +456,10 @@
+ 	);
+ 
+ 	const playOne = async (g: number): Promise<void> => {
+-		const { seed, specs: order } = jobs[g];
+-		const controllers = order.map((spec, i) => controllerFor(spec, i, seed, budget));
++		const { seed, specs: order, strategies: seatStrategies } = jobs[g];
++		const controllers = order.map((spec, i) =>
++			controllerFor(spec, i, seed, budget, seatStrategies?.[i] ?? null)
++		);
+ 		const path = join(outDir, `game-${g}.jsonl`);
+ 		const sink = new JsonlStreamSink(path);
+ 		let summary: GameSummary;
+@@ -443,6 +478,7 @@
+ 				maxPhaseDecisions,
+ 				askOnForced: values['ask-forced'],
+ 				parallel: !values['no-parallel'],
++				statements: !!strategies,
+ 				git: gitInfo,
+ 				signal: abort.signal,
+ 				onDecision: () => {
+@@ -569,6 +605,10 @@
+ 		renderSummaryMarkdown(runId, summaries, aggregate, budget.snapshot())
+ 	);
+ 	console.log(`summary → ${join(outDir, 'summary.md')}`);
++	if (strategies) {
++		writeStrategyReport(outDir, loaded.catalog);
++		console.log(`strategy report → ${join(outDir, 'strategy-report.md')}`);
++	}
+ 	await codexProvider?.idle();
+ 	codexProvider?.dispose();
+ 	if (failures.length) process.exitCode = 1;
+--- a/scripts/agent-harness/README.md
++++ b/scripts/agent-harness/README.md
+@@ -306,7 +306,44 @@
+ average round of a win, kills, corruptions, PvP, illegal-answer rate, seconds per call, input /
+ cached / output / reasoning tokens per game) and the pair matrix; `summary.json` has the same
+ data and the schedule. A dozen games is a small sample: read differences with care.
++
++## Strategies, statements and the simulation job (Step 2)
++
++```bash
++# One model for all seats (--model, default gw:gpt-6.1-sol); each seat gets one strategy text
++npx tsx scripts/agent-harness/run.ts --strategies fire,moon-evil,barrier-hunter,free --rotate --games 4 --gw-effort low
++# A finished run folder: build the strategy report again; compare two runs (old data first)
++npx tsx scripts/agent-harness/sim/report.ts <run>
++npx tsx scripts/agent-harness/sim/compare.ts <old run> <new run>
++# The job the data editor starts (detached), and its status
++scripts/agent-harness/sim/run-sim.sh --data <design dir> [--baseline <design dir>] --games 4 --effort low
++scripts/agent-harness/sim/status.sh [run-id]
++```
+ 
++- Strategies: `strategies.json` (id, name, a 1-2 sentence goal; `free` has no text). The text is a
++  second system message after the rules brief, so the brief keeps the same bytes for every seat
++  and the decision message does not change; a `free` seat's prompt is byte-identical to a seat
++  without a strategy. `--rotate` moves the strategies with the seats. Header and game summary
++  record each seat's strategy (`strategy.ts`).
++- Statement: with `--strategies`, after each game every model seat is asked once, in its own
++  conversation, why it played as it did (`statement` record, also `statement` in the seat
++  summary; replay ignores it). Mock seats get a placeholder without a call; a failed call is
++  recorded and the game result stands.
++- Each run folder keeps its catalog: `catalog/play-catalog.json` (sha256 = the run's catalog hash),
++  `catalog/source/*.json` and `catalog/catalog-info.json` (`runCatalog.ts`).
++- `strategy-report.{json,md}` (`strategyReport.ts`): per strategy games, wins, win rate, average
++  place and VP; spirits and classes collected (by strategy) and never taken; awaken counts; each
++  game's winner path (destinations by round, monsters, status rounds, VP by round); statements.
++  Every number comes from replaying the transcripts on the run's catalog copy.
++- `compare.{json,md}` (`strategyCompare.ts`): changed spirits, classes and monsters by name and
++  field; per strategy win rate and VP before/after; per changed card collected / awakened /
++  fought before/after.
++- `sim/run-sim.sh` (nohup + `caffeinate -i`) runs `sim/sim.ts` into
++  `~/arcspirits-harness/runs/<run-id>/`: `status.json`, `new/`, `baseline/` (same seeds, seats and
++  strategies; a finished run with the same catalog hash, model, effort, strategies, seeds, decision
++  cap and harness version is reused), `compare.{json,md}`. A gateway usage stop ends the job as
++  `failed` with that message.
++
+ ## How to add a provider
+ 
+ Implement `ChatProvider` (`src/lib/play/agents/providers/types.ts`): `name`,

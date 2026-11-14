@@ -19,12 +19,12 @@
 	<header class="screen-only topbar">
 		<div class="spectrum-line"></div>
 		<div class="topbar-inner">
-			<a href="/" class="brand">
+			<a href="/game" class="brand">
 				<span class="lantern" aria-hidden="true">
 					<img src="/favicon.png" alt="" width="44" height="44" />
 				</span>
 				<div class="brand-text">
-					<div class="brand-eyebrow">Lantern Light Games</div>
+					<div class="brand-eyebrow">Angelside Studios</div>
 					<div class="brand-title">ARC <span>SPIRITS</span> Spectate</div>
 				</div>
 			</a>

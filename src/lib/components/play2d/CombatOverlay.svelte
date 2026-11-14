@@ -6,6 +6,7 @@
 	import { displayName } from './helpers';
 	import LowPolySpiritStage from '$lib/components/LowPolySpiritStage.svelte';
 	import { pulseHaptic } from '$lib/stores/accessibilitySettings.svelte';
+	import MonsterCard from './MonsterCard.svelte';
 
 	interface Props {
 		combats: CombatState[];
@@ -134,22 +135,35 @@
 			<div class="verdict">
 				{displayName(myCombat.monster.name)} — {myCombat.killed
 					? 'Defeated!'
-					: 'Not enough damage to defeat it'}
+					: corruptionMoment
+						? 'Its first hit corrupted you, so you could not strike back'
+						: 'Not defeated yet'}
+				{#if !myCombat.killed && myCombat.kind === 'monster'}
+					<span class="verdict-note">The damage stays on the card in your hand.</span>
+				{/if}
 			</div>
 		{/if}
-		<ol class="log">
-			{#each lines as line, i (i)}
-				<li class={lineKind(line)} class:done={i < lineIdx} class:typing={i === lineIdx} class:pending={i > lineIdx}>
-					{#if i < lineIdx}
-						{line}
-					{:else if i === lineIdx}
-						{line.slice(0, charIdx)}<span class="cursor" aria-hidden="true"></span>
-					{:else}
-						<span class="ghost">{line}</span>
-					{/if}
-				</li>
-			{/each}
-		</ol>
+		<div class="body" class:with-card={!!myCombat.monster}>
+			{#if myCombat.monster}
+				<!-- The fought card from the hand, as it stands after the fight. -->
+				<div class="fought" data-testid="combat-monster-card">
+					<MonsterCard card={myCombat.monster} defeated={myCombat.killed} />
+				</div>
+			{/if}
+			<ol class="log">
+				{#each lines as line, i (i)}
+					<li class={lineKind(line)} class:done={i < lineIdx} class:typing={i === lineIdx} class:pending={i > lineIdx}>
+						{#if i < lineIdx}
+							{line}
+						{:else if i === lineIdx}
+							{line.slice(0, charIdx)}<span class="cursor" aria-hidden="true"></span>
+						{:else}
+							<span class="ghost">{line}</span>
+						{/if}
+					</li>
+				{/each}
+			</ol>
+		</div>
 	</section>
 {/if}
 
@@ -190,7 +204,32 @@
 		mix-blend-mode: overlay;
 	}
 	.corruption-spirit { position:absolute; right:-28px; top:-44px; width:240px; height:220px; opacity:.32; pointer-events:none; }
-	.head,.verdict,.log{position:relative;z-index:1}
+	.head,.verdict,.body{position:relative;z-index:1}
+	.body {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: clamp(0.8rem, 2vw, 1.4rem);
+		align-items: start;
+	}
+	.body.with-card {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+	.fought {
+		/* The printed card's name and numbers stay readable at the top size. */
+		width: clamp(5.5rem, 16vw, 11.5rem);
+		margin-top: 0.3rem;
+		animation: fought-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+	}
+	@keyframes fought-in {
+		from {
+			opacity: 0;
+			transform: translateY(10px) rotate(-6deg) scale(0.9);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
 	.head {
 		display: flex;
 		justify-content: space-between;
@@ -214,6 +253,15 @@
 		padding: 3px 10px;
 		border-radius: 999px;
 		box-shadow: 0 0 16px rgba(255, 186, 61, 0.6);
+	}
+	.verdict-note {
+		display: block;
+		margin-top: 0.15rem;
+		font-family: var(--font-body, inherit);
+		font-size: 0.8rem;
+		letter-spacing: 0.02em;
+		color: var(--color-fog, #c2b9ce);
+		text-shadow: none;
 	}
 	.verdict {
 		font-family: var(--font-display);
@@ -399,7 +447,8 @@
 		50% { opacity: 0; }
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.combat {
+		.combat,
+		.fought {
 			animation: none;
 		}
 		.log {
@@ -436,6 +485,10 @@
 			font-size: clamp(1rem, 4vw, 1.3rem);
 		}
 
+		.fought {
+			width: 4.8rem;
+		}
+
 		.log {
 			/* Flatten the perspective tilt on small screens — not enough depth to sell it. */
 			transform: none;
@@ -450,6 +503,44 @@
 		.badge {
 			font-size: 0.8rem;
 			padding: 2px 8px;
+		}
+	}
+	/* Phone landscape (~390px tall): compact chrome and type so the verdict, the card and
+	   the log fit under the stage title; the panel scrolls if a long log still overflows. */
+	@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+		.combat {
+			gap: 0.4rem;
+			padding: 0.65rem 0.9rem 0.75rem;
+			border-radius: 8px;
+			overflow-y: auto;
+			overscroll-behavior: contain;
+		}
+		.eyebrow {
+			font-size: 0.66rem;
+		}
+		.badge {
+			font-size: 0.62rem;
+			padding: 2px 8px;
+		}
+		.verdict {
+			font-size: 0.95rem;
+			line-height: 1.15;
+		}
+		.log {
+			transform: none;
+			gap: 0.25rem;
+		}
+		.log li {
+			font-size: 0.8rem;
+			line-height: 1.3;
+			min-height: 1.3em;
+		}
+		.fought {
+			width: 4.4rem;
+			margin-top: 0.1rem;
+		}
+		.body.with-card {
+			gap: 0.7rem;
 		}
 	}
 </style>

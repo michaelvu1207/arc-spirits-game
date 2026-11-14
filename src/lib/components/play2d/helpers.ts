@@ -1,6 +1,7 @@
 import { powerIconUrl } from '$lib/play/regionRules';
+import { meaningFor } from '$lib/play/locationInteractions';
 /** Shared helpers for the 2D play board. */
-import { STORAGE_BASE_URL } from '$lib/supabase';
+import { gameImageUrl } from '$lib/storageImages';
 import type { HexSpiritAsset, IconPoolEntry, MatAsset, MatSlotSnapshot } from '$lib/types';
 import { PLAYER_COLOR_HEX, type PlayerColor } from '$lib/types';
 import type { DiceTier, SeatColor } from '$lib/play/types';
@@ -95,10 +96,9 @@ export function statusIconUrl(
 	return storageUrl(statusIcons.get(token.toLowerCase())?.file_path ?? null);
 }
 
-/** Resolve a Supabase storage path (or pass through an absolute URL). */
+/** Display-size URL for a Supabase storage path (or pass through a foreign absolute URL). */
 export function storageUrl(path: string | null | undefined): string | null {
-	if (!path) return null;
-	return path.startsWith('http') ? path : `${STORAGE_BASE_URL}/${path}`;
+	return gameImageUrl(path);
 }
 
 const ATTACK_DIE_ASSET_NAME: Record<DiceTier, string> = {
@@ -124,6 +124,21 @@ export function attackDieImageUrl(
 	return null;
 }
 
+/**
+ * Icon for one reward token (monster reward tracks): its icon_pool file, else, for an
+ * attack-die reward, the rendered die face of that tier (the "Enchanted Attack" token has
+ * no icon file in storage).
+ */
+export function rewardTokenIconUrl(
+	assets: ReturnType<typeof getAssetState>,
+	token: string
+): string | null {
+	const icon = iconPoolUrl(assets.iconPool, token);
+	if (icon) return icon;
+	const meaning = meaningFor(token);
+	return meaning?.kind === 'attackDice' ? attackDieImageUrl(assets, meaning.tier) : null;
+}
+
 /** Build an id → image-url map for HexGrid from the spirit asset map. */
 export function spiritImageMap(spiritAssets: Map<string, HexSpiritAsset>): Map<string, string> {
 	const map = new Map<string, string>();
@@ -139,7 +154,7 @@ export function spiritImageMap(spiritAssets: Map<string, HexSpiritAsset>): Map<s
  * older catalogs that do not expose a back-side field.
  */
 export function spiritBackImageUrl(id: string): string {
-	return storageUrl(getAssetState().spiritAssets.get(id)?.back_side_export) ?? `${STORAGE_BASE_URL}/hex_spirits/${id}/rework-2026-10-29-card-icons-v2/game-fit-v2/back.png`;
+	return storageUrl(getAssetState().spiritAssets.get(id)?.back_side_export) ?? gameImageUrl(`hex_spirits/${id}/rework-2026-10-29-card-icons-v2/game-fit-v2/back.png`)!;
 }
 
 /**
@@ -160,6 +175,58 @@ export function displayName(raw: string | null | undefined, fallback = 'Unknown'
 		.replace(/([a-z])([A-Z])/g, '$1 $2')
 		.replace(/([A-Za-z])(\d)/g, '$1 $2')
 		.replace(/(\d)([A-Za-z])/g, '$1 $2');
+}
+
+// ── Arcane Abyss monster cards ──────────────────────────────────────────────
+
+export type MonsterDifficulty = 1 | 2 | 3;
+
+export const MONSTER_NUMERAL: Record<MonsterDifficulty, string> = { 1: 'I', 2: 'II', 3: 'III' };
+
+/** One colour per difficulty deck: I cyan, II amber, III magenta. */
+export const MONSTER_DIFFICULTY_COLOR: Record<MonsterDifficulty, string> = {
+	1: '#5cdfff',
+	2: '#ffb54d',
+	3: '#ff4fc3'
+};
+
+export function monsterDifficulty(card: { difficulty?: MonsterDifficulty } | null | undefined): MonsterDifficulty {
+	return card?.difficulty ?? 1;
+}
+
+/** The card back of a difficulty deck (static art). */
+export function monsterBackUrl(difficulty: MonsterDifficulty): string {
+	return `/monster-cards/difficulty-${difficulty}-back.webp`;
+}
+
+/**
+ * The catalog row's `card_image_path` for a monster card, matched by id and then by name: the
+ * finished card face WITH its info (name, stats, rewards), not bare art. See `monsterCardFace`.
+ */
+export function monsterCatalogCardPath(
+	assets: ReturnType<typeof getAssetState>,
+	card: { id: string; name: string }
+): string | null {
+	const byId = assets.monsterAssets.get(card.id);
+	const found =
+		byId ??
+		Array.from(assets.monsterAssets.values()).find(
+			(m) => m.name?.toLowerCase() === card.name.toLowerCase()
+		);
+	return found?.card_image_path ?? null;
+}
+
+/** "1–3", or "2" when the range is one value. */
+export function rangeText(min: number, max: number): string {
+	return min === max ? `${min}` : `${min}–${max}`;
+}
+
+/** Deck VP totals: "1–2" when consecutive, "3 / 5" when a value is skipped. */
+export function vpText(values: number[], joiner = ' / '): string {
+	if (values.length === 0) return '0';
+	const min = values[0];
+	const max = values[values.length - 1];
+	return max - min === values.length - 1 ? rangeText(min, max) : values.join(joiner);
 }
 
 const ACCENT_FALLBACK = '#8d8aa1';

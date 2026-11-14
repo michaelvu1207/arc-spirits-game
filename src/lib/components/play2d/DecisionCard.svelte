@@ -43,8 +43,11 @@
 
 	const eligibleIds = $derived(new Set(pickerSpec?.eligibleInstanceIds ?? []));
 	const needed = $derived(pickerSpec?.count ?? 0);
+	// A free-size picker (Sentinel's discard) accepts minCount..count picks; else exactly count.
+	const minPick = $derived(pickerSpec?.minCount ?? needed);
 
 	let pick = $state<string[]>([]);
+	const pickOk = $derived(pick.length >= minPick && pick.length <= needed);
 	function toggleDie(instanceId: string) {
 		if (pick.includes(instanceId)) pick = pick.filter((id) => id !== instanceId);
 		else if (pick.length < needed) pick = [...pick, instanceId];
@@ -66,7 +69,7 @@
 	);
 	function resolve(optionId: string, withPicks: boolean) {
 		if (busy) return;
-		if (withPicks && pick.length !== needed) return;
+		if (withPicks && !pickOk) return;
 		onResolve(decision.id, optionId, withPicks ? [...pick] : undefined);
 		pick = [];
 	}
@@ -112,10 +115,12 @@
 						type="button"
 						class="opt-row"
 						data-testid={`${testidPrefix}-${decision.id}-${yesOption.id}`}
-						disabled={busy || pick.length !== needed}
+						disabled={busy || !pickOk}
 						onclick={() => resolve(yesOption.id, true)}
 					>
-						<span class="opt-label">{yesOption.label} ({pick.length}/{needed})</span>
+						<span class="opt-label"
+							>{yesOption.label} ({pickerSpec?.minCount != null ? pick.length : `${pick.length}/${needed}`})</span
+						>
 						<span class="opt-go" aria-hidden="true">→</span>
 					</button>
 				{/if}

@@ -1,7 +1,10 @@
-import type { ClassAbility, ClassHandler } from './types';
+import { nextId } from '../../rng';
+import { ruleValue } from '../../rules';
+import { gainChosenRelic, relicChoiceOptions } from './cultivator';
+import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 
 /**
- * Relic Warden — "For every unique Relic you hold, reduce incoming damage by 2."
+ * Cleric — "For every unique Relic you hold, reduce incoming damage by 2."
  *
  * Bespoke `onTakeDamage` handler: it counts the UNIQUE relics the player holds
  * (`player.mats` entries with `type === 'relic'`, deduped by `name`) and raises
@@ -13,6 +16,10 @@ import type { ClassAbility, ClassHandler } from './types';
  * Counting unique relics requires reading `player.mats` (not a fixed amount), so
  * this can't be expressed by the declarative `reduceIncomingDamage` action and is
  * implemented as a `run` handler instead.
+ *
+ * Rule `sunRework` (default false) adds "On this spirit's Awakening, gain 1 relic of your
+ * choice.": when the awakened spirit itself is a Cleric, the same relic choice card as
+ * Cultivator (5) (`clericRelic`).
  */
 
 /** Count distinct relics held, deduped by name (un-named relics each count once). */
@@ -33,8 +40,32 @@ const reduceByRelics: ClassHandler = (ctx) => {
 	const amount = unique * 2;
 	ctx.player.damageReduction += amount;
 	ctx.log.push(
-		`Relic Warden: reduced incoming damage by ${amount} (${unique} unique relic${unique === 1 ? '' : 's'}).`
+		`Cleric: reduced incoming damage by ${amount} (${unique} unique relic${unique === 1 ? '' : 's'}).`
 	);
 };
 
-export const ability: ClassAbility[] = [{ on: 'onTakeDamage', run: reduceByRelics }];
+const relicOnOwnAwakening: ClassHandler = (ctx) => {
+	if (!ruleValue(ctx.catalog, 'sunRework')) return;
+	const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
+	const awakened = slot == null ? undefined : ctx.player.spirits.find((s) => s.slotIndex === slot);
+	if (!awakened || (awakened.classes?.['Cleric'] ?? 0) <= 0) return;
+	ctx.player.pendingDecisions.push({
+		id: nextId(ctx.state.rng, 'dec'),
+		source: 'class',
+		kind: 'clericRelic',
+		prompt: 'Cleric: choose any relic.',
+		options: relicChoiceOptions()
+	});
+	ctx.log.push('Cleric: choose 1 relic.');
+};
+
+export const ability: ClassAbility[] = [
+	{ on: 'onTakeDamage', run: reduceByRelics },
+	{ on: 'awakening', run: relicOnOwnAwakening }
+];
+
+export const decisions: ClassDecisions = {
+	clericRelic(ctx, optionId) {
+		gainChosenRelic(ctx, optionId, 'Cleric');
+	}
+};

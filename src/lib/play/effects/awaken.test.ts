@@ -22,6 +22,8 @@ import {
 import { CLASS_EFFECTS, MANUAL_CLASSES, type ClassEffect } from './registry';
 import { HANDLER_CLASSES } from './handlers';
 import {
+	FALCONER_TRADE_ACTION,
+	recordTravelingTraderProgress,
 	AWAKEN_HANDLERS,
 	AWAKEN_PROGRESS_KEYS,
 	AWAKEN_SPIRIT_IDS,
@@ -235,12 +237,13 @@ describe('checkAwakenCondition', () => {
 
 	// Regression: wildcard costs are KIND-STRICT. "Any Relic" counts ONLY relic-kind
 	// held items — origin runes never pay it; "Any Rune" counts ONLY origin runes —
-	// relics never pay it. Modeled on "Runic Duplicator" = three of any relic.
+	// relics never pay it. (A synthetic cost: the Rune Smith no longer costs three of any
+	// relic — it costs 1 Mountain Rune in the November 2026 data.)
 	// See runeMatch.ts wildcardMatch.
 	const FAIRY_RELIC = 'e02af831-e599-4676-9e37-820d19bfc3e1';
-	it('Runic Duplicator (3 "any relic"): 2 relics + 2 origin runes held → NOT awakenable', () => {
+	it('a 3 "any relic" cost: 2 relics + 2 origin runes held → NOT awakenable', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, 'mod', 'Runic Duplicator')],
+			spirits: [spirit(1, 'mod', 'Smith')],
 			mats: [
 				rune(1, { id: FAIRY_RELIC, name: 'Fairy' }), // relic (no originId/classId)
 				rune(2, { id: FAIRY_RELIC, name: 'Fairy' }), // relic
@@ -264,7 +267,7 @@ describe('checkAwakenCondition', () => {
 	//     never pays a relic cost).
 	it('any-relic cost (×3): 3 origin RUNES held → NOT awakenable (rune ≠ relic)', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, 'mod', 'Runic Duplicator')],
+			spirits: [spirit(1, 'mod', 'Smith')],
 			mats: [
 				rune(1, { id: WATER_RUNE, name: 'Water', originId: 'water-origin' }),
 				rune(2, { id: 'fire', name: 'Fire', originId: 'fire-origin' }),
@@ -301,9 +304,9 @@ describe('checkAwakenCondition', () => {
 	});
 
 	// (c) positive controls: 3 relics → any-relic ok; 1 origin rune → any-rune ok.
-	it('Runic Duplicator (3 "any relic"): 3 relics held → awakenable (positive control)', () => {
+	it('a 3 "any relic" cost: 3 relics held → awakenable (positive control)', () => {
 		const player = makePlayer({
-			spirits: [spirit(1, 'mod', 'Runic Duplicator')],
+			spirits: [spirit(1, 'mod', 'Smith')],
 			mats: [
 				rune(1, { id: FAIRY_RELIC, name: 'Fairy' }),
 				rune(2, { id: FAIRY_RELIC, name: 'Fairy' }),
@@ -337,7 +340,7 @@ describe('checkAwakenCondition', () => {
 	});
 
 	it('a text condition is never auto-satisfiable and carries the verbatim text', () => {
-		const player = makePlayer({ spirits: [spirit(1, 'txt', 'Tide Warden')] });
+		const player = makePlayer({ spirits: [spirit(1, 'txt', 'Warden')] });
 		const awaken: NormalizedAwaken = { kind: 'text', text: 'Discard 2 Teapots at the Water Region' };
 		const check = checkAwakenCondition(ctxFor(player, catalogWith('txt', awaken)), {
 			spirit: player.spirits[0]
@@ -1128,178 +1131,187 @@ describe('AWAKEN_HANDLERS discard choice (let-me-choose)', () => {
 });
 
 describe('AWAKEN_HANDLERS discard-at-location', () => {
-	it('Arcane Synthesizer: discards 2 of your OTHER Arcane Abyss spirits (cost 7-9)', () => {
-		const sp = { ...spirit(1, IDS.arcaneSynthesizer, 'Arcane Synthesizer'), cost: 7 };
-		const player = makePlayer({
-			spirits: [
-				sp,
-				{ ...spirit(2, 'a1', 'Abyss 1', false), cost: 7 },
-				{ ...spirit(3, 'a2', 'Abyss 2', false), cost: 9 },
-				{ ...spirit(4, 'w1', 'World 1', false), cost: 3 } // a Spirit-World spirit — NOT a candidate
-			]
+	it('The Argent Loom: "Be Fallen in the Awakening Phase." (checked when it awakens; nothing paid)', () => {
+		const sp = { ...spirit(1, IDS.argentLoom, 'The Argent Loom'), cost: 7 };
+		const handler = AWAKEN_HANDLERS[IDS.argentLoom];
+		expect(handler.check(handlerCtx(makePlayer({ spirits: [sp], statusLevel: 3 }), sp)).ok).toBe(true);
+		expect(handler.check(handlerCtx(makePlayer({ spirits: [sp], statusLevel: 2 }), sp))).toEqual({
+			ok: false,
+			reason: 'fallen_required'
 		});
-		const handler = AWAKEN_HANDLERS[IDS.arcaneSynthesizer];
-		const ctx = handlerCtx(player, sp);
-		// Only the two cost 7-9 spirits (excluding self) are candidates.
-		expect(
-			handler.discardChoice!(ctx)!
-				.options.map((o) => o.label)
-				.sort()
-		).toEqual(['Abyss 1', 'Abyss 2']);
-		expect(handler.check(ctx).ok).toBe(true);
-		handler.pay(ctx);
-		// The two abyss spirits are gone; the Synthesizer + the World spirit remain.
-		expect(player.spirits.map((s) => s.slotIndex).sort()).toEqual([1, 4]);
 	});
 
-	it('Arcane Synthesizer: fails with fewer than 2 other Abyss spirits', () => {
-		const sp = { ...spirit(1, IDS.astrobiologist, 'Astrobiologist'), cost: 7 };
-		const player = makePlayer({
-			spirits: [sp, { ...spirit(2, 'a1', 'Abyss 1', false), cost: 8 }] // only one other abyss spirit
-		});
-		expect(AWAKEN_HANDLERS[IDS.astrobiologist].check(handlerCtx(player, sp)).ok).toBe(false);
+	it('Keeper of the Twin Pyres: 2 Fire Runes OR 5 attack dice; a selection picks the branch', () => {
+		const sp = spirit(1, IDS.twinPyres, 'Keeper of the Twin Pyres');
+		const handler = AWAKEN_HANDLERS[IDS.twinPyres];
+		const fire = (i: number): MatSlotSnapshot => ({ slotIndex: i, hasRune: true, id: FIRE_RUNE, name: 'Fire Rune', type: 'rune' });
+		const fiveDice = ['basic', 'basic', 'enchanted', 'exalted', 'arcane', 'arcane'].map((tier, i) => ({
+			instanceId: `d${i}`,
+			tier: tier as 'basic'
+		}));
+		// Neither branch payable.
+		const broke = makePlayer({ spirits: [sp], mats: [fire(1)], attackDice: fiveDice.slice(0, 4) });
+		expect(handler.check(handlerCtx(broke, sp)).ok).toBe(false);
+		// Rune branch (no selection): 2 Fire Runes are spent, dice kept.
+		const runes = makePlayer({ spirits: [sp], mats: [fire(1), fire(2)], attackDice: fiveDice.slice() });
+		expect(handler.check(handlerCtx(runes, sp)).ok).toBe(true);
+		expect(handler.discardChoice?.(handlerCtx(runes, sp))?.count).toBe(2);
+		handler.pay(handlerCtx(runes, sp));
+		expect(runes.mats.every((m) => !m.hasRune)).toBe(true);
+		expect(runes.attackDice).toHaveLength(6);
+		// Dice branch chosen by selection even though runes are payable.
+		const both = makePlayer({ spirits: [sp], mats: [fire(1), fire(2)], attackDice: fiveDice.slice() });
+		const pick = ['d0', 'd1', 'd2', 'd3', 'd5'].map((instanceId) => ({ kind: 'attackDie' as const, instanceId }));
+		const cmd = { type: 'awakenSpirit', slotIndex: 1, discardRefs: pick } as unknown as GameCommand;
+		expect(handler.check(handlerCtx(both, sp, cmd)).ok).toBe(true);
+		handler.pay(handlerCtx(both, sp, cmd));
+		expect(both.attackDice.map((d) => d.instanceId)).toEqual(['d4']);
+		expect(both.mats.every((m) => m.hasRune)).toBe(true);
+		// A wrong-size selection is rejected.
+		const bad = { type: 'awakenSpirit', slotIndex: 1, discardRefs: pick.slice(0, 4) } as unknown as GameCommand;
+		expect(handler.check(handlerCtx(both, sp, bad)).ok).toBe(false);
+		// Dice branch without selection: only dice payable → the 5 weakest go.
+		const diceOnly = makePlayer({ spirits: [sp], attackDice: fiveDice.slice() });
+		expect(handler.discardChoice?.(handlerCtx(diceOnly, sp))?.count).toBe(5);
+		handler.pay(handlerCtx(diceOnly, sp));
+		expect(diceOnly.attackDice.map((d) => d.tier)).toEqual(['arcane']);
 	});
 
-	it('Space Invader: needs 4 attack dice; pay discards exactly 4', () => {
-		const sp = spirit(1, IDS.spaceInvader, 'Space Invader');
-		const player = makePlayer({
-			spirits: [sp],
-			attackDice: [
-				{ instanceId: 'a', tier: 'basic' },
-				{ instanceId: 'b', tier: 'basic' },
-				{ instanceId: 'c', tier: 'enchanted' },
-				{ instanceId: 'd', tier: 'exalted' },
-				{ instanceId: 'e', tier: 'arcane' }
-			]
-		});
-		const handler = AWAKEN_HANDLERS[IDS.spaceInvader];
-		const ctx = handlerCtx(player, sp);
-		expect(handler.check(ctx).ok).toBe(true);
-		const choice = handler.discardChoice?.(ctx);
-		expect(choice?.count).toBe(4);
-		expect(choice?.requiresSelection).toBe(true);
-		expect(choice?.options.map((option) => option.ref)).toEqual([
-			{ kind: 'attackDie', instanceId: 'a' },
-			{ kind: 'attackDie', instanceId: 'b' },
-			{ kind: 'attackDie', instanceId: 'c' },
-			{ kind: 'attackDie', instanceId: 'd' },
-			{ kind: 'attackDie', instanceId: 'e' }
+	it('Keeper of the Twin Pyres: both ways payable → the offer lists both; awakenSpirit pays either', () => {
+		const text = 'Discard 2 Fire Runes, or discard 5 of any attack dice.';
+		const catalog = textCatalog(IDS.twinPyres, 'Keeper of the Twin Pyres', text);
+		const setup = () => {
+			const state = startedGame(catalog);
+			const red = state.players.Red!;
+			red.spirits = [spirit(1, IDS.twinPyres, 'Keeper of the Twin Pyres')];
+			red.mats = [rune(1, { id: FIRE_RUNE }), rune(2, { id: FIRE_RUNE })];
+			red.attackDice = ['basic', 'basic', 'enchanted', 'exalted', 'arcane', 'arcane'].map((tier, i) => ({
+				instanceId: `k${i}`,
+				tier: tier as 'basic'
+			}));
+			return { state, red };
+		};
+		// The offer carries both ways and opens the picker.
+		const { state: s0, red: r0 } = setup();
+		const offer = buildAwakenOffer(
+			buildEffectContext({ state: s0, seat: 'Red', player: r0, trigger: 'awakening', log: [], traitCount: 0, catalog }),
+			{ spirit: r0.spirits[0] }
+		)!;
+		expect(offer.requiresSelection).toBe(true);
+		expect(offer.alternatives?.map((a) => [a.label, a.discardCount])).toEqual([
+			['Discard 2 Fire Runes', 2],
+			['Discard 5 attack dice', 5]
 		]);
-		const exactCostPlayer = makePlayer({
-			spirits: [sp],
-			attackDice: player.attackDice.slice(0, 4)
-		});
-		expect(
-			handler.discardChoice?.(handlerCtx(exactCostPlayer, sp))?.requiresSelection
-		).toBeUndefined();
-		handler.pay(ctx);
-		expect(player.attackDice).toHaveLength(1); // 5 - 4 discarded
-		expect(player.attackDice[0]).toMatchObject({ instanceId: 'e', tier: 'arcane' });
-
-		const broke = makePlayer({ spirits: [sp], attackDice: [{ instanceId: 'a', tier: 'basic' }] });
-		expect(AWAKEN_HANDLERS[IDS.spaceInvader].check(handlerCtx(broke, sp)).ok).toBe(false);
-	});
-
-	it('Space Invader: awakenSpirit spends the exact four attack dice selected by the owner', () => {
-		const catalog = textCatalog(IDS.spaceInvader, 'Space Invader', 'Discard 4 of any attack dice.');
-		const state = startedGame(catalog);
-		const red = state.players.Red!;
-		red.spirits = [spirit(1, IDS.spaceInvader, 'Space Invader')];
-		red.attackDice = [
-			{ instanceId: 'basic-1', tier: 'basic' },
-			{ instanceId: 'enchanted-1', tier: 'enchanted' },
-			{ instanceId: 'exalted-1', tier: 'exalted' },
-			{ instanceId: 'arcane-1', tier: 'arcane' },
-			{ instanceId: 'arcane-keep', tier: 'arcane' }
-		];
-
-		const result = applyGameCommand(
-			state,
+		// Pay with the 2 Fire Runes.
+		const a = setup();
+		const byRunes = applyGameCommand(
+			a.state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'awakenSpirit', slotIndex: 1, discardRefs: [{ kind: 'rune', slotIndex: 1 }, { kind: 'rune', slotIndex: 2 }] },
+			catalog
+		);
+		if (!byRunes.ok) throw new Error(byRunes.error.message);
+		expect(byRunes.state.players.Red!.mats.filter((m) => m.hasRune)).toHaveLength(0);
+		expect(byRunes.state.players.Red!.attackDice).toHaveLength(6);
+		expect(byRunes.state.players.Red!.spirits[0].isFaceDown).toBe(false);
+		// Pay with 5 chosen attack dice (they are gone for good).
+		const b = setup();
+		const byDice = applyGameCommand(
+			b.state,
 			{ ...HOST, seatColor: 'Red' },
 			{
 				type: 'awakenSpirit',
 				slotIndex: 1,
-				discardRefs: ['basic-1', 'enchanted-1', 'exalted-1', 'arcane-1'].map((instanceId) => ({
-					kind: 'attackDie' as const,
-					instanceId
-				}))
+				discardRefs: ['k0', 'k1', 'k2', 'k3', 'k5'].map((instanceId) => ({ kind: 'attackDie' as const, instanceId }))
 			},
 			catalog
 		);
-		expect(result.ok).toBe(true);
-		if (!result.ok) throw new Error(result.error.message);
-		expect(result.state.players.Red!.attackDice).toEqual([
-			{ instanceId: 'arcane-keep', tier: 'arcane' }
-		]);
-		expect(result.state.players.Red!.spirits[0].isFaceDown).toBe(false);
+		if (!byDice.ok) throw new Error(byDice.error.message);
+		expect(byDice.state.players.Red!.attackDice.map((d) => d.instanceId)).toEqual(['k4']);
+		expect(byDice.state.players.Red!.mats.filter((m) => m.hasRune)).toHaveLength(2);
+		expect(byDice.state.players.Red!.spirits[0].isFaceDown).toBe(false);
+		// The log has the handler's line once, not a "Discarded Discarded …" copy (play test 2,
+		// 2026-11-12): a text handler logs for itself, so the payment returns no `discarded` names
+		// for the runtime to wrap a second time. (A one-seat game advances past Awakening at once,
+		// so lastAction is gone here; check the payment and the context log directly.)
+		const c = setup();
+		const log: string[] = [];
+		const ctx = {
+			...buildEffectContext({ state: c.state, seat: 'Red', player: c.red, trigger: 'awakening', log, traitCount: 0, catalog }),
+			command: { type: 'awakenSpirit', slotIndex: 1, discardRefs: ['k0', 'k1', 'k2', 'k3', 'k5'].map((instanceId) => ({ kind: 'attackDie' as const, instanceId })) }
+		};
+		const payment = payAwakenCondition(ctx as never, { spirit: c.red.spirits[0] });
+		expect(payment).toEqual({ ok: true, discarded: [] });
+		expect(log).toEqual(['Discarded 5 attack dice to awaken Keeper of the Twin Pyres.']);
 	});
 
-	it('The Solar Reliquarian discards two different Rune types and awakens', () => {
-		const catalog = textCatalog(
-			IDS.meteorShower,
-			'Meteor Shower',
-			'Discard 2 unique relics.'
-		);
+	it('Keeper of the Twin Pyres: cannot pay (1 Fire Rune, 4 dice) → no offer and awakenSpirit fails', () => {
+		const catalog = textCatalog(IDS.twinPyres, 'Keeper of the Twin Pyres', 'Discard 2 Fire Runes, or discard 5 of any attack dice.');
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
-		red.spirits = [spirit(1, IDS.meteorShower, 'Meteor Shower')];
-		red.mats = [rune(1, {id:WATER_RUNE}), rune(2, {id:FIRE_RUNE}), rune(3, {id:WATER_RUNE})];
-
-		const res = applyGameCommand(
-			state,
-			{ ...HOST, seatColor: 'Red' },
-			{ type: 'awakenSpirit', slotIndex: 1 },
-			catalog
-		);
-		expect(res.ok).toBe(true);
-		if (!res.ok) throw new Error(res.error.message);
-		const out = res.state.players.Red!;
-		expect(out.spirits[0].isFaceDown).toBe(false); // flipped, no manual prompt
-		expect(out.manualPrompts.filter((p) => p.source === 'awaken')).toHaveLength(0);
-		// Exactly two differently named relics were spent; the duplicate stays.
-		expect(out.mats.filter((r) => r.hasRune).length).toBe(1);
-	});
-
-	it('The Solar Reliquarian blocks two Runes of the same type', () => {
-		const catalog = textCatalog(
-			IDS.meteorShower,
-			'Meteor Shower',
-			'Discard 2 unique relics.'
-		);
-		const state = startedGame(catalog);
-		const red = state.players.Red!;
-		red.spirits = [spirit(1, IDS.meteorShower, 'Meteor Shower')];
-		red.mats = [rune(1, {id:WATER_RUNE}), rune(2, {id:WATER_RUNE})];
-
-		const res = applyGameCommand(
-			state,
-			{ ...HOST, seatColor: 'Red' },
-			{ type: 'awakenSpirit', slotIndex: 1 },
-			catalog
-		);
+		red.spirits = [spirit(1, IDS.twinPyres, 'Keeper of the Twin Pyres')];
+		red.mats = [rune(1, { id: FIRE_RUNE })];
+		red.attackDice = ['basic', 'basic', 'basic', 'basic'].map((tier, i) => ({ instanceId: `k${i}`, tier: tier as 'basic' }));
+		const ctx = buildEffectContext({ state, seat: 'Red', player: red, trigger: 'awakening', log: [], traitCount: 0, catalog });
+		expect(buildAwakenOffer(ctx, { spirit: red.spirits[0] })).toBeNull();
+		const res = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'awakenSpirit', slotIndex: 1 }, catalog);
 		expect(res.ok).toBe(false);
-		if (res.ok) throw new Error('expected hard block');
-		expect(res.error.code).toBe('awaken_unmet');
-		// No manual prompt was raised (scripted text just isn't ready yet).
-		expect(state.players.Red!.manualPrompts.filter((p) => p.source === 'awaken')).toHaveLength(0);
+		expect(red.spirits[0].isFaceDown).toBe(true);
 	});
+
+	it('Traveling Trader: "Navigate to the Water Region and do no location interactions."', () => {
+		const sp = spirit(1, IDS.travelingTrader, 'Traveling Trader');
+		const handler = AWAKEN_HANDLERS[IDS.travelingTrader];
+		const endLocation = (destination: string, used: string[], player = makePlayer({ spirits: [sp] })) => {
+			player.navigationDestination = destination as PrivatePlayerState['navigationDestination'];
+			player.actionsUsedThisRound = used;
+			recordTravelingTraderProgress(player);
+			return player;
+		};
+		// Eligible: Water Region, nothing done (a navigation Power use is not a location interaction).
+		const ok = endLocation('Water Region', ['gain-power']);
+		expect(handler.check(handlerCtx(ok, sp)).ok).toBe(true);
+		// Interacted: a location row, or the Falconer remote trade.
+		expect(handler.check(handlerCtx(endLocation('Water Region', ['row:0']), sp)).ok).toBe(false);
+		expect(handler.check(handlerCtx(endLocation('Water Region', [FALCONER_TRADE_ACTION]), sp)).ok).toBe(false);
+		// Another location.
+		expect(handler.check(handlerCtx(endLocation('Fire Region', []), sp))).toEqual({
+			ok: false,
+			reason: 'water_region_without_interactions_required'
+		});
+		// Two rounds: like Nhal, the progress is kept into a later round until the spirit awakens.
+		const later = endLocation('Fire Region', ['row:1'], ok);
+		expect(handler.check(handlerCtx(later, sp)).ok).toBe(true);
+		handler.pay(handlerCtx(later, sp));
+		expect(handler.check(handlerCtx(later, sp)).ok).toBe(false);
+	});
+
+	it('Keeper of the Twin Pyres: Water Runes pay as Fire Runes with an awakened Trader', () => {
+		const sp = spirit(1, IDS.twinPyres, 'Keeper of the Twin Pyres');
+		const wayfinder = { ...spirit(2, 'wf', 'Trader', false), classes: { Trader: 1 } };
+		const player = makePlayer({ spirits: [sp, wayfinder], mats: [rune(1, { id: WATER_RUNE }), rune(2, { id: FIRE_RUNE })] });
+		expect(AWAKEN_HANDLERS[IDS.twinPyres].check(handlerCtx(player, sp)).ok).toBe(true);
+		const without = makePlayer({ spirits: [sp], mats: [rune(1, { id: WATER_RUNE }), rune(2, { id: FIRE_RUNE })] });
+		expect(AWAKEN_HANDLERS[IDS.twinPyres].check(handlerCtx(without, sp)).ok).toBe(false);
+	});
+
 });
 
-describe('AWAKEN_HANDLERS alignment + cultivate (Contessa)', () => {
-	it('Contessa: cultivating while Evil sets the flag → satisfiable', () => {
-		const contessa = spirit(1, IDS.contessa, 'Contessa');
-		// Actor is Evil (Fallen = 3). DB condition is simply "Cultivate while Evil."
+describe('AWAKEN_HANDLERS alignment + cultivate (Vespera, Contessa id)', () => {
+	const cultivateState = (actor: PrivatePlayerState) =>
+		({ rng: createRng(1), players: { Red: actor }, activeSeats: ['Red'] as SeatColor[] }) as unknown as PublicGameState;
+
+	it('Vespera: "Cultivate while Fallen." sets the flag → satisfiable while Fallen', () => {
+		const contessa = spirit(1, IDS.contessa, 'Vespera');
 		const actor = makePlayer({ playerColor: 'Red', statusLevel: 3, spirits: [contessa] });
-		const state = {
-			rng: createRng(1),
-			players: { Red: actor },
-			activeSeats: ['Red'] as SeatColor[]
-		} as unknown as PublicGameState;
 
 		// Before cultivate: not satisfiable.
-		expect(AWAKEN_HANDLERS[IDS.contessa].check(handlerCtx(actor, contessa)).ok).toBe(false);
+		expect(AWAKEN_HANDLERS[IDS.contessa].check(handlerCtx(actor, contessa))).toEqual({
+			ok: false,
+			reason: 'cultivate_while_fallen_required'
+		});
 
-		applyCultivate(state, 'Red', []);
+		applyCultivate(cultivateState(actor), 'Red', []);
 		expect(actor.awakenProgress[AWAKEN_PROGRESS_KEYS.contessa]).toBe(true);
 
 		// After cultivate: satisfiable; pay consumes the flag.
@@ -1309,55 +1321,37 @@ describe('AWAKEN_HANDLERS alignment + cultivate (Contessa)', () => {
 		expect(actor.awakenProgress[AWAKEN_PROGRESS_KEYS.contessa]).toBeFalsy();
 	});
 
-	it('Contessa: cultivating while Good does NOT set the flag', () => {
-		const contessa = spirit(1, IDS.contessa, 'Contessa');
-		const actorGood = makePlayer({ playerColor: 'Red', statusLevel: 0, spirits: [contessa] });
-		const state = {
-			rng: createRng(1),
-			players: { Red: actorGood },
-			activeSeats: ['Red'] as SeatColor[]
-		} as unknown as PublicGameState;
-		applyCultivate(state, 'Red', []);
-		expect(actorGood.awakenProgress[AWAKEN_PROGRESS_KEYS.contessa]).toBeFalsy();
+	it('Vespera: cultivating while not Fallen does NOT set the flag', () => {
+		const contessa = spirit(1, IDS.contessa, 'Vespera');
+		for (const statusLevel of [0, 2]) {
+			const actor = makePlayer({ playerColor: 'Red', statusLevel, spirits: [contessa] });
+			applyCultivate(cultivateState(actor), 'Red', []);
+			expect(actor.awakenProgress[AWAKEN_PROGRESS_KEYS.contessa]).toBeFalsy();
+		}
 	});
 
-	it('Arcane Huntress: cultivating while Fallen with ≥10 potential sets the flag', () => {
-		const huntress = spirit(1, IDS.arcaneHuntress, 'Arcane Huntress');
-		const actor = makePlayer({
-			playerColor: 'Red',
-			statusLevel: 3,
-			maxBarrier: 10,
-			spirits: [huntress]
+	it('Vespera: the owner must be Fallen at the moment of awakening', () => {
+		const sp = spirit(1, IDS.contessa, 'Vespera');
+		const actor = makePlayer({ playerColor: 'Red', statusLevel: 2, spirits: [sp] });
+		actor.awakenProgress = { [AWAKEN_PROGRESS_KEYS.contessa]: true };
+		expect(AWAKEN_HANDLERS[IDS.contessa].check(handlerCtx(actor, sp))).toEqual({ ok: false, reason: 'fallen_required' });
+		actor.statusLevel = 3;
+		expect(AWAKEN_HANDLERS[IDS.contessa].check(handlerCtx(actor, sp)).ok).toBe(true);
+	});
+
+	it('Nhal is the Moon exception: the flag alone awakens it, Fallen or not', () => {
+		const sp = spirit(1, IDS.shadowtaker, 'Nhal');
+		const actor = makePlayer({ playerColor: 'Red', statusLevel: 0, spirits: [sp] });
+		expect(AWAKEN_HANDLERS[IDS.shadowtaker].check(handlerCtx(actor, sp))).toEqual({
+			ok: false,
+			reason: 'abyss_without_combat_required'
 		});
-		const state = {
-			rng: createRng(1),
-			players: { Red: actor },
-			activeSeats: ['Red'] as SeatColor[]
-		} as unknown as PublicGameState;
-		expect(AWAKEN_HANDLERS[IDS.arcaneHuntress].check(handlerCtx(actor, huntress)).ok).toBe(false);
-		applyCultivate(state, 'Red', []);
-		expect(actor.awakenProgress[AWAKEN_PROGRESS_KEYS.arcaneHuntress]).toBe(true);
+		actor.awakenProgress = { [AWAKEN_PROGRESS_KEYS.shadowtaker]: true };
+		expect(AWAKEN_HANDLERS[IDS.shadowtaker].check(handlerCtx(actor, sp)).ok).toBe(true);
 	});
 
-	it('Arcane Huntress: NOT Fallen, or <10 potential, does NOT set the flag', () => {
-		const mk = (statusLevel: number, maxBarrier: number) => {
-			const huntress = spirit(1, IDS.arcaneHuntress, 'Arcane Huntress');
-			const actor = makePlayer({
-				playerColor: 'Red',
-				statusLevel,
-				maxBarrier,
-				spirits: [huntress]
-			});
-			const state = {
-				rng: createRng(1),
-				players: { Red: actor },
-				activeSeats: ['Red'] as SeatColor[]
-			} as unknown as PublicGameState;
-			applyCultivate(state, 'Red', []);
-			return actor.awakenProgress[AWAKEN_PROGRESS_KEYS.arcaneHuntress];
-		};
-		expect(mk(3, 4)).toBeFalsy(); // Fallen but only 4 potential
-		expect(mk(2, 10)).toBeFalsy(); // 10 potential but Corrupt (not Fallen)
+	it('Tide Huntress (cafb6cfb) has a rune cost now, so it has no text-awaken handler', () => {
+		expect(AWAKEN_HANDLERS[IDS.arcaneHuntress]).toBeUndefined();
 	});
 });
 
@@ -1369,18 +1363,11 @@ describe('AWAKEN_HANDLERS origin cultivate progress', () => {
 	] as const;
 
 	for (const [id, name, origin, progressKey] of cases) {
-		it(`${name}: cultivating with four ${origin} spirits sets the flag`, () => {
+		it(`${name}: "Cultivate." — cultivating with ANY count of ${origin} spirits sets the flag`, () => {
 			const fairy = { ...spirit(1, id, name), origins: { [origin]: 1 } };
-			const actor = makePlayer({
-				playerColor: 'Red',
-				spirits: [
-					fairy,
-					...Array.from({ length: 3 }, (_, index) => ({
-						...spirit(index + 2, `${origin}-${index}`, `${origin} ${index}`),
-						origins: { [origin]: 1 }
-					}))
-				]
-			});
+			// Only the Fairy itself: no origin-count gate any more (November 2026).
+			const actor = makePlayer({ playerColor: 'Red', spirits: [fairy] });
+			expect(AWAKEN_HANDLERS[id].check(handlerCtx(actor, fairy)).ok).toBe(false);
 			const state = {
 				rng: createRng(1),
 				players: { Red: actor },
@@ -1390,6 +1377,48 @@ describe('AWAKEN_HANDLERS origin cultivate progress', () => {
 			applyCultivate(state, 'Red', []);
 			expect(actor.awakenProgress[progressKey]).toBe(true);
 			expect(AWAKEN_HANDLERS[id].check(handlerCtx(actor, fairy)).ok).toBe(true);
+		});
+	}
+});
+
+describe('AWAKEN_HANDLERS "Have 7 <Origin> Spirits, or discard 3 Arcane Abyss Spirits."', () => {
+	const cases = [
+		[IDS.caldera, 'Caldera', 'Fire Region'],
+		[IDS.stormKing, 'Storm King', 'Water Region'],
+		[IDS.hollowbloom, 'Hollowbloom', 'Forest Region']
+	] as const;
+	for (const [id, name, origin] of cases) {
+		it(`${name}: 7 ${origin} spirits (itself included) awaken it for free`, () => {
+			const self = { ...spirit(1, id, name), cost: 9, origins: { [origin]: 1 } };
+			const others = Array.from({ length: 6 }, (_, i) => ({
+				...spirit(i + 2, `${origin}-${i}`, `${origin} ${i}`, false),
+				cost: 3,
+				origins: { [origin]: 1 }
+			}));
+			const player = makePlayer({ spirits: [self, ...others] });
+			const ctx = handlerCtx(player, self);
+			expect(AWAKEN_HANDLERS[id].check(ctx).ok).toBe(true);
+			AWAKEN_HANDLERS[id].pay(ctx);
+			expect(player.spirits).toHaveLength(7); // nothing discarded
+		});
+		it(`${name}: with 6 ${origin} spirits it needs 3 other Abyss spirits and discards them`, () => {
+			const self = { ...spirit(1, id, name), cost: 9, origins: { [origin]: 1 } };
+			const abyss = Array.from({ length: 3 }, (_, i) => ({
+				...spirit(i + 2, `abyss-${i}`, `Abyss ${i}`, false),
+				cost: 7
+			}));
+			const fewWorld = Array.from({ length: 2 }, (_, i) => ({
+				...spirit(i + 5, `${origin}-${i}`, `${origin} ${i}`, false),
+				cost: 3,
+				origins: { [origin]: 1 }
+			}));
+			const player = makePlayer({ spirits: [self, ...fewWorld, abyss[0], abyss[1]] });
+			expect(AWAKEN_HANDLERS[id].check(handlerCtx(player, self)).ok).toBe(false);
+			player.spirits.push(abyss[2]);
+			const ctx = handlerCtx(player, self);
+			expect(AWAKEN_HANDLERS[id].check(ctx).ok).toBe(true);
+			AWAKEN_HANDLERS[id].pay(ctx);
+			expect(player.spirits.map((s) => s.slotIndex).sort()).toEqual([1, 5, 6]);
 		});
 	}
 });
@@ -1509,9 +1538,8 @@ describe('combat-event awaken progress (Hollow Eyes)', () => {
 		const outBlue = res.state.players.Blue!;
 		// The defending player is corrupted without defeating the attacker.
 		expect(outBlue.awakenProgress[AWAKEN_PROGRESS_KEYS.hollowEyes]).toBe(true);
-		// And the scripted handler now reports satisfiable.
-		const ctx = handlerCtx(outBlue, outBlue.spirits[0]);
-		expect(AWAKEN_HANDLERS[IDS.hollowEyes].check(ctx).ok).toBe(true);
+		// (The spirit left the design data on 2026-11-11, so it has no awaken handler now.)
+		expect(AWAKEN_HANDLERS[IDS.hollowEyes]).toBeUndefined();
 	});
 
 	it('is deterministic: same seed → same PvP damage + same flag outcome', () => {
@@ -1619,11 +1647,11 @@ describe('manualAwaken command', () => {
 	});
 
 	it('rejects manualAwaken on a SCRIPTED text spirit (must use awakenSpirit)', () => {
-		const catalog = textCatalog(IDS.spaceInvader, 'Space Invader', 'Discard 4 of any attack dice.');
+		const catalog = textCatalog(IDS.twinPyres, 'Keeper of the Twin Pyres', 'Discard 2 Fire Runes, or discard 5 of any attack dice.');
 		const state = startedGame(catalog);
 		const red = state.players.Red!;
-		red.spirits = [spirit(1, IDS.spaceInvader, 'Space Invader')];
-		red.attackDice = Array.from({ length: 4 }, (_, i) => ({
+		red.spirits = [spirit(1, IDS.twinPyres, 'Keeper of the Twin Pyres')];
+		red.attackDice = Array.from({ length: 5 }, (_, i) => ({
 			instanceId: `d${i}`,
 			tier: 'basic' as const
 		}));
@@ -1643,10 +1671,10 @@ describe('manualAwaken command', () => {
 		const unscripted = checkCtx(player, 'x', { kind: 'text', text: 'bespoke' });
 		expect(needsManualAwaken(unscripted.ctx, { spirit: unscripted.spirit })).toBe(true);
 
-		const scriptedPlayer = makePlayer({ spirits: [spirit(1, IDS.spaceInvader, 'SI')] });
-		const scripted = checkCtx(scriptedPlayer, IDS.spaceInvader, {
+		const scriptedPlayer = makePlayer({ spirits: [spirit(1, IDS.moonrend, 'Moonrend')] });
+		const scripted = checkCtx(scriptedPlayer, IDS.moonrend, {
 			kind: 'text',
-			text: 'Discard 4 of any attack dice.'
+			text: 'Attack another player.'
 		});
 		expect(needsManualAwaken(scripted.ctx, { spirit: scripted.spirit })).toBe(false);
 	});
@@ -1674,8 +1702,8 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		return { state, catalog };
 	}
 
-	it('Rune Mage: grants per-trade now (no manual prompt on the bare end-of-location beat)', () => {
-		const { state, catalog } = startedClassGame({ 'Rune Mage': 1 });
+	it('Mage: grants per-trade now (no manual prompt on the bare end-of-location beat)', () => {
+		const { state, catalog } = startedClassGame({ 'Mage': 1 });
 		const red = state.players.Red!;
 		red.navigationDestination = 'Mountain Region';
 		// Drive to the location phase so endLocationActions is legal.
@@ -1689,7 +1717,7 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		);
 		expect(res.ok).toBe(true);
 		if (!res.ok) throw new Error(res.error.message);
-		// Rune Mage is now a real onLocationInteraction trade handler — it grants
+		// Mage is now a real onLocationInteraction trade handler — it grants
 		// Enchanted/Exalted dice per rune/relic traded (covered in effects.test.ts) and
 		// emits NO manual prompt on the bare end-of-location beat (no trade ⇒ no grant).
 		const prompts = res.state.players.Red!.manualPrompts.filter((p) => p.source === 'class');
@@ -1697,7 +1725,7 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 	});
 
 	it('Hexblade: the obsolete dice-swap command is rejected', () => {
-		const { state, catalog } = startedClassGame({ 'Cursed Fighter': 1 });
+		const { state, catalog } = startedClassGame({ 'Ram': 1 });
 		const red = state.players.Red!;
 		const blue = makePlayer({
 			playerColor: 'Blue',
@@ -1724,7 +1752,7 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		expect(res.error.code).toBe('ability_changed');
 	});
 
-	it('Monster Hunter: extraActions["combat"] lets the player fight the monster twice', () => {
+	it('Monster Hunter: extraActions["combat"] lets the player fight a hand card twice', () => {
 		const { state, catalog } = startedClassGame({ 'Monster Hunter': 1 });
 		const red = state.players.Red!;
 		red.navigationDestination = 'Arcane Abyss';
@@ -1732,23 +1760,25 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		// Re-grant Ironmane's combat allowance (onNavigate would; set it directly here).
 		red.extraActions = { combat: 1 };
 		state.phase = 'location';
-		state.monster = {
-			id: 'm',
-			name: 'Maw',
-			hp: 100,
-			maxHp: 100,
-			damage: 0,
-			rewardTrack: [],
-			chooseAmount: 1,
-			livesRemaining: 1,
-			livesTotal: 1,
-			ladderIndex: 0,
-			ladderMax: 3
-		};
+		red.monsterHand = [
+			{
+				id: 'm',
+				name: 'Maw',
+				hp: 100,
+				maxHp: 100,
+				damage: 0,
+				rewardTrack: [],
+				chooseAmount: 1,
+				livesRemaining: 1,
+				livesTotal: 1,
+				ladderIndex: 0,
+				ladderMax: 3
+			}
+		];
 		const first = applyGameCommand(
 			state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'startCombat' },
+			{ type: 'startCombat', handIndex: 0 },
 			catalog
 		);
 		expect(first.ok).toBe(true);
@@ -1756,7 +1786,7 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		const second = applyGameCommand(
 			first.state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'startCombat' },
+			{ type: 'startCombat', handIndex: 0 },
 			catalog
 		);
 		expect(second.ok).toBe(true); // second combat allowed by the extra allowance
@@ -1765,7 +1795,7 @@ describe('Phase 6 interaction classes emit one manual prompt with DB text', () =
 		const third = applyGameCommand(
 			second.state,
 			{ ...HOST, seatColor: 'Red' },
-			{ type: 'startCombat' },
+			{ type: 'startCombat', handIndex: 0 },
 			catalog
 		);
 		expect(third.ok).toBe(false);
@@ -1793,17 +1823,17 @@ describe('Phase 6 coverage closure', () => {
 	});
 
 	it('the Phase-6 interaction classes are all accounted for', () => {
-		// Ironmane is encoded (extraAction); Rune Mage is now a real trade handler;
-		// Runebound Vessel is now a run-handler (grants 2 augments bound to itself).
+		// Ironmane is encoded (extraAction); Mage is now a real trade handler;
+		// Herder is a run-handler (a rune for each adjacent Beast on its awakening).
 		expect(CLASS_EFFECTS['Monster Hunter']).toBeDefined();
-		expect(CLASS_EFFECTS['Wayfarer']).toBeDefined();
-		expect(MANUAL_CLASSES.has('Wayfarer')).toBe(false);
-		expect(HANDLER_CLASSES.has('Rune Mage')).toBe(true);
-		expect(MANUAL_CLASSES.has('Cursed Fighter')).toBe(false);
-		expect(HANDLER_CLASSES.has('Cursed Fighter')).toBe(true);
-		// Runebound Vessel is no longer manual — it is a run-handler (bound-augment grant).
-		expect(MANUAL_CLASSES.has('Runebound Vessel'), 'Runebound Vessel is handler-driven now').toBe(false);
-		expect(HANDLER_CLASSES.has('Runebound Vessel'), 'Runebound Vessel must be a handler class').toBe(true);
+		expect(CLASS_EFFECTS['Nomad']).toBeDefined();
+		expect(MANUAL_CLASSES.has('Nomad')).toBe(false);
+		expect(HANDLER_CLASSES.has('Mage')).toBe(true);
+		expect(MANUAL_CLASSES.has('Ram')).toBe(false);
+		expect(HANDLER_CLASSES.has('Ram')).toBe(true);
+		// Herder is no longer manual — it is a run-handler (bound-augment grant).
+		expect(MANUAL_CLASSES.has('Herder'), 'Herder is handler-driven now').toBe(false);
+		expect(HANDLER_CLASSES.has('Herder'), 'Herder must be a handler class').toBe(true);
 	});
 
 	it('every class in the game is encoded, handled, or allowlisted (no silent no-op)', () => {
@@ -1815,14 +1845,19 @@ describe('Phase 6 coverage closure', () => {
 		// the picks — so it carries no declarative/handler/manual effect, yet is fully
 		// handled. Mirrors ENGINE_HANDLED_CLASSES in coverage.test.ts.
 		const ENGINE_HANDLED_CLASSES = new Set<string>([
-			'Abyss Summoner',
+			'Summoner',
 			'Cursed Spirit',
-			'Aegis Weaver',
-			'Golden Ruler',
-			'Soul Weaver',
-			'Relic Sentinel',
-			// Runic Duplicator: duplicates the selected augment after a paid trade.
-			'Runic Duplicator'
+			'King',
+			'Mystic',
+			// Smith: duplicates the selected augment after a paid trade.
+			'Smith',
+			// November 2026 classes encoded in shared engine code.
+			'Trader',
+			'Wildling',
+			'Druid',
+			'Prince',
+			'Cultist',
+			'Acolyte'
 		]);
 		for (const cls of allClasses) {
 			const handled =

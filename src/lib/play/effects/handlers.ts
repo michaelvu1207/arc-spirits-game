@@ -14,7 +14,7 @@
  * Each handler receives the same {@link EffectContext} the declarative path uses
  * and mutates `ctx.player` / `ctx.state` in place. Determinism: any randomness must
  * flow through `ctx.state.rng`; these handlers use none directly (the only "random"
- * piece — Fatestriker's optional reroll — is deferred to a manual prompt).
+ * piece — Assassin's optional reroll — is deferred to a manual prompt).
  */
 
 import { CLASS_ABILITIES } from './abilities';

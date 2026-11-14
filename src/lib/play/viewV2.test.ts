@@ -379,7 +379,7 @@ describe('computeAffordances — location interactions (§5.2)', () => {
 		expect(row1.costSlots[0].eligibleMatSlotIndexes).toEqual([2]);
 		// The "or" augment gain surfaces as a choice group with no pre-selected default (S6).
 		expect(row1.choiceGroups).toHaveLength(1);
-		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Elementalist', 'Soul Weaver']);
+		expect(row1.choiceGroups[0].options.map((o) => o.name)).toEqual(['Elementalist', 'Mystic']);
 	});
 
 	test('both Mountain trades are repeatable and require one Rune', () => {
@@ -395,10 +395,10 @@ describe('computeAffordances — location interactions (§5.2)', () => {
   expect(rows.every(r=>!r.noEffectNow)).toBe(true);
  });
 
-	test('a Runic Duplicator still pays the normal augment-trade cost', () => {
+	test('a Smith still pays the normal augment-trade cost', () => {
 		const state = locationState([], {
 			spirits: [
-				{ slotIndex: 1, id: 'mi', name: 'Runic Duplicator', cost: 2, classes: { 'Runic Duplicator': 1 }, origins: {}, isFaceDown: false }
+				{ slotIndex: 1, id: 'mi', name: 'Smith', cost: 2, classes: { 'Smith': 1 }, origins: {}, isFaceDown: false }
 			]
 		});
 		const row1 = computeAffordances(state, 'Red', LOC_CATALOG).locationInteractions!.find(
@@ -668,7 +668,7 @@ describe('encounter + infiltrator affordances (§5.4)', () => {
 	red.powerInventory = ['thorn-ward'];
 	red.phaseReady = false;
 		red.spirits = [
-			{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { 'Cursed Fighter': 1 }, origins: {}, isFaceDown: false }
+			{ slotIndex: 1, id: 'inf', name: 'Infil', cost: 2, classes: { 'Ram': 1 }, origins: {}, isFaceDown: false }
 		];
 		red.attackDice = [{ instanceId: 'r1', tier: 'basic' }];
 		blue.navigationDestination = 'Mountain Region';
@@ -830,7 +830,7 @@ describe('bot enumerator never generates the now-rejected command shapes', () =>
 				id: 'inf',
 				name: 'Infil',
 				cost: 2,
-				classes: { 'Cursed Fighter': 1 },
+				classes: { 'Ram': 1 },
 				origins: {},
 				isFaceDown: false
 			}

@@ -74,13 +74,13 @@ describe('region rules', () => {
 		expect(rows('Water Region')[1].gains).toMatchObject([
 			{
 				type: 'chooseRune',
-				options: [{ name: 'Fighter' }, { name: 'Cultivator' }, { name: 'Spirit Animal' }]
+				options: [{ name: 'Fighter' }, { name: 'Cultivator' }, { name: 'Beast' }]
 			}
 		]);
 		expect(rows('Mountain Region')[0].gains).toEqual([{ type: 'navigationPower', replace: true }]);
 		expect(rows('Fire Region').map((r) => r.gains)).toMatchObject([
 			[{ type: 'action', action: 'cultivate' }],
-			[{ type: 'chooseRune', options: [{ name: 'Cursed Spirit' }, { name: 'Elementalist' }, { name: 'Soul Weaver' }] }]
+			[{ type: 'chooseRune', options: [{ name: 'Cursed Spirit' }, { name: 'Elementalist' }, { name: 'Mystic' }] }]
 		]);
 	});
 	test.each(['resolveLocationInteraction', 'acquireNavigationPower'])(

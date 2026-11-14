@@ -7,6 +7,7 @@
  */
 
 import { applyGameCommand } from '../../runtime';
+import { bestHandMonster, isLiveMonster } from '../../bots/monsterCardAutopilot';
 import {
 	botActorFor,
 	computeKillProbability,
@@ -24,18 +25,43 @@ import {
 	VP_TO_WIN,
 	isEvilAlignment,
 	type GameCommand,
+	type MonsterState,
 	type NavigationDestination,
 	type PlayCatalog,
 	type PublicGameState,
 	type SeatColor
 } from '../../types';
 import { buildMonsterRewards } from '../../monsterRewards';
-import { combatActionExpectation, encodeObs } from '../encode';
+import { combatActionExpectation, encodeObs, startCombatMonster } from '../encode';
 import type { NeuralPolicy } from '../net';
 import { policyPreviewState, type LegalAction } from '../actions';
 import { evaluateFarmValue } from '../farmValue';
 
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+/**
+ * The monster card `seat` would fight: the best live card in its OWN monster hand (null for an
+ * empty hand). There is no shared Abyss monster any more — a player fights only the cards it
+ * holds, so no rival can take a kill from it. This replaces every old `state.monster` read. With
+ * no catalog (two callers have none) the lowest-Barrier live card stands in for the best one.
+ */
+function seatFightMonster(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog?: PlayCatalog
+): MonsterState | null {
+	if (catalog) return bestHandMonster(state, seat, catalog)?.card ?? null;
+	let best: MonsterState | null = null;
+	for (const card of state.players[seat]?.monsterHand ?? []) {
+		if (isLiveMonster(card) && (!best || card.hp < best.hp)) best = card;
+	}
+	return best;
+}
+
+/** True when `seat` holds at least one live monster card (cheap existence check). */
+function holdsLiveMonster(state: PublicGameState, seat: SeatColor): boolean {
+	return (state.players[seat]?.monsterHand ?? []).some(isLiveMonster);
+}
 function envNumber(name: string, fallback: number): number {
 	const raw = process.env[name];
 	if (raw === undefined || raw.trim() === '') return fallback;
@@ -226,7 +252,7 @@ function routeHandDrawBuildScore(
 	const player = state.players[seat];
 	if (!player) return 0;
 	const counts = awakenedClassCounts(player);
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	const monsterDamage = monster?.damage ?? 0;
 	const survivalTarget = monsterDamage + 1;
 	const maxBarrier = player.maxBarrier ?? 0;
@@ -247,7 +273,7 @@ function routeHandDrawBuildScore(
 		cleanProb * 4 +
 		survivalReady * 1.25 +
 		maxSurvivalReady * 1.25 +
-		(counts['Spirit Animal'] ?? 0) * 0.5 +
+		(counts['Beast'] ?? 0) * 0.5 +
 		(counts.Cultivator ?? 0) * 0.6 +
 		(player.attackDice?.length ?? 0) * 0.35
 	);
@@ -260,9 +286,10 @@ function isCommittedCleanMonsterRoute(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	if (!player || !state.monster || isEvilAlignment(player.statusLevel ?? 0)) return false;
+	const monster = seatFightMonster(state, seat, catalog);
+	if (!player || !monster || isEvilAlignment(player.statusLevel ?? 0)) return false;
 	const vp = player.victoryPoints ?? 0;
-	const monsterHp = state.monster.maxHp ?? state.monster.hp ?? 0;
+	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	if (vp >= 9 || monsterHp >= 4 || player.navigationDestination === 'Arcane Abyss') return true;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
 	return farm.valid && (farm.farmable || farm.opportunityVp > 0);
@@ -308,7 +335,7 @@ function preservesRouteFirepower(
 ): boolean {
 	if (action.cmd.type === 'startCombat' || action.cmd.type === 'resolveMonsterReward') return true;
 	const preview = policyPreviewState(action);
-	if (!state.monster || !state.players[seat] || !preview.players[seat]) return true;
+	if (!holdsLiveMonster(state, seat) || !state.players[seat] || !preview.players[seat]) return true;
 	const currentFirepower = firepowerKillProbability(state, seat, catalog);
 	if (currentFirepower < threshold) return true;
 	const nextFirepower = firepowerKillProbability(preview, seat, catalog);
@@ -342,7 +369,7 @@ function preservesRouteSurvival(
 	const player = state.players[seat];
 	const preview = policyPreviewState(action);
 	const nextPlayer = preview.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !nextPlayer || !monster) return true;
 	if (action.cmd.type === 'startCombat' || action.cmd.type === 'resolveMonsterReward') return true;
 	if (ROUTE_PROGRESS_ACTION_TYPES.has(action.cmd.type)) return true;
@@ -367,7 +394,7 @@ function preservesRouteSurvival(
 	const earlyFarmDamage =
 		currentVp >= 3 &&
 		(currentAttack >= 2 ||
-			(currentCounts['Spirit Animal'] ?? 0) >= 2 ||
+			(currentCounts['Beast'] ?? 0) >= 2 ||
 			currentFirepower >= firepowerThreshold);
 	const committedToRoute =
 		currentVp >= 6 ||
@@ -386,8 +413,8 @@ function preservesRouteSurvival(
 		return false;
 	}
 	if (
-		(currentCounts['Spirit Animal'] ?? 0) > 0 &&
-		(nextCounts['Spirit Animal'] ?? 0) < (currentCounts['Spirit Animal'] ?? 0) &&
+		(currentCounts['Beast'] ?? 0) > 0 &&
+		(nextCounts['Beast'] ?? 0) < (currentCounts['Beast'] ?? 0) &&
 		nextAttack <= currentAttack + 0.1
 	) {
 		return false;
@@ -487,7 +514,7 @@ function filterGoodTargetActionDisciplineActions(
 	threshold: number
 ): LegalAction[] {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || isEvilAlignment(player.statusLevel ?? 0)) return withNext;
 	const currentVp = player.victoryPoints ?? 0;
 	const currentAttack = expectedAttack(player);
@@ -544,20 +571,20 @@ function filterGoodTargetActionDisciplineActions(
 		) {
 			return false;
 		}
-		const nextFirepower = preview.monster
+		const nextFirepower = holdsLiveMonster(preview, seat)
 			? firepowerKillProbability(preview, seat, catalog)
 			: currentFirepower;
-		const nextClean = preview.monster
+		const nextClean = holdsLiveMonster(preview, seat)
 			? computeKillProbability(preview, seat, catalog, { allowCorruptKill: false })
 			: currentClean;
-		const nextFarm = preview.monster
+		const nextFarm = holdsLiveMonster(preview, seat)
 			? evaluateFarmValue(preview, seat, catalog, { threshold })
 			: currentFarm;
 		const improvesDamage =
 			nextAttack > currentAttack + 0.1 ||
 			nextFirepower > currentFirepower + 0.05 ||
 			nextClean > currentClean + 0.05 ||
-			(nextCounts['Spirit Animal'] ?? 0) > (currentCounts['Spirit Animal'] ?? 0) ||
+			(nextCounts['Beast'] ?? 0) > (currentCounts['Beast'] ?? 0) ||
 			(nextPlayer.attackDice?.length ?? 0) > (player.attackDice?.length ?? 0);
 		const improvesSurvival =
 			(nextPlayer.maxBarrier ?? 0) > currentMaxBarrier ||
@@ -585,7 +612,7 @@ function filterGoodTargetActionDisciplineActions(
 				needsDamage ||
 				improvesDamage ||
 				player.spirits.length < 6 ||
-				(currentCounts['Spirit Animal'] ?? 0) < 2
+				(currentCounts['Beast'] ?? 0) < 2
 			);
 		}
 		if (interactionHasAction(interaction, 'restoreBarrier')) {
@@ -604,7 +631,8 @@ function filterAbyssRouteDisciplineActions(
 	threshold: number
 ): LegalAction[] {
 	const player = state.players[seat];
-	if (!player || !state.monster || isEvilAlignment(player.statusLevel ?? 0)) return withNext;
+	if (!player || !holdsLiveMonster(state, seat) || isEvilAlignment(player.statusLevel ?? 0))
+		return withNext;
 	const inAbyss = player.navigationDestination === 'Arcane Abyss';
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
 
@@ -640,10 +668,10 @@ function filterAbyssRouteDisciplineActions(
 		if (!nextPlayer) return true;
 		const nextCounts = awakenedClassCounts(nextPlayer);
 		const nextAttack = expectedAttack(nextPlayer);
-		const nextFirepower = preview.monster
+		const nextFirepower = holdsLiveMonster(preview, seat)
 			? firepowerKillProbability(preview, seat, catalog)
 			: currentFirepower;
-		if ((nextCounts['Spirit Animal'] ?? 0) < (currentCounts['Spirit Animal'] ?? 0)) return false;
+		if ((nextCounts['Beast'] ?? 0) < (currentCounts['Beast'] ?? 0)) return false;
 		if ((nextCounts.Cultivator ?? 0) < (currentCounts.Cultivator ?? 0)) return false;
 		if (nextAttack < currentAttack - 0.01) return false;
 		if (currentFirepower >= threshold && nextFirepower < currentFirepower - 0.01) return false;
@@ -661,7 +689,7 @@ function isRouteCloserFullActionState(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const vp = player.victoryPoints ?? 0;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -690,14 +718,13 @@ function isRouteCloserRestoreFinishState(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const vp = player.victoryPoints ?? 0;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	if (state.round < 16 || vp < 24 || vp >= 30 || monsterHp < 4 || monsterHp > 10) return false;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
-	const finishOpportunity =
-		farm.valid && farm.rewardVp > 0 && vp + farm.rewardVp * Math.max(1, farm.livesRemaining) >= 30;
+	const finishOpportunity = farm.valid && farm.rewardVp > 0 && vp + farm.rewardVp >= 30; // each card is a single kill
 	if (!finishOpportunity) return false;
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const firepowerProb = firepowerKillProbability(state, seat, catalog);
@@ -749,9 +776,14 @@ function pendingRewardVpPotential(state: PublicGameState, seat: SeatColor): numb
 		.reduce((sum, vp) => sum + vp, 0);
 }
 
-function isGoodBuilderHp4ConversionOverlayState(state: PublicGameState, seat: SeatColor): boolean {
+function isGoodBuilderHp4ConversionOverlayState(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog?: PlayCatalog
+): boolean {
 	const player = state.players[seat];
-	const monsterHp = state.monster?.maxHp ?? state.monster?.hp ?? 0;
+	const monster = seatFightMonster(state, seat, catalog);
+	const monsterHp = monster?.maxHp ?? monster?.hp ?? 0;
 	return (
 		!!player &&
 		!isEvilAlignment(player.statusLevel ?? 0) &&
@@ -803,7 +835,12 @@ function abyssFarmPayoffScore(
 	}
 
 	if (action.cmd.type === 'startCombat') {
-		const expected = combatActionExpectation(state, seat, catalog);
+		const expected = combatActionExpectation(
+			state,
+			seat,
+			catalog,
+			startCombatMonster(state, seat, action.cmd)
+		);
 		return expected.killProbability > 0
 			? 50 * expected.killProbability + expected.expectedRewardVp
 			: 0;
@@ -848,19 +885,19 @@ function goodBuilderClassScore(
 	vp: number
 ): number {
 	const awakened =
-		(counts['Void Sovereign'] ?? 0) * 70 +
+		(counts['Queen'] ?? 0) * 70 +
 		(counts['Relic Sentinel'] ?? 0) * (vp >= 20 ? 90 : 45) +
 		(counts.Healer ?? 0) * 38 +
-		(counts['Spirit Animal'] ?? 0) * 24 +
+		(counts['Beast'] ?? 0) * 24 +
 		(counts.Fighter ?? 0) * 9 +
 		(counts['Elementalist'] ?? 0) * 12 +
 		(counts.Cultivator ?? 0) * 13 +
-		(counts['Soul Weaver'] ?? 0) * 8;
+		(counts['Mystic'] ?? 0) * 8;
 	const potential =
-		Math.max(0, (raw['Void Sovereign'] ?? 0) - (counts['Void Sovereign'] ?? 0)) * 30 +
+		Math.max(0, (raw['Queen'] ?? 0) - (counts['Queen'] ?? 0)) * 30 +
 		Math.max(0, (raw['Relic Sentinel'] ?? 0) - (counts['Relic Sentinel'] ?? 0)) * 26 +
 		Math.max(0, (raw.Healer ?? 0) - (counts.Healer ?? 0)) * 14 +
-		Math.max(0, (raw['Spirit Animal'] ?? 0) - (counts['Spirit Animal'] ?? 0)) * 10 +
+		Math.max(0, (raw['Beast'] ?? 0) - (counts['Beast'] ?? 0)) * 10 +
 		Math.max(0, (raw.Fighter ?? 0) - (counts.Fighter ?? 0)) * 5 +
 		Math.max(0, (raw['Elementalist'] ?? 0) - (counts['Elementalist'] ?? 0)) * 5 +
 		Math.max(0, (raw.Cultivator ?? 0) - (counts.Cultivator ?? 0)) * 6;
@@ -874,14 +911,14 @@ function goodBuilderSpiritScore(
 	if (!spirit) return 0;
 	const cls = spirit.classes ?? {};
 	let score = 0;
-	score += (cls['Void Sovereign'] ?? 0) * 40;
+	score += (cls['Queen'] ?? 0) * 40;
 	score += (cls['Relic Sentinel'] ?? 0) * 34;
 	score += (cls.Healer ?? 0) * 24;
-	score += (cls['Spirit Animal'] ?? 0) * 18;
+	score += (cls['Beast'] ?? 0) * 18;
 	score += (cls.Cultivator ?? 0) * 13;
 	score += (cls['Elementalist'] ?? 0) * 12;
 	score += (cls.Fighter ?? 0) * 10;
-	score += (cls['Soul Weaver'] ?? 0) * 8;
+	score += (cls['Mystic'] ?? 0) * 8;
 	score += (cls['Sharpshooter'] ?? 0) * 3;
 	score -= (cls['Cursed Spirit'] ?? 0) * 25;
 	score -= Math.max(0, (spirit.cost ?? 1) - 5) * 2;
@@ -909,7 +946,7 @@ function goodBuilderStateScore(
 	const vp = player.victoryPoints ?? 0;
 	const counts = awakenedClassCounts(player);
 	const raw = allClassCounts(player);
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	const cleanProb = monster
 		? computeKillProbability(state, seat, catalog, { allowCorruptKill: false })
 		: 0;
@@ -961,7 +998,12 @@ function goodBuilderActionScore(
 	let score = afterScore - beforeScore + vpDelta * 600 - Math.max(0, statusDelta) * 10_000;
 
 	if (action.cmd.type === 'startCombat') {
-		const expected = combatActionExpectation(state, seat, catalog);
+		const expected = combatActionExpectation(
+			state,
+			seat,
+			catalog,
+			startCombatMonster(state, seat, action.cmd)
+		);
 		score += expected.killProbability * 670 - 120 + expected.expectedRewardVp * 180;
 	}
 	if (action.cmd.type === 'resolveMonsterReward') score += 500 + vpDelta * 500;
@@ -1051,13 +1093,13 @@ function classCountScoreForHp4Floor(
 	hp: number,
 	survivalShort: boolean
 ): number {
-	const spiritAnimal = counts['Spirit Animal'] ?? 0;
+	const spiritAnimal = counts['Beast'] ?? 0;
 	const cultivator = counts.Cultivator ?? 0;
 	const healer = counts.Healer ?? 0;
 	const fighter = counts.Fighter ?? 0;
 	const elementalist = counts['Elementalist'] ?? 0;
 	const worldGuardian = counts['Relic Sentinel'] ?? 0;
-	const worldEnder = counts['Void Sovereign'] ?? 0;
+	const worldEnder = counts['Queen'] ?? 0;
 	return (
 		Math.min(spiritAnimal, Math.max(4, hp + 1)) * 260 +
 		(cultivator >= 2 ? 900 : cultivator * (survivalShort ? 420 : 180)) +
@@ -1077,7 +1119,7 @@ function goodBuilderHp4ScoreFloorStateScore(
 	threshold: number
 ): number {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player) return -1_000_000;
 	const vp = player.victoryPoints ?? 0;
 	const status = player.statusLevel ?? 0;
@@ -1123,7 +1165,7 @@ function goodBuilderHp4ScoreFloorStateScore(
 		(vp >= VP_TO_WIN ? 80_000 : 0) -
 		status * 12_000 +
 		pendingRewardVpPotential(state, seat) * 2_200 +
-		(farm.valid ? farm.rewardVp * Math.max(1, farm.livesRemaining ?? 1) * 260 : 0) +
+		(farm.valid ? farm.rewardVp * 260 : 0) + // each card is a single kill
 		(farm.valid ? farm.opportunityVp * 450 : 0) +
 		(farm.valid && farm.farmable ? 1_200 : 0) +
 		clean * 1_250 +
@@ -1158,7 +1200,7 @@ function goodBuilderHp4ScoreFloorActionScore(
 	const before = state.players[seat];
 	const preview = policyPreviewState(action);
 	const after = preview.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!before || !after || isEvilAlignment(before.statusLevel ?? 0)) return -1_000_000;
 	const beforeScore = goodBuilderHp4ScoreFloorStateScore(state, seat, catalog, threshold);
 	const afterScore = goodBuilderHp4ScoreFloorStateScore(preview, seat, catalog, threshold);
@@ -1193,10 +1235,10 @@ function goodBuilderHp4ScoreFloorActionScore(
 		(beforeAttack < Math.min(5, hp + 0.5) || beforeFirepower < threshold * 0.5);
 	const beforeSurvivalReady = survivalTarget <= 0 || (before.barrier ?? 0) >= survivalTarget;
 	const beforeMaxSurvivalReady = survivalTarget <= 0 || (before.maxBarrier ?? 0) >= survivalTarget;
-	const afterClean = preview.monster
+	const afterClean = holdsLiveMonster(preview, seat)
 		? computeKillProbability(preview, seat, catalog, { allowCorruptKill: false })
 		: beforeClean;
-	const afterFirepower = preview.monster
+	const afterFirepower = holdsLiveMonster(preview, seat)
 		? firepowerKillProbability(preview, seat, catalog)
 		: beforeFirepower;
 	const afterAttack = expectedAttack(after);
@@ -1228,7 +1270,7 @@ function goodBuilderHp4ScoreFloorActionScore(
 		beforeCultivatorProgress < 2;
 	let score = afterScore - beforeScore + vpDelta * 5_500 - Math.max(0, statusDelta) * 40_000;
 
-	if ((afterCounts['Spirit Animal'] ?? 0) > (beforeCounts['Spirit Animal'] ?? 0)) score += 1_600;
+	if ((afterCounts['Beast'] ?? 0) > (beforeCounts['Beast'] ?? 0)) score += 1_600;
 	if (cultivatorProgressDelta > 0)
 		score += cultivatorProgressDelta * (hp4SurvivalWall ? 2_800 : 900);
 	if ((afterCounts.Fighter ?? 0) > (beforeCounts.Fighter ?? 0))
@@ -1254,7 +1296,12 @@ function goodBuilderHp4ScoreFloorActionScore(
 			score += 12_000 + Math.max(0, vpDelta) * 12_000;
 			break;
 		case 'startCombat': {
-			const expected = combatActionExpectation(state, seat, catalog);
+			const expected = combatActionExpectation(
+				state,
+				seat,
+				catalog,
+				startCombatMonster(state, seat, action.cmd)
+			);
 			if (hp4SurvivalWall && !beforeSurvivalReady) score -= 20_000;
 			score += expected.killProbability * 19_000 - 5_000;
 			score += expected.expectedRewardVp * 4_000;
@@ -1307,7 +1354,7 @@ function goodBuilderHp4ScoreFloorActionScore(
 		}
 		case 'spawnHandSpirit': {
 			score +=
-				Math.max(0, (afterCounts['Spirit Animal'] ?? 0) - (beforeCounts['Spirit Animal'] ?? 0)) *
+				Math.max(0, (afterCounts['Beast'] ?? 0) - (beforeCounts['Beast'] ?? 0)) *
 					1_600 +
 				Math.max(0, (afterCounts.Cultivator ?? 0) - (beforeCounts.Cultivator ?? 0)) * 1_200 +
 				Math.max(0, (afterCounts.Fighter ?? 0) - (beforeCounts.Fighter ?? 0)) *
@@ -1321,7 +1368,7 @@ function goodBuilderHp4ScoreFloorActionScore(
 		case 'replaceSpirit':
 			score +=
 				(afterAttack - beforeAttack) * 950 +
-				Math.max(0, (afterCounts['Spirit Animal'] ?? 0) - (beforeCounts['Spirit Animal'] ?? 0)) *
+				Math.max(0, (afterCounts['Beast'] ?? 0) - (beforeCounts['Beast'] ?? 0)) *
 					1_450 +
 				Math.max(0, (afterCounts.Cultivator ?? 0) - (beforeCounts.Cultivator ?? 0)) *
 					(hp4SurvivalWall ? 3_800 : 1_350) +
@@ -1411,7 +1458,7 @@ function combatReadyButNeedsRestore(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return false;
 	const cleanProb = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	if (cleanProb >= threshold) return false;
@@ -1450,7 +1497,7 @@ function goodBuilderOracleDestinations(
 	threshold: number
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player) return ['Water Region', 'Forest Region', 'Fire Region', 'Mountain Region'];
 	const destinations: NavigationDestination[] = [];
 	const append = (destination: NavigationDestination): void =>
@@ -1476,11 +1523,11 @@ function goodBuilderOracleDestinations(
 		(counts.Cultivator ?? 0) >= 2;
 	const damageShort = monsterHp > 0 && attack < monsterHp + 0.5 && firepower < threshold;
 	const wantsPassiveScorer =
-		(raw['Void Sovereign'] ?? 0) <= 0 ||
+		(raw['Queen'] ?? 0) <= 0 ||
 		((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 15) ||
 		((counts.Healer ?? 0) <= 0 && (player.maxBarrier ?? 0) >= 8);
 	const wantsTeam =
-		player.spirits.length < 6 || wantsPassiveScorer || (counts['Spirit Animal'] ?? 0) < 2;
+		player.spirits.length < 6 || wantsPassiveScorer || (counts['Beast'] ?? 0) < 2;
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
 	const hasWorldGuardianFinish = (counts['Relic Sentinel'] ?? 0) > 0 && vp >= 24;
 	const hasHealerRestVp = (counts.Healer ?? 0) > 0 && (player.maxBarrier ?? 0) >= 10;
@@ -1492,7 +1539,8 @@ function goodBuilderOracleDestinations(
 
 	if (farm.valid && farm.farmable && farm.opportunityVp >= (vp < 18 ? 2 : 1))
 		return ['Arcane Abyss'];
-	if (cleanFarmReady && (vp < 24 || farm.livesRemaining >= 1)) return ['Arcane Abyss'];
+	// A valid farm always has its one kill left (legacy lives = 1), so readiness alone decides.
+	if (cleanFarmReady) return ['Arcane Abyss'];
 	if (hasWorldGuardianFinish || hasHealerRestVp) return ['Forest Region'];
 	if (needsRestore) return ['Forest Region', 'Fire Region'];
 	if (wantsTeam || damageShort || (player.attackDice?.length ?? 0) < 2) {
@@ -1518,7 +1566,7 @@ function goodBuilderFarmerOracleDestinations(
 	threshold: number
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster) return goodBuilderOracleDestinations(state, seat, catalog, threshold);
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
 	const clean = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
@@ -1542,7 +1590,7 @@ function goodBuilderFarmerOracleDestinations(
 		return ['Fire Region', 'Forest Region'];
 	}
 	const needsDamage = monsterHp > 0 && attack < monsterHp + 0.5 && firepower < threshold;
-	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || (counts['Spirit Animal'] ?? 0) < 3) {
+	if (needsDamage || (player.attackDice?.length ?? 0) < 2 || (counts['Beast'] ?? 0) < 3) {
 		return ['Water Region', 'Mountain Region'];
 	}
 	return goodBuilderOracleDestinations(state, seat, catalog, threshold);
@@ -1555,7 +1603,7 @@ function goodBuilderSupportOracleDestinations(
 	threshold: number
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player) return ['Water Region', 'Forest Region', 'Mountain Region', 'Fire Region'];
 	const destinations: NavigationDestination[] = [];
 	const append = (destination: NavigationDestination): void =>
@@ -1573,14 +1621,14 @@ function goodBuilderSupportOracleDestinations(
 	const hasWorldGuardianFinish = (counts['Relic Sentinel'] ?? 0) > 0 && vp >= 24;
 	const hasHealerRestVp = (counts.Healer ?? 0) > 0 && (player.maxBarrier ?? 0) >= 10;
 	const wantsScorer =
-		(raw['Void Sovereign'] ?? 0) <= 0 || ((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12);
+		(raw['Queen'] ?? 0) <= 0 || ((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12);
 	if (hasWorldGuardianFinish || hasHealerRestVp || needsRestore)
 		return ['Forest Region', 'Fire Region'];
 	if (farm.valid && farm.farmable && farm.opportunityVp > 0) {
 		const monsterHp = monster?.maxHp ?? monster?.hp ?? 99;
 		if (vp < 18 || farm.opportunityVp >= 2 || monsterHp <= 4) return ['Arcane Abyss'];
 	}
-	if (player.spirits.length < 7 || wantsScorer || (counts['Spirit Animal'] ?? 0) < 2)
+	if (player.spirits.length < 7 || wantsScorer || (counts['Beast'] ?? 0) < 2)
 		append('Water Region');
 	if (hasRelic && (state.round >= 4 || player.spirits.length >= 5)) append('Mountain Region');
 	if ((player.maxBarrier ?? 0) < 8 && (counts.Cultivator ?? 0) >= 2) append('Fire Region');
@@ -1598,8 +1646,9 @@ function goodBuilderNoncontestSupportDestinations(
 	threshold: number
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
-	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Forest Region', 'Fire Region'];
+	const monster = seatFightMonster(state, seat, catalog);
+	if (!player || !monster)
+		return ['Water Region', 'Mountain Region', 'Forest Region', 'Fire Region'];
 	const destinations: NavigationDestination[] = [];
 	const append = (destination: NavigationDestination): void =>
 		appendUniqueDestination(destinations, destination);
@@ -1621,7 +1670,7 @@ function goodBuilderNoncontestSupportDestinations(
 		survivalTarget > 0 && maxBarrier < survivalTarget && (counts.Cultivator ?? 0) >= 2;
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
 	const wantsPassiveScorer =
-		(raw['Void Sovereign'] ?? 0) <= 0 ||
+		(raw['Queen'] ?? 0) <= 0 ||
 		((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12) ||
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
 
@@ -1630,7 +1679,7 @@ function goodBuilderNoncontestSupportDestinations(
 		append('Fire Region');
 	}
 	if (needsMaxBarrier) append('Fire Region');
-	if (needsDamage || player.spirits.length < 7 || (counts['Spirit Animal'] ?? 0) < 2) {
+	if (needsDamage || player.spirits.length < 7 || (counts['Beast'] ?? 0) < 2) {
 		append('Water Region');
 		if (hasRelic || state.round >= 4) append('Mountain Region');
 	}
@@ -1650,7 +1699,7 @@ function goodNonfallenFarmBuildDestinations(
 	threshold: number
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region'];
 	const status = player.statusLevel ?? 0;
 	if (isEvilAlignment(status))
@@ -1699,7 +1748,7 @@ function shouldGoodTargetContinueAbyssFarm(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	const status = player?.statusLevel ?? 0;
 	if (!player || !monster || isEvilAlignment(status)) return false;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
@@ -1708,7 +1757,6 @@ function shouldGoodTargetContinueAbyssFarm(
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const vp = player.victoryPoints ?? 0;
 	if (vp >= GOOD_TARGET_EXPOSE_AFTER_VP) return false;
-	const lives = Math.max(1, farm.livesRemaining ?? monster.livesRemaining ?? 1);
 	const clean = computeKillProbability(state, seat, catalog, { allowCorruptKill: false });
 	const corrupt = computeKillProbability(state, seat, catalog, { allowCorruptKill: true });
 	const firepower = firepowerKillProbability(state, seat, catalog);
@@ -1730,19 +1778,10 @@ function shouldGoodTargetContinueAbyssFarm(
 		clean >= threshold * 0.65 ||
 		(canSpendCorruptionAndRemainGood &&
 			(corrupt >= threshold * 0.65 || firepower >= threshold * 0.65 || attack >= monsterHp - 0.75));
-	const cheapLowRung =
-		farm.rewardVp >= 3 &&
-		controlledOpportunityVp >= 2 &&
-		lives >= 2 &&
-		monsterHp <= 2 &&
-		nearDamage;
-	if (cheapLowRung && vp < 24) return true;
-
+	// Each card is a single kill (no multi-life ladder rung), so the old "cheap low rung with lives
+	// left" branch is gone.
 	const efficientHp4Farm =
-		controlledOpportunityVp >= 2 &&
-		monsterHp <= 4 &&
-		(vp < 18 || farm.rewardVp >= 3 || lives >= 2) &&
-		nearDamage;
+		controlledOpportunityVp >= 2 && monsterHp <= 4 && (vp < 18 || farm.rewardVp >= 3) && nearDamage;
 	if (efficientHp4Farm && vp < 24) return true;
 
 	const reliablePrePivotHardFarm =
@@ -1752,8 +1791,7 @@ function shouldGoodTargetContinueAbyssFarm(
 		(damageReady || nearDamage);
 	if (reliablePrePivotHardFarm) return true;
 
-	const monsterFinishPossible =
-		vp + farm.rewardVp * lives >= VP_TO_WIN && (damageReady || nearDamage);
+	const monsterFinishPossible = vp + farm.rewardVp >= VP_TO_WIN && (damageReady || nearDamage);
 	return monsterFinishPossible;
 }
 
@@ -1764,7 +1802,7 @@ function isGoodTargetExposureNavigationState(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || isEvilAlignment(player.statusLevel ?? 0)) return false;
 	if ((player.statusLevel ?? 0) > 2) return false;
 	const vp = player.victoryPoints ?? 0;
@@ -1840,8 +1878,9 @@ function goodNonfallenFarmTargetPivotDestinations(
 	threshold: number
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
-	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
+	const monster = seatFightMonster(state, seat, catalog);
+	if (!player || !monster)
+		return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
 	if (isEvilAlignment(player.statusLevel ?? 0))
 		return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, threshold)) return ['Arcane Abyss'];
@@ -1862,7 +1901,7 @@ function goodNonfallenFarmTargetPivotDestinations(
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
 	const wantsScorer =
 		vp >= 18 ||
-		(raw['Void Sovereign'] ?? 0) <= 0 ||
+		(raw['Queen'] ?? 0) <= 0 ||
 		((raw['Relic Sentinel'] ?? 0) <= 0 && vp >= 12) ||
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
 	const needsDamage =
@@ -1888,7 +1927,7 @@ function goodNonfallenFarmTargetPivotDestinations(
 		needsDamage ||
 		(player.attackDice?.length ?? 0) < 2 ||
 		player.spirits.length < 6 ||
-		(counts['Spirit Animal'] ?? 0) < 2
+		(counts['Beast'] ?? 0) < 2
 	) {
 		append('Water Region');
 		if (hasRelic || state.round >= 4) append('Mountain Region');
@@ -1923,7 +1962,7 @@ function goodNonfallenFarmTargetEvadeDestinations(
 ): NavigationDestination[] {
 	const base = goodNonfallenFarmTargetPivotDestinations(state, seat, catalog, threshold);
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || base[0] === 'Arcane Abyss') return base;
 	const hunterCount = evilPressureCount(state, seat);
 	const vp = player.victoryPoints ?? 0;
@@ -1971,8 +2010,9 @@ function goodNonfallenScoreFloorDestinations(
 	threshold: number
 ): NavigationDestination[] {
 	const player = state.players[seat];
-	const monster = state.monster;
-	if (!player || !monster) return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
+	const monster = seatFightMonster(state, seat, catalog);
+	if (!player || !monster)
+		return ['Water Region', 'Mountain Region', 'Fire Region', 'Forest Region'];
 	if (isEvilAlignment(player.statusLevel ?? 0))
 		return ['Forest Region', 'Water Region', 'Mountain Region', 'Fire Region'];
 	if (shouldGoodTargetContinueAbyssFarm(state, seat, catalog, threshold)) return ['Arcane Abyss'];
@@ -1992,7 +2032,7 @@ function goodNonfallenScoreFloorDestinations(
 	const counts = awakenedClassCounts(player);
 	const pendingAugments = pendingAugmentClassCounts(player, catalog);
 	const raw = allClassCounts(player);
-	const spiritAnimal = counts['Spirit Animal'] ?? 0;
+	const spiritAnimal = counts['Beast'] ?? 0;
 	const cultivatorProgress = (counts.Cultivator ?? 0) + (pendingAugments.Cultivator ?? 0);
 	const hasRelic = (player.mats ?? []).some((r) => r.hasRune && r.type === 'relic');
 	const canSurviveNow = survivalTarget <= 0 || barrier >= survivalTarget;
@@ -2065,7 +2105,7 @@ function goodNonfallenScoreFloorDestinations(
 
 	const wantsPassiveScorer =
 		vp >= 18 ||
-		(vp >= 12 && (raw['Void Sovereign'] ?? 0) <= 0) ||
+		(vp >= 12 && (raw['Queen'] ?? 0) <= 0) ||
 		(vp >= 15 && (raw['Relic Sentinel'] ?? 0) <= 0) ||
 		((counts.Healer ?? 0) > 0 && maxBarrier >= 8);
 	if (wantsPassiveScorer) append('Forest Region');
@@ -2086,16 +2126,14 @@ function nearFinishNavigationOracleDestination(
 	maxRounds: number
 ): NavigationDestination | null {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) !== 0) return null;
 	const vp = player.victoryPoints ?? 0;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	if (state.round < 16 || vp < 24 || vp >= VP_TO_WIN || monsterHp < 4 || monsterHp > 5) return null;
 
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
-	const livesRemaining = Math.max(1, farm.livesRemaining ?? monster.livesRemaining ?? 1);
-	const rewardFinishPossible =
-		farm.valid && farm.rewardVp > 0 && vp + farm.rewardVp * livesRemaining >= VP_TO_WIN;
+	const rewardFinishPossible = farm.valid && farm.rewardVp > 0 && vp + farm.rewardVp >= VP_TO_WIN; // one kill per card
 	const lateNearMiss = vp >= 25 && state.round >= 20;
 	if (!rewardFinishPossible && !lateNearMiss) return null;
 
@@ -2118,10 +2156,7 @@ function nearFinishNavigationOracleDestination(
 	const abyss = firstLegalNavigationDestination(state, seat, catalog, ['Arcane Abyss']);
 	if (canSurviveNow && (!needsBuffer || state.round >= maxRounds - 1)) return abyss;
 	if (!canRestore)
-		return firstLegalNavigationDestination(state, seat, catalog, [
-			'Forest Region',
-			'Fire Region'
-		]);
+		return firstLegalNavigationDestination(state, seat, catalog, ['Forest Region', 'Fire Region']);
 
 	const largeDeficit = survivalTarget - currentBarrier >= 3;
 	const deepBufferDeficit =
@@ -2133,8 +2168,7 @@ function nearFinishNavigationOracleDestination(
 		);
 	}
 	return (
-		firstLegalNavigationDestination(state, seat, catalog, ['Fire Region', 'Forest Region']) ??
-		abyss
+		firstLegalNavigationDestination(state, seat, catalog, ['Fire Region', 'Forest Region']) ?? abyss
 	);
 }
 
@@ -2199,7 +2233,8 @@ function predictedDestinationsForGoodTarget(
 		return [];
 	}
 
-	const targetMonster = state.monster;
+	// The card the TARGET would fight: its own best hand card (read from the full simulator state).
+	const targetMonster = seatFightMonster(state, targetSeat, catalog);
 	const counts = awakenedClassCounts(target);
 	const destinations: NavigationDestination[] = [];
 	const append = (destination: NavigationDestination): void =>
@@ -2320,7 +2355,7 @@ function shouldGoodTargetLowTailHunt(
 ): boolean {
 	if (PVP_LOW_TAIL_HUNT_MAX_VP < 0) return false;
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) < 3) return false;
 	const vp = player.victoryPoints ?? 0;
 	if (vp <= 0 || vp > PVP_LOW_TAIL_HUNT_MAX_VP || vp >= VP_TO_WIN) return false;
@@ -2339,7 +2374,7 @@ function shouldGoodTargetLowTailHunt(
 		farm.valid &&
 		farm.farmable &&
 		farm.opportunityVp >= 2 &&
-		(monsterHp <= 2 || (farm.rewardVp >= 3 && (farm.livesRemaining ?? 1) >= 2)) &&
+		monsterHp <= 2 && // one kill per card: the old "lives left" branch is gone
 		vp < 24;
 	return !cheapFarmStillBest;
 }
@@ -2351,7 +2386,7 @@ function shouldGoodTargetValuePivotHunt(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) < 3) return false;
 	const vp = player.victoryPoints ?? 0;
 	if (vp >= VP_TO_WIN || state.round < 10) return false;
@@ -2379,23 +2414,19 @@ function shouldGoodTargetValuePivotHunt(
 	const killProb = Math.max(clean, firepower * 0.85);
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const rewardVp = farm.valid ? Math.max(0, farm.rewardVp) : 0;
-	const lives = Math.max(1, farm.valid ? farm.livesRemaining : (monster.livesRemaining ?? 1));
+	// Each card is a single kill, so the remaining monster EV is the next kill's EV.
 	const monsterNextEv = rewardVp * killProb;
-	const remainingMonsterEv = monsterNextEv * lives;
+	const remainingMonsterEv = monsterNextEv;
 	const finishNeeded = Math.max(0, VP_TO_WIN - vp);
 	const pvpEv = visiblePvpHuntDestinations(state, seat).length > 0 ? 3 : 2.1;
 
 	if (finishNeeded <= 3) return true;
 
-	const cheapFarmStillBest =
-		farm.valid && rewardVp >= 3 && lives >= 2 && monsterHp <= 2 && killProb >= 0.3 && vp < 24;
-	if (cheapFarmStillBest) return false;
-
 	const reliableMonsterFinish =
 		farm.valid &&
 		rewardVp > 0 &&
 		(clean >= threshold || firepower >= threshold) &&
-		rewardVp * lives >= finishNeeded &&
+		rewardVp >= finishNeeded &&
 		monsterNextEv >= pvpEv * 0.8;
 	if (reliableMonsterFinish) return false;
 	if (lowTailHunt) return true;
@@ -2466,7 +2497,7 @@ function fallenCanContinueAbyssFarm(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster) return false;
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
@@ -2491,7 +2522,7 @@ function fallenRebuildDestinations(
 	if (fallenCanContinueAbyssFarm(state, seat, catalog, threshold)) return ['Arcane Abyss'];
 
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster) return ['Arcane Abyss'];
 
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
@@ -2596,7 +2627,7 @@ function shouldPredictivePvpHunt(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) < 3) return false;
 	const vp = player.victoryPoints ?? 0;
 	if (vp >= VP_TO_WIN || state.round < 10) return false;
@@ -2608,7 +2639,7 @@ function shouldPredictivePvpHunt(
 		farm.valid &&
 		farm.rewardVp > 0 &&
 		(clean >= threshold || firepower >= threshold) &&
-		farm.rewardVp * Math.max(1, farm.livesRemaining) >= finishNeeded;
+		farm.rewardVp >= finishNeeded; // one kill per card
 	if (monsterCanFinish) return false;
 	if (vp < 24) return clean < 0.25 && firepower < 0.25 && (monster.maxHp ?? monster.hp ?? 0) >= 4;
 	if (vp < 27 && (clean >= threshold * 0.7 || firepower >= threshold * 0.7)) return false;
@@ -2622,7 +2653,7 @@ function shouldPredictivePvpFinishHunt(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) < 3) return false;
 	const vp = player.victoryPoints ?? 0;
 	if (vp >= VP_TO_WIN || state.round < 10) return false;
@@ -2635,7 +2666,7 @@ function shouldPredictivePvpFinishHunt(
 		farm.valid &&
 		farm.rewardVp > 0 &&
 		(clean >= threshold || firepower >= threshold) &&
-		farm.rewardVp * Math.max(1, farm.livesRemaining) >= finishNeeded;
+		farm.rewardVp >= finishNeeded; // one kill per card
 	if (pvpCanFinish) return true;
 	if (monsterCanFinish) return false;
 	if (vp < 24) return false;
@@ -2650,7 +2681,7 @@ function shouldPredictivePvpValueHunt(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) < 3) return false;
 	const vp = player.victoryPoints ?? 0;
 	if (vp >= VP_TO_WIN || state.round < 10) return false;
@@ -2667,18 +2698,12 @@ function shouldPredictivePvpValueHunt(
 	const monsterHp = monster.maxHp ?? monster.hp ?? 0;
 	const killProb = Math.max(clean, firepower * 0.85);
 	const monsterNextEv = farm.valid && farm.rewardVp > 0 ? killProb * farm.rewardVp : 0;
-	const remainingMonsterEv = monsterNextEv * Math.max(1, farm.livesRemaining);
+	// Each card is a single kill: the remaining monster EV is the next kill's EV, and the old
+	// "cheap low rung with lives left" branch is gone.
+	const remainingMonsterEv = monsterNextEv;
 	const pvpEv = visible.length > 0 ? 3 : 2.1;
 
 	if (finishNeeded <= 3) return true;
-
-	const cheapLowRungFarm =
-		farm.valid &&
-		farm.rewardVp >= 3 &&
-		farm.livesRemaining >= 2 &&
-		monsterHp <= 2 &&
-		killProb >= 0.3;
-	if (cheapLowRungFarm && vp < 24) return false;
 
 	const reliableMonsterLine =
 		farm.valid &&
@@ -2725,7 +2750,7 @@ function isLatePvpDescendCandidate(
 	threshold: number
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.statusLevel ?? 0) >= 3) return false;
 	const vp = player.victoryPoints ?? 0;
 	if (vp < 18 || vp >= VP_TO_WIN || state.round < 10) return false;
@@ -2759,7 +2784,7 @@ function pvpStatus2TargetDescendOracleDestination(
 	threshold: number
 ): NavigationDestination | null {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.victoryPoints ?? 0) >= VP_TO_WIN) return null;
 	if ((player.statusLevel ?? 0) !== 2) return null;
 	if (state.round < 12) return null;
@@ -2786,7 +2811,7 @@ function pvpStatus2ConversionDescendOracleDestination(
 	threshold: number
 ): NavigationDestination | null {
 	const player = state.players[seat];
-	const monster = state.monster;
+	const monster = seatFightMonster(state, seat, catalog);
 	if (!player || !monster || (player.victoryPoints ?? 0) >= VP_TO_WIN) return null;
 	if ((player.statusLevel ?? 0) !== 2) return null;
 	if (state.round < 12) return null;
@@ -2831,7 +2856,8 @@ function isPvpPivotState(
 	if (!player || (player.victoryPoints ?? 0) >= VP_TO_WIN || state.round < 6) return false;
 	if ((player.statusLevel ?? 0) >= 3) return visiblePvpHuntDestinations(state, seat).length > 0;
 	const vp = player.victoryPoints ?? 0;
-	const monsterHp = state.monster ? (state.monster.maxHp ?? state.monster.hp ?? 0) : 0;
+	const monster = seatFightMonster(state, seat, catalog);
+	const monsterHp = monster ? (monster.maxHp ?? monster.hp ?? 0) : 0;
 	const farm = evaluateFarmValue(state, seat, catalog, { threshold });
 	const farmStillGood = farm.valid && farm.farmable && farm.opportunityVp >= 2;
 	if ((player.statusLevel ?? 0) > 0) {
@@ -2892,9 +2918,9 @@ function pvpEncounterTargets(
 					})
 					.sort((a, b) => b.vp - a.vp || a.seat.localeCompare(b.seat));
 	const targetVp = targets.reduce((sum, target) => sum + target.vp, 0);
+	const ownMonster = legal ? seatFightMonster(state, seat) : null;
 	const hardMonsterWindow =
-		legal &&
-		(state.monster?.maxHp ?? state.monster?.hp ?? 0) >= PVP_GOOD_TARGET_PIVOT_MIN_MONSTER_HP;
+		legal && (ownMonster?.maxHp ?? ownMonster?.hp ?? 0) >= PVP_GOOD_TARGET_PIVOT_MIN_MONSTER_HP;
 	return {
 		legal,
 		targetCount: targets.length,
@@ -2933,6 +2959,8 @@ export {
 };
 export type { CombatOpportunityFlags, PvpOpportunityInfo };
 export {
+	seatFightMonster,
+	holdsLiveMonster,
 	preservesRouteHandDrawOpportunity,
 	preservesRouteFirepower,
 	preservesRouteSurvival,

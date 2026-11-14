@@ -27,7 +27,12 @@ const CATALOG: PlayCatalog = {
 		cost: 2,
 		classes: {},
 		origins: {}
-	}))
+	})),
+	// One undrawn monster card keeps the spirit world unsaved, so cleanup never ends the game
+	// on its own ("every monster card is gone" would otherwise hold from round 1).
+	monsters: [
+		{ id: 'm-1', name: 'Imp', damage: 1, barrier: 5, rewardTrack: [], dicePool: [], chooseAmount: 2, stage: 1, order: 0 }
+	]
 };
 
 function apply(state: PublicGameState, actor: GameActor, command: GameCommand): PublicGameState {
@@ -273,9 +278,9 @@ const toCleanup = (state: PublicGameState): PublicGameState => {
 };
 
 describe('P5 onNavigate fires on reveal', () => {
-	test('Tide Stalker offers a destination change without adding initiative', () => {
+	test('Spellblade offers a destination change without adding initiative', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Tide Stalker': 1 });
+		giveSpirit(state, 'Red', { 'Spellblade': 1 });
 		expect(state.players.Red!.initiative).toBe(0);
 		state = lockBoth(state);
 		expect(state.revealedDestinations).toBe(true);
@@ -291,33 +296,31 @@ describe('P5 onNavigate fires on reveal', () => {
 });
 
 describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
-	test('Void Sovereign grants a flat +1 VP at cleanup (reworked, unconditional)', () => {
+	test('Queen grants a flat +1 VP at cleanup (reworked, unconditional)', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Void Sovereign': 1 });
+		giveSpirit(state, 'Red', { 'Queen': 1 });
 		state = lockBoth(state);
 		state = toCleanup(state);
-		// Reworked: Void Sovereign is now a flat +1 VP awakeningPhase handler that fires
+		// Reworked: Queen is now a flat +1 VP awakeningPhase handler that fires
 		// during cleanup — no alignment condition, no Cleanup claim.
 		expect(state.players.Red!.victoryPoints).toBe(1);
 	});
 
-	test('Relic Sentinel grants +6 VP at ≥24 VP while Good', () => {
+	test('Relic Sentinel has no Benefits VP claim (November 2026 text: relic guard only)', () => {
 		let state = startedGame();
 		giveSpirit(state, 'Red', { 'Relic Sentinel': 1 });
 		state = lockBoth(state);
 		state.players.Red!.victoryPoints = 24; // Good (status 0)
 		state = toCleanup(state);
-		state = apply(state, RED, {
-			type: 'resolveAwakenReward',
-			taintedMaxBarrier: 0,
-			relicPicks: []
-		});
-		expect(state.players.Red!.victoryPoints).toBe(30);
+		// The old "+6 VP at 24 VP while Good" claim is gone: nothing holds Benefits open,
+		// so the round rolls on and the VP stays the same.
+		expect(state.players.Red!.victoryPoints).toBe(24);
+		expect(state.round).toBe(2);
 	});
 
 	test('Dawn Sovereign grants +1 VP at cleanup and self-discards while Evil', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Golden Ruler': 1 });
+		giveSpirit(state, 'Red', { 'King': 1 });
 		state = lockBoth(state);
 		state.players.Red!.statusLevel = 3; // Evil (Fallen) → must discard
 		state = toCleanup(state);
@@ -332,7 +335,7 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 
 	test('Dawn Sovereign grants +1 VP and keeps the spirit while Good', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Golden Ruler': 1 });
+		giveSpirit(state, 'Red', { 'King': 1 });
 		state = lockBoth(state);
 		state = toCleanup(state);
 		state = apply(state, RED, {
@@ -346,12 +349,12 @@ describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
 
 	test('a win-con pushing a player to the VP target makes findWinner declare them THAT round', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Relic Sentinel': 1 });
+		giveSpirit(state, 'Red', { 'King': 1 });
 		state = lockBoth(state);
-		// 24 + 6 (Relic Sentinel) = 30 = VP_TO_WIN. The +6 is a Benefits CLAIM; the
-		// sequence holds open on it, and claiming (the last outstanding work) rolls the
-		// round through cleanup where findWinner runs.
-		state.players.Red!.victoryPoints = 24;
+		// 29 + 1 (King) = 30 = VP_TO_WIN. The +1 is a Benefits CLAIM; the sequence holds
+		// open on it, and claiming (the last outstanding work) rolls the round through
+		// cleanup where findWinner runs.
+		state.players.Red!.victoryPoints = 29;
 		state = toCleanup(state);
 		expect(state.phase).toBe('benefits'); // held open by Red's unclaimed reward
 		state = apply(state, RED, {
@@ -379,12 +382,12 @@ describe('P5 determinism', () => {
 	test('the same seed reproduces identical post-cleanup win-con state', () => {
 		const run = (seed: number): PublicGameState => {
 			let s = startedGame(seed);
-			giveSpirit(s, 'Red', { 'Void Sovereign': 1 });
+			giveSpirit(s, 'Red', { 'Queen': 1 });
 			s = lockBoth(s);
 			return toCleanup(s);
 		};
 		expect(run(7).players.Red!.victoryPoints).toBe(run(7).players.Red!.victoryPoints);
-		// Void Sovereign's flat +1 VP fires deterministically during cleanup.
+		// Queen's flat +1 VP fires deterministically during cleanup.
 		expect(run(7).players.Red!.victoryPoints).toBe(1);
 	});
 });
@@ -471,7 +474,7 @@ describe('resolution sequence auto-skip', () => {
 
 	test('benefits holds open on an unclaimed reward while workless seats idle ready', () => {
 		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Golden Ruler': 1 });
+		giveSpirit(state, 'Red', { 'King': 1 });
 		state = lockBoth(state);
 		state = toCleanup(state);
 		expect(state.phase).toBe('benefits');

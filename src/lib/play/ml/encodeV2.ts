@@ -39,7 +39,9 @@
  * training data. See docs/encoder-v2.md for the full field-by-field schema.
  */
 
+import { currentClassName } from '../classNames';
 import type { MatSlotSnapshot } from '$lib/types';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import {
 	ALL_DESTINATIONS,
 	DICE_TIER_ORDER,
@@ -53,6 +55,7 @@ import {
 	isEvilAlignment,
 	type PlayCatalog,
 	type PlayCatalogSpirit,
+	type MonsterState,
 	type PlaySpirit,
 	type PrivatePlayerState,
 	type PublicGameState,
@@ -139,6 +142,13 @@ export function buildObsV2Vocab(catalog: PlayCatalog): ObsV2Vocab {
 		spiritById: new Map(catalog.spirits.map((s) => [s.id, s]))
 	};
 	vocab.classIndex = toIndex(vocab.classes);
+	// Rename aliases (November 2026): game state carries today's class names (save migration),
+	// while a frozen catalog may still carry the earlier names. Point each current name at the
+	// SAME slot, so the field list, order and dims of the vocabulary do not change.
+	for (const [name, index] of [...vocab.classIndex]) {
+		const current = currentClassName(name);
+		if (!vocab.classIndex.has(current)) vocab.classIndex.set(current, index);
+	}
 	vocab.originIndex = toIndex(vocab.origins);
 	vocab.runeIndex = toIndex(vocab.runeIds);
 	vocab.spiritIndex = toIndex(vocab.spiritIds);
@@ -315,8 +325,7 @@ function bagPerIdCounts(bag: RuntimeBagSnapshot | undefined, vocab: ObsV2Vocab):
 	return out.map((n) => clamp01(n / BAG_COPY_NORM));
 }
 
-function globalToken(state: PublicGameState, vocab: ObsV2Vocab): number[] {
-	const mon = state.monster;
+function globalToken(state: PublicGameState, vocab: ObsV2Vocab, mon: MonsterState | null): number[] {
 	const bags = state.bags;
 	return [
 		clamp01(state.round / MAX_ROUNDS),
@@ -514,8 +523,7 @@ function runeToken(mat: MatSlotSnapshot, catalog: PlayCatalog, vocab: ObsV2Vocab
 	return f;
 }
 
-function monsterToken(state: PublicGameState): number[] {
-	const mon = state.monster;
+function monsterToken(mon: MonsterState | null): number[] {
 	if (!mon) return new Array<number>(10).fill(0);
 	return [
 		1,
@@ -554,6 +562,11 @@ export function encodeEntityObsV2(
 ): EntityObsV2 {
 	const vocab = buildObsV2Vocab(catalog);
 	const dims = obsV2Dims(vocab);
+	// There is no shared Abyss monster: a player fights cards from their own hand. The legacy
+	// "monster" global features and the monster token (same lengths, so saved models still load)
+	// describe the acting seat's best hand card (highest kill probability), or zeros when its hand
+	// is empty. Legacy lives/ladder fields are static on cards (1 / catalog order).
+	const mon = bestHandMonster(state, seat, catalog)?.card ?? null;
 
 	// Self first, then the remaining active seats in stable SEAT_COLORS order.
 	const seatOrder: SeatColor[] = [
@@ -594,18 +607,18 @@ export function encodeEntityObsV2(
 
 	return {
 		version: OBS_V2_VERSION,
-		global: globalToken(state, vocab),
+		global: globalToken(state, vocab, mon),
 		seats: seats.rows,
 		spirits: spirits.rows,
 		market: market.rows,
 		runes: runes.rows,
-		monster: monsterToken(state),
+		monster: monsterToken(mon),
 		masks: {
 			seats: seats.mask,
 			spirits: spirits.mask,
 			market: market.mask,
 			runes: runes.mask,
-			monster: [state.monster ? 1 : 0]
+			monster: [mon ? 1 : 0]
 		}
 	};
 }

@@ -11,12 +11,24 @@
 	import { resetPlayIdentityState } from '$lib/stores/playStore.svelte';
 	import { isE2eHarness } from '$lib/play/e2eHarness';
 	import { getAccessibilitySettings } from '$lib/stores/accessibilitySettings.svelte';
+	import { installImageFallback } from '$lib/storageImages';
+	import { LOCAL_EXPLORER } from '$lib/explorer';
 
 	let { data, children } = $props();
 	const accessibility = getAccessibilitySettings();
+	// `/` is the ANGELSIDE studio homepage; the game lives at `/game`
+	// (its main menu) and `/play/*`.
+	const studioHome = $derived($page.url.pathname === '/');
 	const playSurface = $derived(
-		$page.url.pathname === '/' || $page.url.pathname.startsWith('/play')
+		$page.url.pathname === '/game' || $page.url.pathname.startsWith('/play')
 	);
+
+	// Local game only: the explorer pages have no site chrome (the data editor frames them).
+	const explorerSurface = $derived(LOCAL_EXPLORER && $page.url.pathname.startsWith('/explorer'));
+
+	// Game art is served as resized copies; if the resize endpoint refuses one,
+	// fall back to the original so the art still shows.
+	onMount(() => installImageFallback());
 
 	// NATIVE COLD START ONLY: if iOS killed the app while the OAuth browser sheet
 	// was up, the callback deep link arrives as this process's LAUNCH URL instead of
@@ -118,10 +130,17 @@
 	// Shown when the site is shared on Discord, X, Slack, iMessage, etc. Absolute URLs
 	// are derived from the live request origin, so the embeds keep working unchanged on
 	// any domain (the current *.vercel.app, a preview deploy, or a future custom domain).
-	const SITE_NAME = 'Arc Spirits';
-	const SITE_TITLE = 'Arc Spirits — Spirit-Summoning Strategy';
-	const SITE_DESC =
-		'Summon spirits, awaken their classes, and outwit the Arcane Abyss in a competitive spirit-summoning strategy game.';
+	const SITE_NAME = $derived(studioHome ? 'Angelside Studios' : 'Arc Spirits');
+	const SITE_TITLE = $derived(
+		studioHome
+			? 'Angelside Studios — Makers of Arc Spirits'
+			: 'Arc Spirits — Spirit-Summoning Strategy'
+	);
+	const SITE_DESC = $derived(
+		studioHome
+			? 'Angelside Studios is the independent studio that makes Arc Spirits, a competitive spirit-summoning strategy game.'
+			: 'Summon spirits, awaken their classes, and outwit the Arcane Abyss in a competitive spirit-summoning strategy game.'
+	);
 	const canonicalUrl = $derived(`${$page.url.origin}${$page.url.pathname}`);
 	const ogImageUrl = $derived(`${$page.url.origin}/og-image.png`);
 </script>
@@ -154,8 +173,8 @@
 	<meta name="twitter:image:alt" content="Arc Spirits — Fight for the Arcane Abyss" />
 </svelte:head>
 
-<div class="app haunted-bg">
-	{#if !playSurface}
+<div class="app haunted-bg" class:explorer-plain={explorerSurface}>
+	{#if !playSurface && !studioHome && !explorerSurface}
 		<TopBar />
 	{/if}
 	<div class="flex-1">

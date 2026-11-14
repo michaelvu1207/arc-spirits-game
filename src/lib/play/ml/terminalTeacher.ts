@@ -185,10 +185,11 @@ function validateSoloState(state: PublicGameState, seat: SeatColor): void {
 			throw new Error(`terminalTeacher: ${name} count/content mismatch`);
 		}
 	}
-	// The current runtime represents the monster ladder outside these legacy bags.
-	// Fail closed if that contract changes instead of accidentally leaking a deck order.
-	if (state.bags.monsters.contents.length > 0 || state.bags.stageDeck.contents.length > 0) {
-		throw new Error('terminalTeacher: unsupported ordered monster/stage bag');
+	// The monster-card deck is canonicalized and reshuffled like the spirit bags (see
+	// sanitize/redeterminize). The stage deck is still unsupported: fail closed rather than
+	// accidentally leak its order.
+	if (state.bags.stageDeck.contents.length > 0) {
+		throw new Error('terminalTeacher: unsupported ordered stage bag');
 	}
 	if (!Array.isArray(state.bags.purgeBags) || state.bags.purgeBags.length > 0) {
 		throw new Error('terminalTeacher: unsupported nonempty purge bag');
@@ -242,6 +243,7 @@ export function redeterminizeSoloTerminalState(
 	state.rng = createRng(terminalRolloutSeed(stateId, rolloutIndex, salt));
 	shuffleBag(state.bags.hexSpirits.contents, state.rng);
 	shuffleBag(state.bags.abyssFallen.contents, state.rng);
+	shuffleBag(state.bags.monsters.contents, state.rng);
 	rebuildHistory(state);
 	return state;
 }

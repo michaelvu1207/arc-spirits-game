@@ -4,6 +4,13 @@
 	import { loadAssets, getGuardianAsset } from '$lib/stores/assetStore.svelte';
 	import { toSortedChampions, type ChampionEntry } from '$lib/features/champions/champions';
 	import { formatDateCompact } from '$lib/features/stats/format';
+	import { explorerLinks, fetchPlayerRuns, runLabel, runsOf } from '$lib/explorer';
+
+	// `explorer`: the local game explorer shows the standings on one screen.
+	let { explorer = false }: { explorer?: boolean } = $props();
+	let playerRuns = $state(new Map<string, string>());
+	let runFilter = $state('all');
+	const runs = $derived(runsOf([...playerRuns.values()].map((run) => ({ run }))));
 
 	let entries = $state<ChampionEntry[]>([]);
 	let loading = $state(true);
@@ -13,8 +20,9 @@
 
 	const filteredEntries = $derived(() => {
 		const q = search.trim().toLowerCase();
-		if (!q) return entries;
-		return entries.filter((e) => e.username.toLowerCase().includes(q));
+		const list = runFilter === 'all' ? entries : entries.filter((e) => playerRuns.get(e.usernameKey) === runFilter);
+		if (!q) return list;
+		return list.filter((e) => e.username.toLowerCase().includes(q));
 	});
 
 	async function refreshLeaderboard() {
@@ -23,6 +31,7 @@
 		try {
 			const rows = await fetchRatingLeaderboard();
 			entries = toSortedChampions(rows);
+			if (explorer) playerRuns = await fetchPlayerRuns();
 			lastRefresh = new Date();
 		} catch (e) {
 			console.error('Error fetching leaderboard:', e);
@@ -37,8 +46,9 @@
 	<title>Leaderboard | Arc Spirits Spectate</title>
 </svelte:head>
 
-<div class="page">
+<div class="page" class:explorer>
 	<!-- PAGE HEADER -->
+	{#if !explorer}
 	<div class="page-header">
 		<div class="page-header-text">
 			<span class="eyebrow">Hall of Champions</span>
@@ -57,14 +67,16 @@
 		</div>
 	</div>
 
+	{/if}
+
 	<!-- TOP 3 PODIUM — solid colored rank chips, big names -->
-	{#if !loading && entries.length >= 1}
+	{#if !explorer && !loading && entries.length >= 1}
 		<section class="podium">
 			{#each entries.slice(0, 3) as champ, i (champ.usernameKey)}
 				{@const rank = i + 1}
 				{@const lastGame = champ.lastGames[0]}
 				{@const asset = lastGame ? getGuardianAsset(lastGame.character) : null}
-				<a href={`/players/${encodeURIComponent(champ.username)}`} class="pod-card pod-rank-{rank}">
+				<a href={explorerLinks.player(champ.username)} class="pod-card pod-rank-{rank}">
 					<div class="pod-rank-chip">
 						<span class="pod-rank-num">{rank}</span>
 						<span class="pod-rank-label">{rank === 1 ? 'Champion' : rank === 2 ? 'Runner-Up' : 'Third'}</span>
@@ -98,6 +110,14 @@
 	<!-- FULL STANDINGS -->
 	<div class="standings-header">
 		<h2 class="standings-title">Full Standings</h2>
+		{#if explorer && runs.length > 1}
+			<div class="tabs-underline">
+				<button class="tab-btn" class:active={runFilter === 'all'} onclick={() => (runFilter = 'all')}>All runs</button>
+				{#each runs as run (run)}
+					<button class="tab-btn" class:active={runFilter === run} onclick={() => (runFilter = run)}>{runLabel(run)}</button>
+				{/each}
+			</div>
+		{/if}
 		<div class="search-bare">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3" stroke-linecap="round"/></svg>
 			<input class="input-bare" bind:value={search} placeholder="Filter by name…" />
@@ -133,7 +153,7 @@
 						<span class="rank-chip rank-chip-{rank <= 3 ? rank : 'rest'}">{rank}</span>
 					</div>
 					<div class="player-cell">
-						<a href={`/players/${encodeURIComponent(entry.username)}`} class="player-link">{entry.username}</a>
+						<a href={explorerLinks.player(entry.username)} class="player-link">{entry.username}</a>
 						{#if entry.lastGames[0]}
 							<div class="player-meta">Last played {formatDateCompact(entry.lastGames[0].endedAt)}</div>
 						{/if}
@@ -154,7 +174,7 @@
 						{#each entry.lastGames.slice(0, 5) as game (`${game.gameId}:${game.round}:${game.playerColor}`)}
 							{@const a = getGuardianAsset(game.character)}
 							<a
-								href={`/game/${encodeURIComponent(game.gameId)}?round=${encodeURIComponent(String(game.round))}&player=${encodeURIComponent(game.playerColor)}`}
+								href={explorerLinks.game(game.gameId, `?round=${encodeURIComponent(String(game.round))}&player=${encodeURIComponent(game.playerColor)}`)}
 								class="recent-hex"
 								title={`${game.character} • ${game.victoryPoints} VP • Place ${game.placement}`}
 							>
@@ -174,6 +194,13 @@
 
 <style>
 	.page { max-width: 1280px; margin: 0 auto; padding: 56px 32px 80px; position: relative; z-index: 1; }
+
+	/* Local explorer: one screen. The table scrolls inside its panel, the page does not. */
+	.page.explorer { height: 100%; width: 100%; padding: 14px 32px 10px; display: flex; flex-direction: column; }
+	.page.explorer .standings-header { margin-bottom: 0; align-items: center; }
+	.page.explorer .standings-title { font-size: 2rem; }
+	.page.explorer .lb-table { flex: 1; min-height: 0; overflow-y: auto; }
+	.page.explorer .lb-head { position: sticky; top: 0; background: var(--color-void); z-index: 1; }
 
 	/* PAGE HEADER */
 	.page-header {

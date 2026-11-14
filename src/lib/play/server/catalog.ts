@@ -1,10 +1,17 @@
 import { REGION_ORIGIN_NAMES } from '../regions';
+import { currentClassName } from '../classNames';
 import { regionCatalog } from '../regionRules';
-import { fetchAssetsData, type AssetsData } from '$lib/supabase';
+import { fetchAssetsData, supabaseAssets, type AssetsData } from '$lib/supabase';
+import { normalizeMonsterPools } from '../monsterPools';
+import { parseRules } from '../rules';
+import { LEGACY_RELIC_TOOL_VP, relicToolVpFromAbilities } from '../effects/relicTools';
 import { normalizeAwaken, type AwakenRuneInfo } from '../awakenConditions';
 import type { PlayCatalog, PlayCatalogClass, PlayCatalogRune } from '../types';
 
-const CACHE_TTL_MS = 60_000;
+// The local game (scripts/local-game) sets ARC_PLAY_CATALOG_TTL_MS low, so a data edit
+// reaches the next game quickly. Unset (production): 60 s.
+const CACHE_TTL_MS =
+	Number(typeof process !== 'undefined' ? process.env?.ARC_PLAY_CATALOG_TTL_MS : undefined) || 60_000;
 
 
 let cachedCatalog: PlayCatalog | null = null;
@@ -38,7 +45,9 @@ function countRolesByName(ids: string[], names: Map<string, string>): Record<str
  * Side-effect free + I/O free so it can be unit-tested directly with fixtures.
  */
 export function buildPlayCatalog(assets: AssetsData): PlayCatalog {
-	const classNames = new Map(assets.classes.map((entry) => [entry.id, entry.name]));
+	// Class names go through the rename map, so the engine sees today's names before AND
+	// after a database rename is applied (e.g. a DB row still named "Knight" reads as "Monk").
+	const classNames = new Map(assets.classes.map((entry) => [entry.id, currentClassName(entry.name)]));
 	const originNames = new Map(assets.origins.map((entry) => [entry.id, REGION_ORIGIN_NAMES[entry.id] ?? entry.name]));
 	// Mat name+kind by id, for normalizing each spirit's awaken mat cost.
 	const runesById = new Map<string, AwakenRuneInfo>(
@@ -76,7 +85,7 @@ export function buildPlayCatalog(assets: AssetsData): PlayCatalog {
 			.map(
 				(klass): PlayCatalogClass => ({
 					id: klass.id,
-					name: klass.name,
+					name: currentClassName(klass.name),
 					classType: klass.class_type ?? null,
 					isSpecial: klass.is_special ?? false,
 					// Carry the breakpoint schema verbatim — later phases read it.
@@ -115,7 +124,11 @@ export function buildPlayCatalog(assets: AssetsData): PlayCatalog {
 				dicePool: Array.isArray(monster.dice_pool) ? monster.dice_pool : [],
 				chooseAmount: typeof monster.choose_amount === 'number' ? monster.choose_amount : 2,
 				stage: typeof monster.stage === 'number' ? monster.stage : Number(monster.stage) || 1,
-				order: typeof monster.order_num === 'number' ? monster.order_num : 0
+				order: typeof monster.order_num === 'number' ? monster.order_num : 0,
+				// Optional: a monster with no initiative strikes first against everyone (as before).
+				...(typeof (monster as { initiative?: unknown }).initiative === 'number'
+					? { initiative: (monster as unknown as { initiative: number }).initiative }
+					: {})
 			}))
 			// The escalation ladder: weakest first. Sort by stage, then the difficulty
 			// rung (order_num) — every row shares the same name, so name can't order them.
@@ -153,6 +166,38 @@ export async function loadPlayCatalog(): Promise<PlayCatalog> {
 
 	const assets = await fetchAssetsData();
 	const catalog = buildPlayCatalog(assets);
+	// Optional monster_pools table (limited Abyss decks per player count). Missing table or any
+	// error ⇒ no limit, and the catalog is exactly as before.
+	try {
+		const { data, error } = await supabaseAssets.from('monster_pools').select('players, difficulty, size');
+		const pools = error ? [] : normalizeMonsterPools(data);
+		if (pools.length) catalog.monsterPools = pools;
+	} catch {
+		/* no monster_pools table: unlimited pools */
+	}
+	// Relic tool VP from the relics table's ability text (the local game serves relics.json).
+	// A live game never replays an old record, so no table / no text ⇒ today's rule: 0 VP
+	// (Michael 2026-11-13). The field is written only when it is not the legacy 2.
+	let relicVp = 0;
+	try {
+		const { data, error } = await supabaseAssets.from('relics').select('id, ability');
+		relicVp = (error ? null : relicToolVpFromAbilities(data ?? [])) ?? 0;
+	} catch {
+		/* no relics table */
+	}
+	if (relicVp !== LEGACY_RELIC_TOOL_VP) catalog.relicToolVp = relicVp;
+	// Optional rules table (rule switches, rules.ts; the local game serves rules.json as one row).
+	// Missing table, an error or only default values ⇒ no field: every rule as before.
+	try {
+		const { data, error } = await supabaseAssets.from('rules').select('*');
+		if (!error) {
+			const { rules, problems } = parseRules(data ?? []);
+			if (problems.length) console.warn(`[play catalog] ${problems.join('; ')}`);
+			if (rules) catalog.rules = rules;
+		}
+	} catch {
+		/* no rules table: default rules */
+	}
 
 	cachedCatalog = catalog;
 	cachedAt = now;

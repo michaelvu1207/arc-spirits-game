@@ -50,9 +50,10 @@ import type {
 	TraitStatsRow
 } from './types';
 import { env as publicEnv } from '$env/dynamic/public';
+import { SUPABASE_SAME_ORIGIN, supabaseUrl } from './supabaseOrigin';
 
-const PUBLIC_SUPABASE_URL = publicEnv.PUBLIC_SUPABASE_URL || 'https://unconfigured.invalid';
-const PUBLIC_SUPABASE_ANON_KEY = publicEnv.PUBLIC_SUPABASE_ANON_KEY || 'unconfigured-public-anon-key';
+const PUBLIC_SUPABASE_URL = supabaseUrl();
+const PUBLIC_SUPABASE_ANON_KEY = publicEnv.PUBLIC_SUPABASE_ANON_KEY?.trim() || 'unconfigured-public-anon-key';
 
 // Schema names
 export const SCHEMA = 'arc_spirits_game'; // Game state data
@@ -62,7 +63,8 @@ export const ASSETS_SCHEMA = 'arc_spirits_assets'; // Static assets (spirits, gu
 export const SUPABASE_URL = PUBLIC_SUPABASE_URL;
 
 // Supabase storage bucket base URL (bucket is 'game_assets')
-export const STORAGE_BASE_URL = `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/game_assets`;
+// (Root-relative in same-origin mode, so server-rendered image URLs work for every host name.)
+export const STORAGE_BASE_URL = `${SUPABASE_SAME_ORIGIN ? '' : PUBLIC_SUPABASE_URL}/storage/v1/object/public/game_assets`;
 
 // Table names
 export const TABLES = {

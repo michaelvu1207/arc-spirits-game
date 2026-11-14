@@ -1,17 +1,35 @@
 import { expectedAttack } from '../combat';
 import { awakenedClassCounts } from '../effects/apply';
+import { bestHandMonster } from '../bots/monsterCardAutopilot';
 import { computeKillProbability, firepowerKillProbability } from '../server/botPolicy';
-import { type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
+import {
+	type MonsterState,
+	type PlayCatalog,
+	type PublicGameState,
+	type SeatColor
+} from '../types';
 import { policyPreviewState, type LegalAction } from './actions';
-import { combatActionExpectation } from './encode';
+import { combatActionExpectation, startCombatMonster } from './encode';
 
 export interface RouteBreakpointOracleOptions {
 	cleanThreshold?: number;
 	firepowerThreshold?: number;
 }
 
-function monsterHp(state: PublicGameState): number {
-	return state.monster?.maxHp ?? state.monster?.hp ?? 0;
+/**
+ * The card `seat` would fight: the best live card in its own monster hand (null for an empty
+ * hand). There is no shared Abyss monster; a player fights only the cards it holds.
+ */
+function seatMonster(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog: PlayCatalog
+): MonsterState | null {
+	return bestHandMonster(state, seat, catalog)?.card ?? null;
+}
+
+function monsterHp(monster: MonsterState | null): number {
+	return monster?.maxHp ?? monster?.hp ?? 0;
 }
 
 function routeBreakpointStateScore(
@@ -27,18 +45,19 @@ function routeBreakpointStateScore(
 	const counts = awakenedClassCounts(player);
 	const attack = expectedAttack(player);
 	const attackDice = player.attackDice?.length ?? 0;
-	const spiritAnimal = counts['Spirit Animal'] ?? 0;
+	const spiritAnimal = counts['Beast'] ?? 0;
 	const cultivator = counts.Cultivator ?? 0;
 	const maxBarrier = player.maxBarrier ?? 0;
 	const currentBarrier = player.barrier ?? 0;
 	const status = player.statusLevel ?? 0;
 	const vp = player.victoryPoints ?? 0;
-	const hp = monsterHp(state);
-	const damage = state.monster?.damage ?? 0;
-	const cleanProb = state.monster
-		? computeKillProbability(state, seat, catalog, { allowCorruptKill: false })
+	const monster = seatMonster(state, seat, catalog);
+	const hp = monsterHp(monster);
+	const damage = monster?.damage ?? 0;
+	const cleanProb = monster
+		? computeKillProbability(state, seat, catalog, { allowCorruptKill: false, monster })
 		: 0;
-	const firepowerProb = state.monster ? firepowerKillProbability(state, seat, catalog) : 0;
+	const firepowerProb = monster ? firepowerKillProbability(state, seat, catalog, { monster }) : 0;
 	const survivalTarget = damage + 1;
 	const damageGap = hp > 0 ? Math.max(0, hp + 0.5 - attack) : 0;
 	const maxBarrierGap = survivalTarget > 0 ? Math.max(0, survivalTarget - maxBarrier) : 0;
@@ -83,7 +102,12 @@ function commandProgressBonus(
 	let score = vpDelta * 180;
 	switch (action.cmd.type) {
 		case 'startCombat': {
-			const expected = combatActionExpectation(state, seat, catalog);
+			const expected = combatActionExpectation(
+				state,
+				seat,
+				catalog,
+				startCombatMonster(state, seat, action.cmd)
+			);
 			score += expected.killProbability * 190 - 30 + expected.expectedRewardVp * 20;
 			break;
 		}
@@ -91,21 +115,23 @@ function commandProgressBonus(
 			score += 140;
 			break;
 		case 'lockNavigation': {
-			const hp = monsterHp(state);
-			const cleanProb = state.monster
-				? computeKillProbability(state, seat, catalog, { allowCorruptKill: false })
+			const monster = seatMonster(state, seat, catalog);
+			const hp = monsterHp(monster);
+			const cleanProb = monster
+				? computeKillProbability(state, seat, catalog, { allowCorruptKill: false, monster })
 				: 0;
-			const firepowerProb = state.monster ? firepowerKillProbability(state, seat, catalog) : 0;
+			const firepowerProb = monster
+				? firepowerKillProbability(state, seat, catalog, { monster })
+				: 0;
 			const player = state.players[seat];
 			const attack = player ? expectedAttack(player) : 0;
 			const needsDamage =
 				hp > 0 && (firepowerProb < (opts.firepowerThreshold ?? 0.5) || attack < hp + 0.5);
 			const needsRestore =
 				!!player &&
-				!!state.monster &&
-				((player.barrier ?? 0) <
-					Math.min(player.maxBarrier ?? 0, (state.monster.damage ?? 0) + 1) ||
-					(player.maxBarrier ?? 0) < (state.monster.damage ?? 0) + 1);
+				!!monster &&
+				((player.barrier ?? 0) < Math.min(player.maxBarrier ?? 0, (monster.damage ?? 0) + 1) ||
+					(player.maxBarrier ?? 0) < (monster.damage ?? 0) + 1);
 			const destination = action.cmd.destination;
 			if (
 				destination === 'Arcane Abyss' &&
@@ -172,10 +198,26 @@ export function chooseRouteBreakpointOracleAction(
 	return best;
 }
 
-function monsterKillDelta(before: PublicGameState, after: PublicGameState): number {
-	const beforeLives = before.monster?.livesRemaining ?? 0;
-	const afterLives = after.monster?.livesRemaining ?? beforeLives;
-	return Math.max(0, beforeLives - afterLives);
+/**
+ * Cards that left `seat`'s monster hand between the two states. A card leaves the hand only when
+ * it is defeated (each card is a single kill; the legacy lives counter no longer changes).
+ */
+function monsterKillDelta(
+	before: PublicGameState,
+	after: PublicGameState,
+	seat: SeatColor
+): number {
+	const remaining = new Map<string, number>();
+	for (const card of after.players[seat]?.monsterHand ?? []) {
+		remaining.set(card.id, (remaining.get(card.id) ?? 0) + 1);
+	}
+	let removed = 0;
+	for (const card of before.players[seat]?.monsterHand ?? []) {
+		const left = remaining.get(card.id) ?? 0;
+		if (left > 0) remaining.set(card.id, left - 1);
+		else removed += 1;
+	}
+	return removed;
 }
 
 export function routeFinishLoopActionScore(
@@ -198,8 +240,9 @@ export function routeFinishLoopActionScore(
 	const beforeVp = before.victoryPoints ?? 0;
 	const afterVp = after.victoryPoints ?? 0;
 	const vpDelta = afterVp - beforeVp;
-	const hp = monsterHp(state);
-	const monsterDamage = state.monster?.damage ?? 0;
+	const monster = seatMonster(state, seat, catalog);
+	const hp = monsterHp(monster);
+	const monsterDamage = monster?.damage ?? 0;
 	const survivalTarget = monsterDamage + 1;
 	const beforeMaxBarrier = before.maxBarrier ?? 0;
 	const afterMaxBarrier = after.maxBarrier ?? 0;
@@ -207,15 +250,19 @@ export function routeFinishLoopActionScore(
 	const afterAttack = expectedAttack(after);
 	const beforeBarrier = before.barrier ?? 0;
 	const afterBarrier = after.barrier ?? 0;
-	const beforeClean = state.monster
-		? computeKillProbability(state, seat, catalog, { allowCorruptKill: false })
+	const beforeClean = monster
+		? computeKillProbability(state, seat, catalog, { allowCorruptKill: false, monster })
 		: 0;
-	const beforeFirepower = state.monster ? firepowerKillProbability(state, seat, catalog) : 0;
-	const afterClean = preview.monster
-		? computeKillProbability(preview, seat, catalog, { allowCorruptKill: false })
+	const beforeFirepower = monster ? firepowerKillProbability(state, seat, catalog, { monster }) : 0;
+	const previewMonster = seatMonster(preview, seat, catalog);
+	const afterClean = previewMonster
+		? computeKillProbability(preview, seat, catalog, {
+				allowCorruptKill: false,
+				monster: previewMonster
+			})
 		: beforeClean;
-	const afterFirepower = preview.monster
-		? firepowerKillProbability(preview, seat, catalog)
+	const afterFirepower = previewMonster
+		? firepowerKillProbability(preview, seat, catalog, { monster: previewMonster })
 		: beforeFirepower;
 	const beforeSurvivalReady = survivalTarget <= 0 || beforeBarrier >= survivalTarget;
 	const afterSurvivalReady = survivalTarget <= 0 || afterBarrier >= survivalTarget;
@@ -228,8 +275,10 @@ export function routeFinishLoopActionScore(
 		afterFirepower >= firepowerThreshold ||
 		afterAttack >= hp - 0.01;
 	const combatExpected =
-		action.cmd.type === 'startCombat' ? combatActionExpectation(state, seat, catalog) : null;
-	const livesDelta = combatExpected?.killProbability ?? monsterKillDelta(state, preview);
+		action.cmd.type === 'startCombat'
+			? combatActionExpectation(state, seat, catalog, startCombatMonster(state, seat, action.cmd))
+			: null;
+	const livesDelta = combatExpected?.killProbability ?? monsterKillDelta(state, preview, seat);
 	const barrierTarget = survivalTarget > 0 ? survivalTarget : beforeMaxBarrier;
 
 	let score = afterVp * 600 + vpDelta * 4000;

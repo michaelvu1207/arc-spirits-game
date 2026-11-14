@@ -42,6 +42,7 @@ import {
 	type AugmentPlacementEligibility
 } from './augments';
 import { decisionPickerSpec, type DecisionPickerSpec } from './decisionPicker';
+import { runesAreWild } from './effects/matMatch';
 import {
 	autoPickCostSlots,
 	buildLocationInteractions,
@@ -171,7 +172,15 @@ export interface ResolvedRewardOption {
 	/** icon_pool id, for rendering the reward glyph. */
 	iconToken: string;
 	/** The claimable effect's discriminant. */
-	effect: 'navigationPower' | 'vp' | 'rune' | 'chooseRune' | 'action' | 'gainMaxBarrier' | 'restoreBarrier';
+	effect:
+		| 'navigationPower'
+		| 'vp'
+		| 'rune'
+		| 'chooseRune'
+		| 'action'
+		| 'gainMaxBarrier'
+		| 'restoreBarrier'
+		| 'attackDice';
 	/** For a `chooseRune` reward: the runes the player picks among (the `choices` payload of
 	 *  `resolveMonsterReward` indexes into this, in pick order). Absent otherwise. */
 	chooseOptions?: { runeId: string; name: string }[];
@@ -364,6 +373,8 @@ const CANDIDATE_TYPES_BY_PHASE: Record<GamePhase, GameCommandType[]> = {
 		'spawnHandSpirit',
 		'discardHandDraws',
 		'redrawHandDraws',
+		'drawMonsterCards',
+		'keepMonsterCard',
 		'startCombat',
 		'resolveMonsterReward',
 		'resolveLocationInteraction',
@@ -439,7 +450,6 @@ function representativeCommand(
 		case 'initiatePvp':
 		case 'discardHandDraws':
 		case 'redrawHandDraws':
-		case 'startCombat':
 		case 'endLocationActions':
 		case 'resolveAwakenReward':
 		case 'commitBenefits':
@@ -448,6 +458,13 @@ function representativeCommand(
 			return { type };
 		case 'spawnHandSpirit':
 			return { type, guid: player.handDraws?.[0]?.guid ?? '' };
+		case 'drawMonsterCards':
+			// Probe the lowest difficulty; the reducer re-checks the chosen deck.
+			return { type, difficulty: 1 };
+		case 'keepMonsterCard':
+			return { type, index: 0 };
+		case 'startCombat':
+			return { type, handIndex: 0 };
 		case 'resolveMonsterReward':
 			return { type, picks: [] };
 		case 'resolveLocationInteraction':
@@ -668,22 +685,24 @@ export function computeLocationInteractions(
 	if (interactions.length === 0) return [];
 
 	const mats = player.mats ?? [];
+	// Trader: every held basic rune also pays a rune-of-an-origin cost.
+	const costOpts = { runesWild: runesAreWild(player) };
 	const rowAllowance = 1 + (player.extraActions?.locationInteraction ?? 0);
 
 	return interactions.map((interaction) => {
 		const usedKey = `row:${interaction.rowIndex}`;
 		const rowUsed = (player.actionsUsedThisRound ?? []).filter((a) => a === usedKey).length;
-		const auto = autoPickCostSlots(interaction.cost, mats);
+		const auto = autoPickCostSlots(interaction.cost, mats, costOpts);
 		const costSlots = interaction.cost.map((req, ci) => ({
 			need: req.label,
 			wildcard: isWildcardCost(req),
-			eligibleMatSlotIndexes: eligibleCostSlots(req, mats),
+			eligibleMatSlotIndexes: eligibleCostSlots(req, mats, costOpts),
 			autoPick: auto[ci] ?? null
 		}));
 		const choiceGroups = interaction.gains
 			.filter((g): g is Extract<GainEffect, { type: 'chooseRune' }> => g.type === 'chooseRune')
 			.map((g) => ({ options: g.options.map((o) => ({ runeId: o.runeId, name: o.name })) }));
-		const affordable = !player.phaseReady && !player.pendingPowerDrafts?.length && canAfford(interaction, mats) && (!interaction.gains.some(g => g.type === 'navigationPower' && g.replace) || !!player.powerInventory?.length);
+		const affordable = !player.phaseReady && !player.pendingPowerDrafts?.length && canAfford(interaction, mats, costOpts) && (!interaction.gains.some(g => g.type === 'navigationPower' && g.replace) || !!player.powerInventory?.length);
 		const noEffectNow = interactionHasNoEffect(interaction, player);
 
 		const repeatable = interaction.kind === 'trade';
@@ -764,7 +783,7 @@ export function computeInfiltratorSwap(
 	/*
 	if (state.phase !== 'location') return undefined;
 	const hasInfiltrator = (player.spirits ?? []).some(
-		(s) => !s.isFaceDown && (s.classes?.['Cursed Fighter'] ?? 0) > 0
+		(s) => !s.isFaceDown && (s.classes?.['Ram'] ?? 0) > 0
 	);
 	if (!hasInfiltrator) return undefined;
 	if ((player.actionsUsedThisRound ?? []).includes('infiltratorSwap')) return undefined;

@@ -5,6 +5,7 @@ import {
 	rollAttack,
 	resetCombatFlags,
 	advanceMonsterIfDefeated,
+	monsterBarrierLeft,
 	monsterLivesForPlayerCount,
 	pvpVpForAttack,
 	DICE_TIER_FACES
@@ -13,10 +14,10 @@ import { createRng } from './rng';
 import type {
 	AttackDie,
 	MonsterState,
-	PlayCatalog,
 	PlaySpirit,
 	PrivatePlayerState,
 	PublicGameState,
+	RuntimeBagEntry,
 	SeatColor
 } from './types';
 
@@ -95,15 +96,17 @@ function dice(tier: AttackDie['tier'], count: number): AttackDie[] {
 	return Array.from({ length: count }, (_, i) => ({ instanceId: `d${i}`, tier }));
 }
 
+/** A bare one-seat state. `monster`, when given, is the single card in Red's monster hand
+ *  (the same object, so a test can read the damage a fight leaves on it). */
 function makeState(
 	player: PrivatePlayerState,
 	monster: MonsterState | null,
 	seed = 1
 ): PublicGameState {
 	const seat: SeatColor = 'Red';
+	if (monster) player.monsterHand = [monster];
 	return {
 		rng: createRng(seed),
-		monster,
 		players: { [seat]: player },
 		activeSeats: [seat]
 	} as unknown as PublicGameState;
@@ -352,162 +355,145 @@ describe('rollAttack', () => {
 });
 
 describe('fightMonster', () => {
-	it('monster hits the player and the player chips the monster (HP does not persist)', () => {
-		const p = makePlayer({ barrier: 4, attackDice: dice('basic', 2) });
+	/** Fixed 3 damage per fight: no dice, three Beast traits (+1 damage each). */
+	const threeDamage = () => [spirit(1, { 'Beast': 3 })];
+	const hand = (state: PublicGameState, seat: SeatColor = 'Red') => state.players[seat]?.monsterHand ?? [];
+
+	it('monster hits the player and the player chips the card in their hand (damage persists)', () => {
+		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) }); // guarantees >= 1 damage
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 2 });
 		const state = makeState(p, monster, 3);
 		const result = fightMonster(state, 'Red');
 		expect(result).not.toBeNull();
 		expect(result!.corrupted).toBe(false);
 		expect(p.barrier).toBe(2); // took 2 monster damage
-		// Shared monster HP is NOT chipped — every combat fights a full-strength monster.
-		expect(monster.hp).toBe(monster.maxHp);
-		// The combat record/snapshot still reflects THIS combat's ending HP.
-		expect(result!.fought?.hp).toBe(10 - result!.playerDamage);
+		expect(result!.playerDamage).toBeGreaterThan(0);
+		// The card keeps the damage and stays in the player's hand.
+		expect(monster.hp).toBe(10 - result!.playerDamage);
+		expect(result!.fought?.hp).toBe(monster.hp);
+		expect(hand(state)).toEqual([monster]);
 	});
 
-	it('monster HP does not persist across combats: a second fight starts at full HP', () => {
-		// Two consecutive non-kill fights (maxHp far above one roll's damage, monster deals 0 so
-		// the player never corrupts). The second fight must NOT start from the first's chip.
-		const p = makePlayer({ barrier: 4, attackDice: dice('basic', 2) });
+	it("monster HP persists across combats: a second fight continues from the first fight's damage", () => {
+		const p = makePlayer({ barrier: 4, attackDice: [], spirits: threeDamage() });
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const state = makeState(p, monster, 3);
 
 		const first = fightMonster(state, 'Red');
 		expect(first!.killed).toBe(false);
-		expect(monster.hp).toBe(20); // shared state restored to full after the fight
+		expect(monster.hp).toBe(17); // nothing resets after the fight
 
 		const second = fightMonster(state, 'Red');
 		expect(second!.killed).toBe(false);
-		// Judged against full HP, not (20 − firstDamage): the snapshot reflects only this fight.
-		expect(second!.fought?.hp).toBe(20 - second!.playerDamage);
-		expect(monster.hp).toBe(20);
+		expect(second!.fought?.hp).toBe(14); // 20 − 3 − 3
+		expect(monster.hp).toBe(14);
+		expect(monster.maxHp).toBe(20);
+		expect(hand(state)).toHaveLength(1);
 	});
 
-	it('a kill consumes one life and resets HP — it does NOT advance the rung mid-fight', () => {
+	it("damage removes the monster's single Barrier value, and the loss persists", () => {
+		const p = makePlayer({ barrier: 4, attackDice: [], spirits: threeDamage() });
+		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 0 });
+		const state = makeState(p, monster, 3);
+		expect(monsterBarrierLeft(monster)).toBe(10);
+
+		const first = fightMonster(state, 'Red');
+		expect(first!.playerDamage).toBe(3);
+		expect(monster.hp).toBe(7);
+		expect(first!.log.some((line) => line.includes('loses 3 Barrier (7/10 left)'))).toBe(true);
+
+		fightMonster(state, 'Red');
+		expect(monsterBarrierLeft(monster)).toBe(4);
+	});
+
+	it('handIndex picks the card to fight; the other cards in the hand are untouched', () => {
+		const p = makePlayer({ barrier: 4, attackDice: [], spirits: threeDamage() });
+		const state = makeState(p, null, 3);
+		const a = makeMonster({ id: 'a', hp: 10, maxHp: 10, damage: 0 });
+		const b = makeMonster({ id: 'b', hp: 10, maxHp: 10, damage: 0 });
+		const c = makeMonster({ id: 'c', hp: 10, maxHp: 10, damage: 0 });
+		p.monsterHand = [a, b, c];
+
+		const result = fightMonster(state, 'Red', undefined, 1);
+		expect(result!.fought?.id).toBe('b');
+		expect(b.hp).toBe(7);
+		expect(a.hp).toBe(10);
+		expect(c.hp).toBe(10);
+		expect(hand(state).map((card) => card.id)).toEqual(['a', 'b', 'c']);
+	});
+
+	it('a missing hand card cannot be fought (empty hand or out-of-range handIndex)', () => {
+		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) });
+		const empty = makeState(p, null, 3);
+		expect(fightMonster(empty, 'Red')).toBeNull();
+		expect(p.barrier).toBe(4); // nothing happened
+
+		const one = makeState(makePlayer({ attackDice: dice('arcane', 1) }), makeMonster(), 3);
+		expect(fightMonster(one, 'Red', undefined, 1)).toBeNull();
+		expect(fightMonster(one, 'Red', undefined, -1)).toBeNull();
+		expect(hand(one)[0].hp).toBe(5);
+	});
+
+	it('a kill removes the card from the hand; the fought snapshot shows HP 0', () => {
 		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) }); // guarantees >= 1 damage
-		// maxHp 1 so one combat's roll kills against the monster's FULL health (HP never persists).
-		const monster = makeMonster({
-			hp: 1,
-			maxHp: 1,
-			damage: 1,
-			livesRemaining: 1,
-			livesTotal: 1,
-			ladderIndex: 0
-		});
-		const state = makeState(p, monster, 5);
-		const result = fightMonster(state, 'Red');
+		const monster = makeMonster({ hp: 1, maxHp: 1, damage: 1 });
+		const other = makeMonster({ id: 'keep', hp: 9, maxHp: 9 });
+		const state = makeState(p, null, 5);
+		p.monsterHand = [other, monster];
+		const result = fightMonster(state, 'Red', undefined, 1);
 		expect(result!.killed).toBe(true);
-		// The fight itself grants no VP — defeating the monster opens a reward pick.
+		// The fight itself grants no VP — defeating the monster opens a reward claim.
 		expect(result!.vpGained).toBe(0);
 		expect(p.victoryPoints).toBe(0);
-		expect(result!.fought?.hp).toBe(0); // the defeated snapshot (reward reads this)
-		expect(monster.livesRemaining).toBe(0); // one life spent
-		expect(monster.hp).toBe(monster.maxHp); // HP reset for the next challenger
-		expect(monster.ladderIndex).toBe(0); // same rung — escalation waits for the round boundary
+		expect(result!.fought).toMatchObject({ id: 'm1', hp: 0, maxHp: 1 }); // the reward reads this
+		expect(hand(state)).toEqual([other]); // the card leaves the game at once
+		expect(other.hp).toBe(9);
 	});
 
-	it('a multi-life monster survives a kill: same rung, one fewer life, HP reset', () => {
-		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) });
-		const monster = makeMonster({
-			id: 'm1',
-			hp: 1,
-			maxHp: 1,
-			damage: 1,
-			livesRemaining: 2,
-			livesTotal: 2,
-			ladderIndex: 0
-		});
+	it('a card worn down by earlier fights dies to a hit smaller than its printed Barrier', () => {
+		const p = makePlayer({ barrier: 4, attackDice: [], spirits: threeDamage() });
+		// 3 damage could never kill this Barrier-10 card at full strength, but it has 3 left.
+		const monster = makeMonster({ hp: 3, maxHp: 10, damage: 0 });
 		const state = makeState(p, monster, 5);
 		const result = fightMonster(state, 'Red');
 		expect(result!.killed).toBe(true);
-		expect(state.monster?.id).toBe('m1'); // still the same listed monster
-		expect(state.monster?.livesRemaining).toBe(1); // 2 → 1
-		expect(state.monster?.hp).toBe(1); // full HP for the next player (never persists)
-		expect(state.monster?.ladderIndex).toBe(0);
+		expect(result!.fought?.hp).toBe(0);
+		expect(hand(state)).toEqual([]);
 	});
 
-	it('excess kills never carry over: livesRemaining floors at 0', () => {
-		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) });
-		const monster = makeMonster({
-			id: 'm1',
-			hp: 1,
-			maxHp: 1,
-			livesRemaining: 0,
-			livesTotal: 2,
-			ladderIndex: 0
-		});
+	it('a hit one short of the Barrier left does not defeat the card', () => {
+		const p = makePlayer({ barrier: 4, attackDice: [], spirits: threeDamage() });
+		const monster = makeMonster({ hp: 4, maxHp: 4, damage: 0 });
 		const state = makeState(p, monster, 5);
+		const result = fightMonster(state, 'Red');
+		expect(result!.killed).toBe(false);
+		expect(monster.hp).toBe(1);
+		expect(hand(state)).toEqual([monster]);
+	});
+
+	it("one player's fight never touches another player's hand", () => {
+		const red = makePlayer({ barrier: 4, attackDice: [], spirits: threeDamage() });
+		const blueCard = makeMonster({ id: 'blue-card', hp: 10, maxHp: 10, damage: 0 });
+		const blue = makePlayer({ playerColor: 'Blue', monsterHand: [blueCard] });
+		const redCard = makeMonster({ id: 'red-card', hp: 10, maxHp: 10, damage: 0 });
+		const state = makeState(red, redCard, 3);
+		state.players.Blue = blue;
+		state.activeSeats = ['Red', 'Blue'] as SeatColor[];
+
 		fightMonster(state, 'Red');
-		expect(state.monster?.id).toBe('m1'); // does not advance mid-fight
-		expect(state.monster?.livesRemaining).toBe(0); // already spent — never goes negative
+		expect(redCard.hp).toBe(7);
+		expect(blueCard.hp).toBe(10);
+		expect(hand(state, 'Blue')).toEqual([blueCard]);
 	});
 
-	const LADDER = {
-		monsters: [
-			{
-				id: 'm1',
-				name: 'Weak',
-				damage: 1,
-				barrier: 5,
-				rewardTrack: [],
-				dicePool: [],
-				chooseAmount: 2,
-				stage: 1,
-				order: 0
-			},
-			{
-				id: 'm2',
-				name: 'Strong',
-				damage: 9,
-				barrier: 14,
-				rewardTrack: ['r'],
-				dicePool: [],
-				chooseAmount: 2,
-				stage: 1,
-				order: 1
-			}
-		]
-	} as unknown as PlayCatalog;
-
-	const LADDER3 = {
-		monsters: [
-			...(LADDER as unknown as { monsters: unknown[] }).monsters,
-			{
-				id: 'm3',
-				name: 'Apex',
-				damage: 12,
-				barrier: 20,
-				rewardTrack: ['r', 'r'],
-				dicePool: [],
-				chooseAmount: 2,
-				stage: 1,
-				order: 2
-			}
-		]
-	} as unknown as PlayCatalog;
-
-	it('advanceMonsterIfDefeated: a spent monster climbs to the next, stronger rung at full HP', () => {
-		const p = makePlayer({});
-		const monster = makeMonster({
-			id: 'm1',
-			hp: 5,
-			maxHp: 5,
-			livesRemaining: 0,
-			livesTotal: 1,
-			ladderIndex: 0,
-			ladderMax: 2
-		});
-		const state = makeState(p, monster, 5); // makeState seats one player → 1 kill to defeat
-		advanceMonsterIfDefeated(state, LADDER);
-		expect(state.monster?.id).toBe('m2');
-		expect(state.monster?.hp).toBe(14);
-		expect(state.monster?.maxHp).toBe(14);
-		expect(state.monster?.damage).toBe(9);
-		expect(state.monster?.ladderIndex).toBe(1);
-		expect(state.monster?.livesTotal).toBe(1); // one active seat → one kill needed
-		expect(state.monster?.livesRemaining).toBe(1);
-	});
+	/** Mark a bare state as having dealt a monster deck, with `deck` cards left to draw. */
+	function withDealtDeck(state: PublicGameState, deck: RuntimeBagEntry[] = []): PublicGameState {
+		state.monsterDecks = [
+			{ difficulty: 1, total: 1, barrierMin: 1, barrierMax: 5, vpValues: [], summonMin: 0, summonMax: 0, extraRewards: [] }
+		];
+		state.bags = { monsters: { count: deck.length, contents: deck } } as unknown as PublicGameState['bags'];
+		return state;
+	}
 
 	it('pvpVpForAttack: 2 VP for engaging, +2 per corrupted opponent', () => {
 		expect(pvpVpForAttack(0)).toBe(2);
@@ -524,87 +510,55 @@ describe('fightMonster', () => {
 		expect(monsterLivesForPlayerCount(5)).toBe(3);
 	});
 
-	it('advanceMonsterIfDefeated: the next rung gets lives scaled by player count (4 seats → 3)', () => {
-		const p = makePlayer({});
-		const monster = makeMonster({
-			id: 'm1',
-			hp: 5,
-			maxHp: 5,
-			livesRemaining: 0,
-			livesTotal: 3,
-			ladderIndex: 0,
-			ladderMax: 3
-		});
-		const state = makeState(p, monster, 5);
-		state.activeSeats = ['Red', 'Blue', 'Green', 'Yellow'] as SeatColor[];
-		advanceMonsterIfDefeated(state, LADDER3);
-		expect(state.monster?.id).toBe('m2');
-		expect(state.monster?.livesTotal).toBe(3);
-		expect(state.monster?.livesRemaining).toBe(3);
-	});
-
-	it('the FINAL rung gets the same player-count lives as every other rung', () => {
-		const p = makePlayer({});
-		const monster = makeMonster({
-			id: 'm2',
-			hp: 14,
-			maxHp: 14,
-			livesRemaining: 0,
-			livesTotal: 3,
-			ladderIndex: 1,
-			ladderMax: 3
-		});
-		const state = makeState(p, monster, 5);
-		state.activeSeats = ['Red', 'Blue', 'Green', 'Yellow'] as SeatColor[];
-		advanceMonsterIfDefeated(state, LADDER3);
-		expect(state.monster?.id).toBe('m3');
-		expect(state.monster?.livesTotal).toBe(3);
-		expect(state.monster?.livesRemaining).toBe(3);
-	});
-
-	it('defeating the FINAL monster saves the spirit world: Abyss cleared, end flag set', () => {
-		const p = makePlayer({});
-		const monster = makeMonster({
-			id: 'm3',
-			hp: 0,
-			maxHp: 20,
-			livesRemaining: 0,
-			livesTotal: 1,
-			ladderIndex: 2,
-			ladderMax: 3
-		});
-		const state = makeState(p, monster, 5);
-		state.activeSeats = ['Red', 'Blue', 'Green', 'Yellow'] as SeatColor[];
-		advanceMonsterIfDefeated(state, LADDER3);
-		expect(state.monster).toBeNull(); // the Abyss is clear
-		expect(state.spiritWorldSaved).toBe(true); // game ends at this cleanup
-	});
-
-	it('without a catalog the defeated monster returns at full strength (bare-state safety)', () => {
-		const p = makePlayer({});
-		const monster = makeMonster({ hp: 0, maxHp: 5, livesRemaining: 0, livesTotal: 1 });
-		const state = makeState(p, monster, 5);
-		advanceMonsterIfDefeated(state); // no catalog
-		expect(state.monster?.hp).toBe(5);
-		expect(state.monster?.livesRemaining).toBe(1);
+	it('advanceMonsterIfDefeated: a damaged card in a hand never recovers Barrier', () => {
+		const monster = makeMonster({ hp: 4, maxHp: 10 });
+		const state = withDealtDeck(makeState(makePlayer({}), monster, 5));
+		for (let round = 0; round < 3; round++) advanceMonsterIfDefeated(state);
+		expect(hand(state)).toEqual([monster]); // same card, even with no fights at all
+		expect(monster.hp).toBe(4); // damage is permanent
 		expect(state.spiritWorldSaved).toBeUndefined();
 	});
 
-	it('advanceMonsterIfDefeated: no-op while the monster still has lives left', () => {
-		const p = makePlayer({});
-		const monster = makeMonster({
-			id: 'm1',
-			livesRemaining: 1,
-			livesTotal: 2,
-			ladderIndex: 0,
-			ladderMax: 2
-		});
-		const state = makeState(p, monster, 5);
-		advanceMonsterIfDefeated(state, LADDER);
-		expect(state.monster?.id).toBe('m1'); // unchanged — still has a life
-		expect(state.monster?.livesRemaining).toBe(1);
+	it('the spirit world is saved when every deck is empty and every hand is empty', () => {
+		const state = withDealtDeck(makeState(makePlayer({}), null, 5));
+		state.players.Blue = makePlayer({ playerColor: 'Blue' });
+		state.activeSeats = ['Red', 'Blue', 'Green'] as SeatColor[]; // a seat with no player state holds no cards
+		advanceMonsterIfDefeated(state);
+		expect(state.spiritWorldSaved).toBe(true); // the game ends at this cleanup
 	});
 
+	it('the spirit world is NOT saved while any monster card remains (deck, any hand, pending draw)', () => {
+		const inDeck = withDealtDeck(makeState(makePlayer({}), null, 5), [
+			{ guid: 'monster-card-m2', id: 'm2', name: 'Strong', barrier: 14, damage: 9, difficulty: 3 }
+		]);
+		advanceMonsterIfDefeated(inDeck);
+		expect(inDeck.spiritWorldSaved).toBeUndefined();
+
+		const inOwnHand = withDealtDeck(makeState(makePlayer({}), makeMonster({ id: 'm2' }), 5));
+		advanceMonsterIfDefeated(inOwnHand);
+		expect(inOwnHand.spiritWorldSaved).toBeUndefined();
+
+		// A card in ANOTHER player's hand also keeps the game going.
+		const inOtherHand = withDealtDeck(makeState(makePlayer({}), null, 5));
+		inOtherHand.players.Blue = makePlayer({ playerColor: 'Blue', monsterHand: [makeMonster({ id: 'm2', hp: 1 })] });
+		inOtherHand.activeSeats = ['Red', 'Blue'] as SeatColor[];
+		advanceMonsterIfDefeated(inOtherHand);
+		expect(inOtherHand.spiritWorldSaved).toBeUndefined();
+
+		// An open reveal settles into the hand at the boundary, so it is not "gone" either.
+		const inDraw = withDealtDeck(
+			makeState(makePlayer({ pendingMonsterDraw: { cards: [makeMonster({ id: 'm2' })], maxCards: 2 } }), null, 5)
+		);
+		advanceMonsterIfDefeated(inDraw);
+		expect(inDraw.spiritWorldSaved).toBeUndefined();
+		expect(hand(inDraw).map((card) => card.id)).toEqual(['m2']);
+	});
+
+	it('a bare state (no monster deck dealt) never saves the spirit world', () => {
+		const state = makeState(makePlayer({}), null, 5);
+		advanceMonsterIfDefeated(state); // no catalog, no monsterDecks
+		expect(state.spiritWorldSaved).toBeUndefined();
+	});
 	it('a corrupted player cannot strike back', () => {
 		const p = makePlayer({ barrier: 1, attackDice: dice('arcane', 5) });
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 5 }); // 5 > 1 barrier → corrupt
@@ -630,11 +584,11 @@ describe('fightMonster', () => {
 		expect(result!.killed).toBe(true); // and can kill through the corruption
 	});
 
-	it('Soul Weaver ≥3 also grants simultaneous attack through corruption', () => {
+	it('Mystic ≥3 also grants simultaneous attack through corruption', () => {
 		const p = makePlayer({
 			barrier: 1,
 			attackDice: dice('arcane', 5),
-			spirits: [spirit(1, { 'Soul Weaver': 3 })]
+			spirits: [spirit(1, { 'Mystic': 3 })]
 		});
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 5 });
 		const result = fightMonster(makeState(p, monster, 2), 'Red');
@@ -651,12 +605,12 @@ describe('fightMonster', () => {
 // stun-immune) — covered in classes/sharpshooter.test.ts. Its simultaneous-attack
 // rule is still exercised above (corrupted-player-still-strikes test).
 
-describe('Spirit Animal (inCombat)', () => {
-	it('scales damage AND initiative by the Spirit Animal trait count', () => {
+describe('Beast (inCombat)', () => {
+	it('scales damage AND initiative by the Beast trait count', () => {
 		const p = makePlayer({
 			barrier: 4,
 			attackDice: [],
-			spirits: [spirit(1, { 'Spirit Animal': 3 })]
+			spirits: [spirit(1, { 'Beast': 3 })]
 		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
@@ -668,7 +622,7 @@ describe('Spirit Animal (inCombat)', () => {
 		const p = makePlayer({
 			barrier: 4,
 			attackDice: [],
-			spirits: [spirit(1, { 'Spirit Animal': 1 })]
+			spirits: [spirit(1, { 'Beast': 1 })]
 		});
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
@@ -677,13 +631,13 @@ describe('Spirit Animal (inCombat)', () => {
 	});
 });
 
-describe('Living Bastion (inCombat)', () => {
+describe('Titan (inCombat)', () => {
 	it('deflects 4 damage so a 4-damage hit is fully absorbed', () => {
 		const p = makePlayer({
 			barrier: 4,
 			maxBarrier: 4,
 			attackDice: [],
-			spirits: [spirit(1, { 'Living Bastion': 1 })]
+			spirits: [spirit(1, { 'Titan': 1 })]
 		});
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 4 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
@@ -728,7 +682,7 @@ describe('Aquamaiden (onTakeDamage)', () => {
 			maxBarrier: 4,
 			attackDice: [],
 			spirits: [
-				{ ...spirit(1, { 'Tide Warden': 1 }), origins: { 'Water Region': 1 } },
+				{ ...spirit(1, { 'Warden': 1 }), origins: { 'Water Region': 1 } },
 				{ ...spirit(2, {}), origins: { 'Water Region': 1 } }
 			]
 		});
@@ -739,7 +693,7 @@ describe('Aquamaiden (onTakeDamage)', () => {
 	});
 });
 
-// Aegis Weaver's combat damage now scales by Cursed Spirit traits (not barrier
+// Paladin's combat damage now scales by Cursed Spirit traits (not barrier
 // parity) — covered in classes/darkAssassin.test.ts. The rollAttack multiplier +
 // advantage primitives it relies on are exercised here.
 describe('rollAttack (damage multiplier + advantage)', () => {
@@ -748,7 +702,7 @@ describe('rollAttack (damage multiplier + advantage)', () => {
 		expect(rollAttack(makeState(p, null, 1), p)).toBe(10); // (0 + 5) × 2
 	});
 
-	it('attackRollAdvantage (Fatestriker) rolls twice and keeps the higher total', () => {
+	it('attackRollAdvantage (roll twice, keep the higher; no class sets it since the Moon rework) rolls twice and keeps the higher total', () => {
 		const dice = Array.from({ length: 4 }, (_, i) => ({
 			instanceId: `d${i}`,
 			tier: 'basic' as const
@@ -767,7 +721,7 @@ describe('rollAttack (damage multiplier + advantage)', () => {
 	});
 });
 
-describe('Disruptor (onTakeDamage, HANDLER)', () => {
+describe('Bastion (onTakeDamage, HANDLER)', () => {
 	function twoSeatState(
 		red: PrivatePlayerState,
 		blue: PrivatePlayerState,
@@ -775,7 +729,6 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 	): PublicGameState {
 		return {
 			rng: createRng(seed),
-			monster: null,
 			players: { Red: red, Blue: blue },
 			activeSeats: ['Red', 'Blue'] as SeatColor[]
 		} as unknown as PublicGameState;
@@ -787,7 +740,7 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 			barrier: 10,
 			maxBarrier: 10,
 			initiative: 1,
-			spirits: [spirit(1, { 'Disruptor': 1 })]
+			spirits: [spirit(1, { 'Bastion': 1 })]
 		});
 		const attacker = makePlayer({ playerColor: 'Red', initiative: 5 });
 		const state = twoSeatState(attacker, defender);
@@ -802,7 +755,7 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 			barrier: 10,
 			maxBarrier: 10,
 			initiative: 5,
-			spirits: [spirit(1, { 'Disruptor': 1 })]
+			spirits: [spirit(1, { 'Bastion': 1 })]
 		});
 		const attacker = makePlayer({ playerColor: 'Red', initiative: 1 });
 		const state = twoSeatState(attacker, defender);
@@ -816,11 +769,11 @@ describe('Disruptor (onTakeDamage, HANDLER)', () => {
 // class no longer exists in the DB or the engine.
 
 describe('per-combat flags reset between combats', () => {
-	it('Spirit Animal combat bonus is re-applied each combat, never accumulated', () => {
+	it('Beast combat bonus is re-applied each combat, never accumulated', () => {
 		const p = makePlayer({
 			barrier: 4,
 			attackDice: [],
-			spirits: [spirit(1, { 'Spirit Animal': 1 })]
+			spirits: [spirit(1, { 'Beast': 1 })]
 		});
 		const monster = makeMonster({ hp: 100, maxHp: 100, damage: 0 });
 		const state = makeState(p, monster, 1);
@@ -839,7 +792,7 @@ describe('per-combat flags reset between combats', () => {
 			barrier: 6,
 			maxBarrier: 6,
 			attackDice: [],
-			spirits: [spirit(1, { 'Living Bastion': 1 })]
+			spirits: [spirit(1, { 'Titan': 1 })]
 		});
 		const monster = makeMonster({ hp: 100, maxHp: 100, damage: 4 });
 		const state = makeState(p, monster, 1);
@@ -855,21 +808,21 @@ describe('per-combat flags reset between combats', () => {
 		expect(second!.barrierLost).toBe(4); // full damage now lands
 	});
 
-	it('combines Fairy +3 with +1 initiative for every Spirit Animal trait', () => {
+	it('combines Fairy +3 with +1 initiative for every Beast trait', () => {
 		const p = makePlayer({
 			// Simulate the stale pre-fix readout: combat reset must rebuild the real total,
 			// not preserve or increment this arbitrary value.
 			initiative: 4,
 			spirits: [
 				spirit(1, { 'Fairy': 1 }),
-				spirit(2, { 'Spirit Animal': 6 })
+				spirit(2, { 'Beast': 6 })
 			]
 		});
 		const state = makeState(p, makeMonster({ hp: 100, maxHp: 100, damage: 0 }), 1);
 
 		fightMonster(state, 'Red');
 
-		expect(p.initiative).toBe(9); // Fairy 3 + six Spirit Animal traits
+		expect(p.initiative).toBe(9); // Fairy 3 + six Beast traits
 		expect(p.combatDamageBonus).toBe(6);
 
 		fightMonster(state, 'Red');

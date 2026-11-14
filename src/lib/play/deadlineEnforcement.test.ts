@@ -55,7 +55,12 @@ const CATALOG: PlayCatalog = {
 		classes: {},
 		origins: {}
 	})),
-	locations: [{ name: 'Water Region', originId: null, rewardRows: TIDAL_COVE_ROWS }]
+	locations: [{ name: 'Water Region', originId: null, rewardRows: TIDAL_COVE_ROWS }],
+	// An undrawn monster card keeps the spirit world unsaved, so a round boundary never ends
+	// the game on its own ("every monster card is gone" would otherwise hold from round 1).
+	monsters: [
+		{ id: 'm-1', name: 'Imp', damage: 1, barrier: 3, rewardTrack: [], dicePool: [], chooseAmount: 2, stage: 1, order: 0 }
+	]
 };
 
 function apply(state: PublicGameState, actor: GameActor, command: GameCommand): PublicGameState {

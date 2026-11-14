@@ -2,16 +2,16 @@
  * Display-only combat/encounter log collapsing.
  *
  * The engine emits one log line per granted effect, each attributed to its source
- * trait (e.g. "Spirit Animal: Gained +1 combat damage." / "Spirit Animal: Gained 1
+ * trait (e.g. "Beast: Gained +1 combat damage." / "Beast: Gained 1
  * initiative."). When one source grants several numeric buffs in a row that reads as
  * a wall of near-duplicate lines. This merges CONSECUTIVE lines from the same source
  * into a single sentence, summing each distinct effect:
  *
- *   Spirit Animal: Gained +1 combat damage.
- *   Spirit Animal: Gained 1 initiative.
- *   Spirit Animal: Gained +2 combat damage.
- *   Spirit Animal: Gained 2 initiative.
- *      →  Spirit Animal: Gained +3 combat damage and 3 initiative.
+ *   Beast: Gained +1 combat damage.
+ *   Beast: Gained 1 initiative.
+ *   Beast: Gained +2 combat damage.
+ *   Beast: Gained 2 initiative.
+ *      →  Beast: Gained +3 combat damage and 3 initiative.
  *
  * Purely cosmetic — the engine log is untouched; only the UI renders the merged view.
  */

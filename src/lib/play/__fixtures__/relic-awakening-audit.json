@@ -39,7 +39,7 @@
     {
       "id": "a77653c5-69fa-4351-833d-59d302722365",
       "name": "Aurelion, Crown of the Undying Sun",
-      "cost": 9,
+      "cost": 7,
       "awaken_condition": {
         "type": "rune_cost",
         "rune_ids": [
@@ -281,7 +281,7 @@
     {
       "id": "fc667265-edd6-4c28-b96e-6e505188ce72",
       "name": "Nhal, the World Unwoven",
-      "cost": 9,
+      "cost": 7,
       "awaken_condition": {
         "text": "Navigate to the Arcane Abyss, but don't fight the monster.",
         "type": "text"
@@ -407,7 +407,7 @@
     {
       "id": "e4822f18-98f0-44fd-8711-756f946f6cd5",
       "name": "Vespera, Empress of the Last Moon",
-      "cost": 9,
+      "cost": 7,
       "awaken_condition": {
         "text": "Cultivate while Evil.",
         "type": "text"

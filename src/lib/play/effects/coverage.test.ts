@@ -172,16 +172,20 @@ const ALL_CLASS_NAMES = CATALOG_CLASSES.map((c) => c.name);
  * stays declarative and is NOT listed here.)
  */
 const ENGINE_HANDLED_CLASSES = new Set<string>([
-	'Abyss Summoner',
+	'Summoner',
 	'Cursed Spirit',
-	'Aegis Weaver',
-	'Golden Ruler',
-	'Relic Sentinel',
-		// Runic Duplicator duplicates the exact augment gained by a paid trade in the
-		// interaction reducer, so it has no effect-system entry.
-	'Runic Duplicator'
-	,'Soul Weaver'
+	'King',
+	'Smith',
+	'Mystic',
+	// November 2026 classes encoded in shared engine code (no trigger of their own):
+	'Trader', // matMatch.spendableMats — every rune pays as a wild rune
+	'Wildling', // actions.gainAttackDice — +1 Exalted die per gain
+	'Druid', // actions.gainAttackDice — +1 Exalted die per Exalted die gained (Nov 12)
+	'Prince', // combat.strikeFirstDamageBonus — +2 damage when striking first
+	'Cultist', // types.setCorruptionDiscardObligation + effects/corruption — 1 fewer sacrifice, +1 VP
+	'Acolyte' // combat.resolveEncounterCombat afterStrike — restore the Barrier the hit player lost
 ]);
+
 const ALL_SPIRITS = CATALOG_SPIRITS;
 const RUNE_COST_SPIRITS = ALL_SPIRITS.filter((s) => s.awaken_condition?.type === 'rune_cost');
 const TEXT_SPIRITS = ALL_SPIRITS.filter((s) => s.awaken_condition?.type === 'text');
@@ -225,7 +229,7 @@ describe('Phase 7 — class coverage (every class is handled)', () => {
 		// engine-handled classes — Cursed Spirit's cleanup claim — are counted only
 		// in `engine`).
 		expect(declarative + handler + manual + engine).toBe(ALL_CLASS_NAMES.length);
-		expect(ALL_CLASS_NAMES.length).toBe(37);
+		expect(ALL_CLASS_NAMES.length).toBe(55);
 	});
 });
 
@@ -259,7 +263,7 @@ describe('Phase 7 — awaken coverage (every spirit is handled)', () => {
 		expect(FREE_SPIRITS.length + RUNE_COST_SPIRITS.length + TEXT_SPIRITS.length).toBe(
 			ALL_SPIRITS.length
 		);
-		expect(ALL_SPIRITS.length).toBe(50);
+		expect(ALL_SPIRITS.length).toBe(64);
 	});
 
 	it('a null awaken_condition normalizes to a free flip (ok:true)', () => {

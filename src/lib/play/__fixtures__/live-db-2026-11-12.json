@@ -1,0 +1,1870 @@
+{
+ "_source": "Read-only backup of the live database, ~/ArcSpiritsArt/game/_db_backup_2026-11-12_before_migrations/ (taken 2026-11-12, before migration 20261111120000). Only the columns buildPlayCatalog reads. Do not update: it stands for the database as it is between the code deploy and the migration.",
+ "classes": [
+  {
+   "id": "4768cb25-60ac-4178-b9e3-25aca98f495a",
+   "name": "Runic Bulwark",
+   "position": 42,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When you Take Damage, reduce damage by 1 for every Spirit Augment."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d4752205-1dcb-4f87-8b46-14c4b1bd97d5",
+   "name": "Fairy",
+   "position": 13,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When Awakened, gain 1 Exalted Attack for every spirit matching this Fairy's origin. Gain 3 Initiative."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "601d161f-0d86-4904-afe9-20dd096954c9",
+   "name": "Cursed Fighter",
+   "position": 21,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "For every Cursed Spirit trait you have, gain 1 Attack Damage."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "f0aebe91-6217-4f9c-a85e-94ac2232f5b4",
+   "name": "Golden Ruler",
+   "position": 27,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "In the Awakening Phase, Gain 1 VP. If you are evil, you must discard this spirit."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "89a2cec9-bdcd-4b48-9574-033098e74438",
+   "name": "Battle Adept",
+   "position": 30,
+   "class_type": "human",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If you overkill by 2 damage, gain 1 potential. If you don't kill, gain 1 Enchanted Attack."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "acbc0f6d-1514-45aa-85a0-a5d635db6e51",
+   "name": "Void Sovereign",
+   "position": 31,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "In the Awakening Phase, gain 1 VP."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "0d15066d-ab3b-4c84-b0d5-4562a1c5fbb7",
+   "name": "Tide Warden",
+   "position": 44,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When you Take Damage, take 1 less for every Water Spirit."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "dd17c072-159c-4b43-831f-1f51bb8b7720",
+   "name": "Fighter",
+   "position": 3,
+   "class_type": "normal",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "color": "bronze",
+     "count": 2,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, gain 1 Basic Attack Dice"
+      }
+     ]
+    },
+    {
+     "color": "bronze",
+     "count": 3,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, gain 2 Basic Attack Dice"
+      }
+     ]
+    },
+    {
+     "color": "silver",
+     "count": 4,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, gain 5 Basic Attack Dice"
+      }
+     ]
+    },
+    {
+     "count": 5,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, gain 10 Basic Attack Dice and 1 of any spirit augment."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "173589ed-9bec-4965-94e6-dadbc6b5310a",
+   "name": "Elementalist",
+   "position": 4,
+   "class_type": "normal",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "color": "bronze",
+     "count": 2,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, upgrade an attack dice, once.",
+       "description_translations": {
+        "de": "Verbessere 4 Würfel zu Erhaben.",
+        "es": "Mejora 4 dados a Exaltado.",
+        "fr": "Améliorez 4 dés en Exalté.",
+        "it": "Migliora 4 dadi a Esaltato.",
+        "ja": "ダイス4個をExaltedにアップグレードする。",
+        "ko": "주사위 4개를 Exalted로 업그레이드합니다.",
+        "pl": "Ulepsz 4 kości do Exalted.",
+        "zh-Hans": "将4个骰子升级为崇高。",
+        "zh-Hant": "將4顆骰子升級為崇高。"
+       }
+      }
+     ],
+     "count_translations": {
+      "de": "Einzigartig 2",
+      "es": "Único 2",
+      "fr": "Unique 2",
+      "it": "Unico 2",
+      "ja": "ユニーク 2",
+      "ko": "고유 2",
+      "pl": "Unikalny 2",
+      "zh-Hans": "唯一 2",
+      "zh-Hant": "唯一 2"
+     }
+    },
+    {
+     "count": 3,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, upgrade an attack dice, up to 2 times."
+      }
+     ]
+    },
+    {
+     "count": 4,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, upgrade an attack dice, up to 5 times."
+      }
+     ]
+    },
+    {
+     "count": 5,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Rest, upgrade an attack dice, up to 10 times."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "dcf1dd2d-3369-468f-9475-5ffc5b7bc1ed",
+   "name": "Wayfarer",
+   "position": 22,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "You may do ALL location interactions up to two times."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "9e0b5091-19a9-464c-ad81-bd0e8a4dd48b",
+   "name": "Relic Envoy",
+   "position": 28,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When you encounter a player, you may give them and yourself 1 Fairy Relic from the supply."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d02f42f6-6451-4f8a-a586-ac130f9885a9",
+   "name": "Relic Sentinel",
+   "position": 32,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When you Take Damage, you may choose to take 0 damage if you discard a relic."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "d94cc132-6e83-4527-9f15-2365fde69518",
+   "name": "Arcane Vanguard",
+   "position": 45,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "Gain 2 initiative. On this spirit's Awakening, gain 3 Arcane Attack Dice."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "17e08cde-f3d2-480b-8386-1e3047e2f85a",
+   "name": "Soul Weaver",
+   "position": 6,
+   "class_type": "normal",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On a Spirit World or Abyss Summon, you may put all spirits back and draw again."
+      }
+     ]
+    },
+    {
+     "count": 3,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "In combat, your side may always attack at the same time as the enemy. In addition to (1)."
+      }
+     ]
+    },
+    {
+     "count": 4,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When gaining spirit augments, you may place them on a spirit with one existing augment. In addition to (1) and (2)."
+      }
+     ]
+    },
+    {
+     "count": 2,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "After you get Corrupted, and restore all barriers, gain 2 max barrier."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "20d2a252-3655-4839-93a4-04db111c0617",
+   "name": "Cursed Spirit",
+   "position": 10,
+   "class_type": "normal",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": "1+",
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If you become Tainted, in the Awakening Phase, gain 1 max barrier or 1 Enchanted Attack for every Cursed Spirit."
+      }
+     ]
+    },
+    {
+     "count": "1+",
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If you become Corrupt,  in the Awakening Phase, gain 1 max barrier or 1 Rune for every Cursed Spirit."
+      }
+     ]
+    },
+    {
+     "count": "1+",
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If you become Fallen, in the Awakening Phase, gain 1 max barrier or 1 Spirit Augment for every Cursed Spirit."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "8e156cb4-1461-411f-8b0c-79adacbc9d97",
+   "name": "Growth Warden",
+   "position": 33,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If you gained or upgraded attack dice  this turn, gain 2 max barrier or any 1 Spirit Augment"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "1f880d9d-f0e7-4d2b-8e50-ce9883b1c102",
+   "name": "Living Bastion",
+   "position": 46,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When you take damage, take 6 less. Gain 6 damage and 6 Initiative."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e6cb39c6-eee0-47d2-b032-c2a992ab7378",
+   "name": "Emberguard",
+   "position": 34,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If you roll an even combat value in combat, when you Take Damage, reduce it by 5."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cbbdd615-d54b-4aa3-b860-ef605df41f91",
+   "name": "Arcane Ascendant",
+   "position": 47,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "In the Awakening phase, you may upgrade 1 Exalted Attack to an Arcane Attack."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "aa90084b-a07a-4b00-9448-9f5dae83bd03",
+   "name": "Cultivator",
+   "position": 5,
+   "class_type": "normal",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": 2,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Cultivate, gain 1 potential."
+      }
+     ]
+    },
+    {
+     "count": 3,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Cultivate, gain 2 potential."
+      }
+     ]
+    },
+    {
+     "count": 4,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Cultivate, gain 5 potential."
+      }
+     ]
+    },
+    {
+     "count": 5,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Cultivate, gain 10 potential and 1 of any relic."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "bf04c279-bcff-41f0-a9e3-be3f9161b887",
+   "name": "Disruptor",
+   "position": 17,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If the opponent has higher initiative, when you Take Damage, half it (rounding up)."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "41180098-1490-4223-9a5a-415a6ec89ca0",
+   "name": "Runebound Vessel",
+   "position": 35,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "You may place unlimited Spirit Augments on this spirit. On awaken, gain any 2 augments for this spirit."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cd699d38-fea9-4bb9-9244-8acfa74f8e5a",
+   "name": "Arcane Alchemist",
+   "position": 26,
+   "class_type": "human",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When you cultivate, you may discard 4 attack dice to gain 1 Arcane Attack Dice."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "72bf99e7-2cf1-497b-9a8e-1df58e37096d",
+   "name": "Runic Duplicator",
+   "position": 36,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "When trading for a spirit augment, gain two of that augment."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "1a894014-2829-480e-9c16-75c92aa05b47",
+   "name": "Tide Stalker",
+   "position": 40,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Navigation Reveal, you may change your destination and you may always attack first."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "2686944a-49f4-4a5e-ac3d-d10d14bb9609",
+   "name": "Rune Mage",
+   "position": 14,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "In the Awakening Phase, you may discard a rune to gain an Enchanted Attack."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ae0ad0aa-9ab5-4872-9777-ebc21717adc2",
+   "name": "The Corruptor",
+   "position": 18,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "Drop your status to Fallen, and replace all Spirit World spirits with a random Arcane Abyss Spirit. Gain 2 Initiative."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "33c7d413-1dd0-472f-be67-5505cd830084",
+   "name": "Woundreaver",
+   "position": 23,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "In Combat, deal 1 damage per Broken Barrier (max 4)"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "41a377bb-c49a-4675-8ecc-44105135ed5b",
+   "name": "Monster Hunter",
+   "position": 41,
+   "class_type": "human",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "You may initiate Monster Combat two times."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "46cf02f0-a3cd-4211-bde4-cc3c5417bd6f",
+   "name": "Healer",
+   "position": 1,
+   "class_type": "human",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "color": "bronze",
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On rest, if you have 10 max barrier, you may restore 3 barrier and gain 1 VP. When discarded, restore 2 barrier."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "5ef93452-0c88-4710-83b9-bbebadbdd8cf",
+   "name": "Relic Warden",
+   "position": 19,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "For every unique Relic you hold, reduce incoming damage by 2."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "8015821c-08cd-4895-9b03-865ad09976aa",
+   "name": "Aegis Weaver",
+   "position": 43,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "+4 Initiative."
+      },
+      {
+       "type": "benefit",
+       "description": "Whenever your Max Barrier increases, restore an equal amount of Barrier. For example, gaining 2 Max Barrier restores 2 Barrier."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "f5438f3c-2052-4093-b402-893a45cf7046",
+   "name": "Spirit Animal",
+   "position": 8,
+   "class_type": "normal",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": "1+",
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "In combat, deal 1 damage and gain 1 combat initiative for every Spirit Animal trait.",
+       "description_translations": {
+        "de": "Erhalte 1 zusätzlichen Siegpunkt beim Töten eines Monsters. Verringere eingehenden Monsterschaden um 1",
+        "es": "Gana 1 punto de victoria adicional al matar a un monstruo. Reduce el daño de monstruo recibido en 1",
+        "fr": "Gagnez 1 point de victoire supplémentaire lors de l'élimination d'un monstre. Réduisez les dégâts de monstre subis de 1",
+        "it": "Ottieni 1 punto vittoria extra quando uccidi un Mostro. Riduci di 1 i danni dei mostri subiti",
+        "ja": "モンスターを倒したとき、追加で勝利点を1獲得する。受けるモンスターのダメージを1減らす",
+        "ko": "몬스터 처치 시 추가로 승리 점수 1점을 획득한다. 받는 몬스터 피해를 1 감소시킨다",
+        "pl": "Zyskaj 1 dodatkowy punkt zwycięstwa za Zabicie Potwora. Zmniejsz otrzymywane obrażenia od potworów o 1",
+        "zh-Hans": "击杀怪物时额外获得 1 点胜利点数。受到的怪物伤害减少 1",
+        "zh-Hant": "擊殺怪物時額外獲得 1 點勝利點數。受到的怪物傷害減少 1"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "97724d22-27de-490d-86d4-e87e83d25961",
+   "name": "Sharpshooter",
+   "position": 20,
+   "class_type": "human",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "Your side may always attack at the same time as the enemy. When discarded, gain 1 Enchanted Attack."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "85021637-3ad8-4476-a675-8187938dd7ee",
+   "name": "Captain",
+   "position": 29,
+   "class_type": "human",
+   "is_special": false,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "If you Cultivate with 3 Heroes, gain 1 Spirit Augment. When discarded, gain 1 Enchanted Attack."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "91322cba-4201-48a3-86b1-2d6d034fce3f",
+   "name": "Abyss Summoner",
+   "position": 11,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "On Spirit World summon, you may draw from the Arcane Abyss Bag. When you discard an Arcane Abyss Spirit, gain 4 points.",
+       "description_translations": {
+        "de": "Erhalte 1 Arkaner Angriff für je 2 Arkane Tropfen, die du hast.",
+        "es": "Obtén 1 Ataque Arcano por cada 2 Gotas Arcanas que tengas.",
+        "fr": "Gagnez 1 Attaque arcanique pour chaque tranche de 2 Gouttelettes arcaniques que vous avez.",
+        "it": "Ottieni 1 Attacco Arcano per ogni 2 Gocce Arcane che possiedi.",
+        "ja": "所持している秘術の雫2つごとに、秘術攻撃を1得る。",
+        "ko": "보유한 비전 물방울 2개마다 비전 공격 1을 획득합니다.",
+        "pl": "Zyskaj 1 Atak Arkaniczny za każde 2 Arkane Krople, które posiadasz.",
+        "zh-Hans": "你每拥有 2 个奥术水滴，获得 1 点奥术攻击。",
+        "zh-Hant": "你每擁有 2 個奧術水滴，獲得 1 點奧術攻擊。"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "136bd398-5144-46d6-a128-371b2d39596a",
+   "name": "Fatestriker",
+   "position": 37,
+   "class_type": "special",
+   "is_special": true,
+   "effect_schema": [
+    {
+     "count": 1,
+     "effects": [
+      {
+       "type": "benefit",
+       "description": "Gain 4 Initiative. In the Battle Step, roll your attack twice and take the higher roll."
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "origins": [
+  {
+   "id": "ad555f03-9b89-4a71-a47c-464fd67d2c05",
+   "name": "Forest",
+   "position": 6,
+   "color": "#10b981",
+   "icon_png": "origin_icons/ad555f03-9b89-4a71-a47c-464fd67d2c05/origin_floral_patch_icon.png.png",
+   "icon_token_png": "origin_icons/ad555f03-9b89-4a71-a47c-464fd67d2c05/origin_floral_patch_icon.png.png",
+   "description": "Gather the prettiest floral spirits and"
+  },
+  {
+   "id": "48e4acb4-ee9e-42ea-ba82-70165770c368",
+   "name": "Human Enclave",
+   "position": 2,
+   "color": "#6b7280",
+   "icon_png": "origin_icons/48e4acb4-ee9e-42ea-ba82-70165770c368/origin_human_enclave_icon.png.png",
+   "icon_token_png": "origin_icons/48e4acb4-ee9e-42ea-ba82-70165770c368/origin_human_enclave_icon.png.png",
+   "description": "Cheap, and flexible. fits into any composition"
+  },
+  {
+   "id": "b4a04571-548d-4572-a6a8-0b85c39316d3",
+   "name": "Twilight Fairies",
+   "position": 52,
+   "color": "#d76ace",
+   "icon_png": "origin_icons/b4a04571-548d-4572-a6a8-0b85c39316d3/origin_twilight_fairies_icon.png.png",
+   "icon_token_png": "origin_icons/b4a04571-548d-4572-a6a8-0b85c39316d3/origin_twilight_fairies_icon.png.png",
+   "description": "Late Game Trait, Mixed Atk/Def."
+  },
+  {
+   "id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e",
+   "name": "Arcane Spirits",
+   "position": 50,
+   "color": "#8b5cf6",
+   "icon_png": "origin_icons/36bd6a28-d5ae-4598-97ea-cec6a14b9c5e/origin_arcane_spirits_icon.png.png",
+   "icon_token_png": "origin_icons/36bd6a28-d5ae-4598-97ea-cec6a14b9c5e/origin_arcane_spirits_icon.png.png",
+   "description": "A unified origin for spirits formerly aligned with Void, Astral Zone, and Royal Family."
+  },
+  {
+   "id": "178449e9-cc6b-45ab-8522-5183fe1d9307",
+   "name": "Fire",
+   "position": 7,
+   "color": "#a95189",
+   "icon_png": "origin_icons/178449e9-cc6b-45ab-8522-5183fe1d9307/origin_lantern_lights_icon.png.png",
+   "icon_token_png": "origin_icons/178449e9-cc6b-45ab-8522-5183fe1d9307/origin_lantern_lights_icon.png.png",
+   "description": "Generalist comp, mostly for the artifacts."
+  },
+  {
+   "id": "d40b9771-29b0-4391-a9aa-41945682cd3a",
+   "name": "Hero Party",
+   "position": 102,
+   "color": "#6b7280",
+   "icon_png": "origin_icons/d40b9771-29b0-4391-a9aa-41945682cd3a/origin_hero_party_icon.png.png",
+   "icon_token_png": "origin_icons/d40b9771-29b0-4391-a9aa-41945682cd3a/origin_hero_party_icon.png.png",
+   "description": "The Hero Party are a class where units grow stronger over time as they level up.\n\nThe Hero's Party origin introduces a Hero Spirit specific leveling system. Add Hero Party Leveling tokens onto Hero Party Spirits to increase their strength and level them up."
+  },
+  {
+   "id": "82816408-d2e1-4e2c-9954-d9aea0bad324",
+   "name": "Arctic Nest",
+   "position": 13,
+   "color": "#64748b",
+   "icon_png": "origin_icons/82816408-d2e1-4e2c-9954-d9aea0bad324/origin_arctic_nest_icon.png.png",
+   "icon_token_png": "origin_icons/82816408-d2e1-4e2c-9954-d9aea0bad324/origin_arctic_nest_icon.png.png",
+   "description": "Play around a lot of Arctic Units, and eventually summon the Ice Dragon!"
+  },
+  {
+   "id": "fa7db249-d99d-4c1d-a37d-9027c9f5a31e",
+   "name": "Mountain",
+   "position": 14,
+   "color": "#3b82f6",
+   "icon_png": "origin_icons/fa7db249-d99d-4c1d-a37d-9027c9f5a31e/origin_cyber_city_icon.png.png",
+   "icon_token_png": "origin_icons/fa7db249-d99d-4c1d-a37d-9027c9f5a31e/origin_cyber_city_icon.png.png",
+   "description": "The Cyber City origin gives players dangerous Cyber Worm Attack Dice, which can multiply during combat."
+  },
+  {
+   "id": "d459ae53-da95-4323-b348-6720e52643d4",
+   "name": "Lost",
+   "position": 999,
+   "color": "#6b7280",
+   "icon_png": "origin_icons/d459ae53-da95-4323-b348-6720e52643d4/origin_lost_icon.png.png",
+   "icon_token_png": "origin_icons/d459ae53-da95-4323-b348-6720e52643d4/origin_lost_icon.png.png",
+   "description": "An enigmatic origin tied to forgotten realms."
+  },
+  {
+   "id": "294cee31-a7ac-4292-9b61-d4293c05c146",
+   "name": "Water",
+   "position": 11,
+   "color": "#64748b",
+   "icon_png": "origin_icons/294cee31-a7ac-4292-9b61-d4293c05c146/origin_tidal_tribe_icon.png.png",
+   "icon_token_png": "origin_icons/294cee31-a7ac-4292-9b61-d4293c05c146/origin_tidal_tribe_icon.png.png",
+   "description": null
+  }
+ ],
+ "mats": [
+  {
+   "id": "a36f2af9-3c8c-4265-939c-62bd2e12e878",
+   "name": "Royal Family",
+   "origin_id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e",
+   "icon_path": "runes/a36f2af9-3c8c-4265-939c-62bd2e12e878/icon.png"
+  },
+  {
+   "id": "34b2a963-f8c6-4fc0-8272-ddc50b0036a8",
+   "name": "Forest",
+   "origin_id": "ad555f03-9b89-4a71-a47c-464fd67d2c05",
+   "icon_path": "runes/34b2a963-f8c6-4fc0-8272-ddc50b0036a8/icon.png"
+  },
+  {
+   "id": "356f3ad2-4cac-4b69-a3cc-7559f8891d8e",
+   "name": "Cyber City",
+   "origin_id": "fa7db249-d99d-4c1d-a37d-9027c9f5a31e",
+   "icon_path": "runes/356f3ad2-4cac-4b69-a3cc-7559f8891d8e/icon.png"
+  },
+  {
+   "id": "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+   "name": "Any Rune",
+   "origin_id": "d459ae53-da95-4323-b348-6720e52643d4",
+   "icon_path": "runes/7ca279f0-1ca8-484a-a86e-0a87aaa7b312/icon.png"
+  },
+  {
+   "id": "480cd5f7-adea-481d-8ea9-aad776599d7b",
+   "name": "Lantern Lights",
+   "origin_id": "178449e9-cc6b-45ab-8522-5183fe1d9307",
+   "icon_path": "runes/480cd5f7-adea-481d-8ea9-aad776599d7b/icon.png"
+  },
+  {
+   "id": "5eba8681-16b8-4563-b017-22c80a84b35b",
+   "name": "Tidal Tribe",
+   "origin_id": "294cee31-a7ac-4292-9b61-d4293c05c146",
+   "icon_path": "runes/5eba8681-16b8-4563-b017-22c80a84b35b/icon.png"
+  },
+  {
+   "id": "a6111d01-2c55-4b1f-854a-32887d92b8e1",
+   "name": "Teapot",
+   "origin_id": null,
+   "icon_path": "runes/a6111d01-2c55-4b1f-854a-32887d92b8e1/icon.png"
+  },
+  {
+   "id": "e02af831-e599-4676-9e37-820d19bfc3e1",
+   "name": "Fairy Rune",
+   "origin_id": null,
+   "icon_path": "runes/e02af831-e599-4676-9e37-820d19bfc3e1/icon.png"
+  },
+  {
+   "id": "690a7e3b-5737-4494-bb8a-b58bee13f473",
+   "name": "Flower",
+   "origin_id": null,
+   "icon_path": "runes/690a7e3b-5737-4494-bb8a-b58bee13f473/icon.png"
+  },
+  {
+   "id": "ee1486a0-8b61-499c-809b-b4de9920aa8f",
+   "name": "Magnet",
+   "origin_id": null,
+   "icon_path": "runes/ee1486a0-8b61-499c-809b-b4de9920aa8f/icon.png"
+  },
+  {
+   "id": "8a0d54ca-aeab-405c-9e5c-1c1425d1aa86",
+   "name": "Firecracker",
+   "origin_id": null,
+   "icon_path": "runes/8a0d54ca-aeab-405c-9e5c-1c1425d1aa86/icon.png"
+  },
+  {
+   "id": "19d72567-4ac8-4214-a21f-596bc88de8f7",
+   "name": "Any Relic",
+   "origin_id": "d459ae53-da95-4323-b348-6720e52643d4",
+   "icon_path": "runes/19d72567-4ac8-4214-a21f-596bc88de8f7/icon.png"
+  },
+  {
+   "id": "745e019e-67af-4933-aa12-a70ceff0f090",
+   "name": "Crown",
+   "origin_id": null,
+   "icon_path": "runes/745e019e-67af-4933-aa12-a70ceff0f090/icon.png"
+  }
+ ],
+ "guardians": [
+  {
+   "id": "fd8557f7-1cdc-4dde-9941-42b171992432",
+   "name": "Bubblepop",
+   "origin_id": "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+  },
+  {
+   "id": "20112149-c8df-48b6-b508-5e9c39e87fc2",
+   "name": "Embers",
+   "origin_id": "178449e9-cc6b-45ab-8522-5183fe1d9307"
+  },
+  {
+   "id": "20ec3d5d-3fd8-4b5b-b75b-127acb325fff",
+   "name": "Lumina",
+   "origin_id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+  },
+  {
+   "id": "73ab5a4a-b988-4d3e-b849-611f4767f1ae",
+   "name": "Taron",
+   "origin_id": "294cee31-a7ac-4292-9b61-d4293c05c146"
+  },
+  {
+   "id": "8ce23995-bb31-4be8-8fd6-fda19d1f430a",
+   "name": "Pixia",
+   "origin_id": "b4a04571-548d-4572-a6a8-0b85c39316d3"
+  },
+  {
+   "id": "36ed021f-cad0-4442-8879-054e095c84b3",
+   "name": "Fjorn",
+   "origin_id": "82816408-d2e1-4e2c-9954-d9aea0bad324"
+  },
+  {
+   "id": "c17484dc-741b-4e9b-9ece-6581c2095fe1",
+   "name": "Prox",
+   "origin_id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+  },
+  {
+   "id": "2d8d81ec-5b43-4b2b-b8b4-a69e7fca8496",
+   "name": "Void Avatar",
+   "origin_id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+  },
+  {
+   "id": "9cb13598-1b9f-47a6-b86c-c687665b3eb5",
+   "name": "Human Avatar",
+   "origin_id": "48e4acb4-ee9e-42ea-ba82-70165770c368"
+  },
+  {
+   "id": "3267074b-4f61-457c-b406-12ccf43d068a",
+   "name": "Myrtle",
+   "origin_id": "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+  }
+ ],
+ "spirits": [
+  {
+   "id": "25848694-6c69-408c-9b78-94948c6df3a6",
+   "name": "Ashveil, the Rekindled Blade",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "8015821c-08cd-4895-9b03-865ad09976aa"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "480cd5f7-adea-481d-8ea9-aad776599d7b",
+     "480cd5f7-adea-481d-8ea9-aad776599d7b"
+    ]
+   }
+  },
+  {
+   "id": "1781a426-913b-4446-a062-a0ecfe401027",
+   "name": "Blacklily",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "173589ed-9bec-4965-94e6-dadbc6b5310a",
+     "20d2a252-3655-4839-93a4-04db111c0617"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "504c77b5-8f46-427d-a339-1ef11160b0d7",
+   "name": "Caldera, the Sixfold Inferno",
+   "cost": 9,
+   "traits": {
+    "class_ids": [
+     "1f880d9d-f0e7-4d2b-8e50-ce9883b1c102"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Have 7 Fire Spirits, or discard 3 Arcane Abyss Spirits.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "be2072ea-ccdb-4941-b1b3-26890a7b64cf",
+   "name": "Sovereign of the Drowned Sky",
+   "cost": 9,
+   "traits": {
+    "class_ids": [
+     "d94cc132-6e83-4527-9f15-2365fde69518"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "5eba8681-16b8-4563-b017-22c80a84b35b",
+     "5eba8681-16b8-4563-b017-22c80a84b35b",
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312"
+    ]
+   }
+  },
+  {
+   "id": "36bb656c-49fe-4d50-a037-b29dbd1bfa91",
+   "name": "Crestwing Regent",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "d4752205-1dcb-4f87-8b46-14c4b1bd97d5"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Cultivate with 4 Water Spirits.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "241c977c-d1c8-4ef5-856b-8100ef228f72",
+   "name": "Inkweaver",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "17e08cde-f3d2-480b-8386-1e3047e2f85a",
+     "20d2a252-3655-4839-93a4-04db111c0617"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "fc667265-edd6-4c28-b96e-6e505188ce72",
+   "name": "Nhal, the World Unwoven",
+   "cost": 9,
+   "traits": {
+    "class_ids": [
+     "ae0ad0aa-9ab5-4872-9777-ebc21717adc2"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Navigate to the Arcane Abyss, but don't fight the monster.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "cafb6cfb-11f8-476c-a275-a5b8179630d2",
+   "name": "The Huntress of All Tides",
+   "cost": 9,
+   "traits": {
+    "class_ids": [
+     "1a894014-2829-480e-9c16-75c92aa05b47"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Have 7 Water Spirits, or discard 3 Arcane Abyss Spirits.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "7e3d88c0-6854-4c13-882c-ddf78c0d2b58",
+   "name": "Cragfist",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "dd17c072-159c-4b43-831f-1f51bb8b7720"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "9707edd6-fbc3-4433-99f2-a687f39505fd",
+   "name": "Geode Tender",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "173589ed-9bec-4965-94e6-dadbc6b5310a"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "e24e9f91-7333-44c0-968e-15b900af3385",
+   "name": "Dawn Chorus, Heralds of First Light",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "f5438f3c-2052-4093-b402-893a45cf7046",
+     "f5438f3c-2052-4093-b402-893a45cf7046",
+     "f5438f3c-2052-4093-b402-893a45cf7046"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312"
+    ]
+   }
+  },
+  {
+   "id": "f043914f-9259-481f-960d-ab83a48b06ba",
+   "name": "Hero Zarek",
+   "cost": 1,
+   "traits": {
+    "class_ids": [
+     "89a2cec9-bdcd-4b48-9574-033098e74438"
+    ],
+    "origin_ids": []
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "b3068fcf-d197-4030-ba55-29ac1621f9a9",
+   "name": "Moonrend, the Twice-Striking",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "136bd398-5144-46d6-a128-371b2d39596a"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Discard 4 of any attack dice.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "3b196b06-a047-4505-aad6-bf0c9fe05ac0",
+   "name": "Oathroot Ancient",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "8e156cb4-1461-411f-8b0c-79adacbc9d97"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "34b2a963-f8c6-4fc0-8272-ddc50b0036a8",
+     "34b2a963-f8c6-4fc0-8272-ddc50b0036a8"
+    ]
+   }
+  },
+  {
+   "id": "ed612933-fd19-4b68-993e-6e61b52eb4ce",
+   "name": "Aureate Runeweaver",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "2686944a-49f4-4a5e-ac3d-d10d14bb9609"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312"
+    ]
+   }
+  },
+  {
+   "id": "5f719599-3914-440e-b518-2426ab1e83c5",
+   "name": "Blightshard",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "20d2a252-3655-4839-93a4-04db111c0617",
+     "20d2a252-3655-4839-93a4-04db111c0617"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "40016186-6b98-4dbb-8364-b50d27e9f394",
+   "name": "Hexbound Reaver",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "601d161f-0d86-4904-afe9-20dd096954c9"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e",
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e"
+    ]
+   }
+  },
+  {
+   "id": "e5dff9be-ac58-47bb-bd9d-69efb03dc393",
+   "name": "Hollowbloom, Gate of the First Forest",
+   "cost": 9,
+   "traits": {
+    "class_ids": [
+     "91322cba-4201-48a3-86b1-2d6d034fce3f"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Have 7 Forest Spirits, or discard 3 Arcane Abyss Spirits.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "18154c10-1422-4655-a7cd-c637ac947916",
+   "name": "Elderhorn, the Living Bastion",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "4768cb25-60ac-4178-b9e3-25aca98f495a"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "34b2a963-f8c6-4fc0-8272-ddc50b0036a8",
+     "34b2a963-f8c6-4fc0-8272-ddc50b0036a8"
+    ]
+   }
+  },
+  {
+   "id": "e95c775b-0677-4884-bc59-12ae2762ca8b",
+   "name": "Reefrunner",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "f5438f3c-2052-4093-b402-893a45cf7046"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "3aefb245-b1d8-43ab-8aa2-cb2210abbb72",
+   "name": "Hero Nyra",
+   "cost": 1,
+   "traits": {
+    "class_ids": [
+     "cd699d38-fea9-4bb9-9244-8acfa74f8e5a"
+    ],
+    "origin_ids": []
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "d89f5d3a-5519-4b96-baf0-1f0a49c0ada1",
+   "name": "Keeper of the Twin Pyres",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "e6cb39c6-eee0-47d2-b032-c2a992ab7378"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "480cd5f7-adea-481d-8ea9-aad776599d7b",
+     "480cd5f7-adea-481d-8ea9-aad776599d7b"
+    ]
+   }
+  },
+  {
+   "id": "b8314d8f-ea32-44de-a3ad-62944e5ccecb",
+   "name": "Twinforge Runemaster",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "72bf99e7-2cf1-497b-9a8e-1df58e37096d"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e",
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e"
+    ]
+   }
+  },
+  {
+   "id": "e368f98d-fa19-47b0-bb54-1dd26d902b23",
+   "name": "Dandelion",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "f5438f3c-2052-4093-b402-893a45cf7046"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "cfccc89f-06fe-4bd7-85f9-c5f9416cd1b4",
+   "name": "Hero Ironmane",
+   "cost": 1,
+   "traits": {
+    "class_ids": [
+     "41a377bb-c49a-4675-8ecc-44105135ed5b"
+    ],
+    "origin_ids": []
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "e75cb10c-fee4-488b-a213-e663c0fecae7",
+   "name": "The Argent Loom",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "cbbdd615-d54b-4aa3-b860-ef605df41f91"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Discard 2 Arcane Abyss Spirits.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "5c864c2d-20bd-4134-a829-09a2cc793e41",
+   "name": "Crown of a Thousand Facets",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "41180098-1490-4223-9a5a-415a6ec89ca0"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e",
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e"
+    ]
+   }
+  },
+  {
+   "id": "5dc44c85-8224-4c49-89ff-90a37aa10040",
+   "name": "The Solar Reliquarian",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "5ef93452-0c88-4710-83b9-bbebadbdd8cf"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Discard 2 Runes of different types.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "70ed3fcd-a7c2-4443-b5e7-9b6de8491917",
+   "name": "The Threefold Watcher",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "f5438f3c-2052-4093-b402-893a45cf7046",
+     "f5438f3c-2052-4093-b402-893a45cf7046",
+     "f5438f3c-2052-4093-b402-893a45cf7046"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "text": "In combat, fail to defeat the enemy AND get yourself corrupted.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "d19f66b7-787b-4c5b-b498-e1f8fb7688e0",
+   "name": "Sporecap",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "173589ed-9bec-4965-94e6-dadbc6b5310a"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "a77653c5-69fa-4351-833d-59d302722365",
+   "name": "Aurelion, Crown of the Undying Sun",
+   "cost": 9,
+   "traits": {
+    "class_ids": [
+     "f0aebe91-6217-4f9c-a85e-94ac2232f5b4"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312"
+    ]
+   }
+  },
+  {
+   "id": "728c5151-2da6-4202-b5b0-aae13dec68be",
+   "name": "Dawnborn, Child of Two Suns",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "dcf1dd2d-3369-468f-9475-5ffc5b7bc1ed"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+     "7ca279f0-1ca8-484a-a86e-0a87aaa7b312"
+    ]
+   }
+  },
+  {
+   "id": "955abfc0-fa04-4ab3-bcaf-5dc2839ddec0",
+   "name": "Tidewarden, the Unbroken Current",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "0d15066d-ab3b-4c84-b0d5-4562a1c5fbb7"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "5eba8681-16b8-4563-b017-22c80a84b35b",
+     "5eba8681-16b8-4563-b017-22c80a84b35b",
+     "5eba8681-16b8-4563-b017-22c80a84b35b"
+    ]
+   }
+  },
+  {
+   "id": "57b06434-0eeb-4e9e-a17f-c2bdce613e52",
+   "name": "Hero Captain",
+   "cost": 1,
+   "traits": {
+    "class_ids": [
+     "85021637-3ad8-4476-a675-8187938dd7ee"
+    ],
+    "origin_ids": []
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "a5e1965a-4b51-4de4-ad42-2f8ac085ff0e",
+   "name": "Briarfox",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "f5438f3c-2052-4093-b402-893a45cf7046"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "a6c24fba-940e-4aa9-8729-a361f7209f9c",
+   "name": "Hero Ivern",
+   "cost": 1,
+   "traits": {
+    "class_ids": [
+     "97724d22-27de-490d-86d4-e87e83d25961"
+    ],
+    "origin_ids": []
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "ae827012-29ff-406e-bcbe-afe3a5258607",
+   "name": "Briarwing Regent",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "d4752205-1dcb-4f87-8b46-14c4b1bd97d5"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Cultivate with 4 Forest Spirits.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "c0d12557-4615-4c60-a93c-622e5fc70eae",
+   "name": "Cinderwing Regent",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "d4752205-1dcb-4f87-8b46-14c4b1bd97d5"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Cultivate with 4 Fire Spirits.",
+    "type": "text"
+   }
+  },
+  {
+   "id": "cb20dc2d-f486-45ac-a1b7-3f7d97805d09",
+   "name": "Blackflame Novice",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "aa90084b-a07a-4b00-9448-9f5dae83bd03",
+     "20d2a252-3655-4839-93a4-04db111c0617"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "9ef2c6f9-c6b3-4ec0-8e6e-4ddd5b26b344",
+   "name": "Frostfang",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "f5438f3c-2052-4093-b402-893a45cf7046"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "aa541f5d-f648-4964-9e8b-db891c2bbd81",
+   "name": "Hero Mintyheart",
+   "cost": 1,
+   "traits": {
+    "class_ids": [
+     "46cf02f0-a3cd-4211-bde4-cc3c5417bd6f"
+    ],
+    "origin_ids": []
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "b5ceee38-e08f-44e4-b87a-93cb024cbfd8",
+   "name": "Hearthling",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "aa90084b-a07a-4b00-9448-9f5dae83bd03"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "47504f4d-bfab-4e7c-98d7-3476b28d922d",
+   "name": "Ashblade",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "dd17c072-159c-4b43-831f-1f51bb8b7720"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "afcb8700-c12e-45b5-b844-bf4339354e76",
+   "name": "Briarblade",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "dd17c072-159c-4b43-831f-1f51bb8b7720",
+     "dd17c072-159c-4b43-831f-1f51bb8b7720"
+    ],
+    "origin_ids": [
+     "ad555f03-9b89-4a71-a47c-464fd67d2c05"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "ee907abd-2f0a-4b8b-a004-f6012d2ab6ad",
+   "name": "Ashweaver",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "17e08cde-f3d2-480b-8386-1e3047e2f85a"
+    ],
+    "origin_ids": [
+     "178449e9-cc6b-45ab-8522-5183fe1d9307"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "c6548ffd-4852-4e62-9c5a-9329e40d222e",
+   "name": "River Guide",
+   "cost": 3,
+   "traits": {
+    "class_ids": [
+     "aa90084b-a07a-4b00-9448-9f5dae83bd03"
+    ],
+    "origin_ids": [
+     "294cee31-a7ac-4292-9b61-d4293c05c146"
+    ]
+   },
+   "awaken_condition": null
+  },
+  {
+   "id": "0a775e09-555f-43a7-ac5b-06aaeaa4b69c",
+   "name": "Stonegate Colossus",
+   "cost": 7,
+   "traits": {
+    "class_ids": [
+     "bf04c279-bcff-41f0-a9e3-be3f9161b887"
+    ],
+    "origin_ids": [
+     "fa7db249-d99d-4c1d-a37d-9027c9f5a31e"
+    ]
+   },
+   "awaken_condition": {
+    "type": "rune_cost",
+    "rune_ids": [
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e",
+     "356f3ad2-4cac-4b69-a3cc-7559f8891d8e"
+    ]
+   }
+  },
+  {
+   "id": "e4822f18-98f0-44fd-8711-756f946f6cd5",
+   "name": "Vespera, Empress of the Last Moon",
+   "cost": 9,
+   "traits": {
+    "class_ids": [
+     "acbc0f6d-1514-45aa-85a0-a5d635db6e51"
+    ],
+    "origin_ids": [
+     "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e"
+    ]
+   },
+   "awaken_condition": {
+    "text": "Cultivate while Evil.",
+    "type": "text"
+   }
+  }
+ ]
+}

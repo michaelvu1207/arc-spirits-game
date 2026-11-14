@@ -18,6 +18,7 @@ import { runClassHandler } from './handlers';
 import { recordCultivateAwakenProgress } from './awakenHandlers';
 import { augmentContributions } from '../augments';
 import { originRuneForName } from '../locationInteractions';
+import { ORIGIN_REWARDS, grantRelicTool, spiritsByOrigin } from './relicTools';
 
 /** Class trait counts from AWAKENED spirits only (unawakened classes are inactive).
  *  Placed spirit augments also contribute their class — but only while their host
@@ -119,7 +120,7 @@ export function applyTrigger(
 		if (count <= 0) continue;
 
 		// Attribute every log line a class produces to its source trait, so the combat /
-		// reward / awakening log says WHAT granted each effect (e.g. "Spirit Animal:
+		// reward / awakening log says WHAT granted each effect (e.g. "Beast:
 		// Gained +1 combat damage."). Lines a handler already self-attributes (they start
 		// with the class name) are left untouched to avoid a doubled prefix.
 		const attributeFrom = (start: number) => {
@@ -177,7 +178,7 @@ export function applyRest(
 }
 
 /**
- * Cultivate grants one origin rune for every three same-origin spirit traits.
+ * Cultivate grants the origin rewards (3 spirits → 1 origin rune; 5 → the origin relic, once).
  * Its class payoff remains separate: the Cultivator
  * trigger grants max barrier on the 2/3/4/5 → +1/+2/+5/+10 ladder, while Arc
  * Mage, Captain, and other classes hook into the same `onCultivate` event.
@@ -202,37 +203,38 @@ export function applyCultivate(
 		.filter((p): p is NonNullable<typeof p> => !!p);
 	recordCultivateAwakenProgress(player, allPlayers);
 
-	// Intrinsic Cultivate yield (every player, no class required): gain ONE origin rune
-	// for every THREE spirit origin traits sharing that origin.
-	// Awakened and face-down spirits both count (origin is always active; only class
-	// abilities need awakening). Only the four core origins with a basic rune (Mountain
-	// Region / Forest Region / Fire Region / Water Region) produce trios. Rune Traveler's
-	// per-turn `doubleRunes` doubles the rune yield.
-	const originTraits: Record<string, number> = {};
-	for (const spirit of player.spirits) {
-		for (const [origin, n] of Object.entries(spirit.origins ?? {})) {
-			originTraits[origin] = (originTraits[origin] ?? 0) + (typeof n === 'number' ? n : 1);
-		}
-	}
+	// Intrinsic Cultivate yield — the origin rewards of origins.json `calling_card`
+	// (November 2026): for each land origin, 3+ spirits of that origin → 1 rune of the
+	// origin; 5+ spirits → the origin's relic tool, one time per player. Spirits count once
+	// each, awakened or face-down (origin is always active). Rune Traveler's per-turn
+	// `doubleRunes` doubles the rune.
+	const bySpirit = spiritsByOrigin(player.spirits);
 	const runeMult = player.doubleRunes ? 2 : 1;
-	for (const [origin, traits] of Object.entries(originTraits)) {
-		const rune = originRuneForName(origin);
-		if (!rune) continue;
-		const trios = Math.floor(traits / 3);
-		const count = trios * runeMult;
-		for (let i = 0; i < count; i += 1) {
-			player.mats.push({
-				slotIndex: player.mats.length + 1,
-				hasRune: true,
-				id: rune.runeId,
-				name: rune.name,
-				type: rune.type,
-				originId: rune.originId ?? undefined,
-				classId: rune.classId ?? undefined,
-				special: rune.special
-			});
+	for (const [origin, reward] of Object.entries(ORIGIN_REWARDS)) {
+		const spirits = bySpirit[origin] ?? 0;
+		if (spirits >= reward.runeAt) {
+			const rune = originRuneForName(origin);
+			if (rune) {
+				for (let i = 0; i < runeMult; i += 1) {
+					player.mats.push({
+						slotIndex: player.mats.length + 1,
+						hasRune: true,
+						id: rune.runeId,
+						name: rune.name,
+						type: rune.type,
+						originId: rune.originId ?? undefined,
+						classId: rune.classId ?? undefined,
+						special: rune.special
+					});
+				}
+				log.push(`Cultivated ${runeMult} ${rune.name}${runeMult === 1 ? '' : 's'} (${spirits} ${origin} spirits).`);
+			}
 		}
-		if (count > 0) log.push(`Cultivated ${count} ${rune.name}${count === 1 ? '' : 's'}.`);
+		const gained = (player.originRelicsGained ??= []);
+		if (spirits >= reward.relicAt && !gained.includes(origin)) {
+			gained.push(origin);
+			grantRelicTool(player, reward.relicId, log);
+		}
 	}
 	// Class-hook dispatch: fire onCultivate class effects for the acting seat.
 	applyTrigger(state, seat, 'onCultivate', log, opts);

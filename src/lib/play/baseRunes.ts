@@ -111,6 +111,8 @@ export function upgradeRelicRuneSlots(state: PublicGameState): void {
 	for (const player of Object.values(state.players ?? {})) {
 		if (!player) continue;
 		for (const slot of player.mats ?? []) {
+			// Relic tools (November 2026) are real relics again; only legacy slots convert.
+			if (slot.relicTool) continue;
 			const names: Record<string, string> = {
 				Firecracker: '480cd5f7-adea-481d-8ea9-aad776599d7b',
 				Flower: '34b2a963-f8c6-4fc0-8272-ddc50b0036a8',

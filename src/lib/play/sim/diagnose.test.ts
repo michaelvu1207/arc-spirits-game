@@ -76,7 +76,7 @@ function instrumentedSolo(
 
 	const snap = () => {
 		const p = state.players[seat]!;
-		const m = state.monster;
+		const m = p.monsterHand?.[0]; // the seat's oldest monster card (each player fights their own)
 		const t = p.attackDice.reduce<Record<string, number>>((a, d) => ((a[d.tier] = (a[d.tier] ?? 0) + 1), a), {});
 		const cc = p.spirits.reduce<Record<string, number>>((a, s) => {
 			for (const c of Object.keys(s.classes ?? {})) if (!s.isFaceDown) a[c] = (a[c] ?? 0) + 1;
@@ -85,7 +85,7 @@ function instrumentedSolo(
 		const team = Object.entries(cc).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${v}${k.slice(0, 3)}`).join('+') || '∅';
 		trace?.push({
 			round: state.round,
-			ladder: m?.ladderIndex ?? -1,
+			ladder: m?.difficulty ?? -1,
 			monster: m?.name ?? '—',
 			mdmg: m?.damage ?? 0,
 			mhp: m?.hp ?? 0,
@@ -105,7 +105,7 @@ function instrumentedSolo(
 			snap();
 			lastRound = state.round;
 		}
-		maxLadder = Math.max(maxLadder, state.monster?.ladderIndex ?? 0);
+		maxLadder = Math.max(maxLadder, ...(state.players[seat]?.monsterHand ?? []).map((card) => card.difficulty ?? 0));
 		maxPot = Math.max(maxPot, state.players[seat]?.maxBarrier ?? 0);
 		let progressed = false;
 		for (const s of state.activeSeats) {
@@ -171,7 +171,7 @@ describe.skipIf(!RUN_SIM)('diagnose solo stall', () => {
 		}
 
 		// Detailed per-round trace for the ARCANE profile on seed 1 — watch for arcane dice (×a)
-		// and an Arcane Ascendant (Arc) appearing once it claims an Abyss summon + awakens it.
+		// and an Sorcerer (Arc) appearing once it claims an Abyss summon + awakens it.
 		const trace: RoundSnap[] = [];
 		instrumentedSolo(catalog, 1, arcaneProfile, 50, trace);
 		console.log('\n--- arcane seed=1 per-round trace ---');
@@ -187,8 +187,8 @@ describe.skipIf(!RUN_SIM)('diagnose solo stall', () => {
 		const catalog = await loadPlayCatalog();
 		const base = BOT_PROFILES['hard'];
 		const simClasses = {
-			preCapClasses: ['Sharpshooter', 'Fighter', 'Elementalist', 'Spirit Animal', 'Cultivator'],
-			postCapClasses: ['Sharpshooter', 'Spirit Animal', 'Elementalist'],
+			preCapClasses: ['Sharpshooter', 'Fighter', 'Elementalist', 'Beast', 'Cultivator'],
+			postCapClasses: ['Sharpshooter', 'Beast', 'Elementalist'],
 			originFocus: false
 		};
 		const profiles: Record<string, BotProfile> = {
@@ -229,7 +229,7 @@ describe.skipIf(!RUN_SIM)('diagnose solo stall', () => {
 		const ablations: Record<string, BotProfile> = {
 			'FULL build (baseline)': M,
 			'– potential (cap stays 4)': { ...M, maxBarrierTarget: 4 },
-			'– flat damage (no Spirit Animal)': {
+			'– flat damage (no Beast)': {
 				...M,
 				damageClasses: [],
 				postCapClasses: ['Cultivator', 'Healer', 'Elementalist']
@@ -306,7 +306,7 @@ describe.skipIf(!RUN_SIM)('diagnose solo stall', () => {
 		}
 		// Per-class cost/bag reachability — Spirit World = cost 1-5, Arcane Abyss = cost 7-9.
 		console.log('\n--- key class reachability (cost → bag) ---');
-		for (const cls of ['Healer', 'Spirit Animal', 'Cultivator', 'Fighter', 'Elementalist', 'Arcane Ascendant', 'Sharpshooter']) {
+		for (const cls of ['Healer', 'Beast', 'Cultivator', 'Fighter', 'Elementalist', 'Sorcerer', 'Sharpshooter']) {
 			const costs = catalog.spirits.filter((s) => (s.classes?.[cls] ?? 0) > 0).map((s) => s.cost).sort((a, b) => a - b);
 			const sw = costs.filter((c) => c >= 1 && c <= 5).length;
 			const ab = costs.filter((c) => c >= 7 && c <= 9).length;
@@ -320,7 +320,7 @@ describe.skipIf(!RUN_SIM)('diagnose solo stall', () => {
 
 		// Dice-tier kill odds reference: P(sum of N tier dice >= hp).
 		console.log('\n--- max firepower reference (avg dmg by 10-dice pool) ---');
-		console.log('10 basic≈3.3  10 enchanted≈6.7  10 exalted≈10.0  10 arcane≈20.0  (+1 per Spirit Animal trait, flat)');
+		console.log('10 basic≈3.3  10 enchanted≈6.7  10 exalted≈10.0  10 arcane≈20.0  (+1 per Beast trait, flat)');
 		expect((catalog.monsters ?? []).length).toBeGreaterThan(0);
 	}, 120_000);
 });

@@ -1,8 +1,9 @@
 import { BASE_RUNES, RELIC_TO_RUNE } from './baseRunes';
 /**
  * Monster-kill rewards — derived from a monster's `reward_track` (a flat list of
- * icon_pool tokens). Defeating the Arcane Abyss monster lets the player claim up
- * to `chooseAmount` (default 2) tokens from this pool; you do NOT get them all.
+ * icon_pool tokens). Defeating the Arcane Abyss monster grants EVERY token on the
+ * card (owner rule, 2026-11-03: no "choose 2"). A "choose a rune" token still asks
+ * the player which rune.
  *
  * Reward semantics reuse the single source of truth in `locationInteractions.ts`
  * (`REWARD_ICON_SEMANTICS`). The one contextual difference: the "Any relic" and
@@ -20,6 +21,7 @@ import {
 	relicOptions,
 	type GainEffect
 } from './locationInteractions';
+import { RELIC_TOOLS } from './effects/relicTools';
 
 /** One selectable reward in a monster's pool. */
 export interface MonsterRewardOption {
@@ -51,6 +53,9 @@ export function monsterGainFor(iconId: string): GainEffect | null {
 		case 'navigationPower': return null;
 		case 'victoryPoints':
 			return { type: 'vp', amount: m.amount };
+		case 'attackDice':
+			// One die-face token = one attack die of that tier (owner rule, 2026-11-11).
+			return { type: 'attackDice', tier: m.tier, amount: m.amount };
 		case 'action':
 			return { type: 'action', action: m.action };
 		case 'gainMaxBarrier':
@@ -60,12 +65,16 @@ export function monsterGainFor(iconId: string): GainEffect | null {
 		case 'anyRune':
 			return { type: 'chooseRune', options: originRuneOptions() };
 		case 'wildcardRelic':
-			// "Any relic" gain — choose one of the five relics.
+			// "Any relic" gain — choose one of the five relics. No rule yet says which relic
+			// tools it may give, so it keeps its earlier mapping to a basic rune.
 			return { type: 'chooseRune', options: relicOptions().map(downgradedRune) };
 		case 'originRune':
 		case 'specialRune': {
 			const rune = toResolvedRune(m);
-			return rune ? { type: 'rune', rune: downgradedRune(rune) } : null;
+			if (!rune) return null;
+			// A named relic on the card (Firecracker, Flower, Diamond, Cleansing Teapot) gives that
+			// relic (owner rule, 2026-11-12); `addGainedRune` makes it a relic tool.
+			return { type: 'rune', rune: RELIC_TOOLS[rune.runeId] ? rune : downgradedRune(rune) };
 		}
 	}
 }
@@ -82,15 +91,19 @@ export function buildMonsterRewards(
 	(rewardTrack ?? []).forEach((token, index) => {
 		const effect = monsterGainFor(token);
 		if (!effect) return;
-		out.push({ index, token, effect, label: effect.type === 'rune' && BASE_RUNES[effect.rune.runeId] ? effect.rune.name : meaningFor(token)?.label ?? 'Reward' });
+		const relic = effect.type === 'rune' ? RELIC_TOOLS[effect.rune.runeId] : undefined;
+		const label =
+			effect.type === 'rune' && BASE_RUNES[effect.rune.runeId]
+				? effect.rune.name
+				: relic
+					? `${relic.name} relic`
+					: (meaningFor(token)?.label ?? 'Reward');
+		out.push({ index, token, effect, label });
 	});
 	return out;
 }
 
-/** How many tokens a player may actually claim from `rewardTrack`. */
-export function rewardClaimCount(
-	rewardTrack: string[] | null | undefined,
-	chooseAmount: number
-): number {
-	return Math.min(Math.max(0, chooseAmount), buildMonsterRewards(rewardTrack).length);
+/** How many rewards a kill grants: every resolvable token on the card. */
+export function rewardClaimCount(rewardTrack: string[] | null | undefined): number {
+	return buildMonsterRewards(rewardTrack).length;
 }

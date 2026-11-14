@@ -1,5 +1,6 @@
 import { REGION_ORIGIN_NAMES } from '../src/lib/play/regions';
 import { regionCatalog } from '../src/lib/play/regionRules';
+import { currentClassName } from '../src/lib/play/classNames';
 /**
  * PlayCatalog loader for the room server.
  *
@@ -219,7 +220,7 @@ export async function loadCatalog(): Promise<PlayCatalog> {
 		null;
 
 	// ── Pure transform: faithful port of buildPlayCatalog (src/lib/play/server/catalog.ts) ──
-	const classNames = new Map(classes.map((c) => [c.id, c.name]));
+	const classNames = new Map(classes.map((c) => [c.id, currentClassName(c.name)]));
 	const originNames = new Map(origins.map((o) => [o.id, REGION_ORIGIN_NAMES[o.id] ?? o.name]));
 	const runesById = new Map<string, AwakenRuneInfo>(
 		mats.map((mat) => [mat.id, { name: mat.name, kind: matKind(mat) }])
@@ -247,7 +248,7 @@ export async function loadCatalog(): Promise<PlayCatalog> {
 			.map(
 				(k): PlayCatalogClass => ({
 					id: k.id,
-					name: k.name,
+					name: currentClassName(k.name),
 					classType: k.class_type ?? null,
 					isSpecial: k.is_special ?? false,
 					effectSchema: (k.effect_schema ?? null) as PlayCatalogClass['effectSchema']

@@ -42,7 +42,7 @@ import type {
 	PublicGameState,
 	SeatColor
 } from '../types';
-import { encodeObs, encodeAction } from './encode';
+import { encodeObs, encodeAction, seatTargetMonster } from './encode';
 import { evaluateFarmValue } from './farmValue';
 import type { NeuralPolicy } from './net';
 
@@ -140,11 +140,13 @@ function farmValueHeadScore(policy: NeuralPolicy, obs: number[]): number {
 function passesFarmPriorGates(
 	state: PublicGameState,
 	seat: SeatColor,
+	catalog: PlayCatalog,
 	opts: PlanOptions
 ): boolean {
 	const player = state.players[seat];
-	const monster = state.monster;
-	if (!player || !monster || monster.livesRemaining <= 0) return false;
+	// The card this seat would farm: its best hand card (there is no shared Abyss monster).
+	const monster = seatTargetMonster(state, seat, catalog);
+	if (!player || !monster || monster.hp <= 0) return false;
 	const hp = monster.hp ?? monster.maxHp ?? 0;
 	if (opts.farmValueMinMonsterHp !== undefined && hp < opts.farmValueMinMonsterHp) return false;
 	if (opts.farmValueMaxMonsterHp !== undefined && hp > opts.farmValueMaxMonsterHp) return false;
@@ -167,7 +169,7 @@ function farmPriorScore(
 		const farm = evaluateFarmValue(state, seat, catalog, { threshold: 0 });
 		return farm.valid ? farm.score : 0;
 	};
-	const head = (): number => (passesFarmPriorGates(state, seat, opts) ? farmValueHeadScore(policy, obs) : 0);
+	const head = (): number => (passesFarmPriorGates(state, seat, catalog, opts) ? farmValueHeadScore(policy, obs) : 0);
 	if (source === 'head') return head();
 	if (source === 'max') return Math.max(heuristic(), head());
 	if (source === 'sum') return clamp01(heuristic() + head());

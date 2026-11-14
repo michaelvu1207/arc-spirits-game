@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import {
-	augmentCapacityForSpirit,
-	augmentContributions,
-	UNLIMITED_AUGMENT_CAPACITY,
-	UNLIMITED_AUGMENT_CLASSES
-} from './augments';
+import { augmentCapacityForSpirit, augmentContributions } from './augments';
 
 function spirit(slotIndex: number, isFaceDown: boolean, classes: Record<string, number> = {}) {
 	return { slotIndex, isFaceDown, classes };
@@ -16,21 +11,8 @@ describe('augmentCapacityForSpirit', () => {
 		expect(augmentCapacityForSpirit(spirit(1, false, {}))).toBe(1);
 	});
 
-	test('a Runebound Vessel holds unlimited augments (large finite cap)', () => {
-		expect(augmentCapacityForSpirit(spirit(1, false, { 'Runebound Vessel': 1 }))).toBe(
-			UNLIMITED_AUGMENT_CAPACITY
-		);
-		// The cap is a plain integer (not Infinity) and is large enough to never bind.
-		expect(Number.isFinite(UNLIMITED_AUGMENT_CAPACITY)).toBe(true);
-		expect(UNLIMITED_AUGMENT_CAPACITY).toBeGreaterThanOrEqual(99);
-	});
-
-	test('a zero-count augment-capacity class does not raise capacity', () => {
-		expect(augmentCapacityForSpirit(spirit(1, false, { 'Runebound Vessel': 0 }))).toBe(1);
-	});
-
-	test('Runebound Vessel is registered as an unlimited-capacity class', () => {
-		expect(UNLIMITED_AUGMENT_CLASSES.has('Runebound Vessel')).toBe(true);
+	test('a Herder holds one augment like any spirit (the old unlimited rule is gone)', () => {
+		expect(augmentCapacityForSpirit(spirit(1, false, { Herder: 1 }))).toBe(1);
 	});
 });
 
