@@ -37,6 +37,9 @@ import {
 	roomCloseReason,
 	isRoomOpen,
 	humanLastSeen,
+	humanAbsentMs,
+	noHumanPlayersLeft,
+	seatedHumanLastSeen,
 	type RoomCloseReason,
 	type RoomLiveness
 } from '../roomLifecycle';
@@ -699,8 +702,10 @@ export async function enforceRoomDeadlines(roomCode: string): Promise<void> {
 
 /** Build the pure {@link RoomLiveness} input from a session row + its member rows. */
 function roomLivenessFrom(
-	session: Pick<PlaySessionRow, 'status' | 'created_at' | 'started_at'>,
+	session: Pick<PlaySessionRow, 'status' | 'created_at' | 'started_at'> &
+		Partial<Pick<PlaySessionRow, 'public_state'>>,
 	members: {
+		id?: string;
 		display_name: string | null;
 		last_seen_at: string;
 		is_bot?: boolean | null;
@@ -720,9 +725,46 @@ function roomLivenessFrom(
 		),
 		// Legacy human memberships with no owning account have no safe claim path under
 		// the account trust model — the room is quarantined (closed) for security upgrade.
-		hasUnownedHumans: members.some((m) => !(m.is_bot ?? false) && m.user_id == null)
+		hasUnownedHumans: members.some((m) => !(m.is_bot ?? false) && m.user_id == null),
+		seatedHumanLastSeenMs: seatedHumansOf(session, members)
 	};
 }
+
+/**
+ * `last_seen_at` of the humans seated in a started game (see roomLifecycle
+ * seatedHumanLastSeen), or undefined when it cannot be judged here: not an active game, no
+ * public state on the row, or member rows loaded without their ids (a seat could then not be
+ * matched to its member, and an unmatched seat would wrongly read as a human who left).
+ */
+function seatedHumansOf(
+	session: Pick<PlaySessionRow, 'status'> & Partial<Pick<PlaySessionRow, 'public_state'>>,
+	members: { id?: string; last_seen_at: string; is_bot?: boolean | null }[]
+): number[] | undefined {
+	if (session.status !== 'active' || session.public_state == null) return undefined;
+	if (members.some((m) => !m.id)) return undefined;
+	const state = parseJsonValue<PublicGameState | null>(session.public_state, null);
+	if (!state) return undefined;
+	return seatedHumanLastSeen(
+		state,
+		members.map((m) => ({ id: m.id!, lastSeenAtMs: Date.parse(m.last_seen_at), isBot: m.is_bot }))
+	);
+}
+
+/** The `no_human_players` rule alone (roomLifecycle): a started game whose seated humans
+ *  have all been away longer than ARC_HUMAN_ABSENT_MS. False for an all-bot/AI start. */
+function noHumanPlayersRule(
+	session: PlaySessionRow,
+	members: { id?: string; last_seen_at: string; is_bot?: boolean | null }[],
+	nowMs: number
+): boolean {
+	const seated = seatedHumansOf(session, members);
+	return !!seated && noHumanPlayersLeft(seated, nowMs, humanAbsentMs());
+}
+
+/** Short audit note stored with a close event. */
+const CLOSE_NOTES: Partial<Record<RoomCloseReason, string>> = {
+	no_human_players: 'closed: no human players left'
+};
 
 /**
  * Transition a room to the terminal `closed` state: mirrors the row `status`, stamps
@@ -735,7 +777,7 @@ async function closeRoomSession(
 	session: PlaySessionRow,
 	reason: RoomCloseReason
 ): Promise<PlaySessionRow | null> {
-	if (reason === 'abandoned' && session.status === 'active' && session.mode === 'ranked' && session.ranked_season_id) {
+	if ((reason === 'abandoned' || reason === 'no_human_players') && session.status === 'active' && session.mode === 'ranked' && session.ranked_season_id) {
 		const abandonment = await getPlayAdmin().rpc('finalize_ranked_abandonment', { p_session_id: session.id });
 		if (abandonment.error) {
 			throw kitError(503, 'Could not durably record ranked abandonment; room closure will retry.');
@@ -778,7 +820,7 @@ async function closeRoomSession(
 			revision: state.revision,
 			actor_member_id: null,
 			command_type: 'closeRoom',
-			command_payload: { reason }
+			command_payload: CLOSE_NOTES[reason] ? { reason, note: CLOSE_NOTES[reason] } : { reason }
 		})
 		.then(undefined, () => {});
 
@@ -815,6 +857,7 @@ async function maybeTakeOverRankedDisconnects(session: PlaySessionRow): Promise<
 async function maybeCloseRoom(
 	session: PlaySessionRow,
 	members?: {
+		id?: string;
 		display_name: string | null;
 		last_seen_at: string;
 		is_bot?: boolean | null;
@@ -858,13 +901,14 @@ export async function closeAbandonedRooms(): Promise<void> {
 	const ids = rooms.map((room) => room.id);
 	const { data: memberData, error: memberError } = await admin
 		.from(PLAY_TABLES.MEMBERS)
-		.select('session_id, display_name, last_seen_at, is_bot, user_id')
+		.select('id, session_id, display_name, last_seen_at, is_bot, user_id')
 		.in('session_id', ids);
 	if (memberError) {
 		throw kitError(500, `Failed to sweep room members: ${memberError.message}`);
 	}
 
 	type LiteMember = {
+		id: string;
 		session_id: string;
 		display_name: string | null;
 		last_seen_at: string;
@@ -1890,7 +1934,7 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 	const sessionIds = rows.map((r) => r.id);
 	const { data: memberRows, error: memberError } = await admin
 		.from(PLAY_TABLES.MEMBERS)
-		.select('session_id, display_name, role, last_seen_at, is_bot, user_id')
+		.select('id, session_id, display_name, role, last_seen_at, is_bot, user_id')
 		.in('session_id', sessionIds);
 
 	if (memberError) {
@@ -1898,6 +1942,7 @@ export async function listOpenRooms(): Promise<RoomSummary[]> {
 	}
 
 	type LiteMember = {
+		id: string;
 		session_id: string;
 		display_name: string | null;
 		role: MemberRole;
@@ -2609,28 +2654,66 @@ async function aiRoomFrom(session: PlaySessionRow, aiMembers: Set<string>): Prom
 	};
 }
 
-async function aiMemberIds(sessionIds: string[]): Promise<Map<string, Set<string>>> {
-	const bySession = new Map<string, Set<string>>();
+type PresenceMember = {
+	id: string;
+	session_id: string;
+	is_bot: boolean | null;
+	bot_profile: string | null;
+	last_seen_at: string;
+};
+
+/** Every member of the given sessions (one query): AI seats AND human presence. */
+async function presenceMembers(sessionIds: string[]): Promise<Map<string, PresenceMember[]>> {
+	const bySession = new Map<string, PresenceMember[]>();
 	if (sessionIds.length === 0) return bySession;
 	const { data, error } = await getPlayAdmin()
 		.from(PLAY_TABLES.MEMBERS)
-		.select('id, session_id, bot_profile')
-		.in('session_id', sessionIds)
-		.eq('is_bot', true);
-	if (error) throw kitError(500, `Failed to load AI seats: ${error.message}`);
-	for (const row of (data as { id: string; session_id: string; bot_profile: string | null }[] | null) ?? []) {
-		if (!isAiBotProfile(row.bot_profile)) continue;
-		const set = bySession.get(row.session_id) ?? new Set<string>();
-		set.add(row.id);
-		bySession.set(row.session_id, set);
+		.select('id, session_id, is_bot, bot_profile, last_seen_at')
+		.in('session_id', sessionIds);
+	if (error) throw kitError(500, `Failed to load room members: ${error.message}`);
+	for (const row of (data as PresenceMember[] | null) ?? []) {
+		const list = bySession.get(row.session_id) ?? [];
+		list.push(row);
+		bySession.set(row.session_id, list);
 	}
 	return bySession;
 }
 
+function aiMemberSet(members: PresenceMember[]): Set<string> {
+	return new Set(members.filter((m) => m.is_bot && isAiBotProfile(m.bot_profile)).map((m) => m.id));
+}
+
 /**
- * ACTIVE rooms with at least one AI seat, at most `limit` of them (the ones that changed least
- * recently first are not tracked; the newest rooms are taken). Two cheap queries pick the rooms
- * (ids only), then only those rows are loaded in full.
+ * Close a started game whose seated humans have all been away longer than
+ * ARC_HUMAN_ABSENT_MS (roomLifecycle `no_human_players`) through the normal close path
+ * (status 'closed', revision CAS, audit event "closed: no human players left"). Exactly one
+ * writer wins the CAS. Returns the freshest row (closed, or unchanged when the rule does not
+ * apply). A game started with only bot/AI seats is never closed here.
+ */
+async function closeIfNoHumanPlayers(
+	session: PlaySessionRow,
+	members: { id?: string; last_seen_at: string; is_bot?: boolean | null }[]
+): Promise<PlaySessionRow> {
+	if (session.status !== 'active' || !noHumanPlayersRule(session, members, Date.now())) return session;
+	const closed = await closeRoomSession(session, 'no_human_players');
+	if (closed) return closed;
+	return (await getSessionByRoomCode(session.room_code)) ?? session;
+}
+
+/** The bot tick's entry check: true when the room is (now) closed because no human player is
+ *  left, so the tick must not drive any seat. One member query per call on an active room. */
+export async function closeRoomIfNoHumanPlayers(roomCode: string): Promise<boolean> {
+	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	if (!session || session.status !== 'active') return false;
+	const after = await closeIfNoHumanPlayers(session, await getMembersForSession(session.id));
+	return after.status !== 'active';
+}
+
+/**
+ * ACTIVE rooms with at least one AI seat, at most `limit` of them (the newest rooms are
+ * taken). Three queries per call whatever the room count: active ids, their members (AI seats
+ * and human presence in one read), then the picked rows in full. A picked game whose seated
+ * humans have all gone is closed here (one update + one audit insert, once) and not listed.
  */
 export async function listActiveAiRooms(limit: number): Promise<AiRoom[]> {
 	const admin = getPlayAdmin();
@@ -2642,23 +2725,27 @@ export async function listActiveAiRooms(limit: number): Promise<AiRoom[]> {
 		.limit(500);
 	if (active.error) throw kitError(500, `Failed to list active rooms: ${active.error.message}`);
 	const ids = ((active.data as { id: string }[] | null) ?? []).map((row) => row.id);
-	const members = await aiMemberIds(ids);
-	const picked = ids.filter((id) => members.has(id)).slice(0, limit);
+	const members = await presenceMembers(ids);
+	const picked = ids.filter((id) => aiMemberSet(members.get(id) ?? []).size > 0).slice(0, limit);
 	if (picked.length === 0) return [];
 	const rows = await admin.from(PLAY_TABLES.SESSIONS).select('*').in('id', picked);
 	if (rows.error) throw kitError(500, `Failed to load AI rooms: ${rows.error.message}`);
 	const out: AiRoom[] = [];
-	for (const row of (rows.data as PlaySessionRow[] | null) ?? []) {
+	for (const loaded of (rows.data as PlaySessionRow[] | null) ?? []) {
+		const roomMembers = members.get(loaded.id) ?? [];
+		const row = await closeIfNoHumanPlayers(loaded, roomMembers);
 		if (row.status !== 'active') continue;
-		out.push(await aiRoomFrom(row, members.get(row.id) ?? new Set()));
+		out.push(await aiRoomFrom(row, aiMemberSet(roomMembers)));
 	}
 	return out;
 }
 
-/** One room as an {@link AiRoom}, or null when it does not exist. */
+/** One room as an {@link AiRoom} (closed first when no human player is left), or null when
+ *  it does not exist. */
 export async function loadAiRoom(roomCode: string): Promise<AiRoom | null> {
-	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
-	if (!session) return null;
-	const members = await aiMemberIds([session.id]);
-	return aiRoomFrom(session, members.get(session.id) ?? new Set());
+	const loaded = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	if (!loaded) return null;
+	const members = (await presenceMembers([loaded.id])).get(loaded.id) ?? [];
+	const session = await closeIfNoHumanPlayers(loaded, members);
+	return aiRoomFrom(session, aiMemberSet(members));
 }

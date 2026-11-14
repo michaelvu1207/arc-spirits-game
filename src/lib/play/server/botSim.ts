@@ -16,6 +16,7 @@ import { BOTS_ENABLED, requireBotsEnabled } from '../botAvailability';
  */
 
 import {
+	closeRoomIfNoHumanPlayers,
 	enforceRoomDeadlines,
 	getSessionIdByRoomCode,
 	getSessionModeByRoomCode,
@@ -451,8 +452,11 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 	// would ever trigger the drain and the room would hang. The poll tick is the one thing
 	// guaranteed to keep firing, so it must be able to unstick the room by itself.
 	await enforceRoomDeadlines(roomCode);
+	// Every human seated at the start has gone (ARC_HUMAN_ABSENT_MS): close the game here and
+	// drive nothing. A game started with only bot/AI seats is never closed by this.
+	const noHumansLeft = await closeRoomIfNoHumanPlayers(roomCode);
 	state = await loadRawRoomState(roomCode);
-	if (state.status !== 'active') {
+	if (noHumansLeft || state.status !== 'active') {
 		const view = await loadRoomView(roomCode, { trustedMemberId: hostMemberId ?? null });
 		return { view, commandsIssued: 0 };
 	}

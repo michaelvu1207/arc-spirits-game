@@ -15,6 +15,12 @@
  *                            (a longer grace — a real game shouldn't die on a brief
  *                            all-disconnect, but an abandoned one must not linger as
  *                            "live" forever, since no winner ⇒ it never finishes).
+ *  - `active` → `no_human_players`: the game started with at least one human in a seat
+ *                            and every such human has been away for longer than
+ *                            {@link humanAbsentMs} (ARC_HUMAN_ABSENT_MS, default 5 min) —
+ *                            bots/AI seats must not keep playing (and spending model
+ *                            calls) for nobody. A game started with only bot/AI seats
+ *                            (the host watches) is exempt from this rule.
  *  - `finished` / `closed`: terminal — never reconsidered.
  *
  * Bots never keep a room alive: they are real member rows but never poll, so they're
@@ -49,7 +55,23 @@ export const LOBBY_PRESENCE_WINDOW_MS = 60_000;
 export const ACTIVE_PRESENCE_WINDOW_MS = 120_000;
 
 export type RoomStatus = 'lobby' | 'active' | 'finished' | 'closed';
-export type RoomCloseReason = 'expired' | 'abandoned' | 'security_upgrade';
+export type RoomCloseReason = 'expired' | 'abandoned' | 'security_upgrade' | 'no_human_players';
+
+/** Default {@link humanAbsentMs}: 5 minutes. */
+export const DEFAULT_HUMAN_ABSENT_MS = 300_000;
+
+/**
+ * How long every seated human may be away before a started game closes as
+ * `no_human_players` (ARC_HUMAN_ABSENT_MS). "Away" = no `last_seen_at` refresh: an open
+ * room page refreshes it every ~2-3 s (the /view and chat polls), so a player who is
+ * only thinking never counts as gone.
+ */
+export function humanAbsentMs(
+	env: Record<string, string | undefined> = typeof process !== 'undefined' ? process.env : {}
+): number {
+	const raw = Number(env.ARC_HUMAN_ABSENT_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HUMAN_ABSENT_MS;
+}
 
 /** The minimal liveness facts about a session needed to judge whether it's alive. */
 export interface RoomLiveness {
@@ -68,6 +90,14 @@ export interface RoomLiveness {
 	 * rather than letting anyone impersonate the legacy member.
 	 */
 	hasUnownedHumans?: boolean;
+	/**
+	 * `last_seen_at` (epoch ms) of every HUMAN who holds a seat of the started game (see
+	 * {@link seatedHumanLastSeen}). Empty: the game started with only bot/AI seats — exempt
+	 * from `no_human_players`. Undefined: not known here (rule not applied).
+	 */
+	seatedHumanLastSeenMs?: number[];
+	/** Override of {@link humanAbsentMs} (tests). */
+	humanAbsentMs?: number;
 }
 
 /** True if any human was seen within `windowMs` of now. */
@@ -96,6 +126,12 @@ export function roomCloseReason(input: RoomLiveness, nowMs: number): RoomCloseRe
 			: 'abandoned';
 	}
 	if (input.status === 'active') {
+		if (
+			input.seatedHumanLastSeenMs &&
+			noHumanPlayersLeft(input.seatedHumanLastSeenMs, nowMs, input.humanAbsentMs ?? humanAbsentMs())
+		) {
+			return 'no_human_players';
+		}
 		return hasPresentHuman(input.humanLastSeenMs, nowMs, ACTIVE_PRESENCE_WINDOW_MS)
 			? null
 			: 'abandoned';
@@ -121,4 +157,39 @@ export function humanLastSeen(
 	return members
 		.filter((m) => !(m.isBot === true || (m.displayName ?? '').startsWith(BOT_NAME_PREFIX)))
 		.map((m) => m.lastSeenAtMs);
+}
+
+/**
+ * `last_seen_at` of every human seated in the game. Seats are locked once a game starts, so
+ * the state's active seats ARE the seats taken at the start. A seat counts as human when its
+ * member row is not a bot; a seat whose member row is gone counts as a human who left (bot
+ * rows are never deleted, human rows only by account deletion). Empty ⇒ the game started with
+ * only bot/AI seats. Spectators and a host who never sat are not seats and never count.
+ */
+export function seatedHumanLastSeen(
+	state: { activeSeats?: readonly string[]; seats?: Record<string, { memberId?: string | null } | undefined> },
+	members: { id: string; lastSeenAtMs: number; isBot?: boolean | null }[]
+): number[] {
+	const byId = new Map(members.map((m) => [m.id, m]));
+	const out: number[] = [];
+	for (const seat of state.activeSeats ?? []) {
+		const memberId = state.seats?.[seat]?.memberId;
+		if (!memberId) continue;
+		const member = byId.get(memberId);
+		if (member?.isBot === true) continue;
+		out.push(member && Number.isFinite(member.lastSeenAtMs) ? member.lastSeenAtMs : 0);
+	}
+	return out;
+}
+
+/** True when the game had seated humans and every one of them has been away > `absentMs`. */
+export function noHumanPlayersLeft(
+	seatedHumanLastSeenMs: number[],
+	nowMs: number,
+	absentMs: number
+): boolean {
+	return (
+		seatedHumanLastSeenMs.length > 0 &&
+		seatedHumanLastSeenMs.every((seenMs) => nowMs - seenMs > absentMs)
+	);
 }

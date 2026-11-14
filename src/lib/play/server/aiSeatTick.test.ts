@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./service', () => ({
 	enforceRoomDeadlines: vi.fn(),
+	closeRoomIfNoHumanPlayers: vi.fn(async () => false),
 	getSessionIdByRoomCode: vi.fn().mockResolvedValue('session-1'),
 	getSessionModeByRoomCode: vi.fn(),
 	joinRoom: vi.fn(),
