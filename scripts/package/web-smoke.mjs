@@ -91,9 +91,14 @@ while (view?.projection?.status === 'active' && ticks < maxTicks) {
 	const tick = await call('POST', `/api/play/sessions/${roomCode}/bots/tick`, token);
 	if (tick.status !== 200) fail('bot tick', `tick ${ticks}: ${tick.status} ${tick.text.slice(0, 300)}`);
 	ticks++;
-	idle = tick.json?.commandsIssued ? 0 : idle + 1;
+	// "Stuck" is measured in time, not ticks: a fast (local) server answers idle ticks in
+	// milliseconds while a short reveal countdown or a phase deadline is still running.
+	const moved = tick.json?.commandsIssued || tick.json?.projection?.revision !== view?.projection?.revision;
+	if (moved) idle = 0;
+	else if (!idle) idle = Date.now();
 	view = tick.json;
-	if (idle >= 40) fail('bot tick', `no bot command for 40 ticks at round ${view?.projection?.round} phase ${view?.projection?.phase}`);
+	if (idle && Date.now() - idle > 240_000) fail('bot tick', `nothing happened for 4 minutes at round ${view?.projection?.round} phase ${view?.projection?.phase}`);
+	if (!moved) await new Promise((r) => setTimeout(r, 400));
 	if (ticks % 50 === 0) console.log(`     … tick ${ticks}, round ${view?.projection?.round}, ${((Date.now() - began) / 1000).toFixed(0)} s`);
 }
 if (view?.projection?.status !== 'finished') fail('play to the end', `status ${view?.projection?.status} after ${ticks} ticks`);
@@ -108,6 +113,7 @@ for (let i = 0; i < 10; i++) {
 }
 if (post.status !== 200) fail('postgame record', `${post.status} ${post.text.slice(0, 300)}`);
 step('postgame record', JSON.stringify({ finalized: post.json?.finalized, players: post.json?.players?.length ?? post.json?.standings?.length }));
+if (process.env.SMOKE_DEBUG) console.log(JSON.stringify(post.json).slice(0, 2500));
 
 // 6. Replay.
 const gameId = view?.projection?.gameId ?? post.json?.gameId;

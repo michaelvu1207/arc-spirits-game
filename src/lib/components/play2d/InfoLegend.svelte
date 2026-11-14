@@ -33,8 +33,12 @@
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
 	import type { DiceTier } from '$lib/play/types';
 	import { DICE_TIER_ORDER, STATUS_LADDER, MAX_SPIRITS } from '$lib/play/types';
-	import { DICE_TIER_FACES } from '$lib/play/combat';
+	import { DICE_TIER_FACES, PVP_ENGAGE_VP, PVP_VP_PER_CORRUPTED } from '$lib/play/combat';
 	import { iconPoolUrl, storageUrl, statusAccent } from './helpers';
+	import { onMount } from 'svelte';
+	import { supabaseAssets } from '$lib/supabase';
+	import { parseRules, ruleValue } from '$lib/play/rules';
+	import type { PlayRules } from '$lib/play/types';
 
 	interface Props {
 		assets: ReturnType<typeof getAssetState>;
@@ -42,6 +46,20 @@
 		onClose: () => void;
 	}
 	let { assets, context = 'overview', onClose }: Props = $props();
+
+	// The rule switches of the game data in force (the live package on the web, the working data in
+	// the local game), so the texts below describe the rules actually played. Until they load, and
+	// if they cannot be read, the default rules are described.
+	let rules = $state<PlayRules | undefined>(undefined);
+	onMount(async () => {
+		try {
+			const { data } = await supabaseAssets.from('rules').select('*');
+			rules = parseRules(data ?? []).rules;
+		} catch {
+			/* default rules */
+		}
+	});
+	const rule = (name: keyof PlayRules) => ruleValue({ rules }, name);
 
 	interface ScreenInfo {
 		title: string;
@@ -385,19 +403,29 @@
 	// STATUS_LADDER; the spirit board is MAX_SPIRITS (7) at every status. Each corruption costs a
 	// one-time sacrifice (Nth corruption → N spirits; types.ts setCorruptionDiscardObligation).
 	// Only Fallen is Evil (isEvilAlignment).
-	const STATUS_NOTE: Record<string, string> = {
+	const pvpText = $derived(
+		rule('pvpPaysOnCorrupt')
+			? rule('pvpEngageVp')
+				? `for ${PVP_ENGAGE_VP} VP, plus ${PVP_VP_PER_CORRUPTED} VP for each one you corrupt`
+				: `for ${PVP_VP_PER_CORRUPTED} VP for each one you corrupt`
+			: 'for +2 VP each'
+	);
+	const STATUS_NOTE: Record<string, string> = $derived({
 		Pure: 'Uncorrupted and fully Good — your strongest standing.',
 		Tainted: 'Lightly corrupted. Still Good-aligned.',
 		Corrupt: 'Deeply corrupted. Still Good-aligned.',
 		Fallen:
-			'Evil-aligned. In the Encounter phase you may attack co-located Good players for +2 VP each. You can’t fall any further; further corruptions still cost their sacrifice, and each spirit you can’t pay costs 1 VP.'
-	};
-	const statusLevels = STATUS_LADDER.map((name, i) => ({
-		name,
-		color: statusAccent(name),
-		slots: MAX_SPIRITS,
-		note: STATUS_NOTE[name] ?? ''
-	}));
+			`Evil-aligned. In the Encounter phase you may attack co-located Good players ${pvpText}. ` +
+			'You can’t fall any further; further corruptions still cost their sacrifice, and each spirit you can’t pay costs 1 VP.'
+	});
+	const statusLevels = $derived(
+		STATUS_LADDER.map((name, i) => ({
+			name,
+			color: statusAccent(name),
+			slots: MAX_SPIRITS,
+			note: STATUS_NOTE[name] ?? ''
+		}))
+	);
 
 	// ── Spirit World actions (the Location-phase actions, grounded in the engine) ─
 	const spiritActions = $derived(
@@ -410,7 +438,9 @@
 			{
 				id: '12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e',
 				label: 'Arcane Abyss Summon',
-				desc: 'Draw 3 spirits from the Arcane Abyss, then summon up to 1. It arrives unawakened — face-down; awaken it later to switch its traits on.'
+				desc: rule('abyssSummonDraw4Pick2')
+					? 'Draw 4 spirits from the Arcane Abyss, then summon up to 2. They arrive unawakened — face-down; awaken them later to switch their traits on.'
+					: 'Draw 3 spirits from the Arcane Abyss, then summon up to 1. It arrives unawakened — face-down; awaken it later to switch its traits on.'
 			},
 			{
 				id: '60e40dd5-c3cc-4f26-9aa3-2043b4106ade',

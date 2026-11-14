@@ -483,6 +483,12 @@ export function summonDrawSizes(
 	return ruleValue(catalog, 'abyssSummonDraw4Pick2') ? { draw: 4, pick: 2 } : { draw: 3, pick: 1 };
 }
 
+/** The log line of an Arcane Abyss Summon, with the sizes of the rule in force. */
+function abyssSummonLogLine(catalog?: Pick<PlayCatalog, 'rules'> | null): string {
+	const { draw, pick } = summonDrawSizes(ARCANE_ABYSS_BAG, catalog);
+	return `Summon from the Arcane Abyss — draw ${draw}, summon up to ${pick}.`;
+}
+
 function startDraw(
 	state: PublicGameState,
 	player: PrivatePlayerState,
@@ -677,7 +683,7 @@ function applyRewardGain(
 				log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 			} else if (gain.action === 'abyssSummon') {
 				queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
-				log.push('Summon from the Arcane Abyss — draw 3, summon up to 1.');
+				log.push(abyssSummonLogLine(catalog));
 			} else if (gain.action === 'cultivate') {
 				applyCultivate(state, seat, log, { catalog });
 			} else {
@@ -3232,7 +3238,7 @@ function reduceCommand(
 							log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 						} else if (gain.action === 'abyssSummon') {
 							queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
-							log.push('Summon from the Arcane Abyss — draw 3, summon up to 1.');
+							log.push(abyssSummonLogLine(catalog));
 						} else if (gain.action === 'cultivate') {
 							cultivateTokens += 1;
 						} else {
