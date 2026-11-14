@@ -43,6 +43,16 @@ game shows), makes display-size WebP copies and uploads them to the play project
 is copied from the old project's bucket. It also rebuilds the printed monster card faces
 (`static/monster-cards`). `--no-art` skips this and reuses the art of the live package.
 
+## Before a release, when these change
+
+- **Monster Barrier, Damage or rewards** (`monsters_v2.json`): remake the printed monster cards
+  first: `python3 ~/niji-batch/tools/regen_monsters.py` (the niji-batch server must run on
+  port 8787; code only, about a minute for all cards). The site shows a printed card only while
+  its numbers match the game; a stale card is replaced by a plain drawn one. The release prints
+  "card differs from the local row" for every card that still needs this.
+- **A class rule** (a rule switch that changes what a class does): write the new text into
+  `classes.json` as well. Players read the class text from the data, not from the rule switch.
+
 ## Checking a deployment
 
     SUPABASE_URL=… SUPABASE_ANON_KEY=… node scripts/package/web-smoke.mjs https://arcspirits.com
