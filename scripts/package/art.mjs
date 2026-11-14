@@ -15,7 +15,7 @@
  */
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -24,7 +24,6 @@ import { buildImageIndex } from '../local-game/images.mjs';
 const run = promisify(execFile);
 const OLD_BUCKET = 'https://gvxfokbptelmvvlxbigh.supabase.co/storage/v1/object/public/game_assets';
 const IMAGE = /\.(png|jpe?g|webp|gif|svg(\+xml)?)$/i;
-const RASTER = /\.(png|jpe?g|webp)$/i;
 const CACHE = join(homedir(), '.cache', 'arc-package-art');
 
 /** Longest edge of the display copy. Keep in step with maxEdgeFor in src/lib/storageImages.ts. */
@@ -72,25 +71,40 @@ async function fetchOld(path) {
 	return file;
 }
 
+/** What the bytes are, whatever the file is called (the old bucket has PNGs named .svg+xml). */
+function sniff(bytes) {
+	if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
+	if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'jpg';
+	if (bytes.subarray(0, 4).toString('latin1') === 'RIFF' && bytes.subarray(8, 12).toString('latin1') === 'WEBP') return 'webp';
+	if (bytes.subarray(0, 3).toString('latin1') === 'GIF') return 'gif';
+	if (/^\s*(<\?xml|<svg|<!--)/i.test(bytes.subarray(0, 300).toString('utf8'))) return 'svg';
+	return null;
+}
+
 /** Display copy of `file` (WebP, longest edge ≤ edge, never enlarged). SVG and GIF pass through. */
 async function displayCopy(file, edge) {
 	const bytes = readFileSync(file);
-	if (!RASTER.test(file)) {
-		const svg = /\.svg(\+xml)?$/i.test(file);
-		return { bytes, type: svg ? 'image/svg+xml' : 'image/gif' };
-	}
+	const kind = sniff(bytes);
+	if (kind === 'svg') return { bytes, type: 'image/svg+xml' };
+	if (kind === 'gif') return { bytes, type: 'image/gif' };
+	if (!kind) throw new Error('not an image this tool knows');
 	const key = createHash('sha1').update(bytes).update(`|${edge}`).digest('hex');
 	const out = join(CACHE, 'webp', `${key}.webp`);
 	if (!existsSync(out)) {
 		mkdirSync(join(CACHE, 'webp'), { recursive: true });
-		const { stdout } = await run('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file]);
+		// Work on a copy named for what the bytes are, so the tools are not misled by the name.
+		const input = join(tmpdir(), `arc-art-${key}.${kind}`);
+		writeFileSync(input, bytes);
+		const { stdout } = await run('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', input]);
 		const width = Number(/pixelWidth: (\d+)/.exec(stdout)?.[1]);
 		const height = Number(/pixelHeight: (\d+)/.exec(stdout)?.[1]);
 		const scale = width && height ? Math.min(1, edge / Math.max(width, height)) : 1;
 		const resize = scale < 1 ? ['-resize', String(Math.round(width * scale)), String(Math.round(height * scale))] : [];
-		const tmp = join(tmpdir(), `arc-art-${key}.webp`);
-		await run('cwebp', ['-quiet', '-q', '80', '-alpha_q', '90', ...resize, file, '-o', tmp]);
+		const tmp = join(tmpdir(), `arc-art-${key}.out.webp`);
+		await run('cwebp', ['-quiet', '-q', '80', '-alpha_q', '90', ...resize, input, '-o', tmp]);
 		writeFileSync(out, readFileSync(tmp));
+		rmSync(input, { force: true });
+		rmSync(tmp, { force: true });
 	}
 	return { bytes: readFileSync(out), type: 'image/webp' };
 }
