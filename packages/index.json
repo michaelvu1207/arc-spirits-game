@@ -1,5 +1,5 @@
 {
-	"live": "0.1.2",
+	"live": "0.2.0",
 	"versions": [
 		{
 			"version": "0.1.0",
@@ -64,6 +64,36 @@
 			"notes": "Fixes one icon that did not show (a PNG stored under an SVG name). Art and data otherwise as 0.1.1.",
 			"sha256": "92e4826b899087c52c72cefa7e1f914688f04dcaf7937c1aa78df12329850b7c",
 			"rulesHash": "5da0c221159cfc131c8e9ef0c6bcb2cc7232c3156489ef9ff6f7c8f1108063d0",
+			"art": {
+				"id": "73c2b70f8fc3921f",
+				"files": 521
+			},
+			"counts": {
+				"hex_spirits": 64,
+				"classes": 55,
+				"origins": 8,
+				"monsters_v2": 108,
+				"icon_pool": 146,
+				"game_locations": 5,
+				"guardians": 10,
+				"editions": 2,
+				"custom_dice": 5,
+				"dice_sides": 30,
+				"game_location_rows": 14,
+				"monster_pools": 15,
+				"relics": 5,
+				"rules": 1,
+				"mat_items": 12,
+				"reward_row_assignments": 1
+			}
+		},
+		{
+			"version": "0.2.0",
+			"createdAt": "2026-11-14T22:17:53.378Z",
+			"parent": "0.1.2",
+			"notes": "Balance update. Fixes set: summon replaces a spirit when the board is full; Cultivator relic once; PvP pays on corruption (no bounty on Good players), +VP for engaging; attacker sacrifice cap; Corruptor counts as corruption; Fallen debt below zero; Sun rework; monsters have initiative and new Barrier/Damage values; Bastion and Firetail work against monsters; new class texts for Mage, Chorus, Shieldbearer, Nomad, Gardener, Cleric. Arcane Abyss summon: draw 4, summon up to 2. Power rework: 22 Powers, 11 general and 11 niche, none needs another player to be Evil.",
+			"sha256": "334ab5bf7e8f7752163b710dfc92bed8eeaaf112a098b4e1f64f08f2060f21d7",
+			"rulesHash": "1b12b4d508df68426adc18dbb8d9f8060a6054f5b51ddaa28914c17ed22cf776",
 			"art": {
 				"id": "73c2b70f8fc3921f",
 				"files": 521

@@ -1,0 +1,304 @@
+# 0.2.0
+
+Balance update. Fixes set: summon replaces a spirit when the board is full; Cultivator relic once; PvP pays on corruption (no bounty on Good players), +VP for engaging; attacker sacrifice cap; Corruptor counts as corruption; Fallen debt below zero; Sun rework; monsters have initiative and new Barrier/Damage values; Bastion and Firetail work against monsters; new class texts for Mage, Chorus, Shieldbearer, Nomad, Gardener, Cleric. Arcane Abyss summon: draw 4, summon up to 2. Power rework: 22 Powers, 11 general and 11 niche, none needs another player to be Evil.
+
+Changes since 0.1.2: 120 changed
+
+## Classes
+
+- **Bastion**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"If the opponent has higher initiative, when you Take Damage, half it (rounding up… → [{"count":1,"effects":[{"type":"benefit","description":"If the opponent has higher initiative, or is a monster, when you Take Damage, hal…
+- **Nomad**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"You may do ALL location interactions up to two times."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"You may do ALL location interactions up to two times. In the Awakening Phase, gai…
+- **Mage**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, you may discard a rune to gain an Enchanted Attack."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"On this spirit's Awakening, gain 2 Exalted Attack Dice. In the Awakening Phase, y…
+- **Cleric**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"For every unique Relic you hold, reduce incoming damage by 2."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"On this spirit's Awakening, gain 1 relic of your choice. For every unique Relic y…
+- **Firetail**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In a round when another player is at your location, gain 3 Initiative."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"In combat with a monster, or in a round when another player is at your location, …
+- **Chorus**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When you awaken a spirit, restore 3 Barrier and gain 1 Max Barrier."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"When you awaken a spirit (this one included), restore all your Barrier and gain 2…
+- **Shieldbearer**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When you take damage, if your Barrier is full, take 3 less."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"When you take damage, take 2 less. If your Barrier is full, take 4 less instead."…
+- **Gardener**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, if you are not Evil, restore 2 Barrier."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, if you are not Evil, restore 3 Barrier and gain 1 Max Bar…
+
+## Spirits
+
+- **Dawn Chorus, Heralds of First Light**
+  - awaken_condition: {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune","Any basic rune"]} → {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune"]}
+- **Dawnborn, Child of Two Suns**
+  - awaken_condition: {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune","Any basic rune"]} → {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune"]}
+- **Dawn Knight**
+  - awaken_condition: {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune","Any basic rune"]} → {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune"]}
+
+## Monsters
+
+- **Carrion Crown**
+  - barrier: 4 → 5
+  - initiative: — → 6
+- **Blightfang**
+  - barrier: 5 → 6
+  - initiative: — → 5
+- **Ember Maw**
+  - initiative: — → 8
+- **Hollow Stag**
+  - barrier: 5 → 6
+  - initiative: — → 4
+- **Gutter Hydra**
+  - damage: 5 → 6
+  - initiative: — → 2
+- **Tidecaller Eel**
+  - initiative: — → 3
+- **Gravemoss Golem**
+  - barrier: 5 → 6
+  - initiative: — → 4
+- **Chainmaw Brute**
+  - initiative: — → 3
+- **Sunken Bellwraith**
+  - initiative: — → 8
+- **Howling Shroud**
+  - damage: 5 → 6
+  - initiative: — → 2
+- **Ruin Phoenix**
+  - initiative: — → 9
+- **Rootrot Ancient**
+  - initiative: — → 3
+- **Plague Choir**
+  - initiative: — → 9
+- **Void Shepherd**
+  - initiative: — → 8
+- **Ashwisp**
+  - initiative: — → 5
+- **Hollow Lantern**
+  - initiative: — → 5
+- **Cinder Mite**
+  - initiative: — → 5
+- **Fogkin**
+  - initiative: — → 5
+- **Mire Imp**
+  - initiative: — → 5
+- **Bog Whisperer**
+  - initiative: — → 5
+- **Grave Nettle**
+  - initiative: — → 5
+- **Thornling**
+  - initiative: — → 5
+- **Ember Gnat**
+  - initiative: — → 4
+- **Murk Tadpole**
+  - initiative: — → 4
+- **Shiver Wisp**
+  - initiative: — → 4
+- **Tidepool Lurker**
+  - initiative: — → 4
+- **Splinter Imp**
+  - initiative: — → 4
+- **Rattlebone Pup**
+  - initiative: — → 4
+- **Pale Wanderer**
+  - initiative: — → 4
+- **Weeping Candle**
+  - initiative: — → 4
+- **Rustveil Ghostling**
+  - initiative: — → 3
+- **Ironjaw Hound**
+  - initiative: — → 6
+- **Ashen Lynx**
+  - barrier: 5 → 6
+  - initiative: — → 5
+- **Stormgut Toad**
+  - barrier: 4 → 5
+  - initiative: — → 6
+- **Venom Lotus**
+  - initiative: — → 6
+- **Marrow Wolf**
+  - barrier: 5 → 6
+  - initiative: — → 5
+- **Bramble Wyrm**
+  - barrier: 5 → 6
+  - initiative: — → 5
+- **Nightmare Loom**
+  - initiative: — → 3
+- **Obsidian Hydra**
+  - initiative: — → 7
+- **The Drowned Bell**
+  - initiative: — → 8
+- **Thousand-Eye Warden**
+  - initiative: — → 7
+- **Grief Titan**
+  - initiative: — → 7
+- **Storm-Eater**
+  - initiative: — → 7
+- **Cinder Colossus**
+  - initiative: — → 6
+- **Ashfall Tyrant**
+  - initiative: — → 6
+- **Starless Seraph**
+  - initiative: — → 7
+- **Pale Monarch**
+  - barrier: 12 → 13
+  - initiative: — → 6
+- **Gloamheart Dragon**
+  - barrier: 13 → 14
+  - initiative: — → 5
+- **Abyss Leviathan**
+  - barrier: 14 → 15
+  - initiative: — → 5
+- **Eclipse Wyrm**
+  - barrier: 15 → 17
+  - initiative: — → 4
+- **The Hollow Regent**
+  - barrier: 13 → 14
+  - initiative: — → 5
+- **World Gnawer**
+  - barrier: 15 → 17
+  - initiative: — → 4
+- **Maw of the Deep Rift**
+  - barrier: 14 → 15
+  - initiative: — → 5
+- **Soot Chick**
+  - initiative: — → 4
+- **Puddle Frog**
+  - initiative: — → 4
+- **Acorn Imp**
+  - initiative: — → 4
+- **Pebble Pup**
+  - initiative: — → 4
+- **Candle Slug**
+  - initiative: — → 4
+- **Kelp Wisp**
+  - initiative: — → 4
+- **Moss Mite**
+  - initiative: — → 3
+- **Rust Bat**
+  - initiative: — → 4
+- **Spark Rat**
+  - initiative: — → 3
+- **Shell Snapper**
+  - initiative: — → 4
+- **Burr Hog**
+  - initiative: — → 3
+- **Tin Mole**
+  - initiative: — → 3
+- **Charcoal Snail**
+  - initiative: — → 3
+- **Drip Jelly**
+  - initiative: — → 3
+- **Sap Beetle**
+  - initiative: — → 3
+- **Cinder Boar**
+  - initiative: — → 6
+- **Tide Crab**
+  - barrier: 4 → 5
+  - initiative: — → 5
+- **Thorn Spider**
+  - barrier: 4 → 5
+  - initiative: — → 5
+- **Iron Ram**
+  - barrier: 4 → 5
+  - initiative: — → 5
+- **Ash Vulture**
+  - barrier: 4 → 5
+  - initiative: — → 5
+- **Reef Shark**
+  - barrier: 5 → 6
+  - initiative: — → 4
+- **Bark Bear**
+  - barrier: 4 → 5
+  - initiative: — → 5
+- **Crystal Scorpion**
+  - barrier: 5 → 6
+  - initiative: — → 4
+- **Magma Toad**
+  - barrier: 5 → 6
+  - initiative: — → 4
+- **Drowned Knight**
+  - barrier: 5 → 6
+  - initiative: — → 4
+- **Rot Troll**
+  - barrier: 6 → 7
+  - initiative: — → 4
+- **Cave Troll**
+  - barrier: 6 → 7
+  - initiative: — → 4
+- **Ember Serpent**
+  - barrier: 6 → 7
+  - initiative: — → 3
+- **Siren Eel**
+  - barrier: 6 → 7
+  - initiative: — → 3
+- **Wasp Queen**
+  - damage: 5 → 6
+  - initiative: — → 2
+- **Scree Wyvern**
+  - damage: 5 → 6
+  - initiative: — → 2
+- **Furnace Knight**
+  - damage: 5 → 6
+  - initiative: — → 2
+- **Angler Horror**
+  - initiative: — → 8
+- **Hollow Treant**
+  - initiative: — → 8
+- **Quartz Golem**
+  - initiative: — → 8
+- **Umbra the Last Eclipse**
+  - initiative: — → 3
+- **The Grinning Nova**
+  - initiative: — → 3
+- **Vael the Moonless Tide**
+  - initiative: — → 3
+- **Nihilor the Star Drinker**
+  - initiative: — → 9
+- **Orthan the Iron Nebula**
+  - initiative: — → 9
+- **Lethe the Drowned Memory**
+  - initiative: — → 8
+- **Caeles the Shattered Sky**
+  - initiative: — → 7
+- **Xul the Bone Constellation**
+  - initiative: — → 7
+- **The Weeping Meteor**
+  - initiative: — → 7
+- **Noctis the Hollow Moon**
+  - initiative: — → 6
+- **Seraphel the Burnt Dawn**
+  - initiative: — → 6
+- **Korrath the Chained Comet**
+  - initiative: — → 6
+- **Maw of Ten Thousand Teeth**
+  - initiative: — → 6
+- **Ashkar, Herald of the Dead Sun**
+  - barrier: 12 → 13
+  - initiative: — → 6
+- **Veyra the Starved Nebula**
+  - barrier: 12 → 13
+  - initiative: — → 5
+- **Gravemind Colossus**
+  - barrier: 14 → 15
+  - initiative: — → 5
+- **The Thousand-Hand Oracle**
+  - barrier: 14 → 15
+  - initiative: — → 5
+- **Omen the Last Light**
+  - barrier: 14 → 15
+  - initiative: — → 5
+- **The Silent Zenith**
+  - barrier: 15 → 17
+  - initiative: — → 4
+- **Thal, the End of Tides**
+  - barrier: 15 → 16
+  - initiative: — → 4
+
+## Rule switches
+
+- **row 1**
+  - firetailVsMonsters: — → true
+  - sunRework: — → true
+  - bastionVsMonsters: — → true
+  - pvpEngageVp: — → true
+  - pvpAttackerSacrificeCap: — → true
+  - powerRework: — → true
+  - abyssSummonDraw4Pick2: — → true
+
