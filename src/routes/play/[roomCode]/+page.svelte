@@ -31,6 +31,7 @@
 		setRoomChatOpen,
 		startPlayGame
 	} from '$lib/stores/playStore.svelte';
+	import { apiUrl } from '$lib/play/apiBase';
 	import type { RoomView } from '$lib/play/server/service';
 	import type { SeatColor } from '$lib/play/types';
 	import { SEAT_COLORS, NAVIGATION_TIMER_OPTIONS } from '$lib/play/types';
@@ -130,6 +131,14 @@
 		seat.isBot === true || isLegacyBotName(seat.displayName);
 	const botLabel = (name: string) =>
 		name.startsWith(BOT_PREFIX) ? name.replace(BOT_PREFIX, '').trim() : name;
+
+	// AI players (Claude, played from the owner's laptop worker): offered only when the server
+	// has the worker key (`aiPlayers` in /api/play/config). A room with an AI seat needs the
+	// host's bot tick even while the built-in bots are paused — the tick is what lets the
+	// built-in bot stand in for an AI seat whose worker is off or slow.
+	let aiPlayers = $state(false);
+	const hasAiSeats = $derived(room ? SEAT_COLORS.some((s) => room.seats[s]?.isAi === true) : false);
+	const ticksBots = () => BOTS_ENABLED || hasAiSeats;
 
 	// ── Party derivations ────────────────────────────────────────────────────
 	const mySeat = $derived(
@@ -350,6 +359,13 @@
 			void preloadAssetImages(preloadAbort.signal);
 		}
 
+		void fetch(apiUrl('/api/play/config'))
+			.then((res) => (res.ok ? res.json() : null))
+			.then((config: { aiPlayers?: unknown } | null) => {
+				aiPlayers = config?.aiPlayers === true;
+			})
+			.catch(() => {});
+
 		let botTimer: ReturnType<typeof setInterval> | null = null;
 		let backupBotTimer: ReturnType<typeof setInterval> | null = null;
 		let removeImmersiveInputGuard: (() => void) | null = null;
@@ -370,7 +386,7 @@
 				// name check: ranked matchmaking backfills human-named bots (no 🤖), so a
 				// name-based `hasBots` misses them and they'd freeze. The server's tickBots
 				// is authoritative and a cheap no-op when the session has no bot members.
-				if (!BOTS_ENABLED || !isHost || room?.status !== 'active') return;
+				if (!ticksBots() || !isHost || room?.status !== 'active') return;
 				tickBots();
 			}, 1300);
 
@@ -384,7 +400,7 @@
 			// by presence rules; this backup only matters when other humans remain.
 			const backupPeriod = 4000 + Math.floor(Math.random() * 1000); // 4–5s with jitter
 			backupBotTimer = setInterval(() => {
-				if (!BOTS_ENABLED || isHost || mySeat === null || room?.status !== 'active') return;
+				if (!ticksBots() || isHost || mySeat === null || room?.status !== 'active') return;
 				tickBots();
 			}, backupPeriod);
 		}
@@ -441,6 +457,7 @@
 	// trained ML policy (badged "ML Bot" on the seat frame); old heuristic difficulty
 	// names normalize to this server-side.
 	const addBotAction = () => runAction('add-bot', () => postBots('add', { difficulty: 'neural' }));
+	const addAiAction = () => runAction('add-ai', () => postBots('add', { difficulty: 'ai' }));
 	// Navigation timer (host-only, lobby-only). The <select> works in strings, so "none"
 	// is the sentinel for the no-limit (null) preset.
 	const navTimerDuration = $derived(room?.navigationDurationMs ?? null);
@@ -636,7 +653,7 @@
 										<span class="shade" aria-hidden="true"></span>
 										<span class="badges">
 											{#if mine}<b class="badge you">You</b>{/if}
-											{#if bot}<b class="badge bot">ML Bot</b>{/if}
+											{#if bot}<b class="badge bot">{s.isAi ? 'AI' : 'ML Bot'}</b>{/if}
 										</span>
 										<span class="plate">
 											<span class="pname"
@@ -740,6 +757,17 @@
 									disabled={pendingAction !== null || openSeats.length === 0}
 								>
 									{pendingAction === 'add-bot' ? 'Summoning…' : '+ Add bot'}
+								</button>
+							{/if}
+							{#if aiPlayers}
+								<button
+									class="ctl btn"
+									data-testid="add-ai"
+									onclick={addAiAction}
+									disabled={pendingAction !== null || openSeats.length === 0}
+									title="Add an AI player (Claude)"
+								>
+									{pendingAction === 'add-ai' ? 'Summoning…' : '+ Add AI'}
 								</button>
 							{/if}
 						{:else}

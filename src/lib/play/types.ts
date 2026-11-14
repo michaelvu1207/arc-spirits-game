@@ -871,6 +871,8 @@ export interface LobbySeatState {
 	displayName: string | null;
 	selectedGuardian: string | null;
 	isBot?: boolean;
+	/** Projection-only: the bot seat is an AI player (Claude, bot_profile 'ai'). */
+	isAi?: boolean;
 }
 
 export interface MarketSlotState {

@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env as publicEnv } from '$env/dynamic/public';
+import { aiPlayersEnabled } from '$lib/play/server/aiPlayers';
 
 /**
  * Public client bootstrap config for cookieless native clients (Godot).
@@ -23,7 +24,9 @@ export const GET: RequestHandler = async () => {
 		{
 			supabaseUrl,
 			supabaseAnonKey,
-			wsUrl: publicEnv.PUBLIC_WS_SERVER_URL ?? ''
+			wsUrl: publicEnv.PUBLIC_WS_SERVER_URL ?? '',
+			// The room lobby offers "+ Add AI" only when the AI worker key is configured.
+			aiPlayers: aiPlayersEnabled()
 		},
 		{ headers: { 'cache-control': 'public, max-age=300' } }
 	);

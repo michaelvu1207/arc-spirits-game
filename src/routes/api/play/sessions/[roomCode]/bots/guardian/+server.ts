@@ -1,4 +1,5 @@
 import { BOTS_ENABLED } from '$lib/play/botAvailability';
+import { aiPlayersEnabled } from '$lib/play/server/aiPlayers';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticateRoomMember } from '$lib/play/server/service';
@@ -6,7 +7,8 @@ import { setBotGuardian } from '$lib/play/server/botSim';
 import type { SeatColor } from '$lib/play/types';
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
-	if (!BOTS_ENABLED) throw error(403, 'Bots are temporarily unavailable.');
+	// AI seats (their own switch) may be configured while the built-in bots are paused.
+	if (!BOTS_ENABLED && !aiPlayersEnabled()) throw error(403, 'Bots are temporarily unavailable.');
 	const roomCode = String(params.roomCode ?? '');
 	// Resolve the validated account to the trusted internal member id at the edge —
 	// botSim helpers only ever receive server-verified identities.
@@ -23,5 +25,11 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 		throw error(400, 'seat and guardianName are required.');
 	}
 
-	return json(await setBotGuardian(roomCode, caller.memberId, seat, guardianName));
+	try {
+		return json(await setBotGuardian(roomCode, caller.memberId, seat, guardianName));
+	} catch (err) {
+		const message = err instanceof Error ? err.message : '';
+		if (message.includes('temporarily unavailable')) throw error(403, message);
+		throw err;
+	}
 };

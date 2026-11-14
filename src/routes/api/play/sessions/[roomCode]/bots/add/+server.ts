@@ -3,11 +3,17 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { authenticateRoomMember } from '$lib/play/server/service';
 import { addBot } from '$lib/play/server/botSim';
-import { normalizeBotProfileKey } from '$lib/play/bots/contract';
+import { AI_BOT_PROFILE_KEY, isAiBotProfile, normalizeBotProfileKey } from '$lib/play/bots/contract';
+import { aiPlayersEnabled } from '$lib/play/server/aiPlayers';
 import type { SeatColor } from '$lib/play/types';
 
 export const POST: RequestHandler = async ({ request, params, locals }) => {
-	if (!BOTS_ENABLED) throw error(403, 'Bots are temporarily unavailable.');
+	const body = await request.json().catch(() => ({}));
+	// `difficulty: 'ai'` seats an AI player (Claude via the laptop worker): its own switch,
+	// ARC_AI_WORKER_KEY, independent of the paused built-in bots.
+	const ai = isAiBotProfile(body?.difficulty);
+	if (ai && !aiPlayersEnabled()) throw error(403, 'AI players are not available.');
+	if (!ai && !BOTS_ENABLED) throw error(403, 'Bots are temporarily unavailable.');
 	const roomCode = String(params.roomCode ?? '');
 	// Resolve the validated account to the trusted internal member id at the edge —
 	// botSim helpers only ever receive server-verified identities.
@@ -17,10 +23,9 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 		throw error(401, 'Join this room before adding bots.');
 	}
 
-	const body = await request.json().catch(() => ({}));
 	const seat = typeof body?.seat === 'string' ? (body.seat as SeatColor) : undefined;
 	const guardianName = typeof body?.guardianName === 'string' ? body.guardianName : undefined;
-	const difficulty = normalizeBotProfileKey(body?.difficulty);
+	const difficulty = ai ? AI_BOT_PROFILE_KEY : normalizeBotProfileKey(body?.difficulty);
 
 	try {
 		return json(await addBot(roomCode, caller.memberId, { seat, guardianName, difficulty }));
@@ -28,6 +33,10 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 		const message = err instanceof Error ? err.message : 'Failed to add bot.';
 		// Ranked games reject bots — surface as a clean 400.
 		if (message.includes('Bots are not allowed in ranked games')) throw error(400, message);
+		if (message.includes('not available') || message.includes('temporarily unavailable'))
+			throw error(403, message);
+		if (message.includes('Only the host')) throw error(403, message);
+		if (message.includes('lobby') || message.includes('already filled')) throw error(409, message);
 		throw err;
 	}
 };

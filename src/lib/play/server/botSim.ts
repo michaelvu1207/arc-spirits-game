@@ -20,6 +20,7 @@ import {
 	getSessionIdByRoomCode,
 	getSessionModeByRoomCode,
 	joinRoom,
+	lastCommitAt,
 	loadBotMembers,
 	loadRawRoomState,
 	loadRoomView,
@@ -31,11 +32,14 @@ import { loadPlayCatalog } from './catalog';
 import { SEAT_COLORS, type SeatColor, type PublicGameState, type GameCommand } from '../types';
 import { BOT_NAME_PREFIX } from '../roomLifecycle';
 import {
+	AI_BOT_PROFILE_KEY,
 	DEFAULT_BOT_PROFILE_KEY,
 	EXPERT_BOT_PROFILE_KEY,
 	ML_BOT_PROFILE_KEY,
+	isAiBotProfile,
 	normalizeBotProfileKey
 } from '../bots/contract';
+import { AI_DISPLAY_NAME, aiPlayersEnabled, aiSeatTimeoutMs } from './aiPlayers';
 import {
 	getNeuralPolicy,
 	planNeuralPhaseActions,
@@ -265,7 +269,7 @@ async function seatOneBot(
 	difficulty: string = DEFAULT_BOT_PROFILE_KEY,
 	opts?: { userId?: string | null; displayName?: string }
 ): Promise<string> {
-	const profile = normalizeDifficulty(difficulty);
+	const profile = isAiBotProfile(difficulty) ? AI_BOT_PROFILE_KEY : normalizeDifficulty(difficulty);
 	const displayName = opts?.displayName ?? botDisplayNameFor(seat, difficulty);
 	const { memberId: botMemberId } = await joinRoom(roomCode, displayName, opts?.userId ?? null, {
 		isBot: true,
@@ -322,7 +326,12 @@ export async function addBot(
 	hostMemberId: string,
 	opts: { seat?: SeatColor; guardianName?: string; difficulty?: string } = {}
 ): Promise<RoomView> {
-	requireBotsEnabled();
+	const ai = isAiBotProfile(opts.difficulty);
+	if (ai) {
+		if (!aiPlayersEnabled()) throw new Error('AI players are not available.');
+	} else {
+		requireBotsEnabled();
+	}
 	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') throw new Error('Only the host can add bots.');
 	if ((await getSessionModeByRoomCode(roomCode)) === 'ranked') {
@@ -337,7 +346,13 @@ export async function addBot(
 	if (open.length === 0) throw new Error('Every seat is already filled.');
 	const seat = opts.seat && open.includes(opts.seat) ? opts.seat : open[0];
 
-	await seatOneBot(roomCode, seat, opts.guardianName, opts.difficulty ?? DEFAULT_BOT_PROFILE_KEY);
+	if (ai) {
+		await seatOneBot(roomCode, seat, opts.guardianName, AI_BOT_PROFILE_KEY, {
+			displayName: AI_DISPLAY_NAME
+		});
+	} else {
+		await seatOneBot(roomCode, seat, opts.guardianName, opts.difficulty ?? DEFAULT_BOT_PROFILE_KEY);
+	}
 	return loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 }
 
@@ -348,7 +363,7 @@ export async function setBotGuardian(
 	seat: SeatColor,
 	guardianName: string
 ): Promise<RoomView> {
-	requireBotsEnabled();
+	if (!aiPlayersEnabled()) requireBotsEnabled();
 	const hostView = await loadRoomView(roomCode, { trustedMemberId: hostMemberId });
 	if (hostView.member.role !== 'host') throw new Error('Only the host can set a bot guardian.');
 
@@ -358,6 +373,8 @@ export async function setBotGuardian(
 	const botMembers = sessionId ? await loadBotMembers(sessionId) : undefined;
 	const botMemberId = botMemberIdAt(state, seat, botMembers);
 	if (!botMemberId) throw new Error('That seat is not a bot.');
+	// With bots paused, only AI seats (their own switch) may be configured.
+	if (!BOTS_ENABLED && !isAiBotProfile(botMembers?.get(botMemberId))) requireBotsEnabled();
 
 	await runRoomCommand({
 		roomCode,
@@ -412,7 +429,10 @@ export interface TickBotsResult {
  * Returns the host's updated {@link RoomView} plus a count of commands issued.
  */
 export async function tickBots(roomCode: string, hostMemberId?: string): Promise<TickBotsResult> {
-	if (!BOTS_ENABLED) {
+	// AI seats run on their own switch: with bots paused but AI players on, the tick drives
+	// ONLY the AI seats' timeout fallback (no other bot seat can exist then).
+	const aiEnabled = aiPlayersEnabled();
+	if (!BOTS_ENABLED && !aiEnabled) {
 		return {
 			view: await loadRoomView(roomCode, { trustedMemberId: hostMemberId ?? null }),
 			commandsIssued: 0
@@ -443,16 +463,22 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 	const sessionId = await getSessionIdByRoomCode(roomCode);
 	const botMembers = sessionId ? await loadBotMembers(sessionId) : new Map<string, string | null>();
 
-	// Trained ML policy, loaded once per tick. Null when no weights are bundled; in that
-	// case the live bot uses the same legal-action contract with uniform selection, not
-	// the retired strategic heuristic profiles.
-	const neuralPolicy = await getNeuralPolicy();
-	// Remote v2 champion fleet (ARC_INFER_URL/ARC_INFER_TOKEN). Empty when unconfigured or
-	// the handshake recently failed; every seat below then plays the bundled v1 policy.
-	// Multi-bot rooms deal DIFFERENT champions across bot seats (fleet[ordinal % n]) so
-	// identical clones don't chase the same plan and starve each other; the strongest
-	// champion is always fleet[0], so heads-up rooms get exactly the current champion.
-	const remoteV2Fleet = await getRemoteV2Fleet();
+	// Trained ML policy, loaded once per tick (lazily: only when some seat is planned — a
+	// tick where every bot is an AI seat still waiting on the worker loads nothing). Null
+	// when no weights are bundled; the live bot then uses the same legal-action contract
+	// with uniform selection, not the retired strategic heuristic profiles.
+	const policies: {
+		loaded: boolean;
+		neural: Awaited<ReturnType<typeof getNeuralPolicy>>;
+		fleet: Awaited<ReturnType<typeof getRemoteV2Fleet>>;
+	} = { loaded: false, neural: null, fleet: [] };
+	const loadPolicies = async () => {
+		if (policies.loaded) return;
+		policies.loaded = true;
+		policies.neural = await getNeuralPolicy();
+		// Bots paused (AI-only fallback): the bundled policy, never the remote fleet.
+		policies.fleet = BOTS_ENABLED ? await getRemoteV2Fleet() : [];
+	};
 	// The v2 champion was validated (gauntlet + human benchmark) sampling ALL phases at
 	// 0.55, unlike v1's nav-only 0.65 — different model, different in-distribution knobs.
 	const v2Temp = process.env.ARC_V2_TEMP !== undefined ? parseFloat(process.env.ARC_V2_TEMP) : 0.55;
@@ -469,8 +495,27 @@ export async function tickBots(roomCode: string, hostMemberId?: string): Promise
 		const botMemberId = botMemberIdAt(state, seat, botMembers);
 		if (!botMemberId) continue;
 		botOrdinal += 1;
-		const remoteV2 = remoteV2Fleet.length ? remoteV2Fleet[botOrdinal % remoteV2Fleet.length] : null;
 		if (!botSeatNeedsToAct(state, seat)) continue;
+
+		// AI seat (Claude via the laptop worker): skipped while the room has waited on it for
+		// less than ARC_AI_SEAT_TIMEOUT_MS since its last committed change; past that, the
+		// bundled policy plays it for this tick exactly like a neural bot. With the worker key
+		// removed (AI players off) it is simply a neural bot.
+		if (isAiBotProfile(botMembers.get(botMemberId))) {
+			if (aiEnabled && sessionId) {
+				const since = await lastCommitAt(sessionId);
+				const waited = since == null ? Number.POSITIVE_INFINITY : Date.now() - since;
+				if (waited < aiSeatTimeoutMs()) continue;
+				console.warn(
+					`[botSim] AI seat ${seat} in ${roomCode} waited ${Math.round(waited / 1000)}s; the built-in bot plays it this tick`
+				);
+			}
+		} else if (!BOTS_ENABLED) {
+			continue;
+		}
+		await loadPolicies();
+		const { neural: neuralPolicy, fleet: remoteV2Fleet } = policies;
+		const remoteV2 = remoteV2Fleet.length ? remoteV2Fleet[botOrdinal % remoteV2Fleet.length] : null;
 
 		// Strategy comes from the member's bot_profile column; fall back to parsing the
 		// legacy 🤖-display-name when a bot row predates the column (bot_profile null).

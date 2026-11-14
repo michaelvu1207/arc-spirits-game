@@ -22,7 +22,7 @@
 import { awakenedClassCounts } from '../effects/apply';
 import { spiritsByOrigin } from '../effects/relicTools';
 import { applyDeadlineAdvance, applyGameCommand } from '../runtime';
-import { botActorFor, botSeatNeedsToAct } from '../server/botPolicy';
+import { botActorFor } from '../server/botPolicy';
 import { hashGameState } from '../stateHash';
 import { STATUS_LADDER, type PlayCatalog, type PublicGameState, type SeatColor } from '../types';
 import { BudgetExceededError, type BudgetGuard } from './budget';
@@ -35,6 +35,7 @@ import {
 	type SeatController
 } from './contract';
 import { buildDecision } from './decision';
+import { seatsToAct } from './seats';
 import { EventLog, publicDiff, recordCommandEvents } from './events';
 import { safeFallback } from './llmSeat';
 import { renderDecisionMessage } from './prompt';
@@ -232,17 +233,6 @@ function addAttemptStats(sum: SeatSummary, attempts: AnswerAttempt[]) {
 	return { promptTokens, completionTokens, costUsd, latencyMs };
 }
 
-/** Seats that must act now; a pending Navigation Power prompt blocks everyone else. */
-function seatsToAct(state: PublicGameState): SeatColor[] {
-	const needing = state.activeSeats.filter((seat) => botSeatNeedsToAct(state, seat));
-	const prompted = needing.filter((seat) => {
-		const p = state.players[seat];
-		return (
-			(p?.navigationPowerOffers?.length ?? 0) > 0 || p?.pendingNavigationTrade?.toSeat === seat
-		);
-	});
-	return prompted.length ? prompted : needing;
-}
 
 /**
  * Seats whose decisions are truly simultaneous: secret destination choice in the navigation

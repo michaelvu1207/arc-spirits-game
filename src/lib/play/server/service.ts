@@ -40,7 +40,8 @@ import {
 	type RoomCloseReason,
 	type RoomLiveness
 } from '../roomLifecycle';
-import { DEFAULT_BOT_PROFILE_KEY } from '../bots/contract';
+import { DEFAULT_BOT_PROFILE_KEY, isAiBotProfile } from '../bots/contract';
+import { aiPlayersEnabled } from './aiPlayers';
 import { loadPlayCatalog } from './catalog';
 import { getSupabaseAdmin } from '$lib/server/supabaseAdmin';
 import {
@@ -262,6 +263,8 @@ async function attachBotSeatFlags(
 	for (const seat of SEAT_COLORS) {
 		const memberId = projection.seats[seat]?.memberId;
 		projection.seats[seat].isBot = memberId != null && botMembers.has(memberId);
+		projection.seats[seat].isAi =
+			memberId != null && botMembers.has(memberId) && isAiBotProfile(botMembers.get(memberId));
 	}
 	return projection;
 }
@@ -652,9 +655,13 @@ async function maybeEnforceDeadline(session: PlaySessionRow): Promise<PlaySessio
 	let botSeats: SeatColor[] = [];
 	if (deadlineBlockingSeats(state).length > 0) {
 		const botMembers = await loadBotMembers(session.id);
+		// An AI seat (Claude via the laptop worker) is answered from OUTSIDE the tick, like a
+		// human, so it earns the same deadline extensions instead of being force-advanced.
 		botSeats = state.activeSeats.filter((seat) => {
 			const memberId = state.seats[seat]?.memberId;
-			return memberId != null && botMembers.has(memberId);
+			return (
+				memberId != null && botMembers.has(memberId) && !isAiBotProfile(botMembers.get(memberId))
+			);
 		});
 	}
 
@@ -1757,7 +1764,10 @@ export async function joinRoom(
 	}
 ): Promise<{ memberId: string; created: boolean }> {
 	const isBot = opts?.isBot ?? false;
-	if (isBot && !BOTS_ENABLED) throw kitError(403, 'Bots are temporarily unavailable.');
+	// AI seats are allowed on their own switch (ARC_AI_WORKER_KEY): the built-in bot only
+	// stands in for them when the worker is off or slow.
+	const aiSeat = isBot && isAiBotProfile(opts?.botProfile) && aiPlayersEnabled();
+	if (isBot && !BOTS_ENABLED && !aiSeat) throw kitError(403, 'Bots are temporarily unavailable.');
 	const admission = opts?.admission ?? 'wire';
 	if (admission === 'wire' && isBot) {
 		throw kitError(403, 'Bots are server-managed and cannot join over the wire.');
@@ -2304,6 +2314,15 @@ export async function loadRawRoomState(roomCode: string): Promise<PublicGameStat
 	return state;
 }
 
+/** A revision-fenced command (see runRoomCommand `requireRevision`) met a newer room. */
+export class StaleRevisionError extends Error {
+	readonly status = 409;
+	constructor(readonly revision: number) {
+		super(`The room moved on (current revision ${revision}).`);
+		this.name = 'StaleRevisionError';
+	}
+}
+
 export async function runRoomCommand(params: {
 	roomCode: string;
 	/** VALIDATED Supabase user from the wire (session cookie / Bearer). The command
@@ -2321,6 +2340,14 @@ export async function runRoomCommand(params: {
 	 * a second application. Optional: legacy clients without one behave as before.
 	 */
 	cmdId?: string | null;
+	/**
+	 * Strict revision fence (AI seats, /api/ai/act): the command was decided against exactly
+	 * this revision, so it applies ONLY there. Any other revision — a write that landed first,
+	 * a deadline advance, a CAS-miss retry — throws 409 {@link StaleRevisionError} instead of
+	 * re-applying a stale decision to a newer state. Checked after the cmdId dedup, so an honest
+	 * retry of an already-committed answer still succeeds.
+	 */
+	requireRevision?: number | null;
 }): Promise<RoomView> {
 	const roomCode = normalizeRoomCode(params.roomCode);
 	// Wire callers (userId) pass through the deny-by-default admission policy below;
@@ -2416,6 +2443,10 @@ export async function runRoomCommand(params: {
 				}
 				return viewForMemberAndState(session, asState(session), member);
 			}
+		}
+
+		if (params.requireRevision != null && session.revision !== params.requireRevision) {
+			throw new StaleRevisionError(session.revision);
 		}
 
 		const state = asState(session);
@@ -2529,4 +2560,105 @@ async function viewForMemberAndState(
 			displayName: projection.viewer.displayName
 		}
 	};
+}
+
+// ── AI seats (laptop worker, /api/ai/*) ─────────────────────────────────────────
+
+/** When the room last committed a change: the newest ledger row's created_at (every commit —
+ *  player, bot, deadline, close — appends to the ledger in the same transaction). Null when
+ *  the room has no ledger rows yet. */
+export async function lastCommitAt(sessionId: string): Promise<number | null> {
+	const { data, error } = await getPlayAdmin()
+		.from(PLAY_TABLES.EVENTS)
+		.select('created_at')
+		.eq('session_id', sessionId)
+		.order('created_at', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	if (error) throw kitError(500, `Failed to read the room's last change: ${error.message}`);
+	const at = Date.parse((data as { created_at?: string } | null)?.created_at ?? '');
+	return Number.isFinite(at) ? at : null;
+}
+
+export interface AiRoom {
+	sessionId: string;
+	roomCode: string;
+	revision: number;
+	/** Full authoritative state (awaken eligibility recomputed, as for the bot driver). */
+	state: PublicGameState;
+	/** AI seats → their bot member id. */
+	aiSeats: Map<SeatColor, string>;
+}
+
+async function aiRoomFrom(session: PlaySessionRow, aiMembers: Set<string>): Promise<AiRoom> {
+	const state = asState(session);
+	if (state.phase === 'awakening' || state.phase === 'cleanup') {
+		recomputeAwakenEligibility(state, await loadPlayCatalog());
+	}
+	const aiSeats = new Map<SeatColor, string>();
+	for (const seat of SEAT_COLORS) {
+		const memberId = state.seats[seat]?.memberId;
+		if (memberId && aiMembers.has(memberId)) aiSeats.set(seat, memberId);
+	}
+	return {
+		sessionId: session.id,
+		roomCode: session.room_code,
+		revision: session.revision,
+		state,
+		aiSeats
+	};
+}
+
+async function aiMemberIds(sessionIds: string[]): Promise<Map<string, Set<string>>> {
+	const bySession = new Map<string, Set<string>>();
+	if (sessionIds.length === 0) return bySession;
+	const { data, error } = await getPlayAdmin()
+		.from(PLAY_TABLES.MEMBERS)
+		.select('id, session_id, bot_profile')
+		.in('session_id', sessionIds)
+		.eq('is_bot', true);
+	if (error) throw kitError(500, `Failed to load AI seats: ${error.message}`);
+	for (const row of (data as { id: string; session_id: string; bot_profile: string | null }[] | null) ?? []) {
+		if (!isAiBotProfile(row.bot_profile)) continue;
+		const set = bySession.get(row.session_id) ?? new Set<string>();
+		set.add(row.id);
+		bySession.set(row.session_id, set);
+	}
+	return bySession;
+}
+
+/**
+ * ACTIVE rooms with at least one AI seat, at most `limit` of them (the ones that changed least
+ * recently first are not tracked; the newest rooms are taken). Two cheap queries pick the rooms
+ * (ids only), then only those rows are loaded in full.
+ */
+export async function listActiveAiRooms(limit: number): Promise<AiRoom[]> {
+	const admin = getPlayAdmin();
+	const active = await admin
+		.from(PLAY_TABLES.SESSIONS)
+		.select('id')
+		.eq('status', 'active')
+		.order('created_at', { ascending: false })
+		.limit(500);
+	if (active.error) throw kitError(500, `Failed to list active rooms: ${active.error.message}`);
+	const ids = ((active.data as { id: string }[] | null) ?? []).map((row) => row.id);
+	const members = await aiMemberIds(ids);
+	const picked = ids.filter((id) => members.has(id)).slice(0, limit);
+	if (picked.length === 0) return [];
+	const rows = await admin.from(PLAY_TABLES.SESSIONS).select('*').in('id', picked);
+	if (rows.error) throw kitError(500, `Failed to load AI rooms: ${rows.error.message}`);
+	const out: AiRoom[] = [];
+	for (const row of (rows.data as PlaySessionRow[] | null) ?? []) {
+		if (row.status !== 'active') continue;
+		out.push(await aiRoomFrom(row, members.get(row.id) ?? new Set()));
+	}
+	return out;
+}
+
+/** One room as an {@link AiRoom}, or null when it does not exist. */
+export async function loadAiRoom(roomCode: string): Promise<AiRoom | null> {
+	const session = await getSessionByRoomCode(normalizeRoomCode(roomCode));
+	if (!session) return null;
+	const members = await aiMemberIds([session.id]);
+	return aiRoomFrom(session, members.get(session.id) ?? new Set());
 }

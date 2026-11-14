@@ -8,6 +8,19 @@ export const DEFAULT_BOT_PROFILE_KEY = ML_BOT_PROFILE_KEY;
 
 export const BOT_PROFILE_KEYS = [ML_BOT_PROFILE_KEY, EXPERT_BOT_PROFILE_KEY] as const;
 
+/**
+ * An "AI player" seat: a bot member (is_bot) whose decisions come from Claude through the
+ * laptop AI worker (/api/ai/*, src/lib/play/server/aiPlayers.ts). Stored in bot_profile like
+ * the other keys, but deliberately NOT in BOT_PROFILE_KEYS: every path that does not know about
+ * AI seats (the bot-fill difficulty, the WebSocket room server) normalizes it to the neural
+ * policy, so an AI seat can never be left without a player.
+ */
+export const AI_BOT_PROFILE_KEY = 'ai';
+
+export function isAiBotProfile(value: unknown): boolean {
+	return typeof value === 'string' && value.toLowerCase() === AI_BOT_PROFILE_KEY;
+}
+
 export type BotProfileKey = (typeof BOT_PROFILE_KEYS)[number];
 export type BotActionId = `${typeof BOT_CONTRACT_VERSION}:${string}`;
 
