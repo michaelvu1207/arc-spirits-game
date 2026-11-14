@@ -82,6 +82,9 @@
 				}))
 			: []
 	);
+	/** The monster's initiative, when it has a number. The printed cards do not carry it, so
+	 *  the card shows it as a chip: a player with higher initiative strikes first. */
+	const initiative = $derived(typeof card?.initiative === 'number' ? card.initiative : null);
 	const name = $derived(card ? displayName(card.name) : '');
 	/** The label describes what shows: the printed card can carry another name than the
 	 *  database row (Michael's card names; the rows are not renamed). */
@@ -89,6 +92,8 @@
 	const label = $derived(
 		card && showFront
 			? `${shownName}: Barrier ${damaged ? `${card.hp} of ${card.maxHp}` : card.maxHp}, hits for ${card.damage}${
+					initiative !== null ? `, initiative ${initiative}` : ''
+				}${
 					rewards.length ? `. Rewards: ${rewards.map((r) => r.label).join(', ')}` : ''
 				}`
 			: `Difficulty ${MONSTER_NUMERAL[deck]} monster card, face down`
@@ -123,6 +128,11 @@
 							onload={() => onFaceLoad(url)}
 							onerror={(event) => onFaceError(event, url)}
 						/>
+						{#if initiative !== null}
+							<span class="init-chip" data-testid="monster-card-initiative" title="Initiative: a player with more strikes first">
+								Initiative <b>{initiative}</b>
+							</span>
+						{/if}
 						{#if damaged && !defeated}
 							<!-- Damage stays on the card: the Barrier left covers the printed Health. -->
 							<span class="barrier-left" data-testid="monster-card-barrier-left">
@@ -136,7 +146,7 @@
 						<span class="numeral">{MONSTER_NUMERAL[deck]}</span>
 					</div>
 					<div class="band">{name}</div>
-					<div class="stats">
+					<div class="stats" class:three={initiative !== null}>
 						<span class="stat barrier" class:hurt={damaged}>
 							<span class="k">Barrier</span>
 							<span class="v">{damaged ? `${card.hp}/${card.maxHp}` : card.maxHp}</span>
@@ -145,6 +155,12 @@
 							<span class="k">Hits</span>
 							<span class="v">{card.damage}</span>
 						</span>
+						{#if initiative !== null}
+							<span class="stat init">
+								<span class="k">Init</span>
+								<span class="v">{initiative}</span>
+							</span>
+						{/if}
 					</div>
 					{#if rewards.length > 0}
 						<div class="rewards">
@@ -273,6 +289,17 @@
 		gap: 2.5cqi;
 		padding: 0 4cqi;
 	}
+	.stats.three {
+		grid-template-columns: 1fr 1fr 1fr;
+		gap: 1.5cqi;
+		padding: 0 2.5cqi;
+	}
+	.stats.three .v {
+		font-size: 12cqi;
+	}
+	.stats.three .k {
+		font-size: max(6px, 5.2cqi);
+	}
 	.stat {
 		display: grid;
 		gap: 0.5cqi;
@@ -358,6 +385,28 @@
 			drop-shadow(0 0 2.5cqi color-mix(in srgb, var(--c) 45%, transparent));
 	}
 	/* Barrier left, over the printed Health number (plate: x 6–20 %, y 6.7–12.6 %; label above it). */
+	.init-chip {
+		position: absolute;
+		left: 50%;
+		top: 7.4%;
+		transform: translateX(-50%);
+		padding: 0.5cqi 2.6cqi;
+		border-radius: 3cqi;
+		background: rgba(20, 14, 34, 0.82);
+		box-shadow: 0 0 0 0.4cqi rgba(240, 214, 160, 0.75);
+		color: #f3e3bd;
+		font-size: 3.6cqi;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		white-space: nowrap;
+		line-height: 1.5;
+	}
+	.init-chip b {
+		margin-left: 0.6cqi;
+		color: #fff;
+		font-size: 4.6cqi;
+	}
 	.barrier-left {
 		position: absolute;
 		left: 5.3%;
