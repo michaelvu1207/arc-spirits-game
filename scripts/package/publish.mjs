@@ -23,8 +23,10 @@ const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'u
 const before = index.live;
 index.live = version;
 writeFileSync(indexPath, JSON.stringify(index, null, '\t') + '\n');
-git('add', 'packages');
-if (!git('status', '--porcelain', 'packages')) {
+// The monster card faces rebuilt by release.mjs ship with the package.
+const SHIPPED = ['packages', 'static/monster-cards', 'src/lib/components/play2d/monsterCardFaces.json'];
+git('add', ...SHIPPED);
+if (!git('diff', '--cached', '--name-only', '--', ...SHIPPED)) {
 	console.log(`${version} is already the live package and committed`);
 } else {
 	git('commit', '-m', before === version ? `Add game package ${version}` : `Publish game package ${version} (was ${before ?? 'none'})`);

@@ -52,6 +52,7 @@ import type {
 import { env as publicEnv } from '$env/dynamic/public';
 import { SUPABASE_SAME_ORIGIN, supabaseUrl } from './supabaseOrigin';
 import { createPackageFetch } from './packages/packageFetch';
+import { packageInfo } from './packages';
 
 const PUBLIC_SUPABASE_URL = supabaseUrl();
 const PUBLIC_SUPABASE_ANON_KEY = publicEnv.PUBLIC_SUPABASE_ANON_KEY?.trim() || 'unconfigured-public-anon-key';
@@ -69,7 +70,15 @@ export const SUPABASE_URL = PUBLIC_SUPABASE_URL;
 // play database is small and clean, the print-size art stays in the project that has always
 // stored it. Unset ⇒ the same project as before.
 const PUBLIC_ART_SUPABASE_URL = publicEnv.PUBLIC_ART_SUPABASE_URL?.trim() || PUBLIC_SUPABASE_URL;
-export const STORAGE_BASE_URL = `${SUPABASE_SAME_ORIGIN ? '' : PUBLIC_ART_SUPABASE_URL}/storage/v1/object/public/game_assets`;
+// A package released with art has its own display-size copies in the play project's bucket, under
+// art/<id>/ (scripts/package/art.mjs): the art is as fixed as the data, and already display size.
+// The local game (same-origin mode) serves the working art folder itself.
+const PACKAGE_ART_ID = SUPABASE_SAME_ORIGIN ? null : (packageInfo()?.art?.id ?? null);
+/** True when image URLs are final display copies: no resize endpoint in front of them. */
+export const ART_PRESIZED = PACKAGE_ART_ID !== null;
+export const STORAGE_BASE_URL = PACKAGE_ART_ID
+	? `${PUBLIC_SUPABASE_URL}/storage/v1/object/public/game_assets/art/${PACKAGE_ART_ID}`
+	: `${SUPABASE_SAME_ORIGIN ? '' : PUBLIC_ART_SUPABASE_URL}/storage/v1/object/public/game_assets`;
 
 /**
  * Game data (spirits, classes, monsters, rules, …) comes from the live game PACKAGE

@@ -19,6 +19,9 @@ export interface PackageInfo {
 	/** ./rulesHash.ts of the engine catalog the release check played on. */
 	rulesHash?: string;
 	counts?: Record<string, number>;
+	/** Display-size art uploaded for this package: storage folder `game_assets/art/<id>/` of the
+	 *  play project (scripts/package/art.mjs). null/absent ⇒ the art of the old project's bucket. */
+	art?: { id: string; files: number } | null;
 }
 export type PackageTables = Record<string, Record<string, unknown>[]>;
 

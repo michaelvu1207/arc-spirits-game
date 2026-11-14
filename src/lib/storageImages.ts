@@ -11,13 +11,15 @@
  *
  * Editors and print/export tools must keep using the original object URLs.
  */
-import { STORAGE_BASE_URL } from '$lib/supabase';
+import { ART_PRESIZED, STORAGE_BASE_URL } from '$lib/supabase';
 
 const OBJECT_SEGMENT = '/storage/v1/object/public/';
-/** Same bucket through the transformation endpoint; null if the base is not a Supabase object URL. */
-const STORAGE_RENDER_BASE_URL = STORAGE_BASE_URL.includes(OBJECT_SEGMENT)
-	? STORAGE_BASE_URL.replace(OBJECT_SEGMENT, '/storage/v1/render/image/public/')
-	: null;
+/** Same bucket through the transformation endpoint; null if the base is not a Supabase object URL,
+ *  or when the package's art is already display size (ART_PRESIZED: scripts/package/art.mjs). */
+const STORAGE_RENDER_BASE_URL =
+	!ART_PRESIZED && STORAGE_BASE_URL.includes(OBJECT_SEGMENT)
+		? STORAGE_BASE_URL.replace(OBJECT_SEGMENT, '/storage/v1/render/image/public/')
+		: null;
 
 /** Raster formats the transformation endpoint accepts. SVG and the rest pass through. */
 const RESIZABLE = /\.(png|jpe?g|webp)$/i;

@@ -34,8 +34,14 @@ The site lists every package, which one is live, and its change list at `/versio
 
 `packages/<version>/tables.json` (the design tables: spirits, classes, monsters, locations,
 dice, guardians, rule switches…), `manifest.json` and `CHANGES.md`. A package is immutable.
-`packages/index.json` lists them and names the live one. Art is not in a package: image paths in
-the tables point into the art storage bucket.
+`packages/index.json` lists them and names the live one.
+
+Art is part of a release. `package:release` takes the latest local exports and icons in
+`~/ArcSpiritsArt` (found the same way the local game finds them, so the web shows what the local
+game shows), makes display-size WebP copies and uploads them to the play project's storage under
+`game_assets/art/<art id>/`. Art with no local export (guardian mats, location backgrounds, dice)
+is copied from the old project's bucket. It also rebuilds the printed monster card faces
+(`static/monster-cards`). `--no-art` skips this and reuses the art of the live package.
 
 ## Checking a deployment
 
