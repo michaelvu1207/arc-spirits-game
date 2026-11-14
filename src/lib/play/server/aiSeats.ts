@@ -155,6 +155,9 @@ function httpMessageOf(err: unknown): string {
  * room's current revision (else 409 with the current one), and `actionId` must be one of the
  * ids of the rebuilt decision (else 400 — never a guess).
  */
+/** Tries to apply one answer when other seats keep committing in between (bots act in bursts). */
+const COMMIT_ATTEMPTS = 4;
+
 export async function actForAiSeat(input: unknown): Promise<AiActResult> {
 	const body = (input ?? {}) as Record<string, unknown>;
 	const roomCode = typeof body.roomCode === 'string' ? body.roomCode.trim().toUpperCase() : '';
@@ -168,54 +171,60 @@ export async function actForAiSeat(input: unknown): Promise<AiActResult> {
 		return { status: 400, body: { message: 'revision must be a whole number.' } };
 	if (!actionId) return { status: 400, body: { message: 'actionId is required.' } };
 
-	const room = await loadAiRoom(roomCode);
-	if (!room) return { status: 404, body: { message: 'Room not found.' } };
-	const memberId = room.aiSeats.get(seat);
-	if (!memberId) return { status: 400, body: { message: `${seat} is not an AI seat.` } };
-	if (room.state.status !== 'active')
-		return { status: 409, body: { message: 'The game is not active.', revision: room.revision } };
-	if (aiSeatsThatMustAct(room.state, [seat]).length === 0)
-		return {
-			status: 409,
-			body: { message: `${seat} does not need to act now.`, revision: room.revision }
-		};
+	for (let attempt = 1; ; attempt++) {
+		const room = await loadAiRoom(roomCode);
+		if (!room) return { status: 404, body: { message: 'Room not found.' } };
+		const memberId = room.aiSeats.get(seat);
+		if (!memberId) return { status: 400, body: { message: `${seat} is not an AI seat.` } };
+		if (room.state.status !== 'active')
+			return { status: 409, body: { message: 'The game is not active.', revision: room.revision } };
+		if (aiSeatsThatMustAct(room.state, [seat]).length === 0)
+			return {
+				status: 409,
+				body: { message: `${seat} does not need to act now.`, revision: room.revision }
+			};
 
-	const catalog = await loadPlayCatalog();
-	const { built } = buildAiDecision(room.state, seat, catalog, room.roomCode);
-	// The answer is for the room as it is now when the revision is the same, or when the room
-	// moved on but this seat is still being asked exactly the same thing (aiDecisionKey).
-	const decisionKey = typeof body.decisionKey === 'string' ? body.decisionKey : '';
-	const sameDecision = decisionKey !== '' && decisionKey === aiDecisionKey(built.request.actions);
-	if (revision !== room.revision && !sameDecision)
-		return {
-			status: 409,
-			body: { message: `Stale revision (current ${room.revision}).`, revision: room.revision }
-		};
-	const applyAt = room.revision;
-	const chosen = built.request.actions.find((action) => action.id === actionId);
-	if (!chosen)
-		return {
-			status: 400,
-			body: { message: `"${actionId.slice(0, 40)}" is not one of the offered action ids.` }
-		};
+		const catalog = await loadPlayCatalog();
+		const { built } = buildAiDecision(room.state, seat, catalog, room.roomCode);
+		// The answer is for the room as it is now when the revision is the same, or when the room
+		// moved on but this seat is still being asked exactly the same thing (aiDecisionKey).
+		const decisionKey = typeof body.decisionKey === 'string' ? body.decisionKey : '';
+		const sameDecision = decisionKey !== '' && decisionKey === aiDecisionKey(built.request.actions);
+		if (revision !== room.revision && !sameDecision)
+			return {
+				status: 409,
+				body: { message: `Stale revision (current ${room.revision}).`, revision: room.revision }
+			};
+		const applyAt = room.revision;
+		const chosen = built.request.actions.find((action) => action.id === actionId);
+		if (!chosen)
+			return {
+				status: 400,
+				body: { message: `"${actionId.slice(0, 40)}" is not one of the offered action ids.` }
+			};
 
-	try {
-		const view = await runRoomCommand({
-			roomCode: room.roomCode,
-			trustedMemberId: memberId,
-			expectedRevision: applyAt,
-			command: chosen.command,
-			cmdId: aiCmdId(room.sessionId, applyAt, seat),
-			requireRevision: applyAt
-		});
-		return { status: 200, body: { ok: true, revision: view.projection.revision } };
-	} catch (err) {
-		if (err instanceof StaleRevisionError)
-			return { status: 409, body: { message: err.message, revision: err.revision } };
-		const status = httpStatusOf(err);
-		if (status === 400) return { status: 400, body: { message: httpMessageOf(err) } };
-		if (status === 409 || status === 410)
-			return { status: 409, body: { message: httpMessageOf(err), revision: room.revision } };
-		throw err;
+		try {
+			const view = await runRoomCommand({
+				roomCode: room.roomCode,
+				trustedMemberId: memberId,
+				expectedRevision: applyAt,
+				command: chosen.command,
+				cmdId: aiCmdId(room.sessionId, applyAt, seat),
+				requireRevision: applyAt
+			});
+			return { status: 200, body: { ok: true, revision: view.projection.revision } };
+		} catch (err) {
+			if (err instanceof StaleRevisionError) {
+				// Another seat committed between our read and our write. With a decision key, look
+				// again: if this seat is still asked the same thing, apply the answer to the new state.
+				if (decisionKey !== '' && attempt < COMMIT_ATTEMPTS) continue;
+				return { status: 409, body: { message: err.message, revision: err.revision } };
+			}
+			const status = httpStatusOf(err);
+			if (status === 400) return { status: 400, body: { message: httpMessageOf(err) } };
+			if (status === 409 || status === 410)
+				return { status: 409, body: { message: httpMessageOf(err), revision: room.revision } };
+			throw err;
+		}
 	}
 }

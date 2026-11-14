@@ -192,6 +192,22 @@ describe('POST /api/ai/act', () => {
 		expect(mocks.runRoomCommand).not.toHaveBeenCalled();
 	});
 
+	test('a commit race is retried while the decision is unchanged', async () => {
+		const [item] = (await listPendingAiDecisions()).filter((i) => i.seat === seats[1]);
+		mocks.runRoomCommand
+			.mockRejectedValueOnce(new mocks.StaleRevisionError(state.revision + 1))
+			.mockResolvedValue({ projection: { revision: state.revision + 2 } });
+		const result = await actForAiSeat({
+			roomCode: ROOM,
+			seat: seats[1],
+			revision: state.revision,
+			decisionKey: item.decisionKey,
+			actionId: item.actions[0].id
+		});
+		expect(result.status).toBe(200);
+		expect(mocks.runRoomCommand).toHaveBeenCalledTimes(2);
+	});
+
 	test('a revision that moves during the commit is a 409 too', async () => {
 		mocks.runRoomCommand.mockRejectedValue(new mocks.StaleRevisionError(state.revision + 1));
 		const result = await actForAiSeat({
