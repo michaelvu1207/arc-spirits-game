@@ -1,0 +1,36 @@
+{
+	"version": "0.1.1",
+	"createdAt": "2026-11-14T21:34:20.863Z",
+	"parent": "0.1.0",
+	"notes": "Art from the latest local exports: current spirit card faces, class, origin and rune icons, and monster cards. Game data unchanged.",
+	"sha256": "92e4826b899087c52c72cefa7e1f914688f04dcaf7937c1aa78df12329850b7c",
+	"rulesHash": "5da0c221159cfc131c8e9ef0c6bcb2cc7232c3156489ef9ff6f7c8f1108063d0",
+	"art": {
+		"id": "8848c161e2b0ea4b",
+		"files": 521,
+		"fromExports": 426,
+		"fromOldBucket": 95,
+		"missing": [
+			"misc_assets/spirit_world_map/spirit_world_board_1771649177953.png"
+		]
+	},
+	"counts": {
+		"hex_spirits": 64,
+		"classes": 55,
+		"origins": 8,
+		"monsters_v2": 108,
+		"icon_pool": 146,
+		"game_locations": 5,
+		"guardians": 10,
+		"editions": 2,
+		"custom_dice": 5,
+		"dice_sides": 30,
+		"game_location_rows": 14,
+		"monster_pools": 15,
+		"relics": 5,
+		"rules": 1,
+		"mat_items": 12,
+		"reward_row_assignments": 1
+	},
+	"source": "~/ArcSpiritsArt/game"
+}
