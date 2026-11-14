@@ -6,6 +6,7 @@
  * seats and live AI seats. The answer is applied through runRoomCommand as the seat's bot
  * member — the same commit path tickBots uses — fenced to the exact revision it was asked at.
  */
+import { createHash } from 'node:crypto';
 import { buildDecision, type BuiltDecision } from '../agents/decision';
 import { renderDecisionMessage } from '../agents/prompt';
 import { buildRulesBrief } from '../agents/rulesBrief';
@@ -75,10 +76,25 @@ export function aiCmdId(sessionId: string, revision: number, seat: SeatColor): s
 	return `ai:${sessionId}:${revision}:${seat}`;
 }
 
+/**
+ * Identifies WHAT a seat is being asked: its numbered legal actions (ids and labels). Other
+ * players' moves change the room revision all the time (navigation is simultaneous) without
+ * changing this seat's choice; an answer is still valid while this key is unchanged, so a model
+ * call is not thrown away because someone else moved first.
+ */
+export function aiDecisionKey(actions: readonly { id: string; label: string }[]): string {
+	return createHash('sha256')
+		.update(JSON.stringify(actions.map(({ id, label }) => [id, label])))
+		.digest('hex')
+		.slice(0, 24);
+}
+
 export interface AiPendingItem {
 	roomCode: string;
 	seat: SeatColor;
 	revision: number;
+	/** {@link aiDecisionKey} of `actions`; send it back with the answer. */
+	decisionKey: string;
 	system: string;
 	prompt: string;
 	actions: { id: string; label: string }[];
@@ -108,6 +124,7 @@ export async function listPendingAiDecisions(now = Date.now()): Promise<AiPendin
 				roomCode: room.roomCode,
 				seat,
 				revision: room.revision,
+				decisionKey: aiDecisionKey(built.request.actions),
 				system,
 				prompt,
 				actions: built.request.actions.map(({ id, label }) => ({ id, label })),
@@ -157,11 +174,6 @@ export async function actForAiSeat(input: unknown): Promise<AiActResult> {
 	if (!memberId) return { status: 400, body: { message: `${seat} is not an AI seat.` } };
 	if (room.state.status !== 'active')
 		return { status: 409, body: { message: 'The game is not active.', revision: room.revision } };
-	if (revision !== room.revision)
-		return {
-			status: 409,
-			body: { message: `Stale revision (current ${room.revision}).`, revision: room.revision }
-		};
 	if (aiSeatsThatMustAct(room.state, [seat]).length === 0)
 		return {
 			status: 409,
@@ -170,6 +182,16 @@ export async function actForAiSeat(input: unknown): Promise<AiActResult> {
 
 	const catalog = await loadPlayCatalog();
 	const { built } = buildAiDecision(room.state, seat, catalog, room.roomCode);
+	// The answer is for the room as it is now when the revision is the same, or when the room
+	// moved on but this seat is still being asked exactly the same thing (aiDecisionKey).
+	const decisionKey = typeof body.decisionKey === 'string' ? body.decisionKey : '';
+	const sameDecision = decisionKey !== '' && decisionKey === aiDecisionKey(built.request.actions);
+	if (revision !== room.revision && !sameDecision)
+		return {
+			status: 409,
+			body: { message: `Stale revision (current ${room.revision}).`, revision: room.revision }
+		};
+	const applyAt = room.revision;
 	const chosen = built.request.actions.find((action) => action.id === actionId);
 	if (!chosen)
 		return {
@@ -181,10 +203,10 @@ export async function actForAiSeat(input: unknown): Promise<AiActResult> {
 		const view = await runRoomCommand({
 			roomCode: room.roomCode,
 			trustedMemberId: memberId,
-			expectedRevision: revision,
+			expectedRevision: applyAt,
 			command: chosen.command,
-			cmdId: aiCmdId(room.sessionId, revision, seat),
-			requireRevision: revision
+			cmdId: aiCmdId(room.sessionId, applyAt, seat),
+			requireRevision: applyAt
 		});
 		return { status: 200, body: { ok: true, revision: view.projection.revision } };
 	} catch (err) {

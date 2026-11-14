@@ -164,6 +164,34 @@ describe('POST /api/ai/act', () => {
 		expect(mocks.runRoomCommand).not.toHaveBeenCalled();
 	});
 
+	test('a stale revision is accepted while the seat is still asked the same thing', async () => {
+		const [item] = (await listPendingAiDecisions()).filter((i) => i.seat === seats[1]);
+		expect(item.decisionKey).toMatch(/^[0-9a-f]{24}$/);
+		mocks.runRoomCommand.mockResolvedValue({ projection: { revision: state.revision + 1 } });
+		const ok = await actForAiSeat({
+			roomCode: ROOM,
+			seat: seats[1],
+			revision: state.revision - 3,
+			decisionKey: item.decisionKey,
+			actionId: item.actions[0].id
+		});
+		expect(ok.status).toBe(200);
+		// Applied at the CURRENT revision, never at the stale one.
+		expect(mocks.runRoomCommand).toHaveBeenCalledWith(
+			expect.objectContaining({ requireRevision: state.revision, expectedRevision: state.revision })
+		);
+		mocks.runRoomCommand.mockClear();
+		const changed = await actForAiSeat({
+			roomCode: ROOM,
+			seat: seats[1],
+			revision: state.revision - 3,
+			decisionKey: 'not-the-current-decision',
+			actionId: item.actions[0].id
+		});
+		expect(changed.status).toBe(409);
+		expect(mocks.runRoomCommand).not.toHaveBeenCalled();
+	});
+
 	test('a revision that moves during the commit is a 409 too', async () => {
 		mocks.runRoomCommand.mockRejectedValue(new mocks.StaleRevisionError(state.revision + 1));
 		const result = await actForAiSeat({

@@ -132,9 +132,13 @@ export function createWorker(cfg, deps = {}) {
 	const fetchImpl = deps.fetch ?? fetch;
 	const log = deps.log ?? ((line) => console.log(line));
 	const now = deps.now ?? (() => Date.now());
+	/** "room:seat" being answered now: one model call at a time per seat. */
 	const inFlight = new Set();
-	/** key → time given up (so a dead revision is never asked again; pruned after an hour). */
+	/** decision → time given up (a decision with no usable answer is not asked again; the
+	 *  site's timeout plays it; pruned after 3 minutes). */
 	const done = new Map();
+	/** "room:seat" → time its last answer settled: items of a poll sent before that are stale. */
+	const settledAt = new Map();
 	let lastBusyAt = now();
 
 	const site = (path, init = {}) =>
@@ -147,12 +151,20 @@ export function createWorker(cfg, deps = {}) {
 	async function act(item, id, reason) {
 		const res = await site('/api/ai/act', {
 			method: 'POST',
-			body: JSON.stringify({ roomCode: item.roomCode, seat: item.seat, revision: item.revision, actionId: id, reason })
+			body: JSON.stringify({
+				roomCode: item.roomCode,
+				seat: item.seat,
+				revision: item.revision,
+				decisionKey: item.decisionKey,
+				actionId: id,
+				reason
+			})
 		});
 		const body = await res.json().catch(() => ({}));
 		return { status: res.status, body };
 	}
 
+	/** @returns {Promise<boolean>} false ⇒ gave up on this decision (do not ask it again). */
 	async function handle(item) {
 		const started = now();
 		const label = (id) => item.actions.find((a) => a.id === id)?.label ?? id;
@@ -161,7 +173,7 @@ export function createWorker(cfg, deps = {}) {
 			const r = await act(item, item.actions[0].id, 'only legal action');
 			if (r.status === 200) log(`[ai] ${tag} → ${label(item.actions[0].id)} (forced)`);
 			else log(`[ai] ${tag}: act ${r.status} ${String(r.body?.message ?? '').slice(0, 120)}`);
-			return;
+			return r.status === 200 || r.status === 409;
 		}
 		const messages = [
 			{ role: 'system', content: item.system },
@@ -173,7 +185,7 @@ export function createWorker(cfg, deps = {}) {
 				text = await callGateway(cfg, messages, fetchImpl);
 			} catch (err) {
 				log(`[ai] ${tag}: ${err instanceof Error ? err.message : String(err)}`);
-				return; // gateway down/busy: the site's timeout covers this revision
+				return false; // gateway down/busy: the site's timeout covers this decision
 			}
 			const pick = pickAction(text, item.actions);
 			if (!pick) {
@@ -185,40 +197,50 @@ export function createWorker(cfg, deps = {}) {
 			const secs = ((now() - started) / 1000).toFixed(1);
 			if (r.status === 200) {
 				log(`[ai] ${tag} → ${label(pick.id)} (${secs}s)`);
-				return;
+				return true;
 			}
 			if (r.status === 409) {
-				log(`[ai] ${tag}: the room moved on before the answer (${secs}s)`);
-				return;
+				log(`[ai] ${tag}: the decision changed before the answer (${secs}s)`);
+				return true;
 			}
 			log(`[ai] ${tag}: act ${r.status} ${String(r.body?.message ?? '').slice(0, 120)}`);
-			if (r.status !== 400) return;
+			if (r.status !== 400) return false;
 			messages.push({ role: 'assistant', content: text });
 			messages.push({ role: 'user', content: repairMessage(String(r.body?.message ?? 'the action was rejected'), item.actions) });
 		}
-		log(`[ai] ${tag}: no usable answer; giving up on revision ${item.revision}`);
+		log(`[ai] ${tag}: no usable answer; giving up on this decision`);
+		return false;
 	}
 
 	/** One poll: start a decision for every new due item (at most MAX_IN_FLIGHT at once). */
 	async function poll() {
+		const asked = now();
 		const res = await site('/api/ai/pending');
 		if (!res.ok) throw new Error(`pending ${res.status}`);
 		const { items = [] } = await res.json();
 		if (items.length > 0) lastBusyAt = now();
-		for (const [key, at] of done) if (now() - at > 3_600_000) done.delete(key);
+		for (const [key, at] of done) if (now() - at > 180_000) done.delete(key);
 		const started = [];
 		for (const item of items) {
-			const key = `${item.roomCode}:${item.seat}:${item.revision}`;
-			if (inFlight.has(key) || done.has(key)) continue;
+			const key = `${item.roomCode}:${item.seat}`;
+			const decision = `${key}:${item.decisionKey ?? item.revision}`;
+			// A poll sent before this seat's last answer settled may still list the old decision.
+			// Same revision as an answer already given ⇒ the very same state: never ask it twice.
+			const exact = `${decision}@${item.revision}`;
+			if (inFlight.has(key) || done.has(decision) || done.has(exact) || (settledAt.get(key) ?? -1) >= asked) continue;
 			if (inFlight.size >= MAX_IN_FLIGHT) break;
 			inFlight.add(key);
 			lastBusyAt = now();
 			started.push(
 				handle(item)
-					.catch((err) => log(`[ai] ${item.roomCode} ${item.seat}: ${err instanceof Error ? err.message : String(err)}`))
-					.finally(() => {
+					.catch((err) => {
+						log(`[ai] ${item.roomCode} ${item.seat}: ${err instanceof Error ? err.message : String(err)}`);
+						return false;
+					})
+					.then((answered) => {
+						done.set(answered ? exact : decision, now());
 						inFlight.delete(key);
-						done.set(key, now());
+						settledAt.set(key, now());
 						lastBusyAt = now();
 					})
 			);
