@@ -326,7 +326,6 @@
 		return `/play?${params.toString()}`;
 	}
 	const soloHref = $derived(actionHref('solo'));
-	const rankedHref = $derived(actionHref('ranked'));
 
 	onMount(() => {
 		mounted = true;
@@ -338,8 +337,8 @@
 		const params = new URLSearchParams(window.location.search);
 		const action = params.get('action');
 		if (action) {
-			if (action === 'ranked') void startRanked();
-			else if (action === 'solo') void startSolo();
+			// 'ranked' (Quick Play) is dropped: only the solo action remains.
+			if (action === 'solo') void startSolo();
 			// Strip ?action so refresh/back doesn't re-trigger it. On the initial
 			// (post-reload) mount SvelteKit's router isn't initialized yet and its
 			// replaceState throws — fall back to the native call, preserving
@@ -405,20 +404,8 @@
 						<span class="go" aria-hidden="true">→</span>
 					</a>
 
-					<a
-						data-testid="quick-play"
-						class="row link"
-						href={rankedHref}
-						onclick={(event) => {
-							event.preventDefault();
-							void startRanked();
-						}}
-						onpointerenter={hover}
-					>
-						<span class="gem"></span>
-						<span class="lbl">Quick Play</span>
-						<span class="go" aria-hidden="true">→</span>
-					</a>
+					<!-- Quick Play (matchmaking / ranked) is dropped with the minimal database
+					     ($lib/server/droppedRoutes.ts); the search view below stays unreachable. -->
 
 					{#if soloError}
 						<p class="menu-error" data-testid="solo-play-error">{soloError}</p>
@@ -437,23 +424,18 @@
 					</a>
 
 					<a
+						data-testid="play-versions"
 						class="row link"
-						href="/play/champions"
+						href="/versions"
 						onpointerenter={hover}
 						onclick={() => playMenuSfx('ui-click')}
 					>
-						<span class="gem"></span><span class="lbl">Hall of Guardians</span><span class="go"
-							>→</span
-						>
+						<span class="gem"></span>
+						<span class="lbl">Game Versions</span>
+						<span class="go">→</span>
 					</a>
-					<a
-						class="row link"
-						href="/play/builder"
-						onpointerenter={hover}
-						onclick={() => playMenuSfx('ui-click')}
-					>
-						<span class="gem"></span><span class="lbl">Builder</span><span class="go">→</span>
-					</a>
+
+					<!-- Hall of Guardians (/play/champions) and Builder (/play/builder) are dropped. -->
 				</nav>
 			{:else}
 				<section class="ranked-view reveal" aria-live="polite" data-testid="ranked-view">

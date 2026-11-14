@@ -9,6 +9,7 @@
 	import { formatDate, formatDuration, formatDurationHoursMinutes } from '$lib/features/stats/format';
 	import { toShortReplayCode } from '$lib/replayCodes';
 	import { getGuardianAsset } from '$lib/stores/assetStore.svelte';
+	import { LOCAL_EXPLORER, explorerLinks } from '$lib/explorer';
 
 	interface Props {
 		game: RecordGame;
@@ -64,10 +65,14 @@
 
 <DetailOverlay eyebrow="Game Record" title={shortenGameId(game.gameId)} {onClose}>
 	{#snippet headerActions()}
-		<a class="full-replay" href={`/game/${encodeURIComponent(game.gameId)}`}>
-			<span>Full Replay</span>
-			<span class="fr-arrow" aria-hidden="true">→</span>
-		</a>
+		<!-- There is no /game/<id> page: the round-by-round viewer exists only in the local
+		     explorer. Online, a player opens a replay from Past Games (/replay/<code>). -->
+		{#if LOCAL_EXPLORER}
+			<a class="full-replay" href={explorerLinks.game(game.gameId)}>
+				<span>Full Replay</span>
+				<span class="fr-arrow" aria-hidden="true">→</span>
+			</a>
+		{/if}
 	{/snippet}
 
 	<!-- ── Winner summary ─────────────────────────────────────── -->

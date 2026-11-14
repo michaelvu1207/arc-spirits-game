@@ -114,6 +114,7 @@ function connectSrcDirectives() {
 		}
 	};
 	addOrigin(readVar('PUBLIC_SUPABASE_URL'), { withWsTwin: true }); // REST + Auth + Realtime
+	addOrigin(readVar('PUBLIC_ART_SUPABASE_URL')); // game art bucket, when it is another project
 	addOrigin(readVar('PUBLIC_WS_SERVER_URL')); // room server WS
 	addOrigin(readVar('PUBLIC_API_BASE_URL')); // Capacitor → deployed API
 	// The WebGL/splat engine initializes its WebAssembly by FETCHING inline data:
@@ -152,6 +153,9 @@ function imgSrcDirectives() {
 	const sources = new Set(['self', 'data:', 'blob:']);
 	const supabase = admissibleOrigin(readVar('PUBLIC_SUPABASE_URL'));
 	if (supabase) sources.add(supabase.origin);
+	// The art bucket may be in another Supabase project (src/lib/supabase.ts STORAGE_BASE_URL).
+	const art = admissibleOrigin(readVar('PUBLIC_ART_SUPABASE_URL'));
+	if (art) sources.add(art.origin);
 	return /** @type {any} */ ([...sources]);
 }
 

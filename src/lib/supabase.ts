@@ -51,6 +51,7 @@ import type {
 } from './types';
 import { env as publicEnv } from '$env/dynamic/public';
 import { SUPABASE_SAME_ORIGIN, supabaseUrl } from './supabaseOrigin';
+import { createPackageFetch } from './packages/packageFetch';
 
 const PUBLIC_SUPABASE_URL = supabaseUrl();
 const PUBLIC_SUPABASE_ANON_KEY = publicEnv.PUBLIC_SUPABASE_ANON_KEY?.trim() || 'unconfigured-public-anon-key';
@@ -64,7 +65,19 @@ export const SUPABASE_URL = PUBLIC_SUPABASE_URL;
 
 // Supabase storage bucket base URL (bucket is 'game_assets')
 // (Root-relative in same-origin mode, so server-rendered image URLs work for every host name.)
-export const STORAGE_BASE_URL = `${SUPABASE_SAME_ORIGIN ? '' : PUBLIC_SUPABASE_URL}/storage/v1/object/public/game_assets`;
+// The art can live in another Supabase project than the play data (PUBLIC_ART_SUPABASE_URL): the
+// play database is small and clean, the print-size art stays in the project that has always
+// stored it. Unset ⇒ the same project as before.
+const PUBLIC_ART_SUPABASE_URL = publicEnv.PUBLIC_ART_SUPABASE_URL?.trim() || PUBLIC_SUPABASE_URL;
+export const STORAGE_BASE_URL = `${SUPABASE_SAME_ORIGIN ? '' : PUBLIC_ART_SUPABASE_URL}/storage/v1/object/public/game_assets`;
+
+/**
+ * Game data (spirits, classes, monsters, rules, …) comes from the live game PACKAGE
+ * (src/lib/packages), not from database tables: the assets client below keeps its query code but
+ * its fetch answers from the package. The local game (same-origin mode) is the one exception: it
+ * serves the working data folder live, so local edits show at once.
+ */
+export const GAME_DATA_FROM_PACKAGE = !SUPABASE_SAME_ORIGIN;
 
 // Table names
 export const TABLES = {
@@ -133,6 +146,7 @@ export const supabaseAssets = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_
 	db: {
 		schema: ASSETS_SCHEMA
 	},
+	...(GAME_DATA_FROM_PACKAGE ? { global: { fetch: createPackageFetch() } } : {}),
 	auth: {
 		persistSession: false,
 		autoRefreshToken: false,

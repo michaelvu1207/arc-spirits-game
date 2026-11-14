@@ -25,7 +25,6 @@
 	<main class="ui low">
 		<nav aria-label="Main menu">
 			<a class="play" href="/game" data-testid="studio-play-arc-spirits">Play Arc Spirits</a>
-			<a href="/play/champions">Hall of Guardians</a>
 			<a href="/account">Sign in</a>
 		</nav>
 		<p class="legal">© {year} Angelside Studios</p>

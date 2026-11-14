@@ -6,9 +6,7 @@
 	import { postPlayJson, restoreActiveMember, setActiveMember } from '$lib/stores/playStore.svelte';
 	import { runRematch } from '$lib/play/rematchAction';
 	import { buildPostgameInsights } from '$lib/play/postgameInsights';
-	import { getCosmeticsState, syncCosmetics } from '$lib/stores/cosmetics.svelte';
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
-	import { calculateMatchAward, type MatchAward, type RankDefinition } from '$lib/cosmetics/progression';
 	import type { PrivatePlayerState, SeatColor, SpectatorProjection } from '$lib/play/types';
 	import type { ClassTrait } from '$lib/types';
 	import { expectedAttack } from '$lib/play/combat';
@@ -26,7 +24,6 @@
 
 	let { room, mySeat, assets, spiritImages }: Props = $props();
 
-	const cosmetics = getCosmeticsState();
 	// Reuse the in-game leaderboard's resource icons (VP + barrier) so the standings
 	// stats read identically to the live board.
 	const vpIcon = $derived(iconPoolUrl(assets.iconPool, RESOURCE_ICON_IDS.vp));
@@ -179,33 +176,13 @@
 	let shareBusy = $state(false);
 	let shareError = $state<string | null>(null);
 	let shareUrl = $state<string | null>(null);
-	let payout = $state<MatchAward | null>(null);
-	let promotedTo = $state<RankDefinition | null>(null);
-	let payoutChecked = $state(false);
 	let authoritative = $state<null | { rated: boolean; finalized: boolean; players: Array<{
 		seatColor: SeatColor; placement: number; ratedPlacement: number; abandoned: boolean;
 		rating: { ordinalDelta: number } | null }> }>(null);
 	const myAuthoritative = $derived(authoritative?.players.find((player) => player.seatColor === mySeat) ?? null);
 
-	$effect(() => {
-		if (payoutChecked || room.status !== 'finished' || !mySeat || !me || !authoritative?.finalized) return;
-		payoutChecked = true;
-		if (myAuthoritative?.abandoned) return;
-		// Display the deterministic formula immediately, but award nothing locally.
-		// syncCosmetics reconciles the trusted match-result ledger on the server; a
-		// forged/replayed client can neither mint currency nor claim twice.
-		payout = calculateMatchAward({
-			matchId: `${room.roomCode}:${mySeat}`,
-			victoryPoints: me.vp,
-			placement: me.placement,
-			won: myWon,
-			round: room.round
-		});
-		const previousRank = cosmetics.rank;
-		void syncCosmetics().then(() => {
-			if (cosmetics.rank.id !== previousRank.id) promotedTo = cosmetics.rank;
-		}).catch(() => {});
-	});
+	// The account XP / credits payout (cosmetics progression) is dropped with the minimal
+	// database: no rank ladder, wallet or syncCosmetics call after a game.
 
 	function ordinal(n: number): string {
 		const v = n % 100;
@@ -477,17 +454,6 @@
 					? `Conceded · rated ${ordinal(myAuthoritative.ratedPlacement)}`
 					: myWon ? 'Victory' : `Finished ${ordinal(me.placement)}`}</span>
 				<span class="hero-status" style="--sc: {me.statusColor}">{me.statusLabel}</span>
-
-				<div class="ladder" style="--rank-accent: {cosmetics.rank.accent}">
-					<span class="ladder-name">{promotedTo ? `Promoted to ${promotedTo.name}` : cosmetics.rank.name}</span>
-					<span class="ladder-xp">{cosmetics.progression.rankXp} account XP</span>
-				</div>
-
-				<div class="payout" aria-live="polite">
-					<img src="/cosmetics/abyss-credit.png" alt="" />
-					<span>{myAuthoritative?.abandoned ? 'No payout' : payout ? `+${payout.credits}` : cosmetics.progression.credits}</span>
-					<small>{myAuthoritative?.abandoned ? 'Conceded match' : payout ? `+${payout.rankXp} XP` : 'Wallet'}</small>
-				</div>
 
 				{#if rank.kind === 'ranked'}
 					<span class="hero-rank" class:up={rank.delta >= 0} class:down={rank.delta < 0}>
@@ -862,61 +828,6 @@
 		border-radius: 999px;
 		border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent);
 		background: color-mix(in srgb, var(--sc) 12%, transparent);
-	}
-	.ladder {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 3px;
-		margin-top: 0.35rem;
-	}
-	.ladder :global(.rank-emblem.large) {
-		width: clamp(92px, 12vw, 150px);
-		height: clamp(92px, 12vw, 150px);
-	}
-	.ladder-name {
-		font-family: var(--font-display);
-		font-size: 0.95rem;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: color-mix(in srgb, var(--rank-accent) 54%, #fff);
-	}
-	.ladder-xp {
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		color: var(--color-fog);
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-	}
-	.payout {
-		display: inline-grid;
-		grid-template-columns: auto auto;
-		grid-template-rows: auto auto;
-		align-items: center;
-		column-gap: 7px;
-		margin-top: 0.2rem;
-		padding: 7px 13px;
-		border-radius: 999px;
-		border: 1px solid rgba(255, 186, 61, 0.48);
-		background: rgba(255, 186, 61, 0.1);
-	}
-	.payout img {
-		grid-row: 1 / 3;
-		width: 30px;
-		height: 30px;
-		object-fit: contain;
-	}
-	.payout span {
-		font-family: var(--font-display);
-		font-size: 1.15rem;
-		line-height: 1;
-		color: var(--brand-amber);
-	}
-	.payout small {
-		font-family: var(--font-mono);
-		font-size: 0.64rem;
-		color: var(--color-fog);
-		text-transform: uppercase;
 	}
 	.hero-rank {
 		margin-top: 0.35rem;

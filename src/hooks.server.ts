@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 import { env as publicEnv } from '$env/dynamic/public';
 import { checkPlayApiRequest, securityHeaders } from '$lib/server/httpGuards';
 import { authCookieOptions } from '$lib/supabaseOrigin';
+import { isDroppedRoute } from '$lib/server/droppedRoutes';
 
 /**
  * Supabase Auth (SSR). Creates a per-request server client bound to the request's
@@ -157,4 +158,12 @@ const corsHandle: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-export const handle: Handle = sequence(supabaseHandle, corsHandle);
+/** Dropped features answer 404 (see $lib/server/droppedRoutes). Off in the local game. */
+const droppedRoutesHandle: Handle = async ({ event, resolve }) => {
+	if (publicEnv.PUBLIC_ARC_LOCAL_EXPLORER !== '1' && isDroppedRoute(event.url.pathname)) {
+		return new Response('Not found', { status: 404 });
+	}
+	return resolve(event);
+};
+
+export const handle: Handle = sequence(droppedRoutesHandle, supabaseHandle, corsHandle);

@@ -2,7 +2,6 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth, type OAuthProvider } from '$lib/auth/auth.svelte';
-	import CosmeticLoadout from '$lib/components/CosmeticLoadout.svelte';
 
 	type Mode = 'signin' | 'signup';
 	let mode = $state<Mode>('signin');
@@ -264,7 +263,7 @@
 					>
 				</form>
 			</section>
-			<CosmeticLoadout />
+			<!-- Cosmetic loadout (shop / progression) is dropped with the minimal database. -->
 
 			{#if auth.isAnonymous}
 				<!-- Claim flow: attach a real identity to the same uid → keep all progress. -->

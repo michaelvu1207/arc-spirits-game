@@ -1,11 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/auth/auth.svelte';
-	import { fetchMy2DRating, type Rating2DRow } from '$lib/supabase';
-	import { getCosmeticsState } from '$lib/stores/cosmetics.svelte';
 	import { playMenuSfx } from '$lib/stores/menuAudio.svelte';
 	import GameIcon from '$lib/components/GameIcon.svelte';
-	import StatCell from './screens/StatCell.svelte';
 	import MatchHistoryOverlay from './MatchHistoryOverlay.svelte';
 
 	let open = $state(false);
@@ -17,37 +14,12 @@
 	let nameDraft = $state('');
 	let nameError = $state<string | null>(null);
 
-	// Lazily-loaded ranked rating for the signed-in user.
-	let rating = $state<Rating2DRow | null>(null);
-	let ratingLoaded = $state(false);
-
-	const cosmetics = getCosmeticsState();
 	const displayName = $derived(auth.displayName ?? 'Nameless Spirit');
 	const initial = $derived((auth.displayName ?? '?').slice(0, 1).toUpperCase());
 	const userId = $derived(auth.user?.id ?? null);
 
 	const hover = () => playMenuSfx('ui-hover', { volume: 0.4 });
 	const click = () => playMenuSfx('ui-click');
-
-	// (Re)load the rating whenever the popover opens for a signed-in user.
-	$effect(() => {
-		if (!open || !userId) return;
-		ratingLoaded = false;
-		let cancelled = false;
-		fetchMy2DRating(userId)
-			.then((r) => {
-				if (!cancelled) rating = r;
-			})
-			.catch(() => {
-				if (!cancelled) rating = null;
-			})
-			.finally(() => {
-				if (!cancelled) ratingLoaded = true;
-			});
-		return () => {
-			cancelled = true;
-		};
-	});
 
 	function toggle() {
 		open = !open;
@@ -103,11 +75,6 @@
 	function goAccount() {
 		click();
 		goto('/account');
-	}
-
-	function goRecords() {
-		click();
-		goto('/play/records');
 	}
 </script>
 
@@ -166,38 +133,12 @@
 					</div>
 				</header>
 
-				<div class="stats">
-					<div class="wallet-stat">
-						<div>
-							<span>{cosmetics.rank.name}</span>
-							<small>{cosmetics.progression.credits} Credits</small>
-						</div>
-					</div>
-					{#if !ratingLoaded}
-						<p class="stats-muted">Reading the aether…</p>
-					{:else if rating}
-						<StatCell
-							value={Math.round(rating.ordinal)}
-							label="Rating"
-							size="sm"
-							accent="var(--brand-cyan)"
-						/>
-						<span class="s-div" aria-hidden="true"></span>
-						<StatCell value={rating.gamesPlayed} label="Ranked Games" size="sm" />
-					{:else}
-						<p class="stats-muted">Unranked — play a ranked match to earn your rating.</p>
-					{/if}
-				</div>
+				<!-- Rating and cosmetics (rank, credits) are dropped with the minimal database. -->
 
 				<nav class="actions" aria-label="Profile actions">
 					<button class="act" type="button" onclick={openHistory} onpointerenter={hover}>
 						<span class="gem" aria-hidden="true"></span>
 						<span class="lbl">Past Games</span>
-						<span class="go" aria-hidden="true">→</span>
-					</button>
-					<button class="act" type="button" onclick={goRecords} onpointerenter={hover}>
-						<span class="gem" aria-hidden="true"></span>
-						<span class="lbl">Game Records</span>
 						<span class="go" aria-hidden="true">→</span>
 					</button>
 					<button class="act" type="button" onclick={goAccount} onpointerenter={hover}>
@@ -225,7 +166,7 @@
 					</div>
 				</header>
 				<p class="signed-out-lead">
-					Sign in to save your stats and climb the ranked ladder — or jump straight in as a guest.
+					Sign in to keep your past games and replays on every device — or jump straight in as a guest.
 				</p>
 				<button class="btn-primary block" type="button" onclick={goAccount} onpointerenter={hover}>
 					Sign in / Create account
@@ -512,50 +453,6 @@
 		color: var(--brand-magenta-soft);
 	}
 
-	/* ── Stats ───────────────────────────────────────────── */
-	.stats {
-		display: flex;
-		align-items: stretch;
-		gap: 22px;
-		padding: 16px 18px;
-		border-bottom: 1px solid var(--color-mist);
-	}
-	.wallet-stat {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		min-width: 84px;
-	}
-	.wallet-stat span {
-		display: block;
-		font-family: var(--font-display);
-		font-size: 0.88rem;
-		line-height: 1;
-		color: var(--color-bone);
-		text-transform: uppercase;
-	}
-	.wallet-stat small {
-		display: block;
-		margin-top: 3px;
-		font-family: var(--font-mono);
-		font-size: 0.62rem;
-		color: var(--color-fog);
-		text-transform: uppercase;
-		white-space: nowrap;
-	}
-	.s-div {
-		width: 1px;
-		align-self: stretch;
-		min-height: 30px;
-		background: var(--color-mist);
-	}
-	.stats-muted {
-		margin: 0;
-		font-family: var(--font-body);
-		font-size: 0.8rem;
-		line-height: 1.5;
-		color: var(--color-fog);
-	}
 
 	/* ── Actions (mirrors the play-menu rows) ─────────────── */
 	.actions {
@@ -757,10 +654,6 @@
 		border-bottom: 3px solid #24d4ff;
 		border-radius: 0;
 		background: #110829;
-	}
-	.stats {
-		border: 0;
-		background: #150b34;
 	}
 	.actions {
 		gap: 2px;

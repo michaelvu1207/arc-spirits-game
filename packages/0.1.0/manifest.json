@@ -1,0 +1,27 @@
+{
+	"version": "0.1.0",
+	"createdAt": "2026-11-14T19:45:25.396Z",
+	"parent": null,
+	"notes": "First package: the live game data as of 2026-11-14 (the data the local game has been running).",
+	"sha256": "d0f67ce3f8816c8bc7ebdece32e5d96550572a0eac2fea05f60e7e5c08d571b9",
+	"rulesHash": "5da0c221159cfc131c8e9ef0c6bcb2cc7232c3156489ef9ff6f7c8f1108063d0",
+	"counts": {
+		"hex_spirits": 64,
+		"classes": 55,
+		"origins": 8,
+		"monsters_v2": 108,
+		"icon_pool": 146,
+		"game_locations": 5,
+		"guardians": 10,
+		"editions": 2,
+		"custom_dice": 5,
+		"dice_sides": 30,
+		"game_location_rows": 14,
+		"monster_pools": 15,
+		"relics": 5,
+		"rules": 1,
+		"mat_items": 12,
+		"reward_row_assignments": 1
+	},
+	"source": "~/ArcSpiritsArt/game"
+}

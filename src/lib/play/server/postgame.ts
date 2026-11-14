@@ -29,11 +29,15 @@ const TABLES = {
 	MEMBERS: 'play_session_members',
 	EVENTS: 'play_game_session_events',
 	RESULT_PLAYERS: 'match_result_players',
-	RESULTS: 'match_results',
-	RATING_EVENTS: 'player_rating_events'
+	RESULTS: 'match_results'
 } as const;
 
 const REMATCH_COMMAND_TYPE = '$rematch';
+
+/** Persistent parties (arc_spirits_2d.social_* tables) are dropped with the minimal
+ *  database ($lib/server/droppedRoutes.ts): rematch keeps only the terminal-seat
+ *  party contract and never touches the social tables. */
+const PERSISTENT_PARTIES_ENABLED = false as boolean;
 
 function getAdmin() {
 	const admin = getSupabaseAdmin(PLAY_SCHEMA);
@@ -125,14 +129,6 @@ interface ResultPlayerRow {
 	placement: number;
 	rated_placement?: number | null;
 	abandoned?: boolean | null;
-}
-
-interface RatingEventRow {
-	user_id: string;
-	mu_before: number;
-	sigma_before: number;
-	mu_after: number;
-	sigma_after: number;
 }
 
 async function getSessionRow(roomCode: string): Promise<SessionRow | null> {
@@ -295,15 +291,14 @@ export async function loadPostgameSummary(
 	}
 
 	const admin = getAdmin();
-	const [resultRes, recordedRes, ratingsRes, rematch] = await Promise.all([
-		admin.from(TABLES.RESULTS).select('rated,quarantined,ranked_season_id').eq('session_id', session.id).maybeSingle(),
+	// Only columns of the minimal schema: `select('*')` on the player rows keeps the
+	// ranked-era columns (rated_placement, abandoned) optional, and player_rating_events
+	// (ratings are dropped) is no longer read — every finished game is unrated.
+	const [resultRes, recordedRes, rematch] = await Promise.all([
+		admin.from(TABLES.RESULTS).select('rated,quarantined').eq('session_id', session.id).maybeSingle(),
 		admin
 			.from(TABLES.RESULT_PLAYERS)
-			.select('seat_color, member_id, user_id, display_name, is_bot, victory_points, placement,rated_placement,abandoned')
-			.eq('session_id', session.id),
-		admin
-			.from(TABLES.RATING_EVENTS)
-			.select('user_id, mu_before, sigma_before, mu_after, sigma_after')
+			.select('*')
 			.eq('session_id', session.id),
 		// The rematch lobby is PRIVATE party state: only the TERMINAL SEATED party
 		// learns its code/status. Spectators of a public finished board — even ones
@@ -313,21 +308,11 @@ export async function loadPostgameSummary(
 			? loadRematchStatus(session)
 			: Promise.resolve(null)
 	]);
-	const result = resultRes.data as { rated?: boolean; quarantined?: boolean; ranked_season_id?: string | null } | null;
+	const result = resultRes.data as { rated?: boolean; quarantined?: boolean } | null;
 	base.rated = result?.rated === true && result?.quarantined !== true;
 
 	const recorded = (recordedRes.data as ResultPlayerRow[] | null) ?? [];
 	const ratingByUser = new Map<string, PostgameRating>();
-	for (const row of (ratingsRes.data as RatingEventRow[] | null) ?? []) {
-		ratingByUser.set(row.user_id, {
-			muBefore: row.mu_before,
-			sigmaBefore: row.sigma_before,
-			muAfter: row.mu_after,
-			sigmaAfter: row.sigma_after,
-			ordinalDelta:
-				row.mu_after - 3 * row.sigma_after - (row.mu_before - 3 * row.sigma_before)
-		});
-	}
 
 	if (recorded.length > 0) {
 		base.finalized = true;
@@ -472,6 +457,7 @@ export async function requestRematch(
  * established terminal-seat rematch contract.
  */
 async function syncPersistentPartyRematch(session: SessionRow, rematchCode: string): Promise<void> {
+	if (!PERSISTENT_PARTIES_ENABLED) return;
 	if (!rematchCode) return;
 	try {
 		const terminalIds = [...terminalSeatedMemberIds(session.public_state)];

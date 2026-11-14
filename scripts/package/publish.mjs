@@ -1,0 +1,36 @@
+#!/usr/bin/env node
+/**
+ * Make a package live on the web: point packages/index.json at it, commit and push. Vercel
+ * deploys the push; the site then reads its game data from that package.
+ *
+ *   node scripts/package/publish.mjs <version> [--no-push]
+ *
+ * Rolling back is the same command with an older version.
+ */
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const [version, ...rest] = process.argv.slice(2);
+const repoRoot = resolve(import.meta.dirname, '../..');
+const indexPath = join(repoRoot, 'packages/index.json');
+const index = JSON.parse(readFileSync(indexPath, 'utf8'));
+if (!version || !index.versions.some((v) => v.version === version)) {
+	console.error(`usage: publish.mjs <version> [--no-push]\nknown versions: ${index.versions.map((v) => v.version).join(', ')}`);
+	process.exit(1);
+}
+const git = (...args) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
+const before = index.live;
+index.live = version;
+writeFileSync(indexPath, JSON.stringify(index, null, '\t') + '\n');
+git('add', 'packages');
+if (!git('status', '--porcelain', 'packages')) {
+	console.log(`${version} is already the live package and committed`);
+} else {
+	git('commit', '-m', before === version ? `Add game package ${version}` : `Publish game package ${version} (was ${before ?? 'none'})`);
+	console.log(`committed: live package ${before ?? 'none'} → ${version}`);
+}
+if (rest.includes('--no-push')) process.exit(0);
+const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
+execFileSync('git', ['push', 'origin', branch], { cwd: repoRoot, stdio: 'inherit' });
+console.log(`pushed ${branch}; Vercel deploys it`);

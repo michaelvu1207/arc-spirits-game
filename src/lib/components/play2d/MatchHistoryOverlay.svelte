@@ -2,7 +2,9 @@
 	import DetailOverlay from './screens/DetailOverlay.svelte';
 	import StateMessage from './screens/StateMessage.svelte';
 	import StatCell from './screens/StatCell.svelte';
-	import { fetchMyMatchHistory, type MatchHistoryEntry } from '$lib/supabase';
+	import { goto } from '$app/navigation';
+	import { fetchMyMatchHistory, type MatchHistoryEntry } from '$lib/play/matchHistory';
+	import { postPlayJson } from '$lib/stores/playStore.svelte';
 	import { formatDate } from '$lib/features/stats/format';
 
 	interface Props {
@@ -48,9 +50,24 @@
 		return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
 	}
 
-	function deltaLabel(d: number): string {
-		const r = Math.round(d * 10) / 10;
-		return `${r >= 0 ? '+' : ''}${r}`;
+	// Replays are served by share code (/replay/<code>, replay_frames): the first open of a
+	// game makes the player's share link for it (idempotent per player + game), then opens it.
+	let openingReplay = $state<string | null>(null);
+	let replayError = $state<string | null>(null);
+	async function openReplay(m: MatchHistoryEntry) {
+		if (!m.gameId || openingReplay) return;
+		openingReplay = m.sessionId;
+		replayError = null;
+		try {
+			const share = await postPlayJson<{ code: string; url: string }>('/api/play/replays', {
+				gameId: m.gameId
+			});
+			await goto(share.url);
+		} catch (e) {
+			replayError = e instanceof Error ? e.message : 'Could not open this replay.';
+		} finally {
+			openingReplay = null;
+		}
 	}
 
 	function placeAccent(placement: number): string {
@@ -90,7 +107,7 @@
 				<div class="c-mode" role="columnheader">Mode</div>
 				<div class="c-vp" role="columnheader">VP</div>
 				<div class="c-opps" role="columnheader">Opponents</div>
-				<div class="c-sr" role="columnheader">Rating</div>
+				<div class="c-sr" role="columnheader">Replay</div>
 				<div class="c-when" role="columnheader">Played</div>
 			</div>
 
@@ -103,7 +120,7 @@
 						<span class="of">of {m.playerCount}</span>
 					</div>
 					<div class="c-mode" role="cell">
-						<span class="mode-tag" class:ranked={m.ranked}>{m.ranked ? 'Ranked' : 'Casual'}</span>
+						<span class="mode-tag">{m.mode === 'ranked' ? 'Ranked' : 'Casual'}</span>
 					</div>
 					<div class="c-vp" role="cell"><span class="vp">{m.myVictoryPoints}</span></div>
 					<div class="c-opps" role="cell">
@@ -116,18 +133,28 @@
 						{/if}
 					</div>
 					<div class="c-sr" role="cell">
-						{#if m.ratingDelta !== null}
-							<span class="delta" class:up={m.ratingDelta >= 0} class:down={m.ratingDelta < 0}>
-								{deltaLabel(m.ratingDelta)}
-							</span>
+						{#if m.gameId}
+							<button
+								type="button"
+								class="replay-btn"
+								onclick={() => openReplay(m)}
+								disabled={openingReplay !== null}
+								data-testid="history-open-replay"
+							>
+								{openingReplay === m.sessionId ? 'Opening…' : 'Watch'}
+							</button>
 						{:else}
-							<span class="delta dim">—</span>
+							<span class="dim">—</span>
 						{/if}
 					</div>
 					<div class="c-when" role="cell"><span class="when">{formatDate(m.endedAt)}</span></div>
 				</div>
 			{/each}
 		</div>
+
+		{#if replayError}
+			<p class="replay-err" role="alert">{replayError}</p>
+		{/if}
 
 		<div class="archive-foot">
 			Showing your last <b>{matches.length}</b> {matches.length === 1 ? 'game' : 'games'}
@@ -225,9 +252,6 @@
 		text-transform: uppercase;
 		color: var(--color-fog);
 	}
-	.mode-tag.ranked {
-		color: var(--brand-cyan);
-	}
 
 	.c-vp {
 		text-align: right;
@@ -254,19 +278,33 @@
 	.c-sr {
 		text-align: right;
 	}
-	.delta {
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
-		font-variant-numeric: tabular-nums;
+	.replay-btn {
+		font-family: var(--font-display);
+		font-size: 0.74rem;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--brand-cyan);
+		background: transparent;
+		border: 1px solid color-mix(in srgb, var(--brand-cyan) 45%, transparent);
+		border-radius: 999px;
+		padding: 4px 12px;
+		cursor: pointer;
 	}
-	.delta.up {
-		color: var(--brand-teal);
+	.replay-btn:hover:not(:disabled),
+	.replay-btn:focus-visible {
+		background: color-mix(in srgb, var(--brand-cyan) 14%, transparent);
 	}
-	.delta.down {
-		color: var(--brand-magenta-soft);
+	.replay-btn:disabled {
+		opacity: 0.55;
+		cursor: progress;
 	}
-	.delta.dim {
+	.dim {
 		color: var(--color-whisper);
+	}
+	.replay-err {
+		margin: 10px 0 0;
+		font-size: 0.82rem;
+		color: var(--brand-magenta-soft);
 	}
 
 	.c-when {
@@ -302,7 +340,8 @@
 			display: none;
 		}
 		.c-opps,
-		.c-vp {
+		.c-vp,
+		.c-mode {
 			display: none;
 		}
 	}
