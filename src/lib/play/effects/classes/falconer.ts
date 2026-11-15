@@ -12,6 +12,8 @@ import {
 import { gainSpiritAugments, runAction } from '../actions';
 import { FALCONER_TRADE_ACTION } from '../awakenHandlers';
 import { runesAreWild } from '../matMatch';
+import { ruleValue } from '../../rules';
+import type { PlayCatalog, PrivatePlayerState, PublicGameState } from '../../types';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Falconer — "On awaken, gain 2 Spirit Augments of your choice. In the Location Phase, you may
@@ -122,10 +124,48 @@ function completeTrade(ctx: Ctx, t: AugmentTrade, preferred: number[] = []): voi
 
 export const FALCONER_AWAKEN_AUGMENTS = 2;
 
+// Rule `falconerDoubleKill` (Michael, 2026-11-14): "On your next monster kill you may gain double
+// the rewards. Then discard this spirit." After a kill that opens a reward claim, a player with an
+// awakened Falconer SPIRIT (a Falconer augment has no spirit to discard) gets a yes/no card.
+// Yes: every reward of that kill is given twice and the Falconer spirit is discarded (the
+// reducer's `resolveDecision` does both, because discarding a spirit lives there). No, or no
+// answer before the claim or the Benefits step: nothing, and the next kill asks again.
+export const FALCONER_DOUBLE_KIND = 'falconerDouble';
+
+/** The awakened spirit whose own card has the Falconer class, if any. */
+export function awakeFalconerSpirit(player: PrivatePlayerState) {
+	return (player.spirits ?? []).find((s) => !s.isFaceDown && (s.classes?.['Falconer'] ?? 0) > 0);
+}
+
+/** Offer the doubling for the reward claim that is open now. */
+export function offerFalconerDouble(
+	state: PublicGameState,
+	player: PrivatePlayerState,
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+): void {
+	if (!ruleValue(catalog, 'falconerDoubleKill')) return;
+	const reward = player.pendingReward;
+	const falconer = awakeFalconerSpirit(player);
+	if (!reward || reward.doubled || !falconer) return;
+	player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== FALCONER_DOUBLE_KIND);
+	player.pendingDecisions.push({
+		id: nextId(state.rng, 'dec'),
+		source: 'class',
+		kind: FALCONER_DOUBLE_KIND,
+		prompt: `Falconer: gain double the rewards of ${reward.monsterName}? ${falconer.name} is then discarded.`,
+		options: [
+			{ id: 'yes', label: `Double the rewards and discard ${falconer.name}` },
+			{ id: 'no', label: 'No, keep the spirit' }
+		],
+		expiresAt: 'benefits'
+	});
+}
+
 export const ability: ClassAbility[] = [
 	{
 		on: 'awakening',
 		run(ctx) {
+			if (ruleValue(ctx.catalog, 'falconerDoubleKill')) return; // the new Falconer gives no augments
 			const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 			const awakened = ctx.player.spirits.find((s) => s.slotIndex === slot);
 			if (!awakened || (awakened.classes?.['Falconer'] ?? 0) <= 0) return;
@@ -135,6 +175,7 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'locationPhase',
 		run(ctx) {
+			if (ruleValue(ctx.catalog, 'falconerDoubleKill')) return; // the new Falconer has no trade
 			const { player, log, state } = ctx;
 			player.pendingDecisions = (player.pendingDecisions ?? []).filter(
 				(d) => d.kind !== 'falconerTrade' && d.kind !== 'falconerPayment'
@@ -164,6 +205,8 @@ export const ability: ClassAbility[] = [
 ];
 
 export const decisions: ClassDecisions = {
+	// The doubling itself is applied by the reducer (it discards a spirit); see FALCONER_DOUBLE_KIND.
+	falconerDouble() {},
 	falconerTrade(ctx, optionId) {
 		if (optionId === 'no') return;
 		const trade = findTrade(ctx, optionId);

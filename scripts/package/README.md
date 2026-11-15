@@ -52,6 +52,15 @@ is copied from the old project's bucket. It also rebuilds the printed monster ca
   "card differs from the local row" for every card that still needs this.
 - **A class rule** (a rule switch that changes what a class does): write the new text into
   `classes.json` as well. Players read the class text from the data, not from the rule switch.
+- **A spirit's rune cost, awaken text or class text** (`hex_spirits.json`, `classes.json`): remake
+  the spirit cards that print it (the card back shows the runes, the class name and the class
+  text): `python3 ~/niji-batch/tools/regen_hexes.py x "" "Name One|Name Two"` (server on port
+  8787; code only, about 4 s a card). The automatic remake is off on the laptop. To list the
+  cards that differ from the data, compare each `references/hex_bases/<Name>/gen-back.spec.json`
+  with `GET /api/game/hex-spirits`.
+- **Spirit names**: `hex_spirits.json` `name` is the card name (since 2026-11-14 there is one name
+  per spirit). `~/niji-batch/spirit-names.json` still maps the old long names and is no longer
+  needed for them.
 
 ## Checking a deployment
 

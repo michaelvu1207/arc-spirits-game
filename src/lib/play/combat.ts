@@ -73,9 +73,14 @@ export function resetCombatFlags(player: PrivatePlayerState): void {
  * rather than the per-combat `stunImmune` flag, because Mystic grants it on rest and
  * `resetCombatFlags` would otherwise wipe that grant before the fight resolves.
  */
-function hasSimultaneousAttack(player: PrivatePlayerState): boolean {
+function hasSimultaneousAttack(
+	player: PrivatePlayerState,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): boolean {
 	const c = awakenedClassCounts(player);
-	return (c['Sharpshooter'] ?? 0) >= 1 || (c['Mystic'] ?? 0) >= 3;
+	// Rule `mysticSwap23`: the simultaneous attack is Mystic (2), not (3).
+	const mysticAt = ruleValue(catalog, 'mysticSwap23') ? 2 : 3;
+	return (c['Sharpshooter'] ?? 0) >= 1 || (c['Mystic'] ?? 0) >= mysticAt;
 }
 
 /**
@@ -494,7 +499,7 @@ export function resolveEncounterCombat(
 					);
 				}
 			}
-			const attacksSimultaneously = player.stunImmune || hasSimultaneousAttack(player);
+			const attacksSimultaneously = player.stunImmune || hasSimultaneousAttack(player, catalog);
 			if ((corrupted || player.barrier === 0) && !attacksSimultaneously) {
 				player.stunned = true;
 				log.push(`${seat} is stunned and cannot strike back.`);
@@ -710,7 +715,7 @@ export function fightMonster(
 	//    corrupting hit still lands their damage (and can kill).
 	let playerDamage = attacksFirst ? rolledDamage : 0;
 	const hpBeforeStrike = monsterBarrierLeft(monster);
-	const simultaneous = hasSimultaneousAttack(player);
+	const simultaneous = hasSimultaneousAttack(player, catalog);
 	if (!attacksFirst && (!corrupted || simultaneous)) {
 		playerDamage = rolledDamage;
 		log.push(

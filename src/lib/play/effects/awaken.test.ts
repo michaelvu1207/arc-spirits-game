@@ -1242,7 +1242,7 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		};
 		const payment = payAwakenCondition(ctx as never, { spirit: c.red.spirits[0] });
 		expect(payment).toEqual({ ok: true, discarded: [] });
-		expect(log).toEqual(['Discarded 5 attack dice to awaken Keeper of the Twin Pyres.']);
+		expect(log).toEqual(['Discarded 5 attack dice to awaken Twin Flame Keeper.']);
 	});
 
 	it('Keeper of the Twin Pyres: cannot pay (1 Fire Rune, 4 dice) → no offer and awakenSpirit fails', () => {

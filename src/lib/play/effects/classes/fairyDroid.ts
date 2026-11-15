@@ -1,6 +1,7 @@
 import { BASE_RUNES } from '../../baseRunes';
 import { REGION_ORIGIN_NAMES } from '../../regions';
 import type { PlaySpirit, PrivatePlayerState } from '../../types';
+import { ruleValue } from '../../rules';
 import type { ClassAbility, ClassHandler } from './types';
 
 // Herder — "On awaken, for each Beast that you have, gain 1 rune of the origin of that Beast."
@@ -26,6 +27,9 @@ export function ownedBeasts(player: PrivatePlayerState): PlaySpirit[] {
 }
 
 const herderAwakening: ClassHandler = (ctx) => {
+	// Rule `herderArcaneAugments`: Herder is the augment capacity of Arcane spirits instead
+	// (augments.ts `ownerAugmentCapacity`); it gives no runes.
+	if (ruleValue(ctx.catalog, 'herderArcaneAugments')) return;
 	const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 	const herder = ctx.player.spirits.find((s) => s.slotIndex === slot);
 	if (!herder || (herder.classes?.['Herder'] ?? 0) <= 0) return;

@@ -98,6 +98,7 @@ import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
 import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
+import { FALCONER_DOUBLE_KIND, awakeFalconerSpirit, offerFalconerDouble } from './effects/classes/falconer';
 import { RELIC_TOOLS, grantRelicTool, keepUnansweredRelicTools } from './effects/relicTools';
 import { decisionPickerSpec, validateDecisionSelection } from './decisionPicker';
 import { checkAwakenCondition, payAwakenCondition, needsManualAwaken } from './effects/awaken';
@@ -2467,7 +2468,7 @@ function reduceCommand(
 
 			// Capacity: a spirit holds ONE augment by default; some abilities raise it, and
 			// some augments carry their own host cap. Count every placed augment.
-			const capacity = Math.max(ownerAugmentCapacity(player, spirit), augment.hostCapacity ?? 0);
+			const capacity = Math.max(ownerAugmentCapacity(player, spirit, catalog), augment.hostCapacity ?? 0);
 			const placedOnSpirit = (player.spiritAugmentAttachments ?? []).filter(
 				(a) =>
 					a.spiritSlotIndex === spirit.slotIndex &&
@@ -2872,6 +2873,21 @@ function reduceCommand(
 					catalog
 				});
 				resolver(ctx, command.optionId, command.selectedInstanceIds);
+			}
+			// Falconer (rule `falconerDoubleKill`): yes gives every reward of the open claim twice
+			// and discards the Falconer spirit.
+			if (decision.kind === FALCONER_DOUBLE_KIND && command.optionId === 'yes') {
+				const reward = active.player.pendingReward;
+				const falconer = awakeFalconerSpirit(active.player);
+				if (reward && !reward.doubled && falconer && ruleValue(catalog, 'falconerDoubleKill')) {
+					reward.rewardTrack = [...reward.rewardTrack, ...reward.rewardTrack];
+					reward.chooseAmount *= 2;
+					reward.doubled = true;
+					log.push(`Falconer: the rewards of ${reward.monsterName} are doubled.`);
+					log.push(...discardBoardSpirit(state, active.seatColor, falconer, catalog));
+				} else {
+					log.push('Falconer: there is no monster reward to double.');
+				}
 			}
 			// Summoner: after a Spirit World summon, Yes opens a normal Abyss draw.
 			if (decision.kind === 'abyssSummonerDraw' && command.optionId === 'yes') {
@@ -3455,6 +3471,7 @@ function reduceCommand(
 						rewardTrack: [...result.fought.rewardTrack],
 						chooseAmount: claim
 					};
+					offerFalconerDouble(state, active.player, catalog);
 				}
 			}
 			return success(state);
@@ -3482,6 +3499,8 @@ function reduceCommand(
 			}
 
 			player.pendingReward = null;
+			// The Falconer card belongs to this claim: unanswered, it ends with it.
+			player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== FALCONER_DOUBLE_KIND);
 			player.lastAction = {
 				key: 'reward',
 				label: `${pending.monsterName} rewards`,
@@ -3880,13 +3899,15 @@ const navigationPowerHooks = {
 			combat: { dealt: monster.maxHp, overkill: 0, killed: true }
 		});
 		const claim = rewardClaimCount(fought.rewardTrack);
-		if (claim > 0)
+		if (claim > 0) {
 			player.pendingReward = {
 				monsterId: fought.id,
 				monsterName: fought.name,
 				rewardTrack: [...fought.rewardTrack],
 				chooseAmount: claim
 			};
+			offerFalconerDouble(state, player, catalog);
+		}
 		state.combats.push({
 			id: nextId(state.rng, 'power-kill'),
 			kind: 'monster',

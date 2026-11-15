@@ -19,6 +19,8 @@ type EffectContextLike = Parameters<ClassDecisions[string]>[0];
 
 /** Mage's on-awakening Exalted dice under `sunRework`. */
 export const MAGE_SUN_AWAKEN_DICE = 2;
+/** Mage's on-awakening Arcane dice under `mageArcaneDice`. */
+export const MAGE_ARCANE_AWAKEN_DICE = 4;
 
 const heldRunes = (player: EffectContextLike['player']) =>
 	player.mats.filter((slot) => slot.type === 'rune' && slot.hasRune);
@@ -56,6 +58,8 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'awakeningPhase',
 		run(ctx) {
+			// Rule `mageArcaneDice`: no rune trade; the Mage only gives its dice when it awakens.
+			if (ruleValue(ctx.catalog, 'mageArcaneDice')) return;
 			const { player, log, state } = ctx;
 			const die = tradeTier(ctx) === 'exalted' ? 'Exalted' : 'Enchanted';
 			const options = tradeOptions(player, die);
@@ -76,17 +80,21 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'awakening',
 		run(ctx) {
-			if (!ruleValue(ctx.catalog, 'sunRework')) return;
+			const arcane = ruleValue(ctx.catalog, 'mageArcaneDice');
+			if (!arcane && !ruleValue(ctx.catalog, 'sunRework')) return;
 			const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 			const awakened = slot == null ? undefined : ctx.player.spirits.find((s) => s.slotIndex === slot);
 			if (!awakened || (awakened.classes?.['Mage'] ?? 0) <= 0) return;
-			runAction(ctx, { kind: 'gainAttackDice', tier: 'exalted', amount: MAGE_SUN_AWAKEN_DICE });
+			// Rule `mageArcaneDice`: "On this spirit's Awakening, gain 4 Arcane Attack Dice."
+			if (arcane) runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: MAGE_ARCANE_AWAKEN_DICE });
+			else runAction(ctx, { kind: 'gainAttackDice', tier: 'exalted', amount: MAGE_SUN_AWAKEN_DICE });
 		}
 	}
 ];
 
 export const decisions: ClassDecisions = {
 	runeMageTrade(ctx, optionId) {
+		if (ruleValue(ctx.catalog, 'mageArcaneDice')) return; // a card left from before the rule
 		const [kind, rawSlotIndex] = optionId.split(':');
 		if (kind !== 'rune') return; // "no" / unknown
 		const slotIndex = rawSlotIndex === undefined ? undefined : Number(rawSlotIndex);

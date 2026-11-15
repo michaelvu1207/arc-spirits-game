@@ -14,6 +14,8 @@
 
 import type { PendingAugment, PlayCatalog, PlaySpirit, PrivatePlayerState } from './types';
 import { GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
+import { ARCANE_ABYSS_COST_MIN } from './bags';
+import { ruleValue } from './rules';
 
 /**
  * The canonical Spirit Augment token set. A Spirit Augment is its OWN token type
@@ -49,9 +51,18 @@ export function augmentCapacityForSpirit(_spirit: Pick<PlaySpirit, 'classes'>): 
 /** Mystic IV raises every owned spirit's capacity from one augment to two. */
 export function ownerAugmentCapacity(
 	player: PrivatePlayerState,
-	spirit: Pick<PlaySpirit, 'classes'>
+	spirit: Pick<PlaySpirit, 'classes'> & { cost?: number },
+	catalog?: Pick<PlayCatalog, 'rules'> | null
 ): number {
-	const base = augmentCapacityForSpirit(spirit);
+	let base = augmentCapacityForSpirit(spirit);
+	// Rule `herderArcaneAugments`: with an awakened Herder, each Arcane spirit (cost 7+) holds 2.
+	if (
+		ruleValue(catalog, 'herderArcaneAugments') &&
+		(spirit.cost ?? 0) >= ARCANE_ABYSS_COST_MIN &&
+		(player.spirits ?? []).some((s) => !s.isFaceDown && (s.classes?.['Herder'] ?? 0) > 0)
+	) {
+		base = Math.max(base, 2);
+	}
 	let soulWeavers = 0;
 	for (const owned of player.spirits ?? []) {
 		if (!owned.isFaceDown) soulWeavers += owned.classes?.['Mystic'] ?? 0;
@@ -107,7 +118,8 @@ export interface AugmentPlacementEligibility {
  */
 export function augmentPlacementEligibility(
 	player: PrivatePlayerState,
-	augment: PendingAugment
+	augment: PendingAugment,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
 ): AugmentPlacementEligibility {
 	const eligibleSpiritSlots: number[] = [];
 	const slotReasons: Record<number, string> = {};
@@ -121,7 +133,7 @@ export function augmentPlacementEligibility(
 			slotReasons[slot] = `Needs ${augment.hostClass}`;
 			continue;
 		}
-		const capacity = Math.max(ownerAugmentCapacity(player, spirit), augment.hostCapacity ?? 0);
+		const capacity = Math.max(ownerAugmentCapacity(player, spirit, catalog), augment.hostCapacity ?? 0);
 		if (placedAugmentCount(player, slot) >= capacity) {
 			slotReasons[slot] = 'Augment slots full';
 			continue;

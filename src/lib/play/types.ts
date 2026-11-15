@@ -417,6 +417,8 @@ export interface PendingRewardState {
 	rewardTrack: string[];
 	/** How many rewards the claim grants (every resolvable token). */
 	chooseAmount: number;
+	/** Falconer (rule `falconerDoubleKill`) doubled this claim: the track holds every reward twice. */
+	doubled?: boolean;
 }
 
 /**
@@ -826,6 +828,18 @@ export interface PlayRules {
 	ramAugmentDamage?: boolean;
 	/** Evil players may attack Good players at the Arcane Abyss too (default false: regions only). */
 	pvpInAbyss?: boolean;
+	/** Mystic: (2) is the simultaneous attack and (3) the Cultivate doubling (default false: the reverse). */
+	mysticSwap23?: boolean;
+	/** Falconer: double the rewards of a monster kill, then discard the spirit (default false). */
+	falconerDoubleKill?: boolean;
+	/** Herder: each Arcane spirit may hold 2 Spirit Augments (default false). */
+	herderArcaneAugments?: boolean;
+	/** Rider: its Mountain Region choice also offers 1 Spirit Augment (default false). */
+	riderAugmentOption?: boolean;
+	/** Mage: on its awakening gain 4 Arcane Attack Dice, nothing else (default false). */
+	mageArcaneDice?: boolean;
+	/** Shieldbearer: 5 less damage at full Barrier, nothing otherwise (default false). */
+	shieldbearerFullOnly?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

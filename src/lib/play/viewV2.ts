@@ -548,7 +548,7 @@ export function describePendingWork(
 			// helper, so the client never re-derives which spirit a token may go on (S5).
 			augments: unplaced.map((augment) => ({
 				runeId: augment.runeId,
-				...augmentPlacementEligibility(player, augment),
+				...augmentPlacementEligibility(player, augment, catalog),
 				classChoices: augmentClassChoices(augment, catalog)
 			}))
 		});

@@ -199,7 +199,9 @@ export function cultivateRuneMultiplier(
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
 ): number {
 	if (player.doubleRunes) return 2;
-	if (ruleValue(catalog, 'mysticCultivateDouble') && (awakenedClassCounts(player)['Mystic'] ?? 0) >= 2) return 2;
+	// Rule `mysticSwap23`: the doubling is Mystic (3), not (2).
+	const mysticAt = ruleValue(catalog, 'mysticSwap23') ? 3 : 2;
+	if (ruleValue(catalog, 'mysticCultivateDouble') && (awakenedClassCounts(player)['Mystic'] ?? 0) >= mysticAt) return 2;
 	return 1;
 }
 

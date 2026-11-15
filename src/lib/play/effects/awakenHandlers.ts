@@ -546,7 +546,7 @@ const twinPyresHandler: AwakenHandler = {
 					);
 		const before = player.attackDice.length;
 		player.attackDice = player.attackDice.filter((die) => !ids.has(die.instanceId));
-		log.push(`Discarded ${before - player.attackDice.length} attack dice to awaken Keeper of the Twin Pyres.`);
+		log.push(`Discarded ${before - player.attackDice.length} attack dice to awaken Twin Flame Keeper.`);
 	},
 	discardChoice(ctx) {
 		const runes = fireRuneSlots(ctx.player);

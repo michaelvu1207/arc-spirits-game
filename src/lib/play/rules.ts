@@ -75,6 +75,23 @@
  * PvP place (2026-11-14):
  * - pvpInAbyss (default false): true ⇒ an Evil player may also attack the Good players that share
  *   the Arcane Abyss with it (old: only in the four regions). See `pvpAllowedAt`.
+ *
+ * Class changes of 2026-11-14 (Michael), one switch each:
+ * - mysticSwap23 (default false): true ⇒ Mystic (2) is the simultaneous attack and Mystic (3) the
+ *   Cultivate doubling (the two abilities change places). Read with `mysticCultivateDouble`.
+ * - falconerDoubleKill (default false): true ⇒ Falconer is "On your next monster kill you may gain
+ *   double the rewards. Then discard this spirit." A card after the kill asks; yes doubles every
+ *   reward of that kill and discards the Falconer spirit. The old Falconer (2 augments on awaken,
+ *   a remote augment trade) is off.
+ * - herderArcaneAugments (default false): true ⇒ Herder is "Each of your Arcane spirits may hold up
+ *   to 2 Spirit Augments." (capacity only; Arcane = cost 7 or more). The old Herder (runes for
+ *   Beasts on awaken) is off.
+ * - riderAugmentOption (default false): true ⇒ Rider's Mountain Region choice has a fourth option:
+ *   gain 1 Spirit Augment of your choice.
+ * - mageArcaneDice (default false): true ⇒ Mage is "On this spirit's Awakening, gain 4 Arcane
+ *   Attack Dice." and nothing else (no rune trade in the Awakening Phase).
+ * - shieldbearerFullOnly (default false): true ⇒ Shieldbearer is "When you take damage, if your
+ *   Barrier is full, take 5 less." and nothing when it is not full.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
@@ -101,7 +118,13 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	mysticCultivateDouble: false,
 	cultivateRuneOrRelic: false,
 	ramAugmentDamage: false,
-	pvpInAbyss: false
+	pvpInAbyss: false,
+	mysticSwap23: false,
+	falconerDoubleKill: false,
+	herderArcaneAugments: false,
+	riderAugmentOption: false,
+	mageArcaneDice: false,
+	shieldbearerFullOnly: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -157,6 +180,57 @@ export function pvpAllowedAt(
 
 /** Printed class text that a switch replaces: class → breakpoint count → text. */
 const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count: number; text: string }[] = [
+	// The 2026-11-14 class changes come first: for one class and breakpoint the first entry wins,
+	// so they replace the `sunRework` and `mysticCultivateDouble` texts below.
+	{
+		rule: 'mysticSwap23',
+		when: true,
+		className: 'Mystic',
+		count: 2,
+		text: 'In combat, your side may always attack at the same time as the enemy. In addition to (1).'
+	},
+	{
+		rule: 'mysticSwap23',
+		when: true,
+		className: 'Mystic',
+		count: 3,
+		text: 'When you Cultivate, you may gain twice as many runes. In addition to (1) and (2).'
+	},
+	{
+		rule: 'falconerDoubleKill',
+		when: true,
+		className: 'Falconer',
+		count: 1,
+		text: 'On your next monster kill you may gain double the rewards. Then discard this spirit.'
+	},
+	{
+		rule: 'herderArcaneAugments',
+		when: true,
+		className: 'Herder',
+		count: 1,
+		text: 'Each of your Arcane spirits may hold up to 2 Spirit Augments.'
+	},
+	{
+		rule: 'riderAugmentOption',
+		when: true,
+		className: 'Rider',
+		count: 1,
+		text: 'When you navigate to the Mountain Region from a different location, choose one: restore 3 Barrier, gain 3 Max Barrier, gain 3 Basic Attack Dice, or gain 1 Spirit Augment of your choice.'
+	},
+	{
+		rule: 'mageArcaneDice',
+		when: true,
+		className: 'Mage',
+		count: 1,
+		text: "On this spirit's Awakening, gain 4 Arcane Attack Dice."
+	},
+	{
+		rule: 'shieldbearerFullOnly',
+		when: true,
+		className: 'Shieldbearer',
+		count: 1,
+		text: 'When you take damage, if your Barrier is full, take 5 less.'
+	},
 	{
 		rule: 'feralMonsterStrikeFirst',
 		when: false,

@@ -1,6 +1,7 @@
 import { nextId } from '../../rng';
 import type { PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
+import { ruleValue } from '../../rules';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Rider — "When you navigate to the Mountain Region from a different location, choose one:
@@ -25,7 +26,7 @@ export function cameFromMountain(player: Pick<PrivatePlayerState, 'previousDesti
 export const RIDER_AMOUNT = 3;
 const MAX_BARRIER_CAP = 10;
 
-type RiderOption = 'restore' | 'maxBarrier' | 'dice';
+type RiderOption = 'restore' | 'maxBarrier' | 'dice' | 'augment';
 
 /** The engine's pick for an unanswered card: the option that gives the most right now. Max
  *  Barrier also restores what it adds, so it wins while it adds at least as much as a restore. */
@@ -55,7 +56,11 @@ export const ability: ClassAbility[] = [
 				options: [
 					{ id: 'restore', label: `Restore ${RIDER_AMOUNT} Barrier` },
 					{ id: 'maxBarrier', label: `Gain ${RIDER_AMOUNT} Max Barrier` },
-					{ id: 'dice', label: `Gain ${RIDER_AMOUNT} Basic Attack Dice` }
+					{ id: 'dice', label: `Gain ${RIDER_AMOUNT} Basic Attack Dice` },
+					// Rule `riderAugmentOption`: a fourth choice (never the engine's own pick).
+					...(ruleValue(ctx.catalog, 'riderAugmentOption')
+						? [{ id: 'augment', label: 'Gain 1 Spirit Augment of your choice' }]
+						: [])
 				],
 				expiresAt: 'benefits',
 				expiryOptionId: 'auto'
@@ -78,6 +83,9 @@ export const decisions: ClassDecisions = {
 				break;
 			case 'dice':
 				runAction(ctx, { kind: 'gainAttackDice', tier: 'basic', amount: RIDER_AMOUNT });
+				break;
+			case 'augment':
+				if (ruleValue(ctx.catalog, 'riderAugmentOption')) runAction(ctx, { kind: 'gainAugment', amount: 1 });
 				break;
 		}
 	}
