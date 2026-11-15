@@ -1,0 +1,36 @@
+{
+	"version": "0.2.3",
+	"createdAt": "2026-11-15T02:46:55.388Z",
+	"parent": "0.2.2",
+	"notes": "Monster decks hold 25% more cards. New permanent monster Abyss Lurker (Barrier 1, 3 damage, initiative 4; 1 VP and an Arcane Abyss Summon): always available at the Abyss, taken into the hand instead of a deck draw. Monster initiative now applies on the site.",
+	"sha256": "9c4ab25b6b891ee62343ad89863ae51f60ee3932dcabc87a44c170e2c8ef6cb4",
+	"rulesHash": "c9bc13ce37a03f1735a73eaebb238f9cc73e7474b06b5fdfffeed3f25275ca34",
+	"art": {
+		"id": "73c2b70f8fc3921f",
+		"files": 521,
+		"fromExports": 426,
+		"fromOldBucket": 95,
+		"missing": [
+			"misc_assets/spirit_world_map/spirit_world_board_1771649177953.png"
+		]
+	},
+	"counts": {
+		"hex_spirits": 64,
+		"classes": 55,
+		"origins": 8,
+		"monsters_v2": 109,
+		"icon_pool": 146,
+		"game_locations": 5,
+		"guardians": 10,
+		"editions": 2,
+		"custom_dice": 5,
+		"dice_sides": 30,
+		"game_location_rows": 14,
+		"monster_pools": 15,
+		"relics": 5,
+		"rules": 1,
+		"mat_items": 12,
+		"reward_row_assignments": 1
+	},
+	"source": "~/ArcSpiritsArt/game"
+}
