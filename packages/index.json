@@ -1,5 +1,5 @@
 {
-	"live": "0.2.6",
+	"live": "0.2.7",
 	"versions": [
 		{
 			"version": "0.1.0",
@@ -276,6 +276,36 @@
 			"rulesHash": "a5740ac0a04e86fad101e71c3ed38ed063a8d038b053eb6fda81d148098580ad",
 			"art": {
 				"id": "d53651034dfc8ddd",
+				"files": 521
+			},
+			"counts": {
+				"hex_spirits": 64,
+				"classes": 55,
+				"origins": 8,
+				"monsters_v2": 109,
+				"icon_pool": 146,
+				"game_locations": 5,
+				"guardians": 10,
+				"editions": 2,
+				"custom_dice": 5,
+				"dice_sides": 30,
+				"game_location_rows": 14,
+				"monster_pools": 15,
+				"relics": 5,
+				"rules": 1,
+				"mat_items": 12,
+				"reward_row_assignments": 1
+			}
+		},
+		{
+			"version": "0.2.7",
+			"createdAt": "2026-11-15T07:03:23.869Z",
+			"parent": "0.2.6",
+			"notes": "Master: on Cultivate, gain 2 Max Barrier or restore 2 Barrier (your choice). Old Master card back remade.",
+			"sha256": "4263ee58ca849d812e48cb484f092ebb4aeece3a22d8400bcc94d51c0802ab77",
+			"rulesHash": "c18aed3eaa031eb86bbad86d33aa465a550785470b35f8502d389e65a2ca3c3d",
+			"art": {
+				"id": "0a4c2c7a010692b4",
 				"files": 521
 			},
 			"counts": {
