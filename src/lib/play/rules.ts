@@ -92,6 +92,9 @@
  *   Attack Dice." and nothing else (no rune trade in the Awakening Phase).
  * - shieldbearerFullOnly (default false): true ⇒ Shieldbearer is "When you take damage, if your
  *   Barrier is full, take 5 less." and nothing when it is not full.
+ * - masterBarrierChoice (default false): true ⇒ Master is "On Cultivate, gain 2 Max Barrier or
+ *   restore 2 Barrier". A card asks only while both would give something (some Barrier broken and
+ *   Max Barrier below its cap); unanswered, it gives Max Barrier. See effects/classes/master.ts.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
@@ -124,7 +127,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	herderArcaneAugments: false,
 	riderAugmentOption: false,
 	mageArcaneDice: false,
-	shieldbearerFullOnly: false
+	shieldbearerFullOnly: false,
+	masterBarrierChoice: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -230,6 +234,13 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Shieldbearer',
 		count: 1,
 		text: 'When you take damage, if your Barrier is full, take 5 less.'
+	},
+	{
+		rule: 'masterBarrierChoice',
+		when: true,
+		className: 'Master',
+		count: 1,
+		text: 'On Cultivate, gain 2 Max Barrier or restore 2 Barrier.'
 	},
 	{
 		rule: 'feralMonsterStrikeFirst',

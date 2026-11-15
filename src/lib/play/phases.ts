@@ -38,6 +38,7 @@ import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTo
 import { DECISION_RESOLVERS } from './effects/decisions';
 import { pvpAllowedAt } from './rules';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
+import { MASTER_CULTIVATE_KIND } from './effects/classes/master';
 import { recordTravelingTraderProgress } from './effects/awakenHandlers';
 import { advanceMonsterIfDefeated } from './combat';
 import {
@@ -506,10 +507,12 @@ export function enterCleanup(state: PublicGameState, catalog?: PlayCatalog): voi
 		const player = state.players[seat];
 		if (!player) continue;
 		keepUnansweredRelicTools(player, []);
-		// A Cultivate reward card made after the Location step (rule `cultivateRuneOrRelic`) is
-		// not carried into the next round: unanswered, it gives its default reward now.
+		// A Cultivate card made after the Location step (rules `cultivateRuneOrRelic`,
+		// `masterBarrierChoice`) is not carried into the next round: unanswered, it gives its
+		// default reward now.
 		const open = (player.pendingDecisions ?? []).filter(
-			(d) => d.kind === ORIGIN_CULTIVATE_KIND && d.expiryOptionId
+			(d) =>
+				(d.kind === ORIGIN_CULTIVATE_KIND || d.kind === MASTER_CULTIVATE_KIND) && d.expiryOptionId
 		);
 		if (open.length === 0) continue;
 		player.pendingDecisions = player.pendingDecisions.filter((d) => !open.includes(d));

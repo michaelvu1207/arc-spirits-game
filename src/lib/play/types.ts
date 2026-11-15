@@ -840,6 +840,8 @@ export interface PlayRules {
 	mageArcaneDice?: boolean;
 	/** Shieldbearer: 5 less damage at full Barrier, nothing otherwise (default false). */
 	shieldbearerFullOnly?: boolean;
+	/** Master: on Cultivate, 2 Max Barrier or restore 2 Barrier, the player's choice (default false). */
+	masterBarrierChoice?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
