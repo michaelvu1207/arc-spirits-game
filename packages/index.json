@@ -1,5 +1,5 @@
 {
-	"live": "0.2.4",
+	"live": "0.2.5",
 	"versions": [
 		{
 			"version": "0.1.0",
@@ -216,6 +216,36 @@
 			"rulesHash": "0792ccca2e93732ba08f06d1caa665ae45339d710662d0a260848c024064a607",
 			"art": {
 				"id": "73c2b70f8fc3921f",
+				"files": 521
+			},
+			"counts": {
+				"hex_spirits": 64,
+				"classes": 55,
+				"origins": 8,
+				"monsters_v2": 109,
+				"icon_pool": 146,
+				"game_locations": 5,
+				"guardians": 10,
+				"editions": 2,
+				"custom_dice": 5,
+				"dice_sides": 30,
+				"game_location_rows": 14,
+				"monster_pools": 15,
+				"relics": 5,
+				"rules": 1,
+				"mat_items": 12,
+				"reward_row_assignments": 1
+			}
+		},
+		{
+			"version": "0.2.5",
+			"createdAt": "2026-11-15T04:14:49.271Z",
+			"parent": "0.2.4",
+			"notes": "One name per spirit (the card name). Sun spirits cost 3 runes, Aureate Mage and Dawnborn 4. Mystic (2) and (3) change places. New Falconer, Herder, Mage and Shieldbearer abilities; Rider can give a Spirit Augment. 17 spirit cards remade to match the data.",
+			"sha256": "3d6188b31cb54b1496b7a5d85f0d24def381fb3ce97a4c5ac1121caef762e22f",
+			"rulesHash": "8ae180ac60ac84b16ac15a88e7c222a8ed77628efa8daf0e2e9e919507583e62",
+			"art": {
+				"id": "d9d44984bc7eea3f",
 				"files": 521
 			},
 			"counts": {
