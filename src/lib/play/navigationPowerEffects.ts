@@ -442,6 +442,54 @@ export function resolveNavigationPowerReveal(
 	}
 }
 
+/** Choices that change only their owner's own board (runes, Barrier, dice, own spirits, own
+ *  monster cards). Every other kind touches another player or a fight and holds everyone. */
+const OWNER_ONLY_OFFER_KINDS = new Set([
+	'restore',
+	'repeat-location',
+	'exchange',
+	'convert-rune',
+	'execute',
+	'rest-cultivate',
+	'awaken',
+	'defeat-monster',
+	'augment',
+	'bastion',
+	'random-powers',
+	'rest',
+	'cultivate',
+	'rune',
+	'failed-potential',
+	'failed-vp'
+]);
+
+function ownerOnlyOffer(offer: NavigationPowerOffer): boolean {
+	return OWNER_ONLY_OFFER_KINDS.has(offer.kind) && !offer.data?.targets && !offer.data?.recipient;
+}
+
+/**
+ * The seats whose pending Power choices stop `seat` from acting now (empty: free to act).
+ *  - A seat with its own pending choice is always held (it is in the list itself).
+ *  - Another seat's choice holds `seat` only when it can touch other players (damage, rune
+ *    theft, trades, combat Powers), in the Encounter phase (a fight must not start on a
+ *    half-resolved board), or when the command has no seat (system and spectator commands).
+ *  - Another seat's owner-only choice (for example Mountain's Wealth "gain 2 Runes") holds
+ *    nobody else: a slow player no longer freezes the table.
+ */
+export function navigationPowerBlockers(
+	state: PublicGameState,
+	seat: SeatColor | null | undefined
+): SeatColor[] {
+	const out: SeatColor[] = [];
+	for (const other of state.activeSeats) {
+		const offers = state.players[other]?.navigationPowerOffers ?? [];
+		if (!offers.length) continue;
+		if (other === seat || !seat || state.phase === 'encounter' || !offers.every(ownerOnlyOffer))
+			out.push(other);
+	}
+	return out;
+}
+
 /** Remove stale mandatory obligations when earlier simultaneous thefts spent the last rune. */
 export function refreshNavigationPowerOffers(state: PublicGameState) {
 	for (const seat of state.activeSeats) {

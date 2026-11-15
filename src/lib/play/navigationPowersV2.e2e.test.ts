@@ -68,6 +68,33 @@ describe('powerRework through the reducer', () => {
 		expect([...oldIds].filter((id) => /-2$|underdogs-oath|tidal-calling|sudden-strike|tempered-dice|dark-bargain|soul-ward|twin-rhythm/.test(id))).toEqual([]);
 	});
 
+	it("another seat's owner-only choice does not hold the table; the owner is held", () => {
+		const s = reveal(start(), 'mountains-wealth', 'Mountain Region');
+		expect(offerOf(s)?.kind).toBe('rune');
+		// Blue has nothing to resolve: its Location step is not frozen by Red's rune choice.
+		const blue = applyGameCommand(structuredClone(s), botActorFor(s, 'Blue'), { type: 'endLocationActions' }, catalog);
+		expect(blue.ok).toBe(true);
+		expect(agentLegalCommands(s, 'Blue', catalog).commands.length).toBeGreaterThan(0);
+		// Red must answer its own choice first, and is told it is its own.
+		const red = applyGameCommand(structuredClone(s), botActorFor(s, 'Red'), { type: 'endLocationActions' }, catalog);
+		expect(red.ok).toBe(false);
+		if (!red.ok) {
+			expect(red.error.code).toBe('power_pending');
+			expect(red.error.message).toBe('Resolve your Navigation Power choice first.');
+		}
+	});
+
+	it('a choice that can hit other players still holds them, and names who is waited on', () => {
+		const s = reveal(start(), 'thorn-ward', 'Mountain Region');
+		expect(offerOf(s)?.kind).toBe('damage');
+		const blue = applyGameCommand(structuredClone(s), botActorFor(s, 'Blue'), { type: 'endLocationActions' }, catalog);
+		expect(blue.ok).toBe(false);
+		if (!blue.ok) {
+			expect(blue.error.code).toBe('power_pending');
+			expect(blue.error.message).toBe('Waiting for Red to resolve a Navigation Power choice.');
+		}
+	});
+
 	it('Cinder Awakening wakes a rune-cost Arcane spirit for free at the Fire Region', () => {
 		let s = start();
 		const arcane = catalog.spirits.find((x) => x.cost >= 7 && x.awaken?.kind === 'rune_cost')!;

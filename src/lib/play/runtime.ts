@@ -11,7 +11,8 @@ import {
 } from './navigationPowers';
 import {
 	resolveNavigationPowerChoice,
-	refreshNavigationPowerOffers
+	refreshNavigationPowerOffers,
+	navigationPowerBlockers
 } from './navigationPowerEffects';
 import { proposePowerTrade, respondPowerTrade } from './navigationPowerTrades';
 import type { BagsData } from '$lib/types';
@@ -1514,11 +1515,9 @@ function reduceCommand(
 	command: GameCommand,
 	catalog: PlayCatalog
 ): CommandResult {
-	const powerWork = state.activeSeats.some(
-		(s) => (state.players[s]?.navigationPowerOffers?.length ?? 0) > 0
-	);
+	const powerBlockers = navigationPowerBlockers(state, actor.seatColor);
 	if (
-		powerWork &&
+		powerBlockers.length &&
 		![
 			'resolveNavigationPower',
 			'chooseNavigationPower',
@@ -1526,7 +1525,15 @@ function reduceCommand(
 			'debugGrant'
 		].includes(command.type)
 	) {
-		return failure('power_pending', 'Resolve Navigation Power effects first.');
+		// Say whose choice it is: "resolve first" read as the actor's own Power even when the
+		// table was waiting on another seat.
+		const others = powerBlockers.filter((s) => s !== actor.seatColor);
+		return failure(
+			'power_pending',
+			others.length === powerBlockers.length
+				? `Waiting for ${others.join(' and ')} to resolve a Navigation Power choice.`
+				: 'Resolve your Navigation Power choice first.'
+		);
 	}
 	const actorPlayer = actor.seatColor ? state.players[actor.seatColor] : null;
 	const mandatory = actorPlayer?.navigationPowerOffers?.filter((o) => o.mandatory) ?? [];

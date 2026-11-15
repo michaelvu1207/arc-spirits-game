@@ -37,6 +37,7 @@ import type {
 import { buildLocationInteractions, matchRewardCost } from './locationInteractions';
 import { runesAreWild } from './effects/matMatch';
 import { ruleValue } from './rules';
+import { navigationPowerBlockers } from './navigationPowerEffects';
 
 /** Pure mirror of activePlayerForActor's null-ness (no mutating ensurePlayerCollections backfill). */
 function seatPlayer(state: PublicGameState, actor: GameActor): PrivatePlayerState | null {
@@ -61,9 +62,9 @@ export function canApply(
 ): boolean | undefined {
 	const active = state.status === 'active';
 
-	const powerPending = state.activeSeats.some(
-		(s) => (state.players[s]?.navigationPowerOffers?.length ?? 0) > 0
-	);
+	// Same rule as the reducer (navigationPowerBlockers): another seat's owner-only choice
+	// does not hold this seat.
+	const powerPending = navigationPowerBlockers(state, actor.seatColor).length > 0;
 	if (
 		powerPending &&
 		![
