@@ -821,11 +821,16 @@
 		}
 	}
 
-	async function drawMonsterCards(difficulty: 1 | 2 | 3) {
+	async function drawMonsterCards(difficulty: 1 | 2 | 3, permanent = false) {
 		if (busy) return;
 		try {
 			playSfx('ui-click');
-			await sendPlayCommand({ type: 'drawMonsterCards', difficulty });
+			// `permanent`: take a copy of the permanent monster instead of drawing from a deck.
+			await sendPlayCommand({
+				type: 'drawMonsterCards',
+				difficulty,
+				...(permanent ? { permanent: true } : {})
+			});
 		} catch (err) {
 			actionError = err instanceof Error ? err.message : 'Monster deck draw failed.';
 		}
@@ -1170,7 +1175,7 @@
 			const canDraw =
 				myPlayer.monsterDrawRound !== room.round &&
 				hand.length < 3 &&
-				(room.monsterDecks ?? []).some((deck) => (deck.count ?? 0) > 0);
+				((room.monsterDecks ?? []).some((deck) => (deck.count ?? 0) > 0) || !!room.permanentMonster);
 			const canFight = !myCombatUsed && hand.some((card) => card.hp > 0);
 			return canFight || canDraw;
 		}

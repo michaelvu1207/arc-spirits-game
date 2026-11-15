@@ -61,7 +61,7 @@ function coreRules(catalog: PlayCatalog): string {
 		'',
 		'## Goal and end of game',
 		`- The first player with ${VP_TO_WIN}+ Victory Points (VP) when a round ends wins (the highest if several).`,
-		`- Otherwise the game ends after round ${MAX_ROUNDS}, or when every player is Fallen, or when every monster card is defeated; then the most VP wins (ties: seat order).`,
+		`- Otherwise the game ends after round ${MAX_ROUNDS}, or when every player is Fallen${(catalog.monsters ?? []).some((m) => m.permanent) ? '' : ', or when every monster card is defeated'}; then the most VP wins (ties: seat order).`,
 		'',
 		'## A round (6 phases; you act in each, then you finish/yield it)',
 		'1. Navigation: every player SECRETLY locks one destination — one of the four Spirit World regions or the Arcane Abyss — and may commit one held Navigation Power with it. All destinations are revealed together.',
@@ -133,7 +133,7 @@ function cardText(catalog: PlayCatalog): string {
 
 	lines.push('', '## Monster decks');
 	for (const difficulty of [1, 2, 3] as const) {
-		const cards = (catalog.monsters ?? []).filter((m) => monsterDifficulty(m) === difficulty);
+		const cards = (catalog.monsters ?? []).filter((m) => !m.permanent && monsterDifficulty(m) === difficulty);
 		if (!cards.length) continue;
 		const barrier = cards.map((m) => m.barrier);
 		const damage = cards.map((m) => m.damage);
@@ -145,6 +145,17 @@ function cardText(catalog: PlayCatalog): string {
 		);
 		lines.push(
 			`- Difficulty ${difficulty}: ${cards.length} cards; Barrier ${Math.min(...barrier)}-${Math.max(...barrier)}; damage ${Math.min(...damage)}-${Math.max(...damage)}; VP per kill ${Math.min(...vp)}-${Math.max(...vp)}.`
+		);
+	}
+
+	const permanent = (catalog.monsters ?? []).find((m) => m.permanent);
+	if (permanent) {
+		const vp = buildMonsterRewards(permanent.rewardTrack).reduce(
+			(s, o) => s + (o.effect.type === 'vp' ? o.effect.amount : 0),
+			0
+		);
+		lines.push(
+			`- Permanent monster "${permanent.name}": Barrier ${permanent.barrier}, damage ${permanent.damage}${typeof permanent.initiative === 'number' ? `, initiative ${permanent.initiative}` : ''}, ${vp} VP per kill plus its other rewards. It is in no deck and never runs out: instead of drawing from a deck you may take a copy into your hand (that is your draw of the visit), then fight it like any card. Because it is always there, empty decks do not end the game.`
 		);
 	}
 

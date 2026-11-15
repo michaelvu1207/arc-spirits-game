@@ -32,6 +32,7 @@
 	import { cubicOut } from 'svelte/easing';
 	import type { MonsterDeckSummary, MonsterDrawState, MonsterState } from '$lib/play/types';
 	import { MONSTER_DECK_NAMES } from '$lib/play/runtime';
+	import { buildMonsterRewards } from '$lib/play/monsterRewards';
 	import { getAssetState } from '$lib/stores/assetStore.svelte';
 	import TakeoverStage from './takeover/TakeoverStage.svelte';
 	import MonsterCard from './MonsterCard.svelte';
@@ -50,6 +51,8 @@
 		pending: MonsterDrawState | null | undefined;
 		/** Difficulty decks with cards-left counts (room projection). */
 		decks: MonsterDeckSummary[];
+		/** The permanent monster (always available; a copy goes straight to the hand), if any. */
+		permanent?: MonsterState | null;
 		/** The player already drew a monster card this visit. */
 		drawUsed: boolean;
 		/** Monster fights left this round (0 = none). */
@@ -61,7 +64,7 @@
 		/** The Abyss's own location actions (free Arcane Abyss Summon). */
 		actions?: AbyssAction[];
 		busy?: boolean;
-		onDraw: (difficulty: MonsterDifficulty) => void | Promise<unknown>;
+		onDraw: (difficulty: MonsterDifficulty, permanent?: boolean) => void | Promise<unknown>;
 		onKeep: (index: number) => void | Promise<unknown>;
 		onFight: (handIndex: number) => void;
 		onAction?: (key: string) => void;
@@ -73,6 +76,7 @@
 		hand,
 		pending,
 		decks,
+		permanent = null,
 		drawUsed,
 		fightsLeft,
 		fightAllowance,
@@ -206,7 +210,7 @@
 			? 'Drawn this visit'
 			: handFull
 				? 'Hand full · fight one first'
-				: !anyCardsLeft
+				: !anyCardsLeft && !permanent
 					? 'All decks are empty'
 					: null
 	);
@@ -231,7 +235,10 @@
 	}
 
 	const subtitle = $derived.by(() => {
-		if (view === 'decks') return 'The back is the difficulty · Reveal 2, keep 1';
+		if (view === 'decks')
+			return permanent
+				? `Reveal 2 from a deck and keep 1 · or take ${permanent.name}`
+				: 'The back is the difficulty · Reveal 2, keep 1';
 		if (view === 'reveal' && revealDeck) {
 			const deck = `Deck ${MONSTER_NUMERAL[revealDeck]}`;
 			if (!hasReveal) return `Drawing from ${deck}…`;
@@ -259,6 +266,31 @@
 		await onDraw(difficulty);
 		// Rejected (no reveal came back): return to the deck picker.
 		if (!pending?.cards.length) chosen = null;
+	}
+	/** Take a copy of the permanent monster: it goes straight into the hand (no reveal). */
+	let takingPermanent = $state(false);
+	async function takePermanent() {
+		if (busy || chosen !== null || takingPermanent || !permanent) return;
+		takingPermanent = true;
+		const before = hand.length;
+		try {
+			await onDraw(1, true);
+		} finally {
+			takingPermanent = false;
+		}
+		// Taken: back to the hand. Rejected: stay on the picker.
+		if (hand.length > before) picking = false;
+	}
+	function permanentRewards(card: MonsterState): string {
+		const rewards = buildMonsterRewards(card.rewardTrack);
+		const vp = rewards.reduce((n, r) => n + (r.effect.type === 'vp' ? r.effect.amount : 0), 0);
+		const summons = rewards.filter(
+			(r) => r.effect.type === 'action' && r.effect.action === 'abyssSummon'
+		).length;
+		const gains = [vp ? `${vp} VP` : '', summons ? `${summons === 1 ? '' : `${summons} `}Abyss Summon${summons === 1 ? '' : 's'}` : '']
+			.filter(Boolean)
+			.join(' + ');
+		return `Barrier ${card.maxHp} · ${card.damage} damage${typeof card.initiative === 'number' ? ` · Initiative ${card.initiative}` : ''}${gains ? ` · ${gains}` : ''}`;
 	}
 	async function keep(index: number, event: MouseEvent) {
 		if (busy || keeping !== null) return;
@@ -437,7 +469,7 @@
 					{/each}
 				</div>
 			{:else if view === 'decks'}
-				<div class="row decks" role="group" aria-label="Monster decks">
+				<div class="row decks" class:four={!!permanent} role="group" aria-label="Monster decks">
 					{#each DIFFICULTIES as d (d)}
 						{@const deck = deckOf(d)}
 						{@const left = cardsLeft(d)}
@@ -473,6 +505,27 @@
 							</span>
 						</button>
 					{/each}
+					{#if permanent}
+						<!-- The permanent monster: face up, never runs out, goes straight to the hand. -->
+						<button
+							type="button"
+							class="obj deck permanent"
+							style="--c: var(--brand-amber, #ffba3d)"
+							data-testid="monster-permanent"
+							disabled={busy || takingPermanent}
+							aria-label={`${permanent.name}, always available: ${permanentRewards(permanent)}. Tap to add it to your hand.`}
+							onclick={takePermanent}
+						>
+							<span class="floater" style="--i: 3">
+								<span class="deck-card"><MonsterCard card={permanent} /></span>
+							</span>
+							<span class="info" in:label|global={{ intro: true }} out:label|global>
+								<b>{permanent.name}</b>
+								<span>{permanentRewards(permanent)}</span>
+								<span class="left">Always here · Tap to take</span>
+							</span>
+						</button>
+					{/if}
 				</div>
 			{:else if revealDeck}
 				{@const d = revealDeck}
@@ -777,6 +830,10 @@
 		--w: min(calc((100cqw - 2 * var(--gap)) / 3.25), calc((100cqh - 8.4rem) * 0.6), 10rem);
 		gap: calc(var(--gap) * 1.6);
 	}
+	/* With the permanent monster there are four columns. */
+	.row.decks.four {
+		--w: min(calc((100cqw - 3 * var(--gap) * 1.6) / 4.3), calc((100cqh - 8.4rem) * 0.6), 10rem);
+	}
 	.deck-card {
 		display: block;
 		width: 100%;
@@ -958,6 +1015,9 @@
 		}
 		.row.decks {
 			--w: min(calc((100cqw - 2 * var(--gap)) / 3.4), calc((100cqh - 6.1rem) * 0.6), 8rem);
+		}
+		.row.decks.four {
+			--w: min(calc((100cqw - 3 * var(--gap) * 1.6) / 4.4), calc((100cqh - 6.1rem) * 0.6), 8rem);
 		}
 		.row.reveal {
 			--w: min(calc((100cqw - 3 * var(--gap) - 1.5rem) / 2.95), calc((100cqh - 4.2rem) * 0.6), 9.5rem);

@@ -193,7 +193,8 @@ export function loadLocalDesignCatalog(
 				stage: typeof m.stage === 'number' ? m.stage : Number(m.stage) || 1,
 				order: typeof m.order_num === 'number' ? m.order_num : 0,
 				// Optional: a monster with no initiative strikes first against everyone (as before).
-				...(typeof m.initiative === 'number' ? { initiative: m.initiative } : {})
+				...(typeof m.initiative === 'number' ? { initiative: m.initiative } : {}),
+				...(m.permanent === true ? { permanent: true } : {})
 			}))
 			.sort((a, b) => a.stage - b.stage || a.order - b.order || a.name.localeCompare(b.name)),
 		locations: [...locations].map((loc) => ({

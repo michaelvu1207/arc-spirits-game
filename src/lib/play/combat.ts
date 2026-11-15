@@ -813,11 +813,13 @@ export function monsterLivesForPlayerCount(playerCount: number): number {
  * Round-boundary upkeep for the monster cards (called from `enterCleanup`). Open reveals settle.
  * A card in a hand keeps its damage: its Barrier never recovers. Once every monster card is gone
  * — decks empty, no cards in any hand — the spirit world is saved and the game ends at this
- * cleanup with final scoring.
+ * cleanup with final scoring. Not with a permanent monster in the catalog: it is never gone.
  */
-export function advanceMonsterIfDefeated(state: PublicGameState, _catalog?: PlayCatalog): void {
+export function advanceMonsterIfDefeated(state: PublicGameState, catalog?: PlayCatalog): void {
 	returnOpenMonsterReveals(state);
 	if (!monsterDeckWasDealt(state)) return;
+	// A permanent monster is never gone, so empty decks do not end the game.
+	if (state.permanentMonster || (catalog?.monsters ?? []).some((m) => m.permanent)) return;
 	const deckEmpty = (state.bags?.monsters?.contents?.length ?? 0) === 0;
 	const handsEmpty = (state.activeSeats ?? []).every((seat) => {
 		const p = state.players[seat];

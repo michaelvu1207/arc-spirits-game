@@ -1307,8 +1307,16 @@ export function monsterCardFromCatalog(monster: PlayCatalogMonster): MonsterStat
 		livesTotal: 1,
 		ladderIndex: monster.order,
 		ladderMax: 0,
-		...(typeof monster.initiative === 'number' ? { initiative: monster.initiative } : {})
+		...(typeof monster.initiative === 'number' ? { initiative: monster.initiative } : {}),
+		...(monster.permanent ? { permanent: true } : {})
 	};
+}
+
+/** The catalog's permanent monster (see PlayCatalogMonster.permanent), if it has one. */
+export function permanentMonsterOf(
+	catalog: Pick<PlayCatalog, 'monsters'> | null | undefined
+): PlayCatalogMonster | undefined {
+	return (catalog?.monsters ?? []).find((m) => m.permanent);
 }
 
 /** Victory Points a kill of `monster` grants (every VP reward on the card). */
@@ -1382,7 +1390,9 @@ function buildMonsterDecks(
 	dealt?: { difficulty?: number }[]
 ): MonsterDeckSummary[] {
 	return ([1, 2, 3] as const).map((difficulty) => {
-		const cards = (catalog.monsters ?? []).filter((m) => monsterDifficulty(m) === difficulty);
+		const cards = (catalog.monsters ?? []).filter(
+			(m) => !m.permanent && monsterDifficulty(m) === difficulty
+		);
 		const barriers = cards.map((m) => m.barrier);
 		const vps = cards.map(rewardVp);
 		const summons = cards.map(rewardSummons);
@@ -1515,6 +1525,11 @@ function reduceCommand(
 	command: GameCommand,
 	catalog: PlayCatalog
 ): CommandResult {
+	// A game started before the catalog had a permanent monster gets it with its next command.
+	if (state.status === 'active' && !state.permanentMonster) {
+		const permanent = permanentMonsterOf(catalog);
+		if (permanent) state.permanentMonster = monsterCardFromCatalog(permanent);
+	}
 	const powerBlockers = navigationPowerBlockers(state, actor.seatColor);
 	if (
 		powerBlockers.length &&
@@ -1754,8 +1769,9 @@ function reduceCommand(
 				count: 0,
 				contents: []
 			};
+			// The permanent monster is never dealt into a deck (a catalog without one deals as before).
 			const monsterDeck = shuffleBag(
-				(catalog.monsters ?? []).map((monster) => ({
+				(catalog.monsters ?? []).filter((monster) => !monster.permanent).map((monster) => ({
 					guid: `monster-card-${monster.id}`,
 					id: monster.id,
 					name: monster.name,
@@ -1771,6 +1787,8 @@ function reduceCommand(
 			const dealt = limitMonsterPools(monsterDeck, catalog.monsterPools, occupiedSeats.length);
 			state.bags.monsters = { count: dealt.length, contents: dealt };
 			state.monsterDecks = buildMonsterDecks(catalog, dealt);
+			const permanent = permanentMonsterOf(catalog);
+			if (permanent) state.permanentMonster = monsterCardFromCatalog(permanent);
 			state.bags.rewardHexes = { count: rewardEntries().length, contents: rewardEntries().map((entry) => ({ ...entry })) };
 			// Both TTS bags carry `shuffle = true`, so the opening hands, the market,
 			// and every subsequent draw are randomized — not dealt in alphabetical
@@ -3350,6 +3368,17 @@ function reduceCommand(
 			if (active.player.pendingMonsterDraw?.cards.length) return failure('monster_draw_pending', 'Keep one of the revealed monster cards first.');
 			if ((active.player.monsterHand?.length ?? 0) >= 3) return failure('monster_hand_full', 'Your hand is full (3/3). Defeat a monster card before you draw again.');
 			if (active.player.monsterDrawRound === state.round) return failure('monster_draw_used', 'You already drew monster cards this visit.');
+			if (command.permanent) {
+				// The permanent monster: a copy goes straight into the hand (no reveal, nothing leaves
+				// a deck). It is the draw of this visit.
+				const permanent = permanentMonsterOf(catalog);
+				if (!permanent) return failure('no_permanent_monster', 'This game has no permanent monster.');
+				active.player.monsterHand ??= [];
+				active.player.monsterHand.push(monsterCardFromCatalog(permanent));
+				state.permanentMonster ??= monsterCardFromCatalog(permanent);
+				active.player.monsterDrawRound = state.round;
+				return success(state);
+			}
 			if (!drawMonsterCardsForPlayer(state, active.player, command.difficulty, catalog)) return failure('monster_deck_empty', `The Difficulty ${command.difficulty} deck is empty.`);
 			active.player.monsterDrawRound = state.round;
 			return success(state);
@@ -3748,6 +3777,7 @@ export function buildSessionProjection(
 			...deck,
 			count: state.bags.monsters.contents.filter((entry) => entry.difficulty === deck.difficulty).length
 		})),
+		...(state.permanentMonster ? { permanentMonster: structuredClone(state.permanentMonster) } : {}),
 		combats: structuredClone(state.combats),
 		winnerSeat: state.winnerSeat,
 		...(startGate

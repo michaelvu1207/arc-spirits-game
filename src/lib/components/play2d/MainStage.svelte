@@ -78,7 +78,7 @@
 		/** Keep one of the two revealed monster cards; resolves once the room view updates. */
 		onKeepMonsterCard: (index: number) => void | Promise<unknown>;
 		/** Draw from a monster deck (reveal 2); resolves once the room view updates. */
-		onDrawMonsterCards: (difficulty: 1 | 2 | 3) => void | Promise<unknown>;
+		onDrawMonsterCards: (difficulty: 1 | 2 | 3, permanent?: boolean) => void | Promise<unknown>;
 		/** Claim monster-kill rewards (Arcane Abyss): picks = track indices. */
 		onClaimReward: (picks: number[], choices: number[]) => void;
 		onSummon: (guid: string) => void;
@@ -1194,6 +1194,7 @@
 						hand={myPlayer?.monsterHand ?? []}
 						pending={myPlayer?.pendingMonsterDraw}
 						decks={room.monsterDecks ?? []}
+						permanent={room.permanentMonster ?? null}
 						drawUsed={myPlayer?.monsterDrawRound === room.round}
 						fightsLeft={Math.max(0, combatAllowance - combatUsedCount)}
 						fightAllowance={combatAllowance}

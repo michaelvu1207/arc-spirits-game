@@ -254,6 +254,10 @@ export interface MonsterAsset {
 	reward_track?: string[] | null;
 	dice_pool?: string[] | null;
 	choose_amount?: number | null;
+	/** Combat initiative; absent ⇒ the monster always strikes first. */
+	initiative?: number | null;
+	/** The permanent monster: never in a deck, never used up (see PlayCatalogMonster). */
+	permanent?: boolean | null;
 }
 
 // Icon pool entry (central icon registry)

@@ -219,7 +219,11 @@ export function nextMonsterCardCommand(
 	const drawable = ([1, 2, 3] as const).filter((difficulty) =>
 		legal({ type: 'drawMonsterCards', difficulty })
 	);
-	if (drawable.length === 0) return null;
+	if (drawable.length === 0) {
+		// Every deck is empty: take the permanent monster when the game has one.
+		const permanent: GameCommand = { type: 'drawMonsterCards', difficulty: 1, permanent: true };
+		return legal(permanent) ? permanent : null;
+	}
 	const confident = [...drawable]
 		.reverse()
 		.find((difficulty) => (weakestDeckCard(state, seat, catalog, difficulty)?.score.killProbability ?? 0) >= LIKELY_KILL);

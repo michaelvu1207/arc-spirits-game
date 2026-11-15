@@ -211,7 +211,9 @@ export function canApply(
 				!me.pendingMonsterDraw?.cards.length &&
 				(me.monsterHand?.length ?? 0) < 3 &&
 				me.monsterDrawRound !== state.round &&
-				state.bags.monsters.contents.some((entry) => entry.difficulty === command.difficulty)
+				(command.permanent
+					? (catalog?.monsters ?? []).some((m) => m.permanent)
+					: state.bags.monsters.contents.some((entry) => entry.difficulty === command.difficulty))
 			);
 		}
 		case 'keepMonsterCard': {

@@ -595,6 +595,8 @@ export interface MonsterState {
 	damage: number;
 	/** Combat initiative; absent ⇒ infinite (always strikes first). See PlayCatalogMonster. */
 	initiative?: number;
+	/** A copy of the catalog's permanent monster (never from a deck; see PlayCatalogMonster). */
+	permanent?: boolean;
 	rewardTrack: string[]; // icon_pool ids
 	chooseAmount: number; // rewards a kill grants (every resolvable token on the card)
 	/** Kills still needed to defeat THIS monster. Starts at the active player count; each
@@ -731,6 +733,10 @@ export interface PlayCatalogMonster {
 	/** Combat initiative (monsters_v2 `initiative`). Absent ⇒ infinite: the monster always strikes
 	 *  first unless the player has an always-strike-first effect (the rule before 2026-11-13). */
 	initiative?: number;
+	/** The permanent monster (monsters_v2 `permanent: true`; Michael, 2026-11-14): never dealt into
+	 *  a deck and never used up. At the Arcane Abyss a player may take a copy into the monster hand
+	 *  instead of drawing from a deck. While the catalog has one, empty decks do not end the game. */
+	permanent?: boolean;
 }
 
 /** A class trait carried into the engine, with its breakpoint effect schema intact. */
@@ -1266,6 +1272,8 @@ export interface PublicGameState {
 	spiritWorldSaved?: boolean;
 	/** The three Abyss difficulty decks (static facts for the card backs). */
 	monsterDecks?: MonsterDeckSummary[];
+	/** The catalog's permanent monster as a card (written only when the catalog has one). */
+	permanentMonster?: MonsterState;
 }
 
 export interface PlayerProjection extends Omit<PrivatePlayerState, 'displayName'> {
@@ -1333,6 +1341,8 @@ export interface SpectatorProjection {
 	locationOccupancy: Partial<Record<NavigationDestination, SeatColor[]>>;
 	/** Abyss difficulty decks with cards-left counts (card order and contents stay hidden). */
 	monsterDecks?: MonsterDeckSummary[];
+	/** The permanent monster a player may take at the Abyss (absent when the game has none). */
+	permanentMonster?: MonsterState;
 	combats: CombatState[];
 	winnerSeat: SeatColor | null;
 	/**
@@ -1505,7 +1515,7 @@ export type GameCommand =
 	// ── Combat: fight one monster card from your own hand ─────────────────
 	| { type: 'startCombat'; handIndex: number }
 	/** Draw two monster cards from an Abyss difficulty deck. */
-	| { type: 'drawMonsterCards'; difficulty: 1 | 2 | 3 }
+	| { type: 'drawMonsterCards'; difficulty: 1 | 2 | 3; /** Take a copy of the permanent monster instead (difficulty is ignored). */ permanent?: boolean }
 	/** Keep one card from the current two-card reveal and return the other. */
 	| { type: 'keepMonsterCard'; index: number }
 	/**

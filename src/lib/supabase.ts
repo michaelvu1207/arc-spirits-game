@@ -1026,7 +1026,9 @@ export async function fetchAssetsData(): Promise<AssetsData> {
 			),
 		supabaseAssets
 			.from(TABLES.MONSTERS)
-			.select('id, name, stage, order_num, damage, barrier, card_image_path, reward_track, dice_pool, choose_amount'),
+			// Every column: a fixed list here dropped `initiative`, so on the site every monster
+			// struck first (found 2026-11-14). `permanent` is read the same way.
+			.select('*'),
 		supabaseAssets
 			.from(TABLES.ICON_POOL)
 			.select('id, name, file_path, tags')

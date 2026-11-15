@@ -128,7 +128,8 @@ export function buildPlayCatalog(assets: AssetsData): PlayCatalog {
 				// Optional: a monster with no initiative strikes first against everyone (as before).
 				...(typeof (monster as { initiative?: unknown }).initiative === 'number'
 					? { initiative: (monster as unknown as { initiative: number }).initiative }
-					: {})
+					: {}),
+				...((monster as { permanent?: unknown }).permanent === true ? { permanent: true } : {})
 			}))
 			// The escalation ladder: weakest first. Sort by stage, then the difficulty
 			// rung (order_num) — every row shares the same name, so name can't order them.

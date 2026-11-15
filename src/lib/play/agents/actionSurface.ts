@@ -263,7 +263,10 @@ function monsterCardCommands(state: PublicGameState, seat: SeatColor): GameComma
 	if (!me || state.phase !== 'location' || me.navigationDestination !== 'Arcane Abyss') return [];
 	const reveal = me.pendingMonsterDraw?.cards ?? [];
 	if (reveal.length > 0) return reveal.map((_, index) => ({ type: 'keepMonsterCard', index }));
-	return ([1, 2, 3] as const).map((difficulty) => ({ type: 'drawMonsterCards', difficulty }));
+	const draws: GameCommand[] = ([1, 2, 3] as const).map((difficulty) => ({ type: 'drawMonsterCards', difficulty }));
+	// The permanent monster (when the game has one): take a copy instead of drawing from a deck.
+	if (state.permanentMonster) draws.push({ type: 'drawMonsterCards', difficulty: 1, permanent: true });
+	return draws;
 }
 
 function monsterRewardCommands(me: PrivatePlayerState): GameCommand[] {

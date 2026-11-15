@@ -45,6 +45,8 @@ export interface ViewLike {
 	players: Partial<Record<SeatColor, SeatPlayer>>;
 	/** Public deck summaries (the projection carries them). */
 	monsterDecks?: MonsterDeckSummary[];
+	/** The permanent monster, when the game has one. */
+	permanentMonster?: MonsterState;
 }
 
 /** A rune / augment / relic as a player names it. */
@@ -306,6 +308,10 @@ export function labelFor(
 		case 'discardHandDraws':
 			return 'Summon none of the drawn spirits (return them)';
 		case 'drawMonsterCards': {
+			if (cmd.permanent) {
+				const card = state.permanentMonster;
+				return `Take the permanent monster ${card ? monsterLine(card) : ''} into your hand (always available; this is your draw of this visit)`;
+			}
 			const deck = state.monsterDecks?.find((d) => d.difficulty === cmd.difficulty);
 			const band = deck
 				? `, Barrier ${deck.barrierMin}-${deck.barrierMax}, ${deck.count ?? '?'} cards left`
