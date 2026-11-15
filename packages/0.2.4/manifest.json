@@ -1,0 +1,36 @@
+{
+	"version": "0.2.4",
+	"createdAt": "2026-11-15T03:43:19.836Z",
+	"parent": "0.2.3",
+	"notes": "Evil players may attack Good players at the Arcane Abyss too (was: only in the four regions).",
+	"sha256": "5ee6631c637c9b8fe0917a20c1f8b7b6e3f5ae4e34c2213e900154c41821b522",
+	"rulesHash": "0792ccca2e93732ba08f06d1caa665ae45339d710662d0a260848c024064a607",
+	"art": {
+		"id": "73c2b70f8fc3921f",
+		"files": 521,
+		"fromExports": 426,
+		"fromOldBucket": 95,
+		"missing": [
+			"misc_assets/spirit_world_map/spirit_world_board_1771649177953.png"
+		]
+	},
+	"counts": {
+		"hex_spirits": 64,
+		"classes": 55,
+		"origins": 8,
+		"monsters_v2": 109,
+		"icon_pool": 146,
+		"game_locations": 5,
+		"guardians": 10,
+		"editions": 2,
+		"custom_dice": 5,
+		"dice_sides": 30,
+		"game_location_rows": 14,
+		"monster_pools": 15,
+		"relics": 5,
+		"rules": 1,
+		"mat_items": 12,
+		"reward_row_assignments": 1
+	},
+	"source": "~/ArcSpiritsArt/game"
+}
