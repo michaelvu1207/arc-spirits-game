@@ -11,6 +11,7 @@
 import type { EffectContext } from './context';
 import { CLASS_DECISIONS } from './abilities';
 import { decisions as RELIC_TOOL_DECISIONS } from './relicToolDecisions';
+import { decisions as ORIGIN_CULTIVATE_DECISIONS } from './originCultivate';
 
 export const DECISION_RESOLVERS: Record<
 	string,
@@ -18,5 +19,7 @@ export const DECISION_RESOLVERS: Record<
 > = {
 	...CLASS_DECISIONS,
 	// Relic tools (origin relics) are not a class, but resolve through the same cards.
-	...RELIC_TOOL_DECISIONS
+	...RELIC_TOOL_DECISIONS,
+	// The Cultivate origin reward under rule `cultivateRuneOrRelic` (rune or relic).
+	...ORIGIN_CULTIVATE_DECISIONS
 };

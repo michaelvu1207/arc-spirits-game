@@ -812,6 +812,10 @@ export interface PlayRules {
 	pvpAttackerSacrificeCap?: boolean;
 	/** The 2026-11-13 Navigation Power set, 11 general + 11 niche (default false: the old 22). */
 	powerRework?: boolean;
+	/** Mystic (2): Cultivate gives twice as many runes; the old Max Barrier gain is off (default false). */
+	mysticCultivateDouble?: boolean;
+	/** Cultivate gives one reward per origin: the rune at 3+, the rune or the relic at 5+ (default false). */
+	cultivateRuneOrRelic?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

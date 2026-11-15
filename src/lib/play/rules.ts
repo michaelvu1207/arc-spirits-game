@@ -54,6 +54,18 @@
  * - powerRework (default false): true ⇒ the Navigation Power set is `NAVIGATION_POWERS_V2`
  *   (navigationPowers.ts): 11 general and 11 niche Powers, none needing another player to be Evil.
  *   Drafts, random Power gains and the rules brief read `navigationPowerPool(catalog)`.
+ *
+ * Mystic (2026-11-14, Michael):
+ * - mysticCultivateDouble (default false): true ⇒ Mystic (2) is "When you Cultivate, you may gain
+ *   twice as many runes." The engine always takes the second rune (runes over the carry limit are
+ *   discarded by the player's choice, so more is never worse). It does not stack with another
+ *   doubling of the turn. The old Mystic (2), 2 Max Barrier after a corruption, is off.
+ *
+ * Cultivate (2026-11-14, Michael):
+ * - cultivateRuneOrRelic (default false): true ⇒ a Cultivate gives one reward per origin. 3+ spirits
+ *   of the origin: its rune. 5+ spirits: its rune, or the origin's relic instead (the relic one
+ *   time per player); the player chooses on a card (effects/originCultivate.ts). Old: at 5+ the
+ *   rune and, the first time, also the relic.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
@@ -76,7 +88,9 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	bastionVsMonsters: false,
 	pvpEngageVp: false,
 	pvpAttackerSacrificeCap: false,
-	powerRework: false
+	powerRework: false,
+	mysticCultivateDouble: false,
+	cultivateRuneOrRelic: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -206,6 +220,13 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Cleric',
 		count: 1,
 		text: "On this spirit's Awakening, gain 1 relic of your choice. For every unique Relic you hold, reduce incoming damage by 2."
+	},
+	{
+		rule: 'mysticCultivateDouble',
+		when: true,
+		className: 'Mystic',
+		count: 2,
+		text: 'When you Cultivate, you may gain twice as many runes.'
 	},
 	{
 		rule: 'bastionVsMonsters',

@@ -26,7 +26,7 @@ import {
 	type PrivatePlayerState,
 	type SeatColor
 } from '../types';
-import { awakenedClassCounts } from '../effects/apply';
+import { awakenedClassCounts, cultivateRuneMultiplier } from '../effects/apply';
 import { ORIGIN_REWARDS, spiritsByOrigin } from '../effects/relicTools';
 import { PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, PVP_VP_PER_CORRUPTED } from '../combat';
 import { ruleValue } from '../rules';
@@ -145,7 +145,12 @@ function diceTiers(me: SeatPlayer | undefined, ids: string[] | undefined): strin
 }
 
 /** Runes/relics a gain puts on the mat (augments with a class go to the to-place pouch). */
-function matItemsGained(me: SeatPlayer | undefined, gain: GainEffect, choice?: number): number {
+function matItemsGained(
+	me: SeatPlayer | undefined,
+	gain: GainEffect,
+	choice?: number,
+	catalog?: PlayCatalog
+): number {
 	const onMat = (r?: { type?: string; classId?: string | null }) =>
 		r && !(r.type === 'augment' && r.classId) ? 1 : 0;
 	if (gain.type === 'rune') return onMat(gain.rune);
@@ -153,12 +158,14 @@ function matItemsGained(me: SeatPlayer | undefined, gain: GainEffect, choice?: n
 	if (gain.type === 'action' && gain.action === 'cultivate' && me) {
 		// applyCultivate: per origin, runeAt+ spirits → 1 rune (×2 with doubleRunes); relicAt+ → relic once.
 		const counts = spiritsByOrigin(me.spirits);
-		const mult = (me as { doubleRunes?: boolean }).doubleRunes ? 2 : 1;
+		const mult = cultivateRuneMultiplier(me as PrivatePlayerState, catalog);
 		let n = 0;
+		const oneReward = ruleValue(catalog, 'cultivateRuneOrRelic');
 		for (const [origin, r] of Object.entries(ORIGIN_REWARDS)) {
 			const c = counts[origin] ?? 0;
 			if (c >= r.runeAt) n += mult;
-			if (c >= r.relicAt && !(me.originRelicsGained ?? []).includes(origin)) n += 1;
+			// Under `cultivateRuneOrRelic` the relic replaces the rune(s): never more than `mult`.
+			if (!oneReward && c >= r.relicAt && !(me.originRelicsGained ?? []).includes(origin)) n += 1;
 		}
 		return n;
 	}
@@ -166,14 +173,21 @@ function matItemsGained(me: SeatPlayer | undefined, gain: GainEffect, choice?: n
 }
 
 /** "Cultivate (now: 1 Fire Region rune; adds no spirits)" — what applyCultivate gives this seat now. */
-function cultivateLabel(me: SeatPlayer | undefined): string {
+function cultivateLabel(me: SeatPlayer | undefined, catalog?: PlayCatalog): string {
 	if (!me) return 'Cultivate';
 	const counts = spiritsByOrigin(me.spirits);
+	const mult = cultivateRuneMultiplier(me as PrivatePlayerState, catalog);
 	const parts: string[] = [];
 	for (const [origin, r] of Object.entries(ORIGIN_REWARDS)) {
 		const c = counts[origin] ?? 0;
-		if (c >= r.runeAt) parts.push(`${origin} rune`);
-		if (c >= r.relicAt && !(me.originRelicsGained ?? []).includes(origin)) parts.push(`${origin} relic`);
+		const runes = mult === 2 ? `2 ${origin} runes` : `${origin} rune`;
+		const relicOpen = c >= r.relicAt && !(me.originRelicsGained ?? []).includes(origin);
+		if (ruleValue(catalog, 'cultivateRuneOrRelic')) {
+			if (c >= r.runeAt) parts.push(relicOpen ? `${runes} or the ${origin} relic (you choose one)` : runes);
+			continue;
+		}
+		if (c >= r.runeAt) parts.push(runes);
+		if (relicOpen) parts.push(`${origin} relic`);
 	}
 	return `Cultivate (now: ${parts.join(' + ') || 'no origin reward'}, plus On Cultivate class effects; adds no spirits)`;
 }
@@ -259,8 +273,8 @@ export function labelFor(
 			const gains = interaction.gains
 				.map((g) => {
 					const choice = g.type === 'chooseRune' ? cmd.choices?.[cursor++] : undefined;
-					items += matItemsGained(me, g, choice);
-					if (g.type === 'action' && g.action === 'cultivate') return cultivateLabel(me);
+					items += matItemsGained(me, g, choice, catalog);
+					if (g.type === 'action' && g.action === 'cultivate') return cultivateLabel(me, catalog);
 					return gainLabel(g, choice);
 				})
 				.join(' + ');
@@ -312,11 +326,11 @@ export function labelFor(
 			let items = 0;
 			const parts = options.map((o) => {
 				if (o.effect.type !== 'chooseRune') {
-					items += matItemsGained(me, o.effect);
+					items += matItemsGained(me, o.effect, undefined, catalog);
 					return o.label;
 				}
 				const choice = cmd.choices?.[cursor++] ?? 0;
-				items += matItemsGained(me, o.effect, choice);
+				items += matItemsGained(me, o.effect, choice, catalog);
 				return `${o.label}: ${itemName(o.effect.options[choice] ?? { name: '?' })}`;
 			});
 			return `Claim every reward of ${me?.pendingReward?.monsterName ?? 'the monster'}: ${parts.join(', ') || 'none'}${carryWarning(me, items)}`;

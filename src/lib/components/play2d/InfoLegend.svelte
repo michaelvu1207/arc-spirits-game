@@ -385,7 +385,7 @@
 			{
 				ids: ['36aab6c9-b98c-4e84-b097-e743f45dde82', '6a85e06a-52cc-483c-aa59-38395a377307'],
 				label: 'Runes & Relics',
-				desc: 'Tokens you spend to awaken your face-down spirits — each spirit lists a rune cost you pay from the runes you hold. Cultivating grants 1 matching origin rune for every pair of spirits sharing that origin. You keep up to 4 runes between rounds; relics are rarer special runes used by specific awaken costs.'
+				desc: `Tokens you spend to awaken your face-down spirits — each spirit lists a rune cost you pay from the runes you hold. Cultivating with 3 or more spirits of one origin gives 1 rune of that origin; with 5 or more ${rule('cultivateRuneOrRelic') ? "you take that rune or the origin's relic instead" : "you also gain the origin's relic"} (the relic one time). You keep up to 4 runes between rounds; relics are rarer special runes used by specific awaken costs.`
 			},
 			{
 				ids: [] as string[],
@@ -445,7 +445,7 @@
 			{
 				id: '60e40dd5-c3cc-4f26-9aa3-2043b4106ade',
 				label: 'Cultivate',
-				desc: 'For every pair of spirits sharing a core origin, gain 1 matching origin rune. Then resolve Cultivate class abilities; Cultivator grants max barrier at 2/3/4/5 traits.'
+				desc: `For each origin with 3 or more of your spirits, gain 1 rune of that origin. With 5 or more, ${rule('cultivateRuneOrRelic') ? "take that rune or the origin's relic instead" : "also gain the origin's relic"} (the relic one time). Then resolve Cultivate class abilities; Cultivator grants max barrier at 2/3/4/5 traits.`
 			},
 			{
 				id: 'bdded3f5-e405-4b68-b63a-9f5c2139beea',

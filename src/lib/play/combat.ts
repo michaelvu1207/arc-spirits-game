@@ -275,7 +275,11 @@ export function takeDamage(
 		player.brokenBarrier = 0;
 		// Mystic II: after corruption restores barrier to full, gain 2 potential.
 		// The new capacity begins broken, preserving the ordering stated by the ability.
-		if ((awakenedClassCounts(player)['Mystic'] ?? 0) >= 2) {
+		// Under rule `mysticCultivateDouble` Mystic (2) is the Cultivate doubling instead (apply.ts).
+		if (
+			(awakenedClassCounts(player)['Mystic'] ?? 0) >= 2 &&
+			!ruleValue(ctx?.catalog ?? rulesCatalog, 'mysticCultivateDouble')
+		) {
 			const before = player.maxBarrier;
 			player.maxBarrier = Math.min(10, player.maxBarrier + 2);
 			player.brokenBarrier = player.maxBarrier - player.barrier;

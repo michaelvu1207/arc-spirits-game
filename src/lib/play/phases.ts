@@ -36,6 +36,7 @@ import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effec
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
 import { DECISION_RESOLVERS } from './effects/decisions';
+import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { recordTravelingTraderProgress } from './effects/awakenHandlers';
 import { advanceMonsterIfDefeated } from './combat';
 import {
@@ -498,7 +499,27 @@ export function enterCleanup(state: PublicGameState, catalog?: PlayCatalog): voi
 	// deadline): an unanswered relic card resolves as "keep" before Cleanup.
 	for (const seat of state.activeSeats) {
 		const player = state.players[seat];
-		if (player) keepUnansweredRelicTools(player, []);
+		if (!player) continue;
+		keepUnansweredRelicTools(player, []);
+		// A Cultivate reward card made after the Location step (rule `cultivateRuneOrRelic`) is
+		// not carried into the next round: unanswered, it gives its default reward now.
+		const open = (player.pendingDecisions ?? []).filter(
+			(d) => d.kind === ORIGIN_CULTIVATE_KIND && d.expiryOptionId
+		);
+		if (open.length === 0) continue;
+		player.pendingDecisions = player.pendingDecisions.filter((d) => !open.includes(d));
+		for (const card of open) {
+			const ctx = buildEffectContext({
+				state,
+				seat,
+				player,
+				trigger: 'awakeningPhase',
+				log: [],
+				traitCount: 0,
+				catalog
+			});
+			DECISION_RESOLVERS[card.kind]?.(ctx, card.expiryOptionId!);
+		}
 	}
 	state.phase = 'cleanup';
 	state.phaseDeadline = null; // re-stamped by the service for the new phase

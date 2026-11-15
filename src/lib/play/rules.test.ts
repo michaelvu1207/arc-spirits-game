@@ -20,6 +20,7 @@ import { ARCANE_ABYSS_BAG } from './bags';
 import { applyCultivate, applyTrigger } from './effects/apply';
 import { checkAwakenCondition, payAwakenCondition } from './effects/awaken';
 import { buildEffectContext } from './effects/context';
+import { DECISION_RESOLVERS } from './effects/decisions';
 import { makePlayer, makeState, spirit } from './effects/classes/testHelpers';
 import { agentLegalCommands } from './agents/actionSurface';
 import { catalogHash, loadFrozenCatalog, loadLocalDesignCatalog } from './agents/catalog';
@@ -589,5 +590,151 @@ describe('proposal C text for agents (only when on)', () => {
 		expect(renderSeatView(seatProjection(state, 'Red'), 'Red', cat)).toContain(
 			'Attacked a player this round: no (Sorcerer gain only in a round you attacked a player)'
 		);
+	});
+});
+
+describe('mysticCultivateDouble: Mystic (2) "When you Cultivate, you may gain twice as many runes."', () => {
+	const ON = withRules({ mysticCultivateDouble: true });
+	const fire3 = (mystic: number, faceDown = false) => [
+		spirit(1, { Mystic: mystic }, { origins: { 'Fire Region': 1 }, faceDown }),
+		spirit(2, {}, { origins: { 'Fire Region': 1 } }),
+		spirit(3, {}, { origins: { 'Fire Region': 1 } })
+	];
+	const runesAfterCultivate = (catalog: PlayCatalog, spirits: ReturnType<typeof spirit>[]) => {
+		const player = makePlayer({ spirits });
+		applyCultivate(makeState(player), 'Red', [], { catalog });
+		return player.mats.filter((m) => m.hasRune).length;
+	};
+
+	it('on, 2 awakened Mystic: 2 runes per origin reward', () => {
+		expect(runesAfterCultivate(ON, fire3(2))).toBe(2);
+	});
+
+	it('on, 1 Mystic or a face-down Mystic: 1 rune', () => {
+		expect(runesAfterCultivate(ON, fire3(1))).toBe(1);
+		expect(runesAfterCultivate(ON, fire3(2, true))).toBe(1);
+	});
+
+	it('off (default): 1 rune', () => {
+		expect(runesAfterCultivate(frozen, fire3(2))).toBe(1);
+	});
+
+	it('does not stack with another doubling of the turn', () => {
+		const player = makePlayer({ spirits: fire3(2), doubleRunes: true });
+		applyCultivate(makeState(player), 'Red', [], { catalog: ON });
+		expect(player.mats.filter((m) => m.hasRune).length).toBe(2);
+	});
+
+	it('on: no Max Barrier after a corruption; off: +2 as before', () => {
+		const hit = (catalog: PlayCatalog) => {
+			const player = makePlayer({ barrier: 2, maxBarrier: 4, statusLevel: 0, spirits: [spirit(1, { Mystic: 2 })] });
+			takeDamage(player, 9, { state: makeState(player), seat: 'Red', catalog }, []);
+			return player.maxBarrier;
+		};
+		expect(hit(ON)).toBe(4);
+		expect(hit(frozen)).toBe(6);
+	});
+
+	it('printed text follows the switch', () => {
+		const schema = [
+			{ count: 1, effects: [{ type: 'benefit', description: 'one' }] },
+			{ count: 2, effects: [{ type: 'benefit', description: 'old two' }] }
+		] as never;
+		expect(ruleAdjustedClassSchema(frozen, 'Mystic', schema)).toBe(schema);
+		expect(ruleAdjustedClassSchema(ON, 'Mystic', schema)?.[1].effects?.[0].description).toBe(
+			'When you Cultivate, you may gain twice as many runes.'
+		);
+	});
+});
+
+describe('cultivateRuneOrRelic: one reward per origin, the rune at 3+, the rune or the relic at 5+', () => {
+	const ON = withRules({ cultivateRuneOrRelic: true });
+	const fire = (n: number, mystic = 0) =>
+		Array.from({ length: n }, (_, i) =>
+			spirit(i + 1, i === 0 && mystic ? { Mystic: mystic } : {}, { origins: { 'Fire Region': 1 } })
+		);
+	const cultivate = (catalog: PlayCatalog, spirits: ReturnType<typeof spirit>[]) => {
+		const player = makePlayer({ spirits });
+		const state = makeState(player);
+		applyCultivate(state, 'Red', [], { catalog });
+		return { player, state };
+	};
+	const runes = (p: { mats: { hasRune: boolean; type?: string }[] }) =>
+		p.mats.filter((m) => m.hasRune && m.type !== 'relic').length;
+	const relics = (p: { mats: { hasRune: boolean; type?: string }[] }) =>
+		p.mats.filter((m) => m.hasRune && m.type === 'relic').length;
+	it('2 spirits: nothing. 3 and 4 spirits: the rune at once, no card', () => {
+		expect(runes(cultivate(ON, fire(2)).player)).toBe(0);
+		for (const n of [3, 4]) {
+			const { player } = cultivate(ON, fire(n));
+			expect(runes(player)).toBe(1);
+			expect(player.pendingDecisions).toHaveLength(0);
+		}
+	});
+
+	it('5, 6 and 7 spirits: a card with the relic and the rune; nothing is given before the answer', () => {
+		for (const n of [5, 6, 7]) {
+			const { player } = cultivate(ON, fire(n));
+			expect(runes(player) + relics(player)).toBe(0);
+			expect(player.pendingDecisions).toHaveLength(1);
+			expect(player.pendingDecisions[0].options.map((o) => o.label)).toEqual([
+				'The Firecracker relic (one time)',
+				'1 Fire Rune'
+			]);
+		}
+	});
+
+	it('the resolver gives exactly the chosen reward', () => {
+		const pick = (which: 'relic' | 'rune') => {
+			const { player, state } = cultivate(ON, fire(5));
+			const card = player.pendingDecisions[0];
+			const ctx = buildEffectContext({ state, seat: 'Red', player, trigger: 'awakeningPhase', log: [], traitCount: 0, catalog: ON });
+			DECISION_RESOLVERS.originCultivate(ctx, card.options.find((o) => o.id.startsWith(which))!.id);
+			return player;
+		};
+		const relic = pick('relic');
+		expect([runes(relic), relics(relic), relic.originRelicsGained]).toEqual([0, 1, ['Fire Region']]);
+		const rune = pick('rune');
+		expect([runes(rune), relics(rune), rune.originRelicsGained ?? []]).toEqual([1, 0, []]);
+	});
+
+	it('after the relic is taken, 5+ gives the rune at once; the relic is one time', () => {
+		const player = makePlayer({ spirits: fire(6), originRelicsGained: ['Fire Region'] });
+		applyCultivate(makeState(player), 'Red', [], { catalog: ON });
+		expect([runes(player), relics(player), player.pendingDecisions.length]).toEqual([1, 0, 0]);
+	});
+
+	it('after the rune is chosen, the next Cultivate offers the relic again', () => {
+		const { player, state } = cultivate(ON, fire(5));
+		const ctx = buildEffectContext({ state, seat: 'Red', player, trigger: 'awakeningPhase', log: [], traitCount: 0, catalog: ON });
+		DECISION_RESOLVERS.originCultivate(ctx, player.pendingDecisions[0].options[1].id);
+		player.pendingDecisions = [];
+		applyCultivate(state, 'Red', [], { catalog: ON });
+		expect(player.pendingDecisions).toHaveLength(1);
+	});
+
+	it('two cards in one round: the second "relic" answer gives the rune', () => {
+		const { player, state } = cultivate(ON, fire(5));
+		applyCultivate(state, 'Red', [], { catalog: ON });
+		expect(player.pendingDecisions).toHaveLength(2);
+		const ctx = buildEffectContext({ state, seat: 'Red', player, trigger: 'awakeningPhase', log: [], traitCount: 0, catalog: ON });
+		for (const card of player.pendingDecisions) DECISION_RESOLVERS.originCultivate(ctx, card.options[0].id);
+		expect([runes(player), relics(player)]).toEqual([1, 1]);
+	});
+
+	it('with Mystic (2) doubling: the rune option is 2 runes; the relic is not doubled', () => {
+		const both = withRules({ cultivateRuneOrRelic: true, mysticCultivateDouble: true });
+		const at3 = cultivate(both, fire(3, 2)).player;
+		expect(runes(at3)).toBe(2);
+		const { player, state } = cultivate(both, fire(5, 2));
+		expect(player.pendingDecisions[0].options[1].label).toBe('2 Fire Runes');
+		const ctx = buildEffectContext({ state, seat: 'Red', player, trigger: 'awakeningPhase', log: [], traitCount: 0, catalog: both });
+		DECISION_RESOLVERS.originCultivate(ctx, player.pendingDecisions[0].options[1].id);
+		expect([runes(player), relics(player)]).toEqual([2, 0]);
+	});
+
+	it('off (default): the rune and, the first time, also the relic; no card', () => {
+		const { player } = cultivate(frozen, fire(5));
+		expect([runes(player), relics(player), player.pendingDecisions.length]).toEqual([1, 1, 0]);
 	});
 });

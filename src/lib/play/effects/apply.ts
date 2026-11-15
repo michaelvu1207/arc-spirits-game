@@ -19,6 +19,8 @@ import { recordCultivateAwakenProgress } from './awakenHandlers';
 import { augmentContributions } from '../augments';
 import { originRuneForName } from '../locationInteractions';
 import { ORIGIN_REWARDS, grantRelicTool, spiritsByOrigin } from './relicTools';
+import { ruleValue } from '../rules';
+import { gainOriginRunes, offerOriginCultivateChoice } from './originCultivate';
 
 /** Class trait counts from AWAKENED spirits only (unawakened classes are inactive).
  *  Placed spirit augments also contribute their class — but only while their host
@@ -187,6 +189,20 @@ export function applyRest(
  * once), so there is no per-token multiplier. We still record the cultivate moment
  * for the text-awaken spirits that gate on it, then dispatch the class trigger.
  */
+/**
+ * Runes per origin reward of one Cultivate: 2 with the turn's `doubleRunes`, or with 2+ awakened
+ * Mystic under rule `mysticCultivateDouble` ("When you Cultivate, you may gain twice as many
+ * runes"; the second rune is always taken). Otherwise 1.
+ */
+export function cultivateRuneMultiplier(
+	player: PrivatePlayerState,
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+): number {
+	if (player.doubleRunes) return 2;
+	if (ruleValue(catalog, 'mysticCultivateDouble') && (awakenedClassCounts(player)['Mystic'] ?? 0) >= 2) return 2;
+	return 1;
+}
+
 export function applyCultivate(
 	state: PublicGameState,
 	seat: SeatColor,
@@ -207,11 +223,23 @@ export function applyCultivate(
 	// (November 2026): for each land origin, 3+ spirits of that origin → 1 rune of the
 	// origin; 5+ spirits → the origin's relic tool, one time per player. Spirits count once
 	// each, awakened or face-down (origin is always active). Rune Traveler's per-turn
-	// `doubleRunes` doubles the rune.
+	// `doubleRunes` doubles the rune; so does Mystic (2) under rule `mysticCultivateDouble`
+	// (the two do not stack).
 	const bySpirit = spiritsByOrigin(player.spirits);
-	const runeMult = player.doubleRunes ? 2 : 1;
+	const runeMult = cultivateRuneMultiplier(player, opts.catalog);
+	// Rule `cultivateRuneOrRelic`: one reward per origin. 3+ → the rune; 5+ → the rune, or the
+	// relic instead while it is not yet taken (a decision card; see originCultivate.ts).
+	const oneReward = ruleValue(opts.catalog, 'cultivateRuneOrRelic');
 	for (const [origin, reward] of Object.entries(ORIGIN_REWARDS)) {
 		const spirits = bySpirit[origin] ?? 0;
+		if (oneReward) {
+			if (spirits < reward.runeAt) continue;
+			const relicOpen =
+				spirits >= reward.relicAt && !(player.originRelicsGained ?? []).includes(origin);
+			if (relicOpen) offerOriginCultivateChoice(state, player, origin, runeMult, log);
+			else gainOriginRunes(player, origin, runeMult, log);
+			continue;
+		}
 		if (spirits >= reward.runeAt) {
 			const rune = originRuneForName(origin);
 			if (rune) {
