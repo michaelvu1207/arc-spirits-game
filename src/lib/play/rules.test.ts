@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { parseRules, ruleAdjustedClassSchema, ruleValue } from './rules';
 import { applyGameCommand, createLobbyState } from './runtime';
 import { initRoundLoop } from './phases';
-import { pvpGoodBounty, pvpVpForAttack, resetCombatFlags, takeDamage } from './combat';
+import { fightMonster, pvpGoodBounty, pvpVpForAttack, resetCombatFlags, takeDamage } from './combat';
 import { setCorruptionDiscardObligation, settleUnpayableCorruptionDebt } from './types';
 import { canApply } from './legality';
 import { botActorFor } from './server/botPolicy';
@@ -736,5 +736,72 @@ describe('cultivateRuneOrRelic: one reward per origin, the rune at 3+, the rune 
 	it('off (default): the rune and, the first time, also the relic; no card', () => {
 		const { player } = cultivate(frozen, fire(5));
 		expect([runes(player), relics(player), player.pendingDecisions.length]).toEqual([1, 1, 0]);
+	});
+});
+
+describe('ramAugmentDamage: Ram "In combat, deal 1 more damage for each Spirit Augment on your spirits."', () => {
+	const ON = withRules({ ramAugmentDamage: true });
+	const ram = (augments: number, faceDown = false) =>
+		makePlayer({
+			spirits: [spirit(1, { Ram: 1 }, { faceDown }), spirit(2, { Fighter: 1 }), spirit(3, { Fighter: 1 }, { faceDown: true })],
+			spiritAugmentAttachments: Array.from({ length: augments }, (_, i) => ({
+				spiritSlotIndex: 2 + (i % 2),
+				className: 'Fighter'
+			})) as never
+		});
+	const bonus = (catalog: PlayCatalog, player: ReturnType<typeof makePlayer>, opponent?: 'Blue') => {
+		resetCombatFlags(player);
+		const evil = makePlayer({ playerColor: 'Blue', statusLevel: 3, statusToken: 'Fallen' });
+		applyTrigger(makeState(player, { Blue: evil }), 'Red', 'inCombat', [], { catalog, opponent });
+		return player.combatDamageBonus;
+	};
+
+	it('on: +1 damage per placed augment, against a monster and against a player', () => {
+		expect(bonus(ON, ram(0))).toBe(0);
+		expect(bonus(ON, ram(1))).toBe(1);
+		expect(bonus(ON, ram(3))).toBe(3); // an augment on a face-down spirit counts too
+		expect(bonus(ON, ram(2), 'Blue')).toBe(2);
+	});
+
+	it('on: a face-down Ram gives nothing; augments not yet placed do not count', () => {
+		expect(bonus(ON, ram(2, true))).toBe(0);
+		const player = ram(1);
+		player.unplacedAugments = [{ runeId: 'x', name: 'Spirit Augment' }] as never;
+		expect(bonus(ON, player)).toBe(1);
+	});
+
+	it('on: no augment card at the Mountain Region; off: the card, and no damage', () => {
+		const arrive = (catalog: PlayCatalog) => {
+			const player = ram(2);
+			player.navigationDestination = 'Mountain Region' as never;
+			applyTrigger(makeState(player), 'Red', 'onNavigate', [], { catalog });
+			return player.pendingDecisions.filter((d) => d.kind === 'ramAugment').length;
+		};
+		expect(arrive(ON)).toBe(0);
+		expect(arrive(frozen)).toBe(1);
+		expect(bonus(frozen, ram(2))).toBe(0);
+	});
+});
+
+describe('ramAugmentDamage in a real monster fight', () => {
+	it('the damage dealt is the dice plus 1 per placed augment', () => {
+		const fight = (catalog: PlayCatalog) => {
+			const player = makePlayer({
+				barrier: 10,
+				maxBarrier: 10,
+				attackDice: [],
+				spirits: [spirit(1, { Ram: 1 }), spirit(2, {})],
+				spiritAugmentAttachments: [
+					{ runeId: 'a', spiritId: 's2', spiritSlotIndex: 2, className: 'Fighter' },
+					{ runeId: 'b', spiritId: 's1', spiritSlotIndex: 1, className: 'Healer' }
+				],
+				monsterHand: [
+					{ id: 'm', name: 'Test Monster', hp: 9, maxHp: 9, damage: 1, rewardTrack: [], chooseAmount: 0, livesRemaining: 1, livesTotal: 1, ladderIndex: 0, ladderMax: 1 }
+				] as never
+			});
+			return fightMonster(makeState(player), 'Red', catalog, 0)!.playerDamage;
+		};
+		expect(fight(withRules({ ramAugmentDamage: true }))).toBe(2); // no dice: 0 + 2 augments
+		expect(fight(frozen)).toBe(0);
 	});
 });

@@ -1,6 +1,8 @@
 import { nextId } from '../../rng';
 import { runAction } from '../actions';
 import { cameFromMountain } from './rider';
+import { ruleValue } from '../../rules';
+import { placedAugmentTotal } from '../../augments';
 import type { ClassAbility, ClassDecisions } from './types';
 
 /** Where Ram's augment comes from (the same arrival as Rider). */
@@ -15,11 +17,28 @@ export const RAM_DESTINATION = 'Mountain Region';
 // gain path (the owner picks its type at placement; Smith adds 1 more). The card stays open
 // through the Encounter and Location Phases; an unanswered card (bots) ends at Benefits with no
 // augment ("you may").
+//
+// Rule switch `ramAugmentDamage` (rules.ts; default false; Michael, 2026-11-14). On: Ram is "In
+// combat, deal 1 more damage for each Spirit Augment on your spirits." Every placed augment
+// counts, whatever its class and whether its spirit is awake; augments not yet placed do not.
+// It applies in monster fights and player fights and does not grow with more Rams. The
+// Mountain Region augment is off.
 export const ability: ClassAbility[] = [
+	{
+		on: 'inCombat',
+		run(ctx) {
+			if (!ruleValue(ctx.catalog, 'ramAugmentDamage')) return;
+			const augments = placedAugmentTotal(ctx.player);
+			if (augments <= 0) return;
+			ctx.player.combatDamageBonus += augments;
+			ctx.log.push(`Ram: ${augments} Spirit Augment${augments === 1 ? '' : 's'} — deal ${augments} more damage.`);
+		}
+	},
 	{
 		on: 'onNavigate',
 		run(ctx) {
 			const { player, state } = ctx;
+			if (ruleValue(ctx.catalog, 'ramAugmentDamage')) return;
 			if (player.navigationDestination !== RAM_DESTINATION) return;
 			if (cameFromMountain(player)) return;
 			player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== 'ramAugment');

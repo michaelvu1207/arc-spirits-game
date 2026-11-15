@@ -816,6 +816,8 @@ export interface PlayRules {
 	mysticCultivateDouble?: boolean;
 	/** Cultivate gives one reward per origin: the rune at 3+, the rune or the relic at 5+ (default false). */
 	cultivateRuneOrRelic?: boolean;
+	/** Ram: +1 combat damage per placed Spirit Augment; no Mountain Region augment (default false). */
+	ramAugmentDamage?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

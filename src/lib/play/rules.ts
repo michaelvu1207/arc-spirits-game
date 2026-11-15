@@ -66,6 +66,11 @@
  *   of the origin: its rune. 5+ spirits: its rune, or the origin's relic instead (the relic one
  *   time per player); the player chooses on a card (effects/originCultivate.ts). Old: at 5+ the
  *   rune and, the first time, also the relic.
+ *
+ * Ram (2026-11-14, Michael):
+ * - ramAugmentDamage (default false): true ⇒ Ram is "In combat, deal 1 more damage for each Spirit
+ *   Augment on your spirits." (effects/classes/infiltrator.ts). The old Ram, a Spirit Augment on
+ *   arriving at the Mountain Region, is off.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
@@ -90,7 +95,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	pvpAttackerSacrificeCap: false,
 	powerRework: false,
 	mysticCultivateDouble: false,
-	cultivateRuneOrRelic: false
+	cultivateRuneOrRelic: false,
+	ramAugmentDamage: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -227,6 +233,13 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Mystic',
 		count: 2,
 		text: 'When you Cultivate, you may gain twice as many runes.'
+	},
+	{
+		rule: 'ramAugmentDamage',
+		when: true,
+		className: 'Ram',
+		count: 1,
+		text: 'In combat, deal 1 more damage for each Spirit Augment on your spirits.'
 	},
 	{
 		rule: 'bastionVsMonsters',

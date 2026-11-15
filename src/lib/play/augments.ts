@@ -82,6 +82,13 @@ function placedAugmentCount(player: PrivatePlayerState, slotIndex: number): numb
 	).length;
 }
 
+/** Every Spirit Augment placed on the player's spirits (same predicate as the capacity gate). */
+export function placedAugmentTotal(player: PrivatePlayerState): number {
+	return (player.spiritAugmentAttachments ?? []).filter(
+		(a) => typeof a.className === 'string' || a.runeId === GENERIC_AUGMENT_RUNE_ID
+	).length;
+}
+
 /** Where one unplaced augment may legally be placed, and — for every spirit it may
  *  NOT go on — the reason (so the UI can dim that hex with a lock chip). */
 export interface AugmentPlacementEligibility {
