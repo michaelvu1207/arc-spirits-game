@@ -247,6 +247,7 @@
 		<g
 			class="discard-hit"
 			class:staged
+			class:hold={holdToDiscard}
 			role="button"
 			tabindex="0"
 			aria-label={holdToDiscard
@@ -572,6 +573,16 @@
 	}
 	.discard-hit:focus-visible .discard-glyph {
 		opacity: 1;
+	}
+	/* Profile board (hold to discard): no outline at rest. Nothing is being asked of the
+	   player there, so the red line shows only while a spirit is pointed at or held. */
+	.discard-hit.hold:not(:hover):not(:focus-visible) .discard-tint {
+		stroke-opacity: 0;
+	}
+	@media (pointer: coarse) {
+		.discard-hit.hold .discard-tint {
+			stroke-opacity: 0;
+		}
 	}
 	/* Staged for discard: the mark holds without hover — this hex WILL be lost
 	   when the commit bar confirms. Clicking again un-stages. */
