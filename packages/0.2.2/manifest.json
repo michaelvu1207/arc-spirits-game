@@ -1,0 +1,36 @@
+{
+	"version": "0.2.2",
+	"createdAt": "2026-11-15T02:18:38.265Z",
+	"parent": "0.2.1",
+	"notes": "Ram: in combat, deal 1 more damage for each Spirit Augment on your spirits (was: gain 1 Spirit Augment on arriving at the Mountain Region).",
+	"sha256": "8d2fdbb2c1f9c39aa577034d7615f83ce5aa3e9fc4574a46fe47a426a3b6ac0b",
+	"rulesHash": "f1686fd66aacc8d29acbe3b02363057baffa7d5ba1c9e57646a87bbb73dba362",
+	"art": {
+		"id": "73c2b70f8fc3921f",
+		"files": 521,
+		"fromExports": 426,
+		"fromOldBucket": 95,
+		"missing": [
+			"misc_assets/spirit_world_map/spirit_world_board_1771649177953.png"
+		]
+	},
+	"counts": {
+		"hex_spirits": 64,
+		"classes": 55,
+		"origins": 8,
+		"monsters_v2": 108,
+		"icon_pool": 146,
+		"game_locations": 5,
+		"guardians": 10,
+		"editions": 2,
+		"custom_dice": 5,
+		"dice_sides": 30,
+		"game_location_rows": 14,
+		"monster_pools": 15,
+		"relics": 5,
+		"rules": 1,
+		"mat_items": 12,
+		"reward_row_assignments": 1
+	},
+	"source": "~/ArcSpiritsArt/game"
+}
