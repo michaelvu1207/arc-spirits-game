@@ -90,7 +90,27 @@ async function displayCopy(file, edge) {
 	if (!kind) throw new Error('not an image this tool knows');
 	const key = createHash('sha1').update(bytes).update(`|${edge}`).digest('hex');
 	const out = join(CACHE, 'webp', `${key}.webp`);
+	// Several image paths can resolve to one file (front.png, front-base.png and combined.png of a
+	// spirit are the same export). Convert it once: two conversions of the same key at the same
+	// time removed each other's temporary files, and the loser was reported as missing.
+	if (!existsSync(out) && converting.has(key)) await converting.get(key);
 	if (!existsSync(out)) {
+		let done;
+		converting.set(key, new Promise((resolve) => (done = resolve)));
+		try {
+			await convertToWebp(bytes, kind, key, edge, out);
+		} finally {
+			converting.delete(key);
+			done();
+		}
+	}
+	return { bytes: readFileSync(out), type: 'image/webp' };
+}
+
+const converting = new Map();
+
+async function convertToWebp(bytes, kind, key, edge, out) {
+	{
 		mkdirSync(join(CACHE, 'webp'), { recursive: true });
 		// Work on a copy named for what the bytes are, so the tools are not misled by the name.
 		const input = join(tmpdir(), `arc-art-${key}.${kind}`);
@@ -106,7 +126,6 @@ async function displayCopy(file, edge) {
 		rmSync(input, { force: true });
 		rmSync(tmp, { force: true });
 	}
-	return { bytes: readFileSync(out), type: 'image/webp' };
 }
 
 /**
