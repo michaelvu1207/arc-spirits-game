@@ -56,7 +56,7 @@ import {
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
-import { ruleValue } from './rules';
+import { pvpAllowedAt, ruleValue } from './rules';
 import {
 	bagForSpiritCost,
 	deckCopiesForCost,
@@ -3473,7 +3473,7 @@ function reduceCommand(
 			// co-located Evil player to agree, so one decline cancels it for that location.
 			if (
 				isEvilAlignment(active.player.statusLevel) &&
-				encounterGoodTargets(state, active.seatColor).length > 0
+				encounterGoodTargets(state, active.seatColor, catalog).length > 0
 			) {
 				active.player.encounterVote = 'decline';
 				resolveEncounterLocationIfReady(state, catalog, active.player.navigationDestination);
@@ -3491,7 +3491,7 @@ function reduceCommand(
 			if (!isEvilAlignment(active.player.statusLevel)) {
 				return failure('not_evil', 'Only Evil-aligned players may initiate combat.');
 			}
-			if (encounterGoodTargets(state, active.seatColor).length === 0) {
+			if (encounterGoodTargets(state, active.seatColor, catalog).length === 0) {
 				return failure('no_targets', 'There are no Good players at your location to attack.');
 			}
 			// Cast this aggressor's ATTACK vote. The group strike fires only once EVERY
@@ -3513,9 +3513,13 @@ function reduceCommand(
 /** Good (non-Evil) seats sharing `seat`'s non-Abyss destination — its PvP targets.
  *  Exported so the view layer (viewV2 encounter affordance) reads the SAME target set
  *  the `initiatePvp` reducer gates on, never re-deriving co-location + alignment. */
-export function encounterGoodTargets(state: PublicGameState, seat: SeatColor): SeatColor[] {
+export function encounterGoodTargets(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog?: Pick<PlayCatalog, 'rules'>
+): SeatColor[] {
 	const dest = state.players[seat]?.navigationDestination ?? null;
-	if (!dest || dest === 'Arcane Abyss') return [];
+	if (!pvpAllowedAt(dest, catalog)) return [];
 	return state.activeSeats.filter(
 		(s) =>
 			s !== seat &&
@@ -3529,9 +3533,10 @@ export function encounterGoodTargets(state: PublicGameState, seat: SeatColor): S
  *  group-attack resolver waits on. */
 export function encounterEvilAggressorsAt(
 	state: PublicGameState,
-	dest: string | null
+	dest: string | null,
+	catalog?: Pick<PlayCatalog, 'rules'>
 ): SeatColor[] {
-	if (!dest || dest === 'Arcane Abyss') return [];
+	if (!pvpAllowedAt(dest, catalog)) return [];
 	const hasGood = state.activeSeats.some(
 		(s) =>
 			state.players[s]?.navigationDestination === dest &&
@@ -3557,7 +3562,7 @@ function resolveEncounterLocationIfReady(
 	catalog: PlayCatalog | undefined,
 	dest: string | null
 ): void {
-	const evilSeats = encounterEvilAggressorsAt(state, dest);
+	const evilSeats = encounterEvilAggressorsAt(state, dest, catalog);
 	if (evilSeats.length === 0) return;
 	// Wait until every aggressor has cast a vote.
 	if (evilSeats.some((s) => (state.players[s]?.encounterVote ?? null) === null)) return;

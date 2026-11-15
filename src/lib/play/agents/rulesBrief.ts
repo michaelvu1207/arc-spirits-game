@@ -65,7 +65,7 @@ function coreRules(catalog: PlayCatalog): string {
 		'',
 		'## A round (6 phases; you act in each, then you finish/yield it)',
 		'1. Navigation: every player SECRETLY locks one destination — one of the four Spirit World regions or the Arcane Abyss — and may commit one held Navigation Power with it. All destinations are revealed together.',
-		'2. Encounter: an Evil (Fallen) player at the same location as Good players may attack them all (group PvP). Everyone else passes.',
+		`2. Encounter: an Evil (Fallen) player at the same location as Good players may attack them all (group PvP)${ruleValue(catalog, 'pvpInAbyss') ? ', at the Arcane Abyss too' : ''}. Everyone else passes.`,
 		'3. Location: use the actions of your location (list below). A "gain" action works once per round; a "trade" action (pay → gain) can be repeated while you can pay. At the Arcane Abyss you draw and fight monster cards instead (below).',
 		'4. Benefits: claim Awakening-phase grants (e.g. Cursed Spirit); held relic tools are offered as decision cards.',
 		'5. Awakening: awaken face-down spirits by paying their cost; answer decision cards; place Spirit Augments.',

@@ -149,8 +149,12 @@
 			eyebrow: 'Round reveal',
 			summary: 'The reveal shows where each player committed before the round enters those realms.',
 			tips: [
-				'Players sharing a Spirit World realm may become encounter targets.',
-				'Players at the Arcane Abyss draw or fight monster cards instead.',
+				rule('pvpInAbyss')
+					? 'Good players sharing a location with an Evil player may become encounter targets, at the Arcane Abyss too.'
+					: 'Players sharing a Spirit World realm may become encounter targets.',
+				rule('pvpInAbyss')
+					? 'Players at the Arcane Abyss then draw or fight monster cards.'
+					: 'Players at the Arcane Abyss draw or fight monster cards instead.',
 				'The reveal is informational; the next screen hosts the active choices.'
 			]
 		},

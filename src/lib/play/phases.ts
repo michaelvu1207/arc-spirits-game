@@ -36,6 +36,7 @@ import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effec
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
 import { DECISION_RESOLVERS } from './effects/decisions';
+import { pvpAllowedAt } from './rules';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { recordTravelingTraderProgress } from './effects/awakenHandlers';
 import { advanceMonsterIfDefeated } from './combat';
@@ -231,11 +232,15 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 	enterEncounter(state, catalog);
 }
 
-/** Evil seats that share a non-Abyss location with a Good seat (potential PvP). */
-export function encounterAggressors(state: PublicGameState): Set<SeatColor> {
+/** Evil seats that share a location with a Good seat (potential PvP). The Arcane Abyss counts
+ *  only under rule `pvpInAbyss`. */
+export function encounterAggressors(
+	state: PublicGameState,
+	catalog?: Pick<PlayCatalog, 'rules'>
+): Set<SeatColor> {
 	const actors = new Set<SeatColor>();
 	for (const [dest, seats] of Object.entries(state.locationOccupancy)) {
-		if (dest === 'Arcane Abyss') continue;
+		if (!pvpAllowedAt(dest, catalog)) continue;
 		const list = (seats ?? []) as SeatColor[];
 		const evil = list.filter((s) => isEvilAlignment(state.players[s]?.statusLevel ?? 0));
 		const good = list.filter((s) => !isEvilAlignment(state.players[s]?.statusLevel ?? 0));
@@ -260,7 +265,7 @@ export function enterEncounter(state: PublicGameState, catalog?: PlayCatalog): v
 		const player = state.players[seat];
 		if (player) player.encounterVote = null;
 	}
-	const aggressors = encounterAggressors(state);
+	const aggressors = encounterAggressors(state, catalog);
 	if (aggressors.size === 0) {
 		enterLocation(state, catalog);
 		return;

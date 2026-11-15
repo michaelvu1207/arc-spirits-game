@@ -752,13 +752,14 @@ export function computePendingReward(
 export function computeEncounter(
 	state: PublicGameState,
 	player: PrivatePlayerState,
-	seat: SeatColor
+	seat: SeatColor,
+	catalog?: Pick<PlayCatalog, 'rules'>
 ): EncounterAffordance | undefined {
 	if (state.phase !== 'encounter') return undefined;
 	if (!isEvilAlignment(player.statusLevel)) return undefined;
-	const eligibleTargets = encounterGoodTargets(state, seat);
+	const eligibleTargets = encounterGoodTargets(state, seat, catalog);
 	if (eligibleTargets.length === 0) return undefined;
-	const aggressors = encounterEvilAggressorsAt(state, player.navigationDestination ?? null);
+	const aggressors = encounterEvilAggressorsAt(state, player.navigationDestination ?? null, catalog);
 	const votesPending = aggressors.filter((s) => (state.players[s]?.encounterVote ?? null) === null);
 	return { eligibleTargets, votesPending };
 }
@@ -861,7 +862,7 @@ export function computeAffordances(
 	const pendingWork = player ? describePendingWork(state, player, catalog) : [];
 	const locationInteractions = active ? computeLocationInteractions(state, active, catalog) : [];
 	const pendingReward = active ? computePendingReward(active) : undefined;
-	const encounter = active ? computeEncounter(state, active, seat) : undefined;
+	const encounter = active ? computeEncounter(state, active, seat, catalog) : undefined;
 	return {
 		seat,
 		phase,

@@ -15,6 +15,7 @@ import { initRoundLoop } from './phases';
 import { fightMonster, pvpGoodBounty, pvpVpForAttack, resetCombatFlags, takeDamage } from './combat';
 import { setCorruptionDiscardObligation, settleUnpayableCorruptionDebt } from './types';
 import { canApply } from './legality';
+import { computeAffordances } from './viewV2';
 import { botActorFor } from './server/botPolicy';
 import { ARCANE_ABYSS_BAG } from './bags';
 import { applyCultivate, applyTrigger } from './effects/apply';
@@ -341,7 +342,12 @@ const pvpCatalog = (rules?: PlayRules): PlayCatalog => ({ ...PVP_CATALOG, rules 
 const arcaneDice = (n: number) => Array.from({ length: n }, (_, i) => ({ instanceId: `d${i}`, tier: 'arcane' as const }));
 
 /** Red (Fallen) attacks Blue and Orange (Good) in Mountain Region; `setup` shapes the sides. */
-function pvpExchange(catalog: PlayCatalog, setup: (s: PublicGameState) => void): PublicGameState {
+function pvpExchange(
+	catalog: PlayCatalog,
+	setup: (s: PublicGameState) => void,
+	destination = 'Mountain Region',
+	attack = true
+): PublicGameState {
 	const ok = (state: PublicGameState, actor: object, command: object) => {
 		const r = applyGameCommand(state, actor as never, command as never, catalog);
 		if (!r.ok) throw new Error(`${(command as { type: string }).type}: ${r.error.message}`);
@@ -356,7 +362,7 @@ function pvpExchange(catalog: PlayCatalog, setup: (s: PublicGameState) => void):
 	state = ok(state, ACTORS_C.Orange, { type: 'selectGuardian', guardianName: 'Orro' });
 	state = ok(state, ACTORS_C.Red, { type: 'startGame', seed: 99 });
 	for (const seat of ['Red', 'Blue', 'Orange'] as const)
-		state = ok(state, ACTORS_C[seat], { type: 'lockNavigation', destination: 'Mountain Region' });
+		state = ok(state, ACTORS_C[seat], { type: 'lockNavigation', destination });
 	for (const seat of state.activeSeats) {
 		const p = state.players[seat]!;
 		p.spirits = [];
@@ -370,7 +376,7 @@ function pvpExchange(catalog: PlayCatalog, setup: (s: PublicGameState) => void):
 	red.statusToken = 'Fallen';
 	setup(state);
 	state = ok(state, ACTORS_C.Red, { type: 'forceAdvancePhase' });
-	return ok(state, ACTORS_C.Red, { type: 'initiatePvp' });
+	return attack ? ok(state, ACTORS_C.Red, { type: 'initiatePvp' }) : state;
 }
 const vps = (s: PublicGameState) => (['Red', 'Blue', 'Orange'] as const).map((k) => s.players[k]!.victoryPoints);
 
@@ -803,5 +809,56 @@ describe('ramAugmentDamage in a real monster fight', () => {
 		};
 		expect(fight(withRules({ ramAugmentDamage: true }))).toBe(2); // no dice: 0 + 2 augments
 		expect(fight(frozen)).toBe(0);
+	});
+});
+
+describe('pvpInAbyss: an Evil player may attack Good players at the Arcane Abyss', () => {
+	const oneCorrupted = (s: PublicGameState) => {
+		s.players.Red!.attackDice = arcaneDice(3);
+		s.players.Blue!.maxBarrier = 2;
+		s.players.Blue!.barrier = 2;
+	};
+
+	it('off (default): no Encounter at the Abyss; the round goes straight to the Location step', () => {
+		const state = pvpExchange(pvpCatalog(), oneCorrupted, 'Arcane Abyss', false);
+		expect(state.phase).toBe('location');
+		expect(computeAffordances(state, 'Red', pvpCatalog()).encounter).toBeUndefined();
+		const r = applyGameCommand(state, ACTORS_C.Red as never, { type: 'initiatePvp' } as never, pvpCatalog());
+		expect(r.ok).toBe(false);
+	});
+
+	it('on: the Encounter step opens at the Abyss with both Good players as targets', () => {
+		const cat = pvpCatalog({ pvpInAbyss: true });
+		const state = pvpExchange(cat, oneCorrupted, 'Arcane Abyss', false);
+		expect(state.phase).toBe('encounter');
+		expect(computeAffordances(state, 'Red', cat).encounter).toEqual({
+			eligibleTargets: ['Blue', 'Orange'],
+			votesPending: ['Red']
+		});
+		expect(computeAffordances(state, 'Blue', cat).encounter).toBeUndefined();
+	});
+
+	it('on: the attack resolves as a player fight, then the Abyss Location step follows', () => {
+		const cat = pvpCatalog({ pvpInAbyss: true });
+		const state = pvpExchange(cat, oneCorrupted, 'Arcane Abyss');
+		expect(state.combats.filter((c) => c.kind === 'pvp')).toHaveLength(1);
+		expect(vps(state)).toEqual([4, 0, 0]); // same payout as in a region (old PvP VP rule)
+		expect(state.players.Blue!.statusLevel).toBe(1); // corrupted once
+		expect(state.phase).toBe('location');
+	});
+
+	it('on: passing instead of attacking gives no fight', () => {
+		const cat = pvpCatalog({ pvpInAbyss: true });
+		const before = pvpExchange(cat, oneCorrupted, 'Arcane Abyss', false);
+		const r = applyGameCommand(before, ACTORS_C.Red as never, { type: 'passEncounter' } as never, cat);
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.state.combats.filter((c) => c.kind === 'pvp')).toHaveLength(0);
+			expect(r.state.phase).toBe('location');
+		}
+	});
+
+	it('on: regions are unchanged', () => {
+		expect(vps(pvpExchange(pvpCatalog({ pvpInAbyss: true }), oneCorrupted))).toEqual([4, 0, 0]);
 	});
 });

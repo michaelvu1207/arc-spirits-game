@@ -818,6 +818,8 @@ export interface PlayRules {
 	cultivateRuneOrRelic?: boolean;
 	/** Ram: +1 combat damage per placed Spirit Augment; no Mountain Region augment (default false). */
 	ramAugmentDamage?: boolean;
+	/** Evil players may attack Good players at the Arcane Abyss too (default false: regions only). */
+	pvpInAbyss?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

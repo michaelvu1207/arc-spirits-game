@@ -71,6 +71,10 @@
  * - ramAugmentDamage (default false): true ⇒ Ram is "In combat, deal 1 more damage for each Spirit
  *   Augment on your spirits." (effects/classes/infiltrator.ts). The old Ram, a Spirit Augment on
  *   arriving at the Mountain Region, is off.
+ *
+ * PvP place (2026-11-14):
+ * - pvpInAbyss (default false): true ⇒ an Evil player may also attack the Good players that share
+ *   the Arcane Abyss with it (old: only in the four regions). See `pvpAllowedAt`.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
@@ -96,7 +100,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	powerRework: false,
 	mysticCultivateDouble: false,
 	cultivateRuneOrRelic: false,
-	ramAugmentDamage: false
+	ramAugmentDamage: false,
+	pvpInAbyss: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -139,6 +144,15 @@ export function ruleValue(
 ): boolean {
 	const value = catalog?.rules?.[name];
 	return typeof value === 'boolean' ? value : RULE_DEFAULTS[name];
+}
+
+/** Whether an Evil player may attack Good players at this destination (rule `pvpInAbyss`). */
+export function pvpAllowedAt(
+	dest: string | null | undefined,
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+): boolean {
+	if (!dest) return false;
+	return dest !== 'Arcane Abyss' || ruleValue(catalog, 'pvpInAbyss');
 }
 
 /** Printed class text that a switch replaces: class → breakpoint count → text. */
