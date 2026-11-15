@@ -1,5 +1,5 @@
 {
-	"live": "0.2.5",
+	"live": "0.2.6",
 	"versions": [
 		{
 			"version": "0.1.0",
@@ -246,6 +246,36 @@
 			"rulesHash": "8ae180ac60ac84b16ac15a88e7c222a8ed77628efa8daf0e2e9e919507583e62",
 			"art": {
 				"id": "d9d44984bc7eea3f",
+				"files": 521
+			},
+			"counts": {
+				"hex_spirits": 64,
+				"classes": 55,
+				"origins": 8,
+				"monsters_v2": 109,
+				"icon_pool": 146,
+				"game_locations": 5,
+				"guardians": 10,
+				"editions": 2,
+				"custom_dice": 5,
+				"dice_sides": 30,
+				"game_location_rows": 14,
+				"monster_pools": 15,
+				"relics": 5,
+				"rules": 1,
+				"mat_items": 12,
+				"reward_row_assignments": 1
+			}
+		},
+		{
+			"version": "0.2.6",
+			"createdAt": "2026-11-15T06:54:50.322Z",
+			"parent": "0.2.5",
+			"notes": "Nhal (Corruptor) sets your status to Fallen directly; it is no longer a corruption (no Barrier restored, no sacrifice). Nhal card back remade.",
+			"sha256": "87f092784bc891cd3167eada60f560b87f63d5a9f44b33181e7efe60b9c9c351",
+			"rulesHash": "a5740ac0a04e86fad101e71c3ed38ed063a8d038b053eb6fda81d148098580ad",
+			"art": {
+				"id": "d53651034dfc8ddd",
 				"files": 521
 			},
 			"counts": {
