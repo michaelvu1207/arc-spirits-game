@@ -12,8 +12,8 @@
  *   src/lib/components/play2d/monsterCardFaces.json         what each card PRINTS, so the game can refuse a
  *                                                           card whose printed values no longer match the game
  *
- * The database name of a monster can differ from the name on its card (~/niji-batch/names.json maps
- * database name -> card name). The id comes from the local table snapshot ~/ArcSpiritsArt/game/monsters_v2.json.
+ * The database name of a monster can differ from the name on its card (tools/editor/names.json maps
+ * database name -> card name). The id comes from the local table snapshot data/monsters_v2.json.
  *
  * Reads only; writes only the two outputs above. Needs `cwebp` (brew install webp).
  *
@@ -27,6 +27,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { artDir as hostArtDir, dataDir, editorDir } from './lib/paths.mjs';
 
 const run = promisify(execFile);
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,8 +36,9 @@ function arg(name, fallback) {
 	const i = process.argv.indexOf(`--${name}`);
 	return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
-const ART_ROOT = resolve(arg('art-root', join(homedir(), 'ArcSpiritsArt')));
-const NAMES_FILE = resolve(arg('names', join(homedir(), 'niji-batch', 'names.json')));
+const ART_ROOT = resolve(arg('art-root', hostArtDir() ?? join(homedir(), 'ArcSpiritsArt')));
+const NAMES_FILE = resolve(arg('names', join(editorDir, 'names.json')));
+const DATA_DIR = resolve(arg('data', dataDir()));
 const WIDTH = Number(arg('width', '600'));
 const QUALITY = Number(arg('quality', '85'));
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -56,8 +58,8 @@ const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
 
 async function main() {
 	const [monsters, iconPool, names] = await Promise.all([
-		readJson(join(ART_ROOT, 'game/monsters_v2.json')),
-		readJson(join(ART_ROOT, 'game/icon_pool.json')),
+		readJson(join(DATA_DIR, 'monsters_v2.json')),
+		readJson(join(DATA_DIR, 'icon_pool.json')),
 		existsSync(NAMES_FILE) ? readJson(NAMES_FILE) : { monsters: {} }
 	]);
 	const iconName = new Map(iconPool.map((icon) => [icon.id, icon.name]));

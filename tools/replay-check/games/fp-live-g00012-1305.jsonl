@@ -1,0 +1,511 @@
+{"type":"header","seed":8712,"seats":[{"seat":"Red","guardian":"Myrtle","controller":"opus-a","model":"gw:anthropic/claude-opus-5-5","strategy":{"id":"opus-a","name":"Opus 5.5 medium (free a)","text":""}},{"seat":"Blue","guardian":"Embers","controller":"opus-b","model":"gw:anthropic/claude-opus-5-5","strategy":{"id":"opus-b","name":"Opus 5.5 medium (free b)","text":""}},{"seat":"Orange","guardian":"Taron","controller":"opus-d","model":"gw:anthropic/claude-opus-5-5","strategy":{"id":"opus-d","name":"Opus 5.5 medium (free d)","text":""}},{"seat":"Green","guardian":"Pixia","controller":"opus-c","model":"gw:anthropic/claude-opus-5-5","strategy":{"id":"opus-c","name":"Opus 5.5 medium (free c)","text":""}}],"catalog":{"hash":"130596c931e2189db0bddfd9cedd8db148def412d7c00007ba9d7b93095d743c"},"gameId":"league-130596c931e2-g12-s8712"}
+{"type":"decision","n":1,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"powerId\":\"battle-fury\",\"type\":\"chooseNavigationPower\"}"}}
+{"type":"decision","n":2,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"powerId\":\"duelists-prize\",\"type\":\"chooseNavigationPower\"}"}}
+{"type":"decision","n":3,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"powerId\":\"fires-rhythm\",\"type\":\"chooseNavigationPower\"}"}}
+{"type":"decision","n":4,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"powerId\":\"battle-guard\",\"type\":\"chooseNavigationPower\"}"}}
+{"type":"decision","n":5,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"navigationPowerId\":\"battle-fury\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":6,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"navigationPowerId\":\"duelists-prize\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":7,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Water Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":8,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Water Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":9,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_1x43hat3tm5jg\",\"optionId\":\"accept\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":10,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_azg3vfcus2mr\",\"optionId\":\"accept\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":11,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":12,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":13,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":1,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":14,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":15,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_032_9707edd6-fbc3-4433-99f2-a687f39505fd\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":16,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_021_a5e1965a-4b51-4de4-ad42-2f8ac085ff0e\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":17,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":18,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_007_36bb656c-49fe-4d50-a037-b29dbd1bfa91\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":19,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_056_c6548ffd-4852-4e62-9c5a-9329e40d222e\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":20,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"reward-earth-rune\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":21,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":22,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":1,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":23,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"choices\":[2],\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":24,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"choices\":[0],\"costChoices\":[1],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":25,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":26,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":27,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"f1c4f059-61e0-40ad-ad9a-4e25a8531f49\",\"className\":\"Beast\",\"spiritSlotIndex\":2,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":28,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"choices\":[0],\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":29,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_032_67d51bbd-a964-4bea-b7c3-7d8c7d616af1\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":30,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":31,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_1jr4a6q1o0wt7n\",\"optionId\":\"accept\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":32,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":33,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"efa4b29a-06f0-43af-bd11-d60c180e793e\",\"className\":\"Fighter\",\"spiritSlotIndex\":4,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":34,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":35,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":36,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"efa4b29a-06f0-43af-bd11-d60c180e793e\",\"className\":\"Fighter\",\"spiritSlotIndex\":2,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":37,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_013_f32acd75-2242-489b-82fe-bbc789de5ba5\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":38,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":39,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":40,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Water Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":41,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":42,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":43,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":44,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":45,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":1,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":46,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":47,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":48,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"choices\":[2],\"costChoices\":[1],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":49,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":50,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"generic-spirit-augment\",\"className\":\"Beast\",\"spiritSlotIndex\":3,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":51,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"reward-forest-rune\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":52,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"choices\":[2],\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":53,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":54,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":55,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_040_cfccc89f-06fe-4bd7-85f9-c5f9416cd1b4\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":56,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"33f343e7-6bdb-43cc-8b27-115eaa16826f\",\"className\":\"Mystic\",\"spiritSlotIndex\":2,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":57,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":58,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":59,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"33f343e7-6bdb-43cc-8b27-115eaa16826f\",\"className\":\"Mystic\",\"spiritSlotIndex\":4,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":60,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_004_ae827012-29ff-406e-bcbe-afe3a5258607\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":61,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":62,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":63,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":64,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":65,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":5,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":66,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":67,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":68,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"navigationPowerId\":\"fires-rhythm\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":69,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"navigationPowerId\":\"battle-guard\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":70,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_4ai7zp7ri7u2\",\"optionId\":\"2\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":71,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_1yb0k1anhyeo1\",\"optionId\":\"accept\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":72,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":73,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":74,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":75,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":76,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"generic-spirit-augment\",\"className\":\"Beast\",\"spiritSlotIndex\":1,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":77,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":78,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"choices\":[1],\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":79,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":80,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":81,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"d0b484ed-733c-4d55-b549-30e631eec857\",\"className\":\"Elementalist\",\"spiritSlotIndex\":1,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":82,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":83,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":84,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":85,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_017_e5dff9be-ac58-47bb-bd9d-69efb03dc393\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":86,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":87,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_028_d2af57b4-3c6a-472b-8371-bb00b827f5f8\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":88,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":89,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":7,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":90,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":7,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":91,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":92,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":93,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":94,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":95,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":96,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":97,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":98,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":99,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"generic-spirit-augment\",\"className\":\"Beast\",\"spiritSlotIndex\":7,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":100,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":101,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":102,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":103,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":104,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"redrawHandDraws\"}"}}
+{"type":"decision","n":105,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":106,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_003_a77653c5-69fa-4351-833d-59d302722365\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":107,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":108,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":109,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_006_c0d12557-4615-4c60-a93c-622e5fc70eae\",\"replaceSlotIndex\":6,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":110,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"redrawHandDraws\"}"}}
+{"type":"decision","n":111,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":112,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_031_7ea7209a-b779-4a8d-9007-775c5e90a398\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":113,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":114,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":1,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":115,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":116,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":117,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":118,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"decisionId\":\"dec_x6jyv63x0cey\",\"optionId\":\"keep:2:690a7e3b-5737-4494-bb8a-b58bee13f473\",\"type\":\"resolveDecision\"}"}}
+{"type":"decision","n":119,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":120,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":121,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":122,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":123,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":124,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":125,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":126,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":127,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"costChoices\":[1],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":128,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":129,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":130,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":131,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":132,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":133,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":134,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":135,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":136,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":137,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitAwakening\"}"}}
+{"type":"decision","n":138,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"decisionId\":\"dec_pb3m9ovi8e3a\",\"optionId\":\"effect:2:690a7e3b-5737-4494-bb8a-b58bee13f473\",\"type\":\"resolveDecision\"}"}}
+{"type":"decision","n":139,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":140,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":141,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":142,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":143,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":1,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":144,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":145,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":146,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":147,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":148,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":149,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":150,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":151,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":152,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":153,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":154,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":155,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":156,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_011_78831740-f85c-4100-96d2-460a5eb819e5\",\"replaceSlotIndex\":6,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":157,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":158,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":159,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":160,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitAwakening\"}"}}
+{"type":"decision","n":161,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":6,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":162,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":163,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":164,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":165,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":166,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":167,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":168,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":169,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":170,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":171,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":172,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":173,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":174,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":175,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":6,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":176,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":177,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":178,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":179,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":180,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":181,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":182,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":1,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":183,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":184,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":185,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"choices\":[1],\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":186,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":187,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":188,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":189,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"choices\":[1],\"costChoices\":[1],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":190,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":191,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_016_0f4383ca-3ad8-40ea-a74a-3408fa11719d\",\"replaceSlotIndex\":6,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":192,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"d0b484ed-733c-4d55-b549-30e631eec857\",\"className\":\"Elementalist\",\"spiritSlotIndex\":7,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":193,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":194,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":195,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"d0b484ed-733c-4d55-b549-30e631eec857\",\"className\":\"Elementalist\",\"spiritSlotIndex\":5,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":196,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":197,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"choices\":[1],\"costChoices\":[2],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":198,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_018_6b1cf338-490e-46ee-ae0b-b217c3cb2d3f\",\"replaceSlotIndex\":5,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":199,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"d0b484ed-733c-4d55-b549-30e631eec857\",\"className\":\"Elementalist\",\"spiritSlotIndex\":1,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":200,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":201,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":202,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":203,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":5,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":204,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":205,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":206,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":207,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":208,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":209,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":210,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":211,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":212,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":213,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":214,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"generic-spirit-augment\",\"className\":\"Elementalist\",\"spiritSlotIndex\":6,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":215,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":216,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":217,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":218,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"redrawHandDraws\"}"}}
+{"type":"decision","n":219,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":220,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":1,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":221,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":222,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":223,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":224,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":6,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":225,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitAwakening\"}"}}
+{"type":"decision","n":226,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":227,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":228,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":229,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":230,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":231,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":232,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":233,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":234,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":235,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":236,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"generic-spirit-augment\",\"className\":\"Beast\",\"spiritSlotIndex\":5,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":237,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":238,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":239,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":240,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":241,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":242,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":243,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":244,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":6,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":245,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitAwakening\"}"}}
+{"type":"decision","n":246,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitCleanup\"}"}}
+{"type":"decision","n":247,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":248,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":249,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":250,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":251,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":252,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":253,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":254,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":255,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":256,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":257,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":258,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":259,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"redrawHandDraws\"}"}}
+{"type":"decision","n":260,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":261,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":262,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_023_9f457095-6b6f-4175-a426-097ee9dd2a64\",\"replaceSlotIndex\":3,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":263,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":264,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":265,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":266,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":267,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"redrawHandDraws\"}"}}
+{"type":"decision","n":268,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":269,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":270,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitBenefits\"}"}}
+{"type":"decision","n":271,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":272,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitAwakening\"}"}}
+{"type":"decision","n":273,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitCleanup\"}"}}
+{"type":"decision","n":274,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":275,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":276,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Water Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":277,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":278,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":279,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":280,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":281,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":282,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":283,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":7,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":284,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"reward-earth-rune\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":285,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":286,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":287,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":288,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_029_9ef2c6f9-c6b3-4ec0-8e6e-4ddd5b26b344\",\"replaceSlotIndex\":7,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":289,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":290,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":291,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"discard_d440qnrku580\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":292,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":293,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":294,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":295,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":2,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":296,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":297,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":298,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":299,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":300,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":301,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"taintedMaxBarrier\":1,\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":302,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":3,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":303,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":304,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":305,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":306,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":307,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":308,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":309,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":310,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":1,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":311,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":312,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":313,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"choices\":[0],\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":314,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":315,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"44d0b158-8892-42c7-9ce8-1a033da9440d\",\"className\":\"Cursed Spirit\",\"spiritSlotIndex\":5,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":316,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"d0b484ed-733c-4d55-b549-30e631eec857\",\"className\":\"Elementalist\",\"spiritSlotIndex\":7,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":317,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":318,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":319,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":320,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":321,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":322,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_041_c122e431-3792-4b21-bf3a-87ccbed2c123\",\"replaceSlotIndex\":6,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":323,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":324,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitBenefits\"}"}}
+{"type":"decision","n":325,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":326,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitAwakening\"}"}}
+{"type":"decision","n":327,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":7,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":328,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"commitCleanup\"}"}}
+{"type":"decision","n":329,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":330,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":331,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":332,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":333,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":334,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":335,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":336,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":337,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":338,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":339,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":340,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":341,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":342,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":1,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":343,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":344,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":345,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":346,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":4,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":347,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":348,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":349,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_015_d3d2decc-9cf6-4ff1-9b6e-c03cf1f82394\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":350,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":351,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":352,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":353,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":354,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":355,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":356,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":357,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":358,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":359,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":360,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":361,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":362,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":363,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"costChoices\":[0],\"rowIndex\":1,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":364,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":1,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":365,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":366,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":367,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2,3],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":368,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":369,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":370,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":371,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"a844c161-3f67-42d7-ba59-d5efd5df5f98\",\"className\":\"Cultivator\",\"spiritSlotIndex\":4,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":372,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":373,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":374,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":375,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":376,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":377,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":6,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":378,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Mountain Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":379,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":380,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Mountain Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":381,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":382,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":383,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"costChoices\":[0],\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":384,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":385,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"decisionId\":\"dec_1wdt3t2zmsmp6\",\"optionId\":\"maxBarrier\",\"type\":\"resolveDecision\"}"}}
+{"type":"decision","n":386,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":387,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"powerId\":\"thorn-ward\",\"replacePowerId\":\"forest-bounty\",\"type\":\"chooseNavigationPower\"}"}}
+{"type":"decision","n":388,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":389,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":390,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":1,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":391,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":392,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":4,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":393,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":394,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_020_2f15b8f6-9ef0-4d6b-a495-a44730fcb5a2\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":395,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":4,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":396,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":397,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":398,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"navigationPowerId\":\"thorn-ward\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":399,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":400,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":401,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":402,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_w3bccb1g5qbon\",\"optionId\":\"accept\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":403,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":404,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":405,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":1,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":406,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":407,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":408,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"index\":1,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":409,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2,3],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":410,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"difficulty\":3,\"type\":\"drawMonsterCards\"}"}}
+{"type":"decision","n":411,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":412,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":413,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"index\":0,\"type\":\"keepMonsterCard\"}"}}
+{"type":"decision","n":414,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":415,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_040_e4822f18-98f0-44fd-8711-756f946f6cd5\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":416,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":417,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"discardHandDraws\"}"}}
+{"type":"decision","n":418,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"d0b484ed-733c-4d55-b549-30e631eec857\",\"className\":\"Elementalist\",\"spiritSlotIndex\":4,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":419,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":420,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":421,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":422,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":423,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":424,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"navigationPowerId\":\"unbroken-assault\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":425,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Mountain Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":426,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":427,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_qgxhmx194fies\",\"optionId\":\"accept\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":428,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"decisionId\":\"dec_1t15ke31uo4802\",\"optionId\":\"maxBarrier\",\"type\":\"resolveDecision\"}"}}
+{"type":"decision","n":429,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":430,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":431,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":432,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"costChoices\":[0],\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":433,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":434,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":435,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":436,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"powerId\":\"battle-fury\",\"replacePowerId\":\"augment-relay\",\"type\":\"chooseNavigationPower\"}"}}
+{"type":"decision","n":437,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":2,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":438,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"efa4b29a-06f0-43af-bd11-d60c180e793e\",\"className\":\"Fighter\",\"spiritSlotIndex\":7,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":439,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":440,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":441,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":442,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_042_1a09511f-a928-4bda-8a1f-af8f03346087\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":443,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":2,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":444,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":6,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":445,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":446,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":447,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Water Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":448,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":449,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":450,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Fire Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":451,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":452,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":453,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":454,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":455,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":456,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":457,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_041_a6c24fba-940e-4aa9-8729-a361f7209f9c\",\"replaceSlotIndex\":6,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":458,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":459,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"play_054_e95c775b-0677-4884-bc59-12ae2762ca8b\",\"replaceSlotIndex\":3,\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":460,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":461,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"decision","n":462,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":4,\"type\":\"awakenSpirit\"}"}}
+{"type":"decision","n":463,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":464,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":465,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Arcane Abyss\",\"navigationPowerId\":\"battle-fury\",\"type\":\"lockNavigation\"}"}}
+{"type":"decision","n":466,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"destination\":\"Forest Region\",\"type\":\"lockNavigation\"}"}}
+{"type":"advance"}
+{"type":"decision","n":467,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"offerId\":\"power-offer_44torz18okwke\",\"optionId\":\"accept\",\"type\":\"resolveNavigationPower\"}"}}
+{"type":"decision","n":468,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"initiatePvp\"}"}}
+{"type":"decision","n":469,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":470,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":1,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":471,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":1,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":472,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":473,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":4,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":474,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":5,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":475,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":476,"seat":"Green","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":477,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"handIndex\":0,\"type\":\"startCombat\"}"}}
+{"type":"decision","n":478,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":479,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"a844c161-3f67-42d7-ba59-d5efd5df5f98\",\"className\":\"Cultivator\",\"spiritSlotIndex\":3,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":480,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"picks\":[0,1,2,3],\"type\":\"resolveMonsterReward\"}"}}
+{"type":"decision","n":481,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":482,"seat":"Orange","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":483,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":5,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":484,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"slotIndex\":2,\"type\":\"discardSpirit\"}"}}
+{"type":"decision","n":485,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"augmentIndex\":0,\"augmentRuneId\":\"a844c161-3f67-42d7-ba59-d5efd5df5f98\",\"className\":\"Cultivator\",\"spiritSlotIndex\":6,\"type\":\"placeAugmentOnSpirit\"}"}}
+{"type":"decision","n":486,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"rowIndex\":0,\"type\":\"resolveLocationInteraction\"}"}}
+{"type":"decision","n":487,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"guid\":\"discard_ffd581kym489\",\"type\":\"spawnHandSpirit\"}"}}
+{"type":"decision","n":488,"seat":"Red","chosen":{"actionId":"arc-bot-v1:{\"type\":\"endLocationActions\"}"}}
+{"type":"decision","n":489,"seat":"Blue","chosen":{"actionId":"arc-bot-v1:{\"type\":\"resolveAwakenReward\"}"}}
+{"type":"result","finalStateHash":"bb2ca06dd6585326","summary":{"finished":true}}

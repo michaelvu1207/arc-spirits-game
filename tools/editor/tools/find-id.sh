@@ -1,0 +1,3 @@
+#!/bin/sh
+# Finds the workspace file(s) for generation IDs like 92f9fd70-0 (or a job id 92f9fd70 for the whole batch). Usage: tools/find-id.sh 92f9fd70-0 ...
+for id in "$@"; do find "${NIJI_WORKSPACE:-$HOME/ArcSpiritsArt}" -name "*-$id*.png" -not -path '*/.*' | sed "s|^${NIJI_WORKSPACE:-$HOME/ArcSpiritsArt}/||"; done

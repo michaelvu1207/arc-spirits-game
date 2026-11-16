@@ -1,0 +1,112 @@
+{
+  "source": "local-design",
+  "path": "/Users/michaelvu-simforge/arcspirits-harness/experiments/live-2026-11-13/game",
+  "hash": "130596c931e2189db0bddfd9cedd8db148def412d7c00007ba9d7b93095d743c",
+  "savedAt": "2026-11-13T23:38:38.220Z",
+  "files": [
+    {
+      "name": "augments.json",
+      "sha256": "a667455f9dd4e5655be73e28fedaed504623985ca782c55c69959b67b2ab2976"
+    },
+    {
+      "name": "classes.json",
+      "sha256": "9b6cc164948c5425c648006687fb34bcf742b41810a01bc49b549bbd1bc01eb6"
+    },
+    {
+      "name": "custom_dice.json",
+      "sha256": "6dc9874c09dcb10d0f38d280c766aa07eee0150a296c63b0e013c9ff8c15c63c"
+    },
+    {
+      "name": "dice_sides.json",
+      "sha256": "cabcbfc534c41d46fed4eee35fb7f249cdf4e3cfcc8c7623b217266da58525b4"
+    },
+    {
+      "name": "dice_templates.json",
+      "sha256": "020ccc75f263ece92243286d7d65d0a2d883fb3a058ddf3f316ab116aca965b4"
+    },
+    {
+      "name": "edition_scenarios.json",
+      "sha256": "34dd92a3265845f1021223038fa500202c6a5e92c2e8ad680d35867052c29902"
+    },
+    {
+      "name": "editions.json",
+      "sha256": "ad50bdf35ba7e5c34203f13c47c18e4a8978ab0b258fa98f6dfa9b7b4bfa6ea3"
+    },
+    {
+      "name": "event_cards.json",
+      "sha256": "ed3228392b53d8b5f0fe0e7b62233c6233562a7b111672ff705ec70f1ddbfdc6"
+    },
+    {
+      "name": "game_location_rows.json",
+      "sha256": "02b16f2eb2fd0211998b9a4f9c2d07f17eec61348af5f6273648cd89d9667dbe"
+    },
+    {
+      "name": "game_locations.json",
+      "sha256": "cf90becacb80bc695a141993040b30944be0073c238f9eb6fea488a743edb7e3"
+    },
+    {
+      "name": "guardians.json",
+      "sha256": "ba21789c2f571bcc5169ff4b1bac96d2673b62ef11886aec4ce0e285578f7b2e"
+    },
+    {
+      "name": "hex_spirits.json",
+      "sha256": "cc381b017ed19770ce321189b30dbb3fd8b286abd4381aa62e59bd64ce8c9cb3"
+    },
+    {
+      "name": "icon_placement.json",
+      "sha256": "9e54151492f2601efbe5d8c02f7700cf791080c2180169686b3a17c5605fb820"
+    },
+    {
+      "name": "icon_pool.json",
+      "sha256": "7390c755d8e9ee44ed83d2ea080e68331731fcb54ee82425585ab3a4c30b0c14"
+    },
+    {
+      "name": "monster_pools.json",
+      "sha256": "57ac40c827caf7827c66cbdb4abeee9fd3b38dbe4deb34d52fef1e8d77a8d1da"
+    },
+    {
+      "name": "monsters_v2.json",
+      "sha256": "f2b8218690cccdaf2a987bcacc267c58240ea7e6372f570b4a6124af478a666f"
+    },
+    {
+      "name": "origins.json",
+      "sha256": "8f67cdaf7286b414d57ebf3774ff481a18181904077ce07ff4bea3edb95f0738"
+    },
+    {
+      "name": "rarity_traits.json",
+      "sha256": "6614d3b02d14c69defca7b6f8a0015edcbd8bb68b109c4ae04c8462ead06a686"
+    },
+    {
+      "name": "relics.json",
+      "sha256": "9b2382506da08a2a5220cdb8f9c7036443197a782833de42f822b464d6485373"
+    },
+    {
+      "name": "reward_sets.json",
+      "sha256": "4a64e6792661d863c3c18205d5d06122f7dd3a46fcc597a5a55d749e395c7d49"
+    },
+    {
+      "name": "reward_values.json",
+      "sha256": "85f3847f245c006107ed8886138d9a981b2e6453674128503b25de63356d6226"
+    },
+    {
+      "name": "rules.json",
+      "sha256": "a340abb8d2a30cc658f18edfbdbce59604659acfbf02266a74c4f90a2c96c47c"
+    },
+    {
+      "name": "runes.json",
+      "sha256": "f3b7d8f07949a4b1750595580d89f35ff197b47d17fbc9fd00a0df3b7abcc243"
+    },
+    {
+      "name": "scenarios.json",
+      "sha256": "db906402cf144fcb705ea42e90d27ebec3ad1a25f6bfcb7d61f09bf3b39ca7a0"
+    },
+    {
+      "name": "stage_dividers.json",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "name": "ui_settings.json",
+      "sha256": "9d34a6dd9aa3b11e653c21484a0888e8ef444d4612ee3064ceba2ce8122a80a1"
+    }
+  ]
+}

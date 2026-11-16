@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team builder · Niji Batch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* The same page as the web game's Composition Builder (online-game-and-bot src/routes/play/builder):
+     catalog on the left, the trait tracker in the middle, the seven-hex formation on the right. */
+  :root { --bg: #0a0b0f; --panel: #12141a; --card: #171a21; --line: #23262f; --line-2: #30343f; --text: #e6e7eb; --dim: #9a9eab; --faint: #646978; --seg: #20232b; --field: #0d0e13; --accent: #f0532d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Figtree", -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; height: 100vh; display: flex; flex-direction: column; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: 0; padding: 0; }
+  header.top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header.top a { color: var(--dim); text-decoration: none; font-size: 13px; } header.top a:hover { color: var(--text); }
+  header.top h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  .spacer { flex: 1; }
+  .field { background: var(--field); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; }
+  .count { color: var(--dim); font-variant-numeric: tabular-nums; } .count.full { color: #ffce45; }
+  .tb { background: var(--seg); border-radius: 8px; padding: 7px 12px; } .tb:hover { background: var(--line-2); }
+  /* playstyle wheel: a pop-up below its button in the top bar */
+  .pop-wrap { position: relative; } .tb[aria-expanded="true"] { background: var(--line-2); }
+  .pop { position: absolute; z-index: 25; top: calc(100% + 8px); right: 0; width: 520px; max-width: calc(100vw - 24px); background: #14121c; border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+  .pop svg { width: 100%; height: auto; display: block; } .pop p { margin: 4px 4px 0; color: var(--dim); font-size: 12px; }
+  .wheel .ring { fill: none; stroke: var(--seg); stroke-width: 22; } .wheel .spoke { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 5; } .wheel .tick { fill: var(--dim); }
+  .wheel .axis { fill: var(--text); font-size: 14px; font-weight: 600; } .wheel .axis-hint { fill: var(--faint); font-size: 11px; font-weight: 400; }
+  .wheel .origin { fill: var(--text); font-size: 12px; font-weight: 600; text-anchor: middle; }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) 260px minmax(0, 1fr); gap: 12px; padding: 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; min-height: 0; display: flex; flex-direction: column; }
+  .kicker { padding: 10px 14px 0; font-size: 12px; color: var(--dim); font-weight: 600; }
+  .cat-head { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .cat-head .field { flex: 1; min-width: 120px; }
+  .check { display: flex; align-items: center; gap: 6px; flex-basis: 100%; font-size: 13px; color: var(--dim); cursor: pointer; } .check input { accent-color: var(--accent); margin: 0; }
+  .cat-scroll { overflow: auto; padding: 10px; flex: 1; }
+  .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .cat-group { grid-column: 1 / -1; margin: 10px 2px 0; font-size: 13px; font-weight: 600; color: var(--dim); } .cat-group:first-child { margin-top: 0; }
+  .spirit-card { border-radius: 8px; padding: 2px; display: block; } .spirit-card:hover { background: var(--card); }
+  .spirit-card img { width: 100%; display: block; pointer-events: none; }
+  .note { padding: 24px; color: var(--faint); text-align: center; grid-column: 1 / -1; }
+  /* simulator mode (?sim): the left panel shows a random draw, not the full list */
+  body.sim .build-only, body:not(.sim) .sim-only { display: none; }
+  body.sim .cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cat-head.sim-only { align-items: center; }
+  /* trait tracker */
+  .traits { overflow: auto; padding: 8px 10px 12px; flex: 1; }
+  .state-label { display: block; font-size: 11px; color: var(--faint); margin: 8px 2px 6px; }
+  .trait { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 10%, var(--card)); margin-bottom: 6px; cursor: default; }
+  .emblem { position: relative; width: 38px; height: 38px; flex: none; border-radius: 8px; background: color-mix(in srgb, var(--c) 78%, #fff); display: grid; place-items: center; font-weight: 600; color: #1a0f2e; }
+  .emblem img { width: 30px; height: 30px; object-fit: contain; }
+  .emblem .n { position: absolute; right: -6px; bottom: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 99px; background: var(--c); color: #14100a; font-size: 11px; font-weight: 600; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--panel); }
+  .trait .name { font-weight: 500; display: block; }
+  .pips { display: flex; gap: 4px; margin-top: 3px; }
+  .pip { font-size: 10px; min-width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; background: var(--seg); color: var(--faint); }
+  .pip.hit { background: #ffce45; color: #1a0f2e; font-weight: 600; }
+  .tip { position: fixed; z-index: 20; width: 320px; background: #14121c; border: 1px solid var(--line-2); border-top: 3px solid var(--c); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgba(0,0,0,.5); pointer-events: none; }
+  .tip-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .tip-name { font-weight: 600; font-size: 15px; display: block; } .tip-kind { font-size: 11px; color: var(--c); }
+  .tip p { margin: 0 0 8px; color: var(--dim); font-size: 13px; }
+  /* the detail card of a spirit in the list: awaken requirement and class abilities */
+  .tip-awaken { margin: 2px 0 4px; font-size: 13px; } .tip-awaken .state-label { margin: 6px 0 3px; }
+  .aw-runes { display: flex; align-items: center; gap: 6px; } .aw-runes img { width: 26px; height: 26px; object-fit: contain; } .aw-runes .or { color: var(--faint); font-size: 11px; }
+  .tip-class { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; } .tip-class .name { font-weight: 600; display: block; } .tip-class p { margin: 2px 0 0; }
+  .bp-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; font-size: 13px; }
+  .bp-count { flex: none; min-width: 26px; height: 22px; padding: 0 6px; border-radius: 6px; display: grid; place-items: center; font-weight: 600; font-size: 12px; background: linear-gradient(135deg, #c08560, #8b5a3c); color: #fff; }
+  .bp-silver { background: linear-gradient(135deg, #e6e6f0, #9090a0); color: #1a0f2e; } .bp-gold { background: linear-gradient(135deg, #ffd56a, #c89028); color: #1a0f2e; } .bp-prismatic { background: linear-gradient(135deg, #ff7fd9, #5a2bff, #5cdfff); }
+  /* formation */
+  .board { flex: 1; min-height: 0; display: grid; place-items: center; padding: 8px; }
+  .board svg { width: 100%; height: 100%; max-height: 100%; }
+  .board-panel.over { border-color: var(--accent); }
+  .hex-empty { fill: #15121a; stroke: var(--line-2); stroke-width: 1.5; }
+  .drag-ghost { position: fixed; z-index: 30; width: 150px; transform: translate(-50%, -50%); pointer-events: none; opacity: .9; }
+  .hex-full.lifting image { opacity: .25; } .drop-target.hex-empty, .drop-target .hex-empty { stroke: var(--accent); stroke-width: 3; }
+  .hex-full { cursor: grab; touch-action: none; }
+  /* Flip and Remove: two small buttons at the top of a placed spirit, shown on hover */
+  .act { opacity: 0; cursor: pointer; transition: opacity .12s; } .hex-full:hover .act { opacity: 1; } body.dragging .act { display: none; }
+  .act rect { fill: rgba(10, 11, 15, .9); stroke: var(--line-2); stroke-width: .75; } .act:hover rect { fill: var(--accent); stroke: var(--accent); }
+  .act text { fill: var(--text); font-size: 8.5px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+  .hint { padding: 0 14px 12px; color: var(--faint); font-size: 12px; margin: 0; }
+</style>
+</head>
+<body>
+<header class="top">
+  <a href="/data.html">← Data</a><h1 id="title">Team builder</h1><a id="modeLink" href="/team.html?sim">Simulator</a><span class="spacer"></span>
+  <div class="pop-wrap"><button class="tb" id="wheelBtn" aria-expanded="false" aria-controls="wheelPop">Playstyles</button><div class="pop" id="wheelPop" hidden></div></div>
+  <input class="field build-only" id="teamName" maxlength="40" placeholder="Team name" spellcheck="false" aria-label="Team name">
+  <span class="count" id="count">0/7</span>
+  <button class="tb" id="clear">Clear</button>
+</header>
+<div class="grid">
+  <section class="panel" aria-label="All spirits">
+    <div class="cat-head sim-only">
+      <button class="tb" data-draw="spiritWorld">Spirit World: draw 4, pick 2</button>
+      <button class="tb" data-draw="arcaneAbyss">Arcane Abyss: draw 3, pick 1</button>
+      <span class="spacer"></span><span class="count" id="picks"></span>
+    </div>
+    <div class="cat-head build-only">
+      <input class="field" id="search" placeholder="Search spirits…" spellcheck="false" aria-label="Search spirits">
+      <select class="field" id="origin" aria-label="Filter by origin"><option value="">All origins</option></select>
+      <select class="field" id="source" aria-label="Filter by source"><option value="all">All sources</option><option value="spiritWorld">Spirit World</option><option value="arcaneAbyss">Arcane Abyss</option></select>
+      <label class="check"><input type="checkbox" id="hideSpecial"> Hide capstones and fairies</label>
+    </div>
+    <div class="cat-scroll"><div class="cat-grid" id="catalog"></div></div>
+  </section>
+  <aside class="panel" aria-label="Synergies"><div class="kicker">Synergies</div><div class="traits" id="traits"></div></aside>
+  <section class="panel board-panel" id="boardPanel" aria-label="Team board">
+    <div class="kicker">Formation</div>
+    <div class="board" id="board"></div>
+    <p class="hint" id="hint">Drag a spirit onto the board, or click one to add it. Drag a placed spirit to another slot to move it. Hover a placed spirit to flip it or remove it.</p>
+  </section>
+</div>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const file = (p) => '/ws/file?path=' + encodeURIComponent(p);
+// Simulator mode (/team.html?sim): start with 4 random Spirit World spirits, then add spirits only from random draws.
+const SIM = new URLSearchParams(location.search).has('sim');
+const DRAW = { spiritWorld: { show: 4, pick: 2 }, arcaneAbyss: { show: 3, pick: 1 } }, START = 4;
+const TEAM_SIZE = 7, LS_KEY = SIM ? 'arc-team-sim' : 'arc-comp-builder'; // builder: the same save key and shape as the game: { teamName, board }
+const SPECIAL_ORANGE = '#ff9636', COMMON_GRAY = '#6b7280', COMMON_GOLD = '#ffce45';
+// Bags by cost, as in the game (src/lib/play/bags.ts): Spirit World 1-5, Arcane Abyss 7-9.
+const bagOf = (cost) => cost >= 1 && cost <= 5 ? 'spiritWorld' : cost >= 7 && cost <= 9 ? 'arcaneAbyss' : null;
+// Slot -> axial coordinates of the flat-top seven-hex grid (src/lib/hex/gridConfig.ts). Slot 4 is the center.
+const SLOT = { 4: [0, 0], 1: [1, -1], 2: [1, 0], 3: [0, 1], 5: [-1, 1], 6: [-1, 0], 7: [0, -1] }, R = 60;
+
+let catalog = [], byId = new Map(), classByName = new Map();
+let teamName = 'New Team', board = Array(TEAM_SIZE).fill(null); // board[i] = spirit id or null; duplicates are allowed
+let front = Array(TEAM_SIZE).fill(false); // front[i]: slot i shows the front side. A placed spirit shows its back side (ability and awaken text) by default.
+const sideImage = (i) => { const s = byId.get(board[i]); return s && (!front[i] && s.back ? s.back : s.image); }; // a spirit with no back side shows its front
+let offer = null, saved = false; // simulator: offer = { ids, left } = the drawn spirits and the picks that remain
+
+function restore() {
+  try { const d = JSON.parse(localStorage.getItem(LS_KEY) ?? 'null'); if (!d) return; saved = true;
+    if (SIM && Array.isArray(d.offer?.ids)) offer = { ids: d.offer.ids, left: Number(d.offer.left) || 1 };
+    if (Array.isArray(d.board)) board = Array.from({ length: TEAM_SIZE }, (_, i) => d.board[i] ?? null);
+    if (Array.isArray(d.front)) front = Array.from({ length: TEAM_SIZE }, (_, i) => !!d.front[i]);
+    if (typeof d.teamName === 'string') teamName = d.teamName; } catch { /* a corrupt save is ignored */ }
+}
+const persist = () => localStorage.setItem(LS_KEY, JSON.stringify(SIM ? { board, front, offer } : { teamName, board, front }));
+// ---------- simulator: random draws from a bag (each spirit has the same chance; one draw has no duplicates) ----------
+const sample = (list, n) => { const a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
+const bag = (name) => catalog.filter((s) => bagOf(s.cost) === name);
+function newRun() { board = Array(TEAM_SIZE).fill(null); front = Array(TEAM_SIZE).fill(false); sample(bag('spiritWorld'), START).forEach((s, i) => { board[i] = s.id; }); offer = null; }
+function draw(name) { offer = { ids: sample(bag(name), DRAW[name].show).map((s) => s.id), left: DRAW[name].pick }; paintTeam(); }
+
+async function load() {
+  const [hs, classes] = await Promise.all([fetch('/api/game/hex-spirits').then((r) => r.json()), fetch('/api/game/table?name=classes').then((r) => r.json())]);
+  for (const c of classes) classByName.set(c.name, c);
+  catalog = hs.spirits.map((s) => ({ id: s.name, name: s.name, cost: s.cost, origin: s.origin ?? s.folder.split('/').at(-2), classes: s.classes,
+    image: s.final?.front ? `${file(s.final.front + '-preview.png')}&v=${s.finalKey}` : file(s.front),
+    back: s.final?.back ? `${file(s.final.back + '-preview.png')}&v=${s.finalKey}` : null, awakenText: s.awakenText, runes: s.runes ?? [] }))
+    .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
+  byId = new Map(catalog.map((s) => [s.id, s]));
+  board = board.map((id) => (id && byId.has(id) ? id : null)); // a spirit that is gone leaves its slot
+  if (offer) { offer.ids = offer.ids.filter((id) => byId.has(id)); if (!offer.ids.length) offer = null; }
+  if (SIM && !saved) newRun();
+  $('origin').innerHTML = '<option value="">All origins</option>' + [...new Set(catalog.map((s) => s.origin))].sort().map((o) => `<option>${esc(o)}</option>`).join('');
+  $('teamName').value = teamName;
+  paintCatalog(); paintTeam();
+}
+function paintCatalog() {
+  hideTip();
+  if (SIM) { // only the open draw
+    $('picks').textContent = offer ? `Pick ${offer.left}` : '';
+    $('catalog').innerHTML = offer ? offer.ids.map((id) => byId.get(id)).map((s) => `<button class="spirit-card" draggable="true" data-id="${esc(s.id)}"><img src="${s.image}" alt="${esc(s.name)}" draggable="false"></button>`).join('')
+      : '<div class="note">Draw spirits to add to your team.</div>';
+    return;
+  }
+  const q = $('search').value.trim().toLowerCase(), o = $('origin').value, src = $('source').value;
+  // "Hide capstones and fairies": a capstone is a spirit with cost 9 (Michael's label), a fairy has the Fairy class.
+  const hide = $('hideSpecial').checked, isHidden = (s) => s.cost === 9 || s.classes.some((c) => c.name === 'Fairy');
+  const list = catalog.filter((s) => (!q || s.name.toLowerCase().includes(q)) && (!o || s.origin === o) && (src === 'all' || bagOf(s.cost) === src) && !(hide && isHidden(s)));
+  // Grouped by origin (a heading for each); in a group: by cost, then name.
+  const groups = {}; for (const s of list) (groups[s.origin] ??= []).push(s);
+  const card = (s) => `<button class="spirit-card" draggable="true" data-id="${esc(s.id)}"><img src="${s.image}" alt="${esc(s.name)}" loading="lazy" draggable="false"></button>`;
+  $('catalog').innerHTML = list.length ? Object.keys(groups).sort().map((o) => `<h3 class="cat-group">${esc(o)}</h3>${groups[o].map(card).join('')}`).join('')
+    : '<div class="note">No spirits found.</div>';
+}
+// ---------- trait tracker: class counts of the placed spirits (all awakened in the builder) ----------
+function thresholds(c) { return [...new Set((c?.effect_schema ?? []).map((b) => Number.parseInt(b.count, 10)).filter((n) => Number.isFinite(n) && n > 0))].sort((a, b) => a - b); }
+const isSpecial = (c) => c?.is_special === true || c?.class_type === 'special' || c?.class_type === 'human';
+function traitRows() {
+  const counts = {}, icon = {};
+  for (const id of board) for (const c of byId.get(id)?.classes ?? []) { counts[c.name] = (counts[c.name] ?? 0) + 1; icon[c.name] = c.icon; }
+  const specials = [], commons = [];
+  for (const [name, count] of Object.entries(counts)) {
+    const c = classByName.get(name), th = thresholds(c);
+    if (isSpecial(c)) specials.push({ name, count, icon: icon[name], color: SPECIAL_ORANGE, th: [], kind: 'Special' });
+    else { const met = th.filter((t) => t <= count).length; // gray to gold by the share of breakpoints that are met
+      commons.push({ name, count, icon: icon[name], color: th.length ? `color-mix(in srgb, ${COMMON_GOLD} ${Math.round(met / th.length * 100)}%, ${COMMON_GRAY})` : COMMON_GRAY, th, kind: 'Common' }); }
+  }
+  const byCount = (a, b) => b.count - a.count || a.name.localeCompare(b.name);
+  return [...specials.sort(byCount), ...commons.sort(byCount)];
+}
+function paintTraits() {
+  // Two lists: the common classes (count and breakpoints), then the special classes (no count: a special class is on or off).
+  const rows = traitRows(), commons = rows.filter((r) => r.kind === 'Common'), specials = rows.filter((r) => r.kind === 'Special').sort((a, b) => a.name.localeCompare(b.name));
+  const row = (r, count) => `<div class="trait" style="--c:${r.color}" data-trait="${esc(r.name)}">
+    <div class="emblem">${r.icon ? `<img src="${file(r.icon)}" alt="">` : esc(r.name[0])}${count ? `<span class="n">${r.count}</span>` : ''}</div>
+    <div><span class="name">${esc(r.name)}</span>${r.th.length ? `<div class="pips">${r.th.map((t) => `<span class="pip ${r.count >= t ? 'hit' : ''}">${t}</span>`).join('')}</div>` : ''}</div></div>`;
+  $('traits').innerHTML = !rows.length ? '<div class="note">Summon spirits to build traits.</div>'
+    : (commons.length ? '<span class="state-label">Classes</span>' + commons.map((r) => row(r, true)).join('') : '')
+    + (specials.length ? '<span class="state-label">Special classes</span>' + specials.map((r) => row(r, false)).join('') : '');
+}
+// The detail card on hover: description, breakpoints, footer.
+let tip = null;
+function hideTip() { tip?.remove(); tip = null; }
+$('traits').addEventListener('pointerover', (e) => {
+  const el = e.target.closest('[data-trait]'); if (!el) return;
+  hideTip(); const row = traitRows().find((r) => r.name === el.dataset.trait), c = classByName.get(row.name); if (!row) return;
+  const bps = (c?.effect_schema ?? []).slice().sort((a, b) => (Number(a.count) || 99) - (Number(b.count) || 99))
+    .map((bp) => ({ count: bp.count, color: bp.color ?? 'bronze', desc: (bp.effects ?? []).map((x) => (x?.description ?? '').trim()).filter(Boolean).join(' ') || (bp.description ?? '').trim() }));
+  tip = document.createElement('div'); tip.className = 'tip'; tip.style.setProperty('--c', row.color);
+  tip.innerHTML = `<div class="tip-head"><div class="emblem" style="--c:${row.color}">${row.icon ? `<img src="${file(row.icon)}" alt="">` : esc(row.name[0])}</div><div><span class="tip-name">${esc(row.name)}</span><span class="tip-kind">${row.kind}</span></div></div>
+    ${c?.description ? `<p>${esc(c.description)}</p>` : ''}${bps.map((b) => `<div class="bp-row"><span class="bp-count bp-${esc(b.color)}">${esc(b.count)}</span><div>${esc(b.desc)}</div></div>`).join('')}${c?.footer ? `<p>${esc(c.footer)}</p>` : ''}`;
+  document.body.appendChild(tip);
+  const a = el.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = a.right + 12; if (left + tw > innerWidth - 8) left = a.left - tw - 12; // flip to the left if it does not fit
+  tip.style.left = left + 'px'; tip.style.top = Math.max(8, Math.min(a.top + a.height / 2 - th / 2, innerHeight - th - 8)) + 'px';
+});
+$('traits').addEventListener('pointerout', (e) => { if (!e.relatedTarget?.closest?.('[data-trait]')) hideTip(); });
+// The detail card of a spirit in the list, above the spirit: what it needs to awaken and what its classes do.
+function spiritTip(s) {
+  const runes = s.runes.map((g) => g.map((f) => `<img src="${file(f)}" alt="${esc(f.split('/').at(-1).replace(/\.png$/, ''))}">`).join('<span class="or">or</span>')).join('');
+  // Spirit World spirits and heroes have no awaken requirement in the data; an Arcane Abyss spirit (cost 7+) without one shows that.
+  const awaken = runes ? `<div class="aw-runes">${runes}</div>` : s.awakenText ? esc(s.awakenText) : s.cost >= 7 ? 'No requirement.' : '';
+  const byName = new Map(); for (const c of s.classes) byName.set(c.name, { ...c, n: (byName.get(c.name)?.n ?? 0) + 1 });
+  const classes = [...byName.values()].map((c) => {
+    const k = classByName.get(c.name), special = isSpecial(k);
+    const text = (special && (k?.effect_schema ?? []).flatMap((b) => (b.effects ?? []).map((x) => (x?.description ?? '').trim())).filter(Boolean).join(' ')) || k?.description || '';
+    return `<div class="tip-class" style="--c:${special ? SPECIAL_ORANGE : COMMON_GRAY}"><div class="emblem">${c.icon ? `<img src="${file(c.icon)}" alt="">` : esc(c.name[0])}</div><div><span class="name">${esc(c.name)}${c.n > 1 ? ` ×${c.n}` : ''}</span><p>${esc(text)}</p></div></div>`;
+  }).join('');
+  return `<span class="tip-name">${esc(s.name)}</span>${awaken ? `<div class="tip-awaken"><span class="state-label">To awaken</span>${awaken}</div>` : ''}${classes}`;
+}
+$('catalog').addEventListener('pointerover', (e) => {
+  const el = e.target.closest('[data-id]'), s = el && byId.get(el.dataset.id); if (!s || dragId) return;
+  hideTip(); tip = document.createElement('div'); tip.className = 'tip'; tip.style.setProperty('--c', COMMON_GRAY); tip.innerHTML = spiritTip(s); document.body.appendChild(tip);
+  const a = el.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+  let top = a.top - th - 8; if (top < 8) top = a.bottom + 8; // above the spirit; below it when there is no room above
+  tip.style.left = Math.max(8, Math.min(a.left + a.width / 2 - tw / 2, innerWidth - tw - 8)) + 'px'; tip.style.top = top + 'px';
+});
+$('catalog').addEventListener('pointerout', (e) => { if (!e.relatedTarget?.closest?.('#catalog [data-id]')) hideTip(); });
+document.querySelector('.cat-scroll').addEventListener('scroll', hideTip, { passive: true });
+// ---------- playstyle wheel ----------
+// Eight qualities around a circle, in an order where neighbours help each other and opposite qualities work against each other.
+// An origin is strong in the two qualities next to it (only its Arcane Abyss spirits have these playstyles).
+const AXES = [['Initiative', 'Strike first'], ['Damage', 'Few strong dice'], ['Awakening', 'Awaken spirits'], ['Purity', 'Stay Good'],
+  ['Barrier', 'Survive hits'], ['Dice count', 'Many dice'], ['Augments', 'Spirit Augments'], ['Corruption', 'Go Evil']];
+// origin -> [the first of its two qualities (it is between axis i and axis i + 1), its colour]
+const WHEEL = { Fire: [0, '#c8372d'], Water: [2, '#2d7fd8'], Sun: [3, '#f2b81c'], Forest: [4, '#7c9a3a'], Mountain: [6, '#969ba5'], Moon: [7, '#6366f1'] };
+function paintWheel() {
+  const CX = 260, CY = 215, RR = 120, rad = Math.PI / 180, ang = (i) => -90 + i * 45; // axis 0 is at the top; the order is clockwise
+  const pt = (deg, r) => [CX + r * Math.cos(deg * rad), CY + r * Math.sin(deg * rad)], n = (v) => v.toFixed(1);
+  let out = `<circle class="ring" cx="${CX}" cy="${CY}" r="${RR}"/>`;
+  for (let i = 0; i < 4; i++) { const [x0, y0] = pt(ang(i), RR - 11), [x1, y1] = pt(ang(i + 4), RR - 11); out += `<line class="spoke" x1="${n(x0)}" y1="${n(y0)}" x2="${n(x1)}" y2="${n(y1)}"/>`; } // opposite qualities
+  for (const [name, [i, color]] of Object.entries(WHEEL)) {
+    const [x0, y0] = pt(ang(i) + 2.5, RR), [x1, y1] = pt(ang(i + 1) - 2.5, RR), [mx, my] = pt(ang(i) + 22.5, RR - 40);
+    out += `<path d="M${n(x0)} ${n(y0)}A${RR} ${RR} 0 0 1 ${n(x1)} ${n(y1)}" fill="none" stroke="${color}" stroke-width="22"><title>${name}: ${AXES[i][0]} and ${AXES[(i + 1) % 8][0]}</title></path>
+      <image href="${file(`references/icons/origins/${name} (icon).png`)}" x="${n(mx - 11)}" y="${n(my - 19)}" width="22" height="22" preserveAspectRatio="xMidYMid meet"/><text class="origin" x="${n(mx)}" y="${n(my + 17)}">${name}</text>`;
+  }
+  AXES.forEach(([name, hint], i) => {
+    const a = ang(i), cos = Math.cos(a * rad), sin = Math.sin(a * rad), [tx, ty] = pt(a, RR + 11), [x, y] = pt(a, RR + 24);
+    const anchor = Math.abs(cos) < .3 ? 'middle' : cos > 0 ? 'start' : 'end', y0 = sin < -.9 ? y - 14 : sin > .9 ? y + 12 : y - 2 + sin * 8; // two lines of text, placed away from the ring
+    out += `<circle class="tick" cx="${n(tx)}" cy="${n(ty)}" r="2.5"/><text class="axis" text-anchor="${anchor}" x="${n(x)}" y="${n(y0)}">${name}<tspan class="axis-hint" x="${n(x)}" dy="14">${hint}</tspan></text>`;
+  });
+  $('wheelPop').innerHTML = `<svg class="wheel" viewBox="0 34 520 364" role="img" aria-label="Playstyle wheel: the two qualities of each origin">${out}</svg>
+    <p>An origin is strong in the two qualities next to it. Qualities that are opposite each other (dashed lines) work against each other.</p>`;
+}
+function toggleWheel(open) { const b = $('wheelBtn'), p = $('wheelPop'); if (open && !p.innerHTML) paintWheel(); p.hidden = !open; b.setAttribute('aria-expanded', String(open)); }
+$('wheelBtn').onclick = () => toggleWheel($('wheelPop').hidden);
+addEventListener('pointerdown', (e) => { if (!$('wheelPop').hidden && !e.target.closest('.pop-wrap')) toggleWheel(false); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') toggleWheel(false); });
+// ---------- formation: the seven-hex board ----------
+function paintBoard() {
+  const center = ([q, r]) => [R * 1.5 * q, R * Math.sqrt(3) * (r + q / 2)];
+  const corners = (cx, cy) => Array.from({ length: 6 }, (_, i) => `${(cx + R * Math.cos(Math.PI / 3 * i)).toFixed(2)},${(cy + R * Math.sin(Math.PI / 3 * i)).toFixed(2)}`).join(' ');
+  const h = R * Math.sqrt(3) / 2, pad = 20;
+  let defs = '', cells = '';
+  for (const [slot, qr] of Object.entries(SLOT)) {
+    const [cx, cy] = center(qr), pts = corners(cx, cy), s = byId.get(board[slot - 1]);
+    if (!s) { cells += `<polygon class="hex-empty" data-slot="${slot}" points="${pts}"/>`; continue; }
+    defs += `<clipPath id="hc${slot}"><polygon points="${pts}"/></clipPath>`;
+    const act = (x, w, name, label) => `<g class="act" data-act="${name}"><rect x="${x}" y="${cy - h + 12}" width="${w}" height="15" rx="7.5"/><text x="${x + w / 2}" y="${cy - h + 22.6}">${label}</text></g>`;
+    const acts = s.back ? act(cx - 35, 26, 'flip', 'Flip') + act(cx - 5, 40, 'remove', 'Remove') : act(cx - 20, 40, 'remove', 'Remove'); // no back side: no Flip
+    cells += `<g class="hex-full" data-slot="${slot}"><title>${esc(s.name)}</title><polygon class="hex-empty" points="${pts}"/><image href="${sideImage(slot - 1)}" x="${cx - R}" y="${cy - h}" width="${R * 2}" height="${h * 2}" preserveAspectRatio="xMidYMid meet" clip-path="url(#hc${slot})"/>${acts}</g>`;
+  }
+  $('board').innerHTML = `<svg viewBox="${-2.5 * R - pad} ${-3 * h - pad} ${5 * R + pad * 2} ${6 * h + pad * 2}" role="img" aria-label="Formation"><defs>${defs}</defs>${cells}</svg>`;
+}
+function paintTeam() {
+  const n = board.filter(Boolean).length; $('count').textContent = `${n}/${TEAM_SIZE}`; $('count').classList.toggle('full', n === TEAM_SIZE);
+  paintTraits(); paintBoard(); if (SIM) paintCatalog(); persist();
+}
+// ---------- placement: drag from the catalog or click; removal: click a placed hex ----------
+function take(id) { // builder: add the spirit; simulator: use one pick of the open draw
+  if (SIM && !offer?.ids.includes(id)) return;
+  const i = board.findIndex((x) => x == null);
+  if (i === -1) { if (SIM) $('picks').textContent = 'The team is full. Remove a spirit first.'; return; } // a full board ignores the spirit
+  board[i] = id; front[i] = false;
+  if (SIM) { offer.ids.splice(offer.ids.indexOf(id), 1); if (--offer.left === 0) offer = null; }
+  paintTeam();
+}
+let dragId = null;
+$('catalog').addEventListener('click', (e) => { const b = e.target.closest('[data-id]'); if (b) take(b.dataset.id); });
+$('catalog').addEventListener('dragstart', (e) => { const b = e.target.closest('[data-id]'); if (!b) return; hideTip(); dragId = b.dataset.id; e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'copy'; });
+$('catalog').addEventListener('dragend', () => { dragId = null; $('boardPanel').classList.remove('over'); });
+$('boardPanel').addEventListener('dragover', (e) => { e.preventDefault(); $('boardPanel').classList.add('over'); });
+$('boardPanel').addEventListener('dragleave', () => $('boardPanel').classList.remove('over'));
+$('boardPanel').addEventListener('drop', (e) => { e.preventDefault(); if (dragId) take(dragId); dragId = null; $('boardPanel').classList.remove('over'); });
+// A placed spirit: drag it to another slot (an empty slot = move, a full slot = exchange). The buttons on hover flip or remove it; a click on the spirit does nothing.
+let move = null; // { slot, x, y, ghost }
+$('board').addEventListener('pointerdown', (e) => {
+  const g = e.target.closest('.hex-full'); if (!g || e.button || e.target.closest('.act')) return;
+  move = { slot: Number(g.dataset.slot), x: e.clientX, y: e.clientY, ghost: null }; e.preventDefault();
+});
+addEventListener('pointermove', (e) => {
+  if (!move) return;
+  if (!move.ghost) {
+    if (Math.hypot(e.clientX - move.x, e.clientY - move.y) < 6) return; // not a drag yet
+    const img = document.createElement('img'); img.src = sideImage(move.slot - 1); img.className = 'drag-ghost'; document.body.appendChild(img); move.ghost = img; document.body.classList.add('dragging');
+    document.querySelector(`.hex-full[data-slot="${move.slot}"]`)?.classList.add('lifting');
+  }
+  move.ghost.style.left = e.clientX + 'px'; move.ghost.style.top = e.clientY + 'px';
+  const over = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('[data-slot]');
+  for (const el of document.querySelectorAll('#board [data-slot]')) el.classList.toggle('drop-target', el === over && Number(el.dataset.slot) !== move.slot);
+});
+addEventListener('pointerup', (e) => {
+  if (!move) return; const m = move; move = null;
+  if (!m.ghost) return; // a click, not a drag
+  m.ghost.remove(); document.body.classList.remove('dragging');
+  const to = Number(document.elementFromPoint(e.clientX, e.clientY)?.closest?.('#board [data-slot]')?.dataset.slot);
+  if (to && to !== m.slot) { [board[m.slot - 1], board[to - 1]] = [board[to - 1], board[m.slot - 1]]; [front[m.slot - 1], front[to - 1]] = [front[to - 1], front[m.slot - 1]]; }
+  paintTeam();
+});
+addEventListener('pointercancel', () => { if (!move) return; move.ghost?.remove(); document.body.classList.remove('dragging'); move = null; paintTeam(); });
+$('board').addEventListener('click', (e) => {
+  const a = e.target.closest('.act'); if (!a) return;
+  const i = Number(a.closest('[data-slot]').dataset.slot) - 1;
+  if (a.dataset.act === 'flip') front[i] = !front[i]; else { board[i] = null; front[i] = false; }
+  paintTeam();
+});
+$('clear').onclick = () => { if (SIM) newRun(); else { board = Array(TEAM_SIZE).fill(null); front = Array(TEAM_SIZE).fill(false); } paintTeam(); };
+for (const b of document.querySelectorAll('[data-draw]')) b.onclick = () => draw(b.dataset.draw);
+if (SIM) {
+  document.body.classList.add('sim'); document.title = 'Team simulator · Niji Batch';
+  $('title').textContent = 'Team simulator'; $('clear').textContent = 'Restart';
+  $('modeLink').textContent = 'Builder'; $('modeLink').href = '/team.html';
+  $('hint').textContent = 'Click a drawn spirit to add it to the team. Drag a placed spirit to another slot to move it. Hover a placed spirit to flip it or remove it.';
+}
+$('teamName').oninput = (e) => { teamName = e.target.value; persist(); };
+for (const id of ['search', 'origin', 'source']) $(id).addEventListener('input', paintCatalog);
+try { $('hideSpecial').checked = localStorage.getItem('arc-team-hide-special') === '1'; } catch { /* no storage: the option starts off */ }
+$('hideSpecial').addEventListener('change', (e) => { try { localStorage.setItem('arc-team-hide-special', e.target.checked ? '1' : '0'); } catch { /* not saved */ } paintCatalog(); });
+restore(); load();
+</script>
+</body>
+</html>

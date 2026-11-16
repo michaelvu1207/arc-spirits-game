@@ -1,0 +1,52 @@
+[
+ {
+  "id": "480cd5f7-adea-481d-8ea9-aad776599d7b",
+  "name": "Fire Rune",
+  "kind": "basic",
+  "owner": "Fire Region",
+  "icon": "7248cdca-9b03-4951-bfba-a4d17f7b97c8",
+  "description": "",
+  "source_icon": null,
+  "source_emoji": "\ud83d\udd25"
+ },
+ {
+  "id": "34b2a963-f8c6-4fc0-8272-ddc50b0036a8",
+  "name": "Plant Rune",
+  "kind": "basic",
+  "owner": "Forest Region",
+  "icon": "8dd2b283-122b-4965-9184-f1f84e1216f4",
+  "description": "",
+  "source_icon": "3e3a2c94-fb2c-4969-bc93-3f5ed87d29aa",
+  "source_emoji": ""
+ },
+ {
+  "id": "356f3ad2-4cac-4b69-a3cc-7559f8891d8e",
+  "name": "Mountain Rune",
+  "kind": "basic",
+  "owner": "Mountain Region",
+  "icon": "87d1f1ad-9c0a-4a65-bb2b-16acebc2d019",
+  "description": "",
+  "source_icon": null,
+  "source_emoji": "\u26f0\ufe0f"
+ },
+ {
+  "id": "5eba8681-16b8-4563-b017-22c80a84b35b",
+  "name": "Water Rune",
+  "kind": "basic",
+  "owner": "Water Region",
+  "icon": "4d34484d-4345-448d-b192-a425841ddbc4",
+  "description": "",
+  "source_icon": null,
+  "source_emoji": "\ud83d\udca7"
+ },
+ {
+  "id": "7ca279f0-1ca8-484a-a86e-0a87aaa7b312",
+  "name": "Any basic rune",
+  "kind": "wildcard",
+  "owner": "",
+  "icon": "36aab6c9-b98c-4e84-b097-e743f45dde82",
+  "description": "",
+  "source_icon": null,
+  "source_emoji": ""
+ }
+]

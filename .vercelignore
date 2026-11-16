@@ -6,3 +6,6 @@
 /.gstack
 /playwright-report
 /test-results
+/tools
+/data
+/.art-cache

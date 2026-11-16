@@ -61,7 +61,7 @@ const REPO = resolve(HERE, '..', '..', '..');
 const HARNESS = join(homedir(), 'arcspirits-harness');
 const OUT = join(HARNESS, 'experiments', 'picktest');
 const DEFAULT_MODEL = 'anthropic/claude-opus-5-5';
-const DEFAULT_DATA = join(homedir(), 'ArcSpiritsArt', 'game');
+const DEFAULT_DATA = join(process.cwd(), 'data');
 
 const expand = (p: string) => resolve(p.replace(/^~(?=\/|$)/, homedir()));
 const readJsonl = <T>(path: string): T[] =>

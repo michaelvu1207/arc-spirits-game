@@ -1,0 +1,213 @@
+[
+ {
+  "id": "7d3dd729-a89a-4245-9fd1-f1c3f12222b4",
+  "internal_name": "7d3dd729-a89a-4245-9fd1-f1c3f12222b4",
+  "stage": "stage_1",
+  "title": "Recognition of the King",
+  "description": "The Spirit World cheers as the news spread of how Prox vanquished the Arcane. The Spirit World hails Prox as king, and is now known as the Golden Ruler. However, he hides a dark secret, that he consumed Arcane Blood and now suffers the dark, corrupting consequences.",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/7d3dd729-a89a-4245-9fd1-f1c3f12222b4.png",
+  "data": {},
+  "order_num": 0,
+  "created_at": "2026-01-17T01:21:19.793106+00:00",
+  "updated_at": "2026-02-16T17:38:57.609+00:00"
+ },
+ {
+  "id": "74f8f683-ea76-4557-8f3a-adcbf2ac944a",
+  "internal_name": "74f8f683-ea76-4557-8f3a-adcbf2ac944a",
+  "stage": "stage_1",
+  "title": "LETS GO TO HEAVEN HAHAHAAHAHAAaSDFIHHWPIAJ~~~~ explodes~",
+  "description": "Arcane Pixia overdosed on Arcane blood, and explodes. The Spirit World becomes enveloped in a highly toxic aura, killing almost everything in sight, leaving all locations devastated with Arcane Fallout. All players immediately drop to the Fallen status. Reveal 6 Event Location Cards, all called Arcane Wasteland, where players can trade 3 barriers for 1 arcane. Then reveal the next Event Location, The Outskirts, which does nothing. Stage End: All players are in The Outskirts.",
+  "reward_rows": [
+   {
+    "type": "all_players",
+    "icon_ids": []
+   }
+  ],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/74f8f683-ea76-4557-8f3a-adcbf2ac944a.png",
+  "data": {},
+  "order_num": 0,
+  "created_at": "2026-01-20T05:50:25.406471+00:00",
+  "updated_at": "2026-02-15T21:41:28.142+00:00"
+ },
+ {
+  "id": "4ea5446e-75be-4b9b-8a32-298c577d2ee8",
+  "internal_name": "4ea5446e-75be-4b9b-8a32-298c577d2ee8",
+  "stage": "stage_1",
+  "title": "Rise of the Arcane Synthesizer",
+  "description": "The Arcane Synthesizer rises from the Abyss to the surface, and with it comes a surge of monsters. These monsters invade the Spirit World, devouring many innocent spirits all types of Origins, sending their souls down into the Arcane Abyss. You play as a Guardian, leader of your Origin, and your mission is to vanquish and stop the Arcane Synthesizer, and save your spirits.",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/4ea5446e-75be-4b9b-8a32-298c577d2ee8.png",
+  "data": {},
+  "order_num": 0,
+  "created_at": "2025-11-26T03:17:25.79228+00:00",
+  "updated_at": "2026-02-15T21:41:31.118+00:00"
+ },
+ {
+  "id": "ead71b23-da6d-4a47-85eb-5067c62116a4",
+  "internal_name": "ead71b23-da6d-4a47-85eb-5067c62116a4",
+  "stage": "stage_3",
+  "title": "Mysterious Visitor",
+  "description": "With the air seemingly calm, the Fallen Flower Girl appears in the Arcane Abyss. With a dying voice, she says \"Beware the Arcane, its blood will consume and corrupt you\".",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/ead71b23-da6d-4a47-85eb-5067c62116a4.png",
+  "data": {},
+  "order_num": 2,
+  "created_at": "2026-01-10T00:41:55.102623+00:00",
+  "updated_at": "2026-02-15T21:41:36.24+00:00"
+ },
+ {
+  "id": "9102a660-d268-46fb-a9a8-ae3800aee19b",
+  "internal_name": "9102a660-d268-46fb-a9a8-ae3800aee19b",
+  "stage": "final_stage",
+  "title": "Last Words",
+  "description": "The Fallen Flower Girl lies in a pool of her own Arcane Blood, a consequence of her consuming. She explains her story, she was an ordinary spirit in the Floral Patch, when the Monsters invaded, and in desperation for survival, she was forced to consume Arcane Blood to fight back. She was able to protect her family, but she was forced to leave her home due to her causing Arcane Hysteria.",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/9102a660-d268-46fb-a9a8-ae3800aee19b.png",
+  "data": {},
+  "order_num": 3,
+  "created_at": "2026-01-10T00:51:10.898333+00:00",
+  "updated_at": "2026-02-15T21:41:37.57+00:00"
+ },
+ {
+  "id": "aed52aa4-0d8d-4d31-9f60-cc595c017163",
+  "internal_name": "aed52aa4-0d8d-4d31-9f60-cc595c017163",
+  "stage": "stage_3",
+  "title": "Sighting of the Irradiated Mutants",
+  "description": "The player that returns to the Outskirts of the Spirit World grimaces in what the Spirit World becomes. They see Mutants forming in the Arcane miasma that remains. Place 6 mutant monster cards in the Spirit World. The guardians realize the situation is worsening in the Spirit World, and everyone realizes the longer they wait, the stronger the monsters get. Note: All monsters are Final bosses. Stage End: All Mutants in the Spirit World are vanquished.",
+  "reward_rows": [
+   {
+    "type": "all_players",
+    "icon_ids": []
+   }
+  ],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/aed52aa4-0d8d-4d31-9f60-cc595c017163.png",
+  "data": {},
+  "order_num": 6,
+  "created_at": "2026-01-20T07:04:35.124985+00:00",
+  "updated_at": "2026-02-15T21:41:44.658+00:00"
+ },
+ {
+  "id": "4ba75eac-7544-4b04-9be7-fd3abf4772c5",
+  "internal_name": "4ba75eac-7544-4b04-9be7-fd3abf4772c5",
+  "stage": "stage_2",
+  "title": "Rise of the Kingdom",
+  "description": "With his newfound status, money and power, he transforms the Spirit Sanctuary into the Royal Kingdom. Additionally, Prox decides to constuct the Colosseum, a new location.",
+  "reward_rows": [
+   {
+    "type": "all_players",
+    "icon_ids": [
+     "203870f7-2169-49f2-915c-cb22743e85d7"
+    ]
+   }
+  ],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/4ba75eac-7544-4b04-9be7-fd3abf4772c5.png",
+  "data": {},
+  "order_num": 1,
+  "created_at": "2026-01-17T01:22:15.811368+00:00",
+  "updated_at": "2026-02-16T17:40:01.064+00:00"
+ },
+ {
+  "id": "d6ecc86c-5af3-4210-98e4-7b657a0993d7",
+  "internal_name": "d6ecc86c-5af3-4210-98e4-7b657a0993d7",
+  "stage": "stage_2",
+  "title": "Depths of the Abyss",
+  "description": "As the Spirit World becomes infected with Arcane, a Rift opens up on the Fairy Oasis, turning that location into the Depths of the Abyss. Place the next event card onto the Fairy Oasis, replacing that location permanently.",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/d6ecc86c-5af3-4210-98e4-7b657a0993d7.png",
+  "data": {},
+  "order_num": 1,
+  "created_at": "2026-01-18T01:10:05.391218+00:00",
+  "updated_at": "2026-02-15T21:41:32.282+00:00"
+ },
+ {
+  "id": "c2b9f6b6-df56-4ce0-a220-87cc24f7b528",
+  "internal_name": "c2b9f6b6-df56-4ce0-a220-87cc24f7b528",
+  "stage": "endgame",
+  "title": "A Purified World. For Now.",
+  "description": "With the defeat of Arcane, it seems that the Spirit World has been saved. However, any Guardians (Players) who has consumed arcane blood  slowly begin to deteriorate, and eventually succumb to the effects of the Arcane. Centuries pass, and a new enemy awakens, deep down in the abyss... The player with the most Victory Points wins this game for now, and if they have consumed any arcane, they will rise again as the Scenario of the next game.",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/c2b9f6b6-df56-4ce0-a220-87cc24f7b528.png",
+  "data": {},
+  "order_num": 4,
+  "created_at": "2025-12-02T01:28:35.393106+00:00",
+  "updated_at": "2026-02-15T21:41:38.912+00:00"
+ },
+ {
+  "id": "3b71c70c-c40e-4500-b6f3-ef6a1ac896cc",
+  "internal_name": "3b71c70c-c40e-4500-b6f3-ef6a1ac896cc",
+  "stage": "stage_3",
+  "title": "End of the Origins",
+  "description": "Seeing as many of his former Guardian Comrades, now rivals, are challenging him, he sends out Royal Armies to every origin location of active players. ",
+  "reward_rows": [
+   {
+    "type": "all_players",
+    "icon_ids": [
+     "66d1b264-b85c-428a-85ca-75f2f7284ebd"
+    ]
+   }
+  ],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/3b71c70c-c40e-4500-b6f3-ef6a1ac896cc.png",
+  "data": {},
+  "order_num": 4,
+  "created_at": "2026-01-17T01:22:27.581597+00:00",
+  "updated_at": "2026-02-15T21:41:40.064+00:00"
+ },
+ {
+  "id": "751b4dba-d68a-4041-a56b-1fe4f7d6ade6",
+  "internal_name": "751b4dba-d68a-4041-a56b-1fe4f7d6ade6",
+  "stage": "stage_2",
+  "title": "Discover of a New Civilization",
+  "description": "All fallen guardians escape the wasteland that the Spirit World has become, which is when all guardians encounter the Central Human Cooperative, a highly prosperous and thriving society run by the Human Race. A familiar face with a great smile greets you, the Arcane Advisor. He welcomes you into the Human Society, and mentions that although you are foriegners, the Humans would gladly trade runes for services. He warns you that there may be things that you won’t like, but assures you that since you provide runes, the humans here would gladly trade with you. Here, you find the Hospital (basic/ex runes for 4 barriers), Spirit Slave Market (basic/ex runes for 1 random summon), the CYBER INVESTMENT FUND (place runes here, cyber dice may duplicate them). All players gain the Arcane Advisor and 1 barrier. Stage Ends: When a guardian returns to The Outskirts.",
+  "reward_rows": [
+   {
+    "type": "all_players",
+    "icon_ids": []
+   }
+  ],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/751b4dba-d68a-4041-a56b-1fe4f7d6ade6.png",
+  "data": {},
+  "order_num": 2,
+  "created_at": "2026-01-20T06:54:20.140325+00:00",
+  "updated_at": "2026-02-15T21:41:35.028+00:00"
+ },
+ {
+  "id": "936281e3-32a5-4340-95ad-3c6d2a6c03fd",
+  "internal_name": "936281e3-32a5-4340-95ad-3c6d2a6c03fd",
+  "stage": "final_stage",
+  "title": "The Curse of Arcane",
+  "description": "The effects of the Arcane finally turn prox into a monster. He powers up, and gains Arcane Powers but with this comes his humanity. ",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/936281e3-32a5-4340-95ad-3c6d2a6c03fd.png",
+  "data": {},
+  "order_num": 5,
+  "created_at": "2026-01-17T01:22:42.145295+00:00",
+  "updated_at": "2026-02-15T21:41:41.417+00:00"
+ },
+ {
+  "id": "c76080fd-07b2-450a-a359-52af80b9cb25",
+  "internal_name": "c76080fd-07b2-450a-a359-52af80b9cb25",
+  "stage": "endgame",
+  "title": "A Purified World. For now",
+  "description": "With the defeat of Arcane, it seems that the Spirit World has been saved. However, any Guardians (Players) who has consumed arcane blood  slowly begin to deteriorate, and eventually succumb to the effects of the Arcane. Centuries pass, and a new enemy awakens, deep down in the abyss... The player with the most Victory Points wins this game for now, and if they have consumed any arcane, they will rise again as the Scenario of the next game.",
+  "reward_rows": [],
+  "image_path": null,
+  "card_image_path": "card_images/events/export/c76080fd-07b2-450a-a359-52af80b9cb25.png",
+  "data": {},
+  "order_num": 6,
+  "created_at": "2026-01-17T01:22:52.904957+00:00",
+  "updated_at": "2026-02-15T21:41:43.036+00:00"
+ }
+]

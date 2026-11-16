@@ -62,3 +62,22 @@ ml/human_reference/*/snapshot.json
 # Local game build caches and harness run output
 /.svelte-kit-local-*/
 /output/
+
+# Game data (data/): the working tables are tracked; editor backups are not.
+/data/*.bak*.json
+/data/backup-*/
+/data/_*/
+/data/.playwright-cli/
+
+# Data editor and card tool (tools/editor/): code is tracked; state and installs are not.
+/tools/editor/chrome-profile/
+/tools/editor/queue.json
+/tools/editor/capture.json
+/tools/editor/*.log
+/tools/editor/*.bak*
+/tools/editor/tools/*.bak*
+/tools/editor/tools/*.orig-*
+
+# Per-machine settings and the downloaded web art (npm run art:fetch).
+/arc.local.json
+/.art-cache/

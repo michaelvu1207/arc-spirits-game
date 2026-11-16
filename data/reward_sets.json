@@ -1,0 +1,7 @@
+[
+ {"id": "rune-scouts", "name": "Rune Scouts", "stage": 1, "sub_difficulty": 2, "barrier": 1, "damage": 2, "template": ["victory_point", "abyss_sealed_summon", "{rune}"]},
+ {"id": "rune-keepers", "name": "Rune Keepers", "stage": 1, "sub_difficulty": 3, "barrier": 2, "damage": 3, "template": ["2vp", "{rune}"]},
+ {"id": "rune-hunters", "name": "Rune Hunters", "stage": 2, "sub_difficulty": 5, "barrier": 5, "damage": 4, "template": ["2vp", "abyss_sealed_summon", "{rune}"]},
+ {"id": "rune-wardens", "name": "Rune Wardens", "stage": 2, "sub_difficulty": 7, "barrier": 7, "damage": 5, "template": ["3vp", "{rune}", "Exalted Attack - Side 1"]},
+ {"id": "relic-guardians", "name": "Relic Guardians", "stage": 2, "sub_difficulty": 8, "barrier": 8, "damage": 6, "template": ["2vp", "{relic}"]}
+]

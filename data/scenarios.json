@@ -1,0 +1,89 @@
+[
+ {
+  "id": "02ab2bbc-f620-4971-9c55-f60c09b91d74",
+  "name": "Arcane Myrtle",
+  "description": null,
+  "order_num": 2,
+  "created_at": "2026-01-12T23:38:15.856499+00:00",
+  "updated_at": "2026-01-12T23:38:15.856499+00:00",
+  "edition_id": "46530eea-a347-4a87-a590-bb002b05eef1",
+  "display_name": null,
+  "display_image_path": null,
+  "game_location_ids": [],
+  "is_enabled": true
+ },
+ {
+  "id": "3456e3e7-36f3-4e12-bf1e-e27373004408",
+  "name": "Arcane Pixia",
+  "description": null,
+  "order_num": 1,
+  "created_at": "2026-01-12T23:37:28.221623+00:00",
+  "updated_at": "2026-01-26T21:14:23.233693+00:00",
+  "edition_id": "46530eea-a347-4a87-a590-bb002b05eef1",
+  "display_name": null,
+  "display_image_path": null,
+  "game_location_ids": [],
+  "is_enabled": true
+ },
+ {
+  "id": "888d14fa-1e28-4db9-99be-bea77b0bc03d",
+  "name": "ArcaneBubblepop",
+  "description": null,
+  "order_num": 4,
+  "created_at": "2026-02-03T22:58:11.596951+00:00",
+  "updated_at": "2026-02-03T22:58:11.596951+00:00",
+  "edition_id": "46530eea-a347-4a87-a590-bb002b05eef1",
+  "display_name": "Arcane Bubblepop",
+  "display_image_path": null,
+  "game_location_ids": [
+   "a5bf38d5-a3e5-47aa-8e67-561edb1414ad",
+   "4b6eb2c1-21d0-406c-bc62-1c9486116cf2",
+   "035cce80-5413-4cd3-8b68-f8bdd411c9f2",
+   "2f32acdf-01de-4d1f-a1bd-ed9009ef052e",
+   "63db4155-3c50-4d0b-90d0-349704b6db96"
+  ],
+  "is_enabled": true
+ },
+ {
+  "id": "6c0b9bc6-68a2-4383-a146-7b519e1f6480",
+  "name": "The Golden Ruler Prox",
+  "description": "Prox vanquished the Arcane Synthesizer, but at a cost. Medium Difficulty, Low PVP combat, high monster difficulty, low resource access.",
+  "order_num": 3,
+  "created_at": "2026-01-12T23:59:46.982139+00:00",
+  "updated_at": "2026-01-12T23:59:46.982139+00:00",
+  "edition_id": "46530eea-a347-4a87-a590-bb002b05eef1",
+  "display_name": null,
+  "display_image_path": "scenario_images/6c0b9bc6-68a2-4383-a146-7b519e1f6480/display.png",
+  "game_location_ids": [
+   "6d8c041d-9c87-4c72-9101-c4bc9d1e83a0",
+   "035cce80-5413-4cd3-8b68-f8bdd411c9f2",
+   "63db4155-3c50-4d0b-90d0-349704b6db96",
+   "84645e86-26c3-43bd-ab04-91b1fc285c50",
+   "a5bf38d5-a3e5-47aa-8e67-561edb1414ad",
+   "2f32acdf-01de-4d1f-a1bd-ed9009ef052e",
+   "4b6eb2c1-21d0-406c-bc62-1c9486116cf2"
+  ],
+  "is_enabled": true
+ },
+ {
+  "id": "e240a7ca-857e-48a4-95e1-b5e8b179e505",
+  "name": "Arcane Synthesizer",
+  "description": "The introductory scenario to Arc Spirits. High on PVP combat, low monster difficulty, medium resource avaliability.",
+  "order_num": 0,
+  "created_at": "2026-01-12T22:07:14.634308+00:00",
+  "updated_at": "2026-01-12T22:07:14.634308+00:00",
+  "edition_id": "46530eea-a347-4a87-a590-bb002b05eef1",
+  "display_name": "Arcane Synthesizer",
+  "display_image_path": "scenario_images/e240a7ca-857e-48a4-95e1-b5e8b179e505/display.png",
+  "game_location_ids": [
+   "d7aab267-7f15-4104-8aa6-5ff441808994",
+   "d8331062-faa0-43b3-a9fe-689e14e87035",
+   "2f32acdf-01de-4d1f-a1bd-ed9009ef052e",
+   "035cce80-5413-4cd3-8b68-f8bdd411c9f2",
+   "63db4155-3c50-4d0b-90d0-349704b6db96",
+   "4b6eb2c1-21d0-406c-bc62-1c9486116cf2",
+   "68beff4b-6958-4de5-b517-f485d55734f8"
+  ],
+  "is_enabled": true
+ }
+]

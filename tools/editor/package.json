@@ -1,0 +1,11 @@
+{
+  "name": "niji-batch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "worker": "NIJI_WORKER=1 node server.mjs",
+    "client": "NIJI_REMOTE=home3090-linux node server.mjs",
+    "chrome": "\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 --user-data-dir=\"$HOME/niji-batch/chrome-profile\" --no-first-run --no-default-browser-check https://nijijourney.com/imagine"
+  }
+}

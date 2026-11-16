@@ -27,7 +27,13 @@ import { regionCatalog } from '../regionRules';
 import { REGION_ORIGIN_NAMES } from '../regions';
 import type { PlayCatalog, PlayCatalogClass } from '../types';
 
-export const DEFAULT_LOCAL_CATALOG_DIR = join(homedir(), 'ArcSpiritsArt', 'game');
+// The working tables are data/ in this repo (commands run from the repo root); the old location
+// in the home folder is the fallback for a checkout made before 2026-11-16.
+export const DEFAULT_LOCAL_CATALOG_DIR =
+	process.env.ARC_DATA_DIR ??
+	(existsSync(join(process.cwd(), 'data', 'hex_spirits.json'))
+		? join(process.cwd(), 'data')
+		: join(homedir(), 'ArcSpiritsArt', 'game'));
 
 export function frozenCatalogPath(repoRoot = process.cwd()): string {
 	return resolve(repoRoot, 'ml', 'catalog.json');

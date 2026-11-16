@@ -1,0 +1,1938 @@
+[
+  {
+    "id": "4768cb25-60ac-4178-b9e3-25aca98f495a",
+    "name": "Bastion",
+    "position": 42,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Halves incoming damage when the opponent has higher Initiative.",
+    "footer": "",
+    "created_at": "2026-10-24T00:44:08.236005+00:00",
+    "updated_at": "2026-10-24T00:45:45.842864+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "If the opponent has higher initiative, or is a monster, when you Take Damage, half it (rounding up)."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/4768cb25-60ac-4178-b9e3-25aca98f495a/class_great_enchanter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "d4752205-1dcb-4f87-8b46-14c4b1bd97d5",
+    "name": "Fairy",
+    "position": 13,
+    "icon_emoji": "🧚",
+    "color": "#8b5cf6",
+    "description": "Gains Exalted Attack dice from matching origins when awakened, plus 3 Initiative.",
+    "footer": "",
+    "created_at": "2026-02-20T02:54:31.018972+00:00",
+    "updated_at": "2026-10-16T04:45:14.656171+00:00",
+    "tags": [
+      "Economic"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When Awakened, gain 1 Exalted Attack for every spirit matching this Fairy's origin. Gain 3 Initiative."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/d4752205-1dcb-4f87-8b46-14c4b1bd97d5/class_fairy_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "601d161f-0d86-4904-afe9-20dd096954c9",
+    "name": "Ram",
+    "position": 21,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Deals more combat damage for each Spirit Augment on your spirits.",
+    "footer": "",
+    "created_at": "2026-03-20T19:46:00.915313+00:00",
+    "updated_at": "2026-10-16T04:45:15.298794+00:00",
+    "tags": [
+      "Player Interaction",
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat, deal 1 more damage for each Spirit Augment on your spirits."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/601d161f-0d86-4904-afe9-20dd096954c9/class_scavenger_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "f0aebe91-6217-4f9c-a85e-94ac2232f5b4",
+    "name": "King",
+    "position": 27,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains VP during Awakening, but must be discarded while Evil.",
+    "footer": "",
+    "created_at": "2026-04-05T05:23:47.454857+00:00",
+    "updated_at": "2026-10-16T04:45:15.854274+00:00",
+    "tags": [
+      "Special"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In the Awakening Phase, Gain 1 VP. If you are evil, you must discard this spirit."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/f0aebe91-6217-4f9c-a85e-94ac2232f5b4/class_golden_ruler_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "89a2cec9-bdcd-4b48-9574-033098e74438",
+    "name": "Battle Adept",
+    "position": 30,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains Max Barrier from overkills or Enchanted Attack dice from failed kills.",
+    "footer": "",
+    "created_at": "2026-04-18T21:59:24.659702+00:00",
+    "updated_at": "2026-10-16T04:45:16.243531+00:00",
+    "tags": [
+      "Engine"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "If you overkill by 2 damage, gain 1 Max Barrier. If you don't kill, gain 1 Enchanted Attack."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/939efd05-f56d-4a8b-b02b-885d3d142d00/class_adaptive_fighter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "human",
+    "augment_token_path": null
+  },
+  {
+    "id": "acbc0f6d-1514-45aa-85a0-a5d635db6e51",
+    "name": "Queen",
+    "position": 31,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains VP during the Awakening Phase.",
+    "footer": "",
+    "created_at": "2026-04-21T23:09:44.089251+00:00",
+    "updated_at": "2026-10-16T04:45:16.311166+00:00",
+    "tags": [
+      "Special"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In the Awakening Phase, gain 1 VP."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/acbc0f6d-1514-45aa-85a0-a5d635db6e51/class_world_ender_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "0d15066d-ab3b-4c84-b0d5-4562a1c5fbb7",
+    "name": "Warden",
+    "position": 44,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Reduces incoming damage for each Water Spirit.",
+    "footer": "",
+    "created_at": "2026-05-16T22:28:47.274043+00:00",
+    "updated_at": "2026-10-16T04:45:17.721432+00:00",
+    "tags": [
+      "Defensive"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you Take Damage, take 1 less for every Water Spirit."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/65d848e0-3bf3-4d2c-b738-3b5589b92fb9/class_aquamaiden_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "dd17c072-159c-4b43-831f-1f51bb8b7720",
+    "name": "Fighter",
+    "position": 3,
+    "icon_emoji": "🛡️",
+    "color": "#059669",
+    "description": "Gains Basic Attack dice when you Rest. Higher trait counts grant more dice and a Spirit Augment.",
+    "footer": "",
+    "created_at": "2025-07-18T23:11:34.463082+00:00",
+    "updated_at": "2026-10-16T04:45:12.482348+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "color": "bronze",
+        "count": 2,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, gain 1 Basic Attack Dice"
+          }
+        ]
+      },
+      {
+        "color": "bronze",
+        "count": 3,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, gain 2 Basic Attack Dice"
+          }
+        ]
+      },
+      {
+        "color": "silver",
+        "count": 4,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, gain 5 Basic Attack Dice"
+          }
+        ]
+      },
+      {
+        "count": 5,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, gain 10 Basic Attack Dice and 1 of any spirit augment."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/dd17c072-159c-4b43-831f-1f51bb8b7720/class_fighter_icon.png",
+    "name_translations": {
+      "de": "Kämpfer",
+      "es": "Luchador",
+      "fr": "Combattant",
+      "it": "Guerriero",
+      "ja": "ファイター",
+      "ko": "전사",
+      "pl": "Wojownik",
+      "zh-Hans": "战士",
+      "zh-Hant": "戰士"
+    },
+    "description_translations": {},
+    "footer_translations": {
+      "de": "Erwarteter Wurf der Nahkampfangriffswürfel: ~1, geringe Varianz.",
+      "es": "Tirada esperada de los dados de ataque cuerpo a cuerpo: ~1, baja varianza.",
+      "fr": "Jet attendu des dés d’attaque au corps à corps : ~1, faible variance.",
+      "it": "Tiro atteso dei dadi d’attacco in mischia: ~1, bassa varianza.",
+      "ja": "近接攻撃ダイスの期待値：~1、低分散。",
+      "ko": "근접 공격 주사위 기대값: ~1, 낮은 분산.",
+      "pl": "Oczekiwany wynik rzutu kośćmi ataku wręcz: ~1, niska wariancja.",
+      "zh-Hans": "近战攻击骰子期望掷出值：约1，低方差。",
+      "zh-Hant": "近戰攻擊骰的預期擲骰結果：~1，低變異。"
+    },
+    "is_special": false,
+    "class_type": "normal",
+    "augment_token_path": "runes/efa4b29a-06f0-43af-bd11-d60c180e793e/icon.png"
+  },
+  {
+    "id": "173589ed-9bec-4965-94e6-dadbc6b5310a",
+    "name": "Elementalist",
+    "position": 4,
+    "icon_emoji": "🪄",
+    "color": "#6b7280",
+    "description": "Upgrades attack dice when you Rest.",
+    "footer": "",
+    "created_at": "2025-07-18T23:11:34.463082+00:00",
+    "updated_at": "2026-10-16T04:45:12.677843+00:00",
+    "tags": [
+      "Engine"
+    ],
+    "effect_schema": [
+      {
+        "color": "bronze",
+        "count": 2,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, upgrade an attack dice, once.",
+            "description_translations": {
+              "de": "Verbessere 4 Würfel zu Erhaben.",
+              "es": "Mejora 4 dados a Exaltado.",
+              "fr": "Améliorez 4 dés en Exalté.",
+              "it": "Migliora 4 dadi a Esaltato.",
+              "ja": "ダイス4個をExaltedにアップグレードする。",
+              "ko": "주사위 4개를 Exalted로 업그레이드합니다.",
+              "pl": "Ulepsz 4 kości do Exalted.",
+              "zh-Hans": "将4个骰子升级为崇高。",
+              "zh-Hant": "將4顆骰子升級為崇高。"
+            }
+          }
+        ],
+        "count_translations": {
+          "de": "Einzigartig 2",
+          "es": "Único 2",
+          "fr": "Unique 2",
+          "it": "Unico 2",
+          "ja": "ユニーク 2",
+          "ko": "고유 2",
+          "pl": "Unikalny 2",
+          "zh-Hans": "唯一 2",
+          "zh-Hant": "唯一 2"
+        }
+      },
+      {
+        "count": 3,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, upgrade an attack dice, up to 2 times."
+          }
+        ]
+      },
+      {
+        "count": 4,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, upgrade an attack dice, up to 5 times."
+          }
+        ]
+      },
+      {
+        "count": 5,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Rest, upgrade an attack dice, up to 10 times."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/173589ed-9bec-4965-94e6-dadbc6b5310a/class_elementalist_icon.png",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {
+      "de": "Erwarteter Wurf an Magieangriffswürfeln: 4, hohe Varianz.",
+      "es": "Tirada esperada de dados de ataque mágico: 4, alta varianza.",
+      "fr": "Jet attendu de dés d’attaque magique : 4, forte variance.",
+      "it": "Tiro previsto di dadi d’attacco magico: 4, alta varianza.",
+      "ja": "魔法攻撃ダイスの期待ロール数：4、高い分散。",
+      "ko": "마법 공격 주사위 기대 굴림: 4, 높은 변동성.",
+      "pl": "Oczekiwany rzut kośćmi ataku magicznego: 4, wysoka wariancja.",
+      "zh-Hans": "魔法攻击骰预期掷骰数：4，高波动。",
+      "zh-Hant": "魔法攻擊骰的預期擲骰數：4，波動較大。"
+    },
+    "is_special": false,
+    "class_type": "normal",
+    "augment_token_path": "runes/d0b484ed-733c-4d55-b549-30e631eec857/icon.png"
+  },
+  {
+    "id": "dcf1dd2d-3369-468f-9475-5ffc5b7bc1ed",
+    "name": "Nomad",
+    "position": 22,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Can perform each location interaction up to twice.",
+    "footer": "",
+    "created_at": "2026-03-21T19:58:06.568472+00:00",
+    "updated_at": "2026-10-16T04:45:15.352887+00:00",
+    "tags": [
+      "Economic"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "You may do ALL location interactions up to two times. In the Awakening Phase, gain 1 Any basic Rune."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/dcf1dd2d-3369-468f-9475-5ffc5b7bc1ed/class_prodigy_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "9e0b5091-19a9-464c-ad81-bd0e8a4dd48b",
+    "name": "Relic Envoy",
+    "position": 28,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Shares Fairy Relics with players you encounter.",
+    "footer": "",
+    "created_at": "2026-04-05T05:53:39.232089+00:00",
+    "updated_at": "2026-10-16T04:45:15.928141+00:00",
+    "tags": [
+      "Economic"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you encounter a player, you may give them and yourself 1 Fairy Relic from the supply."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/df324bbb-7180-470e-baad-355781772f23/class__icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "d02f42f6-6451-4f8a-a586-ac130f9885a9",
+    "name": "Relic Sentinel",
+    "position": 32,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Can discard a relic to prevent incoming damage.",
+    "footer": "",
+    "created_at": "2026-04-21T23:22:54.018845+00:00",
+    "updated_at": "2026-10-16T04:45:16.364091+00:00",
+    "tags": [
+      "Special"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you Take Damage, you may choose to take 0 damage if you discard a relic."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/70333851-21a2-4479-8f3e-3ce51eccf09a/class_world_guardian_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "d94cc132-6e83-4527-9f15-2365fde69518",
+    "name": "Spellblade",
+    "position": 45,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Can redirect navigation and always attacks first.",
+    "footer": "",
+    "created_at": "2026-05-16T22:32:43.379382+00:00",
+    "updated_at": "2026-10-16T04:45:17.897065+00:00",
+    "tags": [
+      "Initiative",
+      "Special"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Navigation Reveal, you may change your destination and you may always attack first."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/d94cc132-6e83-4527-9f15-2365fde69518/class_dragon_warrior_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "17e08cde-f3d2-480b-8386-1e3047e2f85a",
+    "name": "Mystic",
+    "position": 6,
+    "icon_emoji": "🌀",
+    "color": "#6b7280",
+    "description": "Reshapes spirit summons and unlocks doubled Cultivate runes, simultaneous attacks, and additional augment placement.",
+    "footer": "",
+    "created_at": "2025-07-18T23:11:34.463082+00:00",
+    "updated_at": "2026-10-16T04:45:14.06095+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On a Spirit World or Abyss Summon, you may put all spirits back and draw again."
+          }
+        ]
+      },
+      {
+        "count": 3,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you Cultivate, you may gain twice as many runes. In addition to (1) and (2)."
+          }
+        ]
+      },
+      {
+        "count": 4,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When gaining spirit augments, you may place them on a spirit with one existing augment. In addition to (1), (2) and (3)."
+          }
+        ]
+      },
+      {
+        "count": 2,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat, your side may always attack at the same time as the enemy. In addition to (1)."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/17e08cde-f3d2-480b-8386-1e3047e2f85a/class_soul_weaver_icon.png",
+    "name_translations": {
+      "de": "Seelenweber",
+      "es": "Tejedor de almas",
+      "fr": "Tisseur d’âmes",
+      "it": "Tessitore d’anime",
+      "ja": "魂織り",
+      "ko": "영혼 직조사",
+      "pl": "Tkacz Dusz",
+      "zh-Hans": "织魂者",
+      "zh-Hant": "靈魂編織者"
+    },
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "normal",
+    "augment_token_path": "runes/33f343e7-6bdb-43cc-8b27-115eaa16826f/icon.png"
+  },
+  {
+    "id": "20d2a252-3655-4839-93a4-04db111c0617",
+    "name": "Cursed Spirit",
+    "position": 10,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Grants Awakening rewards based on your corruption status and Cursed Spirit traits.",
+    "footer": "",
+    "created_at": "2026-03-19T20:39:39.060882+00:00",
+    "updated_at": "2026-10-16T04:45:14.360212+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": "1+",
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "If you become Tainted, in the Awakening Phase, gain 1 max barrier or 1 Enchanted Attack for every Cursed Spirit."
+          }
+        ]
+      },
+      {
+        "count": "1+",
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "If you become Corrupt,  in the Awakening Phase, gain 1 max barrier or 1 Rune for every Cursed Spirit."
+          }
+        ]
+      },
+      {
+        "count": "1+",
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "If you become Fallen, in the Awakening Phase, gain 1 max barrier or 1 Spirit Augment for every Cursed Spirit."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/33ea32fb-6a39-445b-8754-c833afd9e7f2/class_dark_spirit_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "normal",
+    "augment_token_path": "runes/44d0b158-8892-42c7-9ce8-1a033da9440d/icon.png"
+  },
+  {
+    "id": "8e156cb4-1461-411f-8b0c-79adacbc9d97",
+    "name": "Druid",
+    "position": 33,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains one more Exalted Attack Dice when you gain one.",
+    "footer": "",
+    "created_at": "2026-04-21T23:48:13.670298+00:00",
+    "updated_at": "2026-10-16T04:45:16.43405+00:00",
+    "tags": [
+      "Economic"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you gain an Exalted Attack Dice, you may gain 1 more. The extra dice does not cause this ability again."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/8e156cb4-1461-411f-8b0c-79adacbc9d97/class_cleanser_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "1f880d9d-f0e7-4d2b-8e50-ce9883b1c102",
+    "name": "Titan",
+    "position": 46,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Has +6 damage and +6 Initiative, and reduces incoming damage by 6.",
+    "footer": "",
+    "created_at": "2026-05-16T22:42:49.13145+00:00",
+    "updated_at": "2026-10-16T04:45:18.143095+00:00",
+    "tags": [
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you take damage, take 6 less. Gain 6 damage and 6 Initiative."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/2ad7349b-bd42-4212-8fc3-0fee230f303d/class_golem_of_wishes_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "e6cb39c6-eee0-47d2-b032-c2a992ab7378",
+    "name": "Sentinel",
+    "position": 34,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Can discard attack dice before the roll to deal more damage.",
+    "footer": "",
+    "created_at": "2026-04-22T00:04:59.086439+00:00",
+    "updated_at": "2026-10-16T04:45:16.580415+00:00",
+    "tags": [
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "Before you roll in combat, you may discard attack dice. For each dice that you discard, deal 2 more damage."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/7b2067a7-abfa-4407-b249-01837a48346c/class_wish_maker_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "cbbdd615-d54b-4aa3-b860-ef605df41f91",
+    "name": "Sorcerer",
+    "position": 47,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains an Enchanted Attack Dice in the Awakening Phase while you are Evil.",
+    "footer": "",
+    "created_at": "2026-05-25T16:55:39.470035+00:00",
+    "updated_at": "2026-10-16T04:45:18.454354+00:00",
+    "tags": [
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In the Awakening Phase, if you are Evil, gain 1 Enchanted Attack Dice."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/cbbdd615-d54b-4aa3-b860-ef605df41f91/class_arcane_advisor_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "aa90084b-a07a-4b00-9448-9f5dae83bd03",
+    "name": "Cultivator",
+    "position": 5,
+    "icon_emoji": "🤝",
+    "color": "#6b7280",
+    "description": "Gains Max Barrier when you Cultivate. Higher trait counts grant more capacity and a relic.",
+    "footer": "",
+    "created_at": "2025-07-18T23:11:34.463082+00:00",
+    "updated_at": "2026-10-16T04:45:13.784449+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 2,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Cultivate, gain 1 Max Barrier."
+          }
+        ]
+      },
+      {
+        "count": 3,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Cultivate, gain 2 Max Barrier."
+          }
+        ]
+      },
+      {
+        "count": 4,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Cultivate, gain 5 Max Barrier."
+          }
+        ]
+      },
+      {
+        "count": 5,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Cultivate, gain 10 Max Barrier. The first time (once per game), also gain 1 relic of your choice."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/aa90084b-a07a-4b00-9448-9f5dae83bd03/class_support_icon.png",
+    "name_translations": {
+      "de": "Unterstützung",
+      "es": "Apoyo",
+      "fr": "Soutien",
+      "it": "Supporto",
+      "ja": "支援",
+      "ko": "지원",
+      "pl": "Wsparcie",
+      "zh-Hans": "支援",
+      "zh-Hant": "支援"
+    },
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "normal",
+    "augment_token_path": "runes/a844c161-3f67-42d7-ba59-d5efd5df5f98/icon.png"
+  },
+  {
+    "id": "bf04c279-bcff-41f0-a9e3-be3f9161b887",
+    "name": "Monk",
+    "position": 17,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains Initiative and takes less damage while you are not Evil and have no Cursed Spirits.",
+    "footer": "",
+    "created_at": "2026-03-19T20:45:16.242334+00:00",
+    "updated_at": "2026-10-16T04:45:14.823159+00:00",
+    "tags": [
+      "Defensive"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "While you are not Evil and have no Cursed Spirits, gain 5 Initiative and take 2 less damage."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/d6e63b52-7617-4a84-8602-2e85b4ea2191/class_disruptor_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "41180098-1490-4223-9a5a-415a6ec89ca0",
+    "name": "Herder",
+    "position": 35,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Lets each of your Arcane spirits hold two Spirit Augments.",
+    "footer": "",
+    "created_at": "2026-04-22T00:16:36.468675+00:00",
+    "updated_at": "2026-10-16T04:45:16.662911+00:00",
+    "tags": [
+      "Combat",
+      "Augment Economy"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "Each of your Arcane spirits may hold up to 2 Spirit Augments."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/41180098-1490-4223-9a5a-415a6ec89ca0/class_fairy_droid_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "cd699d38-fea9-4bb9-9244-8acfa74f8e5a",
+    "name": "Arcane Alchemist",
+    "position": 26,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Converts four attack dice into an Arcane Attack die when you Cultivate.",
+    "footer": "",
+    "created_at": "2026-04-05T02:12:52.192563+00:00",
+    "updated_at": "2026-10-16T04:45:15.631165+00:00",
+    "tags": [
+      "Engine"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you cultivate, you may discard 4 attack dice to gain 1 Arcane Attack Dice."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/cd699d38-fea9-4bb9-9244-8acfa74f8e5a/class_lone_warrior_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "human",
+    "augment_token_path": null
+  },
+  {
+    "id": "72bf99e7-2cf1-497b-9a8e-1df58e37096d",
+    "name": "Smith",
+    "position": 36,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains one more Spirit Augment when you gain one.",
+    "footer": "",
+    "created_at": "2026-04-22T00:21:39.705953+00:00",
+    "updated_at": "2026-10-16T04:45:16.81106+00:00",
+    "tags": [
+      "Augment Economy",
+      "Engine"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you gain a Spirit Augment, you may gain 1 more of your choice. The extra augment does not cause this ability again."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/326d5fdf-9c20-4dae-93dc-3484a83b7e3b/class_implanter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "1a894014-2829-480e-9c16-75c92aa05b47",
+    "name": "Huntress",
+    "position": 40,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Has +2 Initiative and gains three Arcane Attack dice when awakened.",
+    "footer": "",
+    "created_at": "2026-04-26T14:30:08.663128+00:00",
+    "updated_at": "2026-10-16T04:45:17.037973+00:00",
+    "tags": [
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "Gain 2 initiative. On this spirit's Awakening, gain 3 Arcane Attack Dice."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/4714711c-ab82-4265-b0fd-3b6be243571b/class_deep_sea_hunter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "2686944a-49f4-4a5e-ac3d-d10d14bb9609",
+    "name": "Mage",
+    "position": 14,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains 4 Arcane Attack Dice when awakened.",
+    "footer": "",
+    "created_at": "2026-03-19T20:05:36.221445+00:00",
+    "updated_at": "2026-10-16T04:45:14.728682+00:00",
+    "tags": [
+      "Combat",
+      "Engine"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On this spirit's Awakening, gain 4 Arcane Attack Dice."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/2a48862c-e2c8-4449-88b2-9f27871033cd/class_rune_mage_icon.png",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "ae0ad0aa-9ab5-4872-9777-ebc21717adc2",
+    "name": "Corruptor",
+    "position": 18,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Sets your status to Fallen and transforms Spirit World spirits into Arcane Abyss spirits.",
+    "footer": "",
+    "created_at": "2026-03-20T00:33:49.202138+00:00",
+    "updated_at": "2026-10-16T04:45:14.892517+00:00",
+    "tags": [
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "Set your status to Fallen (this is not a corruption). Replace all Spirit World spirits with a random Arcane Abyss Spirit. Gain 2 Initiative."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/748b82b1-ae74-4295-ac84-9dad5a81ffe7/class_dark_fighter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "33c7d413-1dd0-472f-be67-5505cd830084",
+    "name": "Woundreaver",
+    "position": 23,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Deals extra combat damage from broken barriers, up to 4.",
+    "footer": "",
+    "created_at": "2026-03-24T02:05:53.678223+00:00",
+    "updated_at": "2026-10-16T04:45:15.395931+00:00",
+    "tags": [
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In Combat, deal 1 damage per Broken Barrier (max 4)"
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/33c7d413-1dd0-472f-be67-5505cd830084/class_blood_hunter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "41a377bb-c49a-4675-8ecc-44105135ed5b",
+    "name": "Monster Hunter",
+    "position": 41,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Can initiate Monster Combat twice.",
+    "footer": "",
+    "created_at": "2026-05-02T04:35:18.613747+00:00",
+    "updated_at": "2026-10-16T04:45:17.184471+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "You may initiate Monster Combat two times."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/41a377bb-c49a-4675-8ecc-44105135ed5b/class_monster_hunter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "human",
+    "augment_token_path": null
+  },
+  {
+    "id": "46cf02f0-a3cd-4211-bde4-cc3c5417bd6f",
+    "name": "Healer",
+    "position": 1,
+    "icon_emoji": "🛡️",
+    "color": "#88a1d3",
+    "description": "Restores barriers when discarded, and can restore barriers and gain VP when resting at 10 Max Barrier.",
+    "footer": "",
+    "created_at": "2025-07-18T23:11:34.463082+00:00",
+    "updated_at": "2026-10-16T04:45:12.238861+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "color": "bronze",
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On rest, if you have 10 max barrier, you may restore 3 barrier and gain 1 VP. When discarded, restore 2 barrier."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/46cf02f0-a3cd-4211-bde4-cc3c5417bd6f/class_defender_icon.svg+xml",
+    "name_translations": {
+      "de": "Verteidiger",
+      "es": "Defensor",
+      "fr": "Défenseur",
+      "it": "Difensore",
+      "ja": "守護者",
+      "ko": "수호자",
+      "pl": "Obrońca",
+      "zh-Hans": "防御者",
+      "zh-Hant": "防衛者"
+    },
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "human",
+    "augment_token_path": null
+  },
+  {
+    "id": "5ef93452-0c88-4710-83b9-bbebadbdd8cf",
+    "name": "Cleric",
+    "position": 19,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Reduces incoming damage for each unique relic you hold.",
+    "footer": "",
+    "created_at": "2026-03-20T00:45:30.2334+00:00",
+    "updated_at": "2026-10-16T04:45:15.064938+00:00",
+    "tags": [
+      "Economic"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On this spirit's Awakening, gain 1 relic of your choice. For every unique Relic you hold, reduce incoming damage by 2."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/5ef93452-0c88-4710-83b9-bbebadbdd8cf/class_rune_guardian_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "8015821c-08cd-4895-9b03-865ad09976aa",
+    "name": "Paladin",
+    "position": 43,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "High Initiative, and wins initiative ties.",
+    "footer": "",
+    "created_at": "2026-05-03T08:21:14.854497+00:00",
+    "updated_at": "2026-10-16T04:45:17.586769+00:00",
+    "tags": [
+      "Combat"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "+4 Initiative. If initiative is tied, your side strikes first."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/8015821c-08cd-4895-9b03-865ad09976aa/class_high_sorcerer_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "f5438f3c-2052-4093-b402-893a45cf7046",
+    "name": "Beast",
+    "position": 8,
+    "icon_emoji": "😼",
+    "color": "#6b7280",
+    "description": "Adds combat damage and Initiative for each Spirit Animal trait.",
+    "footer": "",
+    "created_at": "2025-07-18T23:11:34.463082+00:00",
+    "updated_at": "2026-10-16T04:45:14.229299+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": "1+",
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat, deal 1 damage and gain 1 combat initiative for every Spirit Animal trait.",
+            "description_translations": {
+              "de": "Erhalte 1 zusätzlichen Siegpunkt beim Töten eines Monsters. Verringere eingehenden Monsterschaden um 1",
+              "es": "Gana 1 punto de victoria adicional al matar a un monstruo. Reduce el daño de monstruo recibido en 1",
+              "fr": "Gagnez 1 point de victoire supplémentaire lors de l'élimination d'un monstre. Réduisez les dégâts de monstre subis de 1",
+              "it": "Ottieni 1 punto vittoria extra quando uccidi un Mostro. Riduci di 1 i danni dei mostri subiti",
+              "ja": "モンスターを倒したとき、追加で勝利点を1獲得する。受けるモンスターのダメージを1減らす",
+              "ko": "몬스터 처치 시 추가로 승리 점수 1점을 획득한다. 받는 몬스터 피해를 1 감소시킨다",
+              "pl": "Zyskaj 1 dodatkowy punkt zwycięstwa za Zabicie Potwora. Zmniejsz otrzymywane obrażenia od potworów o 1",
+              "zh-Hans": "击杀怪物时额外获得 1 点胜利点数。受到的怪物伤害减少 1",
+              "zh-Hant": "擊殺怪物時額外獲得 1 點勝利點數。受到的怪物傷害減少 1"
+            }
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/f5438f3c-2052-4093-b402-893a45cf7046/class_beast_icon.png",
+    "name_translations": {
+      "de": "Tier",
+      "es": "Animal",
+      "fr": "Animal",
+      "it": "Animale",
+      "ja": "動物",
+      "ko": "동물",
+      "pl": "Zwierzę",
+      "zh-Hans": "动物",
+      "zh-Hant": "動物"
+    },
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "normal",
+    "augment_token_path": "runes/f1c4f059-61e0-40ad-ad9a-4e25a8531f49/icon.png"
+  },
+  {
+    "id": "97724d22-27de-490d-86d4-e87e83d25961",
+    "name": "Sharpshooter",
+    "position": 20,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Lets your side attack simultaneously with the enemy; grants an Enchanted Attack when discarded.",
+    "footer": "",
+    "created_at": "2026-03-20T00:48:28.111082+00:00",
+    "updated_at": "2026-10-16T04:45:15.246926+00:00",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "Your side may always attack at the same time as the enemy. When discarded, gain 1 Enchanted Attack."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/97724d22-27de-490d-86d4-e87e83d25961/class_sharpshooter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "human",
+    "augment_token_path": null
+  },
+  {
+    "id": "85021637-3ad8-4476-a675-8187938dd7ee",
+    "name": "Captain",
+    "position": 29,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Gains a Spirit Augment when cultivating with three Heroes, and an Enchanted Attack when discarded.",
+    "footer": "",
+    "created_at": "2026-04-13T03:40:09.536802+00:00",
+    "updated_at": "2026-10-16T04:45:16.140739+00:00",
+    "tags": [
+      "Engine"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "If you Cultivate with 3 Heroes, gain 1 Spirit Augment. When discarded, gain 1 Enchanted Attack."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/85021637-3ad8-4476-a675-8187938dd7ee/class_augmenter_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": false,
+    "class_type": "human",
+    "augment_token_path": null
+  },
+  {
+    "id": "91322cba-4201-48a3-86b1-2d6d034fce3f",
+    "name": "Summoner",
+    "position": 11,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Draws from the Arcane Abyss on Spirit World summons and gains VP for discarded Arcane Abyss spirits.",
+    "footer": "",
+    "created_at": "2025-11-16T20:42:02.652817+00:00",
+    "updated_at": "2026-10-16T04:45:14.507928+00:00",
+    "tags": [
+      "Special"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Spirit World summon, you may draw from the Arcane Abyss Bag. When you discard an Arcane Abyss Spirit, gain 4 points.",
+            "description_translations": {
+              "de": "Erhalte 1 Arkaner Angriff für je 2 Arkane Tropfen, die du hast.",
+              "es": "Obtén 1 Ataque Arcano por cada 2 Gotas Arcanas que tengas.",
+              "fr": "Gagnez 1 Attaque arcanique pour chaque tranche de 2 Gouttelettes arcaniques que vous avez.",
+              "it": "Ottieni 1 Attacco Arcano per ogni 2 Gocce Arcane che possiedi.",
+              "ja": "所持している秘術の雫2つごとに、秘術攻撃を1得る。",
+              "ko": "보유한 비전 물방울 2개마다 비전 공격 1을 획득합니다.",
+              "pl": "Zyskaj 1 Atak Arkaniczny za każde 2 Arkane Krople, które posiadasz.",
+              "zh-Hans": "你每拥有 2 个奥术水滴，获得 1 点奥术攻击。",
+              "zh-Hant": "你每擁有 2 個奧術水滴，獲得 1 點奧術攻擊。"
+            }
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/91322cba-4201-48a3-86b1-2d6d034fce3f/class_arcanist_icon.png",
+    "name_translations": {
+      "de": "Arkanist",
+      "es": "Arcanista",
+      "fr": "Arcaniste",
+      "it": "Arcanista",
+      "ja": "アルカニスト",
+      "ko": "아르카니스트",
+      "pl": "Arkanista",
+      "zh-Hans": "奥术师",
+      "zh-Hant": "奧術師"
+    },
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "136bd398-5144-46d6-a128-371b2d39596a",
+    "name": "Assassin",
+    "position": 37,
+    "icon_emoji": "🛡️",
+    "color": "#8b5cf6",
+    "description": "Strikes first and harder against a player who has more attack dice.",
+    "footer": "",
+    "created_at": "2026-04-22T18:02:02.553787+00:00",
+    "updated_at": "2026-10-16T04:45:16.940438+00:00",
+    "tags": [
+      "Combat",
+      "Initiative"
+    ],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat with a player who has more attack dice than you, strike first and deal 3 more damage."
+          }
+        ]
+      }
+    ],
+    "icon_png": "class_icons/136bd398-5144-46d6-a128-371b2d39596a/class_dual_wielder_icon.svg+xml",
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "7f97fa53-872c-4bc3-9ba5-bd6adbabb5ed",
+    "name": "Falconer",
+    "position": 48,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Doubles the rewards of one monster kill, then leaves.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On your next monster kill you may gain double the rewards. Then discard this spirit."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "ecb8faea-28db-4251-8763-c6c2153e5829",
+    "name": "Princess",
+    "position": 49,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Gains VP while you are not Evil and all your spirits are awake.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In the Awakening Phase, if you are not Evil and all your spirits are awakened, gain 1 VP."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "a2882c00-a986-4ac3-aad4-1747819115ce",
+    "name": "Feral",
+    "position": 50,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Strikes first and harder against Evil players and monsters.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When an Evil player or a monster attacks you, your side strikes first and deals 3 more damage."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "ef0cfa25-8073-41a1-8a85-e5f0e63e50cb",
+    "name": "Trader",
+    "position": 51,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Your runes can pay as runes of any type.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "You may pay your runes as runes of any type."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "1efbeaf7-fbbc-4952-8fdb-4b50e536f7ae",
+    "name": "Master",
+    "position": 52,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Gains Max Barrier or restores Barrier when you Cultivate.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "On Cultivate, gain 2 Max Barrier or restore 2 Barrier."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "023ccfe2-115f-4af8-a6b6-f2f4ea7026cb",
+    "name": "Wildling",
+    "position": 53,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Gains an Exalted Attack Dice when you gain attack dice.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you gain an attack dice, gain 1 Exalted Attack Dice."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "ea5c337c-744c-4959-be6a-ffe21605dfe2",
+    "name": "Wanderer",
+    "position": 54,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Gains Basic Attack Dice when you move to a new location.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you enter a location where you were not last round, gain 2 Basic Attack Dice."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "cb9401ba-634e-49e4-ba24-06220dc5ad9b",
+    "name": "Prince",
+    "position": 55,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Deals more damage when you strike first.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you strike first, deal 2 more damage."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "215e1c8d-ee21-4200-a99b-aad7709016cc",
+    "name": "Hunter",
+    "position": 56,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Deals more damage in combat with a monster.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat with a monster, deal 5 more damage."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "e54aee76-cd22-4bde-b67c-bf05cf50d3c7",
+    "name": "Rider",
+    "position": 57,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Gains Barrier, Max Barrier, Basic Attack Dice or a Spirit Augment when you arrive at the Mountain Region.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you navigate to the Mountain Region from a different location, choose one: restore 3 Barrier, gain 3 Max Barrier, gain 3 Basic Attack Dice, or gain 1 Spirit Augment of your choice."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "31d81f29-7ea1-4e5c-9cda-aa3606e94925",
+    "name": "Salamander",
+    "position": 58,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Rolls again the attack dice that show 0.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat, roll again each attack dice that shows 0, once."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "c1a39792-b5b9-4749-830b-72f553a60ced",
+    "name": "Firetail",
+    "position": 59,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Gains Initiative when another player is at your location.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat with a monster, or in a round when another player is at your location, gain 3 Initiative."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "69fb73b4-ff0b-43f4-9654-52a9480e5ff4",
+    "name": "Chorus",
+    "position": 60,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Restores Barrier and gains Max Barrier when you awaken a spirit.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you awaken a spirit (this one included), restore all your Barrier and gain 2 Max Barrier."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null
+  },
+  {
+    "id": "05856e77-32d9-4e07-89e9-773d5452e677",
+    "name": "Witch",
+    "position": 61,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Takes the best attack dice of a player for one combat.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "At the start of combat with a player, take the best attack dice of that player for this combat."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null,
+    "local": true
+  },
+  {
+    "id": "8bba23af-6104-4cd9-8dbd-af62f7e1958f",
+    "name": "Cultist",
+    "position": 63,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Sacrifices fewer spirits and gains VP on corruption.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you become Corrupted, sacrifice 1 fewer spirit and gain 1 VP."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null,
+    "local": true
+  },
+  {
+    "id": "ff60a2fc-5228-490f-be21-65fb1ea11f6a",
+    "name": "Acolyte",
+    "position": 64,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Restores Barrier when you deal damage to a player.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you deal damage to a player, restore the same quantity of Barrier."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null,
+    "local": true
+  },
+  {
+    "id": "43096e04-36b0-460d-b4b5-dbb4230f514f",
+    "name": "Shieldbearer",
+    "position": 66,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Takes less damage while your Barrier is full.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "When you take damage, if your Barrier is full, take 5 less."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null,
+    "local": true
+  },
+  {
+    "id": "2c65f0d1-2ac6-42a3-8212-9067d29a7231",
+    "name": "Gardener",
+    "position": 67,
+    "icon_emoji": "",
+    "color": "#8b5cf6",
+    "description": "Restores Barrier in the Awakening Phase while you are not Evil.",
+    "footer": "",
+    "tags": [],
+    "effect_schema": [
+      {
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In the Awakening Phase, if you are not Evil, restore 3 Barrier and gain 1 Max Barrier."
+          }
+        ]
+      }
+    ],
+    "icon_png": null,
+    "name_translations": {},
+    "description_translations": {},
+    "footer_translations": {},
+    "is_special": true,
+    "class_type": "special",
+    "augment_token_path": null,
+    "local": true
+  }
+]

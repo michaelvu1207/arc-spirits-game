@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Niji Batch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23f0532d'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b0f; --panel: #12141a; --card: #171a21; --line: #23262f; --line-2: #30343f;
+    --text: #e6e7eb; --dim: #9a9eab; --faint: #646978; --seg: #20232b; --field: #0d0e13;
+    --accent: #f0532d; --accent-soft: rgba(240, 83, 45, .15); --ok: #4ecb8f; --warn: #f2b84b; --bad: #f0616d;
+    --genw: 440px; --label: 84px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Figtree", -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: 0; padding: 0; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  [hidden] { display: none !important; }
+
+  /* ---- explorer ---- */
+  .split { display: grid; grid-template-columns: 270px minmax(0, 1fr); height: 100vh; }
+  #ws { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  #ws > header { padding: 16px 14px 8px; font-weight: 500; }
+  #ws > header small { display: block; color: var(--faint); font-weight: 400; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree { overflow: auto; padding: 0 6px 16px; flex: 1; }
+  .tree details { margin-left: 12px; }
+  .tree > details { margin-left: 0; }
+  .tree summary { list-style: none; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer; color: var(--dim); white-space: nowrap; user-select: none; }
+  #ws, #ws * { scrollbar-width: none; }
+  #ws::-webkit-scrollbar, #ws *::-webkit-scrollbar { display: none; }
+  .tree details.gap { margin-top: 14px; }
+  .fgroup + .fgroup { margin-top: 28px; }
+  #qualityRow.off .seg { opacity: .35; pointer-events: none; }
+  .only { font-size: 12px; color: var(--faint); margin-left: 10px; }
+  .cicon { width: 20px; height: 20px; padding: 2px; box-sizing: border-box; object-fit: contain; flex: none; vertical-align: -5px; margin-right: 6px; background: #ece9e2; border-radius: 5px; } /* the game icons are dark, so they get a light plate */
+  .tree summary span { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .tree summary::-webkit-details-marker { display: none; }
+  .tree summary::before { content: "▶"; font-size: 11px; line-height: 1; color: var(--dim); width: 16px; flex: none; }
+  .tree details[open] > summary::before { content: "▼"; }
+  .tree details > summary.leaf::before, .tree details[open] > summary.leaf::before { content: ""; }
+  .tree summary:hover { background: var(--card); color: var(--text); }
+  .tree summary.sel { background: var(--seg); color: var(--text); }
+  .thead { display: flex; align-items: center; padding: 16px 4px 4px 8px; }
+  .thead:first-child { padding-top: 4px; }
+  .thead .tname { flex: 1; text-align: left; font-weight: 600; font-size: 13px; color: var(--text); padding: 3px 6px; margin-left: -6px; border-radius: 6px; }
+  .thead button.tname:hover { background: var(--card); }
+  .thead.sel .tname { color: var(--accent); }
+  .tree summary .gd { position: relative; flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; color: var(--faint); visibility: hidden; }
+  .tree summary:hover .gd { visibility: visible; }
+  .tree summary .gd svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tree summary .gd:hover { color: var(--text); }
+  .tree .gd .pop { display: none; position: fixed; z-index: 30; width: min(520px, 60vw); padding: 10px 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--panel); color: var(--text); font-size: 13px; line-height: 1.5; white-space: normal; box-shadow: 0 8px 24px rgba(0,0,0,.4); pointer-events: none; }
+  .tree .gd:hover .pop { display: block; }
+  .tree summary i { font-style: normal; font-size: 11px; color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); border-radius: 99px; padding: 0 7px; }
+  .drophot { outline: 2px solid var(--accent) !important; outline-offset: -2px; background: var(--accent-soft) !important; }
+
+  #files { display: flex; flex-direction: column; min-width: 0; min-height: 0; transition: padding-right .22s ease; }
+  .fbar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-height: 58px; }
+  .fbar h1 { margin: 0; font-size: 16px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fbar h1 span { color: var(--faint); }
+  .spacer { flex: 1; }
+  .stats { font-size: 13px; color: var(--dim); white-space: nowrap; }
+  .stats b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #queueBtn b { font-weight: 600; } #queueBtn b.bad { color: var(--bad); }
+  .qpop { position: fixed; z-index: 40; top: 52px; right: 12px; width: min(560px, calc(100vw - 24px)); max-height: 75vh; overflow: auto; padding: 10px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 13px; }
+  .qpop[hidden] { display: none; }
+  .qpop .qh { display: flex; gap: 8px; align-items: baseline; padding: 6px 14px 4px; color: var(--text); font-weight: 600; }
+  .qpop .qh span { color: var(--faint); font-weight: 400; }
+  .qpop .qbar { display: flex; height: 6px; margin: 4px 14px 10px; border-radius: 99px; overflow: hidden; background: var(--seg); }
+  .qpop .qbar i { display: block; height: 100%; }
+  .qpop .qr { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 10px; padding: 4px 14px; color: var(--dim); align-items: baseline; cursor: pointer; }
+  .qpop .qr:hover { background: var(--card); color: var(--text); }
+  .qpop .qr small .link { margin-left: 8px; }
+  .qpop .qr b { font-weight: 500; font-size: 12px; color: var(--faint); } .qpop .qr b.run { color: var(--warn); } .qpop .qr b.bad { color: var(--bad); } .qpop .qr b.ok { color: var(--ok); }
+  .qpop .qr span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qpop .qr small { color: var(--faint); text-align: right; white-space: nowrap; }
+  .qpop .qempty { padding: 6px 14px 10px; color: var(--faint); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 13px; color: var(--dim); white-space: nowrap; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+  .pill.ok i { background: var(--ok); }
+  .tb { padding: 7px 14px; border-radius: 8px; background: var(--seg); color: var(--text); font-weight: 500; font-size: 13px; white-space: nowrap; }
+  .tb:hover { background: #2a2e38; }
+  .tb.go { background: var(--accent); color: #180802; font-weight: 600; }
+  .tb.go:hover { background: #ff6a45; }
+  .tb:disabled { opacity: .4; cursor: default; }
+  .link { color: var(--dim); font-size: 13px; padding: 3px 6px; border-radius: 6px; }
+  .link:hover { color: var(--text); background: var(--seg); }
+  .link.on { color: var(--accent); }
+  .banner { border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line)); background: color-mix(in srgb, var(--bad) 9%, var(--panel)); color: #ffc9ce; border-radius: 10px; padding: 10px 14px; margin: 14px 20px 0; font-size: 13px; }
+  .fscroll { overflow: auto; flex: 1; padding: 18px 20px 80px; }
+  .fgrid { display: block; }
+  .frow { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 210px)); gap: 10px; align-content: start; }
+  .fhead { display: flex; align-items: baseline; gap: 12px; margin: 22px 0 9px; font-size: 13px; color: var(--faint); min-width: 0; }
+  .fhead:first-child { margin-top: 0; }
+  .fhead b { color: var(--text); font-weight: 500; white-space: nowrap; }
+  .fhead span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pin { position: absolute; top: 8px; left: 8px; width: 28px; height: 28px; border-radius: 99px; background: rgba(10, 11, 15, .82); color: var(--dim); font-size: 14px; line-height: 1; border: 1px solid rgba(255,255,255,.16); opacity: 0; backdrop-filter: blur(6px); }
+  .fgrid figure:hover .pin, .pin:focus-visible, .pin.on { opacity: 1; }
+  .pin.on { background: var(--accent); color: #180802; border-color: var(--accent); }
+  .pin:hover { color: var(--text); }
+  .meta.kind { color: var(--text); background: rgba(240, 83, 45, .16); }
+  .meta { font-style: normal; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--dim); background: rgba(255,255,255,.07); padding: 0 5px; border-radius: 4px; white-space: nowrap; }
+  .info { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--dim); font: 600 9px/1 "Figtree", sans-serif; font-style: normal; vertical-align: 1px; margin-left: 3px; cursor: help; position: relative; }
+  .info:hover, .info:focus-visible { color: var(--text); border-color: var(--dim); }
+  #tip { position: fixed; z-index: 70; width: 320px; padding: 8px 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line-2); color: var(--text); font-size: 12px; line-height: 1.45; box-shadow: 0 10px 30px rgba(0,0,0,.5); pointer-events: none; }
+  .gid { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--dim); user-select: all; }
+  .tag { display: inline-block; margin: 2px 4px 0 0; padding: 0 6px; border-radius: 99px; background: rgba(255,255,255,.1); color: var(--dim); font-size: 10.5px; line-height: 16px; }
+  .fscroll { position: relative; user-select: none; -webkit-user-select: none; }
+  .fgrid figure { margin: 0; cursor: default; min-width: 0; border-radius: 10px; padding: 4px; margin: -4px; }
+  .fgrid figure.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .fgrid figure.sel figcaption { color: var(--text); }
+  .fgrid figure.cut { opacity: .45; }
+  .fgrid .pic { position: relative; }
+  .reuse { position: absolute; top: 8px; right: 8px; padding: 4px 11px; border-radius: 99px; background: rgba(10, 11, 15, .82); color: var(--text); font-size: 12.5px; font-weight: 500; border: 1px solid rgba(255,255,255,.16); opacity: 0; backdrop-filter: blur(6px); }
+  .fgrid figure:hover .reuse, .reuse:focus-visible { opacity: 1; }
+  .reuse:hover { background: var(--accent); color: #180802; border-color: var(--accent); }
+  .marquee { position: absolute; border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 2px; pointer-events: none; z-index: 5; }
+  .fgrid .tile { width: 100%; aspect-ratio: 1; border-radius: 8px; background: var(--card); display: block; object-fit: cover; }
+  .fgrid img.tile { aspect-ratio: auto; height: auto; object-fit: contain; } /* an image keeps its own aspect ratio */
+  .frow { align-items: start; }
+  .fgrid figcaption { font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 2px 0; }
+  .fgroup { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 6px; }
+  .fgrid .folder .tile { display: grid; place-items: center; align-content: center; gap: 8px; color: var(--faint); font-size: 12px; border: 1px solid var(--line); aspect-ratio: 16 / 10; }
+  .fgrid .folder .tile.cover { position: relative; display: block; padding: 0; overflow: hidden; aspect-ratio: 1; }
+  .fgrid .folder .tile.cover img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+  .fgrid .folder .tile.cover span { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: rgba(8, 9, 12, .72); color: #fff; font-size: 11px; }
+  .fgrid .folder:hover .tile.cover img { filter: brightness(1.08); }
+  .fgrid .folder:hover .tile { background: var(--seg); color: var(--dim); }
+  .fgrid .folder svg { width: 34px; height: 34px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linejoin: round; }
+  .fgrid .folder figcaption { color: var(--text); font-size: 13px; }
+  .fbar h1 button { color: var(--faint); font: inherit; border-radius: 5px; padding: 0 2px; }
+  .fbar h1 button:hover { color: var(--text); background: var(--seg); }
+  .fgrid .wait { cursor: default; }
+  .fgrid .wait .tile { animation: pulse 1.6s ease-in-out infinite; display: grid; place-items: center; color: var(--faint); font-size: 12px; }
+  .fgrid .wait figcaption { color: var(--dim); }
+  .fgrid .fail .tile { background: color-mix(in srgb, var(--bad) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--bad) 35%, var(--line)); color: #ffb3ba; font-size: 12px; padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 8px; cursor: default; }
+  @keyframes pulse { 50% { background: #232732; } }
+  @media (prefers-reduced-motion: reduce) { .fgrid .wait .tile { animation: none; } #gen, #files { transition: none; } }
+  .note { color: var(--faint); font-size: 14px; padding: 50px 0; text-align: center; grid-column: 1 / -1; }
+  .folderstyle { grid-column: 1 / -1; color: var(--dim); font-size: 13px; padding-bottom: 4px; }
+
+  /* ---- generate panel: large, everything visible at one time, nothing scrolls ---- */
+  #gen { position: fixed; top: 12px; right: 12px; bottom: 12px; width: min(1120px, calc(100vw - 294px)); min-width: min(760px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.6); display: flex; flex-direction: column; z-index: 30; transition: transform .22s ease, opacity .22s ease; overflow: hidden; }
+  #gen.closed { transform: translateX(calc(100% + 24px)); opacity: 0; pointer-events: none; }
+  .gmain { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 372px; }
+  .gleft { display: grid; grid-template-rows: minmax(130px, 2fr) minmax(350px, 3fr); min-height: 0; min-width: 0; }
+  .gright { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .gprompt { display: flex; flex-direction: column; padding: 18px 22px 10px; min-height: 0; }
+  #text { flex: 1; min-height: 0; width: 100%; background: none; border: 0; outline: 0; resize: none; padding: 0; font-size: 19px; line-height: 28px; }
+  #text::placeholder { color: var(--faint); }
+  .help { font-size: 12px; color: var(--faint); padding-top: 8px; display: flex; align-items: center; gap: 12px; }
+  .help span { flex: 1; }
+  .help .link { white-space: nowrap; }
+  .help code { color: var(--dim); font: inherit; }
+  .x { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 8px; color: var(--dim); font-size: 18px; line-height: 1; z-index: 2; }
+  .x:hover { background: var(--seg); color: var(--text); }
+  .gh { margin: 0; font-size: 14px; font-weight: 500; }
+  .sec { padding: 16px 20px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+  .gright .sec:first-child { border-top: 0; padding-top: 18px; }
+  .row { display: grid; grid-template-columns: var(--label) minmax(0, 1fr); align-items: center; min-height: 30px; }
+  .row > label, .row > .l { color: var(--dim); font-size: 13px; }
+  .row .ctl { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .row output { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 34px; text-align: right; font-size: 13px; }
+
+  /* references: the three rows on the left, the picker on the right, fixed height */
+  .grefs { border-top: 1px solid var(--line); display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: 0; }
+  .reflist { padding: 16px 14px 14px 22px; display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: hidden; }
+  .refrow { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: start; padding: 5px 6px; margin: 0 -6px; border-radius: 8px; cursor: pointer; }
+  .refrow .l { padding-top: 5px; text-align: left; color: var(--dim); font-size: 13px; }
+  .refrow.active { background: var(--card); }
+  .refrow.active .l { color: var(--accent); }
+  .refrow small { display: block; color: var(--faint); font-size: 11px; white-space: nowrap; }
+  .thumbs { display: flex; gap: 4px; flex-wrap: wrap; min-height: 34px; align-items: center; }
+  .thumbs button { width: 34px; height: 34px; border-radius: 5px; overflow: hidden; position: relative; background: var(--seg); }
+  .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumbs .th { position: relative; display: inline-block; }
+  .thumbs .rm { position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; border-radius: 99px; background: var(--bad); color: #fff; font-size: 11px; line-height: 1; display: none; place-items: center; box-shadow: 0 0 0 2px var(--panel); }
+  .thumbs .th:hover .rm, .thumbs .rm:focus-visible { display: grid; }
+  .thumbs .more, .thumbs .none { font-size: 12px; color: var(--faint); padding: 0 4px; }
+  .reflist .field { margin-top: auto; }
+  .reftools { display: flex; gap: 4px; margin-left: -6px; }
+  .picker { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .pickhead { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; font-size: 13px; color: var(--dim); }
+  .pickbody { flex: 1; min-height: 0; margin: 0 14px; overflow: hidden; }
+  .pickfoot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 4px 10px 8px; font-size: 12px; color: var(--faint); min-height: 34px; font-variant-numeric: tabular-nums; }
+  .pgrid { display: grid; gap: 4px; }
+  .reffolder { display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 36px; border-radius: 7px; text-align: left; background: var(--card); min-width: 0; white-space: nowrap; }
+  .reffolder:hover { background: var(--seg); }
+  .reffolder b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+  .reffolder span { color: var(--faint); }
+  .reffolder small { margin-left: auto; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .ptile { width: 100%; aspect-ratio: 1; background: var(--seg); border-radius: 4px; overflow: hidden; display: block; }
+  .ptile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .15s; }
+  .ptile.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .ptile.sel img { transform: scale(.78); border-radius: 3px; }
+  .ptile.up { display: grid; place-items: center; text-align: center; border: 1.5px dashed var(--line-2); background: none; color: var(--dim); font-size: 11.5px; cursor: pointer; }
+  .libnote { color: var(--faint); font-size: 13px; padding: 8px 2px; }
+
+  /* history: past generations; a click loads the prompt again */
+  .gright .hist { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
+  .histhead { display: flex; align-items: center; min-height: 24px; }
+  #histFoot { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  #histBody { flex: 1; min-height: 0; overflow: hidden; display: grid; align-content: start; gap: 2px; margin: 0 -8px; }
+  .hrow { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: center; height: 54px; padding: 5px 8px; border-radius: 8px; text-align: left; }
+  .hrow:hover { background: var(--card); }
+  .hrow img { width: 44px; height: 44px; object-fit: cover; border-radius: 5px; background: var(--seg); display: block; }
+  .hrow span { font-size: 12.5px; line-height: 1.35; color: var(--dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .hrow:hover span { color: var(--text); }
+  .hrow.saved { grid-template-columns: 44px minmax(0, 1fr) auto; cursor: pointer; }
+  .hrow.saved b { display: block; color: var(--text); font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hrow.saved span { -webkit-line-clamp: 1; }
+  .hrow .ph { width: 44px; height: 44px; border-radius: 5px; background: var(--seg); display: grid; place-items: center; color: var(--faint); font-weight: 600; }
+  .hrow .del { opacity: 0; font-size: 16px; }
+  .hrow:hover .del, .hrow .del:focus-visible { opacity: 1; }
+  /* controls */
+  .field { width: 100%; background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  select.field { width: auto; }
+  .num { width: 54px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+  input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 4px; border-radius: 9px; background: linear-gradient(to right, #c9cbd3 var(--p, 0%), #353945 var(--p, 0%)); min-width: 60px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #dcdde3; }
+  .seg { display: inline-flex; background: var(--seg); border-radius: 8px; padding: 2px; }
+  .seg button { padding: 4px 10px; color: var(--dim); font-weight: 500; font-size: 13px; border-radius: 6px; white-space: nowrap; }
+  .seg button.on { color: var(--text); background: #343844; }
+  .ratios { display: flex; align-items: center; gap: 1px; flex: 1; }
+  .ratios button { flex: 1; height: 32px; display: grid; place-items: center; border-radius: 6px; }
+  .ratios button:hover { background: var(--seg); }
+  .ratios i { display: block; border: 1.5px solid var(--faint); border-radius: 2px; }
+  .ratios button.on i { border-color: var(--accent); background: var(--accent-soft); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; max-height: 64px; overflow: hidden; }
+  .chip { padding: 4px 11px; border-radius: 99px; background: var(--seg); color: var(--dim); font-size: 13px; white-space: nowrap; }
+  .chip:hover { color: var(--text); }
+  .chip.on { background: var(--accent-soft); color: var(--accent); }
+  .trio { display: flex; gap: 14px; }
+  .trio label { display: flex; align-items: center; gap: 7px; color: var(--dim); font-size: 13px; white-space: nowrap; }
+
+  .gfoot { display: flex; align-items: center; gap: 12px; padding: 12px 14px 12px 22px; border-top: 1px solid var(--line-2); background: var(--card); }
+  .gfoot .dest { flex: 1; min-width: 0; font-size: 13px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gfoot .dest b { color: var(--text); font-weight: 500; }
+  .gfoot .dest.warn { color: var(--warn); }
+  .gfoot .tb { padding: 9px 22px; font-size: 14px; }
+  /* Small windows only: one column, and the panel can scroll. */
+  @media (max-width: 1060px), (max-height: 640px) { #gen { width: calc(100vw - 24px); min-width: 0; } .gmain { display: block; overflow: auto; } .gright { border-left: 0; border-top: 1px solid var(--line); } .gleft { display: block; } .grefs { grid-template-columns: 1fr; } .picker { border-left: 0; border-top: 1px solid var(--line); height: 300px; } .gprompt { height: 160px; } }
+  /* ---- context menu ---- */
+  #menu { position: fixed; z-index: 70; min-width: 170px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; padding: 5px; box-shadow: 0 18px 50px rgba(0,0,0,.6); }
+  #menu button { display: block; width: 100%; text-align: left; padding: 6px 10px; border-radius: 6px; font-size: 13.5px; }
+  #menu button:hover, #menu button:focus-visible { background: var(--seg); outline: 0; }
+  #menu button.danger { color: var(--bad); }
+  #menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+  #ws > header { display: flex; align-items: flex-start; gap: 10px; }
+  #ws > header div { flex: 1; min-width: 0; }
+  /* ---- full-screen viewer ---- */
+  #viewer { position: fixed; inset: 0; z-index: 60; background: rgba(5, 6, 9, .94); display: grid; grid-template-rows: 1fr auto; }
+  #viewer .stage { min-height: 0; display: grid; place-items: center; padding: 24px 72px 8px; }
+  #viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; min-height: 0; }
+  #viewer .vacts { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; padding: 10px 16px 0; }
+  #viewer .vacts span { color: var(--faint); font-size: 12px; align-self: center; margin: 0 2px 0 10px; }
+  #viewer .vacts span:first-child { margin-left: 0; }
+  #viewer .vacts button { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
+  #viewer .vacts button:hover { background: var(--seg); }
+  #viewer .cap { text-align: center; color: var(--dim); font-size: 13px; padding: 8px 16px 18px; font-variant-numeric: tabular-nums; }
+  #viewer .nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 72px; border-radius: 10px; color: var(--dim); font-size: 30px; }
+  #viewer .nav:hover { background: var(--seg); color: var(--text); }
+  #viewer .nav:disabled { opacity: .2; cursor: default; }
+  #viewer .prev { left: 12px; } #viewer .next { right: 12px; }
+  #viewer .vx { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 8px; color: var(--dim); font-size: 22px; }
+  #viewer .vx:hover { background: var(--seg); color: var(--text); }
+  #refViewer { position: fixed; inset: 0; z-index: 61; background: rgba(5, 6, 9, .94); display: grid; place-items: center; }
+  #refViewer img { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 6px; }
+  #refViewer .vx { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 8px; color: var(--dim); font-size: 22px; } #refViewer .vx:hover { background: var(--seg); color: var(--text); }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--seg); border: 1px solid var(--line-2); border-radius: 99px; padding: 7px 16px; font-size: 13px; z-index: 50; }
+  @media (max-width: 760px) { .split { grid-template-columns: 1fr; height: auto; } #ws { max-height: 240px; border-right: 0; border-bottom: 1px solid var(--line); } .stats, .pill { display: none; } }
+</style>
+</head>
+<body>
+<div class="split">
+  <aside id="ws" aria-label="Folders">
+    <header><div>Folders<small id="wsRoot"></small></div><a class="link" href="/data.html" title="Edit monsters and classes">Data</a><a class="link" href="/exports.html" title="Cards and graphics made from the art">Exports</a></header>
+    <div class="tree" id="tree"></div>
+  </aside>
+  <main id="files">
+    <div class="fbar">
+      <h1 id="wsName"><span>Select a folder</span></h1>
+      <button class="link" id="wsNew" hidden>New folder</button>
+      <label class="link" id="wsUp" hidden tabindex="0" style="cursor:pointer">Add images<input type="file" id="wsFile" accept="image/*" multiple hidden></label>
+      <span class="spacer"></span>
+      <span class="stats" id="selInfo"></span>
+      <button class="tb" id="queueBtn" title="Queue status">Queue</button>
+      <div class="qpop" id="qpop" hidden></div><span class="pill" id="link"><i></i><span>Connecting…</span></span>
+      <button class="tb go" id="genBtn">Generate</button>
+    </div>
+    <div class="banner" id="banner" hidden></div>
+    <div class="fscroll"><div class="fgrid" id="wsGrid"><div class="note">Select a folder on the left.</div></div></div>
+  </main>
+</div>
+
+<aside id="gen" class="closed" aria-label="Generate">
+  <button class="x" id="genClose" title="Close (Esc)" aria-label="Close panel">×</button>
+  <div class="gmain">
+    <div class="gleft">
+      <div class="gprompt">
+        <textarea id="text" spellcheck="false" placeholder="Describe the image" aria-label="Prompt"></textarea>
+        <div class="help"><span><code>{a|b|c}</code> makes one prompt per option. Cmd+Enter sends.</span><button class="link" id="addGuide" hidden title="Put the character guide of this folder in the prompt">Add character guide</button><button class="link" id="savePrompt" title="Save this prompt, its references and its settings">Save prompt</button></div>
+      </div>
+      <div class="grefs">
+        <div class="reflist">
+          <h2 class="gh">References</h2>
+          <div class="refrow slot" data-slot="sref"><span class="l">Style <i class="info" tabindex="0" data-tip="Style reference (--sref): the model copies the look of these pictures (colors, rendering, mood), not their subject. Style weight (--sw) sets how strongly. — docs.midjourney.com">i</i><small>the look</small></span><div class="thumbs" data-thumbs="sref"></div></div>
+          <div class="refrow slot" data-slot="img"><span class="l">Image <i class="info" tabindex="0" data-tip="Image prompt: the picture goes before the text and the model copies its content and composition, background included. Image weight (--iw) sets how much. — docs.midjourney.com">i</i><small>the content</small></span><div class="thumbs" data-thumbs="img"></div></div>
+          <div class="refrow slot" data-slot="oref"><span class="l">Omni <i class="info" tabindex="0" data-tip="Omni reference (--oref): one picture of a character, creature or object. The model keeps its identity (face, hair, outfit, shape) while the prompt sets pose, scene and camera. Omni weight (--ow) sets how strict it is. Only Midjourney V7 has it: with a picture here the job runs on V7 instead of Niji 7 or 8.2 (Niji does the same). Costs about 2x. — docs.midjourney.com">i</i><small>the subject, runs on V7</small></span><div class="thumbs" data-thumbs="oref"></div></div>
+          <div class="refrow slot" data-slot="vary"><span class="l">Vary <i class="info" tabindex="0" data-tip="Vary row (this app): each picture here makes its own job, added as an image prompt next to the Image row. Use it to run the same prompt over several references at once.">i</i><small>one job each</small></span><div class="thumbs" data-thumbs="vary"></div></div>
+          <input class="field" id="stylePrompt" spellcheck="false" placeholder="Style text, added to every prompt" aria-label="Style text">
+          <div class="reftools"><span class="spacer"></span><button class="link" id="clearImgs">Clear</button></div>
+        </div>
+        <div class="picker">
+          <div class="pickhead"><span id="pickTitle"></span><span class="spacer"></span><span class="seg" id="pickTab"><button data-v="folders">Folders</button><button data-v="niji">Niji uploads</button></span></div>
+          <div class="pickbody" id="pickBody"></div>
+          <div class="pickfoot" id="pickFoot"></div>
+          <input type="file" id="file" accept="image/*" multiple hidden>
+        </div>
+      </div>
+    </div>
+    <div class="gright">
+      <div class="sec">
+        <h2 class="gh">Settings</h2>
+        <div class="row"><span class="l">Ratio <i class="info" tabindex="0" data-tip="Aspect ratio (--ar): the shape of the image, width to height. 2:3 is a portrait card, 3:2 a landscape, 1:1 a square.">i</i></span><div class="ctl"><div class="ratios" id="ratios" role="radiogroup" aria-label="Aspect ratio"></div><output id="o-ar"></output></div></div>
+        <div class="row"><label for="stylize">Stylize <i class="info" tabindex="0" aria-label="Stylize (--stylize, 0–1000, default 100): how strongly the Niji house aesthetic is applied. Low values produce images that closely match the prompt but are less artistic. High values create images that are very artistic but less connected to the prompt. — docs.midjourney.com" data-tip="Stylize (--stylize, 0–1000, default 100): how strongly the Niji house aesthetic is applied. Low values produce images that closely match the prompt but are less artistic. High values create images that are very artistic but less connected to the prompt. — docs.midjourney.com">i</i></label><div class="ctl"><input type="range" id="stylize" min="0" max="1000" step="1"><output id="o-stylize"></output></div></div>
+        <div class="row"><label for="weird">Weird <i class="info" tabindex="0" aria-label="Weird (--weird, 0–3000, default 0): an experimental setting that adds quirky and offbeat qualities for unique and unexpected outcomes. It controls how unusual an image is compared to previous images; Stylize controls how strongly the default aesthetic is applied. — docs.midjourney.com" data-tip="Weird (--weird, 0–3000, default 0): an experimental setting that adds quirky and offbeat qualities for unique and unexpected outcomes. It controls how unusual an image is compared to previous images; Stylize controls how strongly the default aesthetic is applied. — docs.midjourney.com">i</i></label><div class="ctl"><input type="range" id="weird" min="0" max="3000" step="10"><output id="o-weird"></output></div></div>
+        <div class="row"><label for="iw">Image weight <i class="info" tabindex="0" aria-label="Image weight (--iw, 0–3, default 1): how much an image prompt (a picture before the text) counts against the text. Higher values follow the image more closely in content and composition; lower values let the text win. Only for image prompts. — docs.midjourney.com" data-tip="Image weight (--iw, 0–3, default 1): how much an image prompt (a picture before the text) counts against the text. Higher values follow the image more closely in content and composition; lower values let the text win. Only for image prompts. — docs.midjourney.com">i</i></label><div class="ctl"><input type="range" id="iw" min="0" max="3" step="0.25"><output id="o-iw"></output></div></div>
+        <div class="row"><label for="sw">Style weight <i class="info" tabindex="0" aria-label="Style weight (--sw, 0–1000, default 100): how strongly the style references (--sref) are applied. Higher values copy the reference style more; lower values keep more of the prompt and model look. Only for style references. — docs.midjourney.com" data-tip="Style weight (--sw, 0–1000, default 100): how strongly the style references (--sref) are applied. Higher values copy the reference style more; lower values keep more of the prompt and model look. Only for style references. — docs.midjourney.com">i</i></label><div class="ctl"><input type="range" id="sw" min="0" max="1000" step="10"><output id="o-sw"></output></div></div>
+        <div class="row"><label for="ow">Omni weight <i class="info" tabindex="0" data-tip="Omni weight (--ow, 0–1000, default 100): how strictly the Omni reference is kept. Low keeps only the idea of the subject; around 300–400 keeps a character well in a new scene; high copies details closely. — docs.midjourney.com">i</i></label><div class="ctl"><input type="range" id="ow" min="0" max="1000" step="10"><output id="o-ow"></output></div></div>
+        <div class="row"><label for="chaos">Variety <i class="info" tabindex="0" aria-label="Variety (--chaos, 0–100, default 0): how varied the four images of a job are. Higher values produce more unusual and unexpected results and compositions, and may not stick as closely to the prompt. Lower values give more reliable, repeatable results. — docs.midjourney.com" data-tip="Variety (--chaos, 0–100, default 0): how varied the four images of a job are. Higher values produce more unusual and unexpected results and compositions, and may not stick as closely to the prompt. Lower values give more reliable, repeatable results. — docs.midjourney.com">i</i></label><div class="ctl"><input type="range" id="chaos" min="0" max="100" step="1"><output id="o-chaos"></output></div></div>
+        <div class="row"><label for="version">Model <i class="info" tabindex="0" data-tip="Niji 7 is the anime model; 8.2 is the newest general model; 7 is Midjourney V7, the only model with Omni references. Raw applies less of the house style and follows the prompt more literally.">i</i></label><div class="ctl"><select class="field" id="version"></select><span class="seg" id="rawSeg"><button data-v="0">Standard</button><button data-v="1">Raw</button></span></div></div>
+        <div class="row"><span class="l">Speed <i class="info" tabindex="0" data-tip="Fast uses the paid fast hours and starts at once. Relax is free of fast hours but queues behind other users. Turbo is 2x fast hours (not used here).">i</i></span><div class="ctl"><span class="seg" id="speedSeg"><button data-v="relax">Relax</button><button data-v="fast">Fast</button><button data-v="turbo">Turbo</button></span></div></div>
+        <div class="row" id="qualityRow"><span class="l">Quality <i class="info" tabindex="0" data-tip="8.2 only. Draft is a fast low-cost preview; Standard is the normal render; HD renders at a higher resolution and costs more. HD images have no upscale.">i</i></span><div class="ctl"><span class="seg" id="qualitySeg"><button data-v="draft" title="Faster, lower detail (--draft)">Draft</button><button data-v="standard">Standard</button><button data-v="hd" title="2K images with more detail; slower (--hd)">HD</button></span><span class="only" id="qualityNote">8.2 only</span></div></div>
+        <div class="row"><label for="yesText">Yes <i class="info" tabindex="0" data-tip="Yes (this app, not a Niji flag): words added to the end of every prompt you send, the opposite of No. For example: soft painted textures, visible brush strokes." data-tip="Yes (this app, not a Niji flag): words added to the end of every prompt you send, the opposite of No. For example: soft painted textures, visible brush strokes.">i</i></label><div class="ctl"><input class="field" id="yesText" placeholder="added to every prompt" style="flex:1"></div></div>
+        <div class="row"><label for="noText">No <i class="info" tabindex="0" aria-label="No (--no): things to leave out of the image, comma separated, for example: text, blood, plastic. — docs.midjourney.com" data-tip="No (--no): things to leave out of the image, comma separated, for example: text, blood, plastic. — docs.midjourney.com">i</i></label><div class="ctl"><input class="field" id="noText" placeholder="text, watermark, …" style="flex:1"></div></div>
+      </div>
+      <div class="sec hist">
+        <div class="histhead"><span class="seg" id="histTab"><button data-v="history">History</button><button data-v="saved">Saved</button></span><span class="spacer"></span><span id="histFoot"></span></div>
+        <div id="histBody"></div>
+      </div>
+    </div>
+  </div>
+  <div class="gfoot">
+    <div class="dest" id="dest"></div>
+    <button class="tb go" id="send" title="Sends before the jobs that wait (Michael: manual jobs always go to the top of the queue)">Generate</button>
+  </div>
+</aside>
+<div id="viewer" hidden role="dialog" aria-label="Image viewer">
+  <div class="stage"><img id="viewImg" alt=""></div>
+  <div class="vacts" id="viewActs" hidden></div>
+  <div class="cap" id="viewCap"></div>
+  <button class="nav prev" id="viewPrev" aria-label="Previous image">‹</button>
+  <button class="nav next" id="viewNext" aria-label="Next image">›</button>
+  <button class="vx" id="viewClose" aria-label="Close viewer">×</button>
+</div>
+<div id="refViewer" hidden role="dialog" aria-label="Reference image"><img id="refImg" referrerpolicy="no-referrer" alt=""><button class="vx" id="refClose" aria-label="Close">×</button></div>
+<div id="tip" hidden role="tooltip"></div>
+<div id="menu" hidden role="menu"></div>
+<div id="toast" hidden></div>
+
+<script type="module">
+// Generation ID of an image file: <job id, 8 chars>-<index>, for example 92f9fd70-0. Michael gives these IDs to Claude.
+const idOf = (n) => n.match(/-([0-9a-f]{8}-\d+)\.[a-z0-9]+$/i)?.[1] ?? null;
+import { expand, MAX_JOBS } from './expand.js';
+const $ = (id) => document.getElementById(id);
+const post = (path, body = {}) => fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+let toastTimer;
+function toast(msg, ms = 2500) { $('toast').textContent = msg; $('toast').hidden = false; clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => ($('toast').hidden = true), ms); }
+
+// ---------- state ----------
+const RATIOS = ['1:2', '9:16', '2:3', '3:4', '5:6', '1:1', '6:5', '4:3', '3:2', '16:9', '2:1'];
+// The two models that this app sends to, and what each one accepts. Source: the flag parser of the Niji web app
+// (one parser function for each model). `no` = flags that the model rejects with "Version … doesn't support --flag".
+const VERSIONS = ['Niji 7', '8.2', '7']; // '7' = Midjourney V7, the only model with Omni references (--oref)
+const CAPS = {
+  // --oref / --ow are allowed on both: Niji itself moves such a job to model V7 ("Omni references are v7-only"), and so do we.
+  'Niji 7': { quality: false, no: ['hd', 'draft', 'q', 'quality', 'video', 'preview', 'edit', 'ev', 'cref', 'cw'] },
+  '8.2': { quality: true, no: ['zoom', 'cref', 'cw', 'av'] },
+  '7': { quality: true, no: ['hd', 'zoom', 'cref', 'cw', 'av', 'edit', 'ev'] }, // V7: --draft yes, --hd no
+};
+const caps = () => CAPS[S.version] ?? CAPS['Niji 7'];
+const SLOTS = ['sref', 'img', 'oref', 'vary'], SLOT_NAME = { sref: 'Style', img: 'Image', oref: 'Omni', vary: 'Vary' };
+const S = Object.assign({ ar: 5, stylize: 100, weird: 0, chaos: 0, iw: 1, sw: 500, ow: 100, no: '', yes: '', version: 'Niji 7', raw: false, speed: 'fast', repeat: 1, quality: 'standard', pOn: false, pCodes: '', moodboards: [], lock: false, style: '', styleFolder: '', genOpen: false, pickTab: 'folders', histTab: 'history', useGuide: true }, load('settings', {}));
+if (!S.sw500) { if (S.sw === 100) S.sw = 500; S.sw500 = true; } // default style weight 500 (Michael, 2026-11-07)
+if (!S.stdDefault) { S.raw = false; S.stdDefault = true; } // default Standard again (Michael, 2026-11-07)
+if (!VERSIONS.includes(S.version)) S.version = 'Niji 7'; // settings stored by an older version of this page
+if (S.draft) S.quality = 'draft'; delete S.draft;
+const refs = Object.assign({ sref: [], img: [], oref: [], vary: [] }, load('refs', {})); // [{url, thumb}]
+let slot = 'sref', page = 0, library = null, loadingLib = false, state = null, wsPath = load('wsPath', null);
+
+$('version').innerHTML = VERSIONS.map((v) => `<option>${v}</option>`).join('');
+$('ratios').innerHTML = RATIOS.map((r, i) => { const [w, h] = r.split(':').map(Number), k = 20 / Math.max(w, h); return `<button data-ar="${i}" role="radio" title="${r}" aria-label="${r}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i></button>`; }).join('');
+
+function buildParams() {
+  const out = [];
+  if (S.chaos > 0) out.push(`--chaos ${S.chaos}`);
+  if (RATIOS[S.ar] !== '1:1') out.push(`--ar ${RATIOS[S.ar]}`);
+  if (S.raw) out.push(S.version === 'Niji 7' || parseFloat(S.version) >= 7 ? '--raw' : '--style raw');
+  if (caps().quality && S.quality !== 'standard' && !(S.version === '7' && S.quality === 'hd')) out.push(`--${S.quality}`); // --draft or --hd; Niji 7 has neither; V7 has no HD
+  if (refs.sref.length) out.push(`--sref ${refs.sref.map((r) => r.url).join(' ')}`);
+  if (refs.sref.length && S.sw !== 100) out.push(`--sw ${S.sw}`);
+  if (refs.img.length && S.iw !== 1) out.push(`--iw ${S.iw}`);
+  if (refs.oref.length) { out.push(`--oref ${refs.oref[0].url}`); if (S.ow !== 100) out.push(`--ow ${S.ow}`); }
+  if (S.no.trim()) out.push(`--no ${S.no.split(',').map((x) => x.trim()).filter(Boolean).join(', ')}`);
+  if (S.stylize !== 100) out.push(`--stylize ${S.stylize}`);
+  if (S.weird > 0) out.push(`--weird ${S.weird}`);
+  out.push(S.version.startsWith('Niji') ? `--niji ${S.version.slice(5)}` : `--v ${S.version}`);
+  return out.join(' ');
+}
+// The settings and the flags in the prompt text are the same thing, shown in two places.
+//   - A change in the panel writes the flags at the end of the prompt text (writeFlags).
+//   - A flag that you type sets the panel control when you leave the prompt box or send (readFlags). A panel flag
+//     that is not in the text then goes back to its default.
+// Flags that the panel does not have (for example --no, --seed) stay in the text as they are. Style reference
+// images are not written in the text: they show in the References rows.
+const FLAG = /(^|\s)--[a-z]/i;
+// Yes and No are global settings (Michael, 2026-11-08): they apply to every generation and a reused prompt does not change them.
+// So --no is not written into the text (it goes with the job from the panel), and a typed --no is merged into the setting.
+const panelFlags = () => buildParams().split(/\s+(?=--[a-z])/).filter((f) => f && !f.startsWith('--sref ') && !f.startsWith('--oref ') && !f.startsWith('--no ')).join(' ');
+const mergeNo = (str) => { const have = S.no.split(',').map((x) => x.trim()).filter(Boolean); for (const w of str.split(',').map((x) => x.trim()).filter(Boolean)) if (!have.includes(w)) have.push(w); S.no = have.join(', '); };
+const stripYes = (body) => { const y = S.yes.trim(); return y && body.endsWith(', ' + y) ? body.slice(0, -(y.length + 2)).trim() : body; };
+function splitText(v) {
+  const at = v.search(FLAG);
+  return at < 0 ? { body: v.trim(), flags: [] } : { body: v.slice(0, at).trim(), flags: v.slice(at).trim().split(/\s+(?=--[a-z])/i) };
+}
+/** Sets the panel from the flags in the text. Returns the flags that the panel does not have. */
+function readFlags() {
+  const { body, flags } = splitText($('text').value), other = [];
+  if (!body && !flags.length) return other;
+  const num = (x, lo, hi) => { const n = Number(x); return x !== '' && n >= lo && n <= hi ? n : null; };
+  const next = { ar: RATIOS.indexOf('1:1'), stylize: 100, chaos: 0, weird: 0, iw: 1, sw: 500, ow: 100, raw: false, quality: 'standard' };
+  for (const f of flags) {
+    const [word, ...rest] = f.split(/\s+/), name = word.toLowerCase(), a = rest.join(' ').toLowerCase(), one = rest.length === 1, none = !rest.length;
+    let n;
+    if ((name === '--ar' || name === '--aspect') && one && RATIOS.includes(a)) next.ar = RATIOS.indexOf(a);
+    else if ((name === '--stylize' || name === '--s') && one && (n = num(a, 0, 1000)) !== null) next.stylize = n;
+    else if ((name === '--chaos' || name === '--c') && one && (n = num(a, 0, 100)) !== null) next.chaos = n;
+    else if ((name === '--weird' || name === '--w') && one && (n = num(a, 0, 3000)) !== null) next.weird = n;
+    else if (name === '--iw' && one && (n = num(a, 0, 3)) !== null) next.iw = n;
+    else if (name === '--sw' && one && (n = num(a, 0, 1000)) !== null) next.sw = n;
+    else if (name === '--no' && rest.length) mergeNo(rest.join(' '));
+    else if (name === '--ow' && one && (n = num(a, 0, 1000)) !== null) next.ow = n;
+    else if (name === '--niji' && one && VERSIONS.includes(`Niji ${a}`)) next.version = `Niji ${a}`;
+    else if ((name === '--v' || name === '--version') && one && VERSIONS.includes(a)) next.version = a;
+    else if (name === '--oref') {} // the Omni row holds the picture; a typed --oref would be added a second time
+    else if ((name === '--raw' && none) || (name === '--style' && a === 'raw')) next.raw = true;
+    else if ((name === '--draft' || name === '--hd') && none) next.quality = name.slice(2);
+    else if (['--relax', '--fast', '--turbo'].includes(name) && none) next.speed = name.slice(2);
+    else other.push(f);
+  }
+  Object.assign(S, next);
+  return other;
+}
+/** Writes the panel settings as flags at the end of the prompt text. An empty prompt stays empty. */
+let lastFlags = null;
+function writeFlags() {
+  const t = $('text'), { body, flags } = splitText(t.value);
+  for (const f of flags) if (/^--no\s/i.test(f)) { mergeNo(f.replace(/^--no\s+/i, '')); if ($('noText').value !== S.no) $('noText').value = S.no; } // a typed --no joins the global No before it leaves the text
+  lastFlags = panelFlags();
+  if (!body) return;
+  const known = /^--(ar|aspect|stylize|s|chaos|c|weird|w|iw|sw|ow|no|niji|v|version|raw|draft|hd|relax|fast|turbo|oref|sref)$/i;
+  const other = flags.filter((f) => !known.test(f.split(/\s+/)[0]) && !/^--style\s+raw$/i.test(f));
+  const v = [body, ...other, lastFlags].filter(Boolean).join(' ');
+  if (v === t.value) return;
+  const focus = document.activeElement === t, caret = Math.min(t.selectionStart, body.length);
+  t.value = v; keep('text', v);
+  if (focus) t.selectionStart = t.selectionEnd = caret;
+}
+/** Text -> panel -> text: makes the two agree. */
+function syncFlags() {
+  const other = readFlags();
+  if (!caps().quality && S.quality !== 'standard') { toast(`${S.version} has no --${S.quality}. It was removed. Use 8.2 for Draft or HD.`, 5000); S.quality = 'standard'; }
+  writeFlags(); return other;
+}
+/** A flag in the text that the selected model rejects, or null. */
+function badFlag() {
+  const names = splitText($('text').value).flags.map((f) => f.split(/\s+/)[0].slice(2).toLowerCase());
+  return names.find((n) => caps().no.includes(n)) ?? null;
+}
+// One request for each image in the Vary slot (or one request if that slot is empty).
+const requests = () => (refs.vary.length ? refs.vary : [null]).map((v) => {
+  const imgs = [...refs.img, ...(v ? [v] : [])];
+  return { text: $('text').value.replace(/\s*\n\s*/g, ' '), params: buildParams(), suffix: [S.yes.trim(), S.style].filter(Boolean).join(' '), prefix: imgs.map((r) => r.url).join(' '), repeat: 1, mode: S.speed, folder: wsPath, label: pendingLabel ?? undefined, counts: { characterReferences: refs.oref.length, imagePrompts: imgs.length, imageReferences: refs.sref.length } };
+});
+const jobCount = () => requests().reduce((n, r) => n + expand(r).length, 0);
+
+function seg(id, value, onPick) {
+  for (const b of $(id).children) b.classList.toggle('on', b.dataset.v === String(value));
+  $(id).onclick = (e) => { const b = e.target.closest('button'); if (b) onPick(b.dataset.v); };
+}
+function paint() {
+  if (lastFlags !== null && panelFlags() !== lastFlags) writeFlags(); // a setting changed: show it in the prompt text
+  keep('settings', S); keep('refs', refs);
+  $('gen').classList.toggle('closed', !S.genOpen); $('genBtn').hidden = S.genOpen;
+  // references
+  const MAXT = 14; // thumbnails shown for one row; the others are counted
+  for (const k of SLOTS) {
+    document.querySelector(`.refrow[data-slot=${k}]`).classList.toggle('active', slot === k);
+    document.querySelector(`[data-thumbs=${k}]`).innerHTML = refs[k].length
+      ? refs[k].slice(0, MAXT).map((r, i) => `<span class="th"><button data-unref="${k}:${i}" title="Open"><img src="${esc(r.thumb)}" referrerpolicy="no-referrer" alt=""></button><button class="rm" data-rmref="${k}:${i}" title="Remove" aria-label="Remove">×</button></span>`).join('') + (refs[k].length > MAXT ? `<span class="more">+${refs[k].length - MAXT}</span>` : '')
+      : `<span class="none">${slot === k ? 'Pick on the right, or drop images here' : 'None'}</span>`;
+  }
+  $('pickTitle').textContent = `Add to ${SLOT_NAME[slot]}`;
+  seg('pickTab', S.pickTab, (v) => { S.pickTab = v; page = 0; paint(); });
+  paintPicker();
+  if (document.activeElement !== $('stylePrompt')) $('stylePrompt').value = S.style;
+  $('clearImgs').hidden = !SLOTS.some((k) => refs[k].length);
+  // settings
+  for (const b of $('ratios').children) { const on = Number(b.dataset.ar) === S.ar; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); }
+  $('o-ar').textContent = RATIOS[S.ar];
+  if (refs.oref.length > 1) refs.oref = refs.oref.slice(-1); // one omni reference only
+  if (refs.oref.length && S.version !== '7') { S.version = '7'; toast('Omni references run on V7. The model was set to 7.', 4000); }
+  for (const id of ['stylize', 'weird', 'chaos', 'iw', 'sw', 'ow']) { $(id).value = S[id]; $(`o-${id}`).textContent = S[id]; }
+  if (document.activeElement !== $('noText')) $('noText').value = S.no; if (document.activeElement !== $('yesText')) $('yesText').value = S.yes;
+  for (const r of document.querySelectorAll('input[type=range]')) r.style.setProperty('--p', `${((r.value - r.min) / (r.max - r.min)) * 100}%`);
+  $('version').value = S.version;
+  seg('rawSeg', S.raw ? 1 : 0, (v) => { S.raw = v === '1'; paint(); });
+  seg('speedSeg', S.speed, (v) => { S.speed = v; paint(); });
+  seg('qualitySeg', caps().quality ? S.quality : 'standard', (v) => { S.quality = v; paint(); });
+  $('qualityRow').classList.toggle('off', !caps().quality); $('qualityNote').hidden = caps().quality;
+  paintCount();
+}
+function paintCount() {
+  $('addGuide').hidden = !files.guide;
+  const n = jobCount(), over = n > MAX_JOBS, d = $('dest');
+  d.classList.toggle('warn', !wsPath || over);
+  d.innerHTML = !wsPath ? 'Select a folder for the images' : over ? `${n} jobs is more than the limit of ${MAX_JOBS}` : `${n > 1 ? `${n} jobs` : n === 1 ? '1 job' : 'Images'} to <b>${esc(wsPath.split('/').at(-1))}</b>`;
+  $('send').disabled = !wsPath || over || !n;
+  return over ? 0 : n;
+}
+$('noText').oninput = (e) => { S.no = e.target.value; paint(); }; $('yesText').oninput = (e) => { S.yes = e.target.value; paint(); };
+for (const id of ['stylize', 'weird', 'chaos', 'iw', 'sw', 'ow']) $(id).oninput = (e) => { S[id] = Number(e.target.value); paint(); };
+$('ratios').onclick = (e) => { const b = e.target.closest('button'); if (b) { S.ar = Number(b.dataset.ar); paint(); } };
+$('version').onchange = (e) => { S.version = e.target.value; paint(); };
+
+// The guide is never added automatically. This button types its text into the prompt box, at the cursor, as normal text.
+$('addGuide').onclick = () => {
+  const t = $('text'), g = files.guide;
+  if (!g) return;
+  const flagsAt = t.value.search(FLAG), end = flagsAt < 0 ? t.value.length : flagsAt; // the guide always goes before the flags
+  const at = Math.min(document.activeElement === t || t.selectionStart ? t.selectionStart : end, end);
+  const before = t.value.slice(0, at).replace(/[ \t]+$/, ''), after = t.value.slice(Math.max(at, Math.min(t.selectionEnd ?? at, end))).replace(/^[ \t]+/, '');
+  const head = before && !/[,\n]$/.test(before) ? `${before}, ` : before && !before.endsWith('\n') ? `${before} ` : before;
+  t.value = head + g + (!after || /^[,\n]/.test(after) ? after : after.startsWith('--') ? ` ${after}` : `, ${after}`); // no comma before flags
+  t.selectionStart = t.selectionEnd = (head + g).length;
+  t.dispatchEvent(new Event('input', { bubbles: true })); t.focus();
+};
+$('clearImgs').onclick = () => { for (const k of SLOTS) refs[k] = []; pendingLabel = null; paint(); };
+$('stylePrompt').oninput = (e) => { S.style = e.target.value; keep('settings', S); paintCount(); };
+$('stylePrompt').onchange = () => { if (S.styleFolder && S.style.trim()) post('/api/ws/prompt', { path: S.styleFolder, text: S.style }); if (!S.style.trim()) S.styleFolder = ''; paint(); };
+
+
+
+// ---------- panel ----------
+function setGen(open) { S.genOpen = open; paint(); if (open) setTimeout(() => { $('text').focus(); paintPicker(); paintHistory(); loadHistory(); }, 60); }
+$('genBtn').onclick = () => setGen(true);
+$('genClose').onclick = () => setGen(false);
+// A click outside the panel closes it. Capture phase: a button outside that opens the panel (Generate, Reuse) runs after this.
+document.addEventListener('click', (e) => { if (S.genOpen && !e.target.closest('#gen, #toast, #menu, #refViewer, #viewer, #tip')) setGen(false); }, true); // a click that closes an image preview keeps the panel open
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && S.genOpen) setGen(false);
+  else if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); setGen(!S.genOpen); }
+});
+
+
+// ---------- reference picker: folders first, then the Niji uploads ----------
+function refFolders(nodes = treeData?.folders?.find((n) => n.path === 'references')?.children ?? [], out = []) {
+  for (const n of nodes) { if (n.images) out.push(n); refFolders(n.children, out); }
+  return out;
+}
+// The picker never scrolls: it shows the items that fit and has page buttons for the others.
+function paintPicker() {
+  const body = $('pickBody'), W = body.clientWidth, H = body.clientHeight;
+  if (!W || !H) return;
+  const folders = S.pickTab === 'folders';
+  if (!folders && !library) { body.innerHTML = '<div class="libnote">Loading…</div>'; $('pickFoot').textContent = ''; if (!loadingLib) loadLibrary(); return; }
+  const used = new Set(refs[slot].map((r) => r.url));
+  const items = folders ? refFolders() : [null, ...library];
+  const cols = folders ? 2 : Math.max(4, Math.floor((W + 4) / 66)), rowH = folders ? 36 : (W - (cols - 1) * 4) / cols;
+  const per = Math.max(cols, cols * Math.floor((H + 4) / (rowH + 4))), pages = Math.max(1, Math.ceil(items.length / per));
+  page = Math.min(page, pages - 1);
+  const html = items.slice(page * per, (page + 1) * per).map((it) => folders
+    ? (() => { const parent = it.path.split('/').slice(1, -1).join(' / '); return `<button class="reffolder" data-reffolder="${esc(it.path)}" title="Attach all ${it.images} images of ${esc(it.path)}">${parent ? `<span>${esc(parent)} /</span>` : ''}<b>${esc(it.name)}</b><small>${it.images}</small></button>`; })()
+    : it === null ? `<label class="ptile up" for="file" tabindex="0">Upload</label>`
+    : `<button class="ptile ${used.has(it.url) ? 'sel' : ''}" data-lib="${library.indexOf(it)}"><img referrerpolicy="no-referrer" src="${esc(it.thumb)}" alt=""></button>`).join('');
+  body.innerHTML = items.length ? `<div class="pgrid" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">${html}</div>` : '<div class="libnote">No folders with images in “references”.</div>';
+  $('pickFoot').innerHTML = pages > 1 ? `<button class="link" data-page="-1" ${page ? '' : 'disabled'} aria-label="Previous page">‹</button>${page + 1} / ${pages}<button class="link" data-page="1" ${page < pages - 1 ? '' : 'disabled'} aria-label="Next page">›</button>` : folders ? 'Click a folder to attach all its images' : '';
+}
+addEventListener('resize', () => paintPicker());
+async function attachPaths(paths) {
+  toast('Uploading the references to Niji…', 0);
+  const target = slot;
+  const r = await post('/api/ws/attach', { paths });
+  if (r.error) return toast(r.error, 5000);
+  for (const im of r.images) if (!refs[target].some((x) => x.url === im.url)) refs[target].push(im);
+  if (r.prompt) { S.style = r.prompt; S.styleFolder = r.folder; }
+  toast(r.images.length ? `${r.images.length} image${r.images.length === 1 ? '' : 's'} added to ${SLOT_NAME[target]}` : 'Style text applied'); library = null; paint();
+}
+async function loadLibrary() {
+  loadingLib = true;
+  const r = await fetch('/api/library').then((x) => x.json()).catch((e) => ({ error: e.message }));
+  loadingLib = false;
+  if (!Array.isArray(r)) { if (S.pickTab === 'niji') $('pickBody').innerHTML = `<div class="libnote">${esc(r.error ?? 'Could not load the images.')}</div>`; return; }
+  library = r; paintPicker();
+}
+function addRef(im) {
+  const list = refs[slot], at = list.findIndex((r) => r.url === im.url);
+  if (at >= 0) list.splice(at, 1); else list.push(im);
+  paint();
+}
+async function uploadFiles(files) {
+  const target = slot;
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) continue;
+    toast(`Uploading ${f.name}…`, 0);
+    const base64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(',')[1]); fr.onerror = rej; fr.readAsDataURL(f); });
+    const r = await post('/api/upload', { name: f.name, type: f.type, base64 });
+    if (r.error) return toast(r.error, 5000);
+    (library ??= []).unshift(r); refs[target].push(r);
+  }
+  toast(`Added to ${SLOT_NAME[target]}`); paint();
+}
+$('file').onchange = (e) => { uploadFiles([...e.target.files]); e.target.value = ''; };
+$('text').addEventListener('change', () => { syncFlags(); paint(); }); // when you leave the prompt box
+$('text').addEventListener('paste', (e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); uploadFiles(fs); } });
+
+// ---------- reuse a prompt, and the history of past generations ----------
+const isUrl = (w) => /^https?:\/\//.test(w);
+function reuse(full) {
+  if (!full) return;
+  const words = full.trim().split(/\s+/), imgs = [];
+  while (words.length && isUrl(words[0])) imgs.push(words.shift());
+  const rest = words.join(' '), at = rest.search(/(^|\s)--[a-z]/);
+  const body = at < 0 ? rest : rest.slice(0, at).trim(), flags = at < 0 ? [] : rest.slice(at).trim().split(/\s+(?=--[a-z])/);
+  const srefs = [], kept = [];
+  for (const f of flags) {
+    if (f.startsWith('--no ')) continue; // No is global, the old prompt's --no is not loaded
+    if (!f.startsWith('--sref ')) { kept.push(f); continue; }
+    const parts = f.split(/\s+/).slice(1), codes = parts.filter((x) => !isUrl(x));
+    srefs.push(...parts.filter(isUrl));
+    if (codes.length) kept.push(`--sref ${codes.join(' ')}`);
+  }
+  const asRef = (url) => ({ url, thumb: url });
+  refs.img = imgs.map(asRef); refs.sref = srefs.map(asRef); refs.vary = [];
+  S.style = ''; S.styleFolder = ''; // the old prompt already contains its style text
+  $('text').value = [stripYes(body), ...kept].join(' '); keep('text', $('text').value);
+  syncFlags(); setGen(true); toast('Prompt loaded. Its settings are in the panel.', 3500);
+}
+let history = null, hpage = 0, loadingHist = false;
+async function loadHistory() {
+  if (loadingHist) return; loadingHist = true;
+  const r = await fetch('/api/history').then((x) => x.json()).catch(() => null);
+  loadingHist = false; history = Array.isArray(r) ? r : history ?? []; paintHistory();
+}
+const KEEP = ['ar', 'stylize', 'weird', 'chaos', 'iw', 'sw', 'ow', 'no', 'yes', 'version', 'raw', 'speed', 'quality']; // settings stored with a saved prompt
+let saved = null;
+async function loadSaved() { const r = await fetch('/api/saved').then((x) => x.json()).catch(() => null); saved = Array.isArray(r) ? r : saved ?? []; paintHistory(); }
+async function savePrompt() {
+  const body = $('text').value.trim();
+  if (!body && !SLOTS.some((k) => refs[k].length)) return toast('Write a prompt first.', 3000);
+  const name = prompt('Name for this saved prompt', promptText(body).slice(0, 48) || 'References only'); if (!name?.trim()) return;
+  const r = await post('/api/saved', { name: name.trim(), text: $('text').value, style: S.style, refs, settings: Object.fromEntries(KEEP.map((k) => [k, S[k]])) });
+  if (r.error) return toast(r.error, 5000);
+  saved = r; S.histTab = 'saved'; hpage = 0; keep('settings', S); paintHistory(); toast(`Saved “${name.trim()}”`);
+}
+function useSaved(it) {
+  $('text').value = splitText(it.text).body ? it.text : ''; keep('text', $('text').value);
+  for (const k of SLOTS) refs[k] = (it.refs?.[k] ?? []).map((r) => ({ ...r }));
+  S.style = it.style ?? ''; S.styleFolder = '';
+  for (const k of KEEP) if (it.settings?.[k] != null && k !== 'no' && k !== 'yes') S[k] = it.settings[k]; // Yes and No are global
+  if (!VERSIONS.includes(S.version)) S.version = 'Niji 7'; if (it.settings?.draft) S.quality = 'draft';
+  writeFlags(); paint(); $('text').focus(); toast(`Loaded “${it.name}”`);
+}
+$('savePrompt').onclick = savePrompt;
+function paintHistory() {
+  seg('histTab', S.histTab, (v) => { S.histTab = v; hpage = 0; keep('settings', S); paintHistory(); });
+  const body = $('histBody'), H = body.clientHeight;
+  if (!H) return;
+  const isSaved = S.histTab === 'saved', list = isSaved ? saved : history;
+  if (!list) { body.innerHTML = '<div class="libnote" style="padding:8px">Loading…</div>'; if (isSaved) loadSaved(); return; }
+  const per = Math.max(1, Math.floor((H + 2) / 56)), pages = Math.max(1, Math.ceil(list.length / per));
+  hpage = Math.min(hpage, pages - 1);
+  const rows = list.slice(hpage * per, (hpage + 1) * per).map((h, i) => isSaved
+    ? (() => { const thumb = [...(h.refs?.img ?? []), ...(h.refs?.sref ?? []), ...(h.refs?.vary ?? [])][0]?.thumb; return `<div class="hrow saved" role="button" tabindex="0" data-saved="${hpage * per + i}" title="Load: ${esc(h.text)}">${thumb ? `<img src="${esc(thumb)}" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(h.name[0].toUpperCase())}</div>`}<div><b>${esc(h.name)}</b><span>${esc(h.text || 'References only')}</span></div><button class="link del" data-unsave="${h.id}" title="Delete this saved prompt" aria-label="Delete ${esc(h.name)}">×</button></div>`; })()
+    : `<button class="hrow" data-hist="${hpage * per + i}" title="Reuse: ${esc(h.prompt)}"><img src="https://cdn.midjourney.com/${h.id}/0_0_640_N.webp?method=shortest" referrerpolicy="no-referrer" alt=""><span>${esc(promptText(h.prompt) || h.prompt)}</span></button>`).join('');
+  body.innerHTML = rows || `<div class="libnote" style="padding:8px">${isSaved ? 'No saved prompts. Write a prompt, then press “Save prompt”.' : 'No generations yet.'}</div>`;
+  $('histFoot').innerHTML = pages > 1 ? `<button class="link" data-hpage="-1" ${hpage ? '' : 'disabled'} aria-label="Previous page">‹</button>${hpage + 1} / ${pages}<button class="link" data-hpage="1" ${hpage < pages - 1 ? '' : 'disabled'} aria-label="Next page">›</button>` : '';
+}
+$('histBody').addEventListener('click', (e) => { const row = e.target.closest('[data-saved]'); if (row && !e.target.closest('.del')) useSaved(saved[Number(row.dataset.saved)]); });
+$('histBody').addEventListener('keydown', (e) => { const row = e.target.closest('[data-saved]'); if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); useSaved(saved[Number(row.dataset.saved)]); } });
+addEventListener('resize', () => paintHistory());
+
+// ---------- prompt ----------
+const text = $('text');
+text.value = load('text', ''); writeFlags(); // show the stored settings in the stored prompt
+function grow() {} // the prompt box fills its area
+let hadText = Boolean(text.value.trim());
+text.oninput = () => {
+  // The first characters of a new prompt: put the current settings after them. The cursor stays where you type.
+  const has = Boolean(text.value.trim()); if (has && !hadText && !FLAG.test(text.value)) writeFlags(); hadText = has;
+  grow(); keep('text', text.value); paintCount();
+};
+async function send(top) {
+  syncFlags(); paint();
+  const bad = badFlag(); if (bad) return toast(`${S.version} does not support --${bad}. Remove it or change the model.`, 6000);
+  if (!wsPath) return toast('Select a folder first. The images are saved there.', 4000);
+  if (!paintCount()) return;
+  let added = 0;
+  for (const req of requests()) { const r = await post('/api/enqueue', { ...req, top: true }); if (r.error) return toast(r.error, 6000); added += r.added; } // manual jobs always go first
+  toast(`${added} job${added === 1 ? '' : 's'} started in ${wsPath}`); pendingLabel = null;
+  paint(); // the prompt and the references stay in the panel (Michael, 2026-11-07)
+}
+// Enter makes a new line. Only Cmd/Ctrl+Enter or the Generate button sends.
+text.onkeydown = (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) { e.preventDefault(); send(false); } };
+$('send').onclick = () => send(false);
+
+// ---------- clicks ----------
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('.refrow'); // a click on a reference row makes it the target of the picker
+  if (row && !e.target.closest('[data-unref], [data-rmref]') && slot !== row.dataset.slot) { slot = row.dataset.slot; page = 0; paint(); }
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.rmref) { const [k, i] = d.rmref.split(':'); refs[k].splice(Number(i), 1); paint(); return; }
+  if (d.unref) { const [k, i] = d.unref.split(':'); refView = { k, i: Number(i) }; $('refImg').src = refs[k][Number(i)].url; $('refViewer').hidden = false; }
+  else if (d.root) openFolder(d.root);
+  else if (d.newin) newFolder(d.newin);
+  else if (d.page) { page += Number(d.page); paintPicker(); }
+  else if (d.hpage) { hpage += Number(d.hpage); paintHistory(); }
+  else if (d.hist) reuse(history[Number(d.hist)].prompt);
+  else if (d.unsave) post('/api/saved/delete', { id: d.unsave }).then((r) => { if (Array.isArray(r)) { saved = r; paintHistory(); } });
+  else if (d.lib) addRef(library[Number(d.lib)]);
+  else if (d.reffolder) attachPaths([d.reffolder]);
+
+  else if (d.retry) post('/api/retry', { id: d.retry });
+  else if (d.remove) post('/api/remove', { id: d.remove });
+});
+
+// ---------- explorer ----------
+const WS = 'application/x-ws', FILE = 'application/x-ws-file';
+const open = new Set(load('wsOpen', []));
+const ACTIVE = ['sending', 'running', 'saving'];
+const jobsIn = (path, deep) => (state?.jobs ?? []).filter((j) => j.folder != null && (j.folder === path || (deep && j.folder.startsWith(path + '/'))));
+function findNode(path, nodes = treeData?.folders ?? []) {
+  for (const n of nodes) { if (n.path === path) return n; const f = findNode(path, n.children); if (f) return f; }
+  return null;
+}
+const promptText = (p) => p.replace(/https?:\/\/\S+/g, '').replace(/\s--[a-z].*$/, '').trim();
+// Model and the parameters of a prompt, for the generation lists: "8.2 · s0 c0 w0 iw0.5 sw60" (stylize, chaos, weird; image weight and style weight only when set).
+// The type of a generation, from its prompt and (for finished images) the Niji event type: Text, Image prompt, Style, Omni, or an action name.
+function jobKind(p, kind) {
+  if (kind) return kind;
+  const urls = (p.match(/^(?:https?:\/\/\S+\s+)+/) ?? [''])[0].trim().split(/\s+/).filter(Boolean).length;
+  const parts = [];
+  if (urls) parts.push(`${urls} image prompt${urls > 1 ? 's' : ''}`);
+  if (/(^|\s)--oref\s/.test(p)) parts.push('omni');
+  if (/(^|\s)--sref\s/.test(p)) parts.push('style');
+  if (/(^|\s)--edit\s/.test(p)) parts.push('edit');
+  return parts.length ? parts.join(' + ') : 'Text';
+}
+function promptMeta(p) {
+  const flag = (names, dflt) => { for (const n of names) { const m = p.match(new RegExp(`(?:^|\\s)--${n}\\s+(\\S+)`)); if (m) return m[1]; } return dflt; };
+  const v = p.match(/(?:^|\s)--niji\s+(\S+)/) ? `niji ${p.match(/(?:^|\s)--niji\s+(\S+)/)[1]}` : flag(['v', 'version'], '?');
+  const iw = flag(['iw'], null), sw = flag(['sw'], null);
+  const raw = /(^|\s)--raw(\s|$)/.test(p) || /(^|\s)--style\s+raw(\s|$)/.test(p);
+  return `${v} ${raw ? 'raw' : 'standard'} · s${flag(['stylize', 's'], 100)} c${flag(['chaos', 'c'], 0)} w${flag(['weird', 'w'], 0)}${iw != null ? ` iw${iw}` : ''}${sw != null ? ` sw${sw}` : ''}`;
+}
+let files = { images: [], guide: null, pinned: [], tags: {}, info: {}, prompts: {}, prompt: null }, treeData = null;
+
+const iconsOf = (n) => (n?.icons ?? []).map((f) => `<img class="cicon" draggable="false" src="/ws/file?path=${encodeURIComponent(n.path + '/' + f)}" title="${esc(f.replace(/^\.\w+-|\.png$/g, ''))}" alt="${esc(f.replace(/^\.\w+-|\.png$/g, ''))}">`).join('');
+const gapAt = (nodes, i) => i > 0 && nodes[i].rank !== nodes[i - 1].rank; // between the guardian, the common spirits and the special-class spirits
+function treeHtml(nodes) {
+  return nodes.map((n, i) => {
+    const busy = jobsIn(n.path, true).filter((j) => ACTIVE.includes(j.status)).length;
+    return `<details ${open.has(n.path) ? 'open' : ''} class="${gapAt(nodes, i) ? 'gap' : ''}" data-path="${esc(n.path)}"><summary draggable="true" class="${n.children.length ? '' : 'leaf'} ${n.path === wsPath ? 'sel' : ''}" data-folder="${esc(n.path)}"><span>${iconsOf(n)}${esc(n.name)}</span>${n.guide ? `<b class="gd" data-guide="1" aria-label="Guide"><svg viewBox="0 0 24 24"><path d="M4 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z"/></svg><span class="pop">${esc(n.guide)}</span></b>` : ''}${busy ? `<i title="Jobs in progress">${busy}</i>` : ''}</summary>${treeHtml(n.children)}</details>`;
+  }).join('');
+}
+// The sidebar has two areas. They work the same way: References hold reference images,
+// Assets hold the images that go into the game.
+const AREAS = [['references', 'References'], ['assets', 'Assets']];
+function paintTree() {
+  if (!treeData) return;
+  if (treeData.missing) { $('tree').innerHTML = '<div class="note" style="padding:12px;text-align:left">The workspace folder does not exist. Run: node tools/seed-arcspirits.mjs</div>'; return; }
+  const area = ([path, label]) => `<div class="thead ${wsPath === path ? 'sel' : ''}"><button class="tname" data-root="${path}" data-folder="${path}" title="Show the ${label} folder">${label}</button><button class="link" data-newin="${path}" title="New folder in ${label}" aria-label="New folder in ${label}">+</button></div>${treeHtml(treeData.folders.find((f) => f.path === path)?.children ?? [])}`;
+  const other = treeData.folders.filter((f) => !AREAS.some(([p]) => p === f.path));
+  $('tree').innerHTML = AREAS.map(area).join('') + (other.length ? `<div class="thead"><span class="tname">Other</span></div>${treeHtml(other)}` : '');
+}
+async function loadTree() { treeData = await fetch('/api/ws/tree').then((r) => r.json()); $('wsRoot').textContent = treeData.root; $('wsRoot').title = treeData.root; paintTree(); paintPicker(); paintFiles(); }
+
+let shown = []; // image names in the order of the page (the viewer and the arrow keys use it)
+function when(ms) {
+  const d = new Date(ms), now = new Date(), day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((day(now) - day(d)) / 86400000), time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const date = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : d.toLocaleDateString([], { month: 'short', day: 'numeric', ...(d.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }) });
+  return `${date}, ${time}`;
+}
+function paintFiles() {
+  if (!wsPath) return;
+  const pinnedSet = new Set(files.pinned ?? []), info = files.info ?? {};
+  const tile = (n) => { const p = encodeURIComponent(wsPath + '/' + n), on = pinnedSet.has(n), id = idOf(n); return `<figure draggable="true" data-file="${esc(wsPath + '/' + n)}" title="${esc(n)}"><div class="pic"><img class="tile" draggable="false" src="/ws/file?thumb=1&path=${p}" alt=""><button class="pin ${on ? 'on' : ''}" data-pin="${esc(n)}" title="${on ? 'Unpin' : 'Pin to the top'}" aria-label="${on ? 'Unpin' : 'Pin to the top'}" aria-pressed="${on}">★</button>${files.prompts?.[n] ? `<button class="reuse" data-reuse="${esc(n)}" title="${esc(files.prompts[n])}">Reuse</button>` : ''}</div><figcaption>${id ? `<span class="gid" title="${esc(n)}">${id}</span>` : esc(n)}${(files.tags?.[n] ?? []).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</figcaption></figure>`; };
+  const section = (head, names) => (names.length ? `<div class="fhead">${head}</div><div class="frow">${names.map(tile).join('')}</div>` : '');
+
+  const folderTiles = (findNode(wsPath)?.children ?? []).map((n, i, all) => `${gapAt(all, i) ? '</div><div class="fgroup">' : ''}<figure class="folder" draggable="true" data-folder="${esc(n.path)}" title="Open ${esc(n.name)}"><div class="tile ${n.cover ? 'cover' : ''}">${n.cover ? `<img draggable="false" src="/ws/file?thumb=1&path=${encodeURIComponent(n.path + '/' + n.cover)}" alt="">` : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'}<span>${n.images ? `${n.images} image${n.images === 1 ? '' : 's'}` : n.children.length ? `${n.children.length} folder${n.children.length === 1 ? '' : 's'}` : 'Empty'}</span></div><figcaption>${iconsOf(n)}${esc(n.name)}</figcaption></figure>`).join('');
+
+  // Jobs in progress: one row each.
+  const label = { sending: 'Sending…', running: 'Generating…', saving: 'Saving…' };
+  const jobRows = jobsIn(wsPath).filter((j) => j.status !== 'done').reverse().map((j) => `<div class="fhead"><b>${j.status === 'failed' ? 'Failed' : label[j.status] ?? ''}</b><span title="${esc(j.prompt)}"><i class="meta kind">${esc(j.label ?? jobKind(j.prompt))}</i> <i class="meta">${esc(promptMeta(j.prompt))}</i> ${esc(promptText(j.prompt))}</span></div><div class="frow">${j.status === 'failed'
+    ? `<figure class="fail"><div class="tile"><span>${esc(j.error)}</span><span><button class="link" data-retry="${j.id}">Retry</button><button class="link" data-remove="${j.id}">Remove</button></span></div></figure>`
+    : Array.from({ length: j.batch ?? 4 }, (_, i) => `<figure class="wait"><div class="tile" style="animation-delay:${i * .15}s${j.width && j.height ? `;aspect-ratio:${j.width}/${j.height}` : ''}"></div></figure>`).join('')}</div>`).join('');
+
+  // Images: a copy of each pinned image first, then one row for each generation (newest first), then the other images.
+  const pinned = files.images.filter((n) => pinnedSet.has(n)), groups = new Map(), other = [];
+  for (const n of files.images) {
+    const job = info[n]?.job;
+    if (!job) other.push(n); else if (groups.has(job)) groups.get(job).push(n); else groups.set(job, [n]);
+  }
+  const gens = [...groups.values()].map((names) => ({ names, time: Math.max(...names.map((n) => info[n].time)) })).sort((a, b) => b.time - a.time);
+  shown = [...gens.flatMap((g) => g.names), ...other]; // a pinned image shows two times, but the viewer steps through each image one time
+  const genRows = gens.map((g) => { const full = files.prompts?.[g.names[0]]; const kind = files.labels?.[g.names[0]] ?? files.info?.[g.names[0]]?.kind; return section(`<b>${when(g.time)}</b>${full ? `<span title="${esc(full)}"><i class="meta kind">${esc(jobKind(full, kind))}</i> <i class="meta">${esc(promptMeta(full))}</i> ${esc(promptText(full))}</span>` : ''}`, g.names); }).join('');
+  const html = (files.prompt != null ? `<div class="folderstyle">Style text: ${esc(files.prompt)}</div>` : '')
+    + (folderTiles ? `<div class="fgroup">${folderTiles}</div>` : '') + jobRows
+    + section('<b>Pinned</b>', pinned) + genRows + section(`<b>${pinned.length || gens.length ? 'Other images' : 'Images'}</b>`, other);
+  // Do not rebuild the grid when nothing changed: the images would flash.
+  if (html !== paintFiles.last) { paintFiles.last = html; $('wsGrid').innerHTML = html || '<div class="note">This folder is empty. Press Generate to make images here.</div>'; }
+  markSel();
+}
+async function togglePin(names, pinned) {
+  const r = await post('/api/ws/pin', { path: wsPath, names, pinned }); if (r.error) return toast(r.error, 5000);
+  loadFiles();
+}
+async function setTag(names, tag, on) {
+  const r = await post('/api/ws/tag', { path: wsPath, names, tag, on }); if (r.error) return toast(r.error, 5000);
+  loadFiles();
+}
+async function tagItems(names) {
+  const tag = prompt(`Tag for ${names.length === 1 ? names[0] : plural(names.length, 'image')}:`); if (tag?.trim()) setTag(names, tag, true);
+}
+async function loadFiles() {
+  if (!wsPath) return;
+  const path = wsPath, r = await fetch('/api/ws/list?path=' + encodeURIComponent(path)).then((x) => x.json());
+  if (path !== wsPath) return;
+  if (r.error) return closeFolder(); // the folder was renamed or deleted outside this page
+  files = r; paintFiles(); paintCount();
+}
+function openFolder(path) {
+  wsPath = path; keep('wsPath', path); files = { images: [], prompt: null }; paintFiles.last = null; sel.clear(); anchor = null;
+  const parts = path.split('/');
+  for (let i = 1; i < parts.length; i++) open.add(parts.slice(0, i).join('/')); // keep the parent folders open
+  keep('wsOpen', [...open]);
+  open.add(path);
+  $('wsName').innerHTML = parts.slice(0, -1).map((name, i) => `<button data-crumb="${esc(parts.slice(0, i + 1).join('/'))}">${esc(name)}</button><span> / </span>`).join('') + iconsOf(findNode(wsPath)) + esc(parts.at(-1));
+  $('wsNew').hidden = false; $('wsUp').hidden = false;
+  paintTree(); paint(); loadFiles();
+}
+$('tree').addEventListener('click', (e) => {
+  const s = e.target.closest('summary'); if (!s) return;
+  e.preventDefault(); // the tree is drawn again from the `open` set, so the browser must not toggle it
+  const path = s.dataset.folder;
+  if (path === wsPath && open.has(path)) open.delete(path); else open.add(path);
+  keep('wsOpen', [...open]);
+  if (path === wsPath) paintTree(); else openFolder(path);
+});
+// ---------- create, rename, delete ----------
+const parentOf = (p) => p.split('/').slice(0, -1).join('/');
+async function newFolder(path) {
+  const name = prompt(path ? `New folder in “${path.split('/').at(-1)}”` : 'New folder'); if (!name) return;
+  const r = await post('/api/ws/mkdir', { path, name: name.trim() }); if (r.error) return toast(r.error, 5000);
+  if (path) open.add(path); keep('wsOpen', [...open]); await loadTree();
+}
+// After a folder gets a new path, the open folder and the open tree nodes follow it.
+function follow(from, to) {
+  const swap = (p) => (p === from || p.startsWith(from + '/') ? (to == null ? null : to + p.slice(from.length)) : p);
+  for (const p of [...open]) { open.delete(p); const n = swap(p); if (n) open.add(n); }
+  keep('wsOpen', [...open]);
+  if (S.styleFolder) { S.styleFolder = swap(S.styleFolder) ?? ''; keep('settings', S); }
+  if (wsPath) { const n = swap(wsPath); if (n !== wsPath) { if (n) return openFolder(n); closeFolder(); } }
+}
+function closeFolder() {
+  wsPath = null; keep('wsPath', null); files = { images: [], prompt: null }; paintFiles.last = null;
+  $('wsName').innerHTML = '<span>Select a folder</span>'; $('wsNew').hidden = true; $('wsUp').hidden = true;
+  $('wsGrid').innerHTML = '<div class="note">Select a folder on the left.</div>'; paint();
+}
+async function renameItem(path, isFolder) {
+  const old = path.split('/').at(-1), shown = isFolder ? old : old.replace(/\.[^.]+$/, '');
+  const name = prompt('New name', shown); if (!name || name.trim() === shown) return;
+  const r = await post('/api/ws/rename', { path, name: name.trim() }); if (r.error) return toast(r.error, 5000);
+  if (isFolder) { follow(path, (parentOf(path) ? parentOf(path) + '/' : '') + r.name); await loadTree(); } else loadFiles();
+}
+async function deleteItem(path, isFolder) {
+  const name = path.split('/').at(-1);
+  const r = await post('/api/ws/delete', { path }); if (r.error) return toast(r.error, 5000);
+  toast(`“${name}” moved to the Trash`);
+  if (isFolder) follow(path, null);
+  await loadTree(); if (!isFolder) loadFiles();
+}
+async function putFiles(list) {
+  if (!wsPath) return toast('Select a folder first.', 4000);
+  let n = 0;
+  for (const f of list) {
+    if (!f.type.startsWith('image/')) continue;
+    toast(`Adding ${f.name}…`, 0);
+    const base64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(',')[1]); fr.onerror = rej; fr.readAsDataURL(f); });
+    const r = await post('/api/ws/put', { path: wsPath, name: f.name, base64 }); if (r.error) return toast(r.error, 5000);
+    n++;
+  }
+  toast(n ? `${n} image${n === 1 ? '' : 's'} added` : 'No images in that drop'); loadFiles(); loadTree();
+}
+$('wsName').onclick = (e) => { const b = e.target.closest('[data-crumb]'); if (b) openFolder(b.dataset.crumb); };
+$('wsNew').onclick = () => newFolder(wsPath);
+$('wsFile').onchange = (e) => { putFiles([...e.target.files]); e.target.value = ''; };
+
+// Right-click (or the Menu key) on a folder or an image opens its actions.
+// Actions on one generated image (the same as the buttons on the Niji site). The result saves in the same folder.
+const ACTIONS = [['Vary', [['varySubtle', 'Subtle'], ['varyStrong', 'Strong']]], ['Zoom out', [['zoom15', '1.5x'], ['zoom2', '2x']]], ['Pan', [['panLeft', '←'], ['panRight', '→'], ['panUp', '↑'], ['panDown', '↓']]], ['Upscale', [['upSubtle', 'Subtle'], ['upCreative', 'Creative']]], ['Edit', [['remix', 'Remix'], ['rerun', 'Rerun'], ['enhance', 'Enhance']]], ['Arc', [['arc', 'Arc retexture']]]]; // Retexture: Niji rejects it outside its Editor (tested 2026-11-07), so it is not offered
+const ACTION_NAME = { varySubtle: 'Vary (subtle)', varyStrong: 'Vary (strong)', zoom15: 'Zoom out 1.5x', zoom2: 'Zoom out 2x', panLeft: 'Pan left', panRight: 'Pan right', panUp: 'Pan up', panDown: 'Pan down', upSubtle: 'Upscale (subtle)', upCreative: 'Upscale (creative)', remix: 'Remix…', rerun: 'Rerun', enhance: 'Enhance', arc: 'Arc retexture' };
+const ACTION_TIP = {
+  varySubtle: 'Four new images close to this one: same composition, small changes.', varyStrong: 'Four new images that keep the idea but change more: pose, details, composition.',
+  zoom15: 'Paints new canvas around the image so it shows 1.5x more. Same prompt.', zoom2: 'Paints new canvas around the image so it shows 2x more. Same prompt.',
+  panLeft: 'Extends the image to the left with new painted canvas.', panRight: 'Extends the image to the right.', panUp: 'Extends the image upward.', panDown: 'Extends the image downward.',
+  upSubtle: 'Doubles the resolution and keeps the image as it is.', upCreative: 'Doubles the resolution and adds detail; small changes to the image.',
+  remix: 'Four new images from this one with a changed prompt (you type the new text). Subtle keeps more of the image.', rerun: 'Runs the same prompt again for four new images (new seed).',
+  enhance: 'Adds detail and sharpness on top of the finished image, like a stronger upscale. 8.2 images only.',
+  arc: 'Arc retexture (this app): runs the original prompt of this image again with the image itself as the only image prompt at image weight 2.5. Style references, text, ratio, model and raw/standard stay. Pushes the texture of the style references onto the image.', retexture: 'Keeps the drawing (shapes, poses, layout) and repaints materials, light and style from a new text. Niji 7.',
+};
+const canAct = (name) => Boolean(files.info?.[name]?.job);
+// Arc retexture (Michael, 2026-11-07): opens the generation panel filled from this image: its prompt text, its style references,
+// the image itself as the only image prompt, image weight 2.5, Raw, stylize/variety/weird 0, same ratio and model. Michael then presses Generate.
+let pendingLabel = null; // the type label for the next send (Arc retexture)
+async function arcRetexture(name) {
+  const full = files.prompts?.[name]; if (!full) return toast('The prompt of this image is not known.', 4000);
+  const body = promptText(full), flags = full.slice(full.search(/(^|\s)--[a-z]/i)).trim();
+  const flag = (re) => full.match(re)?.[1];
+  toast('Uploading the image to Niji…', 0);
+  const me = await post('/api/ws/attach', { paths: [`${wsPath}/${name}`] }); if (me.error) return toast(me.error, 5000);
+  refs.img = [{ url: me.images[0].url, thumb: `/ws/file?thumb=1&path=${encodeURIComponent(wsPath + '/' + name)}` }];
+  refs.sref = (flag(/(?:^|\s)--sref\s+(.*?)(?=\s--[a-z]|$)/i) ?? '').split(/\s+/).filter((x) => /^https?:/.test(x)).map((url) => ({ url, thumb: url }));
+  refs.oref = []; refs.vary = [];
+  S.iw = 2.5; S.raw = /(^|\s)--raw(\s|$)/.test(flags) || /(^|\s)--style\s+raw(\s|$)/.test(flags); S.stylize = 0; S.chaos = 0; S.weird = 0;
+  const sw = flag(/(?:^|\s)--sw\s+(\d+)/); if (sw) S.sw = Number(sw);
+  const ar = flag(/(?:^|\s)--(?:ar|aspect)\s+(\d+:\d+)/); if (ar && RATIOS.includes(ar)) S.ar = RATIOS.indexOf(ar);
+  S.version = /(^|\s)--niji\s+7/.test(flags) ? 'Niji 7' : /(^|\s)--v(ersion)?\s+8\.2/.test(flags) ? '8.2' : /(^|\s)--v(ersion)?\s+7(\s|$)/.test(flags) ? '7' : S.version;
+  S.quality = /(^|\s)--hd(\s|$)/.test(flags) ? 'hd' : /(^|\s)--draft(\s|$)/.test(flags) ? 'draft' : 'standard';
+  text.value = stripYes(body); keep('text', text.value); hadText = true; // Yes and No are global: the panel keeps them
+  S.genOpen = true; pendingLabel = 'Arc retexture';
+  paint(); writeFlags(); paint();
+  toast('Panel filled for Arc retexture. Change what you want, then press Generate.', 4000);
+}
+async function runAction(name, action) {
+  if (action === 'arc') return arcRetexture(name);
+  const extra = {};
+  if (action === 'remix' || action === 'retexture') { // these take a new text; the flags of the image stay
+    const cur = files.prompts?.[name] ? promptText(files.prompts[name]) : '';
+    const t = prompt(action === 'remix' ? 'Remix: the new prompt text' : 'Retexture: describe the new surface, materials and style', cur); if (t == null || !t.trim()) return;
+    extra.newPrompt = t.trim();
+    if (action === 'remix') extra.strong = confirm('Strong remix? OK = strong (changes more), Cancel = subtle (keeps more of the image).');
+  }
+  const r = await post('/api/action', { path: `${wsPath}/${name}`, action, ...extra });
+  toast(r.error ?? `${r.label} started. The result saves in this folder.`, r.error ? 6000 : 3000);
+}
+// Restyle (Michael, 2026-11-07): remake this image so it looks more like a reference folder. Two methods:
+//  - image prompt: this image goes in as the image prompt (--iw from the panel) with the folder's pinned images as --sref (--sw from the panel);
+//  - retexture: Niji 7 keeps the drawing and repaints the surface with the folder as --sref.
+// The panel's Image weight, Style weight and Model are the knobs to play with. Stylize, variety and weird stay 0.
+async function restyle(name, method, folder) {
+  const full = files.prompts?.[name] ?? '', text = promptText(full) || 'the same picture';
+  const ar = full.match(/--(?:ar|aspect)\s+(\d+:\d+)/)?.[1];
+  toast('Uploading the references to Niji…', 0);
+  const r = await post('/api/ws/attach', { paths: [folder] }); if (r.error) return toast(r.error, 5000);
+  const srefs = r.images.map((x) => x.url); if (!srefs.length) return toast('That folder has no images.', 4000);
+  if (method === 'retexture') {
+    const res = await post('/api/action', { path: `${wsPath}/${name}`, action: 'retexture', newPrompt: `${text} --sref ${srefs.join(' ')} --sw ${S.sw}${ar ? ` --ar ${ar}` : ''} --stylize 0 --chaos 0 --weird 0` });
+    return toast(res.error ?? 'Restyle (retexture) started. The result saves in this folder.', res.error ? 6000 : 3000);
+  }
+  const me = await post('/api/ws/attach', { paths: [`${wsPath}/${name}`] }); if (me.error) return toast(me.error, 5000);
+  const model = /--niji\s+7/.test(full) ? '--niji 7' : /--v(?:ersion)?\s+8\.2/.test(full) ? '--v 8.2' : /--v(?:ersion)?\s+7(\s|$)/.test(full) ? '--v 7' : (S.version.startsWith('Niji') ? `--niji ${S.version.slice(5)}` : `--v ${S.version}`);
+  const params = `--sref ${srefs.join(' ')} --sw ${S.sw} --iw ${S.iw}${ar ? ` --ar ${ar}` : ''} --stylize 0 --chaos 0 --weird 0 ${model}`;
+  const res = await post('/api/enqueue', { text, params, prefix: me.images[0].url, repeat: 1, mode: 'fast', top: true, folder: wsPath, label: 'Restyle', counts: { imagePrompts: 1, imageReferences: srefs.length } });
+  toast(res.error ?? `Restyle started (image weight ${S.iw}, style weight ${S.sw}). The result saves in this folder.`, res.error ? 6000 : 4000);
+}
+function restyleMenu(x, y, name, method) {
+  const folders = refFolders();
+  showMenu(x, y, folders.length ? folders.map((n) => ({ label: n.path.replace(/^references\//, ''), tip: `${n.images} images (pinned ones are used when there are pins)`, run: () => restyle(name, method, n.path) })) : [{ label: 'No reference folders', run: () => {} }]);
+}
+function showMenu(x, y, items) {
+  const m = $('menu');
+  m.innerHTML = items.map((it, i) => (it ? `<button role="menuitem" data-i="${i}" class="${it.danger ? 'danger' : ''}" ${it.tip ? `title="${esc(it.tip)}"` : ''}>${esc(it.label)}</button>` : '<hr>')).join('');
+  m.hidden = false;
+  m.style.left = `${Math.min(x, innerWidth - m.offsetWidth - 8)}px`; m.style.top = `${Math.min(y, innerHeight - m.offsetHeight - 8)}px`;
+  m.onclick = (e) => { const b = e.target.closest('button'); if (b) { m.hidden = true; items[Number(b.dataset.i)].run(); } };
+  m.querySelector('button')?.focus();
+}
+document.addEventListener('contextmenu', (e) => {
+  const treeFolder = e.target.closest('#tree summary[data-folder]')?.dataset.folder;
+  const fig = e.target.closest(TILE), blank = !fig && wsPath && e.target.closest('.fscroll');
+  if (treeFolder == null && !fig && !blank) return;
+  e.preventDefault();
+  const paste = (to) => (clip ? [{ label: `Paste ${plural(clip.paths.length)}`, run: () => pasteInto(to) }] : []);
+  let items;
+  if (treeFolder != null) {
+    items = [{ label: 'New folder inside…', run: () => newFolder(treeFolder) }, { label: 'Rename…', run: () => renameItem(treeFolder, true) }, ...paste(treeFolder), null, { label: 'Move to Trash', danger: true, run: () => deleteItem(treeFolder, true) }];
+  } else if (fig) {
+    const p = pathOf(fig);
+    if (!sel.has(p)) { select([p]); anchor = p; }
+    const paths = [...sel], n = paths.length, folder = isFolderPath(p);
+    items = [
+      ...(n === 1 ? [{ label: 'Open', run: () => openItem(p) }, ...(files.prompts?.[p.split('/').at(-1)] && !folder ? [{ label: 'Reuse prompt', run: () => reuse(files.prompts[p.split('/').at(-1)]) }] : []), { label: 'Rename…', run: () => renameItem(p, folder) }] : []),
+      ...(n === 1 && !folder && canAct(p.split('/').at(-1)) ? [null, ...Object.entries(ACTION_NAME).map(([id, label]) => ({ label, tip: ACTION_TIP[id], run: () => runAction(p.split('/').at(-1), id) })), null] : []),
+      ...(n === 1 && !folder && /-[0-9a-f]{8}-\d+\.png$/i.test(p) ? [
+        { label: 'Restyle with folder…', tip: 'This image as the image prompt (Image weight from the panel) plus a reference folder as style references (Style weight from the panel). Pick the folder next.', run: () => restyleMenu(e.clientX, e.clientY, p.split('/').at(-1), 'image') },
+        null] : []),
+      ...(() => { const names = paths.filter((x) => !isFolderPath(x)).map((x) => x.split('/').at(-1)); if (!names.length) return []; const all = names.every((x) => files.pinned.includes(x));
+        const common = [...new Set(names.flatMap((x) => files.tags?.[x] ?? []))].filter((t) => names.every((x) => (files.tags?.[x] ?? []).includes(t)));
+        const ids = names.map((x) => idOf(x) ?? x);
+        return [{ label: n > 1 ? `Copy ${n} IDs` : `Copy ID ${ids[0]}`, run: () => navigator.clipboard.writeText(ids.join('\n')) }, { label: all ? 'Unpin' : 'Pin to the top', run: () => togglePin(names, !all) }, { label: 'Tag…', run: () => tagItems(names) }, ...common.map((t) => ({ label: `Remove tag “${t}”`, run: () => setTag(names, t, false) }))]; })(),
+      { label: n > 1 ? `Cut ${plural(n)}` : 'Cut', run: () => setClip(true) }, { label: n > 1 ? `Copy ${plural(n)}` : 'Copy', run: () => setClip(false) },
+      ...(n === 1 && folder ? paste(p) : []), null,
+      { label: n > 1 ? `Move ${plural(n)} to Trash` : 'Move to Trash', danger: true, run: () => deleteItems(paths) },
+    ];
+  } else {
+    items = [{ label: 'New folder…', run: () => newFolder(wsPath) }, { label: 'Add images…', run: () => $('wsFile').click() }, ...paste(wsPath), null, { label: 'Select all', run: () => select(tiles().map(pathOf)) }];
+  }
+  showMenu(e.clientX, e.clientY, items);
+});
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu')) $('menu').hidden = true; });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('menu').hidden) { $('menu').hidden = true; e.stopImmediatePropagation(); } }, true);
+
+// ---------- selection: click, Ctrl/Cmd-click, Shift-click, marquee, keys (like a desktop file explorer) ----------
+const sel = new Set();
+let anchor = null, clip = null, dragging = null;
+const TILE = '#wsGrid figure[data-file], #wsGrid figure[data-folder]';
+const tiles = () => [...document.querySelectorAll(TILE)];
+const pathOf = (f) => f.dataset.file ?? f.dataset.folder;
+const isFolderPath = (p) => tiles().some((f) => f.dataset.folder === p);
+const plural = (n, word = 'item') => `${n} ${word}${n === 1 ? '' : 's'}`;
+function markSel() {
+  const present = new Set(tiles().map(pathOf));
+  for (const p of [...sel]) if (!present.has(p)) sel.delete(p);
+  for (const f of tiles()) { const p = pathOf(f); f.classList.toggle('sel', sel.has(p)); f.classList.toggle('cut', Boolean(clip?.cut && clip.paths.includes(p))); }
+  $('selInfo').textContent = sel.size > 1 ? `${sel.size} selected` : '';
+}
+function select(paths, add = false) { if (!add) sel.clear(); for (const p of paths) sel.add(p); markSel(); }
+function openItem(p) { if (isFolderPath(p)) openFolder(p); else view(shown.indexOf(p.split('/').at(-1))); }
+
+$('wsGrid').addEventListener('click', (e) => {
+  const again = e.target.closest('.reuse'); if (again) return reuse(files.prompts[again.dataset.reuse]);
+  const pin = e.target.closest('.pin'); if (pin) return togglePin([pin.dataset.pin], !pin.classList.contains('on'));
+  const f = e.target.closest(TILE); if (!f) return;
+  const p = pathOf(f), all = tiles().map(pathOf), mod = e.metaKey || e.ctrlKey;
+  if (e.shiftKey && anchor && all.includes(anchor)) { const [a, b] = [all.indexOf(anchor), all.indexOf(p)].sort((x, y) => x - y); select(all.slice(a, b + 1), mod); }
+  else if (mod) { if (sel.has(p)) sel.delete(p); else sel.add(p); anchor = p; markSel(); }
+  else { select([p]); anchor = p; }
+});
+$('wsGrid').addEventListener('dblclick', (e) => { const f = e.target.closest(TILE); if (f && !e.target.closest('.reuse, .pin')) openItem(pathOf(f)); });
+
+// Marquee: drag on empty space to draw a rectangle. All tiles that it touches are selected.
+const scroller = document.querySelector('.fscroll');
+scroller.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || !wsPath || e.target.closest('figure, button, a, label')) return;
+  const base = e.metaKey || e.ctrlKey || e.shiftKey ? new Set(sel) : new Set();
+  const at = (ev) => { const r = scroller.getBoundingClientRect(); return [ev.clientX - r.left + scroller.scrollLeft, ev.clientY - r.top + scroller.scrollTop, r]; };
+  const [x0, y0] = at(e), box = document.createElement('div');
+  box.className = 'marquee'; let moved = false;
+  const move = (ev) => {
+    const [x1, y1, r] = at(ev), L = Math.min(x0, x1), T = Math.min(y0, y1), W = Math.abs(x1 - x0), H = Math.abs(y1 - y0);
+    if (!moved && W + H < 5) return;
+    if (!moved) { moved = true; scroller.append(box); }
+    Object.assign(box.style, { left: `${L}px`, top: `${T}px`, width: `${W}px`, height: `${H}px` });
+    const hit = tiles().filter((f) => { const b = f.getBoundingClientRect(), fl = b.left - r.left + scroller.scrollLeft, ft = b.top - r.top + scroller.scrollTop; return fl < L + W && fl + b.width > L && ft < T + H && ft + b.height > T; }).map(pathOf);
+    sel.clear(); for (const p of [...base, ...hit]) sel.add(p); markSel();
+    // Scroll when the pointer is near the top or the bottom edge.
+    if (ev.clientY > r.bottom - 30) scroller.scrollTop += 14; else if (ev.clientY < r.top + 30) scroller.scrollTop -= 14;
+  };
+  const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); box.remove(); if (!moved) { sel.clear(); for (const p of base) sel.add(p); markSel(); } };
+  addEventListener('pointermove', move); addEventListener('pointerup', up);
+  e.preventDefault(); document.activeElement?.blur?.();
+});
+
+async function moveItems(paths, to) {
+  let n = 0;
+  for (const from of paths) {
+    if (from === to) continue;
+    const r = await post('/api/ws/move', { from, to });
+    if (r.error) { toast(r.error, 5000); break; }
+    if (r.same) continue;
+    n++; if (r.movedFolder) follow(r.movedFolder.from, r.movedFolder.to);
+  }
+  if (n) { toast(`${plural(n)} moved to ${to.split('/').at(-1)}`); open.add(to); keep('wsOpen', [...open]); }
+  sel.clear(); await loadTree(); loadFiles();
+}
+async function deleteItems(paths) {
+  if (!paths.length) return;
+  const name = paths[0].split('/').at(-1); // no confirmation: the items go to the Trash and can come back
+  let n = 0;
+  for (const path of paths) {
+    const r = await post('/api/ws/delete', { path });
+    if (r.error) { toast(r.error, 5000); break; }
+    n++; if (r.deletedFolder) follow(path, null);
+  }
+  if (n) toast(n === 1 ? `“${name}” moved to the Trash` : `${plural(n)} moved to the Trash`);
+  sel.clear(); await loadTree(); loadFiles();
+}
+function setClip(cut) { if (!sel.size) return; clip = { paths: [...sel], cut }; markSel(); toast(`${plural(sel.size)} ${cut ? 'cut' : 'copied'}. Paste with ${navigator.platform.startsWith('Mac') ? '⌘' : 'Ctrl+'}V in a folder.`); }
+async function pasteInto(to) {
+  if (!clip) return;
+  if (clip.cut) { const paths = clip.paths; clip = null; return moveItems(paths, to); }
+  let n = 0;
+  for (const from of clip.paths) { const r = await post('/api/ws/copy', { from, to }); if (r.error) { toast(r.error, 5000); break; } n++; }
+  if (n) toast(`${plural(n)} copied to ${to.split('/').at(-1)}`);
+  await loadTree(); loadFiles();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (viewAt >= 0 || !$('menu').hidden || !wsPath || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const mod = e.metaKey || e.ctrlKey, list = tiles(), one = sel.size === 1 ? [...sel][0] : null, k = e.key.toLowerCase();
+  if (mod && k === 'a') select(list.map(pathOf));
+  else if ((e.key === 'Delete' || (mod && e.key === 'Backspace')) && sel.size) deleteItems([...sel]);
+  else if (e.key === 'Enter' && one) openItem(one);
+  else if (e.key === 'F2' && one) renameItem(one, isFolderPath(one));
+  else if (e.key === 'Escape' && sel.size) select([]);
+  else if (mod && (k === 'c' || k === 'x') && sel.size) setClip(k === 'x');
+  else if (mod && k === 'v' && clip) pasteInto(wsPath);
+  else if (e.key.startsWith('Arrow') && list.length) {
+    const cur = list.find((f) => pathOf(f) === anchor) ?? list.find((f) => sel.has(pathOf(f)));
+    let next;
+    if (!cur) next = list[0];
+    else if (e.key === 'ArrowRight') next = list[list.indexOf(cur) + 1];
+    else if (e.key === 'ArrowLeft') next = list[list.indexOf(cur) - 1];
+    else {
+      const c = cur.getBoundingClientRect(), down = e.key === 'ArrowDown';
+      const rows = list.filter((f) => { const t = f.getBoundingClientRect().top; return down ? t > c.top + 4 : t < c.top - 4; });
+      const rowTop = rows.length ? (down ? Math.min : Math.max)(...rows.map((f) => f.getBoundingClientRect().top)) : 0;
+      next = rows.filter((f) => Math.abs(f.getBoundingClientRect().top - rowTop) < 4).sort((a, b) => Math.abs(a.getBoundingClientRect().left - c.left) - Math.abs(b.getBoundingClientRect().left - c.left))[0];
+    }
+    if (next) { const p = pathOf(next); select([p], e.shiftKey); anchor = p; next.scrollIntoView({ block: 'nearest' }); }
+  } else return;
+  e.preventDefault();
+});
+
+// ---------- full-screen viewer ----------
+let viewAt = -1;
+// Info tooltips (the settings panel clips overflow, so the tip is a fixed element next to the icon).
+const showTip = (i) => { const t = $('tip'); t.textContent = i.dataset.tip; t.hidden = false; const r = i.getBoundingClientRect(); t.style.left = Math.max(8, Math.min(r.left, innerWidth - 336)) + 'px'; t.style.top = (r.bottom + 6 + t.offsetHeight > innerHeight ? r.top - 6 - t.offsetHeight : r.bottom + 6) + 'px'; };
+document.addEventListener('mouseover', (e) => { const i = e.target.closest('.info'); if (i) showTip(i); else if (!$('tip').hidden && !document.activeElement?.classList.contains('info')) $('tip').hidden = true; });
+document.addEventListener('focusin', (e) => { const i = e.target.closest('.info'); if (i) showTip(i); });
+document.addEventListener('focusout', (e) => { if (e.target.closest?.('.info')) $('tip').hidden = true; });
+let refView = null; // the reference shown large: { k: slot, i: index }
+const closeRef = () => { $('refViewer').hidden = true; $('refImg').src = ''; refView = null; };
+$('refClose').onclick = closeRef;
+$('refViewer').addEventListener('click', (e) => { if (e.target.id === 'refViewer') closeRef(); });
+document.addEventListener('keydown', (e) => { if (!refView) return; if (e.key === 'Escape') { closeRef(); e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+function view(i) {
+  viewAt = i;
+  $('viewer').hidden = i < 0;
+  if (i < 0) return void ($('viewImg').src = '');
+  const name = shown[i];
+  $('viewImg').src = '/ws/file?path=' + encodeURIComponent(wsPath + '/' + name);
+  const acts = $('viewActs'); acts.hidden = !canAct(name);
+  acts.innerHTML = canAct(name) ? ACTIONS.map(([group, list]) => `<span>${group}</span>${list.map(([id, text]) => `<button data-act="${id}" title="${esc(ACTION_NAME[id])}: ${esc(ACTION_TIP[id])}" aria-label="${ACTION_NAME[id]}">${text}</button>`).join('')}`).join('') : '';
+  $('viewCap').textContent = `${name}   ${i + 1} / ${shown.length}${files.prompts?.[name] ? `   —   ${promptText(files.prompts[name])}` : ''}`;
+  $('viewPrev').disabled = i === 0; $('viewNext').disabled = i === shown.length - 1;
+}
+const step = (d) => { const i = viewAt + d; if (i >= 0 && i < shown.length) view(i); };
+$('viewActs').onclick = (e) => { const b = e.target.closest('[data-act]'); if (b) runAction(shown[viewAt], b.dataset.act); };
+$('viewPrev').onclick = () => step(-1); $('viewNext').onclick = () => step(1); $('viewClose').onclick = () => view(-1);
+$('viewer').addEventListener('click', (e) => { if (e.target.closest('.stage') && e.target.tagName !== 'IMG' || e.target.id === 'viewer' || e.target.id === 'viewCap') view(-1); });
+document.addEventListener('keydown', (e) => {
+  if (viewAt < 0) return;
+  if (e.key === 'Escape') view(-1); else if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); else return;
+  e.stopImmediatePropagation(); e.preventDefault();
+}, true);
+
+// Drag an image or a folder from the explorer to a reference row.
+document.addEventListener('dragstart', (e) => {
+  const src = e.target.closest?.('[data-folder],[data-file]');
+  if (!src) return;
+  const p = pathOf(src), inGrid = Boolean(src.closest('#wsGrid'));
+  if (inGrid && !sel.has(p)) { select([p]); anchor = p; }
+  dragging = inGrid ? [...sel] : [p];
+  e.dataTransfer.setData(WS, JSON.stringify(dragging));
+  e.dataTransfer.setData(FILE, JSON.stringify(dragging)); // the items that a drop on a folder moves
+  e.dataTransfer.effectAllowed = 'copyMove';
+});
+// An image dropped on a folder of the tree moves there. An image or folder dropped on a reference row is attached.
+const dropTarget = (e) => {
+  const t = e.dataTransfer.types;
+  const folder = t.includes(FILE) && e.target.closest?.('#tree [data-folder], #wsGrid figure[data-folder]');
+  if (folder) return dragging?.includes(folder.dataset.folder) ? null : folder;
+  if (t.includes('Files') && !t.includes(WS) && wsPath && e.target.closest?.('.fscroll')) return document.querySelector('.fscroll');
+  return (t.includes(WS) || t.includes('Files')) && e.target.closest?.('.slot');
+};
+let hot = null;
+const setHot = (el) => { if (hot !== el) { hot?.classList.remove('drophot'); (hot = el)?.classList.add('drophot'); } };
+document.addEventListener('dragover', (e) => { const el = dropTarget(e); setHot(el || null); if (el) { e.preventDefault(); e.dataTransfer.dropEffect = el.dataset.folder ? 'move' : 'copy'; } });
+document.addEventListener('dragend', () => { setHot(null); dragging = null; });
+document.addEventListener('drop', async (e) => {
+  const el = dropTarget(e); setHot(null); if (!el) return;
+  e.preventDefault();
+  const dt = e.dataTransfer, before = slot;
+  if (el.classList.contains('fscroll')) return putFiles([...dt.files]);
+  if (el.dataset.folder) return moveItems(JSON.parse(dt.getData(FILE)), el.dataset.folder);
+  slot = el.dataset.slot;
+  if (dt.types.includes(WS)) await attachPaths(JSON.parse(dt.getData(WS))); else if (dt.files.length) await uploadFiles([...dt.files]);
+  slot = before; paint();
+});
+
+// ---------- live state ----------
+let lastSig = '', lastTree = '', lastJobs = 0;
+function render(s) {
+  state = s;
+  $('link').className = 'pill ' + (s.link.ok ? 'ok' : ''); $('link').lastElementChild.textContent = s.link.ok ? (s.remote === true ? 'Niji · remote' : 'Niji') : 'Not connected';
+  $('banner').hidden = !s.link.error; $('banner').textContent = s.link.error ?? '';
+  const n = (st) => s.jobs.filter((j) => st.includes(j.status)).length;
+  const running = n(['sending', 'running', 'saving']), failed = n(['failed']);
+  const waiting = n(['sending']), live = n(['running', 'saving']);
+  $('queueBtn').innerHTML = `Queue${live + waiting ? ` <b>${live}</b>${waiting ? ` +${waiting}` : ''}` : ''}${failed ? ` <b class="bad">${failed}</b>` : ''}`;
+  paintQueue();
+  document.title = running ? `(${running}) Niji Batch` : 'Niji Batch';
+  const treeSig = s.jobs.map((j) => j.folder + j.status).join();
+  if (treeSig !== lastTree) { lastTree = treeSig; paintTree(); }
+  // When a job of the open folder completes, its new files appear.
+  if (s.jobs.length < lastJobs) { loadTree(); if (S.genOpen) setTimeout(loadHistory, 1500); } // a job completed
+  lastJobs = s.jobs.length;
+  const sig = wsPath ? jobsIn(wsPath).map((j) => j.id).join() : '';
+  if (sig !== lastSig) { lastSig = sig; loadFiles(); } else paintFiles();
+}
+$('tree').addEventListener('mouseover', (e) => {
+  const gd = e.target.closest('.gd'); if (!gd) return;
+  const r = gd.getBoundingClientRect(), pop = gd.querySelector('.pop');
+  pop.style.left = `${r.right + 8}px`; pop.style.top = `${Math.max(8, Math.min(r.top - 8, innerHeight - 8 - Math.min(innerHeight * .8, 400)))}px`; pop.style.maxHeight = '80vh'; pop.style.overflow = 'hidden';
+});
+// A click on the guide icon must not open or close the folder.
+$('tree').addEventListener('click', (e) => { if (e.target.closest('.gd')) { e.preventDefault(); e.stopPropagation(); } }, true);
+function paintQueue() {
+  const q = $('qpop'); if (q.hidden || !state) return;
+  // The folder, then the prompt without its generic opening (the part before the subject).
+  const short = (j) => (j.folder ? j.folder.replace(/^assets\/|^references\//, '') + ' — ' : '') + (j.label ?? jobKind(j.prompt)) + ' · ' + promptMeta(j.prompt) + ' — ' + promptText(j.prompt).replace(/^[^,]*illustration[^,]*,\s*(the environment is the subject,\s*)?/i, '');
+  const dur = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? '< 1 min' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+  const by = (st) => state.jobs.filter((j) => st.includes(j.status));
+  const run = by(['running', 'saving']), fail = by(['failed']), done = state.done ?? [];
+  const wait = by(['sending']).sort((a, b) => (b.top ?? 0) - (a.top ?? 0) || a.createdAt - b.createdAt); // the order in which they go
+  const today = done.filter((d) => Date.now() - d.doneAt < 86400000).length, total = run.length + wait.length + fail.length + today;
+  const seg = (nr, c) => (nr ? `<i style="width:${(100 * nr) / total}%;background:${c}"></i>` : '');
+  const row = (j, cls, label, t, extra = '') => `<div class="qr" data-folder="${esc(j.folder ?? '')}"><b class="${cls}">${label}</b><span title="${esc(j.prompt)}">${esc(short(j))}</span><small>${t}${extra}</small></div>`;
+  q.innerHTML = `<div class="qh">${run.length} running <span>· ${wait.length} waiting · ${fail.length} failed · ${today} done today</span></div>
+    ${total ? `<div class="qbar">${seg(run.length, 'var(--warn)')}${seg(wait.length, 'var(--dim)')}${seg(fail.length, 'var(--bad)')}${seg(today, 'var(--ok)')}</div>` : ''}
+    ${run.map((j) => row(j, 'run', j.status === 'saving' ? 'Saving' : 'Running', dur(j.sentAt ?? j.createdAt))).join('')}
+    ${wait.map((j, i) => row(j, '', j.top ? 'First' : 'Waiting', dur(j.createdAt), i ? ` <button class="link" data-top="${j.id}" title="Send this job next">Top</button>` : '')).join('')}
+    ${fail.map((j) => row(j, 'bad', 'Failed', dur(j.createdAt))).join('')}
+    ${done.slice(0, 40).map((j) => row(j, 'ok', 'Done', dur(j.doneAt) + ' ago')).join('')}
+    ${total ? '' : '<div class="qempty">Nothing in the queue.</div>'}`;
+}
+$('qpop').onclick = async (e) => {
+  const top = e.target.closest('[data-top]')?.dataset.top;
+  if (top) { e.stopPropagation(); const r = await post('/api/top', { id: top }); if (r.error) toast(r.error, 4000); return; }
+  const folder = e.target.closest('.qr')?.dataset.folder;
+  if (folder) { $('qpop').hidden = true; openFolder(folder); }
+};
+setInterval(paintQueue, 60000);
+$('queueBtn').onclick = () => { const q = $('qpop'); q.hidden = !q.hidden; paintQueue(); };
+document.addEventListener('click', (e) => { if (!e.target.closest('#qpop, #queueBtn')) $('qpop').hidden = true; });
+const es = new EventSource('/api/events');
+es.onmessage = (e) => render(JSON.parse(e.data));
+es.onerror = () => { $('link').className = 'pill'; $('link').lastElementChild.textContent = 'Local server is not running'; };
+paint(); grow();
+if (S.genOpen) setTimeout(() => { paintPicker(); paintHistory(); loadHistory(); }, 80);
+loadTree().then(() => wsPath && openFolder(wsPath));
+</script>
+</body>
+</html>

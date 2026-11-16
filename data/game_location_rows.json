@@ -1,0 +1,264 @@
+[
+ {
+  "id": "2b427aa9-771c-4a2a-8e3f-18d4685f26ee",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "7248cdca-9b03-4951-bfba-a4d17f7b97c8",
+    "7248cdca-9b03-4951-bfba-a4d17f7b97c8"
+   ],
+   "gain_icon_ids": [
+    "895144a1-e0f6-4bdc-a4db-322423f1b922"
+   ]
+  },
+  "row_image_path": "game_location_rows/copy_copy.png",
+  "created_at": "2026-03-21T21:13:29.256164+00:00",
+  "updated_at": "2026-07-31T06:32:29.268071+00:00",
+  "name": "(copy) (copy)",
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "b9440e27-7a33-4e90-9072-7f4bf8021ac9",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "87d1f1ad-9c0a-4a65-bb2b-16acebc2d019",
+    "87d1f1ad-9c0a-4a65-bb2b-16acebc2d019"
+   ],
+   "gain_icon_ids": [
+    "ca4df196-67fb-4507-973d-1dfac277953d"
+   ]
+  },
+  "row_image_path": "game_location_rows/copy_copy_copy.png",
+  "created_at": "2026-03-21T21:13:47.436506+00:00",
+  "updated_at": "2026-07-31T06:32:35.783075+00:00",
+  "name": "(copy) (copy) (copy)",
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "a37679ff-35ab-4e8f-b053-330725d1ed5b",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "6a85e06a-52cc-483c-aa59-38395a377307"
+   ],
+   "gain_icon_ids": [
+    "16daf8be-6ae0-4ace-b70c-cbb30e357664"
+   ]
+  },
+  "row_image_path": "game_location_rows/a37679ff_35ab_4e8f_b053_330725d1ed5b.png",
+  "created_at": "2026-04-22T04:39:07.133022+00:00",
+  "updated_at": "2026-07-31T06:33:08.444513+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "02e4812e-4e83-44c4-a066-28c0b55815b2",
+  "type": "gain",
+  "config": {
+   "type": "gain",
+   "gain_icon_ids": [
+    "76e58219-e805-4b94-acf4-6d62dfe4c515"
+   ]
+  },
+  "row_image_path": "game_location_rows/spirit_sanctuary_row_1.png",
+  "created_at": "2026-01-03T05:06:23.40776+00:00",
+  "updated_at": "2026-06-14T01:42:21.76647+00:00",
+  "name": "Spirit Sanctuary Row 1",
+  "tag_ids": [
+   "f38b4d96-14fb-4837-8aad-1957f68e34f7"
+  ],
+  "quantity": 2
+ },
+ {
+  "id": "ff378215-38d4-4c7a-a921-8b798c56032d",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "36aab6c9-b98c-4e84-b097-e743f45dde82"
+   ],
+   "gain_icon_ids": [
+    "faa39f61-98ec-4f63-a873-766dc4e111f3"
+   ]
+  },
+  "row_image_path": "game_location_rows/ff378215_38d4_4c7a_a921_8b798c56032d.png",
+  "created_at": "2026-06-16T03:38:00.425988+00:00",
+  "updated_at": "2026-06-16T03:38:00.8549+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "87e3b0ad-b16c-4ed2-b69e-d9304921e5a2",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "6a85e06a-52cc-483c-aa59-38395a377307"
+   ],
+   "gain_icon_ids": [
+    {
+     "kind": "or",
+     "icon_ids": [
+      "de816c21-aa17-4e41-9217-20511c11e9c9",
+      "66525fe8-e375-4473-b1c3-88d3c9fd2b1c",
+      "40934631-35fc-4936-943a-c607a9c607be"
+     ]
+    }
+   ]
+  },
+  "row_image_path": "game_location_rows/87e3b0ad_b16c_4ed2_b69e_d9304921e5a2.png",
+  "created_at": "2026-06-16T03:39:49.881054+00:00",
+  "updated_at": "2026-06-16T03:39:50.302787+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "4eb55986-b94a-4a62-9c35-2583088de23b",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "8dd2b283-122b-4965-9184-f1f84e1216f4",
+    "8dd2b283-122b-4965-9184-f1f84e1216f4"
+   ],
+   "gain_icon_ids": [
+    "75134075-3347-49de-a740-eb99d20b1f1a"
+   ]
+  },
+  "row_image_path": "game_location_rows/4eb55986_b94a_4a62_9c35_2583088de23b.png",
+  "created_at": "2026-03-21T21:14:42.135896+00:00",
+  "updated_at": "2026-07-31T06:32:39.915546+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "e3e42518-9d89-4f5d-9d51-f64578daf5f1",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "4d34484d-4345-448d-b192-a425841ddbc4",
+    "4d34484d-4345-448d-b192-a425841ddbc4"
+   ],
+   "gain_icon_ids": [
+    "c8ef5d48-2289-4fee-a34d-b041d3e8bea6"
+   ]
+  },
+  "row_image_path": "game_location_rows/e3e42518_9d89_4f5d_9d51_f64578daf5f1.png",
+  "created_at": "2026-03-21T21:15:07.762994+00:00",
+  "updated_at": "2026-07-31T06:32:45.125246+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "a5b67a34-7111-43e6-bd30-4631cc005c87",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "87d1f1ad-9c0a-4a65-bb2b-16acebc2d019"
+   ],
+   "gain_icon_ids": [
+    "12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e"
+   ]
+  },
+  "row_image_path": "game_location_rows/spirit_sanctuary_fairy.png",
+  "created_at": "2026-02-18T02:58:58.108338+00:00",
+  "updated_at": "2026-07-31T06:41:52.820404+00:00",
+  "name": "Spirit Sanctuary Fairy",
+  "tag_ids": [
+   "f38b4d96-14fb-4837-8aad-1957f68e34f7",
+   "2e17ed8f-1399-4b28-8d69-c88434c7cf05"
+  ],
+  "quantity": 2
+ },
+ {
+  "id": "517d9730-ac91-487d-812f-e84833f3089f",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "6a85e06a-52cc-483c-aa59-38395a377307"
+   ],
+   "gain_icon_ids": [
+    {
+     "kind": "or",
+     "icon_ids": [
+      "c9b3225f-c8a9-4aa8-8e43-56c39cf68974",
+      "88facdb6-3374-4891-af8a-fca2e81b79ef"
+     ]
+    }
+   ]
+  },
+  "row_image_path": "game_location_rows/517d9730_ac91_487d_812f_e84833f3089f.png",
+  "created_at": "2026-02-19T05:43:37.000995+00:00",
+  "updated_at": "2026-06-14T01:42:22.90567+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "4fc77b2e-2a88-414c-8f49-cf10443a7761",
+  "type": "gain",
+  "config": {
+   "type": "gain",
+   "gain_icon_ids": [
+    "bdded3f5-e405-4b68-b63a-9f5c2139beea"
+   ]
+  },
+  "row_image_path": "game_location_rows/4fc77b2e_2a88_414c_8f49_cf10443a7761.png",
+  "created_at": "2026-02-20T02:01:23.089913+00:00",
+  "updated_at": "2026-07-31T07:30:07.908008+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "f4cc0af4-a9cb-4d46-8f1a-4ce8934e3531",
+  "type": "trade",
+  "config": {
+   "type": "trade",
+   "cost_icon_ids": [
+    "36aab6c9-b98c-4e84-b097-e743f45dde82"
+   ],
+   "gain_icon_ids": [
+    "faa39f61-98ec-4f63-a873-766dc4e111f3"
+   ]
+  },
+  "row_image_path": "game_location_rows/f4cc0af4_a9cb_4d46_8f1a_4ce8934e3531.png",
+  "created_at": "2026-06-16T03:40:44.529308+00:00",
+  "updated_at": "2026-06-16T03:40:45.386422+00:00",
+  "name": null,
+  "tag_ids": [],
+  "quantity": 1
+ },
+ {
+  "id": "11bc2812-4774-410b-ab2a-51337edd3c20",
+  "type": "gain",
+  "config": {
+   "type": "gain",
+   "gain_icon_ids": [
+    "60e40dd5-c3cc-4f26-9aa3-2043b4106ade"
+   ]
+  },
+  "row_image_path": "game_location_rows/basic.png",
+  "created_at": "2025-12-29T00:18:22.771027+00:00",
+  "updated_at": "2026-07-31T06:33:15.868785+00:00",
+  "name": "Basic",
+  "tag_ids": [
+   "c65f12bd-c30f-47bc-8862-ff91cd6edddc"
+  ],
+  "quantity": 2
+ }
+]

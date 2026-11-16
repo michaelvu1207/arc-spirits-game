@@ -1,0 +1,190 @@
+[
+ {
+  "id": "ad555f03-9b89-4a71-a47c-464fd67d2c05",
+  "name": "Forest",
+  "position": 6,
+  "icon_emoji": "🌿",
+  "color": "#10b981",
+  "description": "Gather the prettiest floral spirits and",
+  "created_at": "2025-07-18T23:11:40.237878+00:00",
+  "updated_at": "2026-10-15T22:50:21.431743+00:00",
+  "icon_png": "origin_icons/ad555f03-9b89-4a71-a47c-464fd67d2c05/origin_floral_patch_icon.png.png",
+  "icon_token_png": "origin_icons/ad555f03-9b89-4a71-a47c-464fd67d2c05/origin_floral_patch_icon.png.png",
+  "calling_card": {
+   "enabled": true,
+   "breakpoints": [
+    {
+     "count": 3,
+     "label": "On Cultivate: 1 Plant Rune",
+     "icon_ids": [
+      "8dd2b283-122b-4965-9184-f1f84e1216f4"
+     ]
+    },
+    {
+     "count": 5,
+     "label": "On Cultivate: 1 Plant Rune, or Flower instead (one time)",
+     "icon_ids": [
+      "75134075-3347-49de-a740-eb99d20b1f1a"
+     ]
+    }
+   ],
+   "hex_spirit_id": "e5dff9be-ac58-47bb-bd9d-69efb03dc393"
+  }
+ },
+ {
+  "id": "48e4acb4-ee9e-42ea-ba82-70165770c368",
+  "name": "Human Enclave",
+  "position": 2,
+  "icon_emoji": "🕵️",
+  "color": "#6b7280",
+  "description": "Cheap, and flexible. fits into any composition",
+  "created_at": "2025-07-18T23:11:40.237878+00:00",
+  "updated_at": "2026-02-18T03:20:12.180257+00:00",
+  "icon_png": "origin_icons/48e4acb4-ee9e-42ea-ba82-70165770c368/origin_human_enclave_icon.png.png",
+  "icon_token_png": "origin_icons/48e4acb4-ee9e-42ea-ba82-70165770c368/origin_human_enclave_icon.png.png",
+  "calling_card": {
+   "enabled": false,
+   "breakpoints": [],
+   "hex_spirit_id": null
+  }
+ },
+ {
+  "id": "178449e9-cc6b-45ab-8522-5183fe1d9307",
+  "name": "Fire",
+  "position": 7,
+  "icon_emoji": "🏮",
+  "color": "#a95189",
+  "description": "Generalist comp, mostly for the artifacts.",
+  "created_at": "2025-07-18T23:11:40.237878+00:00",
+  "updated_at": "2026-10-15T22:50:21.537109+00:00",
+  "icon_png": "origin_icons/178449e9-cc6b-45ab-8522-5183fe1d9307/origin_lantern_lights_icon.png.png",
+  "icon_token_png": "origin_icons/178449e9-cc6b-45ab-8522-5183fe1d9307/origin_lantern_lights_icon.png.png",
+  "calling_card": {
+   "enabled": true,
+   "breakpoints": [
+    {
+     "count": 3,
+     "label": "On Cultivate: 1 Fire Rune",
+     "icon_ids": [
+      "7248cdca-9b03-4951-bfba-a4d17f7b97c8"
+     ]
+    },
+    {
+     "count": 5,
+     "label": "On Cultivate: 1 Fire Rune, or Firecracker instead (one time)",
+     "icon_ids": [
+      "895144a1-e0f6-4bdc-a4db-322423f1b922"
+     ]
+    }
+   ],
+   "hex_spirit_id": "504c77b5-8f46-427d-a339-1ef11160b0d7"
+  }
+ },
+ {
+  "id": "fa7db249-d99d-4c1d-a37d-9027c9f5a31e",
+  "name": "Mountain",
+  "position": 14,
+  "icon_emoji": "🔧",
+  "color": "#3b82f6",
+  "description": "The Cyber City origin gives players dangerous Cyber Worm Attack Dice, which can multiply during combat.",
+  "created_at": "2025-07-18T23:11:40.237878+00:00",
+  "updated_at": "2026-10-15T22:50:21.60938+00:00",
+  "icon_png": "origin_icons/fa7db249-d99d-4c1d-a37d-9027c9f5a31e/origin_cyber_city_icon.png.png",
+  "icon_token_png": "origin_icons/fa7db249-d99d-4c1d-a37d-9027c9f5a31e/origin_cyber_city_icon.png.png",
+  "calling_card": {
+   "enabled": true,
+   "breakpoints": [
+    {
+     "count": 3,
+     "label": "On Cultivate: 1 Mountain Rune",
+     "icon_ids": [
+      "87d1f1ad-9c0a-4a65-bb2b-16acebc2d019"
+     ]
+    },
+    {
+     "count": 5,
+     "label": "On Cultivate: 1 Mountain Rune, or Diamond instead (one time)",
+     "icon_ids": [
+      "ca4df196-67fb-4507-973d-1dfac277953d"
+     ]
+    }
+   ],
+   "hex_spirit_id": "5f719599-3914-440e-b518-2426ab1e83c5"
+  }
+ },
+ {
+  "id": "d459ae53-da95-4323-b348-6720e52643d4",
+  "name": "Lost",
+  "position": 999,
+  "icon_emoji": "⭐",
+  "color": "#6b7280",
+  "description": "An enigmatic origin tied to forgotten realms.",
+  "created_at": "2025-10-28T03:43:06.833357+00:00",
+  "updated_at": "2026-02-18T03:20:16.658875+00:00",
+  "icon_png": "origin_icons/d459ae53-da95-4323-b348-6720e52643d4/origin_lost_icon.png.png",
+  "icon_token_png": "origin_icons/d459ae53-da95-4323-b348-6720e52643d4/origin_lost_icon.png.png",
+  "calling_card": {
+   "enabled": false,
+   "breakpoints": [],
+   "hex_spirit_id": null
+  }
+ },
+ {
+  "id": "294cee31-a7ac-4292-9b61-d4293c05c146",
+  "name": "Water",
+  "position": 11,
+  "icon_emoji": "🌊",
+  "color": "#64748b",
+  "description": null,
+  "created_at": "2025-11-10T03:09:36.323821+00:00",
+  "updated_at": "2026-10-15T22:50:21.768486+00:00",
+  "icon_png": "origin_icons/294cee31-a7ac-4292-9b61-d4293c05c146/origin_tidal_tribe_icon.png.png",
+  "icon_token_png": "origin_icons/294cee31-a7ac-4292-9b61-d4293c05c146/origin_tidal_tribe_icon.png.png",
+  "calling_card": {
+   "enabled": true,
+   "breakpoints": [
+    {
+     "count": 3,
+     "label": "On Cultivate: 1 Water Rune",
+     "icon_ids": [
+      "4d34484d-4345-448d-b192-a425841ddbc4"
+     ]
+    },
+    {
+     "count": 5,
+     "label": "On Cultivate: 1 Water Rune, or Cleansing Teapot instead (one time)",
+     "icon_ids": [
+      "c8ef5d48-2289-4fee-a34d-b041d3e8bea6"
+     ]
+    }
+   ],
+   "hex_spirit_id": "cafb6cfb-11f8-476c-a275-a5b8179630d2"
+  }
+ },
+ {
+  "id": "1c54a70b-5ab2-4fca-b8b9-6e0cce2fefdc",
+  "name": "Sun",
+  "position": 8,
+  "icon_emoji": "☀️",
+  "color": "#f5b301",
+  "description": "",
+  "created_at": "2026-11-10T02:21:55.773836+00:00",
+  "updated_at": "2026-11-10T02:21:55.773836+00:00",
+  "icon_png": null,
+  "icon_token_png": null,
+  "local": true
+ },
+ {
+  "id": "03c098a9-ff2e-46a7-8405-09aa8ece70b3",
+  "name": "Moon",
+  "position": 9,
+  "icon_emoji": "🌙",
+  "color": "#6366f1",
+  "description": "",
+  "created_at": "2026-11-10T02:21:55.773836+00:00",
+  "updated_at": "2026-11-10T02:21:55.773836+00:00",
+  "icon_png": null,
+  "icon_token_png": null,
+  "local": true
+ }
+]

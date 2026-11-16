@@ -20,6 +20,7 @@ import { homedir, tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { buildImageIndex } from '../local-game/images.mjs';
+import { editorDir, PLAY_PROJECT_REF } from '../lib/paths.mjs';
 
 const run = promisify(execFile);
 const OLD_BUCKET = 'https://gvxfokbptelmvvlxbigh.supabase.co/storage/v1/object/public/game_assets';
@@ -34,7 +35,7 @@ export function maxEdgeFor(path) {
 	return 512;
 }
 
-function imagePaths(tables) {
+export function imagePaths(tables) {
 	const paths = new Set();
 	const walk = (value) => {
 		if (typeof value === 'string') {
@@ -138,12 +139,11 @@ export async function buildPackageArt({ tables, extras, artDir, log = console.lo
 	} catch {
 		throw new Error('cwebp is not installed (brew install webp): cannot make the art of the package');
 	}
-	const home = homedir();
 	const index = buildImageIndex({
 		tables,
 		extras,
 		artDir,
-		spiritNamesFile: join(home, 'niji-batch/spirit-names.json'),
+		spiritNamesFile: join(editorDir, 'spirit-names.json'),
 		ttsDir: null // art without a local export comes from the bucket original, not from a game cache
 	});
 	const paths = imagePaths(tables);
@@ -174,18 +174,17 @@ export async function buildPackageArt({ tables, extras, artDir, log = console.lo
 		.digest('hex')
 		.slice(0, 16);
 	const bytes = files.reduce((n, f) => n + f.bytes.length, 0);
-	return { id, files, summary: { id, files: files.length, bytes, fromExports, fromOldBucket, missing } };
+	// The manifest lets another machine download the set (scripts/package/art-fetch.mjs): every
+	// file with its content hash (only new content is downloaded), and the image paths this
+	// machine gave to rows that had none.
+	const manifest = { id, files: files.map((f) => [f.path, f.sha, f.type]), filled: index.filled };
+	return { id, files, manifest, summary: { id, files: files.length, bytes, fromExports, fromOldBucket, missing } };
 }
 
 /** Upload the art to `<supabaseUrl>` bucket game_assets under art/<id>/. Skips art already there. */
-export async function uploadPackageArt({ id, files, summary }, { supabaseUrl, serviceKey, log = console.log }) {
+export async function uploadPackageArt({ id, files, manifest, summary }, { supabaseUrl, serviceKey, latest = true, log = console.log }) {
 	const api = `${supabaseUrl.replace(/\/$/, '')}/storage/v1`;
 	const auth = { authorization: `Bearer ${serviceKey}`, apikey: serviceKey };
-	const marker = `art/${id}/_complete.json`;
-	if ((await fetch(`${api}/object/public/game_assets/${marker}`)).ok) {
-		log(`art ${id} is already uploaded`);
-		return;
-	}
 	const bucket = await fetch(`${api}/bucket`, {
 		method: 'POST',
 		headers: { ...auth, 'content-type': 'application/json' },
@@ -193,38 +192,61 @@ export async function uploadPackageArt({ id, files, summary }, { supabaseUrl, se
 	});
 	if (!bucket.ok && bucket.status !== 409 && !/exist/i.test(await bucket.text()))
 		throw new Error(`could not create the storage bucket: ${bucket.status}`);
-	const put = async (key, body, type) => {
+	const put = async (key, body, type, cache = 'max-age=31536000') => {
 		for (let attempt = 1; ; attempt++) {
 			const res = await fetch(`${api}/object/game_assets/${key.split('/').map(encodeURIComponent).join('/')}`, {
 				method: 'POST',
-				headers: { ...auth, 'content-type': type, 'cache-control': 'max-age=31536000', 'x-upsert': 'true' },
+				headers: { ...auth, 'content-type': type, 'cache-control': cache, 'x-upsert': 'true' },
 				body
 			});
 			if (res.ok) return;
 			if (attempt >= 3) throw new Error(`upload of ${key} failed: ${res.status} ${(await res.text()).slice(0, 120)}`);
 		}
 	};
+	const marker = `art/${id}/_complete.json`;
+	const publicUrl = (key) => `${api}/object/public/game_assets/${key}?t=${Date.now()}`;
+	// The pointer other machines follow with `art:fetch --latest`.
+	const pointLatest = async () => latest && put('art/_latest.json', JSON.stringify({ id, at: new Date().toISOString() }), 'application/json', 'no-cache');
+	if ((await fetch(publicUrl(marker))).ok) {
+		if (manifest && !(await fetch(publicUrl(`art/${id}/_manifest.json`))).ok) {
+			await put(`art/${id}/_manifest.json`, JSON.stringify(manifest), 'application/json');
+			log(`art ${id} is already uploaded; added its manifest`);
+		} else log(`art ${id} is already uploaded`);
+		await pointLatest();
+		return;
+	}
 	let done = 0;
 	await pool(files, 8, async (f) => {
 		await put(`art/${id}/${f.path}`, f.bytes, f.type);
 		if (++done % 100 === 0) log(`  uploaded ${done}/${files.length}`);
 	});
+	if (manifest) await put(`art/${id}/_manifest.json`, JSON.stringify(manifest), 'application/json');
 	await put(marker, JSON.stringify({ ...summary, missing: summary.missing.length }), 'application/json');
+	await pointLatest();
 	log(`uploaded ${files.length} images (${(summary.bytes / 1e6).toFixed(1)} MB) as art ${id}`);
 }
 
-/** The play project's URL and service key: from the environment, else from the Supabase CLI on seablue. */
+/** The play project's URL and service key: from the environment, else from the Supabase CLI (this machine, then the key host). */
 export async function playProjectKeys() {
-	const ref = 'ydmlhjucgvultqhpctlr';
+	const ref = PLAY_PROJECT_REF;
 	const supabaseUrl = process.env.PUBLIC_SUPABASE_URL?.includes(ref) ? process.env.PUBLIC_SUPABASE_URL : `https://${ref}.supabase.co`;
 	if (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.PUBLIC_SUPABASE_URL?.includes(ref))
 		return { supabaseUrl, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY };
+	const pick = (stdout) => JSON.parse(stdout).find((k) => k.name === 'service_role' && k.type === 'legacy')?.api_key;
+	// The Supabase CLI of this machine when it is signed in, else the one on the key host.
 	try {
-		const { stdout } = await run('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', 'seablue', `zsh -lc 'supabase projects api-keys --project-ref ${ref} -o json 2>/dev/null'`]);
-		const key = JSON.parse(stdout).find((k) => k.name === 'service_role' && k.type === 'legacy')?.api_key;
+		const key = pick((await run('supabase', ['projects', 'api-keys', '--project-ref', ref, '-o', 'json'])).stdout);
 		if (key) return { supabaseUrl, serviceKey: key };
 	} catch {
 		/* fall through */
 	}
-	throw new Error('no storage key: set PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY of the play project, or make seablue reachable (its Supabase CLI is signed in)');
+	try {
+		const host = process.env.ARC_KEY_HOST ?? 'seablue';
+		const { stdout } = await run('ssh', ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20', host, `zsh -lc 'supabase projects api-keys --project-ref ${ref} -o json 2>/dev/null'`]);
+		const key = pick(stdout);
+		if (key) return { supabaseUrl, serviceKey: key };
+	} catch {
+		/* fall through */
+	}
+	throw new Error('no storage key: set PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY of the play project, or sign in the Supabase CLI on this machine (supabase login)');
 }

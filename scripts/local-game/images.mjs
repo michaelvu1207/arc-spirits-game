@@ -93,7 +93,7 @@ export function buildImageIndex({ tables, extras, artDir, spiritNamesFile, ttsDi
 		if (!file) return;
 		if (!row[column]) {
 			row[column] = synthetic;
-			filled.push(`${table}.${column}`);
+			filled.push({ table, id: row.id, column, path: synthetic });
 		}
 		register(row[column], file);
 	};
@@ -195,6 +195,7 @@ export function buildImageIndex({ tables, extras, artDir, spiritNamesFile, ttsDi
 		resolve,
 		missing,
 		fromTts,
+		filled,
 		stats: { paths: byPath.size, ids: byId.size, filled: filled.length, ttsCache: tts.size }
 	};
 }

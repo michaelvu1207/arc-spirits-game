@@ -1,0 +1,52 @@
+[
+  {
+    "id": "19d72567-4ac8-4214-a21f-596bc88de8f7",
+    "name": "Any relic",
+    "owner": "",
+    "icon": "6a85e06a-52cc-483c-aa59-38395a377307",
+    "description": "",
+    "source_icon": null,
+    "source_emoji": "",
+    "ability": ""
+  },
+  {
+    "id": "8a0d54ca-aeab-405c-9e5c-1c1425d1aa86",
+    "name": "Firecracker",
+    "owner": "Fire Region",
+    "icon": "895144a1-e0f6-4bdc-a4db-322423f1b922",
+    "description": "",
+    "source_icon": null,
+    "source_emoji": "🧨",
+    "ability": "You may strike first in one combat, then discard this."
+  },
+  {
+    "id": "690a7e3b-5737-4494-bb8a-b58bee13f473",
+    "name": "Flower",
+    "owner": "Forest Region",
+    "icon": "75134075-3347-49de-a740-eb99d20b1f1a",
+    "description": "",
+    "source_icon": null,
+    "source_emoji": "",
+    "ability": "You may restore your Barrier to full, then discard this."
+  },
+  {
+    "id": "ee1486a0-8b61-499c-809b-b4de9920aa8f",
+    "name": "Diamond",
+    "owner": "Mountain Region",
+    "icon": "ca4df196-67fb-4507-973d-1dfac277953d",
+    "description": "",
+    "source_icon": null,
+    "source_emoji": "💎",
+    "ability": "You may gain 1 Spirit Augment of your choice, then discard this."
+  },
+  {
+    "id": "a6111d01-2c55-4b1f-854a-32887d92b8e1",
+    "name": "Cleansing Teapot",
+    "owner": "Water Region",
+    "icon": "c8ef5d48-2289-4fee-a34d-b041d3e8bea6",
+    "description": "",
+    "source_icon": null,
+    "source_emoji": "🫖",
+    "ability": "You may awaken any one spirit, then discard this."
+  }
+]

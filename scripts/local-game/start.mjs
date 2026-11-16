@@ -7,8 +7,9 @@
 // It starts three parts and stops them all on Ctrl+C:
 //   1. the database + sign-in emulator (emulator.ts: server/pgrestEmu.ts, saved to
 //      <state-dir>/emulator/ so games survive a restart)
-//   2. the local backend (backend.mjs): catalog from ~/ArcSpiritsArt/game/*.json, images from
-//      ~/ArcSpiritsArt, realtime room updates
+//   2. the local backend (backend.mjs): catalog from data/*.json, images from the raw art
+//      folder of this machine (arc.local.json) or else from .art-cache/ (npm run art:fetch),
+//      realtime room updates
 //   3. the Vite dev server (vite.config.local.mjs), which sends the Supabase paths to (2)
 // See scripts/local-game/README.md.
 import { spawn } from 'node:child_process';
@@ -20,6 +21,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { startBackend } from './backend.mjs';
+import { artCacheDir, artDir as defaultArtDir, dataDir, editorDir, localConfig } from '../lib/paths.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../..');
@@ -28,15 +30,16 @@ const home = os.homedir();
 const { values: args } = parseArgs({
 	options: {
 		port: { type: 'string', default: process.env.ARC_LOCAL_PORT ?? '5317' },
-		'game-dir': { type: 'string', default: process.env.ARC_LOCAL_GAME_DIR ?? join(home, 'ArcSpiritsArt/game') },
-		'art-dir': { type: 'string', default: process.env.ARC_LOCAL_ART_DIR ?? join(home, 'ArcSpiritsArt') },
+		'game-dir': { type: 'string', default: dataDir() },
+		// Empty ⇒ this machine has no raw art folder: images come from .art-cache/.
+		'art-dir': { type: 'string', default: defaultArtDir() ?? '' },
 		'state-dir': { type: 'string', default: process.env.ARC_LOCAL_STATE_DIR ?? join(home, '.arc-local-game') },
 		'log-dir': { type: 'string', default: process.env.ARC_LOCAL_LOG_DIR ?? join(os.tmpdir(), 'arc-local-game') },
 		'strict-port': { type: 'boolean', default: false },
 		open: { type: 'boolean', default: false },
 		'no-tts-cache': { type: 'boolean', default: false },
 		// The folder with the AI game runs (league, benchmark, tournament) shown in the explorer.
-		'agent-games': { type: 'string', default: process.env.ARC_LOCAL_AGENT_GAMES ?? join(home, 'arcspirits-harness') },
+		'agent-games': { type: 'string', default: process.env.ARC_LOCAL_AGENT_GAMES ?? localConfig().agentGames?.replace(/^~/, home) ?? '' },
 		'no-explorer-import': { type: 'boolean', default: false },
 		help: { type: 'boolean', short: 'h', default: false }
 	}
@@ -47,7 +50,7 @@ if (args.help) {
 }
 
 const gameDir = resolve(args['game-dir']);
-const artDir = resolve(args['art-dir']);
+const artDir = args['art-dir'] ? resolve(args['art-dir']) : null;
 const stateDir = resolve(args['state-dir']);
 const logDir = resolve(args['log-dir']);
 mkdirSync(logDir, { recursive: true });
@@ -57,6 +60,10 @@ const log = (line) => backendLog.write(`${new Date().toISOString()} ${line}\n`);
 
 if (!existsSync(join(gameDir, 'hex_spirits.json'))) {
 	console.error(`No game data at ${gameDir} (hex_spirits.json not found). Use --game-dir <dir>.`);
+	process.exit(1);
+}
+if (!artDir && !existsSync(join(artCacheDir, 'current.json'))) {
+	console.error('No art on this machine yet. Run: npm run art:fetch   (about 30 MB, one time)');
 	process.exit(1);
 }
 
@@ -192,8 +199,9 @@ try {
 		upstreamPort: emulatorPort,
 		gameDir,
 		artDir,
+		artCacheDir,
 		repoRoot,
-		spiritNamesFile: join(home, 'niji-batch/spirit-names.json'),
+		spiritNamesFile: join(editorDir, 'spirit-names.json'),
 		ttsDir: args['no-tts-cache'] ? null : join(home, 'Library/Tabletop Simulator/Mods/Images'),
 		// Resized images, keyed by source file + size: shared by every local game on this Mac.
 		cacheDir: join(os.tmpdir(), 'arc-local-game', 'image-cache'),
@@ -238,7 +246,7 @@ try {
 
 	// The explorer's games: AI game records and the games played here, imported now and then
 	// every 30 s (import-agent-games.ts). It is a helper: when it stops, the game goes on.
-	if (!args['no-explorer-import']) {
+	if (!args['no-explorer-import'] && args['agent-games'] && existsSync(resolve(args['agent-games']))) {
 		const out = createWriteStream(join(logDir, 'explorer-import.log'), { flags: 'w' });
 		const importer = spawn(
 			process.execPath,
@@ -255,7 +263,7 @@ try {
 	console.log('Arc Spirits: local game (no Supabase project is used)');
 	console.log(`  data    ${gameDir}`);
 	console.log(`          ${['hex_spirits', 'monsters_v2', 'classes', 'origins', 'mat_items', 'icon_pool'].map((t) => `${t} ${counts[t]}`).join(', ')}`);
-	console.log(`  images  ${artDir} (${images.paths} paths; status: ${appOrigin}/__local/status)`);
+	console.log(`  images  ${artDir ?? `web art ${images.artSet} in .art-cache/`} (${images.paths} paths; status: ${appOrigin}/__local/status)`);
 	for (const note of notes) console.log(`  note    ${note}`);
 	console.log(`  saved   ${join(stateDir, 'emulator')} (rooms, games, replays, accounts)`);
 	console.log(`  logs    ${logDir}`);

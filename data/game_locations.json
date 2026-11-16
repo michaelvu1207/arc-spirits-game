@@ -1,0 +1,47 @@
+[
+ {
+  "id": "82e36f2d-02ec-4718-908e-ac75b4395766",
+  "name": "Arcane Abyss",
+  "origin_id": null,
+  "created_at": "2026-06-23T08:03:30.622836+00:00",
+  "updated_at": "2026-06-23T08:03:30.622836+00:00",
+  "background_image_path": null,
+  "image_with_icons_path": null
+ },
+ {
+  "id": "2f32acdf-01de-4d1f-a1bd-ed9009ef052e",
+  "name": "Cyber City",
+  "origin_id": "fa7db249-d99d-4c1d-a37d-9027c9f5a31e",
+  "created_at": "2025-12-28T06:55:45.578518+00:00",
+  "updated_at": "2026-06-15T22:04:50.509863+00:00",
+  "background_image_path": "game_locations/1771900277756.png",
+  "image_with_icons_path": "game_location_cards/2f32acdf-01de-4d1f-a1bd-ed9009ef052e.png"
+ },
+ {
+  "id": "63db4155-3c50-4d0b-90d0-349704b6db96",
+  "name": "Lantern Canyon",
+  "origin_id": null,
+  "created_at": "2025-12-28T06:59:33.604462+00:00",
+  "updated_at": "2026-06-15T22:04:50.509863+00:00",
+  "background_image_path": "game_locations/1771900295649.png",
+  "image_with_icons_path": "game_location_cards/63db4155-3c50-4d0b-90d0-349704b6db96.png"
+ },
+ {
+  "id": "4b6eb2c1-21d0-406c-bc62-1c9486116cf2",
+  "name": "Tidal Cove",
+  "origin_id": null,
+  "created_at": "2026-01-31T00:34:28.812336+00:00",
+  "updated_at": "2026-06-15T22:04:50.509863+00:00",
+  "background_image_path": "game_locations/1771903670077.png",
+  "image_with_icons_path": "game_location_cards/4b6eb2c1-21d0-406c-bc62-1c9486116cf2.png"
+ },
+ {
+  "id": "68beff4b-6958-4de5-b517-f485d55734f8",
+  "name": "Floral Patch",
+  "origin_id": null,
+  "created_at": "2026-02-19T01:58:55.425985+00:00",
+  "updated_at": "2026-06-15T22:04:50.509863+00:00",
+  "background_image_path": "game_locations/1771466331591.png",
+  "image_with_icons_path": "game_location_cards/68beff4b-6958-4de5-b517-f485d55734f8.png"
+ }
+]

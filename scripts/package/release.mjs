@@ -7,11 +7,12 @@
  * Writes packages/<version>/ (tables.json, manifest.json, CHANGES.md) and adds it to
  * packages/index.json. A package is immutable: an existing version is never overwritten.
  * `--live` also makes it the live package (same as `publish.mjs <version>` without the push).
- * The data folder defaults to ~/ArcSpiritsArt/game (the working data the local game shows).
+ * The data folder defaults to data/ in this repo (the working data the local game shows).
  *
- * Art: display copies of the latest local exports (~/ArcSpiritsArt) are uploaded for the package
- * (scripts/package/art.mjs) and the printed monster card faces are rebuilt. `--no-art` skips both;
- * the package then shows the art of the package it replaces.
+ * Art: on the art host (arc.local.json), display copies of the latest local exports are uploaded
+ * for the package (scripts/package/art.mjs) and the printed monster card faces are rebuilt.
+ * On any other machine, and with `--no-art`, the package shows the art of the package it
+ * replaces; `--art-id <id>` uses a set the art host already uploaded (npm run cards:remake).
  *
  * Checks before anything is written: the tables load, the engine catalog builds, and random
  * players (no AI model) finish full games on the data (scripts/package/validate.ts).
@@ -24,6 +25,7 @@ import { join, resolve } from 'node:path';
 import { loadLocalTables } from '../local-game/localData.mjs';
 import { describeChanges } from './changes.mjs';
 import { buildPackageArt, playProjectKeys, uploadPackageArt } from './art.mjs';
+import { artDir as hostArtDir, dataDir, isArtHost } from '../lib/paths.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -36,11 +38,14 @@ if (!version || version.startsWith('-') || !/^[a-z0-9][a-z0-9._-]*$/i.test(versi
 	process.exit(1);
 }
 const repoRoot = resolve(import.meta.dirname, '../..');
-const gameDir = resolve(flag('--from') ?? join(homedir(), 'ArcSpiritsArt/game'));
+const gameDir = resolve(flag('--from') ?? dataDir());
 const notes = flag('--notes') ?? '';
 const makeLive = args.includes('--live');
-const withArt = !args.includes('--no-art');
-const artDir = resolve(flag('--art-dir') ?? join(homedir(), 'ArcSpiritsArt'));
+// Art is made on the art host only (arc.local.json). Elsewhere the package reuses the art of the
+// package it replaces, or the set named with --art-id (for example the one `cards:remake` printed).
+const artDir = flag('--art-dir') ? resolve(flag('--art-dir')) : hostArtDir();
+const artId = flag('--art-id');
+const withArt = !args.includes('--no-art') && !artId && (flag('--art-dir') ? true : isArtHost());
 const packagesDir = join(repoRoot, 'packages');
 const outDir = join(packagesDir, version);
 const indexPath = join(packagesDir, 'index.json');
@@ -88,8 +93,38 @@ if (withArt) {
 	art = { id: summary.id, files: summary.files, fromExports: summary.fromExports, fromOldBucket: summary.fromOldBucket, missing: summary.missing };
 	execFileSync('node', ['scripts/build-monster-card-faces.mjs'], { cwd: repoRoot, stdio: 'inherit' });
 } else {
-	art = index.versions.find((v) => v.version === parent)?.art ?? null;
-	if (art) console.log(`--no-art: reusing art ${art.id} of ${parent}`);
+	if (artId) {
+		const res = await fetch(`https://ydmlhjucgvultqhpctlr.supabase.co/storage/v1/object/public/game_assets/art/${artId}/_manifest.json?t=${Date.now()}`);
+		if (!res.ok) {
+			console.error(`art ${artId} was not found in the bucket`);
+			process.exit(1);
+		}
+		const manifest = await res.json();
+		// Rows without an image path get the path the art host gave them, as in a release made there.
+		for (const { table, id, column, path } of manifest.filled ?? []) {
+			const row = (tables[table] ?? []).find((r) => r.id === id);
+			if (row && !row[column]) row[column] = path;
+		}
+		art = { id: artId, files: manifest.files.length };
+		console.log(`using art ${artId} (${art.files} images) made by the art host`);
+	} else {
+		art = index.versions.find((v) => v.version === parent)?.art ?? null;
+		if (art) console.log(`no art made on this machine: reusing art ${art.id} of ${parent}`);
+		// Keep the image paths of the package it replaces for rows that have none in the data.
+		if (parent) {
+			const before = JSON.parse(readFileSync(join(packagesDir, parent, 'tables.json'), 'utf8'));
+			for (const [table, rows] of Object.entries(tables)) {
+				const old = new Map((before[table] ?? []).map((r) => [r.id, r]));
+				for (const row of rows) {
+					const prev = row.id != null ? old.get(row.id) : null;
+					if (!prev) continue;
+					for (const [column, value] of Object.entries(prev)) {
+						if (typeof value === 'string' && /\.(png|jpe?g|webp|gif|svg(\+xml)?)$/i.test(value) && row[column] == null) row[column] = value;
+					}
+				}
+			}
+		}
+	}
 }
 
 // 4. Change list against the package it replaces (the live one).

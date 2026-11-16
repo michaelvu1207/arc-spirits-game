@@ -1,0 +1,179 @@
+{
+ "front": {
+  "_icon_size": 300,
+  "spirit_world": {
+   "origin_slots": [
+    {
+     "x": 727,
+     "y": 2016
+    }
+   ],
+   "class_slots": [
+    {
+     "x": 1234,
+     "y": 2006
+    },
+    {
+     "x": 1527,
+     "y": 1997
+    }
+   ]
+  },
+  "abyss": {
+   "origin_slots": [
+    {
+     "x": 695,
+     "y": 2034
+    }
+   ],
+   "class_slots": [
+    {
+     "x": 1176,
+     "y": 1974
+    },
+    {
+     "x": 1479,
+     "y": 1978
+    },
+    {
+     "x": 1794,
+     "y": 1981
+    }
+   ],
+   "class_icon_color": "white"
+  },
+  "abyss_void_astral": {
+   "origin_slots": [],
+   "class_slots": [
+    {
+     "x": 770,
+     "y": 1958
+    },
+    {
+     "x": 1086,
+     "y": 1959
+    },
+    {
+     "x": 1409,
+     "y": 1966
+    }
+   ],
+   "class_icon_color": "white"
+  },
+  "arcane": {
+   "origin_slots": [],
+   "class_slots": [
+    {
+     "x": 765,
+     "y": 1973
+    }
+   ],
+   "class_icon_color": "white"
+  },
+  "fairy": {
+   "origin_slots": [
+    {
+     "x": 749,
+     "y": 2004
+    }
+   ],
+   "class_slots": [
+    {
+     "x": 1223,
+     "y": 1958
+    }
+   ]
+  },
+  "human_enclave": {
+   "origin_slots": [],
+   "class_slots": [
+    {
+     "x": 756,
+     "y": 1968
+    }
+   ],
+   "class_icon_color": "white"
+  },
+  "royal_family": {
+   "origin_slots": [],
+   "class_slots": [
+    {
+     "x": 756,
+     "y": 1968
+    }
+   ]
+  }
+ },
+ "back": {
+  "_rune_size": 300,
+  "rune_slots": [
+   {
+    "x": 1048,
+    "y": 419
+   },
+   {
+    "x": 1373,
+    "y": 413
+   },
+   {
+    "x": 714,
+    "y": 414
+   },
+   {
+    "x": 1712,
+    "y": 413
+   }
+  ],
+  "special_class_icon_slot": {
+   "x": 552,
+   "y": 1439
+  },
+  "_special_class_icon_size": 300
+ },
+ "tiers": {
+  "note": "Fixed tier per spirit for the 16 spirits the old rule could not place (Heroes, Arcane Spirits), from the shipped art.",
+  "overrides": {
+   "Hero Captain": "human_enclave",
+   "Hero Ironmane": "human_enclave",
+   "Hero Ivern": "human_enclave",
+   "Hero Mintyheart": "human_enclave",
+   "Hero Nyra": "human_enclave",
+   "Hero Zarek": "human_enclave",
+   "Dawn Chorus": "abyss_void_astral",
+   "Aureate Mage": "abyss_void_astral",
+   "Solar Cleric": "abyss_void_astral",
+   "Dawnborn": "abyss_void_astral",
+   "Aurelion": "abyss_void_astral",
+   "Moonrend": "abyss_void_astral",
+   "The Argent Loom": "abyss_void_astral",
+   "Threefold Watcher": "abyss_void_astral",
+   "Nhal": "abyss_void_astral",
+   "Vespera": "abyss_void_astral"
+  },
+  "subfolders": {
+   "Hero Captain": "standalone",
+   "Hero Ironmane": "standalone",
+   "Hero Ivern": "standalone",
+   "Hero Mintyheart": "standalone",
+   "Hero Nyra": "standalone",
+   "Hero Zarek": "standalone",
+   "Dawn Chorus": "astral",
+   "Aureate Mage": "astral",
+   "Solar Cleric": "astral",
+   "Dawnborn": "astral",
+   "Aurelion": "astral",
+   "Moonrend": "void",
+   "The Argent Loom": "void",
+   "Threefold Watcher": "void",
+   "Nhal": "void",
+   "Vespera": "void"
+  },
+  "land_subfolder": {
+   "Fire": "lantern",
+   "Forest": "forest",
+   "Mountain": "cyber",
+   "Water": "tidal"
+  },
+  "note2": "Frame = <tier>__<subfolder> in the old repo's scripts/_frame_cache. Hollowbloom (arcane) uses 'florest'."
+ }
+}

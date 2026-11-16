@@ -1,0 +1,77 @@
+[
+	{
+		"players": 2,
+		"difficulty": 1,
+		"size": 5
+	},
+	{
+		"players": 2,
+		"difficulty": 2,
+		"size": 8
+	},
+	{
+		"players": 2,
+		"difficulty": 3,
+		"size": 5
+	},
+	{
+		"players": 3,
+		"difficulty": 1,
+		"size": 6
+	},
+	{
+		"players": 3,
+		"difficulty": 2,
+		"size": 10
+	},
+	{
+		"players": 3,
+		"difficulty": 3,
+		"size": 8
+	},
+	{
+		"players": 4,
+		"difficulty": 1,
+		"size": 9
+	},
+	{
+		"players": 4,
+		"difficulty": 2,
+		"size": 14
+	},
+	{
+		"players": 4,
+		"difficulty": 3,
+		"size": 10
+	},
+	{
+		"players": 5,
+		"difficulty": 1,
+		"size": 11
+	},
+	{
+		"players": 5,
+		"difficulty": 2,
+		"size": 18
+	},
+	{
+		"players": 5,
+		"difficulty": 3,
+		"size": 13
+	},
+	{
+		"players": 6,
+		"difficulty": 1,
+		"size": 14
+	},
+	{
+		"players": 6,
+		"difficulty": 2,
+		"size": 21
+	},
+	{
+		"players": 6,
+		"difficulty": 3,
+		"size": 15
+	}
+]

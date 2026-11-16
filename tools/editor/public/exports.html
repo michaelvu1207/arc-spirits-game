@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Exports · Niji Batch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="fonts" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Cinzel:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b0f; --panel: #12141a; --card: #171a21; --line: #23262f; --line-2: #30343f;
+    --text: #e6e7eb; --dim: #9a9eab; --faint: #646978; --seg: #20232b; --field: #0d0e13;
+    --accent: #f0532d; --ok: #4ecb8f; --bad: #f0616d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Figtree", -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button, select { font: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  .split { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  aside header { padding: 14px 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+  aside header a { color: var(--dim); text-decoration: none; font-weight: 500; font-size: 13px; }
+  aside header a:hover { color: var(--text); }
+  .tpl { padding: 8px; }
+  .tpl button { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; color: var(--dim); }
+  .tpl button.on { background: var(--seg); color: var(--text); }
+  .opts { padding: 12px 16px; border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; display: grid; gap: 8px; }
+  .opts label { display: flex; gap: 8px; align-items: center; }
+  main { display: flex; flex-direction: column; min-width: 0; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .bar h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  .spacer { flex: 1; }
+  .tb { padding: 7px 14px; border-radius: 8px; background: var(--seg); font-weight: 500; font-size: 13px; white-space: nowrap; }
+  .tb.go { background: var(--accent); color: #180802; }
+  .tb:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--dim); font-size: 13px; }
+  .scroll { overflow: auto; padding: 16px; }
+  .cardbox .hex { width: calc(50% - 4px); height: auto; display: inline-block; vertical-align: top; } .cardbox .hex + .hex { margin-left: 8px; }
+  .cardbox:has(.hex) { transform: none; width: 100%; position: static; }
+  #hexEd { position: fixed; inset: 0; background: rgba(8,6,12,.97); z-index: 50; display: flex; align-items: center; justify-content: center; }
+  .edmain { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; }
+  #hexEd[hidden] { display: none; }
+  .edwrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; width: min(96vw, 1500px); height: 92vh; min-height: 0; }
+  #edCanvas { max-width: 100%; max-height: 100%; width: auto; height: auto; background: #0c0a10; border-radius: 8px; cursor: grab; touch-action: none; }
+  #edCanvas.drag { cursor: grabbing; }
+  .edside { display: flex; flex-direction: column; gap: 14px; color: var(--fg, #eee); font-size: 13px; padding-top: 6px; }
+  .edside h2 { margin: 0; font-size: 18px; }
+  .edside label { display: flex; flex-direction: column; gap: 6px; }
+  .edside label:has(input[type=checkbox]) { flex-direction: row; align-items: center; }
+  .edside select, .edside input[type=range] { width: 100%; }
+  .edpos, .edhint, .edstatus { color: #999; font-size: 12px; line-height: 1.5; }
+  .edbtns { display: flex; gap: 8px; align-items: center; margin-top: auto; flex-wrap: wrap; }
+  .tb.primary { background: #6d5bd0; color: #fff; }
+  .edpick { width: min(96vw, 1500px); height: 92vh; display: flex; flex-direction: column; min-height: 0; }
+  .edpick .fgrid { overflow: auto; padding: 16px 4px; flex: 1; }
+  .fgroup { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; align-items: start; }
+  .fgrid .group { margin: 4px 0 10px; font-size: 14px; font-weight: 600; color: var(--dim); }
+  .fgrid figure { margin: 0; cursor: pointer; min-width: 0; border-radius: 10px; padding: 4px; }
+  .fgrid figure:hover { background: var(--card); }
+  .fgrid figure.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .fgrid .pic { position: relative; }
+  .fgrid img.tile { width: 100%; height: auto; border-radius: 8px; display: block; background: var(--card); }
+  .fgrid figcaption { font-size: 12px; color: var(--faint, #777); padding: 4px 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fgrid .gid { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--dim); }
+  .fgrid .pin { position: absolute; top: 8px; left: 8px; width: 24px; height: 24px; border-radius: 99px; background: var(--accent); color: #180802; font-size: 13px; display: grid; place-items: center; }
+  .tpl button.sub { padding-left: 28px; font-size: 13px; }
+  [hidden] { display: none !important; }
+  .grid .group { grid-column: 1 / -1; margin: 10px 0 0; font-size: 14px; font-weight: 600; color: var(--dim); }
+  .grid .group:first-child { margin-top: 0; }
+  .cardbox .mcard { width: 100%; height: 100%; display: block; object-fit: contain; }
+  .cardbox .mcard.pending { display: flex; align-items: center; justify-content: center; color: #9a90a8; font-size: 13px; background: #1d1824; border-radius: 12px; }
+  .cardbox .hex.pending { aspect-ratio: 2784 / 2414; display: inline-flex; align-items: center; justify-content: center; color: #9a90a8; font-size: 13px; background: #1d1824; border-radius: 6px; }
+  .meta .figma.upd { background: rgba(255, 196, 0, .16); color: #ffd36b; }
+  .meta .figma { font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; background: rgba(162, 89, 255, .18); color: #c9a8ff; }
+  .grid.hex { grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); }
+  .item.hex .frame { aspect-ratio: 5568 / 2414; background: #15121a; }
+  .dim { color: #888; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; }
+  .item .frame { width: 100%; aspect-ratio: 825 / 1425; overflow: hidden; border-radius: 6px; background: transparent; position: relative; }
+  .item .frame .cardbox { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .item .meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+  .item select { background: var(--field); border: 1px solid var(--line-2); border-radius: 6px; padding: 3px 6px; font-size: 12px; max-width: 100%; }
+  .item .link { color: var(--dim); font-size: 12px; } .item .link:hover { color: var(--text); }
+
+  /* ---------- Monster tarot card: 70 x 120 mm at 300 dpi = 827 x 1417 px. All sizes in px of the card. ----------
+     Layers, bottom to top: art, color grade (blend), vignette (multiply), sparkles (screen), gold frame (SVG), gem orbs, name, track. */
+  .tarot { --gold: linear-gradient(160deg, #fff2c2 0%, #e9c86a 18%, #a8761f 38%, #f3dc8e 55%, #c99a3a 72%, #6d4a10 100%);
+    width: 827px; height: 1417px; position: relative; overflow: hidden; background: #07050c; font-family: "Cinzel", serif; color: #fff; isolation: isolate; }
+  .tarot > * { position: absolute; }
+  .tarot .art { inset: 0; background-size: cover; background-position: center top; }
+  .tarot .grade { inset: 0; background: var(--grade); mix-blend-mode: color; opacity: .18; }
+  .tarot .glow { inset: 0; background: radial-gradient(ellipse 70% 55% at 50% 42%, var(--aura) 0%, transparent 70%); mix-blend-mode: screen; opacity: .35; }
+  .tarot .vignette { inset: 0; background: radial-gradient(ellipse 80% 70% at 50% 45%, transparent 45%, rgba(0,0,0,.55) 100%), linear-gradient(180deg, rgba(0,0,0,.45) 0%, transparent 20%, transparent 58%, rgba(0,0,0,.9) 84%, #000 100%); mix-blend-mode: multiply; }
+  .tarot .stars { inset: 0; mix-blend-mode: screen; opacity: .45;
+    background-image: radial-gradient(circle, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle, #fff 0 1px, transparent 2px), radial-gradient(circle, var(--c1) 0 2px, transparent 3.5px), radial-gradient(circle, #fff 0 .8px, transparent 1.6px);
+    background-size: 311px 463px, 257px 373px, 431px 601px, 189px 233px; background-position: 17px 31px, 160px 90px, 120px 240px, 75px 170px; }
+  .tarot .sparkle { width: 34px; height: 34px; background: var(--c1); clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); filter: drop-shadow(0 0 8px var(--c1)); mix-blend-mode: screen; }
+  .tarot .frame { inset: 0; width: 827px; height: 1417px; }
+  .tarot .orb { width: 150px; height: 150px; display: grid; place-items: center; font-weight: 900; font-size: 82px; line-height: 1; color: #fff; text-shadow: 0 0 18px rgba(0,0,0,.8), 0 3px 0 rgba(0,0,0,.5); z-index: 3; }
+  .tarot .orb::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 36% 30%, #fff 0%, var(--gem2) 18%, var(--gem1) 60%, #140820 100%); box-shadow: 0 0 0 6px #0b0612, 0 0 0 9px #e2c070, 0 0 0 12px #0b0612, 0 0 36px var(--gem2), 0 16px 30px rgba(0,0,0,.7); }
+  .tarot .orb::after { content: ""; position: absolute; left: 22%; top: 12%; width: 40%; height: 26%; border-radius: 50%; background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,0)); mix-blend-mode: screen; }
+  .tarot .orb span { position: relative; z-index: 1; }
+  .tarot .orb small { position: absolute; bottom: -34px; left: 50%; transform: translateX(-50%); font-size: 19px; font-weight: 700; letter-spacing: .18em; background: var(--gold); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 3px #000); white-space: nowrap; }
+  .tarot .orb.health { left: 65px; top: 71px; --gem1: #2e6b4f; --gem2: #8ff0c0; }
+  .tarot .orb.damage { right: 65px; top: 71px; --gem1: #7a1020; --gem2: #ff8a8a; }
+  .tarot .leaves { width: 230px; height: 230px; z-index: 2; filter: drop-shadow(0 6px 10px rgba(0,0,0,.7)); }
+  .tarot .leaves.tl, .tarot .leaves.tr { width: 310px; height: 310px; } .tarot .leaves.tl { left: 24px; top: 30px; } .tarot .leaves.tr { right: 24px; top: 30px; transform: scaleX(-1); }
+  .tarot .leaves.bl { left: 24px; bottom: 30px; transform: scaleY(-1); } .tarot .leaves.br { right: 24px; bottom: 30px; transform: scale(-1); }
+  .tarot .origin { top: 64px; left: 50%; transform: translateX(-50%); width: 96px; height: 96px; object-fit: contain; filter: drop-shadow(0 0 14px var(--c1)) drop-shadow(0 4px 8px #000); z-index: 3; }
+  .tarot .name { left: 70px; right: 70px; bottom: 262px; text-align: center; font-weight: 700; font-size: 56px; line-height: 1.05; letter-spacing: .04em; z-index: 3;
+    background: var(--gold); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 2px #000) drop-shadow(0 0 22px rgba(0,0,0,.9)); }
+  .tarot .nameglow { left: 110px; right: 110px; bottom: 236px; height: 120px; background: radial-gradient(ellipse 50% 60% at 50% 60%, var(--aura), transparent 70%); mix-blend-mode: screen; opacity: .7; }
+  .tarot .rule { left: 120px; right: 120px; bottom: 244px; height: 2px; background: linear-gradient(90deg, transparent, #e9c86a 30%, #fff2c2 50%, #e9c86a 70%, transparent); z-index: 3; }
+  .tarot .rule::after { content: ""; position: absolute; left: 50%; top: -7px; width: 16px; height: 16px; transform: translateX(-50%) rotate(45deg); background: var(--gold); box-shadow: 0 0 10px #e9c86a; }
+  .tarot .track { left: 70px; right: 70px; bottom: 92px; height: 118px; display: flex; align-items: center; justify-content: center; z-index: 3; }
+  .tarot .track .node { position: relative; width: 108px; height: 108px; border-radius: 50%; display: grid; place-items: center; flex: none;
+    background: radial-gradient(circle at 50% 38%, #3a2a52, #0b0612 70%); box-shadow: 0 0 0 4px #e2c070, 0 0 0 6px #0b0612, 0 0 24px var(--aura), 0 10px 20px rgba(0,0,0,.7); }
+  .tarot .track .node::after { content: ""; position: absolute; inset: 10px; border-radius: 50%; border: 1px solid rgba(255,242,194,.45); }
+  .tarot .track .node img { width: 76px; height: 76px; object-fit: contain; filter: drop-shadow(0 3px 4px #000); }
+  .tarot .track .seg { position: relative; flex: 1; max-width: 64px; height: 3px; background: linear-gradient(90deg, #a8761f, #fff2c2, #a8761f); }
+  .tarot .track .seg::after { content: ""; position: absolute; left: 50%; top: -5px; width: 12px; height: 12px; transform: translateX(-50%) rotate(45deg); background: #fff2c2; box-shadow: 0 0 8px #e9c86a; }
+  .tarot .stage { left: 50%; transform: translateX(-50%); bottom: 44px; font-size: 24px; font-weight: 700; letter-spacing: .4em; z-index: 3; background: var(--gold); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 3px #000); }
+  /* The three difficulties: accent, color grade and aura. */
+  .tarot.s1 { --c1: #ffe9a8; --grade: #ffd27a; --aura: rgba(255, 214, 140, .8); }
+  .tarot.s2 { --c1: #ff6a5c; --grade: #b3121c; --aura: rgba(255, 60, 60, .8); }
+  .tarot.s3 { --c1: #d98bff; --grade: #6a1fd1; --aura: rgba(190, 80, 255, .9); }
+</style>
+</head>
+<body>
+<div class="split">
+  <aside>
+    <header><a href="/">← Folders</a><span>Exports</span></header>
+    <div class="tpl" id="tpl"></div>
+    <div class="opts" id="opts"></div>
+  </aside>
+  <main>
+    <div class="bar"><h1 id="title">Monster tarot cards</h1><span class="status" id="status"></span><span class="spacer"></span><button class="tb" id="renderAll" hidden>Render all</button><button class="tb" id="exportAll">Export all to assets/exports</button></div>
+    <div class="scroll"><div class="grid" id="grid"></div></div>
+  </main>
+</div>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const file = (p) => '/ws/file?path=' + encodeURIComponent(p);
+const post = (p, b) => fetch(p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
+
+// ---------- templates: each one lists its items, renders one item as HTML, and names the export file ----------
+const TEMPLATES = {
+  'monster-card': {
+    title: 'Monster cards', folder: 'assets/exports/monster-cards', width: 825, height: 1425,
+    load: () => fetch('/api/game/monsters').then((r) => r.json()),
+    key: (m) => m.name,
+    // The merged monster card from Figma (Design Drafts), made on the server by tools/monster_generate.py whenever
+    // the monster's art, values or reward icons change; this shows the made card.
+    render(m) {
+      return m.card ? `<img class="mcard" loading="lazy" src="${file(m.card + '-preview.png')}&v=${m.cardKey}" alt="">` : '<div class="mcard pending">Making the card…</div>';
+    },
+    async png(m) { if (!m.card) throw new Error(`${m.name}: the card is still being made.`); return dataUrl(file(m.card + '.png')); },
+    badge: (m) => `${m.stale ? '<span class="figma upd" title="The art or data changed; the server is making the new card">updating…</span>' : ''}${m.missingIcons?.length ? `<span class="figma upd" title="These kill rewards have no icon in references/icons/icon_pool, so they are not on the card">no icon: ${esc(m.missingIcons.join(', '))}</span>` : ''}`,
+    renderOld(m) {
+      const track = m.rewards.map((r, i) => `${i ? '<span class="seg"></span>' : ''}<span class="node">${r.icon ? `<img src="${file(r.icon)}" alt="${esc(r.name)}">` : ''}</span>`).join('');
+      // Gold art-nouveau frame: a double line with diamonds, curved corner vines and a hanging ornament at the top.
+      const frame = `<svg class="frame" viewBox="0 0 827 1417" fill="none" stroke-linecap="round">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff2c2"/><stop offset=".3" stop-color="#e9c86a"/><stop offset=".55" stop-color="#a8761f"/><stop offset=".8" stop-color="#f3dc8e"/><stop offset="1" stop-color="#8a5a12"/></linearGradient>
+        <filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".9"/></filter></defs>
+        <g filter="url(#s)" stroke="url(#g)">
+          <rect x="30" y="30" width="767" height="1357" rx="14" stroke-width="4"/>
+          <rect x="44" y="44" width="739" height="1329" rx="10" stroke-width="1.5" opacity=".8"/>
+          <path d="M44 300 C 44 220, 120 200, 150 120 C 170 70, 110 50, 60 44" stroke-width="2.5"/><path d="M783 300 C 783 220, 707 200, 677 120 C 657 70, 717 50, 767 44" stroke-width="2.5"/>
+          <path d="M44 1117 C 44 1197, 120 1217, 150 1297 C 170 1347, 110 1367, 60 1373" stroke-width="2.5"/><path d="M783 1117 C 783 1197, 707 1217, 677 1297 C 657 1347, 717 1367, 767 1373" stroke-width="2.5"/>
+          <path d="M250 44 C 300 70, 527 70, 577 44" stroke-width="2"/><path d="M290 44 C 340 90, 487 90, 537 44" stroke-width="1.5" opacity=".8"/>
+        </g>
+        <g fill="url(#g)" filter="url(#s)">
+          ${[0,1,2].map((i) => `<path d="M${413 + (i - 1) * 70} 66 l9 14 l-9 14 l-9 -14z"/>`).join('')}
+          ${[...Array(9)].map((_, i) => `<path d="M37 ${330 + i * 85} l6 10 l-6 10 l-6 -10z"/><path d="M790 ${330 + i * 85} l6 10 l-6 10 l-6 -10z"/>`).join('')}
+        </g></svg>`;
+      // Corner ornament: gold leaves around a pearl gem.
+      const leaves = `<svg class="leaves" viewBox="0 0 230 230" fill="none"><defs><linearGradient id="l" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff2c2"/><stop offset=".5" stop-color="#c9962b"/><stop offset="1" stop-color="#6d4a10"/></linearGradient>
+        <radialGradient id="p" cx=".38" cy=".32" r=".7"><stop offset="0" stop-color="#fff"/><stop offset=".25" stop-color="#f4d9ff"/><stop offset=".6" stop-color="#a86ef0"/><stop offset="1" stop-color="#3a1466"/></radialGradient></defs>
+        <g fill="url(#l)" stroke="#2a1a05" stroke-width="1.5">
+          <path d="M40 40 C 90 20, 150 40, 190 30 C 150 70, 110 60, 70 90 Z"/><path d="M40 40 C 20 90, 40 150, 30 190 C 70 150, 60 110, 90 70 Z"/>
+          <path d="M60 70 C 120 60, 150 90, 170 120 C 120 110, 100 90, 60 70 Z" opacity=".9"/><path d="M70 60 C 60 120, 90 150, 120 170 C 110 120, 90 100, 70 60 Z" opacity=".9"/>
+        </g>
+        <circle cx="86" cy="86" r="40" fill="#0b0612"/><circle cx="86" cy="86" r="34" fill="url(#p)"/><circle cx="86" cy="86" r="38" stroke="url(#l)" stroke-width="4"/>
+        <ellipse cx="74" cy="72" rx="12" ry="7" fill="#fff" opacity=".85"/></svg>`;
+      const sparkles = [[150, 420], [690, 300], [120, 760], [720, 900], [400, 180]].map(([x, y], i) => `<span class="sparkle" style="left:${x}px;top:${y}px;transform:scale(${[1, .7, .5, .8, .6][i]})"></span>`).join('');
+      return `<div class="tarot s${m.stage}">
+        <div class="art" style="background-image:url('${m.art ? file(m.art) : ''}')"></div><div class="grade"></div><div class="glow"></div><div class="vignette"></div><div class="stars"></div>${sparkles}
+        ${frame}${leaves.replace('class="leaves"', 'class="leaves tl"')}${leaves.replace('class="leaves"', 'class="leaves tr"')}${leaves.replace('class="leaves"', 'class="leaves bl"')}${leaves.replace('class="leaves"', 'class="leaves br"')}
+        ${m.originIcon ? `<img class="origin" src="${file(m.originIcon)}" alt="">` : ''}
+        <div class="orb health"><span>${m.barrier}</span><small>HEALTH</small></div>
+        <div class="orb damage"><span>${m.damage}</span><small>DAMAGE</small></div>
+        <div class="nameglow"></div><div class="name">${esc(m.name)}</div><div class="rule"></div>
+        <div class="track">${track}</div>
+        <div class="stage">${['', 'I', 'II', 'III'][m.stage] ?? m.stage}</div>
+      </div>`;
+    },
+    options: (m) => `<select data-art="${esc(m.name)}" title="Art">${m.images.map((n) => `<option value="${esc(n)}" ${m.art?.endsWith('/' + n) ? 'selected' : ''}>${esc(n.replace(/^.*-([0-9a-f]{8}-\d)\.png$/, '$1'))}</option>`).join('')}</select>`,
+  },
+};
+// ---------- hex spirits: the icon placer of the old editor (game-data-backend spiritIconPlacer / spiritBackIconPlacer), drawn on canvas ----------
+// The front-base and back-base already hold art, frame, name, cost and text. This step adds the origin icon, the class icons,
+// the rune icons of the awaken cost and the special class icon at the fixed pixel slots of the tier (game/icon_placement.json),
+// then makes every half-transparent pixel opaque, like the original.
+const imgCache = {};
+const loadImg = (src) => imgCache[src] ??= new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Missing image: ' + src)); i.src = src; });
+function drawContain(ctx, img, x, y, w, h) {
+  const nw = img.naturalWidth || w, nh = img.naturalHeight || h, k = Math.min(w / nw, h / nh), dw = nw * k, dh = nh * k;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+function solidify(canvas) {
+  const ctx = canvas.getContext('2d'), d = ctx.getImageData(0, 0, canvas.width, canvas.height), a = d.data;
+  for (let i = 3; i < a.length; i += 4) if (a[i] > 0) a[i] = 255;
+  ctx.putImageData(d, 0, 0);
+}
+function drawTinted(ctx, img, x, y, w, h, color) {
+  const t = document.createElement('canvas'); t.width = w; t.height = h; const c = t.getContext('2d');
+  drawContain(c, img, 0, 0, w, h); solidify(t);
+  c.globalCompositeOperation = 'source-in'; c.fillStyle = color; c.fillRect(0, 0, w, h);
+  ctx.drawImage(t, x, y);
+}
+async function drawOrRunes(ctx, icons, x, y, s) {
+  if (icons.length === 1) return drawContain(ctx, await loadImg(icons[0]), x, y, s, s);
+  const gap = Math.round(0.35 * s), total = icons.length * s + (icons.length - 1) * gap;
+  let cx = x + (s - total) / 2;
+  for (let i = 0; i < icons.length; i++) {
+    drawContain(ctx, await loadImg(icons[i]), cx, y, s, s); cx += s;
+    if (i < icons.length - 1) { ctx.font = `bold ${s}px Arial`; ctx.fillStyle = '#FFFFFF'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('/', cx + gap / 2, y + s / 2); cx += gap; }
+  }
+}
+async function drawHex(m, side, placement) {
+  const base = await loadImg(file(side === 'front' ? m.front : m.back));
+  const canvas = document.createElement('canvas'); canvas.width = base.naturalWidth; canvas.height = base.naturalHeight;
+  const ctx = canvas.getContext('2d'); ctx.drawImage(base, 0, 0);
+  const layer = document.createElement('canvas'); layer.width = canvas.width; layer.height = canvas.height; const lc = layer.getContext('2d');
+  const front = placement.front, tc = m.tier ? front[m.tier] : null;
+  if (tc) {
+    const S = front._icon_size || 80, white = tc.class_icon_color === 'white';
+    const origins = m.originIcon ? [m.originIcon] : [];
+    const classes = m.classes.filter((c) => c.icon && !(side === 'back' && c.special)).map((c) => c.icon);
+    for (let i = 0; i < Math.min(origins.length, (tc.origin_slots ?? []).length); i++) drawContain(lc, await loadImg(file(origins[i])), tc.origin_slots[i].x, tc.origin_slots[i].y, S, S);
+    for (let i = 0; i < Math.min(classes.length, (tc.class_slots ?? []).length); i++) {
+      const img = await loadImg(file(classes[i])), { x, y } = tc.class_slots[i];
+      white ? drawTinted(lc, img, x, y, S, S, '#FFFFFF') : drawContain(lc, img, x, y, S, S);
+    }
+  }
+  if (side === 'back') {
+    const b = placement.back, RS = b._rune_size || 120;
+    for (let i = 0; i < Math.min(m.runes.length, (b.rune_slots ?? []).length); i++) await drawOrRunes(lc, m.runes[i].map(file), b.rune_slots[i].x, b.rune_slots[i].y, RS);
+    const special = m.classes.find((c) => c.special && c.icon);
+    if (special && b.special_class_icon_slot) { const SC = b._special_class_icon_size || 80; drawTinted(lc, await loadImg(file(special.icon)), b.special_class_icon_slot.x, b.special_class_icon_slot.y, SC, SC, '#FFFFFF'); }
+  }
+  solidify(layer); ctx.drawImage(layer, 0, 0); solidify(canvas);
+  return canvas;
+}
+TEMPLATES['hex-spirit'] = {
+  title: 'Hex spirits', folder: 'assets/exports/hex-spirits', width: 2784, height: 2414, canvas: true, sides: ['front', 'back'], placement: null,
+  group: (m) => m.folder.split('/').at(-2),
+  async load() { const r = await fetch('/api/game/hex-spirits').then((x) => x.json()); this.placement = r.placement; this.parallel = r.parallel || 1; return r.spirits; },
+  key: (m) => m.name,
+  draw(m, side) { return drawHex(m, side, this.placement); },
+  // A saved finished hex shows as a small image. A side with no saved image (or an old one) is drawn once, then saved.
+  // Arcane and non-arcane spirits (m.source 'figma') show the cards exported from Figma; only the heroes are drawn from the old frame.
+  render(m) {
+    if (m.source === 'figma') return (m.kit?.template === 'non-arcane' ? ['front'] : this.sides).map((side) => m.final[side]
+      ? `<img class="hex" loading="lazy" width="${this.width}" height="${this.height}" src="${file(m.final[side] + '-preview.png')}&v=${m.finalKey}" alt="">`
+      : `<div class="hex pending">Making the ${side}…</div>`).join('');
+    return this.sides.map((side) => m.final?.[side] ? `<img class="hex" loading="lazy" width="${this.width}" height="${this.height}" src="${file(m.final[side] + '-preview.png')}&v=${m.finalKey}" alt="">` : `<canvas class="hex" data-side="${side}" data-key="${esc(m.name)}" width="${this.width}" height="${this.height}"></canvas>`).join(''); },
+  edit: true, // a click on the pair (or Edit) opens the editor: select the art, position it, render
+  // Figma-design spirits are made by the generator (tools/hex_generate.py) whenever their art or data changes.
+  badge: (m) => m.source === 'figma' ? `<span class="figma" title="Figma design, made by the generator">Figma design</span>${m.stale?.length ? '<span class="figma upd" title="The art or data changed; the server is making the new card">updating…</span>' : ''}` : '',
+  // The PNG of one side: the Figma export as is, or the old frame drawn on canvas (heroes).
+  async png(m, side) { return m.source === 'figma' ? dataUrl(file(m.final[side] + '.png')) : (await this.draw(m, side)).toDataURL('image/png'); },
+  hasSide: (m, side) => side === 'front' || (m.source === 'figma' ? !!m.final.back : !!m.back),
+};
+let current = 'monster-card', items = [];
+
+let folder = ''; // the open folder of the template, '' = all
+function paintTemplates() {
+  // Under the open template: its folders (the same as on the assets page). A click shows only that folder.
+  const subs = (t) => t.group ? [...new Set(items.map(t.group))].map((g) => `<button class="sub${g === folder ? ' on' : ''}" data-folder="${esc(g)}">${esc(g)}</button>`).join('') : '';
+  $('tpl').innerHTML = Object.entries(TEMPLATES).map(([k, t]) => `<button class="${k === current && !folder ? 'on' : ''}" data-tpl="${k}">${esc(t.title)}</button>${k === current ? subs(t) : ''}`).join('');
+  for (const el of $('grid').children) el.hidden = !!folder && el.dataset.group !== folder;
+}
+async function load() {
+  const t = TEMPLATES[current];
+  $('title').textContent = t.title; $('status').textContent = 'Loading…';
+  items = await t.load();
+  $('status').textContent = t.canvas ? `${items.length} spirits · ${t.width} × ${t.height} px, front and back` : `${items.length} cards · ${t.width} × ${t.height} px (2.75 × 4.75 in at 300 dpi)`;
+  $('renderAll').hidden = !t.canvas;
+  $('grid').classList.toggle('hex', !!t.canvas);
+  // Groups (the same folders as on the assets page): a stable sort by group, then one heading per group.
+  if (t.group) items = items.map((m, i) => [m, i]).sort((x, y) => t.group(x[0]).localeCompare(t.group(y[0])) || x[1] - y[1]).map((x) => x[0]);
+  $('grid').innerHTML = items.map((m, i) => `${t.group && (!i || t.group(items[i - 1]) !== t.group(m)) ? `<h3 class="group" data-group="${esc(t.group(m))}">${esc(t.group(m))}</h3>` : ''}<div class="item${t.canvas ? ' hex' : ''}" data-group="${t.group ? esc(t.group(m)) : ''}" data-key="${esc(t.key(m))}">
+    <div class="frame"${t.edit && (!t.editable || t.editable(m)) ? ` data-edit="${esc(t.key(m))}" title="Edit" style="cursor:pointer"` : ''}><div class="cardbox">${t.render(m)}</div></div>
+    <div class="meta"><span>${esc(t.key(m))}</span>${t.badge ? t.badge(m) : ''}<span class="spacer"></span>${t.edit && (!t.editable || t.editable(m)) ? `<button class="link" data-edit="${esc(t.key(m))}">Edit</button>` : ''}<button class="link" data-export="${esc(t.key(m))}">Export</button><button class="link" data-download="${esc(t.key(m))}">Download</button></div>
+    ${t.options ? `<div class="meta">${t.options(m)}</div>` : ''}
+  </div>`).join('');
+  paintTemplates(); fit();
+  // While the server is making changed hexes, look again every 15 s (not while the art editor is open).
+  clearTimeout(window.hexPoll);
+  if (items.some((m) => m.stale === true || m.stale?.length)) window.hexPoll = setTimeout(() => { if (TEMPLATES[current] === t && $('hexEd').hidden) load(); }, 15000);
+  if (t.canvas) for (const c of document.querySelectorAll('canvas.hex')) {
+    const m = items.find((x) => t.key(x) === c.dataset.key);
+    try {
+      const full = await t.draw(m, c.dataset.side); c.getContext('2d').drawImage(full, 0, 0);
+      const small = document.createElement('canvas'); small.width = 696; small.height = Math.round(696 * full.height / full.width); small.getContext('2d').drawImage(full, 0, 0, small.width, small.height);
+      const b64 = (cv) => cv.toDataURL('image/png').split(',')[1];
+      await post('/api/game/hex-final', { name: m.name, side: c.dataset.side, key: m.finalKey, full: b64(full), preview: b64(small) });
+    } catch (err) { $('status').textContent = `${m.name}: ${err.message}`; }
+  }
+}
+// The card is drawn at full size and scaled down to the preview tile.
+function fit() {
+  const t = TEMPLATES[current];
+  for (const box of document.querySelectorAll('.cardbox')) {
+    if (t.canvas) { box.style.transform = ''; box.style.width = ''; box.style.height = ''; continue; } // canvases scale with CSS width
+    const w = box.parentElement.clientWidth; box.style.transform = `scale(${w / t.width})`; box.style.width = t.width + 'px'; box.style.height = t.height + 'px';
+  }
+}
+addEventListener('resize', fit);
+
+// ---------- export: the card DOM goes into an SVG <foreignObject>, is drawn on a canvas at full size, and saved as PNG ----------
+const dataUrl = async (url) => { const b = await (await fetch(url)).blob(); return new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); }); };
+let fontCss = null;
+async function fonts() {
+  if (fontCss) return fontCss;
+  let css = await (await fetch($('fonts').href)).text();
+  const urls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map((m) => m[1]))];
+  for (const u of urls) css = css.split(u).join(await dataUrl(u));
+  return (fontCss = css);
+}
+async function inlineImages(root) {
+  for (const img of root.querySelectorAll('img')) img.src = await dataUrl(img.getAttribute('src'));
+  for (const el of root.querySelectorAll('[style*="background-image"]')) { const m = el.style.backgroundImage.match(/url\(["']?([^"')]+)/); if (m) el.style.backgroundImage = `url("${await dataUrl(m[1])}")`; }
+}
+async function renderPng(key) {
+  const t = TEMPLATES[current], m = items.find((x) => t.key(x) === key);
+  const host = document.createElement('div'); host.innerHTML = t.render(m);
+  const card = host.firstElementChild;
+  await inlineImages(card);
+  const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('\n') + '\n' + await fonts();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${t.width}" height="${t.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${new XMLSerializer().serializeToString(card)}</div></foreignObject></svg>`;
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error('The card did not render.')); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); });
+  const canvas = document.createElement('canvas'); canvas.width = t.width; canvas.height = t.height;
+  canvas.getContext('2d').drawImage(img, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+async function exportOne(key) {
+  const t = TEMPLATES[current];
+  if (t.canvas) {
+    const m = items.find((x) => t.key(x) === key); let path;
+    for (const side of t.sides) {
+      if (!t.hasSide(m, side)) continue;
+      const png = await t.png(m, side);
+      const r = await post('/api/export', { folder: t.folder, name: `${key}_${side}`, base64: png.split(',')[1] });
+      if (r.error) throw new Error(r.error); path = r.path;
+    }
+    return path;
+  }
+  const png = t.png ? await t.png(items.find((x) => t.key(x) === key)) : await renderPng(key);
+  const r = await post('/api/export', { folder: t.folder, name: key, base64: png.split(',')[1] });
+  if (r.error) throw new Error(r.error);
+  return r.path;
+}
+async function downloadOne(key) {
+  const t = TEMPLATES[current];
+  if (t.canvas) { const m = items.find((x) => t.key(x) === key); for (const side of t.sides) { if (!t.hasSide(m, side)) continue; const a = document.createElement('a'); a.href = await t.png(m, side); a.download = `${key}_${side}.png`; a.click(); } return; }
+  const a = document.createElement('a'); a.href = t.png ? await t.png(items.find((x) => t.key(x) === key)) : await renderPng(key); a.download = key + '.png'; a.click();
+}
+$('grid').addEventListener('click', async (e) => {
+  const ex = e.target.closest('[data-export]'), dl = e.target.closest('[data-download]');
+  try {
+    if (ex) { ex.textContent = '…'; const p = await exportOne(ex.dataset.export); ex.textContent = 'Exported'; $('status').textContent = p; }
+    if (dl) await downloadOne(dl.dataset.download);
+  } catch (err) { $('status').textContent = err.message; }
+});
+// ---------- interactive art editor: move, zoom and flip the art inside the hex; the frame shows on top ----------
+// Same math as tools/hex_render.py place_art: cover-fit to the hex (2784 x 2414), centered, then scale / offset (px of the base image).
+const ED = { m: null, art: null, frame: null, mask: null, t: null, drag: null, w: 2784, h: 2414, cx: 1392, cy: 1207 };
+const edCanvas = $('edCanvas'), edCtx = edCanvas.getContext('2d');
+function edDefault() { return { scale: 1, x: 0, y: 0, flip: false }; }
+function edDraw() {
+  if (!ED.art) return;
+  const { w, h, cx, cy, t, art } = ED; edCanvas.width = w; edCanvas.height = h;
+  edCtx.clearRect(0, 0, w, h);
+  const k = Math.max(w / art.naturalWidth, h / art.naturalHeight) * t.scale, dw = art.naturalWidth * k, dh = art.naturalHeight * k;
+  const drawArt = (ctx) => { ctx.save(); ctx.translate(cx + t.x, cy + t.y); if (t.flip) ctx.scale(-1, 1); ctx.drawImage(art, -dw / 2, -dh / 2, dw, dh); ctx.restore(); };
+  edCtx.globalAlpha = 0.28; drawArt(edCtx); edCtx.globalAlpha = 1; // what lies outside the hex, dimmed
+  const inner = document.createElement('canvas'); inner.width = w; inner.height = h; const ic = inner.getContext('2d');
+  drawArt(ic);
+  if (ED.mask) { ic.globalCompositeOperation = 'destination-in'; ic.drawImage(ED.mask, 0, 0, w, h); }
+  edCtx.drawImage(inner, 0, 0);
+  if (ED.frame) edCtx.drawImage(ED.frame, 0, 0, w, h);
+  $('edZoom').value = t.scale; $('edZoomV').textContent = `${Math.round(t.scale * 100)} %`; $('edFlip').checked = !!t.flip;
+  $('edPos').textContent = `${Math.round(t.x)}, ${Math.round(t.y)} px`;
+}
+// Step 1: the gallery of the spirit's images (the same tiles as the generations gallery). A click selects the art.
+// Step 2: position the art in the hex, then render.
+function edStep(pick) { $('edPick').hidden = !pick; $('edWrap').hidden = pick; }
+function edGallery() {
+  const m = ED.m, pinned = new Set(m.pinned ?? []), id = (n) => n.match(/-([0-9a-f]{8}-\d)\.png$/)?.[1];
+  const tile = (n) => `<figure class="${ED.artName === n ? 'sel' : ''}" data-pick="${esc(n)}" title="${esc(n)}"><div class="pic"><img class="tile" loading="lazy" src="/ws/file?thumb=1&path=${encodeURIComponent(m.folder + '/' + n)}" alt="">${pinned.has(n) ? '<span class="pin on">★</span>' : ''}</div><figcaption>${id(n) ? `<span class="gid">${id(n)}</span>` : esc(n.split('/').at(-1))}</figcaption></figure>`;
+  const groups = {}; for (const n of m.images) (groups[n.includes('/') ? n.split('/')[0] : ''] ??= []).push(n);
+  $('edPickTitle').textContent = `${m.name} · select the art`;
+  $('edGrid').innerHTML = m.images.length ? Object.entries(groups).map(([g, list]) => `${g ? `<h3 class="group">${esc(g)}</h3>` : ''}<div class="fgroup">${[...list.filter((n) => pinned.has(n)), ...list.filter((n) => !pinned.has(n))].map(tile).join('')}</div>`).join('')
+    : `<div class="edhint">No images in ${esc(m.folder)}. Generate or add images there first.</div>`;
+}
+async function openEditor(name) {
+  const m = items.find((x) => x.name === name); if (!m) return;
+  ED.m = m; ED.t = { ...edDefault(), ...(m.transform ?? {}) }; ED.frame = ED.mask = ED.art = null; ED.artName = m.artName;
+  $('edName').textContent = m.name; $('edStatus').textContent = '';
+  edGallery(); edStep(true); $('hexEd').hidden = false;
+}
+async function edPickArt(n) {
+  const m = ED.m; if (n !== ED.artName) ED.t = edDefault(); // another image: start again at cover, centered
+  ED.artName = n; $('edStatus').textContent = 'Loading…'; edStep(false);
+  try {
+    ED.art = await loadImg(file(`${m.folder}/${n}`)); edDraw();
+    if (!ED.frame) {
+      const fr = await fetch(`/api/game/hex-frame?name=${encodeURIComponent(m.name)}`).then((r) => r.json());
+      if (fr.error) throw new Error(fr.error);
+      [ED.frame, ED.mask] = await Promise.all([loadImg(file(fr.frame)), loadImg(file(fr.mask))]);
+    }
+    $('edStatus').textContent = '';
+  } catch (err) { $('edStatus').textContent = err.message; }
+  edDraw();
+}
+$('edGrid').addEventListener('click', (e) => { const f = e.target.closest('[data-pick]'); if (f) edPickArt(f.dataset.pick); });
+$('edChange').onclick = () => { edGallery(); edStep(true); };
+$('edPickCancel').onclick = () => { $('hexEd').hidden = true; };
+const edPoint = (e) => { const r = edCanvas.getBoundingClientRect(), k = ED.w / r.width; return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k }; };
+edCanvas.addEventListener('pointerdown', (e) => { ED.drag = { ...edPoint(e), tx: ED.t.x, ty: ED.t.y }; edCanvas.setPointerCapture(e.pointerId); edCanvas.classList.add('drag'); });
+edCanvas.addEventListener('pointermove', (e) => { if (!ED.drag) return; const p = edPoint(e); ED.t.x = ED.drag.tx + (p.x - ED.drag.x); ED.t.y = ED.drag.ty + (p.y - ED.drag.y); edDraw(); });
+edCanvas.addEventListener('pointerup', () => { ED.drag = null; edCanvas.classList.remove('drag'); });
+edCanvas.addEventListener('wheel', (e) => {
+  e.preventDefault(); const p = edPoint(e), f = Math.exp(-e.deltaY * 0.0015), s0 = ED.t.scale, s1 = Math.min(4, Math.max(0.5, s0 * f)), r = s1 / s0;
+  // zoom about the cursor: the art point under the cursor stays put
+  ED.t.x = p.x - ED.cx - (p.x - ED.cx - ED.t.x) * r; ED.t.y = p.y - ED.cy - (p.y - ED.cy - ED.t.y) * r; ED.t.scale = s1; edDraw();
+}, { passive: false });
+edCanvas.addEventListener('dblclick', () => { ED.t = edDefault(); edDraw(); });
+$('edZoom').oninput = (e) => { ED.t.scale = Number(e.target.value); edDraw(); };
+$('edFlip').onchange = (e) => { ED.t.flip = e.target.checked; edDraw(); };
+$('edReset').onclick = () => { ED.t = edDefault(); edDraw(); };
+$('edCancel').onclick = () => { $('hexEd').hidden = true; };
+addEventListener('keydown', (e) => {
+  if ($('hexEd').hidden) return;
+  if (e.key === 'Escape') return $('edCancel').click();
+  const d = e.shiftKey ? 10 : 1, k = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] }[e.key];
+  if (k && !$('edWrap').hidden) { e.preventDefault(); ED.t.x += k[0]; ED.t.y += k[1]; edDraw(); }
+});
+$('edSave').onclick = async () => {
+  const m = ED.m, btn = $('edSave'); btn.disabled = true; $('edStatus').textContent = 'Rendering…';
+  try {
+    await post('/api/exports/settings', { template: 'hex-spirit', key: m.name, values: { art: ED.artName, transform: ED.t } });
+    await renderBase(m.name); $('hexEd').hidden = true; $('status').textContent = `${m.name} rendered`; load();
+  } catch (err) { $('edStatus').textContent = err.message; }
+  btn.disabled = false;
+};
+async function renderBase(name) {
+  $('status').textContent = `Rendering ${name}…`;
+  const m = items.find((x) => x.name === name);
+  const r = await post(m?.source === 'figma' ? '/api/game/hex-generate' : '/api/game/hex-render', { name, force: true });
+  if (r.error) throw new Error(r.error);
+  for (const k of Object.keys(imgCache)) if (k.includes(encodeURIComponent(`references/hex_bases/${name}/`))) delete imgCache[k]; // the bases changed
+}
+$('grid').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-edit]'); if (ed) return openEditor(ed.dataset.edit);
+});
+$('renderAll').addEventListener('click', async () => {
+  // Several renders at once: a pool as wide as the server allows (cores and memory).
+  const btn = $('renderAll'); btn.disabled = true; let n = 0, done = 0; const shown = (m) => !folder || TEMPLATES[current].group(m) === folder, todo = items.filter((m) => m.art && shown(m)), total = todo.length, errors = []; // only the spirits in the open folder
+  const worker = async () => { let m; while ((m = todo.shift())) { try { await post(m.source === 'figma' ? '/api/game/hex-generate' : '/api/game/hex-render', { name: m.name, force: true }).then((r) => { if (r.error) throw new Error(r.error); }); n++; } catch (err) { errors.push(err.message); } done++; $('status').textContent = `Rendering… ${done} of ${total}`; } };
+  await Promise.all(Array.from({ length: TEMPLATES['hex-spirit'].parallel || 1 }, worker));
+  for (const k of Object.keys(imgCache)) if (k.includes('hex_bases')) delete imgCache[k];
+  $('status').textContent = `Rendered ${n}${errors.length ? ` · ${errors.length} failed: ${errors[0]}` : ''}`; btn.disabled = false; load();
+});
+$('grid').addEventListener('change', async (e) => {
+  const s = e.target.closest('select[data-art]'); if (!s) return;
+  await post('/api/exports/settings', { template: current, key: s.dataset.art, values: { art: s.value } });
+  load();
+});
+$('exportAll').addEventListener('click', async () => {
+  const t = TEMPLATES[current], btn = $('exportAll'); btn.disabled = true;
+  let n = 0;
+  for (const m of items) { try { await exportOne(t.key(m)); n++; $('status').textContent = `Exported ${n} of ${items.length}…`; } catch (err) { $('status').textContent = `${t.key(m)}: ${err.message}`; } }
+  $('status').textContent = `Exported ${n} of ${items.length} to ${t.folder}`; btn.disabled = false;
+});
+$('tpl').addEventListener('click', (e) => {
+  const f = e.target.closest('[data-folder]'); if (f) { folder = f.dataset.folder; paintTemplates(); fit(); $('grid').parentElement.scrollTop = 0; return; }
+  const b = e.target.closest('[data-tpl]'); if (!b) return;
+  if (b.dataset.tpl === current) { folder = ''; paintTemplates(); fit(); return; }
+  current = b.dataset.tpl; folder = ''; items = []; paintTemplates(); load();
+});
+Object.assign(window, { renderPng, exportOne }); paintTemplates(); load();
+</script>
+<div id="hexEd" hidden>
+  <div class="edpick" id="edPick">
+    <div class="bar"><h1 id="edPickTitle"></h1><span class="spacer"></span><button class="tb" id="edPickCancel">Cancel</button></div>
+    <div class="fgrid" id="edGrid"></div>
+  </div>
+  <div class="edwrap" id="edWrap" hidden>
+    <div class="edmain"><canvas id="edCanvas"></canvas></div>
+    <div class="edside">
+      <h2 id="edName"></h2>
+      <button class="tb" id="edChange">← Select another image</button>
+      <label>Zoom <span id="edZoomV"></span><input type="range" id="edZoom" min="0.5" max="4" step="0.01"></label>
+      <label><input type="checkbox" id="edFlip"> Flip horizontally</label>
+      <div class="edpos">Offset <span id="edPos"></span></div>
+      <div class="edhint">Drag to move · wheel to zoom at the cursor · arrow keys nudge (Shift = 10 px) · double-click resets</div>
+      <div class="edbtns"><button class="tb" id="edReset">Reset to cover</button><span class="spacer"></span><button class="tb" id="edCancel">Cancel</button><button class="tb primary" id="edSave">Render</button></div>
+      <div class="edstatus" id="edStatus"></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

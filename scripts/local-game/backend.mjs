@@ -3,7 +3,9 @@
 //
 //   GET  /rest/v1/<table>  (Accept-Profile: arc_spirits_assets)  rows from the local JSON
 //   any write to arc_spirits_assets, any storage upload           refused (403)
-//   /storage/v1/{object,render/image}/public/game_assets/<path>  local image files
+//   /storage/v1/{object,render/image}/public/game_assets/<path>  local image files (the raw art
+//                                                                folder, or without one the
+//                                                                web art in .art-cache/)
 //   /realtime/v1/websocket, POST /realtime/v1/api/broadcast      realtime.mjs
 //   GET  /__local/status                                         counts, missing images
 //   everything else (game schema, auth, rpc)                     the in-memory emulator
@@ -15,6 +17,7 @@ import http from 'node:http';
 import { createReadStream, readdirSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { buildImageIndex, createResizer, CONTENT_TYPES } from './images.mjs';
+import { buildWebArtIndex } from './webArt.mjs';
 import { loadLocalTables } from './localData.mjs';
 import { createRealtime } from './realtime.mjs';
 
@@ -72,7 +75,7 @@ function sendJson(res, status, body, extra = {}) {
  * Start the backend. Returns `{ server, port, summary, close }`.
  * `upstreamPort` is the emulator (server/pgrestEmu.ts --rpc).
  */
-export async function startBackend({ port = 0, upstreamPort, gameDir, artDir, repoRoot, spiritNamesFile, ttsDir, cacheDir, log }) {
+export async function startBackend({ port = 0, upstreamPort, gameDir, artDir, artCacheDir, repoRoot, spiritNamesFile, ttsDir, cacheDir, log }) {
 	// The data is re-read when a file in the game dir (the data editor saves there) or one of the
 	// art folders changes: at most one check per second, on the next request that needs the data.
 	// Signature: the mtime of each game JSON file, plus the mtime of each art folder (changes
@@ -91,7 +94,10 @@ export async function startBackend({ port = 0, upstreamPort, gameDir, artDir, re
 		} catch {
 			// no game dir: the signature stays the same until it appears
 		}
-		return [...files.sort().map((f) => `${f}@${mtime(join(gameDir, f))}`), ...ART_DIRS.map((rel) => `${rel}@${mtime(join(artDir, rel))}`)].join('|');
+		const art = artDir
+			? ART_DIRS.map((rel) => `${rel}@${mtime(join(artDir, rel))}`)
+			: [`web-art@${mtime(join(artCacheDir, 'current.json'))}`];
+		return [...files.sort().map((f) => `${f}@${mtime(join(gameDir, f))}`), ...art].join('|');
 	};
 	let tables, notes, images;
 	let loadedSignature = '';
@@ -99,7 +105,9 @@ export async function startBackend({ port = 0, upstreamPort, gameDir, artDir, re
 	function load() {
 		const sig = signature();
 		const next = loadLocalTables({ gameDir, repoRoot });
-		images = buildImageIndex({ tables: next.tables, extras: next.extras, artDir, spiritNamesFile, ttsDir });
+		images = artDir
+			? buildImageIndex({ tables: next.tables, extras: next.extras, artDir, spiritNamesFile, ttsDir })
+			: buildWebArtIndex({ tables: next.tables, cacheDir: artCacheDir });
 		({ tables, notes } = next);
 		if (loadedSignature) log(`data reloaded from ${gameDir} (hex_spirits ${tables.hex_spirits.length})`);
 		loadedSignature = sig;

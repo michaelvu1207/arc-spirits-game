@@ -1,0 +1,464 @@
+{
+  "monsters": {
+    "Ashwisp": {
+      "name": "Ash Puff",
+      "origin": "Fire"
+    },
+    "Bog Whisperer": {
+      "name": "Mud Slime",
+      "origin": "Water"
+    },
+    "Cinder Mite": {
+      "name": "Coal Beetle",
+      "origin": "Fire"
+    },
+    "Driftshade": {
+      "name": "Shade Blob",
+      "origin": "Twilight Fairies"
+    },
+    "Dusk Sprite": {
+      "name": "Dusk Sprite",
+      "origin": "Twilight Fairies"
+    },
+    "Ember Gnat": {
+      "name": "Fire Gnat",
+      "origin": "Fire"
+    },
+    "Fogkin": {
+      "name": "Fog Child",
+      "origin": "Mountain"
+    },
+    "Gloom Moth": {
+      "name": "Grey Moth",
+      "origin": "Twilight Fairies"
+    },
+    "Grave Nettle": {
+      "name": "Angry Nettle",
+      "origin": "Forest"
+    },
+    "Hollow Lantern": {
+      "name": "Lantern Ghost",
+      "origin": "Fire"
+    },
+    "Mire Imp": {
+      "name": "Swamp Imp",
+      "origin": "Water"
+    },
+    "Murk Tadpole": {
+      "name": "Fat Tadpole",
+      "origin": "Water"
+    },
+    "Pale Wanderer": {
+      "name": "Lost Ghost",
+      "origin": "Mountain"
+    },
+    "Rattlebone Pup": {
+      "name": "Bone Puppy",
+      "origin": "Forest"
+    },
+    "Rustveil Ghostling": {
+      "name": "Helmet Ghost",
+      "origin": "Mountain"
+    },
+    "Shiver Wisp": {
+      "name": "Frost Wisp",
+      "origin": "Mountain"
+    },
+    "Splinter Imp": {
+      "name": "Twig Imp",
+      "origin": "Forest"
+    },
+    "Thornling": {
+      "name": "Thorn Sprout",
+      "origin": "Forest"
+    },
+    "Tidepool Lurker": {
+      "name": "Shy Crab",
+      "origin": "Water"
+    },
+    "Weeping Candle": {
+      "name": "Sad Candle",
+      "origin": "Fire"
+    },
+    "Ashen Lynx": {
+      "name": "Ash Lynx",
+      "origin": "Fire"
+    },
+    "Blightfang": {
+      "name": "Rot Serpent",
+      "origin": "Forest"
+    },
+    "Bone Weaver": {
+      "name": "Bone Spider",
+      "origin": "Twilight Fairies"
+    },
+    "Bramble Wyrm": {
+      "name": "Thorn Wyrm",
+      "origin": "Forest"
+    },
+    "Carrion Crown": {
+      "name": "Vulture King",
+      "origin": "Fire"
+    },
+    "Chainmaw Brute": {
+      "name": "Chain Ogre",
+      "origin": "Fire"
+    },
+    "Dread Mantis": {
+      "name": "Mantis Reaper",
+      "origin": "Twilight Fairies"
+    },
+    "Ember Maw": {
+      "name": "Lava Maw",
+      "origin": "Fire"
+    },
+    "Gravemoss Golem": {
+      "name": "Tomb Golem",
+      "origin": "Mountain"
+    },
+    "Gutter Hydra": {
+      "name": "Sewer Hydra",
+      "origin": "Water"
+    },
+    "Hollow Stag": {
+      "name": "Ghost Stag",
+      "origin": "Forest"
+    },
+    "Howling Shroud": {
+      "name": "Screaming Shroud",
+      "origin": "Mountain"
+    },
+    "Ironjaw Hound": {
+      "name": "Iron Hound",
+      "origin": "Mountain"
+    },
+    "Marrow Wolf": {
+      "name": "Starved Wolf",
+      "origin": "Mountain"
+    },
+    "Mirror Stalker": {
+      "name": "Mirror Demon",
+      "origin": "Twilight Fairies"
+    },
+    "Riftjackal": {
+      "name": "Rift Jackal",
+      "origin": "Twilight Fairies"
+    },
+    "Stormgut Toad": {
+      "name": "Storm Toad",
+      "origin": "Water"
+    },
+    "Sunken Bellwraith": {
+      "name": "Bell Wraith",
+      "origin": "Water"
+    },
+    "Tidecaller Eel": {
+      "name": "Eel Queen",
+      "origin": "Water"
+    },
+    "Venom Lotus": {
+      "name": "Poison Lotus",
+      "origin": "Forest"
+    },
+    "Abyss Leviathan": {
+      "name": "Morvath the Abyss Serpent",
+      "origin": null
+    },
+    "Ashfall Tyrant": {
+      "name": "Kargoth the Eclipsed Tyrant",
+      "origin": null
+    },
+    "Cinder Colossus": {
+      "name": "Volgrim the Fallen Sun",
+      "origin": null
+    },
+    "Eclipse Wyrm": {
+      "name": "Solnyx the Eclipse Dragon",
+      "origin": null
+    },
+    "Gloamheart Dragon": {
+      "name": "Vyrax the Bleeding Star",
+      "origin": null
+    },
+    "Grief Titan": {
+      "name": "Oron the Weeping Moon",
+      "origin": null
+    },
+    "Maw of the Deep Rift": {
+      "name": "The Hungering Rift",
+      "origin": null
+    },
+    "Nightmare Loom": {
+      "name": "Sethra the Fate Weaver",
+      "origin": null
+    },
+    "Obsidian Hydra": {
+      "name": "Nyxara the Nine Moons",
+      "origin": null
+    },
+    "Pale Monarch": {
+      "name": "Selvane the Pale Moon King",
+      "origin": null
+    },
+    "Plague Choir": {
+      "name": "The Silent Choir",
+      "origin": null
+    },
+    "Rootrot Ancient": {
+      "name": "Eldergrim the Broken Oracle",
+      "origin": null
+    },
+    "Ruin Phoenix": {
+      "name": "Pyrrhos the Black Sun Phoenix",
+      "origin": null
+    },
+    "Starless Seraph": {
+      "name": "Zerathiel the Fallen Seraph",
+      "origin": null
+    },
+    "Storm-Eater": {
+      "name": "Tempestus the Star Eater",
+      "origin": null
+    },
+    "The Drowned Bell": {
+      "name": "The Bell of the Void",
+      "origin": null
+    },
+    "The Hollow Regent": {
+      "name": "Malric the Hollow Saint",
+      "origin": null
+    },
+    "Thousand-Eye Warden": {
+      "name": "Argoth the All-Seeing",
+      "origin": null
+    },
+    "Void Shepherd": {
+      "name": "Charos the Soul Shepherd",
+      "origin": null
+    },
+    "World Gnawer": {
+      "name": "Gorm the Moon Eater",
+      "origin": null
+    },
+    "Soot Chick": {
+      "name": "Soot Chick",
+      "origin": "Fire"
+    },
+    "Puddle Frog": {
+      "name": "Puddle Frog",
+      "origin": "Water"
+    },
+    "Acorn Imp": {
+      "name": "Acorn Imp",
+      "origin": "Forest"
+    },
+    "Pebble Pup": {
+      "name": "Pebble Pup",
+      "origin": "Mountain"
+    },
+    "Candle Slug": {
+      "name": "Candle Slug",
+      "origin": "Fire"
+    },
+    "Kelp Wisp": {
+      "name": "Kelp Wisp",
+      "origin": "Water"
+    },
+    "Moss Mite": {
+      "name": "Moss Mite",
+      "origin": "Forest"
+    },
+    "Rust Bat": {
+      "name": "Rust Bat",
+      "origin": "Mountain"
+    },
+    "Spark Rat": {
+      "name": "Spark Rat",
+      "origin": "Fire"
+    },
+    "Shell Snapper": {
+      "name": "Shell Snapper",
+      "origin": "Water"
+    },
+    "Burr Hog": {
+      "name": "Burr Hog",
+      "origin": "Forest"
+    },
+    "Tin Mole": {
+      "name": "Tin Mole",
+      "origin": "Mountain"
+    },
+    "Charcoal Snail": {
+      "name": "Charcoal Snail",
+      "origin": "Fire"
+    },
+    "Drip Jelly": {
+      "name": "Drip Jelly",
+      "origin": "Water"
+    },
+    "Sap Beetle": {
+      "name": "Sap Beetle",
+      "origin": "Forest"
+    },
+    "Cinder Boar": {
+      "name": "Cinder Boar",
+      "origin": "Fire"
+    },
+    "Tide Crab": {
+      "name": "Tide Crab",
+      "origin": "Water"
+    },
+    "Thorn Spider": {
+      "name": "Thorn Spider",
+      "origin": "Forest"
+    },
+    "Iron Ram": {
+      "name": "Iron Ram",
+      "origin": "Mountain"
+    },
+    "Ash Vulture": {
+      "name": "Ash Vulture",
+      "origin": "Fire"
+    },
+    "Reef Shark": {
+      "name": "Reef Shark",
+      "origin": "Water"
+    },
+    "Bark Bear": {
+      "name": "Bark Bear",
+      "origin": "Forest"
+    },
+    "Crystal Scorpion": {
+      "name": "Crystal Scorpion",
+      "origin": "Mountain"
+    },
+    "Magma Toad": {
+      "name": "Magma Toad",
+      "origin": "Fire"
+    },
+    "Drowned Knight": {
+      "name": "Drowned Knight",
+      "origin": "Water"
+    },
+    "Rot Troll": {
+      "name": "Rot Troll",
+      "origin": "Forest"
+    },
+    "Cave Troll": {
+      "name": "Cave Troll",
+      "origin": "Mountain"
+    },
+    "Ember Serpent": {
+      "name": "Ember Serpent",
+      "origin": "Fire"
+    },
+    "Siren Eel": {
+      "name": "Siren Eel",
+      "origin": "Water"
+    },
+    "Wasp Queen": {
+      "name": "Wasp Queen",
+      "origin": "Forest"
+    },
+    "Scree Wyvern": {
+      "name": "Scree Wyvern",
+      "origin": "Mountain"
+    },
+    "Furnace Knight": {
+      "name": "Furnace Knight",
+      "origin": "Fire"
+    },
+    "Angler Horror": {
+      "name": "Angler Horror",
+      "origin": "Water"
+    },
+    "Hollow Treant": {
+      "name": "Hollow Treant",
+      "origin": "Forest"
+    },
+    "Quartz Golem": {
+      "name": "Quartz Golem",
+      "origin": "Mountain"
+    },
+    "Umbra the Last Eclipse": {
+      "name": "Umbra the Last Eclipse",
+      "origin": null
+    },
+    "The Grinning Nova": {
+      "name": "The Grinning Nova",
+      "origin": null
+    },
+    "Vael the Moonless Tide": {
+      "name": "Vael the Moonless Tide",
+      "origin": null
+    },
+    "Nihilor the Star Drinker": {
+      "name": "Nihilor the Star Drinker",
+      "origin": null
+    },
+    "Orthan the Iron Nebula": {
+      "name": "Orthan the Iron Nebula",
+      "origin": null
+    },
+    "Lethe the Drowned Memory": {
+      "name": "Lethe the Drowned Memory",
+      "origin": null
+    },
+    "Caeles the Shattered Sky": {
+      "name": "Caeles the Shattered Sky",
+      "origin": null
+    },
+    "Xul the Bone Constellation": {
+      "name": "Xul the Bone Constellation",
+      "origin": null
+    },
+    "The Weeping Meteor": {
+      "name": "The Weeping Meteor",
+      "origin": null
+    },
+    "Noctis the Hollow Moon": {
+      "name": "Noctis the Hollow Moon",
+      "origin": null
+    },
+    "Seraphel the Burnt Dawn": {
+      "name": "Seraphel the Burnt Dawn",
+      "origin": null
+    },
+    "Korrath the Chained Comet": {
+      "name": "Korrath the Chained Comet",
+      "origin": null
+    },
+    "Maw of Ten Thousand Teeth": {
+      "name": "Maw of Ten Thousand Teeth",
+      "origin": null
+    },
+    "Ashkar, Herald of the Dead Sun": {
+      "name": "Ashkar, Herald of the Dead Sun",
+      "origin": null
+    },
+    "Veyra the Starved Nebula": {
+      "name": "Veyra the Starved Nebula",
+      "origin": null
+    },
+    "Gravemind Colossus": {
+      "name": "Gravemind Colossus",
+      "origin": null
+    },
+    "The Thousand-Hand Oracle": {
+      "name": "The Thousand-Hand Oracle",
+      "origin": null
+    },
+    "Omen the Last Light": {
+      "name": "Omen the Last Light",
+      "origin": null
+    },
+    "The Silent Zenith": {
+      "name": "The Silent Zenith",
+      "origin": null
+    },
+    "Thal, the End of Tides": {
+      "name": "Thal, the End of Tides",
+      "origin": null
+    }
+  }
+}

@@ -1,0 +1,212 @@
+[
+ {
+  "id": "fd8557f7-1cdc-4dde-9941-42b171992432",
+  "name": "Bubblepop",
+  "origin_id": "fa7db249-d99d-4c1d-a37d-9027c9f5a31e",
+  "created_at": "2025-10-29T17:22:18.583898+00:00",
+  "updated_at": "2026-04-24T05:15:02.769886+00:00",
+  "image_mat_path": "guardians/fd8557f7-1cdc-4dde-9941-42b171992432/guardian_bubblepop_image_mat.png",
+  "chibi_image_path": "guardians/fd8557f7-1cdc-4dde-9941-42b171992432/guardian_cypher_chibi.png",
+  "icon_image_path": "guardians/fd8557f7-1cdc-4dde-9941-42b171992432/guardian_cypher_icon.png",
+  "name_translations": {
+   "de": "Blubberplopp",
+   "es": "Burbupop",
+   "fr": "Bullepop",
+   "it": "Bollapop",
+   "ja": "バブルポップ",
+   "ko": "버블팝",
+   "pl": "Bąbelpuk",
+   "zh-Hans": "泡泡啵",
+   "zh-Hant": "泡泡啵"
+  }
+ },
+ {
+  "id": "20112149-c8df-48b6-b508-5e9c39e87fc2",
+  "name": "Embers",
+  "origin_id": "178449e9-cc6b-45ab-8522-5183fe1d9307",
+  "created_at": "2025-10-29T17:22:01.470762+00:00",
+  "updated_at": "2026-04-24T05:14:20.839944+00:00",
+  "image_mat_path": "guardians/20112149-c8df-48b6-b508-5e9c39e87fc2/guardian_embers_image_mat.png",
+  "chibi_image_path": "guardians/20112149-c8df-48b6-b508-5e9c39e87fc2/guardian_embers_chibi.png",
+  "icon_image_path": "guardians/20112149-c8df-48b6-b508-5e9c39e87fc2/guardian_embers_icon.png",
+  "name_translations": {
+   "de": "Glut",
+   "es": "Brasas",
+   "fr": "Braises",
+   "it": "Braci",
+   "ja": "残り火",
+   "ko": "불씨",
+   "pl": "Żar",
+   "zh-Hans": "余烬",
+   "zh-Hant": "餘燼"
+  }
+ },
+ {
+  "id": "20ec3d5d-3fd8-4b5b-b75b-127acb325fff",
+  "name": "Lumina",
+  "origin_id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e",
+  "created_at": "2025-10-29T17:22:43.785262+00:00",
+  "updated_at": "2026-08-18T01:27:20.606916+00:00",
+  "image_mat_path": "guardians/20ec3d5d-3fd8-4b5b-b75b-127acb325fff/guardian_lumina_image_mat.png",
+  "chibi_image_path": "guardians/20ec3d5d-3fd8-4b5b-b75b-127acb325fff/guardian_lumina_chibi.png",
+  "icon_image_path": "guardians/20ec3d5d-3fd8-4b5b-b75b-127acb325fff/guardian_lumina_icon.png",
+  "name_translations": {
+   "de": "Lumina",
+   "es": "Lumina",
+   "fr": "Lumina",
+   "it": "Lumina",
+   "ja": "ルミナ",
+   "ko": "루미나",
+   "pl": "Lumina",
+   "zh-Hans": "露米娜",
+   "zh-Hant": "露米娜"
+  }
+ },
+ {
+  "id": "73ab5a4a-b988-4d3e-b849-611f4767f1ae",
+  "name": "Taron",
+  "origin_id": "294cee31-a7ac-4292-9b61-d4293c05c146",
+  "created_at": "2025-12-02T18:38:49.105278+00:00",
+  "updated_at": "2026-01-07T08:35:47.109149+00:00",
+  "image_mat_path": null,
+  "chibi_image_path": null,
+  "icon_image_path": null,
+  "name_translations": {
+   "de": "Taron",
+   "es": "Tarón",
+   "fr": "Taron",
+   "it": "Taron",
+   "ja": "タロン",
+   "ko": "타론",
+   "pl": "Taron",
+   "zh-Hans": "塔隆",
+   "zh-Hant": "塔隆"
+  }
+ },
+ {
+  "id": "8ce23995-bb31-4be8-8fd6-fda19d1f430a",
+  "name": "Pixia",
+  "origin_id": "b4a04571-548d-4572-a6a8-0b85c39316d3",
+  "created_at": "2025-10-29T17:21:54.864079+00:00",
+  "updated_at": "2026-04-24T05:14:40.781732+00:00",
+  "image_mat_path": "guardians/8ce23995-bb31-4be8-8fd6-fda19d1f430a/guardian_pixia_image_mat.png",
+  "chibi_image_path": "guardians/8ce23995-bb31-4be8-8fd6-fda19d1f430a/guardian_pixia_chibi.png",
+  "icon_image_path": "guardians/8ce23995-bb31-4be8-8fd6-fda19d1f430a/guardian_pixia_icon.png",
+  "name_translations": {
+   "de": "Pixia",
+   "es": "Pixia",
+   "fr": "Pixia",
+   "it": "Pixia",
+   "ja": "ピクシア",
+   "ko": "픽시아",
+   "pl": "Pixia",
+   "zh-Hans": "皮克西亚",
+   "zh-Hant": "皮克西亞"
+  }
+ },
+ {
+  "id": "36ed021f-cad0-4442-8879-054e095c84b3",
+  "name": "Fjorn",
+  "origin_id": "82816408-d2e1-4e2c-9954-d9aea0bad324",
+  "created_at": "2025-12-02T18:39:37.027306+00:00",
+  "updated_at": "2026-01-07T08:35:47.249247+00:00",
+  "image_mat_path": null,
+  "chibi_image_path": null,
+  "icon_image_path": null,
+  "name_translations": {
+   "de": "Fjorn",
+   "es": "Fjorn",
+   "fr": "Fjorn",
+   "it": "Fjorn",
+   "ja": "フィヨルン",
+   "ko": "피요른",
+   "pl": "Fjorn",
+   "zh-Hans": "菲约恩",
+   "zh-Hant": "菲奧恩"
+  }
+ },
+ {
+  "id": "c17484dc-741b-4e9b-9ece-6581c2095fe1",
+  "name": "Prox",
+  "origin_id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e",
+  "created_at": "2025-10-29T17:21:47.855679+00:00",
+  "updated_at": "2026-08-18T01:27:20.606916+00:00",
+  "image_mat_path": "guardians/c17484dc-741b-4e9b-9ece-6581c2095fe1/guardian_prox_image_mat.png",
+  "chibi_image_path": "guardians/c17484dc-741b-4e9b-9ece-6581c2095fe1/guardian_prox_chibi.png",
+  "icon_image_path": "guardians/c17484dc-741b-4e9b-9ece-6581c2095fe1/guardian_prox_icon.png",
+  "name_translations": {
+   "de": "Prox",
+   "es": "Prox",
+   "fr": "Prox",
+   "it": "Prox",
+   "ja": "プロックス",
+   "ko": "프록스",
+   "pl": "Proks",
+   "zh-Hans": "普罗克斯",
+   "zh-Hant": "普羅克斯"
+  }
+ },
+ {
+  "id": "2d8d81ec-5b43-4b2b-b8b4-a69e7fca8496",
+  "name": "Void Avatar",
+  "origin_id": "36bd6a28-d5ae-4598-97ea-cec6a14b9c5e",
+  "created_at": "2025-10-31T00:27:36.562502+00:00",
+  "updated_at": "2026-08-18T01:27:20.606916+00:00",
+  "image_mat_path": null,
+  "chibi_image_path": null,
+  "icon_image_path": null,
+  "name_translations": {
+   "de": "Avatar der Leere",
+   "es": "Avatar del Vacío",
+   "fr": "Avatar du Vide",
+   "it": "Avatar del Vuoto",
+   "ja": "虚無のアバター",
+   "ko": "공허의 아바타",
+   "pl": "Awatar Pustki",
+   "zh-Hans": "虚空化身",
+   "zh-Hant": "虛空化身"
+  }
+ },
+ {
+  "id": "9cb13598-1b9f-47a6-b86c-c687665b3eb5",
+  "name": "Human Avatar",
+  "origin_id": "48e4acb4-ee9e-42ea-ba82-70165770c368",
+  "created_at": "2025-10-29T17:31:58.630916+00:00",
+  "updated_at": "2026-01-07T08:35:46.487813+00:00",
+  "image_mat_path": null,
+  "chibi_image_path": null,
+  "icon_image_path": null,
+  "name_translations": {
+   "de": "Menschlicher Avatar",
+   "es": "Avatar humano",
+   "fr": "Avatar humain",
+   "it": "Avatar umano",
+   "ja": "人間のアバター",
+   "ko": "인간 아바타",
+   "pl": "Ludzki Awatar",
+   "zh-Hans": "人类化身",
+   "zh-Hant": "人類化身"
+  }
+ },
+ {
+  "id": "3267074b-4f61-457c-b406-12ccf43d068a",
+  "name": "Myrtle",
+  "origin_id": "ad555f03-9b89-4a71-a47c-464fd67d2c05",
+  "created_at": "2025-10-29T17:21:41.232379+00:00",
+  "updated_at": "2026-04-24T05:14:55.66921+00:00",
+  "image_mat_path": "guardians/3267074b-4f61-457c-b406-12ccf43d068a/guardian_myrtle_image_mat.png",
+  "chibi_image_path": "guardians/3267074b-4f61-457c-b406-12ccf43d068a/guardian_myrtle_chibi.png",
+  "icon_image_path": "guardians/3267074b-4f61-457c-b406-12ccf43d068a/guardian_myrtle_icon.png",
+  "name_translations": {
+   "de": "Myrtle",
+   "es": "Myrtle",
+   "fr": "Myrtle",
+   "it": "Myrtle",
+   "ja": "マートル",
+   "ko": "머틀",
+   "pl": "Myrtle",
+   "zh-Hans": "默特尔",
+   "zh-Hant": "默特爾"
+  }
+ }
+]

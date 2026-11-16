@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Data · Niji Batch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #0a0b0f; --panel: #12141a; --card: #171a21; --line: #23262f; --line-2: #30343f; --text: #e6e7eb; --dim: #9a9eab; --faint: #646978; --seg: #20232b; --field: #0d0e13; --accent: #f0532d; --ok: #4ecb8f; --bad: #f0616d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Figtree", -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: 0; padding: 0; }
+  [hidden] { display: none !important; }
+  .split { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); }
+  main.games > :not(#gamesFrame) { display: none !important; } #gamesFrame { display: none; width: 100%; height: 100vh; border: 0; background: var(--bg); } main.games > #gamesFrame { display: block; }
+  .split:has(main.games) { grid-template-rows: minmax(0, 1fr); } .split:has(main.games) aside { overflow-y: auto; } #gamesFrame { height: 100%; }
+  @media (max-height: 840px) { aside .note { display: none; } }
+  aside header { padding: 14px 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+  aside header a { color: var(--dim); text-decoration: none; font-weight: 500; font-size: 13px; } aside header a:hover { color: var(--text); }
+  .tabs { padding: 8px; } .tabs button { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; color: var(--dim); } .tabs button.on { background: var(--seg); color: var(--text); }
+  .chead img { width: 112px !important; height: 112px !important; padding: 10px; background: #d9cfb8; border-radius: 8px !important; }
+  .chead .newicon { display: grid; justify-items: center; gap: 2px; padding-left: 8px; border-left: 1px solid var(--line); } .chead .newicon small { font-size: 10px; color: var(--accent); }
+  .tabs small { color: var(--faint); margin-left: 6px; }
+  .tabs .sub { padding-left: 24px; font-size: 13px; }
+  main { display: flex; flex-direction: column; min-width: 0; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .bar h1 { margin: 0; font-size: 16px; font-weight: 600; } .spacer { flex: 1; } .status { color: var(--dim); font-size: 13px; }
+  .tb { padding: 7px 14px; border-radius: 8px; background: var(--seg); font-weight: 500; font-size: 13px; white-space: nowrap; } .tb.go { background: var(--accent); color: #180802; } .tb:disabled { opacity: .5; cursor: default; }
+  .scroll { overflow: auto; padding: 0 16px 24px; }
+  table { border-collapse: collapse; width: 100%; }
+  th { position: sticky; top: 0; background: var(--bg); text-align: left; font-weight: 500; color: var(--dim); font-size: 12px; padding: 10px 8px 6px; border-bottom: 1px solid var(--line); z-index: 1; }
+  td { padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.changed td:first-child { box-shadow: inset 3px 0 var(--accent); }
+  input, select, textarea { background: var(--field); border: 1px solid var(--line-2); border-radius: 6px; padding: 4px 7px; font-size: 13px; }
+  input.num { width: 58px; text-align: center; } input.name { width: 100%; min-width: 180px; } select { padding: 4px 4px; }
+  textarea { width: 100%; min-width: 300px; min-height: 52px; resize: vertical; font-size: 12.5px; line-height: 1.4; }
+  .track { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 260px; }
+  .tok { position: relative; width: 36px; height: 36px; border-radius: 8px; background: var(--seg); display: grid; place-items: center; border: 1px solid var(--line-2); }
+  .tok img { width: 28px; height: 28px; object-fit: contain; }
+  .tok button { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 99px; background: var(--bad); color: #fff; font-size: 10px; line-height: 1; display: none; }
+  .tok:hover button { display: grid; place-items: center; }
+  .add { width: 36px; height: 36px; border-radius: 8px; border: 1px dashed var(--line-2); color: var(--dim); font-size: 18px; display: grid; place-items: center; }
+  .pick { position: fixed; z-index: 10; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; padding: 8px; display: grid; grid-template-columns: repeat(8, 40px); gap: 4px; max-height: 320px; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+  .pick button { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; } .pick button:hover { background: var(--seg); } .pick img { width: 30px; height: 30px; object-fit: contain; }
+  .del { color: var(--faint); font-size: 12px; } .del:hover { color: var(--bad); }
+  .effects { display: grid; gap: 4px; min-width: 360px; } .effect { display: flex; gap: 6px; align-items: flex-start; } .effect input { width: 50px; text-align: center; } .effect textarea { min-height: 34px; min-width: 0; flex: 1; }
+  .effect .del { padding-top: 6px; }
+  .note { color: var(--faint); font-size: 12px; padding: 12px 0; }
+  .summary { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 10px 0 2px; font-size: 12.5px; color: var(--dim); } .summary b { color: var(--text); font-weight: 600; }
+  .pw { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; } .pw small { font-weight: 500; color: var(--dim); margin-left: 5px; }
+  .jackpot { color: #f5c542; } .strong { color: var(--ok); } .average { color: var(--dim); } .weak { color: #e9a06b; } .trap { color: var(--bad); }
+  tr.inset td { background: rgba(240, 83, 45, .06); } tr.spacer td { height: 26px; border-bottom: 0; background: none; } .setname { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: currentColor; margin-right: 5px; }
+  td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--dim); } td.v.val { color: var(--text); }
+  .curve { display: flex; gap: 14px; align-items: center; padding: 12px 0; color: var(--dim); font-size: 13px; } .curve input { width: 64px; text-align: center; }
+  .tname { display: flex; align-items: center; gap: 8px; } .tname .tok { width: 30px; height: 30px; } .tname .tok img { width: 24px; height: 24px; }
+  /* classes: cards like the Svelte data editor */
+  .divider { display: flex; align-items: center; gap: 12px; margin: 14px 0 10px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #d4a843; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: rgba(168,130,50,.3); }
+  .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; padding-top: 12px; }
+  .ccard { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; border: 1px solid rgba(168,130,50,.3); border-left: 4px solid var(--cc, rgba(168,130,50,.55));
+    background: linear-gradient(135deg, rgba(48,32,20,.82), rgba(62,42,26,.78) 50%, rgba(40,28,18,.82)); box-shadow: inset 0 0 12px rgba(90,62,28,.2), 0 1px 3px rgba(0,0,0,.3); color: #e8d5a0; }
+  .ccard.human { border-color: rgba(245,245,245,.34); border-left-color: rgba(245,245,245,.72); background: linear-gradient(135deg, rgba(30,30,34,.9), rgba(44,44,50,.85)); color: #e4e4e7; }
+  .ccard.special { border-left-width: 1px; border-color: color-mix(in srgb, var(--cc, #d4a843) 55%, transparent); background: linear-gradient(135deg, rgba(28,18,34,.9), rgba(40,26,46,.85)); }
+  .ccard.special::before, .ccard.special::after { content: ""; position: absolute; width: 10px; height: 10px; border: 1px solid var(--cc, #d4a843); }
+  .ccard.special::before { top: 4px; left: 4px; border-right: 0; border-bottom: 0; } .ccard.special::after { bottom: 4px; right: 4px; border-left: 0; border-top: 0; }
+  .ccard.changed { outline: 1px solid var(--accent); }
+  .chead { display: flex; align-items: center; gap: 8px; }
+  .chead img, .chead .emoji { width: 32px; height: 32px; border-radius: 4px; object-fit: contain; display: grid; place-items: center; font-size: 20px; }
+  .chead h2 { margin: 0; font-size: 15px; font-weight: 600; color: #f0dca0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .ccard.human h2 { color: #f8fafc; }
+  .chead small { display: block; color: #c4a96a; font-size: 11px; }
+  .badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: rgba(202,168,62,.25); color: #d4a843; letter-spacing: .04em; }
+  .badge.human { background: rgba(245,245,245,.14); border: 1px solid rgba(245,245,245,.28); color: #f8fafc; }
+  .cdesc { margin: 0; font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; } .cdesc.empty { color: #a08968; font-style: italic; }
+  .ctags { display: flex; gap: 6px; flex-wrap: wrap; } .ctags span { font-size: 11px; color: #e8d5a0; opacity: .8; }
+  .bps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .bps li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 6px; background: rgba(25,16,10,.55); border: 1px solid rgba(168,130,50,.25); font-size: 12.5px; }
+  .bps .cnt { color: #d4a843; font-weight: 600; white-space: nowrap; } .bps .cnt.bronze { color: #fbbf24; } .bps .cnt.silver { color: #cbd5f5; } .bps .cnt.gold { color: #facc15; }
+  .bps .fx { display: grid; gap: 2px; color: #f0dca0; }
+  .cfoot { border-top: 1px solid rgba(168,130,50,.3); padding-top: 6px; font-size: 11.5px; color: #d4a843; }
+  .cact { position: absolute; top: 8px; right: 8px; display: flex; gap: 8px; opacity: 0; } .ccard:hover .cact, .ccard.edit .cact { opacity: 1; } .cact button { font-size: 12px; color: #c4a96a; } .cact button:hover { color: #fff; }
+  .ccard input, .ccard textarea, .ccard select { background: rgba(0,0,0,.35); border-color: rgba(168,130,50,.35); color: inherit; }
+  .ccard .fx textarea { min-width: 0; min-height: 30px; width: 100%; } .ccard .bps li input { width: 44px; text-align: center; padding: 2px 4px; }
+  .ccard h2 input { font-size: 15px; font-weight: 600; width: 100%; } .ccard .cdesc textarea { width: 100%; min-width: 0; }
+</style>
+</head>
+<body>
+<div class="split">
+  <aside>
+    <header><a href="/">← Folders</a><span>Data</span></header>
+    <div class="tabs" id="tabs"></div>
+    <div class="tabs"><a href="/team.html" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Team builder</a><a href="/team.html?sim" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Team simulator</a><a data-game="/play" target="_blank" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Play the game ↗</a><button id="gamesTab">Games</button></div>
+    <script>{const l=/^(127\.0\.0\.1|localhost)$/.test(location.hostname);const b=(l?'http://127.0.0.1':'https://'+location.hostname)+':5317';document.querySelectorAll('a[data-game]').forEach(a=>a.href=b+a.dataset.game);
+      // Games: the game app's explorer (trends, games, leaderboard, players) fills the content area.
+      const tab=document.getElementById('gamesTab');let frame=null;
+      const show=(on)=>{const main=document.querySelector('main');if(on&&!frame){frame=document.createElement('iframe');frame.id='gamesFrame';frame.title='Games';frame.src=b+'/explorer';main.append(frame)}
+        main.classList.toggle('games',on);tab.classList.toggle('on',on);if(on)for(const x of document.getElementById('tabs').children)x.classList.remove('on');
+        history.replaceState(null,'',on?'#games':location.pathname+location.search)};
+      tab.addEventListener('click',()=>show(true));
+      document.getElementById('tabs').addEventListener('click',(e)=>{if(e.target.closest('[data-t]')&&frame)show(false)},true);
+      addEventListener('DOMContentLoaded',()=>{if(location.hash==='#games')show(true)})}</script>
+    <div class="note" style="padding:12px 16px">Local copy of the game data (<code>game/*.json</code>). Save writes the file; the old one stays as <code>.bak.json</code>. Classes 1–3 are the old difficulty tiers; Difficulty 1–15 is the fight cost.</div>
+  </aside>
+  <main>
+    <div class="bar"><h1 id="title">Monsters</h1><span class="status" id="status"></span><span class="spacer"></span><button class="tb" id="addRow">Add row</button><button class="tb go" id="save" disabled>Save</button></div>
+    <div class="scroll" id="scroll"></div>
+  </main>
+</div>
+<div class="pick" id="pick" hidden></div>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const file = (p) => '/ws/file?path=' + encodeURIComponent(p);
+const get = (p) => fetch(p).then((r) => r.json());
+const post = (p, b) => fetch(p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
+const uuid = () => crypto.randomUUID();
+
+let table = 'monsters_v2', stage = 0, rows = [], saved = '', pool = [], poolById = {}, poolIcon = {};
+const TITLE = { monsters_v2: 'Monsters', classes: 'Classes', origins: 'Origins', runes: 'Runes', relics: 'Relics', augments: 'Augments', reward_sets: 'Sets', rewards: 'Rewards' };
+let RV = { curve: { a: 1, b: 0.4 }, bands: { jackpot: .5, strong: .2, weak: -.2, trap: -.5 }, values: {}, used: {} };
+const BANDS = ['jackpot', 'strong', 'average', 'weak', 'trap'];
+const THEMES = ['Fire', 'Forest', 'Mountain', 'Water', 'Arcane'];
+const expected = (d) => RV.curve.a + RV.curve.b * (Number(d) || 0);
+const trackValue = (track) => (track ?? []).reduce((a, id) => a + (RV.values[id] ?? 0), 0);
+const bandOf = (p) => p >= RV.bands.jackpot ? 'jackpot' : p >= RV.bands.strong ? 'strong' : p <= RV.bands.trap ? 'trap' : p <= RV.bands.weak ? 'weak' : 'average';
+const pct = (p) => (p >= 0 ? '+' : '−') + Math.round(Math.abs(p) * 100) + '%';
+const fmt = (v) => (Math.round(v * 100) / 100).toString();
+const titleText = () => (TITLE[table] ?? table) + (stage ? table === 'classes' ? ` · ${['', 'Generic', 'Special'][stage]}` : ` · Class ${stage}` : '');
+let ICONS = [], SETS = [];
+// Fixed backgrounds (Michael, 2026-11-07): runes = the teal shape, relics = the golden shape, augments = the white hexagon. Never per row.
+const BG = { runes: 'references/icons/rune_backgrounds/rune.png', relics: 'references/icons/rune_backgrounds/relic.png', augments: 'references/icons/rune_backgrounds/augment.png' };
+let curveDirty = false;
+const dirty = () => curveDirty || JSON.stringify(rows) !== saved;
+const mark = () => { $('save').disabled = !dirty(); $('status').textContent = dirty() ? 'Unsaved changes' : ''; };
+
+async function init() {
+  pool = await get('/api/game/icons'); ICONS = (await get('/api/ws/list?path=' + encodeURIComponent('references/icons/classes'))).images ?? []; NEWICONS = (await get('/api/ws/list?path=' + encodeURIComponent('references/icons/classes_new'))).images ?? [];
+  for (const t of pool) { poolById[t.id] = t; poolIcon[t.id] = t.icon; }
+  SETS = await get('/api/game/table?name=reward_sets').catch(() => []);
+  const tabs = await get('/api/game/tables');
+  $('tabs').innerHTML = tabs.map((t) => `<button class="${t.name === table && !stage ? 'on' : ''}" data-t="${t.name}">${TITLE[t.name] ?? t.name}<small>${t.rows}</small></button>${t.name === 'monsters_v2' ? [1, 2, 3].map((d) => `<button class="sub" data-t="monsters_v2" data-stage="${d}">Class ${d}</button>`).join('') : ''}${t.name === 'classes' ? `<button class="sub" data-t="classes" data-stage="1">Generic</button><button class="sub" data-t="classes" data-stage="2">Special</button>` : ''}`).join('') + `<button data-t="rewards">Rewards<small>VP values</small></button>`;
+  load();
+}
+async function load() {
+  RV = await get('/api/game/rewards');
+  if (table === 'reward_sets') { const ms = await get('/api/game/table?name=monsters_v2'); MEMBERS = {}; for (const m of ms) if (m.set) (MEMBERS[m.set] ??= []).push(m.name); }
+  if (table === 'rewards') { rows = pool.filter((t) => RV.values[t.id] != null || RV.used[t.id]).map((t) => ({ id: t.id, name: t.name, icon: t.icon, value: RV.values[t.id] ?? 0 })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name)); }
+  else rows = await get('/api/game/table?name=' + table);
+  if (table === 'origins') { const [icons, runes, relics] = await Promise.all([get('/api/game/origin-icons'), get('/api/game/table?name=runes'), get('/api/game/table?name=relics')]); ORIGIN = { icons, runes, relics }; }
+  saved = JSON.stringify(rows);
+  $('title').textContent = TITLE[table] ?? table;
+  for (const b of $('tabs').children) b.classList.toggle('on', !document.querySelector('main.games') && b.dataset.t === table && Number(b.dataset.stage ?? 0) === stage);
+  $('title').textContent = titleText();
+  paint(); mark();
+}
+// ---------- monsters: name, difficulty, health, damage, reward track ----------
+const tok = (id, ri, ti) => `<span class="tok" title="${esc(poolById[id]?.name ?? id)} · ${fmt(RV.values[id] ?? 0)} VP">${poolIcon[id] ? `<img src="${file(poolIcon[id])}" alt="">` : '?'}<button data-rm="${ri}:${ti}" title="Remove">×</button></span>`;
+function paintMonsters() {
+  // Symmetric sets first (by class, difficulty, set, land), then an empty row, then the random section by difficulty.
+  const shown = [...rows.keys()].filter((i) => !stage || rows[i].stage === stage);
+  const byDiff = (a, b) => rows[a].stage - rows[b].stage || (rows[a].sub_difficulty ?? 0) - (rows[b].sub_difficulty ?? 0) || rows[a].order_num - rows[b].order_num;
+  const setIdx = shown.filter((i) => rows[i].set).sort((a, b) => rows[a].stage - rows[b].stage || (rows[a].sub_difficulty ?? 0) - (rows[b].sub_difficulty ?? 0) || rows[a].set.localeCompare(rows[b].set) || THEMES.indexOf(rows[a].theme) - THEMES.indexOf(rows[b].theme));
+  const randIdx = shown.filter((i) => !rows[i].set).sort(byDiff);
+  const order = [...setIdx, ...randIdx];
+  const stats = order.map((i) => { const m = rows[i], v = trackValue(m.reward_track), e = expected(m.sub_difficulty), p = e ? (v - e) / e : 0; return { v, e, p, band: bandOf(p) }; });
+  const SPACER = '<tr class="spacer"><td colspan="12"></td></tr>';
+  const count = Object.fromEntries(BANDS.map((b) => [b, stats.filter((x) => x.band === b).length]));
+  const mean = stats.length ? stats.reduce((a, x) => a + x.p, 0) / stats.length : 0;
+  const nSet = order.filter((i) => rows[i].set).length;
+  const summary = `<div class="summary"><span>${stage ? `Class ${stage}` : 'All classes'}: <b>${order.length}</b> monsters</span><span><b>${nSet}</b> in symmetric sets, <b>${order.length - nSet}</b> random</span>${BANDS.map((b) => `<span class="${b}"><span class="dot"></span>${count[b]} ${b}</span>`).join('')}<span>mean power <b>${pct(mean)}</b></span><span>expected = ${fmt(RV.curve.a)} + ${fmt(RV.curve.b)} × difficulty</span></div>`;
+  return summary + `<table><thead><tr><th>Name</th>${stage ? '' : '<th>Class</th>'}<th title="Fight cost inside the class: 1–3, 4–8, 9–15">Difficulty</th><th title="The land the monster comes from; runes and relics on its track match it">Theme</th><th title="Symmetric set: four monsters, one per land, same stats and track">Set</th><th>Health</th><th>Damage</th><th>Reward track</th><th title="Sum of the reward values (VP)">Reward value</th><th title="Expected value for this difficulty">Expected</th><th title="(value − expected) / expected">Power</th><th></th></tr></thead><tbody>${order.map((i, k) => { const m = rows[i], st = stats[k]; return `${k === setIdx.length && setIdx.length && randIdx.length ? SPACER : ''}<tr data-i="${i}" class="${m.set ? 'inset' : ''}">
+    <td><input class="name" data-f="name" value="${esc(m.name)}"></td>
+    ${stage ? '' : `<td><select data-f="stage" data-num>${[1, 2, 3].map((s) => `<option value="${s}" ${m.stage === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>`}
+    <td><input class="num" type="number" min="1" max="15" data-f="sub_difficulty" data-num value="${m.sub_difficulty ?? ''}"></td>
+    <td><select data-f="theme">${THEMES.map((t) => `<option ${m.theme === t ? 'selected' : ''}>${t}</option>`).join('')}${m.theme && !THEMES.includes(m.theme) ? `<option selected>${esc(m.theme)}</option>` : ''}</select></td>
+    <td><span class="setname">${esc(SETS.find((x) => x.id === m.set)?.name ?? '')}</span></td>
+    <td><input class="num" type="number" min="1" data-f="barrier" data-num value="${m.barrier}"></td>
+    <td><input class="num" type="number" min="0" data-f="damage" data-num value="${m.damage}"></td>
+    <td><div class="track">${(m.reward_track ?? []).map((id, ti) => tok(id, i, ti)).join('')}<button class="add" data-add="${i}" title="Add a reward">+</button></div></td>
+    <td class="v val">${fmt(st.v)}</td><td class="v">${fmt(st.e)}</td><td><span class="pw ${st.band}">${pct(st.p)}<small>${st.band}</small></span></td>
+    <td><button class="del" data-del="${i}">Remove</button></td></tr>`; }).join('')}</tbody></table>`;
+}
+// ---------- classes: name, type, summary, effects (count + text) ----------
+const isGeneric = (c) => c.class_type === 'normal';
+const typeOf = (c) => ['normal', 'human', 'special'].includes(c.class_type) ? c.class_type : c.is_special ? 'special' : 'normal';
+const editing = new Set(); // ids of the cards in edit mode
+const num = (v) => (typeof v === 'number' ? v : /^\d+$/.test(String(v).trim()) ? Number(v) : null);
+const byCount = (a, b) => { const x = num(a.count), y = num(b.count); return x != null && y != null ? x - y : x != null ? -1 : y != null ? 1 : 0; };
+// Icon file from the one-time import, by class name.
+let NEWICONS = []; // the icons before the change (references/icons/classes_old), shown next to the current one for review
+const classIcon = (c) => ICONS.find((f) => f === `${c.name} (icon).png` || f === `${c.name}.png`);
+function card(i) {
+  const c = rows[i], t = typeOf(c), g = t === 'normal', edit = editing.has(c.id), icon = classIcon(c);
+  const bps = [...(c.effect_schema ?? [])].map((bp, ei) => ({ bp, ei })).sort((a, b) => byCount(a.bp, b.bp));
+  const head = edit
+    ? `<h2><input data-f="name" value="${esc(c.name)}"></h2><small><select data-f="class_type">${['normal', 'special', 'human'].map((x) => `<option ${t === x ? 'selected' : ''}>${x}</option>`).join('')}</select> · position <input class="num" style="width:50px" type="number" data-f="position" data-num value="${c.position ?? 0}"></small>`
+    : `<h2>${esc(c.name)}${t !== 'normal' ? `<span class="badge ${t}">${t === 'human' ? 'Human' : 'Special'}</span>` : ''}</h2><small>Position ${c.position ?? '–'}</small>`;
+  const desc = g || edit ? (edit ? `<p class="cdesc"><textarea data-f="description" placeholder="Summary">${esc(c.description)}</textarea></p>` : `<p class="cdesc ${c.description ? '' : 'empty'}">${esc(c.description || 'No description provided.')}</p>`) : '';
+  const list = bps.length ? `<ul class="bps">${bps.map(({ bp, ei }) => `<li>${g ? `<span class="cnt ${bp.color ?? ''}">${edit ? `(<input data-ef="${i}:${ei}:count" value="${esc(bp.count)}">)` : `(${esc(bp.count)})`}</span>` : ''}<div class="fx">${edit ? `<textarea data-ef="${i}:${ei}:text">${esc((bp.effects ?? []).map((x) => x.description).join('\n'))}</textarea>` : (bp.effects ?? []).map((x) => `<span>${esc(x.description)}</span>`).join('')}</div>${edit && g ? `<button class="del" data-efdel="${i}:${ei}">×</button>` : ''}</li>`).join('')}</ul>` : `<p class="cdesc empty">No effects configured.</p>`;
+  const add = edit && (g || !bps.length) ? `<button class="del" data-efadd="${i}">${g ? '+ breakpoint' : '+ effect'}</button>` : '';
+  const tags = Array.isArray(c.tags) && c.tags.length ? `<div class="ctags">${c.tags.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : '';
+  const foot = edit ? `<div class="cfoot"><input data-f="footer" placeholder="Footer" style="width:100%" value="${esc(c.footer)}"></div>` : c.footer ? `<div class="cfoot">${esc(c.footer)}</div>` : '';
+  return `<article class="ccard ${t} ${edit ? 'edit' : ''}" data-i="${i}" style="--cc:${esc(c.color ?? '#d4a843')}">
+    <div class="cact"><button data-edit="${i}">${edit ? 'Done' : 'Edit'}</button><button data-del="${i}">Remove</button></div>
+    <div class="chead">${icon ? `<img src="${file('references/icons/classes/' + icon)}" alt="">` : `<span class="emoji">${esc(c.icon_emoji || '🛡️')}</span>`}${NEWICONS.includes(c.name + '.png') ? `<span class="newicon" title="Proposed new icon (not in use)"><img src="${file('references/icons/classes_new/' + c.name + '.png')}" alt=""><small>new</small></span>` : ''}<div>${head}</div></div>
+    ${desc}${tags}${list}${add}${foot}</article>`;
+}
+function paintClasses() {
+  const show = (c) => !stage || (stage === 1) === isGeneric(c);
+  const section = (label, type) => { const idx = [...rows.keys()].filter((i) => show(rows[i]) && typeOf(rows[i]) === type).sort((a, b) => (rows[a].position ?? 0) - (rows[b].position ?? 0)); return idx.length ? `${label ? `<div class="divider">${label}</div>` : ''}<section class="cgrid">${idx.map(card).join('')}</section>` : ''; };
+  return section('', 'normal') + section('Human Classes', 'human') + section('Special Classes', 'special') || '<div class="note">No classes here.</div>';
+}
+// ---------- rewards: one subjective value (VP) per token, and the expected-value curve ----------
+function paintRewards() {
+  const curve = `<div class="curve">Expected value = <input class="num" type="number" step="0.1" data-curve="a" value="${RV.curve.a}"> + <input class="num" type="number" step="0.05" data-curve="b" value="${RV.curve.b}"> × difficulty <span>· bands: jackpot ≥ +${RV.bands.jackpot * 100}%, strong ≥ +${RV.bands.strong * 100}%, weak ≤ ${RV.bands.weak * 100}%, trap ≤ ${RV.bands.trap * 100}%</span></div>`;
+  return curve + `<table><thead><tr><th>Reward</th><th>Value (VP)</th><th>On tracks</th><th></th></tr></thead><tbody>${rows.map((t, i) => `<tr data-i="${i}">
+    <td><div class="tname"><span class="tok">${t.icon ? `<img src="${file(t.icon)}" alt="">` : '?'}</span>${esc(t.name)}</div></td>
+    <td><input class="num" type="number" step="0.25" data-f="value" data-num value="${t.value}"></td>
+    <td class="v">${RV.used[t.id] ?? 0}</td><td><button class="del" data-del="${i}">Remove</button></td></tr>`).join('')}</tbody></table>
+    <div class="note">Tokens with no value count as 0 on a track. Use “Add row” to give a value to another token.</div>`;
+}
+// ---------- origins: each origin with its icons (origin icon, its rune, its relic) ----------
+let ORIGIN = { icons: {}, runes: [], relics: [] };
+function paintOrigins() {
+  const own = (list, o) => list.filter((r) => r.owner === o.name || r.owner === `${o.name} Region`);
+  const toks = (list) => list.length ? `<div class="track">${list.map((r) => `<span class="tok" title="${esc(r.name)}">${poolIcon[r.icon] ? `<img src="${file(poolIcon[r.icon])}" alt="">` : '?'}</span>`).join('')}</div>` : '<span class="v">–</span>';
+  return `<table><thead><tr><th>Icon</th><th>Name</th><th>Rune</th><th>Relic</th><th>Color</th><th>Description</th><th></th></tr></thead><tbody>${rows.map((o, i) => `<tr data-i="${i}">
+    <td><div class="track"><span class="tok">${ORIGIN.icons[o.name] ? `<img src="${file(ORIGIN.icons[o.name])}" alt="">` : esc(o.icon_emoji ?? '?')}</span></div></td>
+    <td><input class="name" data-f="name" value="${esc(o.name)}"></td>
+    <td>${toks(own(ORIGIN.runes, o))}</td><td>${toks(own(ORIGIN.relics, o))}</td>
+    <td><input type="color" data-f="color" value="${esc(o.color ?? '#888888')}"></td>
+    <td><textarea data-f="description" style="min-width:320px;min-height:34px">${esc(o.description)}</textarea></td>
+    <td><button class="del" data-del="${i}">Remove</button></td></tr>`).join('')}</tbody></table>
+    <div class="note">The rune and the relic come from the Runes and Relics tabs (by owner). The origin icon file is references/icons/origins/&lt;Name&gt; (icon).png.</div>`;
+}
+// ---------- runes: the local rune list (basic origin runes, relics, class augments, wildcards) ----------
+const KINDS = ['basic', 'wildcard', 'other'];
+// Augments (one per class) use the same table without the kind column; the owner is the class.
+function paintRunes() {
+  const aug = table === 'augments', kindCol = table === 'runes', rel = table === 'relics';
+  return `<table><thead><tr><th>Icon</th><th>Name</th>${kindCol ? '<th>Kind</th>' : ''}<th title="${aug ? 'The class the augment belongs to' : 'Origin it belongs to'}">${aug ? 'Class' : 'Origin'}</th><th>Value (VP)</th>${rel ? '<th>Ability</th>' : ''}<th>Description</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr data-i="${i}">
+    <td><div class="track"><span class="tok" title="${esc(poolById[r.icon]?.name ?? '')}">${poolIcon[r.icon] ? `<img src="${file(poolIcon[r.icon])}" alt="">` : '?'}</span></div></td>
+    <td><input class="name" data-f="name" value="${esc(r.name)}"></td>
+    ${!kindCol ? '' : `<td><select data-f="kind">${KINDS.map((k) => `<option ${r.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select></td>`}
+    <td><input data-f="${aug ? 'class' : 'owner'}" style="width:140px" value="${esc(aug ? r.class : r.owner)}"></td>
+    <td class="v">${r.icon && RV.values[r.icon] != null ? fmt(RV.values[r.icon]) : '–'}</td>
+    ${rel ? `<td><textarea data-f="ability" placeholder="What the relic does" style="min-width:240px;min-height:34px">${esc(r.ability)}</textarea></td>` : ''}
+    <td><textarea data-f="description" style="min-width:220px;min-height:34px">${esc(r.description)}</textarea></td>
+    <td><button class="del" data-del="${i}">Remove</button></td></tr>`).join('')}</tbody></table>
+    <div class="note">The value comes from the Rewards tab (by icon). The game engine still has its own list; this table is the design list.</div>`;
+}
+// ---------- sets: the symmetric section. Four members per set (one per land); Save re-applies stats and track to them ----------
+function paintSets() {
+  return `<table><thead><tr><th>Name</th><th>Class</th><th>Difficulty</th><th>Health</th><th>Damage</th><th title="Token names, comma separated. {rune} and {relic} become the token of each member's land">Track template</th><th>Members</th><th></th></tr></thead><tbody>${rows.map((st, i) => `<tr data-i="${i}">
+    <td><input class="name" data-f="name" value="${esc(st.name)}"></td>
+    <td><select data-f="stage" data-num>${[1, 2, 3].map((x) => `<option value="${x}" ${st.stage === x ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
+    <td><input class="num" type="number" min="1" max="15" data-f="sub_difficulty" data-num value="${st.sub_difficulty}"></td>
+    <td><input class="num" type="number" min="1" data-f="barrier" data-num value="${st.barrier}"></td>
+    <td><input class="num" type="number" min="0" data-f="damage" data-num value="${st.damage}"></td>
+    <td><input data-f="template" data-list style="min-width:320px" value="${esc((st.template ?? []).join(', '))}"></td>
+    <td class="v">${(MEMBERS[st.id] ?? []).join(', ') || '–'}</td>
+    <td><button class="del" data-del="${i}">Remove</button></td></tr>`).join('')}</tbody></table>
+    <div class="note">Members are assigned by the track script (one monster per land). Save writes the sets and re-applies difficulty, health, damage and track to the members.</div>`;
+}
+let MEMBERS = {};
+function paint() { $('scroll').innerHTML = table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); }
+
+$('scroll').addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.dataset.curve) { RV.curve[el.dataset.curve] = Number(el.value) || 0; curveDirty = true; mark(); return; }
+  const tr = el.closest('tr, article'); if (!tr) return;
+  const r = rows[Number(tr.dataset.i)];
+  if (el.dataset.f) r[el.dataset.f] = el.hasAttribute('data-num') ? Number(el.value) : el.hasAttribute('data-list') ? el.value.split(',').map((x) => x.trim()).filter(Boolean) : el.value;
+  if (el.dataset.ef) { const [i, ei, k] = el.dataset.ef.split(':'); const ef = rows[i].effect_schema[ei]; if (k === 'count') ef.count = /^\d+$/.test(el.value) ? Number(el.value) : el.value; else ef.effects = el.value.split('\n').filter((x) => x.trim()).map((d, n) => ({ ...(ef.effects?.[n] ?? { type: 'benefit' }), description: d })); }
+  tr.classList.add('changed'); mark();
+  if (tr.tagName === 'ARTICLE' && el.dataset.f === 'color') tr.style.setProperty('--cc', el.value);
+});
+$('scroll').addEventListener('click', (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.rm) { const [i, ti] = t.dataset.rm.split(':').map(Number); rows[i].reward_track.splice(ti, 1); paint(); mark(); }
+  if (t.dataset.add) { const i = Number(t.dataset.add); openPick(t, (id) => { (rows[i].reward_track ??= []).push(id); }); }
+  if (t.dataset.del) { const i = Number(t.dataset.del); if (confirm(`Remove “${rows[i].name}”?`)) { rows.splice(i, 1); paint(); mark(); } }
+  if (t.dataset.efadd) { const r = rows[t.dataset.efadd]; (r.effect_schema ??= []).push({ count: isGeneric(r) ? (r.effect_schema.length ? (num(r.effect_schema.at(-1).count) ?? 1) + 1 : 2) : 1, effects: [{ type: 'benefit', description: '' }] }); paint(); mark(); }
+  if (t.dataset.edit) { const id = rows[t.dataset.edit].id; editing.has(id) ? editing.delete(id) : editing.add(id); paint(); }
+  if (t.dataset.efdel) { const [i, ei] = t.dataset.efdel.split(':'); rows[i].effect_schema.splice(ei, 1); paint(); mark(); }
+});
+// The reward picker: all icons of the game, in a popover next to the + button.
+function openPick(btn, onPick) {
+  const p = $('pick'); p.innerHTML = pool.filter((t) => t.icon).map((t) => `<button data-id="${t.id}" title="${esc(t.name)}${RV.values[t.id] != null ? ` · ${fmt(RV.values[t.id])} VP` : ''}"><img src="${file(t.icon)}" alt=""></button>`).join('');
+  const r = btn.getBoundingClientRect(); p.hidden = false; p.style.left = Math.min(r.left, innerWidth - 360) + 'px'; p.style.top = Math.min(r.bottom + 6, innerHeight - 330) + 'px';
+  p.onclick = (e) => { const b = e.target.closest('[data-id]'); if (!b) return; onPick(b.dataset.id); p.hidden = true; paint(); mark(); };
+}
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#pick, [data-add]')) $('pick').hidden = true; });
+// ---------- icon composer (no UI; Claude runs it through window.__dbg when Michael asks for an icon): the same recipe as the Svelte editor's runeIconGenerator (canvas 800, background contain, icon 56 % with a 3 % outline #2b1a12) ----------
+const loadImg = (src) => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = src; });
+function stampOutline(ctx, src, x, y, w, h, px, color) {
+  const m = document.createElement('canvas'); m.width = Math.max(1, Math.round(w)); m.height = Math.max(1, Math.round(h)); const mc = m.getContext('2d');
+  mc.drawImage(src, 0, 0, m.width, m.height); mc.globalCompositeOperation = 'source-in'; mc.fillStyle = color; mc.fillRect(0, 0, m.width, m.height);
+  for (let dy = -px; dy <= px; dy++) for (let dx = -px; dx <= px; dx++) if ((dx || dy) && dx * dx + dy * dy <= px * px) ctx.drawImage(m, x + dx, y + dy, w, h);
+  ctx.drawImage(src, x, y, w, h);
+}
+async function composeIcon(r) {
+  const size = 800, padding = size * 0.1, iconSize = size - padding * 2, center = size / 2, target = iconSize * 0.56, outline = Math.max(2, Math.round(target * 0.03)), outlineColor = '#2b1a12';
+  const c = document.createElement('canvas'); c.width = c.height = size; const ctx = c.getContext('2d');
+  { const bg = await loadImg(file(BG[table])); const sc = Math.min(size / bg.naturalWidth, size / bg.naturalHeight), dw = bg.naturalWidth * sc, dh = bg.naturalHeight * sc; ctx.drawImage(bg, (size - dw) / 2, (size - dh) / 2, dw, dh); }
+  let src = null;
+  if (r.source_icon && poolIcon[r.source_icon]) src = await loadImg(file(poolIcon[r.source_icon]));
+  else if (r.source_emoji) { // render the emoji big, crop to its pixels, then fit like an image
+    const n = size * 2, e = document.createElement('canvas'); e.width = e.height = n; const ec = e.getContext('2d');
+    ec.font = `${n * 0.6}px sans-serif`; ec.textAlign = 'center'; ec.textBaseline = 'middle'; ec.fillStyle = '#1e293b'; ec.fillText(r.source_emoji, n / 2, n / 2);
+    const d = ec.getImageData(0, 0, n, n).data; let x0 = n, y0 = n, x1 = 0, y1 = 0;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (d[(y * n + x) * 4 + 3] > 10) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    if (x0 < x1) { const k = document.createElement('canvas'); k.width = x1 - x0 + 8; k.height = y1 - y0 + 8; k.getContext('2d').drawImage(e, x0 - 4, y0 - 4, k.width, k.height, 0, 0, k.width, k.height); src = k; }
+  }
+  if (!src) throw new Error(`No symbol for “${r.name}” yet (source_icon or source_emoji in game/${table}.json).`);
+  const iw = src.naturalWidth ?? src.width, ih = src.naturalHeight ?? src.height, sc = Math.min(target / iw, target / ih), w = iw * sc, h = ih * sc;
+  stampOutline(ctx, src, center - w / 2, center - h / 2, w, h, outline, outlineColor);
+  return c.toDataURL('image/png').split(',')[1];
+}
+$('addRow').onclick = () => {
+  if (table === 'rewards') { openPick($('addRow'), (id) => { if (!rows.some((r) => r.id === id)) rows.unshift({ id, name: poolById[id].name, icon: poolIcon[id], value: 0 }); }); return; }
+  if (table === 'reward_sets') { rows.push({ id: 'set-' + uuid().slice(0, 8), name: 'New set', stage: 1, sub_difficulty: 2, barrier: 1, damage: 2, template: ['victory_point', '{rune}'] }); paint(); mark(); return; }
+  if (table === 'augments') { rows.push({ id: uuid(), name: 'New augment', class: '', icon: null, source_icon: null, source_emoji: '', description: '' }); paint(); mark(); $('scroll').scrollTop = $('scroll').scrollHeight; return; }
+  if (table === 'relics') { rows.push({ id: uuid(), name: 'New relic', owner: '', icon: null, source_icon: null, source_emoji: '', ability: '', description: '' }); paint(); mark(); $('scroll').scrollTop = $('scroll').scrollHeight; return; }
+  if (table === 'origins') { rows.push({ id: uuid(), name: 'New origin', position: rows.length + 1, icon_emoji: '', color: '#888888', description: '' }); paint(); mark(); $('scroll').scrollTop = $('scroll').scrollHeight; return; }
+  if (table === 'runes') { rows.push({ id: uuid(), name: 'New rune', kind: 'basic', owner: '', icon: null, source_icon: null, source_emoji: '', description: '' }); paint(); mark(); $('scroll').scrollTop = $('scroll').scrollHeight; return; }
+  rows.push(table === 'monsters_v2' ? { id: uuid(), name: 'New monster', stage: stage || 1, sub_difficulty: [0, 1, 4, 9][stage || 1], theme: stage === 3 ? 'Arcane' : 'Fire', barrier: 1, damage: 1, order_num: rows.length + 1, reward_track: [], dice_pool: [], attack_type: 'damage', choose_amount: 0, name_translations: {}, card_image_path: null, card_image_path_translations: {} }
+    : { id: uuid(), name: 'New class', class_type: stage === 1 ? 'normal' : 'special', description: '', footer: '', tags: [], effect_schema: [{ count: stage === 1 ? 2 : 1, effects: [{ type: 'benefit', description: '' }] }], is_special: stage !== 1, position: rows.length + 1, icon_emoji: '', color: '#8b5cf6' });
+  if (table === 'classes') editing.add(rows.at(-1).id);
+  paint(); mark(); $('scroll').scrollTop = $('scroll').scrollHeight;
+};
+$('save').onclick = async () => {
+  if (table === 'monsters_v2') for (const m of rows) m.choose_amount = (m.reward_track ?? []).length;
+  const r = table === 'rewards' ? await post('/api/game/rewards', { curve: RV.curve, bands: RV.bands, values: Object.fromEntries(rows.map((t) => [t.id, Number(t.value) || 0])) }) : await post('/api/game/table', { name: table, rows });
+  if (r.error) return ($('status').textContent = r.error);
+  if (table === 'reward_sets') SETS = rows.map((x) => ({ ...x }));
+  if (table === 'rewards') { RV.values = Object.fromEntries(rows.map((t) => [t.id, Number(t.value) || 0])); curveDirty = false; }
+  saved = JSON.stringify(rows); for (const tr of document.querySelectorAll('tr.changed')) tr.classList.remove('changed'); mark(); $('status').textContent = `Saved ${r.rows ?? r.tokens} rows`;
+};
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; const same = b.dataset.t === table; if (!same && dirty() && !confirm('Leave without saving?')) return; if (!same) curveDirty = false; stage = Number(b.dataset.stage ?? 0); if (same) { for (const x of $('tabs').children) x.classList.toggle('on', x === b); $('title').textContent = titleText(); paint(); } else { table = b.dataset.t; load(); } });
+addEventListener('beforeunload', (e) => { if (dirty()) e.preventDefault(); });
+init();
+window.__dbg = () => ({ rows, composeIcon, post }); // for tests
+</script>
+</body>
+</html>
