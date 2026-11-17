@@ -1,6 +1,8 @@
 #!/bin/bash
-# Stop the league cleanly: running games are abandoned (kept and marked, played again later),
-# after-game notebook calls may finish (stopGraceSec), then the process exits. Waits for it.
+# Stop (= pause) the league: no new game starts; each running game stops before its next decision,
+# so calls under way finish and are recorded (calls still open after stopGraceSec are cut off).
+# The games' records are kept: the next start.sh continues each one from its last decision.
+# After-game notebook calls may finish (stopGraceSec), then the process exits. Waits for it.
 #
 #   scripts/agent-harness/league/stop.sh [league dir]      (default ~/arcspirits-harness/league)
 set -euo pipefail

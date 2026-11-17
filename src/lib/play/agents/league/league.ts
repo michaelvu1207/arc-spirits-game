@@ -17,9 +17,9 @@
  * account is blocked until its reset and its games move on.
  */
 
-import { appendFileSync, existsSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { SeatColor } from '../../types';
 import { BudgetGuard } from '../budget';
 import { CallGate } from '../callGate';
@@ -28,11 +28,16 @@ import { notebookPrompt } from '../memory';
 import { GatewayProvider, gatewayProviderOf, type GatewayProviderId } from '../providers/gateway';
 import { adaptiveAccountGate, GatewayPool, type GatewayAccount } from '../providers/gatewayPool';
 import { MockProvider, type MockPolicy } from '../providers/mock';
-import { runAgentGame, type GameSummary } from '../runner';
+import { ResumeMismatchError, runAgentGame, type GameSummary } from '../runner';
 import { collectStatements, type GameOutcome } from '../strategy';
 import { seatStatement, traceGame } from '../strategyReport';
 import { seatResults } from '../tournament';
-import { JsonlStreamSink, readTranscript, type StatementRecord } from '../transcript';
+import {
+	JsonlStreamSink,
+	readTranscript,
+	type HeaderRecord,
+	type StatementRecord
+} from '../transcript';
 import { isMockModel, loadAgents, type LeagueAgent } from './agents';
 import type { LeagueConfig } from './config';
 import { NotebookStore, textHash, writeAtomic } from './notebookStore';
@@ -43,7 +48,9 @@ import {
 	renderLeagueReport,
 	versionReport
 } from './report';
+import { findResumeSource } from './resume';
 import { firstFit, LeagueSchedule, type LeagueGame } from './schedule';
+import { Seating } from './seating';
 import { VersionStore } from './versionStore';
 import { changedCards, DataWatcher, loadSavedVersion, versionId, type DataVersion } from './versions';
 
@@ -109,6 +116,8 @@ interface RunningGame {
 	index: number;
 	gameId: string;
 	abort: AbortController;
+	/** Pause: the game stops before its next decision (calls under way finish first). */
+	pause: AbortController;
 	phase: 'playing' | 'after';
 	promise: Promise<void>;
 }
@@ -150,6 +159,7 @@ export class League {
 	readonly #catalogs = new Map<string, DataVersion | null>();
 	/** How far past the oldest open game the loop looks for a game that fits the free slots. */
 	readonly #lookahead: number;
+	readonly #seatings = new Map<string, Seating>();
 	#current: DataVersion | null = null;
 	#stopping: string | null = null;
 	#wake: (() => void) | null = null;
@@ -241,15 +251,23 @@ export class League {
 		return this.#current;
 	}
 
-	/** Stop: abandon the running games, let after-game notebook calls finish (grace), then exit. */
+	/**
+	 * Stop (= pause): no new game starts; each running game stops before its next decision, so
+	 * the calls that are under way finish and are recorded. After the grace time, calls that are
+	 * still open are cut off. Either way the game's record is kept and the next start continues
+	 * it from its last decision. After-game notebook calls may finish within the grace time.
+	 */
 	stop(reason: string): void {
 		if (this.#stopping) return;
 		this.#stopping = reason;
 		this.status.stopReason = reason;
 		this.status.state = 'stopping';
 		this.#event(`stop: ${reason}`);
-		for (const g of this.#running.values()) if (g.phase === 'playing') g.abort.abort();
-		setTimeout(() => this.#statementsAbort.abort(), this.config.stopGraceSec * 1000).unref();
+		for (const g of this.#running.values()) if (g.phase === 'playing') g.pause.abort();
+		setTimeout(() => {
+			for (const g of this.#running.values()) if (g.phase === 'playing') g.abort.abort();
+			this.#statementsAbort.abort();
+		}, this.config.stopGraceSec * 1000).unref();
 		this.#writeStatus();
 		this.#wake?.();
 	}
@@ -337,7 +355,7 @@ export class League {
 		const first = this.#nextIndex(v, max);
 		if (first === null) return null;
 		return firstFit(
-			this.schedule,
+			this.#seating(v),
 			first,
 			Math.min(max, first + this.#lookahead),
 			(i) => !this.#running.has(`${v.id}/${i}`) && !this.versions.done(v.id, i),
@@ -345,8 +363,26 @@ export class League {
 		);
 	}
 
+	/** The saved seating of a data version (made on first use; see seating.ts). */
+	#seating(v: DataVersion): Seating {
+		let seating = this.#seatings.get(v.id);
+		if (!seating) {
+			seating = new Seating(
+				join(this.dir, 'versions', v.id, 'seating.json'),
+				this.agents,
+				{ seed: this.config.seed, tableSize: this.config.seatsPerGame },
+				(index) => this.versions.done(v.id, index)
+			);
+			this.#seatings.set(v.id, seating);
+			if (seating.change) this.#event(`data version ${v.id}: ${seating.change}`);
+		}
+		return seating;
+	}
+
 	/** Free slots for a game ([] for an all-mock table); null when none is free. */
 	#slot(game: LeagueGame): GatewayAccount[] | null {
+		// A finished game of a removed agent can still be listed here: it is never started.
+		if (game.seats.some((id) => !this.#byId.has(id))) return null;
 		const models = game.seats.map((id) => this.#byId.get(id)!.model);
 		if (models.some((m) => !isMockModel(m))) return gatewaySlots(this.#pool!, models);
 		const mockRunning = [...this.#running.values()].filter((g) => !this.#pool?.labelOf(g.gameId)).length;
@@ -395,11 +431,13 @@ export class League {
 		const runId = `league-${v.id}`;
 		const gameId = `${runId}-g${game.index}-s${game.seed}`;
 		for (const account of accounts) this.#pool!.assign(gameId, account);
+		this.#seating(v).record(game);
 		const entry: RunningGame = {
 			version: v,
 			index: game.index,
 			gameId,
 			abort: new AbortController(),
+			pause: new AbortController(),
 			phase: 'playing',
 			promise: Promise.resolve()
 		};
@@ -429,46 +467,99 @@ export class League {
 		const changes = agents.map((a) => (a.learn ? this.#dataChanges(a, v) : []));
 		const controllers = agents.map((a, i) => this.#controller(a, i, game.seed, books[i], changes[i]));
 		const path = this.versions.transcriptPath(v.id, game.index);
-		const sink = new JsonlStreamSink(path);
+		// A record of this game from an earlier start (paused, stopped, killed, provider errors):
+		// continue from it when it is the same game (same seats, models, efforts and data).
+		const sameGame = (h: HeaderRecord): boolean => {
+			const was = (
+				h.options.league as
+					| { agents?: { agent: string; model: string; effort: string; memory: string }[] }
+					| undefined
+			)?.agents;
+			return (
+				h.seed === game.seed &&
+				h.catalog.hash === v.catalogInfo.hash &&
+				!!was &&
+				was.length === agents.length &&
+				was.every(
+					(w, i) =>
+						w.agent === agents[i].id &&
+						w.model === agents[i].model &&
+						w.effort === agents[i].effort &&
+						w.memory === agents[i].memory
+				)
+			);
+		};
+		let source = findResumeSource(dirname(path), game.index, sameGame);
 		let summary: GameSummary;
-		try {
-			summary = await runAgentGame({
-				catalog: v.catalog,
-				catalogInfo: v.catalogInfo,
-				seed: game.seed,
-				controllers,
-				rulesBrief: v.rulesBrief,
-				budget: this.#budget,
-				runId,
-				gameIndex: game.index,
-				sink,
-				maxDecisions: this.config.maxDecisions,
-				maxPhaseDecisions: this.config.maxPhaseDecisions,
-				eventsPerPrompt: this.config.eventsPerPrompt,
-				headerOptions: {
-					league: {
-						version: v.id,
-						game: game.index,
-						account: this.#pool?.labelOf(entry.gameId) ?? null,
-						agents: agents.map((a, i) => ({
-							agent: a.id,
-							model: a.model,
-							effort: a.effort,
-							memory: a.memory,
-							learn: a.learn,
-							notebook: books[i],
-							notebookHash: textHash(books[i]),
-							dataChanges: changes[i]
-						}))
-					}
-				},
-				signal: entry.abort.signal,
-				onDecision: (r) => this.#countCalls(r.attempts.length)
-			});
-		} finally {
-			await sink.close();
+		for (;;) {
+			const sink = new JsonlStreamSink(path);
+			try {
+				summary = await runAgentGame({
+					catalog: v.catalog,
+					catalogInfo: v.catalogInfo,
+					seed: game.seed,
+					controllers,
+					rulesBrief: v.rulesBrief,
+					budget: this.#budget,
+					runId,
+					gameIndex: game.index,
+					sink,
+					maxDecisions: this.config.maxDecisions,
+					maxPhaseDecisions: this.config.maxPhaseDecisions,
+					eventsPerPrompt: this.config.eventsPerPrompt,
+					headerOptions: {
+						league: {
+							version: v.id,
+							game: game.index,
+							account: this.#pool?.labelOf(entry.gameId) ?? null,
+							...(source
+								? {
+										resumedFrom: basename(source.file),
+										resumedDecisions: source.decisions,
+										playedMs: Math.round(source.priorMs)
+									}
+								: {}),
+							agents: agents.map((a, i) => ({
+								agent: a.id,
+								model: a.model,
+								effort: a.effort,
+								memory: a.memory,
+								learn: a.learn,
+								notebook: books[i],
+								notebookHash: textHash(books[i]),
+								dataChanges: changes[i]
+							}))
+						}
+					},
+					signal: entry.abort.signal,
+					pause: entry.pause.signal,
+					...(source ? { resume: { records: source.records, priorMs: source.priorMs } } : {}),
+					onDecision: (r) => this.#countCalls(r.attempts.length)
+				});
+				await sink.close();
+				if (source)
+					this.#event(
+						`game ${game.index + 1} of ${v.id} continued after decision ${summary.resumedDecisions ?? source.decisions} of its earlier record`
+					);
+				break;
+			} catch (err) {
+				await sink.close();
+				if (!(err instanceof ResumeMismatchError) || !source) throw err;
+				// The record no longer leads to the same game: mark it, drop what the seats were
+				// given back, and play the game from its start.
+				renameSync(source.file, source.file.replace(/\.jsonl$/, '.noresume.jsonl'));
+				this.#event(
+					`game ${game.index + 1} of ${v.id}: its earlier record cannot be continued (${(err as Error).message}); it is played from the start`
+				);
+				for (const p of this.#providers.values()) p.forgetGame(entry.gameId);
+				source = null;
+			}
 		}
-		if (summary.stopReason === 'aborted' || entry.abort.signal.aborted) {
+		if (
+			summary.stopReason === 'aborted' ||
+			summary.stopReason === 'paused' ||
+			entry.abort.signal.aborted
+		) {
 			this.versions.setAside(v.id, game.index, 'abandoned');
 			return;
 		}
@@ -627,7 +718,9 @@ export class League {
 
 	#writeReports(v: DataVersion): void {
 		const files = [...this.versions.traces(v.id).values()];
-		const current = versionReport(v, files, this.agents);
+		// Agents that were removed keep their finished games in the reports.
+		const agents = [...this.agents, ...this.#seating(v).removed(this.agents)];
+		const current = versionReport(v, files, agents);
 		const vdir = join(this.dir, 'versions', v.id);
 		const prev = this.versions.previous(v.id);
 		let compare: Parameters<typeof renderLeagueReport>[0]['compare'] = null;
@@ -637,7 +730,7 @@ export class League {
 				const c = compareVersions(
 					{ ...before, files: [...this.versions.traces(prev.id).values()] },
 					{ ...v, files },
-					this.agents
+					agents
 				);
 				compare = { previous: prev.id, ...c };
 			}
@@ -648,8 +741,8 @@ export class League {
 				(g) => g.version.id === v.id && g.phase === 'playing'
 			).length,
 			dataNote: this.status.dataNote,
-			agents: agentViews(this.agents, files, (a) => this.notebooks.read(a.dir)),
-			standings: this.config.benchmark ? benchmarkStandings(files, this.agents) : null,
+			agents: agentViews(agents, files, (a) => (a.dir ? this.notebooks.read(a.dir) : '')),
+			standings: this.config.benchmark ? benchmarkStandings(files, agents) : null,
 			updatedAt: new Date().toISOString()
 		};
 		writeAtomic(join(vdir, 'report.json'), `${JSON.stringify(current, null, 2)}\n`);

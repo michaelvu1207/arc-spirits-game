@@ -42,7 +42,13 @@ import { renderDecisionMessage } from './prompt';
 import { sha256 } from './rulesBrief';
 import { createAgentLobby, pickGuardians, seatsFor } from './setup';
 import { collectStatements } from './strategy';
-import type { DecisionRecord, SeatSetup, TranscriptSink } from './transcript';
+import type {
+	DecisionRecord,
+	SeatSetup,
+	StaleRecord,
+	TranscriptRecord,
+	TranscriptSink
+} from './transcript';
 import { seatProjection, spectatorProjection } from './view';
 
 export type StopReason =
@@ -52,7 +58,12 @@ export type StopReason =
 	| 'stalled'
 	| 'reducer-rejection'
 	| 'provider-errors'
-	| 'aborted';
+	| 'aborted'
+	/** Stopped between two decisions on request (`pause`): nothing was cut off; it can be resumed. */
+	| 'paused';
+
+/** The record a game is resumed from no longer leads to the same game (the engine or data changed). */
+export class ResumeMismatchError extends Error {}
 
 export interface SeatSummary {
 	seat: SeatColor;
@@ -123,6 +134,8 @@ export interface GameSummary {
 	advances: number;
 	/** Batches of simultaneous (navigation) decisions asked in parallel. */
 	parallelBatches: number;
+	/** Decisions taken from the record of an earlier, cut-off run of this game (resume). */
+	resumedDecisions?: number;
 	seats: SeatSummary[];
 	/** Agent decisions whose first answer was invalid ÷ agent decisions. */
 	invalidAnswerRate: number;
@@ -162,6 +175,20 @@ export interface RunGameOptions {
 	/** Extra fields for the header's `options` (e.g. the gateway account label of the game). */
 	headerOptions?: Record<string, unknown>;
 	signal?: AbortSignal;
+	/**
+	 * Pause: when this signal fires the game stops before its next decision (`paused`). Calls that
+	 * are under way finish and are recorded first, so no answer is thrown away.
+	 */
+	pause?: AbortSignal;
+	/**
+	 * Continue a game that was cut off: the records of its transcript so far. The game is played
+	 * again from the start with the recorded answers (no provider call), each seat gets its
+	 * conversation back (`SeatController.restore`), and from the first decision that has no record
+	 * the seats are asked as usual. The sink receives the whole game again, so the new transcript
+	 * is complete. Throws `ResumeMismatchError` when the records do not lead to the same game.
+	 */
+	resume?: { records: TranscriptRecord[]; priorMs?: number };
+	/** Called for decisions answered now (not for the recorded ones of a resumed game). */
 	onDecision?: (record: DecisionRecord) => void;
 }
 
@@ -368,6 +395,13 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 	const maxProviderFailures = opts.maxProviderFailures ?? 3;
 	const providerFailureRuns = new Map<SeatColor, number>();
 	let providerStop: string | null = null;
+	// Resume: the recorded answers by request id; `live` counts decisions answered now.
+	const recorded = new Map<string, DecisionRecord | StaleRecord>();
+	for (const r of opts.resume?.records ?? [])
+		if (r.type === 'decision' || r.type === 'stale') recorded.set(r.requestId, r);
+	const replayedAnswers = new WeakMap<ControllerAnswer, DecisionRecord | StaleRecord>();
+	let live = 0;
+	let replayed = 0;
 
 	interface Prepared {
 		seat: SeatColor;
@@ -443,6 +477,45 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 				fallback: false
 			};
 		}
+		const rec = recorded.get(request.requestId);
+		if (rec) {
+			// A recorded answer of the game that is being resumed: no call; the seat gets the turn
+			// back in its conversation.
+			recorded.delete(request.requestId);
+			// An old record has no state hash: the message the seat saw must then be the one the
+			// game produces again (it shows everything the seat could see).
+			if (live === 0 && rec.prompt && p.prompt && !(rec.type === 'decision' && rec.stateHash) && !rec.prompt.includes(p.prompt))
+				throw new ResumeMismatchError(
+					`resume: at ${request.requestId} the game no longer shows the seat what the record shows`
+				);
+			await controllerBySeat.get(p.seat)!.restore?.(request, {
+				prompt: rec.prompt,
+				attempts: rec.attempts,
+				note: rec.type === 'decision' ? rec.note : undefined
+			});
+			const offered =
+				request.actions.find(
+					(a) => a.actionId === rec.chosen.actionId && a.label === rec.chosen.label
+				) ?? request.actions.find((a) => a.actionId === rec.chosen.actionId);
+			if (!offered)
+				throw new ResumeMismatchError(
+					`resume: decision ${request.requestId} no longer offers the recorded action "${rec.chosen.label}"`
+				);
+			const answer: ControllerAnswer = {
+				response: {
+					actionId: offered.id,
+					reason: rec.reason,
+					...(rec.type === 'decision' && rec.note ? { note: rec.note } : {})
+				},
+				attempts: rec.attempts,
+				repaired: rec.type === 'decision' ? rec.repaired : false,
+				fallback: rec.type === 'decision' ? rec.fallback : false,
+				...(rec.type === 'decision' && rec.fallbackReason ? { fallbackReason: rec.fallbackReason } : {}),
+				...(rec.prompt && rec.prompt !== p.prompt ? { userMessage: rec.prompt } : {})
+			};
+			replayedAnswers.set(answer, rec);
+			return answer;
+		}
 		currentSeat = p.seat;
 		return controllerBySeat.get(p.seat)!.decide(request, {
 			rulesBrief: opts.rulesBrief,
@@ -464,10 +537,20 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 		const chosen =
 			request.actions.find((a) => a.id === answer.response.actionId) ??
 			request.actions.find((a) => a.actionId === answer.response.actionId);
-		if (!chosen)
+		const replayRecord = replayedAnswers.get(answer);
+		const isReplay = !!replayRecord;
+		// A forced or capped move of a resumed game is worked out again; it must be the recorded one.
+		const forcedRecord = !isReplay ? recorded.get(request.requestId) : undefined;
+		if (forcedRecord) recorded.delete(request.requestId);
+		if (!chosen || (forcedRecord && forcedRecord.chosen.actionId !== chosen.actionId)) {
+			if (isReplay || forcedRecord)
+				throw new ResumeMismatchError(
+					`resume: decision ${request.requestId} no longer offers the recorded action`
+				);
 			throw new Error(
 				`controller ${controller.label} returned an id that was not offered: ${answer.response.actionId}`
 			);
+		}
 		if (applied !== p.appliedAtBuild) {
 			const fresh = buildDecision({
 				state,
@@ -508,6 +591,10 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 		const specBefore = spectatorProjection(state);
 		const result = applyGameCommand(state, actor, chosen.command, catalog);
 		if (!result.ok) {
+			if (isReplay || forcedRecord)
+				throw new ResumeMismatchError(
+					`resume: the engine now rejects the recorded move of ${request.requestId} (${result.error.code})`
+				);
 			stopReason = 'reducer-rejection';
 			stopDetail = `${chosen.command.type}: ${result.error.code} ${result.error.message}`;
 			return 'rejected';
@@ -515,6 +602,20 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 		state = result.state;
 		applied += 1;
 		decisions += 1;
+		const source = replayRecord ?? forcedRecord;
+		if (source) {
+			replayed += 1;
+			// Until the first decision answered now, the game must be exactly the recorded one.
+			if (
+				live === 0 &&
+				source.type === 'decision' &&
+				(source.revision !== state.revision ||
+					(source.stateHash !== undefined && source.stateHash !== hashGameState(state)))
+			)
+				throw new ResumeMismatchError(
+					`resume: after ${request.requestId} the game is not in the recorded state`
+				);
+		} else live += 1;
 		idleAdvances = 0;
 		phaseCounts.set(phaseKey, phaseIndex + 1);
 		recordCommandEvents(
@@ -578,10 +679,11 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 			promptTokens,
 			completionTokens,
 			costUsd,
-			revision: state.revision
+			revision: state.revision,
+			stateHash: hashGameState(state)
 		};
 		sink?.write(record);
-		opts.onDecision?.(record);
+		if (!isReplay && !forcedRecord) opts.onDecision?.(record);
 		return 'ok';
 	};
 
@@ -596,6 +698,12 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 			}
 			if (opts.signal?.aborted) {
 				stopReason = 'aborted';
+				break;
+			}
+			// A pause waits until the recorded part of a resumed game is in again, so the new
+			// transcript never holds less than the one it continues.
+			if (opts.pause?.aborted && recorded.size === 0) {
+				stopReason = 'paused';
 				break;
 			}
 			if (providerStop) {
@@ -707,7 +815,7 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 	const finalStop: StopReason =
 		state.status === 'finished' ? 'finished' : stopReason === 'finished' ? 'stalled' : stopReason;
 	// After the game: each seat says why it played as it did (a failure never fails the game).
-	if (opts.statements && finalStop !== 'aborted') {
+	if (opts.statements && finalStop !== 'aborted' && finalStop !== 'paused') {
 		const statements = await collectStatements({
 			gameId,
 			outcome: {
@@ -746,12 +854,13 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 		decisions,
 		advances,
 		parallelBatches,
+		...(opts.resume ? { resumedDecisions: replayed } : {}),
 		seats: seatSummaries,
 		invalidAnswerRate: agentDecisionsTotal ? firstInvalidTotal / agentDecisionsTotal : 0,
 		fallbackRate: agentDecisionsTotal ? fallbackTotal / agentDecisionsTotal : 0,
 		totalCostUsd: seatSummaries.reduce((n, s) => n + s.costUsd, 0),
 		totalTokens: seatSummaries.reduce((n, s) => n + s.promptTokens + s.completionTokens, 0),
-		durationMs: Math.round(performance.now() - started),
+		durationMs: Math.round(performance.now() - started + (opts.resume?.priorMs ?? 0)),
 		finalStateHash: hashGameState(state),
 		budget: budget.snapshot()
 	};

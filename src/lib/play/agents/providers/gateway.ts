@@ -235,6 +235,15 @@ export class GatewayProvider implements ChatProvider {
 			}
 	}
 
+	/** Resume: one earlier exchange of a seat goes back into its stored conversation (no call). */
+	remember(sessionKey: string, user: string, assistant: string): void {
+		this.#history.set(sessionKey, [
+			...(this.#history.get(sessionKey) ?? []),
+			{ role: 'user', content: user },
+			{ role: 'assistant', content: assistant }
+		]);
+	}
+
 	/** The pooled account for a call (waits while every account of the provider is blocked). */
 	async #target(
 		key: string | undefined,

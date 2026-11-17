@@ -58,6 +58,8 @@ export interface ChatResponse {
 export interface ChatProvider {
 	readonly name: string;
 	complete(request: ChatRequest): Promise<ChatResponse>;
+	/** Resume: add one earlier exchange to a stored conversation, without a call (providers that keep one). */
+	remember?(sessionKey: string, user: string, assistant: string): void;
 	/** Upper-bound USD estimate of one call (prompt size × list price + the output cap), used by
 	 *  the budget guard BEFORE the call. Unknown prices must estimate high, not low. */
 	estimateCostUsd(request: ChatRequest): Promise<number>;

@@ -140,6 +140,14 @@ export interface SeatController {
 	/** Model id / profile for records (e.g. "openrouter:openai/gpt-4o-mini", "mock:random"). */
 	readonly modelId: string;
 	decide(request: DecisionRequest, ctx: DecideContext): Promise<ControllerAnswer>;
+	/**
+	 * Resume: put one recorded turn back into the seat's memory (its conversation and plan note),
+	 * with no provider call. `prompt` is the message the seat saw, `attempts` its recorded answers.
+	 */
+	restore?(
+		request: DecisionRequest,
+		turn: { prompt: string | null; attempts: AnswerAttempt[]; note?: string }
+	): void | Promise<void>;
 	/** The goal this seat keeps for the whole game (strategy.ts); absent = none. */
 	readonly strategy?: Strategy | null;
 	/** After the game: why it played as it did (one call in the same conversation). */

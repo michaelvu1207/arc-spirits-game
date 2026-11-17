@@ -88,6 +88,8 @@ export interface DecisionRecord {
 	completionTokens: number;
 	costUsd: number;
 	revision: number;
+	/** Hash of the whole game state after this decision (a resume checks it; absent in old records). */
+	stateHash?: string;
 }
 
 export interface AdvanceRecord {

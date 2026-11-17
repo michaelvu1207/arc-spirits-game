@@ -31,13 +31,16 @@ export class LeagueSchedule {
 	readonly #blocks: string[][][] = [];
 	readonly #pairs = new Map<string, number>();
 
-	constructor(agents: string[], opts: { seed: number; tableSize: number }) {
+	/** `prior`: tables already played (an earlier agent list); their meetings count for the balance. */
+	constructor(agents: string[], opts: { seed: number; tableSize: number; prior?: string[][] }) {
 		if (new Set(agents).size !== agents.length) throw new Error('agent ids must be distinct');
 		if (agents.length < opts.tableSize)
 			throw new Error(`${agents.length} agents cannot fill a table of ${opts.tableSize}`);
 		this.agents = [...agents].sort();
 		this.#seed = opts.seed;
 		this.#size = opts.tableSize;
+		for (const seats of opts.prior ?? [])
+			for (const key of pairsOf(seats)) this.#pairs.set(key, (this.#pairs.get(key) ?? 0) + 1);
 	}
 
 	game(index: number): LeagueGame {
@@ -90,7 +93,7 @@ export class LeagueSchedule {
  * slots, or null), with those slots. The games themselves (seeds, seats) do not depend on it.
  */
 export function firstFit<T>(
-	schedule: LeagueSchedule,
+	schedule: { game(index: number): LeagueGame },
 	from: number,
 	to: number,
 	open: (index: number) => boolean,

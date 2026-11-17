@@ -117,6 +117,26 @@ export class LlmSeatController implements SeatController {
 		return this.#notes.get(`${gameId}:${seat}`) ?? null;
 	}
 
+	/**
+	 * Resume: the seat's memory after a recorded turn is what `decide` left behind. A history seat
+	 * gets the decision message and each answer it gave (a repair question before a second answer)
+	 * back in its conversation; a provider failure left nothing. The plan note is set again.
+	 */
+	restore(
+		request: DecisionRequest,
+		turn: { prompt: string | null; attempts: AnswerAttempt[]; note?: string }
+	): void {
+		const key = `${request.gameId}:${request.seat}`;
+		if (turn.note) this.#notes.set(key, turn.note);
+		if (this.memory === 'fresh') return;
+		let user = turn.prompt ?? renderDecisionMessage(request);
+		for (const attempt of turn.attempts) {
+			if (attempt.providerError) continue;
+			this.#opts.provider.remember?.(key, user, attempt.raw);
+			user = repairMessage(attempt.error ?? 'invalid answer', request);
+		}
+	}
+
 	async decide(request: DecisionRequest, ctx: DecideContext): Promise<ControllerAnswer> {
 		const attempts: AnswerAttempt[] = [];
 		const key = `${request.gameId}:${request.seat}`;
