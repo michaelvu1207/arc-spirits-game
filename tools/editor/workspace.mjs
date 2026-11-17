@@ -169,6 +169,45 @@ async function thumbFor(abs) {
   return out;
 }
 
+// Small WebP copies for the pages (`/ws/file?w=<pixels>`). WebP keeps transparency, so it also fits icons.
+const WIDTHS = [64, 128, 256, 384, 512, 768, 1024];
+const CWEBP = ['/opt/homebrew/bin/cwebp', '/usr/local/bin/cwebp'].find((p) => existsSync(p)) ?? 'cwebp';
+const making = new Map(); // output file -> promise, so one image is made once even if many requests ask for it
+let busy = 0;
+const queue = [];
+/** Runs at most 4 conversions at the same time; a page can ask for hundreds of images at once. */
+const limited = (fn) => new Promise((res, rej) => {
+  const run = () => { busy++; fn().then(res, rej).finally(() => { busy--; queue.shift()?.(); }); };
+  if (busy < 4) run(); else queue.push(run);
+});
+
+/** Width in pixels: from the PNG header, or from `sips` for other formats. 0 if unknown. */
+async function pixelWidth(abs) {
+  if (extname(abs).toLowerCase() === '.png') {
+    const fh = await open(abs, 'r');
+    try { const { buffer } = await fh.read(Buffer.alloc(24), 0, 24, 0); return buffer.readUInt32BE(16); } finally { await fh.close(); }
+  }
+  return new Promise((res) => execFile('sips', ['-g', 'pixelWidth', abs], (e, out) => res(e ? 0 : Number(/pixelWidth: (\d+)/.exec(out)?.[1] ?? 0))));
+}
+
+/** Makes (and caches) a WebP copy at most `want` pixels wide. An image is never made larger. */
+async function smallFor(abs, want, st) {
+  const w = WIDTHS.find((x) => x >= want) ?? WIDTHS.at(-1);
+  const out = join(THUMBS, createHash('sha1').update(`${abs}|${st.size}|${st.mtimeMs}|w${w}`).digest('hex') + '.webp');
+  if (existsSync(out)) return out;
+  if (!making.has(out)) {
+    making.set(out, limited(async () => {
+      await mkdir(THUMBS, { recursive: true });
+      const tmp = `${out}.${process.pid}.tmp`;
+      const resize = (await pixelWidth(abs).catch(() => 0)) > w ? ['-resize', String(w), '0'] : [];
+      await new Promise((res, rej) => execFile(CWEBP, ['-quiet', '-q', '80', ...resize, abs, '-o', tmp], (e) => (e ? rej(e) : res())));
+      await rename(tmp, out);
+      return out;
+    }).finally(() => making.delete(out)));
+  }
+  return making.get(out);
+}
+
 /** Returns a path in `dir` for `name` that is not in use: "a.png", then "a-2.png", ... */
 function freeName(dir, name) {
   const ext = extname(name), stem = basename(name, ext);
@@ -407,8 +446,25 @@ export async function serveFile(url, res) {
     res.writeHead(404).end();
     return;
   }
-  // ?thumb=1 serves a small JPEG; if `sips` fails, the original file is served.
-  const thumb = url.searchParams.has('thumb') ? await thumbFor(abs).catch(() => null) : null;
-  res.writeHead(200, { 'content-type': thumb ? 'image/jpeg' : IMG[extname(abs).toLowerCase()], 'cache-control': 'private, max-age=60' });
-  createReadStream(thumb ?? abs).pipe(res);
+  const st = await stat(abs);
+  const ext = extname(abs).toLowerCase();
+  const w = Math.max(0, Math.floor(Number(url.searchParams.get('w')) || 0));
+  const mode = w ? `w${w}` : url.searchParams.has('thumb') ? 't' : 'f';
+  // The ETag changes when the file changes, so the browser can keep the image and only ask "still the same?".
+  // A URL with `v=<key>` already changes with the image: the browser keeps that one without asking.
+  const etag = `"${st.size.toString(36)}-${Math.round(st.mtimeMs).toString(36)}-${mode}"`;
+  const cache = url.searchParams.has('v') ? 'private, max-age=2592000, immutable' : 'private, no-cache';
+  if (res.req?.headers['if-none-match'] === etag) {
+    res.writeHead(304, { etag, 'cache-control': cache }).end();
+    return;
+  }
+  // ?w=<pixels> serves a small WebP; ?thumb=1 serves a small JPEG. If the tool fails, or the copy is not smaller, the original file is served.
+  let body = abs, type = IMG[ext], size = st.size;
+  const small = w && ext !== '.gif' ? await smallFor(abs, w, st).catch(() => null) : !w && url.searchParams.has('thumb') ? await thumbFor(abs).catch(() => null) : null;
+  if (small) {
+    const ss = await stat(small);
+    if (ss.size < st.size) { body = small; size = ss.size; type = small.endsWith('.webp') ? 'image/webp' : 'image/jpeg'; }
+  }
+  res.writeHead(200, { 'content-type': type, 'content-length': size, etag, 'cache-control': cache });
+  createReadStream(body).pipe(res);
 }

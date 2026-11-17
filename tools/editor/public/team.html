@@ -116,6 +116,8 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const file = (p) => '/ws/file?path=' + encodeURIComponent(p);
+// A small WebP copy for the screen (the server makes and keeps it). `file` stays the full image, for canvases and exports.
+const small = (p, w = 128) => '/ws/file?w=' + w + '&path=' + encodeURIComponent(p);
 // Simulator mode (/team.html?sim): start with 4 random Spirit World spirits, then add spirits only from random draws.
 const SIM = new URLSearchParams(location.search).has('sim');
 const DRAW = { spiritWorld: { show: 4, pick: 2 }, arcaneAbyss: { show: 3, pick: 1 } }, START = 4;
@@ -150,8 +152,8 @@ async function load() {
   const [hs, classes] = await Promise.all([fetch('/api/game/hex-spirits').then((r) => r.json()), fetch('/api/game/table?name=classes').then((r) => r.json())]);
   for (const c of classes) classByName.set(c.name, c);
   catalog = hs.spirits.map((s) => ({ id: s.name, name: s.name, cost: s.cost, origin: s.origin ?? s.folder.split('/').at(-2), classes: s.classes,
-    image: s.final?.front ? `${file(s.final.front + '-preview.png')}&v=${s.finalKey}` : file(s.front),
-    back: s.final?.back ? `${file(s.final.back + '-preview.png')}&v=${s.finalKey}` : null, awakenText: s.awakenText, runes: s.runes ?? [] }))
+    image: s.final?.front ? `${small(s.final.front + '-preview.png', 384)}&v=${s.finalKey}` : small(s.front, 384),
+    back: s.final?.back ? `${small(s.final.back + '-preview.png', 384)}&v=${s.finalKey}` : null, awakenText: s.awakenText, runes: s.runes ?? [] }))
     .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name));
   byId = new Map(catalog.map((s) => [s.id, s]));
   board = board.map((id) => (id && byId.has(id) ? id : null)); // a spirit that is gone leaves its slot
@@ -199,7 +201,7 @@ function paintTraits() {
   // Two lists: the common classes (count and breakpoints), then the special classes (no count: a special class is on or off).
   const rows = traitRows(), commons = rows.filter((r) => r.kind === 'Common'), specials = rows.filter((r) => r.kind === 'Special').sort((a, b) => a.name.localeCompare(b.name));
   const row = (r, count) => `<div class="trait" style="--c:${r.color}" data-trait="${esc(r.name)}">
-    <div class="emblem">${r.icon ? `<img src="${file(r.icon)}" alt="">` : esc(r.name[0])}${count ? `<span class="n">${r.count}</span>` : ''}</div>
+    <div class="emblem">${r.icon ? `<img src="${small(r.icon)}" alt="">` : esc(r.name[0])}${count ? `<span class="n">${r.count}</span>` : ''}</div>
     <div><span class="name">${esc(r.name)}</span>${r.th.length ? `<div class="pips">${r.th.map((t) => `<span class="pip ${r.count >= t ? 'hit' : ''}">${t}</span>`).join('')}</div>` : ''}</div></div>`;
   $('traits').innerHTML = !rows.length ? '<div class="note">Summon spirits to build traits.</div>'
     : (commons.length ? '<span class="state-label">Classes</span>' + commons.map((r) => row(r, true)).join('') : '')
@@ -214,7 +216,7 @@ $('traits').addEventListener('pointerover', (e) => {
   const bps = (c?.effect_schema ?? []).slice().sort((a, b) => (Number(a.count) || 99) - (Number(b.count) || 99))
     .map((bp) => ({ count: bp.count, color: bp.color ?? 'bronze', desc: (bp.effects ?? []).map((x) => (x?.description ?? '').trim()).filter(Boolean).join(' ') || (bp.description ?? '').trim() }));
   tip = document.createElement('div'); tip.className = 'tip'; tip.style.setProperty('--c', row.color);
-  tip.innerHTML = `<div class="tip-head"><div class="emblem" style="--c:${row.color}">${row.icon ? `<img src="${file(row.icon)}" alt="">` : esc(row.name[0])}</div><div><span class="tip-name">${esc(row.name)}</span><span class="tip-kind">${row.kind}</span></div></div>
+  tip.innerHTML = `<div class="tip-head"><div class="emblem" style="--c:${row.color}">${row.icon ? `<img src="${small(row.icon)}" alt="">` : esc(row.name[0])}</div><div><span class="tip-name">${esc(row.name)}</span><span class="tip-kind">${row.kind}</span></div></div>
     ${c?.description ? `<p>${esc(c.description)}</p>` : ''}${bps.map((b) => `<div class="bp-row"><span class="bp-count bp-${esc(b.color)}">${esc(b.count)}</span><div>${esc(b.desc)}</div></div>`).join('')}${c?.footer ? `<p>${esc(c.footer)}</p>` : ''}`;
   document.body.appendChild(tip);
   const a = el.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -224,14 +226,14 @@ $('traits').addEventListener('pointerover', (e) => {
 $('traits').addEventListener('pointerout', (e) => { if (!e.relatedTarget?.closest?.('[data-trait]')) hideTip(); });
 // The detail card of a spirit in the list, above the spirit: what it needs to awaken and what its classes do.
 function spiritTip(s) {
-  const runes = s.runes.map((g) => g.map((f) => `<img src="${file(f)}" alt="${esc(f.split('/').at(-1).replace(/\.png$/, ''))}">`).join('<span class="or">or</span>')).join('');
+  const runes = s.runes.map((g) => g.map((f) => `<img src="${small(f)}" alt="${esc(f.split('/').at(-1).replace(/\.png$/, ''))}">`).join('<span class="or">or</span>')).join('');
   // Spirit World spirits and heroes have no awaken requirement in the data; an Arcane Abyss spirit (cost 7+) without one shows that.
   const awaken = runes ? `<div class="aw-runes">${runes}</div>` : s.awakenText ? esc(s.awakenText) : s.cost >= 7 ? 'No requirement.' : '';
   const byName = new Map(); for (const c of s.classes) byName.set(c.name, { ...c, n: (byName.get(c.name)?.n ?? 0) + 1 });
   const classes = [...byName.values()].map((c) => {
     const k = classByName.get(c.name), special = isSpecial(k);
     const text = (special && (k?.effect_schema ?? []).flatMap((b) => (b.effects ?? []).map((x) => (x?.description ?? '').trim())).filter(Boolean).join(' ')) || k?.description || '';
-    return `<div class="tip-class" style="--c:${special ? SPECIAL_ORANGE : COMMON_GRAY}"><div class="emblem">${c.icon ? `<img src="${file(c.icon)}" alt="">` : esc(c.name[0])}</div><div><span class="name">${esc(c.name)}${c.n > 1 ? ` ×${c.n}` : ''}</span><p>${esc(text)}</p></div></div>`;
+    return `<div class="tip-class" style="--c:${special ? SPECIAL_ORANGE : COMMON_GRAY}"><div class="emblem">${c.icon ? `<img src="${small(c.icon)}" alt="">` : esc(c.name[0])}</div><div><span class="name">${esc(c.name)}${c.n > 1 ? ` ×${c.n}` : ''}</span><p>${esc(text)}</p></div></div>`;
   }).join('');
   return `<span class="tip-name">${esc(s.name)}</span>${awaken ? `<div class="tip-awaken"><span class="state-label">To awaken</span>${awaken}</div>` : ''}${classes}`;
 }
@@ -259,7 +261,7 @@ function paintWheel() {
   for (const [name, [i, color]] of Object.entries(WHEEL)) {
     const [x0, y0] = pt(ang(i) + 2.5, RR), [x1, y1] = pt(ang(i + 1) - 2.5, RR), [mx, my] = pt(ang(i) + 22.5, RR - 40);
     out += `<path d="M${n(x0)} ${n(y0)}A${RR} ${RR} 0 0 1 ${n(x1)} ${n(y1)}" fill="none" stroke="${color}" stroke-width="22"><title>${name}: ${AXES[i][0]} and ${AXES[(i + 1) % 8][0]}</title></path>
-      <image href="${file(`references/icons/origins/${name} (icon).png`)}" x="${n(mx - 11)}" y="${n(my - 19)}" width="22" height="22" preserveAspectRatio="xMidYMid meet"/><text class="origin" x="${n(mx)}" y="${n(my + 17)}">${name}</text>`;
+      <image href="${small(`references/icons/origins/${name} (icon).png`)}" x="${n(mx - 11)}" y="${n(my - 19)}" width="22" height="22" preserveAspectRatio="xMidYMid meet"/><text class="origin" x="${n(mx)}" y="${n(my + 17)}">${name}</text>`;
   }
   AXES.forEach(([name, hint], i) => {
     const a = ang(i), cos = Math.cos(a * rad), sin = Math.sin(a * rad), [tx, ty] = pt(a, RR + 11), [x, y] = pt(a, RR + 24);

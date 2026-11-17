@@ -115,6 +115,8 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const file = (p) => '/ws/file?path=' + encodeURIComponent(p);
+// A small WebP copy for the screen (the server makes and keeps it). `file` stays the full image, for canvases and exports.
+const small = (p, w = 128) => '/ws/file?w=' + w + '&path=' + encodeURIComponent(p);
 const get = (p) => fetch(p).then((r) => r.json());
 const post = (p, b) => fetch(p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
 const uuid = () => crypto.randomUUID();
@@ -158,7 +160,7 @@ async function load() {
   paint(); mark();
 }
 // ---------- monsters: name, difficulty, health, damage, reward track ----------
-const tok = (id, ri, ti) => `<span class="tok" title="${esc(poolById[id]?.name ?? id)} · ${fmt(RV.values[id] ?? 0)} VP">${poolIcon[id] ? `<img src="${file(poolIcon[id])}" alt="">` : '?'}<button data-rm="${ri}:${ti}" title="Remove">×</button></span>`;
+const tok = (id, ri, ti) => `<span class="tok" title="${esc(poolById[id]?.name ?? id)} · ${fmt(RV.values[id] ?? 0)} VP">${poolIcon[id] ? `<img src="${small(poolIcon[id])}" alt="">` : '?'}<button data-rm="${ri}:${ti}" title="Remove">×</button></span>`;
 function paintMonsters() {
   // Symmetric sets first (by class, difficulty, set, land), then an empty row, then the random section by difficulty.
   const shown = [...rows.keys()].filter((i) => !stage || rows[i].stage === stage);
@@ -206,7 +208,7 @@ function card(i) {
   const foot = edit ? `<div class="cfoot"><input data-f="footer" placeholder="Footer" style="width:100%" value="${esc(c.footer)}"></div>` : c.footer ? `<div class="cfoot">${esc(c.footer)}</div>` : '';
   return `<article class="ccard ${t} ${edit ? 'edit' : ''}" data-i="${i}" style="--cc:${esc(c.color ?? '#d4a843')}">
     <div class="cact"><button data-edit="${i}">${edit ? 'Done' : 'Edit'}</button><button data-del="${i}">Remove</button></div>
-    <div class="chead">${icon ? `<img src="${file('references/icons/classes/' + icon)}" alt="">` : `<span class="emoji">${esc(c.icon_emoji || '🛡️')}</span>`}${NEWICONS.includes(c.name + '.png') ? `<span class="newicon" title="Proposed new icon (not in use)"><img src="${file('references/icons/classes_new/' + c.name + '.png')}" alt=""><small>new</small></span>` : ''}<div>${head}</div></div>
+    <div class="chead">${icon ? `<img src="${small('references/icons/classes/' + icon, 256)}" alt="">` : `<span class="emoji">${esc(c.icon_emoji || '🛡️')}</span>`}${NEWICONS.includes(c.name + '.png') ? `<span class="newicon" title="Proposed new icon (not in use)"><img src="${small('references/icons/classes_new/' + c.name + '.png', 256)}" alt=""><small>new</small></span>` : ''}<div>${head}</div></div>
     ${desc}${tags}${list}${add}${foot}</article>`;
 }
 function paintClasses() {
@@ -218,7 +220,7 @@ function paintClasses() {
 function paintRewards() {
   const curve = `<div class="curve">Expected value = <input class="num" type="number" step="0.1" data-curve="a" value="${RV.curve.a}"> + <input class="num" type="number" step="0.05" data-curve="b" value="${RV.curve.b}"> × difficulty <span>· bands: jackpot ≥ +${RV.bands.jackpot * 100}%, strong ≥ +${RV.bands.strong * 100}%, weak ≤ ${RV.bands.weak * 100}%, trap ≤ ${RV.bands.trap * 100}%</span></div>`;
   return curve + `<table><thead><tr><th>Reward</th><th>Value (VP)</th><th>On tracks</th><th></th></tr></thead><tbody>${rows.map((t, i) => `<tr data-i="${i}">
-    <td><div class="tname"><span class="tok">${t.icon ? `<img src="${file(t.icon)}" alt="">` : '?'}</span>${esc(t.name)}</div></td>
+    <td><div class="tname"><span class="tok">${t.icon ? `<img src="${small(t.icon)}" alt="">` : '?'}</span>${esc(t.name)}</div></td>
     <td><input class="num" type="number" step="0.25" data-f="value" data-num value="${t.value}"></td>
     <td class="v">${RV.used[t.id] ?? 0}</td><td><button class="del" data-del="${i}">Remove</button></td></tr>`).join('')}</tbody></table>
     <div class="note">Tokens with no value count as 0 on a track. Use “Add row” to give a value to another token.</div>`;
@@ -227,9 +229,9 @@ function paintRewards() {
 let ORIGIN = { icons: {}, runes: [], relics: [] };
 function paintOrigins() {
   const own = (list, o) => list.filter((r) => r.owner === o.name || r.owner === `${o.name} Region`);
-  const toks = (list) => list.length ? `<div class="track">${list.map((r) => `<span class="tok" title="${esc(r.name)}">${poolIcon[r.icon] ? `<img src="${file(poolIcon[r.icon])}" alt="">` : '?'}</span>`).join('')}</div>` : '<span class="v">–</span>';
+  const toks = (list) => list.length ? `<div class="track">${list.map((r) => `<span class="tok" title="${esc(r.name)}">${poolIcon[r.icon] ? `<img src="${small(poolIcon[r.icon])}" alt="">` : '?'}</span>`).join('')}</div>` : '<span class="v">–</span>';
   return `<table><thead><tr><th>Icon</th><th>Name</th><th>Rune</th><th>Relic</th><th>Color</th><th>Description</th><th></th></tr></thead><tbody>${rows.map((o, i) => `<tr data-i="${i}">
-    <td><div class="track"><span class="tok">${ORIGIN.icons[o.name] ? `<img src="${file(ORIGIN.icons[o.name])}" alt="">` : esc(o.icon_emoji ?? '?')}</span></div></td>
+    <td><div class="track"><span class="tok">${ORIGIN.icons[o.name] ? `<img src="${small(ORIGIN.icons[o.name])}" alt="">` : esc(o.icon_emoji ?? '?')}</span></div></td>
     <td><input class="name" data-f="name" value="${esc(o.name)}"></td>
     <td>${toks(own(ORIGIN.runes, o))}</td><td>${toks(own(ORIGIN.relics, o))}</td>
     <td><input type="color" data-f="color" value="${esc(o.color ?? '#888888')}"></td>
@@ -243,7 +245,7 @@ const KINDS = ['basic', 'wildcard', 'other'];
 function paintRunes() {
   const aug = table === 'augments', kindCol = table === 'runes', rel = table === 'relics';
   return `<table><thead><tr><th>Icon</th><th>Name</th>${kindCol ? '<th>Kind</th>' : ''}<th title="${aug ? 'The class the augment belongs to' : 'Origin it belongs to'}">${aug ? 'Class' : 'Origin'}</th><th>Value (VP)</th>${rel ? '<th>Ability</th>' : ''}<th>Description</th><th></th></tr></thead><tbody>${rows.map((r, i) => `<tr data-i="${i}">
-    <td><div class="track"><span class="tok" title="${esc(poolById[r.icon]?.name ?? '')}">${poolIcon[r.icon] ? `<img src="${file(poolIcon[r.icon])}" alt="">` : '?'}</span></div></td>
+    <td><div class="track"><span class="tok" title="${esc(poolById[r.icon]?.name ?? '')}">${poolIcon[r.icon] ? `<img src="${small(poolIcon[r.icon])}" alt="">` : '?'}</span></div></td>
     <td><input class="name" data-f="name" value="${esc(r.name)}"></td>
     ${!kindCol ? '' : `<td><select data-f="kind">${KINDS.map((k) => `<option ${r.kind === k ? 'selected' : ''}>${k}</option>`).join('')}</select></td>`}
     <td><input data-f="${aug ? 'class' : 'owner'}" style="width:140px" value="${esc(aug ? r.class : r.owner)}"></td>
@@ -290,7 +292,7 @@ $('scroll').addEventListener('click', (e) => {
 });
 // The reward picker: all icons of the game, in a popover next to the + button.
 function openPick(btn, onPick) {
-  const p = $('pick'); p.innerHTML = pool.filter((t) => t.icon).map((t) => `<button data-id="${t.id}" title="${esc(t.name)}${RV.values[t.id] != null ? ` · ${fmt(RV.values[t.id])} VP` : ''}"><img src="${file(t.icon)}" alt=""></button>`).join('');
+  const p = $('pick'); p.innerHTML = pool.filter((t) => t.icon).map((t) => `<button data-id="${t.id}" title="${esc(t.name)}${RV.values[t.id] != null ? ` · ${fmt(RV.values[t.id])} VP` : ''}"><img loading="lazy" src="${small(t.icon)}" alt=""></button>`).join('');
   const r = btn.getBoundingClientRect(); p.hidden = false; p.style.left = Math.min(r.left, innerWidth - 360) + 'px'; p.style.top = Math.min(r.bottom + 6, innerHeight - 330) + 'px';
   p.onclick = (e) => { const b = e.target.closest('[data-id]'); if (!b) return; onPick(b.dataset.id); p.hidden = true; paint(); mark(); };
 }

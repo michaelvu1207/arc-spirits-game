@@ -145,6 +145,8 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const file = (p) => '/ws/file?path=' + encodeURIComponent(p);
+// A small WebP copy for the screen (the server makes and keeps it). `file` stays the full image, for canvases and exports.
+const small = (p, w = 128) => '/ws/file?w=' + w + '&path=' + encodeURIComponent(p);
 const post = (p, b) => fetch(p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
 
 // ---------- templates: each one lists its items, renders one item as HTML, and names the export file ----------
@@ -156,7 +158,7 @@ const TEMPLATES = {
     // The merged monster card from Figma (Design Drafts), made on the server by tools/monster_generate.py whenever
     // the monster's art, values or reward icons change; this shows the made card.
     render(m) {
-      return m.card ? `<img class="mcard" loading="lazy" src="${file(m.card + '-preview.png')}&v=${m.cardKey}" alt="">` : '<div class="mcard pending">Making the card…</div>';
+      return m.card ? `<img class="mcard" loading="lazy" src="${small(m.card + '-preview.png', 512)}&v=${m.cardKey}" alt="">` : '<div class="mcard pending">Making the card…</div>';
     },
     async png(m) { if (!m.card) throw new Error(`${m.name}: the card is still being made.`); return dataUrl(file(m.card + '.png')); },
     badge: (m) => `${m.stale ? '<span class="figma upd" title="The art or data changed; the server is making the new card">updating…</span>' : ''}${m.missingIcons?.length ? `<span class="figma upd" title="These kill rewards have no icon in references/icons/icon_pool, so they are not on the card">no icon: ${esc(m.missingIcons.join(', '))}</span>` : ''}`,
@@ -266,9 +268,9 @@ TEMPLATES['hex-spirit'] = {
   // Arcane and non-arcane spirits (m.source 'figma') show the cards exported from Figma; only the heroes are drawn from the old frame.
   render(m) {
     if (m.source === 'figma') return (m.kit?.template === 'non-arcane' ? ['front'] : this.sides).map((side) => m.final[side]
-      ? `<img class="hex" loading="lazy" width="${this.width}" height="${this.height}" src="${file(m.final[side] + '-preview.png')}&v=${m.finalKey}" alt="">`
+      ? `<img class="hex" loading="lazy" width="${this.width}" height="${this.height}" src="${small(m.final[side] + '-preview.png', 512)}&v=${m.finalKey}" alt="">`
       : `<div class="hex pending">Making the ${side}…</div>`).join('');
-    return this.sides.map((side) => m.final?.[side] ? `<img class="hex" loading="lazy" width="${this.width}" height="${this.height}" src="${file(m.final[side] + '-preview.png')}&v=${m.finalKey}" alt="">` : `<canvas class="hex" data-side="${side}" data-key="${esc(m.name)}" width="${this.width}" height="${this.height}"></canvas>`).join(''); },
+    return this.sides.map((side) => m.final?.[side] ? `<img class="hex" loading="lazy" width="${this.width}" height="${this.height}" src="${small(m.final[side] + '-preview.png', 512)}&v=${m.finalKey}" alt="">` : `<canvas class="hex" data-side="${side}" data-key="${esc(m.name)}" width="${this.width}" height="${this.height}"></canvas>`).join(''); },
   edit: true, // a click on the pair (or Edit) opens the editor: select the art, position it, render
   // Figma-design spirits are made by the generator (tools/hex_generate.py) whenever their art or data changes.
   badge: (m) => m.source === 'figma' ? `<span class="figma" title="Figma design, made by the generator">Figma design</span>${m.stale?.length ? '<span class="figma upd" title="The art or data changed; the server is making the new card">updating…</span>' : ''}` : '',
@@ -404,7 +406,7 @@ function edDraw() {
 function edStep(pick) { $('edPick').hidden = !pick; $('edWrap').hidden = pick; }
 function edGallery() {
   const m = ED.m, pinned = new Set(m.pinned ?? []), id = (n) => n.match(/-([0-9a-f]{8}-\d)\.png$/)?.[1];
-  const tile = (n) => `<figure class="${ED.artName === n ? 'sel' : ''}" data-pick="${esc(n)}" title="${esc(n)}"><div class="pic"><img class="tile" loading="lazy" src="/ws/file?thumb=1&path=${encodeURIComponent(m.folder + '/' + n)}" alt="">${pinned.has(n) ? '<span class="pin on">★</span>' : ''}</div><figcaption>${id(n) ? `<span class="gid">${id(n)}</span>` : esc(n.split('/').at(-1))}</figcaption></figure>`;
+  const tile = (n) => `<figure class="${ED.artName === n ? 'sel' : ''}" data-pick="${esc(n)}" title="${esc(n)}"><div class="pic"><img class="tile" loading="lazy" src="/ws/file?w=384&path=${encodeURIComponent(m.folder + '/' + n)}" alt="">${pinned.has(n) ? '<span class="pin on">★</span>' : ''}</div><figcaption>${id(n) ? `<span class="gid">${id(n)}</span>` : esc(n.split('/').at(-1))}</figcaption></figure>`;
   const groups = {}; for (const n of m.images) (groups[n.includes('/') ? n.split('/')[0] : ''] ??= []).push(n);
   $('edPickTitle').textContent = `${m.name} · select the art`;
   $('edGrid').innerHTML = m.images.length ? Object.entries(groups).map(([g, list]) => `${g ? `<h3 class="group">${esc(g)}</h3>` : ''}<div class="fgroup">${[...list.filter((n) => pinned.has(n)), ...list.filter((n) => !pinned.has(n))].map(tile).join('')}</div>`).join('')

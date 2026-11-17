@@ -3,7 +3,8 @@ import http from 'node:http';
 import { writeFileSync } from 'node:fs';
 import { readFile, writeFile, rename } from 'node:fs/promises';
 import { readFileSync, existsSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { brotliCompressSync, gzipSync, constants as zlibConst } from 'node:zlib';
 import { extname, join, normalize, basename, dirname, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as niji from './niji.mjs';
@@ -224,10 +225,41 @@ async function readBody(req) {
   return s ? JSON.parse(s) : {};
 }
 
-const json = (res, code, obj) => {
-  res.writeHead(code, { 'content-type': 'application/json' });
-  res.end(JSON.stringify(obj));
-};
+/**
+ * Sends text (a page or JSON) so that a slow link carries as little as possible:
+ * - compressed (Brotli, or gzip) when the browser accepts it;
+ * - with an ETag on GET, so a second visit gets "304 Not Modified" with no body.
+ * The browser asks again each time (`no-cache`), so it never shows old data.
+ */
+function sendText(res, code, type, body) {
+  const req = res.req;
+  const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
+  const headers = { 'content-type': type, vary: 'accept-encoding' };
+  if (code === 200 && req?.method === 'GET') {
+    headers.etag = `W/"${createHash('sha1').update(buf).digest('base64url').slice(0, 22)}"`;
+    headers['cache-control'] = 'private, no-cache';
+    if (req.headers['if-none-match'] === headers.etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+  }
+  const accept = String(req?.headers['accept-encoding'] ?? '');
+  let out = buf;
+  if (buf.length > 1024) {
+    if (/\bbr\b/.test(accept)) {
+      out = brotliCompressSync(buf, { params: { [zlibConst.BROTLI_PARAM_QUALITY]: 5 } });
+      headers['content-encoding'] = 'br';
+    } else if (/\bgzip\b/.test(accept)) {
+      out = gzipSync(buf, { level: 6 });
+      headers['content-encoding'] = 'gzip';
+    }
+  }
+  headers['content-length'] = out.length;
+  res.writeHead(code, headers);
+  res.end(out);
+}
+
+const json = (res, code, obj) => sendText(res, code, 'application/json', JSON.stringify(obj));
 
 // Actions on one generated image. The request formats come from the Niji web app.
 const ACTIONS = {
@@ -468,8 +500,7 @@ const server = http.createServer(async (req, res) => {
       if (!file.startsWith(PUBLIC)) return json(res, 403, { error: 'Forbidden' });
       try {
         const data = await readFile(file);
-        res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
-        return res.end(data);
+        return sendText(res, 200, MIME[extname(file)] ?? 'application/octet-stream', data);
       } catch {
         return json(res, 404, { error: 'Not found' });
       }
