@@ -5,12 +5,12 @@ reads working data: a change reaches players only when a package is published.
 
 | Where | What it reads |
 |---|---|
-| Local game on the laptop (`npm run local`, port 5317) | the working data folder `~/ArcSpiritsArt/game`, live |
+| Local game on the laptop (`npm run local`, port 5317) | the working data folder `data/` (in this repo), live |
 | Website | the live package in `packages/` (this repo), fixed at deploy time |
 
 ## Workflow
 
-1. Change the data in `~/ArcSpiritsArt/game` (and the engine, if the change needs code) and play
+1. Change the data in `data/` (in this repo) (and the engine, if the change needs code) and play
    it in the local game.
 2. Make a package (nothing goes live yet):
 
@@ -46,7 +46,7 @@ is copied from the old project's bucket. It also rebuilds the printed monster ca
 ## Before a release, when these change
 
 - **Monster Barrier, Damage or rewards** (`monsters_v2.json`): remake the printed monster cards
-  first: `python3 ~/niji-batch/tools/regen_monsters.py` (the niji-batch server must run on
+  first: `python3 tools/editor/tools/regen_monsters.py` (the niji-batch server must run on
   port 8787; code only, about a minute for all cards). The site shows a printed card only while
   its numbers match the game; a stale card is replaced by a plain drawn one. The release prints
   "card differs from the local row" for every card that still needs this.
@@ -54,12 +54,12 @@ is copied from the old project's bucket. It also rebuilds the printed monster ca
   `classes.json` as well. Players read the class text from the data, not from the rule switch.
 - **A spirit's rune cost, awaken text or class text** (`hex_spirits.json`, `classes.json`): remake
   the spirit cards that print it (the card back shows the runes, the class name and the class
-  text): `python3 ~/niji-batch/tools/regen_hexes.py x "" "Name One|Name Two"` (server on port
+  text): `python3 tools/editor/tools/regen_hexes.py x "" "Name One|Name Two"` (server on port
   8787; code only, about 4 s a card). The automatic remake is off on the laptop. To list the
   cards that differ from the data, compare each `references/hex_bases/<Name>/gen-back.spec.json`
   with `GET /api/game/hex-spirits`.
 - **Spirit names**: `hex_spirits.json` `name` is the card name (since 2026-11-14 there is one name
-  per spirit). `~/niji-batch/spirit-names.json` still maps the old long names and is no longer
+  per spirit). `tools/editor/spirit-names.json` still maps the old long names and is no longer
   needed for them.
 
 ## Checking a deployment

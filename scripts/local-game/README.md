@@ -73,7 +73,7 @@ Rooms live in memory: a restart clears them.
 | Part | What it does |
 | --- | --- |
 | `emulator.ts` | `server/pgrestEmu.ts` (the database and anonymous sign-in the tests use), saved to `<state-dir>/emulator/`. |
-| `backend.mjs` | Serves the catalog (`arc_spirits_assets`) from `~/ArcSpiritsArt/game/*.json`, images from local files, and realtime room updates. Refuses all writes to assets and storage. Sends the rest to the emulator. |
+| `backend.mjs` | Serves the catalog (`arc_spirits_assets`) from `data/*.json`, images from local files, and realtime room updates. Refuses all writes to assets and storage. Sends the rest to the emulator. |
 | `import-agent-games.ts` | Fills the explorer's tables from the AI game records and the games played here (above). |
 | Vite dev server (`vite.config.local.mjs`) | The normal app. It sends `/rest/v1`, `/auth/v1`, `/storage/v1`, `/realtime/v1` to the backend. |
 
@@ -85,7 +85,7 @@ allows it. The dev server writes to its own `.svelte-kit-local-<port>` folder
 
 ### Catalog
 
-All tables come from `<game-dir>/<table>.json` (default `~/ArcSpiritsArt/game`). Two tables
+All tables come from `<game-dir>/<table>.json` (default `data/` in this repo). Two tables
 have no local file and come from this repo, as in the agent harness (`src/lib/play/agents/catalog.ts`):
 
 - `mat_items` (runes and relics): the rows of `ml/catalog.json`, with the names from the local
