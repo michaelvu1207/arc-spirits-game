@@ -850,6 +850,8 @@ export interface PlayRules {
 	relicAwakenNeedsBoard?: boolean;
 	/** A monster card's deck is its `stage` (1-3), not its Barrier band. */
 	monsterDeckByStage?: boolean;
+	/** Summoner gains 2 VP (not 4) for a discarded Arcane Abyss spirit. */
+	summonerPays2?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

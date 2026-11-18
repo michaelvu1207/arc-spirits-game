@@ -106,6 +106,9 @@
  * - relicAwakenNeedsBoard (default false): true ⇒ the Cleansing Teapot cannot awaken a spirit whose
  *   awakening text is "Have N <Origin> Spirits…" (Caldera, Storm King, Hollowbloom) while the
  *   player holds fewer than N spirits of that origin. The full origin board is then the only way.
+ * - summonerPays2 (default false): true ⇒ Summoner gains 2 VP (not 4) for a discarded Arcane Abyss
+ *   spirit. With `summonerOncePerRound` a 7-Forest board still paid 4 VP every round from round 6
+ *   (24 of the winner's 30 points in three test games). The printed text assumes both are on.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -146,7 +149,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	masterBarrierChoice: false,
 	falconerNoDoubleVp: false,
 	relicAwakenNeedsBoard: false,
-	monsterDeckByStage: false
+	monsterDeckByStage: false,
+	summonerPays2: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -281,6 +285,14 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Firetail',
 		count: 1,
 		text: 'In combat with a monster, or in a round when another player is at your location, gain 3 Initiative.'
+	},
+	{
+		// Listed before `summonerOncePerRound`: the first matching entry of a tier is the one printed.
+		rule: 'summonerPays2',
+		when: true,
+		className: 'Summoner',
+		count: 1,
+		text: 'On Spirit World summon, you may draw from the Arcane Abyss Bag. Once per round, when you discard an Arcane Abyss Spirit, gain 2 points.'
 	},
 	{
 		rule: 'summonerOncePerRound',

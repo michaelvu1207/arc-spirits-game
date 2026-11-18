@@ -1074,10 +1074,12 @@ function discardBoardSpirit(
 		// Rule `summonerOncePerRound`: only the first such discard of a round pays.
 		const once = ruleValue(catalog, 'summonerOncePerRound');
 		if (!once || player.summonerPaidRound !== state.round) {
-			player.victoryPoints += 4;
+			// Rule `summonerPays2`: 2 VP instead of 4.
+			const gain = ruleValue(catalog, 'summonerPays2') ? 2 : 4;
+			player.victoryPoints += gain;
 			if (once) player.summonerPaidRound = state.round;
-			discardLog.push('Summoner: gained 4 VP for discarding an Arcane Abyss spirit.');
-		} else discardLog.push('Summoner: already gained its 4 VP this round.');
+			discardLog.push(`Summoner: gained ${gain} VP for discarding an Arcane Abyss spirit.`);
+		} else discardLog.push(`Summoner: already gained its ${ruleValue(catalog, 'summonerPays2') ? 2 : 4} VP this round.`);
 	}
 
 	// Return the card to the bag it came from (face-down ⇒ Arcane Abyss,

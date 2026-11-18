@@ -1632,6 +1632,27 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(third.state.players.Red!.victoryPoints).toBe(before + 8);
 	});
 
+	test('rule summonerPays2: the Summoner discard pays 2 VP', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const catalog = { ...CATALOG, rules: { summonerOncePerRound: true, summonerPays2: true } };
+		const state = locationPhase(started.state, 'Water Region');
+		const player = state.players.Red!;
+		player.spirits = [
+			{ slotIndex: 4, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
+			{ slotIndex: 5, id: 'abyss-a', name: 'Abyss A', cost: 8, classes: {}, origins: {}, isFaceDown: false },
+			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
+		];
+		const before = player.victoryPoints;
+		const first = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
+		if (!first.ok) throw new Error(first.error.message);
+		expect(first.state.players.Red!.victoryPoints).toBe(before + 2);
+		const second = applyGameCommand(first.state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 5 }, catalog);
+		if (!second.ok) throw new Error(second.error.message);
+		expect(second.state.players.Red!.victoryPoints).toBe(before + 2);
+	});
+
 	test('Mystic: opening a summon draw arms a redraw; redrawHandDraws refreshes the hand', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
