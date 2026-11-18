@@ -2,7 +2,7 @@
 	// One list of spirits (Spirit World, Arcane Abyss or Heroes): the tier from desirability and
 	// power together, the cost to awaken, and the two levels. A row is marked when the spirit is
 	// too powerful (both levels High or better) or in the danger zone (wins far more than
-	// average but is not picked much). The "i" after a name shows the spirit; after a class, its text.
+	// average but is not picked much). A pick counts only when the spirit was also awakened. The "i" after a name shows the spirit; after a class, its text.
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ClassInfo from '$lib/components/ClassInfo.svelte';
@@ -84,7 +84,7 @@
 		<div class="count-rule">
 			<span><i class="key hot"></i>Too powerful: desirability and power both High or better</span>
 			<span><i class="key watch"></i>Danger zone: wins far more than average but is not picked much</span>
-			<span>Tier combines desirability (picked when offered) and power (holders win more than an average seat)</span>
+			<span>Tier combines desirability (picked and awakened when offered) and power (seats that awakened it win more than an average seat)</span>
 		</div>
 	{/if}
 </div>
