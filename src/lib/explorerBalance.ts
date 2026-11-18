@@ -8,6 +8,8 @@ export interface BalanceHeadline {
 	setup: string;
 	table: string;
 	games: number;
+	/** Points that win the game in this test (30, or 40 under rule winAt40). */
+	win_points?: number;
 	end_round_median: number;
 	end_round_low: number;
 	end_round_high: number;

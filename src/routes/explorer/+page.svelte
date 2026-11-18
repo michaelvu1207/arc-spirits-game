@@ -107,7 +107,7 @@
 						<div class="bar-row">
 							<span class="bar-name">{s.status}</span>
 							<div class="track">
-								<div class="bar"><i class="now" style={`width:${Math.max(0.5, (s.avg_points / 30) * 55)}%`}></i><span>{s.avg_points} pts</span></div>
+								<div class="bar"><i class="now" style={`width:${Math.max(0.5, (s.avg_points / (head.win_points ?? 30)) * 55)}%`}></i><span>{s.avg_points} pts</span></div>
 								<div class="bar"><i class="goal" style={`width:${Math.max(0.5, s.share_pct * 0.55)}%`}></i><span>{s.share_pct}% of seats</span></div>
 							</div>
 						</div>
