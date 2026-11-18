@@ -27,7 +27,7 @@ import {
 } from '../bags';
 import { DICE_TIER_FACES, PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, PVP_VP_PER_CORRUPTED, pvpVpForAttack } from '../combat';
 import { navigationPowerPool } from '../navigationPowers';
-import { ORIGIN_REWARDS, RELIC_TOOLS, relicToolText, relicToolVp } from '../effects/relicTools';
+import { ORIGIN_BOARD_NOTE, ORIGIN_REWARDS, RELIC_TOOLS, relicToolText, relicToolVp } from '../effects/relicTools';
 import { monsterDifficulty } from '../runtime';
 import { buildMonsterRewards } from '../monsterRewards';
 import {
@@ -170,7 +170,9 @@ function cardText(catalog: PlayCatalog): string {
 		`## Relic tools (offered once per round in Benefits: keep it or use the effect; using it discards it${relicToolVp(catalog) > 0 ? `; or take ${relicToolVp(catalog)} VP` : '. Relics give no VP'})`
 	);
 	for (const tool of Object.values(RELIC_TOOLS))
-		lines.push(`- ${tool.name}: ${relicToolText(tool, relicToolVp(catalog))}`);
+		lines.push(
+			`- ${tool.name}: ${relicToolText(tool, relicToolVp(catalog))}${tool.effect === 'awaken' && ruleValue(catalog, 'relicAwakenNeedsBoard') ? ORIGIN_BOARD_NOTE : ''}`
+		);
 
 	const used = new Set<string>();
 	for (const spirit of catalog.spirits)

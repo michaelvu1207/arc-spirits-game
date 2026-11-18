@@ -98,6 +98,14 @@
  * - masterBarrierChoice (default false): true ⇒ Master is "On Cultivate, gain 2 Max Barrier or
  *   restore 2 Barrier". A card asks only while both would give something (some Barrier broken and
  *   Max Barrier below its cap); unanswered, it gives Max Barrier. See effects/classes/master.ts.
+ *
+ * Balance test of 2026-11-18 (games ended in round 4 to 13; see also `summonerOncePerRound`):
+ * - falconerNoDoubleVp (default false): only read under falconerDoubleKill. true ⇒ Falconer doubles
+ *   every reward of the kill except Victory Points (a doubled Difficulty 3 kill paid up to 14 VP
+ *   in one move).
+ * - relicAwakenNeedsBoard (default false): true ⇒ the Cleansing Teapot cannot awaken a spirit whose
+ *   awakening text is "Have N <Origin> Spirits…" (Caldera, Storm King, Hollowbloom) while the
+ *   player holds fewer than N spirits of that origin. The full origin board is then the only way.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
@@ -132,7 +140,9 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	riderAugmentOption: false,
 	mageArcaneDice: false,
 	shieldbearerFullOnly: false,
-	masterBarrierChoice: false
+	masterBarrierChoice: false,
+	falconerNoDoubleVp: false,
+	relicAwakenNeedsBoard: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -203,6 +213,14 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Mystic',
 		count: 3,
 		text: 'When you Cultivate, you may gain twice as many runes. In addition to (1) and (2).'
+	},
+	{
+		// Listed before `falconerDoubleKill`: the first matching entry of a tier is the one printed.
+		rule: 'falconerNoDoubleVp',
+		when: true,
+		className: 'Falconer',
+		count: 1,
+		text: 'On your next monster kill you may gain double the rewards, except Victory Points. Then discard this spirit.'
 	},
 	{
 		rule: 'falconerDoubleKill',

@@ -226,6 +226,20 @@ describe('falconerDoubleKill: "On your next monster kill you may gain double the
 		expect(card(s)).toBeUndefined();
 	});
 
+	it('with falconerNoDoubleVp: every reward twice except Victory Points', () => {
+		const NO_VP = falconerCatalog({ falconerDoubleKill: true, falconerNoDoubleVp: true });
+		let s = afterKill(NO_VP);
+		const c = card(s)!;
+		expect(c.options[0].label).toContain('except Victory Points');
+		const vp = s.players.Red!.victoryPoints;
+		s = ok(s, NO_VP, ACTORS.Red, { type: 'resolveDecision', decisionId: c.id, optionId: 'yes' });
+		expect(s.players.Red!.spirits.map((x) => x.name)).toEqual(['Other']);
+		expect(s.players.Red!.pendingReward?.rewardTrack).toEqual([VP, ABYSS_SUMMON, ABYSS_SUMMON]);
+		expect(s.players.Red!.pendingReward?.chooseAmount).toBe(3);
+		s = ok(s, NO_VP, ACTORS.Red, { type: 'resolveMonsterReward', picks: [] });
+		expect(s.players.Red!.victoryPoints).toBe(vp + 1);
+	});
+
 	it('no: the usual rewards, the spirit stays, and the next kill asks again', () => {
 		let s = afterKill(ON);
 		const vp = s.players.Red!.victoryPoints;

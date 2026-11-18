@@ -2885,10 +2885,19 @@ function reduceCommand(
 				const reward = active.player.pendingReward;
 				const falconer = awakeFalconerSpirit(active.player);
 				if (reward && !reward.doubled && falconer && ruleValue(catalog, 'falconerDoubleKill')) {
-					reward.rewardTrack = [...reward.rewardTrack, ...reward.rewardTrack];
-					reward.chooseAmount *= 2;
+					// Rule `falconerNoDoubleVp`: the second copy leaves out the Victory Point rewards.
+					const noVp = ruleValue(catalog, 'falconerNoDoubleVp');
+					const again = noVp
+						? buildMonsterRewards(reward.rewardTrack)
+								.filter((option) => option.effect.type !== 'vp')
+								.map((option) => option.token)
+						: reward.rewardTrack;
+					reward.rewardTrack = [...reward.rewardTrack, ...again];
+					reward.chooseAmount = noVp ? rewardClaimCount(reward.rewardTrack) : reward.chooseAmount * 2;
 					reward.doubled = true;
-					log.push(`Falconer: the rewards of ${reward.monsterName} are doubled.`);
+					log.push(
+						`Falconer: the rewards of ${reward.monsterName} are doubled${noVp ? ' (not its Victory Points)' : ''}.`
+					);
 					log.push(...discardBoardSpirit(state, active.seatColor, falconer, catalog));
 				} else {
 					log.push('Falconer: there is no monster reward to double.');

@@ -549,6 +549,29 @@ describe('Relic tools — "You may <effect>, then discard this." (no VP side)', 
 		DECISION_RESOLVERS.relicTool(ctx, optionId);
 	};
 
+	it('rule relicAwakenNeedsBoard: the Teapot cannot awaken a "Have 7 <Origin> Spirits" spirit without that board', () => {
+		const capstone = { id: 'cap', name: 'Hollowbloom', cost: 9, classes: {}, origins: { 'Forest Region': 1 }, awaken: { kind: 'text', text: 'Have 7 Forest Spirits.' } };
+		const plain = { id: 'plain', name: 'Tide Warden', cost: 7, classes: {}, origins: { 'Water Region': 1 }, awaken: { kind: 'text', text: 'Cultivate.' } };
+		const catalog = (on: boolean) => ({ ...NO_VP, spirits: [capstone, plain], rules: on ? { relicAwakenNeedsBoard: true } : undefined }) as unknown as PlayCatalog;
+		const board = (forest: number) => [
+			{ slotIndex: 1, id: 'cap', name: 'Hollowbloom', cost: 9, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: true },
+			{ slotIndex: 2, id: 'plain', name: 'Tide Warden', cost: 7, classes: {}, origins: { 'Water Region': 1 }, isFaceDown: true },
+			...Array.from({ length: forest }, (_, i) => ({ slotIndex: 3 + i, id: `f${i}`, name: `Forest ${i}`, cost: 3, classes: {}, origins: { 'Forest Region': 1 }, isFaceDown: false }))
+		];
+		const offered = (on: boolean, forest: number) => {
+			const player = makePlayer({ mats: [relicTool(1, CLEANSING_TEAPOT_ID, 'Cleansing Teapot')], relics: 1, spirits: board(forest) as never });
+			offerHeldRelicTools(makeState(player), player, [], catalog(on));
+			const card = player.pendingDecisions.find((d) => d.kind === 'relicTool')!;
+			return { ids: card.options.filter((o) => o.id.startsWith('awaken:')).map((o) => o.id.split(':').pop()), prompt: card.prompt };
+		};
+		expect(offered(false, 4).ids).toEqual(['1', '2']); // rule off: any face-down spirit
+		expect(offered(true, 4).ids).toEqual(['2']); // 5 Forest spirits with the capstone: not enough
+		expect(offered(true, 5).ids).toEqual(['2']); // 6
+		expect(offered(true, 6 - 1 + 1).ids).toEqual(['1', '2']); // 7 with the capstone itself
+		expect(offered(true, 4).prompt).toContain('full origin board');
+		expect(offered(false, 4).prompt).not.toContain('full origin board');
+	});
+
 	it('each held relic tool is offered once (keep / effect; no VP option)', () => {
 		const player = makePlayer({ mats: [relicTool(1, FLOWER_ID, 'Flower')], relics: 1 });
 		const state = makeState(player);

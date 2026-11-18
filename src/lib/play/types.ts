@@ -844,6 +844,10 @@ export interface PlayRules {
 	shieldbearerFullOnly?: boolean;
 	/** Master: on Cultivate, 2 Max Barrier or restore 2 Barrier, the player's choice (default false). */
 	masterBarrierChoice?: boolean;
+	/** Falconer doubles every reward of the kill except Victory Points (under falconerDoubleKill). */
+	falconerNoDoubleVp?: boolean;
+	/** The Cleansing Teapot cannot awaken a "Have N <Origin> Spirits" spirit without that board. */
+	relicAwakenNeedsBoard?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

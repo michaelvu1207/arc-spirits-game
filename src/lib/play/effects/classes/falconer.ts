@@ -147,14 +147,15 @@ export function offerFalconerDouble(
 	const reward = player.pendingReward;
 	const falconer = awakeFalconerSpirit(player);
 	if (!reward || reward.doubled || !falconer) return;
+	const noVp = ruleValue(catalog, 'falconerNoDoubleVp');
 	player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== FALCONER_DOUBLE_KIND);
 	player.pendingDecisions.push({
 		id: nextId(state.rng, 'dec'),
 		source: 'class',
 		kind: FALCONER_DOUBLE_KIND,
-		prompt: `Falconer: gain double the rewards of ${reward.monsterName}? ${falconer.name} is then discarded.`,
+		prompt: `Falconer: gain double the rewards of ${reward.monsterName}${noVp ? ' (not its Victory Points)' : ''}? ${falconer.name} is then discarded.`,
 		options: [
-			{ id: 'yes', label: `Double the rewards and discard ${falconer.name}` },
+			{ id: 'yes', label: `Double the rewards${noVp ? ' except Victory Points' : ''} and discard ${falconer.name}` },
 			{ id: 'no', label: 'No, keep the spirit' }
 		],
 		expiresAt: 'benefits'

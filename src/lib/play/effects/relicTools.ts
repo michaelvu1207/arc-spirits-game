@@ -15,7 +15,8 @@
  */
 
 import { nextId } from '../rng';
-import type { PlaySpirit, PrivatePlayerState, PublicGameState } from '../types';
+import { ruleValue } from '../rules';
+import type { PlayCatalog, PlaySpirit, PrivatePlayerState, PublicGameState } from '../types';
 
 export const FIRECRACKER_ID = '8a0d54ca-aeab-405c-9e5c-1c1425d1aa86';
 export const FLOWER_ID = '690a7e3b-5737-4494-bb8a-b58bee13f473';
@@ -147,6 +148,30 @@ export function keepUnansweredRelicTools(player: PrivatePlayerState, log: string
 	return open.length;
 }
 
+/** Added to the Cleansing Teapot text under rule `relicAwakenNeedsBoard`. */
+export const ORIGIN_BOARD_NOTE =
+	' It cannot awaken a spirit that needs a full origin board ("Have 7 … Spirits") unless you have that board.';
+
+/**
+ * Rule `relicAwakenNeedsBoard`: true when `spirit`'s awakening text is "Have N <Origin> Spirits…"
+ * and the player holds fewer than N spirits of the spirit's own origin (awakened or not; the
+ * spirit itself counts, as in its awakening check).
+ */
+export function lacksOriginBoard(
+	player: PrivatePlayerState,
+	spirit: PrivatePlayerState['spirits'][number],
+	catalogSpirits: PlayCatalog['spirits'] | undefined
+): boolean {
+	const awaken = (catalogSpirits ?? []).find((s) => s.id === spirit.id)?.awaken;
+	const match = /^\s*have\s+(\d+)\b[^.,]*?spirits?\b/i.exec(awaken?.kind === 'text' ? awaken.text : '');
+	if (!match) return false;
+	const need = Number(match[1]);
+	const origins = Object.keys(spirit.origins ?? {}).filter((o) => (spirit.origins?.[o] ?? 0) > 0);
+	return !origins.some(
+		(origin) => player.spirits.filter((s) => (s.origins?.[origin] ?? 0) > 0).length >= need
+	);
+}
+
 /**
  * Offer every held relic tool: keep, VP (only when relicToolVp(catalog) > 0), or the effect. Called once per round (Benefits).
  * Earlier relic cards are replaced, because rune slots are re-numbered between rounds.
@@ -157,9 +182,10 @@ export function offerHeldRelicTools(
 	state: PublicGameState,
 	player: PrivatePlayerState,
 	log: string[],
-	catalog?: { relicToolVp?: number } | null
+	catalog?: (Pick<PlayCatalog, 'rules'> & { relicToolVp?: number; spirits?: PlayCatalog['spirits'] }) | null
 ): void {
 	const vp = relicToolVp(catalog);
+	const needsBoard = ruleValue(catalog, 'relicAwakenNeedsBoard');
 	player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== 'relicTool');
 	for (const slot of player.mats ?? []) {
 		if (!isHeldRelicTool(slot)) continue;
@@ -171,6 +197,7 @@ export function offerHeldRelicTools(
 		if (vp > 0) options.push({ id: `vp:${ref}`, label: `Gain ${vp} VP, then discard ${tool.name}` });
 		if (tool.effect === 'awaken') {
 			for (const spirit of player.spirits.filter((s) => s.isFaceDown)) {
+				if (needsBoard && lacksOriginBoard(player, spirit, catalog?.spirits)) continue;
 				options.push({
 					id: `awaken:${ref}:${spirit.slotIndex}`,
 					label: `Awaken ${spirit.name}, then discard ${tool.name}`
@@ -183,7 +210,7 @@ export function offerHeldRelicTools(
 			id: nextId(state.rng, 'dec'),
 			source: 'class',
 			kind: 'relicTool',
-			prompt: `${tool.name}: ${relicToolText(tool, vp)}`,
+			prompt: `${tool.name}: ${relicToolText(tool, vp)}${tool.effect === 'awaken' && needsBoard ? ORIGIN_BOARD_NOTE : ''}`,
 			options,
 			// A relic card, not a class ability: name the relic in the card header.
 			sourceLabel: `Relic: ${tool.name}`
