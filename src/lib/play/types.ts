@@ -862,6 +862,12 @@ export interface PlayRules {
 	summonerCultivate?: boolean;
 	/** Cultist gives no point (1 fewer sacrifice only). */
 	cultistNoVp?: boolean;
+	/** Captain: a random Power after a monster kill (no Cultivate clause). */
+	captainPowerOnKill?: boolean;
+	/** Arcane Alchemist: on Cultivate, convert 1 Spirit Augment into 1 Arcane Attack Dice. */
+	alchemistAugmentToArcane?: boolean;
+	/** Healer's Rest gives no point. */
+	healerNoVp?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

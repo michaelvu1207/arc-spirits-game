@@ -158,3 +158,66 @@ describe('Cultist with rule cultistNoVp: no point when corrupted', () => {
 		expect(gain()).toBe(1);
 	});
 });
+
+// Hero reworks and Healer (Michael, 2026-11-18).
+describe('rules captainPowerOnKill, alchemistAugmentToArcane, healerNoVp', () => {
+	const kill = (catalog: never, killed: boolean) => {
+		const p = makePlayer({ spirits: [spirit(1, { Captain: 1 })] });
+		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], { catalog, combat: { dealt: 5, overkill: 0, killed } } as never);
+		return (p.powerInventory ?? []).length;
+	};
+	it('Captain: a random Power after a kill, none after a fight that does not kill, none with the rule off', () => {
+		const ON = { rules: { captainPowerOnKill: true } } as never;
+		expect(kill(ON, true)).toBe(1);
+		expect(kill(ON, false)).toBe(0);
+		expect(kill({} as never, true)).toBe(0);
+	});
+	it('Captain: no augment on Cultivate with the rule on', () => {
+		const hero = () => spirit(1, { Captain: 1 }, { origins: { 'Human Enclave': 1 } });
+		const cultivate = (catalog: never) => {
+			const p = makePlayer({ spirits: [hero(), { ...hero(), slotIndex: 2, classes: {} }, { ...hero(), slotIndex: 3, classes: {} }] });
+			applyTrigger(makeState(p), 'Red', 'onCultivate', [], { catalog });
+			return (p.unplacedAugments ?? []).length;
+		};
+		expect(cultivate({ rules: { captainPowerOnKill: true } } as never)).toBe(0);
+	});
+	it('Arcane Alchemist: converts a placed Spirit Augment into 1 Arcane Attack Dice', () => {
+		const ON = { rules: { alchemistAugmentToArcane: true } } as never;
+		const p = makePlayer({
+			spirits: [spirit(1, { 'Arcane Alchemist': 1 }), spirit(2, {}, { name: 'Carrier' })],
+			spiritAugmentAttachments: [{ runeId: 'aug-fighter', spiritId: 's2', spiritSlotIndex: 2, className: 'Fighter', classId: 'c-fighter' }]
+		});
+		const state = makeState(p);
+		applyTrigger(state, 'Red', 'onCultivate', [], { catalog: ON });
+		const card = p.pendingDecisions.find((d) => d.kind === 'alchemistAugment')!;
+		expect(card.options.map((o) => o.id)).toEqual(['aug:2:aug-fighter', 'no']);
+		const ctx = buildEffectContext({ state, seat: 'Red', player: p, trigger: 'onCultivate', log: [], traitCount: 0, catalog: ON });
+		DECISION_RESOLVERS.alchemistAugment(ctx, 'aug:2:aug-fighter');
+		expect(p.spiritAugmentAttachments).toEqual([]);
+		expect(p.attackDice.map((d) => d.tier)).toEqual(['arcane']);
+	});
+	it('Arcane Alchemist: no card without a placed augment; rule off keeps the 4-dice trade', () => {
+		const ON = { rules: { alchemistAugmentToArcane: true } } as never;
+		const p = makePlayer({ spirits: [spirit(1, { 'Arcane Alchemist': 1 })] });
+		applyTrigger(makeState(p), 'Red', 'onCultivate', [], { catalog: ON });
+		expect(p.pendingDecisions).toEqual([]);
+		const q = makePlayer({
+			spirits: [spirit(1, { 'Arcane Alchemist': 1 })],
+			attackDice: Array.from({ length: 4 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as const }))
+		});
+		applyTrigger(makeState(q), 'Red', 'onCultivate', [], {});
+		expect(q.pendingDecisions.map((d) => d.kind)).toEqual(['arcMageTrade']);
+	});
+	it('Healer: the Rest card gives no point with healerNoVp', () => {
+		const rest = (catalog: never) => {
+			const p = makePlayer({ spirits: [spirit(1, { Healer: 1 })], maxBarrier: 10, barrier: 5, brokenBarrier: 5 });
+			const state = makeState(p);
+			applyTrigger(state, 'Red', 'onRest', [], { catalog });
+			const ctx = buildEffectContext({ state, seat: 'Red', player: p, trigger: 'onRest', log: [], traitCount: 0, catalog });
+			DECISION_RESOLVERS.healerRestore(ctx, 'yes');
+			return [p.victoryPoints, p.barrier];
+		};
+		expect(rest({ rules: { healerNoVp: true } } as never)).toEqual([0, 8]);
+		expect(rest({} as never)).toEqual([1, 8]);
+	});
+});

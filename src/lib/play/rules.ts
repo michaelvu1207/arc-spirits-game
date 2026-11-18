@@ -122,6 +122,12 @@
  *   Spirit World summon, no points for a discarded Arcane Abyss spirit).
  * - cultistNoVp (default false; Michael, 2026-11-18): true ⇒ Cultist is "When you become Corrupted,
  *   sacrifice 1 fewer spirit." (no point). A new Cultist ability is not designed yet.
+ * - captainPowerOnKill (default false; Michael, 2026-11-18): true ⇒ Captain is "After you defeat a
+ *   monster, gain 1 random Power. When discarded, gain 1 Enchanted Attack." (no Cultivate clause).
+ * - alchemistAugmentToArcane (default false; Michael, 2026-11-18): true ⇒ Arcane Alchemist is "When
+ *   you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice."
+ * - healerNoVp (default false; Michael, 2026-11-18): true ⇒ Healer's Rest restores 3 Barrier at 10
+ *   Max Barrier and gives no point.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -168,7 +174,10 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	sidePointsHalf: false,
 	queenUnawakens: false,
 	summonerCultivate: false,
-	cultistNoVp: false
+	cultistNoVp: false,
+	captainPowerOnKill: false,
+	alchemistAugmentToArcane: false,
+	healerNoVp: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -308,6 +317,27 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Firetail',
 		count: 1,
 		text: 'In combat with a monster, or in a round when another player is at your location, gain 3 Initiative.'
+	},
+	{
+		rule: 'captainPowerOnKill',
+		when: true,
+		className: 'Captain',
+		count: 1,
+		text: 'After you defeat a monster, gain 1 random Power. When discarded, gain 1 Enchanted Attack.'
+	},
+	{
+		rule: 'alchemistAugmentToArcane',
+		when: true,
+		className: 'Arcane Alchemist',
+		count: 1,
+		text: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.'
+	},
+	{
+		rule: 'healerNoVp',
+		when: true,
+		className: 'Healer',
+		count: 1,
+		text: 'On rest, if you have 10 max barrier, you may restore 3 barrier. When discarded, restore 2 barrier.'
 	},
 	{
 		rule: 'cultistNoVp',

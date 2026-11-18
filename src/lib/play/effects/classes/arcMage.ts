@@ -1,4 +1,6 @@
-import { DICE_TIER_ORDER } from '../../types';
+import { nextId } from '../../rng';
+import { ruleValue } from '../../rules';
+import { DICE_TIER_ORDER, type PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility, ClassDecisions } from './types';
 
@@ -20,36 +22,62 @@ const tradeOptions = [
 	{ id: 'no', label: 'No' }
 ];
 
+export const ALCHEMIST_AUGMENT_KIND = 'alchemistAugment';
+
+/** The placed Spirit Augments of a player (attachments that carry a class). */
+function placedAugments(player: PrivatePlayerState) {
+	return (player.spiritAugmentAttachments ?? []).filter((a) => a.classId || a.className);
+}
+
+// Rule `alchemistAugmentToArcane` (Michael, 2026-11-18): "When you Cultivate, you may convert 1
+// of your Spirit Augments into 1 Arcane Attack Dice." replaces the 4-dice trade. A card lists
+// every placed augment; the chosen one is removed from its spirit.
 export const ability: ClassAbility[] = [
 	{
 		on: 'onCultivate',
-		breakpoints: [
-			{
-				count: 1,
-				actions: [
-					{
-						kind: 'conditional',
-						when: { kind: 'hasAttackDice', amount: TRADE_COST },
-						then: [
-							{
-								kind: 'choose',
-								decisionKind: 'arcMageTrade',
-								prompt: tradePrompt,
-								options: tradeOptions
-							}
-						]
-					}
-				]
+		run(ctx) {
+			if (ruleValue(ctx.catalog, 'alchemistAugmentToArcane')) {
+				const augments = placedAugments(ctx.player);
+				if (augments.length === 0) return;
+				ctx.player.pendingDecisions.push({
+					id: nextId(ctx.state.rng, 'dec'),
+					source: 'class',
+					kind: ALCHEMIST_AUGMENT_KIND,
+					prompt: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.',
+					options: [
+						...augments.map((a) => {
+							const spirit = ctx.player.spirits.find((sp) => sp.slotIndex === a.spiritSlotIndex);
+							return {
+								id: `aug:${a.spiritSlotIndex}:${a.runeId}`,
+								label: `Convert the ${a.className ?? a.name ?? 'Spirit'} augment on ${spirit?.name ?? `slot ${a.spiritSlotIndex}`} → 1 Arcane Attack Dice`
+							};
+						}),
+						{ id: 'no', label: 'No' }
+					]
+				});
+				ctx.log.push('Decision: convert a Spirit Augment into an Arcane Attack Dice?');
+				return;
 			}
-		]
+			if (ctx.player.attackDice.length < TRADE_COST) return;
+			runAction(ctx, { kind: 'choose', decisionKind: 'arcMageTrade', prompt: tradePrompt, options: tradeOptions });
+		}
 	}
 ];
 
-// Colocated resolver for the opt-in card. On Yes, discard the chosen 4 dice → gain
-// 1 Arcane. The owner's client sends `selectedInstanceIds` (the 4 dice they clicked);
-// when absent or invalid (bots, or a malformed pick) we auto-spend the 4 LOWEST-value
-// dice so an Arcane is never wasted. Fires ONCE per cultivate — no re-offer loop.
 export const decisions: ClassDecisions = {
+	[ALCHEMIST_AUGMENT_KIND](ctx, optionId) {
+		const match = /^aug:(\d+):(.+)$/.exec(optionId);
+		if (!match) return;
+		const list = ctx.player.spiritAugmentAttachments ?? [];
+		const index = list.findIndex((a) => a.spiritSlotIndex === Number(match[1]) && a.runeId === match[2] && (a.classId || a.className));
+		if (index < 0) {
+			ctx.log.push('Arcane Alchemist: that augment is no longer there.');
+			return;
+		}
+		const [removed] = list.splice(index, 1);
+		ctx.log.push(`Arcane Alchemist: converted the ${removed.className ?? removed.name ?? 'Spirit'} augment into 1 Arcane Attack Dice.`);
+		runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: 1 });
+	},
 	arcMageTrade(ctx, optionId, selectedInstanceIds) {
 		if (optionId !== 'yes') return;
 		const dice = ctx.player.attackDice;

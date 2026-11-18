@@ -77,11 +77,9 @@ describe('Captain (onCultivate → +1 Spirit Augment with 3 Heroes)', () => {
 		expect(player.unplacedAugments?.length ?? 0).toBe(0);
 	});
 
-	it('exposes cultivate and discard abilities', () => {
-		expect(ability).toHaveLength(2);
-		expect(ability[0].on).toBe('onCultivate');
+	it('exposes cultivate, monster-kill (rule captainPowerOnKill) and discard abilities', () => {
+		expect(ability.map((x) => x.on)).toEqual(['onCultivate', 'onMonsterKill', 'onSpiritDiscard']);
 		expect(typeof ability[0].run).toBe('function');
-		expect(ability[1]).toMatchObject({ on: 'onSpiritDiscard' });
 	});
 
 	it('direct handler unit test: pushes a placeable augment + logs', () => {
