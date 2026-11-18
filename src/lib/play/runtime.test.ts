@@ -1605,6 +1605,33 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(next.players.Red!.victoryPoints).toBe(before + 4);
 	});
 
+	test('rule summonerOncePerRound: only the first discarded Arcane Abyss spirit of a round pays', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const catalog = { ...CATALOG, rules: { summonerOncePerRound: true } };
+		const state = locationPhase(started.state, 'Water Region');
+		const player = state.players.Red!;
+		player.spirits = [
+			{ slotIndex: 4, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
+			{ slotIndex: 5, id: 'abyss-a', name: 'Abyss A', cost: 8, classes: {}, origins: {}, isFaceDown: false },
+			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
+		];
+		const before = player.victoryPoints;
+		const first = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
+		if (!first.ok) throw new Error(first.error.message);
+		expect(first.state.players.Red!.victoryPoints).toBe(before + 4);
+		const second = applyGameCommand(first.state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 5 }, catalog);
+		if (!second.ok) throw new Error(second.error.message);
+		expect(second.state.players.Red!.victoryPoints).toBe(before + 4);
+		// A new round pays again.
+		second.state.round += 1;
+		second.state.players.Red!.spirits.push({ slotIndex: 6, id: 'abyss-c', name: 'Abyss C', cost: 8, classes: {}, origins: {}, isFaceDown: false });
+		const third = applyGameCommand(second.state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
+		if (!third.ok) throw new Error(third.error.message);
+		expect(third.state.players.Red!.victoryPoints).toBe(before + 8);
+	});
+
 	test('Mystic: opening a summon draw arms a redraw; redrawHandDraws refreshes the hand', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);

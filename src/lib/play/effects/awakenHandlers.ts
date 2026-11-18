@@ -653,7 +653,11 @@ function discardAbyssSpirits(count: number): AwakenHandler {
  */
 export function parseHaveOriginOrDiscard(text: string | undefined): { need: number; discard: number } | null {
 	const match = /\bhave\s+(\d+)\b[^.,]*?spirits?\s*,?\s*or\s+discard\s+(\d+)\s+arcane\s+abyss\s+spirits?/i.exec(text ?? '');
-	return match ? { need: Number(match[1]), discard: Number(match[2]) } : null;
+	if (match) return { need: Number(match[1]), discard: Number(match[2]) };
+	// "Have N <Origin> Spirits." with no second half: the full origin board is the only way
+	// (`discard` 0 = there is no discard branch).
+	const only = /^\s*have\s+(\d+)\b[^.,]*?spirits?\s*\.?\s*$/i.exec(text ?? '');
+	return only ? { need: Number(only[1]), discard: 0 } : null;
 }
 
 /**
@@ -676,14 +680,16 @@ function haveOriginOrDiscardAbyss(origin: string, need: number, discard: number)
 	return {
 		check(ctx) {
 			if (haveOrigin(ctx)) return { ok: true };
+			if (numbers(ctx).discard <= 0) return { ok: false, reason: 'need_origin_spirits' };
 			const viaDiscard = fallbackFor(ctx).check(ctx);
 			return viaDiscard.ok ? viaDiscard : { ok: false, reason: 'need_origin_spirits_or_abyss_spirits' };
 		},
 		discardChoice(ctx) {
-			return haveOrigin(ctx) ? null : (fallbackFor(ctx).discardChoice?.(ctx) ?? null);
+			if (haveOrigin(ctx) || numbers(ctx).discard <= 0) return null;
+			return fallbackFor(ctx).discardChoice?.(ctx) ?? null;
 		},
 		pay(ctx) {
-			if (haveOrigin(ctx)) return;
+			if (haveOrigin(ctx) || numbers(ctx).discard <= 0) return;
 			fallbackFor(ctx).pay(ctx);
 		}
 	};

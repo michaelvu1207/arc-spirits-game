@@ -27,8 +27,7 @@ import {
 	AWAKEN_HANDLERS,
 	AWAKEN_PROGRESS_KEYS,
 	AWAKEN_SPIRIT_IDS,
-	MANUAL_AWAKEN
-} from './awakenHandlers';
+	MANUAL_AWAKEN, parseHaveOriginOrDiscard } from './awakenHandlers';
 import { applyCultivate } from './apply';
 import { createRng } from '../rng';
 import type {
@@ -1421,6 +1420,32 @@ describe('AWAKEN_HANDLERS "Have 7 <Origin> Spirits, or discard 3 Arcane Abyss Sp
 			expect(player.spirits.map((s) => s.slotIndex).sort()).toEqual([1, 5, 6]);
 		});
 	}
+});
+
+describe('AWAKEN_HANDLERS "Have 7 <Origin> Spirits." (no discard branch in the data text)', () => {
+	it('reads the text: with no second half there is no discard branch', () => {
+		expect(parseHaveOriginOrDiscard('Have 7 Forest Spirits.')).toEqual({ need: 7, discard: 0 });
+		expect(parseHaveOriginOrDiscard('Have 7 Forest Spirits, or discard 3 Arcane Abyss Spirits.')).toEqual({ need: 7, discard: 3 });
+		expect(parseHaveOriginOrDiscard('Cultivate.')).toBeNull();
+	});
+	it('Hollowbloom: 3 spare Abyss spirits no longer awaken it; 7 Forest spirits do', () => {
+		const id = IDS.hollowbloom;
+		const self = { ...spirit(1, id, 'Hollowbloom'), cost: 9, origins: { 'Forest Region': 1 } };
+		const abyss = Array.from({ length: 3 }, (_, i) => ({ ...spirit(i + 2, `abyss-${i}`, `Abyss ${i}`, false), cost: 7 }));
+		const player = makePlayer({ spirits: [self, ...abyss] });
+		const catalog = { spirits: [{ id, name: 'Hollowbloom', cost: 9, classes: {}, origins: {}, awaken: { kind: 'text', text: 'Have 7 Forest Spirits.' } }] };
+		const ctx = { ...handlerCtx(player, self), catalog } as ReturnType<typeof handlerCtx>;
+		expect(AWAKEN_HANDLERS[id].check(ctx)).toEqual({ ok: false, reason: 'need_origin_spirits' });
+		expect(AWAKEN_HANDLERS[id].discardChoice?.(ctx) ?? null).toBeNull();
+		player.spirits = [
+			self,
+			...Array.from({ length: 6 }, (_, i) => ({ ...spirit(i + 2, `f-${i}`, `Forest ${i}`, false), cost: 3, origins: { 'Forest Region': 1 } }))
+		];
+		const full = { ...handlerCtx(player, self), catalog } as ReturnType<typeof handlerCtx>;
+		expect(AWAKEN_HANDLERS[id].check(full).ok).toBe(true);
+		AWAKEN_HANDLERS[id].pay(full);
+		expect(player.spirits).toHaveLength(7);
+	});
 });
 
 describe('combat-event awaken progress (Hollow Eyes)', () => {

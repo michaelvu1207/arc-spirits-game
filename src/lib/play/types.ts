@@ -796,6 +796,8 @@ export interface PlayRules {
 	summonReplaceWhenFull?: boolean;
 	/** Cultivator (5) grants its relic only the first time per game (default false). */
 	cultivatorRelicOnce?: boolean;
+	/** Summoner pays its 4 VP for a discarded Arcane Abyss spirit only once per round (default false). */
+	summonerOncePerRound?: boolean;
 	/** PvP pays only per Good player corrupted (3 each) + a Good bounty (default false). */
 	pvpPaysOnCorrupt?: boolean;
 	/** Under pvpPaysOnCorrupt: Good players get 2 VP per Evil attacker corrupted (default true). */
@@ -1136,6 +1138,11 @@ export interface PrivatePlayerState {
 	 * `cultivatorRelicOnce` rule (catalog.rules), so games without that rule never carry it.
 	 */
 	cultivatorRelicGained?: boolean;
+	/**
+	 * The round in which Summoner last paid its 4 VP. Written only under the
+	 * `summonerOncePerRound` rule, so games without that rule never carry it.
+	 */
+	summonerPaidRound?: number;
 	/**
 	 * This player attacked a player (an Evil attacker in a resolved PvP exchange) this round.
 	 * Written only under the `moonPerksNeedAttack` rule (catalog.rules), so games without that

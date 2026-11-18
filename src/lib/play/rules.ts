@@ -17,6 +17,9 @@
  *   replace one spirit of the player's choice (`spawnHandSpirit.replaceSlotIndex`); the replaced
  *   spirit is discarded exactly like `discardSpirit` (back to its bag, its augment lost, discard
  *   effects fire) but does not count as a corruption sacrifice.
+ * - summonerOncePerRound (default false): true ⇒ Summoner gains its 4 VP for a discarded Arcane
+ *   Abyss spirit only once per round (balance test 2026-11-18: with a full board every Abyss
+ *   summon is a discard, which paid 8 to 13 VP a round).
  * - cultivatorRelicOnce (default false): true ⇒ Cultivator (5) grants its relic only the first
  *   time per game (the Max Barrier part is unchanged).
  *
@@ -106,6 +109,7 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	feralMonsterStrikeFirst: true,
 	summonReplaceWhenFull: false,
 	cultivatorRelicOnce: false,
+	summonerOncePerRound: false,
 	pvpPaysOnCorrupt: false,
 	pvpGoodBounty: true,
 	abyssSummonDraw4Pick2: false,
@@ -255,6 +259,13 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Firetail',
 		count: 1,
 		text: 'In combat with a monster, or in a round when another player is at your location, gain 3 Initiative.'
+	},
+	{
+		rule: 'summonerOncePerRound',
+		when: true,
+		className: 'Summoner',
+		count: 1,
+		text: 'On Spirit World summon, you may draw from the Arcane Abyss Bag. Once per round, when you discard an Arcane Abyss Spirit, gain 4 points.'
 	},
 	{
 		rule: 'cultivatorRelicOnce',
