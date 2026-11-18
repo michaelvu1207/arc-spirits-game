@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { fire, makePlayer, ctxFor } from './testHelpers';
-import { ability } from './worldEnder';
+import { fire, makePlayer, makeState, spirit, ctxFor } from './testHelpers';
+import { ability, QUEEN_UNAWAKEN_KIND } from './worldEnder';
+import { applyTrigger } from '../apply';
+import { buildEffectContext } from '../context';
+import { DECISION_RESOLVERS } from '../decisions';
 
 // Queen — DB intent: "In the Awakening Phase, gain 1 VP." Unconditional.
 //
@@ -66,5 +69,92 @@ describe('Queen (awakeningPhase +1 VP)', () => {
 			expect(player.victoryPoints).toBe(11);
 			expect(ctx.log.length).toBeGreaterThan(0);
 		});
+	});
+});
+
+// Rule `queenUnawakens` (Michael, 2026-11-18).
+describe('Queen with rule queenUnawakens: every player turns one awakened spirit face-down', () => {
+	const RULES = { rules: { queenUnawakens: true } } as never;
+	const setup = () => {
+		const red = makePlayer({
+			spirits: [spirit(1, { Queen: 1 }, { name: 'Vespera' }), spirit(2, {}, { name: 'Red Two' }), spirit(3, {}, { name: 'Red Three', faceDown: true })]
+		});
+		const blue = makePlayer({ playerColor: 'Blue', phaseReady: true, spirits: [spirit(1, {}, { name: 'Blue One' }), spirit(2, {}, { name: 'Blue Two' })] });
+		const green = makePlayer({ playerColor: 'Green', spirits: [spirit(1, {}, { name: 'Sleeper', faceDown: true })] });
+		const state = makeState(red, { Blue: blue, Green: green });
+		return { red, blue, green, state };
+	};
+	const card = (p: { pendingDecisions: { kind: string }[] }) => p.pendingDecisions.find((d) => d.kind === QUEEN_UNAWAKEN_KIND) as
+		| { id: string; options: { id: string; label: string }[]; expiryOptionId?: string }
+		| undefined;
+
+	it('her own awakening gives every player with an awakened spirit a card; the Queen is not on her owner\'s card', () => {
+		const { red, blue, green, state } = setup();
+		applyTrigger(state, 'Red', 'awakening', [], { catalog: RULES, command: { type: 'awakenSpirit', slotIndex: 1 } });
+		expect(card(red)!.options.map((o) => o.id)).toEqual(['slot:2']);
+		expect(card(blue)!.options.map((o) => o.id)).toEqual(['slot:1', 'slot:2']);
+		expect(card(blue)!.expiryOptionId).toBe('slot:2');
+		expect(blue.phaseReady).toBe(false);
+		expect(card(green)).toBeUndefined(); // no awakened spirit
+	});
+
+	it('the answer turns that spirit face-down', () => {
+		const { blue, state } = setup();
+		applyTrigger(state, 'Red', 'awakening', [], { catalog: RULES, command: { type: 'awakenSpirit', slotIndex: 1 } });
+		const ctx = buildEffectContext({ state, seat: 'Blue', player: blue, trigger: 'awakening', log: [], traitCount: 0, catalog: RULES });
+		DECISION_RESOLVERS[QUEEN_UNAWAKEN_KIND](ctx, 'slot:1');
+		expect(blue.spirits.map((s) => s.isFaceDown)).toEqual([true, false]);
+	});
+
+	it('another spirit awakening while the Queen is awake makes no card, and the Queen gives no VP', () => {
+		const { red, blue, state } = setup();
+		applyTrigger(state, 'Red', 'awakening', [], { catalog: RULES, command: { type: 'awakenSpirit', slotIndex: 2 } });
+		expect(card(red)).toBeUndefined();
+		expect(card(blue)).toBeUndefined();
+		applyTrigger(state, 'Red', 'awakeningPhase', [], { catalog: RULES });
+		expect(red.victoryPoints).toBe(0);
+	});
+
+	it('rule off: no card, and the Awakening Phase point as before', () => {
+		const { red, blue, state } = setup();
+		applyTrigger(state, 'Red', 'awakening', [], { command: { type: 'awakenSpirit', slotIndex: 1 } });
+		expect(card(blue)).toBeUndefined();
+		applyTrigger(state, 'Red', 'awakeningPhase', [], {});
+		expect(red.victoryPoints).toBe(1);
+	});
+});
+
+// Rule `summonerCultivate` (Michael, 2026-11-18).
+describe('Summoner with rule summonerCultivate: "When you Cultivate with at least 5 Forest spirits, gain 2 points."', () => {
+	const RULES = { rules: { summonerCultivate: true } } as never;
+	const board = (forest: number) => [
+		spirit(1, { Summoner: 1 }, { name: 'Hollowbloom', origins: { 'Forest Region': 1 } }),
+		...Array.from({ length: forest - 1 }, (_, i) => spirit(2 + i, {}, { origins: { 'Forest Region': 1 }, faceDown: i === 0 })),
+		spirit(7, {}, { origins: { 'Water Region': 1 } })
+	];
+	const cultivate = (forest: number, catalog?: never) => {
+		const p = makePlayer({ spirits: board(forest) });
+		applyTrigger(makeState(p), 'Red', 'onCultivate', [], { catalog });
+		return p.victoryPoints;
+	};
+	it('5 Forest spirits (face-down ones count): 2 points; 4: none; rule off: none', () => {
+		expect(cultivate(5, RULES)).toBe(2);
+		expect(cultivate(6, RULES)).toBe(2);
+		expect(cultivate(4, RULES)).toBe(0);
+		expect(cultivate(6)).toBe(0);
+	});
+});
+
+// Rule `cultistNoVp` (Michael, 2026-11-18).
+describe('Cultist with rule cultistNoVp: no point when corrupted', () => {
+	it('on: 0; off: 1', async () => {
+		const { applyCorruptionEffects } = await import('../corruption');
+		const gain = (catalog?: never) => {
+			const p = makePlayer({ spirits: [spirit(1, { Cultist: 1 })] });
+			applyCorruptionEffects(p, [], { catalog });
+			return p.victoryPoints;
+		};
+		expect(gain({ rules: { cultistNoVp: true } } as never)).toBe(0);
+		expect(gain()).toBe(1);
 	});
 });

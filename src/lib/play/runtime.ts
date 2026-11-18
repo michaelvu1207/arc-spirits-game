@@ -1074,7 +1074,8 @@ function discardBoardSpirit(
 			counts: spirit.classes ?? {}
 		});
 	}
-	if (sourceBag === ARCANE_ABYSS_BAG && hadAbyssSummoner) {
+	// Rule `summonerCultivate`: the Summoner pays on Cultivate, not on a discard.
+	if (sourceBag === ARCANE_ABYSS_BAG && hadAbyssSummoner && !ruleValue(catalog, 'summonerCultivate')) {
 		// Rule `summonerOncePerRound`: only the first such discard of a round pays.
 		const once = ruleValue(catalog, 'summonerOncePerRound');
 		if (!once || player.summonerPaidRound !== state.round) {
@@ -2013,6 +2014,7 @@ function reduceCommand(
 			});
 			if (
 				pendingDraw.sourceBag === SPIRIT_WORLD_BAG &&
+				!ruleValue(catalog, 'summonerCultivate') &&
 				(awakenedClassCounts(activePlayer.player)['Summoner'] ?? 0) > 0
 			) {
 				activePlayer.player.pendingDecisions.push({
@@ -2333,7 +2335,8 @@ function reduceCommand(
 					activePlayer.player.corruptionCount = (activePlayer.player.corruptionCount ?? 0) + 1;
 					// (An upward step can never start from Fallen, so Night Witch's flag never fires here.)
 					applyCorruptionEffects(activePlayer.player, undefined, {
-						wasFallen: oldStatus === STATUS_LADDER.length - 1
+						wasFallen: oldStatus === STATUS_LADDER.length - 1,
+						catalog
 					});
 					// wasFallen is structurally false here (an upward move FROM Fallen is
 					// impossible — the ladder clamps), but pass the real check for parity

@@ -114,6 +114,14 @@
  * - sidePointsHalf (default false): true ⇒ Victory Points from anything other than a monster's
  *   reward count half (two make 1 Victory Point). See sidePoints.ts. With monster kills at 1 to 2
  *   points, seats took their points from 1-point-a-round class effects instead.
+ * - queenUnawakens (default false; Michael, 2026-11-18): true ⇒ Queen is "When this spirit awakens,
+ *   every player must turn one of their awakened spirits face-down (their choice)." and gives no
+ *   VP. See effects/classes/worldEnder.ts.
+ * - summonerCultivate (default false; Michael, 2026-11-18): true ⇒ Summoner is "When you Cultivate
+ *   with at least 5 Forest spirits, gain 2 points." and nothing else (no Arcane Abyss draw on a
+ *   Spirit World summon, no points for a discarded Arcane Abyss spirit).
+ * - cultistNoVp (default false; Michael, 2026-11-18): true ⇒ Cultist is "When you become Corrupted,
+ *   sacrifice 1 fewer spirit." (no point). A new Cultist ability is not designed yet.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -157,7 +165,10 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	monsterDeckByStage: false,
 	summonerPays2: false,
 	winAt40: false,
-	sidePointsHalf: false
+	sidePointsHalf: false,
+	queenUnawakens: false,
+	summonerCultivate: false,
+	cultistNoVp: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -299,6 +310,21 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		text: 'In combat with a monster, or in a round when another player is at your location, gain 3 Initiative.'
 	},
 	{
+		rule: 'cultistNoVp',
+		when: true,
+		className: 'Cultist',
+		count: 1,
+		text: 'When you become Corrupted, sacrifice 1 fewer spirit.'
+	},
+	{
+		// Listed first: with this switch the other Summoner switches are not read.
+		rule: 'summonerCultivate',
+		when: true,
+		className: 'Summoner',
+		count: 1,
+		text: 'When you Cultivate with at least 5 Forest spirits, gain 2 points.'
+	},
+	{
 		// Listed before `summonerOncePerRound`: the first matching entry of a tier is the one printed.
 		rule: 'summonerPays2',
 		when: true,
@@ -319,6 +345,14 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Cultivator',
 		count: 5,
 		text: 'On Cultivate, gain 10 Max Barrier. The first time (once per game), also gain 1 relic of your choice.'
+	},
+	{
+		// Listed before `moonPerksNeedAttack`: the first matching entry of a tier is the one printed.
+		rule: 'queenUnawakens',
+		when: true,
+		className: 'Queen',
+		count: 1,
+		text: 'When this spirit awakens, every player must turn one of their awakened spirits face-down (their choice).'
 	},
 	{
 		rule: 'moonPerksNeedAttack',

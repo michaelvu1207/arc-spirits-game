@@ -856,6 +856,12 @@ export interface PlayRules {
 	winAt40?: boolean;
 	/** Victory Points from anything other than a monster's reward count half (see sidePoints.ts). */
 	sidePointsHalf?: boolean;
+	/** Queen: when she awakens, every player turns one awakened spirit face-down; no VP. */
+	queenUnawakens?: boolean;
+	/** Summoner: "When you Cultivate with at least 5 Forest spirits, gain 2 points." only. */
+	summonerCultivate?: boolean;
+	/** Cultist gives no point (1 fewer sacrifice only). */
+	cultistNoVp?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

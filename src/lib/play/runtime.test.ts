@@ -1653,6 +1653,23 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(second.state.players.Red!.victoryPoints).toBe(before + 2);
 	});
 
+	test('rule summonerCultivate: a discarded Arcane Abyss spirit pays nothing', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const catalog = { ...CATALOG, rules: { summonerCultivate: true } };
+		const state = locationPhase(started.state, 'Water Region');
+		const player = state.players.Red!;
+		player.spirits = [
+			{ slotIndex: 4, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
+			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
+		];
+		const before = player.victoryPoints;
+		const next = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
+		if (!next.ok) throw new Error(next.error.message);
+		expect(next.state.players.Red!.victoryPoints).toBe(before);
+	});
+
 	test('rule sidePointsHalf: points that are not a monster reward count half', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);

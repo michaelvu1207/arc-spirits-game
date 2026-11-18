@@ -39,6 +39,7 @@ import { pvpAllowedAt, vpToWin } from './rules';
 import { settleSidePoints } from './sidePoints';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { MASTER_CULTIVATE_KIND } from './effects/classes/master';
+import { QUEEN_UNAWAKEN_KIND } from './effects/classes/worldEnder';
 import { recordTravelingTraderProgress } from './effects/awakenHandlers';
 import { advanceMonsterIfDefeated } from './combat';
 import {
@@ -512,7 +513,8 @@ export function enterCleanup(state: PublicGameState, catalog?: PlayCatalog): voi
 		// default reward now.
 		const open = (player.pendingDecisions ?? []).filter(
 			(d) =>
-				(d.kind === ORIGIN_CULTIVATE_KIND || d.kind === MASTER_CULTIVATE_KIND) && d.expiryOptionId
+				(d.kind === ORIGIN_CULTIVATE_KIND || d.kind === MASTER_CULTIVATE_KIND || d.kind === QUEEN_UNAWAKEN_KIND) &&
+				d.expiryOptionId
 		);
 		if (open.length === 0) continue;
 		player.pendingDecisions = player.pendingDecisions.filter((d) => !open.includes(d));

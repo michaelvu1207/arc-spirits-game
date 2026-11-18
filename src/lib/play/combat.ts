@@ -292,7 +292,10 @@ export function takeDamage(
 			if (gained > 0) log?.push(`Mystic: gained ${gained} max barrier after corruption.`);
 		}
 		player.corruptionCount = (player.corruptionCount ?? 0) + 1;
-		applyCorruptionEffects(player, log, { wasFallen: oldStatus === STATUS_LADDER.length - 1 });
+		applyCorruptionEffects(player, log, {
+			wasFallen: oldStatus === STATUS_LADDER.length - 1,
+			catalog: ctx?.catalog ?? rulesCatalog
+		});
 		const sacrificeCap = opts?.sacrificeCap;
 		const vpCharged = setCorruptionDiscardObligation(player, undefined, {
 			wasFallen: oldStatus === STATUS_LADDER.length - 1,

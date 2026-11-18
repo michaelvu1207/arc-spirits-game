@@ -44,7 +44,7 @@ const corruptorAwakening: ClassHandler = (ctx) => {
 			player.barrier = player.maxBarrier;
 			player.brokenBarrier = 0;
 			player.corruptionCount = (player.corruptionCount ?? 0) + 1;
-			applyCorruptionEffects(player, log, { wasFallen: false });
+			applyCorruptionEffects(player, log, { wasFallen: false, catalog: ctx.catalog });
 			setCorruptionDiscardObligation(player, undefined, { wasFallen: false });
 			log.push(
 				`Corruptor: this counts as corruption ${player.corruptionCount} — Barrier restored; sacrifice ${player.pendingCorruptionDiscard?.count ?? 0} spirit(s).`
