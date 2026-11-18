@@ -60,6 +60,9 @@ function coreRules(catalog: PlayCatalog): string {
 		'',
 		'## Goal and end of game',
 		`- The first player with ${vpToWin(catalog)}+ Victory Points (VP) when a round ends wins (the highest if several).`,
+		...(ruleValue(catalog, 'sidePointsHalf')
+			? ['- HALF POINTS: only a monster\'s reward pays its VP in full. VP from anything else (class effects, Powers, the Summoner, attacks on players, relics) count half: two such VP make 1 VP, and a single leftover half is kept until the next one. A text that says "gain 1 VP" outside a monster reward is therefore worth half a VP.']
+			: []),
 		`- Otherwise the game ends after round ${MAX_ROUNDS}, or when every player is Fallen${(catalog.monsters ?? []).some((m) => m.permanent) ? '' : ', or when every monster card is defeated'}; then the most VP wins (ties: seat order).`,
 		'',
 		'## A round (6 phases; you act in each, then you finish/yield it)',

@@ -111,6 +111,9 @@
  *   (24 of the winner's 30 points in three test games). The printed text assumes both are on.
  * - winAt40 (default false): true ⇒ the game is won at 40 Victory Points, not 30 (see `vpToWin`).
  *   Under the lower monster points of the balance test, a 30-point game ended near round 19.
+ * - sidePointsHalf (default false): true ⇒ Victory Points from anything other than a monster's
+ *   reward count half (two make 1 Victory Point). See sidePoints.ts. With monster kills at 1 to 2
+ *   points, seats took their points from 1-point-a-round class effects instead.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -153,7 +156,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	relicAwakenNeedsBoard: false,
 	monsterDeckByStage: false,
 	summonerPays2: false,
-	winAt40: false
+	winAt40: false,
+	sidePointsHalf: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

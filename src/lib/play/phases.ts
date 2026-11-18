@@ -36,6 +36,7 @@ import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
 import { DECISION_RESOLVERS } from './effects/decisions';
 import { pvpAllowedAt, vpToWin } from './rules';
+import { settleSidePoints } from './sidePoints';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { MASTER_CULTIVATE_KIND } from './effects/classes/master';
 import { recordTravelingTraderProgress } from './effects/awakenHandlers';
@@ -611,6 +612,8 @@ export function tryAdvanceFromCleanup(state: PublicGameState, catalog?: PlayCata
 		p.unplacedAugments = [];
 	}
 
+	// Rule `sidePointsHalf`: halve this round's non-monster points before the win check.
+	settleSidePoints(state, catalog);
 	const winner = findWinner(state, catalog);
 	if (winner) {
 		state.winnerSeat = winner;

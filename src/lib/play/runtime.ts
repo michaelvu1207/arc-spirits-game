@@ -95,6 +95,7 @@ import {
 	type GainEffect
 } from './locationInteractions';
 import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
+import { noteMonsterPoints, settleSidePoints } from './sidePoints';
 import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
@@ -629,6 +630,8 @@ function applyRewardGain(
 	switch (gain.type) {
 		case 'vp':
 			player.victoryPoints += gain.amount;
+			// Rule `sidePointsHalf`: a monster's reward stays whole.
+			noteMonsterPoints(player, gain.amount, catalog);
 			log.push(`Gained ${gain.amount} Victory Point${gain.amount === 1 ? '' : 's'}.`);
 			break;
 		case 'gainMaxBarrier': {
@@ -926,6 +929,7 @@ export function applyDeadlineAdvance(state: PublicGameState, catalog: PlayCatalo
 	if (state.status !== 'active') return;
 	drainPendingBeforeAdvance(state, catalog);
 	forceAdvancePhaseMachine(state, catalog);
+	settleSidePoints(state, catalog);
 	state.revision += 1;
 }
 
@@ -1533,6 +1537,7 @@ export function applyGameCommand(
 	if (result.ok) {
 		refreshNavigationPowerOffers(result.state);
 		autoAdvanceResolution(result.state, catalog);
+		settleSidePoints(result.state, catalog);
 	}
 	return result;
 }

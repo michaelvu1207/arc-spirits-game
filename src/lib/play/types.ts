@@ -854,6 +854,8 @@ export interface PlayRules {
 	summonerPays2?: boolean;
 	/** The game is won at 40 Victory Points, not 30. */
 	winAt40?: boolean;
+	/** Victory Points from anything other than a monster's reward count half (see sidePoints.ts). */
+	sidePointsHalf?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
@@ -1153,6 +1155,12 @@ export interface PrivatePlayerState {
 	 * `summonerOncePerRound` rule, so games without that rule never carry it.
 	 */
 	summonerPaidRound?: number;
+	/** Rule `sidePointsHalf`: Victory Points at the last settlement. */
+	pointsAtSettle?: number;
+	/** Rule `sidePointsHalf`: monster-reward points gained since the last settlement. */
+	monsterPointsSinceSettle?: number;
+	/** Rule `sidePointsHalf`: 1 while a half point waits for its second half. */
+	halfPointBank?: number;
 	/**
 	 * This player attacked a player (an Evil attacker in a resolved PvP exchange) this round.
 	 * Written only under the `moonPerksNeedAttack` rule (catalog.rules), so games without that

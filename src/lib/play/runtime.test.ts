@@ -1653,6 +1653,50 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(second.state.players.Red!.victoryPoints).toBe(before + 2);
 	});
 
+	test('rule sidePointsHalf: points that are not a monster reward count half', () => {
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const catalog = { ...CATALOG, rules: { sidePointsHalf: true } };
+		const state = locationPhase(started.state, 'Water Region');
+		const player = state.players.Red!;
+		player.spirits = [
+			{ slotIndex: 4, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
+			{ slotIndex: 5, id: 'abyss-a', name: 'Abyss A', cost: 8, classes: {}, origins: {}, isFaceDown: false },
+			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
+		];
+		const before = player.victoryPoints;
+		// The Summoner's 4 points for a discarded Arcane Abyss spirit become 2.
+		const first = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
+		if (!first.ok) throw new Error(first.error.message);
+		expect(first.state.players.Red!.victoryPoints).toBe(before + 2);
+		expect(first.state.players.Red!.halfPointBank ?? 0).toBe(0);
+	});
+
+	test('rule sidePointsHalf: a single point is banked, monster points stay whole', async () => {
+		const { settleSidePoints, noteMonsterPoints } = await import('./sidePoints');
+		const lobby = withLobbySelections();
+		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
+		if (!started.ok) throw new Error(started.error.message);
+		const rules = { rules: { sidePointsHalf: true } };
+		const state = started.state;
+		const p = state.players.Red!;
+		settleSidePoints(state, rules);
+		const base = p.victoryPoints;
+		p.victoryPoints += 1; // a class effect
+		settleSidePoints(state, rules);
+		expect([p.victoryPoints, p.halfPointBank]).toEqual([base, 1]);
+		p.victoryPoints += 3; // a monster reward of 3 …
+		noteMonsterPoints(p, 3, rules);
+		p.victoryPoints += 1; // … and another class point in the same step
+		settleSidePoints(state, rules);
+		expect([p.victoryPoints, p.halfPointBank]).toEqual([base + 4, 0]);
+		// Off: nothing changes.
+		p.victoryPoints += 1;
+		settleSidePoints(state, undefined);
+		expect(p.victoryPoints).toBe(base + 5);
+	});
+
 	test('Mystic: opening a summon draw arms a redraw; redrawHandDraws refreshes the hand', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
