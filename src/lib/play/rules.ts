@@ -128,6 +128,8 @@
  *   you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice."
  * - healerNoVp (default false; Michael, 2026-11-18): true ⇒ Healer's Rest restores 3 Barrier at 10
  *   Max Barrier and gives no point.
+ * - feralNoDamage (default false; Michael, 2026-11-18): true ⇒ Feral deals no extra damage; it is
+ *   "When an Evil player or a monster attacks you, your side strikes first."
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -177,7 +179,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	cultistNoVp: false,
 	captainPowerOnKill: false,
 	alchemistAugmentToArcane: false,
-	healerNoVp: false
+	healerNoVp: false,
+	feralNoDamage: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -303,6 +306,13 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Master',
 		count: 1,
 		text: 'On Cultivate, gain 2 Max Barrier or restore 2 Barrier.'
+	},
+	{
+		rule: 'feralNoDamage',
+		when: true,
+		className: 'Feral',
+		count: 1,
+		text: 'When an Evil player or a monster attacks you, your side strikes first.'
 	},
 	{
 		rule: 'feralMonsterStrikeFirst',

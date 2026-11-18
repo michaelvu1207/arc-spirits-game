@@ -12,30 +12,37 @@ export const FERAL_DAMAGE = 3;
 // - PvP Encounter (`inCombat` carries the opposing seat): when that seat is Evil and this player
 //   is not, this player's side gets attack-first priority and this player deals 3 more damage
 //   (added to the side's total).
+// Rule `feralNoDamage` (Michael, 2026-11-18): no extra damage at all; Feral is only "When an Evil
+// player or a monster attacks you, your side strikes first."
 export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
 		run(ctx) {
+			const bonus = ruleValue(ctx.catalog, 'feralNoDamage') ? 0 : FERAL_DAMAGE;
+			const more = bonus ? ` and deal ${bonus} more damage` : '';
 			if (ctx.opponent === undefined) {
 				// Rule switch `feralMonsterStrikeFirst` (rules.ts; default true). Off (proposal C2):
 				// against a monster Feral only deals its 3 more damage; vs Evil players unchanged.
 				if (!ruleValue(ctx.catalog, 'feralMonsterStrikeFirst')) {
-					ctx.player.combatDamageBonus += FERAL_DAMAGE;
-					ctx.log.push(`A monster attacks — you deal ${FERAL_DAMAGE} more damage.`);
+					if (!bonus) return;
+					ctx.player.combatDamageBonus += bonus;
+					ctx.log.push(`A monster attacks — you deal ${bonus} more damage.`);
 					return;
 				}
 				ctx.player.alwaysAttackFirst = true;
-				ctx.player.combatDamageBonus += FERAL_DAMAGE;
-				ctx.log.push(`A monster attacks — you strike first and deal ${FERAL_DAMAGE} more damage.`);
+				ctx.player.combatDamageBonus += bonus;
+				ctx.log.push(`A monster attacks — you strike first${more}.`);
 				return;
 			}
 			const opponent = ctx.state.players[ctx.opponent];
 			if (!opponent) return;
 			if (!isEvilAlignment(opponent.statusLevel) || isEvilAlignment(ctx.player.statusLevel)) return;
 			ctx.player.alwaysAttackFirst = true;
-			ctx.player.combatDamageBonus += FERAL_DAMAGE;
+			ctx.player.combatDamageBonus += bonus;
 			ctx.log.push(
-				`An Evil player attacks — your side strikes first and you deal ${FERAL_DAMAGE} more damage.`
+				bonus
+					? `An Evil player attacks — your side strikes first and you deal ${bonus} more damage.`
+					: 'An Evil player attacks — your side strikes first.'
 			);
 		}
 	}

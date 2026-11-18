@@ -868,6 +868,8 @@ export interface PlayRules {
 	alchemistAugmentToArcane?: boolean;
 	/** Healer's Rest gives no point. */
 	healerNoVp?: boolean;
+	/** Feral deals no extra damage (strike-first only). */
+	feralNoDamage?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

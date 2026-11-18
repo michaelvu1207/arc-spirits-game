@@ -233,3 +233,15 @@ describe('Captain discard clause', () => {
 		expect(discard({ rules: { captainPowerOnKill: true } } as never)).toBe(0);
 	});
 });
+
+describe('rule feralNoDamage', () => {
+	const fight = (catalog: never) => {
+		const p = makePlayer({ spirits: [spirit(1, { Feral: 1 })] });
+		applyTrigger(makeState(p), 'Red', 'inCombat', [], { catalog });
+		return [p.combatDamageBonus, p.alwaysAttackFirst];
+	};
+	it('rule off: +3 and strike first against a monster; rule on: strike first only', () => {
+		expect(fight({} as never)).toEqual([3, true]);
+		expect(fight({ rules: { feralNoDamage: true } } as never)).toEqual([0, true]);
+	});
+});
