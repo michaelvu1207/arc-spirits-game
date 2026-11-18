@@ -109,13 +109,15 @@
  * - summonerPays2 (default false): true ⇒ Summoner gains 2 VP (not 4) for a discarded Arcane Abyss
  *   spirit. With `summonerOncePerRound` a 7-Forest board still paid 4 VP every round from round 6
  *   (24 of the winner's 30 points in three test games). The printed text assumes both are on.
+ * - winAt40 (default false): true ⇒ the game is won at 40 Victory Points, not 30 (see `vpToWin`).
+ *   Under the lower monster points of the balance test, a 30-point game ended near round 19.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
-import type { PlayCatalog, PlayRules } from './types';
+import { VP_TO_WIN, type PlayCatalog, type PlayRules } from './types';
 
 export type RuleName = keyof PlayRules;
 
@@ -150,7 +152,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	falconerNoDoubleVp: false,
 	relicAwakenNeedsBoard: false,
 	monsterDeckByStage: false,
-	summonerPays2: false
+	summonerPays2: false,
+	winAt40: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -193,6 +196,11 @@ export function ruleValue(
 ): boolean {
 	const value = catalog?.rules?.[name];
 	return typeof value === 'boolean' ? value : RULE_DEFAULTS[name];
+}
+
+/** Victory Points that win the game: 30, or 40 under rule `winAt40`. */
+export function vpToWin(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
+	return ruleValue(catalog, 'winAt40') ? 40 : VP_TO_WIN;
 }
 
 /** Whether an Evil player may attack Good players at this destination (rule `pvpInAbyss`). */

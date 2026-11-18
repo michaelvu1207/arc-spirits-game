@@ -852,6 +852,8 @@ export interface PlayRules {
 	monsterDeckByStage?: boolean;
 	/** Summoner gains 2 VP (not 4) for a discarded Arcane Abyss spirit. */
 	summonerPays2?: boolean;
+	/** The game is won at 40 Victory Points, not 30. */
+	winAt40?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

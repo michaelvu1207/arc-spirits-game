@@ -22,7 +22,6 @@ import type {
 	SeatColor
 } from './types';
 import {
-	VP_TO_WIN,
 	MAX_ROUNDS,
 	ALL_DESTINATIONS,
 	RUNE_CARRY_LIMIT,
@@ -36,7 +35,7 @@ import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effec
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
 import { DECISION_RESOLVERS } from './effects/decisions';
-import { pvpAllowedAt } from './rules';
+import { pvpAllowedAt, vpToWin } from './rules';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { MASTER_CULTIVATE_KIND } from './effects/classes/master';
 import { recordTravelingTraderProgress } from './effects/awakenHandlers';
@@ -612,7 +611,7 @@ export function tryAdvanceFromCleanup(state: PublicGameState, catalog?: PlayCata
 		p.unplacedAugments = [];
 	}
 
-	const winner = findWinner(state);
+	const winner = findWinner(state, catalog);
 	if (winner) {
 		state.winnerSeat = winner;
 		state.status = 'finished';
@@ -654,11 +653,15 @@ export function tryAdvanceFromCleanup(state: PublicGameState, catalog?: PlayCata
 }
 
 /** The first active seat at/over the VP target, in seat order, or null. */
-export function findWinner(state: PublicGameState): SeatColor | null {
+export function findWinner(
+	state: PublicGameState,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): SeatColor | null {
+	const target = vpToWin(catalog);
 	let best: { seat: SeatColor; vp: number } | null = null;
 	for (const seat of state.activeSeats) {
 		const vp = state.players[seat]?.victoryPoints ?? 0;
-		if (vp >= VP_TO_WIN && (!best || vp > best.vp)) {
+		if (vp >= target && (!best || vp > best.vp)) {
 			best = { seat, vp };
 		}
 	}

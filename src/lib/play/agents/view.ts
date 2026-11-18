@@ -9,7 +9,7 @@ import { classCountsLine, monsterLine, moonPerksWaiting, spiritLine, type SeatPl
 import { buildSessionProjection } from '../runtime';
 import { navigationPowerById } from '../navigationPowers';
 import { spiritsByOrigin } from '../effects/relicTools';
-import { ruleValue } from '../rules';
+import { ruleValue, vpToWin } from '../rules';
 import { expectedAttack } from '../combat';
 import { awakenedClassCounts } from '../effects/apply';
 import {
@@ -18,7 +18,6 @@ import {
 	RUNE_CARRY_LIMIT,
 	MAX_SPIRITS,
 	STATUS_LADDER,
-	VP_TO_WIN,
 	isEvilAlignment,
 	type PlayCatalog,
 	type PublicGameState,
@@ -81,7 +80,7 @@ function ownSection(
 ): string[] {
 	const lines: string[] = [];
 	lines.push(`YOU: ${seat} (guardian ${me.selectedGuardian})`);
-	lines.push(`  Victory Points: ${me.victoryPoints} (${VP_TO_WIN} wins)`);
+	lines.push(`  Victory Points: ${me.victoryPoints} (${vpToWin(catalog)} wins)`);
 	lines.push(
 		`  Barrier: ${me.barrier} of ${me.maxBarrier} Max Barrier (${me.brokenBarrier} broken)`
 	);

@@ -130,7 +130,7 @@ export function buildDecision(input: {
 		phaseDecisionIndex: input.phaseDecisionIndex,
 		// A forced move (one action) is not asked, so it needs no facts.
 		facts: surface.commands.length > 1 ? decisionFacts(state, seat, catalog, kind) : [],
-		pace: paceLine(state, seat)
+		pace: paceLine(state, seat, catalog)
 	};
 	return { request, surface, view };
 }

@@ -298,3 +298,20 @@ describe('monsterDeckByStage: a card\'s deck is its stage, not its Barrier band'
 		expect(monsterDifficulty({ barrier: 5, stage: 0 }, catalog(true))).toBe(2);
 	});
 });
+
+// ── winAt40 (balance test of 2026-11-18) ─────────────────────────────────────
+describe('winAt40: the game is won at 40 Victory Points', () => {
+	it('vpToWin and findWinner read the switch', async () => {
+		const { vpToWin } = await import('./rules');
+		const { findWinner } = await import('./phases');
+		expect(vpToWin(undefined)).toBe(30);
+		expect(vpToWin({ rules: { winAt40: true } })).toBe(40);
+		const p = makePlayer({});
+		p.victoryPoints = 33;
+		const state = makeState(p);
+		expect(findWinner(state)).toBe('Red');
+		expect(findWinner(state, { rules: { winAt40: true } })).toBeNull();
+		p.victoryPoints = 40;
+		expect(findWinner(state, { rules: { winAt40: true } })).toBe('Red');
+	});
+});

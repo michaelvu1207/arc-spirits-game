@@ -32,7 +32,6 @@ import { botActorFor } from '../server/botPolicy';
 import {
 	ALL_DESTINATIONS,
 	MAX_ROUNDS,
-	VP_TO_WIN,
 	type GameCommand,
 	type PlayCatalog,
 	type PrivatePlayerState,
@@ -42,6 +41,7 @@ import {
 import { locationRowCommands } from './actionSurface';
 import type { DecisionKind } from './contract';
 import { interactionSummary, itemName } from './labels';
+import { vpToWin } from '../rules';
 
 const TRIALS = 12;
 
@@ -420,11 +420,16 @@ export function destinationPreviewLines(
 	return out;
 }
 
-export function paceLine(state: PublicGameState, seat: SeatColor): string {
+export function paceLine(
+	state: PublicGameState,
+	seat: SeatColor,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): string {
+	const target = vpToWin(catalog);
 	const vp = state.players[seat]?.victoryPoints ?? 0;
 	const roundsLeft = Math.max(1, MAX_ROUNDS - state.round + 1);
-	const need = Math.max(0, VP_TO_WIN - vp);
-	return `PACE: round ${state.round} of ${MAX_ROUNDS}; you have ${vp} VP; ${VP_TO_WIN} VP wins; ${need} VP to go in ${roundsLeft} round${roundsLeft === 1 ? '' : 's'} (this one included) = ${(need / roundsLeft).toFixed(1)} VP per round.`;
+	const need = Math.max(0, target - vp);
+	return `PACE: round ${state.round} of ${MAX_ROUNDS}; you have ${vp} VP; ${target} VP wins; ${need} VP to go in ${roundsLeft} round${roundsLeft === 1 ? '' : 's'} (this one included) = ${(need / roundsLeft).toFixed(1)} VP per round.`;
 }
 
 /** Fight facts for revealed monster cards (as if each were kept). */

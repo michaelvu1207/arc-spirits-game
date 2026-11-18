@@ -36,11 +36,10 @@ import {
 	RUNE_CARRY_LIMIT,
 	MAX_SPIRITS,
 	STATUS_LADDER,
-	VP_TO_WIN,
 	type PlayCatalog
 } from '../types';
 import { destinationSummaries } from './labels';
-import { ruleAdjustedClassSchema, ruleValue } from '../rules';
+import { ruleAdjustedClassSchema, ruleValue, vpToWin } from '../rules';
 
 const MAX_BARRIER_CAP = 10;
 
@@ -60,7 +59,7 @@ function coreRules(catalog: PlayCatalog): string {
 		"You are one player at a 2-4 player table of Arc Spirits, a digital board game. You make every decision a human player makes, through text. You see only what your seat can see: other players' secret choices, hands and draws are hidden from you.",
 		'',
 		'## Goal and end of game',
-		`- The first player with ${VP_TO_WIN}+ Victory Points (VP) when a round ends wins (the highest if several).`,
+		`- The first player with ${vpToWin(catalog)}+ Victory Points (VP) when a round ends wins (the highest if several).`,
 		`- Otherwise the game ends after round ${MAX_ROUNDS}, or when every player is Fallen${(catalog.monsters ?? []).some((m) => m.permanent) ? '' : ', or when every monster card is defeated'}; then the most VP wins (ties: seat order).`,
 		'',
 		'## A round (6 phases; you act in each, then you finish/yield it)',
