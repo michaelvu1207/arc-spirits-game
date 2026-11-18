@@ -37,7 +37,7 @@ export function testMonsterCard(catalog?: PlayCatalog | null, opts: TestMonsterO
 	const source =
 		(catalogId ? monsters.find((m) => m.id === catalogId) : monsters[0]) ?? FALLBACK_MONSTER;
 	if (catalogId && source.id !== catalogId) throw new Error(`catalog monster ${catalogId} not found`);
-	const difficulty = monsterDifficulty(source);
+	const difficulty = monsterDifficulty(source, catalog);
 	return {
 		id: source.id,
 		name: source.name,
@@ -92,7 +92,7 @@ export function drawMonsterViaCommands(
 	if (opts.catalogId && !wanted) throw new Error(`catalog monster ${opts.catalogId} not found`);
 	const difficulty =
 		opts.difficulty ??
-		(wanted ? monsterDifficulty(wanted) : ([1, 2, 3] as const).find((d) => deck.some((e) => e.difficulty === d)));
+		(wanted ? monsterDifficulty(wanted, catalog) : ([1, 2, 3] as const).find((d) => deck.some((e) => e.difficulty === d)));
 	if (!difficulty) throw new Error('every monster deck is empty');
 	const run = (s: PublicGameState, command: Parameters<typeof applyGameCommand>[2]) => {
 		const result = applyGameCommand(s, actor, command, catalog);

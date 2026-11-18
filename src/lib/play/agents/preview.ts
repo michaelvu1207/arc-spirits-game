@@ -342,7 +342,7 @@ export function deckOddsLines(s: PublicGameState, seat: SeatColor, catalog: Play
 	if (!me) return [];
 	const lines: string[] = [];
 	for (const difficulty of [1, 2, 3] as const) {
-		const cards = (catalog.monsters ?? []).filter((m) => monsterDifficulty(m) === difficulty);
+		const cards = (catalog.monsters ?? []).filter((m) => monsterDifficulty(m, catalog) === difficulty);
 		if (!cards.length) continue;
 		let fights = 0;
 		let kills = 0;
@@ -352,7 +352,7 @@ export function deckOddsLines(s: PublicGameState, seat: SeatColor, catalog: Play
 			for (let k = 0; k < DECK_TRIALS; k++) {
 				const copy = structuredClone(s);
 				const p = copy.players[seat]!;
-				p.monsterHand = [...(p.monsterHand ?? []), monsterCardFromCatalog(monster)];
+				p.monsterHand = [...(p.monsterHand ?? []), monsterCardFromCatalog(monster, catalog)];
 				copy.rng = { seed: trialSeed(s, seat, `deck${difficulty}:${c}`, k), cursor: 0 };
 				const res = fightMonster(copy, seat, catalog, p.monsterHand.length - 1);
 				if (!res) continue;

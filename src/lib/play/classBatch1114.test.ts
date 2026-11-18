@@ -4,7 +4,7 @@
  * shieldbearerFullOnly. Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
-import { applyGameCommand, createLobbyState } from './runtime';
+import { applyGameCommand, createLobbyState, monsterDifficulty } from './runtime';
 import { fightMonster, resetCombatFlags } from './combat';
 import { applyTrigger, cultivateRuneMultiplier } from './effects/apply';
 import { augmentPlacementEligibility, ownerAugmentCapacity } from './augments';
@@ -271,5 +271,30 @@ describe('falconerDoubleKill: "On your next monster kill you may gain double the
 		};
 		expect(awaken(withRules({ falconerDoubleKill: true }))).toBe(0);
 		expect(awaken(frozen)).toBe(2);
+	});
+});
+
+// ── monsterDeckByStage (balance test of 2026-11-18) ──────────────────────────
+describe('monsterDeckByStage: a card\'s deck is its stage, not its Barrier band', () => {
+	const tough: PlayCatalogMonster = { ...LURKER, id: 'tough', name: 'Tough Stage 2', barrier: 12, stage: 2, permanent: undefined };
+	const catalog = (on: boolean): PlayCatalog => ({ ...falconerCatalog(on ? { monsterDeckByStage: true } : undefined), monsters: [tough, LURKER] });
+	const dealt = (c: PlayCatalog) => {
+		let s = createLobbyState({ roomCode: 'DECK', guardianNames: ['Myrtle', 'Nyra'] });
+		s = ok(s, c, { ...HOST, seatColor: null }, { type: 'claimSeat', seatColor: 'Red' });
+		s = ok(s, c, { ...ACTORS.Blue, seatColor: null }, { type: 'claimSeat', seatColor: 'Blue' });
+		s = ok(s, c, ACTORS.Red, { type: 'selectGuardian', guardianName: 'Myrtle' });
+		s = ok(s, c, ACTORS.Blue, { type: 'selectGuardian', guardianName: 'Nyra' });
+		s = ok(s, c, ACTORS.Red, { type: 'startGame', seed: 3 });
+		return s.bags.monsters.contents.map((e) => e.difficulty);
+	};
+	it('off: Barrier 12 is Difficulty 3; on: its stage (2)', () => {
+		expect(monsterDifficulty(tough)).toBe(3);
+		expect(monsterDifficulty(tough, catalog(false))).toBe(3);
+		expect(monsterDifficulty(tough, catalog(true))).toBe(2);
+		expect(dealt(catalog(false))).toEqual([3]);
+		expect(dealt(catalog(true))).toEqual([2]);
+	});
+	it('on, a card without a stage of 1 to 3 keeps its Barrier band', () => {
+		expect(monsterDifficulty({ barrier: 5, stage: 0 }, catalog(true))).toBe(2);
 	});
 });

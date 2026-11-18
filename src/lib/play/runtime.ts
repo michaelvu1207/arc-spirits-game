@@ -1281,8 +1281,15 @@ function makeGameId(rng: RngState, now = new Date()): string {
 	return `game_${y}${m}${d}_${hh}${mm}${ss}_${random}`;
 }
 
-/** Abyss deck for a catalog monster, by HP: 1–3 → Difficulty 1, 4–7 → 2, 8+ → 3. */
-export function monsterDifficulty(monster: { barrier: number }): 1 | 2 | 3 {
+/** Abyss deck for a catalog monster, by HP: 1–3 → Difficulty 1, 4–7 → 2, 8+ → 3.
+ *  Rule `monsterDeckByStage` (pass the catalog): the card's `stage` (1, 2 or 3) is its deck, so
+ *  a Barrier edit never moves a card to another deck. */
+export function monsterDifficulty(
+	monster: { barrier: number; stage?: number },
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): 1 | 2 | 3 {
+	if (catalog && ruleValue(catalog, 'monsterDeckByStage') && (monster.stage === 1 || monster.stage === 2 || monster.stage === 3))
+		return monster.stage;
 	if (monster.barrier >= 8) return 3;
 	if (monster.barrier >= 4) return 2;
 	return 1;
@@ -1297,8 +1304,11 @@ function monsterCardName(name: string, difficulty: 1 | 2 | 3): string {
 }
 
 /** A monster card in play. Its catalog `barrier` (damage to defeat it) is tracked in hp/maxHp. */
-export function monsterCardFromCatalog(monster: PlayCatalogMonster): MonsterState {
-	const difficulty = monsterDifficulty(monster);
+export function monsterCardFromCatalog(
+	monster: PlayCatalogMonster,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): MonsterState {
+	const difficulty = monsterDifficulty(monster, catalog);
 	return {
 		id: monster.id,
 		name: monsterCardName(monster.name, difficulty),
@@ -1397,7 +1407,7 @@ function buildMonsterDecks(
 ): MonsterDeckSummary[] {
 	return ([1, 2, 3] as const).map((difficulty) => {
 		const cards = (catalog.monsters ?? []).filter(
-			(m) => !m.permanent && monsterDifficulty(m) === difficulty
+			(m) => !m.permanent && monsterDifficulty(m, catalog) === difficulty
 		);
 		const barriers = cards.map((m) => m.barrier);
 		const vps = cards.map(rewardVp);
@@ -1441,7 +1451,7 @@ function drawMonsterCardsForPlayer(
 		cards: selected.map((entry) => {
 			const catalogMonster = (catalog.monsters ?? []).find((monster) => monster.id === entry.id);
 			return catalogMonster
-				? monsterCardFromCatalog(catalogMonster)
+				? monsterCardFromCatalog(catalogMonster, catalog)
 				: monsterCardFromCatalog({
 						id: entry.id ?? entry.guid,
 						name: entry.name,
@@ -1534,7 +1544,7 @@ function reduceCommand(
 	// A game started before the catalog had a permanent monster gets it with its next command.
 	if (state.status === 'active' && !state.permanentMonster) {
 		const permanent = permanentMonsterOf(catalog);
-		if (permanent) state.permanentMonster = monsterCardFromCatalog(permanent);
+		if (permanent) state.permanentMonster = monsterCardFromCatalog(permanent, catalog);
 	}
 	const powerBlockers = navigationPowerBlockers(state, actor.seatColor);
 	if (
@@ -1783,7 +1793,7 @@ function reduceCommand(
 					name: monster.name,
 					barrier: monster.barrier,
 					damage: monster.damage,
-					difficulty: monsterDifficulty(monster)
+					difficulty: monsterDifficulty(monster, catalog)
 				})),
 				state.rng
 			);
@@ -1794,7 +1804,7 @@ function reduceCommand(
 			state.bags.monsters = { count: dealt.length, contents: dealt };
 			state.monsterDecks = buildMonsterDecks(catalog, dealt);
 			const permanent = permanentMonsterOf(catalog);
-			if (permanent) state.permanentMonster = monsterCardFromCatalog(permanent);
+			if (permanent) state.permanentMonster = monsterCardFromCatalog(permanent, catalog);
 			state.bags.rewardHexes = { count: rewardEntries().length, contents: rewardEntries().map((entry) => ({ ...entry })) };
 			// Both TTS bags carry `shuffle = true`, so the opening hands, the market,
 			// and every subsequent draw are randomized — not dealt in alphabetical
@@ -3404,8 +3414,8 @@ function reduceCommand(
 				const permanent = permanentMonsterOf(catalog);
 				if (!permanent) return failure('no_permanent_monster', 'This game has no permanent monster.');
 				active.player.monsterHand ??= [];
-				active.player.monsterHand.push(monsterCardFromCatalog(permanent));
-				state.permanentMonster ??= monsterCardFromCatalog(permanent);
+				active.player.monsterHand.push(monsterCardFromCatalog(permanent, catalog));
+				state.permanentMonster ??= monsterCardFromCatalog(permanent, catalog);
 				active.player.monsterDrawRound = state.round;
 				return success(state);
 			}

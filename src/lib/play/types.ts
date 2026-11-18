@@ -848,6 +848,8 @@ export interface PlayRules {
 	falconerNoDoubleVp?: boolean;
 	/** The Cleansing Teapot cannot awaken a "Have N <Origin> Spirits" spirit without that board. */
 	relicAwakenNeedsBoard?: boolean;
+	/** A monster card's deck is its `stage` (1-3), not its Barrier band. */
+	monsterDeckByStage?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

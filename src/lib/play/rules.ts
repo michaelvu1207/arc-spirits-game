@@ -106,6 +106,9 @@
  * - relicAwakenNeedsBoard (default false): true ⇒ the Cleansing Teapot cannot awaken a spirit whose
  *   awakening text is "Have N <Origin> Spirits…" (Caldera, Storm King, Hollowbloom) while the
  *   player holds fewer than N spirits of that origin. The full origin board is then the only way.
+ * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
+ *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
+ *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
  */
 
 import type { ClassBreakpoint } from '$lib/types';
@@ -142,7 +145,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	shieldbearerFullOnly: false,
 	masterBarrierChoice: false,
 	falconerNoDoubleVp: false,
-	relicAwakenNeedsBoard: false
+	relicAwakenNeedsBoard: false,
+	monsterDeckByStage: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

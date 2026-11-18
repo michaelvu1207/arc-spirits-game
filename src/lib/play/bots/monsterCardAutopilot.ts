@@ -60,7 +60,8 @@ function deckEntryCard(entry: RuntimeBagEntry, catalog: PlayCatalog): MonsterSta
 			chooseAmount: 2,
 			stage: 1,
 			order: 0
-		}
+		},
+		catalog
 	);
 }
 
