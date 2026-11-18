@@ -123,7 +123,9 @@
  * - cultistNoVp (default false; Michael, 2026-11-18): true ⇒ Cultist is "When you become Corrupted,
  *   sacrifice 1 fewer spirit." (no point). A new Cultist ability is not designed yet.
  * - captainPowerOnKill (default false; Michael, 2026-11-18): true ⇒ Captain is "After you defeat a
- *   monster, gain 1 random Power." and nothing else.
+ *   monster, gain 1 random Power. When discarded, gain 1 Enchanted Attack." (no Cultivate clause).
+ * - captainNoDiscardDie (default false; Michael, 2026-11-18): only read with captainPowerOnKill. true ⇒
+ *   the Captain has no "When discarded" clause either.
  * - alchemistAugmentToArcane (default false; Michael, 2026-11-18): true ⇒ Arcane Alchemist is "When
  *   you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice."
  * - healerNoVp (default false; Michael, 2026-11-18): true ⇒ Healer's Rest restores 3 Barrier at 10
@@ -183,7 +185,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	alchemistAugmentToArcane: false,
 	healerNoVp: false,
 	feralNoDamage: false,
-	corruptorAwakenMaxBarrier: false
+	corruptorAwakenMaxBarrier: false,
+	captainNoDiscardDie: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -331,12 +334,20 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		count: 1,
 		text: 'In combat with a monster, or in a round when another player is at your location, gain 3 Initiative.'
 	},
+	// First entry wins: `captainNoDiscardDie` is only read together with `captainPowerOnKill`.
+	{
+		rule: 'captainNoDiscardDie',
+		when: true,
+		className: 'Captain',
+		count: 1,
+		text: 'After you defeat a monster, gain 1 random Power.'
+	},
 	{
 		rule: 'captainPowerOnKill',
 		when: true,
 		className: 'Captain',
 		count: 1,
-		text: 'After you defeat a monster, gain 1 random Power.'
+		text: 'After you defeat a monster, gain 1 random Power. When discarded, gain 1 Enchanted Attack.'
 	},
 	{
 		rule: 'alchemistAugmentToArcane',

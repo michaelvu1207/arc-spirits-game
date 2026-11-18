@@ -872,6 +872,8 @@ export interface PlayRules {
 	feralNoDamage?: boolean;
 	/** Awakening the Corruptor also gives 4 Max Barrier. */
 	corruptorAwakenMaxBarrier?: boolean;
+	/** With captainPowerOnKill: the Captain has no "When discarded" clause. */
+	captainNoDiscardDie?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

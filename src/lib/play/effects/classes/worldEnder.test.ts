@@ -228,9 +228,10 @@ describe('Captain discard clause', () => {
 		applyTrigger(makeState(p), 'Red', 'onSpiritDiscard', [], { catalog, counts: { Captain: 1 } } as never);
 		return p.attackDice.length;
 	};
-	it('rule off: 1 Enchanted Attack; captainPowerOnKill: nothing', () => {
+	it('rule off or captainPowerOnKill alone: 1 Enchanted Attack; with captainNoDiscardDie: nothing', () => {
 		expect(discard({} as never)).toBe(1);
-		expect(discard({ rules: { captainPowerOnKill: true } } as never)).toBe(0);
+		expect(discard({ rules: { captainPowerOnKill: true } } as never)).toBe(1);
+		expect(discard({ rules: { captainPowerOnKill: true, captainNoDiscardDie: true } } as never)).toBe(0);
 	});
 });
 

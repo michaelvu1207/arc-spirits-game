@@ -18,7 +18,7 @@ const captainOnCultivate: ClassHandler = (ctx) => {
 
 /**
  * Rule `captainPowerOnKill` (Michael, 2026-11-18): "After you defeat a monster, gain 1 random
- * Power." is the whole ability: no Cultivate clause and no "When discarded" clause. The Power comes
+ * Power." replaces the Cultivate clause. With `captainNoDiscardDie` as well, it is the whole ability. The Power comes
  * from the same pool as the Forest Region's random Power.
  */
 const captainOnKill: ClassHandler = (ctx) => {
@@ -34,10 +34,11 @@ export const ability: ClassAbility[] = [
 	{ on: 'onCultivate', run: captainOnCultivate },
 	{ on: 'onMonsterKill', run: captainOnKill },
 	{
-		// "When discarded, gain 1 Enchanted Attack." Rule `captainPowerOnKill` removes it too.
+		// "When discarded, gain 1 Enchanted Attack." Rule `captainNoDiscardDie` removes it. (A separate
+		// switch: the games recorded under `captainPowerOnKill` alone still gave the die.)
 		on: 'onSpiritDiscard',
 		run(ctx) {
-			if (ruleValue(ctx.catalog, 'captainPowerOnKill')) return;
+			if (ruleValue(ctx.catalog, 'captainNoDiscardDie')) return;
 			runAction(ctx, { kind: 'gainAttackDice', tier: 'enchanted', amount: 1 });
 		}
 	}
