@@ -221,3 +221,15 @@ describe('rules captainPowerOnKill, alchemistAugmentToArcane, healerNoVp', () =>
 		expect(rest({} as never)).toEqual([1, 8]);
 	});
 });
+
+describe('Captain discard clause', () => {
+	const discard = (catalog: never) => {
+		const p = makePlayer({ spirits: [spirit(1, { Captain: 1 })] });
+		applyTrigger(makeState(p), 'Red', 'onSpiritDiscard', [], { catalog, counts: { Captain: 1 } } as never);
+		return p.attackDice.length;
+	};
+	it('rule off: 1 Enchanted Attack; captainPowerOnKill: nothing', () => {
+		expect(discard({} as never)).toBe(1);
+		expect(discard({ rules: { captainPowerOnKill: true } } as never)).toBe(0);
+	});
+});
