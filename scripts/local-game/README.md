@@ -34,13 +34,29 @@ Stop with Ctrl+C.
 
 ## Game explorer
 
-`http://127.0.0.1:5317/explorer` (local game only; the data editor on port 8787 shows it as its
-"Games" page): Trends, Games (records and the round-by-round viewer with a time-lapse),
-Leaderboard, Players. They are the original records / game viewer / leaderboard / player pages
-(`src/routes/admin/...`) without the site bar, each on one screen.
+`http://127.0.0.1:5317/explorer` (local game only; the data editor on port 8787 shows it in a
+frame): the balance of the AI test games, each page on one screen.
 
-`import-agent-games.ts` fills their tables in the emulator and runs every 30 s while the game
-runs (log: `explorer-import.log`; `--no-explorer-import` turns it off, `--agent-games <dir>` is
+- **Balance**: the round the game ends (median, low to high), the points between first and last
+  place, and where points come from, each box green when it meets its target and red when it
+  does not; damage per turn by round; final points by end status; monsters left in each pool by
+  round; each monster's fights and kills.
+- **Spirit World**, **Arcane Abyss**, **Heroes**: one list each, with a tier from desirability
+  and power together, the cost to awaken, and the two levels. Rows are marked when a spirit is
+  too powerful or in the danger zone. The "i" after a spirit shows its card; after a class, its
+  text (from the local game data).
+
+The pages read `/explorer/balance.json`, which serves one file written by the balance tools from
+the finished test games: `ARC_BALANCE_FILE`, default `../balance/dashboard.json` beside this
+repo. The file is read on every request and the pages reload it every minute, so a new file
+shows without a restart.
+
+`/explorer/game/<id>` is still the round-by-round game viewer (the original
+`src/routes/admin/game/[id]` page without the site bar); the game's "full replay" link opens it.
+The record, leaderboard and player pages are no longer part of the explorer.
+
+`import-agent-games.ts` fills the game viewer's tables in the emulator and runs every 30 s while
+the game runs (log: `explorer-import.log`; `--no-explorer-import` turns it off, `--agent-games <dir>` is
 the folder with the AI runs, default `~/arcspirits-harness`):
 
 - AI games: every finished record under `<dir>/<league>/versions/*/games/*.jsonl` and

@@ -4,20 +4,25 @@ import { supabase } from '$lib/supabase';
 
 /**
  * The local game explorer (scripts/local-game/start.mjs sets PUBLIC_ARC_LOCAL_EXPLORER=1):
- * the records, game viewer, leaderboard and player pages are served without the site chrome
- * under /explorer, and the data editor shows them in a frame. Unset (production, Vercel)
- * nothing here changes behaviour: /explorer answers 404 and the links below keep their values.
+ * /explorer shows the balance of the AI test games (Balance, Spirit World, Arcane Abyss, Heroes;
+ * data: $lib/explorerBalance.ts) without the site chrome, and the data editor shows it in a
+ * frame. The round-by-round game viewer is also served there (/explorer/game/<id>), for the
+ * game's own "full replay" link. Unset (production, Vercel) nothing here changes behaviour:
+ * /explorer answers 404 and the links below keep their values.
  */
 export const LOCAL_EXPLORER = publicEnv.PUBLIC_ARC_LOCAL_EXPLORER === '1';
 
 const enc = encodeURIComponent;
 
-/** Links between the explorer pages (their unchanged values when the explorer is off). */
+/**
+ * Links from the records, leaderboard, player and game pages. The explorer no longer has
+ * record, leaderboard or player pages, so only the game viewer and its way back differ there.
+ */
 export const explorerLinks = {
-	records: (fallback: string) => (LOCAL_EXPLORER ? '/explorer/games' : fallback),
-	leaderboard: () => (LOCAL_EXPLORER ? '/explorer/leaderboard' : '/admin/leaderboard'),
-	players: () => (LOCAL_EXPLORER ? '/explorer/players' : '/admin/players'),
-	player: (username: string) => `${LOCAL_EXPLORER ? '/explorer' : ''}/players/${enc(username)}`,
+	records: (fallback: string) => (LOCAL_EXPLORER ? '/explorer' : fallback),
+	leaderboard: () => '/admin/leaderboard',
+	players: () => '/admin/players',
+	player: (username: string) => `/players/${enc(username)}`,
 	game: (gameId: string, query = '') => `${LOCAL_EXPLORER ? '/explorer' : ''}/game/${enc(gameId)}${query}`
 };
 
@@ -103,83 +108,6 @@ export async function fetchGameStories(gameId?: string): Promise<Map<string, Gam
 	const query = supabase.from('game_stories').select('game_id, headline, luck, story');
 	const { data } = await (gameId ? query.eq('game_id', gameId) : query);
 	return new Map(((data as GameStory[] | null) ?? []).map((s) => [s.game_id, s]));
-}
-
-/** One row of the Models table (local explorer only). */
-export interface ModelStanding {
-	id: string;
-	run: string;
-	mode: 'entrant' | 'model';
-	name: string;
-	games: number;
-	wins: number;
-	avg_vp: number;
-	avg_place: number;
-	rating: number;
-	rating_lo: number;
-	rating_hi: number;
-	seconds_per_call: number;
-}
-
-export async function fetchModelStandings(): Promise<ModelStanding[]> {
-	if (!LOCAL_EXPLORER) return [];
-	const { data } = await supabase.from('model_standings').select('*');
-	return (data as ModelStanding[] | null) ?? [];
-}
-
-/** One seat of one game, with what the Trends page counts. */
-export interface TrendSeat {
-	game_id: string;
-	run: string;
-	version: string;
-	verified: boolean;
-	ended_at: string | null;
-	username: string;
-	strategy: string | null;
-	selected_character: string;
-	victory_points: number;
-	placement: number;
-	player_color: string;
-	final_spirits: { id: string; name: string; slotIndex: number; isFaceDown?: boolean; cost: number; classes: Record<string, number>; origins: Record<string, number> }[];
-	final_classes: string[];
-	/** Per origin: highest count during the game, relic gained (null: no relic), count at the end. */
-	origin_counts: Record<string, { peak: number; relic: boolean | null; final: number }> | null;
-	/** AI games: every monster fight and every monster card kept. */
-	monster_fights: { name: string; difficulty: number | null; barrier: number; dealt: number; lost: number; killed: boolean; fought: boolean; nth: number }[] | null;
-	monsters_kept: { name: string; difficulty: number | null }[] | null;
-	/** The strategy the seat played, judged from the game (stories/strategies.json). */
-	played_strategy: string | null;
-	items: string[];
-	powers: string[];
-	spirit_rounds: { id: string; name: string; cost: number; origins: number; rounds: number; awake: number }[] | null;
-	class_uses: Record<string, number> | null;
-	/** AI games: at the end of each round, Max Barrier, average damage of one attack and initiative against a monster (null: not computable). */
-	stat_rounds: { round: number; max_barrier: number; attack: number | null; initiative: number | null }[] | null;
-}
-
-export async function fetchTrendSeats(): Promise<TrendSeat[]> {
-	if (!LOCAL_EXPLORER) return [];
-	const { data, error } = await supabase
-		.from('player_match_results')
-		.select(
-			'game_id, run, version, verified, ended_at, player_color, username, strategy, selected_character, victory_points, placement, final_spirits, final_classes, items, powers, spirit_rounds, class_uses, origin_counts, monster_fights, monsters_kept, played_strategy, stat_rounds'
-		);
-	if (error) throw new Error(`Failed to fetch trends: ${error.message}`);
-	return (data as TrendSeat[] | null) ?? [];
-}
-
-/** The strategies a seat can be judged to have played (local explorer only). */
-export interface StrategyDefinition {
-	id: string;
-	name: string;
-	description: string;
-	rule: string;
-}
-
-export async function fetchStrategyDefinitions(): Promise<StrategyDefinition[]> {
-	if (!LOCAL_EXPLORER) return [];
-	const { data } = await supabase.from('strategy_definitions').select('id, name, description, rule');
-	return (data as StrategyDefinition[] | null) ?? [];
 }
 
 export interface AgentProfile {

@@ -5,13 +5,14 @@
 	let { children } = $props();
 
 	const path = $derived($page.url.pathname);
-	// The game viewer has its own bar (with the way back to the records).
+	// The round-by-round game viewer has its own bar. It is not one of the tabs: the game's
+	// "full replay" link opens it (GameDetailPanel).
 	const inGame = $derived(path.startsWith('/explorer/game/'));
 	const tabs = [
-		{ href: '/explorer', label: 'Trends', on: (p: string) => p === '/explorer' || p === '/explorer/' },
-		{ href: '/explorer/games', label: 'Games', on: (p: string) => p.startsWith('/explorer/games') },
-		{ href: '/explorer/leaderboard', label: 'Leaderboard', on: (p: string) => p.startsWith('/explorer/leaderboard') },
-		{ href: '/explorer/players', label: 'Players', on: (p: string) => p.startsWith('/explorer/players') }
+		{ href: '/explorer', label: 'Balance', on: (p: string) => p === '/explorer' || p === '/explorer/' },
+		{ href: '/explorer/spirits/world', label: 'Spirit World', on: (p: string) => p.startsWith('/explorer/spirits/world') },
+		{ href: '/explorer/spirits/arcane', label: 'Arcane Abyss', on: (p: string) => p.startsWith('/explorer/spirits/arcane') },
+		{ href: '/explorer/spirits/heroes', label: 'Heroes', on: (p: string) => p.startsWith('/explorer/spirits/heroes') }
 	];
 </script>
 
