@@ -874,6 +874,8 @@ export interface PlayRules {
 	corruptorAwakenMaxBarrier?: boolean;
 	/** With captainPowerOnKill: the Captain has no "When discarded" clause. */
 	captainNoDiscardDie?: boolean;
+	/** Princess gives 1 Any basic Rune instead of 1 point. */
+	princessRune?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

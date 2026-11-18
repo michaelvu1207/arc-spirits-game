@@ -246,3 +246,18 @@ describe('rule feralNoDamage', () => {
 		expect(fight({ rules: { feralNoDamage: true } } as never)).toEqual([0, true]);
 	});
 });
+
+describe('rule princessRune', () => {
+	const phase = (catalog: never, extra: object = {}) => {
+		const p = makePlayer({ spirits: [spirit(1, { Princess: 1 })], ...extra });
+		const before = p.mats.length;
+		applyTrigger(makeState(p), 'Red', 'awakeningPhase', [], { catalog });
+		return [p.victoryPoints, p.mats.length - before];
+	};
+	it('rule off: 1 point; rule on: 1 Any Rune and no point; Evil: nothing', () => {
+		const ON = { rules: { princessRune: true } } as never;
+		expect(phase({} as never)).toEqual([1, 0]);
+		expect(phase(ON)).toEqual([0, 1]);
+		expect(phase(ON, { statusLevel: 3 })).toEqual([0, 0]);
+	});
+});

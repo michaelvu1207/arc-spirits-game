@@ -1,8 +1,13 @@
+import { WILDCARD_MAT_IDS } from '../../awakenConditions';
+import { ruleValue } from '../../rules';
 import { isEvilAlignment } from '../../types';
 import type { ClassAbility } from './types';
 
 // Princess — "In the Awakening Phase, if you are not Evil and all your spirits are awakened,
 // gain 1 VP." Checked when the Awakening Phase effects fire (the Benefits step).
+// Rule `princessRune` (balance test, 2026-11-18; Michael: "the Princess should just do something else
+// entirely"): under the same condition she gives 1 Any basic Rune and no point. The rune is a
+// placeholder effect chosen for the test, not Michael's wording.
 export const ability: ClassAbility[] = [
 	{
 		on: 'awakeningPhase',
@@ -10,6 +15,11 @@ export const ability: ClassAbility[] = [
 			const { player, log } = ctx;
 			if (isEvilAlignment(player.statusLevel)) return;
 			if (player.spirits.length === 0 || player.spirits.some((s) => s.isFaceDown)) return;
+			if (ruleValue(ctx.catalog, 'princessRune')) {
+				player.mats.push({ slotIndex: player.mats.length + 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' });
+				log.push('Princess: not Evil and every spirit awakened — gain 1 Any Rune.');
+				return;
+			}
 			player.victoryPoints += 1;
 			log.push('Princess: not Evil and every spirit awakened — gain 1 VP.');
 		}
