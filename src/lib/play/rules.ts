@@ -130,6 +130,8 @@
  *   Max Barrier and gives no point.
  * - feralNoDamage (default false; Michael, 2026-11-18): true ⇒ Feral deals no extra damage; it is
  *   "When an Evil player or a monster attacks you, your side strikes first."
+ * - corruptorAwakenMaxBarrier (default false; Michael, 2026-11-18): true ⇒ awakening the Corruptor
+ *   (Nhal) also gives 4 Max Barrier.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -180,7 +182,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	captainPowerOnKill: false,
 	alchemistAugmentToArcane: false,
 	healerNoVp: false,
-	feralNoDamage: false
+	feralNoDamage: false,
+	corruptorAwakenMaxBarrier: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -407,6 +410,15 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Sorcerer',
 		count: 1,
 		text: 'In the Awakening Phase, if you are Evil and attacked a player this round, gain 1 Enchanted Attack Dice.'
+	},
+	// First entry wins: with both Corruptor switches on, this text is printed (the corruption part
+	// of `corruptorCountsAsCorruption` still applies in the engine).
+	{
+		rule: 'corruptorAwakenMaxBarrier',
+		when: true,
+		className: 'Corruptor',
+		count: 1,
+		text: 'Set your status to Fallen (this is not a corruption). Replace all Spirit World spirits with a random Arcane Abyss Spirit. Gain 4 Max Barrier. Gain 2 Initiative.'
 	},
 	{
 		rule: 'corruptorCountsAsCorruption',

@@ -82,6 +82,19 @@ describe('Corruptor', () => {
 		expect(player.pendingCorruptionDiscard ?? null).toBeNull();
 	});
 
+	it('rule corruptorAwakenMaxBarrier: its own awakening also gives 4 Max Barrier; rule off or another spirit: none', () => {
+		const ON = { rules: { corruptorAwakenMaxBarrier: true }, spirits: [] } as never;
+		const run = (slotIndex: number, catalog?: never) => {
+			const { player, state } = corruptorState();
+			const before = player.maxBarrier;
+			applyTrigger(state, 'Red', 'awakening', [], catalog ? { command: { slotIndex }, catalog } : { command: { slotIndex } });
+			return player.maxBarrier - before;
+		};
+		expect(run(1, ON)).toBe(4);
+		expect(run(1)).toBe(0);
+		expect(run(2, ON)).toBe(0);
+	});
+
 	it('does nothing when another spirit awakens', () => {
 		const { player, state } = corruptorState();
 		applyTrigger(state, 'Red', 'awakening', [], { command: { slotIndex: 2 } });

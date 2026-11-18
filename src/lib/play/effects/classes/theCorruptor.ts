@@ -1,6 +1,7 @@
 import { bagForSpiritCost, shuffleBag, SPIRIT_WORLD_BAG } from '../../bags';
 import { STATUS_LADDER, setCorruptionDiscardObligation, type PlaySpirit } from '../../types';
 import { ruleValue } from '../../rules';
+import { runAction } from '../actions';
 import { applyCorruptionEffects } from '../corruption';
 import { isHeroSpirit } from '../heroes';
 import type { ClassAbility, ClassHandler } from './types';
@@ -23,6 +24,8 @@ import type { ClassAbility, ClassHandler } from './types';
 // Arcane die after a corruption — is not in the November 2026 text and is gone.)
 
 const FALLEN = STATUS_LADDER.length - 1;
+/** Max Barrier the Corruptor gives when it awakens under rule `corruptorAwakenMaxBarrier`. */
+export const CORRUPTOR_MAX_BARRIER = 4;
 
 const corruptorAwakening: ClassHandler = (ctx) => {
 	const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
@@ -52,6 +55,8 @@ const corruptorAwakening: ClassHandler = (ctx) => {
 		}
 	}
 
+	// Rule `corruptorAwakenMaxBarrier` (Michael, 2026-11-18): awakening the Corruptor also gives 4 Max Barrier.
+	if (ruleValue(ctx.catalog, 'corruptorAwakenMaxBarrier')) runAction(ctx, { kind: 'gainMaxBarrier', amount: CORRUPTOR_MAX_BARRIER });
 	const worldBag = state.bags?.hexSpirits;
 	const abyssBag = state.bags?.abyssFallen;
 	if (!worldBag || !abyssBag) return;

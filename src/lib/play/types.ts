@@ -870,6 +870,8 @@ export interface PlayRules {
 	healerNoVp?: boolean;
 	/** Feral deals no extra damage (strike-first only). */
 	feralNoDamage?: boolean;
+	/** Awakening the Corruptor also gives 4 Max Barrier. */
+	corruptorAwakenMaxBarrier?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
