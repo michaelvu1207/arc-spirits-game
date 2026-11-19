@@ -148,7 +148,9 @@
   .hx b { position: absolute; right: 12px; bottom: 6px; min-width: 18px; padding: 0 4px; border-radius: 99px; background: var(--card); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600; line-height: 15px; text-align: center; }
   .cl-sep { width: 1px; align-self: stretch; background: var(--line-2); margin: 4px 2px; }
   .cl i { font-style: normal; font-weight: 500; color: var(--dim); } .cl.zz img, .cl.zz .abbr { opacity: .32; } .cl.zz { color: var(--faint); font-weight: 500; }
-  .ge-pop { position: fixed; z-index: 30; width: max-content; max-width: 340px; pointer-events: none; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55); font-size: 12.5px; display: grid; gap: 4px; color: var(--dim); }
+  .ge-pop { position: fixed; z-index: 30; width: max-content; max-width: 380px; pointer-events: none; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55); font-size: 12.5px; display: grid; gap: 4px; color: var(--dim); }
+  .ge-pop .costs { display: grid; gap: 2px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line-2); } .ge-pop .costs > div { display: flex; justify-content: space-between; gap: 16px; } .ge-pop .costs span:first-child { color: var(--text); white-space: nowrap; }
+  .ge-pop .sec { display: grid; gap: 4px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line-2); } .hx:focus-visible { outline: none; filter: brightness(1.15); }
   .ge-pop .hd { display: flex; gap: 10px; align-items: baseline; color: var(--text); } .ge-pop .hd b { font-size: 13px; font-weight: 600; } .ge-pop .hit { color: var(--text); } .ge-pop div b { font-weight: 600; margin-right: 4px; }
   .gs-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px; } .gs-cols > div { min-height: 0; overflow: auto; scrollbar-width: thin; }
   .ge-acts { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; } .ge-acts .got { color: var(--dim); } .ge-acts .vp { font-weight: 600; margin-left: 6px; white-space: nowrap; }
@@ -403,7 +405,7 @@ function geBoard(p) {
   const R = 44, w = 2 * R, h = Math.sqrt(3) * R, by = Object.fromEntries(p.sp.map((x) => [x.s, x]));
   return `<div class="hx-board" style="width:${5 * R}px;height:${(3 * h).toFixed(1)}px">${Object.entries(HEX_SLOT).map(([slot, [q, r]]) => { const sp = by[slot], art = sp && GE.hex?.[sp.n], src = art ? (art.final?.front ? art.final.front + '.png' : art.front) : null;
     const pos = `left:${(1.5 * R * (q + 1)).toFixed(1)}px;top:${(h * (r + q / 2 + 1)).toFixed(1)}px;width:${w}px;height:${h.toFixed(1)}px`;
-    return !sp ? `<span class="hx none" style="${pos}"></span>` : `<span class="hx ${sp.d ? 'zz' : ''}" style="${pos}" title="${esc(sp.n)}${sp.d ? ' (unawakened)' : ''}${sp.a?.length ? ` · augments: ${esc(sp.a.join(', '))}` : ''}">${src ? `<img loading="lazy" src="${small(src, 160)}" alt="${esc(sp.n)}">` : `<i>${esc(sp.n)}</i>`}${sp.a?.length ? `<b>+${sp.a.length}</b>` : ''}</span>`; }).join('')}</div>`;
+    return !sp ? `<span class="hx none" style="${pos}"></span>` : `<span class="hx ${sp.d ? 'zz' : ''}" style="${pos}" data-sp="${sp.s}" tabindex="0">${src ? `<img loading="lazy" src="${small(src, 160)}" alt="${esc(sp.n)}">` : `<i>${esc(sp.n)}</i>`}${sp.a?.length ? `<b>+${sp.a.length}</b>` : ''}</span>`; }).join('')}</div>`;
 }
 const STKEY = { Pure: 'pure', Tainted: 'tainted', Corrupt: 'corrupt', Fallen: 'fallen' };
 const stKey = (st) => STKEY[st] ?? 'pure';
@@ -467,9 +469,9 @@ function mountLines() {
     if (b.dataset.clear) geSelect(null);
     else if (b.dataset.view) { geView = b.dataset.view; try { localStorage.setItem('geView', geView); } catch {} paintSide(); } };
   // Pointing at a class (or focusing it) shows what it does in a popup under the icon.
-  side.onpointerover = (e) => { const b = e.target.closest('[data-cls]'); if (b) geClassPop(b); };
-  side.onpointerout = (e) => { if (e.target.closest('[data-cls]') && !e.relatedTarget?.closest?.('[data-cls]')) geClassPop(null); };
-  side.onfocusin = (e) => { const b = e.target.closest('[data-cls]'); if (b) geClassPop(b); };
+  side.onpointerover = (e) => { const b = e.target.closest('[data-cls], [data-sp]'); if (b) geClassPop(b); };
+  side.onpointerout = (e) => { if (e.target.closest('[data-cls], [data-sp]') && !e.relatedTarget?.closest?.('[data-cls], [data-sp]')) geClassPop(null); };
+  side.onfocusin = (e) => { const b = e.target.closest('[data-cls], [data-sp]'); if (b) geClassPop(b); };
   side.onfocusout = () => geClassPop(null);
   GE.ro?.disconnect(); GE.ro = new ResizeObserver(() => drawLines()); GE.ro.observe($('geChart'));
   drawLines();
@@ -554,18 +556,34 @@ function geFocus() {
 }
 const geRune = (r) => { const R = GE.runeIcon, k = R?.key(r.n); return (r.relic ? R?.relic[k] : R?.rune[k]) ?? null; };
 const geClassIcon = (n) => { const f = ICONS.find((x) => x === `${n} (icon).png` || x === `${n}.png`); return f ? small('references/icons/classes/' + f, 64) : null; };
-/** The popup under a class icon: what the class does, with the breakpoints this player has reached. null hides it. */
-function geClassPop(btn) {
-  let pop = $('gePop'); const l = GE.sel;
-  if (!btn || !l) { pop?.remove(); return; }
-  if (!pop) { pop = document.createElement('div'); pop.id = 'gePop'; pop.className = 'ge-pop'; pop.setAttribute('role', 'tooltip'); document.body.append(pop); }
-  const name = btn.dataset.cls, c = l.pts[GE.r].cl.find((x) => x.n === name) ?? { n: name, on: 0, off: 0, sp: [], zz: [] }, lines = GE.data.classes?.[name] ?? [];
+/** The lines of a class in a popup: its name, what it does and the breakpoints this player has reached. */
+function geClassLines(name, c) {
+  const lines = GE.data.classes?.[name] ?? [], special = !GE.generic.has(name);
   const reach = lines.map((b) => { const n = parseInt(b.count, 10); return Number.isFinite(n) && c.on >= n; }), multi = new Set(lines.map((b) => b.count)).size > 1;
-  const held = [...c.sp, ...(c.aug ? [`${c.aug} augment${c.aug > 1 ? 's' : ''}`] : []), ...c.zz.map((n) => `${n} (unawakened)`)].join(', ');
-  pop.innerHTML = `<div class="hd"><b>${esc(name)}</b><span>${!GE.generic.has(name) ? (c.on ? 'awakened' : 'unawakened') : `${c.on ? `${c.on} awakened` : ''}${c.on && c.off ? ', ' : ''}${c.off ? `${c.off} unawakened` : ''}`}</span></div>${held ? `<div>${esc(held)}</div>` : ''}
+  const base = c.on - (c.aug ?? 0);
+  return `<div class="hd"><b>${esc(name)}</b><span>${special ? (c.on ? 'awakened' : c.off ? 'unawakened' : '') : c.on || c.off ? `${c.on ? `${base}${c.aug ? `+${c.aug}` : ''} awakened` : ''}${c.on && c.off ? ', ' : ''}${c.off ? `${c.off} unawakened` : ''}` : ''}</span></div>
     ${lines.length ? lines.map((b, k) => `<div class="${reach[k] ? 'hit' : ''}">${multi ? `<b>(${esc(b.count)})</b>` : ''}${esc(b.text)}</div>`).join('') : '<div>No text for this class.</div>'}`;
-  const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
-  pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px'; pop.style.top = (r.bottom + 8 + h > innerHeight ? r.top - h - 8 : r.bottom + 8) + 'px';
+}
+const geAwaken = (n) => GE.data.awaken?.[n] ?? '';
+/** The popup under a class icon or a hex of the board: what the class does, and what its spirits cost to awaken. null hides it. */
+function geClassPop(el) {
+  let pop = $('gePop'); const l = GE.sel;
+  if (!el || !l) { pop?.remove(); return; }
+  if (!pop) { pop = document.createElement('div'); pop.id = 'gePop'; pop.className = 'ge-pop'; pop.setAttribute('role', 'tooltip'); document.body.append(pop); }
+  const p = l.pts[GE.r], none = (n) => ({ n, on: 0, off: 0, sp: [], zz: [] }), cls = (n) => p.cl.find((x) => x.n === n) ?? none(n);
+  if (el.dataset.cls) { // a class: its text, then each spirit that carries it with its cost to awaken
+    const c = cls(el.dataset.cls), seen = new Set();
+    const spirits = [...c.sp.map((n) => [n, false]), ...c.zz.map((n) => [n, true])].filter(([n, zz]) => !seen.has(n + zz) && seen.add(n + zz));
+    pop.innerHTML = geClassLines(c.n, c) + (spirits.length ? `<div class="costs">${spirits.map(([n, zz]) => `<div><span>${esc(n)}${zz ? ' (unawakened)' : ''}</span><span>To awaken: ${esc(geAwaken(n))}</span></div>`).join('')}</div>` : '');
+  } else { // a hex of the board: the spirit, its cost to awaken, and the text of each of its classes
+    const sp = p.sp.find((x) => String(x.s) === el.dataset.sp); if (!sp) { pop.remove(); return; }
+    pop.innerHTML = `<div class="hd"><b>${esc(sp.n)}</b><span>${sp.d ? 'unawakened' : 'awakened'}</span></div><div>To awaken: ${esc(geAwaken(sp.n))}</div>${sp.a?.length ? `<div>Augments: ${esc(sp.a.join(', '))}</div>` : ''}
+      ${(sp.c ?? []).map((n) => `<div class="sec">${geClassLines(n, cls(n))}</div>`).join('')}`;
+  }
+  const r = el.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight, board = el.dataset.sp ? el.closest('.hx-board')?.getBoundingClientRect() : null;
+  if (board) { // beside the board, so the other hexes stay visible
+    pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, board.right + 12)) + 'px'; pop.style.top = Math.max(8, Math.min(innerHeight - h - 8, r.top)) + 'px';
+  } else { pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px'; pop.style.top = (r.bottom + 8 + h > innerHeight ? Math.max(8, r.top - h - 8) : r.bottom + 8) + 'px'; }
 }
 const DIE_ICON = { basic: 'Basic Attack - Side 1', enchanted: 'Enchanted Attack', exalted: 'Exalted Attack - Side 1', arcane: 'Arcane Attack - Side 1' };
 const geDie = (tier) => { const t = pool.find((x) => x.name === DIE_ICON[tier]); return t?.icon ? small(t.icon, 64) : null; };
