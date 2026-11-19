@@ -35,10 +35,10 @@
   "66525fe8-e375-4473-b1c3-88d3c9fd2b1c": 1.5,
   "de816c21-aa17-4e41-9217-20511c11e9c9": 1.5,
   "faa39f61-98ec-4f63-a873-766dc4e111f3": 1.5,
-  "6d48e34b-e461-4deb-9cfd-662dd7127331": 2,
-  "e7f1c140-32bd-4603-8255-0be7a8ef34c4": 1,
-  "95e4a832-18d6-5ec3-8d57-2d90118050d6": 0.5,
-  "7d052532-89f1-44cf-8521-5a4f2aac5cd9": 0.25
+  "6d48e34b-e461-4deb-9cfd-662dd7127331": 4,
+  "e7f1c140-32bd-4603-8255-0be7a8ef34c4": 2,
+  "95e4a832-18d6-5ec3-8d57-2d90118050d6": 1,
+  "7d052532-89f1-44cf-8521-5a4f2aac5cd9": 0.5
  },
- "notes": "Subjective reward values in victory points (Michael, 2026-11-07): 5 VP is the best single reward; Abyss summon and a rune 0.5; a relic 4; Arcane die 2, Exalted die 1, Enchanted die 0.5; a spirit augment 1.5. Expected value E(d) = a + b * difficulty (1-15). Power = (value - E) / E."
+ "notes": "Subjective reward values in victory points (Michael, 2026-11-07): 5 VP is the best single reward; Abyss summon and a rune 0.5; a relic 4; Arcane die 4, Exalted die 2, Enchanted die 1, Basic die 0.5 (doubled on 2026-11-19 so that monsters that drop dice give fewer points); a spirit augment 1.5. Expected value E(d) = a + b * difficulty (1-15). Power = (value - E) / E."
 }

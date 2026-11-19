@@ -96,7 +96,7 @@
   .tabs .group { padding: 12px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
   .ccard h2 input { font-size: 15px; font-weight: 600; width: 100%; } .ccard .cdesc textarea { width: 100%; min-width: 0; }
   /* game explorer: a full-window view. One line per player (points by round); the chosen point's details fill the panel on the right. */
-  :root { --won: #3987e5; --lastc: #d95926; --midc: #7d8394; }
+  :root { --st-pure: #199e70; --st-tainted: #c98500; --st-corrupt: #9085e9; --st-fallen: #000; --st-edge: #a9adba; }
   #navToggle { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; font-size: 15px; } #barExtra { display: none; }
   .split.nonav { grid-template-columns: minmax(0, 1fr); } .split.nonav > aside { display: none; }
   main.ge-mode { height: 100vh; } main.ge-mode #barExtra { display: flex; } main.ge-mode .bar { flex-wrap: wrap; row-gap: 6px; }
@@ -104,20 +104,21 @@
   .ge { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
   .ge-filters { gap: 8px 18px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--dim); margin-left: 8px; } .ge-filters select { max-width: 380px; color: var(--text); margin-left: 6px; }
   .ge-legend { display: flex; gap: 14px; flex-wrap: wrap; } .ge-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-  .ge-legend i { display: block; width: 18px; height: 0; border-top: 2px solid var(--c); } .ge-legend i.dash { border-top-style: dashed; }
+  .ge-legend i { display: block; width: 18px; height: 0; border-top: 3px solid var(--c); } .ge-legend i.dash { border-top-style: dashed; border-top-width: 2px; } .ge-legend i.edge { outline: 1px solid var(--st-edge); }
   .ge-about { font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
   .ge-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(420px, 1fr); gap: 12px; }
   .ge-chart { position: relative; min-width: 0; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: none; }
   .ge-chart svg { display: block; width: 100%; height: 100%; cursor: crosshair; } .ge-chart svg.near { cursor: pointer; } .ge-chart svg.drag { cursor: ew-resize; }
   .ge-chart text { font: 11px "Figtree", system-ui, sans-serif; fill: var(--dim); } .ge-chart text.cap { fill: var(--faint); } .ge-chart text.lab { fill: var(--text); font-size: 12px; } .ge-chart text.lab.sel { font-weight: 600; }
   .ge-chart .grid { stroke: var(--line); stroke-width: 1; } .ge-chart .axis { stroke: var(--line-2); stroke-width: 1; } .ge-chart .win { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 4; }
-  .ge-chart .ln { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; opacity: .8; transition: opacity .12s; } .ge-chart .end { transition: opacity .12s; }
-  .ge-chart .won { stroke: var(--won); } .ge-chart .last { stroke: var(--lastc); } .ge-chart .mid { stroke: var(--midc); } .ge-chart .ln.mid { opacity: .5; }
-  .ge-chart circle.won { fill: var(--won); stroke: none; } .ge-chart circle.last { fill: var(--lastc); stroke: none; } .ge-chart circle.mid { fill: var(--midc); stroke: none; opacity: .7; }
+  /* a player's line: one piece per status (Pure green, Tainted yellow, Corrupt purple, Fallen black with a light edge so it shows on the dark graph) */
+  .ge-chart .pl { opacity: .85; transition: opacity .12s; } .ge-chart .pl path { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; } .ge-chart .pl path.edge { stroke: var(--st-edge); stroke-width: 3.2; }
+  .ge-chart .st-pure { stroke: var(--st-pure); fill: var(--st-pure); } .ge-chart .st-tainted { stroke: var(--st-tainted); fill: var(--st-tainted); } .ge-chart .st-corrupt { stroke: var(--st-corrupt); fill: var(--st-corrupt); } .ge-chart .st-fallen { stroke: var(--st-fallen); fill: var(--st-fallen); }
+  .ge-chart .pl circle { stroke: none; } .ge-chart .pl circle.st-fallen { stroke: var(--st-edge); stroke-width: 1; }
   .ge-chart .med { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .75; pointer-events: none; }
-  .ge-chart svg.hov .ln, .ge-chart svg.hov .end { opacity: .22; } .ge-chart svg.focus .ln, .ge-chart svg.focus .end { opacity: .05; } .ge-chart svg.focus .med { opacity: .28; }
-  .ge-chart svg .ln.mate, .ge-chart svg .end.mate { opacity: .95; } .ge-chart svg .ln.mate { stroke-width: 2; } .ge-chart svg .ln.sel { opacity: 1; stroke-width: 3.5; }
-  .ge-chart svg .ln.hot, .ge-chart svg .end.hot { opacity: 1; } .ge-chart svg .ln.hot { stroke-width: 3; }
+  .ge-chart svg.hov .pl { opacity: .22; } .ge-chart svg.focus .pl { opacity: .05; } .ge-chart svg.focus .med { opacity: .28; }
+  .ge-chart svg .pl.mate { opacity: .95; } .ge-chart svg .pl.mate path { stroke-width: 2; } .ge-chart svg .pl.mate path.edge { stroke-width: 3.6; }
+  .ge-chart svg .pl.sel, .ge-chart svg .pl.hot { opacity: 1; } .ge-chart svg .pl.sel path { stroke-width: 3.6; } .ge-chart svg .pl.sel path.edge { stroke-width: 5.4; } .ge-chart svg .pl.hot path { stroke-width: 3; } .ge-chart svg .pl.hot path.edge { stroke-width: 4.8; }
   .ge-chart .cross { stroke: var(--line-2); stroke-width: 1; pointer-events: none; } .ge-chart .dot { stroke: var(--panel); stroke-width: 2; pointer-events: none; }
   .ge-hint { position: absolute; z-index: 2; pointer-events: none; background: var(--card); border: 1px solid var(--line-2); border-radius: 6px; padding: 3px 8px; font-size: 12px; white-space: nowrap; color: var(--dim); } .ge-hint b { color: var(--text); font-weight: 600; }
   .ge-side { min-width: 0; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow: hidden; font-size: 13px; display: flex; flex-direction: column; gap: 12px; }
@@ -125,7 +126,7 @@
   .ge-side .empty { color: var(--dim); display: grid; gap: 8px; max-width: 46ch; } .ge-side .empty b { color: var(--text); }
   .ge-side h3 { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); } .ge-side h3 span { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
   .ge-side .who { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; } .ge-side .who b { font-size: 15px; font-weight: 600; white-space: nowrap; } .ge-side .sub { color: var(--dim); font-size: 12px; flex: 1; min-width: 0; } .ge-side .sub a { color: var(--dim); }
-  .ge-side .swatch { display: inline-block; width: 14px; height: 0; border-top: 3px solid var(--c); border-radius: 2px; align-self: center; }
+  .ge-side .swatch { display: inline-block; width: 14px; height: 0; border-top: 4px solid var(--c); align-self: center; } .ge-side .swatch.edge { outline: 1px solid var(--st-edge); }
   .ge-side .x { color: var(--faint); font-size: 12px; } .ge-side .x:hover { color: var(--text); }
   .gs-round { display: flex; align-items: center; gap: 18px; }
   .ge-points { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; } .ge-points b { font-size: 30px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; } .ge-points span { color: var(--dim); }
@@ -384,7 +385,8 @@ function paintBalMonsters() {
 // the menu on the left is closed on entry (the button at the top left opens it) and nothing scrolls. ----------
 const GE = { index: null, setup: '', data: null, lines: [], err: '', game: 0, sel: null, r: 0, hover: null, pin: null, peek: null, runeIcon: null, geo: null, drag: false, ro: null };
 const ORD = ['', '1st', '2nd', '3rd', '4th'];
-const CATLABEL = { won: 'Won', mid: '2nd or 3rd', last: 'Last' };
+const STKEY = { Pure: 'pure', Tainted: 'tainted', Corrupt: 'corrupt', Fallen: 'fallen' };
+const stKey = (st) => STKEY[st] ?? 'pure';
 const setNav = (open) => { document.querySelector('.split').classList.toggle('nonav', !open); $('navToggle').title = open ? 'Hide the menu' : 'Show the menu'; $('navToggle').setAttribute('aria-expanded', open); };
 $('navToggle').onclick = () => setNav(document.querySelector('.split').classList.contains('nonav'));
 const geFetch = (q) => fetch(GAME_APP + '/explorer/lines.json' + q, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
@@ -404,10 +406,10 @@ async function loadLines(setup) {
     GE.runeIcon = { key, rune: Object.fromEntries(runes.map((r) => [key(r.name), poolIcon[r.icon]])), relic: Object.fromEntries(relics.map((r) => [key(r.name), poolIcon[r.icon]])) };
   }
   GE.lines = []; GE.sel = null; GE.hover = null; GE.game = 0; GE.r = 0;
-  GE.data.games.forEach((g, gi) => { const low = Math.min(...g.seats.map((s) => s.final));
-    for (const s of g.seats) GE.lines.push({ i: GE.lines.length, g, gi: gi + 1, s, pts: s.rounds, last: s.rounds.at(-1).r, cat: s.place === 1 ? 'won' : s.final === low ? 'last' : 'mid' }); });
+  // A player is "player 1 to 4" of its game (the seat order); seat colours and characters are not shown.
+  GE.data.games.forEach((g, gi) => g.seats.forEach((s, k) => GE.lines.push({ i: GE.lines.length, g, gi: gi + 1, pn: k + 1, s, pts: s.rounds, last: s.rounds.at(-1).r })));
 }
-const geName = (l) => `${l.s.seat} · ${l.s.guardian}`;
+const geName = (l) => `Game ${l.gi} · Player ${l.pn}`;
 function paintLines() {
   if (!GE.data) { $('barExtra').innerHTML = ''; return `<div class="note">${esc(GE.err || 'Loading…')}</div>`; }
   const meta = GE.index.find((x) => x.setup === GE.setup), newest = GE.index.at(-1);
@@ -417,7 +419,7 @@ function paintLines() {
   // The filters and the legend sit in the title bar, so the graph and the panel get the whole height.
   $('barExtra').innerHTML = `<label>Set of games<select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x === newest ? ' (latest)' : ''} · ${esc(day(x.last))} · ${x.games} games · ${esc(x.table)} · ${esc(cut(x.changed || x.label, 60))}</option>`).join('')}</select></label>
     <label>Game<select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} (${g.rounds} rounds)</option>`).join('')}</select></label>
-    <span class="ge-legend"><span><i style="--c:var(--won)"></i>Won</span><span><i style="--c:var(--midc)"></i>2nd or 3rd</span><span><i style="--c:var(--lastc)"></i>Last</span><span><i class="dash" style="--c:var(--text)"></i>Median</span></span>`;
+    <span class="ge-legend"><span><i style="--c:var(--st-pure)"></i>Pure</span><span><i style="--c:var(--st-tainted)"></i>Tainted</span><span><i style="--c:var(--st-corrupt)"></i>Corrupt</span><span><i class="edge" style="--c:var(--st-fallen)"></i>Fallen</span><span><i class="dash" style="--c:var(--text)"></i>Median</span></span>`;
   const about = `Test ${meta.n} of ${GE.index.length}${meta === newest ? ', the latest set of games' : ''}. Played ${when(meta)}, ${GE.lines.length} players in ${meta.games} games on ${meta.table}. ${meta.changed ? `What it tested: ${meta.changed}. ` : ''}Rules: ${meta.label}. Name in the reports: ${meta.setup}.`;
   return `<div class="ge"><div class="ge-about" title="${esc(about)}">${esc(about)}</div>
   <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-hint" id="geHint" hidden></div></div><aside class="ge-side" id="geSide"></aside></div></div>`;
@@ -467,9 +469,15 @@ function drawLines() {
   s += `<text class="cap" x="${m.l - 34}" y="14">Points</text><text class="cap" x="${f(m.l + pw / 2)}" y="${H - 8}" text-anchor="middle">Round</text>`;
   s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(GE.data.win_points))}" y2="${f(y(GE.data.win_points))}"/><text class="cap" x="${W - m.r}" y="${f(y(GE.data.win_points) - 6)}" text-anchor="end">${GE.data.win_points} points wins</text>`;
   s += `<line class="cross" id="geCross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>`;
-  const shown = geShown(), order = { mid: 0, last: 1, won: 2 };
-  for (const l of [...shown].sort((a, b) => order[a.cat] - order[b.cat])) {
-    s += `<path class="ln ${l.cat}" data-i="${l.i}" d="${l.pts.map((p, k) => `${k ? 'L' : 'M'}${f(x(p.r))} ${f(y(p.vp))}`).join('')}"/><circle class="end ${l.cat}" data-i="${l.i}" cx="${f(x(l.last))}" cy="${f(y(l.s.final))}" r="3"/>`;
+  const shown = geShown();
+  for (const l of [...shown].sort((a, b) => a.s.final - b.s.final)) {
+    // One piece per run of rounds with the same status. A piece runs on to the first point of the next status, so the colour changes at the round the status changed.
+    let pieces = '';
+    for (let a = 0; a < l.pts.length;) { let b = a; while (b + 1 < l.pts.length && l.pts[b + 1].st === l.pts[a].st) b++;
+      const d = l.pts.slice(a, Math.min(b + 2, l.pts.length)).map((p, k) => `${k ? 'L' : 'M'}${f(x(p.r))} ${f(y(p.vp))}`).join(''), key = stKey(l.pts[a].st);
+      if (b > a || b + 1 < l.pts.length) pieces += `${key === 'fallen' ? `<path class="edge" d="${d}"/>` : ''}<path class="st-${key}" d="${d}"/>`;
+      a = b + 1; }
+    s += `<g class="pl" data-i="${l.i}">${pieces}<circle class="st-${stKey(l.pts.at(-1).st)}" cx="${f(x(l.last))}" cy="${f(y(l.s.final))}" r="3"/></g>`;
   }
   // Median of the players still in play at each round.
   const med = []; for (let r = 0; r <= xmax; r++) { const v = shown.filter((l) => l.last >= r).map((l) => l.pts[r].vp).sort((a, b) => a - b); if (v.length < 2) break; med.push([r, (v[Math.floor((v.length - 1) / 2)] + v[Math.ceil((v.length - 1) / 2)]) / 2]); }
@@ -492,9 +500,9 @@ function geHover(hit, mx, my) {
   svg.classList.toggle('near', !!hit); svg.classList.toggle('hov', !!hit && !GE.sel);
   for (const el of svg.querySelectorAll('.hot')) el.classList.remove('hot');
   if (!hit) { hint.hidden = true; return; }
-  for (const el of svg.querySelectorAll(`[data-i="${hit.l.i}"]`)) el.classList.add('hot');
+  svg.querySelector(`.pl[data-i="${hit.l.i}"]`)?.classList.add('hot');
   const p = hit.l.pts[hit.r];
-  hint.innerHTML = `<b>${esc(geName(hit.l))}</b> · game ${hit.l.gi} · round ${p.r} · <b>${p.vp}</b> points`;
+  hint.innerHTML = `<b>${esc(geName(hit.l))}</b> · round ${p.r} · <b>${p.vp}</b> points · ${esc(p.st)}`;
   hint.hidden = false; const w = hint.offsetWidth;
   hint.style.left = Math.max(6, Math.min(GE.geo.W - w - 6, mx - w / 2)) + 'px'; hint.style.top = (my + 20 + 26 > GE.geo.H ? my - 34 : my + 20) + 'px';
 }
@@ -507,17 +515,17 @@ function geFocus(keepRange) {
   const svg = $('geSvg'), g = GE.geo; if (!svg || !g) return;
   const l = GE.sel && geShown().includes(GE.sel) ? GE.sel : (GE.sel = null);
   svg.classList.toggle('focus', !!l); if (l) svg.classList.remove('hov');
-  for (const el of svg.querySelectorAll('.ln, .end')) { const o = GE.lines[el.dataset.i]; el.classList.toggle('mate', !!l && o.gi === l.gi); el.classList.toggle('sel', o === l); }
+  for (const el of svg.querySelectorAll('.pl')) { const o = GE.lines[el.dataset.i]; el.classList.toggle('mate', !!l && o.gi === l.gi); el.classList.toggle('sel', o === l); }
   const dot = svg.querySelector('#geDot'), cross = svg.querySelector('#geCross'), labels = svg.querySelector('#geLabels');
   if (!l) { dot.setAttribute('visibility', 'hidden'); cross.setAttribute('visibility', 'hidden'); labels.innerHTML = ''; paintSide(); return; }
-  svg.querySelector(`.ln[data-i="${l.i}"]`)?.parentNode.insertBefore(svg.querySelector(`.ln[data-i="${l.i}"]`), svg.querySelector('.med'));
+  svg.querySelector('.med').before(svg.querySelector(`.pl[data-i="${l.i}"]`)); // the chosen line on top of the others
   const p = l.pts[GE.r], px = g.x(p.r), py = g.y(p.vp);
-  dot.setAttribute('cx', px); dot.setAttribute('cy', py); dot.setAttribute('visibility', 'visible'); dot.style.fill = `var(--${l.cat === 'won' ? 'won' : l.cat === 'last' ? 'lastc' : 'midc'})`;
+  dot.setAttribute('cx', px); dot.setAttribute('cy', py); dot.setAttribute('visibility', 'visible'); dot.style.fill = `var(--st-${stKey(p.st)})`; dot.style.stroke = stKey(p.st) === 'fallen' ? 'var(--st-edge)' : '';
   cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
   // Direct labels at the ends of the four lines of this game (seat and final points), kept 14 px apart.
   const mates = GE.lines.filter((o) => o.gi === l.gi).map((o) => ({ o, y: g.y(o.s.final) })).sort((a, b) => a.y - b.y);
   for (let k = 1; k < mates.length; k++) if (mates[k].y - mates[k - 1].y < 14) mates[k].y = mates[k - 1].y + 14;
-  labels.innerHTML = mates.map(({ o, y }) => `<text class="lab ${o === l ? 'sel' : ''}" x="${(g.x(o.last) + 8).toFixed(1)}" y="${(y + 4).toFixed(1)}">${esc(o.s.seat)} ${o.s.final}</text>`).join('');
+  labels.innerHTML = mates.map(({ o, y }) => `<text class="lab ${o === l ? 'sel' : ''}" x="${(g.x(o.last) + 8).toFixed(1)}" y="${(y + 4).toFixed(1)}">Player ${o.pn} · ${o.s.final}</text>`).join('');
   paintSide(keepRange);
 }
 const geRune = (r) => { const R = GE.runeIcon, k = R?.key(r.n); return (r.relic ? R?.relic[k] : R?.rune[k]) ?? null; };
@@ -536,20 +544,18 @@ function paintClassDetail() {
 }
 function paintSide(keepRange) {
   const side = $('geSide'); if (!side) return; const l = GE.sel;
-  if (!l) { side.innerHTML = `<div class="empty"><b>No point chosen</b><span>Click a point on a line to see that player's board at that round. The other players of the same game stay visible and the rest fade.</span><span>Drag along the line to move through the rounds, or use ← and →. Esc clears. Double-click a line to open the whole game.</span></div>`; return; }
+  if (!l) { side.innerHTML = `<div class="empty"><b>No point chosen</b><span>Each line is one player; its colour is the player's status at that round. Click a point on a line to see that player's board at that round. The other players of the same game stay visible and the rest fade.</span><span>Drag along the line to move through the rounds, or use ← and →. Esc clears. Double-click a line to open the whole game.</span></div>`; return; }
   const p = l.pts[GE.r], prev = l.pts[GE.r - 1], delta = prev ? p.vp - prev.vp : 0;
-  const color = `var(--${l.cat === 'won' ? 'won' : l.cat === 'last' ? 'lastc' : 'midc'})`;
   const dice = ['basic', 'enchanted', 'exalted', 'arcane'].map((t, k) => p.dice[k] ? `${p.dice[k]} ${t}` : '').filter(Boolean).join(', ') || 'none';
   const runes = Object.values(p.ru.reduce((a, r) => { (a[r.n] ??= { ...r, k: 0 }).k++; return a; }, {}));
-  const level = ['Pure', 'Tainted', 'Corrupt', 'Fallen'].indexOf(p.st);
   const chip = (c) => { const icon = geClassIcon(c.n);
     return `<button class="cl ${c.on ? '' : 'zz'}" data-cls="${esc(c.n)}" aria-label="${esc(c.n)}: ${c.on} awakened, ${c.off} unawakened">${icon ? `<img loading="lazy" src="${icon}" alt="">` : `<span class="abbr">${esc(c.n.slice(0, 2))}</span>`}<span class="n">${c.on || ''}${c.off ? `<i>${c.on ? '+' : ''}${c.off}</i>` : ''}</span></button>`; };
   const stepLabel = p.r ? `Round ${p.r} of ${l.last}` : 'Start';
   const points = `<b>${p.vp}</b><span>points${delta ? ` · ${delta > 0 ? '+' : '−'}${Math.abs(delta)} this round` : ''}</span>`;
-  const head = `<div class="who"><span class="swatch" style="--c:${color}"></span><b>${esc(geName(l))}</b><span class="sub">${esc(l.s.agent)} · game ${l.gi} · ${CATLABEL[l.cat]}: ${ORD[l.s.place] ?? l.s.place} with ${l.s.final} points · <a href="${GAME_APP}/explorer/game/${encodeURIComponent(l.g.id)}" target="_blank">open the game ↗</a></span><button class="x" data-clear="1" title="Clear (Esc)">Clear</button></div>
+  const head = `<div class="who"><b>${esc(geName(l))}</b><span class="sub">${esc(l.s.agent)} · finished ${ORD[l.s.place] ?? l.s.place} with ${l.s.final} points · <a href="${GAME_APP}/explorer/game/${encodeURIComponent(l.g.id)}" target="_blank">open the game ↗</a></span><button class="x" data-clear="1" title="Clear (Esc)">Clear</button></div>
     <div class="gs-round"><div class="ge-points" id="gePoints">${points}</div><div class="ge-step"><button data-step="-1" ${GE.r <= 0 ? 'disabled' : ''} title="Previous round (←)">←</button><input type="range" id="geRange" min="0" max="${l.last}" value="${GE.r}" aria-label="Round"><button data-step="1" ${GE.r >= l.last ? 'disabled' : ''} title="Next round (→)">→</button><span id="geStepLabel">${stepLabel}</span></div></div>`;
   const rest = `<div class="gs-tiles">
-      <div><small>Status</small><span><span class="meter" title="Steps toward Fallen">${[1, 2, 3].map((k) => `<i class="${k <= level ? 'on' : ''}"></i>`).join('')}</span>${esc(p.st)}${p.cor ? ` <span class="was">· corrupted ${p.cor}×</span>` : ''}</span></div>
+      <div><small>Status</small><span><span class="swatch ${stKey(p.st) === 'fallen' ? 'edge' : ''}" style="--c:var(--st-${stKey(p.st)});margin-right:6px;vertical-align:middle"></span>${esc(p.st)}${p.cor ? ` <span class="was">· corrupted ${p.cor}×</span>` : ''}</span></div>
       <div><small>Barrier</small><span><b>${p.bar}</b> of ${p.max}</span></div>
       <div><small>Attack dice</small><span>${esc(dice)}</span></div>
       <div><small>Runes and relics</small><span>${runes.length ? runes.map((r) => `<span class="ge-chip" title="${esc(r.n)}">${geRune(r) ? `<img loading="lazy" src="${small(geRune(r), 64)}" alt="${esc(r.n)}">` : esc(r.n)}${r.k > 1 ? `×${r.k}` : ''}</span>`).join('') : '<span class="was">none</span>'}</span></div>
