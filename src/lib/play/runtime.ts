@@ -702,13 +702,19 @@ function applyRewardGain(
 /** Rule `goodKillBonus`: what a Good-aligned player gets for every monster kill, on top of the card's rewards. */
 export const GOOD_KILL_BONUS_VP = 1;
 
+/** Rule `goodKillBonus` pays for Difficulty 2 and 3 cards only: Difficulty 1 cards (and the permanent
+ *  monster, a Difficulty 1 card) kept their printed points when the others lost 1 (Michael, 2026-11-19). */
+export function goodKillBonusApplies(monster: { difficulty?: number }): boolean {
+	return (monster.difficulty ?? 1) >= 2;
+}
+
 /**
- * Rule `goodKillBonus`: a player who is Good-aligned (not Fallen) when the kill resolves gets
- * GOOD_KILL_BONUS_VP. It is not a reward of the card, so nothing that copies or changes the card's
- * rewards (Falconer, a claim) touches it, and a card with no rewards pays it too.
+ * Rule `goodKillBonus`: a player who is Good-aligned (not Fallen) when the kill of a Difficulty 2 or 3
+ * monster resolves gets GOOD_KILL_BONUS_VP. It is not a reward of the card, so nothing that copies or
+ * changes the card's rewards (Falconer, a claim) touches it, and a card with no rewards pays it too.
  */
-function goodKillBonus(player: PrivatePlayerState, catalog: PlayCatalog, log?: string[]): void {
-	if (!ruleValue(catalog, 'goodKillBonus') || isEvilAlignment(player.statusLevel)) return;
+function goodKillBonus(player: PrivatePlayerState, monster: { difficulty?: number }, catalog: PlayCatalog, log?: string[]): void {
+	if (!ruleValue(catalog, 'goodKillBonus') || isEvilAlignment(player.statusLevel) || !goodKillBonusApplies(monster)) return;
 	player.victoryPoints += GOOD_KILL_BONUS_VP;
 	log?.push(`Good alignment: +${GOOD_KILL_BONUS_VP} VP for the kill.`);
 }
@@ -3514,7 +3520,7 @@ function reduceCommand(
 			// the DEFEATED card (and picks a rune where a token asks for one). This blocks
 			// ending the Location phase until claimed.
 			if (result.killed && result.fought) {
-				goodKillBonus(active.player, catalog, result.log);
+				goodKillBonus(active.player, result.fought, catalog, result.log);
 				const claim = rewardClaimCount(result.fought.rewardTrack);
 				if (claim > 0) {
 					active.player.pendingReward = {
@@ -3962,7 +3968,7 @@ const navigationPowerHooks = {
 			offerFalconerDouble(state, player, catalog);
 		}
 		const killLog = ['Abyssal Execution: defeated the monster without battle.'];
-		goodKillBonus(player, catalog, killLog);
+		goodKillBonus(player, fought, catalog, killLog);
 		state.combats.push({
 			id: nextId(state.rng, 'power-kill'),
 			kind: 'monster',

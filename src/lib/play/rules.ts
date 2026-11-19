@@ -142,8 +142,9 @@
  * - pvpCorruptPays4 (default false; balance test, 2026-11-19): only read under pvpPaysOnCorrupt. true ⇒ the
  *   Evil attacker gets 4 VP per Good player corrupted, not 3 (see `pvpVpPerCorrupted` in combat.ts).
  * - goodKillBonus (default false; Michael, 2026-11-19): true ⇒ a Good-aligned player (Pure, Tainted or
- *   Corrupt; not Fallen) gets GOOD_KILL_BONUS_VP (1) for every monster kill, on top of the card's rewards
- *   (`goodKillBonus` in runtime.ts). The monster cards give 1 VP less each to go with it.
+ *   Corrupt; not Fallen) gets GOOD_KILL_BONUS_VP (1) for every kill of a Difficulty 2 or 3 monster, on top
+ *   of the card's rewards (`goodKillBonus` in runtime.ts). Those cards give 1 VP less each to go with it;
+ *   Difficulty 1 cards are unchanged and pay no bonus.
  * - princessRune (default false; balance test, 2026-11-18): true ⇒ Princess is "In the Awakening Phase, if
  *   you are not Evil and all your spirits are awakened, gain 1 Any basic Rune." (no point).
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its

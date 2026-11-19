@@ -882,7 +882,7 @@ export interface PlayRules {
 	nhalNeedsCorrupt?: boolean;
 	/** Under pvpPaysOnCorrupt: the Evil attacker gets 4 VP per Good player corrupted, not 3. */
 	pvpCorruptPays4?: boolean;
-	/** A Good-aligned player (not Fallen) gets 1 VP for every monster kill, on top of the card's rewards. */
+	/** A Good-aligned player (not Fallen) gets 1 VP for every kill of a Difficulty 2 or 3 monster, on top of the card's rewards. */
 	goodKillBonus?: boolean;
 }
 

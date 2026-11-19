@@ -61,7 +61,7 @@ function statusLine(level: number, catalog: PlayCatalog): string {
 		? ''
 		: isEvilAlignment(level)
 			? `: no alignment bonus, a monster kill pays only the card's rewards`
-			: `: +${GOOD_KILL_BONUS_VP} VP for every monster kill on top of the card's rewards, lost if this player becomes Fallen`;
+			: `: +${GOOD_KILL_BONUS_VP} VP for every Difficulty 2 or 3 monster kill on top of the card's rewards, lost if this player becomes Fallen`;
 	return `${name} (${level}/3${isEvilAlignment(level) ? ', EVIL' : ', Good'}${kill})`;
 }
 

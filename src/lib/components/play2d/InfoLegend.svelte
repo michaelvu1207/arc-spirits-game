@@ -186,7 +186,7 @@
 				'Once per visit, pick a deck (I, II or III), reveal 2 cards and keep 1. Your hand holds 3.',
 				'Tap a card in your hand to fight it. It hits first, and its damage stays on the card.',
 				'A kill gives you every reward on the card, and the card leaves the game.',
-				...(ruleValue({ rules }, 'goodKillBonus') ? ['While you are Good (not Fallen), every kill also gives you 1 extra VP.'] : [])
+				...(ruleValue({ rules }, 'goodKillBonus') ? ['While you are Good (not Fallen), every kill of a Difficulty 2 or 3 monster also gives you 1 extra VP.'] : [])
 			]
 		},
 		draw: {
