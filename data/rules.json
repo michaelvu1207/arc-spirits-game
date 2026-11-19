@@ -22,5 +22,6 @@
 	"riderAugmentOption": true,
 	"mageArcaneDice": true,
 	"shieldbearerFullOnly": true,
-	"masterBarrierChoice": true
+	"masterBarrierChoice": true,
+	"monsterDeckByStage": true
 }

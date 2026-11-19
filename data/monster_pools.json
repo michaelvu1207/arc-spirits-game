@@ -12,7 +12,7 @@
 	{
 		"players": 2,
 		"difficulty": 3,
-		"size": 5
+		"size": 40
 	},
 	{
 		"players": 3,
@@ -27,7 +27,7 @@
 	{
 		"players": 3,
 		"difficulty": 3,
-		"size": 8
+		"size": 40
 	},
 	{
 		"players": 4,
@@ -42,7 +42,7 @@
 	{
 		"players": 4,
 		"difficulty": 3,
-		"size": 10
+		"size": 40
 	},
 	{
 		"players": 5,
@@ -57,7 +57,7 @@
 	{
 		"players": 5,
 		"difficulty": 3,
-		"size": 13
+		"size": 40
 	},
 	{
 		"players": 6,
@@ -72,6 +72,6 @@
 	{
 		"players": 6,
 		"difficulty": 3,
-		"size": 15
+		"size": 40
 	}
 ]
