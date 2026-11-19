@@ -35,7 +35,7 @@ import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effec
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
 import { DECISION_RESOLVERS } from './effects/decisions';
-import { pvpAllowedAt, vpToWin } from './rules';
+import { pvpAllowedAt, ruleValue, vpToWin } from './rules';
 import { settleSidePoints } from './sidePoints';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { MASTER_CULTIVATE_KIND } from './effects/classes/master';
@@ -381,7 +381,7 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 		// Always start from a clean slate so a stale claim (e.g. a prior round the host
 		// force-advanced before it was claimed) can never linger and block this step.
 		player.pendingAwakenReward = null;
-		const grants = collectBenefitGrants(player);
+		const grants = collectBenefitGrants(player, catalog);
 		if (grants.length > 0) {
 			player.pendingAwakenReward = { grants };
 		}
@@ -403,7 +403,7 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
  * `pendingAwakenReward`) and the round-cap final-scoring pass (VP grants applied
  * directly — the game is over, there is nobody left to click a claim).
  */
-function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
+function collectBenefitGrants(player: PrivatePlayerState, catalog?: PlayCatalog): AwakenGrant[] {
 	const counts = awakenedClassCounts(player);
 	const evil = isEvilAlignment(player.statusLevel);
 	const grants: AwakenGrant[] = [];
@@ -418,8 +418,11 @@ function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
 		if (player.becameFallenThisRound)
 			grants.push({ kind: 'fallenChoice', amount: cursed, source: 'Cursed Spirit' });
 	}
-	// King — +1 VP (the Evil self-discard penalty is applied on claim).
-	if ((counts['King'] ?? 0) >= 1) {
+	// King — +1 VP (the Evil self-discard penalty is applied on claim). Rule `kingPureOnly`
+	// (balance test): the point is paid only to a Pure player; a Tainted or Corrupt King holder
+	// gets nothing, an Evil one is offered the claim as before (it discards the King).
+	const kingPays = !ruleValue(catalog, 'kingPureOnly') || player.statusLevel === 0 || evil;
+	if ((counts['King'] ?? 0) >= 1 && kingPays) {
 		grants.push({
 			kind: 'vp',
 			amount: 1,
@@ -454,7 +457,7 @@ function applyFinalScoring(state: PublicGameState, catalog?: PlayCatalog): void 
 		if (!player) continue;
 		const log: string[] = [];
 		applyTrigger(state, seat, 'awakeningPhase', log, { catalog });
-		for (const grant of collectBenefitGrants(player)) {
+		for (const grant of collectBenefitGrants(player, catalog)) {
 			if (grant.kind === 'vp' && grant.amount > 0) {
 				player.victoryPoints = (player.victoryPoints ?? 0) + grant.amount;
 				log.push(`Final scoring: +${grant.amount} VP (${grant.source}).`);

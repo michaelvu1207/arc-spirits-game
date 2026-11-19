@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { applyGameCommand, buildSessionProjection, createLobbyState } from './runtime';
+import { enterBenefits } from './phases';
 import { RUNE_CARRY_LIMIT } from './types';
 import type { GameActor, GameCommand, PlayCatalog, PublicGameState } from './types';
 
@@ -526,5 +527,21 @@ describe('all-Fallen end condition', () => {
 		state = toCleanup(state);
 		expect(state.status).toBe('active');
 		expect(state.round).toBe(2);
+	});
+});
+
+describe('rule kingPureOnly', () => {
+	const kingGrant = (statusLevel: number, rules: object) => {
+		const state = startedGame();
+		giveSpirit(state, 'Red', { King: 1 });
+		state.players.Red!.statusLevel = statusLevel;
+		enterBenefits(state, { rules } as unknown as PlayCatalog);
+		return (state.players.Red!.pendingAwakenReward?.grants ?? []).filter((g) => g.source === 'King').length;
+	};
+	test('rule off: Pure, Tainted and Evil all get the claim', () => {
+		expect([0, 1, 3].map((s) => kingGrant(s, {}))).toEqual([1, 1, 1]);
+	});
+	test('rule on: Pure gets the point, Tainted and Corrupt nothing, Evil the discarding claim', () => {
+		expect([0, 1, 2, 3].map((s) => kingGrant(s, { kingPureOnly: true }))).toEqual([1, 0, 0, 1]);
 	});
 });

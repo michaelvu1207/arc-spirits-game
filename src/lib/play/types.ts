@@ -876,6 +876,8 @@ export interface PlayRules {
 	captainNoDiscardDie?: boolean;
 	/** Princess gives 1 Any basic Rune instead of 1 point. */
 	princessRune?: boolean;
+	/** King pays its point only to a Pure player. */
+	kingPureOnly?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

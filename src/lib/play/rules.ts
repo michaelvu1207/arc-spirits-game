@@ -134,6 +134,8 @@
  *   "When an Evil player or a monster attacks you, your side strikes first."
  * - corruptorAwakenMaxBarrier (default false; Michael, 2026-11-18): true ⇒ awakening the Corruptor
  *   (Nhal) also gives 4 Max Barrier.
+ * - kingPureOnly (default false; balance test, 2026-11-19): true ⇒ King is "In the Awakening Phase, if you
+ *   are Pure, gain 1 VP. If you are Evil, you must discard this spirit." (Tainted and Corrupt: no point).
  * - princessRune (default false; balance test, 2026-11-18): true ⇒ Princess is "In the Awakening Phase, if
  *   you are not Evil and all your spirits are awakened, gain 1 Any basic Rune." (no point).
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
@@ -189,7 +191,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	feralNoDamage: false,
 	corruptorAwakenMaxBarrier: false,
 	captainNoDiscardDie: false,
-	princessRune: false
+	princessRune: false,
+	kingPureOnly: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -358,6 +361,13 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Arcane Alchemist',
 		count: 1,
 		text: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.'
+	},
+	{
+		rule: 'kingPureOnly',
+		when: true,
+		className: 'King',
+		count: 1,
+		text: 'In the Awakening Phase, if you are Pure, gain 1 VP. If you are Evil, you must discard this spirit.'
 	},
 	{
 		rule: 'princessRune',
