@@ -3880,5 +3880,16 @@
    "icon"
   ],
   "description": "Local token: the Enchanted Attack die (no icon in the game assets yet)."
- }
+ },
+  {
+    "id": "c3f7dc4c-b7ba-5788-b325-a203ceac02de",
+    "name": "Any Spirit Augment",
+    "source_type": "local",
+    "file_path": null,
+    "tags": [
+      "icon",
+      "augment"
+    ],
+    "description": "Local token: a Spirit Augment of the owner's choice (the type is picked when it is placed). The augment hexagon with a question mark."
+  }
 ]

@@ -586,6 +586,11 @@ export function addGainedRune(player: PrivatePlayerState, rune: ResolvedRune, lo
 		grantRelicTool(player, rune.runeId, []);
 		return;
 	}
+	// "Any Spirit Augment" (ANY_AUGMENT_RUNE): a generic augment; its owner picks the type at placement.
+	if (rune.runeId === GENERIC_AUGMENT_RUNE_ID) {
+		gainSpiritAugments(player, [{ runeId: GENERIC_AUGMENT_RUNE_ID, name: 'Spirit Augment' }], log);
+		return;
+	}
 	// Other relic ids (the "Any relic" wildcard) still resolve to a base rune.
 	const runeId = RELIC_TO_RUNE[rune.runeId];
 	const base = runeId ? BASE_RUNES[runeId] : undefined;

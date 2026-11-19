@@ -44,7 +44,9 @@ export type RewardIconMeaning =
 	/** "Any basic rune" gain wildcard — choose one of the four origin runes. */
 	| { kind: 'anyRune'; label: string }
 	/** Gain attack dice of one tier (monster-kill reward: the die-face icon = that die). */
-	| { kind: 'attackDice'; tier: DiceTier; amount: number; label: string };
+	| { kind: 'attackDice'; tier: DiceTier; amount: number; label: string }
+	/** "Any Spirit Augment": a Spirit Augment whose type (one of the six) its owner picks when placing it. */
+	| { kind: 'anyAugment'; label: string };
 
 // ── icon_pool ids (stable DB content) ────────────────────────────────────────
 const SUMMON_ICON = '76e58219-e805-4b94-acf4-6d62dfe4c515';
@@ -73,6 +75,9 @@ const EXALTED_ATTACK_SIDE_1_ICON = 'e7f1c140-32bd-4603-8255-0be7a8ef34c4';
 const ARCANE_ATTACK_SIDE_1_ICON = '6d48e34b-e461-4deb-9cfd-662dd7127331';
 // "Any basic rune" wildcard gain — choose one of the four origin runes.
 const ANY_RUNE_ICON = '36aab6c9-b98c-4e84-b097-e743f45dde82';
+/** "Any Spirit Augment" reward token (Michael, 2026-11-19): the augment hexagon with a question mark.
+ *  A local icon row (icon_pool.json "Any Spirit Augment"; image references/icons/icon_pool). */
+export const ANY_AUGMENT_ICON = 'c3f7dc4c-b7ba-5788-b325-a203ceac02de';
 
 /**
  * Reward-icon → meaning. The single source of truth for reward-row semantics.
@@ -115,6 +120,9 @@ export const REWARD_ICON_SEMANTICS: Record<string, RewardIconMeaning> = {
 
 	// "Any basic rune" wildcard gain — choose one of the four origin runes.
 	[ANY_RUNE_ICON]: { kind: 'anyRune', label: 'Any basic rune' },
+
+	// "Any Spirit Augment": the owner picks which of the six when placing it.
+	[ANY_AUGMENT_ICON]: { kind: 'anyAugment', label: 'Spirit Augment of your choice' },
 
 	// Origin runes (matched against held runes by originId).
 	'87d1f1ad-9c0a-4a65-bb2b-16acebc2d019': {
@@ -291,6 +299,21 @@ export interface ResolvedRune {
 	type: 'rune' | 'augment' | 'relic';
 }
 
+/**
+ * The "Any Spirit Augment" gain as a rune: the engine's generic Spirit Augment (its id is
+ * GENERIC_AUGMENT_RUNE_ID of effects/actions.ts), which goes to the to-place pouch and gets its
+ * type when its owner places it. `classId` is set (to the same id) so every "is this an augment,
+ * which takes no rune slot" check treats it as one; it names no class.
+ */
+export const ANY_AUGMENT_RUNE: ResolvedRune = {
+	runeId: 'generic-spirit-augment',
+	name: 'Spirit Augment of your choice',
+	originId: null,
+	classId: 'generic-spirit-augment',
+	special: true,
+	type: 'augment'
+};
+
 export type GainEffect =
 	| { type: 'navigationPower'; replace: boolean }
 	| { type: 'action'; action: RewardActionKind }
@@ -377,6 +400,8 @@ function gainEffectFor(token: RewardIconToken): GainEffect | null {
 			return { type: 'attackDice', tier: m.tier, amount: m.amount };
 		case 'anyRune':
 			return { type: 'chooseRune', options: originRuneOptions() };
+		case 'anyAugment':
+			return { type: 'rune', rune: ANY_AUGMENT_RUNE };
 		case 'originRune':
 		case 'specialRune': {
 			const rune = toResolvedRune(m);

@@ -19,6 +19,7 @@ import {
 	toResolvedRune,
 	originRuneOptions,
 	relicOptions,
+	ANY_AUGMENT_RUNE,
 	type GainEffect
 } from './locationInteractions';
 import { RELIC_TOOLS } from './effects/relicTools';
@@ -64,6 +65,9 @@ export function monsterGainFor(iconId: string): GainEffect | null {
 			return { type: 'restoreBarrier', amount: 1 };
 		case 'anyRune':
 			return { type: 'chooseRune', options: originRuneOptions() };
+		case 'anyAugment':
+			// A Spirit Augment of the owner's choice: the type is picked when it is placed.
+			return { type: 'rune', rune: ANY_AUGMENT_RUNE };
 		case 'wildcardRelic':
 			// "Any relic" gain — choose one of the five relics. No rule yet says which relic
 			// tools it may give, so it keeps its earlier mapping to a basic rune.
