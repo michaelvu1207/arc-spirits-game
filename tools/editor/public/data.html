@@ -126,10 +126,11 @@
   .ge-side .empty { color: var(--dim); display: grid; gap: 8px; max-width: 44ch; } .ge-side .empty b { color: var(--text); font-weight: 600; }
   .ge-side h3 { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
   .gs-top { display: flex; align-items: center; gap: 10px; } .gs-top b { font-size: 15px; font-weight: 600; } .gs-top a, .gs-top .x { color: var(--faint); text-decoration: none; font-size: 14px; line-height: 1; } .gs-top a:hover, .gs-top .x:hover { color: var(--text); } .gs-top .x { margin-left: auto; }
-  .gs-round { display: flex; align-items: center; gap: 22px; }
+  .gs-round { display: flex; align-items: flex-end; gap: 30px; flex-wrap: wrap; }
   .ge-points { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; } .ge-points b { font-size: 34px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; } .ge-points span { color: var(--dim); } .ge-points i { font-style: normal; color: var(--dim); font-variant-numeric: tabular-nums; }
-  .ge-step { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; } .ge-step button { width: 26px; height: 26px; flex: none; border-radius: 6px; color: var(--dim); } .ge-step button:hover:not(:disabled) { background: var(--seg); color: var(--text); } .ge-step button:disabled { opacity: .35; cursor: default; }
-  .ge-step input[type=range] { flex: 1; padding: 0; border: 0; background: none; accent-color: var(--text); min-width: 0; } .ge-step span { white-space: nowrap; color: var(--dim); font-variant-numeric: tabular-nums; }
+  /* the table at that round: the one framed block of the panel */
+  .gs-table { border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 14px 11px; display: flex; flex-wrap: wrap; gap: 8px 34px; align-items: flex-end; }
+  .gs-table > b { font-weight: 600; flex-basis: 100%; } .gs-table .grp { display: grid; gap: 4px; } .gs-table small { color: var(--faint); font-size: 11px; } .gs-table .row { display: flex; gap: 18px; white-space: nowrap; color: var(--dim); } .gs-table .row b { color: var(--text); font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; margin-left: 5px; }
   .gs-stats { display: flex; flex-wrap: wrap; gap: 12px 30px; } .gs-stats > div { display: grid; gap: 4px; align-content: start; } .gs-stats small { color: var(--faint); font-size: 11px; } .gs-stats > div > span { display: flex; align-items: center; gap: 6px; min-height: 24px; white-space: nowrap; } .gs-stats b { font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
   .gs-stats .sw { display: block; width: 10px; height: 10px; border-radius: 99px; background: var(--c); }
   .ic { display: inline-flex; align-items: flex-end; gap: 3px; margin-right: 10px; font-variant-numeric: tabular-nums; } .ic img { width: 24px; height: 24px; object-fit: contain; display: block; } .ic:last-child { margin-right: 0; }
@@ -137,6 +138,14 @@
   .cl { display: inline-flex; align-items: flex-end; gap: 3px; padding: 3px 4px; border-radius: 6px; font-variant-numeric: tabular-nums; font-weight: 600; } .cl:hover, .cl:focus-visible { background: var(--seg); outline: none; }
   .cl img { width: 28px; height: 28px; object-fit: contain; display: block; filter: brightness(0) invert(.92); } .cl .abbr { width: 28px; height: 28px; display: grid; place-items: center; font-size: 12px; }
   .cl .mk { display: block; width: 28px; height: 28px; background: #a98bf7; -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; } .cl.zz .mk { opacity: .32; }
+  .gs-spirits { display: flex; align-items: flex-start; gap: 14px; } .gs-spirits > :first-child { flex: 1; min-width: 0; } .seg2.sm { flex: none; } .seg2.sm button { padding: 2px 9px; font-size: 12px; }
+  /* board view: the board on the left, the round's actions and draws in one column beside it */
+  #geRest.board { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 18px 28px; } #geRest.board .gs-stats { grid-column: 1 / -1; }
+  #geRest.board .gs-spirits { flex-direction: column; gap: 10px; } #geRest.board .gs-spirits .seg2 { order: -1; }
+  #geRest.board .gs-cols { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; gap: 16px; overflow: auto; scrollbar-width: thin; } #geRest.board .gs-cols > div { overflow: visible; }
+  .hx-board { position: relative; flex: none !important; } .hx { position: absolute; display: grid; place-items: center; } .hx img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .hx.zz img { opacity: .3; filter: grayscale(1); } .hx.none { clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: var(--panel); } .hx i { font-style: normal; font-size: 10px; text-align: center; padding: 0 12px; color: var(--dim); }
+  .hx b { position: absolute; right: 12px; bottom: 6px; min-width: 18px; padding: 0 4px; border-radius: 99px; background: var(--card); border: 1px solid var(--line-2); font-size: 11px; font-weight: 600; line-height: 15px; text-align: center; }
   .cl-sep { width: 1px; align-self: stretch; background: var(--line-2); margin: 4px 2px; }
   .cl i { font-style: normal; font-weight: 500; color: var(--dim); } .cl.zz img, .cl.zz .abbr { opacity: .32; } .cl.zz { color: var(--faint); font-weight: 500; }
   .ge-pop { position: fixed; z-index: 30; width: max-content; max-width: 340px; pointer-events: none; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55); font-size: 12.5px; display: grid; gap: 4px; color: var(--dim); }
@@ -386,6 +395,16 @@ const GE = { index: null, setup: '', data: null, lines: [], err: '', game: 0, me
 // What the graph plots: points, or the average damage of one attack with the dice held (the engine's expectedAttack).
 const METRIC = { vp: { label: 'Points', unit: 'points' }, atk: { label: 'Average attack', unit: 'average attack' } };
 const gv = (p) => p[GE.metric] ?? 0;
+// The panel shows the player's spirits as the class list or as the 7-hex board (kept between visits).
+let geView = 'classes'; try { geView = localStorage.getItem('geView') === 'board' ? 'board' : 'classes'; } catch {}
+// Slot to hex position, flat-top hexes, as the game lays the board out (src/lib/hex/gridConfig.ts): 4 is the centre.
+const HEX_SLOT = { 4: [0, 0], 1: [1, -1], 2: [1, 0], 3: [0, 1], 5: [-1, 1], 6: [-1, 0], 7: [0, -1] };
+function geBoard(p) {
+  const R = 44, w = 2 * R, h = Math.sqrt(3) * R, by = Object.fromEntries(p.sp.map((x) => [x.s, x]));
+  return `<div class="hx-board" style="width:${5 * R}px;height:${(3 * h).toFixed(1)}px">${Object.entries(HEX_SLOT).map(([slot, [q, r]]) => { const sp = by[slot], art = sp && GE.hex?.[sp.n], src = art ? (art.final?.front ? art.final.front + '.png' : art.front) : null;
+    const pos = `left:${(1.5 * R * (q + 1)).toFixed(1)}px;top:${(h * (r + q / 2 + 1)).toFixed(1)}px;width:${w}px;height:${h.toFixed(1)}px`;
+    return !sp ? `<span class="hx none" style="${pos}"></span>` : `<span class="hx ${sp.d ? 'zz' : ''}" style="${pos}" title="${esc(sp.n)}${sp.d ? ' (unawakened)' : ''}${sp.a?.length ? ` · augments: ${esc(sp.a.join(', '))}` : ''}">${src ? `<img loading="lazy" src="${small(src, 160)}" alt="${esc(sp.n)}">` : `<i>${esc(sp.n)}</i>`}${sp.a?.length ? `<b>+${sp.a.length}</b>` : ''}</span>`; }).join('')}</div>`;
+}
 const STKEY = { Pure: 'pure', Tainted: 'tainted', Corrupt: 'corrupt', Fallen: 'fallen' };
 const stKey = (st) => STKEY[st] ?? 'pure';
 const setNav = (open) => { document.querySelector('.split').classList.toggle('nonav', !open); $('navToggle').title = open ? 'Hide the menu' : 'Show the menu'; $('navToggle').setAttribute('aria-expanded', open); };
@@ -406,6 +425,7 @@ async function loadLines(setup) {
     const key = (n) => String(n).toLowerCase().replace(/^the /, '').replace(/ (rune|relic)$/, '').replace(/^any basic$/, 'any').replace(/^plant$/, 'forest');
     GE.runeIcon = { key, rune: Object.fromEntries(runes.map((r) => [key(r.name), poolIcon[r.icon]])), relic: Object.fromEntries(relics.map((r) => [key(r.name), poolIcon[r.icon]])) };
   }
+  GE.hex ??= Object.fromEntries(((await get('/api/game/hex-spirits').catch(() => ({ spirits: [] }))).spirits ?? []).flatMap((x) => [[x.dbName, x], [x.name, x]]));
   GE.generic ??= new Set((await get('/api/game/table?name=classes').catch(() => [])).filter((c) => typeOf(c) === 'normal').map((c) => c.name));
   GE.lines = []; GE.sel = null; GE.hover = null; GE.game = 0; GE.r = 0;
   // A player is "player 1 to 4" of its game (the seat order); seat colours and characters are not shown.
@@ -444,14 +464,13 @@ function mountLines() {
   svg.ondblclick = (e) => { const hit = geNearest(...at(e)); if (hit) open(GAME_APP + '/explorer/game/' + encodeURIComponent(hit.l.g.id), '_blank'); };
   const side = $('geSide');
   side.onclick = (e) => { const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.step) geSelect(GE.sel, GE.r + Number(b.dataset.step));
-    else if (b.dataset.clear) geSelect(null); };
+    if (b.dataset.clear) geSelect(null);
+    else if (b.dataset.view) { geView = b.dataset.view; try { localStorage.setItem('geView', geView); } catch {} paintSide(); } };
   // Pointing at a class (or focusing it) shows what it does in a popup under the icon.
   side.onpointerover = (e) => { const b = e.target.closest('[data-cls]'); if (b) geClassPop(b); };
   side.onpointerout = (e) => { if (e.target.closest('[data-cls]') && !e.relatedTarget?.closest?.('[data-cls]')) geClassPop(null); };
   side.onfocusin = (e) => { const b = e.target.closest('[data-cls]'); if (b) geClassPop(b); };
   side.onfocusout = () => geClassPop(null);
-  side.oninput = (e) => { if (e.target.id === 'geRange') geSelect(GE.sel, Number(e.target.value), true); };
   GE.ro?.disconnect(); GE.ro = new ResizeObserver(() => drawLines()); GE.ro.observe($('geChart'));
   drawLines();
 }
@@ -511,12 +530,12 @@ function geHover(hit, mx, my) {
   hint.hidden = false; const w = hint.offsetWidth;
   hint.style.left = Math.max(6, Math.min(GE.geo.W - w - 6, mx - w / 2)) + 'px'; hint.style.top = (my + 20 + 26 > GE.geo.H ? my - 34 : my + 20) + 'px';
 }
-function geSelect(l, r, keepRange) {
+function geSelect(l, r) {
   GE.sel = l ?? null; if (l) GE.r = Math.max(0, Math.min(l.last, r ?? l.last));
-  geFocus(keepRange);
+  geFocus();
 }
 /** Draw the selection: the chosen line bold, the other players of its game visible, every other line faded. */
-function geFocus(keepRange) {
+function geFocus() {
   const svg = $('geSvg'), g = GE.geo; if (!svg || !g) return;
   const l = GE.sel && geShown().includes(GE.sel) ? GE.sel : (GE.sel = null);
   svg.classList.toggle('focus', !!l); if (l) svg.classList.remove('hov');
@@ -531,7 +550,7 @@ function geFocus(keepRange) {
   const mates = GE.lines.filter((o) => o.gi === l.gi).map((o) => ({ o, y: g.y(gv(o.pts.at(-1))) })).sort((a, b) => a.y - b.y);
   for (let k = 1; k < mates.length; k++) if (mates[k].y - mates[k - 1].y < 14) mates[k].y = mates[k - 1].y + 14;
   labels.innerHTML = mates.map(({ o, y }) => `<text class="lab ${o === l ? 'sel' : ''}" x="${(g.x(o.last) + 8).toFixed(1)}" y="${(y + 4).toFixed(1)}">Player ${o.pn} · ${gv(o.pts.at(-1))}</text>`).join('');
-  paintSide(keepRange);
+  paintSide();
 }
 const geRune = (r) => { const R = GE.runeIcon, k = R?.key(r.n); return (r.relic ? R?.relic[k] : R?.rune[k]) ?? null; };
 const geClassIcon = (n) => { const f = ICONS.find((x) => x === `${n} (icon).png` || x === `${n}.png`); return f ? small('references/icons/classes/' + f, 64) : null; };
@@ -550,7 +569,7 @@ function geClassPop(btn) {
 }
 const DIE_ICON = { basic: 'Basic Attack - Side 1', enchanted: 'Enchanted Attack', exalted: 'Exalted Attack - Side 1', arcane: 'Arcane Attack - Side 1' };
 const geDie = (tier) => { const t = pool.find((x) => x.name === DIE_ICON[tier]); return t?.icon ? small(t.icon, 64) : null; };
-function paintSide(keepRange) {
+function paintSide() {
   const side = $('geSide'); if (!side) return; const l = GE.sel; geClassPop(null);
   if (!l) { side.innerHTML = `<div class="empty"><b>No point chosen</b><span>Click a point on a line for that player's board at that round. Drag along the line, or use ← and →, to move through the rounds.</span></div>`; return; }
   const p = l.pts[GE.r], prev = l.pts[GE.r - 1], delta = prev ? p.vp - prev.vp : 0;
@@ -562,10 +581,14 @@ function paintSide(keepRange) {
     const img = !icon ? `<span class="abbr">${esc(c.n.slice(0, 2))}</span>` : special ? `<span class="mk" style="--m:url('${icon.replace(/'/g, '%27')}')"></span>` : `<img loading="lazy" src="${icon}" alt="">`;
     return `<button class="cl ${special ? 'sp' : ''} ${c.on ? '' : 'zz'}" data-cls="${esc(c.n)}" aria-label="${esc(c.n)}${special ? (c.on ? ', awakened' : ', unawakened') : `: ${base} from awakened spirits, ${c.aug ?? 0} from augments, ${c.off} unawakened`}">${img}${special ? '' : `<span>${c.on ? `${base}${c.aug ? `<i>+${c.aug}</i>` : ''}` : c.off}</span>`}</button>`; };
   const generic = p.cl.filter((c) => GE.generic.has(c.n)), special = p.cl.filter((c) => !GE.generic.has(c.n));
-  const stepLabel = p.r ? `Round ${p.r} / ${l.last}` : 'Start';
-  const points = `<b>${p.vp}</b><span>points</span>${delta ? `<i>${delta > 0 ? '+' : '−'}${Math.abs(delta)}</i>` : ''}`;
-  const head = `<div class="gs-top"><b>${esc(geName(l))}</b><a href="${GAME_APP}/explorer/game/${encodeURIComponent(l.g.id)}" target="_blank" title="Open the whole game" aria-label="Open the whole game">↗</a><button class="x" data-clear="1" title="Clear (Esc)" aria-label="Clear">✕</button></div>
-    <div class="gs-round"><div class="ge-points" id="gePoints">${points}</div><div class="ge-step"><button data-step="-1" ${GE.r <= 0 ? 'disabled' : ''} title="Previous round (←)">←</button><input type="range" id="geRange" min="0" max="${l.last}" value="${GE.r}" aria-label="Round"><button data-step="1" ${GE.r >= l.last ? 'disabled' : ''} title="Next round (→)">→</button><span id="geStepLabel">${stepLabel}</span></div></div>`;
+  // The table at this round: monsters left by Difficulty (of the cards dealt) and spirits left in the two bags.
+  const t = l.g.table?.[GE.r], t0 = l.g.table?.[0], src = p.src ?? { mon: 0, pvp: 0, oth: 0 };
+  const tableCard = t ? `<div class="gs-table"><b>Game ${l.gi} · ${p.r ? `round ${p.r} of ${l.last}` : 'start'}</b>
+      <div class="grp"><small>Monsters left</small><div class="row">${[0, 1, 2].map((k) => `<span>Difficulty ${k + 1}<b>${t.m[k]}</b> / ${t0.m[k]}</span>`).join('')}</div></div>
+      <div class="grp"><small>Spirits left in the bags</small><div class="row"><span>Spirit World<b>${t.sw}</b></span><span>Arcane Abyss<b>${t.aa}</b></span></div></div></div>` : '';
+  const head = `${tableCard}<div class="gs-top"><b>Player ${l.pn}</b><a href="${GAME_APP}/explorer/game/${encodeURIComponent(l.g.id)}" target="_blank" title="Open the whole game" aria-label="Open the whole game">↗</a><button class="x" data-clear="1" title="Clear (Esc)" aria-label="Clear">✕</button></div>
+    <div class="gs-round"><div class="ge-points"><b>${p.vp}</b><span>points</span>${delta ? `<i>${delta > 0 ? '+' : '−'}${Math.abs(delta)}</i>` : ''}</div>
+      <div class="gs-stats"><div><small>From monsters</small><span><b>${src.mon}</b></span></div><div><small>From PvP</small><span><b>${src.pvp}</b></span></div>${src.oth ? `<div><small>Other</small><span><b>${src.oth}</b></span></div>` : ''}</div></div>`;
   const rest = `<div class="gs-stats">
       <div><small>Status</small><span><i class="sw" style="--c:var(--st-${stKey(p.st)})"></i>${esc(p.st)}</span></div>
       <div><small>Barrier</small><span><b>${p.bar}</b>/ ${p.max}</span></div>
@@ -573,14 +596,12 @@ function paintSide(keepRange) {
       <div><small>Attack dice</small><span>${dice}</span></div>
       <div><small>Runes and relics</small><span>${runes.length ? runes.map((r) => `<span class="ic" title="${esc(r.n)}">${geRune(r) ? `<img loading="lazy" src="${small(geRune(r), 64)}" alt="${esc(r.n)}">` : esc(r.n) + ' '}${r.k > 1 ? r.k : ''}</span>`).join('') : '<span class="was">–</span>'}</span></div>
       ${p.pw.length ? `<div><small>Powers</small><span>${esc(p.pw.join(', '))}</span></div>` : ''}</div>
-    <div class="cl-grid">${p.cl.length ? generic.map(chip).join('') + (generic.length && special.length ? '<span class="cl-sep"></span>' : '') + special.map(chip).join('') : '<span class="was">No spirits.</span>'}</div>
+    <div class="gs-spirits">${geView === 'board' ? geBoard(p) : `<div class="cl-grid">${p.cl.length ? generic.map(chip).join('') + (generic.length && special.length ? '<span class="cl-sep"></span>' : '') + special.map(chip).join('') : '<span class="was">No spirits.</span>'}</div>`}
+      <span class="seg2 sm">${[['classes', 'Classes'], ['board', 'Board']].map(([k, t]) => `<button data-view="${k}" class="${geView === k ? 'on' : ''}">${t}</button>`).join('')}</span></div>
     <div class="gs-cols"><div><h3>${p.r ? `Round ${p.r}${p.dest ? ` · ${esc(p.dest)}` : ''}` : 'Start of the game'}</h3>
       ${p.acts.length ? `<ul class="ge-acts">${p.acts.map((a) => `<li>${esc(a.t)}${a.vp ? `<span class="vp">${a.vp > 0 ? '+' : '−'}${Math.abs(a.vp)}</span>` : ''}${a.g?.length ? ` <span class="got">${esc(a.g.join(' '))}</span>` : ''}</li>`).join('')}</ul>` : `<span class="was">–</span>`}</div>
       <div><h3>Drew and picked</h3>${p.draws.length ? p.draws.map((d) => `<div class="ge-draw"><span class="k">${esc(d.k)}</span>${d.o.map((o) => { const yes = d.p.some((x) => x === o || x.startsWith(o + ' (replaced')); const full = d.p.find((x) => x.startsWith(o + ' (replaced')) ?? o; return `<span class="${yes ? 'yes' : 'no'}">${yes ? '✓ ' : ''}${esc(full)}</span>`; }).join('<span class="no">, </span>')}${d.again ? ' <span class="no">· drew again</span>' : !d.p.length ? ' <span class="no">· took none</span>' : ''}</div>`).join('') : '<span class="was">–</span>'}</div></div>`;
-  if (keepRange && side.querySelector('#geRange')) { // the round slider is being dragged: leave it in place
-    side.querySelector('#geRest').innerHTML = rest; side.querySelector('#gePoints').innerHTML = points; side.querySelector('#geStepLabel').textContent = stepLabel;
-    side.querySelector('[data-step="-1"]').disabled = GE.r <= 0; side.querySelector('[data-step="1"]').disabled = GE.r >= l.last;
-  } else side.innerHTML = head + `<div id="geRest">${rest}</div>`;
+  side.innerHTML = head + `<div id="geRest" class="${geView}">${rest}</div>`;
 }
 function paint() { document.querySelector('main').classList.toggle('ge-mode', table === 'bal_lines'); $('gePop')?.remove(); $('scroll').innerHTML = table === 'bal_lines' ? paintLines() : table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); if (table === 'bal_lines') mountLines(); }
 
