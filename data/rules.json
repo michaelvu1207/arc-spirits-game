@@ -23,5 +23,6 @@
 	"mageArcaneDice": true,
 	"shieldbearerFullOnly": true,
 	"masterBarrierChoice": true,
-	"monsterDeckByStage": true
+	"monsterDeckByStage": true,
+	"goodKillBonus": true
 }

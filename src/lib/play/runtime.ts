@@ -699,6 +699,20 @@ function applyRewardGain(
 	}
 }
 
+/** Rule `goodKillBonus`: what a Good-aligned player gets for every monster kill, on top of the card's rewards. */
+export const GOOD_KILL_BONUS_VP = 1;
+
+/**
+ * Rule `goodKillBonus`: a player who is Good-aligned (not Fallen) when the kill resolves gets
+ * GOOD_KILL_BONUS_VP. It is not a reward of the card, so nothing that copies or changes the card's
+ * rewards (Falconer, a claim) touches it, and a card with no rewards pays it too.
+ */
+function goodKillBonus(player: PrivatePlayerState, catalog: PlayCatalog, log?: string[]): void {
+	if (!ruleValue(catalog, 'goodKillBonus') || isEvilAlignment(player.statusLevel)) return;
+	player.victoryPoints += GOOD_KILL_BONUS_VP;
+	log?.push(`Good alignment: +${GOOD_KILL_BONUS_VP} VP for the kill.`);
+}
+
 /**
  * Auto-claim a player's pending monster reward: every reward on the card (the first
  * option of any "choose a rune" token). Used when the host force-advances the
@@ -3500,6 +3514,7 @@ function reduceCommand(
 			// the DEFEATED card (and picks a rune where a token asks for one). This blocks
 			// ending the Location phase until claimed.
 			if (result.killed && result.fought) {
+				goodKillBonus(active.player, catalog, result.log);
 				const claim = rewardClaimCount(result.fought.rewardTrack);
 				if (claim > 0) {
 					active.player.pendingReward = {
@@ -3946,6 +3961,8 @@ const navigationPowerHooks = {
 			};
 			offerFalconerDouble(state, player, catalog);
 		}
+		const killLog = ['Abyssal Execution: defeated the monster without battle.'];
+		goodKillBonus(player, catalog, killLog);
 		state.combats.push({
 			id: nextId(state.rng, 'power-kill'),
 			kind: 'monster',
@@ -3953,7 +3970,7 @@ const navigationPowerHooks = {
 			killed: true,
 			sides: [{ seat, initiative: 0, rolled: false, damageDealt: 0 }],
 			monster: fought,
-			log: ['Abyssal Execution: defeated the monster without battle.']
+			log: killLog
 		});
 	}
 };

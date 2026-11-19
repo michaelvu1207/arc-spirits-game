@@ -12,7 +12,7 @@ import {
 import { buildMonsterRewards } from '../monsterRewards';
 import { ARCANE_ABYSS_BAG } from '../bags';
 import { navigationPowerById } from '../navigationPowers';
-import { MONSTER_DECK_NAMES } from '../runtime';
+import { GOOD_KILL_BONUS_VP, MONSTER_DECK_NAMES } from '../runtime';
 import {
 	RUNE_CARRY_LIMIT,
 	SPIRIT_WORLD_ONLY,
@@ -118,6 +118,12 @@ export function spiritLine(spirit: {
 		.map(([name, n]) => (n > 1 ? `${name}×${n}` : name))
 		.join(', ');
 	return `${spirit.name} (cost ${spirit.cost ?? '?'}, ${origins}${classes ? `; ${classes}` : ''})`;
+}
+
+/** Rule `goodKillBonus`: what the acting seat's alignment adds to a kill, for the fight label. */
+function goodKillNote(me: { statusLevel: number } | null | undefined, catalog: PlayCatalog): string {
+	if (!me || !ruleValue(catalog, 'goodKillBonus')) return '';
+	return isEvilAlignment(me.statusLevel) ? '; you are Fallen, so no alignment bonus for a kill' : `; a kill also gives you +${GOOD_KILL_BONUS_VP} VP for being Good`;
 }
 
 export function monsterLine(card: MonsterState): string {
@@ -324,7 +330,7 @@ export function labelFor(
 		}
 		case 'startCombat': {
 			const card = me?.monsterHand?.[cmd.handIndex];
-			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (the monster strikes first unless you strike first)`;
+			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (the monster strikes first unless you strike first${goodKillNote(me, catalog)})`;
 		}
 		case 'resolveMonsterReward': {
 			const options = me?.pendingReward ? buildMonsterRewards(me.pendingReward.rewardTrack) : [];

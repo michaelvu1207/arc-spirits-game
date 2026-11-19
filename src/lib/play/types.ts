@@ -882,6 +882,8 @@ export interface PlayRules {
 	nhalNeedsCorrupt?: boolean;
 	/** Under pvpPaysOnCorrupt: the Evil attacker gets 4 VP per Good player corrupted, not 3. */
 	pvpCorruptPays4?: boolean;
+	/** A Good-aligned player (not Fallen) gets 1 VP for every monster kill, on top of the card's rewards. */
+	goodKillBonus?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
