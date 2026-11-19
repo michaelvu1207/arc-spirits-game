@@ -82,6 +82,7 @@ import {
 	fightMonster,
 	pvpVpForAttack,
 	pvpGoodBounty,
+	pvpVpPerCorrupted,
 	resolveEncounterCombat
 } from './combat';
 import { applyTrigger, applyCultivate, applyRest, awakenedClassCounts } from './effects/apply';
@@ -3679,7 +3680,8 @@ function resolveEncounterLocationIfReady(
 		p.victoryPoints += pvpVpForAttack(
 			corruptedGood,
 			paysOnCorrupt,
-			paysOnCorrupt && ruleValue(catalog, 'pvpEngageVp')
+			paysOnCorrupt && ruleValue(catalog, 'pvpEngageVp'),
+			pvpVpPerCorrupted(catalog)
 		);
 		// Rule `moonPerksNeedAttack`: Queen / Sorcerer read this flag in the Awakening Phase.
 		if (ruleValue(catalog, 'moonPerksNeedAttack')) p.attackedPlayerThisRound = true;

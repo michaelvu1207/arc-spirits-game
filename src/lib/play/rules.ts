@@ -139,6 +139,8 @@
  * - nhalNeedsCorrupt (default false; balance test, 2026-11-19): true ⇒ Nhal's awakening is "Navigate to the
  *   Arcane Abyss while Corrupt or Fallen, but don't fight the monster.": a visit as Pure or Tainted does
  *   not count. The printed text comes from the data (`awaken_condition.text`); see runtime.ts.
+ * - pvpCorruptPays4 (default false; balance test, 2026-11-19): only read under pvpPaysOnCorrupt. true ⇒ the
+ *   Evil attacker gets 4 VP per Good player corrupted, not 3 (see `pvpVpPerCorrupted` in combat.ts).
  * - princessRune (default false; balance test, 2026-11-18): true ⇒ Princess is "In the Awakening Phase, if
  *   you are not Evil and all your spirits are awakened, gain 1 Any basic Rune." (no point).
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
@@ -196,7 +198,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	captainNoDiscardDie: false,
 	princessRune: false,
 	kingPureOnly: false,
-	nhalNeedsCorrupt: false
+	nhalNeedsCorrupt: false,
+	pvpCorruptPays4: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

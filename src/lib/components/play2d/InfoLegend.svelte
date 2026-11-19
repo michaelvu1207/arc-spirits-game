@@ -33,7 +33,7 @@
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
 	import type { DiceTier } from '$lib/play/types';
 	import { DICE_TIER_ORDER, STATUS_LADDER, MAX_SPIRITS } from '$lib/play/types';
-	import { DICE_TIER_FACES, PVP_ENGAGE_VP, PVP_VP_PER_CORRUPTED } from '$lib/play/combat';
+	import { DICE_TIER_FACES, PVP_ENGAGE_VP, pvpVpPerCorrupted } from '$lib/play/combat';
 	import { iconPoolUrl, storageUrl, statusAccent } from './helpers';
 	import { onMount } from 'svelte';
 	import { supabaseAssets } from '$lib/supabase';
@@ -410,8 +410,8 @@
 	const pvpText = $derived(
 		rule('pvpPaysOnCorrupt')
 			? rule('pvpEngageVp')
-				? `for ${PVP_ENGAGE_VP} VP, plus ${PVP_VP_PER_CORRUPTED} VP for each one you corrupt`
-				: `for ${PVP_VP_PER_CORRUPTED} VP for each one you corrupt`
+				? `for ${PVP_ENGAGE_VP} VP, plus ${pvpVpPerCorrupted({ rules })} VP for each one you corrupt`
+				: `for ${pvpVpPerCorrupted({ rules })} VP for each one you corrupt`
 			: 'for +2 VP each'
 	);
 	const STATUS_NOTE: Record<string, string> = $derived({

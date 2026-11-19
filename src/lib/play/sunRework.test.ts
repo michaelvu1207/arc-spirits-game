@@ -334,6 +334,17 @@ describe('pvpEngageVp', () => {
 		expect(vps(pvpExchange(pvpCatalog(both), oneCorrupted))).toEqual([5, 0, 0]);
 		expect(vps(pvpExchange(pvpCatalog({ pvpEngageVp: true }), oneCorrupted))).toEqual([4, 0, 0]);
 	});
+	it('pvpCorruptPays4: 4 per corrupted under pvpPaysOnCorrupt, nothing alone; brief says 4', () => {
+		const four = { pvpPaysOnCorrupt: true, pvpCorruptPays4: true };
+		expect(vps(pvpExchange(pvpCatalog(four), () => {}))).toEqual([0, 0, 0]);
+		expect(vps(pvpExchange(pvpCatalog(four), oneCorrupted))).toEqual([4, 0, 0]);
+		expect(vps(pvpExchange(pvpCatalog({ ...four, pvpEngageVp: true }), oneCorrupted))).toEqual([6, 0, 0]);
+		expect(vps(pvpExchange(pvpCatalog({ pvpCorruptPays4: true }), oneCorrupted))).toEqual([4, 0, 0]);
+		expect(buildRulesBrief(rulesCat({ pvpCorruptPays4: true }))).toBe(buildRulesBrief(frozen));
+		expect(buildRulesBrief(rulesCat({ pvpPaysOnCorrupt: true, pvpGoodBounty: false, pvpCorruptPays4: true }))).toContain(
+			'An Evil attacker gets 4 VP per opponent corrupted in the attack and nothing for the attack itself.'
+		);
+	});
 	it('brief and initiatePvp label change only when on (and only under pvpPaysOnCorrupt)', () => {
 		const pays = rulesCat({ pvpPaysOnCorrupt: true, pvpGoodBounty: false });
 		const both = rulesCat({ pvpPaysOnCorrupt: true, pvpGoodBounty: false, pvpEngageVp: true });

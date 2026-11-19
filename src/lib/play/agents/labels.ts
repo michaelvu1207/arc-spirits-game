@@ -28,7 +28,7 @@ import {
 } from '../types';
 import { awakenedClassCounts, cultivateRuneMultiplier } from '../effects/apply';
 import { ORIGIN_REWARDS, spiritsByOrigin } from '../effects/relicTools';
-import { PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, PVP_VP_PER_CORRUPTED } from '../combat';
+import { PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted } from '../combat';
 import { ruleValue } from '../rules';
 
 /** Rule `moonPerksNeedAttack`: an Evil acting seat's awake Queen / Sorcerer classes (else empty). */
@@ -257,7 +257,7 @@ export function labelFor(
 		}
 		case 'initiatePvp': {
 			const pay = ruleValue(catalog, 'pvpPaysOnCorrupt')
-				? `: you get ${ruleValue(catalog, 'pvpEngageVp') ? `${PVP_ENGAGE_VP} VP for the attack plus ${PVP_VP_PER_CORRUPTED} VP per Good player corrupted` : `${PVP_VP_PER_CORRUPTED} VP per Good player corrupted, nothing otherwise`}${ruleValue(catalog, 'pvpGoodBounty') ? `; each of them gets ${PVP_GOOD_BOUNTY} VP per attacker corrupted` : ''}`
+				? `: you get ${ruleValue(catalog, 'pvpEngageVp') ? `${PVP_ENGAGE_VP} VP for the attack plus ${pvpVpPerCorrupted(catalog)} VP per Good player corrupted` : `${pvpVpPerCorrupted(catalog)} VP per Good player corrupted, nothing otherwise`}${ruleValue(catalog, 'pvpGoodBounty') ? `; each of them gets ${PVP_GOOD_BOUNTY} VP per attacker corrupted` : ''}`
 				: '';
 			const moon = moonPerksWaiting(me, catalog);
 			return `Attack the Good players at your location (PvP group attack${pay})${moon.length ? ` (this turns on your ${moon.join(' and ')} this round)` : ''}`;

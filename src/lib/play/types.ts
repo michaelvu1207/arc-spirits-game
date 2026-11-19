@@ -880,6 +880,8 @@ export interface PlayRules {
 	kingPureOnly?: boolean;
 	/** Nhal's Arcane Abyss visit counts for its awakening only while the holder is Corrupt or Fallen. */
 	nhalNeedsCorrupt?: boolean;
+	/** Under pvpPaysOnCorrupt: the Evil attacker gets 4 VP per Good player corrupted, not 3. */
+	pvpCorruptPays4?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

@@ -25,7 +25,7 @@ import {
 	SPIRIT_WORLD_COST_MAX,
 	SPIRIT_WORLD_COST_MIN
 } from '../bags';
-import { DICE_TIER_FACES, PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, PVP_VP_PER_CORRUPTED, pvpVpForAttack } from '../combat';
+import { DICE_TIER_FACES, PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted, pvpVpForAttack } from '../combat';
 import { navigationPowerPool } from '../navigationPowers';
 import { ORIGIN_BOARD_NOTE, ORIGIN_REWARDS, RELIC_TOOLS, relicToolText, relicToolVp } from '../effects/relicTools';
 import { monsterDifficulty } from '../runtime';
@@ -87,7 +87,7 @@ function coreRules(catalog: PlayCatalog): string {
 		`- When a hit (after damage reduction) is equal to or larger than your current Barrier, your Barrier drops to 0 and you are Corrupted: your status moves one step down (${STATUS_LADDER.join(' → ')}), your Barrier is restored to full, and you must sacrifice spirits of your choice — 1 for your 1st corruption, 2 for the 2nd, 3 for the 3rd, 4 for the 4th. If you are already Fallen and cannot pay in spirits, each missing spirit costs 1 VP${ruleValue(catalog, 'fallenDebtBelowZero') ? ', even below 0 (VP can go negative)' : ''}. Before Fallen, a part you cannot pay is forgiven.${ruleValue(catalog, 'pvpAttackerSacrificeCap') ? ' An Evil attacker corrupted in a player attack it started owes at most 1 sacrifice for that corruption.' : ''}`,
 		`- Spirit slots: ${MAX_SPIRITS} at every status; a status drop costs only that sacrifice, and you may refill to ${MAX_SPIRITS}.`,
 		ruleValue(catalog, 'pvpPaysOnCorrupt')
-			? `- Only Fallen is Evil. Only Evil players can attack players. ${ruleValue(catalog, 'pvpEngageVp') ? `An Evil attacker gets ${PVP_ENGAGE_VP} VP for the attack plus ${PVP_VP_PER_CORRUPTED} VP per opponent corrupted in it.` : `An Evil attacker gets ${PVP_VP_PER_CORRUPTED} VP per opponent corrupted in the attack and nothing for the attack itself.`}${ruleValue(catalog, 'pvpGoodBounty') ? ` Each Good player in it gets ${PVP_GOOD_BOUNTY} VP per Evil attacker corrupted.` : ''}`
+			? `- Only Fallen is Evil. Only Evil players can attack players. ${ruleValue(catalog, 'pvpEngageVp') ? `An Evil attacker gets ${PVP_ENGAGE_VP} VP for the attack plus ${pvpVpPerCorrupted(catalog)} VP per opponent corrupted in it.` : `An Evil attacker gets ${pvpVpPerCorrupted(catalog)} VP per opponent corrupted in the attack and nothing for the attack itself.`}${ruleValue(catalog, 'pvpGoodBounty') ? ` Each Good player in it gets ${PVP_GOOD_BOUNTY} VP per Evil attacker corrupted.` : ''}`
 			: `- Only Fallen is Evil. Only Evil players can attack players. An Evil attacker gets ${pvpVpForAttack(0)} VP for the attack plus ${pvpVpForAttack(1) - pvpVpForAttack(0)} VP per opponent corrupted in it.`,
 		'',
 		'## Monsters (Arcane Abyss)',

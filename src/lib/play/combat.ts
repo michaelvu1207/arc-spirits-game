@@ -788,10 +788,15 @@ export function fightMonster(
  *  fee + corruption bounty; no roll-scaling, no target-VP scaling.)
  *  Rule switch `pvpPaysOnCorrupt` (`paysOnCorrupt`): 3 per opposing player corrupted, nothing
  *  for the attack itself; with `pvpEngageVp` (`engageVp`) also 2 for the attack. */
-export function pvpVpForAttack(corruptedOpponents: number, paysOnCorrupt = false, engageVp = false): number {
+export function pvpVpForAttack(
+	corruptedOpponents: number,
+	paysOnCorrupt = false,
+	engageVp = false,
+	perCorrupted = PVP_VP_PER_CORRUPTED
+): number {
 	const corrupted = Math.max(0, corruptedOpponents);
 	if (!paysOnCorrupt) return 2 + 2 * corrupted;
-	return (engageVp ? PVP_ENGAGE_VP : 0) + PVP_VP_PER_CORRUPTED * corrupted;
+	return (engageVp ? PVP_ENGAGE_VP : 0) + perCorrupted * corrupted;
 }
 
 /** `pvpPaysOnCorrupt` + `pvpEngageVp`: the Evil attacker's VP for the attack itself. */
@@ -799,6 +804,10 @@ export const PVP_ENGAGE_VP = 2;
 
 /** `pvpPaysOnCorrupt`: the Evil attacker's VP per Good player corrupted. */
 export const PVP_VP_PER_CORRUPTED = 3;
+/** `pvpPaysOnCorrupt`: that amount under the rules of `catalog` (4 with `pvpCorruptPays4`). */
+export function pvpVpPerCorrupted(catalog: Parameters<typeof ruleValue>[0]): number {
+	return ruleValue(catalog, 'pvpCorruptPays4') ? 4 : PVP_VP_PER_CORRUPTED;
+}
 /** `pvpPaysOnCorrupt`: each Good player's VP per Evil attacker corrupted in the exchange. */
 export const PVP_GOOD_BOUNTY = 2;
 
