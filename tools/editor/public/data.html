@@ -133,9 +133,11 @@
   .gs-stats { display: flex; flex-wrap: wrap; gap: 12px 30px; } .gs-stats > div { display: grid; gap: 4px; align-content: start; } .gs-stats small { color: var(--faint); font-size: 11px; } .gs-stats > div > span { display: flex; align-items: center; gap: 6px; min-height: 24px; white-space: nowrap; } .gs-stats b { font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
   .gs-stats .sw { display: block; width: 10px; height: 10px; border-radius: 99px; background: var(--c); }
   .ic { display: inline-flex; align-items: flex-end; gap: 3px; margin-right: 10px; font-variant-numeric: tabular-nums; } .ic img { width: 24px; height: 24px; object-fit: contain; display: block; } .ic:last-child { margin-right: 0; }
-  .cl-grid { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .cl-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
   .cl { display: inline-flex; align-items: flex-end; gap: 3px; padding: 3px 4px; border-radius: 6px; font-variant-numeric: tabular-nums; font-weight: 600; } .cl:hover, .cl:focus-visible { background: var(--seg); outline: none; }
   .cl img { width: 28px; height: 28px; object-fit: contain; display: block; filter: brightness(0) invert(.92); } .cl .abbr { width: 28px; height: 28px; display: grid; place-items: center; font-size: 12px; }
+  .cl .mk { display: block; width: 28px; height: 28px; background: #a98bf7; -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; } .cl.zz .mk { opacity: .32; }
+  .cl-sep { width: 1px; align-self: stretch; background: var(--line-2); margin: 4px 2px; }
   .cl i { font-style: normal; font-weight: 500; color: var(--dim); } .cl.zz img, .cl.zz .abbr { opacity: .32; } .cl.zz { color: var(--faint); font-weight: 500; }
   .ge-pop { position: fixed; z-index: 30; width: max-content; max-width: 340px; pointer-events: none; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; box-shadow: 0 12px 32px rgba(0,0,0,.55); font-size: 12.5px; display: grid; gap: 4px; color: var(--dim); }
   .ge-pop .hd { display: flex; gap: 10px; align-items: baseline; color: var(--text); } .ge-pop .hd b { font-size: 13px; font-weight: 600; } .ge-pop .hit { color: var(--text); } .ge-pop div b { font-weight: 600; margin-right: 4px; }
@@ -404,6 +406,7 @@ async function loadLines(setup) {
     const key = (n) => String(n).toLowerCase().replace(/^the /, '').replace(/ (rune|relic)$/, '').replace(/^any basic$/, 'any').replace(/^plant$/, 'forest');
     GE.runeIcon = { key, rune: Object.fromEntries(runes.map((r) => [key(r.name), poolIcon[r.icon]])), relic: Object.fromEntries(relics.map((r) => [key(r.name), poolIcon[r.icon]])) };
   }
+  GE.generic ??= new Set((await get('/api/game/table?name=classes').catch(() => [])).filter((c) => typeOf(c) === 'normal').map((c) => c.name));
   GE.lines = []; GE.sel = null; GE.hover = null; GE.game = 0; GE.r = 0;
   // A player is "player 1 to 4" of its game (the seat order); seat colours and characters are not shown.
   GE.data.games.forEach((g, gi) => g.seats.forEach((s, k) => GE.lines.push({ i: GE.lines.length, g, gi: gi + 1, pn: k + 1, s, pts: s.rounds, last: s.rounds.at(-1).r })));
@@ -540,7 +543,7 @@ function geClassPop(btn) {
   const name = btn.dataset.cls, c = l.pts[GE.r].cl.find((x) => x.n === name) ?? { n: name, on: 0, off: 0, sp: [], zz: [] }, lines = GE.data.classes?.[name] ?? [];
   const reach = lines.map((b) => { const n = parseInt(b.count, 10); return Number.isFinite(n) && c.on >= n; }), multi = new Set(lines.map((b) => b.count)).size > 1;
   const held = [...c.sp, ...(c.aug ? [`${c.aug} augment${c.aug > 1 ? 's' : ''}`] : []), ...c.zz.map((n) => `${n} (unawakened)`)].join(', ');
-  pop.innerHTML = `<div class="hd"><b>${esc(name)}</b><span>${c.on ? `${c.on} awakened` : ''}${c.on && c.off ? ', ' : ''}${c.off ? `${c.off} unawakened` : ''}</span></div>${held ? `<div>${esc(held)}</div>` : ''}
+  pop.innerHTML = `<div class="hd"><b>${esc(name)}</b><span>${!GE.generic.has(name) ? (c.on ? 'awakened' : 'unawakened') : `${c.on ? `${c.on} awakened` : ''}${c.on && c.off ? ', ' : ''}${c.off ? `${c.off} unawakened` : ''}`}</span></div>${held ? `<div>${esc(held)}</div>` : ''}
     ${lines.length ? lines.map((b, k) => `<div class="${reach[k] ? 'hit' : ''}">${multi ? `<b>(${esc(b.count)})</b>` : ''}${esc(b.text)}</div>`).join('') : '<div>No text for this class.</div>'}`;
   const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px'; pop.style.top = (r.bottom + 8 + h > innerHeight ? r.top - h - 8 : r.bottom + 8) + 'px';
@@ -553,9 +556,12 @@ function paintSide(keepRange) {
   const p = l.pts[GE.r], prev = l.pts[GE.r - 1], delta = prev ? p.vp - prev.vp : 0;
   const dice = ['basic', 'enchanted', 'exalted', 'arcane'].map((t, k) => p.dice[k] ? `<span class="ic" title="${p.dice[k]} ${t}">${geDie(t) ? `<img loading="lazy" src="${geDie(t)}" alt="${t}">` : t + ' '}${p.dice[k]}</span>` : '').join('') || '<span class="was">–</span>';
   const runes = Object.values(p.ru.reduce((a, r) => { (a[r.n] ??= { ...r, k: 0 }).k++; return a; }, {}));
-  // A class shows its count from awake spirits, plus the augments on top ("2+4"); a class with no awake spirit is dimmed.
-  const chip = (c) => { const icon = geClassIcon(c.n), base = c.on - (c.aug ?? 0);
-    return `<button class="cl ${c.on ? '' : 'zz'}" data-cls="${esc(c.n)}" aria-label="${esc(c.n)}: ${base} from awakened spirits, ${c.aug ?? 0} from augments, ${c.off} unawakened">${icon ? `<img loading="lazy" src="${icon}" alt="">` : `<span class="abbr">${esc(c.n.slice(0, 2))}</span>`}<span>${c.on ? `${base}${c.aug ? `<i>+${c.aug}</i>` : ''}` : c.off}</span></button>`; };
+  // A generic class shows its count from awake spirits, plus the augments on top ("2+4"). A special class is held once, so it
+  // has no number and a purple icon, after a divider. A class with no awake spirit is dimmed.
+  const chip = (c) => { const icon = geClassIcon(c.n), base = c.on - (c.aug ?? 0), special = !GE.generic.has(c.n);
+    const img = !icon ? `<span class="abbr">${esc(c.n.slice(0, 2))}</span>` : special ? `<span class="mk" style="--m:url('${icon.replace(/'/g, '%27')}')"></span>` : `<img loading="lazy" src="${icon}" alt="">`;
+    return `<button class="cl ${special ? 'sp' : ''} ${c.on ? '' : 'zz'}" data-cls="${esc(c.n)}" aria-label="${esc(c.n)}${special ? (c.on ? ', awakened' : ', unawakened') : `: ${base} from awakened spirits, ${c.aug ?? 0} from augments, ${c.off} unawakened`}">${img}${special ? '' : `<span>${c.on ? `${base}${c.aug ? `<i>+${c.aug}</i>` : ''}` : c.off}</span>`}</button>`; };
+  const generic = p.cl.filter((c) => GE.generic.has(c.n)), special = p.cl.filter((c) => !GE.generic.has(c.n));
   const stepLabel = p.r ? `Round ${p.r} / ${l.last}` : 'Start';
   const points = `<b>${p.vp}</b><span>points</span>${delta ? `<i>${delta > 0 ? '+' : '−'}${Math.abs(delta)}</i>` : ''}`;
   const head = `<div class="gs-top"><b>${esc(geName(l))}</b><a href="${GAME_APP}/explorer/game/${encodeURIComponent(l.g.id)}" target="_blank" title="Open the whole game" aria-label="Open the whole game">↗</a><button class="x" data-clear="1" title="Clear (Esc)" aria-label="Clear">✕</button></div>
@@ -567,7 +573,7 @@ function paintSide(keepRange) {
       <div><small>Attack dice</small><span>${dice}</span></div>
       <div><small>Runes and relics</small><span>${runes.length ? runes.map((r) => `<span class="ic" title="${esc(r.n)}">${geRune(r) ? `<img loading="lazy" src="${small(geRune(r), 64)}" alt="${esc(r.n)}">` : esc(r.n) + ' '}${r.k > 1 ? r.k : ''}</span>`).join('') : '<span class="was">–</span>'}</span></div>
       ${p.pw.length ? `<div><small>Powers</small><span>${esc(p.pw.join(', '))}</span></div>` : ''}</div>
-    <div class="cl-grid">${p.cl.length ? p.cl.map(chip).join('') : '<span class="was">No spirits.</span>'}</div>
+    <div class="cl-grid">${p.cl.length ? generic.map(chip).join('') + (generic.length && special.length ? '<span class="cl-sep"></span>' : '') + special.map(chip).join('') : '<span class="was">No spirits.</span>'}</div>
     <div class="gs-cols"><div><h3>${p.r ? `Round ${p.r}${p.dest ? ` · ${esc(p.dest)}` : ''}` : 'Start of the game'}</h3>
       ${p.acts.length ? `<ul class="ge-acts">${p.acts.map((a) => `<li>${esc(a.t)}${a.vp ? `<span class="vp">${a.vp > 0 ? '+' : '−'}${Math.abs(a.vp)}</span>` : ''}${a.g?.length ? ` <span class="got">${esc(a.g.join(' '))}</span>` : ''}</li>`).join('')}</ul>` : `<span class="was">–</span>`}</div>
       <div><h3>Drew and picked</h3>${p.draws.length ? p.draws.map((d) => `<div class="ge-draw"><span class="k">${esc(d.k)}</span>${d.o.map((o) => { const yes = d.p.some((x) => x === o || x.startsWith(o + ' (replaced')); const full = d.p.find((x) => x.startsWith(o + ' (replaced')) ?? o; return `<span class="${yes ? 'yes' : 'no'}">${yes ? '✓ ' : ''}${esc(full)}</span>`; }).join('<span class="no">, </span>')}${d.again ? ' <span class="no">· drew again</span>' : !d.p.length ? ' <span class="no">· took none</span>' : ''}</div>`).join('') : '<span class="was">–</span>'}</div></div>`;
