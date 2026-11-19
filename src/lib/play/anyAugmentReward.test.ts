@@ -69,7 +69,7 @@ describe('Any Spirit Augment reward', () => {
 	});
 	it('data: every augment reward on a monster card is the Any Spirit Augment token', () => {
 		const live = loadLocalDesignCatalog('data');
-		const tokens = live.monsters.flatMap((m) => m.rewardTrack ?? []);
+		const tokens = (live.monsters ?? []).flatMap((m) => m.rewardTrack ?? []);
 		expect(tokens.filter((t) => t === ANY_AUGMENT_ICON).length).toBe(32);
 		const specific = tokens.filter((t) => { const m = meaningFor(t); return m?.kind === 'specialRune' && m.classId; });
 		expect(specific).toEqual([]);
