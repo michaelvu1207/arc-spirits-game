@@ -118,6 +118,8 @@
   .ge-chart svg.hov .pl { opacity: .22; } .ge-chart svg.focus .pl { opacity: .05; } .ge-chart svg.focus .med { opacity: .28; }
   .ge-chart svg .pl.mate { opacity: .95; } .ge-chart svg .pl.mate path { stroke-width: 2; }
   .ge-chart svg .pl.sel, .ge-chart svg .pl.hot { opacity: 1; } .ge-chart svg .pl.sel path { stroke-width: 3.6; } .ge-chart svg .pl.hot path { stroke-width: 3; }
+  .ge-chart #geAvg path { fill: none; stroke: var(--text); stroke-width: 2.6; stroke-linejoin: round; stroke-linecap: round; pointer-events: stroke; } .ge-chart #geAvg path.halo { stroke: var(--bg); stroke-width: 6; opacity: .8; pointer-events: none; }
+  .ge-chart svg:where(.avg) .pl { opacity: .3; } .ge-chart svg.focus #geAvg { opacity: .2; } .ge-chart svg.focus #geAvg text { display: none; }
   .ge-chart .cross { stroke: var(--line-2); stroke-width: 1; pointer-events: none; } .ge-chart .dot { stroke: var(--bg); stroke-width: 2; pointer-events: none; }
   .ge-hint { position: absolute; z-index: 2; pointer-events: none; background: var(--card); border: 1px solid var(--line-2); border-radius: 6px; padding: 3px 8px; font-size: 12px; white-space: nowrap; color: var(--dim); } .ge-hint b { color: var(--text); font-weight: 600; }
   /* the panel: no boxes, one column of plain rows; the class text is a popup on pointing at an icon */
@@ -399,6 +401,10 @@ const METRIC = { vp: { label: 'Points', unit: 'points' }, atk: { label: 'Average
 const gv = (p) => p[GE.metric] ?? 0;
 // The panel shows the player's spirits as the class list or as the 7-hex board (kept between visits).
 let geView = 'classes'; try { geView = localStorage.getItem('geView') === 'board' ? 'board' : 'classes'; } catch {}
+// Average lines over the graph: off, one per finishing place (1st to 4th), or one per seat (Player 1 to 4, the turn order).
+const AVG = { off: 'Off', place: 'By finishing place', seat: 'By turn order' };
+let geAvg = 'off'; try { const v = localStorage.getItem('geAvg'); if (v in AVG) geAvg = v; } catch {}
+const ORD = ['1st', '2nd', '3rd', '4th'];
 // Slot to hex position, flat-top hexes, as the game lays the board out (src/lib/hex/gridConfig.ts): 4 is the centre.
 const HEX_SLOT = { 4: [0, 0], 1: [1, -1], 2: [1, 0], 3: [0, 1], 5: [-1, 1], 6: [-1, 0], 7: [0, -1] };
 function geBoard(p) {
@@ -443,6 +449,7 @@ function paintLines() {
   // The filters and the legend sit in the title bar, so the graph and the panel get the whole height.
   const about = `Test ${meta.n} of ${GE.index.length}${meta === newest ? ', the latest set of games' : ''}. Played ${when(meta)}, ${GE.lines.length} players in ${meta.games} games on ${meta.table}. ${meta.changed ? `What it tested: ${meta.changed}. ` : ''}Rules: ${meta.label}. Name in the reports: ${meta.setup}.`;
   $('barExtra').innerHTML = `<span class="seg2" id="geMetric">${Object.entries(METRIC).map(([k, m]) => `<button data-metric="${k}" class="${GE.metric === k ? 'on' : ''}">${m.label}</button>`).join('')}</span>
+    <label title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value.">Average lines<select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     <label title="${esc(about)}">Set of games<select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x === newest ? ' (latest)' : ''} · ${esc(day(x.last))} · ${x.games} games · ${esc(x.table)} · ${esc(cut(x.changed || x.label, 60))}</option>`).join('')}</select></label>
     <label>Game<select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} (${g.rounds} rounds)</option>`).join('')}</select></label>
     <span class="ge-legend"><span><i style="--c:var(--st-pure)"></i>Pure</span><span><i style="--c:var(--st-tainted)"></i>Tainted</span><span><i style="--c:var(--st-corrupt)"></i>Corrupt</span><span><i style="--c:var(--st-fallen)"></i>Fallen</span><span><i class="dash" style="--c:var(--text)"></i>Median</span></span>`;
@@ -453,6 +460,7 @@ function mountLines() {
   if (!GE.data) return;
   $('geSetup').onchange = async (e) => { await loadLines(e.target.value); paint(); };
   $('geMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; GE.metric = b.dataset.metric; for (const x of $('geMetric').children) x.classList.toggle('on', x === b); drawLines(); };
+  $('geAvgSel').onchange = (e) => { geAvg = e.target.value; try { localStorage.setItem('geAvg', geAvg); } catch {} drawLines(); };
   $('geGame').onchange = (e) => { GE.game = Number(e.target.value); if (GE.sel && GE.game && GE.sel.gi !== GE.game) GE.sel = null; drawLines(); };
   const svg = $('geSvg');
   const at = (e) => { const b = svg.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
@@ -507,9 +515,23 @@ function drawLines() {
   }
   // Median of the players still in play at each round.
   const med = []; for (let r = 0; r <= xmax; r++) { const v = shown.filter((l) => l.last >= r).map((l) => gv(l.pts[r])).sort((a, b) => a - b); if (v.length < 2) break; med.push([r, (v[Math.floor((v.length - 1) / 2)] + v[Math.ceil((v.length - 1) / 2)]) / 2]); }
-  s += `<path class="med" d="${med.map(([r, v], k) => `${k ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('')}"/><g id="geLabels"></g><circle class="dot" id="geDot" r="5.5" visibility="hidden"/>`;
+  s += `<path class="med" d="${med.map(([r, v], k) => `${k ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('')}"/>${geAvgLines(shown, xmax, x, y, f, W - m.r)}<g id="geLabels"></g><circle class="dot" id="geDot" r="5.5" visibility="hidden"/>`;
+  svg.classList.toggle('avg', geAvg !== 'off');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
   geFocus();
+}
+/** The four average lines (by finishing place or by seat), each with its name and end value at the right edge. */
+function geAvgLines(shown, xmax, x, y, f, right) {
+  if (geAvg === 'off' || new Set(shown.map((l) => l.gi)).size < 2) return '<g id="geAvg"></g>';
+  const end = Math.max(...shown.map((l) => l.last)), rows = [];
+  for (let k = 1; k <= 4; k++) { const of = shown.filter((l) => (geAvg === 'place' ? l.s.place : l.pn) === k); if (!of.length) continue;
+    // A finished game keeps its final value, so the line ends at the average final value.
+    const pts = []; for (let r = 0; r <= end; r++) pts.push(of.reduce((a, l) => a + gv(l.pts[Math.min(r, l.last)]), 0) / of.length);
+    rows.push({ name: geAvg === 'place' ? ORD[k - 1] : `Player ${k}`, pts, n: of.length, ly: y(pts.at(-1)) }); }
+  // Labels at the right edge, moved apart when two lines end close together.
+  const byY = [...rows].sort((a, b) => a.ly - b.ly); for (let i = 1; i < byY.length; i++) byY[i].ly = Math.max(byY[i].ly, byY[i - 1].ly + 14);
+  return `<g id="geAvg">${rows.map((o) => { const d = o.pts.map((v, r) => `${r ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('');
+    return `<path class="halo" d="${d}"/><path d="${d}"><title>Average of the ${o.n} ${geAvg === 'place' ? `players who finished ${o.name}` : `players in seat ${o.name.slice(-1)}`}</title></path><text class="lab" x="${f(Math.min(x(end) + 8, right + 8))}" y="${f(o.ly + 4)}">${o.name} · ${(Math.round(o.pts.at(-1) * 10) / 10)}</text>`; }).join('')}</g>`;
 }
 /** The line nearest to the pointer (within 16 px), with the round under the pointer. With a game in focus its own lines win. */
 function geNearest(mx, my) {
