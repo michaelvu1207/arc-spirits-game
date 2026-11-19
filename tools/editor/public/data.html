@@ -100,7 +100,8 @@
   .ge-filters { display: flex; gap: 8px 18px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--dim); } .ge-filters select { max-width: 420px; color: var(--text); margin-left: 6px; }
   .ge-legend { display: flex; gap: 14px; flex-wrap: wrap; } .ge-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .ge-legend i { display: block; width: 18px; height: 0; border-top: 2px solid var(--c); } .ge-legend i.dash { border-top-style: dashed; }
-  .ge-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; height: calc(100vh - 126px); min-height: 460px; }
+  .ge-about { font-size: 13px; color: var(--dim); } .ge-about b { color: var(--text); font-weight: 600; }
+  .ge-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; height: calc(100vh - 170px); min-height: 460px; }
   .ge-chart { position: relative; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: none; }
   .ge-chart svg { display: block; width: 100%; height: 100%; cursor: crosshair; } .ge-chart svg.near { cursor: pointer; } .ge-chart svg.drag { cursor: ew-resize; }
   .ge-chart text { font: 11px "Figtree", system-ui, sans-serif; fill: var(--dim); } .ge-chart text.cap { fill: var(--faint); } .ge-chart text.lab { fill: var(--text); font-size: 12px; } .ge-chart text.lab.sel { font-weight: 600; }
@@ -385,6 +386,8 @@ async function loadLines(setup) {
     const key = (n) => String(n).toLowerCase().replace(/^the /, '').replace(/ (rune|relic)$/, '').replace(/^any basic$/, 'any').replace(/^plant$/, 'forest');
     GE.runeIcon = { key, rune: Object.fromEntries(runes.map((r) => [key(r.name), poolIcon[r.icon]])), relic: Object.fromEntries(relics.map((r) => [key(r.name), poolIcon[r.icon]])) };
   }
+  // The notes were written for the Test runs table ("the row above"); here the tests are in the order played.
+  for (const x of GE.index) { const t = (x.changed ?? '').replace(/\s*\([^)]*row (above|below)[^)]*\)/, ''); x.changed = /row (above|below)/.test(t) ? '' : t; }
   GE.lines = []; GE.sel = null; GE.hover = null; GE.game = 0; GE.r = 0;
   GE.data.games.forEach((g, gi) => { const low = Math.min(...g.seats.map((s) => s.final));
     for (const s of g.seats) GE.lines.push({ i: GE.lines.length, g, gi: gi + 1, s, pts: s.rounds, last: s.rounds.at(-1).r, cat: s.place === 1 ? 'won' : s.final === low ? 'last' : 'mid' }); });
@@ -392,17 +395,21 @@ async function loadLines(setup) {
 const geName = (l) => `${l.s.seat} · ${l.s.guardian}`;
 function paintLines() {
   if (!GE.data) return `<div class="note">${esc(GE.err || 'Loading…')}</div>`;
-  const meta = GE.index.find((x) => x.setup === GE.setup);
+  const meta = GE.index.find((x) => x.setup === GE.setup), newest = GE.index.at(-1);
+  const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), hm = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const when = (x) => day(x.first) === day(x.last) ? `${day(x.first)}, ${hm(x.first)} to ${hm(x.last)}` : `${day(x.first)} ${hm(x.first)} to ${day(x.last)} ${hm(x.last)}`;
+  const cut = (t, n) => t.length > n ? t.slice(0, n - 2).replace(/\s+\S*$/, '') + '…' : t;
   return `<div class="ge">
   <div class="ge-filters">
-    <label>Test run<select id="geSetup">${GE.index.map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>${esc(x.setup)} · ${esc(x.table)} · ${x.games} games · ${esc(x.label.length > 70 ? x.label.slice(0, 68) + '…' : x.label)}</option>`).join('')}</select></label>
-    <label>Game<select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} (${esc(g.folder)}, ${g.rounds} rounds)</option>`).join('')}</select></label>
+    <label>Set of games<select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x === newest ? ' (latest)' : ''} · ${esc(day(x.last))} · ${x.games} games · ${esc(x.table)} · ${esc(cut(x.changed || x.label, 60))}</option>`).join('')}</select></label>
+    <label>Game<select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} (${g.rounds} rounds)</option>`).join('')}</select></label>
     <span class="ge-legend"><span><i style="--c:var(--won)"></i>Won</span><span><i style="--c:var(--midc)"></i>2nd or 3rd</span><span><i style="--c:var(--lastc)"></i>Last</span><span><i class="dash" style="--c:var(--text)"></i>Median of all players</span></span>
     <span class="spacer"></span><span><b style="color:var(--text)">${GE.lines.length}</b> players in ${GE.data.games.length} games</span>
   </div>
+  <div class="ge-about"><b>Test ${meta.n} of ${GE.index.length}${meta === newest ? ', the latest set of games' : ''}.</b> Played ${esc(when(meta))}, ${meta.games} games on ${esc(meta.table)}. ${meta.changed ? `What it tested: ${esc(meta.changed)}. ` : ''}Rules: ${esc(meta.label)}. <span class="was">Name in the reports: ${esc(meta.setup)}.</span></div>
   <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-hint" id="geHint" hidden></div></div><aside class="ge-side" id="geSide"></aside></div>
-  <table class="ge-table"><thead><tr><th>Game</th><th>Player</th><th>Agent</th><th>Place</th><th>Points</th><th>Rounds</th><th>Status at the end</th></tr></thead><tbody id="geRows">${GE.lines.map((l) => `<tr data-line="${l.i}"><td>Game ${l.gi} <span class="was">${esc(l.g.folder)}</span></td><td>${esc(geName(l))}</td><td>${esc(l.s.agent)}</td><td>${ORD[l.s.place] ?? l.s.place}</td><td class="v val">${l.s.final}</td><td class="v">${l.last}</td><td>${esc(l.pts.at(-1).st)}</td></tr>`).join('')}</tbody></table>
-  <div class="note">Read only. ${esc(meta?.label ?? '')}${meta?.note ? ` (${esc(meta.note)})` : ''}. Each line is one player: points at the end of each round, under the rules of that test run. Click a point for the board at that round, drag along a line to move through its rounds, use ← and → to step, Esc to clear. Double-click a line to open the whole game.</div></div>`;
+  <table class="ge-table"><thead><tr><th>Game</th><th>Player</th><th>Agent</th><th>Place</th><th>Points</th><th>Rounds</th><th>Status at the end</th></tr></thead><tbody id="geRows">${GE.lines.map((l) => `<tr data-line="${l.i}"><td>Game ${l.gi}</td><td>${esc(geName(l))}</td><td>${esc(l.s.agent)}</td><td>${ORD[l.s.place] ?? l.s.place}</td><td class="v val">${l.s.final}</td><td class="v">${l.last}</td><td>${esc(l.pts.at(-1).st)}</td></tr>`).join('')}</tbody></table>
+  <div class="note">Read only. A test is one set of games played under one set of rules; tests are numbered in the order they were played, and the page opens on the latest. Each line is one player: points at the end of each round, under the rules of that test run. Click a point for the board at that round, drag along a line to move through its rounds, use ← and → to step, Esc to clear. Double-click a line to open the whole game.</div></div>`;
 }
 function mountLines() {
   if (!GE.data) return;
@@ -519,7 +526,7 @@ function paintSide(keepRange) {
   const mates = GE.lines.filter((o) => o.gi === l.gi && o !== l);
   const stepLabel = p.r ? `Round ${p.r} of ${l.last}` : 'Start';
   const head = `<div class="who"><span class="swatch" style="--c:${color}"></span><b>${esc(geName(l))}</b><button class="x" data-clear="1" title="Clear (Esc)">Clear</button></div>
-    <div class="sub">${esc(l.s.agent)} · game ${l.gi} of ${esc(l.g.folder)} · ${CATLABEL[l.cat]}: ${ORD[l.s.place] ?? l.s.place} with ${l.s.final} points · <a href="${GAME_APP}/explorer/game/${encodeURIComponent(l.g.id)}" target="_blank">open the game ↗</a></div>
+    <div class="sub">${esc(l.s.agent)} · game ${l.gi} · ${CATLABEL[l.cat]}: ${ORD[l.s.place] ?? l.s.place} with ${l.s.final} points · <a href="${GAME_APP}/explorer/game/${encodeURIComponent(l.g.id)}" target="_blank">open the game ↗</a></div>
     <div class="ge-step"><button data-step="-1" ${GE.r <= 0 ? 'disabled' : ''} title="Previous round (←)">←</button><input type="range" id="geRange" min="0" max="${l.last}" value="${GE.r}" aria-label="Round"><button data-step="1" ${GE.r >= l.last ? 'disabled' : ''} title="Next round (→)">→</button><span id="geStepLabel">${stepLabel}</span></div>`;
   const rest = `<div class="ge-points"><b>${p.vp}</b><span>points${p.r ? ` at the end of round ${p.r}` : ' at the start'}${delta ? ` · ${delta > 0 ? '+' : '−'}${Math.abs(delta)} this round` : ''}</span></div>
     <h3>Board</h3>
