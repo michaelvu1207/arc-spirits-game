@@ -104,4 +104,13 @@
 	.pop :global(.dim) {
 		color: #9a9eab;
 	}
+	/* A label over a group of lines ("In the tested rules", "In the live game"). */
+	.pop :global(.tag) {
+		font-size: 12px;
+		color: #e2b23c;
+	}
+	.pop :global(.tag.live) {
+		margin-top: 4px;
+		color: #9a9eab;
+	}
 </style>

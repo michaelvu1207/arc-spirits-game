@@ -3,6 +3,7 @@
 	// power together, the cost to awaken, and the two levels. A row is marked when the spirit is
 	// too powerful (both levels High or better) or in the danger zone (wins far more than
 	// average but is not picked much). A pick counts only when the spirit was also awakened. The "i" after a name shows the spirit; after a class, its text.
+	// Abilities and costs are those of the tested rules; one that differs from the live game is marked.
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ClassInfo from '$lib/components/ClassInfo.svelte';
@@ -24,6 +25,9 @@
 	const idByName = $derived(new Map([...assets.spiritAssets.entries()].map(([id, a]) => [a.name, id])));
 	/** "Fighter×2" and "Cultivator, Cursed Spirit" → the class names. */
 	const classesOf = (cls: string) => cls.split(', ').map((c) => ({ text: c, name: c.replace(/×\d+$/, '') }));
+	/** What the tested rules change: class abilities and awakening costs. */
+	const changedClasses = $derived(new Set((data?.test_rules?.classes ?? []).map((c) => c.name)));
+	const liveCost = $derived(new Map((data?.test_rules?.spirits ?? []).map((s) => [s.name, s.live])));
 
 	async function load() {
 		try {
@@ -72,8 +76,8 @@
 						<tr class:hot={r.flag === 'Too powerful'} class:watch={r.flag === 'Danger zone'}>
 							<td class="td"><span class={`tier tier-${/^[SABCD]$/.test(r.tier) ? r.tier : 'none'}`}>{r.tier}</span></td>
 							<td class="td name">{r.spirit}{#if id}<SpiritInfo {id} name={r.spirit} />{/if}</td>
-							<td class="td cls">{#each classesOf(r.cls) as c (c.text)}<span class="nowrap">{c.text}<ClassInfo name={c.name} /></span>{/each}</td>
-							<td class="td">{r.awaken_cost}</td>
+							<td class="td cls">{#each classesOf(r.cls) as c (c.text)}<span class="nowrap">{c.text}{#if changedClasses.has(c.name)}<span class="changed">changed</span>{/if}<ClassInfo name={c.name} /></span>{/each}</td>
+							<td class="td">{r.awaken_cost}{#if liveCost.has(r.spirit)}<span class="was">live: {liveCost.get(r.spirit)}</span>{/if}</td>
 							<td class="td">{@render level(r.desirability, r.desirability_level)}</td>
 							<td class="td">{@render level(r.power, r.power_level)}</td>
 						</tr>
@@ -85,6 +89,7 @@
 			<span><i class="key hot"></i>Too powerful: desirability and power both High or better</span>
 			<span><i class="key watch"></i>Danger zone: wins far more than average but is not picked much</span>
 			<span>Tier combines desirability (picked and awakened when offered) and power (seats that awakened it win more than an average seat)</span>
+			{#if data.test_rules}<span>Abilities and costs are those of the tested rules; "changed" marks one that differs from the live game. The card pictures show the live game.</span>{/if}
 		</div>
 	{/if}
 </div>
@@ -100,6 +105,8 @@
 	.td { padding: 5px 8px; border-bottom: 1px solid var(--line); }
 	.td.cls, .dim { color: var(--dim); }
 	.nowrap { white-space: nowrap; margin-right: 6px; }
+	.page .changed { margin-left: 5px; padding: 0 5px; border-radius: 4px; font-size: 11px !important; color: #e2b23c; background: color-mix(in srgb, #e2b23c 16%, transparent); }
+	.page .was { display: block; color: var(--faint); font-size: 12px !important; }
 
 	tr.hot .td { background: color-mix(in srgb, var(--bad) 20%, transparent); }
 	tr.watch .td { background: color-mix(in srgb, #e2b23c 20%, transparent); }

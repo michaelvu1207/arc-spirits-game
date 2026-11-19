@@ -1,7 +1,9 @@
 <script lang="ts">
 	// Game explorer: a small "i" after a spirit's name. Hover, focus or tap shows the spirit's
-	// front and back side by side. The images load only when it opens.
+	// front and back side by side. The images load only when it opens. The pictures are the live
+	// game's cards: where the tested rules awaken the spirit another way, a line under them says so.
 	import { spiritBackImageUrl } from '$lib/components/play2d/helpers';
+	import { testRules } from '$lib/explorerBalance';
 	import { usableImage } from '$lib/explorerImages.svelte';
 	import { gameImageUrl } from '$lib/storageImages';
 	import { getAssetState } from '$lib/stores/assetStore.svelte';
@@ -14,12 +16,20 @@
 	let open = $state(false);
 	let pos = $state({ left: 0, top: 0 });
 	let button: HTMLButtonElement;
+	// What the tested rules change on this card: its awakening, and the ability of a class it has
+	// (the back of a card prints the class text).
+	const testedAwaken = $derived($testRules?.spirits.find((s) => s.name === name) ?? null);
+	const testedClasses = $derived.by(() => {
+		const names = (assets.spiritAssets.get(id)?.traits?.class_ids ?? []).map((c) => assets.classTraits.get(c)?.name);
+		return ($testRules?.classes ?? []).filter((c) => names.includes(c.name));
+	});
+	const tested = $derived(testedAwaken != null || testedClasses.length > 0);
 
 	function show() {
 		const r = button.getBoundingClientRect();
 		// To the right of the icon and below it; flipped where the window ends.
 		const left = r.right + 8 + WIDTH > window.innerWidth ? Math.max(8, r.left - 8 - WIDTH) : r.right + 8;
-		const top = Math.min(Math.max(8, r.top - 20), window.innerHeight - SIZE - 28);
+		const top = Math.min(Math.max(8, r.top - 20), window.innerHeight - SIZE - 28 - (tested ? 70 + 50 * ((testedAwaken ? 1 : 0) + testedClasses.length) : 0));
 		pos = { left, top };
 		open = true;
 	}
@@ -50,13 +60,25 @@
 >
 {#if open}
 	<span class="pop" style={`left:${pos.left}px; top:${pos.top}px`}>
-		{#each sides as url, i (i)}
-			{#if url}
-				<img src={url} alt="" width={SIZE} height={SIZE} />
-			{:else}
-				<span class="none" style={`width:${SIZE}px; height:${SIZE}px`}>{name}</span>
-			{/if}
-		{/each}
+		<span class="sides">
+			{#each sides as url, i (i)}
+				{#if url}
+					<img src={url} alt="" width={SIZE} height={SIZE} />
+				{:else}
+					<span class="none" style={`width:${SIZE}px; height:${SIZE}px`}>{name}</span>
+				{/if}
+			{/each}
+		</span>
+		{#if tested}
+			<span class="note" style={`width:${Math.max(sides.length, 1) * SIZE + (Math.max(sides.length, 1) - 1) * 10}px`}>
+				<span class="tag">In the tested rules</span>
+				{#if testedAwaken}<span><b>To awaken:</b> {testedAwaken.test}</span>{/if}
+				{#each testedClasses as c (c.name)}
+					<span><b>{c.name}:</b> {c.test.map((b) => (c.test.length > 1 ? `${b.count}: ${b.text}` : b.text)).join(' ')}</span>
+				{/each}
+				<span class="dim">The card shows the live game.</span>
+			</span>
+		{/if}
 	</span>
 {/if}
 
@@ -87,16 +109,35 @@
 	.pop {
 		position: fixed;
 		z-index: 50;
-		display: flex;
-		gap: 10px;
+		display: grid;
+		gap: 8px;
 		padding: 10px;
 		background: #171a21;
 		border: 1px solid #30343f;
 		border-radius: 10px;
 		pointer-events: none;
 	}
+	.sides {
+		display: flex;
+		gap: 10px;
+	}
 	.pop img {
 		object-fit: contain;
+	}
+	.note {
+		display: grid;
+		gap: 3px;
+		color: #e6e7eb;
+		font-weight: 400;
+		white-space: normal;
+		text-align: left;
+	}
+	.note .tag {
+		font-size: 12px;
+		color: #e2b23c;
+	}
+	.note .dim {
+		color: #9a9eab;
 	}
 	.none {
 		display: grid;

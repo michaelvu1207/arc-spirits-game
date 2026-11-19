@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, type Snippet } from 'svelte';
 	import GameViewer from '$lib/components/GameViewer.svelte';
 	import ErrorDisplay from '$lib/components/ErrorDisplay.svelte';
 	import ResourceGraph from '$lib/components/ResourceGraph.svelte';
@@ -36,9 +36,14 @@
 		form?: { error?: string } | null;
 		/** The local game explorer: one screen, a short bar, and the time-lapse. */
 		explorer?: boolean;
+		/**
+		 * Explorer, test games: the rules this game was played under, where they differ from the
+		 * live game. Shown as its own tab; the cards in the viewer are the live game's.
+		 */
+		rules?: Snippet;
 	}
 
-	let { data, form, explorer = false }: Props = $props();
+	let { data, form, explorer = false, rules }: Props = $props();
 
 	// Time-lapse: the rounds play by themselves, from the round shown to the last one.
 	let roundHands = $state(new Map<string, RoundHand>());
@@ -268,7 +273,7 @@
 		return diff >= 0 ? diff : null;
 	});
 
-	let activeTab = $state<'round' | 'summary' | 'story'>('round');
+	let activeTab = $state<'round' | 'summary' | 'story' | 'rules'>('round');
 	let copiedReplayValue = $state<string | null>(null);
 	let copyReplayTimer: ReturnType<typeof setTimeout> | null = null;
 	let copiedShareValue = $state<string | null>(null);
@@ -768,6 +773,17 @@
 									Story
 								</button>
 							{/if}
+							{#if explorer && rules}
+								<button
+									type="button"
+									onclick={() => (activeTab = 'rules')}
+									class={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+										activeTab === 'rules' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+									}`}
+								>
+									Rules in this game
+								</button>
+							{/if}
 						</div>
 
 						<div class="flex flex-wrap items-center justify-end gap-2">
@@ -1052,6 +1068,8 @@
 							</aside>
 						{/if}
 					</div>
+				{:else if activeTab === 'rules' && rules}
+					<div class="rules-tab">{@render rules()}</div>
 				{:else if activeTab === 'story'}
 					<div class="story">
 						{#if story}
@@ -1304,6 +1322,7 @@
 	.story { max-width: 70ch; padding: 24px 20px; }
 	.story p { margin: 10px 0 0; white-space: pre-wrap; }
 	.story-luck { color: var(--dim, #9a9eab); }
+	.rules-tab { padding: 20px; max-width: 1400px; }
 	.explorer-game {
 		--viewer-offset: 53px;
 		height: 100%;

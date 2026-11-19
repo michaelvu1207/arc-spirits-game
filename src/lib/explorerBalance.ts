@@ -3,6 +3,8 @@
  * AI test games. Served by /explorer/balance.json from one file; see that route.
  */
 
+import { writable } from 'svelte/store';
+
 /** The most recent finished test against the targets. */
 export interface BalanceHeadline {
 	setup: string;
@@ -76,6 +78,8 @@ export interface BalanceSpirit {
 }
 /** One tested rule set (40-point rules) against the four checks. */
 export interface BalanceRun {
+	/** What this run's rules change from the live game. */
+	changes?: BalanceRuleChanges | null;
 	id: string;
 	/** The whole rule set, in words. */
 	setup: string;
@@ -142,7 +146,37 @@ export interface BalanceWhatIf {
 	combat_pct: number;
 	split_ok: boolean;
 }
+/** One count of a class and what it does there. */
+export interface BalanceClassLine {
+	count: string;
+	text: string;
+}
+/** What a tested rule set changes from the live game, as printed text. */
+export interface BalanceRuleChanges {
+	win_points: number;
+	/** Classes whose ability differs: the live text and the tested one. */
+	classes: { name: string; live: BalanceClassLine[]; test: BalanceClassLine[] }[];
+	/** Spirits whose awakening differs. */
+	spirits: { name: string; live: string; test: string }[];
+	/** Monster numbers by Difficulty (a range over the cards), live and tested. */
+	monsters: {
+		group: string;
+		barrier: string;
+		hit: string;
+		points: string;
+		first: string;
+		barrier_live?: string;
+		hit_live?: string;
+		points_live?: string;
+		first_live?: string;
+	}[];
+	/** Other rules that differ, one sentence each. */
+	other: string[];
+}
+
 export interface BalanceData {
+	/** The rules the spirit lists describe (the latest tested setup). */
+	test_rules?: (BalanceRuleChanges & { setup: string }) | null;
 	runs?: BalanceRun[];
 	run_games?: BalanceRunGame[];
 	whatif?: BalanceWhatIf[];
@@ -159,8 +193,17 @@ export interface BalanceData {
 export async function fetchBalance(): Promise<BalanceData> {
 	const res = await fetch('/explorer/balance.json', { cache: 'no-store' });
 	if (!res.ok) throw new Error(res.status === 404 ? 'No balance data yet.' : `Failed to load the balance data (${res.status}).`);
-	return (await res.json()) as BalanceData;
+	const data = (await res.json()) as BalanceData;
+	testRules.set(data.test_rules ?? null);
+	return data;
 }
+
+/**
+ * The tested rules, for the pieces that print a class or a spirit (ClassInfo, SpiritInfo): the
+ * card data they read is the live game's. Null until the balance data has loaded, and on pages
+ * that do not load it; those show the live text.
+ */
+export const testRules = writable<BalanceData['test_rules']>(null);
 
 /** Share of a pool that may be left for it to count as "mostly dead". */
 const MOSTLY_DEAD = 0.25;

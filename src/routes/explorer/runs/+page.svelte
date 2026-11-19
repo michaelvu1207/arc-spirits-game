@@ -4,6 +4,7 @@
 	// runs and the re-scoring table. Right: the chosen run's games; each opens round by round.
 	import { onMount } from 'svelte';
 	import LineChart from '$lib/components/explorer/LineChart.svelte';
+	import RuleChanges from '$lib/components/explorer/RuleChanges.svelte';
 	import { fetchBalance, type BalanceData, type BalanceRun, type BalanceRunSeat } from '$lib/explorerBalance';
 
 	const REFRESH_MS = 60_000;
@@ -138,6 +139,13 @@
 				<div class="title">{run.games} games · {run.table} · first to {run.win_points} points</div>
 				<div class="setup">{run.setup}</div>
 				<div class="list">
+					{#if run.changes}
+						{@const c = run.changes}
+						<details class="rules-box">
+							<summary>Rules these games were played under: {c.classes.length} abilities and {c.spirits.length} awakening conditions differ from the live game, with the monster numbers. The cards in the game viewer show the live game.</summary>
+							<RuleChanges changes={c} />
+						</details>
+					{/if}
 					{#each games as g, gi (g.folder + g.game)}
 						<article class="game">
 							<div class="game-head">
@@ -234,6 +242,9 @@
 	.page .link:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 	.page .tag { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 11px !important; color: var(--dim); white-space: nowrap; }
 
+	.rules-box { flex: none; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 8px 10px; }
+	.rules-box summary { cursor: pointer; color: var(--text); }
+	.rules-box[open] summary { margin-bottom: 8px; }
 	.games .list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
 	.game { flex: none; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 	.game-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; color: var(--dim); }

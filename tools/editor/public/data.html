@@ -92,7 +92,7 @@
   tr.hot td { background: color-mix(in srgb, var(--bad) 20%, transparent); } tr.watch td { background: color-mix(in srgb, #e2b23c 20%, transparent); }
   .meter { display: inline-flex; gap: 2px; margin-right: 7px; vertical-align: middle; } .meter i { display: block; width: 7px; height: 10px; border-radius: 1px; border: 1px solid var(--faint); } .meter i.on { background: var(--text); border-color: var(--text); }
   .cls { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; white-space: nowrap; color: var(--dim); } .cls img { width: 22px; height: 22px; object-fit: contain; }
-  .was { color: var(--faint); margin-right: 5px; } .now { font-weight: 600; } .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+  .was { color: var(--faint); margin-right: 5px; } .now { font-weight: 600; } .tested { margin-top: 4px; max-width: 48ch; } .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
   .tabs .group { padding: 12px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
   .ccard h2 input { font-size: 15px; font-weight: 600; width: 100%; } .ccard .cdesc textarea { width: 100%; min-width: 0; }
 </style>
@@ -299,15 +299,19 @@ const artCell = (path, cls = '') => path ? `<a class="artlink" href="${file(path
 function paintBalSpirits() {
   if (!BAL) return `<div class="note">${esc(BALERR || 'Loading…')}</div>`;
   const list = BAL.spirits.filter((s) => !stage || s.pool === POOLS[stage]);
+  // What the tested rules change from the live cards: class abilities and awakening costs (BAL.test_rules).
+  const tested = Object.fromEntries((BAL.test_rules?.classes ?? []).map((c) => [c.name, c.test.map((b) => b.text).join(' ')]));
+  const liveCost = Object.fromEntries((BAL.test_rules?.spirits ?? []).map((x) => [x.name, x.live]));
+  const testedLines = (names) => names.filter((n) => tested[n]).map((n) => `<div class="tested"><b>${esc(n)}</b>, in the tests: ${esc(tested[n])}</div>`).join('');
   const body = (pool) => list.filter((s) => s.pool === pool).map((s) => { const h = HEX?.[s.spirit], front = h?.final?.front ? h.final.front + '.png' : h?.front;
     return `<tr class="bal ${s.flag === 'Too powerful' ? 'hot' : s.flag === 'Danger zone' ? 'watch' : ''}">
     <td>${artCell(front)}</td><td><span class="tier tier-${/^[SABCD]$/.test(s.tier) ? s.tier : 'none'}">${esc(s.tier)}</span></td><td><b>${esc(s.spirit)}</b></td>
-    <td>${(h?.classes ?? []).length ? h.classes.map((c) => `<span class="cls">${c.icon ? `<img loading="lazy" src="${small(c.icon, 64)}" alt="">` : ''}${esc(c.name)}</span>`).join('') : `<span class="cls">${esc(s.cls)}</span>`}</td>
-    <td>${esc(s.awaken_cost)}</td><td>${meter(s.desirability, s.desirability_level)}</td><td>${meter(s.power, s.power_level)}</td></tr>`; }).join('');
+    <td>${(h?.classes ?? []).length ? h.classes.map((c) => `<span class="cls">${c.icon ? `<img loading="lazy" src="${small(c.icon, 64)}" alt="">` : ''}${esc(c.name)}</span>`).join('') : `<span class="cls">${esc(s.cls)}</span>`}${testedLines(s.cls.split(', ').map((c) => c.replace(/×\d+$/, '')))}</td>
+    <td>${esc(s.awaken_cost)}${liveCost[s.spirit] ? `<div class="was">live: ${esc(liveCost[s.spirit])}</div>` : ''}</td><td>${meter(s.desirability, s.desirability_level)}</td><td>${meter(s.power, s.power_level)}</td></tr>`; }).join('');
   const pools = POOLS.slice(1).filter((p) => list.some((s) => s.pool === p));
   return `<div class="summary"><span><span class="key" style="background:color-mix(in srgb, var(--bad) 55%, transparent)"></span>Too powerful: desirability and power both High or better</span><span><span class="key" style="background:color-mix(in srgb, #e2b23c 55%, transparent)"></span>Danger zone: wins far more than average but is not picked much</span><span>Tier combines desirability (picked and awakened when offered) and power (seats that awakened it win more than an average seat)</span></div>`
     + pools.map((p) => `${stage ? '' : `<div class="divider">${p}</div>`}<table><thead><tr><th></th><th>Tier</th><th>Spirit</th><th>Class</th><th title="In the rules the tests use">Cost to awaken</th><th>Desirability</th><th>Powerful</th></tr></thead><tbody>${body(p)}</tbody></table>`).join('')
-    + `<div class="note">From the AI test games. The cost to awaken is the one in the rules the tests use (setup ${esc(BAL.current?.[0]?.setup ?? '')}); the class icons and the hex art are the editor's own.</div>`;
+    + `<div class="note">From the AI test games. The cost to awaken is the one in the rules the tests use (setup ${esc(BAL.current?.[0]?.setup ?? '')}), with the live cost in grey where it differs. A class whose ability the tests changed has the tested text under it; the Classes tab holds the live text. The class icons and the hex art are the editor's own.</div>`;
 }
 function paintBalMonsters() {
   if (!BAL) return `<div class="note">${esc(BALERR || 'Loading…')}</div>`;
@@ -315,11 +319,11 @@ function paintBalMonsters() {
   const change = (was, now) => was != null && was !== now ? `<span class="was">${was} →</span><span class="now">${now}</span>` : `${now ?? '–'}`;
   const sum = (f) => list.reduce((a, m) => a + (m[f] ?? 0), 0);
   return `<div class="summary"><span>${stage ? `Class ${stage}` : 'All classes'}: <b>${list.length}</b> monsters</span><span><b>${sum('fights')}</b> fights, <b>${sum('kills')}</b> kills in the latest test</span><span>Test setup <b>${esc(BAL.current?.[0]?.setup ?? '')}</b></span></div>
-  <table><thead><tr><th></th><th>Name</th>${stage ? '' : '<th>Class</th>'}<th>Difficulty</th><th title="Live value → the value the tests use">Barrier</th><th title="Live value → the value the tests use">Hit</th><th title="In the tests">Strikes</th><th title="Points on its reward track">Points</th><th>Fights</th><th>Kills</th><th>Average kill round</th></tr></thead><tbody>${list.map((m) => { const a = MON?.[m.monster];
+  <table><thead><tr><th></th><th>Name</th>${stage ? '' : '<th>Class</th>'}<th>Difficulty</th><th title="Live value → the value the tests use">Barrier</th><th title="Live value → the value the tests use">Hit</th><th title="In the tests">Strikes</th><th title="Points on its reward track: live value → the value the tests use">Points</th><th>Fights</th><th>Kills</th><th>Average kill round</th></tr></thead><tbody>${list.map((m) => { const a = MON?.[m.monster];
     return `<tr class="bal"><td>${artCell(a?.card ? a.card + '.png' : a?.art, 'card')}</td><td><b>${esc(a?.name ?? m.monster)}</b>${a && a.name !== m.monster ? `<div class="was">${esc(m.monster)}</div>` : ''}</td>${stage ? '' : `<td class="v">${m.difficulty}</td>`}<td class="v">${m.sub_difficulty ?? '–'}</td>
     <td class="v val">${change(m.barrier_live, m.barrier)}</td><td class="v val">${change(m.hit_live, m.hit)}</td><td>${m.strikes_first ? 'Always first' : 'By initiative'}${m.strikes_first && m.initiative_live != null ? `<div class="was">live: initiative ${m.initiative_live}</div>` : ''}</td>
-    <td class="v val">${m.points}</td><td class="v">${m.fights}</td><td class="v">${m.kills}</td><td class="v">${m.avg_kill_round ?? '–'}</td></tr>`; }).join('')}</tbody></table>
-  <div class="note">Read only. Barrier, Hit and Strikes are the values the AI test games use; a grey number before an arrow is the live value. To change the live cards, use the Monsters tab. Fights and kills are from the latest finished test.</div>`;
+    <td class="v val">${change(m.points_live, m.points)}</td><td class="v">${m.fights}</td><td class="v">${m.kills}</td><td class="v">${m.avg_kill_round ?? '–'}</td></tr>`; }).join('')}</tbody></table>
+  <div class="note">Read only. Barrier, Hit, Strikes and Points are the values the AI test games use; a grey number before an arrow is the live value. To change the live cards, use the Monsters tab. Fights and kills are from the latest finished test.</div>`;
 }
 function paint() { $('scroll').innerHTML = table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); }
 
