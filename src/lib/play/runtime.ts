@@ -2644,6 +2644,8 @@ function reduceCommand(
 			if (
 				active.player.navigationDestination === 'Arcane Abyss' &&
 				!active.player.actionsUsedThisRound.includes('combat') &&
+				// Rule `nhalNeedsCorrupt`: the visit counts only while Corrupt or Fallen.
+				(!ruleValue(catalog, 'nhalNeedsCorrupt') || (active.player.statusLevel ?? 0) >= 2) &&
 				active.player.spirits.some((s) => s.id === AWAKEN_SPIRIT_IDS.shadowtaker && s.isFaceDown)
 			) {
 				active.player.awakenProgress ??= {};

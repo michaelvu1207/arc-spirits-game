@@ -878,6 +878,8 @@ export interface PlayRules {
 	princessRune?: boolean;
 	/** King pays its point only to a Pure player. */
 	kingPureOnly?: boolean;
+	/** Nhal's Arcane Abyss visit counts for its awakening only while the holder is Corrupt or Fallen. */
+	nhalNeedsCorrupt?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

@@ -136,6 +136,9 @@
  *   (Nhal) also gives 4 Max Barrier.
  * - kingPureOnly (default false; balance test, 2026-11-19): true ⇒ King is "In the Awakening Phase, if you
  *   are Pure, gain 1 VP. If you are Evil, you must discard this spirit." (Tainted and Corrupt: no point).
+ * - nhalNeedsCorrupt (default false; balance test, 2026-11-19): true ⇒ Nhal's awakening is "Navigate to the
+ *   Arcane Abyss while Corrupt or Fallen, but don't fight the monster.": a visit as Pure or Tainted does
+ *   not count. The printed text comes from the data (`awaken_condition.text`); see runtime.ts.
  * - princessRune (default false; balance test, 2026-11-18): true ⇒ Princess is "In the Awakening Phase, if
  *   you are not Evil and all your spirits are awakened, gain 1 Any basic Rune." (no point).
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
@@ -192,7 +195,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	corruptorAwakenMaxBarrier: false,
 	captainNoDiscardDie: false,
 	princessRune: false,
-	kingPureOnly: false
+	kingPureOnly: false,
+	nhalNeedsCorrupt: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

@@ -2282,7 +2282,7 @@ describe('Mountain Region spirits (November 2026): Falconer and Rider through th
 
 	test('Nhal awaken: "Navigate to the Arcane Abyss, but don\'t fight the monster." (no Fallen needed)', () => {
 		const NHAL = 'fc667265-edd6-4c28-b96e-6e505188ce72';
-		const endAtAbyss = (statusLevel: number, actions: string[]) => {
+		const endAtAbyss = (statusLevel: number, actions: string[], catalog = CATALOG) => {
 			const state = started();
 			state.phase = 'location';
 			const p = state.players.Red!;
@@ -2291,13 +2291,20 @@ describe('Mountain Region spirits (November 2026): Falconer and Rider through th
 			p.navigationDestination = 'Arcane Abyss';
 			p.actionsUsedThisRound = actions;
 			p.awakenProgress = {};
-			const res = applyGameCommand(state, red, { type: 'endLocationActions' }, CATALOG);
+			const res = applyGameCommand(state, red, { type: 'endLocationActions' }, catalog);
 			if (!res.ok) throw new Error(res.error.message);
 			return res.state.players.Red!.awakenProgress['awaken:shadowtaker'];
 		};
 		expect(endAtAbyss(3, [])).toBe(true);
 		expect(endAtAbyss(0, [])).toBe(true); // Nhal is the Moon exception: no Fallen needed
 		expect(endAtAbyss(0, ['combat'])).toBeUndefined(); // fought the monster
+		// Rule `nhalNeedsCorrupt`: the visit counts only while Corrupt or Fallen.
+		const strict = { ...CATALOG, rules: { nhalNeedsCorrupt: true } };
+		expect(endAtAbyss(0, [], strict)).toBeUndefined();
+		expect(endAtAbyss(1, [], strict)).toBeUndefined();
+		expect(endAtAbyss(2, [], strict)).toBe(true);
+		expect(endAtAbyss(3, [], strict)).toBe(true);
+		expect(endAtAbyss(2, ['combat'], strict)).toBeUndefined();
 	});
 
 	test('Rider and Ram: round 1 at the Mountain Region counts as an arrival from a different location', () => {
