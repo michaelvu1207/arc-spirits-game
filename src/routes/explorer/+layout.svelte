@@ -10,6 +10,7 @@
 	const inGame = $derived(path.startsWith('/explorer/game/'));
 	const tabs = [
 		{ href: '/explorer', label: 'Balance', on: (p: string) => p === '/explorer' || p === '/explorer/' },
+		{ href: '/explorer/runs', label: 'Test runs', on: (p: string) => p.startsWith('/explorer/runs') },
 		{ href: '/explorer/spirits/world', label: 'Spirit World', on: (p: string) => p.startsWith('/explorer/spirits/world') },
 		{ href: '/explorer/spirits/arcane', label: 'Arcane Abyss', on: (p: string) => p.startsWith('/explorer/spirits/arcane') },
 		{ href: '/explorer/spirits/heroes', label: 'Heroes', on: (p: string) => p.startsWith('/explorer/spirits/heroes') }

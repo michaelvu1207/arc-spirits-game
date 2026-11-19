@@ -74,7 +74,78 @@ export interface BalanceSpirit {
 	power_level: number | null;
 	flag: '' | 'Too powerful' | 'Danger zone';
 }
+/** One tested rule set (40-point rules) against the four checks. */
+export interface BalanceRun {
+	id: string;
+	/** The whole rule set, in words. */
+	setup: string;
+	/** What this run changed from the one before it. */
+	change: string;
+	table: string;
+	note: string;
+	games: number;
+	win_points: number;
+	end_rounds: number[];
+	end_round_median: number;
+	round_ok: boolean;
+	gaps: number[];
+	gap_median: number;
+	first_second_median: number;
+	gap_ok: boolean;
+	monster_pct: number;
+	spirit_pct: number;
+	combat_pct: number;
+	power_pct: number;
+	split_ok: boolean;
+	/** Monsters left in the Difficulty 1, 2 and 3 pools at rounds 10, 20 and 30 (or the last round). */
+	pool_left: number[];
+	pool_start: number[];
+	pools_ok: boolean;
+}
+/** One seat of one test game. */
+export interface BalanceRunSeat {
+	agent: string;
+	seat: string;
+	place: number;
+	points: number;
+	status: string;
+	kills: number;
+	fights: number;
+	from_monsters: number;
+	from_attacks: number;
+	from_spirits: number;
+	from_powers: number;
+	attacks_made: number | null;
+	times_attacked: number | null;
+	times_corrupted: number | null;
+	fallen_round: number | null;
+	spirits_lost: number | null;
+	awakened: number;
+	notable: string[];
+	points_by_round: number[];
+}
+export interface BalanceRunGame {
+	run: string;
+	folder: string;
+	game: string;
+	/** Id of the game in the round-by-round viewer (null: not imported). */
+	game_id: string | null;
+	rounds: number;
+	gap: number;
+	seats: BalanceRunSeat[];
+}
+/** The newest setup's recorded games scored with a different payout (play assumed unchanged). */
+export interface BalanceWhatIf {
+	change: string;
+	monster_pct: number;
+	spirit_pct: number;
+	combat_pct: number;
+	split_ok: boolean;
+}
 export interface BalanceData {
+	runs?: BalanceRun[];
+	run_games?: BalanceRunGame[];
+	whatif?: BalanceWhatIf[];
 	headline: BalanceHeadline[];
 	split: BalanceSplit[];
 	status: BalanceStatus[];
