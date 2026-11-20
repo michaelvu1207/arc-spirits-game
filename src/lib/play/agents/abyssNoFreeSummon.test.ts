@@ -1,0 +1,47 @@
+/**
+ * The Arcane Abyss has no free Abyss Summon (Michael, 2026-11-20: "remove the mechanic entirely, you
+ * can only get aa summons by killing monsters"). The working tables say so with an empty
+ * `reward_rows` on the Arcane Abyss; tables written before that have no such field and keep the
+ * frozen catalog's row, so finished test games replay as they were played.
+ *
+ *   npx vitest run src/lib/play/agents/abyssNoFreeSummon.test.ts
+ */
+import { cpSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { buildMonsterRewards } from '../monsterRewards';
+import { loadLocalDesignCatalog } from './catalog';
+import { interactionsAt } from './labels';
+import { buildRulesBrief } from './rulesBrief';
+
+const summons = (catalog: ReturnType<typeof loadLocalDesignCatalog>) =>
+	interactionsAt(catalog, 'Arcane Abyss').filter((i) => i.gains.some((g) => g.type === 'action' && g.action === 'abyssSummon'));
+
+describe('Arcane Abyss without the free Abyss Summon', () => {
+	const now = loadLocalDesignCatalog('data');
+
+	it('the working tables give the Arcane Abyss no location action', () => {
+		expect(interactionsAt(now, 'Arcane Abyss')).toEqual([]);
+		expect(buildRulesBrief(now)).toContain('- Arcane Abyss: no location actions; draw/keep/fight monster cards');
+		expect(buildRulesBrief(now)).toContain('An Arcane Abyss Summon is ONLY a monster reward');
+	});
+
+	it('monster cards still pay Abyss Summons', () => {
+		const paying = (now.monsters ?? []).filter((m) =>
+			buildMonsterRewards(m.rewardTrack).some((o) => o.effect.type === 'action' && o.effect.action === 'abyssSummon')
+		);
+		expect(paying.length).toBeGreaterThan(20);
+	});
+
+	it('tables without their own reward_rows keep the old free summon', () => {
+		const dir = mkdtempSync(join(tmpdir(), 'arc-old-tables-'));
+		for (const f of readdirSync('data')) if (f.endsWith('.json') && !f.includes('.bak')) cpSync(join('data', f), join(dir, f));
+		const rows = JSON.parse(readFileSync(join(dir, 'game_locations.json'), 'utf8')) as Record<string, unknown>[];
+		for (const row of rows) delete row.reward_rows;
+		writeFileSync(join(dir, 'game_locations.json'), JSON.stringify(rows));
+		const old = loadLocalDesignCatalog(dir);
+		expect(summons(old)).toHaveLength(1);
+		expect(buildRulesBrief(old)).not.toContain('ONLY a monster reward');
+	});
+});

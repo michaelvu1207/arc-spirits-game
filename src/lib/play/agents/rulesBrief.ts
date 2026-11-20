@@ -38,12 +38,17 @@ import {
 	STATUS_LADDER,
 	type PlayCatalog
 } from '../types';
-import { destinationSummaries } from './labels';
+import { destinationSummaries, interactionsAt } from './labels';
 import { ruleAdjustedClassSchema, ruleValue, vpToWin } from '../rules';
 
 const MAX_BARRIER_CAP = 10;
 
 /** Classes whose printed text has an "On Rest" effect (from the catalog). */
+/** Whether the Arcane Abyss location itself offers an Abyss Summon (older tables did, as a free action). */
+function abyssSummonAtAbyss(catalog: PlayCatalog): boolean {
+	return interactionsAt(catalog, 'Arcane Abyss').some((i) => i.gains.some((g) => g.type === 'action' && g.action === 'abyssSummon'));
+}
+
 export function restClasses(catalog: PlayCatalog): string[] {
 	return catalog.classes
 		.filter((k) => /\bon rest\b/i.test(schemaText(k.effectSchema)))
@@ -98,7 +103,7 @@ function coreRules(catalog: PlayCatalog): string {
 			: []),
 		'## Spirits, classes, origins',
 		`- Spirit World Summon: draw 4 from the Spirit World bag, summon up to 2. The 4 are 3 spirits + 1 reward hex (a basic rune, restore 2 Barrier, or a Power draft); taking it uses one of the 2 picks. Arcane Abyss Summon: ${ruleValue(catalog, 'abyssSummonDraw4Pick2') ? 'draw 4 from the Abyss bag, summon up to 2' : 'draw 3 from the Abyss bag, summon 1'}. Spirit World spirits enter AWAKE; Arcane (Abyss) spirits enter FACE-DOWN and must be awakened. Only awake spirits give their class abilities.`,
-		`- Bags: Spirit World = cost ${SPIRIT_WORLD_COST_MIN}-${SPIRIT_WORLD_COST_MAX} spirits; Abyss = every cost ${ARCANE_ABYSS_COST_MIN}-${ARCANE_ABYSS_COST_MAX} (Arcane) spirit of every origin, incl. all Sun and Moon. Arcane spirits come only from an Arcane Abyss Summon (or a Summoner draw).`,
+		`- Bags: Spirit World = cost ${SPIRIT_WORLD_COST_MIN}-${SPIRIT_WORLD_COST_MAX} spirits; Abyss = every cost ${ARCANE_ABYSS_COST_MIN}-${ARCANE_ABYSS_COST_MAX} (Arcane) spirit of every origin, incl. all Sun and Moon. Arcane spirits come only from an Arcane Abyss Summon (or a Summoner draw).${abyssSummonAtAbyss(catalog) ? '' : ' An Arcane Abyss Summon is ONLY a monster reward (shown on the card as "Abyss Summon"): the Arcane Abyss itself has no summon action.'}`,
 		'- Class abilities trigger at breakpoints of your count of that class among awake spirits plus placed Spirit Augments (texts below).',
 		`- Origins count every spirit you hold of that origin, awake or not. When you Cultivate, for each origin: ${Object.values(ORIGIN_REWARDS)[0].runeAt}+ spirits → 1 rune of that origin; ${Object.values(ORIGIN_REWARDS)[0].relicAt}+ spirits → ${ruleValue(catalog, 'cultivateRuneOrRelic') ? "you choose one reward on a card: that rune, or that origin's relic instead (the relic once per game; an unanswered card takes the relic)" : "that origin's relic, once per game"} (${Object.entries(
 			ORIGIN_REWARDS

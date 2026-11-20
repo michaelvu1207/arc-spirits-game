@@ -79,7 +79,10 @@ function buildMatItems(frozenMats, gameDir, origins, notes) {
 
 function buildAbyssRows(frozen, locations, notes) {
 	const abyss = locations.find((loc) => loc.name === 'Arcane Abyss');
-	const frozenRows = frozen.locations?.find((loc) => loc.name === 'Arcane Abyss')?.rewardRows ?? [];
+	// The local table's own reward_rows win (an empty list: no action at the Abyss); else the frozen row.
+	const frozenRows = Array.isArray(abyss?.reward_rows)
+		? abyss.reward_rows
+		: (frozen.locations?.find((loc) => loc.name === 'Arcane Abyss')?.rewardRows ?? []);
 	if (!abyss || frozenRows.length === 0) {
 		notes.push('no Arcane Abyss reward row: the Abyss has no summon action');
 		return { rows: [], assignments: [] };

@@ -7,8 +7,9 @@
  *   (`src/lib/play/server/catalog.ts`) and its room-server port (`server/catalog.ts`). It is a
  *   third copy only because both originals are bound to a Supabase client; keep it identical to
  *   them. Two inputs have no local JSON copy, so they come from the frozen catalog, exactly as the
- *   local play-test proxy does: the rune/relic items (`mat_items`) and the Arcane Abyss reward row
- *   (the four region rows come from code, `regionRules.regionRewardRows`).
+ *   local play-test proxy does: the rune/relic items (`mat_items`) and, for tables without their
+ *   own `reward_rows` on the Arcane Abyss, its reward row (the four region rows come from code,
+ *   `regionRules.regionRewardRows`).
  *
  * `catalogHash` is a sha256 of the canonical JSON of the built catalog, so a run records exactly
  * which card data it played.
@@ -107,7 +108,12 @@ export function loadLocalDesignCatalog(
 	const mats = frozen.mats.map((mat) =>
 		mat.name === 'Teapot' ? { ...mat, name: 'Cleansing Teapot' } : mat
 	);
-	const abyssRows = frozen.locations?.find((loc) => loc.name === 'Arcane Abyss')?.rewardRows ?? [];
+	// The Arcane Abyss actions: the local table's own `reward_rows` when it has them (an empty list
+	// means the Abyss has no action: Abyss Summons come from monster rewards only, 2026-11-20);
+	// tables written before that carry no such field and keep the frozen catalog's free Abyss Summon.
+	const frozenAbyssRows = frozen.locations?.find((loc) => loc.name === 'Arcane Abyss')?.rewardRows ?? [];
+	const localAbyssRows = locations.find((loc) => String(loc.name) === 'Arcane Abyss')?.reward_rows;
+	const abyssRows = Array.isArray(localAbyssRows) ? (localAbyssRows as typeof frozenAbyssRows) : frozenAbyssRows;
 
 	const classNames = new Map(classes.map((c) => [String(c.id), currentClassName(String(c.name))]));
 	const originNames = new Map(
