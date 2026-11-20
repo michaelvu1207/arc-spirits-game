@@ -355,7 +355,7 @@ const GAME_APP = (/^(127\.0\.0\.1|localhost)$/.test(location.hostname) ? 'http:/
 let BAL = null, BALERR = '', HEX = null, MON = null;
 async function loadBalance() {
   BALERR = '';
-  try { BAL = await fetch(GAME_APP + '/explorer/balance.json', { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); }); }
+  try { BAL = await fetch(GAME_APP + '/explorer/balance.json', { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); }); }
   catch (e) { BAL = null; BALERR = `The balance data did not load from the game app (${GAME_APP}). Start it with "npm run local".`; return; }
   if (table === 'bal_spirits') HEX ??= Object.fromEntries((await get('/api/game/hex-spirits')).spirits.flatMap((s) => [[s.dbName, s], [s.name, s]]));
   if (table === 'bal_monsters') MON ??= Object.fromEntries((await get('/api/game/monsters')).flatMap((m) => [[m.dbName, m], [m.name, m]]));
@@ -417,16 +417,19 @@ const STKEY = { Pure: 'pure', Tainted: 'tainted', Corrupt: 'corrupt', Fallen: 'f
 const stKey = (st) => STKEY[st] ?? 'pure';
 const setNav = (open) => { document.querySelector('.split').classList.toggle('nonav', !open); $('navToggle').title = open ? 'Hide the menu' : 'Show the menu'; $('navToggle').setAttribute('aria-expanded', open); };
 $('navToggle').onclick = () => setNav(document.querySelector('.split').classList.contains('nonav'));
-const geFetch = (q) => fetch(GAME_APP + '/explorer/lines.json' + q, { cache: 'no-store' }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
+// 'no-cache': the browser keeps its copy and asks the game app whether it changed (a small answer when it did not).
+const geFetch = (q) => fetch(GAME_APP + '/explorer/lines.json' + q, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
 async function loadLines(setup) {
   GE.err = '';
   try {
+    // The list of sets and the wanted set are asked for at the same time, not one after the other.
+    const want = setup ?? GE.setup, early = want ? geFetch('?setup=' + encodeURIComponent(want)).catch(() => null) : null;
     GE.index = await geFetch('');
     if (!GE.index.length) throw new Error('empty');
     // The notes were written for the Test runs table ("the row above"); here the tests are in the order played.
     for (const x of GE.index) { const t = (x.changed ?? '').replace(/\s*\([^)]*row (above|below)[^)]*\)/, ''); x.changed = /row (above|below)/.test(t) ? '' : t; }
     GE.setup = setup ?? (GE.index.some((x) => x.setup === GE.setup) ? GE.setup : GE.index.at(-1).setup);
-    GE.data = await geFetch('?setup=' + encodeURIComponent(GE.setup));
+    GE.data = (GE.setup === want && await early) || await geFetch('?setup=' + encodeURIComponent(GE.setup));
   } catch (e) { GE.data = null; GE.err = `The game lines did not load from the game app (${GAME_APP}). Start it with "npm run local".`; return; }
   if (!GE.runeIcon) {
     const [runes, relics] = await Promise.all([get('/api/game/table?name=runes'), get('/api/game/table?name=relics')]).catch(() => [[], []]);
