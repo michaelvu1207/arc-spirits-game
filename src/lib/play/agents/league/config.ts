@@ -57,6 +57,7 @@ export interface LeagueConfig {
 	/**
 	 * Game seeds (optional): game n is dealt from `gameSeeds[n]`, so chosen games of an earlier
 	 * league can be played again with the same deal. A game past the list uses `seed + n`.
+	 * A seed may appear more than once (the same deal for another table).
 	 */
 	gameSeeds?: number[];
 }
@@ -132,11 +133,9 @@ export function loadLeagueConfig(leagueDir: string): LeagueConfig {
 			);
 	}
 	if (config.gameSeeds !== undefined) {
-		const ok =
-			Array.isArray(config.gameSeeds) &&
-			config.gameSeeds.every((n) => Number.isInteger(n)) &&
-			new Set(config.gameSeeds).size === config.gameSeeds.length;
-		if (!ok) throw new Error('league.json: "gameSeeds" must be a list of different whole numbers');
+		// A seed may repeat: the same deal played by another table (other opening hands, other agents).
+		const ok = Array.isArray(config.gameSeeds) && config.gameSeeds.every((n) => Number.isInteger(n));
+		if (!ok) throw new Error('league.json: "gameSeeds" must be a list of whole numbers');
 	}
 	const labels = new Set<string>();
 	for (const g of config.gateways) {
