@@ -82,7 +82,7 @@ function coreRules(catalog: PlayCatalog): string {
 		'## Your resources',
 		`- Barrier is your health; Max Barrier is its capacity, at most ${MAX_BARRIER_CAP}. Damage turns Barrier into Broken Barrier.`,
 		`- Rest restores 2 Barrier (never above your Max Barrier), then fires your active "On Rest" class effects (classes with one: ${restClasses(catalog).join(', ') || 'none'}). With full Barrier and no active On Rest effect, Rest changes nothing.`,
-		`- Attack dice: at most ${MAX_ATTACK_DICE}; a dice gain at ${MAX_ATTACK_DICE} dice is lost (upgrades still work). Faces: ${faces}. Your combat damage is the sum of your rolled dice plus bonuses.`,
+		`- Attack dice: at most ${MAX_ATTACK_DICE}; a dice gain at ${MAX_ATTACK_DICE} dice is lost (upgrades still work). An upgrade raises your lowest Basic or Enchanted die one step (Basic → Enchanted → Exalted); it never makes an Arcane die. Faces: ${faces}. Your combat damage is the sum of your rolled dice plus bonuses.`,
 		'- "Any basic rune" costs are paid with one basic rune: an origin rune (e.g. Mountain Rune) or the wild Any Rune. Relics, Spirit Augments and class runes never pay them. "Any relic" costs take a relic only.',
 		'- Location requirements: a "replace one of your Powers" action needs a Power you hold; a "gain" action works once per round; a "trade" action repeats while you can pay.',
 		'- Initiative decides who strikes first in PvP. Runes pay costs (awakening, trades). Relics are special items; relic tools are one-time items.',

@@ -58,7 +58,7 @@ export function gainSpiritAugments(
 	return augments.length;
 }
 
-function upgradeDice(
+export function upgradeDice(
 	player: PrivatePlayerState,
 	times: number,
 	log: string[],

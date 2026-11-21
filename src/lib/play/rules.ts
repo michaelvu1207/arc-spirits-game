@@ -153,6 +153,11 @@
  * - fighterInitiative (default false; Michael, 2026-11-20): true ⇒ in combat Fighter gives 1 initiative
  *   per Fighter trait, up to 5, starting at one trait (a new first breakpoint; the dice on Rest are
  *   unchanged). The printed text is in the class data. See classes/fighter.ts.
+ * - elementalistMethods (default false; Michael, 2026-11-20): true ⇒ Elementalist is "upgrade an attack
+ *   dice twice" per action (an upgrade raises the lowest Basic or Enchanted die one step, as before), and
+ *   each breakpoint adds one action that upgrades: (2) defeating a monster other than the permanent one,
+ *   (3) Rest, (4) Cultivate, (5) a Spirit World Summon. The old ladder (1 / 2 / 5 / 10 upgrades per Rest)
+ *   is gone. The printed text is in the class data. See classes/elementalist.ts.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -212,7 +217,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	pvpCorruptPays4: false,
 	goodKillBonus: false,
 	buffedDice: false,
-	fighterInitiative: false
+	fighterInitiative: false,
+	elementalistMethods: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

@@ -26,5 +26,6 @@
 	"monsterDeckByStage": true,
 	"goodKillBonus": true,
 	"buffedDice": true,
-	"fighterInitiative": true
+	"fighterInitiative": true,
+	"elementalistMethods": true
 }

@@ -888,6 +888,8 @@ export interface PlayRules {
 	buffedDice?: boolean;
 	/** Fighter also gives combat initiative: 1 per Fighter trait, up to 5 (Michael, 2026-11-20). See classes/fighter.ts. */
 	fighterInitiative?: boolean;
+	/** Elementalist upgrades an attack dice twice per board action, one more action per breakpoint (Michael, 2026-11-20). See classes/elementalist.ts. */
+	elementalistMethods?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

@@ -318,7 +318,7 @@
     "position": 4,
     "icon_emoji": "🪄",
     "color": "#6b7280",
-    "description": "Upgrades attack dice when you Rest.",
+    "description": "Upgrades attack dice (Basic to Enchanted to Exalted) as you play. More Elementalists unlock more ways to upgrade.",
     "footer": "",
     "created_at": "2025-07-18T23:11:34.463082+00:00",
     "updated_at": "2026-10-16T04:45:12.677843+00:00",
@@ -332,18 +332,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, upgrade an attack dice, once.",
-            "description_translations": {
-              "de": "Verbessere 4 Würfel zu Erhaben.",
-              "es": "Mejora 4 dados a Exaltado.",
-              "fr": "Améliorez 4 dés en Exalté.",
-              "it": "Migliora 4 dadi a Esaltato.",
-              "ja": "ダイス4個をExaltedにアップグレードする。",
-              "ko": "주사위 4개를 Exalted로 업그레이드합니다.",
-              "pl": "Ulepsz 4 kości do Exalted.",
-              "zh-Hans": "将4个骰子升级为崇高。",
-              "zh-Hant": "將4顆骰子升級為崇高。"
-            }
+            "description": "When you defeat a monster (not the Abyss Lurker), upgrade an attack dice twice."
           }
         ],
         "count_translations": {
@@ -363,7 +352,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, upgrade an attack dice, up to 2 times."
+            "description": "When you Rest, upgrade an attack dice twice. In addition to (2)."
           }
         ]
       },
@@ -372,7 +361,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, upgrade an attack dice, up to 5 times."
+            "description": "When you Cultivate, upgrade an attack dice twice. In addition to (2) and (3)."
           }
         ]
       },
@@ -381,7 +370,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, upgrade an attack dice, up to 10 times."
+            "description": "On a Spirit World Summon, upgrade an attack dice twice. In addition to (2), (3) and (4)."
           }
         ]
       }

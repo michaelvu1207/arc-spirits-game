@@ -101,6 +101,8 @@ import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
 import { FALCONER_DOUBLE_KIND, awakeFalconerSpirit, offerFalconerDouble } from './effects/classes/falconer';
+import { ELEMENTALIST_METHOD_AT, ELEMENTALIST_UPGRADES_PER_ACTION } from './effects/classes/elementalist';
+import { upgradeDice } from './effects/actions';
 import { RELIC_TOOLS, grantRelicTool, keepUnansweredRelicTools } from './effects/relicTools';
 import { decisionPickerSpec, validateDecisionSelection } from './decisionPicker';
 import { checkAwakenCondition, payAwakenCondition, needsManualAwaken } from './effects/awaken';
@@ -538,6 +540,22 @@ function startDraw(
 	return true;
 }
 
+/**
+ * Rule `elementalistMethods`, Elementalist (5): "On a Spirit World Summon, upgrade an attack dice
+ * twice." Called where a Spirit World Summon is granted, once per summon.
+ */
+function elementalistSpiritWorldSummon(
+	player: PrivatePlayerState,
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	log: string[]
+): void {
+	if (!ruleValue(catalog, 'elementalistMethods')) return;
+	if ((awakenedClassCounts(player)['Elementalist'] ?? 0) < ELEMENTALIST_METHOD_AT.spiritWorldSummon) return;
+	const lines: string[] = [];
+	upgradeDice(player, ELEMENTALIST_UPGRADES_PER_ACTION, lines);
+	for (const line of lines) log.push(`Elementalist: ${line}`);
+}
+
 /** Begin a reward-granted draw now, or queue it behind the active one. */
 function queueOrBeginDraw(
 	state: PublicGameState,
@@ -691,6 +709,7 @@ function applyRewardGain(
 		case 'action':
 			if (gain.action === 'spiritWorldSummon') {
 				queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG, false, catalog);
+				elementalistSpiritWorldSummon(player, catalog, log);
 				log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 			} else if (gain.action === 'abyssSummon') {
 				queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
@@ -3338,6 +3357,7 @@ function reduceCommand(
 					case 'action': {
 						if (gain.action === 'spiritWorldSummon') {
 							queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG, false, catalog);
+							elementalistSpiritWorldSummon(player, catalog, log);
 							log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 						} else if (gain.action === 'abyssSummon') {
 							queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
@@ -3960,7 +3980,7 @@ const navigationPowerHooks = {
 		player.actionsUsedThisRound.push('combat');
 		applyTrigger(state, seat, 'onMonsterKill', [], {
 			catalog,
-			combat: { dealt: monster.maxHp, overkill: 0, killed: true }
+			combat: { dealt: monster.maxHp, overkill: 0, killed: true, permanent: !!monster.permanent }
 		});
 		const claim = rewardClaimCount(fought.rewardTrack);
 		if (claim > 0) {
