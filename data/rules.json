@@ -9,7 +9,7 @@
 	"sunRework": true,
 	"bastionVsMonsters": true,
 	"pvpEngageVp": true,
-	"pvpAttackerSacrificeCap": true,
+	"pvpAttackerSacrificeCap": false,
 	"powerRework": true,
 	"abyssSummonDraw4Pick2": true,
 	"mysticCultivateDouble": true,
