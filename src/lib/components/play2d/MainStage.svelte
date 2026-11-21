@@ -11,6 +11,8 @@
 		DiceTier
 	} from '$lib/play/types';
 	import { RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
+	import { cursedSpiritDiceTier } from '$lib/play/rules';
+	import { clientRules } from '$lib/play/clientRules.svelte';
 	import { showsAugmentPlacement } from './stagePriority';
 	import { SPIRIT_AUGMENT_CLASSES, isSpiritAugmentClass } from '$lib/play/augments';
 	import { getLocationConfig, LOCATION_ACCENT, splatFor } from '$lib/play/locations';
@@ -272,6 +274,8 @@
 	const taintedMax = $derived(taintedGrant?.amount ?? 0);
 	const taintedPotentialClamped = $derived(taintedSeg.filter(Boolean).length);
 	const taintedEnchanted = $derived(taintedMax - taintedPotentialClamped);
+	// The dice of the Tainted reward: Enchanted, or Basic under the rule `cursedSpiritBasic`.
+	const taintedDieName = $derived(cursedSpiritDiceTier(clientRules()) === 'basic' ? 'Basic' : 'Enchanted');
 	function toggleTaintedSeg(i: number) {
 		taintedSeg = taintedSeg.map((v, k) => (k === i ? !v : v));
 	}
@@ -305,7 +309,7 @@
 	}
 	const claimSummary = $derived.by(() => {
 		const parts: string[] = [];
-		if (taintedGrant) parts.push(`${taintedPotentialClamped} Max Barrier · ${taintedEnchanted} Enchanted`);
+		if (taintedGrant) parts.push(`${taintedPotentialClamped} Max Barrier · ${taintedEnchanted} ${taintedDieName}`);
 		if (corruptGrant) {
 			parts.push(`${corruptSeg.filter(Boolean).length} Max Barrier · ${corruptSeg.filter((v) => !v).length} Runes`);
 		}
@@ -1305,7 +1309,7 @@
 										<span class="grant-body">
 											<span class="grant-source">Cursed Spirit · Tainted</span>
 											<span class="grant-what"
-												>Split {taintedMax} between Max Barrier and Enchanted Attack — tap a token to
+												>Split {taintedMax} between Max Barrier and {taintedDieName} Attack — tap a token to
 												flip it.</span
 											>
 											<div class="tainted-row" role="group" aria-label="Split tainted units">
@@ -1315,7 +1319,7 @@
 														class="tainted-seg"
 														class:potential={seg}
 														disabled={busy}
-														aria-label={seg ? 'Max Barrier — tap for Enchanted Attack' : 'Enchanted Attack — tap for Max Barrier'}
+														aria-label={seg ? `Max Barrier — tap for ${taintedDieName} Attack` : `${taintedDieName} Attack — tap for Max Barrier`}
 														data-testid={`tainted-seg-${i}`}
 														onclick={() => toggleTaintedSeg(i)}
 													>
@@ -1334,7 +1338,7 @@
 											<span class="tainted-total">
 												<strong data-testid="claim-potential">{taintedPotentialClamped}</strong>
 												Max Barrier ·
-												<strong data-testid="claim-enchanted">{taintedEnchanted}</strong> Enchanted
+												<strong data-testid="claim-enchanted">{taintedEnchanted}</strong> {taintedDieName}
 												Attack
 											</span>
 										</span>

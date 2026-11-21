@@ -35,7 +35,7 @@
     "position": 13,
     "icon_emoji": "🧚",
     "color": "#8b5cf6",
-    "description": "Gains Exalted Attack dice from matching origins when awakened, plus 3 Initiative.",
+    "description": "Gains Enchanted Attack dice from matching origins when awakened, plus 3 Initiative.",
     "footer": "",
     "created_at": "2026-02-20T02:54:31.018972+00:00",
     "updated_at": "2026-10-16T04:45:14.656171+00:00",
@@ -48,7 +48,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When Awakened, gain 1 Exalted Attack for every spirit matching this Fairy's origin. Gain 3 Initiative."
+            "description": "When Awakened, gain 1 Enchanted Attack for every spirit matching this Fairy's origin. Gain 3 Initiative."
           }
         ]
       }
@@ -606,7 +606,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "If you become Tainted, in the Awakening Phase, gain 1 max barrier or 1 Enchanted Attack for every Cursed Spirit."
+            "description": "If you become Tainted, in the Awakening Phase, gain 1 max barrier or 1 Basic Attack for every Cursed Spirit."
           }
         ]
       },

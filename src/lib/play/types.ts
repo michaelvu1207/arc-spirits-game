@@ -892,6 +892,10 @@ export interface PlayRules {
 	elementalistMethods?: boolean;
 	/** Rest restores 2 Barrier plus 1 per status step above Fallen: Pure 5, Tainted 4, Corrupt 3, Fallen 2 (Michael, 2026-11-20). */
 	restByStatus?: boolean;
+	/** A Fairy's awakening gives Enchanted Attack Dice, not Exalted (Michael, 2026-11-20). See `fairyDiceTier` in rules.ts. */
+	fairyEnchanted?: boolean;
+	/** Cursed Spirit's Tainted reward gives Basic Attack Dice, not Enchanted (Michael, 2026-11-20). See `cursedSpiritDiceTier` in rules.ts. */
+	cursedSpiritBasic?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

@@ -56,7 +56,7 @@ import {
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
-import { pvpAllowedAt, ruleValue } from './rules';
+import { cursedSpiritDiceTier, pvpAllowedAt, ruleValue } from './rules';
 import {
 	bagForSpiritCost,
 	deckCopiesForCost,
@@ -802,12 +802,13 @@ function applyAwakenRewardClaim(
 	let runeCursor = 0;
 	for (const grant of pending.grants) {
 		if (grant.kind === 'taintedChoice') {
-			// Cursed Spirit, Tainted: split the N units between max barrier and Enchanted.
+			// Cursed Spirit, Tainted: split the N units between max barrier and attack dice
+			// (Enchanted; Basic under the rule `cursedSpiritBasic`).
 			const maxBarrier = Math.max(0, Math.min(grant.amount, taintedMaxBarrier));
-			const enchanted = grant.amount - maxBarrier;
+			const dice = grant.amount - maxBarrier;
 			if (maxBarrier > 0) runAction(ctx, { kind: 'gainMaxBarrier', amount: maxBarrier });
-			if (enchanted > 0)
-				runAction(ctx, { kind: 'gainAttackDice', tier: 'enchanted', amount: enchanted });
+			if (dice > 0)
+				runAction(ctx, { kind: 'gainAttackDice', tier: cursedSpiritDiceTier(catalog), amount: dice });
 		} else if (grant.kind === 'corruptChoice') {
 			const maxBarrier = Math.max(0, Math.min(grant.amount, corruptMaxBarrier));
 			const runeCount = grant.amount - maxBarrier;

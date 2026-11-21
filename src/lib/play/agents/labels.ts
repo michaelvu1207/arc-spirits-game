@@ -29,7 +29,7 @@ import {
 import { awakenedClassCounts, cultivateRuneMultiplier } from '../effects/apply';
 import { ORIGIN_REWARDS, spiritsByOrigin } from '../effects/relicTools';
 import { PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted } from '../combat';
-import { ruleValue } from '../rules';
+import { cursedSpiritDiceTier, ruleValue } from '../rules';
 
 /** Rule `moonPerksNeedAttack`: an Evil acting seat's awake Queen / Sorcerer classes (else empty). */
 export function moonPerksWaiting(me: SeatPlayer | undefined, catalog: PlayCatalog): string[] {
@@ -383,7 +383,7 @@ export function labelFor(
 			for (const g of grants) {
 				if (g.kind === 'taintedChoice')
 					parts.push(
-						`Tainted ${g.amount}: ${cmd.taintedMaxBarrier ?? 0} Max Barrier + ${g.amount - (cmd.taintedMaxBarrier ?? 0)} Enchanted dice`
+						`Tainted ${g.amount}: ${cmd.taintedMaxBarrier ?? 0} Max Barrier + ${g.amount - (cmd.taintedMaxBarrier ?? 0)} ${cursedSpiritDiceTier(catalog) === 'basic' ? 'Basic' : 'Enchanted'} dice`
 					);
 				else if (g.kind === 'corruptChoice') {
 					const runes = (cmd.corruptRunePicks ?? []).map((i) => runeOptionName(i));

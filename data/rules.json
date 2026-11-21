@@ -28,5 +28,7 @@
 	"buffedDice": true,
 	"fighterInitiative": true,
 	"elementalistMethods": true,
-	"restByStatus": true
+	"restByStatus": true,
+	"fairyEnchanted": true,
+	"cursedSpiritBasic": true
 }

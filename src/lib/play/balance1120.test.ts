@@ -4,7 +4,9 @@
  * - fighterInitiative: Fighter gives 1 combat initiative per Fighter trait, up to 5, from one trait;
  * - elementalistMethods: Elementalist upgrades an attack dice twice per action, one more action per
  *   breakpoint (monster kill, Rest, Cultivate, Spirit World Summon).
- * - restByStatus: Rest restores 2 Barrier plus 1 per status step above Fallen.
+ * - restByStatus: Rest restores 2 Barrier plus 1 per status step above Fallen;
+ * - fairyEnchanted: a Fairy's awakening gives Enchanted dice, not Exalted;
+ * - cursedSpiritBasic: Cursed Spirit's Tainted reward gives Basic dice, not Enchanted.
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
@@ -12,7 +14,9 @@ import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, diceTierFaces, expectedAttack,
 import { applyGameCommand, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyRest, applyTrigger } from './effects/apply';
-import { restBarrier } from './rules';
+import { cursedSpiritDiceTier, fairyDiceTier, restBarrier } from './rules';
+import { enterBenefits } from './phases';
+import { labelFor } from './agents/labels';
 import { makePlayer, makeState, spirit } from './effects/classes/testHelpers';
 import { loadFrozenCatalog } from './agents/catalog';
 import { attackLine } from './agents/view';
@@ -206,5 +210,62 @@ describe('restByStatus: Rest restores 2 Barrier plus 1 per status step above Fal
 	});
 	it('is off by default: 2 at every status', () => {
 		expect([0, 1, 2, 3].map((s) => restored(withRules(undefined), s))).toEqual([2, 2, 2, 2]);
+	});
+});
+
+describe('fairyEnchanted: a Fairy gives Enchanted dice when it awakens', () => {
+	/** The dice a Fairy gives on awakening with two more spirits of its origin and one of another. */
+	const awakenFairy = (catalog: PlayCatalog) => {
+		const p = makePlayer({
+			spirits: [
+				spirit(1, { Fairy: 1 }, { origins: { Floral: 1 } }),
+				spirit(2, { Fighter: 1 }, { origins: { Floral: 1 } }),
+				spirit(3, { Healer: 1 }, { origins: { Floral: 1 } }),
+				spirit(4, { Fighter: 1 }, { origins: { Tidal: 1 } })
+			]
+		});
+		applyTrigger(makeState(p), 'Red', 'awakening', [], { catalog, command: { slotIndex: 1 } });
+		return { tiers: p.attackDice.map((d) => d.tier).join(','), initiative: p.initiative };
+	};
+	it('gives 1 Enchanted dice per spirit of its origin, and the 3 initiative as before', () => {
+		expect(awakenFairy(withRules({ fairyEnchanted: true }))).toEqual({ tiers: 'enchanted,enchanted,enchanted', initiative: 3 });
+		expect(fairyDiceTier(withRules({ fairyEnchanted: true }))).toBe('enchanted');
+	});
+	it('is off by default: Exalted dice', () => {
+		expect(awakenFairy(withRules(undefined))).toEqual({ tiers: 'exalted,exalted,exalted', initiative: 3 });
+		expect(fairyDiceTier(withRules(undefined))).toBe('exalted');
+	});
+});
+
+describe('cursedSpiritBasic: the dice of the Tainted reward are Basic', () => {
+	const actor: GameActor = { memberId: 'host', role: 'host', displayName: 'Host', seatColor: 'Red' };
+	/** Two Cursed Spirits, Tainted this round; the claim takes `maxBarrier` units as Max Barrier and the rest as dice. */
+	const claim = (catalog: PlayCatalog, maxBarrier: number) => {
+		const p = makePlayer({ maxBarrier: 6, spirits: [spirit(1, { 'Cursed Spirit': 2 })], becameTaintedThisRound: true });
+		const state = makeState(p);
+		state.status = 'active';
+		enterBenefits(state);
+		state.phase = 'benefits';
+		const command: GameCommand = { type: 'resolveAwakenReward', taintedMaxBarrier: maxBarrier };
+		const label = labelFor(command, state as never, 'Red', catalog);
+		const result = applyGameCommand(state, actor, command, catalog);
+		if (!result.ok) throw new Error(result.error.message);
+		const after = result.state.players.Red!;
+		return { tiers: after.attackDice.map((d) => d.tier).join(','), maxBarrier: after.maxBarrier, label };
+	};
+	it('gives Basic dice, one per Cursed Spirit', () => {
+		const ON = withRules({ cursedSpiritBasic: true });
+		const all = claim(ON, 0);
+		expect(all.tiers).toBe('basic,basic');
+		expect(all.label).toContain('2 Basic dice');
+		expect(cursedSpiritDiceTier(ON)).toBe('basic');
+	});
+	it('keeps the choice of Max Barrier', () => {
+		expect(claim(withRules({ cursedSpiritBasic: true }), 1)).toMatchObject({ tiers: 'basic', maxBarrier: 7 });
+	});
+	it('is off by default: Enchanted dice', () => {
+		const off = claim(withRules(undefined), 0);
+		expect(off.tiers).toBe('enchanted,enchanted');
+		expect(off.label).toContain('2 Enchanted dice');
 	});
 });

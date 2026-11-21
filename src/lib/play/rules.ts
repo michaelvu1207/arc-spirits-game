@@ -161,6 +161,11 @@
  * - restByStatus (default false; Michael, 2026-11-20): true ⇒ Rest restores 2 Barrier plus 1 for each
  *   status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2), never above Max Barrier. See
  *   `restBarrier` below and `applyRest` in effects/apply.ts.
+ * - fairyEnchanted (default false; Michael, 2026-11-20): true ⇒ a Fairy's awakening gives Enchanted
+ *   Attack Dice, not Exalted (still 1 for every spirit matching its origin). See `fairyDiceTier` below.
+ * - cursedSpiritBasic (default false; Michael, 2026-11-20): true ⇒ the attack dice of Cursed Spirit's
+ *   Tainted reward are Basic, not Enchanted (still 1 Max Barrier or 1 dice per Cursed Spirit). See
+ *   `cursedSpiritDiceTier` below.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -222,10 +227,22 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	buffedDice: false,
 	fighterInitiative: false,
 	elementalistMethods: false,
-	restByStatus: false
+	restByStatus: false,
+	fairyEnchanted: false,
+	cursedSpiritBasic: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
+
+/** The tier of the attack dice a Fairy gives when it awakens: Exalted, or Enchanted under `fairyEnchanted`. */
+export function fairyDiceTier(catalog: Parameters<typeof ruleValue>[0]): 'enchanted' | 'exalted' {
+	return ruleValue(catalog, 'fairyEnchanted') ? 'enchanted' : 'exalted';
+}
+
+/** The tier of the attack dice of Cursed Spirit's Tainted reward: Enchanted, or Basic under `cursedSpiritBasic`. */
+export function cursedSpiritDiceTier(catalog: Parameters<typeof ruleValue>[0]): 'basic' | 'enchanted' {
+	return ruleValue(catalog, 'cursedSpiritBasic') ? 'basic' : 'enchanted';
+}
 
 /** The Barrier a Rest restores without the rule `restByStatus`, and at Fallen with it. */
 export const REST_BARRIER = 2;

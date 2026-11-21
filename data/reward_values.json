@@ -36,10 +36,10 @@
   "de816c21-aa17-4e41-9217-20511c11e9c9": 1.5,
   "faa39f61-98ec-4f63-a873-766dc4e111f3": 1.5,
   "c3f7dc4c-b7ba-5788-b325-a203ceac02de": 1.5,
-  "6d48e34b-e461-4deb-9cfd-662dd7127331": 5,
-  "e7f1c140-32bd-4603-8255-0be7a8ef34c4": 3,
+  "6d48e34b-e461-4deb-9cfd-662dd7127331": 10,
+  "e7f1c140-32bd-4603-8255-0be7a8ef34c4": 6,
   "95e4a832-18d6-5ec3-8d57-2d90118050d6": 1,
   "7d052532-89f1-44cf-8521-5a4f2aac5cd9": 0.5
  },
- "notes": "Subjective reward values in victory points (Michael, 2026-11-07): 5 VP is the best single reward; Abyss summon and a rune 0.5; a relic 4; Arcane die 5, Exalted die 3 (Michael, 2026-11-19; before that day 2 and 1), Enchanted die 1, Basic die 0.5; a spirit augment 1.5. Expected value E(d) = a + b * difficulty (1-15). Power = (value - E) / E."
+ "notes": "Subjective reward values in victory points (Michael, 2026-11-07): 5 VP is the best single reward; Abyss summon and a rune 0.5; a relic 4; Arcane die 10, Exalted die 6 (doubled 2026-11-20 on Michael's word to raise the value of dice a lot; 5 and 3 on 2026-11-19, 2 and 1 before), Enchanted die 1, Basic die 0.5; a spirit augment 1.5. Expected value E(d) = a + b * difficulty (1-15). Power = (value - E) / E."
 }
