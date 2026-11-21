@@ -27,6 +27,7 @@
 import { augmentClassChoices } from '../augments';
 import { actionIdForCommand } from '../bots/contract';
 import { decisionPickerSpec } from '../decisionPicker';
+import { awakenedClassCounts } from '../effects/apply';
 import { canApply } from '../legality';
 import {
 	buildLocationInteractions,
@@ -277,11 +278,16 @@ function monsterRewardCommands(me: PrivatePlayerState): GameCommand[] {
 	const runeChoices = options
 		.filter((o) => o.effect.type === 'chooseRune')
 		.map((o) => (o.effect.type === 'chooseRune' ? o.effect.options.map((_, i) => i) : [0]));
-	return product(runeChoices, MAX_CHOICE_VECTORS).map((choices) => ({
+	const claims: GameCommand[] = product(runeChoices, MAX_CHOICE_VECTORS).map((choices) => ({
 		type: 'resolveMonsterReward',
 		picks,
 		...(choices.length ? { choices } : {})
 	}));
+	// Rule `arcaneBlood`: the Arcane Blood in place of every reward. Offered when it does something
+	// for this player (today: Elementalist 2 or more, which upgrades a die per Arcane Blood).
+	if (pending.arcaneBlood && (awakenedClassCounts(me)['Elementalist'] ?? 0) >= 2)
+		claims.push({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true });
+	return claims;
 }
 
 function awakenRewardCommands(me: PrivatePlayerState, state: PublicGameState): GameCommand[] {

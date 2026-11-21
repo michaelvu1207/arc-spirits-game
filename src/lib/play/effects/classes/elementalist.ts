@@ -58,6 +58,9 @@ export function elementalistKillUpgrades(
 function upgradeFor(ctx: EffectContext, method: keyof typeof ELEMENTALIST_METHOD_AT): void {
 	if (!ruleValue(ctx.catalog, 'elementalistMethods')) return;
 	if (ctx.traitCount < ELEMENTALIST_METHOD_AT[method]) return;
+	// Rule `arcaneBlood` (Michael, 2026-11-21): a kill upgrades nothing by itself; Elementalist (2)
+	// upgrades once per Arcane Blood taken in place of the kill's rewards (runtime.ts, `gainArcaneBlood`).
+	if (method === 'monsterKill' && ruleValue(ctx.catalog, 'arcaneBlood')) return;
 	const times = method === 'monsterKill' ? elementalistKillUpgrades(ctx.catalog, ctx.combat) : elementalistUpgradesPerAction(ctx.catalog);
 	runAction(ctx, { kind: 'upgradeDice', times });
 }

@@ -332,7 +332,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you defeat a monster, upgrade an attack dice. Upgrade twice for a Difficulty 2 or 3 monster."
+            "description": "When you gain an Arcane Blood, upgrade an attack dice."
           }
         ],
         "count_translations": {

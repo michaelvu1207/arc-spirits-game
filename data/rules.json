@@ -36,5 +36,6 @@
 	"battleAdeptNoDice": true,
 	"beastNoInitiative": true,
 	"mysticMonstersOnly": true,
-	"spiritInitiativeTrim": true
+	"spiritInitiativeTrim": true,
+	"arcaneBlood": true
 }

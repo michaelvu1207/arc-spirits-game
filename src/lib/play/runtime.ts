@@ -600,6 +600,37 @@ function elementalistSpiritWorldSummon(
 	for (const line of lines) log.push(`Elementalist: ${line}`);
 }
 
+/** Rule `arcaneBlood`: Arcane Blood for a kill, by the card's Difficulty (the permanent monster gives 1). */
+export const ARCANE_BLOOD_BY_DIFFICULTY: Record<1 | 2 | 3, number> = { 1: 1, 2: 2, 3: 3 };
+/** Rule `arcaneBlood`: the Arcane Blood the kill of `monster` offers in place of its rewards; undefined with the rule off. */
+export function arcaneBloodFor(
+	monster: { difficulty?: number; permanent?: boolean },
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+): number | undefined {
+	if (!ruleValue(catalog, 'arcaneBlood')) return undefined;
+	if (monster.permanent) return 1;
+	return ARCANE_BLOOD_BY_DIFFICULTY[(monster.difficulty ?? 1) as 1 | 2 | 3] ?? 1;
+}
+
+/**
+ * Rule `arcaneBlood`: the player gains `amount` Arcane Blood (taken in place of a kill's rewards).
+ * Arcane Blood is not kept. Elementalist (2), under `elementalistMethods`: "When you gain an Arcane
+ * Blood, upgrade an attack dice", once per Arcane Blood.
+ */
+function gainArcaneBlood(
+	player: PrivatePlayerState,
+	amount: number,
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	log: string[]
+): void {
+	log.push(`Gained ${amount} Arcane Blood.`);
+	if (!ruleValue(catalog, 'elementalistMethods')) return;
+	if ((awakenedClassCounts(player)['Elementalist'] ?? 0) < ELEMENTALIST_METHOD_AT.monsterKill) return;
+	const lines: string[] = [];
+	upgradeDice(player, amount, lines);
+	for (const line of lines) log.push(`Elementalist: ${line}`);
+}
+
 /** Begin a reward-granted draw now, or queue it behind the active one. */
 function queueOrBeginDraw(
 	state: PublicGameState,
@@ -3598,12 +3629,14 @@ function reduceCommand(
 			if (result.killed && result.fought) {
 				goodKillBonus(active.player, result.fought, catalog, result.log);
 				const claim = rewardClaimCount(result.fought.rewardTrack);
-				if (claim > 0) {
+				const blood = arcaneBloodFor(result.fought, catalog);
+				if (claim > 0 || blood) {
 					active.player.pendingReward = {
 						monsterId: result.fought.id,
 						monsterName: result.fought.name,
 						rewardTrack: [...result.fought.rewardTrack],
-						chooseAmount: claim
+						chooseAmount: claim,
+						...(blood ? { arcaneBlood: blood } : {})
 					};
 					offerFalconerDouble(state, active.player, catalog);
 				}
@@ -3625,11 +3658,18 @@ function reduceCommand(
 			// A kill grants EVERY reward on the card; `picks` is ignored. `choices` aligns
 			// to the card's "choose a rune" rewards, in card order.
 			const log: string[] = [];
-			let choiceCursor = 0;
-			for (const opt of buildMonsterRewards(pending.rewardTrack)) {
-				const choice =
-					opt.effect.type === 'chooseRune' ? (command.choices?.[choiceCursor++] ?? 0) : 0;
-				applyRewardGain(state, active.seatColor, player, opt.effect, choice, log, catalog);
+			if (command.arcaneBlood) {
+				// Rule `arcaneBlood`: the Arcane Blood in place of every reward of the card.
+				if (!pending.arcaneBlood) return failure('no_arcane_blood', 'This kill offers no Arcane Blood.');
+				log.push(`Took Arcane Blood in place of the rewards of ${pending.monsterName}.`);
+				gainArcaneBlood(player, pending.arcaneBlood, catalog, log);
+			} else {
+				let choiceCursor = 0;
+				for (const opt of buildMonsterRewards(pending.rewardTrack)) {
+					const choice =
+						opt.effect.type === 'chooseRune' ? (command.choices?.[choiceCursor++] ?? 0) : 0;
+					applyRewardGain(state, active.seatColor, player, opt.effect, choice, log, catalog);
+				}
 			}
 
 			player.pendingReward = null;
@@ -4034,12 +4074,14 @@ const navigationPowerHooks = {
 			combat: { dealt: monster.maxHp, overkill: 0, killed: true, monsterDifficulty: monster.difficulty, monsterPermanent: monster.permanent === true }
 		});
 		const claim = rewardClaimCount(fought.rewardTrack);
-		if (claim > 0) {
+		const blood = arcaneBloodFor(fought, catalog);
+		if (claim > 0 || blood) {
 			player.pendingReward = {
 				monsterId: fought.id,
 				monsterName: fought.name,
 				rewardTrack: [...fought.rewardTrack],
-				chooseAmount: claim
+				chooseAmount: claim,
+				...(blood ? { arcaneBlood: blood } : {})
 			};
 			offerFalconerDouble(state, player, catalog);
 		}

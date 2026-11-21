@@ -12,7 +12,8 @@
  * - elementalistBigKills: a kill of a Difficulty 2 or 3 card upgrades an attack dice twice;
  * - battleAdeptNoDice: Battle Adept gains no attack dice when a fight does not kill;
  * - beastNoInitiative: Beast gives combat damage only, no combat initiative;
- * - spiritInitiativeTrim: Monk gives 3 Initiative, Paladin 2 and Firetail 2.
+ * - spiritInitiativeTrim: Monk gives 3 Initiative, Paladin 2 and Firetail 2;
+ * - arcaneBlood: a kill gives its rewards or Arcane Blood (1 / 2 / 3); Elementalist (2) upgrades per Arcane Blood.
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
@@ -20,7 +21,8 @@ import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, diceTierFaces, expectedAttack,
 import { applyGameCommand, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyRest, applyTrigger } from './effects/apply';
-import { cursedSpiritDiceTier, fairyDiceTier, restBarrier } from './rules';
+import { cursedSpiritDiceTier, fairyDiceTier, restBarrier, ruleAdjustedClassSchema } from './rules';
+import { buildRulesBrief } from './agents/rulesBrief';
 import { enterBenefits } from './phases';
 import { labelFor } from './agents/labels';
 import { makePlayer, makeState, spirit } from './effects/classes/testHelpers';
@@ -402,5 +404,84 @@ describe('spiritInitiativeTrim: Monk 3, Paladin 2, Firetail 2', () => {
 	});
 	it('is off by default: 5, 4 and 3', () => {
 		expect(['Monk', 'Paladin', 'Firetail'].map((c) => initiative(OFF, c).initiative)).toEqual([5, 4, 3]);
+	});
+});
+
+describe('arcaneBlood: the rewards of a kill, or Arcane Blood in their place', () => {
+	const RULES: PlayRules = { elementalistMethods: true, elementalistOneUpgrade: true, elementalistBigKills: true, goodKillBonus: true };
+	const ON = withRules({ ...RULES, arcaneBlood: true });
+	const OFF = withRules(RULES);
+	/** Red (2 Elementalists, 10 Basic dice) has just killed a card of `difficulty` worth 3 Victory Points. */
+	const afterKill = (catalog: PlayCatalog, difficulty: 1 | 2 | 3, elementalists = 2) => {
+		const VP3 = '54a61c34-6e05-44df-a4d1-115e004af31e'; // the "3 Victory Points" reward icon
+		const p = makePlayer({
+			barrier: 9, maxBarrier: 9, attackDice: dice(...Array<DiceTier>(10).fill('basic')),
+			spirits: [spirit(1, { Elementalist: elementalists }), spirit(2, { Beast: 60 })],
+			monsterHand: [{ ...(monster(1, 1, 0) as object), difficulty, rewardTrack: [VP3] } as never]
+		});
+		let state: PublicGameState = { ...makeState(p), status: 'active', phase: 'location' } as PublicGameState;
+		p.navigationDestination = 'Arcane Abyss';
+		const actor = { displayName: 'R', role: 'player', seatColor: 'Red' } as unknown as GameActor;
+		const run = (command: GameCommand) => {
+			const r = applyGameCommand(state, actor, command, catalog);
+			if (!r.ok) throw new Error(`${command.type}: ${r.error.message}`);
+			state = r.state;
+			return state.players.Red!;
+		};
+		return { run, me: () => state.players.Red!, state: () => state, actor };
+	};
+	const tiers = (p: { attackDice: { tier: string }[] }) => p.attackDice.filter((d) => d.tier !== 'basic').length;
+	it('on: the kill itself upgrades nothing and offers 1 / 2 / 3 Arcane Blood by Difficulty', () => {
+		for (const d of [1, 2, 3] as const) {
+			const g = afterKill(ON, d);
+			const me = g.run({ type: 'startCombat', handIndex: 0 });
+			expect(me.pendingReward?.arcaneBlood).toBe(d);
+			expect(tiers(me)).toBe(0);
+		}
+	});
+	it('on: Arcane Blood gives one upgrade each and none of the rewards; the Good bonus stays', () => {
+		const g = afterKill(ON, 3);
+		g.run({ type: 'startCombat', handIndex: 0 });
+		const vpAfterKill = g.me().victoryPoints; // the Good-alignment bonus of the kill
+		const me = g.run({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true });
+		expect(tiers(me)).toBe(3);
+		expect(me.victoryPoints).toBe(vpAfterKill);
+		expect(vpAfterKill).toBe(1);
+		expect(me.pendingReward).toBeNull();
+		expect(me.lastAction?.log.join(' | ')).toContain('Gained 3 Arcane Blood');
+	});
+	it('on: taking the rewards gives the points and no upgrade', () => {
+		const g = afterKill(ON, 3);
+		g.run({ type: 'startCombat', handIndex: 0 });
+		const me = g.run({ type: 'resolveMonsterReward', picks: [] });
+		expect(tiers(me)).toBe(0);
+		expect(me.victoryPoints).toBe(1 + 3);
+	});
+	it('on: with one Elementalist the Arcane Blood upgrades nothing', () => {
+		const g = afterKill(ON, 2, 1);
+		g.run({ type: 'startCombat', handIndex: 0 });
+		expect(tiers(g.run({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true }))).toBe(0);
+	});
+	it('on: the two choices read clearly for an AI player', () => {
+		const g = afterKill(ON, 3);
+		g.run({ type: 'startCombat', handIndex: 0 });
+		const label = (c: GameCommand) => labelFor(c, g.state() as never, 'Red', ON);
+		expect(label({ type: 'resolveMonsterReward', picks: [0] })).toContain('Claim every reward of Test Monster: 3 Victory Points');
+		expect(label({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true })).toContain(
+			'Take 3 Arcane Blood in place of every reward of Test Monster: Elementalist upgrades an attack dice 3 times'
+		);
+	});
+	it('the rules text names the choice only with the rule on, and Elementalist (2) reads "When you gain an Arcane Blood"', () => {
+		expect(buildRulesBrief(ON)).toContain('ARCANE BLOOD');
+		expect(buildRulesBrief(OFF)).not.toContain('ARCANE BLOOD');
+		const schema = [2, 3].map((count) => ({ count, effects: [{ type: 'benefit', description: `old ${count}` }] })) as never;
+		expect(ruleAdjustedClassSchema(ON, 'Elementalist', schema)![0].effects?.[0].description).toBe('When you gain an Arcane Blood, upgrade an attack dice.');
+	});
+	it('is off by default: the kill upgrades, no Arcane Blood is offered or accepted', () => {
+		const g = afterKill(OFF, 3);
+		const me = g.run({ type: 'startCombat', handIndex: 0 });
+		expect(tiers(me)).toBe(2);
+		expect(me.pendingReward?.arcaneBlood).toBeUndefined();
+		expect(() => g.run({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true })).toThrow(/no Arcane Blood/);
 	});
 });

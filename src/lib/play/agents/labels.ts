@@ -333,6 +333,10 @@ export function labelFor(
 			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (the monster strikes first unless you strike first${goodKillNote(me, card, catalog)})`;
 		}
 		case 'resolveMonsterReward': {
+			if (cmd.arcaneBlood) {
+				const n = me?.pendingReward?.arcaneBlood ?? 0;
+				return `Take ${n} Arcane Blood in place of every reward of ${me?.pendingReward?.monsterName ?? 'the monster'}: Elementalist upgrades an attack dice ${n === 1 ? 'once' : `${n} times`} (you get none of the card's rewards)`;
+			}
 			const options = me?.pendingReward ? buildMonsterRewards(me.pendingReward.rewardTrack) : [];
 			let cursor = 0;
 			let items = 0;

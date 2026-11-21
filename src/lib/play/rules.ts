@@ -166,6 +166,12 @@
  *   classes/elementalist.ts.
  * - battleAdeptNoDice (default false; Michael, 2026-11-21): true ⇒ Battle Adept gains no attack dice
  *   when a fight does not kill; the Max Barrier for an overkill stays. See classes/adaptiveFighter.ts.
+ * - arcaneBlood (default false; Michael, 2026-11-21): true ⇒ a player who defeats a monster takes
+ *   either every reward of the card or Arcane Blood in their place: 1 for a Difficulty 1 card and the
+ *   permanent monster, 2 for Difficulty 2, 3 for Difficulty 3 (`arcaneBloodFor` in runtime.ts). The
+ *   Good-alignment kill bonus is not a reward and is kept either way. Elementalist (2) becomes "When
+ *   you gain an Arcane Blood, upgrade an attack dice" and a kill by itself upgrades nothing
+ *   (classes/elementalist.ts). Arcane Blood is not kept: it is an event other classes may use later.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
  *   for a Fighter build. See classes/strategist.ts, darkAssassin.ts, firetail.ts.
@@ -252,7 +258,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	battleAdeptNoDice: false,
 	beastNoInitiative: false,
 	mysticMonstersOnly: false,
-	spiritInitiativeTrim: false
+	spiritInitiativeTrim: false,
+	arcaneBlood: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -337,6 +344,13 @@ export function pvpAllowedAt(
 const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count: number; text: string }[] = [
 	// The 2026-11-14 class changes come first: for one class and breakpoint the first entry wins,
 	// so they replace the `sunRework` and `mysticCultivateDouble` texts below.
+	{
+		rule: 'arcaneBlood',
+		when: true,
+		className: 'Elementalist',
+		count: 2,
+		text: 'When you gain an Arcane Blood, upgrade an attack dice.'
+	},
 	// 2026-11-21: before the `mysticSwap23` text of the same breakpoint (the first entry wins).
 	{
 		rule: 'mysticMonstersOnly',

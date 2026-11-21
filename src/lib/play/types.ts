@@ -419,6 +419,12 @@ export interface PendingRewardState {
 	chooseAmount: number;
 	/** Falconer (rule `falconerDoubleKill`) doubled this claim: the track holds every reward twice. */
 	doubled?: boolean;
+	/**
+	 * Rule `arcaneBlood`: the Arcane Blood this kill gives when the player takes it in place of
+	 * every reward (1 for a Difficulty 1 card and the permanent monster, 2 for Difficulty 2, 3 for
+	 * Difficulty 3). Absent when the rule is off.
+	 */
+	arcaneBlood?: number;
 }
 
 /**
@@ -908,6 +914,8 @@ export interface PlayRules {
 	mysticMonstersOnly?: boolean;
 	/** Monk gives 3 Initiative, Paladin 2 and Firetail 2 (Michael, 2026-11-21). */
 	spiritInitiativeTrim?: boolean;
+	/** A kill gives its rewards or Arcane Blood (1 / 2 / 3 by Difficulty); Elementalist (2) upgrades a die per Arcane Blood, not per kill (Michael, 2026-11-21). */
+	arcaneBlood?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
@@ -1622,7 +1630,7 @@ export type GameCommand =
 	 * `choices[k]` selects the rune for the k-th "choose a rune" reward, in card
 	 * order (default: first).
 	 */
-	| { type: 'resolveMonsterReward'; picks: number[]; choices?: number[] }
+	| { type: 'resolveMonsterReward'; picks: number[]; choices?: number[]; /** Rule `arcaneBlood`: take the Arcane Blood in place of every reward. */ arcaneBlood?: boolean }
 	// ── Encounter / PvP (P2) ──────────────────────────────────────────────
 	| { type: 'initiatePvp' }
 	| { type: 'passEncounter' }
