@@ -352,7 +352,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you Rest, upgrade an attack dice twice. In addition to (2)."
+            "description": "On Rest, upgrade an attack dice twice. In addition to (2)."
           }
         ]
       },
