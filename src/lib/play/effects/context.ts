@@ -34,8 +34,6 @@ export interface EffectCombatInfo {
 	opponentInitiative?: number;
 	/** True when a monster deals this hit (fightMonster); read by Bastion under `bastionVsMonsters`. */
 	vsMonster?: boolean;
-	/** `onMonsterKill`: the monster fought is the permanent one (the Abyss Lurker). */
-	permanent?: boolean;
 }
 
 /** What a resolved trade interaction gave up (Mage hooks `onLocationInteraction`). */

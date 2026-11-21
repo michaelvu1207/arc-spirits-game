@@ -332,7 +332,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you defeat a monster (not the Abyss Lurker), upgrade an attack dice twice."
+            "description": "When you defeat a monster, upgrade an attack dice twice."
           }
         ],
         "count_translations": {

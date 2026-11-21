@@ -11,7 +11,7 @@ import type { ClassAbility } from './types';
 //
 // Rule `elementalistMethods` (Michael, 2026-11-20): "upgrade an attack dice twice" per action, and
 // each breakpoint adds one action:
-//   (2) defeat a monster (not the permanent one, the Abyss Lurker)
+//   (2) defeat a monster (the permanent one, the Abyss Lurker, counts too)
 //   (3) Rest
 //   (4) Cultivate
 //   (5) a Spirit World Summon (fired by the runtime where the summon is granted, see
@@ -53,7 +53,7 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'onMonsterKill',
 		run(ctx) {
-			if (!ctx.combat?.killed || ctx.combat.permanent) return;
+			if (!ctx.combat?.killed) return;
 			upgradeFor(ctx, 'monsterKill');
 		}
 	},

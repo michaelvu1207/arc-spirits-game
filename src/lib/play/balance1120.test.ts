@@ -97,7 +97,7 @@ describe('elementalistMethods: two upgrades per action, one more action per brea
 	const tiers = (p: { attackDice: { tier: DiceTier }[] }) => p.attackDice.map((d) => d.tier).join(',');
 	const pool = () => dice('basic', 'basic', 'enchanted', 'exalted', 'arcane');
 	/** The pool after one `trigger` with `n` Elementalists. */
-	const after = (catalog: PlayCatalog, n: number, trigger: 'onRest' | 'onCultivate' | 'onMonsterKill', combat?: { killed: boolean; permanent?: boolean }) => {
+	const after = (catalog: PlayCatalog, n: number, trigger: 'onRest' | 'onCultivate' | 'onMonsterKill', combat?: { killed: boolean }) => {
 		const p = makePlayer({ attackDice: pool(), spirits: [spirit(1, { Elementalist: n })] });
 		applyTrigger(makeState(p), 'Red', trigger, [], { catalog, combat: combat ? { dealt: 5, overkill: 0, ...combat } : undefined });
 		return tiers(p);
@@ -106,11 +106,10 @@ describe('elementalistMethods: two upgrades per action, one more action per brea
 	/** Two upgrades: the two Basic dice become Enchanted. */
 	const TWO = 'enchanted,enchanted,enchanted,exalted,arcane';
 
-	it('(2) a monster kill upgrades twice; a fight without a kill and the Abyss Lurker do not', () => {
+	it('(2) a monster kill upgrades twice, the Abyss Lurker too; a fight without a kill does not', () => {
 		expect(after(ON, 2, 'onMonsterKill', { killed: true })).toBe(TWO);
 		expect(after(ON, 1, 'onMonsterKill', { killed: true })).toBe(START);
 		expect(after(ON, 5, 'onMonsterKill', { killed: false })).toBe(START);
-		expect(after(ON, 5, 'onMonsterKill', { killed: true, permanent: true })).toBe(START);
 	});
 	it('(3) Rest and (4) Cultivate upgrade twice each, from their breakpoint on, and no more at 5', () => {
 		expect(after(ON, 2, 'onRest')).toBe(START);
@@ -136,7 +135,7 @@ describe('elementalistMethods: two upgrades per action, one more action per brea
 		applyTrigger(state, 'Red', 'onRest', [], { catalog: ON });
 		expect(p.attackDice.every((d) => d.tier === 'exalted')).toBe(true);
 	});
-	it('a monster fight that kills upgrades; a kill of the permanent monster does not', () => {
+	it('a monster fight that kills upgrades, also against the permanent monster', () => {
 		// Three old Arcane dice roll at least 3, so the Barrier 1 monster always dies.
 		const fight = (permanent: boolean) => {
 			const card = { ...(monster(1, 1, 0) as object), permanent } as never;
@@ -145,7 +144,7 @@ describe('elementalistMethods: two upgrades per action, one more action per brea
 			return tiers(p);
 		};
 		expect(fight(false)).toBe('arcane,arcane,arcane,exalted');
-		expect(fight(true)).toBe('arcane,arcane,arcane,basic');
+		expect(fight(true)).toBe('arcane,arcane,arcane,exalted');
 	});
 	it('(5) a Spirit World Summon at the Water Region upgrades twice', () => {
 		const actor: GameActor = { memberId: 'host', role: 'host', displayName: 'Host', seatColor: 'Red' };
