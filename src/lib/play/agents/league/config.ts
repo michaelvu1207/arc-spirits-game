@@ -54,6 +54,11 @@ export interface LeagueConfig {
 	 * Absent: the balanced schedule over all agents.
 	 */
 	tables?: string[][];
+	/**
+	 * Game seeds (optional): game n is dealt from `gameSeeds[n]`, so chosen games of an earlier
+	 * league can be played again with the same deal. A game past the list uses `seed + n`.
+	 */
+	gameSeeds?: number[];
 }
 
 export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
@@ -125,6 +130,13 @@ export function loadLeagueConfig(leagueDir: string): LeagueConfig {
 			throw new Error(
 				`league.json: "tables" must be a list of tables, each ${config.seatsPerGame} different agent ids`
 			);
+	}
+	if (config.gameSeeds !== undefined) {
+		const ok =
+			Array.isArray(config.gameSeeds) &&
+			config.gameSeeds.every((n) => Number.isInteger(n)) &&
+			new Set(config.gameSeeds).size === config.gameSeeds.length;
+		if (!ok) throw new Error('league.json: "gameSeeds" must be a list of different whole numbers');
 	}
 	const labels = new Set<string>();
 	for (const g of config.gateways) {

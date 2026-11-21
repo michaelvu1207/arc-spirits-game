@@ -51,19 +51,22 @@ export class Seating {
 	readonly #schedule: LeagueSchedule;
 	/** Predefined tables (league.json `tables`): game n seats table n modulo the list. */
 	readonly #tables: string[][] | null;
+	/** Game seeds (league.json `gameSeeds`): game n is dealt from entry n; past the list, seed + n. */
+	readonly #gameSeeds: number[];
 	/** Set when this start began a new epoch: a line for the event log. */
 	readonly change: string | null = null;
 
 	constructor(
 		path: string,
 		agents: LeagueAgent[],
-		opts: { seed: number; tableSize: number; tables?: string[][] },
+		opts: { seed: number; tableSize: number; tables?: string[][]; gameSeeds?: number[] },
 		isDone: (index: number) => boolean
 	) {
 		this.#path = path;
 		this.#seed = opts.seed;
 		this.#size = opts.tableSize;
 		this.#tables = opts.tables?.length ? opts.tables : null;
+		this.#gameSeeds = opts.gameSeeds ?? [];
 		this.#file = existsSync(path)
 			? (JSON.parse(readFileSync(path, 'utf8')) as SeatingFile)
 			: { epochs: [], games: {}, known: {} };
@@ -126,7 +129,7 @@ export class Seating {
 	}
 
 	game(index: number): LeagueGame {
-		const seed = this.#seed + index;
+		const seed = this.#gameSeeds[index] ?? this.#seed + index;
 		const fixed = this.#file.games[index];
 		if (fixed) return { index, seed, seats: fixed };
 		if (this.#tables) return { index, seed, seats: [...this.#tables[index % this.#tables.length]] };

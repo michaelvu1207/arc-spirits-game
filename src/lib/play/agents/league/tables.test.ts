@@ -28,6 +28,11 @@ describe('league.json tables', () => {
 		expect(again.game(1).seats).toEqual(tables[1]);
 		expect(again.game(2).seats).toEqual(tables[0]);
 	});
+	it('gameSeeds: game n is dealt from entry n; past the list, seed + n', () => {
+		const s = new Seating(path(), agents, { seed: 100, tableSize: 4, tables, gameSeeds: [500, 507] }, () => false);
+		expect([0, 1, 2, 3].map((i) => s.game(i).seed)).toEqual([500, 507, 102, 103]);
+		expect(s.game(1).seats).toEqual(tables[1]);
+	});
 	it('absent: the balanced schedule, as before', () => {
 		const plain = new Seating(path(), agents, { seed: 100, tableSize: 4 }, () => false);
 		const empty = new Seating(path(), agents, { seed: 100, tableSize: 4, tables: [] }, () => false);

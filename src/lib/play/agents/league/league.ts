@@ -373,7 +373,12 @@ export class League {
 			seating = new Seating(
 				join(this.dir, 'versions', v.id, 'seating.json'),
 				this.agents,
-				{ seed: this.config.seed, tableSize: this.config.seatsPerGame, tables: this.config.tables },
+				{
+					seed: this.config.seed,
+					tableSize: this.config.seatsPerGame,
+					tables: this.config.tables,
+					gameSeeds: this.config.gameSeeds
+				},
 				(index) => this.versions.done(v.id, index)
 			);
 			this.#seatings.set(v.id, seating);
