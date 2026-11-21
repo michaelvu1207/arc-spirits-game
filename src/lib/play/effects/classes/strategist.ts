@@ -1,9 +1,14 @@
-import { isEvilAlignment, type PrivatePlayerState } from '../../types';
+import { isEvilAlignment, type PlayCatalog, type PrivatePlayerState } from '../../types';
+import { ruleValue } from '../../rules';
 import { runAction } from '../actions';
 import type { ClassAbility } from './types';
 
 /** Monk's Initiative gain and per-hit damage reduction while its condition holds. */
 export const MONK_INITIATIVE = 5;
+/** Under rule `spiritInitiativeTrim` (Michael, 2026-11-21). */
+export const MONK_INITIATIVE_TRIMMED = 3;
+export const monkInitiative = (catalog?: Pick<PlayCatalog, 'rules'> | null): number =>
+	ruleValue(catalog, 'spiritInitiativeTrim') ? MONK_INITIATIVE_TRIMMED : MONK_INITIATIVE;
 export const MONK_DAMAGE_REDUCTION = 2;
 
 /**
@@ -23,7 +28,7 @@ export const ability: ClassAbility[] = [
 		on: 'inCombat',
 		run(ctx) {
 			if (isEvilAlignment(ctx.player.statusLevel) || hasCursedSpirit(ctx.player)) return;
-			runAction(ctx, { kind: 'gainInitiative', amount: MONK_INITIATIVE });
+			runAction(ctx, { kind: 'gainInitiative', amount: monkInitiative(ctx.catalog) });
 			runAction(ctx, { kind: 'reduceIncomingDamage', amount: MONK_DAMAGE_REDUCTION });
 		}
 	}

@@ -1,4 +1,9 @@
+import { ruleValue } from '../../rules';
 import type { ClassAbility } from './types';
+
+/** Paladin's Initiative: 4, or 2 under rule `spiritInitiativeTrim` (Michael, 2026-11-21). */
+export const PALADIN_INITIATIVE = 4;
+export const PALADIN_INITIATIVE_TRIMMED = 2;
 
 // Paladin — "+4 Initiative. If initiative is tied, your side strikes first."
 // The tie-break is a per-combat flag that resolveEncounterCombat reads (combat.ts). The old
@@ -8,9 +13,10 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
 		run(ctx) {
-			ctx.player.initiative += 4;
+			const amount = ruleValue(ctx.catalog, 'spiritInitiativeTrim') ? PALADIN_INITIATIVE_TRIMMED : PALADIN_INITIATIVE;
+			ctx.player.initiative += amount;
 			ctx.player.winsInitiativeTies = true;
-			ctx.log.push('Gained 4 initiative; wins initiative ties.');
+			ctx.log.push(`Gained ${amount} initiative; wins initiative ties.`);
 		}
 	}
 ];

@@ -11,7 +11,8 @@
  * The changes of 2026-11-21 (Michael):
  * - elementalistBigKills: a kill of a Difficulty 2 or 3 card upgrades an attack dice twice;
  * - battleAdeptNoDice: Battle Adept gains no attack dice when a fight does not kill;
- * - beastNoInitiative: Beast gives combat damage only, no combat initiative.
+ * - beastNoInitiative: Beast gives combat damage only, no combat initiative;
+ * - spiritInitiativeTrim: Monk gives 3 Initiative, Paladin 2 and Firetail 2.
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
@@ -382,5 +383,24 @@ describe('beastNoInitiative: Beast gives combat damage only', () => {
 	it('is off by default: 1 damage and 1 initiative per Beast trait', () => {
 		const r = fire(withRules(undefined), { Beast: 4 });
 		expect([r.damage, r.initiative]).toEqual([4, 4]);
+	});
+});
+
+describe('spiritInitiativeTrim: Monk 3, Paladin 2, Firetail 2', () => {
+	const initiative = (catalog: PlayCatalog, cls: string) => {
+		const p = makePlayer({ spirits: [spirit(1, { [cls]: 1 })] });
+		resetCombatFlags(p);
+		applyTrigger(makeState(p), 'Red', 'inCombat', [], { catalog });
+		return { initiative: p.initiative, ties: p.winsInitiativeTies === true, reduction: p.damageReduction ?? 0 };
+	};
+	const ON = withRules({ spiritInitiativeTrim: true, firetailVsMonsters: true });
+	const OFF = withRules({ firetailVsMonsters: true });
+	it('on: Monk 3 (still 2 less damage), Paladin 2 (still wins ties), Firetail 2 against a monster', () => {
+		expect(initiative(ON, 'Monk')).toEqual({ initiative: 3, ties: false, reduction: 2 });
+		expect(initiative(ON, 'Paladin')).toEqual({ initiative: 2, ties: true, reduction: 0 });
+		expect(initiative(ON, 'Firetail').initiative).toBe(2);
+	});
+	it('is off by default: 5, 4 and 3', () => {
+		expect(['Monk', 'Paladin', 'Firetail'].map((c) => initiative(OFF, c).initiative)).toEqual([5, 4, 3]);
 	});
 });

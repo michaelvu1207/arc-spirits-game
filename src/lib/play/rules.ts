@@ -166,6 +166,9 @@
  *   classes/elementalist.ts.
  * - battleAdeptNoDice (default false; Michael, 2026-11-21): true ⇒ Battle Adept gains no attack dice
  *   when a fight does not kill; the Max Barrier for an overkill stays. See classes/adaptiveFighter.ts.
+ * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
+ *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
+ *   for a Fighter build. See classes/strategist.ts, darkAssassin.ts, firetail.ts.
  * - mysticMonstersOnly (default false; Michael, 2026-11-21): true ⇒ Mystic's attack "at the same time as
  *   the enemy" works in fights with monsters only, not against players (Sharpshooter is unchanged). See
  *   `hasSimultaneousAttack` in combat.ts.
@@ -248,7 +251,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	elementalistBigKills: false,
 	battleAdeptNoDice: false,
 	beastNoInitiative: false,
-	mysticMonstersOnly: false
+	mysticMonstersOnly: false,
+	spiritInitiativeTrim: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -418,6 +422,14 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Feral',
 		count: 1,
 		text: 'When an Evil player attacks you, your side strikes first and deals 3 more damage. When a monster attacks you, deal 3 more damage.'
+	},
+	// 2026-11-21: before the `firetailVsMonsters` text of the same breakpoint (the first entry wins).
+	{
+		rule: 'spiritInitiativeTrim',
+		when: true,
+		className: 'Firetail',
+		count: 1,
+		text: 'In combat with a monster, or in a round when another player is at your location, gain 2 Initiative.'
 	},
 	{
 		rule: 'firetailVsMonsters',

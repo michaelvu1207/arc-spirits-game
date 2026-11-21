@@ -906,6 +906,8 @@ export interface PlayRules {
 	beastNoInitiative?: boolean;
 	/** Mystic's simultaneous attack works against monsters only, not players (Michael, 2026-11-21). */
 	mysticMonstersOnly?: boolean;
+	/** Monk gives 3 Initiative, Paladin 2 and Firetail 2 (Michael, 2026-11-21). */
+	spiritInitiativeTrim?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

@@ -35,5 +35,6 @@
 	"elementalistBigKills": true,
 	"battleAdeptNoDice": true,
 	"beastNoInitiative": true,
-	"mysticMonstersOnly": true
+	"mysticMonstersOnly": true,
+	"spiritInitiativeTrim": true
 }
