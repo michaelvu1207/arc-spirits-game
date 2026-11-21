@@ -1232,7 +1232,7 @@
     "position": 8,
     "icon_emoji": "😼",
     "color": "#6b7280",
-    "description": "Adds combat damage and Initiative for each Spirit Animal trait.",
+    "description": "Adds combat damage for each Spirit Animal trait.",
     "footer": "",
     "created_at": "2025-07-18T23:11:34.463082+00:00",
     "updated_at": "2026-10-16T04:45:14.229299+00:00",
@@ -1243,7 +1243,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, deal 1 damage and gain 1 combat initiative for every Spirit Animal trait.",
+            "description": "In combat, deal 1 damage for every Spirit Animal trait.",
             "description_translations": {
               "de": "Erhalte 1 zusätzlichen Siegpunkt beim Töten eines Monsters. Verringere eingehenden Monsterschaden um 1",
               "es": "Gana 1 punto de victoria adicional al matar a un monstruo. Reduce el daño de monstruo recibido en 1",

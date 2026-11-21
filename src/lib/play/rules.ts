@@ -166,6 +166,9 @@
  *   classes/elementalist.ts.
  * - battleAdeptNoDice (default false; Michael, 2026-11-21): true ⇒ Battle Adept gains no attack dice
  *   when a fight does not kill; the Max Barrier for an overkill stays. See classes/adaptiveFighter.ts.
+ * - beastNoInitiative (default false; Michael, 2026-11-21): true ⇒ Beast gives 1 combat damage per trait
+ *   and no combat initiative; initiative comes from Fighter (`fighterInitiative`). See
+ *   classes/spiritAnimal.ts.
  * - restByStatus (default false; Michael, 2026-11-20): true ⇒ Rest restores 2 Barrier plus 1 for each
  *   status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2), never above Max Barrier. See
  *   `restBarrier` below and `applyRest` in effects/apply.ts.
@@ -240,7 +243,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	cursedSpiritBasic: false,
 	elementalistOneUpgrade: false,
 	elementalistBigKills: false,
-	battleAdeptNoDice: false
+	battleAdeptNoDice: false,
+	beastNoInitiative: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

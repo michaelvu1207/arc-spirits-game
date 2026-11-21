@@ -6,7 +6,19 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
 		breakpoints: [
-			{ count: '1+', actions: [{ kind: 'combatBonus', amount: 1 }, { kind: 'gainInitiative', amount: 1 }] }
+			{
+				count: '1+',
+				actions: [
+					{ kind: 'combatBonus', amount: 1 },
+					// Rule `beastNoInitiative` (Michael, 2026-11-21): Beast gives damage only; combat
+					// initiative comes from Fighter (`fighterInitiative`).
+					{
+						kind: 'conditional',
+						when: { kind: 'ruleOff', rule: 'beastNoInitiative' },
+						then: [{ kind: 'gainInitiative', amount: 1 }]
+					}
+				]
+			}
 		]
 	}
 ];

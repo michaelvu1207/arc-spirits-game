@@ -33,5 +33,6 @@
 	"cursedSpiritBasic": true,
 	"elementalistOneUpgrade": true,
 	"elementalistBigKills": true,
-	"battleAdeptNoDice": true
+	"battleAdeptNoDice": true,
+	"beastNoInitiative": true
 }

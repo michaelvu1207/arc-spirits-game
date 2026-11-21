@@ -77,7 +77,12 @@ describe('Beast', () => {
 		expect(inCombat?.breakpoints?.[0].count).toBe('1+');
 		expect(inCombat?.breakpoints?.[0].actions).toEqual([
 			{ kind: 'combatBonus', amount: 1 },
-			{ kind: 'gainInitiative', amount: 1 }
+			// the initiative half is dropped under rule `beastNoInitiative`
+			{
+				kind: 'conditional',
+				when: { kind: 'ruleOff', rule: 'beastNoInitiative' },
+				then: [{ kind: 'gainInitiative', amount: 1 }]
+			}
 		]);
 	});
 });

@@ -10,7 +10,8 @@
  * - cursedSpiritBasic: Cursed Spirit's Tainted reward gives Basic dice, not Enchanted.
  * The changes of 2026-11-21 (Michael):
  * - elementalistBigKills: a kill of a Difficulty 2 or 3 card upgrades an attack dice twice;
- * - battleAdeptNoDice: Battle Adept gains no attack dice when a fight does not kill.
+ * - battleAdeptNoDice: Battle Adept gains no attack dice when a fight does not kill;
+ * - beastNoInitiative: Beast gives combat damage only, no combat initiative.
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
@@ -355,5 +356,31 @@ describe('battleAdeptNoDice: no attack dice for a fight that does not kill', () 
 	});
 	it('is off by default: a failed kill gives 1 Enchanted dice', () => {
 		expect(fire(withRules(undefined), { dealt: 1, overkill: 0, killed: false })).toEqual({ dice: 'enchanted', maxBarrier: 0 });
+	});
+});
+
+describe('beastNoInitiative: Beast gives combat damage only', () => {
+	const fire = (catalog: PlayCatalog, traits: Record<string, number>) => {
+		const p = makePlayer({ spirits: [spirit(1, traits)] });
+		const log: string[] = [];
+		resetCombatFlags(p);
+		applyTrigger(makeState(p), 'Red', 'inCombat', log, { catalog });
+		return { damage: p.combatDamageBonus, initiative: p.initiative, log: log.join(' | ') };
+	};
+	it('on: 1 damage per Beast trait and no initiative', () => {
+		const ON = withRules({ beastNoInitiative: true });
+		const r = fire(ON, { Beast: 4 });
+		expect([r.damage, r.initiative]).toEqual([4, 0]);
+		expect(r.log).toContain('Gained +4 combat damage');
+		expect(r.log).not.toContain('initiative');
+	});
+	it('on, with fighterInitiative: initiative comes from Fighter traits only', () => {
+		const ON = withRules({ beastNoInitiative: true, fighterInitiative: true });
+		const r = fire(ON, { Beast: 4, Fighter: 3 });
+		expect([r.damage, r.initiative]).toEqual([4, 3]);
+	});
+	it('is off by default: 1 damage and 1 initiative per Beast trait', () => {
+		const r = fire(withRules(undefined), { Beast: 4 });
+		expect([r.damage, r.initiative]).toEqual([4, 4]);
 	});
 });
