@@ -884,6 +884,10 @@ export interface PlayRules {
 	pvpCorruptPays4?: boolean;
 	/** A Good-aligned player (not Fallen) gets 1 VP for every kill of a Difficulty 2 or 3 monster, on top of the card's rewards. */
 	goodKillBonus?: boolean;
+	/** Stronger attack dice (Michael, 2026-11-20): averages 0.5 / 1 / 1.5 / 2. See `BUFFED_DICE_TIER_FACES` in combat.ts. */
+	buffedDice?: boolean;
+	/** Fighter also gives combat initiative: 1 per Fighter trait, up to 5 (Michael, 2026-11-20). See classes/fighter.ts. */
+	fighterInitiative?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

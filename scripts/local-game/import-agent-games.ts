@@ -394,7 +394,7 @@ function trackStats(state: PublicGameState, catalog: PlayCatalog | undefined, in
 		}
 		let attack: number | null = null;
 		try {
-			attack = Math.round(expectedAttack(player) * 100) / 100;
+			attack = Math.round(expectedAttack(player, catalog) * 100) / 100;
 		} catch {
 			attack = null;
 		}

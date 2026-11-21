@@ -147,6 +147,12 @@
  *   Difficulty 1 cards are unchanged and pay no bonus.
  * - princessRune (default false; balance test, 2026-11-18): true ⇒ Princess is "In the Awakening Phase, if
  *   you are not Evil and all your spirits are awakened, gain 1 Any basic Rune." (no point).
+ * - buffedDice (default false; Michael, 2026-11-20): true ⇒ the attack dice are stronger: Basic 0,0,0,1,1,1
+ *   (average 0.5), Enchanted 0,1,1,1,1,2 (1), Exalted 1,1,1,2,2,2 (1.5), Arcane 0,0,1,3,3,5 (2 as before,
+ *   with a wide spread). See `diceTierFaces` in combat.ts.
+ * - fighterInitiative (default false; Michael, 2026-11-20): true ⇒ in combat Fighter gives 1 initiative
+ *   per Fighter trait, up to 5, starting at one trait (a new first breakpoint; the dice on Rest are
+ *   unchanged). The printed text is in the class data. See classes/fighter.ts.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -204,7 +210,9 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	kingPureOnly: false,
 	nhalNeedsCorrupt: false,
 	pvpCorruptPays4: false,
-	goodKillBonus: false
+	goodKillBonus: false,
+	buffedDice: false,
+	fighterInitiative: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

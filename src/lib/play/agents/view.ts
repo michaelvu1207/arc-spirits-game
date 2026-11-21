@@ -43,10 +43,10 @@ function diceLine(player: SeatPlayer): string {
 }
 
 /** Average damage of one attack (engine `expectedAttack`): dice average plus flat Beast damage. */
-export function attackLine(me: SeatPlayer): string {
+export function attackLine(me: SeatPlayer, catalog?: Parameters<typeof expectedAttack>[1]): string {
 	const player = me as Parameters<typeof expectedAttack>[0];
 	if (!Array.isArray(player.attackDice)) return 'Attack: unknown';
-	const total = expectedAttack(player);
+	const total = expectedAttack(player, catalog);
 	const flat = awakenedClassCounts(player)['Beast'] ?? 0;
 	const dice = total - flat;
 	const parts = [`dice ${dice.toFixed(1)}`];
@@ -96,7 +96,7 @@ function ownSection(
 		`  Status: ${statusLine(me.statusLevel, catalog)}; corruptions so far: ${me.corruptionCount ?? 0}`
 	);
 	lines.push(`  Attack dice: ${diceLine(me)}`);
-	lines.push(`  ${attackLine(me)}`);
+	lines.push(`  ${attackLine(me, catalog)}`);
 	const moon = moonPerksWaiting(me, catalog);
 	if (moon.length)
 		lines.push(

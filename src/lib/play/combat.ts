@@ -173,8 +173,25 @@ export interface FightResult {
 	fought: MonsterState | null;
 }
 
-function rollTier(state: PublicGameState, tier: DiceTier): number {
-	const faces = DICE_TIER_FACES[tier];
+/**
+ * The dice under rule `buffedDice` (Michael, 2026-11-20): averages 0.5 / 1 / 1.5 / 2 instead of
+ * 0.33 / 0.67 / 1 / 2. The Arcane die keeps its average of 2 but swings widely: these are the
+ * faces of the Arcane die in the game data (`dice_sides`).
+ */
+export const BUFFED_DICE_TIER_FACES: Record<DiceTier, number[]> = {
+	basic: [0, 0, 0, 1, 1, 1],
+	enchanted: [0, 1, 1, 1, 1, 2],
+	exalted: [1, 1, 1, 2, 2, 2],
+	arcane: [0, 0, 1, 3, 3, 5]
+};
+
+/** The faces of each attack-dice tier under the rules of `catalog` (no catalog ⇒ the default dice). */
+export function diceTierFaces(catalog?: Parameters<typeof ruleValue>[0]): Record<DiceTier, number[]> {
+	return ruleValue(catalog, 'buffedDice') ? BUFFED_DICE_TIER_FACES : DICE_TIER_FACES;
+}
+
+function rollTier(state: PublicGameState, tier: DiceTier, catalog?: Parameters<typeof ruleValue>[0]): number {
+	const faces = diceTierFaces(catalog)[tier];
 	return faces[nextInt(state.rng, faces.length)];
 }
 
@@ -329,13 +346,17 @@ export function takeDamage(
  * source of a player's dealt damage, so `fightMonster` inherits the bonus
  * through this call rather than re-adding it.
  */
-export function rollAttack(state: PublicGameState, player: PrivatePlayerState): number {
+export function rollAttack(
+	state: PublicGameState,
+	player: PrivatePlayerState,
+	catalog?: Parameters<typeof ruleValue>[0]
+): number {
 	const rollOnce = (): number => {
 		let total = 0;
 		for (const die of player.attackDice) {
-			let face = rollTier(state, die.tier);
+			let face = rollTier(state, die.tier, catalog);
 			// Salamander: "roll again each attack dice that shows 0, once."
-			if (face === 0 && player.rerollZeroDice) face = rollTier(state, die.tier);
+			if (face === 0 && player.rerollZeroDice) face = rollTier(state, die.tier, catalog);
 			total += face;
 		}
 		return total;
@@ -361,10 +382,11 @@ export function rollAttack(state: PublicGameState, player: PrivatePlayerState): 
  * Situational modifiers (Woundreaver, Paladin) are excluded. Shared by the
  * scout dice-pool readout and the leaderboard so they always agree.
  */
-export function expectedAttack(player: PrivatePlayerState): number {
+export function expectedAttack(player: PrivatePlayerState, catalog?: Parameters<typeof ruleValue>[0]): number {
 	let dice = 0;
+	const tiers = diceTierFaces(catalog);
 	for (const die of player.attackDice) {
-		const faces = DICE_TIER_FACES[die.tier];
+		const faces = tiers[die.tier];
 		dice += faces.reduce((a, b) => a + b, 0) / faces.length;
 	}
 	return dice + (awakenedClassCounts(player)['Beast'] ?? 0);
@@ -444,13 +466,13 @@ export function resolveEncounterCombat(
 	// deterministic; Sentinel's discard bonus is already set at this point).
 	const lockedRolls = new Map<SeatColor, number>();
 	for (const { seat, player } of [...evil, ...good]) {
-		lockedRolls.set(seat, rollAttack(state, player));
+		lockedRolls.set(seat, rollAttack(state, player, catalog));
 	}
 
 	const rollSide = (group: EncounterCombatant[], strikesFirst = false): number => {
 		let total = 0;
 		for (const { seat, player } of group) {
-			let r = lockedRolls.get(seat) ?? rollAttack(state, player);
+			let r = lockedRolls.get(seat) ?? rollAttack(state, player, catalog);
 			// Prince: +2 damage for each striker on the side that strikes first.
 			const princeBonus = strikesFirst ? strikeFirstDamageBonus(player) : 0;
 			if (princeBonus > 0) {
@@ -671,7 +693,7 @@ export function fightMonster(
 	useStrikeFirstCharge(player, log);
 	useSentinelDiscard(player, log);
 	// Lock the combat value before damage.
-	let rolledDamage = rollAttack(state, player);
+	let rolledDamage = rollAttack(state, player, catalog);
 	// A monster with an initiative number is outpaced by a player with HIGHER initiative (a tie
 	// goes to the monster unless the player wins ties, e.g. Paladin). No number ⇒ infinite.
 	const monsterInitiative = monsterInitiativeOf(monster);

@@ -1,4 +1,8 @@
+import { ruleValue } from '../../rules';
 import type { ClassAbility } from './types';
+
+/** Under rule `fighterInitiative`: the most initiative Fighter gives (its highest breakpoint). */
+export const FIGHTER_INITIATIVE_MAX = 5;
 
 // Fighter — the dice engine. SUPER-LINEAR breakpoints (counts 2/3/4/5 → +1/+2/+5/+10
 // dice) so stacking Fighters pays off far more than repeat-resting a small pool: a
@@ -18,5 +22,17 @@ export const ability: ClassAbility[] = [
 				]
 			}
 		]
+	},
+	// Rule `fighterInitiative` (Michael, 2026-11-20): "In combat, gain N combat initiative" at
+	// 1, 2, 3, 4 and 5 Fighter traits (N = the trait count, at most 5). Against monsters and players.
+	{
+		on: 'inCombat',
+		run(ctx) {
+			if (!ruleValue(ctx.catalog, 'fighterInitiative')) return;
+			const amount = Math.min(FIGHTER_INITIATIVE_MAX, ctx.traitCount);
+			if (amount <= 0) return;
+			ctx.player.initiative += amount;
+			ctx.log.push(`Gained ${amount} initiative.`);
+		}
 	}
 ];

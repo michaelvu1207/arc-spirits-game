@@ -228,7 +228,7 @@
     "position": 3,
     "icon_emoji": "🛡️",
     "color": "#059669",
-    "description": "Gains Basic Attack dice when you Rest. Higher trait counts grant more dice and a Spirit Augment.",
+    "description": "Adds combat Initiative for each Fighter trait (up to 5) and gains Basic Attack dice when you Rest. Higher trait counts grant more dice and a Spirit Augment.",
     "footer": "",
     "created_at": "2025-07-18T23:11:34.463082+00:00",
     "updated_at": "2026-10-16T04:45:12.482348+00:00",
@@ -236,11 +236,21 @@
     "effect_schema": [
       {
         "color": "bronze",
+        "count": 1,
+        "effects": [
+          {
+            "type": "benefit",
+            "description": "In combat, gain 1 combat initiative."
+          }
+        ]
+      },
+      {
+        "color": "bronze",
         "count": 2,
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, gain 1 Basic Attack Dice"
+            "description": "In combat, gain 2 combat initiative. On Rest, gain 1 Basic Attack Dice."
           }
         ]
       },
@@ -250,7 +260,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, gain 2 Basic Attack Dice"
+            "description": "In combat, gain 3 combat initiative. On Rest, gain 2 Basic Attack Dice."
           }
         ]
       },
@@ -260,7 +270,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, gain 5 Basic Attack Dice"
+            "description": "In combat, gain 4 combat initiative. On Rest, gain 5 Basic Attack Dice."
           }
         ]
       },
@@ -269,7 +279,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, gain 10 Basic Attack Dice and 1 of any spirit augment."
+            "description": "In combat, gain 5 combat initiative. On Rest, gain 10 Basic Attack Dice and 1 of any spirit augment."
           }
         ]
       }

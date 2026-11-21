@@ -25,7 +25,7 @@ import {
 	SPIRIT_WORLD_COST_MAX,
 	SPIRIT_WORLD_COST_MIN
 } from '../bags';
-import { DICE_TIER_FACES, PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted, pvpVpForAttack } from '../combat';
+import { diceTierFaces, PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted, pvpVpForAttack } from '../combat';
 import { navigationPowerPool } from '../navigationPowers';
 import { ORIGIN_BOARD_NOTE, ORIGIN_REWARDS, RELIC_TOOLS, relicToolText, relicToolVp } from '../effects/relicTools';
 import { GOOD_KILL_BONUS_VP, monsterDifficulty } from '../runtime';
@@ -56,7 +56,7 @@ export function restClasses(catalog: PlayCatalog): string[] {
 }
 
 function coreRules(catalog: PlayCatalog): string {
-	const faces = (Object.entries(DICE_TIER_FACES) as [string, number[]][])
+	const faces = (Object.entries(diceTierFaces(catalog)) as [string, number[]][])
 		.map(([tier, f]) => `${tier} ${f.join(',')}`)
 		.join('; ');
 	return [

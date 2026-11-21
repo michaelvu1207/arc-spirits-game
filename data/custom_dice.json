@@ -28,7 +28,7 @@
  {
   "id": "f027b9ec-62f6-48bf-947e-5a6fd07064dc",
   "name": "Exalted Attack",
-  "description": "Average Damage: 1",
+  "description": "Average Damage: 1.5",
   "icon": "🎲",
   "color": "#ffbf52",
   "category": null,
@@ -80,7 +80,7 @@
  {
   "id": "f5e0a3c4-0fe7-4d59-b834-94a39a53bbf9",
   "name": "Basic Attack",
-  "description": "Average Damage: 0.3",
+  "description": "Average Damage: 0.5",
   "icon": "🎲",
   "color": "#4a9eff",
   "category": "attack",
@@ -116,7 +116,7 @@
  {
   "id": "6340eb24-f89e-4b2d-9247-ced800fb42eb",
   "name": "Enchanted Attack",
-  "description": "Average Damage: 0.6",
+  "description": "Average Damage: 1",
   "icon": "⚔️",
   "color": "#4a9eff",
   "category": null,

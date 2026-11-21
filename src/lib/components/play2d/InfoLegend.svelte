@@ -33,7 +33,7 @@
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
 	import type { DiceTier } from '$lib/play/types';
 	import { DICE_TIER_ORDER, STATUS_LADDER, MAX_SPIRITS } from '$lib/play/types';
-	import { DICE_TIER_FACES, PVP_ENGAGE_VP, pvpVpPerCorrupted } from '$lib/play/combat';
+	import { diceTierFaces, PVP_ENGAGE_VP, pvpVpPerCorrupted } from '$lib/play/combat';
 	import { iconPoolUrl, storageUrl, statusAccent } from './helpers';
 	import { onMount } from 'svelte';
 	import { supabaseAssets } from '$lib/supabase';
@@ -482,7 +482,7 @@
 	}
 	const diceTiers = $derived(
 		DICE_TIER_ORDER.map((tier) => {
-			const faces = DICE_TIER_FACES[tier];
+			const faces = diceTierFaces({ rules })[tier];
 			const avg = faces.reduce((a, b) => a + b, 0) / faces.length;
 			return {
 				tier,

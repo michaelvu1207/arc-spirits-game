@@ -27,7 +27,7 @@ import {
 	type ResolvedRune
 } from '../locationInteractions';
 import { buildMonsterRewards } from '../monsterRewards';
-import { DICE_TIER_FACES, monsterBarrierLeft, resetCombatFlags } from '../combat';
+import { diceTierFaces, monsterBarrierLeft, resetCombatFlags } from '../combat';
 import {
 	abyssPreviewMonster,
 	bestStartCombatCommand,
@@ -1150,10 +1150,11 @@ function catalogSpiritById(catalog: PlayCatalog, id: string | undefined): PlayCa
 }
 
 /** Exact PMF of the summed face values of a dice pool (convolution; cheap for ≤10 dice). */
-function diceSumPMF(dice: readonly AttackDie[]): Map<number, number> {
+function diceSumPMF(dice: readonly AttackDie[], catalog?: PlayCatalog): Map<number, number> {
 	let pmf = new Map<number, number>([[0, 1]]);
+	const tiers = diceTierFaces(catalog);
 	for (const die of dice) {
-		const faces = DICE_TIER_FACES[die.tier];
+		const faces = tiers[die.tier];
 		if (!faces || faces.length === 0) continue;
 		const next = new Map<number, number>();
 		const per = 1 / faces.length;
@@ -1248,7 +1249,7 @@ export function computeKillProbability(
 	applyTrigger(sim, seat, 'inCombat', [], { catalog });
 	let best = 0;
 	for (const monster of targets) {
-		best = Math.max(best, killProbabilityAfterTrigger(sim, player, monster, opts.allowCorruptKill === true));
+		best = Math.max(best, killProbabilityAfterTrigger(sim, player, monster, opts.allowCorruptKill === true, catalog));
 		if (best >= 1) break;
 	}
 	return best;
@@ -1259,7 +1260,8 @@ function killProbabilityAfterTrigger(
 	sim: PublicGameState,
 	player: NonNullable<PublicGameState['players'][SeatColor]>,
 	monster: MonsterState,
-	allowCorruptKill: boolean
+	allowCorruptKill: boolean,
+	catalog?: PlayCatalog
 ): number {
 	// The monster hits first. Account for any defensive mitigation the inCombat trigger
 	// granted (deflect / damageReduction — e.g. Titan). If the surviving hit
@@ -1288,12 +1290,12 @@ function killProbabilityAfterTrigger(
 		const c = awakenedClassCounts(player);
 		const simultaneous = (c['Sharpshooter'] ?? 0) >= 1 || (c['Mystic'] ?? 0) >= 2;
 		if (allowCorruptKill && simultaneous && (player.statusLevel ?? 0) <= 1) {
-			return firepowerFromClone(sim, player, hpTarget);
+			return firepowerFromClone(sim, player, hpTarget, catalog);
 		}
 		return 0;
 	}
 
-	return firepowerFromClone(sim, player, hpTarget);
+	return firepowerFromClone(sim, player, hpTarget, catalog);
 }
 
 /**
@@ -1316,7 +1318,7 @@ export function firepowerKillProbability(
 	resetCombatFlags(player);
 	applyTrigger(sim, seat, 'inCombat', [], { catalog });
 	let best = 0;
-	for (const monster of targets) best = Math.max(best, firepowerFromClone(sim, player, monsterBarrierLeft(monster)));
+	for (const monster of targets) best = Math.max(best, firepowerFromClone(sim, player, monsterBarrierLeft(monster), catalog));
 	return best;
 }
 
@@ -1325,12 +1327,13 @@ export function firepowerKillProbability(
 function firepowerFromClone(
 	_sim: PublicGameState,
 	player: NonNullable<PublicGameState['players'][SeatColor]>,
-	hp: number
+	hp: number,
+	catalog?: PlayCatalog
 ): number {
 	const bonus = player.combatDamageBonus ?? 0;
 	const mult = player.combatDamageMultiplier ?? 1;
 	let p = 0;
-	for (const [sum, prob] of diceSumPMF(player.attackDice)) {
+	for (const [sum, prob] of diceSumPMF(player.attackDice, catalog)) {
 		if ((sum + bonus) * mult >= hp) p += prob;
 	}
 	return p;
@@ -1741,8 +1744,9 @@ function expectedAttack(state: PublicGameState, seat: SeatColor, catalog: PlayCa
 	resetCombatFlags(player);
 	applyTrigger(sim, seat, 'inCombat', [], { catalog });
 	let avg = 0;
+	const tiers = diceTierFaces(catalog);
 	for (const die of player.attackDice) {
-		const faces = DICE_TIER_FACES[die.tier];
+		const faces = tiers[die.tier];
 		if (faces && faces.length) avg += faces.reduce((a, b) => a + b, 0) / faces.length;
 	}
 	return (avg + (player.combatDamageBonus ?? 0)) * (player.combatDamageMultiplier ?? 1);

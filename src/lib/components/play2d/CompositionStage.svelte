@@ -10,6 +10,7 @@
 	import { DICE_TIER_ORDER, MAX_ATTACK_DICE, STATUS_LADDER } from '$lib/play/types';
 	import { seatAccent, statusAccent, storageUrl, spiritBackImageUrl, augmentIconForClass } from './helpers';
 	import { expectedAttack } from '$lib/play/combat';
+	import { clientRules } from '$lib/play/clientRules.svelte';
 	import HexGrid from '$lib/components/HexGrid.svelte';
 
 	interface Props {
@@ -51,7 +52,7 @@
 	// dice-tier averages + the flat Beast bonus (see expectedAttack). Shared
 	// with the leaderboard so the two readouts always show the same number.
 	const attackDice = $derived(player?.attackDice ?? []);
-	const avgAttack = $derived(player ? expectedAttack(player as unknown as PrivatePlayerState) : 0);
+	const avgAttack = $derived(player ? expectedAttack(player as unknown as PrivatePlayerState, clientRules()) : 0);
 
 	// The four attack tiers map 1:1 to the "… Attack" custom dice, so we borrow each
 	// die's rendered art for the pool row. Matched by name — the engine's dice are
