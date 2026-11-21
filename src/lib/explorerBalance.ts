@@ -207,11 +207,11 @@ export const testRules = writable<BalanceData['test_rules']>(null);
 
 /** Share of a pool that may be left for it to count as "mostly dead". */
 const MOSTLY_DEAD = 0.25;
-/** Michael's pool targets: Difficulty 1 mostly dead by round 10, 2 by round 20, 3 by round 30. */
+/** Michael's pool targets: Difficulty 1 mostly dead by round 10, 2 by round 20. Difficulty 3 has no target
+ *  (Michael, 2026-11-20: nobody kills 40 of them). */
 const POOL_TARGETS: [keyof Omit<BalancePools, 'round'>, number][] = [
 	['difficulty_1', 10],
-	['difficulty_2', 20],
-	['difficulty_3', 30]
+	['difficulty_2', 20]
 ];
 /** How far a point source may be from its goal, in percentage points. */
 const SPLIT_TOLERANCE = 5;

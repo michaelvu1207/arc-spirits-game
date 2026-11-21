@@ -106,7 +106,7 @@
 						</tbody>
 					</table>
 				</div>
-				<div class="foot">Green meets the target, red does not. Pools left: Difficulty 1 at round 10, Difficulty 2 at round 20, Difficulty 3 at round 30 (the last round if the game ends earlier).</div>
+				<div class="foot">Green meets the target, red does not. Pools left: Difficulty 1 at round 10, Difficulty 2 at round 20 (the last round if the game ends earlier). Difficulty 3 is not checked.</div>
 			</section>
 
 			{#if data.whatif?.length && newest}
