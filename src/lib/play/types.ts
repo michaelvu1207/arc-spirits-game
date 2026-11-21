@@ -1499,7 +1499,8 @@ export type GameCommand =
 	| { type: 'setNavigationTimer'; durationMs: number | null }
 	/**
 	 * `openingSpirits` (tests only; absent in a normal game): for a seat, names of Spirit World
-	 * spirits that its opening four must include. See `seedOpeningSpirits` in runtime.ts.
+	 * spirits that its opening four must include (`class:<Class>`: any spirit of that class). See
+	 * `seedOpeningSpirits` in runtime.ts.
 	 */
 	| { type: 'startGame'; seed?: number; openingSpirits?: Partial<Record<SeatColor, string[]>> }
 	| { type: 'selectNavigationDestination'; destination: string }

@@ -423,7 +423,8 @@ function drawStartingSpirits(
  * still in the Spirit World bag is swapped with one of the seat's dealt spirits (the last slot that
  * is not itself wanted); the dealt spirit takes that copy's place in the bag. So the other seats'
  * opening hands are as dealt, the bag keeps its size and order, and no random number is drawn. A
- * name with no copy left in the bag (or not a Spirit World spirit) is skipped.
+ * name with no copy left in the bag (or not a Spirit World spirit) is skipped. An entry
+ * `class:<Class>` stands for any spirit of that class (the first one in the bag's order).
  */
 function seedOpeningSpirits(
 	state: PublicGameState,
@@ -434,12 +435,16 @@ function seedOpeningSpirits(
 	const bag = state.bags.hexSpirits;
 	const kept = new Set<number>(); // slots that hold a wanted spirit
 	for (const name of wanted) {
-		const held = player.spirits.find((s) => s.name === name && !kept.has(s.slotIndex));
+		// `class:<Class>` asks for any spirit of that class; anything else is a spirit's name.
+		const cls = name.startsWith('class:') ? name.slice(6).trim() : null;
+		const fits = (s: { name: string; classes?: Record<string, number> } | undefined): boolean =>
+			!!s && (cls ? (s.classes?.[cls] ?? 0) > 0 : s.name === name);
+		const held = player.spirits.find((s) => fits(s) && !kept.has(s.slotIndex));
 		if (held) {
 			kept.add(held.slotIndex);
 			continue;
 		}
-		const at = bag.contents.findIndex((entry) => entry.name === name);
+		const at = bag.contents.findIndex((entry) => fits(catalog.spirits.find((c) => c.id === entry.id)));
 		const spirit = at < 0 ? undefined : catalog.spirits.find((c) => c.id === bag.contents[at].id);
 		const out = [...player.spirits].reverse().find((s) => !kept.has(s.slotIndex));
 		if (!spirit || !out) continue;

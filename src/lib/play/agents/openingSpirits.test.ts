@@ -51,6 +51,20 @@ describe('startGame.openingSpirits', () => {
 		const odd = lobby({ Red: ['No Such Spirit'] });
 		expect(hand(odd, 'Red')).toEqual(hand(plain, 'Red'));
 	});
+	it('`class:<Class>` gives any spirit of that class, once per entry, to several seats at once', () => {
+		const count = (s: PublicGameState, seat: SeatColor, cls: string) =>
+			s.players[seat]!.spirits.filter((x) => x.slotIndex <= 4 && (x.classes?.[cls] ?? 0) > 0).length;
+		// The frozen catalog calls the Beast class by its old name, Spirit Animal.
+		const seeded = lobby({ Red: ['class:Spirit Animal', 'class:Spirit Animal'], Orange: ['class:Spirit Animal', 'class:Spirit Animal'], Green: ['class:Fighter', 'class:Elementalist'] });
+		expect(count(seeded, 'Red', 'Spirit Animal')).toBeGreaterThanOrEqual(2);
+		expect(count(seeded, 'Orange', 'Spirit Animal')).toBeGreaterThanOrEqual(2);
+		expect(count(seeded, 'Green', 'Fighter')).toBeGreaterThanOrEqual(1);
+		expect(count(seeded, 'Green', 'Elementalist')).toBeGreaterThanOrEqual(1);
+		expect(hand(seeded, 'Blue')).toEqual(hand(plain, 'Blue'));
+		expect(seeded.bags.hexSpirits.contents.length).toBe(plain.bags.hexSpirits.contents.length);
+		expect(seeded.rng).toEqual(plain.rng);
+		for (const seat of ['Red', 'Orange', 'Green', 'Blue'] as SeatColor[]) expect(hand(seeded, seat)).toHaveLength(4);
+	});
 	it('absent: the start is unchanged', () => {
 		expect(lobby({})).toEqual(plain);
 	});
