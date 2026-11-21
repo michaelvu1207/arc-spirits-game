@@ -19,7 +19,7 @@ import { recordCultivateAwakenProgress } from './awakenHandlers';
 import { augmentContributions } from '../augments';
 import { originRuneForName } from '../locationInteractions';
 import { ORIGIN_REWARDS, grantRelicTool, spiritsByOrigin } from './relicTools';
-import { ruleValue } from '../rules';
+import { restBarrier, ruleValue } from '../rules';
 import { gainOriginRunes, offerOriginCultivateChoice } from './originCultivate';
 
 /** Class trait counts from AWAKENED spirits only (unawakened classes are inactive).
@@ -155,7 +155,8 @@ export function applyTrigger(
 }
 
 /**
- * Rest intrinsically restores two current barrier, then fires every `onRest`
+ * Rest intrinsically restores two current barrier (more under rule `restByStatus`, see
+ * `restBarrier`), then fires every `onRest`
  * class ability. The location row
  * therefore needs only the Rest action icon; restoration is part of the action,
  * not a separate reward-icon gain.
@@ -170,7 +171,7 @@ export function applyRest(
 	if (!player) return;
 
 	const before = player.barrier;
-	player.barrier = Math.min(player.maxBarrier, player.barrier + 2);
+	player.barrier = Math.min(player.maxBarrier, player.barrier + restBarrier(opts.catalog, player.statusLevel ?? 0));
 	player.brokenBarrier = Math.max(0, player.maxBarrier - player.barrier);
 	const restored = player.barrier - before;
 	if (restored > 0) log.push(`Restored ${restored} barrier.`);

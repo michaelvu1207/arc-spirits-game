@@ -455,7 +455,9 @@
 			{
 				id: 'bdded3f5-e405-4b68-b63a-9f5c2139beea',
 				label: 'Rest',
-				desc: 'Restore 2 barrier, then trigger all of your Rest class abilities.'
+				desc: rule('restByStatus')
+					? 'Restore 2 barrier, plus 1 for each status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2), then trigger all of your Rest class abilities.'
+					: 'Restore 2 barrier, then trigger all of your Rest class abilities.'
 			}
 		]
 			.map((e) => ({ ...e, url: iconPoolUrl(assets.iconPool, e.id) }))

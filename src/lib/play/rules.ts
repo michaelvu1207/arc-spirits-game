@@ -158,6 +158,9 @@
  *   each breakpoint adds one action that upgrades: (2) defeating a monster (the permanent one too),
  *   (3) Rest, (4) Cultivate, (5) a Spirit World Summon. The old ladder (1 / 2 / 5 / 10 upgrades per Rest)
  *   is gone. The printed text is in the class data. See classes/elementalist.ts.
+ * - restByStatus (default false; Michael, 2026-11-20): true ⇒ Rest restores 2 Barrier plus 1 for each
+ *   status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2), never above Max Barrier. See
+ *   `restBarrier` below and `applyRest` in effects/apply.ts.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -218,10 +221,23 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	goodKillBonus: false,
 	buffedDice: false,
 	fighterInitiative: false,
-	elementalistMethods: false
+	elementalistMethods: false,
+	restByStatus: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
+
+/** The Barrier a Rest restores without the rule `restByStatus`, and at Fallen with it. */
+export const REST_BARRIER = 2;
+
+/**
+ * The Barrier a Rest restores at status `statusLevel` (0 Pure, 1 Tainted, 2 Corrupt, 3 Fallen).
+ * Under `restByStatus`: 2 plus 1 for each status step above Fallen.
+ */
+export function restBarrier(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, statusLevel: number): number {
+	if (!ruleValue(catalog, 'restByStatus')) return REST_BARRIER;
+	return REST_BARRIER + Math.max(0, 3 - Math.max(0, statusLevel));
+}
 
 /**
  * rules.json content (an object; a one-row array as served by a table is accepted too) → the

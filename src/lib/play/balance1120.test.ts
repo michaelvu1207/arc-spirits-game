@@ -4,13 +4,15 @@
  * - fighterInitiative: Fighter gives 1 combat initiative per Fighter trait, up to 5, from one trait;
  * - elementalistMethods: Elementalist upgrades an attack dice twice per action, one more action per
  *   breakpoint (monster kill, Rest, Cultivate, Spirit World Summon).
+ * - restByStatus: Rest restores 2 Barrier plus 1 per status step above Fallen.
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
 import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
 import { applyGameCommand, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
-import { applyTrigger } from './effects/apply';
+import { applyRest, applyTrigger } from './effects/apply';
+import { restBarrier } from './rules';
 import { makePlayer, makeState, spirit } from './effects/classes/testHelpers';
 import { loadFrozenCatalog } from './agents/catalog';
 import { attackLine } from './agents/view';
@@ -183,5 +185,26 @@ describe('elementalistMethods: two upgrades per action, one more action per brea
 		expect(after(OFF, 4, 'onRest')).toBe('exalted,exalted,exalted,exalted,arcane');
 		expect(after(OFF, 5, 'onMonsterKill', { killed: true })).toBe(START);
 		expect(after(OFF, 5, 'onCultivate')).toBe(START);
+	});
+});
+
+describe('restByStatus: Rest restores 2 Barrier plus 1 per status step above Fallen', () => {
+	const ON = withRules({ restByStatus: true });
+	/** Barrier restored by one Rest at `statusLevel`, from 0 of Max Barrier 9. */
+	const restored = (catalog: PlayCatalog, statusLevel: number, maxBarrier = 9) => {
+		const p = makePlayer({ barrier: 0, maxBarrier, brokenBarrier: maxBarrier, statusLevel });
+		applyRest(makeState(p), 'Red', [], { catalog });
+		return p.barrier;
+	};
+	it('restores 5, 4, 3, 2 at Pure, Tainted, Corrupt, Fallen', () => {
+		expect([0, 1, 2, 3].map((s) => restored(ON, s))).toEqual([5, 4, 3, 2]);
+		expect(restBarrier(ON, 0)).toBe(5);
+		expect(restBarrier(ON, 3)).toBe(2);
+	});
+	it('never goes above Max Barrier', () => {
+		expect(restored(ON, 0, 3)).toBe(3);
+	});
+	it('is off by default: 2 at every status', () => {
+		expect([0, 1, 2, 3].map((s) => restored(withRules(undefined), s))).toEqual([2, 2, 2, 2]);
 	});
 });

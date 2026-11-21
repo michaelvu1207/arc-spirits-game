@@ -890,6 +890,8 @@ export interface PlayRules {
 	fighterInitiative?: boolean;
 	/** Elementalist upgrades an attack dice twice per board action, one more action per breakpoint (Michael, 2026-11-20). See classes/elementalist.ts. */
 	elementalistMethods?: boolean;
+	/** Rest restores 2 Barrier plus 1 per status step above Fallen: Pure 5, Tainted 4, Corrupt 3, Fallen 2 (Michael, 2026-11-20). */
+	restByStatus?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

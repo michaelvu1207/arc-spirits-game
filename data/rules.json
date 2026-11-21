@@ -27,5 +27,6 @@
 	"goodKillBonus": true,
 	"buffedDice": true,
 	"fighterInitiative": true,
-	"elementalistMethods": true
+	"elementalistMethods": true,
+	"restByStatus": true
 }
