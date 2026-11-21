@@ -34,6 +34,10 @@ export interface EffectCombatInfo {
 	opponentInitiative?: number;
 	/** True when a monster deals this hit (fightMonster); read by Bastion under `bastionVsMonsters`. */
 	vsMonster?: boolean;
+	/** The fought card's Difficulty deck (1 to 3), for `onMonsterKill`; read by Elementalist under `elementalistBigKills`. */
+	monsterDifficulty?: 1 | 2 | 3;
+	/** True when the fought card is a copy of the permanent monster (the Abyss Lurker). */
+	monsterPermanent?: boolean;
 }
 
 /** What a resolved trade interaction gave up (Mage hooks `onLocationInteraction`). */

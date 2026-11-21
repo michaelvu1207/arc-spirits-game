@@ -779,7 +779,9 @@ export function fightMonster(
 		combat: {
 			dealt: playerDamage,
 			overkill: Math.max(0, playerDamage + deflected - hpBeforeStrike),
-			killed
+			killed,
+			monsterDifficulty: monster.difficulty,
+			monsterPermanent: monster.permanent === true
 		}
 	});
 

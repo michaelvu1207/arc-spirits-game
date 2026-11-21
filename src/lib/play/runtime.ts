@@ -3981,7 +3981,7 @@ const navigationPowerHooks = {
 		player.actionsUsedThisRound.push('combat');
 		applyTrigger(state, seat, 'onMonsterKill', [], {
 			catalog,
-			combat: { dealt: monster.maxHp, overkill: 0, killed: true }
+			combat: { dealt: monster.maxHp, overkill: 0, killed: true, monsterDifficulty: monster.difficulty, monsterPermanent: monster.permanent === true }
 		});
 		const claim = rewardClaimCount(fought.rewardTrack);
 		if (claim > 0) {

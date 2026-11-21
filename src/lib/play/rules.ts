@@ -160,6 +160,12 @@
  *   is gone. The printed text is in the class data. See classes/elementalist.ts.
  * - elementalistOneUpgrade (default false; Michael, 2026-11-20): true ⇒ under `elementalistMethods` each
  *   action upgrades an attack dice once, not twice. See `elementalistUpgradesPerAction` in classes/elementalist.ts.
+ * - elementalistBigKills (default false; Michael, 2026-11-21): true ⇒ under `elementalistMethods` a kill
+ *   of a Difficulty 2 or 3 card upgrades an attack dice twice; a Difficulty 1 card and the permanent
+ *   monster (the Abyss Lurker) keep the upgrades of one action. See `elementalistKillUpgrades` in
+ *   classes/elementalist.ts.
+ * - battleAdeptNoDice (default false; Michael, 2026-11-21): true ⇒ Battle Adept gains no attack dice
+ *   when a fight does not kill; the Max Barrier for an overkill stays. See classes/adaptiveFighter.ts.
  * - restByStatus (default false; Michael, 2026-11-20): true ⇒ Rest restores 2 Barrier plus 1 for each
  *   status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2), never above Max Barrier. See
  *   `restBarrier` below and `applyRest` in effects/apply.ts.
@@ -232,7 +238,9 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	restByStatus: false,
 	fairyEnchanted: false,
 	cursedSpiritBasic: false,
-	elementalistOneUpgrade: false
+	elementalistOneUpgrade: false,
+	elementalistBigKills: false,
+	battleAdeptNoDice: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

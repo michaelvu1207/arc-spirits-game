@@ -31,5 +31,7 @@
 	"restByStatus": true,
 	"fairyEnchanted": true,
 	"cursedSpiritBasic": true,
-	"elementalistOneUpgrade": true
+	"elementalistOneUpgrade": true,
+	"elementalistBigKills": true,
+	"battleAdeptNoDice": true
 }

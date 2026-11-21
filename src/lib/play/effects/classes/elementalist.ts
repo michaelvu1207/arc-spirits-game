@@ -1,6 +1,6 @@
 import { ruleValue } from '../../rules';
 import { runAction } from '../actions';
-import type { EffectContext } from '../context';
+import type { EffectCombatInfo, EffectContext } from '../context';
 import type { ClassAbility } from './types';
 
 // Elementalist — dice QUALITY. An upgrade raises the player's lowest Basic or Enchanted die one
@@ -17,6 +17,8 @@ import type { ClassAbility } from './types';
 //   (5) a Spirit World Summon (fired by the runtime where the summon is granted, see
 //       `elementalistSpiritWorldSummon` in runtime.ts)
 // Ten Basic dice are ten Exalted dice after ten such actions (20 upgrades).
+// Rule `elementalistOneUpgrade`: one upgrade per action. Rule `elementalistBigKills` (Michael,
+// 2026-11-21): a kill of a Difficulty 2 or 3 card upgrades twice.
 
 /** The old ladder: upgrades per Rest at 2 / 3 / 4 / 5 Elementalists. */
 const REST_LADDER: [count: number, times: number][] = [
@@ -35,11 +37,29 @@ export function elementalistUpgradesPerAction(catalog: Parameters<typeof ruleVal
 	return ruleValue(catalog, 'elementalistOneUpgrade') ? 1 : ELEMENTALIST_UPGRADES_PER_ACTION;
 }
 
+/** Under `elementalistBigKills`: upgrades for a kill of a Difficulty 2 or 3 card. */
+export const ELEMENTALIST_BIG_KILL_UPGRADES = 2;
+/**
+ * Under `elementalistMethods`: upgrades for a monster kill. With the rule `elementalistBigKills` a
+ * Difficulty 2 or 3 card gives two; a Difficulty 1 card and the permanent monster (the Abyss Lurker)
+ * give the upgrades of one action.
+ */
+export function elementalistKillUpgrades(
+	catalog: Parameters<typeof ruleValue>[0],
+	combat: Pick<EffectCombatInfo, 'monsterDifficulty' | 'monsterPermanent'> | undefined
+): number {
+	const perAction = elementalistUpgradesPerAction(catalog);
+	if (!ruleValue(catalog, 'elementalistBigKills')) return perAction;
+	const big = !combat?.monsterPermanent && (combat?.monsterDifficulty ?? 1) >= 2;
+	return big ? Math.max(perAction, ELEMENTALIST_BIG_KILL_UPGRADES) : perAction;
+}
+
 /** The upgrades for the action `method`, if the rule is on and the player has enough Elementalists. */
 function upgradeFor(ctx: EffectContext, method: keyof typeof ELEMENTALIST_METHOD_AT): void {
 	if (!ruleValue(ctx.catalog, 'elementalistMethods')) return;
 	if (ctx.traitCount < ELEMENTALIST_METHOD_AT[method]) return;
-	runAction(ctx, { kind: 'upgradeDice', times: elementalistUpgradesPerAction(ctx.catalog) });
+	const times = method === 'monsterKill' ? elementalistKillUpgrades(ctx.catalog, ctx.combat) : elementalistUpgradesPerAction(ctx.catalog);
+	runAction(ctx, { kind: 'upgradeDice', times });
 }
 
 export const ability: ClassAbility[] = [

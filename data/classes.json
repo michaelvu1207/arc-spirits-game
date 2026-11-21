@@ -132,7 +132,7 @@
     "position": 30,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Gains Max Barrier from overkills or Enchanted Attack dice from failed kills.",
+    "description": "Gains Max Barrier from overkills.",
     "footer": "",
     "created_at": "2026-04-18T21:59:24.659702+00:00",
     "updated_at": "2026-10-16T04:45:16.243531+00:00",
@@ -145,7 +145,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "If you overkill by 2 damage, gain 1 Max Barrier. If you don't kill, gain 1 Enchanted Attack."
+            "description": "If you overkill by 2 damage, gain 1 Max Barrier."
           }
         ]
       }
@@ -332,7 +332,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you defeat a monster, upgrade an attack dice."
+            "description": "When you defeat a monster, upgrade an attack dice. Upgrade twice for a Difficulty 2 or 3 monster."
           }
         ],
         "count_translations": {

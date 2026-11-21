@@ -8,6 +8,9 @@
  * - restByStatus: Rest restores 2 Barrier plus 1 per status step above Fallen;
  * - fairyEnchanted: a Fairy's awakening gives Enchanted dice, not Exalted;
  * - cursedSpiritBasic: Cursed Spirit's Tainted reward gives Basic dice, not Enchanted.
+ * The changes of 2026-11-21 (Michael):
+ * - elementalistBigKills: a kill of a Difficulty 2 or 3 card upgrades an attack dice twice;
+ * - battleAdeptNoDice: Battle Adept gains no attack dice when a fight does not kill.
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
@@ -292,5 +295,65 @@ describe('elementalistOneUpgrade: one upgrade per action', () => {
 	it('does nothing without elementalistMethods, and two upgrades stay the default with it', () => {
 		expect(after(withRules({ elementalistOneUpgrade: true }), 2, 'onMonsterKill')).toBe('basic,basic,enchanted,exalted,arcane');
 		expect(after(withRules({ elementalistMethods: true }), 2, 'onMonsterKill')).toBe('enchanted,enchanted,enchanted,exalted,arcane');
+	});
+});
+
+describe('elementalistBigKills: two upgrades for a Difficulty 2 or 3 kill', () => {
+	const BIG = withRules({ elementalistMethods: true, elementalistOneUpgrade: true, elementalistBigKills: true });
+	const tiers = (p: { attackDice: { tier: DiceTier }[] }) => p.attackDice.map((d) => d.tier).join(',');
+	const START = 'basic,basic,enchanted,exalted,arcane';
+	const kill = (catalog: PlayCatalog, n: number, monsterDifficulty: 1 | 2 | 3, monsterPermanent = false) => {
+		const p = makePlayer({ attackDice: dice('basic', 'basic', 'enchanted', 'exalted', 'arcane'), spirits: [spirit(1, { Elementalist: n })] });
+		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], { catalog, combat: { dealt: 5, overkill: 0, killed: true, monsterDifficulty, monsterPermanent } });
+		return tiers(p);
+	};
+	it('Difficulty 2 and 3 kills upgrade twice, a Difficulty 1 kill once', () => {
+		expect(kill(BIG, 2, 1)).toBe('enchanted,basic,enchanted,exalted,arcane');
+		expect(kill(BIG, 2, 2)).toBe('enchanted,enchanted,enchanted,exalted,arcane');
+		expect(kill(BIG, 2, 3)).toBe('enchanted,enchanted,enchanted,exalted,arcane');
+	});
+	it('the Abyss Lurker (permanent monster) upgrades once whatever its Difficulty', () => {
+		expect(kill(BIG, 2, 2, true)).toBe('enchanted,basic,enchanted,exalted,arcane');
+	});
+	it('needs 2 Elementalists and a kill', () => {
+		expect(kill(BIG, 1, 3)).toBe(START);
+		const p = makePlayer({ attackDice: dice('basic', 'basic'), spirits: [spirit(1, { Elementalist: 2 })] });
+		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], { catalog: BIG, combat: { dealt: 5, overkill: 0, killed: false, monsterDifficulty: 3 } });
+		expect(tiers(p)).toBe('basic,basic');
+	});
+	it('Rest and Cultivate keep one upgrade', () => {
+		const p = makePlayer({ attackDice: dice('basic', 'basic'), spirits: [spirit(1, { Elementalist: 4 })] });
+		applyTrigger(makeState(p), 'Red', 'onCultivate', [], { catalog: BIG });
+		expect(tiers(p)).toBe('enchanted,basic');
+	});
+	it('is off by default: one upgrade for any kill with elementalistOneUpgrade, two without', () => {
+		expect(kill(withRules({ elementalistMethods: true, elementalistOneUpgrade: true }), 2, 3)).toBe('enchanted,basic,enchanted,exalted,arcane');
+		expect(kill(withRules({ elementalistMethods: true }), 2, 1)).toBe('enchanted,enchanted,enchanted,exalted,arcane');
+		expect(kill(withRules({ elementalistBigKills: true }), 2, 3)).toBe(START);
+	});
+	it('a real fight passes the card\'s Difficulty: a Difficulty 2 card upgrades twice', () => {
+		const p = makePlayer({ attackDice: dice('basic', 'basic', 'exalted', 'exalted', 'exalted', 'exalted', 'exalted', 'exalted'), spirits: [spirit(1, { Elementalist: 2 })] });
+		const state = makeState(p);
+		const card = { ...(monster(1, 1, 0) as object), difficulty: 2 } as never;
+		p.monsterHand = [card];
+		fightMonster(state, 'Red', withRules({ ...BIG.rules, buffedDice: true }), 0);
+		expect(tiers(p).split(',').filter((t) => t === 'basic').length).toBe(0);
+	});
+});
+
+describe('battleAdeptNoDice: no attack dice for a fight that does not kill', () => {
+	const fire = (catalog: PlayCatalog, combat: { dealt: number; overkill: number; killed: boolean }) => {
+		const p = makePlayer({ spirits: [spirit(1, { 'Battle Adept': 1 })] });
+		const before = p.maxBarrier;
+		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], { catalog, combat });
+		return { dice: p.attackDice.map((d) => d.tier).join(','), maxBarrier: p.maxBarrier - before };
+	};
+	it('on: a failed kill gives nothing, an overkill by 2 still gives 1 Max Barrier', () => {
+		const ON = withRules({ battleAdeptNoDice: true });
+		expect(fire(ON, { dealt: 1, overkill: 0, killed: false })).toEqual({ dice: '', maxBarrier: 0 });
+		expect(fire(ON, { dealt: 9, overkill: 2, killed: true })).toEqual({ dice: '', maxBarrier: 1 });
+	});
+	it('is off by default: a failed kill gives 1 Enchanted dice', () => {
+		expect(fire(withRules(undefined), { dealt: 1, overkill: 0, killed: false })).toEqual({ dice: 'enchanted', maxBarrier: 0 });
 	});
 });

@@ -898,6 +898,10 @@ export interface PlayRules {
 	cursedSpiritBasic?: boolean;
 	/** Under `elementalistMethods` each action upgrades an attack dice once, not twice (Michael, 2026-11-20). */
 	elementalistOneUpgrade?: boolean;
+	/** Under `elementalistMethods` a kill of a Difficulty 2 or 3 card upgrades an attack dice twice (Michael, 2026-11-21). */
+	elementalistBigKills?: boolean;
+	/** Battle Adept gains no attack dice when a fight does not kill (Michael, 2026-11-21). */
+	battleAdeptNoDice?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
