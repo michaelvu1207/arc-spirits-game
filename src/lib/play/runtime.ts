@@ -101,7 +101,7 @@ import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
 import { FALCONER_DOUBLE_KIND, awakeFalconerSpirit, offerFalconerDouble } from './effects/classes/falconer';
-import { ELEMENTALIST_METHOD_AT, ELEMENTALIST_UPGRADES_PER_ACTION } from './effects/classes/elementalist';
+import { ELEMENTALIST_METHOD_AT, elementalistUpgradesPerAction } from './effects/classes/elementalist';
 import { upgradeDice } from './effects/actions';
 import { RELIC_TOOLS, grantRelicTool, keepUnansweredRelicTools } from './effects/relicTools';
 import { decisionPickerSpec, validateDecisionSelection } from './decisionPicker';
@@ -552,7 +552,7 @@ function elementalistSpiritWorldSummon(
 	if (!ruleValue(catalog, 'elementalistMethods')) return;
 	if ((awakenedClassCounts(player)['Elementalist'] ?? 0) < ELEMENTALIST_METHOD_AT.spiritWorldSummon) return;
 	const lines: string[] = [];
-	upgradeDice(player, ELEMENTALIST_UPGRADES_PER_ACTION, lines);
+	upgradeDice(player, elementalistUpgradesPerAction(catalog), lines);
 	for (const line of lines) log.push(`Elementalist: ${line}`);
 }
 

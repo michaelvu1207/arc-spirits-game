@@ -896,6 +896,8 @@ export interface PlayRules {
 	fairyEnchanted?: boolean;
 	/** Cursed Spirit's Tainted reward gives Basic Attack Dice, not Enchanted (Michael, 2026-11-20). See `cursedSpiritDiceTier` in rules.ts. */
 	cursedSpiritBasic?: boolean;
+	/** Under `elementalistMethods` each action upgrades an attack dice once, not twice (Michael, 2026-11-20). */
+	elementalistOneUpgrade?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

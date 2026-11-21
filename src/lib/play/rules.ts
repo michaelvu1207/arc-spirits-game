@@ -158,6 +158,8 @@
  *   each breakpoint adds one action that upgrades: (2) defeating a monster (the permanent one too),
  *   (3) Rest, (4) Cultivate, (5) a Spirit World Summon. The old ladder (1 / 2 / 5 / 10 upgrades per Rest)
  *   is gone. The printed text is in the class data. See classes/elementalist.ts.
+ * - elementalistOneUpgrade (default false; Michael, 2026-11-20): true ⇒ under `elementalistMethods` each
+ *   action upgrades an attack dice once, not twice. See `elementalistUpgradesPerAction` in classes/elementalist.ts.
  * - restByStatus (default false; Michael, 2026-11-20): true ⇒ Rest restores 2 Barrier plus 1 for each
  *   status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2), never above Max Barrier. See
  *   `restBarrier` below and `applyRest` in effects/apply.ts.
@@ -229,7 +231,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	elementalistMethods: false,
 	restByStatus: false,
 	fairyEnchanted: false,
-	cursedSpiritBasic: false
+	cursedSpiritBasic: false,
+	elementalistOneUpgrade: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

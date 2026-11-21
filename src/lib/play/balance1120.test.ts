@@ -4,6 +4,7 @@
  * - fighterInitiative: Fighter gives 1 combat initiative per Fighter trait, up to 5, from one trait;
  * - elementalistMethods: Elementalist upgrades an attack dice twice per action, one more action per
  *   breakpoint (monster kill, Rest, Cultivate, Spirit World Summon).
+ * - elementalistOneUpgrade: with elementalistMethods, one upgrade per action in place of two;
  * - restByStatus: Rest restores 2 Barrier plus 1 per status step above Fallen;
  * - fairyEnchanted: a Fairy's awakening gives Enchanted dice, not Exalted;
  * - cursedSpiritBasic: Cursed Spirit's Tainted reward gives Basic dice, not Enchanted.
@@ -267,5 +268,29 @@ describe('cursedSpiritBasic: the dice of the Tainted reward are Basic', () => {
 		const off = claim(withRules(undefined), 0);
 		expect(off.tiers).toBe('enchanted,enchanted');
 		expect(off.label).toContain('2 Enchanted dice');
+	});
+});
+
+describe('elementalistOneUpgrade: one upgrade per action', () => {
+	const ONE = withRules({ elementalistMethods: true, elementalistOneUpgrade: true });
+	const tiers = (p: { attackDice: { tier: DiceTier }[] }) => p.attackDice.map((d) => d.tier).join(',');
+	const after = (catalog: PlayCatalog, n: number, trigger: 'onRest' | 'onCultivate' | 'onMonsterKill') => {
+		const p = makePlayer({ attackDice: dice('basic', 'basic', 'enchanted', 'exalted', 'arcane'), spirits: [spirit(1, { Elementalist: n })] });
+		applyTrigger(makeState(p), 'Red', trigger, [], { catalog, combat: trigger === 'onMonsterKill' ? { dealt: 5, overkill: 0, killed: true } : undefined });
+		return tiers(p);
+	};
+	const ONCE = 'enchanted,basic,enchanted,exalted,arcane';
+	it('a kill at 2, a Rest at 3 and a Cultivate at 4 Elementalists each upgrade one dice one step', () => {
+		expect(after(ONE, 2, 'onMonsterKill')).toBe(ONCE);
+		expect(after(ONE, 3, 'onRest')).toBe(ONCE);
+		expect(after(ONE, 4, 'onCultivate')).toBe(ONCE);
+	});
+	it('keeps the breakpoints: no upgrade below them', () => {
+		expect(after(ONE, 1, 'onMonsterKill')).toBe('basic,basic,enchanted,exalted,arcane');
+		expect(after(ONE, 2, 'onRest')).toBe('basic,basic,enchanted,exalted,arcane');
+	});
+	it('does nothing without elementalistMethods, and two upgrades stay the default with it', () => {
+		expect(after(withRules({ elementalistOneUpgrade: true }), 2, 'onMonsterKill')).toBe('basic,basic,enchanted,exalted,arcane');
+		expect(after(withRules({ elementalistMethods: true }), 2, 'onMonsterKill')).toBe('enchanted,enchanted,enchanted,exalted,arcane');
 	});
 });

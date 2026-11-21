@@ -30,12 +30,16 @@ const REST_LADDER: [count: number, times: number][] = [
 export const ELEMENTALIST_METHOD_AT = { monsterKill: 2, rest: 3, cultivate: 4, spiritWorldSummon: 5 } as const;
 /** Under `elementalistMethods`: upgrades per action. */
 export const ELEMENTALIST_UPGRADES_PER_ACTION = 2;
+/** Under `elementalistMethods`: upgrades per action, 1 with the rule `elementalistOneUpgrade`. */
+export function elementalistUpgradesPerAction(catalog: Parameters<typeof ruleValue>[0]): number {
+	return ruleValue(catalog, 'elementalistOneUpgrade') ? 1 : ELEMENTALIST_UPGRADES_PER_ACTION;
+}
 
 /** The upgrades for the action `method`, if the rule is on and the player has enough Elementalists. */
 function upgradeFor(ctx: EffectContext, method: keyof typeof ELEMENTALIST_METHOD_AT): void {
 	if (!ruleValue(ctx.catalog, 'elementalistMethods')) return;
 	if (ctx.traitCount < ELEMENTALIST_METHOD_AT[method]) return;
-	runAction(ctx, { kind: 'upgradeDice', times: ELEMENTALIST_UPGRADES_PER_ACTION });
+	runAction(ctx, { kind: 'upgradeDice', times: elementalistUpgradesPerAction(ctx.catalog) });
 }
 
 export const ability: ClassAbility[] = [

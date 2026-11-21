@@ -332,7 +332,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you defeat a monster, upgrade an attack dice twice."
+            "description": "When you defeat a monster, upgrade an attack dice."
           }
         ],
         "count_translations": {
@@ -352,7 +352,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Rest, upgrade an attack dice twice. In addition to (2)."
+            "description": "On Rest, upgrade an attack dice. In addition to (2)."
           }
         ]
       },
@@ -361,7 +361,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you Cultivate, upgrade an attack dice twice. In addition to (2) and (3)."
+            "description": "When you Cultivate, upgrade an attack dice. In addition to (2) and (3)."
           }
         ]
       },
@@ -370,7 +370,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On a Spirit World Summon, upgrade an attack dice twice. In addition to (2), (3) and (4)."
+            "description": "On a Spirit World Summon, upgrade an attack dice. In addition to (2), (3) and (4)."
           }
         ]
       }

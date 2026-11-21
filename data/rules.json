@@ -30,5 +30,6 @@
 	"elementalistMethods": true,
 	"restByStatus": true,
 	"fairyEnchanted": true,
-	"cursedSpiritBasic": true
+	"cursedSpiritBasic": true,
+	"elementalistOneUpgrade": true
 }
