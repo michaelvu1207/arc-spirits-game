@@ -566,7 +566,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, your side may always attack at the same time as the enemy. In addition to (1)."
+            "description": "In combat with a monster, you may always attack at the same time as the monster. In addition to (1)."
           }
         ]
       }

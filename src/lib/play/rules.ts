@@ -166,6 +166,9 @@
  *   classes/elementalist.ts.
  * - battleAdeptNoDice (default false; Michael, 2026-11-21): true ⇒ Battle Adept gains no attack dice
  *   when a fight does not kill; the Max Barrier for an overkill stays. See classes/adaptiveFighter.ts.
+ * - mysticMonstersOnly (default false; Michael, 2026-11-21): true ⇒ Mystic's attack "at the same time as
+ *   the enemy" works in fights with monsters only, not against players (Sharpshooter is unchanged). See
+ *   `hasSimultaneousAttack` in combat.ts.
  * - beastNoInitiative (default false; Michael, 2026-11-21): true ⇒ Beast gives 1 combat damage per trait
  *   and no combat initiative; initiative comes from Fighter (`fighterInitiative`). See
  *   classes/spiritAnimal.ts.
@@ -244,7 +247,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	elementalistOneUpgrade: false,
 	elementalistBigKills: false,
 	battleAdeptNoDice: false,
-	beastNoInitiative: false
+	beastNoInitiative: false,
+	mysticMonstersOnly: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -329,6 +333,14 @@ export function pvpAllowedAt(
 const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count: number; text: string }[] = [
 	// The 2026-11-14 class changes come first: for one class and breakpoint the first entry wins,
 	// so they replace the `sunRework` and `mysticCultivateDouble` texts below.
+	// 2026-11-21: before the `mysticSwap23` text of the same breakpoint (the first entry wins).
+	{
+		rule: 'mysticMonstersOnly',
+		when: true,
+		className: 'Mystic',
+		count: 2,
+		text: 'In combat with a monster, you may always attack at the same time as the monster. In addition to (1).'
+	},
 	{
 		rule: 'mysticSwap23',
 		when: true,

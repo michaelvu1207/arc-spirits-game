@@ -904,6 +904,8 @@ export interface PlayRules {
 	battleAdeptNoDice?: boolean;
 	/** Beast gives combat damage only, no combat initiative (Michael, 2026-11-21). */
 	beastNoInitiative?: boolean;
+	/** Mystic's simultaneous attack works against monsters only, not players (Michael, 2026-11-21). */
+	mysticMonstersOnly?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

@@ -75,12 +75,17 @@ export function resetCombatFlags(player: PrivatePlayerState): void {
  */
 function hasSimultaneousAttack(
 	player: PrivatePlayerState,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: Pick<PlayCatalog, 'rules'> | null,
+	against: 'monster' | 'player' = 'monster'
 ): boolean {
 	const c = awakenedClassCounts(player);
 	// Rule `mysticSwap23`: the simultaneous attack is Mystic (2), not (3).
 	const mysticAt = ruleValue(catalog, 'mysticSwap23') ? 2 : 3;
-	return (c['Sharpshooter'] ?? 0) >= 1 || (c['Mystic'] ?? 0) >= mysticAt;
+	// Rule `mysticMonstersOnly` (Michael, 2026-11-21): Mystic's simultaneous attack is for fights
+	// with monsters only; against players a corrupted Mystic holder is stunned like anyone else.
+	const mystic =
+		(c['Mystic'] ?? 0) >= mysticAt && !(against === 'player' && ruleValue(catalog, 'mysticMonstersOnly'));
+	return (c['Sharpshooter'] ?? 0) >= 1 || mystic;
 }
 
 /**
@@ -524,7 +529,7 @@ export function resolveEncounterCombat(
 					);
 				}
 			}
-			const attacksSimultaneously = player.stunImmune || hasSimultaneousAttack(player, catalog);
+			const attacksSimultaneously = player.stunImmune || hasSimultaneousAttack(player, catalog, 'player');
 			if ((corrupted || player.barrier === 0) && !attacksSimultaneously) {
 				player.stunned = true;
 				log.push(`${seat} is stunned and cannot strike back.`);

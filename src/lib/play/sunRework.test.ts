@@ -495,3 +495,46 @@ describe('class text for agents (sunRework, bastionVsMonsters)', () => {
 		expect(brief).toContain(`- Mage: (1) ${OLD.Mage}`);
 	});
 });
+
+// ── mysticMonstersOnly (Michael, 2026-11-21) ─────────────────────────────────
+
+describe('mysticMonstersOnly: Mystic strikes at the same time against monsters only', () => {
+	/** Red (Fallen, Mystic 2, Barrier 1) attacks; Blue is faster (2 Beasts) and corrupts Red first. */
+	const slowMystic = (s: PublicGameState) => {
+		const red = s.players.Red!;
+		red.maxBarrier = 1;
+		red.barrier = 1;
+		red.attackDice = arcaneDice(3);
+		red.spirits = [spirit(1, { Mystic: 2 })];
+		s.players.Blue!.attackDice = arcaneDice(1);
+		s.players.Blue!.spirits = [spirit(2, { Beast: 2 })];
+	};
+	const pvpLog = (rules: PlayRules) =>
+		pvpExchange(pvpCatalog(rules), slowMystic).combats.find((c) => c.kind === 'pvp')!.log.join('\n');
+	it('off: a corrupted Mystic (2) attacker still strikes the players', () => {
+		expect(pvpLog({ mysticSwap23: true })).toContain('Red attacks at the same time despite corruption.');
+	});
+	it('on: against players it is stunned like anyone else', () => {
+		const log = pvpLog({ mysticSwap23: true, mysticMonstersOnly: true });
+		expect(log).toContain('Red is stunned and cannot strike back.');
+		expect(log).not.toContain('Red attacks at the same time');
+	});
+	it('on: against a monster it still strikes back when corrupted', () => {
+		const catalog = { ...frozen, rules: { mysticSwap23: true, mysticMonstersOnly: true } };
+		const p = makePlayer({
+			barrier: 1,
+			maxBarrier: 1,
+			attackDice: arcaneDice(5),
+			spirits: [spirit(1, { Mystic: 2 })],
+			monsterHand: [{ id: 'm', name: 'Test Monster', hp: 10, maxHp: 10, damage: 5, rewardTrack: [], chooseAmount: 0, livesRemaining: 1, livesTotal: 1, ladderIndex: 0, ladderMax: 1 } as never]
+		});
+		const result = fightMonster(makeState(p), 'Red', catalog, 0)!;
+		expect(result.corrupted).toBe(true);
+		expect(result.playerDamage).toBeGreaterThan(0);
+	});
+	it('printed text follows the switch', () => {
+		const schema = [1, 2].map((count) => ({ count, effects: [{ type: 'benefit', description: `old ${count}` }] })) as never;
+		const out = ruleAdjustedClassSchema({ ...frozen, rules: { mysticSwap23: true, mysticMonstersOnly: true } }, 'Mystic', schema)!;
+		expect(out[1].effects?.[0].description).toContain('In combat with a monster');
+	});
+});

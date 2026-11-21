@@ -34,5 +34,6 @@
 	"elementalistOneUpgrade": true,
 	"elementalistBigKills": true,
 	"battleAdeptNoDice": true,
-	"beastNoInitiative": true
+	"beastNoInitiative": true,
+	"mysticMonstersOnly": true
 }
