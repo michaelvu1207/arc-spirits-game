@@ -55,6 +55,8 @@
   .jackpot { color: #f5c542; } .strong { color: var(--ok); } .average { color: var(--dim); } .weak { color: #e9a06b; } .trap { color: var(--bad); }
   tr.inset td { background: rgba(240, 83, 45, .06); } tr.spacer td { height: 26px; border-bottom: 0; background: none; } .setname { font-size: 12px; color: var(--dim); white-space: nowrap; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: currentColor; margin-right: 5px; }
+  .grow { display: inline-block; width: 54px; height: 6px; margin-left: 8px; vertical-align: middle; background: var(--line); border-radius: 3px; overflow: hidden; } .grow i { display: block; height: 100%; background: var(--ok); border-radius: 3px; }
+  tr.few td { opacity: .55; } th.gap, td.gap { padding-left: 26px; } th.r { text-align: right; }
   td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--dim); } td.v.val { color: var(--text); }
   .curve { display: flex; gap: 14px; align-items: center; padding: 12px 0; color: var(--dim); font-size: 13px; } .curve input { width: 64px; text-align: center; }
   .tname { display: flex; align-items: center; gap: 8px; } .tname .tok { width: 30px; height: 30px; } .tname .tok img { width: 24px; height: 24px; }
@@ -195,7 +197,7 @@ const post = (p, b) => fetch(p, { method: 'POST', headers: { 'content-type': 'ap
 const uuid = () => crypto.randomUUID();
 
 let table = 'monsters_v2', stage = 0, rows = [], saved = '', pool = [], poolById = {}, poolIcon = {};
-const TITLE = { bal_lines: 'Game explorer', bal_spirits: 'Spirit tiers', bal_monsters: 'Monsters in the tests', monsters_v2: 'Monsters', classes: 'Classes', origins: 'Origins', runes: 'Runes', relics: 'Relics', augments: 'Augments', reward_sets: 'Sets', rewards: 'Rewards' };
+const TITLE = { bal_lines: 'Game explorer', bal_spirits: 'Spirit tiers', bal_monsters: 'Monsters in the tests', bal_attack: 'Attack over time', monsters_v2: 'Monsters', classes: 'Classes', origins: 'Origins', runes: 'Runes', relics: 'Relics', augments: 'Augments', reward_sets: 'Sets', rewards: 'Rewards' };
 let RV = { curve: { a: 1, b: 0.4 }, bands: { jackpot: .5, strong: .2, weak: -.2, trap: -.5 }, values: {}, used: {} };
 const BANDS = ['jackpot', 'strong', 'average', 'weak', 'trap'];
 const THEMES = ['Fire', 'Forest', 'Mountain', 'Water', 'Arcane'];
@@ -220,7 +222,7 @@ async function init() {
   SETS = await get('/api/game/table?name=reward_sets').catch(() => []);
   const tabs = await get('/api/game/tables');
   $('tabs').innerHTML = tabs.map((t) => `<button class="${t.name === table && !stage ? 'on' : ''}" data-t="${t.name}">${TITLE[t.name] ?? t.name}<small>${t.rows}</small></button>${t.name === 'monsters_v2' ? [1, 2, 3].map((d) => `<button class="sub" data-t="monsters_v2" data-stage="${d}">Class ${d}</button>`).join('') : ''}${t.name === 'classes' ? `<button class="sub" data-t="classes" data-stage="1">Generic</button><button class="sub" data-t="classes" data-stage="2">Special</button>` : ''}`).join('') + `<button data-t="rewards">Rewards<small>VP values</small></button>`
-    + `<div class="group">Balance</div><button data-t="bal_lines">Game explorer</button><button data-t="bal_spirits">Spirit tiers</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_spirits" data-stage="${d}">${POOLS[d]}</button>`).join('')}<button data-t="bal_monsters">Monsters in the tests</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_monsters" data-stage="${d}">Class ${d}</button>`).join('')}`;
+    + `<div class="group">Balance</div><button data-t="bal_lines">Game explorer</button><button data-t="bal_spirits">Spirit tiers</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_spirits" data-stage="${d}">${POOLS[d]}</button>`).join('')}<button data-t="bal_monsters">Monsters in the tests</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_monsters" data-stage="${d}">Class ${d}</button>`).join('')}<button data-t="bal_attack">Attack over time</button>`;
   load();
 }
 async function load() {
@@ -378,6 +380,32 @@ function paintBalSpirits() {
   return `<div class="summary"><span><span class="key" style="background:color-mix(in srgb, var(--bad) 55%, transparent)"></span>Too powerful: desirability and power both High or better</span><span><span class="key" style="background:color-mix(in srgb, #e2b23c 55%, transparent)"></span>Danger zone: wins far more than average but is not picked much</span><span>Tier combines desirability (picked and awakened when offered) and power (seats that awakened it win more than an average seat)</span></div>`
     + pools.map((p) => `${stage ? '' : `<div class="divider">${p}</div>`}<table><thead><tr><th></th><th>Tier</th><th>Spirit</th><th>Class</th><th title="In the rules the tests use">Cost to awaken</th><th>Desirability</th><th>Powerful</th></tr></thead><tbody>${body(p)}</tbody></table>`).join('')
     + `<div class="note">From the AI test games. The cost to awaken is the one in the rules the tests use (setup ${esc(BAL.current?.[0]?.setup ?? '')}), with the live cost in grey where it differs. A class whose ability the tests changed has the tested text under it; the Classes tab holds the live text. The class icons and the hex art are the editor's own.</div>`;
+}
+// Attack over time (read only): the average damage of one attack of the Fighter + Elementalist players of the latest
+// test at the end of each round, and how much it grew in that round (BAL.attack_growth, written by balance/tools/dashboard.py).
+function paintBalAttack() {
+  if (!BAL) return `<div class="note">${esc(BALERR || 'Loading…')}</div>`;
+  const list = BAL.attack_growth ?? [], info = BAL.attack_info?.[0];
+  if (!list.length || !info) return `<div class="note">The latest test has no attack data yet.</div>`;
+  const num = (v) => v == null ? '–' : (Math.round(v * 10) / 10 || 0).toFixed(1);
+  const change = (v) => { if (v == null) return '–'; const x = Math.round(v * 10) / 10 || 0; return (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(1); };
+  const bar = (v) => `<span class="grow" title="Growth in this round"><i style="width:${Math.max(0, Math.min(1, (v ?? 0) / 3)) * 100}%"></i></span>`;
+  const at = (r) => list.find((x) => x.round === r), all = info.players;
+  const first = (level) => list.find((x) => x.attack >= level)?.round;
+  const full = list.filter((x) => x.players === all), span = full.length > 1 ? (full[full.length - 1].attack - full[0].attack) / (full.length - 1) : null;
+  return `<div class="summary"><span><b>${info.players}</b> of ${info.seats} players played Fighter with Elementalist in the latest test (${info.games} games, ${esc(info.table)})</span>
+    <span>Attack at round 5, 10, 15: <b>${[5, 10, 15].map((r) => num(at(r)?.attack)).join(', ')}</b></span>
+    ${span == null ? '' : `<span>Growth: <b>${change(span)}</b> a round on average over rounds ${full[0].round} to ${full[full.length - 1].round}</span>`}
+    <span>Reaches 10 at round <b>${first(10) ?? '–'}</b>, 15 at round <b>${first(15) ?? '–'}</b></span></div>
+  <table><thead><tr><th class="r">Round</th><th class="r" title="Fighter + Elementalist players still in a game in this round">Players</th><th class="r" title="Average damage of one attack at the end of the round: dice average plus 1 per Beast">Attack</th>
+    <th class="r" title="How much the attack of these players grew in this round, on average">Growth in the round</th><th class="r" title="The weakest of these players">Lowest</th><th class="r" title="The strongest of these players">Highest</th>
+    <th class="r" title="Average damage from their dice">From dice</th><th class="r" title="Average damage from Beast: 1 per Beast">From Beast</th><th class="r" title="Attack dice held, of 10">Dice</th><th class="r" title="Of them Exalted or Arcane">Exalted or better</th>
+    <th class="r" title="Fighters awake">Fighter</th><th class="r" title="Elementalists awake">Elementalist</th><th class="r gap" title="All other players still in a game">Other players</th><th class="r" title="Average damage of one attack of the other players">Their attack</th><th class="r" title="How much their attack grew in this round">Their growth</th></tr></thead>
+  <tbody>${list.map((x) => `<tr class="bal ${x.players < all / 2 ? 'few' : ''}"><td class="v">${x.round}</td><td class="v">${x.players}</td><td class="v val"><b>${num(x.attack)}</b></td>
+    <td class="v val">${change(x.change)}${bar(x.change)}</td><td class="v">${num(x.lowest)}</td><td class="v">${num(x.highest)}</td><td class="v">${num(x.from_dice)}</td><td class="v">${num(x.from_beast)}</td>
+    <td class="v">${num(x.dice)}</td><td class="v">${num(x.exalted_dice)}</td><td class="v">${num(x.fighter)}</td><td class="v">${num(x.elementalist)}</td>
+    <td class="v gap">${x.others}</td><td class="v">${num(x.others_attack)}</td><td class="v">${change(x.others_change)}</td></tr>`).join('')}</tbody></table>
+  <div class="note">Read only, from the latest finished test: ${esc(info.setup)}. Attack is the average damage of one attack at the end of the round (the average of each die plus 1 per Beast). Growth is the change within the round, averaged over the same players. Fighter + Elementalist players: ${esc(info.group.charAt(0).toLowerCase() + info.group.slice(1))}. Rows in grey have fewer than half of these players left, because their games had ended.</div>`;
 }
 function paintBalMonsters() {
   if (!BAL) return `<div class="note">${esc(BALERR || 'Loading…')}</div>`;
@@ -646,7 +674,7 @@ function paintSide() {
       <div><h3>Drew and picked</h3>${p.draws.length ? p.draws.map((d) => `<div class="ge-draw"><span class="k">${esc(d.k)}</span>${d.o.map((o) => { const yes = d.p.some((x) => x === o || x.startsWith(o + ' (replaced')); const full = d.p.find((x) => x.startsWith(o + ' (replaced')) ?? o; return `<span class="${yes ? 'yes' : 'no'}">${yes ? '✓ ' : ''}${esc(full)}</span>`; }).join('<span class="no">, </span>')}${d.again ? ' <span class="no">· drew again</span>' : !d.p.length ? ' <span class="no">· took none</span>' : ''}</div>`).join('') : '<span class="was">–</span>'}</div></div>`;
   side.innerHTML = head + `<div id="geRest" class="${geView}">${rest}</div>`;
 }
-function paint() { document.querySelector('main').classList.toggle('ge-mode', table === 'bal_lines'); $('gePop')?.remove(); $('scroll').innerHTML = table === 'bal_lines' ? paintLines() : table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); if (table === 'bal_lines') mountLines(); }
+function paint() { document.querySelector('main').classList.toggle('ge-mode', table === 'bal_lines'); $('gePop')?.remove(); $('scroll').innerHTML = table === 'bal_lines' ? paintLines() : table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'bal_attack' ? paintBalAttack() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); if (table === 'bal_lines') mountLines(); }
 
 $('scroll').addEventListener('input', (e) => {
   const el = e.target;
@@ -723,6 +751,7 @@ $('save').onclick = async () => {
 $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; const same = b.dataset.t === table; if (!same && dirty() && !confirm('Leave without saving?')) return; if (!same) curveDirty = false; stage = Number(b.dataset.stage ?? 0); if (same) { for (const x of $('tabs').children) x.classList.toggle('on', x === b); $('title').textContent = titleText(); paint(); } else { table = b.dataset.t; load(); } history.replaceState(null, '', table === 'bal_lines' ? '#explorer' : location.pathname + location.search); });
 addEventListener('beforeunload', (e) => { if (dirty()) e.preventDefault(); });
 if (location.hash === '#explorer') table = 'bal_lines';
+if (location.hash === '#attack') table = 'bal_attack';
 init();
 window.__dbg = () => ({ rows, composeIcon, post }); // for tests
 </script>
