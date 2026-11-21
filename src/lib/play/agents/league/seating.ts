@@ -5,7 +5,8 @@
  * - The seats of every game are written down when the game first starts
  *   (`versions/<id>/seating.json`). A game that is continued later, or played again after a
  *   failure, keeps them.
- * - With an unchanged agent list the seats are exactly those of `LeagueSchedule` (as before).
+ * - With an unchanged agent list the seats are exactly those of `LeagueSchedule` (as before),
+ *   or, when league.json has `tables`, those predefined tables in turn.
  * - When the agent list changes (an agent folder added or removed), a new "epoch" starts:
  *   finished games stay as they are; an unfinished game stays when all its agents are still in
  *   the list (it is continued), else it gets new seats; every later game comes from a new
@@ -48,18 +49,21 @@ export class Seating {
 	readonly #size: number;
 	readonly #file: SeatingFile;
 	readonly #schedule: LeagueSchedule;
+	/** Predefined tables (league.json `tables`): game n seats table n modulo the list. */
+	readonly #tables: string[][] | null;
 	/** Set when this start began a new epoch: a line for the event log. */
 	readonly change: string | null = null;
 
 	constructor(
 		path: string,
 		agents: LeagueAgent[],
-		opts: { seed: number; tableSize: number },
+		opts: { seed: number; tableSize: number; tables?: string[][] },
 		isDone: (index: number) => boolean
 	) {
 		this.#path = path;
 		this.#seed = opts.seed;
 		this.#size = opts.tableSize;
+		this.#tables = opts.tables?.length ? opts.tables : null;
 		this.#file = existsSync(path)
 			? (JSON.parse(readFileSync(path, 'utf8')) as SeatingFile)
 			: { epochs: [], games: {}, known: {} };
@@ -125,6 +129,7 @@ export class Seating {
 		const seed = this.#seed + index;
 		const fixed = this.#file.games[index];
 		if (fixed) return { index, seed, seats: fixed };
+		if (this.#tables) return { index, seed, seats: [...this.#tables[index % this.#tables.length]] };
 		const epoch = this.#file.epochs.at(-1)!;
 		return { index, seed, seats: this.#schedule.game(epoch.offset + index - epoch.from).seats };
 	}

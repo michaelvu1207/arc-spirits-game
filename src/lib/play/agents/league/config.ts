@@ -48,6 +48,12 @@ export interface LeagueConfig {
 	/** A model benchmark: agents without strategy or learning; the report ranks agents, models
 	 *  and efforts (Plackett-Luce rating with a 95% range, as the tournament). */
 	benchmark: boolean;
+	/**
+	 * Predefined tables (optional): each a list of `seatsPerGame` agent ids, in seat order. Game n
+	 * seats table n modulo the list, so a list of 4 tables and 16 games plays each table 4 times.
+	 * Absent: the balanced schedule over all agents.
+	 */
+	tables?: string[][];
 }
 
 export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
@@ -104,6 +110,22 @@ export function loadLeagueConfig(leagueDir: string): LeagueConfig {
 	if (typeof config.benchmark !== 'boolean') throw new Error('league.json: "benchmark" must be true or false');
 	if (config.seatsPerGame < 2 || config.seatsPerGame > 4)
 		throw new Error('league.json: "seatsPerGame" must be 2, 3 or 4');
+	if (config.tables !== undefined) {
+		const ok =
+			Array.isArray(config.tables) &&
+			config.tables.length > 0 &&
+			config.tables.every(
+				(t) =>
+					Array.isArray(t) &&
+					t.length === config.seatsPerGame &&
+					t.every((id) => typeof id === 'string' && id) &&
+					new Set(t).size === t.length
+			);
+		if (!ok)
+			throw new Error(
+				`league.json: "tables" must be a list of tables, each ${config.seatsPerGame} different agent ids`
+			);
+	}
 	const labels = new Set<string>();
 	for (const g of config.gateways) {
 		if (!g.label || !g.url || !g.tokenFile || !(g.games >= 1))

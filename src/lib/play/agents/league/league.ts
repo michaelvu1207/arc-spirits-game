@@ -179,6 +179,9 @@ export class League {
 					throw new Error(
 						`benchmark: agent ${a.id} must have "learn": false, an empty strategy.md and no openingSpirits`
 					);
+		for (const table of opts.config.tables ?? [])
+			for (const id of table)
+				if (!this.#byId.has(id)) throw new Error(`league.json: "tables" names ${id}, which is not an agent folder`);
 		this.schedule = new LeagueSchedule(
 			this.agents.map((a) => a.id),
 			{ seed: opts.config.seed, tableSize: opts.config.seatsPerGame }
@@ -370,7 +373,7 @@ export class League {
 			seating = new Seating(
 				join(this.dir, 'versions', v.id, 'seating.json'),
 				this.agents,
-				{ seed: this.config.seed, tableSize: this.config.seatsPerGame },
+				{ seed: this.config.seed, tableSize: this.config.seatsPerGame, tables: this.config.tables },
 				(index) => this.versions.done(v.id, index)
 			);
 			this.#seatings.set(v.id, seating);
