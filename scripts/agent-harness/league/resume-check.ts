@@ -71,6 +71,7 @@ for (const id of versions) {
 							budget: new BudgetGuard(),
 							label: s.controller,
 							strategy: s.strategy ?? null,
+							...(s.openingSpirits ? { openingSpirits: s.openingSpirits } : {}),
 							memory: league.agents[i].memory
 						})
 				),

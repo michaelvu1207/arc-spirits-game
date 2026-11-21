@@ -29,6 +29,8 @@ export interface LeagueAgent {
 	learn: boolean;
 	/** The seat strategy: id = the agent id, text = strategy.md. */
 	strategy: Strategy;
+	/** Spirits the agent's opening four must include in every game (tests only; agent.json `openingSpirits`). */
+	openingSpirits?: string[];
 }
 
 interface AgentFile {
@@ -37,6 +39,7 @@ interface AgentFile {
 	effort?: string;
 	memory?: string;
 	learn?: boolean;
+	openingSpirits?: string[];
 }
 
 const MOCK_POLICIES: MockPolicy[] = ['random', 'greedy', 'first'];
@@ -95,6 +98,12 @@ export function loadAgent(dir: string, id: string, defaults: { model: string; ef
 		learn: file.learn !== false,
 		strategy: { id, name, text: readText(join(dir, 'strategy.md')).trim() }
 	};
+	if (file.openingSpirits !== undefined) {
+		if (!Array.isArray(file.openingSpirits) || file.openingSpirits.some((n) => typeof n !== 'string' || !n.trim()))
+			throw new Error(`agent ${id}: openingSpirits must be a list of spirit names`);
+		if (file.openingSpirits.length > 4) throw new Error(`agent ${id}: at most 4 openingSpirits`);
+		if (file.openingSpirits.length) agent.openingSpirits = file.openingSpirits.map((n) => n.trim());
+	}
 	return agent;
 }
 

@@ -417,6 +417,45 @@ function drawStartingSpirits(
 	bag.count = bag.contents.length;
 }
 
+/**
+ * Tests only (`startGame.openingSpirits`): make a seat's opening four include the spirits named in
+ * `wanted`, after the normal deal. For each name the seat does not already hold, the first copy
+ * still in the Spirit World bag is swapped with one of the seat's dealt spirits (the last slot that
+ * is not itself wanted); the dealt spirit takes that copy's place in the bag. So the other seats'
+ * opening hands are as dealt, the bag keeps its size and order, and no random number is drawn. A
+ * name with no copy left in the bag (or not a Spirit World spirit) is skipped.
+ */
+function seedOpeningSpirits(
+	state: PublicGameState,
+	catalog: PlayCatalog,
+	player: PrivatePlayerState,
+	wanted: string[]
+): void {
+	const bag = state.bags.hexSpirits;
+	const kept = new Set<number>(); // slots that hold a wanted spirit
+	for (const name of wanted) {
+		const held = player.spirits.find((s) => s.name === name && !kept.has(s.slotIndex));
+		if (held) {
+			kept.add(held.slotIndex);
+			continue;
+		}
+		const at = bag.contents.findIndex((entry) => entry.name === name);
+		const spirit = at < 0 ? undefined : catalog.spirits.find((c) => c.id === bag.contents[at].id);
+		const out = [...player.spirits].reverse().find((s) => !kept.has(s.slotIndex));
+		if (!spirit || !out) continue;
+		const outSpirit = catalog.spirits.find((c) => c.id === out.id);
+		if (!outSpirit) continue;
+		// The dealt spirit goes into the bag where the wanted copy was, under that copy's number.
+		bag.contents[at] = toBagEntry(outSpirit, bag.contents[at].guid.split('_')[1] ?? 'seed');
+		out.id = spirit.id;
+		out.name = spirit.name;
+		out.cost = spirit.cost;
+		out.classes = spirit.classes;
+		out.origins = spirit.origins;
+		kept.add(out.slotIndex);
+	}
+}
+
 function refillSingleMarketSlot(state: PublicGameState, slotIndex: number) {
 	const next = state.bags.hexSpirits.contents.shift() ?? null;
 	state.market[slotIndex].spiritId = next?.id ?? null;
@@ -1888,6 +1927,12 @@ function reduceCommand(
 			for (const seatColor of occupiedSeats) {
 				const player = state.players[seatColor];
 				if (player) drawStartingSpirits(state, catalog, player);
+			}
+			// Tests only: after the normal deal, put the named spirits into a seat's opening four.
+			for (const seatColor of occupiedSeats) {
+				const player = state.players[seatColor];
+				const wanted = command.openingSpirits?.[seatColor];
+				if (player && wanted?.length) seedOpeningSpirits(state, catalog, player, wanted);
 			}
 			state.bags.history = buildHistoryBags(state.bags);
 

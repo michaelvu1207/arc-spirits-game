@@ -46,7 +46,7 @@ function expectOk(result: ReturnType<typeof applyGameCommand>, label: string): P
 export function createAgentLobby(
 	catalog: PlayCatalog,
 	seed: number,
-	seats: { seat: SeatColor; guardian: string }[]
+	seats: { seat: SeatColor; guardian: string; openingSpirits?: string[] }[]
 ): PublicGameState {
 	let state = createLobbyState({
 		roomCode: 'AGENTS',
@@ -73,8 +73,17 @@ export function createAgentLobby(
 			`selectGuardian ${seat}`
 		);
 	}
+	// Tests only: a seat may name spirits its opening four must include (recorded in the header).
+	const openingSpirits = Object.fromEntries(
+		seats.filter((s) => s.openingSpirits?.length).map((s) => [s.seat, s.openingSpirits!])
+	);
 	state = expectOk(
-		applyGameCommand(state, AGENT_HOST, { type: 'startGame', seed }, catalog),
+		applyGameCommand(
+			state,
+			AGENT_HOST,
+			{ type: 'startGame', seed, ...(Object.keys(openingSpirits).length ? { openingSpirits } : {}) },
+			catalog
+		),
 		'startGame'
 	);
 	// The engine's game id embeds the wall-clock start time (runtime.ts makeGameId). It is only an

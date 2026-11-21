@@ -40,6 +40,8 @@ export interface SeatSetup {
 	model: string;
 	/** The seat's strategy for this game (absent: none given). */
 	strategy?: { id: string; name: string; text: string };
+	/** Spirits the seat's opening four must include (tests only; absent: as dealt). */
+	openingSpirits?: string[];
 }
 
 export interface HeaderRecord {

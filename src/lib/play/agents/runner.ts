@@ -285,7 +285,8 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 		guardian: guardians[i],
 		controller: opts.controllers[i].label,
 		model: opts.controllers[i].modelId,
-		...(opts.controllers[i].strategy ? { strategy: opts.controllers[i].strategy! } : {})
+		...(opts.controllers[i].strategy ? { strategy: opts.controllers[i].strategy! } : {}),
+		...(opts.controllers[i].openingSpirits?.length ? { openingSpirits: opts.controllers[i].openingSpirits! } : {})
 	}));
 	const controllerBySeat = new Map(seats.map((seat, i) => [seat, opts.controllers[i]]));
 	const gameIndex = opts.gameIndex ?? 0;

@@ -50,6 +50,8 @@ export interface LlmSeatOptions {
 	gate?: CallGate;
 	/** The seat's goal for the whole game (a second system message; none for `free`). */
 	strategy?: Strategy | null;
+	/** Spirits this seat's opening four must include (tests only; absent: as dealt). */
+	openingSpirits?: string[];
 	/** End-of-game statement: `ask` the model, or a fixed `placeholder` without a call.
 	 *  Default: placeholder for the mock provider, ask for every other provider. */
 	statement?: 'ask' | 'placeholder';
@@ -95,6 +97,7 @@ export class LlmSeatController implements SeatController {
 	readonly label: string;
 	readonly modelId: string;
 	readonly strategy: Strategy | null;
+	readonly openingSpirits?: string[];
 	readonly memory: SeatMemory;
 	readonly #opts: LlmSeatOptions;
 	readonly #strategyMessage: string | null;
@@ -107,6 +110,7 @@ export class LlmSeatController implements SeatController {
 		this.modelId = `${opts.provider.name}:${opts.model}`;
 		this.label = opts.label ?? this.modelId;
 		this.strategy = opts.strategy ?? null;
+		if (opts.openingSpirits?.length) this.openingSpirits = [...opts.openingSpirits];
 		this.memory = opts.memory ?? 'history';
 		this.#strategyMessage = strategyMessage(this.strategy);
 		this.#notebookMessage = notebookMessage(opts.notebook ?? '', opts.dataChanges);

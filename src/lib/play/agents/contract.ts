@@ -150,6 +150,8 @@ export interface SeatController {
 	): void | Promise<void>;
 	/** The goal this seat keeps for the whole game (strategy.ts); absent = none. */
 	readonly strategy?: Strategy | null;
+	/** Spirits this seat's opening four must include (tests only; absent: as dealt). */
+	readonly openingSpirits?: string[];
 	/** After the game: why it played as it did (one call in the same conversation). */
 	explain?(request: StatementRequest, ctx: DecideContext): Promise<StatementAnswer>;
 }

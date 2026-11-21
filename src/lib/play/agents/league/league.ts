@@ -175,9 +175,9 @@ export class League {
 		this.#byId = new Map(this.agents.map((a) => [a.id, a]));
 		if (opts.config.benchmark)
 			for (const a of this.agents)
-				if (a.learn || a.strategy.text)
+				if (a.learn || a.strategy.text || a.openingSpirits)
 					throw new Error(
-						`benchmark: agent ${a.id} must have "learn": false and an empty strategy.md`
+						`benchmark: agent ${a.id} must have "learn": false, an empty strategy.md and no openingSpirits`
 					);
 		this.schedule = new LeagueSchedule(
 			this.agents.map((a) => a.id),
@@ -671,6 +671,7 @@ export class League {
 			maxTokens: 400,
 			label: agent.id,
 			strategy: agent.strategy,
+			...(agent.openingSpirits ? { openingSpirits: agent.openingSpirits } : {}),
 			memory: agent.memory,
 			notebook,
 			dataChanges,

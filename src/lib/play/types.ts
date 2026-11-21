@@ -1497,7 +1497,11 @@ export type GameCommand =
 	| { type: 'selectGuardian'; guardianName: string }
 	/** Host sets the navigation timer (ms) in the lobby; `null` = no limit. */
 	| { type: 'setNavigationTimer'; durationMs: number | null }
-	| { type: 'startGame'; seed?: number }
+	/**
+	 * `openingSpirits` (tests only; absent in a normal game): for a seat, names of Spirit World
+	 * spirits that its opening four must include. See `seedOpeningSpirits` in runtime.ts.
+	 */
+	| { type: 'startGame'; seed?: number; openingSpirits?: Partial<Record<SeatColor, string[]>> }
 	| { type: 'selectNavigationDestination'; destination: string }
 	// ── Phase machine (2D play mode) ──────────────────────────────────────
 	| {
