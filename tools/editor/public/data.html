@@ -7,7 +7,7 @@
   // One file, two pages: /data.html edits the game data; /simulations.html (a link to this file) shows the
   // results of the test games. Old links to the balance pages on /data.html go to /simulations.html.
   {const sims=/\/simulations\.html$/.test(location.pathname);
-   if(!sims&&['#explorer','#attack','#games','#spirits','#monsters'].includes(location.hash))location.replace('/simulations.html'+location.hash);
+   if(!sims&&['#explorer','#builds','#attack','#games','#spirits','#monsters'].includes(location.hash))location.replace('/simulations.html'+location.hash);
    document.documentElement.dataset.mode=sims?'sims':'data';if(sims)document.title='Simulations · Niji Batch';}
 </script>
 <style>:root[data-mode="sims"] .data-only, :root[data-mode="data"] .sims-only { display: none !important; }</style>
@@ -195,10 +195,28 @@
   .ge-draw { margin-bottom: 6px; } .ge-draw .k { color: var(--faint); margin-right: 8px; } .ge-draw .no { color: var(--faint); } .ge-draw .yes { font-weight: 600; }
   .seg2 { display: inline-flex; background: var(--field); border: 1px solid var(--line-2); border-radius: 8px; padding: 2px; } .seg2 button { padding: 4px 12px; border-radius: 6px; color: var(--dim); font-size: 13px; } .seg2 button.on { background: var(--seg); color: var(--text); }
   @media (max-width: 1100px) { main.ge-mode .scroll { overflow: auto; } .ge-body { display: flex; flex-direction: column; } .ge-chart { height: 62vh; flex: none; } .ge-side { overflow: visible; border-left: 0; padding-left: 0; } }
+  /* build archetypes: one line per build */
+  .bd { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; max-width: 1280px; }
+  .bd-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+  .bd-title { margin: 6px 0 0; font-size: 15px; font-weight: 600; } .bd-title small { display: block; margin-top: 3px; font-size: 12px; font-weight: 400; color: var(--dim); }
+  .bd-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--dim); } .bd-legend span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; } .bd-legend small { color: var(--faint); font-variant-numeric: tabular-nums; }
+  .bd-sw { display: inline-block; flex: none; width: 16px; height: 0; border-top: 3px solid var(--c); border-radius: 2px; margin-right: 7px; vertical-align: middle; } .bd-sw.dash { border-top: 2px dashed var(--c); border-radius: 0; opacity: .8; } .bd-legend .bd-sw { margin-right: 0; }
+  .bd-chart { position: relative; height: min(56vh, 520px); min-height: 300px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+  .bd-chart svg { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  .bd-chart text { font: 11px "Figtree", system-ui, sans-serif; fill: var(--dim); } .bd-chart text.cap { fill: var(--faint); } .bd-chart text.lab { fill: var(--text); font-size: 12px; }
+  .bd-chart .grid { stroke: var(--line); stroke-width: 1; } .bd-chart .axis { stroke: var(--line-2); stroke-width: 1; } .bd-chart .win { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 4; }
+  .bd-line { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; } .bd-halo { fill: none; stroke: var(--bg); stroke-width: 5; stroke-linejoin: round; opacity: .85; }
+  .bd-all { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .7; } .bd-end { stroke: var(--bg); stroke-width: 2; }
+  .bd-chart .cross { stroke: var(--line-2); stroke-width: 1; } .bd-chart .dot { stroke: var(--bg); stroke-width: 2; }
+  .bd-tip { position: absolute; z-index: 2; pointer-events: none; min-width: 190px; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; display: grid; gap: 3px; box-shadow: 0 10px 28px rgba(0,0,0,.5); }
+  .bd-tip > b { font-weight: 600; margin-bottom: 2px; } .bd-tip div { display: flex; align-items: center; gap: 0; color: var(--dim); } .bd-tip div span { flex: 1; white-space: nowrap; margin-right: 14px; } .bd-tip div b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .bd-table { overflow-x: auto; } .bd-table .gsum-t td:first-child, .bd-table .gsum-t th:first-child { white-space: nowrap; position: sticky; left: 0; background: var(--bg); padding-right: 10px; } .bd .note b { color: var(--dim); font-weight: 600; }
   /* a phone: the page scrolls as a whole, the top bar stacks, the chart stays pinned at the top while the numbers scroll under it */
   @media (max-width: 700px) {
     .split:has(main.ge-mode) { display: block; height: auto; }
-    .split:has(main.ge-mode) > aside { position: fixed; inset: 0 auto 0 0; z-index: 40; width: min(280px, 84vw); overflow-y: auto; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+    html[data-mode="sims"] .split { grid-template-columns: minmax(0, 1fr); }
+    html[data-mode="sims"] .split > aside { position: fixed; inset: 0 auto 0 0; z-index: 40; width: min(280px, 84vw); overflow-y: auto; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+    .bd-chart { height: 46svh; min-height: 280px; } .bd-filters .gf-f { flex: 1 1 100%; display: grid; gap: 3px; font-size: 11px; } .bd-filters select { width: 100%; max-width: none; font-size: 16px; padding: 8px; } .bd-table .gsum-t { font-size: 12.5px; }
     main.ge-mode { height: auto; min-height: 100dvh; }
     main.ge-mode .bar { position: relative; padding: 8px 12px 10px; gap: 8px 10px; } main.ge-mode .bar h1 { font-size: 15px; }
     main.ge-mode #barExtra { flex: 1 1 100%; margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px; align-items: end; }
@@ -253,7 +271,7 @@ const post = (p, b) => fetch(p, { method: 'POST', headers: { 'content-type': 'ap
 const uuid = () => crypto.randomUUID();
 
 let table = 'monsters_v2', stage = 0, rows = [], saved = '', pool = [], poolById = {}, poolIcon = {};
-const TITLE = { bal_lines: 'Game explorer', bal_spirits: 'Spirit tiers', bal_monsters: 'Monsters in the tests', bal_attack: 'Attack over time', monsters_v2: 'Monsters', classes: 'Classes', origins: 'Origins', runes: 'Runes', relics: 'Relics', augments: 'Augments', reward_sets: 'Sets', rewards: 'Rewards' };
+const TITLE = { bal_lines: 'Game explorer', bal_builds: 'Build archetypes', bal_spirits: 'Spirit tiers', bal_monsters: 'Monsters in the tests', bal_attack: 'Attack over time', monsters_v2: 'Monsters', classes: 'Classes', origins: 'Origins', runes: 'Runes', relics: 'Relics', augments: 'Augments', reward_sets: 'Sets', rewards: 'Rewards' };
 let RV = { curve: { a: 1, b: 0.4 }, bands: { jackpot: .5, strong: .2, weak: -.2, trap: -.5 }, values: {}, used: {} };
 const BANDS = ['jackpot', 'strong', 'average', 'weak', 'trap'];
 const THEMES = ['Fire', 'Forest', 'Mountain', 'Water', 'Arcane'];
@@ -265,7 +283,7 @@ const fmt = (v) => (Math.round(v * 100) / 100).toString();
 const POOLS = ['', 'Spirit World', 'Arcane Abyss', 'Heroes'];
 const isBal = () => table.startsWith('bal_');
 const SIMS = document.documentElement.dataset.mode === 'sims';
-const SIMS_MENU = `<button data-t="bal_lines">Game explorer</button><button data-t="bal_attack">Attack over time</button><button data-t="bal_spirits">Spirit tiers</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_spirits" data-stage="${d}">${POOLS[d]}</button>`).join('')}`;
+const SIMS_MENU = `<button data-t="bal_lines">Game explorer</button><button data-t="bal_builds">Build archetypes</button><button data-t="bal_attack">Attack over time</button><button data-t="bal_spirits">Spirit tiers</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_spirits" data-stage="${d}">${POOLS[d]}</button>`).join('')}`;
 const titleText = () => (TITLE[table] ?? table) + (stage ? table === 'bal_spirits' ? ` · ${POOLS[stage]}` : table === 'classes' ? ` · ${['', 'Generic', 'Special'][stage]}` : ` · Class ${stage}` : '');
 let ICONS = [], SETS = [];
 // Fixed backgrounds (Michael, 2026-11-07): runes = the teal shape, relics = the golden shape, augments = the white hexagon. Never per row.
@@ -283,11 +301,11 @@ async function init() {
   load();
 }
 async function load() {
-  setNav(table !== 'bal_lines'); // the game explorer fills the window: the menu is closed on entry (the button at the top left opens it)
+  setNav(table !== 'bal_lines' && !phone.matches); // the game explorer fills the window: the menu is closed on entry (the button at the top left opens it); on a phone the menu covers the page, so it starts closed everywhere
   RV = await get('/api/game/rewards');
   if (table === 'reward_sets') { const ms = await get('/api/game/table?name=monsters_v2'); MEMBERS = {}; for (const m of ms) if (m.set) (MEMBERS[m.set] ??= []).push(m.name); }
   if (table === 'rewards') { rows = pool.filter((t) => RV.values[t.id] != null || RV.used[t.id]).map((t) => ({ id: t.id, name: t.name, icon: t.icon, value: RV.values[t.id] ?? 0 })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name)); }
-  else if (table === 'bal_lines') { rows = []; await loadLines(); }
+  else if (table === 'bal_lines' || table === 'bal_builds') { rows = []; await loadLines(); }
   else if (isBal()) { rows = []; await loadBalance(); }
   else rows = await get('/api/game/table?name=' + table);
   if (table === 'origins') { const [icons, runes, relics] = await Promise.all([get('/api/game/origin-icons'), get('/api/game/table?name=runes'), get('/api/game/table?name=relics')]); ORIGIN = { icons, runes, relics }; }
@@ -503,7 +521,7 @@ const stKey = (st) => STKEY[st] ?? 'pure';
 const setNav = (open) => { document.querySelector('.split').classList.toggle('nonav', !open); $('navToggle').title = open ? 'Hide the menu' : 'Show the menu'; $('navToggle').setAttribute('aria-expanded', open); };
 $('navToggle').onclick = () => setNav(document.querySelector('.split').classList.contains('nonav'));
 const phone = matchMedia('(max-width: 700px)');
-document.addEventListener('pointerdown', (e) => { if (phone.matches && table === 'bal_lines' && !document.querySelector('.split').classList.contains('nonav') && !e.target.closest('aside, #navToggle')) setNav(false); });
+document.addEventListener('pointerdown', (e) => { if (phone.matches && SIMS && !document.querySelector('.split').classList.contains('nonav') && !e.target.closest('aside, #navToggle')) setNav(false); });
 // 'no-cache': the browser keeps its copy and asks the game app whether it changed (a small answer when it did not).
 const geFetch = (q) => fetch(GAME_APP + '/explorer/lines.json' + q, { cache: 'no-cache' }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
 async function loadLines(setup) {
@@ -516,7 +534,7 @@ async function loadLines(setup) {
     // The notes were written for the Test runs table ("the row above"); here the tests are in the order played.
     for (const x of GE.index) { const t = (x.changed ?? '').replace(/\s*\([^)]*row (above|below)[^)]*\)/, ''); x.changed = /row (above|below)/.test(t) ? '' : t; }
     GE.setup = setup ?? (GE.index.some((x) => x.setup === GE.setup) ? GE.setup : GE.index.at(-1).setup);
-    GE.data = (GE.setup === want && await early) || await geFetch('?setup=' + encodeURIComponent(GE.setup));
+    GE.data = (GE.setup === want && await early) || await geFetch('?setup=' + encodeURIComponent(GE.setup)); GE.arcSet = null;
   } catch (e) { GE.data = null; GE.err = `The game lines did not load from the game app (${GAME_APP}). Start it with "npm run local".`; return; }
   if (!GE.runeIcon) {
     const [runes, relics] = await Promise.all([get('/api/game/table?name=runes'), get('/api/game/table?name=relics')]).catch(() => [[], []]);
@@ -533,7 +551,7 @@ function geBuildLines() { GE.lines = []; GE.data.games.forEach((g, gi) => g.seat
 // Live: while the shown test is being played its lines are fetched again every 20 seconds (the balance tools rewrite
 // them as the games go on). The chosen game, player and round stay; a player followed at its last round stays at the last.
 async function geLiveTick() {
-  if (table !== 'bal_lines' || document.hidden || !GE.data || GE.drag || GE.busy || document.activeElement?.closest?.('select')) return;
+  if ((table !== 'bal_lines' && table !== 'bal_builds') || document.hidden || !GE.data || GE.drag || GE.busy || document.activeElement?.closest?.('select')) return;
   GE.busy = true;
   try {
     const index = await geFetch(''), was = GE.index.find((x) => x.setup === GE.setup), now = index.find((x) => x.setup === GE.setup);
@@ -542,11 +560,11 @@ async function geLiveTick() {
     if (!listChanged && !dataChanged) return;
     for (const x of index) { const t = (x.changed ?? '').replace(/\s*\([^)]*row (above|below)[^)]*\)/, ''); x.changed = /row (above|below)/.test(t) ? '' : t; }
     const data = dataChanged ? await geFetch('?setup=' + encodeURIComponent(GE.setup)) : null;
-    if (table !== 'bal_lines' || GE.drag || document.activeElement?.closest?.('select')) return;
+    if ((table !== 'bal_lines' && table !== 'bal_builds') || GE.drag || document.activeElement?.closest?.('select')) return;
     GE.index = index;
     if (data) {
       const key = GE.sel ? [GE.sel.gi, GE.sel.pn] : null, atEnd = GE.sel && GE.r === GE.sel.last, r = GE.r, game = GE.game;
-      GE.data = data; geBuildLines(); GE.at = Date.now();
+      GE.data = data; GE.arcSet = null; geBuildLines(); GE.at = Date.now();
       GE.game = game <= GE.data.games.length ? game : 0;
       GE.sel = key ? GE.lines.find((l) => l.gi === key[0] && l.pn === key[1]) ?? null : null;
       if (GE.sel) GE.r = atEnd ? GE.sel.last : Math.min(r, GE.sel.last);
@@ -744,12 +762,94 @@ function geClassPop(el) {
 }
 const DIE_ICON = { basic: 'Basic Attack - Side 1', enchanted: 'Enchanted Attack', exalted: 'Exalted Attack - Side 1', arcane: 'Arcane Attack - Side 1' };
 const geDie = (tier) => { const t = pool.find((x) => x.name === DIE_ICON[tier]); return t?.icon ? small(t.icon, 64) : null; };
+// ---------- build archetypes: the average points (or attack) by round of each build, one line per build ----------
+// Colours: a fixed slot per build (it never changes with the test), checked for colour-blind separation on this background;
+// "No clear build" is the neutral grey and "All players" the dashed white line.
+const BD_COLOR = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#7d8291'];
+const BD = { metric: 'vp' };
+function bdSeries() {
+  const games = GE.data.games, end = Math.max(1, ...games.map((g) => g.rounds));
+  const rows = GE_BUILDS.map(([name, rule], k) => ({ k, name, rule, color: BD_COLOR[k], seats: [], wins: 0 })), all = { k: -1, name: 'All players', rule: 'Every player of the test', color: 'var(--text)', seats: [], wins: 0, all: true };
+  for (const g of games) for (const s of g.seats) { const won = (g.state ?? 'done') === 'done' && s.place === 1; for (const r of [rows[geKind(s)], all]) { r.seats.push(s); if (won) r.wins++; } }
+  // A player keeps their final value after their game ends, so a line ends at the build's average final value.
+  const val = (s, r, m = BD.metric) => s.rounds[Math.min(r, s.rounds.length - 1)][m] ?? 0, avg = (seats, r, m) => seats.reduce((a, s) => a + val(s, r, m), 0) / seats.length;
+  const list = [...rows.filter((r) => r.seats.length), all];
+  for (const row of list) { row.pts = Array.from({ length: end + 1 }, (_, r) => avg(row.seats, r)); row.at = (r, m) => avg(row.seats, r, m);
+    const rate = (a, b) => { const v = row.seats.filter((s) => s.rounds.length - 1 > a).map((s) => { const last = s.rounds.length - 1, hi = b == null ? last : Math.min(b, last); return (val(s, hi, 'vp') - val(s, a, 'vp')) / (hi - a); }); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+    row.rate = [rate(0, 8), rate(8, 16), rate(16, null)]; }
+  return { list, end, win: GE.data.win_points ?? 40, done: games.filter((g) => (g.state ?? 'done') === 'done').length, n: games.length };
+}
+function paintBuilds() {
+  if (!GE.data) return `<div class="note">${esc(GE.err || 'Loading…')}</div>`;
+  const meta = GE.index.find((x) => x.setup === GE.setup), newest = GE.index.at(-1), S = BD.series = bdSeries(), day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const n1 = (v) => v == null ? '–' : String(Math.round(v * 10) / 10), last = S.end, marks = [8, 16, 24].filter((r) => r < last);
+  const sw = (r) => `<i class="bd-sw ${r.all ? 'dash' : ''}" style="--c:${r.color}"></i>`;
+  return `<div class="bd">
+    <div class="bd-filters">
+      <label class="gf-f"><span>Test</span><select id="bdSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x.live ? ' · live' : x === newest ? ' · latest' : ''} · ${esc(day(x.last))} · ${x.done != null && x.done < x.games ? `${x.done} of ${x.games} games finished` : `${x.games} games`}</option>`).join('')}</select></label>
+      <span class="seg2" id="bdMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${BD.metric === 'vp' ? 'on' : ''}">Points</button><button data-metric="atk" class="${BD.metric === 'atk' ? 'on' : ''}" title="Average damage of one attack with the dice held">Attack</button></span>
+      ${meta.live ? `<span class="gf-live"><span class="ge-live">Live</span><span class="gf-sub">${S.done} of ${S.n} finished</span></span>` : ''}
+    </div>
+    <h2 class="bd-title">${BD.metric === 'vp' ? 'Average points by round' : 'Average attack by round'}, by build <small>Test ${meta.n} · ${S.n} games · ${S.list.at(-1).seats.length} players${meta.changes?.length ? ` · ${esc(meta.changes[0])}` : ''}</small></h2>
+    <div class="bd-legend">${S.list.map((r) => `<span title="${esc(r.rule)}">${sw(r)}${esc(r.name)} <small>${r.seats.length}</small></span>`).join('')}</div>
+    <div class="bd-chart" id="bdChart"><svg id="bdSvg" role="img" aria-label="Average ${BD.metric === 'vp' ? 'points' : 'attack'} by round, one line per build"></svg><div class="bd-tip" id="bdTip" hidden></div></div>
+    <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Average points at the end">Final points</th>${marks.map((r) => `<th title="Average points at the end of round ${r}">Points at <span class="nb">round ${r}</span></th>`).join('')}
+      <th title="Points a round in rounds 1 to 8">A round, <span class="nb">1–8</span></th><th title="Points a round in rounds 9 to 16"><span class="nb">9–16</span></th><th title="Points a round from round 17 on"><span class="nb">17 on</span></th><th title="Average damage of one attack at the end of round 8">Attack at <span class="nb">round 8</span></th><th title="Average damage of one attack at the end">Attack at <span class="nb">the end</span></th></tr></thead>
+      <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}"><td>${sw(r)}${esc(r.name)}</td><td>${r.seats.length}</td><td>${S.done ? r.wins : '–'}</td><td>${n1(r.at(last, 'vp'))}</td>${marks.map((m) => `<td>${n1(r.at(m, 'vp'))}</td>`).join('')}<td>${n1(r.rate[0])}</td><td>${n1(r.rate[1])}</td><td>${n1(r.rate[2])}</td><td>${n1(r.at(Math.min(8, last), 'atk'))}</td><td>${n1(r.at(last, 'atk'))}</td></tr>`).join('')}</tbody></table></div>
+    <div class="note">A player's build is read from the traits they reached during the game: ${GE_BUILDS.slice(0, 5).map(([n, rule]) => `<b>${esc(n)}</b> = ${esc(rule)}`).join('; ')}; everyone else is "No clear build". The number beside a name is how many players had that build; a group of two or three players is one or two games' luck, not a trend. After a player's game ends they keep their final value, so each line ends at the build's average final value.${S.done < S.n ? ` ${S.done} of ${S.n} games are finished; the others count as far as they were played.` : ''}</div>
+  </div>`;
+}
+function mountBuilds() {
+  if (!GE.data) return;
+  $('bdSetup').onchange = async (e) => { await loadLines(e.target.value); paint(); };
+  $('bdMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; BD.metric = b.dataset.metric; paint(); };
+  const svg = $('bdSvg'), tip = $('bdTip');
+  const move = (e) => { const g = BD.geo; if (!g) return; const b = svg.getBoundingClientRect(), mx = e.clientX - b.left, r = Math.max(0, Math.min(g.end, Math.round(g.xinv(mx))));
+    const px = g.x(r); svg.querySelector('#bdCross').setAttribute('x1', px); svg.querySelector('#bdCross').setAttribute('x2', px); svg.querySelector('#bdHover').setAttribute('visibility', 'visible');
+    const rows = [...BD.series.list].sort((a, c) => c.pts[r] - a.pts[r]);
+    for (const row of BD.series.list) { const d = svg.querySelector(`#bdDot${row.k < 0 ? 'A' : row.k}`); d.setAttribute('cx', px); d.setAttribute('cy', g.y(row.pts[r])); }
+    tip.innerHTML = `<b>Round ${r}</b>${rows.map((row) => `<div><i class="bd-sw ${row.all ? 'dash' : ''}" style="--c:${row.color}"></i><span>${esc(row.name)}</span><b>${(Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
+    tip.hidden = false; const w = tip.offsetWidth, h = tip.offsetHeight; tip.style.left = Math.max(4, px + 14 + w > g.W ? px - 14 - w : px + 14) + 'px'; tip.style.top = Math.max(4, Math.min(g.H - h - 4, e.clientY - b.top - h / 2)) + 'px'; };
+  const leave = () => { tip.hidden = true; svg.querySelector('#bdHover')?.setAttribute('visibility', 'hidden'); };
+  svg.onpointermove = move; svg.onpointerdown = move; svg.onpointerleave = leave; svg.onpointercancel = leave;
+  BD.ro?.disconnect(); BD.ro = new ResizeObserver(() => drawBuilds()); BD.ro.observe($('bdChart'));
+  drawBuilds();
+}
+function drawBuilds() {
+  const box = $('bdChart'), svg = $('bdSvg'), S = BD.series; if (!box || !S) return;
+  const W = box.clientWidth, H = box.clientHeight, slim = W < 560, points = BD.metric === 'vp';
+  const m = slim ? { l: 30, r: 44, t: 14, b: 34 } : { l: 44, r: 208, t: 16, b: 40 }, pw = W - m.l - m.r, ph = H - m.t - m.b; if (pw < 50 || ph < 50) return;
+  const top = Math.max(...S.list.flatMap((r) => r.pts)), ymax = points ? Math.max(S.win, top) + 2 : Math.max(5, top) * 1.1, f = (n) => n.toFixed(1);
+  const x = (r) => m.l + (r / S.end) * pw, y = (v) => m.t + ph - (v / ymax) * ph;
+  BD.geo = { x, y, xinv: (px) => ((px - m.l) / pw) * S.end, W, H, end: S.end };
+  let s = ''; const tick = ymax > 28 ? 10 : 5;
+  for (let v = 0; v <= ymax; v += tick) s += `<line class="${v === 0 ? 'axis' : 'grid'}" x1="${m.l}" x2="${W - m.r}" y1="${f(y(v))}" y2="${f(y(v))}"/><text x="${m.l - 8}" y="${f(y(v) + 4)}" text-anchor="end">${v}</text>`;
+  for (let r = 0; r <= S.end; r += S.end > 30 ? 10 : 5) s += `<line class="grid" x1="${f(x(r))}" x2="${f(x(r))}" y1="${H - m.b}" y2="${H - m.b + 4}"/><text x="${f(x(r))}" y="${H - m.b + 17}" text-anchor="middle">${r}</text>`;
+  s += `<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
+  if (points) s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(S.win))}" y2="${f(y(S.win))}"/><text class="cap" x="${m.l + 6}" y="${f(y(S.win) - 6)}">${S.win} points wins</text>`;
+  // "All players" under the builds, then the builds from the largest group down, so the small groups stay on top.
+  for (const row of [...S.list].sort((a, b) => (b.all ? 1 : 0) - (a.all ? 1 : 0) || b.seats.length - a.seats.length)) { const d = row.pts.map((v, r) => `${r ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('');
+    s += row.all ? `<path class="bd-all" d="${d}"/>` : `<path class="bd-halo" d="${d}"/><path class="bd-line" style="stroke:${row.color}" d="${d}"/>`; }
+  // Labels at the right edge (name and final value; the value alone on a narrow screen), moved apart where lines end close together.
+  const ends = S.list.map((row) => ({ row, y: y(row.pts.at(-1)) })).sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
+  const over = ends.at(-1).y - (H - m.b); if (over > 0) for (const e of ends) e.y -= over;
+  s += ends.map(({ row, y: ly }) => `<circle cx="${f(x(S.end))}" cy="${f(y(row.pts.at(-1)))}" r="${row.all ? 3 : 4}" style="fill:${row.color}" class="bd-end"/><text class="lab" x="${f(x(S.end) + 10)}" y="${f(ly + 4)}">${slim ? '' : esc(row.name) + ' · '}${(Math.round(row.pts.at(-1) * 10) / 10).toFixed(1)}</text>`).join('');
+  s += `<g id="bdHover" visibility="hidden"><line class="cross" id="bdCross" y1="${m.t}" y2="${H - m.b}"/>${S.list.map((row) => `<circle class="dot" id="bdDot${row.k < 0 ? 'A' : row.k}" r="5" style="fill:${row.color}"/>`).join('')}</g>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
+}
 // ---------- the test in numbers (what the Balance charts page showed), in the panel while no point is chosen ----------
 const geWhen = (x) => { const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), hm = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); return day(x.first) === day(x.last) ? `${day(x.first)}, ${hm(x.first)} to ${hm(x.last)}` : `${day(x.first)} ${hm(x.first)} to ${day(x.last)} ${hm(x.last)}`; };
 const geMed = (v) => { const a = [...v].sort((x, y) => x - y), n = a.length; return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : null; };
 const ge1 = (x) => x == null ? '–' : String(Math.round(x * 10) / 10);
 const GE_LEVELS = ['Abyss Lurker', 'Difficulty 1', 'Difficulty 2', 'Difficulty 3'];
 const GE_BUILDS = [['Beast', 'Beast 4 or more, Fighter 2 or less'], ['Beast → Arcane spirits', 'Beast 4 or more, Fighter 2 or less, and 2 or more Arcane Abyss spirits held'], ['Fighter + Beast', 'Fighter 3 or more and Beast 3 or more'], ['Fighter + Elementalist', 'Fighter 3 or more and Elementalist 2 or more'], ['F + E with Mystic / Cursed', 'Fighter 3 or more, Elementalist 2 or more, and Mystic 3 or Cursed Spirit 4'], ['No clear build', 'None of the above']];
+/** The build of a player, by the traits they reached (an index into GE_BUILDS). */
+function geKind(s) {
+  const arc = GE.arcSet ??= new Set(GE.data.arcane ?? []);
+  const pk = (c) => Math.max(0, ...s.rounds.map((p) => p.cl?.find((x) => x.n === c)?.on ?? 0)), fe = pk('Fighter') >= 3 && pk('Elementalist') >= 2, b = pk('Beast'), f = pk('Fighter');
+  if (b >= 4 && f <= 2) return Math.max(0, ...s.rounds.map((p) => (p.sp ?? []).filter((x) => arc.has(x.n)).length)) >= 2 ? 1 : 0;
+  if (b >= 3 && f >= 3) return 2; if (fe) return pk('Cursed Spirit') >= 4 || pk('Mystic') >= 3 ? 4 : 3; return 5;
+}
 function geStats(games) {
   // Finished games count for the end round and the gap; a test with none shows its games as far as they are played.
   const done = games.filter((g) => (g.state ?? 'done') === 'done'), use = done.length ? done : games;
@@ -771,10 +871,7 @@ function geStats(games) {
   const fights = games.reduce((n, g) => n + g.seats.reduce((m, s) => m + s.rounds.reduce((k, p) => k + (p.acts ?? []).filter((a) => /^Attack the Good players/.test(a.t)).length, 0), 0), 0);
   // Players by build (the traits they reached), with their points a round early, in the middle and late.
   const at = (s, r) => { let q = null; for (const p of s.rounds) { if (p.r <= r) q = p; else break; } return q; };
-  const arc = new Set(GE.data.arcane ?? []);
-  const kind = (s) => { const pk = (c) => Math.max(0, ...s.rounds.map((p) => p.cl?.find((x) => x.n === c)?.on ?? 0)), fe = pk('Fighter') >= 3 && pk('Elementalist') >= 2, b = pk('Beast'), f = pk('Fighter');
-    if (b >= 4 && f <= 2) return Math.max(0, ...s.rounds.map((p) => (p.sp ?? []).filter((x) => arc.has(x.n)).length)) >= 2 ? 1 : 0;
-    if (b >= 3 && f >= 3) return 2; if (fe) return pk('Cursed Spirit') >= 4 || pk('Mystic') >= 3 ? 4 : 3; return 5; };
+  const kind = geKind;
   const row = () => ({ n: 0, wins: 0, vp: [], a: [], b: [], c: [], dice: [[], [], [], []], atk: [] });
   const builds = GE_BUILDS.map(row), all = row(), winners = row();
   for (const g of use) for (const s of g.seats) { const last = s.rounds.at(-1), v = (r) => at(s, r)?.vp ?? 0, won = (g.state ?? 'done') === 'done' && s.place === 1;
@@ -875,7 +972,7 @@ function paintSide() {
       <div><h3>Drew and picked</h3>${p.draws.length ? p.draws.map((d) => `<div class="ge-draw"><span class="k">${esc(d.k)}</span>${d.o.map((o) => { const yes = d.p.some((x) => x === o || x.startsWith(o + ' (replaced')); const full = d.p.find((x) => x.startsWith(o + ' (replaced')) ?? o; return `<span class="${yes ? 'yes' : 'no'}">${yes ? '✓ ' : ''}${esc(full)}</span>`; }).join('<span class="no">, </span>')}${d.again ? ' <span class="no">· drew again</span>' : !d.p.length ? ' <span class="no">· took none</span>' : ''}</div>`).join('') : '<span class="was">–</span>'}</div></div>`;
   side.innerHTML = head + `<div id="geRest" class="${geView}">${rest}</div>`;
 }
-function paint() { document.querySelector('main').classList.toggle('ge-mode', table === 'bal_lines'); $('gePop')?.remove(); $('scroll').innerHTML = table === 'bal_lines' ? paintLines() : table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'bal_attack' ? paintBalAttack() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); if (table === 'bal_lines') mountLines(); }
+function paint() { document.querySelector('main').classList.toggle('ge-mode', table === 'bal_lines'); $('gePop')?.remove(); $('scroll').innerHTML = table === 'bal_lines' ? paintLines() : table === 'bal_builds' ? paintBuilds() : table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'bal_attack' ? paintBalAttack() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); if (table === 'bal_lines') mountLines(); if (table === 'bal_builds') mountBuilds(); }
 
 $('scroll').addEventListener('input', (e) => {
   const el = e.target;
@@ -949,9 +1046,9 @@ $('save').onclick = async () => {
   if (table === 'rewards') { RV.values = Object.fromEntries(rows.map((t) => [t.id, Number(t.value) || 0])); curveDirty = false; }
   saved = JSON.stringify(rows); for (const tr of document.querySelectorAll('tr.changed')) tr.classList.remove('changed'); mark(); $('status').textContent = `Saved ${r.rows ?? r.tokens} rows`;
 };
-$('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; const same = b.dataset.t === table; if (!same && dirty() && !confirm('Leave without saving?')) return; if (!same) curveDirty = false; stage = Number(b.dataset.stage ?? 0); if (same) { for (const x of $('tabs').children) x.classList.toggle('on', x === b); $('title').textContent = titleText(); paint(); } else { table = b.dataset.t; load(); } history.replaceState(null, '', table === 'bal_lines' ? '#explorer' : location.pathname + location.search); });
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; const same = b.dataset.t === table; if (!same && dirty() && !confirm('Leave without saving?')) return; if (!same) curveDirty = false; stage = Number(b.dataset.stage ?? 0); if (same) { for (const x of $('tabs').children) x.classList.toggle('on', x === b); $('title').textContent = titleText(); paint(); } else { table = b.dataset.t; load(); } history.replaceState(null, '', table === 'bal_lines' ? '#explorer' : table === 'bal_builds' ? '#builds' : location.pathname + location.search); });
 addEventListener('beforeunload', (e) => { if (dirty()) e.preventDefault(); });
-if (SIMS) table = { '#attack': 'bal_attack', '#spirits': 'bal_spirits', '#monsters': 'bal_monsters' }[location.hash] ?? 'bal_lines';
+if (SIMS) table = { '#builds': 'bal_builds', '#attack': 'bal_attack', '#spirits': 'bal_spirits', '#monsters': 'bal_monsters' }[location.hash] ?? 'bal_lines';
 init();
 window.__dbg = () => ({ rows, composeIcon, post }); // for tests
 </script>
