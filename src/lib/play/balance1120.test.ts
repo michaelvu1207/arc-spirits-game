@@ -21,7 +21,7 @@ import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WE
 import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
-import { cursedSpiritDiceTier, fairyDiceTier, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
+import { cursedSpiritDiceTier, fairyDiceTier, parseRules, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
 import { buildRulesBrief } from './agents/rulesBrief';
 import { enterBenefits } from './phases';
 import { labelFor } from './agents/labels';
@@ -629,5 +629,50 @@ describe('elementalistRest1235, elementalist5NeedsRelic and enchantedTwoThirds (
 		expect((['basic', 'enchanted', 'exalted', 'arcane'] as DiceTier[]).map((t) => Math.round(avg(diceTierFaces(ON)[t]) * 100) / 100)).toEqual([0.33, 0.67, 1.5, 2]);
 		expect(diceTierFaces(withRules({ buffedDice: true, enchantedTwoThirds: true }))).toBe(BUFFED_DICE_TIER_FACES);
 		expect(buildRulesBrief(ON)).toContain('basic 0,0,0,0,1,1; enchanted 0,0,1,1,1,1; exalted 1,1,1,2,2,2');
+	});
+});
+
+describe('rules.json numbers: dice faces and the Elementalist ladder from the data (Michael, 2026-11-22)', () => {
+	const tenBasic = () => Array.from({ length: 10 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as DiceTier }));
+	const relic = { slotIndex: 1, hasRune: true, id: 'firecracker', name: 'Firecracker', type: 'relic' } as never;
+	const upgraded = (rules: PlayRules, n: number, mats: never[] = []) => {
+		const p = makePlayer({ attackDice: tenBasic(), spirits: [spirit(1, { Elementalist: n })], mats });
+		applyRest(makeState(p), 'Red', [], { catalog: withRules(rules) });
+		return p.attackDice.filter((d) => d.tier !== 'basic').length;
+	};
+	const text = (rules: PlayRules, count: number) => ruleAdjustedClassSchema(withRules(rules), 'Elementalist', [{ count, effects: [{ type: 'benefit', description: 'old' }] }] as never)![0].effects?.[0].description;
+	it('parseRules reads them and reports bad ones', () => {
+		const good = parseRules({ weakLowDice: true, numbers: { diceFaces: { enchanted: [0, 1, 1, 1, 1, 1] }, elementalistRest: [1, 1, 2, 4] } });
+		expect(good.problems).toEqual([]);
+		expect(good.rules).toEqual({ weakLowDice: true, numbers: { diceFaces: { enchanted: [0, 1, 1, 1, 1, 1] }, elementalistRest: [1, 1, 2, 4] } });
+		expect(parseRules({ numbers: {} }).rules).toBeUndefined();
+		const bad = parseRules({ numbers: { diceFaces: { gold: [1], basic: [0.5] }, elementalistRest: [1, 2, 3], speed: 3 } });
+		expect(bad.rules).toBeUndefined();
+		expect(bad.problems).toHaveLength(4);
+	});
+	it('diceFaces replaces the faces of the tiers it names, under any dice switch', () => {
+		const own = { diceFaces: { enchanted: [0, 0, 0, 1, 1, 1], exalted: [1, 1, 1, 1, 2, 2] } };
+		const ON = withRules({ buffedDice: true, weakLowDice: true, enchantedTwoThirds: true, numbers: own });
+		expect(diceTierFaces(ON)).toEqual({ ...TWO_THIRDS_DICE_TIER_FACES, ...own.diceFaces });
+		expect(diceTierFaces(withRules({ numbers: own })).basic).toBe(DICE_TIER_FACES.basic);
+		expect(buildRulesBrief(ON)).toContain('basic 0,0,0,0,1,1; enchanted 0,0,0,1,1,1; exalted 1,1,1,1,2,2');
+		const p = makePlayer({ attackDice: dice('enchanted', 'enchanted', 'exalted') });
+		expect(expectedAttack(p, ON)).toBeCloseTo(0.5 + 0.5 + 8 / 6);
+	});
+	it('elementalistRest replaces 1 / 2 / 3 / 5, with the relic step and the printed text', () => {
+		const R: PlayRules = { elementalistRest1235: true, numbers: { elementalistRest: [1, 1, 2, 4] } };
+		expect([1, 2, 3, 4, 5, 6].map((n) => upgraded(R, n))).toEqual([0, 1, 1, 2, 4, 4]);
+		const G: PlayRules = { ...R, elementalist5NeedsRelic: true };
+		expect(upgraded(G, 5)).toBe(2);
+		expect(upgraded(G, 5, [relic])).toBe(4);
+		expect(text(R, 3)).toBe('On Rest, upgrade an attack dice.');
+		expect(text(R, 4)).toBe('On Rest, upgrade an attack dice 2 times.');
+		expect(text(G, 5)).toBe('On Rest, upgrade an attack dice 4 times if you have a relic (any relic); 2 times if you have none.');
+		// Without the switch the numbers do nothing.
+		expect(upgraded({ numbers: { elementalistRest: [9, 9, 9, 9] } }, 3)).toBe(2);
+	});
+	it('without numbers the text and the ladder are as before', () => {
+		expect(text({ elementalistRest1235: true, elementalist5NeedsRelic: true }, 5)).toBe('On Rest, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.');
+		expect(text({ elementalistRest1235: true }, 2)).toBe('On Rest, upgrade an attack dice.');
 	});
 });

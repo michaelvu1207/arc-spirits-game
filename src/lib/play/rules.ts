@@ -162,6 +162,10 @@
  * - elementalist5NeedsRelic (default false; Michael, 2026-11-22): only read under `elementalistRest1235`;
  *   true ⇒ the step at 5 Elementalists counts only while the player holds a relic (any relic); without
  *   one, 5 Elementalists upgrade as 4 do.
+ * - numbers (not a switch; Michael, 2026-11-22: "tweak the numbers for dice, and elementalist upgrade"): an
+ *   optional object of rule numbers. `diceFaces` {tier: faces} replaces the faces of those attack-dice
+ *   tiers under any dice switch; `elementalistRest` [a, b, c, d] replaces 1 / 2 / 3 / 5 under
+ *   `elementalistRest1235`. Absent ⇒ the numbers the switches give. See `parseRuleNumbers` below.
  * - fighterInitiative (default false; Michael, 2026-11-20): true ⇒ in combat Fighter gives 1 initiative
  *   per Fighter trait, up to 5, starting at one trait (a new first breakpoint; the dice on Rest are
  *   unchanged). The printed text is in the class data. See classes/fighter.ts.
@@ -230,11 +234,11 @@
  */
 
 import type { ClassBreakpoint } from '$lib/types';
-import { VP_TO_WIN, type PlayCatalog, type PlayRules } from './types';
+import { DICE_TIER_ORDER, VP_TO_WIN, type DiceTier, type PlayCatalog, type PlayRuleSwitches, type PlayRules, type RuleNumbers } from './types';
 
-export type RuleName = keyof PlayRules;
+export type RuleName = keyof PlayRuleSwitches;
 
-export const RULE_DEFAULTS: Required<PlayRules> = {
+export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	feralMonsterStrikeFirst: true,
 	summonReplaceWhenFull: false,
 	cultivatorRelicOnce: false,
@@ -373,6 +377,12 @@ export function parseRules(raw: unknown): { rules: PlayRules | undefined; proble
 		}
 		for (const [name, value] of Object.entries(row as Record<string, unknown>)) {
 			if (name === 'local' || name === 'id' || name.startsWith('_')) continue; // notes / row ids
+			if (name === 'numbers') {
+				const numbers = parseRuleNumbers(value, problems);
+				if (numbers) rules.numbers = numbers;
+				else delete rules.numbers;
+				continue;
+			}
 			if (!RULE_NAMES.includes(name as RuleName)) {
 				problems.push(`rules: unknown switch "${name}" (known: ${RULE_NAMES.join(', ')})`);
 				continue;
@@ -386,6 +396,49 @@ export function parseRules(raw: unknown): { rules: PlayRules | undefined; proble
 		}
 	}
 	return { rules: Object.keys(rules).length ? rules : undefined, problems };
+}
+
+/** Upgrades per Rest at 2 / 3 / 4 / 5 Elementalists under `elementalistRest1235`, unless `numbers.elementalistRest` says otherwise. */
+export const ELEMENTALIST_REST_DEFAULT: [number, number, number, number] = [1, 2, 3, 5];
+
+const wholeNumbers = (v: unknown, min: number, max: number): v is number[] =>
+	Array.isArray(v) && v.length >= min && v.length <= max && v.every((n) => Number.isInteger(n) && n >= 0 && n <= 99);
+
+/** rules.json `numbers` → the valid rule numbers, or `undefined` when there are none. Bad entries are reported and ignored. */
+function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undefined {
+	if (raw == null) return undefined;
+	if (typeof raw !== 'object' || Array.isArray(raw)) {
+		problems.push(`rules: "numbers" must be an object, got ${JSON.stringify(raw)}`);
+		return undefined;
+	}
+	const numbers: RuleNumbers = {};
+	for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+		if (name.startsWith('_')) continue; // notes
+		if (name === 'diceFaces') {
+			if (!value || typeof value !== 'object' || Array.isArray(value)) {
+				problems.push(`rules: numbers.diceFaces must be an object of tier → faces, got ${JSON.stringify(value)}`);
+				continue;
+			}
+			const faces: Partial<Record<DiceTier, number[]>> = {};
+			for (const [tier, list] of Object.entries(value as Record<string, unknown>)) {
+				if (!DICE_TIER_ORDER.includes(tier as DiceTier)) problems.push(`rules: numbers.diceFaces: unknown tier "${tier}" (known: ${DICE_TIER_ORDER.join(', ')})`);
+				else if (!wholeNumbers(list, 1, 12)) problems.push(`rules: numbers.diceFaces.${tier} must be 1 to 12 whole numbers from 0 to 99, got ${JSON.stringify(list)}`);
+				else faces[tier as DiceTier] = [...list];
+			}
+			if (Object.keys(faces).length) numbers.diceFaces = faces;
+		} else if (name === 'elementalistRest') {
+			if (!wholeNumbers(value, 4, 4)) problems.push(`rules: numbers.elementalistRest must be 4 whole numbers (upgrades per Rest at 2, 3, 4, 5 Elementalists), got ${JSON.stringify(value)}`);
+			else numbers.elementalistRest = [value[0], value[1], value[2], value[3]];
+		} else {
+			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest)`);
+		}
+	}
+	return Object.keys(numbers).length ? numbers : undefined;
+}
+
+/** Upgrades per Rest at 2 / 3 / 4 / 5 Elementalists under `elementalistRest1235`: the catalog's numbers, else 1 / 2 / 3 / 5. */
+export function elementalistRestLadder(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): [number, number, number, number] {
+	return catalog?.rules?.numbers?.elementalistRest ?? ELEMENTALIST_REST_DEFAULT;
 }
 
 /** The value of one switch for this catalog (its default when the catalog has no rules). */
@@ -412,15 +465,27 @@ export function pvpAllowedAt(
 }
 
 /** Printed class text that a switch replaces: class → breakpoint count → text. */
-const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count: number; text: string }[] = [
+/** "upgrade an attack dice" for `n` upgrades, as the Elementalist text words it. */
+const upgradeWords = (n: number): string => (n === 1 ? 'upgrade an attack dice' : `upgrade an attack dice ${n} times`);
+const timesWords = (n: number): string => (n === 1 ? 'once' : `${n} times`);
+/** The Elementalist text at `count` (2 to 5) under `elementalistRest1235`, from the catalog's ladder. */
+function elementalistRestText(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, count: number, needsRelic: boolean): string {
+	const ladder = elementalistRestLadder(catalog);
+	const n = ladder[count - 2] ?? 0;
+	if (count === 5 && needsRelic) return `On Rest, ${upgradeWords(n)} if you have a relic (any relic); ${timesWords(ladder[2])} if you have none.`;
+	return `On Rest, ${upgradeWords(n)}.`;
+}
+
+type RuleClassText = string | ((catalog: Pick<PlayCatalog, 'rules'> | null | undefined) => string);
+const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count: number; text: RuleClassText }[] = [
 	// The 2026-11-14 class changes come first: for one class and breakpoint the first entry wins,
 	// so they replace the `sunRework` and `mysticCultivateDouble` texts below.
 	// Listed before the Arcane Blood text: the first matching entry of a tier is the one printed.
-	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 2, text: 'On Rest, upgrade an attack dice.' },
-	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 3, text: 'On Rest, upgrade an attack dice 2 times.' },
-	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 4, text: 'On Rest, upgrade an attack dice 3 times.' },
-	{ rule: 'elementalist5NeedsRelic', when: true, className: 'Elementalist', count: 5, text: 'On Rest, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.' },
-	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 5, text: 'On Rest, upgrade an attack dice 5 times.' },
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 2, text: (c) => elementalistRestText(c, 2, false) },
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 3, text: (c) => elementalistRestText(c, 3, false) },
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 4, text: (c) => elementalistRestText(c, 4, false) },
+	{ rule: 'elementalist5NeedsRelic', when: true, className: 'Elementalist', count: 5, text: (c) => elementalistRestText(c, 5, true) },
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 5, text: (c) => elementalistRestText(c, 5, false) },
 	{
 		rule: 'arcaneBlood',
 		when: true,
@@ -758,6 +823,7 @@ export function ruleAdjustedClassSchema(
 	return schema.map((tier) => {
 		const change = changes.find((c) => c.count === Number(tier.count));
 		if (!change) return tier;
-		return { ...tier, effects: [{ ...tier.effects?.[0], type: 'benefit', description: change.text }] };
+		const description = typeof change.text === 'function' ? change.text(catalog) : change.text;
+		return { ...tier, effects: [{ ...tier.effects?.[0], type: 'benefit', description }] };
 	});
 }

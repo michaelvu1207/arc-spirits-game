@@ -38,7 +38,7 @@
 	import { onMount } from 'svelte';
 	import { supabaseAssets } from '$lib/supabase';
 	import { parseRules, ruleValue } from '$lib/play/rules';
-	import type { PlayRules } from '$lib/play/types';
+	import type { PlayRuleSwitches, PlayRules } from '$lib/play/types';
 
 	interface Props {
 		assets: ReturnType<typeof getAssetState>;
@@ -59,7 +59,7 @@
 			/* default rules */
 		}
 	});
-	const rule = (name: keyof PlayRules) => ruleValue({ rules }, name);
+	const rule = (name: keyof PlayRuleSwitches) => ruleValue({ rules }, name);
 
 	interface ScreenInfo {
 		title: string;

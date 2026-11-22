@@ -10,7 +10,7 @@
  * to resolve by hand — nothing silently breaks.
  */
 
-import type { DiceTier, PlayRules } from '../types';
+import type { DiceTier, PlayRuleSwitches } from '../types';
 
 import { CLASS_ABILITIES } from './abilities';
 import type { GameEvent } from './events';
@@ -122,7 +122,7 @@ export type EffectCondition =
 	/** True when the acting player has at least `amount` victory points. */
 	| { kind: 'vpAtLeast'; amount: number }
 	/** True when the rule switch `rule` is off in the catalog (rules.ts): a part of a class a rule removes. */
-	| { kind: 'ruleOff'; rule: keyof PlayRules };
+	| { kind: 'ruleOff'; rule: keyof PlayRuleSwitches };
 
 export interface EffectBreakpoint {
 	/**

@@ -1,5 +1,5 @@
 import { isRelic } from '../../locationInteractions';
-import { ruleValue } from '../../rules';
+import { elementalistRestLadder, ruleValue } from '../../rules';
 import type { PlayCatalog, PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { EffectCombatInfo, EffectContext } from '../context';
@@ -30,13 +30,6 @@ const REST_LADDER: [count: number, times: number][] = [
 	[2, 1]
 ];
 
-/** Rule `elementalistRest1235` (Michael, 2026-11-22): upgrades per Rest at 2 / 3 / 4 / 5 Elementalists. */
-const REST_LADDER_1235: [count: number, times: number][] = [
-	[5, 5],
-	[4, 3],
-	[3, 2],
-	[2, 1]
-];
 
 /** Whether the player holds a relic (any relic; a used relic tool is gone). */
 export function holdsRelic(player: Pick<PrivatePlayerState, 'mats'>): boolean {
@@ -44,7 +37,8 @@ export function holdsRelic(player: Pick<PrivatePlayerState, 'mats'>): boolean {
 }
 
 /**
- * Under `elementalistRest1235`: the upgrades one Rest gives a player with `count` Elementalists.
+ * Under `elementalistRest1235`: the upgrades one Rest gives a player with `count` Elementalists
+ * (1 / 2 / 3 / 5 at 2 / 3 / 4 / 5, or the catalog's `numbers.elementalistRest`).
  * With the rule `elementalist5NeedsRelic` the top step (5) counts only while the player holds a
  * relic; without one, five Elementalists upgrade as four do.
  */
@@ -53,8 +47,9 @@ export function elementalistRestUpgrades(
 	count: number,
 	player: Pick<PrivatePlayerState, 'mats'>
 ): number {
-	const capped = count >= 5 && ruleValue(catalog, 'elementalist5NeedsRelic') && !holdsRelic(player) ? 4 : count;
-	return REST_LADDER_1235.find(([at]) => capped >= at)?.[1] ?? 0;
+	const capped = count >= 5 && ruleValue(catalog, 'elementalist5NeedsRelic') && !holdsRelic(player) ? 4 : Math.min(count, 5);
+	// 1 / 2 / 3 / 5 at 2 / 3 / 4 / 5 Elementalists, or the catalog's `numbers.elementalistRest`.
+	return capped >= 2 ? elementalistRestLadder(catalog)[capped - 2] : 0;
 }
 
 /** Under `elementalistMethods`: the Elementalist count at which each action starts to upgrade. */

@@ -796,8 +796,22 @@ export interface PlayCatalog {
 	rules?: PlayRules;
 }
 
+/**
+ * rules.json `numbers`: rule numbers that are not switches (Michael, 2026-11-22: "tweak the numbers
+ * for dice, and elementalist upgrade"). Each one is optional; absent ⇒ the number the switches give.
+ */
+export interface RuleNumbers {
+	/** The faces of an attack-dice tier (1 to 12 whole numbers, 0 or more). Replaces that tier's faces under any dice switch. See `diceTierFaces` in combat.ts. */
+	diceFaces?: Partial<Record<DiceTier, number[]>>;
+	/** Under `elementalistRest1235`: upgrades per Rest at 2 / 3 / 4 / 5 Elementalists (default 1, 2, 3, 5). See `elementalistRestUpgrades` in classes/elementalist.ts. */
+	elementalistRest?: [number, number, number, number];
+}
+
+/** rules.json: the rule switches plus the optional rule numbers. */
+export type PlayRules = PlayRuleSwitches & { numbers?: RuleNumbers };
+
 /** rules.json: named rule switches. Each one is optional; see `rules.ts` for the defaults. */
-export interface PlayRules {
+export interface PlayRuleSwitches {
 	/** Feral strikes first against monsters (default true). false ⇒ only +3 damage vs monsters. */
 	feralMonsterStrikeFirst?: boolean;
 	/** With all 7 spirit slots full, a summon may replace one spirit (default false). */
