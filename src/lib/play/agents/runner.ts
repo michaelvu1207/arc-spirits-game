@@ -192,6 +192,9 @@ export interface RunGameOptions {
 	onDecision?: (record: DecisionRecord) => void;
 	/** Skip the engine facts in every decision (scripted and mock seats do not read them). Default off. */
 	skipFacts?: boolean;
+	/** Called with the state whenever the run's own counters are updated (after every applied
+	 *  command and advance), for statistics. The state must not be changed. Default: none. */
+	onState?: (state: PublicGameState) => void;
 }
 
 function emptySeatSummary(setup: SeatSetup): SeatSummary {
@@ -368,6 +371,7 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 					if (side.side === 'evil') summaries.get(side.seat)!.pvpAttacks += 1;
 			}
 		}
+		opts.onState?.(state);
 	};
 
 	const advance = (reason: string): void => {

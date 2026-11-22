@@ -1,6 +1,6 @@
-/** Aggregate numbers of a batch of scripted-player games (feGames.ts). */
+/** Aggregate numbers of a batch of scripted-player games (feGames.ts): `script:fe`, `script:beast`. */
 
-import type { TableGameResult } from './feGames';
+import type { RoundSnapshot, SeatResult, TableGameResult } from './feGames';
 
 const median = (xs: number[]): number | null => {
 	if (!xs.length) return null;
@@ -15,6 +15,98 @@ const mean = (xs: number[]): number | null =>
 export function vpAt(vpByRound: number[], round: number): number {
 	if (!vpByRound.length) return 0;
 	return vpByRound[Math.min(round, vpByRound.length) - 1] ?? 0;
+}
+
+/** Rounds at which the per-kind summary reads every scripted seat. */
+export const SUMMARY_ROUNDS = [4, 8, 12, 16, 20, 22, 24] as const;
+
+/** A seat's kind: its spec without a variant name (`script:beast#a` → `script:beast`). */
+export function seatKind(spec: string): string {
+	return spec.split('#')[0];
+}
+
+/** A scripted seat's state at the end of `round` (its last state when the game ended earlier). */
+export function snapshotAt(rows: RoundSnapshot[], round: number): RoundSnapshot | undefined {
+	return rows.filter((b) => b.round <= round).pop() ?? rows[0];
+}
+
+/**
+ * Per seat kind (`script:beast`, `script:fe`, `mock:…`): players, wins, final points, and for the
+ * scripted kinds the averages at `SUMMARY_ROUNDS` (points, the engine's expected attack, dice by
+ * tier, Beast / Fighter / Elementalist traits, Barrier, Max Barrier) and kills by monster level.
+ * A player keeps the final value after the game ends.
+ */
+export function summarizeByKind(games: TableGameResult[]) {
+	const kinds = [...new Set(games.flatMap((g) => g.seats.map((x) => seatKind(x.spec))))].sort();
+	return Object.fromEntries(
+		kinds.map((kind) => {
+			const rows = games.flatMap((g) =>
+				g.seats.filter((x) => seatKind(x.spec) === kind).map((x) => ({ g, x }))
+			);
+			const seats: SeatResult[] = rows.map((r) => r.x);
+			const scripted = seats.filter((x) => x.scripted);
+			const wins = rows.filter(({ g, x }) => g.winner === x.seat).length;
+			const at = (pick: (snap: RoundSnapshot) => number) =>
+				Object.fromEntries(
+					SUMMARY_ROUNDS.map((r) => [
+						`round${r}`,
+						mean(
+							scripted.map((x) => {
+								const snap = snapshotAt(x.scripted!.byRound, r);
+								return snap ? pick(snap) : 0;
+							})
+						)
+					])
+				);
+			const perPlayer = (n: number) => Math.round((n / Math.max(1, scripted.length)) * 100) / 100;
+			const kills = { lurker: 0, d1: 0, d2: 0, d3: 0 };
+			for (const x of scripted)
+				for (const k of Object.keys(kills) as (keyof typeof kills)[])
+					kills[k] += x.scripted!.kills[k];
+			return [
+				kind,
+				{
+					players: seats.length,
+					wins,
+					/** Wins ÷ players of this kind (0.25 is an even share at a table of four). */
+					winShare: seats.length ? Math.round((wins / seats.length) * 1000) / 1000 : null,
+					finalVp: mean(seats.map((x) => x.finalVp)),
+					pointsAt: Object.fromEntries(
+						SUMMARY_ROUNDS.map((r) => [`round${r}`, mean(seats.map((x) => vpAt(x.vpByRound, r)))])
+					),
+					corruptionsPerPlayer:
+						Math.round(
+							(seats.reduce((n, x) => n + x.corruptions, 0) / Math.max(1, seats.length)) * 100
+						) / 100,
+					...(scripted.length
+						? {
+								attackAt: at((b) => b.attack),
+								diceAt: {
+									basic: at((b) => b.dice.basic),
+									enchanted: at((b) => b.dice.enchanted),
+									exalted: at((b) => b.dice.exalted),
+									arcane: at((b) => b.dice.arcane)
+								},
+								beastAt: at((b) => b.beast),
+								fighterAt: at((b) => b.fighter),
+								elementalistAt: at((b) => b.elementalist),
+								barrierAt: at((b) => b.barrier),
+								maxBarrierAt: at((b) => b.maxBarrier),
+								killsPerPlayer: {
+									lurker: perPlayer(kills.lurker),
+									d1: perPlayer(kills.d1),
+									d2: perPlayer(kills.d2),
+									d3: perPlayer(kills.d3)
+								},
+								fightsPerPlayer: perPlayer(
+									scripted.reduce((n, x) => n + x.scripted!.fightsStarted, 0)
+								)
+							}
+						: {})
+				}
+			];
+		})
+	);
 }
 
 export function summarizeFeRun(games: TableGameResult[]) {
@@ -84,6 +176,8 @@ export function summarizeFeRun(games: TableGameResult[]) {
 			bloodTakenPerPlayer: perPlayer(scripted.reduce((n, x) => n + x.s.scripted!.bloodTaken, 0)),
 			corruptionsPerPlayer: perPlayer(scripted.reduce((n, x) => n + x.s.corruptions, 0))
 		},
+		/** Per seat kind: the numbers of `summarizeByKind`. */
+		byKind: summarizeByKind(games),
 		/** Per seat spec (A/B tables): players, wins, points. */
 		bySpec: Object.fromEntries(
 			[...new Set(games.flatMap((g) => g.seats.map((x) => x.spec)))].map((spec) => {

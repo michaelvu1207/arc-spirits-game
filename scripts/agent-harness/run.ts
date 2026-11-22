@@ -239,8 +239,9 @@ function controllerFor(
 		});
 	}
 	if (kind === 'script') {
-		// A scripted player (no model): script:fe is the Fighter + Elementalist baseline.
-		if (!isScriptedPolicy(arg)) throw new Error(`unknown scripted policy "${arg}" (fe)`);
+		// A scripted player (no model): script:fe is the Fighter + Elementalist baseline,
+		// script:beast the Beast baseline.
+		if (!isScriptedPolicy(arg)) throw new Error(`unknown scripted policy "${arg}" (fe | beast)`);
 		if (!catalog) throw new Error('scripted seats need the catalog');
 		return new ScriptedSeatController({ catalog, policy: arg });
 	}
@@ -284,7 +285,7 @@ function controllerFor(
 		});
 	}
 	throw new Error(
-		`unknown seat spec "${spec}" (codex[:<model>] | mock:random | mock:greedy | mock:first | script:fe | or:<openrouter model id>)`
+		`unknown seat spec "${spec}" (codex[:<model>] | mock:random | mock:greedy | mock:first | script:fe | script:beast | or:<openrouter model id>)`
 	);
 }
 

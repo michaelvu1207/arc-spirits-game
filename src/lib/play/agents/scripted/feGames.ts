@@ -1,11 +1,17 @@
 /**
- * Offline games for the scripted Fighter + Elementalist player: one table, one seed, no model
- * calls. Used by scripts/agent-harness/scripted/run-fe.ts and the tests.
+ * Offline games for the scripted players (`script:fe`, `script:beast`): one table, one seed, no
+ * model calls. Used by scripts/agent-harness/scripted/run-scripted.ts and the tests.
  */
 
 import { awakenedClassCounts } from '../../effects/apply';
-import { diceTierFaces } from '../../combat';
-import type { DiceTier, PlayCatalog, PrivatePlayerState, SeatColor } from '../../types';
+import { diceTierFaces, expectedAttack } from '../../combat';
+import type {
+	DiceTier,
+	PlayCatalog,
+	PrivatePlayerState,
+	PublicGameState,
+	SeatColor
+} from '../../types';
 import { BudgetGuard } from '../budget';
 import type { ControllerAnswer, DecideContext, DecisionRequest, SeatController } from '../contract';
 import { LlmSeatController } from '../llmSeat';
@@ -13,23 +19,32 @@ import { MockProvider, type MockPolicy } from '../providers/mock';
 import { buildRulesBrief } from '../rulesBrief';
 import { runAgentGame, type GameSummary } from '../runner';
 import { seatsFor } from '../setup';
-import type { FeParams } from './fePolicy';
-import { ScriptedSeatController } from './scriptedSeat';
+import {
+	ScriptedSeatController,
+	SCRIPTED_POLICIES,
+	isScriptedPolicy,
+	type ScriptedParams
+} from './scriptedSeat';
 
 export interface RoundSnapshot {
 	round: number;
 	vp: number;
 	dice: Record<DiceTier, number>;
-	/** Expected damage of one roll of all dice. */
+	/** The engine's expected attack: the dice's average plus 1 per Beast trait. */
 	attack: number;
+	/** Expected damage of one roll of the dice alone. */
+	diceAttack: number;
+	beast: number;
 	fighter: number;
 	elementalist: number;
+	barrier: number;
 	maxBarrier: number;
 }
 
 export interface ScriptedSeatStats {
-	/** Last snapshot the seat saw in each round (its end-of-round state). */
+	/** The seat's state at the end of each round. */
 	byRound: RoundSnapshot[];
+	/** Monsters defeated, by level (every kill, also when the reward claim was the only move). */
 	kills: { lurker: number; d1: number; d2: number; d3: number };
 	/** Kills whose rewards were exchanged for Arcane Blood. */
 	bloodTaken: number;
@@ -64,7 +79,8 @@ export interface TableGameResult {
 
 const TIERS: DiceTier[] = ['basic', 'enchanted', 'exalted', 'arcane'];
 
-/** Wraps the scripted seat to record what it had at the end of every round. */
+/** Wraps the scripted seat to record what it had at the end of every round. The round states and
+ *  the kills are read from the game state (`observe`), the fights and Arcane Blood from its choices. */
 class RecordingSeat implements SeatController {
 	readonly label: string;
 	readonly modelId: string;
@@ -81,6 +97,7 @@ class RecordingSeat implements SeatController {
 	readonly #inner: SeatController;
 	readonly #catalog: PlayCatalog;
 	readonly #means: Record<DiceTier, number>;
+	readonly #seenCombats = new Set<string>();
 
 	constructor(inner: SeatController, catalog: PlayCatalog) {
 		this.#inner = inner;
@@ -95,20 +112,27 @@ class RecordingSeat implements SeatController {
 
 	async decide(request: DecisionRequest, ctx: DecideContext): Promise<ControllerAnswer> {
 		const answer = await this.#inner.decide(request, ctx);
-		const view = ctx.view;
-		const me = view?.players[request.seat] as PrivatePlayerState | undefined;
-		if (view && me) {
-			this.#snapshot(view.round, me);
-			const chosen = request.actions.find((a) => a.id === answer.response.actionId)?.command;
-			if (chosen?.type === 'startCombat') this.stats.fightsStarted += 1;
-			if (chosen?.type === 'resolveMonsterReward' && me.pendingReward) {
-				const card = this.#catalog.monsters?.find((m) => m.id === me.pendingReward!.monsterId);
-				const key = card?.permanent ? 'lurker' : (`d${card?.stage ?? 1}` as 'd1' | 'd2' | 'd3');
-				if (key in this.stats.kills) this.stats.kills[key] += 1;
-				if (chosen.arcaneBlood) this.stats.bloodTaken += 1;
-			}
-		}
+		const chosen = request.actions.find((a) => a.id === answer.response.actionId)?.command;
+		if (chosen?.type === 'startCombat') this.stats.fightsStarted += 1;
+		if (chosen?.type === 'resolveMonsterReward' && chosen.arcaneBlood) this.stats.bloodTaken += 1;
 		return answer;
+	}
+
+	/** Read the seat's state and its new kills from the game state (after any command). */
+	observe(state: PublicGameState, seat: SeatColor): void {
+		const me = state.players[seat];
+		if (!me) return;
+		this.#snapshot(state.round, me);
+		for (const combat of state.combats) {
+			if (combat.kind !== 'monster' || combat.step !== 'resolved') continue;
+			if (combat.sides[0]?.seat !== seat || this.#seenCombats.has(combat.id)) continue;
+			this.#seenCombats.add(combat.id);
+			if (!combat.killed || !combat.monster) continue;
+			const key = combat.monster.permanent
+				? 'lurker'
+				: (`d${combat.monster.difficulty ?? 1}` as 'd1' | 'd2' | 'd3');
+			if (key in this.stats.kills) this.stats.kills[key] += 1;
+		}
 	}
 
 	#snapshot(round: number, me: PrivatePlayerState) {
@@ -119,9 +143,12 @@ class RecordingSeat implements SeatController {
 			round,
 			vp: me.victoryPoints,
 			dice,
-			attack: TIERS.reduce((n, t) => n + dice[t] * this.#means[t], 0),
+			attack: expectedAttack(me, this.#catalog),
+			diceAttack: TIERS.reduce((n, t) => n + dice[t] * this.#means[t], 0),
+			beast: counts.Beast ?? 0,
 			fighter: counts.Fighter ?? 0,
 			elementalist: counts.Elementalist ?? 0,
+			barrier: me.barrier,
 			maxBarrier: me.maxBarrier
 		};
 		const last = this.stats.byRound[this.stats.byRound.length - 1];
@@ -137,11 +164,13 @@ export interface TableOptions {
 	catalog: PlayCatalog;
 	catalogInfo: { source: string; path: string; hash: string };
 	seed: number;
-	/** Seat specs in seat order: `script:fe`, `mock:greedy`, `mock:random`, `mock:first`;
-	 *  `script:fe#<name>` plays with the parameter overrides `variants[name]` (A/B tests). */
+	/** Seat specs in seat order: `script:fe`, `script:beast`, `mock:greedy`, `mock:random`,
+	 *  `mock:first`; `script:<policy>#<name>` plays with the parameter overrides
+	 *  `variants[name]` (A/B tests). */
 	seats: string[];
-	params?: Partial<FeParams>;
-	variants?: Record<string, Partial<FeParams>>;
+	/** Parameter overrides for every scripted seat (a policy reads the names it knows). */
+	params?: ScriptedParams;
+	variants?: Record<string, ScriptedParams>;
 	maxDecisions?: number;
 	rulesBrief?: string;
 }
@@ -152,18 +181,19 @@ export function controllerForSpec(
 	seed: number,
 	catalog: PlayCatalog,
 	budget: BudgetGuard,
-	params?: Partial<FeParams>,
-	variants: Record<string, Partial<FeParams>> = {}
+	params?: ScriptedParams,
+	variants: Record<string, ScriptedParams> = {}
 ): SeatController {
 	const [kind, arg = ''] = spec.split(':');
 	if (kind === 'script') {
 		const [policy, variant] = arg.split('#');
-		if (policy !== 'fe') throw new Error(`unknown scripted policy "${policy}" (fe)`);
+		if (!isScriptedPolicy(policy))
+			throw new Error(`unknown scripted policy "${policy}" (${SCRIPTED_POLICIES.join(' | ')})`);
 		if (variant !== undefined && !variants[variant])
 			throw new Error(`no parameters for variant "${variant}"`);
 		return new ScriptedSeatController({
 			catalog,
-			policy: 'fe',
+			policy,
 			params: { ...(params ?? {}), ...(variant !== undefined ? variants[variant] : {}) },
 			label: spec
 		});
@@ -181,7 +211,7 @@ export function controllerForSpec(
 		});
 	}
 	throw new Error(
-		`unknown seat spec "${spec}" (script:fe | mock:greedy | mock:random | mock:first)`
+		`unknown seat spec "${spec}" (script:fe | script:beast | mock:greedy | mock:random | mock:first)`
 	);
 }
 
@@ -200,6 +230,7 @@ export async function playTable(opts: TableOptions): Promise<TableGameResult> {
 		);
 		return spec.startsWith('script:') ? new RecordingSeat(c, opts.catalog) : c;
 	});
+	const colors = seatsFor(opts.seats.length);
 	const summary: GameSummary = await runAgentGame({
 		catalog: opts.catalog,
 		catalogInfo: opts.catalogInfo,
@@ -210,9 +241,12 @@ export async function playTable(opts: TableOptions): Promise<TableGameResult> {
 		runId: `fe-${opts.seed}`,
 		maxDecisions: opts.maxDecisions ?? 6000,
 		parallel: false,
-		skipFacts: true
+		skipFacts: true,
+		onState: (state) =>
+			controllers.forEach((c, i) => {
+				if (c instanceof RecordingSeat) c.observe(state, colors[i]);
+			})
 	});
-	const colors = seatsFor(opts.seats.length);
 	return {
 		seed: opts.seed,
 		finished: summary.finished,

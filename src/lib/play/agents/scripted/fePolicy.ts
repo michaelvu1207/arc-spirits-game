@@ -14,7 +14,24 @@
 
 import { awakenedClassCounts } from '../../effects/apply';
 import { diceTierFaces } from '../../combat';
+import {
+	ELEMENTALIST_METHOD_AT,
+	elementalistKillUpgrades,
+	elementalistRestUpgrades,
+	elementalistUpgradesPerAction,
+	holdsRelic
+} from '../../effects/classes/elementalist';
+import { CLASS_ABILITIES } from '../../effects/abilities';
+import { CLASS_EFFECTS, selectBreakpoint, type EffectTrigger } from '../../effects/registry';
+import { ORIGIN_REWARDS, spiritsByOrigin } from '../../effects/relicTools';
+import { isRelic, meaningFor } from '../../locationInteractions';
 import { buildMonsterRewards } from '../../monsterRewards';
+import {
+	elementalistUpgradeAction,
+	restBarrier,
+	ruleAdjustedActions,
+	ruleValue
+} from '../../rules';
 import { arcaneBloodFor } from '../../runtime';
 import type {
 	AttackDie,
@@ -27,6 +44,7 @@ import type {
 	SeatColor,
 	SpectatorProjection
 } from '../../types';
+import { MAX_ATTACK_DICE } from '../../types';
 import type { OfferedAction } from '../contract';
 
 export interface FeParams {
@@ -42,10 +60,10 @@ export interface FeParams {
 	bloodEasy: number;
 	/** Take Arcane Blood only while the seat has at most this many points. */
 	bloodMaxVp: number;
-	/** Value of one Max Barrier below 7 / from 7 to 10. */
+	/** Value of one Max Barrier below / above what the hardest monster hit still to come needs. */
 	maxBarrierLow: number;
 	maxBarrierHigh: number;
-	/** Weight of the chance to find a Max Barrier power with a Mountain replace while Max Barrier < 7. */
+	/** Weight of the chance to find a Max Barrier power with a Mountain replace while Max Barrier is below what the hardest monster hit needs. */
 	mbHunt: number;
 	/** Value of being able to take a monster's hit (Barrier readiness, 0..1). */
 	ready: number;
@@ -70,6 +88,29 @@ export interface FeParams {
 	hitCost: number;
 	/** Multiplier on the value of keeping a held power for later. */
 	powerKeep: number;
+	/** Rules where a relic raises the Elementalist Rest step (`elementalist5NeedsRelic`): points per
+	 *  extra upgrade per Rest that holding a relic gives, at full use (scaled down by the upgrade room
+	 *  left and by how far the Elementalist count is from the step). */
+	relic: number;
+	/** Weight on summoning toward 5 spirits of one origin (a Cultivate then takes its relic) while
+	 *  no relic is held. 0: no chase. */
+	originChase: number;
+	/** Multiplier on the value of Cultivator traits (Max Barrier on Cultivate). */
+	cultivator: number;
+	/** Use a held relic tool that the Elementalist step needs only when its effect is worth this
+	 *  multiple of the relic's value. */
+	relicUse: number;
+	/** Multiplier on the dice value of a Rest while Fighter is below 5 (a Rest pays more once the
+	 *  build is done; below 1 builds first). */
+	restBuilding: number;
+	/** 1: a class step is worth the best average of the steps up to a later breakpoint; 0: its own. */
+	lookahead: number;
+	/** 1: a Spirit World Summon also counts the chance of a Cultivator spirit once Fighter and
+	 *  Elementalist are complete; 0: only while they are not. */
+	summonCultivator: number;
+	/** Multiplier on the value of the Elementalist upgrades a Cultivate gives (the Rest / Cultivate
+	 *  split when the ladder is on Cultivate). */
+	upgradeScale: number;
 }
 
 export const DEFAULT_FE_PARAMS: FeParams = {
@@ -91,7 +132,15 @@ export const DEFAULT_FE_PARAMS: FeParams = {
 	minFight: 1.3,
 	hold: 1,
 	hitCost: 0.1,
-	powerKeep: 0.6
+	powerKeep: 0.6,
+	relic: 2,
+	originChase: 1,
+	cultivator: 1,
+	relicUse: 3,
+	restBuilding: 1,
+	lookahead: 1,
+	summonCultivator: 1,
+	upgradeScale: 1
 };
 
 export interface FeChoice {
@@ -100,7 +149,9 @@ export interface FeChoice {
 }
 
 const TARGET = 5;
-const MAX_DICE = 10;
+const MAX_DICE = MAX_ATTACK_DICE;
+/** The engine's Max Barrier cap (effects/actions.ts `gainMaxBarrier`). */
+const MB_CAP = 10;
 const MAX_SLOTS = 7;
 const ABYSS = 'Arcane Abyss';
 const DECLINE = /^(no|decline|skip|pass|keep|none|cancel)/i;
@@ -116,8 +167,11 @@ export interface Situation {
 	params: FeParams;
 	fighter: number;
 	elementalist: number;
+	cultivator: number;
 	tiers: DiceTier[];
 	runes: number;
+	/** Relics held (any relic, as the engine's `holdsRelic` counts them). */
+	relics: number;
 	faces: Record<DiceTier, number[]>;
 	mean: Record<DiceTier, number>;
 }
@@ -145,51 +199,281 @@ export function situationOf(
 		params,
 		fighter: counts.Fighter ?? 0,
 		elementalist: counts.Elementalist ?? 0,
+		cultivator: counts.Cultivator ?? 0,
 		tiers: (me.attackDice ?? []).map((d: AttackDie) => d.tier),
 		runes: basicRuneCount(me),
+		relics: (me.mats ?? []).filter((m) => m?.hasRune && isRelic(m)).length,
 		faces,
 		mean
 	};
 }
 
+// ───────────────────────────── rules, read from the engine ─────────────────────────────
+//
+// Every number the build depends on comes from the engine: the class breakpoints (with the rule
+// switches that change their amounts), the Elementalist helpers, the Rest heal and the dice faces.
+// Nothing here assumes a rule set.
+
+/** Sum of the `kind` amounts a class gives on `trigger` at `count` traits, under the catalog's rules
+ *  (the engine's declarative breakpoints, with `ruleAdjustedActions`). */
+export function classAmount(
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	className: string,
+	trigger: EffectTrigger,
+	count: number,
+	kind: string
+): number {
+	if (count <= 0) return 0;
+	let n = 0;
+	for (const effect of CLASS_EFFECTS[className] ?? []) {
+		if (effect.trigger !== trigger) continue;
+		const sel = selectBreakpoint(effect.breakpoints, count);
+		if (!sel) continue;
+		for (const a of ruleAdjustedActions(catalog, className, sel.bp.count, sel.bp.actions)) {
+			if (a.kind !== kind) continue;
+			const amount = (a as { amount?: number }).amount;
+			n += (typeof amount === 'number' ? amount : 1) * sel.multiplier;
+		}
+	}
+	return n;
+}
+
+/** Basic Attack dice a Rest gives at this Fighter count (as the engine computes them). */
+export function restDice(fighter: number, catalog?: Pick<PlayCatalog, 'rules'> | null): number {
+	return classAmount(catalog, 'Fighter', 'onRest', fighter, 'gainAttackDice');
+}
+
+/** Spirit Augments a Rest gives at this Fighter count. */
+function restAugments(s: Situation, fighter = s.fighter): number {
+	return classAmount(s.catalog, 'Fighter', 'onRest', fighter, 'gainAugment');
+}
+
+/** Max Barrier a Cultivate gives at this Cultivator count. */
+export function cultivateMaxBarrier(
+	cultivator: number,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): number {
+	return classAmount(catalog, 'Cultivator', 'onCultivate', cultivator, 'gainMaxBarrier');
+}
+
+/** The Cultivator count whose Cultivate offers a relic of choice (engine: cultivator.ts, 5). */
+const CULTIVATOR_RELIC_AT = 5;
+
+const RELIC_MATS = [{ hasRune: true, type: 'relic' as const, slotIndex: 0 }];
+const NO_MATS: never[] = [];
+
+/** Upgrades of the engine's default Elementalist rule (no switch on) for one Rest: runs the class's
+ *  own onRest ability on a scratch player. */
+function defaultRestUpgrades(catalog: PlayCatalog, count: number): number {
+	try {
+		const player = {
+			attackDice: new Array(10).fill(0).map((_, i) => ({ instanceId: `d${i}`, tier: 'basic' })),
+			mats: [],
+			pendingDecisions: []
+		} as unknown as PrivatePlayerState;
+		const ctx = {
+			state: { players: {}, rng: { seed: 1, counter: 0 } },
+			seat: 'Red',
+			player,
+			catalog,
+			log: [] as string[],
+			trigger: 'onRest',
+			traitCount: count,
+			colocated: []
+		};
+		for (const ab of CLASS_ABILITIES.Elementalist ?? []) {
+			if (ab.on === 'onRest' && ab.run) ab.run(ctx as never);
+		}
+		return upgradeLevel(player.attackDice.map((d) => d.tier));
+	} catch {
+		return 0;
+	}
+}
+
+export type UpgradeAction = 'rest' | 'cultivate' | 'summon' | 'kill';
+
+/**
+ * Dice upgrades Elementalist gives for one action at `count` Elementalists, as the engine's rule
+ * switches decide (`elementalistRest1235`, `elementalist5NeedsRelic`, `elementalistMethods`,
+ * `elementalistOneUpgrade`, `elementalistBigKills`, `arcaneBlood`). `relic`: whether the player
+ * holds a relic at that time.
+ */
+export function elementalistUpgrades(
+	catalog: PlayCatalog,
+	action: UpgradeAction,
+	count: number,
+	relic: boolean,
+	kill?: { difficulty?: number; permanent?: boolean }
+): number {
+	// The ladder rule: one action upgrades (Rest, or Cultivate under `elementalistOnCultivate`).
+	const ladderAction = elementalistUpgradeAction(catalog);
+	if (ladderAction) {
+		if (action !== ladderAction) return 0;
+		return elementalistRestUpgrades(catalog, count, {
+			mats: relic ? RELIC_MATS : NO_MATS
+		} as never);
+	}
+	if (ruleValue(catalog, 'elementalistMethods')) {
+		const key =
+			action === 'summon' ? 'spiritWorldSummon' : action === 'kill' ? 'monsterKill' : action;
+		if (count < ELEMENTALIST_METHOD_AT[key]) return 0;
+		if (action === 'kill') {
+			// Under Arcane Blood a kill upgrades nothing by itself (the blood does, see bloodValue).
+			if (ruleValue(catalog, 'arcaneBlood')) return 0;
+			return elementalistKillUpgrades(catalog, {
+				monsterDifficulty: (kill?.difficulty ?? 1) as 1 | 2 | 3,
+				monsterPermanent: !!kill?.permanent
+			});
+		}
+		return elementalistUpgradesPerAction(catalog);
+	}
+	return action === 'rest' ? defaultRestUpgrades(catalog, count) : 0;
+}
+
+/** Upgrades per Arcane Blood gained (the engine: Elementalist (2) under `elementalistMethods`,
+ *  not under `elementalistRest1235`). */
+function upgradesPerBlood(s: Situation): number {
+	const c = s.catalog;
+	if (!ruleValue(c, 'arcaneBlood') || !ruleValue(c, 'elementalistMethods')) return 0;
+	if (ruleValue(c, 'elementalistRest1235')) return 0;
+	return s.elementalist >= ELEMENTALIST_METHOD_AT.monsterKill ? 1 : 0;
+}
+
+/** Extra upgrades per upgrading action (Rest or Cultivate, as the rules say) a held relic gives at
+ *  `count` Elementalists (0 unless the rules gate a step on a relic). */
+export function relicRestGain(catalog: PlayCatalog, count: number): number {
+	const action = elementalistUpgradeAction(catalog) ?? 'rest';
+	return (
+		elementalistUpgrades(catalog, action, count, true) -
+		elementalistUpgrades(catalog, action, count, false)
+	);
+}
+
+/** Summed tier level of dice (Basic 0, Enchanted 1, Exalted 2). */
+function upgradeLevel(tiers: DiceTier[]): number {
+	return tiers.reduce((n, t) => n + (t === 'enchanted' ? 1 : t === 'exalted' ? 2 : 0), 0);
+}
+
+/**
+ * What one relic held now is worth to the build: the extra Rest upgrades it unlocks, scaled by the
+ * upgrade room still left on a full set of dice and by how close the Elementalist step is.
+ * 0 when the rules give a relic no Rest value.
+ */
+export function relicWorth(s: Situation): number {
+	const gain = relicRestGain(s.catalog, Math.max(TARGET, s.elementalist));
+	if (gain <= 0) return 0;
+	const room = 2 * MAX_DICE - upgradeLevel(s.tiers.filter((t) => t !== 'arcane'));
+	if (room <= 0) return 0;
+	const near =
+		s.elementalist >= TARGET
+			? 1
+			: s.elementalist >= TARGET - 1
+				? 0.8
+				: s.elementalist >= 2
+					? 0.5
+					: 0.3;
+	return s.params.relic * gain * Math.min(1, room / (2 * MAX_DICE)) * near;
+}
+
+/** Value lost if the player gives up one relic now (only the last relic counts). */
+function lastRelicLoss(s: Situation): number {
+	return s.relics <= 1 ? relicWorth(s) : 0;
+}
+
 // ───────────────────────────── build model ─────────────────────────────
 
-/** Basic Attack dice a Rest gives at this Fighter count (Fighter 2 / 3 / 4 / 5 → 1 / 2 / 3 / 5). */
-export function restDice(fighter: number): number {
-	if (fighter >= 5) return 5;
-	if (fighter >= 4) return 3;
-	if (fighter >= 3) return 2;
-	if (fighter >= 2) return 1;
-	return 0;
+const FIGHTER_STEPS = [0.4, 3, 2, 1.6, 2.4];
+const ELEMENTALIST_STEPS = [0.4, 2, 2.4, 1.2, 0.9];
+
+/** Value of one more trait at count `c` on a ladder of step values. With `lookahead`, a step that
+ *  opens a later breakpoint is worth the best average of the steps up to it (so a first Fighter,
+ *  which does little by itself, is worth its share of the second). */
+function ladderStep(s: Situation, steps: number[], c: number): number {
+	const own = steps[c] ?? 0;
+	if (!s.params.lookahead || own <= 0) return own * s.params.classScale;
+	let best = own;
+	let sum = 0;
+	for (let k = c; k < steps.length; k++) {
+		sum += steps[k];
+		best = Math.max(best, sum / (k - c + 1));
+	}
+	return best * s.params.classScale;
 }
 
 /** Value of one more Fighter (+1) at this count. */
 function fighterStep(s: Situation, f: number): number {
-	return ([0.4, 3, 2, 1.6, 2.4][f] ?? 0) * s.params.classScale;
+	return ladderStep(s, FIGHTER_STEPS, f);
 }
 /** Value of one more Elementalist (+1) at this count. */
 function elementalistStep(s: Situation, e: number): number {
-	return ([0.4, 2, 2.4, 1.2, 0.9][e] ?? 0) * s.params.classScale;
+	return ladderStep(s, ELEMENTALIST_STEPS, e);
 }
 
-/** Value of adding `df` Fighter and `de` Elementalist. */
-function classGain(s: Situation, df: number, de: number): number {
+/**
+ * Value of one more Cultivator (+1) at this count: the Max Barrier its Cultivates add (the engine's
+ * Cultivator ladder) while Max Barrier is below what the strongest monsters need. Worth nothing once
+ * Max Barrier is there.
+ */
+function cultivatorStep(s: Situation, c: number): number {
+	if (s.params.cultivator <= 0) return 0;
+	const room = Math.max(0, mbTarget(s) - s.me.maxBarrier);
+	if (room <= 0) return 0;
+	// The Max Barrier of the next two Cultivates with one more trait, against without it (capped
+	// at what is still needed); each Cultivate costs a round, so half value.
+	const k = 2;
+	const gain =
+		Math.min(room, k * cultivateMaxBarrier(c + 1, s.catalog)) -
+		Math.min(room, k * cultivateMaxBarrier(c, s.catalog));
+	if (gain <= 0) {
+		// The first trait opens the second one's breakpoint.
+		const next = Math.min(room, k * cultivateMaxBarrier(c + 2, s.catalog));
+		return next > 0 && cultivateMaxBarrier(c + 1, s.catalog) === 0
+			? 0.25 * s.params.cultivator * next * s.params.maxBarrierLow
+			: 0;
+	}
+	return s.params.cultivator * 0.5 * gain * s.params.maxBarrierLow;
+}
+
+export type BuildClass = 'Fighter' | 'Elementalist' | 'Cultivator';
+const BUILD_CLASSES: BuildClass[] = ['Fighter', 'Elementalist', 'Cultivator'];
+
+function countOf(s: Situation, cls: BuildClass): number {
+	return cls === 'Fighter' ? s.fighter : cls === 'Elementalist' ? s.elementalist : s.cultivator;
+}
+
+function stepOf(s: Situation, cls: string, at: number): number {
+	if (cls === 'Fighter') return fighterStep(s, at);
+	if (cls === 'Elementalist') return elementalistStep(s, at);
+	if (cls === 'Cultivator') return cultivatorStep(s, at);
+	return 0;
+}
+
+/** Value of adding these class traits (Fighter, Elementalist, Cultivator; others count nothing). */
+function classGain(s: Situation, classes: Record<string, number> | undefined): number {
 	let v = 0;
-	for (let i = 0; i < df; i++) v += fighterStep(s, s.fighter + i);
-	for (let i = 0; i < de; i++) v += elementalistStep(s, s.elementalist + i);
+	for (const cls of BUILD_CLASSES) {
+		const n = classes?.[cls] ?? 0;
+		for (let i = 0; i < n; i++) v += stepOf(s, cls, countOf(s, cls) + i);
+	}
 	return v;
 }
 
-/** The better class for the next augment ('Fighter' | 'Elementalist' | null when both are full). */
-export function nextAugmentClass(s: Situation): 'Fighter' | 'Elementalist' | null {
-	const f = fighterStep(s, s.fighter);
-	const e = elementalistStep(s, s.elementalist);
-	if (f <= 0 && e <= 0) return null;
-	return f >= e ? 'Fighter' : 'Elementalist';
+/** The best class for the next augment (null when none adds anything). */
+export function nextAugmentClass(s: Situation): BuildClass | null {
+	let best: BuildClass | null = null;
+	let bestV = 0;
+	for (const cls of BUILD_CLASSES) {
+		const v = stepOf(s, cls, countOf(s, cls));
+		if (v > bestV) {
+			best = cls;
+			bestV = v;
+		}
+	}
+	return best;
 }
 
 function isFeSpirit(classes: Record<string, number> | undefined): boolean {
-	return !!classes && ((classes.Fighter ?? 0) > 0 || (classes.Elementalist ?? 0) > 0);
+	return !!classes && BUILD_CLASSES.some((c) => (classes[c] ?? 0) > 0);
 }
 
 function basicRuneCount(me: Me): number {
@@ -224,17 +508,22 @@ function keepValue(s: Situation, slot: number): number {
 	if (!sp) return 0;
 	const aug = (s.me.spiritAugmentAttachments ?? []).find((a) => a.spiritSlotIndex === slot);
 	let v = 0;
-	const f = sp.isFaceDown ? 0 : (sp.classes?.Fighter ?? 0);
-	const e = sp.isFaceDown ? 0 : (sp.classes?.Elementalist ?? 0);
 	// What the build loses without it.
-	for (let i = 0; i < f; i++) v += fighterStep(s, Math.max(0, Math.min(4, s.fighter - 1 - i)));
-	for (let i = 0; i < e; i++)
-		v += elementalistStep(s, Math.max(0, Math.min(4, s.elementalist - 1 - i)));
-	if (aug?.className === 'Fighter') v += fighterStep(s, Math.max(0, Math.min(4, s.fighter - 1)));
-	else if (aug?.className === 'Elementalist')
-		v += elementalistStep(s, Math.max(0, Math.min(4, s.elementalist - 1)));
+	for (const cls of BUILD_CLASSES) {
+		const n = sp.isFaceDown ? 0 : (sp.classes?.[cls] ?? 0);
+		for (let i = 0; i < n; i++)
+			v += stepOf(s, cls, Math.max(0, Math.min(4, countOf(s, cls) - 1 - i)));
+	}
+	if (aug && BUILD_CLASSES.includes(aug.className as BuildClass))
+		v += stepOf(
+			s,
+			aug.className!,
+			Math.max(0, Math.min(4, countOf(s, aug.className as BuildClass) - 1))
+		);
 	else if (aug) v += 0.2;
 	else if (!sp.isFaceDown && classNeed(s) > 0) v += s.params.host * 0.5; // a free host
+	// Spirits of the origin the relic chase counts on.
+	v += originKeep(s, sp.origins);
 	return v + 0.01 * sp.cost;
 }
 
@@ -359,10 +648,13 @@ export function fightOutcome(s: Situation, card: MonsterState, setup: FightSetup
 	};
 }
 
-/** Points value of a kill of this card for this seat (points, or Arcane Blood upgrades). */
+/** Points value of a kill of this card for this seat (points, or Arcane Blood upgrades; plus the
+ *  upgrades a kill itself gives under the rules where it does). */
 export function killValue(s: Situation, card: MonsterState): number {
 	const vp = cardVp(card) + cardExtras(s, card);
-	return Math.max(vp, bloodValue(s, card));
+	const up = elementalistUpgrades(s.catalog, 'kill', s.elementalist, s.relics > 0, card);
+	const upV = up > 0 ? diceValueDelta(s, s.tiers, diceAfter(s.tiers, 0, up)) : 0;
+	return Math.max(vp, bloodValue(s, card)) + upV;
 }
 
 /** Points per +1 attack from Arcane Blood: high when the easy cards (Difficulty 1 and 2) are
@@ -379,9 +671,10 @@ function bloodWeight(s: Situation): number {
 
 /** Value of taking the card's Arcane Blood (one upgrade each with Elementalist 2). */
 function bloodValue(s: Situation, card: Pick<MonsterState, 'difficulty' | 'permanent'>): number {
-	if (s.elementalist < 2) return 0;
+	const per = upgradesPerBlood(s);
+	if (per <= 0) return 0;
 	if (s.me.victoryPoints > s.params.bloodMaxVp) return 0;
-	const blood = arcaneBloodFor(card, s.catalog) ?? 0;
+	const blood = (arcaneBloodFor(card, s.catalog) ?? 0) * per;
 	const after = diceAfter(s.tiers, 0, blood);
 	return (expectedAttack(s, after) - expectedAttack(s, s.tiers)) * bloodWeight(s);
 }
@@ -441,7 +734,10 @@ function baseSetup(s: Situation): FightSetup {
 	return {
 		tiers: s.tiers,
 		barrier: s.me.barrier,
-		reduction: s.me.damageReduction ?? 0,
+		// `me.damageReduction` and `me.alwaysAttackFirst` are per-combat flags that stay set after a
+		// fight until the next one starts (combat.ts, `resetCombatFlags`): they say nothing about
+		// the next fight, so they are not read here.
+		reduction: 0,
 		strikeFirst: false,
 		extraArcane: 0
 	};
@@ -479,14 +775,17 @@ export function bestAbyssFight(
 // ───────────────────────────── locations ─────────────────────────────
 
 function restHeal(s: Situation, barrier = s.me.barrier): number {
-	const status = s.me.statusLevel ?? 0; // 0 Pure … 3 Fallen
-	const heal = 4 + Math.max(0, 3 - status);
+	const heal = restBarrier(s.catalog, s.me.statusLevel ?? 0);
 	return Math.max(0, Math.min(s.me.maxBarrier, barrier + heal) - barrier);
 }
 
-/** Dice after a Rest (Fighter dice, Elementalist (3) upgrade). */
+/** Dice after a Rest: the Fighter dice, then the Elementalist upgrades (relic held or not). */
 function tiersAfterRest(s: Situation, tiers = s.tiers): DiceTier[] {
-	return diceAfter(tiers, restDice(s.fighter), s.elementalist >= 3 ? 1 : 0);
+	return diceAfter(
+		tiers,
+		restDice(s.fighter, s.catalog),
+		elementalistUpgrades(s.catalog, 'rest', s.elementalist, s.relics > 0)
+	);
 }
 
 function diceValueDelta(s: Situation, before: DiceTier[], after: DiceTier[]): number {
@@ -494,40 +793,69 @@ function diceValueDelta(s: Situation, before: DiceTier[], after: DiceTier[]): nu
 	return (expectedAttack(s, after) - expectedAttack(s, before)) * s.params.attack * low;
 }
 
-/** How ready a Barrier is to take a monster's hit (hits are 3-4, Difficulty 3 5-6; the hit must be lower). */
-function readiness(barrier: number): number {
-	return [0, 0, 0, 0, 0.5, 0.7, 0.85, 1][Math.max(0, Math.min(7, barrier))];
+/** Monster hits still to come: the damage of every card in the decks that are not empty and in hand. */
+function hitsAhead(s: Situation): number[] {
+	const out: number[] = [];
+	for (const d of [1, 2, 3] as const)
+		if (deckLeft(s, d) > 0) for (const c of deckCards(s, d)) out.push(c.damage);
+	for (const c of s.me.monsterHand ?? []) out.push(c.damage);
+	if (!out.length)
+		for (const d of [1, 2, 3] as const) for (const c of deckCards(s, d)) out.push(c.damage);
+	return out;
+}
+
+/** The Max Barrier that takes the hardest hit still to come and strikes back (the hit must be lower
+ *  than the Barrier), from the catalog's monster cards. */
+function mbTarget(s: Situation): number {
+	const hits = hitsAhead(s);
+	return Math.min(MB_CAP, (hits.length ? Math.max(...hits) : 0) + 1);
+}
+
+/** How ready a Barrier is to take a monster's hit: the share of the monster cards still to come
+ *  whose hit is lower than it. */
+function readiness(s: Situation, barrier: number): number {
+	const hits = hitsAhead(s);
+	if (!hits.length) return 1;
+	return hits.filter((h) => h < barrier).length / hits.length;
 }
 
 function healValue(s: Situation, from: number, heal: number): number {
 	if (heal <= 0) return 0;
-	return (readiness(from + heal) - readiness(from)) * s.params.ready;
+	return (readiness(s, from + heal) - readiness(s, from)) * s.params.ready;
 }
 
 function restValue(s: Situation, barrier = s.me.barrier, tiers = s.tiers): number {
 	const after = tiersAfterRest(s, tiers);
-	let v = diceValueDelta(s, tiers, after) + healValue(s, barrier, restHeal(s, barrier));
-	if (s.fighter >= 5) v += augmentValue(s, 1);
+	const building = s.fighter < TARGET ? s.params.restBuilding : 1;
+	let v = diceValueDelta(s, tiers, after) * building + healValue(s, barrier, restHeal(s, barrier));
+	const augs = restAugments(s);
+	if (augs > 0) v += augmentValue(s, augs);
 	return v;
 }
 
-/** Value of `n` augments of the class the build needs most (each needs a free host). */
-function augmentValue(s: Situation, n: number, only?: 'Fighter' | 'Elementalist'): number {
+/** Value of `n` augments of the class the build needs most (each needs a free host); `only`
+ *  limits the classes to choose from. */
+function augmentValue(s: Situation, n: number, only?: BuildClass[]): number {
 	const hosts = augmentHosts(s.me);
-	let f = s.fighter;
-	let e = s.elementalist;
+	const at: Record<BuildClass, number> = {
+		Fighter: s.fighter,
+		Elementalist: s.elementalist,
+		Cultivator: s.cultivator
+	};
 	let v = 0;
 	for (let i = 0; i < Math.min(n, hosts); i++) {
-		const fv = only === 'Elementalist' ? -1 : fighterStep(s, f);
-		const ev = only === 'Fighter' ? -1 : elementalistStep(s, e);
-		if (fv <= 0 && ev <= 0) break;
-		if (fv >= ev) {
-			v += fv;
-			f++;
-		} else {
-			v += ev;
-			e++;
+		let best: BuildClass | null = null;
+		let bestV = 0;
+		for (const cls of only ?? BUILD_CLASSES) {
+			const x = stepOf(s, cls, at[cls]);
+			if (x > bestV) {
+				best = cls;
+				bestV = x;
+			}
 		}
+		if (!best) break;
+		v += bestV;
+		at[best]++;
 	}
 	return v;
 }
@@ -540,9 +868,7 @@ function pBuildSpirit(s: Situation, spirits = 3): number {
 	for (const row of bag) {
 		total += row.count;
 		const sp = s.catalog.spirits.find((x) => x.id === row.id || x.name === row.name);
-		const f = sp?.classes?.Fighter ?? 0;
-		const e = sp?.classes?.Elementalist ?? 0;
-		if ((f > 0 && s.fighter < TARGET) || (e > 0 && s.elementalist < TARGET)) good += row.count;
+		if (sp && classGain(s, sp.classes) > 0) good += row.count;
 	}
 	if (total <= 0 || good <= 0) return 0;
 	let pNone = 1;
@@ -553,38 +879,148 @@ function pBuildSpirit(s: Situation, spirits = 3): number {
 
 function summonValue(s: Situation, drawSize = 4): number {
 	let v = 0;
+	// A spirit of a class the build still gains from (Cultivator too, after Fighter and
+	// Elementalist are done: Max Barrier).
+	const step = Math.max(...BUILD_CLASSES.map((c) => stepOf(s, c, countOf(s, c))));
+	if (classNeed(s) > 0 || s.params.summonCultivator) v += pBuildSpirit(s, drawSize - 1) * step;
 	if (classNeed(s) > 0) {
-		const step = Math.max(fighterStep(s, s.fighter), elementalistStep(s, s.elementalist));
-		v += pBuildSpirit(s, drawSize - 1) * step;
 		// A spare spirit as a host for the augments still needed.
 		const free = MAX_SLOTS - (s.me.spirits?.length ?? 0);
 		if (free > 0 && augmentHosts(s.me) < classNeed(s)) v += s.params.host;
 	}
 	v += s.params.rune * 0.8; // the reward hex
-	if (s.elementalist >= 5) v += diceValueDelta(s, s.tiers, diceAfter(s.tiers, 0, 1));
+	const up = elementalistUpgrades(s.catalog, 'summon', s.elementalist, s.relics > 0);
+	if (up > 0) v += diceValueDelta(s, s.tiers, diceAfter(s.tiers, 0, up));
+	// The chance to add a spirit of the origin the relic chase counts on.
+	v += originChaseValue(s) * 0.5;
+	return v;
+}
+
+/** Whether the origin's Cultivate relic is still open to this player. */
+function originRelicOpen(s: Situation, origin: string): boolean {
+	return !!ORIGIN_REWARDS[origin] && !(s.me.originRelicsGained ?? []).includes(origin);
+}
+
+/** Spirits per origin (the engine's count: every spirit, awake or not). */
+function originCounts(s: Situation): Record<string, number> {
+	return spiritsByOrigin(s.me.spirits ?? []);
+}
+
+/** The origin closest to its relic (open, most spirits) and its spirit count. */
+function chaseOrigin(s: Situation): { origin: string; count: number } | null {
+	let best: { origin: string; count: number } | null = null;
+	for (const [origin, n] of Object.entries(originCounts(s))) {
+		if (!originRelicOpen(s, origin)) continue;
+		if (!best || n > best.count) best = { origin, count: n };
+	}
+	return best;
+}
+
+/** Share of the relic's worth that one more spirit of `origin` (now `n` spirits) brings: most for
+ *  the spirit that reaches the relic count. */
+function originStep(origin: string, n: number): number {
+	const at = ORIGIN_REWARDS[origin]?.relicAt;
+	if (!at || n >= at) return 0;
+	return [0.5, 0.3, 0.15][at - (n + 1)] ?? 0.05;
+}
+
+/** Value of the relic chase for one more spirit of the best open origin (0 while a relic is held). */
+function originChaseValue(s: Situation): number {
+	if (s.params.originChase <= 0 || s.relics > 0) return 0;
+	const c = chaseOrigin(s);
+	if (!c) return 0;
+	return s.params.originChase * relicWorth(s) * originStep(c.origin, c.count);
+}
+
+/** Value of a spirit (or its origins) for the relic chase. */
+function originGain(s: Situation, origins: Record<string, number> | undefined): number {
+	if (s.params.originChase <= 0 || s.relics > 0 || !origins) return 0;
+	const counts = originCounts(s);
+	const worth = relicWorth(s);
+	let v = 0;
+	for (const [o, n] of Object.entries(origins)) {
+		if (!(n > 0) || !originRelicOpen(s, o)) continue;
+		v = Math.max(v, s.params.originChase * worth * originStep(o, counts[o] ?? 0));
+	}
+	return v;
+}
+
+/** Value lost for the relic chase if a spirit of these origins leaves. */
+function originKeep(s: Situation, origins: Record<string, number> | undefined): number {
+	if (s.params.originChase <= 0 || s.relics > 0 || !origins) return 0;
+	const counts = originCounts(s);
+	const worth = relicWorth(s);
+	let v = 0;
+	for (const [o, n] of Object.entries(origins)) {
+		if (!(n > 0) || !originRelicOpen(s, o)) continue;
+		v = Math.max(
+			v,
+			s.params.originChase * worth * originStep(o, Math.max(0, (counts[o] ?? 1) - 1))
+		);
+	}
 	return v;
 }
 
 function cultivateValue(s: Situation): number {
 	let v = 0;
-	if (s.elementalist >= 4) v += diceValueDelta(s, s.tiers, diceAfter(s.tiers, 0, 1));
-	const byOrigin = new Map<string, Set<string>>();
-	for (const sp of s.me.spirits ?? [])
-		for (const o of Object.keys(sp.origins ?? {})) {
-			if (!byOrigin.has(o)) byOrigin.set(o, new Set());
-			byOrigin.get(o)!.add(sp.name);
-		}
-	for (const [, names] of byOrigin) if (names.size >= 3) v += s.params.rune;
+	const up = elementalistUpgrades(s.catalog, 'cultivate', s.elementalist, s.relics > 0);
+	if (up > 0) v += diceValueDelta(s, s.tiers, diceAfter(s.tiers, 0, up)) * s.params.upgradeScale;
+	// Cultivator: Max Barrier (capped), and its relic of choice.
+	const mb = Math.min(cultivateMaxBarrier(s.cultivator, s.catalog), MB_CAP - s.me.maxBarrier);
+	if (mb > 0) v += maxBarrierValue(s, mb) + healValue(s, s.me.barrier, mb);
+	let relicTaken = false;
+	if (
+		s.cultivator >= CULTIVATOR_RELIC_AT &&
+		!(ruleValue(s.catalog, 'cultivatorRelicOnce') && s.me.cultivatorRelicGained)
+	) {
+		v += Math.max(s.params.rune, s.relics > 0 ? 0 : relicWorth(s));
+		relicTaken = true;
+	}
+	// Origin rewards: 3+ spirits a rune; 5+ the rune or the relic (once per origin).
+	for (const [origin, n] of Object.entries(originCounts(s))) {
+		const reward = ORIGIN_REWARDS[origin];
+		if (!reward || n < reward.runeAt) continue;
+		if (n >= reward.relicAt && originRelicOpen(s, origin) && !relicTaken && s.relics === 0) {
+			v += Math.max(s.params.rune, relicWorth(s));
+			relicTaken = true;
+		} else v += s.params.rune;
+	}
 	return v;
+}
+
+const augmentRowCache = new WeakMap<PlayCatalog, Map<string, BuildClass[]>>();
+
+/** The build classes whose Spirit Augment a location's trade rows sell (from the catalog). */
+function augmentRow(s: Situation, dest: string): BuildClass[] {
+	let byDest = augmentRowCache.get(s.catalog);
+	if (!byDest) {
+		byDest = new Map();
+		for (const loc of s.catalog.locations ?? []) {
+			const out = new Set<BuildClass>();
+			for (const row of loc.rewardRows ?? []) {
+				if (row.type !== 'trade') continue;
+				const ids = (row.gain_icon_ids ?? []).flatMap((g: unknown) =>
+					typeof g === 'string' ? [g] : ((g as { icon_ids?: string[] })?.icon_ids ?? [])
+				);
+				for (const id of ids) {
+					const m = meaningFor(id);
+					if (!m || !/augment/i.test(m.label)) continue;
+					const name = 'runeName' in m ? m.runeName : '';
+					if (BUILD_CLASSES.includes(name as BuildClass)) out.add(name as BuildClass);
+				}
+			}
+			byDest.set(loc.name, [...out]);
+		}
+		augmentRowCache.set(s.catalog, byDest);
+	}
+	return byDest.get(dest) ?? [];
 }
 
 /** Value of spending runes at a location's trade row. */
 function runeSpendValue(s: Situation, dest: string, runes = s.runes): number {
 	if (runes <= 0) return 0;
-	if (dest === 'Water Region')
-		return Math.max(0, augmentValue(s, runes, 'Fighter') - runes * s.params.rune);
-	if (dest === 'Fire Region')
-		return Math.max(0, augmentValue(s, runes, 'Elementalist') - runes * s.params.rune);
+	const row = augmentRow(s, dest);
+	if (row.length) return Math.max(0, augmentValue(s, runes, row) - runes * s.params.rune);
 	if (dest === 'Forest Region') return Math.max(0, s.params.randomPower - s.params.rune) * runes;
 	return 0;
 }
@@ -594,9 +1030,10 @@ function runeSpendValue(s: Situation, dest: string, runes = s.runes): number {
 /** How much a power is worth holding (the value it usually gives this build). Powers that
  *  raise Max Barrier have a low hold value while it is low, so they are used at once. */
 export function powerHoldValue(id: string, s?: Situation): number {
-	const mb = s?.me.maxBarrier ?? 10;
+	const mb = s?.me.maxBarrier ?? MB_CAP;
+	const target = s ? mbTarget(s) : MB_CAP;
 	if (id === 'mountain-bastion-2' || id === 'unbroken-assault-2')
-		return mb < 7 ? 0.8 : mb < 10 ? 1.2 : 0.5;
+		return mb < target ? 0.8 : mb < MB_CAP ? 1.2 : 0.5;
 	const map: Record<string, number> = {
 		'sudden-strike': 4,
 		'battle-guard': 3.5,
@@ -625,8 +1062,9 @@ export function powerHoldValue(id: string, s?: Situation): number {
 /** Value of a power when choosing which to keep (draft, replace). */
 export function powerDraftValue(id: string, s: Situation): number {
 	const mb = s.me.maxBarrier;
-	if (id === 'mountain-bastion-2') return mb < 7 ? 4 : mb < 10 ? 2 : 1;
-	if (id === 'unbroken-assault-2') return mb < 7 ? 4.2 : mb < 10 ? 2.2 : 0.8;
+	const target = mbTarget(s);
+	if (id === 'mountain-bastion-2') return mb < target ? 4 : mb < MB_CAP ? 2 : 1;
+	if (id === 'unbroken-assault-2') return mb < target ? 4.2 : mb < MB_CAP ? 2.2 : 0.8;
 	return powerHoldValue(id, s);
 }
 
@@ -635,11 +1073,12 @@ function replaceValue(s: Situation): number {
 	const held = s.me.powerInventory ?? [];
 	if (!held.length) return 0;
 	const weakest = Math.min(...held.map((id) => powerDraftValue(id, s)));
-	const best3 = s.me.maxBarrier < 7 ? 3.6 : 3;
+	const low = s.me.maxBarrier < mbTarget(s);
+	const best3 = low ? 3.6 : 3;
 	let v = Math.max(0, best3 - weakest) * 0.5;
 	// Below Max Barrier 7 Difficulty 3 hits cannot be taken: hunt Mountain Bastion / Unbroken
 	// Assault (2 of the 22 powers; about 1 chance in 4 among 3 drawn).
-	if (s.me.maxBarrier < 7 && weakest < 3) v += 0.25 * maxBarrierValue(s, 3) * s.params.mbHunt;
+	if (low && weakest < 3) v += 0.25 * maxBarrierValue(s, 3) * s.params.mbHunt;
 	return v;
 }
 
@@ -656,9 +1095,10 @@ function playersAhead(s: Situation): number {
 
 function maxBarrierValue(s: Situation, gain: number): number {
 	let v = 0;
+	const target = mbTarget(s);
 	for (let i = 0; i < gain; i++) {
 		const at = s.me.maxBarrier + i;
-		v += at >= 10 ? 1 : at < 7 ? s.params.maxBarrierLow : s.params.maxBarrierHigh;
+		v += at >= MB_CAP ? 1 : at < target ? s.params.maxBarrierLow : s.params.maxBarrierHigh;
 	}
 	return v;
 }
@@ -694,7 +1134,7 @@ export function destinationValue(s: Situation, dest: string, power: string | nul
 			const setup: FightSetup = {
 				tiers,
 				barrier,
-				reduction: (s.me.damageReduction ?? 0) + (power === 'battle-guard' ? 4 : 0),
+				reduction: power === 'battle-guard' ? 4 : 0,
 				strikeFirst: power === 'sudden-strike',
 				extraArcane: power === 'battle-fury' ? 2 : 0
 			};
@@ -922,7 +1362,7 @@ function scoreAction(
 			// Cursed Spirit grants: Max Barrier while it is low, else dice.
 			const mb =
 				(c.taintedMaxBarrier ?? 0) + (c.corruptMaxBarrier ?? 0) + (c.fallenMaxBarrier ?? 0);
-			const pref = s.me.maxBarrier < 10 ? mb : -mb;
+			const pref = s.me.maxBarrier < MB_CAP ? mb : -mb;
 			return { score: 2 + 0.01 * pref, why: 'claim the Awakening-phase grant' };
 		}
 
@@ -937,7 +1377,8 @@ function scoreAction(
 			const held = (s.me.mats ?? []).filter((m) => m?.hasRune).length;
 			if (held <= 4) return null;
 			const m = s.me.mats?.find((x) => x.slotIndex === c.slotIndex);
-			return { score: 10 - matKeepValue(m), why: `discard ${m?.name ?? 'item'}` };
+			const keep = matKeepValue(m) + (m && isRelic(m) ? lastRelicLoss(s) : 0);
+			return { score: 10 - keep, why: `discard ${m?.name ?? 'item'}` };
 		}
 		default:
 			return null;
@@ -973,9 +1414,8 @@ function currentFightSetup(s: Situation): FightSetup {
 	return {
 		tiers: s.tiers,
 		barrier: s.me.barrier,
-		reduction: (s.me.damageReduction ?? 0) + (enabled && power === 'battle-guard' ? 4 : 0),
+		reduction: enabled && power === 'battle-guard' ? 4 : 0,
 		strikeFirst:
-			s.me.alwaysAttackFirst === true ||
 			(s.me.strikeFirstCharges ?? 0) > 0 ||
 			(enabled && power === 'sudden-strike'),
 		extraArcane: enabled && power === 'battle-fury' ? 2 : 0
@@ -1006,8 +1446,8 @@ function scoreLocationRow(s: Situation, label: string): { score: number; why: st
 	if (/Cultivate/.test(label)) return { score: 0.5 + cultivateValue(s), why: 'cultivate' };
 	const aug = /gain (\w+) Spirit Augment/.exec(label)?.[1];
 	if (aug) {
-		if (aug !== 'Fighter' && aug !== 'Elementalist') return null;
-		const v = augmentValue(s, 1, aug);
+		if (!BUILD_CLASSES.includes(aug as BuildClass)) return null;
+		const v = augmentValue(s, 1, [aug as BuildClass]);
 		const cost = p.rune;
 		return v > cost ? { score: v - cost + 0.1, why: `buy a ${aug} augment` } : null;
 	}
@@ -1101,11 +1541,20 @@ function scoreSummon(
 	if (!spirit || !isFeSpirit(spirit.classes)) {
 		// Another class: only into a free slot, as a host for augments the build still needs.
 		const free = MAX_SLOTS - (s.me.spirits?.length ?? 0);
+		const chase = spirit ? originGain(s, spirit.origins) : 0;
 		if (c.replaceSlotIndex === undefined && free > 0 && augmentHosts(s.me) < classNeed(s))
-			return { score: s.params.host, why: `summon ${draw.name ?? 'a spirit'} as an augment host` };
+			return {
+				score: s.params.host + chase,
+				why: `summon ${draw.name ?? 'a spirit'} as an augment host`
+			};
+		if (chase > 0) {
+			const v =
+				chase - (c.replaceSlotIndex !== undefined ? keepValue(s, c.replaceSlotIndex) + 0.1 : 0);
+			if (v > 0) return { score: v, why: `summon ${draw.name ?? 'a spirit'} for its origin relic` };
+		}
 		return { score: -0.2, why: 'not a build spirit' };
 	}
-	const gain = classGain(s, spirit.classes.Fighter ?? 0, spirit.classes.Elementalist ?? 0);
+	const gain = classGain(s, spirit.classes) + originGain(s, spirit.origins);
 	let v = gain + 0.3;
 	if (c.replaceSlotIndex !== undefined) v -= keepValue(s, c.replaceSlotIndex) + 0.1;
 	if (gain <= 0) v = c.replaceSlotIndex !== undefined ? -1 : 0.1;
@@ -1118,13 +1567,9 @@ function scoreAugmentPlacement(
 ): { score: number; why: string } {
 	const cls = c.className ?? '';
 	const sp = s.me.spirits.find((x) => x.slotIndex === c.spiritSlotIndex);
-	let v =
-		cls === 'Fighter'
-			? fighterStep(s, s.fighter)
-			: cls === 'Elementalist'
-				? elementalistStep(s, s.elementalist)
-				: -0.2;
-	if (v <= 0) v = cls === 'Fighter' || cls === 'Elementalist' ? 0.01 : -0.2;
+	const build = BUILD_CLASSES.includes(cls as BuildClass);
+	let v = build ? stepOf(s, cls, countOf(s, cls as BuildClass)) : -0.2;
+	if (v <= 0) v = build ? 0.01 : -0.2;
 	// Prefer hosts that stay: build spirits, then the more valuable others; never face-down ones.
 	if (sp?.isFaceDown) v -= 1;
 	else if (sp && isFeSpirit(sp.classes)) v += 0.3;
@@ -1141,18 +1586,41 @@ function scoreDecision(
 	const opt = card?.options.find((o) => o.id === c.optionId);
 	const text = `${card?.prompt ?? ''} ${opt?.label ?? ''} ${label}`;
 	const id = c.optionId;
-	// Relic tools: keep / points / effect.
-	if (/^vp:/.test(id)) return { score: 3, why: 'relic for points' };
+	// Relic tools: keep / points / effect. Using one discards it: while the Elementalist step needs a
+	// relic, the last one is kept unless its effect is worth more than the upgrades it gives.
+	const loss = lastRelicLoss(s) * s.params.relicUse;
+	if (/^vp:/.test(id)) {
+		const vp = Number(/(\d+)\s*VP/i.exec(opt?.label ?? '')?.[1] ?? 0);
+		return { score: 1 + vp - loss, why: `relic for ${vp} points` };
+	}
 	if (/^effect:/.test(id) || /^awaken:/.test(id)) {
-		if (/flower/i.test(text))
-			return { score: s.me.barrier < s.me.maxBarrier ? 2 : 0, why: 'use Flower' };
-		if (/diamond/i.test(text))
-			return { score: nextAugmentClass(s) && augmentHosts(s.me) > 0 ? 2 : 0, why: 'use Diamond' };
-		if (/firecracker/i.test(text))
-			return { score: 2, why: 'use Firecracker (strike first next fight)' };
-		return { score: 0.2, why: 'use relic' };
+		let v = 0.2;
+		if (/flower/i.test(text)) v = s.me.barrier < s.me.maxBarrier ? 2 : 0;
+		else if (/diamond/i.test(text)) v = nextAugmentClass(s) && augmentHosts(s.me) > 0 ? 2 : 0;
+		else if (/firecracker/i.test(text)) v = 2;
+		return {
+			score: 1 + v - loss,
+			why: `use the relic (${v.toFixed(2)} against ${loss.toFixed(2)})`
+		};
 	}
 	if (/^keep:/.test(id)) return { score: 1, why: 'keep relic' };
+	// Cultivate at 5+ spirits of an origin: the origin's relic or its rune(s).
+	if (card?.kind === 'originCultivate') {
+		if (/^relic\|/.test(id)) {
+			const v = s.relics > 0 ? 0.3 : Math.max(0.3, relicWorth(s));
+			return { score: 1 + v, why: `take the origin relic (${v.toFixed(2)})` };
+		}
+		const n = Number(id.split('|')[2] ?? 1) || 1;
+		return { score: 1 + n * s.params.rune, why: `take ${n} rune(s)` };
+	}
+	// A relic of choice (Cultivator (5), Cleric): one that is not a tool cannot be used up by mistake;
+	// when no Rest step needs a relic, the Firecracker (strike first) is the most useful tool.
+	if (card?.kind === 'cultivatorRelic' || /choose any relic/i.test(card?.prompt ?? '')) {
+		const name = opt?.label ?? '';
+		const gate = relicWorth(s) > 0;
+		const v = gate ? (/fairy/i.test(name) ? 2 : 1) : /firecracker/i.test(name) ? 2 : 1;
+		return { score: 1 + v, why: `choose ${name}` };
+	}
 	// Augment class choices (Fighter (5) "1 of any spirit augment" and similar).
 	const want = nextAugmentClass(s);
 	if (want && new RegExp(`\\b${want}\\b`, 'i').test(opt?.label ?? ''))
