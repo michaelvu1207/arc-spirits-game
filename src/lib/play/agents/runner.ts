@@ -190,6 +190,8 @@ export interface RunGameOptions {
 	resume?: { records: TranscriptRecord[]; priorMs?: number };
 	/** Called for decisions answered now (not for the recorded ones of a resumed game). */
 	onDecision?: (record: DecisionRecord) => void;
+	/** Skip the engine facts in every decision (scripted and mock seats do not read them). Default off. */
+	skipFacts?: boolean;
 }
 
 function emptySeatSummary(setup: SeatSetup): SeatSummary {
@@ -432,7 +434,8 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 			gameId,
 			requestId: `${gameId}-d${decisions + 1}-${seat}`,
 			events: [],
-			phaseDecisionIndex: phaseIndex
+			phaseDecisionIndex: phaseIndex,
+			facts: !opts.skipFacts
 		});
 		if (built.request.actions.length === 0) {
 			stuck.add(phaseKey);
@@ -520,7 +523,8 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 		currentSeat = p.seat;
 		return controllerBySeat.get(p.seat)!.decide(request, {
 			rulesBrief: opts.rulesBrief,
-			signal: opts.signal
+			signal: opts.signal,
+			view: p.built.view
 		});
 	};
 
@@ -560,7 +564,8 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 				gameId,
 				requestId: request.requestId,
 				events: [],
-				phaseDecisionIndex: phaseIndex
+				phaseDecisionIndex: phaseIndex,
+				facts: !opts.skipFacts
 			});
 			const still = fresh.request.actions.find(
 				(a) => a.actionId === chosen.actionId && a.label === chosen.label

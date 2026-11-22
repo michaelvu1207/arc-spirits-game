@@ -107,6 +107,9 @@ export function buildDecision(input: {
 	events: string[];
 	phaseDecisionIndex: number;
 	surface?: SurfaceResult;
+	/** Compute the engine facts (default true). Scripted seats do not read them; skipping them
+	 *  makes a game about ten times faster. */
+	facts?: boolean;
 }): BuiltDecision {
 	const { state, seat, catalog } = input;
 	const surface = input.surface ?? agentLegalCommands(state, seat, catalog);
@@ -129,7 +132,10 @@ export function buildDecision(input: {
 		actions: offeredActions(surface.commands, view, seat, catalog),
 		phaseDecisionIndex: input.phaseDecisionIndex,
 		// A forced move (one action) is not asked, so it needs no facts.
-		facts: surface.commands.length > 1 ? decisionFacts(state, seat, catalog, kind) : [],
+		facts:
+			surface.commands.length > 1 && input.facts !== false
+				? decisionFacts(state, seat, catalog, kind)
+				: [],
 		pace: paceLine(state, seat, catalog)
 	};
 	return { request, surface, view };

@@ -13,7 +13,7 @@
  */
 
 import type { BotActionId } from '../bots/contract';
-import type { GameCommand, GamePhase, SeatColor } from '../types';
+import type { GameCommand, GamePhase, SeatColor, SpectatorProjection } from '../types';
 import type { Strategy } from './strategy';
 
 export const AGENT_CONTRACT_VERSION = 'arc-agent-v1';
@@ -180,4 +180,7 @@ export interface DecideContext {
 	rulesBrief: string;
 	/** Aborts in-flight provider calls when the run stops (budget, Ctrl-C). */
 	signal?: AbortSignal;
+	/** The seat's own projection (the same data `viewText` renders; no hidden information), for
+	 *  scripted seats that read the table as data. */
+	view?: SpectatorProjection;
 }

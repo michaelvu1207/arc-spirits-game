@@ -40,6 +40,8 @@ import { OpenRouterProvider } from '../../src/lib/play/agents/providers/openrout
 import { buildRulesBrief, sha256 } from '../../src/lib/play/agents/rulesBrief';
 import { runAgentGame, type GameSummary } from '../../src/lib/play/agents/runner';
 import { saveRunCatalog } from '../../src/lib/play/agents/runCatalog';
+import { ScriptedSeatController, isScriptedPolicy } from '../../src/lib/play/agents/scripted/scriptedSeat';
+import type { PlayCatalog } from '../../src/lib/play/types';
 import { loadStrategies, pickStrategies, type Strategy } from '../../src/lib/play/agents/strategy';
 import { writeStrategyReport } from '../../src/lib/play/agents/strategyReport';
 import {
@@ -137,7 +139,7 @@ function git(): { commit: string | null; dirtyFiles: number | null } {
 }
 
 /** Seat specs: mock:<policy>, codex[:<model>], or:<model>; a bare model id means codex. */
-const KNOWN_KINDS = ['mock', 'codex', 'or', 'openrouter', 'gw'];
+const KNOWN_KINDS = ['mock', 'codex', 'or', 'openrouter', 'gw', 'script'];
 // A bare id without a colon is a Codex model; an unknown `kind:` is an error, not a model.
 const isCodexSpec = (spec: string) =>
 	spec === 'codex' || spec.startsWith('codex:') || (!spec.includes(':') && spec !== 'gw');
@@ -213,7 +215,8 @@ function controllerFor(
 	index: number,
 	seed: number,
 	budget: BudgetGuard,
-	strategy: Strategy | null = null
+	strategy: Strategy | null = null,
+	catalog?: PlayCatalog
 ): SeatController {
 	if (isCodexSpec(spec) && spec !== 'codex' && !spec.startsWith('codex:')) spec = `codex:${spec}`;
 	const [kind, ...rest] = spec.split(':');
@@ -234,6 +237,12 @@ function controllerFor(
 			strategy,
 			label: `mock:${policy}`
 		});
+	}
+	if (kind === 'script') {
+		// A scripted player (no model): script:fe is the Fighter + Elementalist baseline.
+		if (!isScriptedPolicy(arg)) throw new Error(`unknown scripted policy "${arg}" (fe)`);
+		if (!catalog) throw new Error('scripted seats need the catalog');
+		return new ScriptedSeatController({ catalog, policy: arg });
 	}
 	if (kind === 'codex') {
 		const model = arg || CODEX_DEFAULT_MODEL;
@@ -275,7 +284,7 @@ function controllerFor(
 		});
 	}
 	throw new Error(
-		`unknown seat spec "${spec}" (codex[:<model>] | mock:random | mock:greedy | mock:first | or:<openrouter model id>)`
+		`unknown seat spec "${spec}" (codex[:<model>] | mock:random | mock:greedy | mock:first | script:fe | or:<openrouter model id>)`
 	);
 }
 
@@ -464,7 +473,7 @@ async function main(): Promise<void> {
 	const playOne = async (g: number): Promise<void> => {
 		const { seed, specs: order, strategies: seatStrategies } = jobs[g];
 		const controllers = order.map((spec, i) =>
-			controllerFor(spec, i, seed, budget, seatStrategies?.[i] ?? null)
+			controllerFor(spec, i, seed, budget, seatStrategies?.[i] ?? null, loaded.catalog)
 		);
 		const path = join(outDir, `game-${g}.jsonl`);
 		const sink = new JsonlStreamSink(path);
