@@ -7,7 +7,7 @@
 	{
 		"players": 2,
 		"difficulty": 2,
-		"size": 8
+		"size": 3
 	},
 	{
 		"players": 2,
@@ -22,7 +22,7 @@
 	{
 		"players": 3,
 		"difficulty": 2,
-		"size": 10
+		"size": 4
 	},
 	{
 		"players": 3,
@@ -37,7 +37,7 @@
 	{
 		"players": 4,
 		"difficulty": 2,
-		"size": 14
+		"size": 6
 	},
 	{
 		"players": 4,
@@ -52,7 +52,7 @@
 	{
 		"players": 5,
 		"difficulty": 2,
-		"size": 18
+		"size": 8
 	},
 	{
 		"players": 5,
@@ -67,7 +67,7 @@
 	{
 		"players": 6,
 		"difficulty": 2,
-		"size": 21
+		"size": 9
 	},
 	{
 		"players": 6,
