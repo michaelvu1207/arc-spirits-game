@@ -494,7 +494,10 @@ const GE = { index: null, setup: '', data: null, lines: [], err: '', game: 0, me
 // What the graph plots: points, or the average damage of one attack with the dice held (the engine's expectedAttack).
 const GE_STATUS_LEGEND = `<span><i style="--c:var(--st-pure)"></i>Pure</span><span><i style="--c:var(--st-tainted)"></i>Tainted</span><span><i style="--c:var(--st-corrupt)"></i>Corrupt</span><span><i style="--c:var(--st-fallen)"></i>Fallen</span><span><i class="dash" style="--c:var(--text)"></i>Median</span>`;
 const METRIC = { vp: { label: 'Points', unit: 'points' }, atk: { label: 'Average attack', unit: 'average attack' } };
-const gv = (p) => p[GE.metric] ?? 0;
+let geAtkDice = false; try { geAtkDice = localStorage.getItem('geAtkDice') === '1'; } catch {}
+/** The field read for a metric: attack is the whole attack ('atk') or the attack dice alone ('da', no Beast or other flat damage). */
+const geKey = (m) => m === 'atk' && geAtkDice ? 'da' : m;
+const gv = (p) => p[geKey(GE.metric)] ?? p[GE.metric] ?? 0;
 // The panel shows the player's spirits as the class list or as the 7-hex board (kept between visits).
 let geView = 'classes'; try { geView = localStorage.getItem('geView') === 'board' ? 'board' : 'classes'; } catch {}
 // Average lines over the graph: off, one per finishing place (1st to 4th), or one per seat (Player 1 to 4, the turn order).
@@ -585,6 +588,7 @@ function paintLines() {
     <div class="gf">
       <span class="seg2" id="geMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${!GE.builds && GE.metric === 'vp' ? 'on' : ''}" title="Each player's points by round">Points</button><button data-metric="builds" class="${GE.builds ? 'on' : ''}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${!GE.builds && GE.metric === 'atk' ? 'on' : ''}" title="Each player's average damage of one attack with the dice held">Attack</button></span>
       <label class="gf-f" title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value."><span>Averages</span><select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label class="gf-f" id="geAtkWrap" hidden title="What the attack lines count: every source of damage (the dice plus the flat damage of Beast), or the attack dice alone"><span>Attack counts</span><select id="geAtkSel"><option value="0" ${geAtkDice ? '' : 'selected'}>Dice and Beast</option><option value="1" ${geAtkDice ? 'selected' : ''}>Dice only</option></select></label>
     </div>`;
   return `<div class="ge">
   <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-legend" id="geLegend">${GE_STATUS_LEGEND}</div><div class="ge-hint" id="geHint" hidden></div><div class="bd-tip" id="bdTip" hidden></div></div><aside class="ge-side" id="geSide"></aside></div></div>`;
@@ -594,6 +598,7 @@ function mountLines() {
   $('geSetup').onchange = async (e) => { await loadLines(e.target.value); paint(); };
   $('geMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; GE.builds = b.dataset.metric === 'builds'; GE.metric = GE.builds ? 'vp' : b.dataset.metric; if (GE.builds) GE.sel = null;
     for (const x of $('geMetric').children) x.classList.toggle('on', x === b); geHover(null); bdLeave(); drawLines(); };
+  $('geAtkSel').onchange = (e) => { geAtkDice = e.target.value === '1'; try { localStorage.setItem('geAtkDice', geAtkDice ? '1' : '0'); } catch {} bdLeave(); drawLines(); };
   $('geAvgSel').onchange = (e) => { geAvg = e.target.value; try { localStorage.setItem('geAvg', geAvg); } catch {} drawLines(); };
   $('geGame').onchange = (e) => { GE.game = Number(e.target.value); if (GE.sel && GE.game && GE.sel.gi !== GE.game) GE.sel = null; drawLines(); };
   const svg = $('geSvg');
@@ -638,6 +643,7 @@ const geShown = () => GE.lines.filter((l) => !GE.game || l.gi === GE.game);
 function drawLines() {
   const box = $('geChart'), svg = $('geSvg'); if (!box || !GE.data) return;
   if ($('geAvgSel')) $('geAvgSel').disabled = !!GE.builds;
+  if ($('geAtkWrap')) $('geAtkWrap').hidden = !(GE.builds ? BD.metric === 'atk' : GE.metric === 'atk');
   if (GE.builds) return drawBuilds();
   $('geLegend').innerHTML = GE_STATUS_LEGEND; svg.setAttribute('aria-label', 'Points by round, one line per player');
   const W = box.clientWidth, H = box.clientHeight, slim = W < 560, m = slim ? { l: 30, r: 58, t: 34, b: 34 } : { l: 44, r: 84, t: 26, b: 40 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
@@ -651,7 +657,7 @@ function drawLines() {
   const tick = ymax - ymin > 28 ? 10 : 5;
   for (let v = Math.ceil(ymin / tick) * tick; v <= ymax; v += tick) s += `<line class="${v === 0 ? 'axis' : 'grid'}" x1="${m.l}" x2="${W - m.r}" y1="${f(y(v))}" y2="${f(y(v))}"/><text x="${m.l - 8}" y="${f(y(v) + 4)}" text-anchor="end">${v}</text>`;
   for (let r = 0; r <= xmax; r += xmax > 30 ? 10 : 5) s += `<line class="grid" x1="${f(x(r))}" x2="${f(x(r))}" y1="${H - m.b}" y2="${H - m.b + 4}"/><text x="${f(x(r))}" y="${H - m.b + 17}" text-anchor="middle">${r}</text>`;
-  s += `${slim ? '' : `<text class="cap" x="${m.l - 34}" y="14">${points ? 'Points' : 'Average attack (damage of one attack with the dice held)'}</text>`}<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
+  s += `${slim ? '' : `<text class="cap" x="${m.l - 34}" y="14">${points ? 'Points' : geAtkDice ? 'Average attack from the dice alone (no Beast damage)' : 'Average attack (damage of one attack with the dice held)'}</text>`}<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
   if (points) s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(GE.data.win_points))}" y2="${f(y(GE.data.win_points))}"/><text class="cap" x="${m.l + 6}" y="${f(y(GE.data.win_points) - 6)}">${GE.data.win_points} points wins</text>`;
   s += `<line class="cross" id="geCross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>`;
   const shown = geShown();
@@ -701,7 +707,7 @@ function geHover(hit, mx, my) {
   if (!hit) { hint.hidden = true; return; }
   svg.querySelector(`.pl[data-i="${hit.l.i}"]`)?.classList.add('hot');
   const p = hit.l.pts[hit.r];
-  hint.innerHTML = `<b>${esc(geName(hit.l))}</b> · round ${p.r} · <b>${p.vp}</b> points · attack <b>${p.atk}</b> · ${esc(p.st)}`;
+  hint.innerHTML = `<b>${esc(geName(hit.l))}</b> · round ${p.r} · <b>${p.vp}</b> points · ${geAtkDice && GE.metric === 'atk' ? `attack from dice <b>${p.da ?? p.atk}</b>` : `attack <b>${p.atk}</b>`} · ${esc(p.st)}`;
   hint.hidden = false; const w = hint.offsetWidth;
   hint.style.left = Math.max(6, Math.min(GE.geo.W - w - 6, mx - w / 2)) + 'px'; hint.style.top = (my + 20 + 26 > GE.geo.H ? my - 34 : my + 20) + 'px';
 }
@@ -772,7 +778,7 @@ function bdSeries() {
   // A player keeps their final value after their game ends, so a line ends at the build's average final value.
   const val = (s, r, m) => s.rounds[Math.min(r, s.rounds.length - 1)][m] ?? 0, avg = (seats, r, m) => seats.reduce((a, s) => a + val(s, r, m), 0) / seats.length;
   const list = [...rows.filter((r) => r.seats.length), all];
-  for (const row of list) { row.pts = Array.from({ length: end + 1 }, (_, r) => avg(row.seats, r, BD.metric)); row.at = (r, m) => avg(row.seats, r, m);
+  for (const row of list) { row.pts = Array.from({ length: end + 1 }, (_, r) => avg(row.seats, r, geKey(BD.metric))); row.at = (r, m) => avg(row.seats, r, m);
     const rate = (a, b) => { const v = row.seats.filter((s) => s.rounds.length - 1 > a).map((s) => { const last = s.rounds.length - 1, hi = b == null ? last : Math.min(b, last); return (val(s, hi, 'vp') - val(s, a, 'vp')) / (hi - a); }); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
     row.rate = [rate(0, 8), rate(8, 16), rate(16, null)]; }
   return { list, end, win: GE.data.win_points ?? 40, done: games.filter((g) => (g.state ?? 'done') === 'done').length, n: games.length };
@@ -810,20 +816,20 @@ function bdMove(e) {
   const b = svg.getBoundingClientRect(), r = Math.max(0, Math.min(g.end, Math.round(g.xinv(e.clientX - b.left)))), px = g.x(r);
   svg.querySelector('#bdCross').setAttribute('x1', px); svg.querySelector('#bdCross').setAttribute('x2', px); svg.querySelector('#bdHover').setAttribute('visibility', 'visible');
   for (const row of BD.series.list) { const d = svg.querySelector(`#bdDot${row.k < 0 ? 'A' : row.k}`); d.setAttribute('cx', px); d.setAttribute('cy', g.y(row.pts[r])); }
-  tip.innerHTML = `<b>Round ${r} · ${BD.metric === 'vp' ? 'points' : 'attack'}</b>${[...BD.series.list].sort((a, c) => c.pts[r] - a.pts[r]).map((row) => `<div>${bdSw(row)}<span>${esc(row.name)}</span><b>${(Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
+  tip.innerHTML = `<b>Round ${r} · ${BD.metric === 'vp' ? 'points' : geAtkDice ? 'attack from dice' : 'attack'}</b>${[...BD.series.list].sort((a, c) => c.pts[r] - a.pts[r]).map((row) => `<div>${bdSw(row)}<span>${esc(row.name)}</span><b>${(Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
   tip.hidden = false; const w = tip.offsetWidth, h = tip.offsetHeight; tip.style.left = Math.max(4, px + 14 + w > g.W ? px - 14 - w : px + 14) + 'px'; tip.style.top = Math.max(4, Math.min(g.H - h - 4, e.clientY - b.top - h / 2)) + 'px';
 }
 function bdLeave() { const tip = $('bdTip'); if (tip) tip.hidden = true; $('geSvg')?.querySelector('#bdHover')?.setAttribute('visibility', 'hidden'); }
 /** The panel beside the builds graph: the builds in numbers. */
 function geBuildsPanel() {
   const meta = GE.index.find((x) => x.setup === GE.setup), S = BD.series ?? bdSeries(), n1 = (v) => v == null ? '–' : String(Math.round(v * 10) / 10), last = S.end, marks = [8, 16, 24].filter((r) => r < last);
-  const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`, what = BD.metric === 'vp' ? 'points' : 'attack';
+  const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`, what = BD.metric === 'vp' ? 'points' : geAtkDice ? 'attack from dice' : 'attack';
   return `<div class="gsum">
     <div class="gs-top"><b>Builds in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b><span class="seg2 sm" style="margin-left:auto" role="group" aria-label="What the builds graph shows">${[['vp', 'Points'], ['atk', 'Attack']].map(([k, t]) => `<button data-bdm="${k}" class="${BD.metric === k ? 'on' : ''}" title="${k === 'vp' ? 'Average points by round' : 'Average damage of one attack with the dice held, by round'}">${t}</button>`).join('')}</span></div>
     <small class="gsum-when">${S.n} ${S.n === 1 ? 'game' : 'games'} · ${S.list.at(-1).seats.length} players${S.done < S.n ? ` · ${S.done} finished` : ''}</small>
     <section class="gsec"><h2>Average ${what}, by build</h2>
       <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Average ${what} at the end">Final</th>${marks.map((r) => `<th title="Average ${what} at the end of round ${r}"><span class="nb">Round ${r}</span></th>`).join('')}</tr></thead>
-        <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${r.seats.length}</td><td>${S.done ? r.wins : '–'}</td><td>${n1(r.at(last, BD.metric))}</td>${marks.map((k) => `<td>${n1(r.at(k, BD.metric))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
+        <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${r.seats.length}</td><td>${S.done ? r.wins : '–'}</td><td>${n1(r.at(last, geKey(BD.metric)))}</td>${marks.map((k) => `<td>${n1(r.at(k, geKey(BD.metric)))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
     <section class="gsec"><h2>Points a round and attack</h2>
       <div class="bd-table"><table class="gsum-t"><thead><tr><th>Build</th><th title="Points a round in rounds 1 to 8">Rounds <span class="nb">1–8</span></th><th title="Points a round in rounds 9 to 16"><span class="nb">9–16</span></th><th title="Points a round from round 17 on"><span class="nb">17 on</span></th><th title="Average damage of one attack at the end of round 8">Attack, <span class="nb">round 8</span></th><th title="Average damage of one attack at the end">Attack, <span class="nb">end</span></th></tr></thead>
         <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${n1(r.rate[0])}</td><td>${n1(r.rate[1])}</td><td>${n1(r.rate[2])}</td><td>${n1(r.at(Math.min(8, last), 'atk'))}</td><td>${n1(r.at(last, 'atk'))}</td></tr>`).join('')}</tbody></table></div></section>
