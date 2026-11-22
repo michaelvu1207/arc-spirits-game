@@ -1,4 +1,6 @@
+import { isRelic } from '../../locationInteractions';
 import { ruleValue } from '../../rules';
+import type { PlayCatalog, PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { EffectCombatInfo, EffectContext } from '../context';
 import type { ClassAbility } from './types';
@@ -27,6 +29,33 @@ const REST_LADDER: [count: number, times: number][] = [
 	[3, 2],
 	[2, 1]
 ];
+
+/** Rule `elementalistRest1235` (Michael, 2026-11-22): upgrades per Rest at 2 / 3 / 4 / 5 Elementalists. */
+const REST_LADDER_1235: [count: number, times: number][] = [
+	[5, 5],
+	[4, 3],
+	[3, 2],
+	[2, 1]
+];
+
+/** Whether the player holds a relic (any relic; a used relic tool is gone). */
+export function holdsRelic(player: Pick<PrivatePlayerState, 'mats'>): boolean {
+	return (player.mats ?? []).some((m) => m.hasRune && isRelic(m));
+}
+
+/**
+ * Under `elementalistRest1235`: the upgrades one Rest gives a player with `count` Elementalists.
+ * With the rule `elementalist5NeedsRelic` the top step (5) counts only while the player holds a
+ * relic; without one, five Elementalists upgrade as four do.
+ */
+export function elementalistRestUpgrades(
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	count: number,
+	player: Pick<PrivatePlayerState, 'mats'>
+): number {
+	const capped = count >= 5 && ruleValue(catalog, 'elementalist5NeedsRelic') && !holdsRelic(player) ? 4 : count;
+	return REST_LADDER_1235.find(([at]) => capped >= at)?.[1] ?? 0;
+}
 
 /** Under `elementalistMethods`: the Elementalist count at which each action starts to upgrade. */
 export const ELEMENTALIST_METHOD_AT = { monsterKill: 2, rest: 3, cultivate: 4, spiritWorldSummon: 5 } as const;
@@ -57,6 +86,8 @@ export function elementalistKillUpgrades(
 /** The upgrades for the action `method`, if the rule is on and the player has enough Elementalists. */
 function upgradeFor(ctx: EffectContext, method: keyof typeof ELEMENTALIST_METHOD_AT): void {
 	if (!ruleValue(ctx.catalog, 'elementalistMethods')) return;
+	// Rule `elementalistRest1235`: upgrades come from Rest only (the ladder in the onRest ability below).
+	if (ruleValue(ctx.catalog, 'elementalistRest1235')) return;
 	if (ctx.traitCount < ELEMENTALIST_METHOD_AT[method]) return;
 	// Rule `arcaneBlood` (Michael, 2026-11-21): a kill upgrades nothing by itself; Elementalist (2)
 	// upgrades once per Arcane Blood taken in place of the kill's rewards (runtime.ts, `gainArcaneBlood`).
@@ -69,6 +100,11 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'onRest',
 		run(ctx) {
+			if (ruleValue(ctx.catalog, 'elementalistRest1235')) {
+				const times = elementalistRestUpgrades(ctx.catalog, ctx.traitCount, ctx.player);
+				if (times) runAction(ctx, { kind: 'upgradeDice', times });
+				return;
+			}
 			if (ruleValue(ctx.catalog, 'elementalistMethods')) {
 				upgradeFor(ctx, 'rest');
 				return;

@@ -153,6 +153,15 @@
  * - weakLowDice (default false; Michael, 2026-11-21, during Test 31): true ⇒ Basic 0,0,0,0,1,1 (0.33) and
  *   Enchanted 0,0,1,1,1,2 (0.83); Exalted 1,1,1,2,2,2 and Arcane 0,0,1,3,3,5 as under `buffedDice`, which it
  *   overrides. See `diceTierFaces` in combat.ts.
+ * - enchantedTwoThirds (default false; Michael, 2026-11-22): only read under `weakLowDice`; true ⇒ the
+ *   Enchanted die is 0,0,1,1,1,1 (0.67), so the dice are 0.33 / 0.67 / 1.5. See `diceTierFaces` in combat.ts.
+ * - elementalistRest1235 (default false; Michael, 2026-11-22): true ⇒ Elementalist upgrades on Rest only:
+ *   1 / 2 / 3 / 5 attack dice at 2 / 3 / 4 / 5 Elementalists, the lowest die first. It overrides
+ *   `elementalistMethods`: a kill, a Cultivate, a Spirit World Summon and Arcane Blood upgrade nothing.
+ *   See `elementalistRestUpgrades` in classes/elementalist.ts.
+ * - elementalist5NeedsRelic (default false; Michael, 2026-11-22): only read under `elementalistRest1235`;
+ *   true ⇒ the step at 5 Elementalists counts only while the player holds a relic (any relic); without
+ *   one, 5 Elementalists upgrade as 4 do.
  * - fighterInitiative (default false; Michael, 2026-11-20): true ⇒ in combat Fighter gives 1 initiative
  *   per Fighter trait, up to 5, starting at one trait (a new first breakpoint; the dice on Rest are
  *   unchanged). The printed text is in the class data. See classes/fighter.ts.
@@ -275,6 +284,9 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	goodKillBonus: false,
 	buffedDice: false,
 	weakLowDice: false,
+	enchantedTwoThirds: false,
+	elementalistRest1235: false,
+	elementalist5NeedsRelic: false,
 	fighterInitiative: false,
 	elementalistMethods: false,
 	restByStatus: false,
@@ -403,6 +415,12 @@ export function pvpAllowedAt(
 const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count: number; text: string }[] = [
 	// The 2026-11-14 class changes come first: for one class and breakpoint the first entry wins,
 	// so they replace the `sunRework` and `mysticCultivateDouble` texts below.
+	// Listed before the Arcane Blood text: the first matching entry of a tier is the one printed.
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 2, text: 'On Rest, upgrade an attack dice.' },
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 3, text: 'On Rest, upgrade an attack dice 2 times.' },
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 4, text: 'On Rest, upgrade an attack dice 3 times.' },
+	{ rule: 'elementalist5NeedsRelic', when: true, className: 'Elementalist', count: 5, text: 'On Rest, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.' },
+	{ rule: 'elementalistRest1235', when: true, className: 'Elementalist', count: 5, text: 'On Rest, upgrade an attack dice 5 times.' },
 	{
 		rule: 'arcaneBlood',
 		when: true,

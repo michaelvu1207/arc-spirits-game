@@ -593,7 +593,7 @@ function elementalistSpiritWorldSummon(
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
 	log: string[]
 ): void {
-	if (!ruleValue(catalog, 'elementalistMethods')) return;
+	if (!ruleValue(catalog, 'elementalistMethods') || ruleValue(catalog, 'elementalistRest1235')) return;
 	if ((awakenedClassCounts(player)['Elementalist'] ?? 0) < ELEMENTALIST_METHOD_AT.spiritWorldSummon) return;
 	const lines: string[] = [];
 	upgradeDice(player, elementalistUpgradesPerAction(catalog), lines);
@@ -650,7 +650,7 @@ function gainArcaneBlood(
 	log: string[]
 ): void {
 	log.push(`Gained ${amount} Arcane Blood.`);
-	if (!ruleValue(catalog, 'elementalistMethods')) return;
+	if (!ruleValue(catalog, 'elementalistMethods') || ruleValue(catalog, 'elementalistRest1235')) return;
 	if ((awakenedClassCounts(player)['Elementalist'] ?? 0) < ELEMENTALIST_METHOD_AT.monsterKill) return;
 	const lines: string[] = [];
 	upgradeDice(player, amount, lines);

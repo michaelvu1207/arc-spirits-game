@@ -202,9 +202,15 @@ export const WEAK_LOW_DICE_TIER_FACES: Record<DiceTier, number[]> = {
 	arcane: BUFFED_DICE_TIER_FACES.arcane
 };
 
+/** Under `weakLowDice` with the rule `enchantedTwoThirds` (Michael, 2026-11-22): Enchanted 0,0,1,1,1,1 (0.67), not 0.83. */
+export const TWO_THIRDS_DICE_TIER_FACES: Record<DiceTier, number[]> = {
+	...WEAK_LOW_DICE_TIER_FACES,
+	enchanted: [0, 0, 1, 1, 1, 1]
+};
+
 /** The faces of each attack-dice tier under the rules of `catalog` (no catalog ⇒ the default dice). */
 export function diceTierFaces(catalog?: Parameters<typeof ruleValue>[0]): Record<DiceTier, number[]> {
-	if (ruleValue(catalog, 'weakLowDice')) return WEAK_LOW_DICE_TIER_FACES;
+	if (ruleValue(catalog, 'weakLowDice')) return ruleValue(catalog, 'enchantedTwoThirds') ? TWO_THIRDS_DICE_TIER_FACES : WEAK_LOW_DICE_TIER_FACES;
 	return ruleValue(catalog, 'buffedDice') ? BUFFED_DICE_TIER_FACES : DICE_TIER_FACES;
 }
 

@@ -17,7 +17,7 @@
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
-import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
+import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
 import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
@@ -579,5 +579,55 @@ describe('fighterDice35 and cultivatorBarrier35: the top two breakpoints give 3 
 		expect(text(ON, 'Cultivator', 4)).toBe('On Cultivate, gain 3 Max Barrier.');
 		expect(text(ON, 'Cultivator', 5)).toContain('gain 5 Max Barrier');
 		expect(text(withRules({ cultivatorRelicOnce: true }), 'Cultivator', 5)).toContain('gain 10 Max Barrier');
+	});
+});
+
+describe('elementalistRest1235, elementalist5NeedsRelic and enchantedTwoThirds (Michael, 2026-11-22)', () => {
+	const tenBasic = () => Array.from({ length: 10 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as DiceTier }));
+	const relic = { slotIndex: 1, hasRune: true, id: 'firecracker', name: 'Firecracker', type: 'relic' } as never;
+	const rune = { slotIndex: 1, hasRune: true, id: 'forest', name: 'Forest Rune', type: 'rune' } as never;
+	/** Dice above Basic after one Rest (each upgrade lifts one Basic die to Enchanted while Basic dice remain). */
+	const upgraded = (rules: PlayRules, n: number, mats: never[] = []) => {
+		const p = makePlayer({ attackDice: tenBasic(), spirits: [spirit(1, { Elementalist: n })], mats });
+		applyRest(makeState(p), 'Red', [], { catalog: withRules(rules) });
+		return p.attackDice.filter((d) => d.tier !== 'basic').length;
+	};
+	it('on Rest: 1 / 2 / 3 / 5 upgrades at 2 / 3 / 4 / 5 Elementalists, none at 1', () => {
+		expect([1, 2, 3, 4, 5, 6].map((n) => upgraded({ elementalistRest1235: true }, n))).toEqual([0, 1, 2, 3, 5, 5]);
+	});
+	it('it overrides elementalistMethods: a Cultivate and Arcane Blood upgrade nothing', () => {
+		const ON = withRules({ elementalistMethods: true, elementalistOneUpgrade: true, elementalistRest1235: true, arcaneBlood: true });
+		const p = makePlayer({ attackDice: tenBasic(), spirits: [spirit(1, { Elementalist: 5 })] });
+		applyCultivate(makeState(p), 'Red', [], { catalog: ON });
+		expect(p.attackDice.every((d) => d.tier === 'basic')).toBe(true);
+		expect(upgraded({ elementalistMethods: true, elementalistOneUpgrade: true, elementalistRest1235: true }, 3)).toBe(2);
+	});
+	it('with elementalist5NeedsRelic the step at 5 needs a held relic (any relic); a rune is not one', () => {
+		const R: PlayRules = { elementalistRest1235: true, elementalist5NeedsRelic: true };
+		expect(upgraded(R, 5)).toBe(3);
+		expect(upgraded(R, 5, [rune])).toBe(3);
+		expect(upgraded(R, 5, [relic])).toBe(5);
+		expect(upgraded(R, 4, [relic])).toBe(3);
+		expect(upgraded(R, 4)).toBe(3);
+	});
+	it('upgrades the lowest die first', () => {
+		const p = makePlayer({ attackDice: dice('basic', 'enchanted', 'enchanted', 'exalted'), spirits: [spirit(1, { Elementalist: 3 })] });
+		applyRest(makeState(p), 'Red', [], { catalog: withRules({ elementalistRest1235: true }) });
+		// Two upgrades: the Basic die first, then one of the Enchanted dice.
+		expect(p.attackDice.map((d) => d.tier).sort()).toEqual(['enchanted', 'enchanted', 'exalted', 'exalted']);
+	});
+	it('the printed text follows the switches', () => {
+		const text = (rules: PlayRules, count: number) => ruleAdjustedClassSchema(withRules(rules), 'Elementalist', [{ count, effects: [{ type: 'benefit', description: 'old' }] }] as never)![0].effects?.[0].description;
+		expect(text({ elementalistRest1235: true, arcaneBlood: true }, 2)).toBe('On Rest, upgrade an attack dice.');
+		expect(text({ elementalistRest1235: true }, 4)).toBe('On Rest, upgrade an attack dice 3 times.');
+		expect(text({ elementalistRest1235: true }, 5)).toBe('On Rest, upgrade an attack dice 5 times.');
+		expect(text({ elementalistRest1235: true, elementalist5NeedsRelic: true }, 5)).toContain('if you have a relic');
+	});
+	it('enchantedTwoThirds: the dice are 0.33 / 0.67 / 1.5 under weakLowDice, and unchanged without it', () => {
+		const ON = withRules({ buffedDice: true, weakLowDice: true, enchantedTwoThirds: true });
+		expect(diceTierFaces(ON)).toBe(TWO_THIRDS_DICE_TIER_FACES);
+		expect((['basic', 'enchanted', 'exalted', 'arcane'] as DiceTier[]).map((t) => Math.round(avg(diceTierFaces(ON)[t]) * 100) / 100)).toEqual([0.33, 0.67, 1.5, 2]);
+		expect(diceTierFaces(withRules({ buffedDice: true, enchantedTwoThirds: true }))).toBe(BUFFED_DICE_TIER_FACES);
+		expect(buildRulesBrief(ON)).toContain('basic 0,0,0,0,1,1; enchanted 0,0,1,1,1,1; exalted 1,1,1,2,2,2');
 	});
 });

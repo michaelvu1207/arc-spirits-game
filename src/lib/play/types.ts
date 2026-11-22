@@ -896,6 +896,12 @@ export interface PlayRules {
 	buffedDice?: boolean;
 	/** Basic 0.33 and Enchanted 0.83 with Exalted 1.5 and Arcane 2 (Michael, 2026-11-21). See `WEAK_LOW_DICE_TIER_FACES` in combat.ts. */
 	weakLowDice?: boolean;
+	/** Under `weakLowDice`: the Enchanted die is 0,0,1,1,1,1 (0.67) (Michael, 2026-11-22). */
+	enchantedTwoThirds?: boolean;
+	/** Elementalist upgrades on Rest only, 1 / 2 / 3 / 5 dice at 2 / 3 / 4 / 5 Elementalists (Michael, 2026-11-22). */
+	elementalistRest1235?: boolean;
+	/** Under `elementalistRest1235`: the step at 5 Elementalists needs a held relic (Michael, 2026-11-22). */
+	elementalist5NeedsRelic?: boolean;
 	/** Fighter also gives combat initiative: 1 per Fighter trait, up to 5 (Michael, 2026-11-20). See classes/fighter.ts. */
 	fighterInitiative?: boolean;
 	/** Elementalist upgrades an attack dice twice per board action, one more action per breakpoint (Michael, 2026-11-20). See classes/elementalist.ts. */
