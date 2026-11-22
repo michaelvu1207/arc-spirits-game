@@ -113,6 +113,10 @@
   main.ge-mode .scroll { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
   .ge { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
   .ge-filters { gap: 8px 18px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--dim); margin-left: 8px; } .ge-filters select { max-width: 380px; color: var(--text); margin-left: 6px; }
+  .ge-live { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-weight: 600; color: var(--text); }
+  .ge-live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #e5484d; animation: geLive 1.6s ease-in-out infinite; }
+  @keyframes geLive { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .ge-live::before { animation: none; } }
   .ge-legend { display: flex; gap: 14px; flex-wrap: wrap; } .ge-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .ge-legend i { display: block; width: 18px; height: 0; border-top: 3px solid var(--c); } .ge-legend i.dash { border-top-style: dashed; border-top-width: 2px; }
   .ge-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(420px, 1fr); gap: 20px; }
@@ -476,10 +480,37 @@ async function loadLines(setup) {
   }
   GE.hex ??= Object.fromEntries(((await get('/api/game/hex-spirits').catch(() => ({ spirits: [] }))).spirits ?? []).flatMap((x) => [[x.dbName, x], [x.name, x]]));
   GE.generic ??= new Set((await get('/api/game/table?name=classes').catch(() => [])).filter((c) => typeOf(c) === 'normal').map((c) => c.name));
-  GE.lines = []; GE.sel = null; GE.hover = null; GE.game = 0; GE.r = 0;
-  // A player is "player 1 to 4" of its game (the seat order); seat colours and characters are not shown.
-  GE.data.games.forEach((g, gi) => g.seats.forEach((s, k) => GE.lines.push({ i: GE.lines.length, g, gi: gi + 1, pn: k + 1, s, pts: s.rounds, last: s.rounds.at(-1).r })));
+  GE.sel = null; GE.hover = null; GE.game = 0; GE.r = 0; GE.at = Date.now();
+  geBuildLines();
 }
+// A player is "player 1 to 4" of its game (the seat order); seat colours and characters are not shown.
+function geBuildLines() { GE.lines = []; GE.data.games.forEach((g, gi) => g.seats.forEach((s, k) => GE.lines.push({ i: GE.lines.length, g, gi: gi + 1, pn: k + 1, s, pts: s.rounds, last: s.rounds.at(-1).r }))); }
+// Live: while the shown test is being played its lines are fetched again every 20 seconds (the balance tools rewrite
+// them as the games go on). The chosen game, player and round stay; a player followed at its last round stays at the last.
+async function geLiveTick() {
+  if (table !== 'bal_lines' || document.hidden || !GE.data || GE.drag || GE.busy || document.activeElement?.closest?.('select')) return;
+  GE.busy = true;
+  try {
+    const index = await geFetch(''), was = GE.index.find((x) => x.setup === GE.setup), now = index.find((x) => x.setup === GE.setup);
+    const listChanged = index.length !== GE.index.length || index.at(-1).setup !== GE.index.at(-1).setup || index.some((x, k) => !!x.live !== !!GE.index[k]?.live);
+    const dataChanged = now && (now.live || was?.live || now.last !== was?.last || now.games !== was?.games);
+    if (!listChanged && !dataChanged) return;
+    for (const x of index) { const t = (x.changed ?? '').replace(/\s*\([^)]*row (above|below)[^)]*\)/, ''); x.changed = /row (above|below)/.test(t) ? '' : t; }
+    const data = dataChanged ? await geFetch('?setup=' + encodeURIComponent(GE.setup)) : null;
+    if (table !== 'bal_lines' || GE.drag || document.activeElement?.closest?.('select')) return;
+    GE.index = index;
+    if (data) {
+      const key = GE.sel ? [GE.sel.gi, GE.sel.pn] : null, atEnd = GE.sel && GE.r === GE.sel.last, r = GE.r, game = GE.game;
+      GE.data = data; geBuildLines(); GE.at = Date.now();
+      GE.game = game <= GE.data.games.length ? game : 0;
+      GE.sel = key ? GE.lines.find((l) => l.gi === key[0] && l.pn === key[1]) ?? null : null;
+      if (GE.sel) GE.r = atEnd ? GE.sel.last : Math.min(r, GE.sel.last);
+    }
+    paint();
+  } catch {} finally { GE.busy = false; }
+}
+setInterval(geLiveTick, 20000);
+addEventListener('visibilitychange', () => { if (!document.hidden) geLiveTick(); });
 const geName = (l) => `Game ${l.gi} · Player ${l.pn}`;
 function paintLines() {
   if (!GE.data) { $('barExtra').innerHTML = ''; return `<div class="note">${esc(GE.err || 'Loading…')}</div>`; }
@@ -488,11 +519,13 @@ function paintLines() {
   const when = (x) => day(x.first) === day(x.last) ? `${day(x.first)}, ${hm(x.first)} to ${hm(x.last)}` : `${day(x.first)} ${hm(x.first)} to ${day(x.last)} ${hm(x.last)}`;
   const cut = (t, n) => t.length > n ? t.slice(0, n - 2).replace(/\s+\S*$/, '') + '…' : t;
   // The filters and the legend sit in the title bar, so the graph and the panel get the whole height.
-  const about = `Test ${meta.n} of ${GE.index.length}${meta === newest ? ', the latest set of games' : ''}. Played ${when(meta)}, ${GE.lines.length} players in ${meta.games} games on ${meta.table}. ${meta.changed ? `What it tested: ${meta.changed}. ` : ''}Rules: ${meta.label}. Name in the reports: ${meta.setup}.`;
+  const part = (x) => x.done != null && x.done < x.games ? `${x.done} of ${x.games} games finished` : `${x.games} games`;
+  const about = `Test ${meta.n} of ${GE.index.length}${meta === newest ? ', the latest set of games' : ''}. ${meta.live ? 'Being played now; this page follows it. ' : ''}Played ${when(meta)}, ${GE.lines.length} players in ${meta.games} games${meta.done != null && meta.done < meta.games ? ` (${meta.done} finished${meta.live ? '' : ', the others were stopped'})` : ''} on ${meta.table}. ${meta.changed ? `What it tested: ${meta.changed}. ` : ''}Rules: ${meta.label}. Name in the reports: ${meta.setup}.`;
   $('barExtra').innerHTML = `<span class="seg2" id="geMetric">${Object.entries(METRIC).map(([k, m]) => `<button data-metric="${k}" class="${GE.metric === k ? 'on' : ''}">${m.label}</button>`).join('')}</span>
     <label title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value.">Average lines<select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-    <label title="${esc(about)}">Set of games<select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x === newest ? ' (latest)' : ''} · ${esc(day(x.last))} · ${x.games} games · ${esc(x.table)} · ${esc(cut(x.changed || x.label, 60))}</option>`).join('')}</select></label>
-    <label>Game<select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} (${g.rounds} rounds)</option>`).join('')}</select></label>
+    <label title="${esc(about)}">Set of games<select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x.live ? ' · LIVE' : x === newest ? ' (latest)' : ''} · ${esc(day(x.last))} · ${part(x)} · ${esc(x.table)} · ${esc(cut(x.changed || x.label, 60))}</option>`).join('')}</select></label>
+    <label>Game<select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} (${g.state === 'live' ? `round ${g.rounds}, in play` : g.state === 'stopped' ? `stopped at round ${g.rounds}` : `${g.rounds} rounds`})</option>`).join('')}</select></label>
+    ${meta.live ? `<span class="ge-live" title="This test is being played. The lines are fetched again every 20 seconds.">Live · ${GE.data.games.filter((g) => g.state === 'done').length} of ${GE.data.games.length} games finished · updated ${esc(new Date(GE.at ?? Date.now()).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }))}</span>` : ''}
     <span class="ge-legend"><span><i style="--c:var(--st-pure)"></i>Pure</span><span><i style="--c:var(--st-tainted)"></i>Tainted</span><span><i style="--c:var(--st-corrupt)"></i>Corrupt</span><span><i style="--c:var(--st-fallen)"></i>Fallen</span><span><i class="dash" style="--c:var(--text)"></i>Median</span></span>`;
   return `<div class="ge">
   <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-hint" id="geHint" hidden></div></div><aside class="ge-side" id="geSide"></aside></div></div>`;
