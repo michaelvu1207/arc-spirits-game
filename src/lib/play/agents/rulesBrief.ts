@@ -163,12 +163,13 @@ function cardText(catalog: PlayCatalog): string {
 
 	const permanent = (catalog.monsters ?? []).find((m) => m.permanent);
 	if (permanent) {
-		const vp = buildMonsterRewards(permanent.rewardTrack).reduce(
+		const rewards = buildMonsterRewards(permanent.rewardTrack);
+		const vp = rewards.reduce(
 			(s, o) => s + (o.effect.type === 'vp' ? o.effect.amount : 0),
 			0
 		);
 		lines.push(
-			`- Permanent monster "${permanent.name}": Barrier ${permanent.barrier}, damage ${permanent.damage}${typeof permanent.initiative === 'number' ? `, initiative ${permanent.initiative}` : ''}, ${vp} VP per kill plus its other rewards. It is in no deck and never runs out: instead of drawing from a deck you may take a copy into your hand (that is your draw of the visit), then fight it like any card. Because it is always there, empty decks do not end the game.`
+			`- Permanent monster "${permanent.name}": Barrier ${permanent.barrier}, damage ${permanent.damage}${typeof permanent.initiative === 'number' ? `, initiative ${permanent.initiative}` : ''}, ${ruleValue(catalog, 'permanentRewardChoice') && rewards.length > 1 ? `each kill gives ONE of these, your choice: ${rewards.map((o) => o.label).join(' OR ')}` : `${vp} VP per kill plus its other rewards`}. It is in no deck and never runs out: instead of drawing from a deck you may take a copy into your hand (that is your draw of the visit), then fight it like any card. Because it is always there, empty decks do not end the game.`
 		);
 	}
 

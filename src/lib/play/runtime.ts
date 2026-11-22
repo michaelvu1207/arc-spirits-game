@@ -600,6 +600,18 @@ function elementalistSpiritWorldSummon(
 	for (const line of lines) log.push(`Elementalist: ${line}`);
 }
 
+/** Rule `permanentRewardChoice`: the claim of this kill gives one reward of the card, the player's choice. */
+export function rewardChoiceOf(
+	monster: { permanent?: boolean; rewardTrack: string[] },
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): boolean {
+	return (
+		monster.permanent === true &&
+		ruleValue(catalog, 'permanentRewardChoice') &&
+		rewardClaimCount(monster.rewardTrack) > 1
+	);
+}
+
 /** Rule `arcaneBlood`: Arcane Blood for a kill, by the card's Difficulty (the permanent monster gives 1). */
 export const ARCANE_BLOOD_BY_DIFFICULTY: Record<1 | 2 | 3, number> = { 1: 1, 2: 2, 3: 3 };
 /** Rule `arcaneBlood`: the Arcane Blood the kill of `monster` offers in place of its rewards; undefined with the rule off. */
@@ -3043,8 +3055,11 @@ function reduceCommand(
 								.filter((option) => option.effect.type !== 'vp')
 								.map((option) => option.token)
 						: reward.rewardTrack;
-					reward.rewardTrack = [...reward.rewardTrack, ...again];
-					reward.chooseAmount = noVp ? rewardClaimCount(reward.rewardTrack) : reward.chooseAmount * 2;
+					// A one-reward claim keeps its track: the chosen reward is paid twice at the claim.
+					if (!reward.chooseOne) {
+						reward.rewardTrack = [...reward.rewardTrack, ...again];
+						reward.chooseAmount = noVp ? rewardClaimCount(reward.rewardTrack) : reward.chooseAmount * 2;
+					}
 					reward.doubled = true;
 					log.push(
 						`Falconer: the rewards of ${reward.monsterName} are doubled${noVp ? ' (not its Victory Points)' : ''}.`
@@ -3637,8 +3652,9 @@ function reduceCommand(
 						monsterId: result.fought.id,
 						monsterName: result.fought.name,
 						rewardTrack: [...result.fought.rewardTrack],
-						chooseAmount: claim,
-						...(blood ? { arcaneBlood: blood } : {})
+						chooseAmount: rewardChoiceOf(result.fought, catalog) ? 1 : claim,
+						...(blood ? { arcaneBlood: blood } : {}),
+						...(rewardChoiceOf(result.fought, catalog) ? { chooseOne: true } : {})
 					};
 					offerFalconerDouble(state, active.player, catalog);
 				}
@@ -3665,6 +3681,16 @@ function reduceCommand(
 				if (!pending.arcaneBlood) return failure('no_arcane_blood', 'This kill offers no Arcane Blood.');
 				log.push(`Took Arcane Blood in place of the rewards of ${pending.monsterName}.`);
 				gainArcaneBlood(player, pending.arcaneBlood, catalog, log);
+			} else if (pending.chooseOne) {
+				// Rule `permanentRewardChoice`: one reward of the card, the player's choice (`picks[0]`).
+				const options = buildMonsterRewards(pending.rewardTrack);
+				const opt = options.find((o) => o.index === command.picks?.[0]) ?? options[0];
+				if (!opt) return failure('no_reward', 'This card has no reward to claim.');
+				// Falconer doubled the claim: the chosen reward twice (not Victory Points under `falconerNoDoubleVp`).
+				const times =
+					pending.doubled && !(opt.effect.type === 'vp' && ruleValue(catalog, 'falconerNoDoubleVp')) ? 2 : 1;
+				for (let n = 0; n < times; n++)
+					applyRewardGain(state, active.seatColor, player, opt.effect, command.choices?.[0] ?? 0, log, catalog);
 			} else {
 				let choiceCursor = 0;
 				for (const opt of buildMonsterRewards(pending.rewardTrack)) {
@@ -4082,8 +4108,9 @@ const navigationPowerHooks = {
 				monsterId: fought.id,
 				monsterName: fought.name,
 				rewardTrack: [...fought.rewardTrack],
-				chooseAmount: claim,
-				...(blood ? { arcaneBlood: blood } : {})
+				chooseAmount: rewardChoiceOf(fought, catalog) ? 1 : claim,
+				...(blood ? { arcaneBlood: blood } : {}),
+				...(rewardChoiceOf(fought, catalog) ? { chooseOne: true } : {})
 			};
 			offerFalconerDouble(state, player, catalog);
 		}

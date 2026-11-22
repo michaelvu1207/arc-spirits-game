@@ -425,6 +425,8 @@ export interface PendingRewardState {
 	 * Difficulty 3). Absent when the rule is off.
 	 */
 	arcaneBlood?: number;
+	/** Rule `permanentRewardChoice`: the claim gives ONE reward of the track (`picks[0]`), not every one. */
+	chooseOne?: boolean;
 }
 
 /**
@@ -918,6 +920,8 @@ export interface PlayRules {
 	arcaneBlood?: boolean;
 	/** Under `arcaneBlood`: a kill offers 2 / 4 / 6 Arcane Blood, not 1 / 2 / 3 (Michael, 2026-11-21). */
 	arcaneBloodDouble?: boolean;
+	/** A kill of the permanent monster gives one of its rewards, the player's choice, not all (Michael, 2026-11-21). */
+	permanentRewardChoice?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

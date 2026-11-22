@@ -278,11 +278,18 @@ function monsterRewardCommands(me: PrivatePlayerState): GameCommand[] {
 	const runeChoices = options
 		.filter((o) => o.effect.type === 'chooseRune')
 		.map((o) => (o.effect.type === 'chooseRune' ? o.effect.options.map((_, i) => i) : [0]));
-	const claims: GameCommand[] = product(runeChoices, MAX_CHOICE_VECTORS).map((choices) => ({
-		type: 'resolveMonsterReward',
-		picks,
-		...(choices.length ? { choices } : {})
-	}));
+	// Rule `permanentRewardChoice`: one command for each reward the player may take.
+	const claims: GameCommand[] = pending.chooseOne
+		? options.flatMap((o): GameCommand[] =>
+				o.effect.type === 'chooseRune'
+					? o.effect.options.map((_, i) => ({ type: 'resolveMonsterReward', picks: [o.index], choices: [i] }))
+					: [{ type: 'resolveMonsterReward', picks: [o.index] }]
+			)
+		: product(runeChoices, MAX_CHOICE_VECTORS).map((choices) => ({
+				type: 'resolveMonsterReward',
+				picks,
+				...(choices.length ? { choices } : {})
+			}));
 	// Rule `arcaneBlood`: the Arcane Blood in place of every reward. Offered when it does something
 	// for this player (today: Elementalist 2 or more, which upgrades a die per Arcane Blood).
 	if (pending.arcaneBlood && (awakenedClassCounts(me)['Elementalist'] ?? 0) >= 2)

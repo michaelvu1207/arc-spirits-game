@@ -175,6 +175,9 @@
  * - arcaneBloodDouble (default false; Michael, 2026-11-21, after Test 27 where Arcane Blood was taken in
  *   31 of 516 offers): only read under `arcaneBlood`. true ⇒ a kill offers 2 / 4 / 6 Arcane Blood
  *   (Difficulty 1 and the permanent monster 2, Difficulty 2 4, Difficulty 3 6), not 1 / 2 / 3.
+ * - permanentRewardChoice (default false; Michael, 2026-11-21): true ⇒ a kill of the permanent monster
+ *   gives ONE of the rewards on its card, the player's choice (`picks[0]`; the first when none is
+ *   named), not every reward. Deck cards still give every reward. See `rewardChoiceOf` in runtime.ts.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
  *   for a Fighter build. See classes/strategist.ts, darkAssassin.ts, firetail.ts.
@@ -263,7 +266,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	mysticMonstersOnly: false,
 	spiritInitiativeTrim: false,
 	arcaneBlood: false,
-	arcaneBloodDouble: false
+	arcaneBloodDouble: false,
+	permanentRewardChoice: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

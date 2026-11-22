@@ -153,3 +153,73 @@ describe('permanent monster', () => {
 		expect(nextMonsterCardCommand(s, 'Red', cat)).toEqual(TAKE);
 	});
 });
+
+describe('rule permanentRewardChoice: a kill of the permanent monster gives one reward, the player\'s choice', () => {
+	const cat: PlayCatalog = { ...catalogWith(true), rules: { permanentRewardChoice: true } };
+	/** Red has just defeated the Abyss Lurker and has the claim open. */
+	function killed(catalog: PlayCatalog): PublicGameState {
+		let s = atAbyss(catalog);
+		s = ok(s, catalog, ACTORS.Red, TAKE);
+		const red = s.players.Red!;
+		red.barrier = 10;
+		red.maxBarrier = 10;
+		red.attackDice = Array.from({ length: 3 }, (_, i) => ({ instanceId: `d${i}`, tier: 'arcane' as const }));
+		s = ok(s, catalog, ACTORS.Red, { type: 'startCombat', handIndex: 0 });
+		expect(s.combats.find((c) => c.kind === 'monster')?.killed).toBe(true);
+		return s;
+	}
+
+	it('the claim is marked as a choice of one, and AI seats get one action for each reward', () => {
+		const s = killed(cat);
+		expect(s.players.Red!.pendingReward).toMatchObject({ chooseOne: true, chooseAmount: 1 });
+		const claims = agentLegalCommands(s, 'Red', cat).commands.filter((c) => c.type === 'resolveMonsterReward');
+		expect(claims).toEqual([
+			{ type: 'resolveMonsterReward', picks: [0] },
+			{ type: 'resolveMonsterReward', picks: [1] }
+		]);
+		const labels = claims.map((c) => labelFor(c, s, 'Red', cat));
+		expect(labels[0]).toContain('Claim ONE reward of Abyss Lurker');
+		expect(labels[0]).toContain('you do not get');
+		expect(labels[0]).not.toBe(labels[1]);
+	});
+
+	it('taking the Victory Point gives 1 VP and no summon', () => {
+		let s = killed(cat);
+		const vpBefore = s.players.Red!.victoryPoints;
+		s = ok(s, cat, ACTORS.Red, { type: 'resolveMonsterReward', picks: [0] });
+		expect(s.players.Red!.victoryPoints).toBe(vpBefore + 1);
+		expect(s.players.Red!.handDraws ?? []).toHaveLength(0);
+		expect(s.players.Red!.pendingReward ?? null).toBeNull();
+	});
+
+	it('taking the Arcane Abyss Summon opens the summon and gives no VP', () => {
+		let s = killed(cat);
+		const vpBefore = s.players.Red!.victoryPoints;
+		s = ok(s, cat, ACTORS.Red, { type: 'resolveMonsterReward', picks: [1] });
+		expect(s.players.Red!.victoryPoints).toBe(vpBefore);
+		expect(s.players.Red!.handDraws.length).toBeGreaterThan(0);
+	});
+
+	it('a claim that names no reward takes the first one (the Victory Point)', () => {
+		let s = killed(cat);
+		const vpBefore = s.players.Red!.victoryPoints;
+		s = ok(s, cat, ACTORS.Red, { type: 'resolveMonsterReward', picks: [] });
+		expect(s.players.Red!.victoryPoints).toBe(vpBefore + 1);
+		expect(s.players.Red!.handDraws ?? []).toHaveLength(0);
+	});
+
+	it('the rules text says it is one or the other', () => {
+		expect(buildRulesBrief(cat)).toContain('each kill gives ONE of these, your choice:');
+		expect(buildRulesBrief(cat)).not.toContain('VP per kill plus its other rewards');
+	});
+
+	it('deck cards still give every reward, and with the rule off the Lurker gives both', () => {
+		const plain = catalogWith(true);
+		let s = killed(plain);
+		expect(s.players.Red!.pendingReward?.chooseOne).toBeUndefined();
+		const vpBefore = s.players.Red!.victoryPoints;
+		s = ok(s, plain, ACTORS.Red, { type: 'resolveMonsterReward', picks: [1] });
+		expect(s.players.Red!.victoryPoints).toBe(vpBefore + 1);
+		expect(s.players.Red!.handDraws.length).toBeGreaterThan(0);
+	});
+});

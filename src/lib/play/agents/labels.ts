@@ -338,6 +338,17 @@ export function labelFor(
 				return `Take ${n} Arcane Blood in place of every reward of ${me?.pendingReward?.monsterName ?? 'the monster'}: Elementalist upgrades an attack dice ${n === 1 ? 'once' : `${n} times`} (you get none of the card's rewards)`;
 			}
 			const options = me?.pendingReward ? buildMonsterRewards(me.pendingReward.rewardTrack) : [];
+			if (me?.pendingReward?.chooseOne) {
+				const o = options.find((x) => x.index === cmd.picks?.[0]) ?? options[0];
+				const choice = cmd.choices?.[0] ?? 0;
+				const what = !o
+					? 'none'
+					: o.effect.type === 'chooseRune'
+						? `${o.label}: ${itemName(o.effect.options[choice] ?? { name: '?' })}`
+						: o.label;
+				const others = options.filter((x) => x !== o).map((x) => x.label);
+				return `Claim ONE reward of ${me.pendingReward.monsterName}: ${what} (this card gives one reward of your choice${others.length ? `; you do not get ${others.join(', ')}` : ''})${carryWarning(me, o ? matItemsGained(me, o.effect, choice, catalog) : 0)}`;
+			}
 			let cursor = 0;
 			let items = 0;
 			const parts = options.map((o) => {

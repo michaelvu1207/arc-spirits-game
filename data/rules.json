@@ -38,5 +38,6 @@
 	"mysticMonstersOnly": true,
 	"spiritInitiativeTrim": true,
 	"arcaneBlood": true,
-	"arcaneBloodDouble": true
+	"arcaneBloodDouble": true,
+	"permanentRewardChoice": true
 }

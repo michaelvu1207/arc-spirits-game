@@ -31,7 +31,8 @@ describe('Arcane Abyss without the free Abyss Summon', () => {
 		const paying = (now.monsters ?? []).filter((m) =>
 			buildMonsterRewards(m.rewardTrack).some((o) => o.effect.type === 'action' && o.effect.action === 'abyssSummon')
 		);
-		expect(paying.length).toBeGreaterThan(20);
+		// 16 Difficulty 1 cards and the permanent monster since the four-level rework (Michael, 2026-11-21).
+		expect(paying.length).toBeGreaterThan(10);
 	});
 
 	it('tables without their own reward_rows keep the old free summon', () => {
