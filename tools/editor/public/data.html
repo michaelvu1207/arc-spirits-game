@@ -216,7 +216,7 @@
     main.ge-mode .gf-f { display: grid; gap: 3px; font-size: 11px; } main.ge-mode .gf:first-child .gf-f:first-child { grid-column: 1 / -1; }
     main.ge-mode .gf-f select { width: 100%; max-width: none; min-width: 0; padding: 8px 8px; font-size: 16px; }
     main.ge-mode .gf-live { grid-column: 1 / -1; order: 5; white-space: normal; flex-wrap: wrap; gap: 4px 10px; }
-    main.ge-mode #geMetric { position: absolute; top: 8px; right: 12px; } main.ge-mode #geMetric button { padding: 5px 10px; }
+    main.ge-mode #geMetric { grid-column: 1 / -1; order: -1; display: flex; } main.ge-mode #geMetric button { flex: 1; padding: 7px 4px; }
     main.ge-mode .scroll { overflow: visible; padding: 0 12px 28px; display: block; }
     .ge { display: block; padding-top: 0; } .ge-body { display: block; }
     .ge-chart { position: sticky; top: 0; z-index: 3; height: 46svh; min-height: 270px; max-height: 460px; margin: 0 -12px; padding: 0 6px; background: var(--bg); border-bottom: 1px solid var(--line); touch-action: pan-y; }
@@ -586,7 +586,7 @@ function paintLines() {
       ${meta.live ? `<span class="gf-live" title="This test is being played. The lines are fetched again every 20 seconds."><span class="ge-live">Live</span><span class="gf-sub">${GE.data.games.filter((g) => g.state === 'done').length} of ${GE.data.games.length} finished · ${esc(liveAt)}</span></span>` : ''}
     </div>
     <div class="gf">
-      <span class="seg2" id="geMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${!GE.builds && GE.metric === 'vp' ? 'on' : ''}" title="Each player's points by round">Points</button><button data-metric="builds" class="${GE.builds ? 'on' : ''}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${!GE.builds && GE.metric === 'atk' ? 'on' : ''}" title="Each player's average damage of one attack with the dice held">Attack</button></span>
+      <span class="seg2" id="geMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${!GE.builds && !GE.mons && GE.metric === 'vp' ? 'on' : ''}" title="Each player's points by round">Points</button><button data-metric="builds" class="${GE.builds ? 'on' : ''}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${!GE.builds && !GE.mons && GE.metric === 'atk' ? 'on' : ''}" title="Each player's average damage of one attack with the dice held">Attack</button><button data-metric="mons" class="${GE.mons ? 'on' : ''}" title="Monsters killed and the pools draining, by round">Monsters</button></span>
       <label class="gf-f" title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value."><span>Averages</span><select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="gf-f" id="geAtkWrap" hidden title="What the attack lines count: every source of damage (the dice plus the flat damage of Beast), or the attack dice alone"><span>Attack counts</span><select id="geAtkSel"><option value="0" ${geAtkDice ? '' : 'selected'}>Dice and Beast</option><option value="1" ${geAtkDice ? 'selected' : ''}>Dice only</option></select></label>
     </div>`;
@@ -596,7 +596,7 @@ function paintLines() {
 function mountLines() {
   if (!GE.data) return;
   $('geSetup').onchange = async (e) => { await loadLines(e.target.value); paint(); };
-  $('geMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; GE.builds = b.dataset.metric === 'builds'; GE.metric = GE.builds ? 'vp' : b.dataset.metric; if (GE.builds) GE.sel = null;
+  $('geMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; GE.builds = b.dataset.metric === 'builds'; GE.mons = b.dataset.metric === 'mons'; GE.metric = GE.builds || GE.mons ? 'vp' : b.dataset.metric; if (GE.builds || GE.mons) GE.sel = null;
     for (const x of $('geMetric').children) x.classList.toggle('on', x === b); geHover(null); bdLeave(); drawLines(); };
   $('geAtkSel').onchange = (e) => { geAtkDice = e.target.value === '1'; try { localStorage.setItem('geAtkDice', geAtkDice ? '1' : '0'); } catch {} bdLeave(); drawLines(); };
   $('geAvgSel').onchange = (e) => { geAvg = e.target.value; try { localStorage.setItem('geAvg', geAvg); } catch {} drawLines(); };
@@ -605,11 +605,11 @@ function mountLines() {
   const at = (e) => { const b = svg.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
   // A finger: nothing is chosen on touch-down (that may be the start of a scroll). A tap chooses the point under it (or clears),
   // a sideways drag moves through the rounds of the chosen line, and an up or down swipe is left to the page.
-  svg.onpointerdown = (e) => { if (GE.builds) return bdMove(e); const [mx, my] = at(e), touch = e.pointerType === 'touch', hit = geNearest(mx, my, touch ? 26 : 16);
+  svg.onpointerdown = (e) => { if (GE.builds || GE.mons) return bdMove(e); const [mx, my] = at(e), touch = e.pointerType === 'touch', hit = geNearest(mx, my, touch ? 26 : 16);
     if (touch) { GE.touch = { id: e.pointerId, x: e.clientX, y: e.clientY, hit }; return; }
     if (!hit) { if (GE.sel) geSelect(null); return; }
     geSelect(hit.l, hit.r); GE.drag = true; svg.classList.add('drag'); svg.setPointerCapture(e.pointerId); };
-  svg.onpointermove = (e) => { if (GE.builds) return bdMove(e); const [mx, my] = at(e), t = GE.touch;
+  svg.onpointermove = (e) => { if (GE.builds || GE.mons) return bdMove(e); const [mx, my] = at(e), t = GE.touch;
     if (t && t.id === e.pointerId && !GE.drag) { const dx = Math.abs(e.clientX - t.x), dy = Math.abs(e.clientY - t.y);
       if (dx < 10 || dx < dy || !(t.hit || GE.sel)) return;
       if (t.hit && !GE.sel) geSelect(t.hit.l, t.hit.r);
@@ -620,14 +620,15 @@ function mountLines() {
     if (t && t.id === e.pointerId && !GE.drag && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 10) { if (t.hit) geSelect(t.hit.l, t.hit.r); else if (GE.sel) geSelect(null); }
     GE.touch = null; GE.drag = false; svg.classList.remove('drag'); };
   svg.onpointercancel = () => { GE.touch = null; GE.drag = false; svg.classList.remove('drag'); };
-  svg.onpointerleave = () => { if (GE.builds) return bdLeave(); if (!GE.drag) geHover(null); };
-  svg.ondblclick = (e) => { if (GE.builds) return; const hit = geNearest(...at(e)); if (hit) open(GAME_APP + '/explorer/game/' + encodeURIComponent(hit.l.g.id), '_blank'); };
+  svg.onpointerleave = () => { if (GE.builds || GE.mons) return bdLeave(); if (!GE.drag) geHover(null); };
+  svg.ondblclick = (e) => { if (GE.builds || GE.mons) return; const hit = geNearest(...at(e)); if (hit) open(GAME_APP + '/explorer/game/' + encodeURIComponent(hit.l.g.id), '_blank'); };
   const side = $('geSide');
   side.onclick = (e) => { const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.clear) geSelect(null);
     else if (b.dataset.all) { GE.all = b.dataset.all === '1'; paintSide(); }
     else if (b.dataset.setup) { if (b.dataset.setup === GE.setup) { GE.all = false; paintSide(); } else loadLines(b.dataset.setup).then(() => { GE.all = false; paint(); }); }
     else if (b.dataset.bdm) { BD.metric = b.dataset.bdm; bdLeave(); drawLines(); }
+    else if (b.dataset.mnm) { MN.metric = b.dataset.mnm; bdLeave(); drawLines(); }
     else if (b.dataset.view) { geView = b.dataset.view; try { localStorage.setItem('geView', geView); } catch {} paintSide(); } };
   // Pointing at a class (or focusing it) shows what it does in a popup under the icon.
   side.onpointerover = (e) => { const b = e.target.closest('[data-cls], [data-sp]'); if (b) geClassPop(b); };
@@ -642,8 +643,9 @@ addEventListener('keydown', (e) => { if (table !== 'bal_lines' || !GE.sel || e.t
 const geShown = () => GE.lines.filter((l) => !GE.game || l.gi === GE.game);
 function drawLines() {
   const box = $('geChart'), svg = $('geSvg'); if (!box || !GE.data) return;
-  if ($('geAvgSel')) $('geAvgSel').disabled = !!GE.builds;
-  if ($('geAtkWrap')) $('geAtkWrap').hidden = !(GE.builds ? BD.metric === 'atk' : GE.metric === 'atk');
+  if ($('geAvgSel')) $('geAvgSel').disabled = !!(GE.builds || GE.mons);
+  if ($('geAtkWrap')) $('geAtkWrap').hidden = GE.mons || !(GE.builds ? BD.metric === 'atk' : GE.metric === 'atk');
+  if (GE.mons) return drawMonsters();
   if (GE.builds) return drawBuilds();
   $('geLegend').innerHTML = GE_STATUS_LEGEND; svg.setAttribute('aria-label', 'Points by round, one line per player');
   const W = box.clientWidth, H = box.clientHeight, slim = W < 560, m = slim ? { l: 30, r: 58, t: 34, b: 34 } : { l: 44, r: 84, t: 26, b: 40 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
@@ -816,13 +818,14 @@ function bdMove(e) {
   const b = svg.getBoundingClientRect(), r = Math.max(0, Math.min(g.end, Math.round(g.xinv(e.clientX - b.left)))), px = g.x(r);
   svg.querySelector('#bdCross').setAttribute('x1', px); svg.querySelector('#bdCross').setAttribute('x2', px); svg.querySelector('#bdHover').setAttribute('visibility', 'visible');
   for (const row of BD.series.list) { const d = svg.querySelector(`#bdDot${row.k < 0 ? 'A' : row.k}`); d.setAttribute('cx', px); d.setAttribute('cy', g.y(row.pts[r])); }
-  tip.innerHTML = `<b>Round ${r} · ${BD.metric === 'vp' ? 'points' : geAtkDice ? 'attack from dice' : 'attack'}</b>${[...BD.series.list].sort((a, c) => c.pts[r] - a.pts[r]).map((row) => `<div>${bdSw(row)}<span>${esc(row.name)}</span><b>${(Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
+  const S = BD.series, rows = S.mons ? S.list : [...S.list].sort((a, c) => c.pts[r] - a.pts[r]); // the monsters keep their order (Lurker, Difficulty 1 to 3)
+  tip.innerHTML = `<b>Round ${r} · ${S.tip ?? (BD.metric === 'vp' ? 'points' : geAtkDice ? 'attack from dice' : 'attack')}</b>${rows.map((row) => `<div>${bdSw(row)}<span>${esc(row.name)}</span><b>${row.tip ? row.tip(r) : (Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
   tip.hidden = false; const w = tip.offsetWidth, h = tip.offsetHeight; tip.style.left = Math.max(4, px + 14 + w > g.W ? px - 14 - w : px + 14) + 'px'; tip.style.top = Math.max(4, Math.min(g.H - h - 4, e.clientY - b.top - h / 2)) + 'px';
 }
 function bdLeave() { const tip = $('bdTip'); if (tip) tip.hidden = true; $('geSvg')?.querySelector('#bdHover')?.setAttribute('visibility', 'hidden'); }
 /** The panel beside the builds graph: the builds in numbers. */
 function geBuildsPanel() {
-  const meta = GE.index.find((x) => x.setup === GE.setup), S = BD.series ?? bdSeries(), n1 = (v) => v == null ? '–' : String(Math.round(v * 10) / 10), last = S.end, marks = [8, 16, 24].filter((r) => r < last);
+  const meta = GE.index.find((x) => x.setup === GE.setup), S = BD.series && !BD.series.mons ? BD.series : bdSeries(), n1 = (v) => v == null ? '–' : String(Math.round(v * 10) / 10), last = S.end, marks = [8, 16, 24].filter((r) => r < last);
   const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`, what = BD.metric === 'vp' ? 'points' : geAtkDice ? 'attack from dice' : 'attack';
   return `<div class="gsum">
     <div class="gs-top"><b>Builds in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b><span class="seg2 sm" style="margin-left:auto" role="group" aria-label="What the builds graph shows">${[['vp', 'Points'], ['atk', 'Attack']].map(([k, t]) => `<button data-bdm="${k}" class="${BD.metric === k ? 'on' : ''}" title="${k === 'vp' ? 'Average points by round' : 'Average damage of one attack with the dice held, by round'}">${t}</button>`).join('')}</span></div>
@@ -835,6 +838,75 @@ function geBuildsPanel() {
         <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${n1(r.rate[0])}</td><td>${n1(r.rate[1])}</td><td>${n1(r.rate[2])}</td><td>${n1(r.at(Math.min(8, last), 'atk'))}</td><td>${n1(r.at(last, 'atk'))}</td></tr>`).join('')}</tbody></table></div></section>
     ${!GE.game && meta.changes?.length ? `<section class="gsec"><h2>What changed${meta.n > 1 ? ` since Test ${meta.n - 1}` : ''}</h2><ul class="gsum-log">${meta.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
     <div class="gsum-note">A player's build is read from the traits they reached during the game: ${GE_BUILDS.slice(0, 5).map(([n, rule]) => `<b>${esc(n)}</b> = ${esc(rule)}`).join('; ')}; everyone else is "No clear build". A group of two or three players is one or two games' luck, not a trend. After a player's game ends they keep their final value, so each line ends at the build's average final value. ${phone.matches ? 'Touch the graph' : 'Point at the graph'} for every build's value at a round. Points / Attack beside the heading switches what the lines show; "Points" in the top bar goes back to one line per player.</div>
+  </div>`;
+}
+// ---------- the monsters graph ("Monsters" in the explorer's top bar): the kills and the pools by round, one line per level ----------
+// Colours: a fixed one per level; the Abyss Lurker (no pool: it comes back after every kill) is the dashed grey line.
+const MN = { metric: 'k' }; // what the monsters graph shows: 'k' the cards killed so far, 'left' the part of each pool still in the game
+const MN_COLOR = ['#7d8291', '#199e70', '#3987e5', '#d95926'];
+function mnSeries() {
+  const games = GE.game ? [GE.data.games[GE.game - 1]].filter(Boolean) : GE.data.games, end = Math.max(1, ...games.map((g) => g.rounds)), n = games.length || 1;
+  // Kills, fights and corruptions by level and round, from the players' fights. A game keeps its final numbers after it ends.
+  const tally = games.map((g) => { const k = GE_LEVELS.map(() => Array(end + 1).fill(0)), f = GE_LEVELS.map(() => 0), cor = GE_LEVELS.map(() => 0);
+    for (const s of g.seats) for (const p of s.rounds) for (const a of p.acts ?? []) { const m = /^Fight (.+?) \(Difficulty (\d)/.exec(a.t); if (!m) continue; const lv = m[1] === 'Abyss Lurker' ? 0 : +m[2]; if (!k[lv]) continue;
+      f[lv]++; if ((a.g ?? []).some((x) => /^Corrupted/.test(x))) cor[lv]++; if ((a.g ?? []).includes('Defeated it.')) k[lv][Math.min(end, p.r)]++; }
+    for (const row of k) for (let r = 1; r <= end; r++) row[r] += row[r - 1]; return { k, f, cor }; });
+  const left = (g, d, r) => g.table?.[Math.min(r, (g.table?.length ?? 1) - 1)]?.m?.[d] ?? 0, avg = (f) => games.reduce((a, g, i) => a + f(g, i), 0) / n, n1 = (v) => String(Math.round(v * 10) / 10);
+  const levels = GE_LEVELS.map((name, lv) => { const d = lv - 1, pool = lv ? avg((g) => left(g, d, 0)) : null;
+    const killed = Array.from({ length: end + 1 }, (_, r) => avg((g, i) => tally[i].k[lv][r])), alive = lv ? Array.from({ length: end + 1 }, (_, r) => avg((g) => left(g, d, r))) : null;
+    // The round a game's pool of this level was empty for the first time.
+    const empty = lv ? games.map((g) => (g.table ?? []).find((t) => (t.m?.[d] ?? 1) === 0)?.r).filter((r) => r != null) : [];
+    const row = { k: lv || -1, lv, name, color: MN_COLOR[lv], all: !lv, pool, killed, alive, empty, fights: tally.reduce((a, t) => a + t.f[lv], 0), kills: tally.reduce((a, t) => a + t.k[lv][end], 0), cor: tally.reduce((a, t) => a + t.cor[lv], 0) };
+    row.pts = MN.metric === 'k' ? killed : lv ? alive.map((v) => pool ? 100 * v / pool : 0) : [];
+    row.tip = (r) => MN.metric === 'k' ? `${killed[r].toFixed(1)}${pool ? ` of ${n1(pool)}` : ''}` : `${n1(alive[r])} of ${n1(pool)}`;
+    row.end = MN.metric === 'k' ? `${killed[end].toFixed(1)}${pool ? ` of ${n1(pool)}` : ''}` : lv ? `${n1(alive[end])} of ${n1(pool)} left` : '';
+    return row; });
+  return { mons: true, levels, list: levels.filter((r) => MN.metric === 'k' || r.lv), end, n: games.length, done: games.filter((g) => (g.state ?? 'done') === 'done').length, tip: MN.metric === 'k' ? 'killed so far, a game' : 'left in the pool' };
+}
+function drawMonsters() {
+  const box = $('geChart'), svg = $('geSvg'), legend = $('geLegend'), S = MN.series = BD.series = mnSeries(), kills = MN.metric === 'k';
+  legend.innerHTML = S.list.map((r) => `<span><i class="${r.all ? 'dash' : ''}" style="--c:${r.color}"></i>${esc(r.name)}</span>`).join('');
+  svg.setAttribute('aria-label', kills ? 'Monsters killed so far by round, one line per level' : 'The part of each monster pool left by round, one line per Difficulty'); svg.classList.remove('avg', 'focus', 'hov', 'near');
+  const W = box.clientWidth, H = box.clientHeight, slim = W < 560, top = Math.max(slim ? 34 : 26, legend.offsetHeight + 12);
+  const m = slim ? { l: 34, r: 44, t: top, b: 34 } : { l: 48, r: 196, t: top, b: 40 }, pw = W - m.l - m.r, ph = H - m.t - m.b; if (pw < 50 || ph < 50) return;
+  const high = Math.max(1, ...S.list.flatMap((r) => r.pts)), f = (v) => v.toFixed(1);
+  // A pool's size is drawn as the ceiling of its kills where the kills come near it (40 % of the pool or more); a ceiling far above would flatten the lines.
+  const caps = kills ? S.list.filter((r) => r.pool && r.killed.at(-1) >= 0.4 * r.pool) : [], ymax = kills ? Math.max(high, ...caps.map((r) => r.pool)) * 1.08 : 104;
+  const x = (r) => m.l + (r / S.end) * pw, y = (v) => m.t + ph - (v / ymax) * ph;
+  BD.geo = { x, y, xinv: (px) => ((px - m.l) / pw) * S.end, W, H, end: S.end };
+  let s = ''; const tick = kills ? (ymax > 40 ? 10 : ymax > 16 ? 5 : 2) : 25;
+  for (let v = 0; v <= ymax; v += tick) s += `<line class="${v === 0 ? 'axis' : 'grid'}" x1="${m.l}" x2="${W - m.r}" y1="${f(y(v))}" y2="${f(y(v))}"/><text x="${m.l - 8}" y="${f(y(v) + 4)}" text-anchor="end">${v}${kills ? '' : ' %'}</text>`;
+  for (let r = 0; r <= S.end; r += S.end > 30 ? 10 : 5) s += `<line class="grid" x1="${f(x(r))}" x2="${f(x(r))}" y1="${H - m.b}" y2="${H - m.b + 4}"/><text x="${f(x(r))}" y="${H - m.b + 17}" text-anchor="middle">${r}</text>`;
+  s += `<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
+  for (const c of caps) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${f(y(c.pool))}" y2="${f(y(c.pool))}" style="stroke:${c.color};stroke-width:1;stroke-dasharray:2 5;opacity:.7"/><text class="cap" x="${m.l + 6}" y="${f(y(c.pool) - 5)}">${Math.round(c.pool * 10) / 10} ${esc(c.name)} cards in a game</text>`;
+  for (const row of S.list) { const d = row.pts.map((v, r) => `${r ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('');
+    s += row.all ? `<path class="bd-all" style="stroke:${row.color};opacity:1" d="${d}"/>` : `<path class="bd-halo" d="${d}"/><path class="bd-line" style="stroke:${row.color}" d="${d}"/>`; }
+  // Labels at the right edge (level and final number; the number alone on a narrow screen), moved apart where lines end close together.
+  const ends = S.list.map((row) => ({ row, y: y(row.pts.at(-1)) })).sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
+  const over = ends.at(-1).y - (H - m.b); if (over > 0) for (const e of ends) e.y -= over;
+  s += ends.map(({ row, y: ly }) => `<circle cx="${f(x(S.end))}" cy="${f(y(row.pts.at(-1)))}" r="${row.all ? 3 : 4}" style="fill:${row.color}" class="bd-end"/><text class="lab" x="${f(x(S.end) + 10)}" y="${f(ly + 4)}">${slim ? esc(row.end.replace(/ .*/, '')) : esc(row.name) + ' · ' + esc(row.end)}</text>`).join('');
+  s += `<g id="bdHover" visibility="hidden"><line class="cross" id="bdCross" y1="${m.t}" y2="${H - m.b}"/>${S.list.map((row) => `<circle class="dot" id="bdDot${row.k < 0 ? 'A' : row.k}" r="5" style="fill:${row.color}"/>`).join('')}</g>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
+  paintSide();
+}
+/** The panel beside the monsters graph: the kills and the pools in numbers. */
+function geMonstersPanel() {
+  const meta = GE.index.find((x) => x.setup === GE.setup), S = MN.series ?? mnSeries(), n1 = (v) => v == null ? '–' : String(Math.round(v * 10) / 10), last = S.end, marks = [8, 16, 24].filter((r) => r < last).slice(0, phone.matches ? 2 : 3), one = S.n === 1;
+  const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`, pools = S.levels.filter((r) => r.lv);
+  return `<div class="gsum">
+    <div class="gs-top"><b>Monsters in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b><span class="seg2 sm" style="margin-left:auto" role="group" aria-label="What the monsters graph shows">${[['k', 'Killed', 'Cards killed so far, by round'], ['left', 'Pool left', 'The part of each pool still in the game, by round']].map(([k, t, tt]) => `<button data-mnm="${k}" class="${MN.metric === k ? 'on' : ''}" title="${tt}">${t}</button>`).join('')}</span></div>
+    <small class="gsum-when">${S.n} ${one ? 'game' : 'games'}${S.done < S.n ? ` · ${S.done} finished` : ''}${one ? '' : ' · the numbers are the average game'}</small>
+    <section class="gsec"><h2>Killed so far${one ? '' : ', a game'}</h2>
+      <div class="bd-table"><table class="gsum-t"><thead><tr><th>Level</th><th title="Cards of this level a game deals">Pool</th>${marks.map((r) => `<th title="Killed by the end of round ${r}"><span class="nb">Round ${r}</span></th>`).join('')}<th title="Killed by the end of the game">End</th></tr></thead>
+        <tbody>${S.levels.map((r) => `<tr>${name(r)}<td>${r.pool == null ? '<span class="was" title="It comes back after every kill">always there</span>' : n1(r.pool)}</td>${marks.map((k) => `<td>${n1(r.killed[k])}</td>`).join('')}<td>${n1(r.killed[last])}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="gsec"><h2>The pools</h2>
+      <div class="bd-table"><table class="gsum-t"><thead><tr><th>Level</th><th title="Cards still in the decks or in a player's hand at the end">Left at the end</th><th title="Games in which the last card of this level was killed">Emptied</th><th title="The middle round in which the pool was empty, among the games where it emptied">By round</th></tr></thead>
+        <tbody>${pools.map((r) => `<tr>${name(r)}<td>${n1(r.alive[last])} of ${n1(r.pool)}</td><td>${one ? (r.empty.length ? 'yes' : 'no') : `${r.empty.length} of ${S.n} games`}</td><td>${r.empty.length ? n1(geMed(r.empty)) : '–'}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="gsec"><h2>Fights${one ? '' : ', all games'}</h2>
+      <div class="bd-table"><table class="gsum-t"><thead><tr><th>Level</th><th>Fights</th><th>Kills</th><th title="Fights that corrupted the player">Corrupted</th></tr></thead>
+        <tbody>${S.levels.map((r) => `<tr>${name(r)}<td>${r.fights}</td><td>${Math.round(r.kills)}</td><td>${r.cor}</td></tr>`).join('')}</tbody></table></div></section>
+    ${!GE.game && meta.changes?.length ? `<section class="gsec"><h2>What changed${meta.n > 1 ? ` since Test ${meta.n - 1}` : ''}</h2><ul class="gsum-log">${meta.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
+    <div class="gsum-note">A pool is the cards of one Difficulty a game deals: the cards in the deck plus those in the players' hands. The Abyss Lurker has no pool; it comes back after every kill. After a game ends it keeps its final numbers, so each line ends at the average of the finished games. ${phone.matches ? 'Slide a finger over the graph' : 'Point at the graph'} to read a round. Choose one game in the top bar to see that game alone.</div>
   </div>`;
 }
 // ---------- the test in numbers (what the Balance charts page showed), in the panel while no point is chosen ----------
@@ -940,6 +1012,7 @@ function geAllTests() {
 }
 function paintSide() {
   const side = $('geSide'); if (!side) return; const l = GE.sel; geClassPop(null);
+  if (GE.mons) { side.innerHTML = geMonstersPanel(); return; }
   if (GE.builds) { side.innerHTML = geBuildsPanel(); return; }
   if (!l) { side.innerHTML = GE.all ? geAllTests() : geSummary(); return; }
   const p = l.pts[GE.r], prev = l.pts[GE.r - 1], delta = prev ? p.vp - prev.vp : 0;
@@ -1049,6 +1122,7 @@ $('save').onclick = async () => {
 };
 $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; const same = b.dataset.t === table; if (!same && dirty() && !confirm('Leave without saving?')) return; if (!same) curveDirty = false; stage = Number(b.dataset.stage ?? 0); if (same) { for (const x of $('tabs').children) x.classList.toggle('on', x === b); $('title').textContent = titleText(); paint(); } else { table = b.dataset.t; load(); } history.replaceState(null, '', table === 'bal_lines' ? '#explorer' : location.pathname + location.search); });
 addEventListener('beforeunload', (e) => { if (dirty()) e.preventDefault(); });
+if (SIMS && location.hash === '#kills') GE.mons = true; // a link to the monsters graph (#monsters is the old monster table)
 if (SIMS && location.hash === '#builds') GE.builds = true; // an old link to the builds graph: the explorer with "Builds" chosen
 if (SIMS) table = { '#attack': 'bal_attack', '#spirits': 'bal_spirits', '#monsters': 'bal_monsters' }[location.hash] ?? 'bal_lines';
 init();
