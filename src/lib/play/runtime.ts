@@ -608,8 +608,10 @@ export function arcaneBloodFor(
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
 ): number | undefined {
 	if (!ruleValue(catalog, 'arcaneBlood')) return undefined;
-	if (monster.permanent) return 1;
-	return ARCANE_BLOOD_BY_DIFFICULTY[(monster.difficulty ?? 1) as 1 | 2 | 3] ?? 1;
+	// Rule `arcaneBloodDouble` (Michael, 2026-11-21): 2 / 4 / 6 in place of 1 / 2 / 3.
+	const times = ruleValue(catalog, 'arcaneBloodDouble') ? 2 : 1;
+	if (monster.permanent) return times;
+	return times * (ARCANE_BLOOD_BY_DIFFICULTY[(monster.difficulty ?? 1) as 1 | 2 | 3] ?? 1);
 }
 
 /**

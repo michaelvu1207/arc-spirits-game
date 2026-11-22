@@ -471,6 +471,16 @@ describe('arcaneBlood: the rewards of a kill, or Arcane Blood in their place', (
 			'Take 3 Arcane Blood in place of every reward of Test Monster: Elementalist upgrades an attack dice 3 times'
 		);
 	});
+	it('arcaneBloodDouble: 2 / 4 / 6 Arcane Blood, one upgrade each', () => {
+		const DOUBLE = withRules({ ...RULES, arcaneBlood: true, arcaneBloodDouble: true });
+		for (const d of [1, 2, 3] as const) {
+			const g = afterKill(DOUBLE, d);
+			expect(g.run({ type: 'startCombat', handIndex: 0 }).pendingReward?.arcaneBlood).toBe(2 * d);
+			expect(tiers(g.run({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true }))).toBe(2 * d);
+		}
+		expect(buildRulesBrief(DOUBLE)).toContain('2 for a Difficulty 1 card or the permanent monster, 4 for a Difficulty 2 card, 6 for a Difficulty 3 card');
+		expect(buildRulesBrief(ON)).toContain('1 for a Difficulty 1 card or the permanent monster, 2 for a Difficulty 2 card, 3 for a Difficulty 3 card');
+	});
 	it('the rules text names the choice only with the rule on, and Elementalist (2) reads "When you gain an Arcane Blood"', () => {
 		expect(buildRulesBrief(ON)).toContain('ARCANE BLOOD');
 		expect(buildRulesBrief(OFF)).not.toContain('ARCANE BLOOD');

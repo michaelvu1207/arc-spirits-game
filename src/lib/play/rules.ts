@@ -172,6 +172,9 @@
  *   Good-alignment kill bonus is not a reward and is kept either way. Elementalist (2) becomes "When
  *   you gain an Arcane Blood, upgrade an attack dice" and a kill by itself upgrades nothing
  *   (classes/elementalist.ts). Arcane Blood is not kept: it is an event other classes may use later.
+ * - arcaneBloodDouble (default false; Michael, 2026-11-21, after Test 27 where Arcane Blood was taken in
+ *   31 of 516 offers): only read under `arcaneBlood`. true ⇒ a kill offers 2 / 4 / 6 Arcane Blood
+ *   (Difficulty 1 and the permanent monster 2, Difficulty 2 4, Difficulty 3 6), not 1 / 2 / 3.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
  *   for a Fighter build. See classes/strategist.ts, darkAssassin.ts, firetail.ts.
@@ -259,7 +262,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	beastNoInitiative: false,
 	mysticMonstersOnly: false,
 	spiritInitiativeTrim: false,
-	arcaneBlood: false
+	arcaneBlood: false,
+	arcaneBloodDouble: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

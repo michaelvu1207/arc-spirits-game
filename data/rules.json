@@ -37,5 +37,6 @@
 	"beastNoInitiative": true,
 	"mysticMonstersOnly": true,
 	"spiritInitiativeTrim": true,
-	"arcaneBlood": true
+	"arcaneBlood": true,
+	"arcaneBloodDouble": true
 }

@@ -916,6 +916,8 @@ export interface PlayRules {
 	spiritInitiativeTrim?: boolean;
 	/** A kill gives its rewards or Arcane Blood (1 / 2 / 3 by Difficulty); Elementalist (2) upgrades a die per Arcane Blood, not per kill (Michael, 2026-11-21). */
 	arcaneBlood?: boolean;
+	/** Under `arcaneBlood`: a kill offers 2 / 4 / 6 Arcane Blood, not 1 / 2 / 3 (Michael, 2026-11-21). */
+	arcaneBloodDouble?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

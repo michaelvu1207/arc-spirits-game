@@ -28,7 +28,7 @@ import {
 import { diceTierFaces, PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted, pvpVpForAttack } from '../combat';
 import { navigationPowerPool } from '../navigationPowers';
 import { ORIGIN_BOARD_NOTE, ORIGIN_REWARDS, RELIC_TOOLS, relicToolText, relicToolVp } from '../effects/relicTools';
-import { ARCANE_BLOOD_BY_DIFFICULTY, GOOD_KILL_BONUS_VP, monsterDifficulty } from '../runtime';
+import { arcaneBloodFor, GOOD_KILL_BONUS_VP, monsterDifficulty } from '../runtime';
 import { buildMonsterRewards } from '../monsterRewards';
 import {
 	MAX_ATTACK_DICE,
@@ -102,7 +102,7 @@ function coreRules(catalog: PlayCatalog): string {
 			? [`- ALIGNMENT BONUS: while you are Good-aligned (Pure, Tainted or Corrupt; not Fallen) every Difficulty 2 or Difficulty 3 monster you defeat gives you ${GOOD_KILL_BONUS_VP} VP on top of the rewards printed on its card (Difficulty 1 cards and the permanent monster pay no bonus). A Fallen (Evil) player gets only the card's rewards. Your Status line says which you get now. The VP figures of the monster cards and decks below do NOT include this bonus.`]
 			: []),
 		...(ruleValue(catalog, 'arcaneBlood')
-			? [`- ARCANE BLOOD: when you defeat a monster you take EITHER every reward printed on its card OR Arcane Blood in their place: ${ARCANE_BLOOD_BY_DIFFICULTY[1]} for a Difficulty 1 card or the permanent monster, ${ARCANE_BLOOD_BY_DIFFICULTY[2]} for a Difficulty 2 card, ${ARCANE_BLOOD_BY_DIFFICULTY[3]} for a Difficulty 3 card. Arcane Blood is not kept and does nothing by itself: Elementalist (2) upgrades an attack dice once for each Arcane Blood you gain. A kill alone upgrades nothing. The Good-alignment kill bonus is not a card reward: you get it with either choice.`]
+			? [`- ARCANE BLOOD: when you defeat a monster you take EITHER every reward printed on its card OR Arcane Blood in their place: ${arcaneBloodFor({ difficulty: 1 }, catalog)} for a Difficulty 1 card or the permanent monster, ${arcaneBloodFor({ difficulty: 2 }, catalog)} for a Difficulty 2 card, ${arcaneBloodFor({ difficulty: 3 }, catalog)} for a Difficulty 3 card. Arcane Blood is not kept and does nothing by itself: Elementalist (2) upgrades an attack dice once for each Arcane Blood you gain. A kill alone upgrades nothing. The Good-alignment kill bonus is not a card reward: you get it with either choice.`]
 			: []),
 		'## Spirits, classes, origins',
 		`- Spirit World Summon: draw 4 from the Spirit World bag, summon up to 2. The 4 are 3 spirits + 1 reward hex (a basic rune, restore 2 Barrier, or a Power draft); taking it uses one of the 2 picks. Arcane Abyss Summon: ${ruleValue(catalog, 'abyssSummonDraw4Pick2') ? 'draw 4 from the Abyss bag, summon up to 2' : 'draw 3 from the Abyss bag, summon 1'}. Spirit World spirits enter AWAKE; Arcane (Abyss) spirits enter FACE-DOWN and must be awakened. Only awake spirits give their class abilities.`,
