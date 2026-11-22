@@ -335,7 +335,7 @@ export function labelFor(
 		case 'resolveMonsterReward': {
 			if (cmd.arcaneBlood) {
 				const n = me?.pendingReward?.arcaneBlood ?? 0;
-				return `Take ${n} Arcane Blood in place of every reward of ${me?.pendingReward?.monsterName ?? 'the monster'}: Elementalist upgrades an attack dice ${n === 1 ? 'once' : `${n} times`} (you get none of the card's rewards)`;
+				return `Take ${n} Arcane Blood in place of every reward of ${me?.pendingReward?.monsterName ?? 'the monster'}: Elementalist permanently upgrades an attack dice ${n === 1 ? 'once' : `${n} times`} (you get none of the card's rewards)`;
 			}
 			const options = me?.pendingReward ? buildMonsterRewards(me.pendingReward.rewardTrack) : [];
 			if (me?.pendingReward?.chooseOne) {

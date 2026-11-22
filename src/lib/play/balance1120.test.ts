@@ -468,7 +468,7 @@ describe('arcaneBlood: the rewards of a kill, or Arcane Blood in their place', (
 		const label = (c: GameCommand) => labelFor(c, g.state() as never, 'Red', ON);
 		expect(label({ type: 'resolveMonsterReward', picks: [0] })).toContain('Claim every reward of Test Monster: 3 Victory Points');
 		expect(label({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true })).toContain(
-			'Take 3 Arcane Blood in place of every reward of Test Monster: Elementalist upgrades an attack dice 3 times'
+			'Take 3 Arcane Blood in place of every reward of Test Monster: Elementalist permanently upgrades an attack dice 3 times'
 		);
 	});
 	it('arcaneBloodDouble: 2 / 4 / 6 Arcane Blood, one upgrade each', () => {
