@@ -145,7 +145,10 @@
   #geRest { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 18px; }
   .gsum { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-right: 10px; }
   .gsum .lnk { margin-left: auto; color: var(--dim); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; padding: 0; } .gsum .lnk:hover { color: var(--text); } .gsum td .lnk { margin: 0; color: var(--text); font-size: 13px; }
-  .gsum-about { display: grid; gap: 5px; margin-top: -8px; } .gsum-about span { color: var(--dim); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .gsum-about small { color: var(--faint); font-size: 11px; }
+  .gsum-log { margin: 0; padding: 0 0 0 16px; display: grid; gap: 3px; font-size: 12.5px; line-height: 1.4; color: var(--text); } .gsum-log li::marker { color: var(--faint); } 
+  .gsec { display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--line); padding-top: 14px; } .gsec > h2 { margin: 0 0 -4px; font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0; }
+  .gsum-when { color: var(--faint); font-size: 11px; margin-top: -12px; }
+  .gsum-about { display: grid; gap: 5px; } .gsum-about span { color: var(--dim); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .gsum-about small { color: var(--faint); font-size: 11px; }
   .gsum-note { color: var(--dim); font-size: 12px; line-height: 1.45; max-width: 60ch; }
   .gsum-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .gsum .chk { border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 11px 10px; display: grid; gap: 3px; align-content: start; min-width: 0; }
@@ -703,6 +706,7 @@ const geWhen = (x) => { const day = (iso) => new Date(iso).toLocaleDateString(un
 const geMed = (v) => { const a = [...v].sort((x, y) => x - y), n = a.length; return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : null; };
 const ge1 = (x) => x == null ? '–' : String(Math.round(x * 10) / 10);
 const GE_LEVELS = ['Abyss Lurker', 'Difficulty 1', 'Difficulty 2', 'Difficulty 3'];
+const GE_BUILDS = [['Beast', 'Beast 4 or more, Fighter 2 or less'], ['Beast → Arcane spirits', 'Beast 4 or more, Fighter 2 or less, and 2 or more Arcane Abyss spirits held'], ['Fighter + Beast', 'Fighter 3 or more and Beast 3 or more'], ['Fighter + Elementalist', 'Fighter 3 or more and Elementalist 2 or more'], ['F + E with Mystic / Cursed', 'Fighter 3 or more, Elementalist 2 or more, and Mystic 3 or Cursed Spirit 4'], ['No clear build', 'None of the above']];
 function geStats(games) {
   // Finished games count for the end round and the gap; a test with none shows its games as far as they are played.
   const done = games.filter((g) => (g.state ?? 'done') === 'done'), use = done.length ? done : games;
@@ -719,7 +723,25 @@ function geStats(games) {
   const avg = (v) => v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
   const left = [0, 1, 2].map((d) => avg(games.map((g) => g.table?.at(-1)?.m?.[d]).filter((x) => x != null)));
   const start = [0, 1, 2].map((d) => avg(games.map((g) => g.table?.[0]?.m?.[d]).filter((x) => x != null)));
-  return { n: games.length, done: done.length, soFar: !done.length, rounds, gaps, lead, src, status, lv, left, start, seats: use.reduce((t, g) => t + g.seats.length, 0) };
+  // The round the first player of a game reaches 30 points (the game end Michael is weighing), and whether that player went on to win.
+  const first30 = (GE.data.win_points ?? 40) > 30 ? use.map((g) => { let b = null; for (const s of g.seats) { const p = s.rounds.find((x) => x.vp >= 30); if (p && (!b || p.r < b.r || (p.r === b.r && p.vp > b.vp))) b = { r: p.r, won: s.place === 1, done: (g.state ?? 'done') === 'done' }; } return b; }).filter(Boolean) : [];
+  const fights = games.reduce((n, g) => n + g.seats.reduce((m, s) => m + s.rounds.reduce((k, p) => k + (p.acts ?? []).filter((a) => /^Attack the Good players/.test(a.t)).length, 0), 0), 0);
+  // Players by build (the traits they reached), with their points a round early, in the middle and late.
+  const at = (s, r) => { let q = null; for (const p of s.rounds) { if (p.r <= r) q = p; else break; } return q; };
+  const arc = new Set(GE.data.arcane ?? []);
+  const kind = (s) => { const pk = (c) => Math.max(0, ...s.rounds.map((p) => p.cl?.find((x) => x.n === c)?.on ?? 0)), fe = pk('Fighter') >= 3 && pk('Elementalist') >= 2, b = pk('Beast'), f = pk('Fighter');
+    if (b >= 4 && f <= 2) return Math.max(0, ...s.rounds.map((p) => (p.sp ?? []).filter((x) => arc.has(x.n)).length)) >= 2 ? 1 : 0;
+    if (b >= 3 && f >= 3) return 2; if (fe) return pk('Cursed Spirit') >= 4 || pk('Mystic') >= 3 ? 4 : 3; return 5; };
+  const row = () => ({ n: 0, wins: 0, vp: [], a: [], b: [], c: [], dice: [[], [], [], []], atk: [] });
+  const builds = GE_BUILDS.map(row), all = row(), winners = row();
+  for (const g of use) for (const s of g.seats) { const last = s.rounds.at(-1), v = (r) => at(s, r)?.vp ?? 0, won = (g.state ?? 'done') === 'done' && s.place === 1;
+    for (const e of [builds[kind(s)], all, ...(won ? [winners] : [])]) { e.n++; if (won) e.wins++; e.vp.push(last.vp); e.atk.push(last.atk ?? 0); (last.dice ?? []).forEach((d, i) => e.dice[i]?.push(d));
+      if (last.r >= 8) e.a.push(v(8) / 8); if (last.r >= 16) e.b.push((v(16) - v(8)) / 8); if (last.r > 16) e.c.push((last.vp - v(16)) / (last.r - 16)); } }
+  // Arcane Blood: a kill offers it; how many kills were turned into it, and by how many players.
+  const blood = { on: JSON.stringify(GE.data.classes?.Elementalist ?? '').includes('Arcane Blood'), n: 0, who: 0 };
+  for (const g of games) for (const s of g.seats) { const k = s.rounds.reduce((m, p) => m + (p.acts ?? []).filter((a) => /^Take \d+ Arcane Blood/.test(a.t)).length, 0); blood.n += k; if (k) blood.who++; }
+  const full = use.reduce((n, g) => n + g.seats.filter((s) => s.rounds.some((p) => (p.dice?.[2] ?? 0) >= 10)).length, 0);
+  return { n: games.length, done: done.length, soFar: !done.length, rounds, gaps, lead, src, status, lv, left, start, first30, fights, builds, all, winners, blood, full, avg, seats: use.reduce((t, g) => t + g.seats.length, 0) };
 }
 function geSummary() {
   const meta = GE.index.find((x) => x.setup === GE.setup), games = GE.game ? [GE.data.games[GE.game - 1]].filter(Boolean) : GE.data.games;
@@ -730,21 +752,38 @@ function geSummary() {
   const splitOk = split.every(([, now, goal]) => Math.abs(now - goal) <= 5);
   const who = GE.game ? `Game ${GE.game}` : `Test ${meta.n}`;
   const stateNote = t.soFar ? (meta.live ? 'No game has finished yet: the numbers are the games so far.' : 'No game of this test finished: the numbers are the games as far as they were played.') : t.done < t.n ? `${t.done} of ${t.n} games finished; the end round, the gap and the points count those. Fights count every game.` : '';
+  const f30 = geMed(t.first30.map((x) => x.r)), f30done = t.first30.filter((x) => x.done), monOk = Math.abs(split[0][1] - 70) <= 5;
+  const bRow = (name, e, tip = '') => `<tr${tip ? ` title="${esc(tip)}"` : ''}><td>${esc(name)}</td><td>${e.n}</td><td>${t.soFar ? '–' : e.wins}</td><td>${ge1(t.avg(e.vp))}</td><td>${ge1(t.avg(e.a))}</td><td>${ge1(t.avg(e.b))}</td><td>${ge1(t.avg(e.c))}</td></tr>`;
+  const dRow = (name, e) => `<tr><td>${name}</td>${e.dice.map((d) => `<td>${ge1(t.avg(d))}</td>`).join('')}<td>${ge1(t.avg(e.atk))}</td></tr>`;
+  const kills = GE_LEVELS.reduce((n, k) => n + t.lv[k].k, 0);
   return `<div class="gsum">
     <div class="gs-top"><b>${who} in numbers</b><button class="lnk" data-all="1" title="Every test side by side">Compare all tests</button></div>
-    ${GE.game ? '' : `<div class="gsum-about" title="${esc(meta.changed || meta.label)}"><span>${esc(meta.changed || meta.label)}</span><small>${esc(geWhen(meta))} · ${meta.games} games · ${esc(meta.table)}</small></div>`}
+    ${GE.game ? '' : `<small class="gsum-when">${esc(geWhen(meta))} · ${meta.games} games · ${esc(meta.table)}</small>`}
     ${stateNote ? `<div class="gsum-note">${esc(stateNote)}</div>` : ''}
-    <div class="gsum-checks">
-      <div class="chk ${verdict(mr >= 20 && mr <= 30)}"><small>${t.soFar ? 'Round reached' : 'Round the game ends'}</small><b>${ge1(mr)}</b><span>${range(t.rounds)}${range(t.rounds) ? ' · ' : ''}target 20 to 30</span></div>
-      <div class="chk ${verdict(mg <= 10)}"><small>Points between first and last</small><b>${ge1(mg)}</b><span>${range(t.gaps)}${range(t.gaps) ? ' · ' : ''}target 10 or less</span></div>
-      <div class="chk"><small>First to second</small><b>${ge1(geMed(t.lead))}</b><span>${range(t.lead)}</span></div>
-    </div>
+    <section class="gsec"><h2>At a glance</h2>
+      <div class="gsum-checks">
+        <div class="chk ${verdict(mr >= 20 && mr <= 30)}"><small>${t.soFar ? 'Round reached' : 'Round the game ends'}</small><b>${ge1(mr)}</b><span>${range(t.rounds)}${range(t.rounds) ? ' · ' : ''}target 20 to 30</span></div>
+        <div class="chk ${verdict(mg <= 10)}"><small>Points, first to last</small><b>${ge1(mg)}</b><span>${range(t.gaps)}${range(t.gaps) ? ' · ' : ''}target 10 or less</span></div>
+        <div class="chk"><small>Points, first to second</small><b>${ge1(geMed(t.lead))}</b><span>${range(t.lead)}</span></div>
+        <div class="chk" title="The round the first player of a game reaches 30 points"><small>Round of the first 30 points</small><b>${ge1(f30)}</b><span>${t.first30.length ? `${range(t.first30.map((x) => x.r))}${t.first30.length < (t.done || t.n) ? ` · ${t.first30.length} of ${t.done || t.n} games` : ''}${f30done.length ? ` · leader won ${f30done.filter((x) => x.won).length} of ${f30done.length}` : ''}` : 'nobody has 30 yet'}</span></div>
+        <div class="chk ${verdict(monOk)}"><small>Points from monsters</small><b>${ge1(split[0][1])} %</b><span>target 70 %</span></div>
+        <div class="chk"><small>Player fights</small><b>${t.fights}</b><span>${ge1(split[1][1])} % of points · target 20 %</span></div>
+      </div></section>
+    ${GE.game ? '' : `<section class="gsec"><h2>${meta.changes?.length ? `What changed${meta.n > 1 ? ` since Test ${meta.n - 1}` : ''}` : 'About this test'}</h2>
+      ${meta.changes?.length ? `<ul class="gsum-log" title="${esc(meta.changed || meta.label)}">${meta.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : `<div class="gsum-about" title="${esc(meta.changed || meta.label)}"><span>${esc(meta.changed || meta.label)}</span></div>`}</section>`}
+    <section class="gsec"><h2>In detail</h2>
     <div><h3>Where points come from <span class="tag ${verdict(splitOk)}">${t.soFar ? '' : splitOk ? 'on target' : 'off target'}</span></h3>
       <div class="gsum-bars">${split.map(([name, now, goal]) => `<span>${name}</span><div class="trk"><i style="width:${Math.max(.5, now)}%"></i><u style="left:${goal}%" title="Target ${goal} %"></u></div><b>${ge1(now)} %</b><small>target ${goal} %</small>`).join('')}</div></div>
+    <div><h3>Builds and their points a round</h3>
+      <table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Average points at the end">Points</th><th title="Points a round in rounds 1 to 8">Rounds 1–8</th><th title="Points a round in rounds 9 to 16">9–16</th><th title="Points a round from round 17 on">17 on</th></tr></thead><tbody>${GE_BUILDS.map(([name, tip], i) => t.builds[i].n ? bRow(name, t.builds[i], tip) : '').join('')}${bRow('All players', t.all)}${t.winners.n ? bRow('Winners', t.winners) : ''}</tbody></table></div>
+    <div><h3>Dice at the end</h3>
+      <table class="gsum-t"><thead><tr><th>Average per player</th><th>Basic</th><th>Enchanted</th><th>Exalted</th><th>Arcane</th><th title="Average damage of one attack">Attack</th></tr></thead><tbody>${dRow('All players', t.all)}${t.winners.n ? dRow('Winners', t.winners) : ''}</tbody></table>
+      <div class="gsum-note" style="margin-top:8px">${t.full} of ${t.seats} players reached 10 Exalted dice.${t.blood.on ? ` Arcane Blood was taken for ${t.blood.n} of ${kills} kills, by ${t.blood.who} players.` : ''}</div></div>
     <div><h3>How players ended</h3>
       <table class="gsum-t"><thead><tr><th>Status</th><th>Players</th><th>Share</th><th>Average points</th></tr></thead><tbody>${['Pure', 'Tainted', 'Corrupt', 'Fallen'].filter((k) => t.status[k]).map((k) => `<tr><td><i class="sw" style="--c:var(--st-${k.toLowerCase()})"></i>${k}</td><td>${t.status[k].n}</td><td>${Math.round(100 * t.status[k].n / t.seats)} %</td><td>${ge1(t.status[k].vp / t.status[k].n)}</td></tr>`).join('')}</tbody></table></div>
     <div><h3>Monsters fought</h3>
       <table class="gsum-t"><thead><tr><th>Level</th><th>Fights</th><th>Kills</th><th title="Fights in which the monster's hit corrupted the player">Corrupted</th><th>Average kill round</th><th title="Cards left in the deck at the end, average per game">Left in the deck</th></tr></thead><tbody>${GE_LEVELS.map((k, i) => { const e = t.lv[k]; return `<tr><td>${k}</td><td>${e.f}</td><td>${e.k}</td><td>${e.cor}</td><td>${e.k ? ge1(e.kr / e.k) : '–'}</td><td>${i === 0 ? 'always there' : t.left[i - 1] == null ? '–' : `${ge1(t.left[i - 1])} of ${ge1(t.start[i - 1])}`}</td></tr>`; }).join('')}</tbody></table></div>
+    </section>
     <div class="gsum-note">Click a point on a line for that player's board at that round. Drag along the line, or use ← and →, to move through the rounds. "Attack" in the top bar shows each player's attack by round.</div>
   </div>`;
 }
