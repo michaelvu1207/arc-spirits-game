@@ -39,7 +39,7 @@ import {
 	type PlayCatalog
 } from '../types';
 import { destinationSummaries, interactionsAt } from './labels';
-import { ruleAdjustedClassSchema, ruleValue, vpToWin } from '../rules';
+import { restBarrier, ruleAdjustedClassSchema, ruleValue, vpToWin } from '../rules';
 
 const MAX_BARRIER_CAP = 10;
 
@@ -81,7 +81,7 @@ function coreRules(catalog: PlayCatalog): string {
 		'',
 		'## Your resources',
 		`- Barrier is your health; Max Barrier is its capacity, at most ${MAX_BARRIER_CAP}. Damage turns Barrier into Broken Barrier.`,
-		`- Rest restores ${ruleValue(catalog, 'restByStatus') ? '2 Barrier plus 1 for each status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2; never above your Max Barrier)' : '2 Barrier (never above your Max Barrier)'}, then fires your active "On Rest" class effects (classes with one: ${restClasses(catalog).join(', ') || 'none'}). With full Barrier and no active On Rest effect, Rest changes nothing.`,
+		`- Rest restores ${ruleValue(catalog, 'restByStatus') ? `${restBarrier(catalog, 3)} Barrier plus 1 for each status step above Fallen (Pure ${restBarrier(catalog, 0)}, Tainted ${restBarrier(catalog, 1)}, Corrupt ${restBarrier(catalog, 2)}, Fallen ${restBarrier(catalog, 3)}; never above your Max Barrier)` : `${restBarrier(catalog, 0)} Barrier (never above your Max Barrier)`}, then fires your active "On Rest" class effects (classes with one: ${restClasses(catalog).join(', ') || 'none'}). With full Barrier and no active On Rest effect, Rest changes nothing.`,
 		`- Attack dice: at most ${MAX_ATTACK_DICE}; a dice gain at ${MAX_ATTACK_DICE} dice is lost (upgrades still work). An upgrade raises your lowest Basic or Enchanted die one step (Basic → Enchanted → Exalted); it never makes an Arcane die. Faces: ${faces}. Your combat damage is the sum of your rolled dice plus bonuses.`,
 		'- "Any basic rune" costs are paid with one basic rune: an origin rune (e.g. Mountain Rune) or the wild Any Rune. Relics, Spirit Augments and class runes never pay them. "Any relic" costs take a relic only.',
 		'- Location requirements: a "replace one of your Powers" action needs a Power you hold; a "gain" action works once per round; a "trade" action repeats while you can pay.',

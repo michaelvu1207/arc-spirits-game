@@ -922,6 +922,8 @@ export interface PlayRules {
 	arcaneBloodDouble?: boolean;
 	/** Under `arcaneBlood`: a kill offers 2 (permanent monster) / 4 / 8 / 12 Arcane Blood (Michael, 2026-11-21). */
 	arcaneBloodTwoPerPoint?: boolean;
+	/** A Rest restores 4 Barrier, not 2, before the `restByStatus` bonus (Michael, 2026-11-21). */
+	restBase4?: boolean;
 	/** A kill of the permanent monster gives one of its rewards, the player's choice, not all (Michael, 2026-11-21). */
 	permanentRewardChoice?: boolean;
 }

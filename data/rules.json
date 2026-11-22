@@ -29,6 +29,7 @@
 	"fighterInitiative": true,
 	"elementalistMethods": true,
 	"restByStatus": true,
+	"restBase4": true,
 	"fairyEnchanted": true,
 	"cursedSpiritBasic": true,
 	"elementalistOneUpgrade": true,

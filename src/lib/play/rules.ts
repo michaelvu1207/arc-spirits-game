@@ -175,6 +175,9 @@
  * - arcaneBloodDouble (default false; Michael, 2026-11-21, after Test 27 where Arcane Blood was taken in
  *   31 of 516 offers): only read under `arcaneBlood`. true ⇒ a kill offers 2 / 4 / 6 Arcane Blood
  *   (Difficulty 1 and the permanent monster 2, Difficulty 2 4, Difficulty 3 6), not 1 / 2 / 3.
+ * - restBase4 (default false; Michael, 2026-11-21, during Test 29 where players rested in a third of
+ *   their turns): true ⇒ a Rest restores 4 Barrier, not 2, before the `restByStatus` bonus (with it:
+ *   Pure 7, Tainted 6, Corrupt 5, Fallen 4). See `restBarrier` below.
  * - arcaneBloodTwoPerPoint (default false; Michael, 2026-11-21, after Test 28 where Arcane Blood was taken
  *   in 0 of 165 offers): only read under `arcaneBlood`; overrides `arcaneBloodDouble`. true ⇒ a kill
  *   offers 2 Arcane Blood for the permanent monster, 4 for Difficulty 1, 8 for Difficulty 2, 12 for
@@ -272,6 +275,7 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	arcaneBlood: false,
 	arcaneBloodDouble: false,
 	arcaneBloodTwoPerPoint: false,
+	restBase4: false,
 	permanentRewardChoice: false
 };
 
@@ -295,8 +299,10 @@ export const REST_BARRIER = 2;
  * Under `restByStatus`: 2 plus 1 for each status step above Fallen.
  */
 export function restBarrier(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, statusLevel: number): number {
-	if (!ruleValue(catalog, 'restByStatus')) return REST_BARRIER;
-	return REST_BARRIER + Math.max(0, 3 - Math.max(0, statusLevel));
+	// Rule `restBase4` (Michael, 2026-11-21): the base is 4, not 2.
+	const base = ruleValue(catalog, 'restBase4') ? 4 : REST_BARRIER;
+	if (!ruleValue(catalog, 'restByStatus')) return base;
+	return base + Math.max(0, 3 - Math.max(0, statusLevel));
 }
 
 /**
