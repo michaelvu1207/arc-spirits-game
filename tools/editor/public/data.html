@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8">
 <title>Data · Niji Batch</title>
+<script>
+  // One file, two pages: /data.html edits the game data; /simulations.html (a link to this file) shows the
+  // results of the test games. Old links to the balance pages on /data.html go to /simulations.html.
+  {const sims=/\/simulations\.html$/.test(location.pathname);
+   if(!sims&&['#explorer','#attack','#games','#spirits','#monsters'].includes(location.hash))location.replace('/simulations.html'+location.hash);
+   document.documentElement.dataset.mode=sims?'sims':'data';if(sims)document.title='Simulations · Niji Batch';}
+</script>
+<style>:root[data-mode="sims"] .data-only, :root[data-mode="data"] .sims-only { display: none !important; }</style>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -166,9 +174,9 @@
 <body>
 <div class="split">
   <aside>
-    <header><a href="/">← Folders</a><span>Data</span></header>
+    <header><a href="/">← Folders</a><span class="data-only">Data</span><span class="sims-only">Simulations</span><span style="flex:1"></span><a class="data-only" href="/simulations.html" title="Results of the test games">Simulations →</a><a class="sims-only" href="/data.html" title="Edit monsters and classes">Data →</a></header>
     <div class="tabs" id="tabs"></div>
-    <div class="tabs"><a href="/team.html" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Team builder</a><a href="/team.html?sim" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Team simulator</a><a data-game="/play" target="_blank" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Play the game ↗</a><button id="gamesTab">Balance charts</button></div>
+    <div class="tabs"><a class="data-only" href="/team.html" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Team builder</a><a class="data-only" href="/team.html?sim" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Team simulator</a><a data-game="/play" target="_blank" style="display:block;padding:8px 10px;border-radius:8px;color:var(--dim);text-decoration:none">Play the game ↗</a><button id="gamesTab" class="sims-only">Balance charts</button></div>
     <script>{const l=/^(127\.0\.0\.1|localhost)$/.test(location.hostname);const b=(l?'http://127.0.0.1':'https://'+location.hostname)+':5317';document.querySelectorAll('a[data-game]').forEach(a=>a.href=b+a.dataset.game);
       // Balance charts: the game app's explorer (Balance and the spirit lists) fills the content area.
       const tab=document.getElementById('gamesTab');let frame=null;
@@ -178,7 +186,8 @@
       tab.addEventListener('click',()=>show(true));
       document.getElementById('tabs').addEventListener('click',(e)=>{if(e.target.closest('[data-t]')&&frame)show(false)},true);
       addEventListener('DOMContentLoaded',()=>{if(location.hash==='#games')show(true)})}</script>
-    <div class="note" style="padding:12px 16px">Local copy of the game data (<code>game/*.json</code>). Save writes the file; the old one stays as <code>.bak.json</code>. Classes 1–3 are the old difficulty tiers; Difficulty 1–15 is the fight cost.</div>
+    <div class="note sims-only" style="padding:12px 16px">Results of the test games (the balance tests). Read only. The numbers come from the game app on port 5317.</div>
+    <div class="note data-only" style="padding:12px 16px">Local copy of the game data (<code>game/*.json</code>). Save writes the file; the old one stays as <code>.bak.json</code>. Classes 1–3 are the old difficulty tiers; Difficulty 1–15 is the fight cost.</div>
   </aside>
   <main>
     <div class="bar"><button class="tb" id="navToggle" title="Hide the menu" aria-label="Show or hide the menu" aria-expanded="true">☰</button><h1 id="title">Monsters</h1><span class="status" id="status"></span><span class="ge-filters" id="barExtra"></span><span class="spacer"></span><button class="tb" id="addRow">Add row</button><button class="tb go" id="save" disabled>Save</button></div>
@@ -208,6 +217,8 @@ const pct = (p) => (p >= 0 ? '+' : '−') + Math.round(Math.abs(p) * 100) + '%';
 const fmt = (v) => (Math.round(v * 100) / 100).toString();
 const POOLS = ['', 'Spirit World', 'Arcane Abyss', 'Heroes'];
 const isBal = () => table.startsWith('bal_');
+const SIMS = document.documentElement.dataset.mode === 'sims';
+const SIMS_MENU = `<button data-t="bal_lines">Game explorer</button><button data-t="bal_attack">Attack over time</button><button data-t="bal_spirits">Spirit tiers</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_spirits" data-stage="${d}">${POOLS[d]}</button>`).join('')}`;
 const titleText = () => (TITLE[table] ?? table) + (stage ? table === 'bal_spirits' ? ` · ${POOLS[stage]}` : table === 'classes' ? ` · ${['', 'Generic', 'Special'][stage]}` : ` · Class ${stage}` : '');
 let ICONS = [], SETS = [];
 // Fixed backgrounds (Michael, 2026-11-07): runes = the teal shape, relics = the golden shape, augments = the white hexagon. Never per row.
@@ -220,9 +231,8 @@ async function init() {
   pool = await get('/api/game/icons'); ICONS = (await get('/api/ws/list?path=' + encodeURIComponent('references/icons/classes'))).images ?? []; NEWICONS = (await get('/api/ws/list?path=' + encodeURIComponent('references/icons/classes_new'))).images ?? [];
   for (const t of pool) { poolById[t.id] = t; poolIcon[t.id] = t.icon; }
   SETS = await get('/api/game/table?name=reward_sets').catch(() => []);
-  const tabs = await get('/api/game/tables');
-  $('tabs').innerHTML = tabs.map((t) => `<button class="${t.name === table && !stage ? 'on' : ''}" data-t="${t.name}">${TITLE[t.name] ?? t.name}<small>${t.rows}</small></button>${t.name === 'monsters_v2' ? [1, 2, 3].map((d) => `<button class="sub" data-t="monsters_v2" data-stage="${d}">Class ${d}</button>`).join('') : ''}${t.name === 'classes' ? `<button class="sub" data-t="classes" data-stage="1">Generic</button><button class="sub" data-t="classes" data-stage="2">Special</button>` : ''}`).join('') + `<button data-t="rewards">Rewards<small>VP values</small></button>`
-    + `<div class="group">Balance</div><button data-t="bal_lines">Game explorer</button><button data-t="bal_spirits">Spirit tiers</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_spirits" data-stage="${d}">${POOLS[d]}</button>`).join('')}<button data-t="bal_monsters">Monsters in the tests</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_monsters" data-stage="${d}">Class ${d}</button>`).join('')}<button data-t="bal_attack">Attack over time</button>`;
+  const tabs = SIMS ? [] : await get('/api/game/tables');
+  $('tabs').innerHTML = SIMS ? SIMS_MENU : tabs.map((t) => `<button class="${t.name === table && !stage ? 'on' : ''}" data-t="${t.name}">${TITLE[t.name] ?? t.name}<small>${t.rows}</small></button>${t.name === 'monsters_v2' ? [1, 2, 3].map((d) => `<button class="sub" data-t="monsters_v2" data-stage="${d}">Class ${d}</button>`).join('') : ''}${t.name === 'classes' ? `<button class="sub" data-t="classes" data-stage="1">Generic</button><button class="sub" data-t="classes" data-stage="2">Special</button>` : ''}`).join('') + `<button data-t="rewards">Rewards<small>VP values</small></button>`;
   load();
 }
 async function load() {
@@ -750,8 +760,7 @@ $('save').onclick = async () => {
 };
 $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b) return; const same = b.dataset.t === table; if (!same && dirty() && !confirm('Leave without saving?')) return; if (!same) curveDirty = false; stage = Number(b.dataset.stage ?? 0); if (same) { for (const x of $('tabs').children) x.classList.toggle('on', x === b); $('title').textContent = titleText(); paint(); } else { table = b.dataset.t; load(); } history.replaceState(null, '', table === 'bal_lines' ? '#explorer' : location.pathname + location.search); });
 addEventListener('beforeunload', (e) => { if (dirty()) e.preventDefault(); });
-if (location.hash === '#explorer') table = 'bal_lines';
-if (location.hash === '#attack') table = 'bal_attack';
+if (SIMS) table = { '#attack': 'bal_attack', '#spirits': 'bal_spirits', '#monsters': 'bal_monsters' }[location.hash] ?? 'bal_lines';
 init();
 window.__dbg = () => ({ rows, composeIcon, post }); // for tests
 </script>
