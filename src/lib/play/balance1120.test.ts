@@ -498,6 +498,15 @@ describe('arcaneBlood: the rewards of a kill, or Arcane Blood in their place', (
 		expect(arcaneBloodFor({ permanent: true, difficulty: 1 }, TWO)).toBe(2);
 		expect(buildRulesBrief(TWO)).toContain('2 for the permanent monster, 4 for a Difficulty 1 card, 8 for a Difficulty 2 card, 12 for a Difficulty 3 card');
 	});
+	it('arcaneBloodPerPoint: 1 for the permanent monster, 2 / 4 / 7 by Difficulty, over the other amount rules', () => {
+		const ONE = withRules({ ...RULES, arcaneBlood: true, arcaneBloodDouble: true, arcaneBloodTwoPerPoint: true, arcaneBloodPerPoint: true });
+		for (const [d, n] of [[1, 2], [2, 4], [3, 7]] as const) {
+			const g = afterKill(ONE, d);
+			expect(g.run({ type: 'startCombat', handIndex: 0 }).pendingReward?.arcaneBlood).toBe(n);
+		}
+		expect(arcaneBloodFor({ permanent: true, difficulty: 1 }, ONE)).toBe(1);
+		expect(buildRulesBrief(ONE)).toContain('1 for the permanent monster, 2 for a Difficulty 1 card, 4 for a Difficulty 2 card, 7 for a Difficulty 3 card');
+	});
 	it('the rules text names the choice only with the rule on, and Elementalist (2) reads "When you gain an Arcane Blood"', () => {
 		expect(buildRulesBrief(ON)).toContain('ARCANE BLOOD');
 		expect(buildRulesBrief(OFF)).not.toContain('ARCANE BLOOD');

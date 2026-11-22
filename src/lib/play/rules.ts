@@ -175,6 +175,10 @@
  * - arcaneBloodDouble (default false; Michael, 2026-11-21, after Test 27 where Arcane Blood was taken in
  *   31 of 516 offers): only read under `arcaneBlood`. true ⇒ a kill offers 2 / 4 / 6 Arcane Blood
  *   (Difficulty 1 and the permanent monster 2, Difficulty 2 4, Difficulty 3 6), not 1 / 2 / 3.
+ * - arcaneBloodPerPoint (default false; Michael, 2026-11-21, after Test 30): only read under `arcaneBlood`;
+ *   overrides `arcaneBloodTwoPerPoint` and `arcaneBloodDouble`. true ⇒ a kill offers 1 Arcane Blood for
+ *   the permanent monster, 2 for Difficulty 1, 4 for Difficulty 2, 7 for Difficulty 3 (one per point of
+ *   the level's card).
  * - restBase4 (default false; Michael, 2026-11-21, during Test 29 where players rested in a third of
  *   their turns): true ⇒ a Rest restores 4 Barrier, not 2, before the `restByStatus` bonus (with it:
  *   Pure 7, Tainted 6, Corrupt 5, Fallen 4). See `restBarrier` below.
@@ -275,6 +279,7 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	arcaneBlood: false,
 	arcaneBloodDouble: false,
 	arcaneBloodTwoPerPoint: false,
+	arcaneBloodPerPoint: false,
 	restBase4: false,
 	permanentRewardChoice: false
 };
