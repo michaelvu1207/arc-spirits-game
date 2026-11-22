@@ -107,10 +107,16 @@
   :root { --st-pure: #199e70; --st-tainted: #c98500; --st-corrupt: #9085e9; --st-fallen: #e34948; }
   #navToggle { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; font-size: 15px; } #barExtra { display: none; }
   .split.nonav { grid-template-columns: minmax(0, 1fr); } .split.nonav > aside { display: none; }
-  main.ge-mode { height: 100vh; } main.ge-mode #barExtra { display: flex; } main.ge-mode .bar { flex-wrap: wrap; row-gap: 6px; }
+  main.ge-mode { height: 100vh; } main.ge-mode #barExtra { display: flex; flex: 1; min-width: 0; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 24px; margin-left: 14px; padding-left: 16px; border-left: 1px solid var(--line-2); }
+  main.ge-mode .bar { flex-wrap: wrap; row-gap: 8px; padding: 9px 16px; } main.ge-mode .bar .spacer, main.ge-mode .bar .status { display: none; }
+  .gf { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; min-width: 0; }
+  .gf-f { display: inline-flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; font-size: 12px; color: var(--faint); }
+  .gf-f select { margin: 0; padding: 6px 8px; max-width: 290px; font-size: 13px; color: var(--text); background: var(--field); border: 1px solid var(--line-2); border-radius: 8px; } .gf-f select:hover { border-color: var(--faint); }
+  .gf-live { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; } .gf-sub { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
   main.ge-mode .scroll { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
   .ge { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
-  .ge-filters { gap: 8px 18px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--dim); margin-left: 8px; } .ge-filters select { max-width: 380px; color: var(--text); margin-left: 6px; }
+  .ge-filters { font-size: 13px; color: var(--dim); }
+  .ge-chart .ge-legend { position: absolute; top: 3px; right: 84px; font-size: 12px; color: var(--dim); pointer-events: none; }
   .ge-live { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-weight: 600; color: var(--text); }
   .ge-live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #e5484d; animation: geLive 1.6s ease-in-out infinite; }
   @keyframes geLive { 50% { opacity: .25; } }
@@ -139,6 +145,7 @@
   #geRest { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 18px; }
   .gsum { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-right: 10px; }
   .gsum .lnk { margin-left: auto; color: var(--dim); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; padding: 0; } .gsum .lnk:hover { color: var(--text); } .gsum td .lnk { margin: 0; color: var(--text); font-size: 13px; }
+  .gsum-about { display: grid; gap: 5px; margin-top: -8px; } .gsum-about span { color: var(--dim); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } .gsum-about small { color: var(--faint); font-size: 11px; }
   .gsum-note { color: var(--dim); font-size: 12px; line-height: 1.45; max-width: 60ch; }
   .gsum-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .gsum .chk { border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 11px 10px; display: grid; gap: 3px; align-content: start; min-width: 0; }
@@ -520,18 +527,21 @@ function paintLines() {
   const meta = GE.index.find((x) => x.setup === GE.setup), newest = GE.index.at(-1);
   const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), hm = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const when = (x) => day(x.first) === day(x.last) ? `${day(x.first)}, ${hm(x.first)} to ${hm(x.last)}` : `${day(x.first)} ${hm(x.first)} to ${day(x.last)} ${hm(x.last)}`;
-  const cut = (t, n) => t.length > n ? t.slice(0, n - 2).replace(/\s+\S*$/, '') + '…' : t;
-  // The filters and the legend sit in the title bar, so the graph and the panel get the whole height.
   const part = (x) => x.done != null && x.done < x.games ? `${x.done} of ${x.games} games finished` : `${x.games} games`;
   const about = `Test ${meta.n} of ${GE.index.length}${meta === newest ? ', the latest set of games' : ''}. ${meta.live ? 'Being played now; this page follows it. ' : ''}Played ${when(meta)}, ${GE.lines.length} players in ${meta.games} games${meta.done != null && meta.done < meta.games ? ` (${meta.done} finished${meta.live ? '' : ', the others were stopped'})` : ''} on ${meta.table}. ${meta.changed ? `What it tested: ${meta.changed}. ` : ''}Rules: ${meta.label}. Name in the reports: ${meta.setup}.`;
-  $('barExtra').innerHTML = `<span class="seg2" id="geMetric">${Object.entries(METRIC).map(([k, m]) => `<button data-metric="${k}" class="${GE.metric === k ? 'on' : ''}">${m.label}</button>`).join('')}</span>
-    <label title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value.">Average lines<select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-    <label title="${esc(about)}">Set of games<select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x.live ? ' · LIVE' : x === newest ? ' (latest)' : ''} · ${esc(day(x.last))} · ${part(x)} · ${esc(x.table)} · ${esc(cut(x.changed || x.label, 60))}</option>`).join('')}</select></label>
-    <label>Game<select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} (${g.state === 'live' ? `round ${g.rounds}, in play` : g.state === 'stopped' ? `stopped at round ${g.rounds}` : `${g.rounds} rounds`})</option>`).join('')}</select></label>
-    ${meta.live ? `<span class="ge-live" title="This test is being played. The lines are fetched again every 20 seconds.">Live · ${GE.data.games.filter((g) => g.state === 'done').length} of ${GE.data.games.length} games finished · updated ${esc(new Date(GE.at ?? Date.now()).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }))}</span>` : ''}
-    <span class="ge-legend"><span><i style="--c:var(--st-pure)"></i>Pure</span><span><i style="--c:var(--st-tainted)"></i>Tainted</span><span><i style="--c:var(--st-corrupt)"></i>Corrupt</span><span><i style="--c:var(--st-fallen)"></i>Fallen</span><span><i class="dash" style="--c:var(--text)"></i>Median</span></span>`;
+  // The top bar, left: what is shown (the test, the game, the live marker). Right: how the lines are drawn.
+  const liveAt = new Date(GE.at ?? Date.now()).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  $('barExtra').innerHTML = `<div class="gf">
+      <label class="gf-f" title="${esc(about)}"><span>Test</span><select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x.live ? ' · live' : x === newest ? ' · latest' : ''} · ${esc(day(x.last))} · ${part(x)}</option>`).join('')}</select></label>
+      <label class="gf-f"><span>Game</span><select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} · ${g.state === 'live' ? `round ${g.rounds}, in play` : g.state === 'stopped' ? `stopped at round ${g.rounds}` : `${g.rounds} rounds`}</option>`).join('')}</select></label>
+      ${meta.live ? `<span class="gf-live" title="This test is being played. The lines are fetched again every 20 seconds."><span class="ge-live">Live</span><span class="gf-sub">${GE.data.games.filter((g) => g.state === 'done').length} of ${GE.data.games.length} finished · ${esc(liveAt)}</span></span>` : ''}
+    </div>
+    <div class="gf">
+      <span class="seg2" id="geMetric" title="What the lines show: each player's points, or the average damage of one attack with the dice held">${Object.entries(METRIC).map(([k, m]) => `<button data-metric="${k}" class="${GE.metric === k ? 'on' : ''}">${k === 'atk' ? 'Attack' : m.label}</button>`).join('')}</span>
+      <label class="gf-f" title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value."><span>Averages</span><select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    </div>`;
   return `<div class="ge">
-  <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-hint" id="geHint" hidden></div></div><aside class="ge-side" id="geSide"></aside></div></div>`;
+  <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-legend"><span><i style="--c:var(--st-pure)"></i>Pure</span><span><i style="--c:var(--st-tainted)"></i>Tainted</span><span><i style="--c:var(--st-corrupt)"></i>Corrupt</span><span><i style="--c:var(--st-fallen)"></i>Fallen</span><span><i class="dash" style="--c:var(--text)"></i>Median</span></div><div class="ge-hint" id="geHint" hidden></div></div><aside class="ge-side" id="geSide"></aside></div></div>`;
 }
 function mountLines() {
   if (!GE.data) return;
@@ -689,6 +699,7 @@ function geClassPop(el) {
 const DIE_ICON = { basic: 'Basic Attack - Side 1', enchanted: 'Enchanted Attack', exalted: 'Exalted Attack - Side 1', arcane: 'Arcane Attack - Side 1' };
 const geDie = (tier) => { const t = pool.find((x) => x.name === DIE_ICON[tier]); return t?.icon ? small(t.icon, 64) : null; };
 // ---------- the test in numbers (what the Balance charts page showed), in the panel while no point is chosen ----------
+const geWhen = (x) => { const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }), hm = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); return day(x.first) === day(x.last) ? `${day(x.first)}, ${hm(x.first)} to ${hm(x.last)}` : `${day(x.first)} ${hm(x.first)} to ${day(x.last)} ${hm(x.last)}`; };
 const geMed = (v) => { const a = [...v].sort((x, y) => x - y), n = a.length; return n ? (n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2) : null; };
 const ge1 = (x) => x == null ? '–' : String(Math.round(x * 10) / 10);
 const GE_LEVELS = ['Abyss Lurker', 'Difficulty 1', 'Difficulty 2', 'Difficulty 3'];
@@ -721,6 +732,7 @@ function geSummary() {
   const stateNote = t.soFar ? (meta.live ? 'No game has finished yet: the numbers are the games so far.' : 'No game of this test finished: the numbers are the games as far as they were played.') : t.done < t.n ? `${t.done} of ${t.n} games finished; the end round, the gap and the points count those. Fights count every game.` : '';
   return `<div class="gsum">
     <div class="gs-top"><b>${who} in numbers</b><button class="lnk" data-all="1" title="Every test side by side">Compare all tests</button></div>
+    ${GE.game ? '' : `<div class="gsum-about" title="${esc(meta.changed || meta.label)}"><span>${esc(meta.changed || meta.label)}</span><small>${esc(geWhen(meta))} · ${meta.games} games · ${esc(meta.table)}</small></div>`}
     ${stateNote ? `<div class="gsum-note">${esc(stateNote)}</div>` : ''}
     <div class="gsum-checks">
       <div class="chk ${verdict(mr >= 20 && mr <= 30)}"><small>${t.soFar ? 'Round reached' : 'Round the game ends'}</small><b>${ge1(mr)}</b><span>${range(t.rounds)}${range(t.rounds) ? ' · ' : ''}target 20 to 30</span></div>
@@ -733,7 +745,7 @@ function geSummary() {
       <table class="gsum-t"><thead><tr><th>Status</th><th>Players</th><th>Share</th><th>Average points</th></tr></thead><tbody>${['Pure', 'Tainted', 'Corrupt', 'Fallen'].filter((k) => t.status[k]).map((k) => `<tr><td><i class="sw" style="--c:var(--st-${k.toLowerCase()})"></i>${k}</td><td>${t.status[k].n}</td><td>${Math.round(100 * t.status[k].n / t.seats)} %</td><td>${ge1(t.status[k].vp / t.status[k].n)}</td></tr>`).join('')}</tbody></table></div>
     <div><h3>Monsters fought</h3>
       <table class="gsum-t"><thead><tr><th>Level</th><th>Fights</th><th>Kills</th><th title="Fights in which the monster's hit corrupted the player">Corrupted</th><th>Average kill round</th><th title="Cards left in the deck at the end, average per game">Left in the deck</th></tr></thead><tbody>${GE_LEVELS.map((k, i) => { const e = t.lv[k]; return `<tr><td>${k}</td><td>${e.f}</td><td>${e.k}</td><td>${e.cor}</td><td>${e.k ? ge1(e.kr / e.k) : '–'}</td><td>${i === 0 ? 'always there' : t.left[i - 1] == null ? '–' : `${ge1(t.left[i - 1])} of ${ge1(t.start[i - 1])}`}</td></tr>`; }).join('')}</tbody></table></div>
-    <div class="gsum-note">Click a point on a line for that player's board at that round. Drag along the line, or use ← and →, to move through the rounds. "Average attack" in the top bar shows attack by round.</div>
+    <div class="gsum-note">Click a point on a line for that player's board at that round. Drag along the line, or use ← and →, to move through the rounds. "Attack" in the top bar shows each player's attack by round.</div>
   </div>`;
 }
 function geAllTests() {
