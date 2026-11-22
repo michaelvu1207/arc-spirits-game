@@ -622,6 +622,7 @@ function mountLines() {
     if (b.dataset.clear) geSelect(null);
     else if (b.dataset.all) { GE.all = b.dataset.all === '1'; paintSide(); }
     else if (b.dataset.setup) { if (b.dataset.setup === GE.setup) { GE.all = false; paintSide(); } else loadLines(b.dataset.setup).then(() => { GE.all = false; paint(); }); }
+    else if (b.dataset.bdm) { BD.metric = b.dataset.bdm; bdLeave(); drawLines(); }
     else if (b.dataset.view) { geView = b.dataset.view; try { localStorage.setItem('geView', geView); } catch {} paintSide(); } };
   // Pointing at a class (or focusing it) shows what it does in a popup under the icon.
   side.onpointerover = (e) => { const b = e.target.closest('[data-cls], [data-sp]'); if (b) geClassPop(b); };
@@ -763,7 +764,7 @@ const geDie = (tier) => { const t = pool.find((x) => x.name === DIE_ICON[tier]);
 // Colours: a fixed slot per build (it never changes with the test), checked for colour-blind separation on this background;
 // "No clear build" is the neutral grey and "All players" the dashed white line.
 const BD_COLOR = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#7d8291'];
-const BD = {};
+const BD = { metric: 'vp' }; // what the builds graph shows: 'vp' points or 'atk' the average damage of one attack
 function bdSeries() {
   const games = GE.game ? [GE.data.games[GE.game - 1]].filter(Boolean) : GE.data.games, end = Math.max(1, ...games.map((g) => g.rounds));
   const rows = GE_BUILDS.map(([name, rule], k) => ({ k, name, rule, color: BD_COLOR[k], seats: [], wins: 0 })), all = { k: -1, name: 'All players', rule: 'Every player shown', color: 'var(--text)', seats: [], wins: 0, all: true };
@@ -771,7 +772,7 @@ function bdSeries() {
   // A player keeps their final value after their game ends, so a line ends at the build's average final value.
   const val = (s, r, m) => s.rounds[Math.min(r, s.rounds.length - 1)][m] ?? 0, avg = (seats, r, m) => seats.reduce((a, s) => a + val(s, r, m), 0) / seats.length;
   const list = [...rows.filter((r) => r.seats.length), all];
-  for (const row of list) { row.pts = Array.from({ length: end + 1 }, (_, r) => avg(row.seats, r, 'vp')); row.at = (r, m) => avg(row.seats, r, m);
+  for (const row of list) { row.pts = Array.from({ length: end + 1 }, (_, r) => avg(row.seats, r, BD.metric)); row.at = (r, m) => avg(row.seats, r, m);
     const rate = (a, b) => { const v = row.seats.filter((s) => s.rounds.length - 1 > a).map((s) => { const last = s.rounds.length - 1, hi = b == null ? last : Math.min(b, last); return (val(s, hi, 'vp') - val(s, a, 'vp')) / (hi - a); }); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
     row.rate = [rate(0, 8), rate(8, 16), rate(16, null)]; }
   return { list, end, win: GE.data.win_points ?? 40, done: games.filter((g) => (g.state ?? 'done') === 'done').length, n: games.length };
@@ -780,17 +781,18 @@ const bdSw = (r) => `<i class="bd-sw ${r.all ? 'dash' : ''}" style="--c:${r.colo
 function drawBuilds() {
   const box = $('geChart'), svg = $('geSvg'), legend = $('geLegend'), S = BD.series = bdSeries();
   legend.innerHTML = S.list.map((r) => `<span><i class="${r.all ? 'dash' : ''}" style="--c:${r.color}"></i>${esc(r.name)} <small>${r.seats.length}</small></span>`).join('');
-  svg.setAttribute('aria-label', 'Average points by round, one line per build'); svg.classList.remove('avg', 'focus', 'hov', 'near');
+  const points = BD.metric === 'vp';
+  svg.setAttribute('aria-label', `Average ${points ? 'points' : 'attack'} by round, one line per build`); svg.classList.remove('avg', 'focus', 'hov', 'near');
   const W = box.clientWidth, H = box.clientHeight, slim = W < 560, top = Math.max(slim ? 34 : 26, legend.offsetHeight + 12);
   const m = slim ? { l: 30, r: 44, t: top, b: 34 } : { l: 44, r: 196, t: top, b: 40 }, pw = W - m.l - m.r, ph = H - m.t - m.b; if (pw < 50 || ph < 50) return;
-  const ymax = Math.max(S.win, ...S.list.flatMap((r) => r.pts)) + 2, f = (n) => n.toFixed(1);
+  const high = Math.max(...S.list.flatMap((r) => r.pts)), ymax = points ? Math.max(S.win, high) + 2 : Math.max(5, high) * 1.1, f = (n) => n.toFixed(1);
   const x = (r) => m.l + (r / S.end) * pw, y = (v) => m.t + ph - (v / ymax) * ph;
   BD.geo = { x, y, xinv: (px) => ((px - m.l) / pw) * S.end, W, H, end: S.end };
   let s = ''; const tick = ymax > 28 ? 10 : 5;
   for (let v = 0; v <= ymax; v += tick) s += `<line class="${v === 0 ? 'axis' : 'grid'}" x1="${m.l}" x2="${W - m.r}" y1="${f(y(v))}" y2="${f(y(v))}"/><text x="${m.l - 8}" y="${f(y(v) + 4)}" text-anchor="end">${v}</text>`;
   for (let r = 0; r <= S.end; r += S.end > 30 ? 10 : 5) s += `<line class="grid" x1="${f(x(r))}" x2="${f(x(r))}" y1="${H - m.b}" y2="${H - m.b + 4}"/><text x="${f(x(r))}" y="${H - m.b + 17}" text-anchor="middle">${r}</text>`;
   s += `<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
-  s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(S.win))}" y2="${f(y(S.win))}"/><text class="cap" x="${m.l + 6}" y="${f(y(S.win) - 6)}">${S.win} points wins</text>`;
+  if (points) s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(S.win))}" y2="${f(y(S.win))}"/><text class="cap" x="${m.l + 6}" y="${f(y(S.win) - 6)}">${S.win} points wins</text>`;
   // "All players" under the builds, then the builds from the largest group down, so the small groups stay on top.
   for (const row of [...S.list].sort((a, b) => (b.all ? 1 : 0) - (a.all ? 1 : 0) || b.seats.length - a.seats.length)) { const d = row.pts.map((v, r) => `${r ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('');
     s += row.all ? `<path class="bd-all" d="${d}"/>` : `<path class="bd-halo" d="${d}"/><path class="bd-line" style="stroke:${row.color}" d="${d}"/>`; }
@@ -808,25 +810,25 @@ function bdMove(e) {
   const b = svg.getBoundingClientRect(), r = Math.max(0, Math.min(g.end, Math.round(g.xinv(e.clientX - b.left)))), px = g.x(r);
   svg.querySelector('#bdCross').setAttribute('x1', px); svg.querySelector('#bdCross').setAttribute('x2', px); svg.querySelector('#bdHover').setAttribute('visibility', 'visible');
   for (const row of BD.series.list) { const d = svg.querySelector(`#bdDot${row.k < 0 ? 'A' : row.k}`); d.setAttribute('cx', px); d.setAttribute('cy', g.y(row.pts[r])); }
-  tip.innerHTML = `<b>Round ${r}</b>${[...BD.series.list].sort((a, c) => c.pts[r] - a.pts[r]).map((row) => `<div>${bdSw(row)}<span>${esc(row.name)}</span><b>${(Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
+  tip.innerHTML = `<b>Round ${r} · ${BD.metric === 'vp' ? 'points' : 'attack'}</b>${[...BD.series.list].sort((a, c) => c.pts[r] - a.pts[r]).map((row) => `<div>${bdSw(row)}<span>${esc(row.name)}</span><b>${(Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
   tip.hidden = false; const w = tip.offsetWidth, h = tip.offsetHeight; tip.style.left = Math.max(4, px + 14 + w > g.W ? px - 14 - w : px + 14) + 'px'; tip.style.top = Math.max(4, Math.min(g.H - h - 4, e.clientY - b.top - h / 2)) + 'px';
 }
 function bdLeave() { const tip = $('bdTip'); if (tip) tip.hidden = true; $('geSvg')?.querySelector('#bdHover')?.setAttribute('visibility', 'hidden'); }
 /** The panel beside the builds graph: the builds in numbers. */
 function geBuildsPanel() {
   const meta = GE.index.find((x) => x.setup === GE.setup), S = BD.series ?? bdSeries(), n1 = (v) => v == null ? '–' : String(Math.round(v * 10) / 10), last = S.end, marks = [8, 16, 24].filter((r) => r < last);
-  const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`;
+  const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`, what = BD.metric === 'vp' ? 'points' : 'attack';
   return `<div class="gsum">
-    <div class="gs-top"><b>Builds in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b></div>
+    <div class="gs-top"><b>Builds in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b><span class="seg2 sm" style="margin-left:auto" role="group" aria-label="What the builds graph shows">${[['vp', 'Points'], ['atk', 'Attack']].map(([k, t]) => `<button data-bdm="${k}" class="${BD.metric === k ? 'on' : ''}" title="${k === 'vp' ? 'Average points by round' : 'Average damage of one attack with the dice held, by round'}">${t}</button>`).join('')}</span></div>
     <small class="gsum-when">${S.n} ${S.n === 1 ? 'game' : 'games'} · ${S.list.at(-1).seats.length} players${S.done < S.n ? ` · ${S.done} finished` : ''}</small>
-    <section class="gsec"><h2>Average points, by build</h2>
-      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Average points at the end">Final</th>${marks.map((r) => `<th title="Average points at the end of round ${r}"><span class="nb">Round ${r}</span></th>`).join('')}</tr></thead>
-        <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${r.seats.length}</td><td>${S.done ? r.wins : '–'}</td><td>${n1(r.at(last, 'vp'))}</td>${marks.map((k) => `<td>${n1(r.at(k, 'vp'))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
+    <section class="gsec"><h2>Average ${what}, by build</h2>
+      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Average ${what} at the end">Final</th>${marks.map((r) => `<th title="Average ${what} at the end of round ${r}"><span class="nb">Round ${r}</span></th>`).join('')}</tr></thead>
+        <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${r.seats.length}</td><td>${S.done ? r.wins : '–'}</td><td>${n1(r.at(last, BD.metric))}</td>${marks.map((k) => `<td>${n1(r.at(k, BD.metric))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
     <section class="gsec"><h2>Points a round and attack</h2>
       <div class="bd-table"><table class="gsum-t"><thead><tr><th>Build</th><th title="Points a round in rounds 1 to 8">Rounds <span class="nb">1–8</span></th><th title="Points a round in rounds 9 to 16"><span class="nb">9–16</span></th><th title="Points a round from round 17 on"><span class="nb">17 on</span></th><th title="Average damage of one attack at the end of round 8">Attack, <span class="nb">round 8</span></th><th title="Average damage of one attack at the end">Attack, <span class="nb">end</span></th></tr></thead>
         <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${n1(r.rate[0])}</td><td>${n1(r.rate[1])}</td><td>${n1(r.rate[2])}</td><td>${n1(r.at(Math.min(8, last), 'atk'))}</td><td>${n1(r.at(last, 'atk'))}</td></tr>`).join('')}</tbody></table></div></section>
     ${!GE.game && meta.changes?.length ? `<section class="gsec"><h2>What changed${meta.n > 1 ? ` since Test ${meta.n - 1}` : ''}</h2><ul class="gsum-log">${meta.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
-    <div class="gsum-note">A player's build is read from the traits they reached during the game: ${GE_BUILDS.slice(0, 5).map(([n, rule]) => `<b>${esc(n)}</b> = ${esc(rule)}`).join('; ')}; everyone else is "No clear build". A group of two or three players is one or two games' luck, not a trend. After a player's game ends they keep their final value, so each line ends at the build's average final value. ${phone.matches ? 'Touch the graph' : 'Point at the graph'} for every build's value at a round. "Points" at the top goes back to one line per player.</div>
+    <div class="gsum-note">A player's build is read from the traits they reached during the game: ${GE_BUILDS.slice(0, 5).map(([n, rule]) => `<b>${esc(n)}</b> = ${esc(rule)}`).join('; ')}; everyone else is "No clear build". A group of two or three players is one or two games' luck, not a trend. After a player's game ends they keep their final value, so each line ends at the build's average final value. ${phone.matches ? 'Touch the graph' : 'Point at the graph'} for every build's value at a round. Points / Attack beside the heading switches what the lines show; "Points" in the top bar goes back to one line per player.</div>
   </div>`;
 }
 // ---------- the test in numbers (what the Balance charts page showed), in the panel while no point is chosen ----------
