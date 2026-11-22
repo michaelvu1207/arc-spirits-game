@@ -18,7 +18,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
-import { applyGameCommand, createLobbyState } from './runtime';
+import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyRest, applyTrigger } from './effects/apply';
 import { cursedSpiritDiceTier, fairyDiceTier, restBarrier, ruleAdjustedClassSchema } from './rules';
@@ -480,6 +480,15 @@ describe('arcaneBlood: the rewards of a kill, or Arcane Blood in their place', (
 		}
 		expect(buildRulesBrief(DOUBLE)).toContain('2 for a Difficulty 1 card or the permanent monster, 4 for a Difficulty 2 card, 6 for a Difficulty 3 card');
 		expect(buildRulesBrief(ON)).toContain('1 for a Difficulty 1 card or the permanent monster, 2 for a Difficulty 2 card, 3 for a Difficulty 3 card');
+	});
+	it('arcaneBloodTwoPerPoint: 2 for the permanent monster, 4 / 8 / 12 by Difficulty', () => {
+		const TWO = withRules({ ...RULES, arcaneBlood: true, arcaneBloodDouble: true, arcaneBloodTwoPerPoint: true });
+		for (const d of [1, 2, 3] as const) {
+			const g = afterKill(TWO, d);
+			expect(g.run({ type: 'startCombat', handIndex: 0 }).pendingReward?.arcaneBlood).toBe(4 * d);
+		}
+		expect(arcaneBloodFor({ permanent: true, difficulty: 1 }, TWO)).toBe(2);
+		expect(buildRulesBrief(TWO)).toContain('2 for the permanent monster, 4 for a Difficulty 1 card, 8 for a Difficulty 2 card, 12 for a Difficulty 3 card');
 	});
 	it('the rules text names the choice only with the rule on, and Elementalist (2) reads "When you gain an Arcane Blood"', () => {
 		expect(buildRulesBrief(ON)).toContain('ARCANE BLOOD');

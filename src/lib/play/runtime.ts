@@ -621,6 +621,12 @@ export function arcaneBloodFor(
 ): number | undefined {
 	if (!ruleValue(catalog, 'arcaneBlood')) return undefined;
 	// Rule `arcaneBloodDouble` (Michael, 2026-11-21): 2 / 4 / 6 in place of 1 / 2 / 3.
+	// Rule `arcaneBloodTwoPerPoint` (Michael, 2026-11-21, after Test 28 where it was taken in 0 of 165
+	// offers): two per point of the card's value: permanent monster 2, Difficulty 1 4, 2 8, 3 12.
+	if (ruleValue(catalog, 'arcaneBloodTwoPerPoint')) {
+		if (monster.permanent) return 2;
+		return 4 * (ARCANE_BLOOD_BY_DIFFICULTY[(monster.difficulty ?? 1) as 1 | 2 | 3] ?? 1);
+	}
 	const times = ruleValue(catalog, 'arcaneBloodDouble') ? 2 : 1;
 	if (monster.permanent) return times;
 	return times * (ARCANE_BLOOD_BY_DIFFICULTY[(monster.difficulty ?? 1) as 1 | 2 | 3] ?? 1);

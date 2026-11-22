@@ -175,6 +175,10 @@
  * - arcaneBloodDouble (default false; Michael, 2026-11-21, after Test 27 where Arcane Blood was taken in
  *   31 of 516 offers): only read under `arcaneBlood`. true ⇒ a kill offers 2 / 4 / 6 Arcane Blood
  *   (Difficulty 1 and the permanent monster 2, Difficulty 2 4, Difficulty 3 6), not 1 / 2 / 3.
+ * - arcaneBloodTwoPerPoint (default false; Michael, 2026-11-21, after Test 28 where Arcane Blood was taken
+ *   in 0 of 165 offers): only read under `arcaneBlood`; overrides `arcaneBloodDouble`. true ⇒ a kill
+ *   offers 2 Arcane Blood for the permanent monster, 4 for Difficulty 1, 8 for Difficulty 2, 12 for
+ *   Difficulty 3 (two per point of the card's value).
  * - permanentRewardChoice (default false; Michael, 2026-11-21): true ⇒ a kill of the permanent monster
  *   gives ONE of the rewards on its card, the player's choice (`picks[0]`; the first when none is
  *   named), not every reward. Deck cards still give every reward. See `rewardChoiceOf` in runtime.ts.
@@ -267,6 +271,7 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	spiritInitiativeTrim: false,
 	arcaneBlood: false,
 	arcaneBloodDouble: false,
+	arcaneBloodTwoPerPoint: false,
 	permanentRewardChoice: false
 };
 

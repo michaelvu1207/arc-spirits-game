@@ -39,5 +39,6 @@
 	"spiritInitiativeTrim": true,
 	"arcaneBlood": true,
 	"arcaneBloodDouble": true,
+	"arcaneBloodTwoPerPoint": true,
 	"permanentRewardChoice": true
 }

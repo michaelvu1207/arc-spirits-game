@@ -920,6 +920,8 @@ export interface PlayRules {
 	arcaneBlood?: boolean;
 	/** Under `arcaneBlood`: a kill offers 2 / 4 / 6 Arcane Blood, not 1 / 2 / 3 (Michael, 2026-11-21). */
 	arcaneBloodDouble?: boolean;
+	/** Under `arcaneBlood`: a kill offers 2 (permanent monster) / 4 / 8 / 12 Arcane Blood (Michael, 2026-11-21). */
+	arcaneBloodTwoPerPoint?: boolean;
 	/** A kill of the permanent monster gives one of its rewards, the player's choice, not all (Michael, 2026-11-21). */
 	permanentRewardChoice?: boolean;
 }
