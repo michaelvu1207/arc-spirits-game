@@ -24,7 +24,7 @@
 	"shieldbearerFullOnly": true,
 	"masterBarrierChoice": true,
 	"monsterDeckByStage": true,
-	"goodKillBonus": true,
+	"goodKillBonus": false,
 	"buffedDice": true,
 	"fighterInitiative": true,
 	"elementalistMethods": true,
