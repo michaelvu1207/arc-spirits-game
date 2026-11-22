@@ -49,5 +49,11 @@
 	"arcaneBloodDouble": true,
 	"arcaneBloodTwoPerPoint": false,
 	"arcaneBloodPerPoint": true,
-	"permanentRewardChoice": true
+	"permanentRewardChoice": true,
+	"numbers": {
+		"diceFaces": {
+			"enchanted": [0, 0, 0, 1, 1, 1]
+		},
+		"elementalistRest": [1, 1, 2, 5]
+	}
 }

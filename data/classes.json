@@ -352,7 +352,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you Cultivate, upgrade an attack dice 2 times."
+            "description": "When you Cultivate, upgrade an attack dice."
           }
         ]
       },
@@ -361,7 +361,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you Cultivate, upgrade an attack dice 3 times."
+            "description": "When you Cultivate, upgrade an attack dice 2 times."
           }
         ]
       },
@@ -370,7 +370,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you Cultivate, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none."
+            "description": "When you Cultivate, upgrade an attack dice 5 times if you have a relic (any relic); 2 times if you have none."
           }
         ]
       }
