@@ -21,7 +21,7 @@ import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WE
 import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
-import { cursedSpiritDiceTier, fairyDiceTier, parseRules, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
+import { cursedSpiritDiceTier, elementalistUpgradeAction, fairyDiceTier, parseRules, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
 import { buildRulesBrief } from './agents/rulesBrief';
 import { enterBenefits } from './phases';
 import { labelFor } from './agents/labels';
@@ -629,6 +629,40 @@ describe('elementalistRest1235, elementalist5NeedsRelic and enchantedTwoThirds (
 		expect((['basic', 'enchanted', 'exalted', 'arcane'] as DiceTier[]).map((t) => Math.round(avg(diceTierFaces(ON)[t]) * 100) / 100)).toEqual([0.33, 0.67, 1.5, 2]);
 		expect(diceTierFaces(withRules({ buffedDice: true, enchantedTwoThirds: true }))).toBe(BUFFED_DICE_TIER_FACES);
 		expect(buildRulesBrief(ON)).toContain('basic 0,0,0,0,1,1; enchanted 0,0,1,1,1,1; exalted 1,1,1,2,2,2');
+	});
+});
+
+describe('elementalistOnCultivate: the ladder upgrades on Cultivate, not on Rest (Michael, 2026-11-22)', () => {
+	const tenBasic = () => Array.from({ length: 10 }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as DiceTier }));
+	const relic = { slotIndex: 1, hasRune: true, id: 'firecracker', name: 'Firecracker', type: 'relic' } as never;
+	const R: PlayRules = { elementalistRest1235: true, elementalistOnCultivate: true };
+	const after = (rules: PlayRules, n: number, act: typeof applyRest, mats: never[] = []) => {
+		const p = makePlayer({ attackDice: tenBasic(), spirits: [spirit(1, { Elementalist: n })], mats });
+		act(makeState(p), 'Red', [], { catalog: withRules(rules) });
+		return p.attackDice.filter((d) => d.tier !== 'basic').length;
+	};
+	it('a Cultivate upgrades 1 / 2 / 3 / 5 at 2 / 3 / 4 / 5 Elementalists; a Rest upgrades nothing', () => {
+		expect([1, 2, 3, 4, 5, 6].map((n) => after(R, n, applyCultivate))).toEqual([0, 1, 2, 3, 5, 5]);
+		expect([2, 3, 4, 5].map((n) => after(R, n, applyRest))).toEqual([0, 0, 0, 0]);
+		expect(elementalistUpgradeAction(withRules(R))).toBe('cultivate');
+		expect(elementalistUpgradeAction(withRules({ elementalistRest1235: true }))).toBe('rest');
+		expect(elementalistUpgradeAction(withRules({ elementalistOnCultivate: true }))).toBeNull();
+	});
+	it('the relic step and the numbers work the same on Cultivate', () => {
+		const G: PlayRules = { ...R, elementalist5NeedsRelic: true, numbers: { elementalistRest: [1, 1, 2, 4] } };
+		expect(after(G, 5, applyCultivate)).toBe(2);
+		expect(after(G, 5, applyCultivate, [relic])).toBe(4);
+	});
+	it('without the ladder rule the switch does nothing', () => {
+		const OLD: PlayRules = { elementalistMethods: true, elementalistOneUpgrade: true };
+		expect(after({ ...OLD, elementalistOnCultivate: true }, 4, applyCultivate)).toBe(after(OLD, 4, applyCultivate));
+		expect(after({ ...OLD, elementalistOnCultivate: true }, 3, applyRest)).toBe(after(OLD, 3, applyRest));
+	});
+	it('the printed text says Cultivate, and Elementalist is no longer a Rest class in the brief', () => {
+		const text = (rules: PlayRules, count: number) => ruleAdjustedClassSchema(withRules(rules), 'Elementalist', [{ count, effects: [{ type: 'benefit', description: 'old' }] }] as never)![0].effects?.[0].description;
+		expect(text(R, 2)).toBe('When you Cultivate, upgrade an attack dice.');
+		expect(text(R, 4)).toBe('When you Cultivate, upgrade an attack dice 3 times.');
+		expect(text({ ...R, elementalist5NeedsRelic: true }, 5)).toBe('When you Cultivate, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.');
 	});
 });
 

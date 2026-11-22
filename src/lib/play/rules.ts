@@ -159,6 +159,10 @@
  *   1 / 2 / 3 / 5 attack dice at 2 / 3 / 4 / 5 Elementalists, the lowest die first. It overrides
  *   `elementalistMethods`: a kill, a Cultivate, a Spirit World Summon and Arcane Blood upgrade nothing.
  *   See `elementalistRestUpgrades` in classes/elementalist.ts.
+ * - elementalistOnCultivate (default false; Michael, 2026-11-22: "move elementalists to on cultivate instead
+ *   of on rest so it doesn't conflict with fighters"): only read under `elementalistRest1235`; true ⇒ the
+ *   ladder's upgrades come when the player Cultivates, and a Rest upgrades nothing. A relic taken on a
+ *   Cultivate counts from the next Cultivate. See `elementalistUpgradeAction` below.
  * - elementalist5NeedsRelic (default false; Michael, 2026-11-22): only read under `elementalistRest1235`;
  *   true ⇒ the step at 5 Elementalists counts only while the player holds a relic (any relic); without
  *   one, 5 Elementalists upgrade as 4 do.
@@ -290,6 +294,7 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	weakLowDice: false,
 	enchantedTwoThirds: false,
 	elementalistRest1235: false,
+	elementalistOnCultivate: false,
 	elementalist5NeedsRelic: false,
 	fighterInitiative: false,
 	elementalistMethods: false,
@@ -441,6 +446,15 @@ export function elementalistRestLadder(catalog: Pick<PlayCatalog, 'rules'> | nul
 	return catalog?.rules?.numbers?.elementalistRest ?? ELEMENTALIST_REST_DEFAULT;
 }
 
+/**
+ * Under `elementalistRest1235`: the action whose resolution gives the ladder's upgrades: Rest, or
+ * Cultivate with the rule `elementalistOnCultivate`. `null` when the ladder rule is off.
+ */
+export function elementalistUpgradeAction(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): 'rest' | 'cultivate' | null {
+	if (!ruleValue(catalog, 'elementalistRest1235')) return null;
+	return ruleValue(catalog, 'elementalistOnCultivate') ? 'cultivate' : 'rest';
+}
+
 /** The value of one switch for this catalog (its default when the catalog has no rules). */
 export function ruleValue(
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
@@ -468,12 +482,13 @@ export function pvpAllowedAt(
 /** "upgrade an attack dice" for `n` upgrades, as the Elementalist text words it. */
 const upgradeWords = (n: number): string => (n === 1 ? 'upgrade an attack dice' : `upgrade an attack dice ${n} times`);
 const timesWords = (n: number): string => (n === 1 ? 'once' : `${n} times`);
-/** The Elementalist text at `count` (2 to 5) under `elementalistRest1235`, from the catalog's ladder. */
+/** The Elementalist text at `count` (2 to 5) under `elementalistRest1235`, from the catalog's ladder and action. */
 function elementalistRestText(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, count: number, needsRelic: boolean): string {
 	const ladder = elementalistRestLadder(catalog);
 	const n = ladder[count - 2] ?? 0;
-	if (count === 5 && needsRelic) return `On Rest, ${upgradeWords(n)} if you have a relic (any relic); ${timesWords(ladder[2])} if you have none.`;
-	return `On Rest, ${upgradeWords(n)}.`;
+	const when = elementalistUpgradeAction(catalog) === 'cultivate' ? 'When you Cultivate' : 'On Rest';
+	if (count === 5 && needsRelic) return `${when}, ${upgradeWords(n)} if you have a relic (any relic); ${timesWords(ladder[2])} if you have none.`;
+	return `${when}, ${upgradeWords(n)}.`;
 }
 
 type RuleClassText = string | ((catalog: Pick<PlayCatalog, 'rules'> | null | undefined) => string);

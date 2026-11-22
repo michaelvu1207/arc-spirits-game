@@ -914,6 +914,8 @@ export interface PlayRuleSwitches {
 	enchantedTwoThirds?: boolean;
 	/** Elementalist upgrades on Rest only, 1 / 2 / 3 / 5 dice at 2 / 3 / 4 / 5 Elementalists (Michael, 2026-11-22). */
 	elementalistRest1235?: boolean;
+	/** Under `elementalistRest1235`: the upgrades come on Cultivate, not on Rest (Michael, 2026-11-22: "so it doesn't conflict with fighters"). */
+	elementalistOnCultivate?: boolean;
 	/** Under `elementalistRest1235`: the step at 5 Elementalists needs a held relic (Michael, 2026-11-22). */
 	elementalist5NeedsRelic?: boolean;
 	/** Fighter also gives combat initiative: 1 per Fighter trait, up to 5 (Michael, 2026-11-20). See classes/fighter.ts. */

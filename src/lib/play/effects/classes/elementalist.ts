@@ -1,5 +1,5 @@
 import { isRelic } from '../../locationInteractions';
-import { elementalistRestLadder, ruleValue } from '../../rules';
+import { elementalistRestLadder, elementalistUpgradeAction, ruleValue } from '../../rules';
 import type { PlayCatalog, PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { EffectCombatInfo, EffectContext } from '../context';
@@ -37,7 +37,8 @@ export function holdsRelic(player: Pick<PrivatePlayerState, 'mats'>): boolean {
 }
 
 /**
- * Under `elementalistRest1235`: the upgrades one Rest gives a player with `count` Elementalists
+ * Under `elementalistRest1235`: the upgrades one Rest (one Cultivate with the rule
+ * `elementalistOnCultivate`; see `elementalistUpgradeAction` in rules.ts) gives a player with `count` Elementalists
  * (1 / 2 / 3 / 5 at 2 / 3 / 4 / 5, or the catalog's `numbers.elementalistRest`).
  * With the rule `elementalist5NeedsRelic` the top step (5) counts only while the player holds a
  * relic; without one, five Elementalists upgrade as four do.
@@ -91,13 +92,18 @@ function upgradeFor(ctx: EffectContext, method: keyof typeof ELEMENTALIST_METHOD
 	runAction(ctx, { kind: 'upgradeDice', times });
 }
 
+/** Under `elementalistRest1235`: the upgrades of the ladder for this player, now. */
+function ladderUpgrades(ctx: EffectContext): void {
+	const times = elementalistRestUpgrades(ctx.catalog, ctx.traitCount, ctx.player);
+	if (times) runAction(ctx, { kind: 'upgradeDice', times });
+}
+
 export const ability: ClassAbility[] = [
 	{
 		on: 'onRest',
 		run(ctx) {
 			if (ruleValue(ctx.catalog, 'elementalistRest1235')) {
-				const times = elementalistRestUpgrades(ctx.catalog, ctx.traitCount, ctx.player);
-				if (times) runAction(ctx, { kind: 'upgradeDice', times });
+				if (elementalistUpgradeAction(ctx.catalog) === 'rest') ladderUpgrades(ctx);
 				return;
 			}
 			if (ruleValue(ctx.catalog, 'elementalistMethods')) {
@@ -118,6 +124,11 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'onCultivate',
 		run(ctx) {
+			// Rule `elementalistOnCultivate`: the ladder's upgrades come here, not on Rest.
+			if (elementalistUpgradeAction(ctx.catalog) === 'cultivate') {
+				ladderUpgrades(ctx);
+				return;
+			}
 			upgradeFor(ctx, 'cultivate');
 		}
 	}
