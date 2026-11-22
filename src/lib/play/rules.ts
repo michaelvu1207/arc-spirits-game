@@ -206,6 +206,12 @@
  * - cursedSpiritBasic (default false; Michael, 2026-11-20): true ⇒ the attack dice of Cursed Spirit's
  *   Tainted reward are Basic, not Enchanted (still 1 Max Barrier or 1 dice per Cursed Spirit). See
  *   `cursedSpiritDiceTier` below.
+ * - fighterDice35 (default false; Michael, 2026-11-21, during Test 31): true ⇒ on Rest Fighter (4) gives
+ *   3 Basic Attack Dice (not 5) and Fighter (5) gives 5 (not 10); 2 and 3 Fighter, the initiative and the
+ *   Spirit Augment at 5 are unchanged. See `ruleAdjustedActions` below and `applyClassTrigger` in effects/apply.ts.
+ * - cultivatorBarrier35 (default false; Michael, 2026-11-21, during Test 31): true ⇒ on Cultivate
+ *   Cultivator (4) gives 3 Max Barrier (not 5) and Cultivator (5) gives 5 (not 10); the relic at 5 is
+ *   unchanged. See `ruleAdjustedActions` below.
  * - monsterDeckByStage (default false): true ⇒ a monster card's deck (Difficulty 1, 2, 3) is its
  *   `stage` in the monster table, not its Barrier band (1-3, 4-7, 8+). A Barrier edit then never
  *   moves a card to another deck. See `monsterDifficulty` in runtime.ts.
@@ -281,6 +287,8 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	arcaneBloodTwoPerPoint: false,
 	arcaneBloodPerPoint: false,
 	restBase4: false,
+	fighterDice35: false,
+	cultivatorBarrier35: false,
 	permanentRewardChoice: false
 };
 
@@ -294,6 +302,29 @@ export function fairyDiceTier(catalog: Parameters<typeof ruleValue>[0]): 'enchan
 /** The tier of the attack dice of Cursed Spirit's Tainted reward: Enchanted, or Basic under `cursedSpiritBasic`. */
 export function cursedSpiritDiceTier(catalog: Parameters<typeof ruleValue>[0]): 'basic' | 'enchanted' {
 	return ruleValue(catalog, 'cursedSpiritBasic') ? 'basic' : 'enchanted';
+}
+
+/** Amounts a rule switch gives a class breakpoint in place of the amount in its ability file. */
+const RULE_CLASS_AMOUNTS: { rule: RuleName; className: string; count: number; kind: string; amount: number }[] = [
+	{ rule: 'fighterDice35', className: 'Fighter', count: 4, kind: 'gainAttackDice', amount: 3 },
+	{ rule: 'fighterDice35', className: 'Fighter', count: 5, kind: 'gainAttackDice', amount: 5 },
+	{ rule: 'cultivatorBarrier35', className: 'Cultivator', count: 4, kind: 'gainMaxBarrier', amount: 3 },
+	{ rule: 'cultivatorBarrier35', className: 'Cultivator', count: 5, kind: 'gainMaxBarrier', amount: 5 }
+];
+
+/**
+ * The actions of the breakpoint `count` of class `className` under the rules of `catalog`: the same
+ * list (the same array when no rule changes it) with the amounts of `RULE_CLASS_AMOUNTS` put in.
+ */
+export function ruleAdjustedActions<A extends { kind: string }>(
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	className: string,
+	count: number | string,
+	actions: A[]
+): A[] {
+	const changes = RULE_CLASS_AMOUNTS.filter((c) => c.className === className && c.count === Number(count) && ruleValue(catalog, c.rule));
+	if (!changes.length) return actions;
+	return actions.map((a) => { const c = changes.find((x) => x.kind === a.kind); return c ? { ...a, amount: c.amount } : a; });
 }
 
 /** The Barrier a Rest restores without the rule `restByStatus`, and at Fallen with it. */
@@ -548,6 +579,35 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Summoner',
 		count: 1,
 		text: 'On Spirit World summon, you may draw from the Arcane Abyss Bag. Once per round, when you discard an Arcane Abyss Spirit, gain 4 points.'
+	},
+	{
+		// Listed before `cultivatorRelicOnce`: the first matching entry of a tier is the one printed.
+		rule: 'cultivatorBarrier35',
+		when: true,
+		className: 'Cultivator',
+		count: 5,
+		text: 'On Cultivate, gain 5 Max Barrier. The first time (once per game), also gain 1 relic of your choice.'
+	},
+	{
+		rule: 'cultivatorBarrier35',
+		when: true,
+		className: 'Cultivator',
+		count: 4,
+		text: 'On Cultivate, gain 3 Max Barrier.'
+	},
+	{
+		rule: 'fighterDice35',
+		when: true,
+		className: 'Fighter',
+		count: 4,
+		text: 'In combat, gain 4 combat initiative. On Rest, gain 3 Basic Attack Dice.'
+	},
+	{
+		rule: 'fighterDice35',
+		when: true,
+		className: 'Fighter',
+		count: 5,
+		text: 'In combat, gain 5 combat initiative. On Rest, gain 5 Basic Attack Dice and 1 of any spirit augment.'
 	},
 	{
 		rule: 'cultivatorRelicOnce',

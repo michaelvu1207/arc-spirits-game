@@ -270,7 +270,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, gain 4 combat initiative. On Rest, gain 5 Basic Attack Dice."
+            "description": "In combat, gain 4 combat initiative. On Rest, gain 3 Basic Attack Dice."
           }
         ]
       },
@@ -279,7 +279,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, gain 5 combat initiative. On Rest, gain 10 Basic Attack Dice and 1 of any spirit augment."
+            "description": "In combat, gain 5 combat initiative. On Rest, gain 5 Basic Attack Dice and 1 of any spirit augment."
           }
         ]
       }
@@ -800,7 +800,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Cultivate, gain 5 Max Barrier."
+            "description": "On Cultivate, gain 3 Max Barrier."
           }
         ]
       },
@@ -809,7 +809,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Cultivate, gain 10 Max Barrier. The first time (once per game), also gain 1 relic of your choice."
+            "description": "On Cultivate, gain 5 Max Barrier. The first time (once per game), also gain 1 relic of your choice."
           }
         ]
       }

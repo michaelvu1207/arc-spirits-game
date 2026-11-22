@@ -30,6 +30,8 @@
 	"elementalistMethods": true,
 	"restByStatus": true,
 	"restBase4": true,
+	"fighterDice35": true,
+	"cultivatorBarrier35": true,
 	"fairyEnchanted": true,
 	"cursedSpiritBasic": true,
 	"elementalistOneUpgrade": true,

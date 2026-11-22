@@ -926,6 +926,10 @@ export interface PlayRules {
 	arcaneBloodPerPoint?: boolean;
 	/** A Rest restores 4 Barrier, not 2, before the `restByStatus` bonus (Michael, 2026-11-21). */
 	restBase4?: boolean;
+	/** On Rest, Fighter (4) gives 3 Basic Attack Dice and Fighter (5) gives 5, not 5 and 10 (Michael, 2026-11-21). */
+	fighterDice35?: boolean;
+	/** On Cultivate, Cultivator (4) gives 3 Max Barrier and Cultivator (5) gives 5, not 5 and 10 (Michael, 2026-11-21). */
+	cultivatorBarrier35?: boolean;
 	/** A kill of the permanent monster gives one of its rewards, the player's choice, not all (Michael, 2026-11-21). */
 	permanentRewardChoice?: boolean;
 }

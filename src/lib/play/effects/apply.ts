@@ -19,7 +19,7 @@ import { recordCultivateAwakenProgress } from './awakenHandlers';
 import { augmentContributions } from '../augments';
 import { originRuneForName } from '../locationInteractions';
 import { ORIGIN_REWARDS, grantRelicTool, spiritsByOrigin } from './relicTools';
-import { restBarrier, ruleValue } from '../rules';
+import { restBarrier, ruleAdjustedActions, ruleValue } from '../rules';
 import { gainOriginRunes, offerOriginCultivateChoice } from './originCultivate';
 
 /** Class trait counts from AWAKENED spirits only (unawakened classes are inactive).
@@ -140,7 +140,8 @@ export function applyTrigger(
 			if (!selected) continue;
 			const ctx = makeCtx(count);
 			const before = log.length;
-			for (const action of selected.bp.actions) runAction(ctx, action, selected.multiplier);
+			// A rule switch may give this breakpoint another amount (`fighterDice35`, `cultivatorBarrier35`).
+			for (const action of ruleAdjustedActions(opts.catalog, cls, selected.bp.count, selected.bp.actions)) runAction(ctx, action, selected.multiplier);
 			attributeFrom(before);
 		}
 

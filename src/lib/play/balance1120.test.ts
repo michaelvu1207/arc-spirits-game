@@ -20,8 +20,8 @@ import { describe, expect, it } from 'vitest';
 import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
 import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
-import { applyRest, applyTrigger } from './effects/apply';
-import { cursedSpiritDiceTier, fairyDiceTier, restBarrier, ruleAdjustedClassSchema } from './rules';
+import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
+import { cursedSpiritDiceTier, fairyDiceTier, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
 import { buildRulesBrief } from './agents/rulesBrief';
 import { enterBenefits } from './phases';
 import { labelFor } from './agents/labels';
@@ -519,5 +519,39 @@ describe('arcaneBlood: the rewards of a kill, or Arcane Blood in their place', (
 		expect(tiers(me)).toBe(2);
 		expect(me.pendingReward?.arcaneBlood).toBeUndefined();
 		expect(() => g.run({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true })).toThrow(/no Arcane Blood/);
+	});
+});
+
+describe('fighterDice35 and cultivatorBarrier35: the top two breakpoints give 3 and 5', () => {
+	const fighters = (n: number) => makePlayer({ spirits: [spirit(1, { Fighter: n })] });
+	const cultivators = (n: number) => makePlayer({ maxBarrier: 0, barrier: 0, spirits: [spirit(1, { Cultivator: n })] });
+	const restDice = (catalog: PlayCatalog, n: number) => { const p = fighters(n); applyRest(makeState(p), 'Red', [], { catalog }); return p.attackDice.length; };
+	const maxBarrier = (catalog: PlayCatalog, n: number) => { const p = cultivators(n); applyCultivate(makeState(p), 'Red', [], { catalog }); return p.maxBarrier; };
+	it('Fighter on Rest: 1, 2, 3, 5 Basic dice at 2, 3, 4, 5 (the Spirit Augment at 5 stays)', () => {
+		const ON = withRules({ fighterDice35: true });
+		expect([1, 2, 3, 4, 5].map((n) => restDice(ON, n))).toEqual([0, 1, 2, 3, 5]);
+		const p = fighters(5), log: string[] = [];
+		applyRest(makeState(p), 'Red', log, { catalog: ON });
+		expect(p.attackDice.every((d) => d.tier === 'basic')).toBe(true);
+		expect(log.join(' ')).toMatch(/augment/i);
+	});
+	it('Cultivator on Cultivate: 1, 2, 3, 5 Max Barrier at 2, 3, 4, 5', () => {
+		expect([1, 2, 3, 4, 5].map((n) => maxBarrier(withRules({ cultivatorBarrier35: true }), n))).toEqual([0, 1, 2, 3, 5]);
+	});
+	it('is off by default: 5 and 10, so recorded games replay', () => {
+		expect([4, 5].map((n) => restDice(withRules(undefined), n))).toEqual([5, 10]);
+		expect([4, 5].map((n) => maxBarrier(withRules(undefined), n))).toEqual([5, 10]);
+		const actions = [{ kind: 'gainAttackDice', amount: 10 }];
+		expect(ruleAdjustedActions(withRules(undefined), 'Fighter', 5, actions)).toBe(actions);
+		expect(ruleAdjustedActions(withRules({ cultivatorBarrier35: true }), 'Fighter', 5, actions)).toBe(actions);
+	});
+	it('the printed class text follows the switches', () => {
+		const text = (catalog: PlayCatalog, name: string, count: number) => ruleAdjustedClassSchema(catalog, name, [{ count, effects: [{ type: 'benefit', description: 'old' }] }] as never)![0].effects?.[0].description;
+		const ON = withRules({ fighterDice35: true, cultivatorBarrier35: true, cultivatorRelicOnce: true });
+		expect(text(ON, 'Fighter', 4)).toBe('In combat, gain 4 combat initiative. On Rest, gain 3 Basic Attack Dice.');
+		expect(text(ON, 'Fighter', 5)).toContain('gain 5 Basic Attack Dice and 1 of any spirit augment');
+		expect(text(ON, 'Cultivator', 4)).toBe('On Cultivate, gain 3 Max Barrier.');
+		expect(text(ON, 'Cultivator', 5)).toContain('gain 5 Max Barrier');
+		expect(text(withRules({ cultivatorRelicOnce: true }), 'Cultivator', 5)).toContain('gain 10 Max Barrier');
 	});
 });
