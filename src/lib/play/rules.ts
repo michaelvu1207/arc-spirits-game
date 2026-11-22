@@ -150,6 +150,9 @@
  * - buffedDice (default false; Michael, 2026-11-20): true ⇒ the attack dice are stronger: Basic 0,0,0,1,1,1
  *   (average 0.5), Enchanted 0,1,1,1,1,2 (1), Exalted 1,1,1,2,2,2 (1.5), Arcane 0,0,1,3,3,5 (2 as before,
  *   with a wide spread). See `diceTierFaces` in combat.ts.
+ * - weakLowDice (default false; Michael, 2026-11-21, during Test 31): true ⇒ Basic 0,0,0,0,1,1 (0.33) and
+ *   Enchanted 0,0,1,1,1,2 (0.83); Exalted 1,1,1,2,2,2 and Arcane 0,0,1,3,3,5 as under `buffedDice`, which it
+ *   overrides. See `diceTierFaces` in combat.ts.
  * - fighterInitiative (default false; Michael, 2026-11-20): true ⇒ in combat Fighter gives 1 initiative
  *   per Fighter trait, up to 5, starting at one trait (a new first breakpoint; the dice on Rest are
  *   unchanged). The printed text is in the class data. See classes/fighter.ts.
@@ -271,6 +274,7 @@ export const RULE_DEFAULTS: Required<PlayRules> = {
 	pvpCorruptPays4: false,
 	goodKillBonus: false,
 	buffedDice: false,
+	weakLowDice: false,
 	fighterInitiative: false,
 	elementalistMethods: false,
 	restByStatus: false,

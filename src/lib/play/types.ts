@@ -894,6 +894,8 @@ export interface PlayRules {
 	goodKillBonus?: boolean;
 	/** Stronger attack dice (Michael, 2026-11-20): averages 0.5 / 1 / 1.5 / 2. See `BUFFED_DICE_TIER_FACES` in combat.ts. */
 	buffedDice?: boolean;
+	/** Basic 0.33 and Enchanted 0.83 with Exalted 1.5 and Arcane 2 (Michael, 2026-11-21). See `WEAK_LOW_DICE_TIER_FACES` in combat.ts. */
+	weakLowDice?: boolean;
 	/** Fighter also gives combat initiative: 1 per Fighter trait, up to 5 (Michael, 2026-11-20). See classes/fighter.ts. */
 	fighterInitiative?: boolean;
 	/** Elementalist upgrades an attack dice twice per board action, one more action per breakpoint (Michael, 2026-11-20). See classes/elementalist.ts. */

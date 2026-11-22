@@ -17,7 +17,7 @@
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
-import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
+import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
 import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
@@ -36,6 +36,32 @@ const dice = (...tiers: DiceTier[]) => tiers.map((tier, i) => ({ instanceId: `d$
 const avg = (f: number[]) => f.reduce((a, b) => a + b, 0) / f.length;
 const monster = (hp: number, damage: number, initiative: number) =>
 	({ id: 'm', name: 'Test Monster', hp, maxHp: hp, damage, initiative, rewardTrack: [], chooseAmount: 0, livesRemaining: 1, livesTotal: 1, ladderIndex: 0, ladderMax: 1 }) as never;
+
+describe('weakLowDice: Basic 0.33, Enchanted 0.83, Exalted 1.5, Arcane 2', () => {
+	const ON = withRules({ buffedDice: true, weakLowDice: true });
+	it('has the averages 0.33, 0.83, 1.5, 2 and overrides buffedDice', () => {
+		expect(diceTierFaces(ON)).toBe(WEAK_LOW_DICE_TIER_FACES);
+		expect((['basic', 'enchanted', 'exalted', 'arcane'] as DiceTier[]).map((t) => Math.round(avg(WEAK_LOW_DICE_TIER_FACES[t]) * 100) / 100)).toEqual([0.33, 0.83, 1.5, 2]);
+		expect(WEAK_LOW_DICE_TIER_FACES.exalted).toEqual(BUFFED_DICE_TIER_FACES.exalted);
+		expect(diceTierFaces(withRules({ buffedDice: true }))).toBe(BUFFED_DICE_TIER_FACES);
+	});
+	it('a player sees the new average, and the rules text lists the faces', () => {
+		const p = makePlayer({ attackDice: dice('basic', 'basic', 'basic', 'enchanted', 'enchanted', 'enchanted', 'enchanted', 'enchanted', 'enchanted', 'exalted') });
+		expect(expectedAttack(p, ON)).toBeCloseTo(7.5);
+		expect(buildRulesBrief(ON)).toContain('basic 0,0,0,0,1,1; enchanted 0,0,1,1,1,2; exalted 1,1,1,2,2,2');
+	});
+	it('rolls: Basic 0 or 1, Enchanted 0, 1 or 2', () => {
+		const rolls = (tier: DiceTier) => {
+			const state = makeState(makePlayer({ attackDice: dice(tier) }));
+			const seen = new Set<number>();
+			for (let i = 0; i < 300; i += 1) seen.add(rollAttack(state, state.players.Red!, ON));
+			return [...seen].sort((a, b) => a - b);
+		};
+		expect(rolls('basic')).toEqual([0, 1]);
+		expect(rolls('enchanted')).toEqual([0, 1, 2]);
+		expect(rolls('exalted')).toEqual([1, 2]);
+	});
+});
 
 describe('buffedDice: attack dice with averages 0.5, 1, 1.5 and 2', () => {
 	const ON = withRules({ buffedDice: true });

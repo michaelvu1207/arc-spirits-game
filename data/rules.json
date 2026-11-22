@@ -26,6 +26,7 @@
 	"monsterDeckByStage": true,
 	"goodKillBonus": false,
 	"buffedDice": true,
+	"weakLowDice": true,
 	"fighterInitiative": true,
 	"elementalistMethods": true,
 	"restByStatus": true,

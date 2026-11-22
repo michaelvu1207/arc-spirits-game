@@ -190,8 +190,21 @@ export const BUFFED_DICE_TIER_FACES: Record<DiceTier, number[]> = {
 	arcane: [0, 0, 1, 3, 3, 5]
 };
 
+/**
+ * The dice under rule `weakLowDice` (Michael, 2026-11-21): Basic back at an average of 0.33 and
+ * Enchanted at 0.83, the six-face average nearest below the middle of Basic and Exalted (0.92);
+ * Exalted (1.5) and Arcane (2) as under `buffedDice`.
+ */
+export const WEAK_LOW_DICE_TIER_FACES: Record<DiceTier, number[]> = {
+	basic: [0, 0, 0, 0, 1, 1],
+	enchanted: [0, 0, 1, 1, 1, 2],
+	exalted: BUFFED_DICE_TIER_FACES.exalted,
+	arcane: BUFFED_DICE_TIER_FACES.arcane
+};
+
 /** The faces of each attack-dice tier under the rules of `catalog` (no catalog ⇒ the default dice). */
 export function diceTierFaces(catalog?: Parameters<typeof ruleValue>[0]): Record<DiceTier, number[]> {
+	if (ruleValue(catalog, 'weakLowDice')) return WEAK_LOW_DICE_TIER_FACES;
 	return ruleValue(catalog, 'buffedDice') ? BUFFED_DICE_TIER_FACES : DICE_TIER_FACES;
 }
 
