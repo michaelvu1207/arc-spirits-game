@@ -607,6 +607,11 @@ export interface MonsterState {
 	initiative?: number;
 	/** A copy of the catalog's permanent monster (never from a deck; see PlayCatalogMonster). */
 	permanent?: boolean;
+	/**
+	 * The card's ability under rule `difficulty3Restores`: Barrier it restores after a fight it
+	 * survives (never above `maxHp`). Written only under the rule, on Difficulty 3 cards.
+	 */
+	restoreAfterCombat?: number;
 	rewardTrack: string[]; // icon_pool ids
 	chooseAmount: number; // rewards a kill grants (every resolvable token on the card)
 	/** Kills still needed to defeat THIS monster. Starts at the active player count; each
@@ -807,6 +812,8 @@ export interface RuleNumbers {
 	elementalistRest?: [number, number, number, number];
 	/** Under `elementalist5NeedsRelic`: upgrades at 5 Elementalists for a player who holds no relic (default: the number at 4 Elementalists). */
 	elementalistNoRelic?: number;
+	/** Under `difficulty3Restores`: Barrier a Difficulty 3 monster restores after a fight it survives (default 5). */
+	difficulty3Restore?: number;
 }
 
 /** rules.json: the rule switches plus the optional rule numbers. */
@@ -916,6 +923,8 @@ export interface PlayRuleSwitches {
 	enchantedTwoThirds?: boolean;
 	/** Elementalist upgrades on Rest only, 1 / 2 / 3 / 5 dice at 2 / 3 / 4 / 5 Elementalists (Michael, 2026-11-22). */
 	elementalistRest1235?: boolean;
+	/** A Difficulty 3 monster restores Barrier after a fight it survives (Michael, 2026-11-22: "special abilities ... restore 5 barriers after combat"). See `difficulty3Restore` in rules.ts. */
+	difficulty3Restores?: boolean;
 	/** At the Arcane Abyss the players draw from the monster decks one after the other, fewest points first (Michael, 2026-11-22). See abyssDrawOrder.ts. */
 	abyssDrawByPoints?: boolean;
 	/** Under `alchemistAugmentToArcane`: Arcane Alchemist converts at most one augment a round (Michael, 2026-11-22: "just one time per turn"). */

@@ -817,9 +817,17 @@ export function fightMonster(
 		}
 	});
 
-	// Snapshot the card AS FOUGHT (this combat's ending Barrier; 0 on a kill) for the reward and
-	// the combat record. A surviving card keeps its damage in the player's hand — nothing resets.
-	const fought: MonsterState = { ...monster, hp: endingHp };
+	// Rule `difficulty3Restores`: a card with the ability restores Barrier after a fight it survives
+	// (never above its printed Barrier). Whatever the fight dealt beyond that stays on the card.
+	if (!killed && (monster.restoreAfterCombat ?? 0) > 0 && monster.hp < monster.maxHp) {
+		const restored = Math.min(monster.restoreAfterCombat!, monster.maxHp - monster.hp);
+		monster.hp += restored;
+		log.push(`${monster.name} restores ${restored} Barrier (${monster.hp}/${monster.maxHp}).`);
+	}
+
+	// Snapshot the card AS FOUGHT (the Barrier it is left with after this combat; 0 on a kill) for
+	// the reward and the combat record. A surviving card keeps its damage in the player's hand.
+	const fought: MonsterState = { ...monster, hp: monster.hp };
 	if (killed) {
 		// A defeated card leaves the game at once.
 		player.monsterHand = (player.monsterHand ?? []).filter((card) => card !== monster);

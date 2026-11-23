@@ -130,7 +130,7 @@ export function monsterLine(card: MonsterState): string {
 	const rewards = buildMonsterRewards(card.rewardTrack)
 		.map((r) => r.label)
 		.join(', ');
-	return `${card.name} [Difficulty ${card.difficulty ?? '?'}; Barrier ${card.hp}/${card.maxHp}; deals ${card.damage}${typeof card.initiative === 'number' ? `; initiative ${card.initiative}` : ''}; rewards: ${rewards || 'none'}]`;
+	return `${card.name} [Difficulty ${card.difficulty ?? '?'}; Barrier ${card.hp}/${card.maxHp}; deals ${card.damage}${typeof card.initiative === 'number' ? `; initiative ${card.initiative}` : ''}${card.restoreAfterCombat ? `; ability: restores ${card.restoreAfterCombat} Barrier after a fight it survives` : ''}; rewards: ${rewards || 'none'}]`;
 }
 
 function spiritBySlot(me: SeatPlayer | undefined, slot: number): PlaySpirit | undefined {

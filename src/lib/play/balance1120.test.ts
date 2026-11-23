@@ -18,14 +18,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
-import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
+import { applyGameCommand, arcaneBloodFor, createLobbyState, monsterCardFromCatalog } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
 import { ALCHEMIST_AUGMENT_KIND, decisions as alchemistDecisions } from './effects/classes/arcMage';
 import { cursedSpiritDiceTier, elementalistUpgradeAction, fairyDiceTier, parseRules, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
 import { buildRulesBrief } from './agents/rulesBrief';
 import { enterBenefits } from './phases';
-import { labelFor } from './agents/labels';
+import { labelFor, monsterLine } from './agents/labels';
 import { makePlayer, makeState, spirit } from './effects/classes/testHelpers';
 import { loadFrozenCatalog } from './agents/catalog';
 import { attackLine } from './agents/view';
@@ -664,6 +664,49 @@ describe('elementalistOnCultivate: the ladder upgrades on Cultivate, not on Rest
 		expect(text(R, 2)).toBe('When you Cultivate, upgrade an attack dice.');
 		expect(text(R, 4)).toBe('When you Cultivate, upgrade an attack dice 3 times.');
 		expect(text({ ...R, elementalist5NeedsRelic: true }, 5)).toBe('When you Cultivate, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.');
+	});
+});
+
+describe('difficulty3Restores: a Difficulty 3 monster restores Barrier after a fight it survives (Michael, 2026-11-22)', () => {
+	const ON = withRules({ difficulty3Restores: true });
+	const d3 = (hp: number, restore?: number) => ({ ...(monster(hp, 5, 100) as object), difficulty: 3, ...(restore ? { restoreAfterCombat: restore } : {}) }) as never;
+	/** A player with `beast` Beast traits and no dice deals exactly `beast` damage; Barrier 20 so the hit of 5 never corrupts. */
+	const fighter = (beast: number, card: never) => makePlayer({ barrier: 20, maxBarrier: 20, spirits: [spirit(1, { Beast: beast })], monsterHand: [card] });
+	it('only the damage beyond 5 stays on the card: 9 damage needs three fights against Barrier 16', () => {
+		const p = fighter(9, d3(16, 5)), state = makeState(p);
+		const first = fightMonster(state, 'Red', ON, 0)!;
+		expect(first.killed).toBe(false);
+		expect(first.fought!.hp).toBe(12); // 16 - 9 = 7, then 5 back
+		expect(first.log.some((l) => l.includes('restores 5 Barrier (12/16)'))).toBe(true);
+		expect(p.monsterHand![0].hp).toBe(12);
+		expect(fightMonster(state, 'Red', ON, 0)!.fought!.hp).toBe(8);
+		expect(fightMonster(state, 'Red', ON, 0)!.killed).toBe(true);
+		expect(p.monsterHand).toHaveLength(0);
+	});
+	it('a fight that deals 5 or less makes no progress, and the Barrier never goes above the printed one', () => {
+		const p = fighter(5, d3(16, 5)), state = makeState(p);
+		expect(fightMonster(state, 'Red', ON, 0)!.fought!.hp).toBe(16);
+		const q = fighter(3, d3(16, 5));
+		expect(fightMonster(makeState(q), 'Red', ON, 0)!.fought!.hp).toBe(16);
+	});
+	it('a card without the ability keeps all its damage', () => {
+		const p = fighter(9, d3(16));
+		expect(fightMonster(makeState(p), 'Red', ON, 0)!.fought!.hp).toBe(7);
+	});
+	it('the rule puts the ability on Difficulty 3 cards only; the number can be set in the data; the players are told', () => {
+		const m = (stage: number, permanent = false) => ({ id: `m${stage}`, name: 'M', damage: 5, barrier: 16, rewardTrack: [], dicePool: [], chooseAmount: 0, stage, order: 1, ...(permanent ? { permanent: true } : {}) }) as never;
+		const byStage = (rules: PlayRules) => withRules({ monsterDeckByStage: true, ...rules });
+		const on = byStage({ difficulty3Restores: true });
+		expect(monsterCardFromCatalog(m(3), on).restoreAfterCombat).toBe(5);
+		expect(monsterCardFromCatalog(m(2), on).restoreAfterCombat).toBeUndefined();
+		expect(monsterCardFromCatalog(m(3, true), on).restoreAfterCombat).toBeUndefined();
+		expect(monsterCardFromCatalog(m(3), byStage({})).restoreAfterCombat).toBeUndefined();
+		expect(monsterCardFromCatalog(m(3), byStage({ difficulty3Restores: true, numbers: { difficulty3Restore: 3 } })).restoreAfterCombat).toBe(3);
+		expect(monsterLine(monsterCardFromCatalog(m(3), on))).toContain('ability: restores 5 Barrier after a fight it survives');
+		expect(monsterLine(monsterCardFromCatalog(m(2), on))).not.toContain('ability');
+		expect(buildRulesBrief(on)).toContain('DIFFICULTY 3 ABILITY: every Difficulty 3 monster restores 5 Barrier');
+		expect(buildRulesBrief(byStage({}))).not.toContain('DIFFICULTY 3 ABILITY');
+		expect(parseRules({ numbers: { difficulty3Restore: -1 } }).problems).toHaveLength(1);
 	});
 });
 

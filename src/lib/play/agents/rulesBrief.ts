@@ -39,7 +39,7 @@ import {
 	type PlayCatalog
 } from '../types';
 import { destinationSummaries, interactionsAt } from './labels';
-import { restBarrier, ruleAdjustedClassSchema, ruleValue, vpToWin } from '../rules';
+import { difficulty3Restore, restBarrier, ruleAdjustedClassSchema, ruleValue, vpToWin } from '../rules';
 
 const MAX_BARRIER_CAP = 10;
 
@@ -97,6 +97,9 @@ function coreRules(catalog: PlayCatalog): string {
 		'',
 		'## Monsters (Arcane Abyss)',
 		`- Monster cards are in 3 decks ${ruleValue(catalog, 'monsterDeckByStage') ? '(Difficulty 1, 2 and 3; the Barrier range of each deck is listed under Monster decks)' : 'by Barrier (Difficulty 1: Barrier 1-3, 2: 4-7, 3: 8+)'}. Once per visit you may draw from one deck: 2 cards are revealed, you keep 1 (the other goes to the bottom of its deck). Your monster hand holds at most 3 cards and is private. A defeated card leaves the game; an empty deck cannot be drawn from.`,
+		...(difficulty3Restore(catalog, 3) > 0
+			? [`- DIFFICULTY 3 ABILITY: every Difficulty 3 monster restores ${difficulty3Restore(catalog, 3)} Barrier after a fight it survives (never above its full Barrier). Only the damage beyond ${difficulty3Restore(catalog, 3)} stays on the card, so a fight that deals ${difficulty3Restore(catalog, 3)} or less makes no progress, and chipping a Difficulty 3 card down over several fights costs far more hits than its Barrier suggests. Difficulty 1 and 2 cards and the permanent monster have no such ability: all damage stays on them.`]
+			: []),
 		...(ruleValue(catalog, 'abyssDrawByPoints')
 			? ['- DRAWING ORDER: the monster decks are shared, so the players at the Arcane Abyss draw from them one after the other: the player with the FEWEST Victory Points at the start of the round first (equal points: table order, starting one seat later each round). You wait until every player ahead of you has drawn, holds 3 cards or has ended their Location turn. Fights are not ordered: you may fight cards you already hold at any time.' + ((catalog.monsters ?? []).some((m) => m.permanent) ? ' Taking the permanent monster needs no turn.' : '')]
 			: []),

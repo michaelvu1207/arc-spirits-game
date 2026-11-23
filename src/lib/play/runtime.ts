@@ -56,7 +56,7 @@ import {
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
-import { cursedSpiritDiceTier, pvpAllowedAt, ruleValue } from './rules';
+import { cursedSpiritDiceTier, difficulty3Restore, pvpAllowedAt, ruleValue } from './rules';
 import { abyssDrawBlockedBy } from './abyssDrawOrder';
 import {
 	bagForSpiritCost,
@@ -1479,7 +1479,9 @@ export function monsterCardFromCatalog(
 		ladderIndex: monster.order,
 		ladderMax: 0,
 		...(typeof monster.initiative === 'number' ? { initiative: monster.initiative } : {}),
-		...(monster.permanent ? { permanent: true } : {})
+		...(monster.permanent ? { permanent: true } : {}),
+		// Rule `difficulty3Restores`: the card's ability (a Difficulty 3 card that is not the permanent monster).
+		...(!monster.permanent && difficulty3Restore(catalog, difficulty) > 0 ? { restoreAfterCombat: difficulty3Restore(catalog, difficulty) } : {})
 	};
 }
 

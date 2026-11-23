@@ -159,6 +159,11 @@
  *   1 / 2 / 3 / 5 attack dice at 2 / 3 / 4 / 5 Elementalists, the lowest die first. It overrides
  *   `elementalistMethods`: a kill, a Cultivate, a Spirit World Summon and Arcane Blood upgrade nothing.
  *   See `elementalistRestUpgrades` in classes/elementalist.ts.
+ * - difficulty3Restores (default false; Michael, 2026-11-22: "have difficulty 3 monsters have special
+ *   abilities. they shoudl restore 5 barriers after combat"): true ⇒ every Difficulty 3 card carries the
+ *   ability "after a fight it survives, restore 5 Barrier" (never above its printed Barrier; the number
+ *   can be set with `numbers.difficulty3Restore`). So a fight that deals 5 or less makes no progress.
+ *   See `difficulty3Restore` below and `fightMonster` in combat.ts.
  * - abyssDrawByPoints (default false; Michael, 2026-11-22: "have least points to greatest player draw in
  *   that order"): true ⇒ the players at the Arcane Abyss draw from the monster decks one after the
  *   other, the one with the fewest points at the start of the round first (equal points: table order,
@@ -305,6 +310,7 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	elementalistRest1235: false,
 	alchemistOncePerRound: false,
 	abyssDrawByPoints: false,
+	difficulty3Restores: false,
 	elementalistOnCultivate: false,
 	elementalist5NeedsRelic: false,
 	fighterInitiative: false,
@@ -448,8 +454,11 @@ function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undef
 		} else if (name === 'elementalistNoRelic') {
 			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.elementalistNoRelic must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
 			else numbers.elementalistNoRelic = value as number;
+		} else if (name === 'difficulty3Restore') {
+			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.difficulty3Restore must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
+			else numbers.difficulty3Restore = value as number;
 		} else {
-			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic)`);
+			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore)`);
 		}
 	}
 	return Object.keys(numbers).length ? numbers : undefined;
@@ -475,6 +484,14 @@ export function elementalistUpgradeAction(catalog: Pick<PlayCatalog, 'rules'> | 
  */
 export function elementalistNoRelicUpgrades(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
 	return catalog?.rules?.numbers?.elementalistNoRelic ?? elementalistRestLadder(catalog)[2];
+}
+
+/** Rule `difficulty3Restores`: Barrier a Difficulty 3 monster restores after a fight it survives, unless `numbers.difficulty3Restore` says otherwise. */
+export const DIFFICULTY_3_RESTORE = 5;
+/** Barrier a monster card of `difficulty` restores after a fight it survives under the rules of `catalog` (0: none). */
+export function difficulty3Restore(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, difficulty: number | undefined): number {
+	if (difficulty !== 3 || !ruleValue(catalog, 'difficulty3Restores')) return 0;
+	return catalog?.rules?.numbers?.difficulty3Restore ?? DIFFICULTY_3_RESTORE;
 }
 
 /** The value of one switch for this catalog (its default when the catalog has no rules). */
