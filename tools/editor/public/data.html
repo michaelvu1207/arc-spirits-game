@@ -552,7 +552,7 @@ async function loadLines(setup) {
     // The notes were written for the Test runs table ("the row above"); here the tests are in the order played.
     for (const x of GE.index) { const t = (x.changed ?? '').replace(/\s*\([^)]*row (above|below)[^)]*\)/, ''); x.changed = /row (above|below)/.test(t) ? '' : t; }
     GE.setup = setup ?? (GE.index.some((x) => x.setup === GE.setup) ? GE.setup : GE.index.at(-1).setup);
-    GE.data = (GE.setup === want && await early) || await geFetch('?setup=' + encodeURIComponent(GE.setup)); GE.arcSet = null;
+    GE.data = (GE.setup === want && await early) || await geFetch('?setup=' + encodeURIComponent(GE.setup)); GE.arcSet = null; GE.lvMap = null;
   } catch (e) { GE.data = null; GE.err = `The game lines did not load from the game app (${GAME_APP}). Start it with "npm run local".`; return; }
   if (!GE.runeIcon) {
     const [runes, relics] = await Promise.all([get('/api/game/table?name=runes'), get('/api/game/table?name=relics')]).catch(() => [[], []]);
@@ -582,7 +582,7 @@ async function geLiveTick() {
     GE.index = index;
     if (data) {
       const key = GE.sel ? [GE.sel.gi, GE.sel.pn] : null, atEnd = GE.sel && GE.r === GE.sel.last, r = GE.r, game = GE.game;
-      GE.data = data; GE.arcSet = null; geBuildLines(); GE.at = Date.now();
+      GE.data = data; GE.arcSet = null; GE.lvMap = null; geBuildLines(); GE.at = Date.now();
       GE.game = game <= GE.data.games.length ? game : 0;
       GE.sel = key ? GE.lines.find((l) => l.gi === key[0] && l.pn === key[1]) ?? null : null;
       if (GE.sel) GE.r = atEnd ? GE.sel.last : Math.min(r, GE.sel.last);
@@ -851,16 +851,14 @@ function bdLeave() { const tip = $('bdTip'); if (tip) tip.hidden = true; $('geSv
 /** The panel beside the builds graph: the builds in numbers. */
 function geBuildsPanel() {
   const meta = GE.index.find((x) => x.setup === GE.setup), S = BD.series && !BD.series.mons ? BD.series : bdSeries(), n1 = (v) => v == null ? '–' : String(Math.round(v * 10) / 10), last = S.end, marks = [8, 16, 24].filter((r) => r < last);
-  const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`, what = BD.metric === 'vp' ? 'points' : geAtkDice ? 'attack from dice' : 'attack';
+  const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`;
   return `<div class="gsum">
     <div class="gs-top"><b>Builds in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b><span class="seg2 sm" style="margin-left:auto" role="group" aria-label="What the builds graph shows">${[['vp', 'Points'], ['atk', 'Attack']].map(([k, t]) => `<button data-bdm="${k}" class="${BD.metric === k ? 'on' : ''}" title="${k === 'vp' ? 'Average points by round' : 'Average damage of one attack with the dice held, by round'}">${t}</button>`).join('')}</span></div>
     <small class="gsum-when">${S.n} ${S.n === 1 ? 'game' : 'games'} · ${S.list.at(-1).seats.length} players${S.done < S.n ? ` · ${S.done} finished` : ''}</small>
-    <section class="gsec"><h2>Average ${what}, by build</h2>
-      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Average ${what} at the end">Final</th>${marks.map((r) => `<th title="Average ${what} at the end of round ${r}"><span class="nb">Round ${r}</span></th>`).join('')}</tr></thead>
-        <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${r.seats.length}</td><td>${S.done ? r.wins : '–'}</td><td>${n1(r.at(last, geKey(BD.metric)))}</td>${marks.map((k) => `<td>${n1(r.at(k, geKey(BD.metric)))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>
-    <section class="gsec"><h2>Points a round and attack</h2>
-      <div class="bd-table"><table class="gsum-t"><thead><tr><th>Build</th><th title="Points a round in rounds 1 to 8">Rounds <span class="nb">1–8</span></th><th title="Points a round in rounds 9 to 16"><span class="nb">9–16</span></th><th title="Points a round from round 17 on"><span class="nb">17 on</span></th><th title="Average damage of one attack at the end of round 8">Attack, <span class="nb">round 8</span></th><th title="Average damage of one attack at the end">Attack, <span class="nb">end</span></th></tr></thead>
-        <tbody>${S.list.map((r) => `<tr title="${esc(r.rule)}">${name(r)}<td>${n1(r.rate[0])}</td><td>${n1(r.rate[1])}</td><td>${n1(r.rate[2])}</td><td>${n1(r.at(Math.min(8, last), 'atk'))}</td><td>${n1(r.at(last, 'atk'))}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="gsec"><h2>Monsters killed, by build</h2>
+      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th>${GE_LEVELS.map((k) => `<th title="${k} cards killed, average per player of the build">${k.replace('Difficulty', 'Diff.').replace('Abyss ', '')}</th>`).join('')}</tr></thead>
+        <tbody>${S.list.map((r) => { const k = [0, 0, 0, 0]; for (const s of r.seats) geSeatKills(s).forEach((v, i) => { k[i] += v; }); return `<tr title="${esc(r.rule)}">${name(r)}<td>${r.seats.length}</td>${k.map((v) => `<td title="${v} kills by ${r.seats.length} players">${n1(v / r.seats.length)}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
+      <div class="gsum-note" style="margin-top:8px">Kills per player of the build over the whole game. A kill is a fight won or a card defeated without a battle.</div></section>
     ${!GE.game && meta.changes?.length ? `<section class="gsec"><h2>What changed${meta.n > 1 ? ` since Test ${meta.n - 1}` : ''}</h2><ul class="gsum-log">${meta.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
     <div class="gsum-note">A player's build is read from the traits they reached during the game: ${GE_BUILDS.slice(0, 5).map(([n, rule]) => `<b>${esc(n)}</b> = ${esc(rule)}`).join('; ')}; everyone else is "No clear build". A group of two or three players is one or two games' luck, not a trend. After a player's game ends they keep their final value, so each line ends at the build's average final value. ${phone.matches ? 'Touch the graph' : 'Point at the graph'} for every build's value at a round. Points / Attack beside the heading switches what the lines show; "Points" in the top bar goes back to one line per player.</div>
   </div>`;
@@ -875,6 +873,7 @@ function mnSeries() {
   const tally = games.map((g) => { const k = GE_LEVELS.map(() => Array(end + 1).fill(0)), f = GE_LEVELS.map(() => 0), cor = GE_LEVELS.map(() => 0);
     for (const s of g.seats) for (const p of s.rounds) for (const a of p.acts ?? []) { const m = /^Fight (.+?) \(Difficulty (\d)/.exec(a.t); if (!m) continue; const lv = m[1] === 'Abyss Lurker' ? 0 : +m[2]; if (!k[lv]) continue;
       f[lv]++; if ((a.g ?? []).some((x) => /^Corrupted/.test(x))) cor[lv]++; if ((a.g ?? []).includes('Defeated it.')) k[lv][Math.min(end, p.r)]++; }
+    for (const s of g.seats) for (const p of s.rounds) for (const lv of geExecLevels(p)) k[lv][Math.min(end, p.r)]++; // defeated without a battle (Abyssal Execution)
     for (const row of k) for (let r = 1; r <= end; r++) row[r] += row[r - 1]; return { k, f, cor }; });
   const left = (g, d, r) => g.table?.[Math.min(r, (g.table?.length ?? 1) - 1)]?.m?.[d] ?? 0, avg = (f) => games.reduce((a, g, i) => a + f(g, i), 0) / n, n1 = (v) => String(Math.round(v * 10) / 10);
   const levels = GE_LEVELS.map((name, lv) => { const d = lv - 1, pool = lv ? avg((g) => left(g, d, 0)) : null;
@@ -940,6 +939,24 @@ const geMed = (v) => { const a = [...v].sort((x, y) => x - y), n = a.length; ret
 const ge1 = (x) => x == null ? '–' : String(Math.round(x * 10) / 10);
 const GE_LEVELS = ['Abyss Lurker', 'Difficulty 1', 'Difficulty 2', 'Difficulty 3'];
 const GE_BUILDS = [['Beast', 'Beast 4 or more, Fighter 2 or less'], ['Beast → Arcane spirits', 'Beast 4 or more, Fighter 2 or less, and 2 or more Arcane Abyss spirits held'], ['Fighter + Beast', 'Fighter 3 or more and Beast 3 or more'], ['Fighter + Elementalist', 'Fighter 3 or more and Elementalist 2 or more'], ['F + E with Mystic / Cursed', 'Fighter 3 or more, Elementalist 2 or more, and Mystic 3 or Cursed Spirit 4'], ['No clear build', 'None of the above']];
+/** The level (0 Abyss Lurker, 1 to 3 the Difficulty) of a monster by its name, learned from the fights of this test; else by its full Barrier. */
+function geLevelOf(name, maxBarrier) {
+  if (name === 'Abyss Lurker') return 0;
+  if (!GE.lvMap) { GE.lvMap = new Map(); for (const g of GE.data.games) for (const s of g.seats) for (const p of s.rounds) for (const a of p.acts ?? []) { const m = /^Fight (.+?) \(Difficulty (\d)/.exec(a.t); if (m) GE.lvMap.set(m[1], +m[2]); } }
+  return GE.lvMap.get(name) ?? (maxBarrier <= 4 ? 1 : maxBarrier <= 11 ? 2 : 3);
+}
+/** The levels of the monsters a player defeated without a battle in one round (the Abyssal Execution power). */
+function geExecLevels(p) {
+  const out = [];
+  for (const a of p.acts ?? []) for (const x of a.g ?? []) { const m = /Defeat (.+?) \(Barrier \d+\/(\d+)\) without a battle/.exec(x); if (m) out.push(geLevelOf(m[1], +m[2])); }
+  return out;
+}
+/** A player's kills in the whole game by level [Abyss Lurker, Difficulty 1, 2, 3]: fights won and cards defeated without a battle. */
+function geSeatKills(s) {
+  const k = [0, 0, 0, 0];
+  for (const p of s.rounds) { for (const a of p.acts ?? []) { const m = /^Fight (.+?) \(Difficulty (\d)/.exec(a.t); if (m && (a.g ?? []).includes('Defeated it.')) k[m[1] === 'Abyss Lurker' ? 0 : +m[2]]++; } for (const lv of geExecLevels(p)) k[lv]++; }
+  return k;
+}
 /** The build of a player, by the traits they reached (an index into GE_BUILDS). */
 function geKind(s) {
   const arc = GE.arcSet ??= new Set(GE.data.arcane ?? []);
@@ -960,6 +977,10 @@ function geStats(games) {
     const e = lv[m[1] === 'Abyss Lurker' ? GE_LEVELS[0] : 'Difficulty ' + m[2]]; if (!e) continue;
     e.f++; if ((a.g ?? []).includes('Defeated it.')) { e.k++; e.kr += p.r; } if ((a.g ?? []).some((x) => /^Corrupted/.test(x))) e.cor++;
   }
+  for (const g of games) for (const s of g.seats) for (const p of s.rounds) for (const d of geExecLevels(p)) { const e = lv[GE_LEVELS[d]]; e.k++; e.kr += p.r; } // defeated without a battle (Abyssal Execution)
+  // Kills by finishing place (1st to 4th), finished games: the players of that place and their kills by level.
+  const places = ORD.map(() => ({ n: 0, k: [0, 0, 0, 0] }));
+  for (const g of done) for (const s of g.seats) { const e = places[(s.place ?? 0) - 1]; if (!e) continue; e.n++; geSeatKills(s).forEach((v, i) => { e.k[i] += v; }); }
   const avg = (v) => v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
   const left = [0, 1, 2].map((d) => avg(games.map((g) => g.table?.at(-1)?.m?.[d]).filter((x) => x != null)));
   const start = [0, 1, 2].map((d) => avg(games.map((g) => g.table?.[0]?.m?.[d]).filter((x) => x != null)));
@@ -981,7 +1002,7 @@ function geStats(games) {
   // Awakened Arcane Abyss spirits: for every player the most they had awake (face-up) at one time, since a sacrifice can take one away again.
   const arcSet = GE.arcSet ??= new Set(GE.data.arcane ?? []);
   const arcane = use.flatMap((g) => g.seats.map((s) => Math.max(0, ...s.rounds.map((p) => (p.sp ?? []).filter((x) => arcSet.has(x.n) && !x.d).length))));
-  return { n: games.length, done: done.length, soFar: !done.length, rounds, gaps, lead, src, status, lv, left, start, first30, fights, builds, all, winners, blood, full, arcane, avg, seats: use.reduce((t, g) => t + g.seats.length, 0) };
+  return { n: games.length, done: done.length, soFar: !done.length, rounds, gaps, lead, src, status, lv, places, left, start, first30, fights, builds, all, winners, blood, full, arcane, avg, seats: use.reduce((t, g) => t + g.seats.length, 0) };
 }
 function geSummary() {
   const meta = GE.index.find((x) => x.setup === GE.setup), games = GE.game ? [GE.data.games[GE.game - 1]].filter(Boolean) : GE.data.games;
@@ -1015,6 +1036,9 @@ function geSummary() {
     <section class="gsec"><h2>In detail</h2>
     <div><h3>Where points come from <span class="tag ${verdict(splitOk)}">${t.soFar ? '' : splitOk ? 'on target' : 'off target'}</span></h3>
       <div class="gsum-bars">${split.map(([name, now, goal]) => `<span>${name}</span><div class="trk"><i style="width:${Math.max(.5, now)}%"></i><u style="left:${goal}%" title="Target ${goal} %"></u></div><b>${ge1(now)} %</b><small>target ${goal} %</small>`).join('')}</div></div>
+    ${t.done ? `<div><h3>Monster kills by finishing place</h3>
+      <table class="gsum-t"><thead><tr><th title="Where the player finished in their game; players who tie share a place">Place</th><th>Players</th>${GE_LEVELS.map((k) => `<th title="${k} cards killed, average per player of that place">${k.replace('Difficulty', 'Diff.').replace('Abyss ', '')}</th>`).join('')}<th title="All kills, average per player of that place">All</th></tr></thead><tbody>${t.places.map((e, i) => e.n ? `<tr><td>${ORD[i]}</td><td>${e.n}</td>${e.k.map((v) => `<td title="${v} kills by ${e.n} players">${ge1(v / e.n)}</td>`).join('')}<td>${ge1(e.k.reduce((a, b) => a + b, 0) / e.n)}</td></tr>` : '').join('')}</tbody></table>
+      <div class="gsum-note" style="margin-top:8px">Kills per player, finished games. A kill is a fight won or a card defeated without a battle.</div></div>` : ''}
     <div><h3>Builds and their points a round</h3>
       <table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Average points at the end">Points</th><th title="Points a round in rounds 1 to 8">Rounds <span class="nb">1–8</span></th><th title="Points a round in rounds 9 to 16"><span class="nb">9–16</span></th><th title="Points a round from round 17 on"><span class="nb">17 on</span></th></tr></thead><tbody>${GE_BUILDS.map(([name, tip], i) => t.builds[i].n ? bRow(name, t.builds[i], tip) : '').join('')}${bRow('All players', t.all)}${t.winners.n ? bRow('Winners', t.winners) : ''}</tbody></table></div>
     <div><h3>Dice at the end</h3>
