@@ -504,6 +504,28 @@ let geView = 'classes'; try { geView = localStorage.getItem('geView') === 'board
 const AVG = { off: 'Off', place: 'By finishing place', seat: 'By turn order' };
 let geAvg = 'off'; try { const v = localStorage.getItem('geAvg'); if (v in AVG) geAvg = v; } catch {}
 const ORD = ['1st', '2nd', '3rd', '4th'];
+// Line smoothing on every graph (kept between visits): off, curved lines through the same values, or each value replaced by the
+// average of the rounds around it (3 or 5 rounds, drawn curved). The numbers on hover and at the line ends stay the real values.
+const SMOOTH = { off: 'Off', curve: 'Curved lines', a3: '3-round average', a5: '5-round average' };
+let geSmooth = 'off'; try { const v = localStorage.getItem('geSmooth'); if (v in SMOOTH) geSmooth = v; } catch {}
+/** The values as drawn. Under an average each is the mean of the rounds around it; the window shrinks toward both ends, so the first and the last value stay exact. */
+function smoothVals(v) {
+  const k = geSmooth === 'a3' ? 1 : geSmooth === 'a5' ? 2 : 0; if (!k) return v;
+  return v.map((_, i) => { const h = Math.min(k, i, v.length - 1 - i); let t = 0; for (let j = i - h; j <= i + h; j++) t += v[j]; return t / (2 * h + 1); });
+}
+/** The SVG path through the points [x, y], from index a to b: straight pieces, or with smoothing on a curve that never overshoots a value
+ *  (monotone cubic). The slopes come from the whole line, so a line drawn in pieces still joins smoothly. */
+function linePath(P, a = 0, b = P.length - 1) {
+  if (!P.length || b < a) return '';
+  const f = (n) => n.toFixed(1); let d = `M${f(P[a][0])} ${f(P[a][1])}`;
+  if (geSmooth === 'off' || P.length < 3) { for (let i = a + 1; i <= b; i++) d += `L${f(P[i][0])} ${f(P[i][1])}`; return d; }
+  const n = P.length, sec = [], t = [];
+  for (let i = 0; i < n - 1; i++) sec.push((P[i + 1][1] - P[i][1]) / ((P[i + 1][0] - P[i][0]) || 1));
+  for (let i = 0; i < n; i++) t.push(i === 0 ? sec[0] : i === n - 1 ? sec[n - 2] : sec[i - 1] * sec[i] <= 0 ? 0 : (2 * sec[i - 1] * sec[i]) / (sec[i - 1] + sec[i]));
+  for (let i = a; i < b; i++) { const dx = (P[i + 1][0] - P[i][0]) / 3;
+    d += `C${f(P[i][0] + dx)} ${f(P[i][1] + t[i] * dx)} ${f(P[i + 1][0] - dx)} ${f(P[i + 1][1] - t[i + 1] * dx)} ${f(P[i + 1][0])} ${f(P[i + 1][1])}`; }
+  return d;
+}
 // Slot to hex position, flat-top hexes, as the game lays the board out (src/lib/hex/gridConfig.ts): 4 is the centre.
 const HEX_SLOT = { 4: [0, 0], 1: [1, -1], 2: [1, 0], 3: [0, 1], 5: [-1, 1], 6: [-1, 0], 7: [0, -1] };
 function geBoard(p) {
@@ -589,6 +611,7 @@ function paintLines() {
       <span class="seg2" id="geMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${!GE.builds && !GE.mons && GE.metric === 'vp' ? 'on' : ''}" title="Each player's points by round">Points</button><button data-metric="builds" class="${GE.builds ? 'on' : ''}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${!GE.builds && !GE.mons && GE.metric === 'atk' ? 'on' : ''}" title="Each player's average damage of one attack with the dice held">Attack</button><button data-metric="mons" class="${GE.mons ? 'on' : ''}" title="Monsters killed and the pools draining, by round">Monsters</button></span>
       <label class="gf-f" title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value."><span>Averages</span><select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="gf-f" id="geAtkWrap" hidden title="What the attack lines count: every source of damage (the dice plus the flat damage of Beast), or the attack dice alone"><span>Attack counts</span><select id="geAtkSel"><option value="0" ${geAtkDice ? '' : 'selected'}>Dice and Beast</option><option value="1" ${geAtkDice ? 'selected' : ''}>Dice only</option></select></label>
+      <label class="gf-f" title="How the lines are drawn. Curved lines pass through the same values. An average replaces each value by the mean of the 3 or 5 rounds around it, which evens out round-to-round jumps. The numbers on hover and at the line ends are always the real values."><span>Smoothing</span><select id="geSmoothSel">${Object.entries(SMOOTH).map(([k, t]) => `<option value="${k}" ${geSmooth === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     </div>`;
   return `<div class="ge">
   <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-legend" id="geLegend">${GE_STATUS_LEGEND}</div><div class="ge-hint" id="geHint" hidden></div><div class="bd-tip" id="bdTip" hidden></div></div><aside class="ge-side" id="geSide"></aside></div></div>`;
@@ -599,6 +622,7 @@ function mountLines() {
   $('geMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; GE.builds = b.dataset.metric === 'builds'; GE.mons = b.dataset.metric === 'mons'; GE.metric = GE.builds || GE.mons ? 'vp' : b.dataset.metric; if (GE.builds || GE.mons) GE.sel = null;
     for (const x of $('geMetric').children) x.classList.toggle('on', x === b); geHover(null); bdLeave(); drawLines(); };
   $('geAtkSel').onchange = (e) => { geAtkDice = e.target.value === '1'; try { localStorage.setItem('geAtkDice', geAtkDice ? '1' : '0'); } catch {} bdLeave(); drawLines(); };
+  $('geSmoothSel').onchange = (e) => { geSmooth = e.target.value; try { localStorage.setItem('geSmooth', geSmooth); } catch {} bdLeave(); drawLines(); };
   $('geAvgSel').onchange = (e) => { geAvg = e.target.value; try { localStorage.setItem('geAvg', geAvg); } catch {} drawLines(); };
   $('geGame').onchange = (e) => { GE.game = Number(e.target.value); if (GE.sel && GE.game && GE.sel.gi !== GE.game) GE.sel = null; drawLines(); };
   const svg = $('geSvg');
@@ -663,18 +687,19 @@ function drawLines() {
   if (points) s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(GE.data.win_points))}" y2="${f(y(GE.data.win_points))}"/><text class="cap" x="${m.l + 6}" y="${f(y(GE.data.win_points) - 6)}">${GE.data.win_points} points wins</text>`;
   s += `<line class="cross" id="geCross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>`;
   const shown = geShown();
+  for (const l of GE.lines) l.dv = smoothVals(l.pts.map(gv)); // the values as drawn (the hover dot and the nearest-line search follow them)
   for (const l of [...shown].sort((a, b) => gv(a.pts.at(-1)) - gv(b.pts.at(-1)))) {
     // One piece per run of rounds with the same status. A piece runs on to the first point of the next status, so the colour changes at the round the status changed.
-    let pieces = '';
+    let pieces = ''; const P = l.dv.map((v, r) => [x(l.pts[r].r), y(v)]);
     for (let a = 0; a < l.pts.length;) { let b = a; while (b + 1 < l.pts.length && l.pts[b + 1].st === l.pts[a].st) b++;
-      const d = l.pts.slice(a, Math.min(b + 2, l.pts.length)).map((p, k) => `${k ? 'L' : 'M'}${f(x(p.r))} ${f(y(gv(p)))}`).join(''), key = stKey(l.pts[a].st);
+      const d = linePath(P, a, Math.min(b + 1, l.pts.length - 1)), key = stKey(l.pts[a].st);
       if (b > a || b + 1 < l.pts.length) pieces += `<path class="st-${key}" d="${d}"/>`;
       a = b + 1; }
-    s += `<g class="pl" data-i="${l.i}">${pieces}<circle class="st-${stKey(l.pts.at(-1).st)}" cx="${f(x(l.last))}" cy="${f(y(gv(l.pts.at(-1))))}" r="3"/></g>`;
+    s += `<g class="pl" data-i="${l.i}">${pieces}<circle class="st-${stKey(l.pts.at(-1).st)}" cx="${f(x(l.last))}" cy="${f(y(l.dv.at(-1)))}" r="3"/></g>`;
   }
   // Median of the players still in play at each round.
   const med = []; for (let r = 0; r <= xmax; r++) { const v = shown.filter((l) => l.last >= r).map((l) => gv(l.pts[r])).sort((a, b) => a - b); if (v.length < 2) break; med.push([r, (v[Math.floor((v.length - 1) / 2)] + v[Math.ceil((v.length - 1) / 2)]) / 2]); }
-  s += `<path class="med" d="${med.map(([r, v], k) => `${k ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('')}"/>${geAvgLines(shown, xmax, x, y, f, W - m.r)}<g id="geLabels"></g><circle class="dot" id="geDot" r="5.5" visibility="hidden"/>`;
+  s += `<path class="med" d="${linePath(smoothVals(med.map((p) => p[1])).map((v, k) => [x(med[k][0]), y(v)]))}"/>${geAvgLines(shown, xmax, x, y, f, W - m.r)}<g id="geLabels"></g><circle class="dot" id="geDot" r="5.5" visibility="hidden"/>`;
   svg.classList.toggle('avg', geAvg !== 'off');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
   geFocus();
@@ -689,7 +714,7 @@ function geAvgLines(shown, xmax, x, y, f, right) {
     rows.push({ name: geAvg === 'place' ? ORD[k - 1] : `Player ${k}`, short: geAvg === 'place' ? ORD[k - 1] : `P${k}`, pts, n: of.length, ly: y(pts.at(-1)) }); }
   // Labels at the right edge, moved apart when two lines end close together.
   const byY = [...rows].sort((a, b) => a.ly - b.ly); for (let i = 1; i < byY.length; i++) byY[i].ly = Math.max(byY[i].ly, byY[i - 1].ly + 14);
-  return `<g id="geAvg">${rows.map((o) => { const d = o.pts.map((v, r) => `${r ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('');
+  return `<g id="geAvg">${rows.map((o) => { const d = linePath(smoothVals(o.pts).map((v, r) => [x(r), y(v)]));
     return `<path class="halo" d="${d}"/><path d="${d}"><title>Average of the ${o.n} ${geAvg === 'place' ? `players who finished ${o.name}` : `players in seat ${o.name.slice(-1)}`}</title></path><text class="lab" x="${f(Math.min(x(end) + 8, right + 8))}" y="${f(o.ly + 4)}">${GE.geo?.slim ? o.short : o.name} · ${(Math.round(o.pts.at(-1) * 10) / 10)}</text>`; }).join('')}</g>`;
 }
 /** The line nearest to the pointer (within `reach` px: 16 for a mouse, 26 for a finger), with the round under the pointer. With a game in focus its own lines win. */
@@ -697,7 +722,7 @@ function geNearest(mx, my, reach = 16) {
   const g = GE.geo; if (!g) return null;
   const rr = g.xinv(mx), find = (list) => { let best = null;
     for (const l of list) { if (rr < -0.6 || rr > l.last + 0.6) continue; const c = Math.max(0, Math.min(l.last, rr)), a = Math.floor(c), b = Math.min(l.last, a + 1);
-      const d = Math.abs(g.y(gv(l.pts[a]) + (gv(l.pts[b]) - gv(l.pts[a])) * (c - a)) - my); if (d <= reach && (!best || d < best.d)) best = { l, d, r: Math.round(c) }; }
+      const va = l.dv?.[a] ?? gv(l.pts[a]), vb = l.dv?.[b] ?? gv(l.pts[b]), d = Math.abs(g.y(va + (vb - va) * (c - a)) - my); if (d <= reach && (!best || d < best.d)) best = { l, d, r: Math.round(c) }; }
     return best; };
   const shown = geShown();
   return (GE.sel && find(shown.filter((l) => l.gi === GE.sel.gi))) || find(shown);
@@ -726,7 +751,7 @@ function geFocus() {
   const dot = svg.querySelector('#geDot'), cross = svg.querySelector('#geCross'), labels = svg.querySelector('#geLabels');
   if (!l) { dot.setAttribute('visibility', 'hidden'); cross.setAttribute('visibility', 'hidden'); labels.innerHTML = ''; paintSide(); return; }
   svg.querySelector('.med').before(svg.querySelector(`.pl[data-i="${l.i}"]`)); // the chosen line on top of the others
-  const p = l.pts[GE.r], px = g.x(p.r), py = g.y(gv(p));
+  const p = l.pts[GE.r], px = g.x(p.r), py = g.y(l.dv?.[GE.r] ?? gv(p));
   dot.setAttribute('cx', px); dot.setAttribute('cy', py); dot.setAttribute('visibility', 'visible'); dot.style.fill = `var(--st-${stKey(p.st)})`;
   cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
   // Direct labels at the ends of the four lines of this game (seat and final points), kept 14 px apart.
@@ -802,7 +827,7 @@ function drawBuilds() {
   s += `<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
   if (points) s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(S.win))}" y2="${f(y(S.win))}"/><text class="cap" x="${m.l + 6}" y="${f(y(S.win) - 6)}">${S.win} points wins</text>`;
   // "All players" under the builds, then the builds from the largest group down, so the small groups stay on top.
-  for (const row of [...S.list].sort((a, b) => (b.all ? 1 : 0) - (a.all ? 1 : 0) || b.seats.length - a.seats.length)) { const d = row.pts.map((v, r) => `${r ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('');
+  for (const row of [...S.list].sort((a, b) => (b.all ? 1 : 0) - (a.all ? 1 : 0) || b.seats.length - a.seats.length)) { row.dv = smoothVals(row.pts); const d = linePath(row.dv.map((v, r) => [x(r), y(v)]));
     s += row.all ? `<path class="bd-all" d="${d}"/>` : `<path class="bd-halo" d="${d}"/><path class="bd-line" style="stroke:${row.color}" d="${d}"/>`; }
   // Labels at the right edge (name and final value; the value alone on a narrow screen), moved apart where lines end close together.
   const ends = S.list.map((row) => ({ row, y: y(row.pts.at(-1)) })).sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
@@ -817,7 +842,7 @@ function bdMove(e) {
   const g = BD.geo, svg = $('geSvg'), tip = $('bdTip'); if (!g || !svg.querySelector('#bdHover')) return;
   const b = svg.getBoundingClientRect(), r = Math.max(0, Math.min(g.end, Math.round(g.xinv(e.clientX - b.left)))), px = g.x(r);
   svg.querySelector('#bdCross').setAttribute('x1', px); svg.querySelector('#bdCross').setAttribute('x2', px); svg.querySelector('#bdHover').setAttribute('visibility', 'visible');
-  for (const row of BD.series.list) { const d = svg.querySelector(`#bdDot${row.k < 0 ? 'A' : row.k}`); d.setAttribute('cx', px); d.setAttribute('cy', g.y(row.pts[r])); }
+  for (const row of BD.series.list) { const d = svg.querySelector(`#bdDot${row.k < 0 ? 'A' : row.k}`); d.setAttribute('cx', px); d.setAttribute('cy', g.y((row.dv ?? row.pts)[r])); }
   const S = BD.series, rows = S.mons ? S.list : [...S.list].sort((a, c) => c.pts[r] - a.pts[r]); // the monsters keep their order (Lurker, Difficulty 1 to 3)
   tip.innerHTML = `<b>Round ${r} · ${S.tip ?? (BD.metric === 'vp' ? 'points' : geAtkDice ? 'attack from dice' : 'attack')}</b>${rows.map((row) => `<div>${bdSw(row)}<span>${esc(row.name)}</span><b>${row.tip ? row.tip(r) : (Math.round(row.pts[r] * 10) / 10).toFixed(1)}</b></div>`).join('')}`;
   tip.hidden = false; const w = tip.offsetWidth, h = tip.offsetHeight; tip.style.left = Math.max(4, px + 14 + w > g.W ? px - 14 - w : px + 14) + 'px'; tip.style.top = Math.max(4, Math.min(g.H - h - 4, e.clientY - b.top - h / 2)) + 'px';
@@ -879,7 +904,7 @@ function drawMonsters() {
   for (let r = 0; r <= S.end; r += S.end > 30 ? 10 : 5) s += `<line class="grid" x1="${f(x(r))}" x2="${f(x(r))}" y1="${H - m.b}" y2="${H - m.b + 4}"/><text x="${f(x(r))}" y="${H - m.b + 17}" text-anchor="middle">${r}</text>`;
   s += `<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
   for (const c of caps) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${f(y(c.pool))}" y2="${f(y(c.pool))}" style="stroke:${c.color};stroke-width:1;stroke-dasharray:2 5;opacity:.7"/><text class="cap" x="${m.l + 6}" y="${f(y(c.pool) - 5)}">${Math.round(c.pool * 10) / 10} ${esc(c.name)} cards in a game</text>`;
-  for (const row of S.list) { const d = row.pts.map((v, r) => `${r ? 'L' : 'M'}${f(x(r))} ${f(y(v))}`).join('');
+  for (const row of S.list) { row.dv = smoothVals(row.pts); const d = linePath(row.dv.map((v, r) => [x(r), y(v)]));
     s += row.all ? `<path class="bd-all" style="stroke:${row.color};opacity:1" d="${d}"/>` : `<path class="bd-halo" d="${d}"/><path class="bd-line" style="stroke:${row.color}" d="${d}"/>`; }
   // Labels at the right edge (level and final number; the number alone on a narrow screen), moved apart where lines end close together.
   const ends = S.list.map((row) => ({ row, y: y(row.pts.at(-1)) })).sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 15);
