@@ -37,6 +37,7 @@ import type {
 import { buildLocationInteractions, matchRewardCost } from './locationInteractions';
 import { runesAreWild } from './effects/matMatch';
 import { ruleValue } from './rules';
+import { abyssDrawBlockedBy } from './abyssDrawOrder';
 import { navigationPowerBlockers } from './navigationPowerEffects';
 
 /** Pure mirror of activePlayerForActor's null-ness (no mutating ensurePlayerCollections backfill). */
@@ -213,7 +214,8 @@ export function canApply(
 				me.monsterDrawRound !== state.round &&
 				(command.permanent
 					? (catalog?.monsters ?? []).some((m) => m.permanent)
-					: state.bags.monsters.contents.some((entry) => entry.difficulty === command.difficulty))
+					: state.bags.monsters.contents.some((entry) => entry.difficulty === command.difficulty) &&
+						!(actor.seatColor && abyssDrawBlockedBy(catalog, state, actor.seatColor)))
 			);
 		}
 		case 'keepMonsterCard': {

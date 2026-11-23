@@ -57,6 +57,7 @@ import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
 import { cursedSpiritDiceTier, pvpAllowedAt, ruleValue } from './rules';
+import { abyssDrawBlockedBy } from './abyssDrawOrder';
 import {
 	bagForSpiritCost,
 	deckCopiesForCost,
@@ -3588,6 +3589,9 @@ function reduceCommand(
 				active.player.monsterDrawRound = state.round;
 				return success(state);
 			}
+			// Rule `abyssDrawByPoints`: the players at the Abyss draw from the decks fewest points first.
+			const ahead = abyssDrawBlockedBy(catalog, state, active.seatColor);
+			if (ahead) return failure('abyss_draw_wait', `${ahead} had fewer points when the round began and draws before you.`);
 			if (!drawMonsterCardsForPlayer(state, active.player, command.difficulty, catalog)) return failure('monster_deck_empty', `The Difficulty ${command.difficulty} deck is empty.`);
 			active.player.monsterDrawRound = state.round;
 			return success(state);

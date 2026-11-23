@@ -159,6 +159,11 @@
  *   1 / 2 / 3 / 5 attack dice at 2 / 3 / 4 / 5 Elementalists, the lowest die first. It overrides
  *   `elementalistMethods`: a kill, a Cultivate, a Spirit World Summon and Arcane Blood upgrade nothing.
  *   See `elementalistRestUpgrades` in classes/elementalist.ts.
+ * - abyssDrawByPoints (default false; Michael, 2026-11-22: "have least points to greatest player draw in
+ *   that order"): true ⇒ the players at the Arcane Abyss draw from the monster decks one after the
+ *   other, the one with the fewest points at the start of the round first (equal points: table order,
+ *   starting one seat later each round). A player waits until those ahead have drawn, hold 3 cards or
+ *   have ended their Location turn. The permanent monster needs no turn. See abyssDrawOrder.ts.
  * - alchemistOncePerRound (default false; Michael, 2026-11-22: "arcane alchemist is just one time per
  *   turn"): only read under `alchemistAugmentToArcane`; true ⇒ a player converts at most one Spirit
  *   Augment a round, however often they Cultivate in it. See classes/arcMage.ts.
@@ -298,6 +303,7 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	enchantedTwoThirds: false,
 	elementalistRest1235: false,
 	alchemistOncePerRound: false,
+	abyssDrawByPoints: false,
 	elementalistOnCultivate: false,
 	elementalist5NeedsRelic: false,
 	fighterInitiative: false,

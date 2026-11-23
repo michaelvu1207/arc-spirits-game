@@ -19,6 +19,7 @@
  * without a provider call unless `askOnForced` is set.
  */
 
+import { abyssDrawBlockedBy } from '../abyssDrawOrder';
 import { awakenedClassCounts } from '../effects/apply';
 import { spiritsByOrigin } from '../effects/relicTools';
 import { applyDeadlineAdvance, applyGameCommand } from '../runtime';
@@ -781,11 +782,18 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 			}
 
 			// Otherwise round-robin over the seats that must act, one decision at a time.
+			// Rule `abyssDrawByPoints`: a seat that waits for its turn to draw monster cards (and has
+			// nothing to answer) is asked after the seats it waits for, so it is not asked to end a
+			// turn in which it could not draw yet.
+			const waiting = candidates.filter(
+				(s) => abyssDrawBlockedBy(catalog, state, s) !== null && (state.players[s]?.pendingDecisions?.length ?? 0) === 0
+			);
+			const askable = waiting.length && waiting.length < candidates.length ? candidates.filter((s) => !waiting.includes(s)) : candidates;
 			const order = state.activeSeats;
-			let seat = candidates[0];
+			let seat = askable[0];
 			for (let k = 0; k < order.length; k++) {
 				const s = order[(rr + k) % order.length];
-				if (candidates.includes(s)) {
+				if (askable.includes(s)) {
 					seat = s;
 					rr = (order.indexOf(s) + 1) % order.length;
 					break;

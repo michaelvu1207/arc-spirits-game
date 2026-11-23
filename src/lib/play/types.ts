@@ -914,6 +914,8 @@ export interface PlayRuleSwitches {
 	enchantedTwoThirds?: boolean;
 	/** Elementalist upgrades on Rest only, 1 / 2 / 3 / 5 dice at 2 / 3 / 4 / 5 Elementalists (Michael, 2026-11-22). */
 	elementalistRest1235?: boolean;
+	/** At the Arcane Abyss the players draw from the monster decks one after the other, fewest points first (Michael, 2026-11-22). See abyssDrawOrder.ts. */
+	abyssDrawByPoints?: boolean;
 	/** Under `alchemistAugmentToArcane`: Arcane Alchemist converts at most one augment a round (Michael, 2026-11-22: "just one time per turn"). */
 	alchemistOncePerRound?: boolean;
 	/** Under `elementalistRest1235`: the upgrades come on Cultivate, not on Rest (Michael, 2026-11-22: "so it doesn't conflict with fighters"). */
