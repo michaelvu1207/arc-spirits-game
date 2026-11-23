@@ -914,6 +914,8 @@ export interface PlayRuleSwitches {
 	enchantedTwoThirds?: boolean;
 	/** Elementalist upgrades on Rest only, 1 / 2 / 3 / 5 dice at 2 / 3 / 4 / 5 Elementalists (Michael, 2026-11-22). */
 	elementalistRest1235?: boolean;
+	/** Under `alchemistAugmentToArcane`: Arcane Alchemist converts at most one augment a round (Michael, 2026-11-22: "just one time per turn"). */
+	alchemistOncePerRound?: boolean;
 	/** Under `elementalistRest1235`: the upgrades come on Cultivate, not on Rest (Michael, 2026-11-22: "so it doesn't conflict with fighters"). */
 	elementalistOnCultivate?: boolean;
 	/** Under `elementalistRest1235`: the step at 5 Elementalists needs a held relic (Michael, 2026-11-22). */
@@ -1250,6 +1252,11 @@ export interface PrivatePlayerState {
 	 * `cultivatorRelicOnce` rule (catalog.rules), so games without that rule never carry it.
 	 */
 	cultivatorRelicGained?: boolean;
+	/**
+	 * The round of this player's last Arcane Alchemist conversion. Written only under the
+	 * `alchemistOncePerRound` rule (catalog.rules), so games without that rule never carry it.
+	 */
+	alchemistConvertedRound?: number;
 	/**
 	 * The round in which Summoner last paid its 4 VP. Written only under the
 	 * `summonerOncePerRound` rule, so games without that rule never carry it.

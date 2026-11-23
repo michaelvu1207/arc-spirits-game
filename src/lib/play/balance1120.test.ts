@@ -21,6 +21,7 @@ import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WE
 import { applyGameCommand, arcaneBloodFor, createLobbyState } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
+import { ALCHEMIST_AUGMENT_KIND, decisions as alchemistDecisions } from './effects/classes/arcMage';
 import { cursedSpiritDiceTier, elementalistUpgradeAction, fairyDiceTier, parseRules, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
 import { buildRulesBrief } from './agents/rulesBrief';
 import { enterBenefits } from './phases';
@@ -663,6 +664,52 @@ describe('elementalistOnCultivate: the ladder upgrades on Cultivate, not on Rest
 		expect(text(R, 2)).toBe('When you Cultivate, upgrade an attack dice.');
 		expect(text(R, 4)).toBe('When you Cultivate, upgrade an attack dice 3 times.');
 		expect(text({ ...R, elementalist5NeedsRelic: true }, 5)).toBe('When you Cultivate, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.');
+	});
+});
+
+describe('alchemistOncePerRound: Arcane Alchemist converts one augment a round (Michael, 2026-11-22)', () => {
+	const aug = (slot: number, runeId: string) => ({ spiritSlotIndex: slot, runeId, className: 'Beast', classId: 'beast' }) as never;
+	const setup = (rules: PlayRules) => {
+		const p = makePlayer({ spirits: [spirit(1, { 'Arcane Alchemist': 1 })], spiritAugmentAttachments: [aug(1, 'r1'), aug(1, 'r2')] });
+		const state = makeState(p), catalog = withRules(rules);
+		state.round = 3;
+		const cultivate = () => { p.pendingDecisions = []; const log: string[] = []; applyCultivate(state, 'Red', log, { catalog }); return p.pendingDecisions.filter((d) => d.kind === ALCHEMIST_AUGMENT_KIND).length; };
+		const convert = (id: string) => alchemistDecisions[ALCHEMIST_AUGMENT_KIND]!({ state, player: p, catalog, log: [], seat: 'Red' } as never, id);
+		return { p, state, cultivate, convert };
+	};
+	const arcane = (p: { attackDice: { tier: DiceTier }[] }) => p.attackDice.filter((d) => d.tier === 'arcane').length;
+	it('after a conversion a second Cultivate in the same round offers nothing; the next round offers again', () => {
+		const { p, state, cultivate, convert } = setup({ alchemistAugmentToArcane: true, alchemistOncePerRound: true });
+		expect(cultivate()).toBe(1);
+		convert('aug:1:r1');
+		expect(arcane(p)).toBe(1);
+		expect(cultivate()).toBe(0);
+		convert('aug:1:r2'); // a stale card answered late converts nothing
+		expect(arcane(p)).toBe(1);
+		expect(p.spiritAugmentAttachments).toHaveLength(1);
+		state.round += 1;
+		expect(cultivate()).toBe(1);
+		convert('aug:1:r2');
+		expect(arcane(p)).toBe(2);
+	});
+	it('declining keeps the offer for a later Cultivate of the round', () => {
+		const { p, cultivate, convert } = setup({ alchemistAugmentToArcane: true, alchemistOncePerRound: true });
+		expect(cultivate()).toBe(1);
+		convert('no');
+		expect(arcane(p)).toBe(0);
+		expect(cultivate()).toBe(1);
+	});
+	it('without the rule every Cultivate offers a conversion, and the text says once a round only with it', () => {
+		const { p, cultivate, convert } = setup({ alchemistAugmentToArcane: true });
+		expect(cultivate()).toBe(1);
+		convert('aug:1:r1');
+		expect(cultivate()).toBe(1);
+		convert('aug:1:r2');
+		expect(arcane(p)).toBe(2);
+		expect(p.alchemistConvertedRound).toBeUndefined();
+		const text = (rules: PlayRules) => ruleAdjustedClassSchema(withRules(rules), 'Arcane Alchemist', [{ count: 1, effects: [{ type: 'benefit', description: 'old' }] }] as never)![0].effects?.[0].description;
+		expect(text({ alchemistAugmentToArcane: true })).toBe('When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.');
+		expect(text({ alchemistAugmentToArcane: true, alchemistOncePerRound: true })).toContain('(once a round)');
 	});
 });
 

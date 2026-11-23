@@ -159,6 +159,9 @@
  *   1 / 2 / 3 / 5 attack dice at 2 / 3 / 4 / 5 Elementalists, the lowest die first. It overrides
  *   `elementalistMethods`: a kill, a Cultivate, a Spirit World Summon and Arcane Blood upgrade nothing.
  *   See `elementalistRestUpgrades` in classes/elementalist.ts.
+ * - alchemistOncePerRound (default false; Michael, 2026-11-22: "arcane alchemist is just one time per
+ *   turn"): only read under `alchemistAugmentToArcane`; true ⇒ a player converts at most one Spirit
+ *   Augment a round, however often they Cultivate in it. See classes/arcMage.ts.
  * - elementalistOnCultivate (default false; Michael, 2026-11-22: "move elementalists to on cultivate instead
  *   of on rest so it doesn't conflict with fighters"): only read under `elementalistRest1235`; true ⇒ the
  *   ladder's upgrades come when the player Cultivates, and a Rest upgrades nothing. A relic taken on a
@@ -294,6 +297,7 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	weakLowDice: false,
 	enchantedTwoThirds: false,
 	elementalistRest1235: false,
+	alchemistOncePerRound: false,
 	elementalistOnCultivate: false,
 	elementalist5NeedsRelic: false,
 	fighterInitiative: false,
@@ -629,7 +633,10 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		when: true,
 		className: 'Arcane Alchemist',
 		count: 1,
-		text: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.'
+		text: (c) =>
+			ruleValue(c, 'alchemistOncePerRound')
+				? 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice (once a round).'
+				: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.'
 	},
 	{
 		rule: 'kingPureOnly',
