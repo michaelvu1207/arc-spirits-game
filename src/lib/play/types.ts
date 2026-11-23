@@ -805,6 +805,8 @@ export interface RuleNumbers {
 	diceFaces?: Partial<Record<DiceTier, number[]>>;
 	/** Under `elementalistRest1235`: upgrades per Rest at 2 / 3 / 4 / 5 Elementalists (default 1, 2, 3, 5). See `elementalistRestUpgrades` in classes/elementalist.ts. */
 	elementalistRest?: [number, number, number, number];
+	/** Under `elementalist5NeedsRelic`: upgrades at 5 Elementalists for a player who holds no relic (default: the number at 4 Elementalists). */
+	elementalistNoRelic?: number;
 }
 
 /** rules.json: the rule switches plus the optional rule numbers. */

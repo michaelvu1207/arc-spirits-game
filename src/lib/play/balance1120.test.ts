@@ -752,6 +752,26 @@ describe('rules.json numbers: dice faces and the Elementalist ladder from the da
 		// Without the switch the numbers do nothing.
 		expect(upgraded({ numbers: { elementalistRest: [9, 9, 9, 9] } }, 3)).toBe(2);
 	});
+	it('elementalistNoRelic sets the number at 5 Elementalists without a relic (Michael, 2026-11-22: 15 attack after 5 Cultivates)', () => {
+		const G: PlayRules = { elementalistRest1235: true, elementalistOnCultivate: true, elementalist5NeedsRelic: true, numbers: { elementalistNoRelic: 4 } };
+		const cultivated = (rules: PlayRules, n: number, mats: never[] = []) => {
+			const p = makePlayer({ attackDice: tenBasic(), spirits: [spirit(1, { Elementalist: n })], mats });
+			applyCultivate(makeState(p), 'Red', [], { catalog: withRules(rules) });
+			return p.attackDice.filter((d) => d.tier !== 'basic').length;
+		};
+		expect([2, 3, 4, 5].map((n) => cultivated(G, n))).toEqual([1, 2, 3, 4]);
+		expect(cultivated(G, 5, [relic])).toBe(5);
+		expect(cultivated(G, 4, [relic])).toBe(3);
+		expect(text(G, 5)).toBe('When you Cultivate, upgrade an attack dice 5 times if you have a relic (any relic); 4 times if you have none.');
+		// Ten Basic dice are ten Exalted dice after 5 Cultivates without a relic, 4 with one.
+		const p = makePlayer({ attackDice: tenBasic(), spirits: [spirit(1, { Elementalist: 5 })] });
+		for (let i = 0; i < 5; i++) applyCultivate(makeState(p), 'Red', [], { catalog: withRules(G) });
+		expect(p.attackDice.every((d) => d.tier === 'exalted')).toBe(true);
+		// Without the relic rule the number is not read; a bad one is reported.
+		expect(cultivated({ elementalistRest1235: true, elementalistOnCultivate: true, numbers: { elementalistNoRelic: 0 } }, 5)).toBe(5);
+		expect(parseRules({ numbers: { elementalistNoRelic: 2.5 } }).problems).toHaveLength(1);
+		expect(parseRules({ numbers: { elementalistNoRelic: 4 } }).rules).toEqual({ numbers: { elementalistNoRelic: 4 } });
+	});
 	it('without numbers the text and the ladder are as before', () => {
 		expect(text({ elementalistRest1235: true, elementalist5NeedsRelic: true }, 5)).toBe('On Rest, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.');
 		expect(text({ elementalistRest1235: true }, 2)).toBe('On Rest, upgrade an attack dice.');

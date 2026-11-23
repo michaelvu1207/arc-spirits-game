@@ -177,7 +177,8 @@
  * - numbers (not a switch; Michael, 2026-11-22: "tweak the numbers for dice, and elementalist upgrade"): an
  *   optional object of rule numbers. `diceFaces` {tier: faces} replaces the faces of those attack-dice
  *   tiers under any dice switch; `elementalistRest` [a, b, c, d] replaces 1 / 2 / 3 / 5 under
- *   `elementalistRest1235`. Absent ⇒ the numbers the switches give. See `parseRuleNumbers` below.
+ *   `elementalistRest1235`; `elementalistNoRelic` n is the number at 5 Elementalists without a relic
+ *   under `elementalist5NeedsRelic` (default: the number at 4). Absent ⇒ the numbers the switches give. See `parseRuleNumbers` below.
  * - fighterInitiative (default false; Michael, 2026-11-20): true ⇒ in combat Fighter gives 1 initiative
  *   per Fighter trait, up to 5, starting at one trait (a new first breakpoint; the dice on Rest are
  *   unchanged). The printed text is in the class data. See classes/fighter.ts.
@@ -444,8 +445,11 @@ function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undef
 		} else if (name === 'elementalistRest') {
 			if (!wholeNumbers(value, 4, 4)) problems.push(`rules: numbers.elementalistRest must be 4 whole numbers (upgrades per Rest at 2, 3, 4, 5 Elementalists), got ${JSON.stringify(value)}`);
 			else numbers.elementalistRest = [value[0], value[1], value[2], value[3]];
+		} else if (name === 'elementalistNoRelic') {
+			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.elementalistNoRelic must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
+			else numbers.elementalistNoRelic = value as number;
 		} else {
-			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest)`);
+			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic)`);
 		}
 	}
 	return Object.keys(numbers).length ? numbers : undefined;
@@ -463,6 +467,14 @@ export function elementalistRestLadder(catalog: Pick<PlayCatalog, 'rules'> | nul
 export function elementalistUpgradeAction(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): 'rest' | 'cultivate' | null {
 	if (!ruleValue(catalog, 'elementalistRest1235')) return null;
 	return ruleValue(catalog, 'elementalistOnCultivate') ? 'cultivate' : 'rest';
+}
+
+/**
+ * Under `elementalistRest1235` with `elementalist5NeedsRelic`: the upgrades of 5 Elementalists for a
+ * player who holds no relic: the catalog's `numbers.elementalistNoRelic`, else the number at 4.
+ */
+export function elementalistNoRelicUpgrades(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
+	return catalog?.rules?.numbers?.elementalistNoRelic ?? elementalistRestLadder(catalog)[2];
 }
 
 /** The value of one switch for this catalog (its default when the catalog has no rules). */
@@ -497,7 +509,7 @@ function elementalistRestText(catalog: Pick<PlayCatalog, 'rules'> | null | undef
 	const ladder = elementalistRestLadder(catalog);
 	const n = ladder[count - 2] ?? 0;
 	const when = elementalistUpgradeAction(catalog) === 'cultivate' ? 'When you Cultivate' : 'On Rest';
-	if (count === 5 && needsRelic) return `${when}, ${upgradeWords(n)} if you have a relic (any relic); ${timesWords(ladder[2])} if you have none.`;
+	if (count === 5 && needsRelic) return `${when}, ${upgradeWords(n)} if you have a relic (any relic); ${timesWords(elementalistNoRelicUpgrades(catalog))} if you have none.`;
 	return `${when}, ${upgradeWords(n)}.`;
 }
 

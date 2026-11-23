@@ -1,5 +1,5 @@
 import { isRelic } from '../../locationInteractions';
-import { elementalistRestLadder, elementalistUpgradeAction, ruleValue } from '../../rules';
+import { elementalistNoRelicUpgrades, elementalistRestLadder, elementalistUpgradeAction, ruleValue } from '../../rules';
 import type { PlayCatalog, PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { EffectCombatInfo, EffectContext } from '../context';
@@ -48,7 +48,9 @@ export function elementalistRestUpgrades(
 	count: number,
 	player: Pick<PrivatePlayerState, 'mats'>
 ): number {
-	const capped = count >= 5 && ruleValue(catalog, 'elementalist5NeedsRelic') && !holdsRelic(player) ? 4 : Math.min(count, 5);
+	// Five Elementalists without a relic: as four do, or the catalog's `numbers.elementalistNoRelic`.
+	if (count >= 5 && ruleValue(catalog, 'elementalist5NeedsRelic') && !holdsRelic(player)) return elementalistNoRelicUpgrades(catalog);
+	const capped = Math.min(count, 5);
 	// 1 / 2 / 3 / 5 at 2 / 3 / 4 / 5 Elementalists, or the catalog's `numbers.elementalistRest`.
 	return capped >= 2 ? elementalistRestLadder(catalog)[capped - 2] : 0;
 }
