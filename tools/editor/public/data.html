@@ -953,7 +953,10 @@ function geStats(games) {
   const blood = { on: JSON.stringify(GE.data.classes?.Elementalist ?? '').includes('Arcane Blood'), n: 0, who: 0 };
   for (const g of games) for (const s of g.seats) { const k = s.rounds.reduce((m, p) => m + (p.acts ?? []).filter((a) => /^Take \d+ Arcane Blood/.test(a.t)).length, 0); blood.n += k; if (k) blood.who++; }
   const full = use.reduce((n, g) => n + g.seats.filter((s) => s.rounds.some((p) => (p.dice?.[2] ?? 0) >= 10)).length, 0);
-  return { n: games.length, done: done.length, soFar: !done.length, rounds, gaps, lead, src, status, lv, left, start, first30, fights, builds, all, winners, blood, full, avg, seats: use.reduce((t, g) => t + g.seats.length, 0) };
+  // Awakened Arcane Abyss spirits: for every player the most they had awake (face-up) at one time, since a sacrifice can take one away again.
+  const arcSet = GE.arcSet ??= new Set(GE.data.arcane ?? []);
+  const arcane = use.flatMap((g) => g.seats.map((s) => Math.max(0, ...s.rounds.map((p) => (p.sp ?? []).filter((x) => arcSet.has(x.n) && !x.d).length))));
+  return { n: games.length, done: done.length, soFar: !done.length, rounds, gaps, lead, src, status, lv, left, start, first30, fights, builds, all, winners, blood, full, arcane, avg, seats: use.reduce((t, g) => t + g.seats.length, 0) };
 }
 function geSummary() {
   const meta = GE.index.find((x) => x.setup === GE.setup), games = GE.game ? [GE.data.games[GE.game - 1]].filter(Boolean) : GE.data.games;
@@ -980,6 +983,7 @@ function geSummary() {
         ${(GE.data.win_points ?? 40) > 30 ? `<div class="chk" title="The round the first player of a game reaches 30 points"><small>Round of the first 30 points</small><b>${ge1(f30)}</b><span>${t.first30.length ? `${range(t.first30.map((x) => x.r))}${t.first30.length < (t.done || t.n) ? ` · ${t.first30.length} of ${t.done || t.n} games` : ''}${f30done.length ? ` · leader won ${f30done.filter((x) => x.won).length} of ${f30done.length}` : ''}` : 'nobody has 30 yet'}</span></div>` : `<div class="chk"><small>Difficulty 3 kills</small><b>${t.lv['Difficulty 3'].k}</b><span>${t.lv['Difficulty 3'].f} fights · ${t.lv['Difficulty 3'].cor} corrupted</span></div>`}
         <div class="chk ${verdict(monOk)}"><small>Points from monsters</small><b>${ge1(split[0][1])} %</b><span>target 70 %</span></div>
         <div class="chk"><small>Player fights</small><b>${t.fights}</b><span>${ge1(split[1][1])} % of points · target 20 %</span></div>
+        <div class="chk" style="grid-column: 1 / -1" title="Arcane Abyss spirits a player had awake (face-up) at one time, at most; the lowest and the highest player"><small>Awakened Arcane spirits, per player</small><b>${t.arcane.length ? `${Math.min(...t.arcane)} to ${Math.max(...t.arcane)}` : '–'}</b><span>${t.arcane.length ? `lowest to highest player · average ${ge1(t.avg(t.arcane))} · ${t.arcane.filter((n) => n > 0).length} of ${t.arcane.length} players had at least one` : ''}</span></div>
       </div></section>
     ${GE.game ? '' : `<section class="gsec"><h2>${meta.changes?.length ? `What changed${meta.n > 1 ? ` since Test ${meta.n - 1}` : ''}` : 'About this test'}</h2>
       ${meta.changes?.length ? `<ul class="gsum-log" title="${esc(meta.changed || meta.label)}">${meta.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : `<div class="gsum-about" title="${esc(meta.changed || meta.label)}"><span>${esc(meta.changed || meta.label)}</span></div>`}</section>`}
