@@ -814,6 +814,10 @@ export interface RuleNumbers {
 	elementalistNoRelic?: number;
 	/** Under `difficulty3Restores`: Barrier a Difficulty 3 monster restores after a fight it survives (default 5). */
 	difficulty3Restore?: number;
+	/** Sentinel: damage for each attack die discarded before the roll (default 2; Michael, 2026-11-22: "nerf sentinel to do 1 damage per dice"). See `sentinelDamagePerDie` in rules.ts. */
+	sentinelDamagePerDie?: number;
+	/** Under `mageArcaneDice`: Arcane attack dice Mage gains on its awakening (default 4; Michael, 2026-11-22: "nerf the mage by 1 attack dice so only 3 arcane attack"). See `mageAwakenArcaneDice` in rules.ts. */
+	mageAwakenArcaneDice?: number;
 }
 
 /** rules.json: the rule switches plus the optional rule numbers. */
@@ -1242,7 +1246,7 @@ export interface PrivatePlayerState {
 	/** Witch: attack dice taken from an opponent for the current PvP combat; given back when
 	 *  that combat ends. */
 	witchBorrowedDice?: { fromSeat: SeatColor; die: AttackDie }[];
-	/** Sentinel: +2 damage per die discarded before this combat's roll. Per combat. */
+	/** Sentinel: the damage of the dice discarded before this combat's roll (`sentinelDamagePerDie` each). Per combat. */
 	discardDamageBonus?: number;
 	/** Salamander: roll again each attack die that shows 0, once. Per combat. */
 	rerollZeroDice?: boolean;

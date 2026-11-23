@@ -1,4 +1,5 @@
 import { nextId } from '../../rng';
+import { sentinelDamagePerDie } from '../../rules';
 import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 
 // Sentinel — "Before you roll in combat, you may discard attack dice. For each dice that you
@@ -9,12 +10,13 @@ import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 // an awakened Sentinel owner holds attack dice, a decision card with a dice picker asks which
 // dice (any number, any tier) to discard before the roll of their NEXT combat (monster or PvP).
 // `useSentinelDiscard` (combat.ts) then removes those dice for good, just before the roll, and
-// adds 2 damage per die to that combat only. "Discard nothing" (or no pick) clears the choice.
+// adds 2 damage per die (or the catalog's `numbers.sentinelDamagePerDie`) to that combat only. "Discard nothing" (or no pick) clears the choice.
 
 export const SENTINEL_DISCARD_KIND = 'sentinelDiscard';
 
 const offerDiscardChoice: ClassHandler = (ctx) => {
 	const { player, state, log } = ctx;
+	const perDie = sentinelDamagePerDie(ctx.catalog);
 	player.pendingDecisions = (player.pendingDecisions ?? []).filter(
 		(d) => d.kind !== SENTINEL_DISCARD_KIND
 	);
@@ -27,7 +29,7 @@ const offerDiscardChoice: ClassHandler = (ctx) => {
 		source: 'class',
 		kind: SENTINEL_DISCARD_KIND,
 		prompt:
-			'Sentinel: choose attack dice to discard before the roll of your next combat. Each discarded die deals 2 more damage.' +
+			`Sentinel: choose attack dice to discard before the roll of your next combat. Each discarded die deals ${perDie} more damage.` +
 			(marked > 0 ? ` (Now chosen: ${marked}.)` : ''),
 		options: [
 			{ id: 'yes', label: 'Discard the chosen dice before my next combat roll' },
@@ -47,7 +49,7 @@ export const decisions: ClassDecisions = {
 		ctx.player.sentinelDiscardIds = chosen;
 		ctx.log.push(
 			chosen.length > 0
-				? `Sentinel: ${chosen.length} attack ${chosen.length === 1 ? 'die' : 'dice'} will be discarded before your next combat roll (+${chosen.length * 2} damage).`
+				? `Sentinel: ${chosen.length} attack ${chosen.length === 1 ? 'die' : 'dice'} will be discarded before your next combat roll (+${chosen.length * sentinelDamagePerDie(ctx.catalog)} damage).`
 				: 'Sentinel: no attack dice will be discarded.'
 		);
 	}

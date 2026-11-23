@@ -720,7 +720,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "Before you roll in combat, you may discard attack dice. For each dice that you discard, deal 2 more damage."
+            "description": "Before you roll in combat, you may discard attack dice. For each dice that you discard, deal 1 more damage."
           }
         ]
       }
@@ -1000,7 +1000,7 @@
     "position": 14,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Gains 4 Arcane Attack Dice when awakened.",
+    "description": "Gains 3 Arcane Attack Dice when awakened.",
     "footer": "",
     "created_at": "2026-03-19T20:05:36.221445+00:00",
     "updated_at": "2026-10-16T04:45:14.728682+00:00",
@@ -1014,7 +1014,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On this spirit's Awakening, gain 4 Arcane Attack Dice."
+            "description": "On this spirit's Awakening, gain 3 Arcane Attack Dice."
           }
         ]
       }

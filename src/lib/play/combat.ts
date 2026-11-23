@@ -25,7 +25,7 @@ import { applyStatusChange } from './effects/status';
 import { applyCorruptionEffects } from './effects/corruption';
 import type { EffectCombatInfo } from './effects/context';
 import { AWAKEN_PROGRESS_KEYS, AWAKEN_SPIRIT_IDS, isFallen, recordAwakenProgress } from './effects/awakenHandlers';
-import { ruleValue } from './rules';
+import { ruleValue, sentinelDamagePerDie } from './rules';
 
 /**
  * Per-combat effect flags that class effects (`inCombat`/`onTakeDamage`) set and
@@ -99,16 +99,18 @@ export function useStrikeFirstCharge(player: PrivatePlayerState, log: string[], 
 	log.push(`${seat ? `${seat} ` : ''}Firecracker: strikes first in this combat.`);
 }
 
-/** Sentinel: damage per attack die discarded before the roll. */
-export const SENTINEL_DAMAGE_PER_DISCARD = 2;
-
 /**
  * Sentinel — "Before you roll in combat, you may discard attack dice. For each dice that you
- * discard, deal 2 more damage." Discards the dice the owner chose on the Sentinel decision
+ * discard, deal 2 more damage." (2, or the catalog's `numbers.sentinelDamagePerDie`.) Discards the dice the owner chose on the Sentinel decision
  * card (still held, awakened Sentinel only) just before this combat's roll, in both the
  * monster and the PvP path. The dice are gone for good; the bonus is for this combat only.
  */
-export function useSentinelDiscard(player: PrivatePlayerState, log: string[], seat?: SeatColor): void {
+export function useSentinelDiscard(
+	player: PrivatePlayerState,
+	log: string[],
+	seat?: SeatColor,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): void {
 	const chosen = new Set(player.sentinelDiscardIds ?? []);
 	if (chosen.size === 0) return;
 	player.sentinelDiscardIds = [];
@@ -117,7 +119,7 @@ export function useSentinelDiscard(player: PrivatePlayerState, log: string[], se
 	player.attackDice = player.attackDice.filter((die) => !chosen.has(die.instanceId));
 	const discarded = before - player.attackDice.length;
 	if (discarded === 0) return;
-	player.discardDamageBonus = discarded * SENTINEL_DAMAGE_PER_DISCARD;
+	player.discardDamageBonus = discarded * sentinelDamagePerDie(catalog);
 	log.push(
 		`${seat ? `${seat} ` : ''}Sentinel: discarded ${discarded} attack ${discarded === 1 ? 'die' : 'dice'} before the roll for ${player.discardDamageBonus} more damage.`
 	);
@@ -485,7 +487,7 @@ export function resolveEncounterCombat(
 
 	for (const { seat } of [...evil, ...good]) beforeNavigationPowerCombat(state, seat, true);
 	for (const { seat, player } of [...evil, ...good]) useStrikeFirstCharge(player, log, seat);
-	for (const { seat, player } of [...evil, ...good]) useSentinelDiscard(player, log, seat);
+	for (const { seat, player } of [...evil, ...good]) useSentinelDiscard(player, log, seat, catalog);
 	const sumInit = (group: EncounterCombatant[]): number =>
 		group.reduce((s, { player }) => s + (player.initiative ?? 0), 0);
 	const initE = sumInit(evil);
@@ -723,7 +725,7 @@ export function fightMonster(
 	applyTrigger(state, seat, 'inCombat', log, { catalog });
 	beforeNavigationPowerCombat(state, seat, false);
 	useStrikeFirstCharge(player, log);
-	useSentinelDiscard(player, log);
+	useSentinelDiscard(player, log, undefined, catalog);
 	// Lock the combat value before damage.
 	let rolledDamage = rollAttack(state, player, catalog);
 	// A monster with an initiative number is outpaced by a player with HIGHER initiative (a tie

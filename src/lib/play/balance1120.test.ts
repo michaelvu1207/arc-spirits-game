@@ -17,11 +17,12 @@
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
-import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack } from './combat';
+import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack, useSentinelDiscard } from './combat';
 import { applyGameCommand, arcaneBloodFor, createLobbyState, monsterCardFromCatalog } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
 import { ALCHEMIST_AUGMENT_KIND, decisions as alchemistDecisions } from './effects/classes/arcMage';
+import { SENTINEL_DISCARD_KIND, ability as sentinelAbility, decisions as sentinelDecisions } from './effects/classes/firekeeper';
 import { cursedSpiritDiceTier, elementalistUpgradeAction, fairyDiceTier, parseRules, restBarrier, ruleAdjustedActions, ruleAdjustedClassSchema } from './rules';
 import { buildRulesBrief } from './agents/rulesBrief';
 import { enterBenefits } from './phases';
@@ -818,5 +819,61 @@ describe('rules.json numbers: dice faces and the Elementalist ladder from the da
 	it('without numbers the text and the ladder are as before', () => {
 		expect(text({ elementalistRest1235: true, elementalist5NeedsRelic: true }, 5)).toBe('On Rest, upgrade an attack dice 5 times if you have a relic (any relic); 3 times if you have none.');
 		expect(text({ elementalistRest1235: true }, 2)).toBe('On Rest, upgrade an attack dice.');
+	});
+});
+
+describe('sentinelDamagePerDie: the damage of each die Sentinel discards (Michael, 2026-11-22: "nerf sentinel to do 1 damage per dice instead")', () => {
+	const ONE = withRules({ numbers: { sentinelDamagePerDie: 1 } });
+	const sentinel = () => makePlayer({ spirits: [spirit(1, { Sentinel: 1 })], attackDice: dice('basic', 'basic', 'basic', 'basic', 'basic'), sentinelDiscardIds: ['d0', 'd1', 'd2', 'd3', 'd4'] });
+	const text = (catalog: PlayCatalog) => ruleAdjustedClassSchema(catalog, 'Sentinel', [{ count: 1, effects: [{ type: 'benefit', description: 'printed' }] }] as never)![0].effects?.[0].description;
+	it('five discarded dice are 10 damage without the number and 5 with it', () => {
+		const before = sentinel(), after = sentinel(), log: string[] = [];
+		useSentinelDiscard(before, [], undefined, withRules(undefined));
+		useSentinelDiscard(after, log, undefined, ONE);
+		expect(before.discardDamageBonus).toBe(10);
+		expect(after.discardDamageBonus).toBe(5);
+		expect(after.attackDice).toHaveLength(0);
+		expect(log[0]).toContain('discarded 5 attack dice before the roll for 5 more damage');
+	});
+	it('in a fight: Beast 3 and five discarded dice deal 8 to a monster, not 13', () => {
+		const fight = (catalog: PlayCatalog) => {
+			const p = makePlayer({ barrier: 20, maxBarrier: 20, spirits: [spirit(1, { Sentinel: 1, Beast: 3 })], attackDice: dice('basic', 'basic', 'basic', 'basic', 'basic'), sentinelDiscardIds: ['d0', 'd1', 'd2', 'd3', 'd4'], monsterHand: [monster(16, 5, 100) as never] });
+			return 16 - fightMonster(makeState(p), 'Red', catalog, 0)!.fought!.hp;
+		};
+		expect(fight(withRules(undefined))).toBe(13);
+		expect(fight(ONE)).toBe(8);
+	});
+	it('the class text, the decision card and its log line name the number', () => {
+		expect(text(ONE)).toBe('Before you roll in combat, you may discard attack dice. For each dice that you discard, deal 1 more damage.');
+		expect(text(withRules(undefined))).toBe('printed');
+		const p = makePlayer({ spirits: [spirit(1, { Sentinel: 1 })], attackDice: dice('basic', 'basic') });
+		const state = makeState(p), log: string[] = [];
+		sentinelAbility[0].run!({ state, seat: 'Red', player: p, catalog: ONE, log, trigger: 'awakeningPhase' } as never);
+		expect(p.pendingDecisions!.find((d) => d.kind === SENTINEL_DISCARD_KIND)!.prompt).toContain('Each discarded die deals 1 more damage.');
+		sentinelDecisions[SENTINEL_DISCARD_KIND]({ state, seat: 'Red', player: p, catalog: ONE, log, trigger: 'awakeningPhase' } as never, 'yes', ['d0', 'd1']);
+		expect(log.at(-1)).toContain('(+2 damage)');
+	});
+	it('a bad number is reported; a good one is kept', () => {
+		expect(parseRules({ numbers: { sentinelDamagePerDie: 1.5 } }).problems).toHaveLength(1);
+		expect(parseRules({ numbers: { sentinelDamagePerDie: 1 } }).rules).toEqual({ numbers: { sentinelDamagePerDie: 1 } });
+	});
+});
+
+describe('mageAwakenArcaneDice: the Arcane dice of Mage\'s awakening (Michael, 2026-11-22: "nerf the mage by 1 attack dice so only 3 arcane attack")', () => {
+	const awaken = (rules: PlayRules) => {
+		const p = makePlayer({ attackDice: [], spirits: [spirit(1, { Mage: 1 })] });
+		applyTrigger(makeState(p), 'Red', 'awakening', [], { catalog: withRules(rules), command: { type: 'awakenSpirit', slotIndex: 1 } as never });
+		return p.attackDice.map((d) => d.tier);
+	};
+	const text = (rules: PlayRules) => ruleAdjustedClassSchema(withRules(rules), 'Mage', [{ count: 1, effects: [{ type: 'benefit', description: 'printed' }] }] as never)![0].effects?.[0].description;
+	it('4 Arcane dice without the number, 3 with it; the text names the number', () => {
+		expect(awaken({ mageArcaneDice: true })).toEqual(['arcane', 'arcane', 'arcane', 'arcane']);
+		expect(awaken({ mageArcaneDice: true, numbers: { mageAwakenArcaneDice: 3 } })).toEqual(['arcane', 'arcane', 'arcane']);
+		expect(text({ mageArcaneDice: true })).toBe("On this spirit's Awakening, gain 4 Arcane Attack Dice.");
+		expect(text({ mageArcaneDice: true, numbers: { mageAwakenArcaneDice: 3 } })).toBe("On this spirit's Awakening, gain 3 Arcane Attack Dice.");
+	});
+	it('a bad number is reported; a good one is kept', () => {
+		expect(parseRules({ numbers: { mageAwakenArcaneDice: -1 } }).problems).toHaveLength(1);
+		expect(parseRules({ numbers: { mageAwakenArcaneDice: 3 } }).rules).toEqual({ numbers: { mageAwakenArcaneDice: 3 } });
 	});
 });

@@ -1,6 +1,6 @@
 import { runAction } from '../actions';
 import { nextId } from '../../rng';
-import { ruleValue } from '../../rules';
+import { mageAwakenArcaneDice, ruleValue } from '../../rules';
 import type { DiceTier } from '../../types';
 import type { ClassAbility, ClassDecisions } from './types';
 
@@ -20,7 +20,7 @@ type EffectContextLike = Parameters<ClassDecisions[string]>[0];
 /** Mage's on-awakening Exalted dice under `sunRework`. */
 export const MAGE_SUN_AWAKEN_DICE = 2;
 /** Mage's on-awakening Arcane dice under `mageArcaneDice`. */
-export const MAGE_ARCANE_AWAKEN_DICE = 4;
+export { MAGE_ARCANE_AWAKEN_DICE } from '../../rules';
 
 const heldRunes = (player: EffectContextLike['player']) =>
 	player.mats.filter((slot) => slot.type === 'rune' && slot.hasRune);
@@ -85,8 +85,8 @@ export const ability: ClassAbility[] = [
 			const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 			const awakened = slot == null ? undefined : ctx.player.spirits.find((s) => s.slotIndex === slot);
 			if (!awakened || (awakened.classes?.['Mage'] ?? 0) <= 0) return;
-			// Rule `mageArcaneDice`: "On this spirit's Awakening, gain 4 Arcane Attack Dice."
-			if (arcane) runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: MAGE_ARCANE_AWAKEN_DICE });
+			// Rule `mageArcaneDice`: "On this spirit's Awakening, gain 4 Arcane Attack Dice." (4, or the catalog's `numbers.mageAwakenArcaneDice`.)
+			if (arcane) runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: mageAwakenArcaneDice(ctx.catalog) });
 			else runAction(ctx, { kind: 'gainAttackDice', tier: 'exalted', amount: MAGE_SUN_AWAKEN_DICE });
 		}
 	}

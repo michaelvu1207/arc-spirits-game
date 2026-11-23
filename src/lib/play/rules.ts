@@ -457,8 +457,14 @@ function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undef
 		} else if (name === 'difficulty3Restore') {
 			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.difficulty3Restore must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
 			else numbers.difficulty3Restore = value as number;
+		} else if (name === 'sentinelDamagePerDie') {
+			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.sentinelDamagePerDie must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
+			else numbers.sentinelDamagePerDie = value as number;
+		} else if (name === 'mageAwakenArcaneDice') {
+			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.mageAwakenArcaneDice must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
+			else numbers.mageAwakenArcaneDice = value as number;
 		} else {
-			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore)`);
+			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore, sentinelDamagePerDie, mageAwakenArcaneDice)`);
 		}
 	}
 	return Object.keys(numbers).length ? numbers : undefined;
@@ -485,6 +491,26 @@ export function elementalistUpgradeAction(catalog: Pick<PlayCatalog, 'rules'> | 
 export function elementalistNoRelicUpgrades(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
 	return catalog?.rules?.numbers?.elementalistNoRelic ?? elementalistRestLadder(catalog)[2];
 }
+
+/** Sentinel: damage for each attack die discarded before the roll, unless `numbers.sentinelDamagePerDie` says otherwise. */
+export const SENTINEL_DAMAGE_PER_DIE = 2;
+
+/** Sentinel: damage for each attack die discarded before the roll (the catalog's `numbers.sentinelDamagePerDie`, else 2). */
+export function sentinelDamagePerDie(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
+	return catalog?.rules?.numbers?.sentinelDamagePerDie ?? SENTINEL_DAMAGE_PER_DIE;
+}
+
+/** Rule `mageArcaneDice`: Arcane attack dice Mage gains on its awakening, unless `numbers.mageAwakenArcaneDice` says otherwise. */
+export const MAGE_ARCANE_AWAKEN_DICE = 4;
+
+/** Rule `mageArcaneDice`: Arcane attack dice Mage gains on its awakening (the catalog's `numbers.mageAwakenArcaneDice`, else 4). */
+export function mageAwakenArcaneDice(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
+	return catalog?.rules?.numbers?.mageAwakenArcaneDice ?? MAGE_ARCANE_AWAKEN_DICE;
+}
+
+/** Sentinel's printed text for the catalog's number. */
+export const sentinelText = (catalog: Pick<PlayCatalog, 'rules'> | null | undefined): string =>
+	`Before you roll in combat, you may discard attack dice. For each dice that you discard, deal ${sentinelDamagePerDie(catalog)} more damage.`;
 
 /** Rule `difficulty3Restores`: Barrier a Difficulty 3 monster restores after a fight it survives, unless `numbers.difficulty3Restore` says otherwise. */
 export const DIFFICULTY_3_RESTORE = 5;
@@ -603,7 +629,7 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		when: true,
 		className: 'Mage',
 		count: 1,
-		text: "On this spirit's Awakening, gain 4 Arcane Attack Dice."
+		text: (c) => `On this spirit's Awakening, gain ${mageAwakenArcaneDice(c)} Arcane Attack Dice.`
 	},
 	{
 		rule: 'shieldbearerFullOnly',
@@ -873,6 +899,10 @@ export function ruleAdjustedClassSchema(
 	className: string,
 	schema: ClassBreakpoint[] | null
 ): ClassBreakpoint[] | null {
+	// A rule number that is printed on a class: Sentinel's damage per discarded die.
+	if (className === 'Sentinel' && catalog?.rules?.numbers?.sentinelDamagePerDie != null && Array.isArray(schema)) {
+		return schema.map((tier) => ({ ...tier, effects: [{ ...tier.effects?.[0], type: 'benefit', description: sentinelText(catalog) }] }));
+	}
 	const changes = RULE_CLASS_TEXT.filter(
 		(c) => c.className === className && ruleValue(catalog, c.rule) === c.when
 	);
