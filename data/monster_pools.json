@@ -2,27 +2,27 @@
 	{
 		"players": 2,
 		"difficulty": 1,
+		"size": 4
+	},
+	{
+		"players": 2,
+		"difficulty": 2,
 		"size": 5
 	},
 	{
 		"players": 2,
-		"difficulty": 2,
-		"size": 6
-	},
-	{
-		"players": 2,
 		"difficulty": 3,
 		"size": 40
 	},
 	{
 		"players": 3,
 		"difficulty": 1,
-		"size": 6
+		"size": 5
 	},
 	{
 		"players": 3,
 		"difficulty": 2,
-		"size": 8
+		"size": 6
 	},
 	{
 		"players": 3,
@@ -32,27 +32,27 @@
 	{
 		"players": 4,
 		"difficulty": 1,
+		"size": 7
+	},
+	{
+		"players": 4,
+		"difficulty": 2,
 		"size": 9
 	},
 	{
 		"players": 4,
-		"difficulty": 2,
-		"size": 11
-	},
-	{
-		"players": 4,
 		"difficulty": 3,
 		"size": 40
 	},
 	{
 		"players": 5,
 		"difficulty": 1,
-		"size": 11
+		"size": 9
 	},
 	{
 		"players": 5,
 		"difficulty": 2,
-		"size": 14
+		"size": 11
 	},
 	{
 		"players": 5,
@@ -62,12 +62,12 @@
 	{
 		"players": 6,
 		"difficulty": 1,
-		"size": 14
+		"size": 11
 	},
 	{
 		"players": 6,
 		"difficulty": 2,
-		"size": 17
+		"size": 14
 	},
 	{
 		"players": 6,
