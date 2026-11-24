@@ -7,7 +7,8 @@
  *   round 1), so a kill made earlier in the same Location step does not change the order.
  * - Equal points: table order, starting one seat later each round.
  * - A player ahead stops holding the others back once they have drawn and kept a card, hold three
- *   cards, or have ended their Location turn. Taking the permanent monster is not a deck draw: it
+ *   cards (not under rule `monsterDrawOne`, where a full hand may still draw), or have ended their
+ *   Location turn. Taking the permanent monster is not a deck draw: it
  *   needs no turn and counts as that player's draw of the visit.
  */
 import { ruleValue } from './rules';
@@ -40,7 +41,8 @@ export function abyssDrawBlockedBy(
 		const p = state.players[other];
 		if (!p || p.phaseReady === true) continue;
 		const revealed = (p.pendingMonsterDraw?.cards.length ?? 0) > 0;
-		const mayStillDraw = p.monsterDrawRound !== state.round && (p.monsterHand?.length ?? 0) < 3;
+		// Rule `monsterDrawOne`: a full hand may still draw (the card can replace a held one).
+		const mayStillDraw = p.monsterDrawRound !== state.round && ((p.monsterHand?.length ?? 0) < 3 || !!ruleValue(catalog, 'monsterDrawOne'));
 		if (revealed || mayStillDraw) return other;
 	}
 	return null;

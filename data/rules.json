@@ -29,6 +29,7 @@
 	"weakLowDice": true,
 	"enchantedTwoThirds": true,
 	"abyssDrawByPoints": true,
+	"monsterDrawOne": true,
 	"difficulty3Restores": true,
 	"elementalistRest1235": true,
 	"elementalistOnCultivate": true,

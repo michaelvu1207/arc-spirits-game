@@ -322,10 +322,21 @@ export function labelFor(
 			const band = deck
 				? `, Barrier ${deck.barrierMin}-${deck.barrierMax}, ${deck.count ?? '?'} cards left`
 				: '';
+			if (ruleValue(catalog, 'monsterDrawOne'))
+				return `Draw the top card of the Difficulty ${cmd.difficulty} deck (${MONSTER_DECK_NAMES[cmd.difficulty]}${band}): you then keep it or put it back on top (this is your draw of this visit)`;
 			return `Draw 2 monster cards from the Difficulty ${cmd.difficulty} deck (${MONSTER_DECK_NAMES[cmd.difficulty]}${band}) and keep 1`;
 		}
 		case 'keepMonsterCard': {
 			const card = me?.pendingMonsterDraw?.cards[cmd.index];
+			if (me?.pendingMonsterDraw?.maxCards === 1) {
+				// Rule `monsterDrawOne`: one card is revealed.
+				const shown = card ? monsterLine(card) : 'the revealed card';
+				if (cmd.returnToDeck) return `Put ${shown} back on top of its deck (you keep nothing new; the next draw from that deck reveals it again)`;
+				const old = cmd.replaceHandIndex === undefined ? undefined : me.monsterHand?.[cmd.replaceHandIndex];
+				if (old)
+					return `Keep ${shown} and give up ${monsterLine(old)}: ${old.permanent ? 'that copy of the permanent monster leaves your hand' : `it goes back on top of its deck at full Barrier${old.hp < old.maxHp ? ` (the ${old.maxHp - old.hp} damage you did to it is lost)` : ''}`}`;
+				return `Keep ${shown}`;
+			}
 			return `Keep ${card ? monsterLine(card) : `card ${cmd.index + 1}`} (the other card goes to the bottom of its deck)`;
 		}
 		case 'startCombat': {

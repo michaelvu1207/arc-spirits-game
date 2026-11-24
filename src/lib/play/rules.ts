@@ -169,6 +169,16 @@
  *   other, the one with the fewest points at the start of the round first (equal points: table order,
  *   starting one seat later each round). A player waits until those ahead have drawn, hold 3 cards or
  *   have ended their Location turn. The permanent monster needs no turn. See abyssDrawOrder.ts.
+ * - monsterDrawOne (default false; Michael, 2026-11-23: "when drawing monsters you only just draw one
+ *   monster and if you don't like the monster you can put it back on the top of the deck. Similarly you
+ *   can replace monsters that you currently have with a new monster but you lose all the damage that you
+ *   did to it and it goes back to the top of the deck"): true ⇒ a draw reveals ONE card (the top card of
+ *   the chosen deck). The player keeps it, or puts it back on top of its deck (`keepMonsterCard` with
+ *   `returnToDeck`); either way it was their draw of the visit. When they keep it they may put one card
+ *   they hold back on top of that card's deck (`replaceHandIndex`): all damage on it is gone (full
+ *   Barrier). With a full hand (3 cards) a draw is still allowed, and keeping then needs such a swap.
+ *   A copy of the permanent monster that is swapped out just leaves the hand. See the `drawMonsterCards`
+ *   and `keepMonsterCard` commands in runtime.ts.
  * - alchemistOncePerRound (default false; Michael, 2026-11-22: "arcane alchemist is just one time per
  *   turn"): only read under `alchemistAugmentToArcane`; true ⇒ a player converts at most one Spirit
  *   Augment a round, however often they Cultivate in it. See classes/arcMage.ts.
@@ -310,6 +320,7 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	elementalistRest1235: false,
 	alchemistOncePerRound: false,
 	abyssDrawByPoints: false,
+	monsterDrawOne: false,
 	difficulty3Restores: false,
 	elementalistOnCultivate: false,
 	elementalist5NeedsRelic: false,

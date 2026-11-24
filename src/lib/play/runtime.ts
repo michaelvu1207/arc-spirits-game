@@ -1591,7 +1591,7 @@ function buildMonsterDecks(
 	});
 }
 
-/** Reveal up to two cards from one difficulty deck into the player's pending draw. */
+/** Reveal up to two cards from one difficulty deck into the player's pending draw (rule `monsterDrawOne`: the top card only). */
 function drawMonsterCardsForPlayer(
 	state: PublicGameState,
 	player: PrivatePlayerState,
@@ -1599,7 +1599,8 @@ function drawMonsterCardsForPlayer(
 	catalog: PlayCatalog
 ): boolean {
 	if (player.pendingMonsterDraw?.cards.length) return false;
-	const selected = state.bags.monsters.contents.filter((entry) => entry.difficulty === difficulty).slice(0, 2);
+	const reveal = ruleValue(catalog, 'monsterDrawOne') ? 1 : 2;
+	const selected = state.bags.monsters.contents.filter((entry) => entry.difficulty === difficulty).slice(0, reveal);
 	if (selected.length === 0) return false;
 	const selectedGuids = new Set(selected.map((entry) => entry.guid));
 	state.bags.monsters.contents = state.bags.monsters.contents.filter((entry) => !selectedGuids.has(entry.guid));
@@ -1621,9 +1622,15 @@ function drawMonsterCardsForPlayer(
 						order: 0
 					});
 		}),
-		maxCards: 2
+		maxCards: reveal
 	};
 	return true;
+}
+
+/** Put a monster card on TOP of its deck at full Barrier (rule `monsterDrawOne`): the next draw from that deck reveals it. */
+function returnMonsterCardToTop(state: PublicGameState, card: MonsterState): void {
+	state.bags.monsters.contents.unshift({ guid: `monster-card-${card.id}-${nextId(state.rng, 'return')}`, id: card.id, name: card.name, barrier: card.maxHp, damage: card.damage, difficulty: card.difficulty });
+	state.bags.monsters.count = state.bags.monsters.contents.length;
 }
 
 export function createLobbyState(input: {
@@ -2768,7 +2775,7 @@ function reduceCommand(
 				return failure('draw_pending', 'Resolve your drawn spirits before ending your turn.');
 			}
 			if (active.player.pendingMonsterDraw?.cards.length) {
-				return failure('monster_draw_pending', 'Keep one of the revealed monster cards before ending your turn.');
+				return failure('monster_draw_pending', ruleValue(catalog, 'monsterDrawOne') ? 'Keep the revealed monster card or put it back before ending your turn.' : 'Keep one of the revealed monster cards before ending your turn.');
 			}
 			// A corruption this turn forces its escalating spirit sacrifice IMMEDIATELY: you
 			// can't end your location actions until you've shed the owed spirit(s). (Corruption
@@ -3578,7 +3585,9 @@ function reduceCommand(
 			const active = activePlayerForActor(state, actor);
 			if (!active || active.player.navigationDestination !== 'Arcane Abyss') return failure('not_in_abyss', 'You must be at the Arcane Abyss to draw monster cards.');
 			if (active.player.pendingMonsterDraw?.cards.length) return failure('monster_draw_pending', 'Keep one of the revealed monster cards first.');
-			if ((active.player.monsterHand?.length ?? 0) >= 3) return failure('monster_hand_full', 'Your hand is full (3/3). Defeat a monster card before you draw again.');
+			// Rule `monsterDrawOne`: a full hand may still draw from a deck (the card can replace a held one).
+			const swapDraw = !!ruleValue(catalog, 'monsterDrawOne') && !command.permanent;
+			if ((active.player.monsterHand?.length ?? 0) >= 3 && !swapDraw) return failure('monster_hand_full', 'Your hand is full (3/3). Defeat a monster card before you draw again.');
 			if (active.player.monsterDrawRound === state.round) return failure('monster_draw_used', 'You already drew monster cards this visit.');
 			if (command.permanent) {
 				// The permanent monster: a copy goes straight into the hand (no reveal, nothing leaves
@@ -3606,6 +3615,26 @@ function reduceCommand(
 			if (active.player.navigationDestination !== 'Arcane Abyss') return failure('not_in_abyss', 'Keep monster cards at the Abyss.');
 			if (!Number.isInteger(command.index) || command.index < 0 || command.index >= pending.cards.length) return failure('monster_card_invalid', 'Choose one of the revealed monster cards.');
 			active.player.monsterHand ??= [];
+			if (ruleValue(catalog, 'monsterDrawOne')) {
+				const revealed = pending.cards[command.index];
+				if (command.returnToDeck) {
+					// Not wanted: back on top of its deck. It was this visit's draw.
+					for (const card of pending.cards) returnMonsterCardToTop(state, card);
+					active.player.pendingMonsterDraw = null;
+					return success(state);
+				}
+				if (command.replaceHandIndex !== undefined) {
+					const old = active.player.monsterHand[command.replaceHandIndex];
+					if (!Number.isInteger(command.replaceHandIndex) || !old) return failure('monster_card_invalid', 'Choose one of the monster cards you hold to put back.');
+					active.player.monsterHand = active.player.monsterHand.filter((card) => card !== old);
+					// The held card goes back on top of its own deck with all damage gone; a copy of the permanent monster just leaves.
+					if (!old.permanent) returnMonsterCardToTop(state, old);
+				} else if (active.player.monsterHand.length >= 3) return failure('monster_hand_full', 'Your monster hand is full: put one of your cards back, or put the revealed card back.');
+				active.player.monsterHand.push(revealed);
+				for (const [index, card] of pending.cards.entries()) if (index !== command.index) returnMonsterCardToTop(state, card);
+				active.player.pendingMonsterDraw = null;
+				return success(state);
+			}
 			if (active.player.monsterHand.length >= 3) return failure('monster_hand_full', 'Your monster hand is full.');
 			active.player.monsterHand.push(pending.cards[command.index]);
 			// The other revealed card goes back to the bottom of its difficulty deck.

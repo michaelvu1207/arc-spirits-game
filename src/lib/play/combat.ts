@@ -899,7 +899,7 @@ export function monsterLivesForPlayerCount(playerCount: number): number {
  * cleanup with final scoring. Not with a permanent monster in the catalog: it is never gone.
  */
 export function advanceMonsterIfDefeated(state: PublicGameState, catalog?: PlayCatalog): void {
-	returnOpenMonsterReveals(state);
+	returnOpenMonsterReveals(state, catalog);
 	if (!monsterDeckWasDealt(state)) return;
 	// A permanent monster is never gone, so empty decks do not end the game.
 	if (state.permanentMonster || (catalog?.monsters ?? []).some((m) => m.permanent)) return;
@@ -915,8 +915,10 @@ export function advanceMonsterIfDefeated(state: PublicGameState, catalog?: PlayC
 
 /** A monster reveal still open when the Location phase ends (deadline / forced advance) keeps
  *  its first card for the player when their hand has room; every other revealed card goes back
- *  to the bottom of its deck, so no card ever leaks out of play. */
-export function returnOpenMonsterReveals(state: PublicGameState): void {
+ *  to the bottom of its deck, so no card ever leaks out of play. Rule `monsterDrawOne`: a card that
+ *  is not kept goes back on TOP of its deck (where it was drawn from). */
+export function returnOpenMonsterReveals(state: PublicGameState, catalog?: PlayCatalog): void {
+	const toTop = !!ruleValue(catalog, 'monsterDrawOne');
 	for (const seat of state.activeSeats ?? []) {
 		const player = state.players[seat];
 		const cards = player?.pendingMonsterDraw?.cards ?? [];
@@ -926,7 +928,7 @@ export function returnOpenMonsterReveals(state: PublicGameState): void {
 		if (keepFirst) player.monsterHand.push(cards[0]);
 		for (const [index, card] of cards.entries()) {
 			if (keepFirst && index === 0) continue;
-			state.bags.monsters.contents.push({
+			state.bags.monsters.contents[toTop ? 'unshift' : 'push']({
 				guid: `monster-card-${card.id}-${state.round}-${seat}-${index}`,
 				id: card.id,
 				name: card.name,

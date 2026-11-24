@@ -125,7 +125,9 @@ export function buildDecision(input: {
 		phase: view.phase,
 		kind,
 		situation:
-			SITUATION[kind] +
+			(kind === 'monster-reveal' && view.players[seat]?.pendingMonsterDraw?.maxCards === 1
+				? 'You drew the top monster card of a deck: keep it, swap it for a card you hold, or put it back on top.'
+				: SITUATION[kind]) +
 			(surface.truncated ? ' (Long list: only the first options are shown.)' : ''),
 		viewText: renderSeatView(view, seat, catalog),
 		events: input.events,

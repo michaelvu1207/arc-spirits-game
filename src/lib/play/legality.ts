@@ -210,7 +210,7 @@ export function canApply(
 				!!me &&
 				me.navigationDestination === 'Arcane Abyss' &&
 				!me.pendingMonsterDraw?.cards.length &&
-				(me.monsterHand?.length ?? 0) < 3 &&
+				((me.monsterHand?.length ?? 0) < 3 || (!!ruleValue(catalog, 'monsterDrawOne') && !command.permanent)) &&
 				me.monsterDrawRound !== state.round &&
 				(command.permanent
 					? (catalog?.monsters ?? []).some((m) => m.permanent)
@@ -221,7 +221,12 @@ export function canApply(
 		case 'keepMonsterCard': {
 			if (!active || state.phase !== 'location') return false;
 			const me = seatPlayer(state, actor);
-			return !!me && me.navigationDestination === 'Arcane Abyss' && !!me.pendingMonsterDraw && (me.monsterHand?.length ?? 0) < 3 && Number.isInteger(command.index) && command.index >= 0 && command.index < me.pendingMonsterDraw.cards.length;
+			if (!me || me.navigationDestination !== 'Arcane Abyss' || !me.pendingMonsterDraw || !Number.isInteger(command.index) || command.index < 0 || command.index >= me.pendingMonsterDraw.cards.length) return false;
+			if (ruleValue(catalog, 'monsterDrawOne')) {
+				if (command.returnToDeck) return true;
+				if (command.replaceHandIndex !== undefined) return Number.isInteger(command.replaceHandIndex) && !!me.monsterHand?.[command.replaceHandIndex];
+			}
+			return (me.monsterHand?.length ?? 0) < 3;
 		}
 		case 'resolveMonsterReward': {
 			if (!active || state.phase !== 'location') return false;

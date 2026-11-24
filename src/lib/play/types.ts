@@ -931,6 +931,8 @@ export interface PlayRuleSwitches {
 	difficulty3Restores?: boolean;
 	/** At the Arcane Abyss the players draw from the monster decks one after the other, fewest points first (Michael, 2026-11-22). See abyssDrawOrder.ts. */
 	abyssDrawByPoints?: boolean;
+	/** A monster draw reveals one card: keep it, put it back on top, or keep it and put a held card back on top at full Barrier (Michael, 2026-11-23). See rules.ts. */
+	monsterDrawOne?: boolean;
 	/** Under `alchemistAugmentToArcane`: Arcane Alchemist converts at most one augment a round (Michael, 2026-11-22: "just one time per turn"). */
 	alchemistOncePerRound?: boolean;
 	/** Under `elementalistRest1235`: the upgrades come on Cultivate, not on Rest (Michael, 2026-11-22: "so it doesn't conflict with fighters"). */
@@ -1686,8 +1688,13 @@ export type GameCommand =
 	| { type: 'startCombat'; handIndex: number }
 	/** Draw two monster cards from an Abyss difficulty deck. */
 	| { type: 'drawMonsterCards'; difficulty: 1 | 2 | 3; /** Take a copy of the permanent monster instead (difficulty is ignored). */ permanent?: boolean }
-	/** Keep one card from the current two-card reveal and return the other. */
-	| { type: 'keepMonsterCard'; index: number }
+	/**
+	 * Keep one card from the current reveal and return the other.
+	 * Rule `monsterDrawOne` (one card is revealed): `returnToDeck` puts the revealed card back on top
+	 * of its deck instead of keeping it; `replaceHandIndex` keeps it and puts that held card back on
+	 * top of its own deck at full Barrier (needed when the hand is full).
+	 */
+	| { type: 'keepMonsterCard'; index: number; returnToDeck?: boolean; replaceHandIndex?: number }
 	/**
 	 * Claim monster-kill rewards. A kill grants EVERY reward on the card, so `picks`
 	 * is ignored by the engine (clients send every index; kept for bot/ML encoders);

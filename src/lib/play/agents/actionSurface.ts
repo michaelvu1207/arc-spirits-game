@@ -263,6 +263,16 @@ function monsterCardCommands(state: PublicGameState, seat: SeatColor): GameComma
 	const me = state.players[seat];
 	if (!me || state.phase !== 'location' || me.navigationDestination !== 'Arcane Abyss') return [];
 	const reveal = me.pendingMonsterDraw?.cards ?? [];
+	// Rule `monsterDrawOne` (one card is revealed): keep it, keep it and put a held card back on top
+	// of its deck, or put it back on top. A full hand can only swap or put back.
+	if (reveal.length > 0 && me.pendingMonsterDraw?.maxCards === 1) {
+		const hand = me.monsterHand ?? [];
+		return [
+			...(hand.length < 3 ? [{ type: 'keepMonsterCard', index: 0 } as GameCommand] : []),
+			...hand.map((_, replaceHandIndex): GameCommand => ({ type: 'keepMonsterCard', index: 0, replaceHandIndex })),
+			{ type: 'keepMonsterCard', index: 0, returnToDeck: true }
+		];
+	}
 	if (reveal.length > 0) return reveal.map((_, index) => ({ type: 'keepMonsterCard', index }));
 	const draws: GameCommand[] = ([1, 2, 3] as const).map((difficulty) => ({ type: 'drawMonsterCards', difficulty }));
 	// The permanent monster (when the game has one): take a copy instead of drawing from a deck.
