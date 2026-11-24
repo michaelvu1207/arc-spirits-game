@@ -198,6 +198,7 @@
   /* the builds graph in the explorer: one line per build */
   .bd-sw { display: inline-block; flex: none; width: 16px; height: 0; border-top: 3px solid var(--c); border-radius: 2px; margin-right: 7px; vertical-align: middle; } .bd-sw.dash { border-top: 2px dashed var(--c); border-radius: 0; opacity: .8; }
   .ge-legend small { color: var(--faint); font-variant-numeric: tabular-nums; }
+  .bd-by { display: flex; align-items: center; gap: 8px; margin-top: 8px; } .bd-by small { color: var(--faint); }
   .bd-line { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; } .bd-halo { fill: none; stroke: var(--bg); stroke-width: 5; stroke-linejoin: round; opacity: .85; }
   .bd-all { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .7; } .bd-end { stroke: var(--bg); stroke-width: 2; }
   .bd-tip { position: absolute; z-index: 2; pointer-events: none; min-width: 190px; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; display: grid; gap: 3px; box-shadow: 0 10px 28px rgba(0,0,0,.5); }
@@ -652,6 +653,7 @@ function mountLines() {
     else if (b.dataset.all) { GE.all = b.dataset.all === '1'; paintSide(); }
     else if (b.dataset.setup) { if (b.dataset.setup === GE.setup) { GE.all = false; paintSide(); } else loadLines(b.dataset.setup).then(() => { GE.all = false; paint(); }); }
     else if (b.dataset.bdm) { BD.metric = b.dataset.bdm; bdLeave(); drawLines(); }
+    else if (b.dataset.bdby) { BD.by = b.dataset.bdby; bdLeave(); drawLines(); }
     else if (b.dataset.mnm) { MN.metric = b.dataset.mnm; bdLeave(); drawLines(); }
     else if (b.dataset.view) { geView = b.dataset.view; try { localStorage.setItem('geView', geView); } catch {} paintSide(); } };
   // Pointing at a class (or focusing it) shows what it does in a popup under the icon.
@@ -797,11 +799,16 @@ const geDie = (tier) => { const t = pool.find((x) => x.name === DIE_ICON[tier]);
 // Colours: a fixed slot per build (it never changes with the test), checked for colour-blind separation on this background;
 // "No clear build" is the neutral grey and "All players" the dashed white line.
 const BD_COLOR = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#7d8291'];
-const BD = { metric: 'vp' }; // what the builds graph shows: 'vp' points or 'atk' the average damage of one attack
+const BD = { metric: 'vp', by: 'build' }; // what the builds graph shows: 'vp' points or 'atk' the average damage of one attack; one line per 'build' or per 'align' (the alignment a player ended on)
+// The alignment a player ended the game on, as the rules have it: only Fallen is Evil; Pure, Tainted and Corrupt are Good.
+const BD_ALIGN = [['Good at the end', 'Ended the game Pure, Tainted or Corrupt', BD_COLOR[0]], ['Evil at the end', 'Ended the game Fallen', 'var(--st-fallen)']];
+const bdAlign = () => BD.by === 'align', bdWord = () => bdAlign() ? 'alignment' : 'build';
+/** The group of a player in the builds graph: their build, or (lines by alignment) 0 Good, 1 Evil at the end of their game. */
+const bdKind = (s) => bdAlign() ? (s.rounds.at(-1).st === 'Fallen' ? 1 : 0) : geKind(s);
 function bdSeries() {
   const games = GE.game ? [GE.data.games[GE.game - 1]].filter(Boolean) : GE.data.games, end = Math.max(1, ...games.map((g) => g.rounds));
-  const rows = GE_BUILDS.map(([name, rule], k) => ({ k, name, rule, color: BD_COLOR[k], seats: [], wins: 0 })), all = { k: -1, name: 'All players', rule: 'Every player shown', color: 'var(--text)', seats: [], wins: 0, all: true };
-  for (const g of games) for (const s of g.seats) { const won = (g.state ?? 'done') === 'done' && s.place === 1; for (const r of [rows[geKind(s)], all]) { r.seats.push(s); if (won) r.wins++; } }
+  const rows = (bdAlign() ? BD_ALIGN : GE_BUILDS).map(([name, rule, color], k) => ({ k, name, rule, color: color ?? BD_COLOR[k], seats: [], wins: 0 })), all = { k: -1, name: 'All players', rule: 'Every player shown', color: 'var(--text)', seats: [], wins: 0, all: true };
+  for (const g of games) for (const s of g.seats) { const won = (g.state ?? 'done') === 'done' && s.place === 1; for (const r of [rows[bdKind(s)], all]) { r.seats.push(s); if (won) r.wins++; } }
   // A player keeps their final value after their game ends, so a line ends at the build's average final value.
   const val = (s, r, m) => s.rounds[Math.min(r, s.rounds.length - 1)][m] ?? 0, avg = (seats, r, m) => seats.reduce((a, s) => a + val(s, r, m), 0) / seats.length;
   const list = [...rows.filter((r) => r.seats.length), all];
@@ -815,7 +822,7 @@ function drawBuilds() {
   const box = $('geChart'), svg = $('geSvg'), legend = $('geLegend'), S = BD.series = bdSeries();
   legend.innerHTML = S.list.map((r) => `<span><i class="${r.all ? 'dash' : ''}" style="--c:${r.color}"></i>${esc(r.name)} <small>${r.seats.length}</small></span>`).join('');
   const points = BD.metric === 'vp';
-  svg.setAttribute('aria-label', `Average ${points ? 'points' : 'attack'} by round, one line per build`); svg.classList.remove('avg', 'focus', 'hov', 'near');
+  svg.setAttribute('aria-label', `Average ${points ? 'points' : 'attack'} by round, one line per ${bdAlign() ? 'alignment at the end of the game' : 'build'}`); svg.classList.remove('avg', 'focus', 'hov', 'near');
   const W = box.clientWidth, H = box.clientHeight, slim = W < 560, top = Math.max(slim ? 34 : 26, legend.offsetHeight + 12);
   const m = slim ? { l: 30, r: 44, t: top, b: 34 } : { l: 44, r: 196, t: top, b: 40 }, pw = W - m.l - m.r, ph = H - m.t - m.b; if (pw < 50 || ph < 50) return;
   const high = Math.max(...S.list.flatMap((r) => r.pts)), ymax = points ? Math.max(S.win, high) + 2 : Math.max(5, high) * 1.1, f = (n) => n.toFixed(1);
@@ -854,22 +861,24 @@ function geBuildsPanel() {
   const name = (r) => `<td>${bdSw(r)}${esc(r.name)}</td>`;
   // Win rate by build, finished games: the builds from the highest win rate down (ties: the better average place), "All players" last.
   const fin = (GE.game ? [GE.data.games[GE.game - 1]].filter(Boolean) : GE.data.games).filter((g) => (g.state ?? 'done') === 'done'), mean = (v) => v.reduce((a, b) => a + b, 0) / v.length;
-  const wr = S.list.map((r) => { const mine = fin.flatMap((g) => g.seats.filter((s) => r.all || geKind(s) === r.k)); return { r, n: mine.length, wins: mine.filter((s) => s.place === 1).length, place: mine.length ? mean(mine.map((s) => s.place ?? 4)) : null, vp: mine.length ? mean(mine.map((s) => s.rounds.at(-1).vp)) : null }; })
+  const wr = S.list.map((r) => { const mine = fin.flatMap((g) => g.seats.filter((s) => r.all || bdKind(s) === r.k)); return { r, n: mine.length, wins: mine.filter((s) => s.place === 1).length, place: mine.length ? mean(mine.map((s) => s.place ?? 4)) : null, vp: mine.length ? mean(mine.map((s) => s.rounds.at(-1).vp)) : null }; })
     .filter((x) => x.n).sort((a, b) => (a.r.all ? 1 : 0) - (b.r.all ? 1 : 0) || b.wins / b.n - a.wins / a.n || a.place - b.place);
   const even = fin.length ? Math.round(100 * fin.length / fin.reduce((n, g) => n + g.seats.length, 0)) : 25;
+  const al = bdAlign(), word = bdWord(), Word = al ? 'Alignment' : 'Build', thTip = al ? 'By the status a player ended the game on; hover a row for its rule' : 'By the traits a player reached; hover a row for its rule';
   return `<div class="gsum">
-    <div class="gs-top"><b>Builds in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b><span class="seg2 sm" style="margin-left:auto" role="group" aria-label="What the builds graph shows">${[['vp', 'Points'], ['atk', 'Attack']].map(([k, t]) => `<button data-bdm="${k}" class="${BD.metric === k ? 'on' : ''}" title="${k === 'vp' ? 'Average points by round' : 'Average damage of one attack with the dice held, by round'}">${t}</button>`).join('')}</span></div>
+    <div class="gs-top"><b>${al ? 'Alignment' : 'Builds'} in ${GE.game ? `game ${GE.game}` : `Test ${meta.n}`}</b><span class="seg2 sm" style="margin-left:auto" role="group" aria-label="What the builds graph shows">${[['vp', 'Points'], ['atk', 'Attack']].map(([k, t]) => `<button data-bdm="${k}" class="${BD.metric === k ? 'on' : ''}" title="${k === 'vp' ? 'Average points by round' : 'Average damage of one attack with the dice held, by round'}">${t}</button>`).join('')}</span></div>
     <small class="gsum-when">${S.n} ${S.n === 1 ? 'game' : 'games'} · ${S.list.at(-1).seats.length} players${S.done < S.n ? ` · ${S.done} finished` : ''}</small>
-    ${wr.length ? `<section class="gsec"><h2>Win rate, by build</h2>
-      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th><th>Wins</th><th title="Wins as a share of the build's players. With ${even} % every build wins as often as the others.">Win rate</th><th title="Average finishing place, 1 is best; 2.5 is the middle of four players">Place</th><th title="Average points at the end">Points</th></tr></thead>
+    <div class="bd-by"><small>One line per</small><span class="seg2 sm" role="group" aria-label="How the players are grouped into lines">${[['build', 'Build', 'One line per build, by the traits a player reached'], ['align', 'Good / Evil', 'One line for the players who ended the game Good (Pure, Tainted or Corrupt) and one for those who ended it Evil (Fallen)']].map(([k, t, tip]) => `<button data-bdby="${k}" class="${BD.by === k ? 'on' : ''}" title="${tip}">${t}</button>`).join('')}</span></div>
+    ${wr.length ? `<section class="gsec"><h2>Win rate, by ${word}</h2>
+      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="${thTip}">${Word}</th><th>Players</th><th>Wins</th><th title="Wins as a share of the group's players. With ${even} % every group wins as often as the others.">Win rate</th><th title="Average finishing place, 1 is best; 2.5 is the middle of four players">Place</th><th title="Average points at the end">Points</th></tr></thead>
         <tbody>${wr.map((x) => { const pct = Math.round(100 * x.wins / x.n); return `<tr title="${esc(x.r.rule)}">${name(x.r)}<td>${x.n}</td><td>${x.wins}</td><td><b style="color:${x.r.all ? 'inherit' : pct > even ? 'var(--st-pure)' : pct < even ? 'var(--st-fallen)' : 'inherit'}">${pct} %</b></td><td>${n1(x.place)}</td><td>${n1(x.vp)}</td></tr>`; }).join('')}</tbody></table></div>
-      <div class="gsum-note" style="margin-top:8px">Finished games, best win rate first. A build that wins as often as the others sits at ${even} %: green is above that, red below. A build with one to three players is one or two games' luck.</div></section>` : ''}
-    <section class="gsec"><h2>Monsters killed, by build</h2>
-      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="By the traits a player reached; hover a row for its rule">Build</th><th>Players</th>${GE_LEVELS.map((k) => `<th title="${k} cards killed, average per player of the build">${k.replace('Difficulty', 'Diff.').replace('Abyss ', '')}</th>`).join('')}</tr></thead>
+      <div class="gsum-note" style="margin-top:8px">Finished games, best win rate first. A group that wins as often as the others sits at ${even} %: green is above that, red below. A group with one to three players is one or two games' luck.</div></section>` : ''}
+    <section class="gsec"><h2>Monsters killed, by ${word}</h2>
+      <div class="bd-table"><table class="gsum-t"><thead><tr><th title="${thTip}">${Word}</th><th>Players</th>${GE_LEVELS.map((k) => `<th title="${k} cards killed, average per player of the group">${k.replace('Difficulty', 'Diff.').replace('Abyss ', '')}</th>`).join('')}</tr></thead>
         <tbody>${S.list.map((r) => { const k = [0, 0, 0, 0]; for (const s of r.seats) geSeatKills(s).forEach((v, i) => { k[i] += v; }); return `<tr title="${esc(r.rule)}">${name(r)}<td>${r.seats.length}</td>${k.map((v) => `<td title="${v} kills by ${r.seats.length} players">${n1(v / r.seats.length)}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
-      <div class="gsum-note" style="margin-top:8px">Kills per player of the build over the whole game. A kill is a fight won or a card defeated without a battle.</div></section>
+      <div class="gsum-note" style="margin-top:8px">Kills per player of the group over the whole game. A kill is a fight won or a card defeated without a battle.</div></section>
     ${!GE.game && meta.changes?.length ? `<section class="gsec"><h2>What changed${meta.n > 1 ? ` since Test ${meta.n - 1}` : ''}</h2><ul class="gsum-log">${meta.changes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
-    <div class="gsum-note">A player's build is read from the traits they reached during the game: ${GE_BUILDS.slice(0, 5).map(([n, rule]) => `<b>${esc(n)}</b> = ${esc(rule)}`).join('; ')}; everyone else is "No clear build". A group of two or three players is one or two games' luck, not a trend. After a player's game ends they keep their final value, so each line ends at the build's average final value. ${phone.matches ? 'Touch the graph' : 'Point at the graph'} for every build's value at a round. Points / Attack beside the heading switches what the lines show; "Points" in the top bar goes back to one line per player.</div>
+    <div class="gsum-note">${al ? `A player's alignment is the one they ended their game on: <b>Evil</b> = Fallen; <b>Good</b> = Pure, Tainted or Corrupt (in the rules only a Fallen player is Evil and may attack the Good players). A player who was Fallen for a while and came back counts as Good. In a game that is still being played it is the status they have now.` : `A player's build is read from the traits they reached during the game: ${GE_BUILDS.slice(0, 5).map(([n, rule]) => `<b>${esc(n)}</b> = ${esc(rule)}`).join('; ')}; everyone else is "No clear build".`} A group of two or three players is one or two games' luck, not a trend. After a player's game ends they keep their final value, so each line ends at the group's average final value. ${phone.matches ? 'Touch the graph' : 'Point at the graph'} for every line's value at a round. Points / Attack beside the heading switches what the lines show, Build / Good / Evil how the players are grouped; "Points" in the top bar goes back to one line per player.</div>
   </div>`;
 }
 // ---------- the monsters graph ("Monsters" in the explorer's top bar): the kills and the pools by round, one line per level ----------
