@@ -128,6 +128,17 @@ export interface GatewayOptions {
 	maxOutputTokens?: number | null;
 	timeoutMs?: number;
 	maxRetries?: number;
+	/**
+	 * How often a call that got NO answer within `timeoutMs` ("gw timeout") is sent again before the
+	 * error goes up (default 0: the old behaviour, where the seat then plays a fallback move). With a
+	 * provider that now and then leaves a request without any reply, a retry costs time, not a move
+	 * made for the player. The retry goes out under a new `prompt_cache_key` (the session key plus
+	 * `~t<n>`, kept for the seat's later calls), so a gateway that keeps one session per key starts a
+	 * new session with the whole conversation instead of resuming the one whose call still hangs
+	 * there. `timeoutRetryPauseMs` (default 2 s) is the pause before a retry.
+	 */
+	timeoutRetries?: number;
+	timeoutRetryPauseMs?: number;
 	/** Several accounts (one gateway each): games are pinned per account, each with its own call
 	 *  gate; `baseUrls` / `tokenFile` are then not used (see gatewayPool.ts). */
 	pool?: GatewayPool;
@@ -160,8 +171,12 @@ export class GatewayProvider implements ChatProvider {
 	readonly #maxOutputTokens: number | null;
 	readonly #timeoutMs: number;
 	readonly #maxRetries: number;
+	readonly #timeoutRetries: number;
+	readonly #timeoutRetryPauseMs: number;
 	readonly #fetch: typeof fetch;
 	readonly #pool: GatewayPool | null;
+	/** How often each seat's calls timed out and were sent again: the suffix of its key on the wire. */
+	readonly #timeoutEpoch = new Map<string, number>();
 	/** Each seat's conversation (user and assistant turns, without the system brief). */
 	readonly #history = new Map<string, StoredTurn[]>();
 	/** The account each seat last used (a move drops that account's encrypted reasoning). */
@@ -207,6 +222,8 @@ export class GatewayProvider implements ChatProvider {
 		this.#maxOutputTokens = opts.maxOutputTokens ?? null;
 		this.#timeoutMs = opts.timeoutMs ?? 300_000;
 		this.#maxRetries = opts.maxRetries ?? 1;
+		this.#timeoutRetries = opts.timeoutRetries ?? 0;
+		this.#timeoutRetryPauseMs = opts.timeoutRetryPauseMs ?? 2_000;
 		this.#fetch = opts.fetchImpl ?? fetch;
 	}
 
@@ -233,6 +250,7 @@ export class GatewayProvider implements ChatProvider {
 				this.#history.delete(key);
 				this.#seatAccount.delete(key);
 			}
+		for (const key of [...this.#timeoutEpoch.keys()]) if (key.startsWith(`${gameId}:`)) this.#timeoutEpoch.delete(key);
 	}
 
 	/** Resume: one earlier exchange of a seat goes back into its stored conversation (no call). */
@@ -314,6 +332,7 @@ export class GatewayProvider implements ChatProvider {
 		let messages: StoredTurn[] = [...system, ...stored, ...fresh];
 		let lastError: ProviderError | null = null;
 		let trimmed = null as { dropped: number; kept: number } | null;
+		let timeoutTries = 0;
 		for (let attempt = 0; attempt <= this.#maxRetries; attempt++) {
 			const target = await this.#target(key, provider, request.signal);
 			try {
@@ -338,7 +357,7 @@ export class GatewayProvider implements ChatProvider {
 					]);
 				return {
 					...res,
-					httpAttempts: attempt + 1,
+					httpAttempts: attempt + 1 + timeoutTries,
 					// Safety path only: a full context dropped the oldest turns (recorded).
 					...(trimmed && key
 						? {
@@ -352,9 +371,17 @@ export class GatewayProvider implements ChatProvider {
 				};
 			} catch (err) {
 				const error = err instanceof ProviderError ? err : this.#networkError(err, key, target);
-				error.httpAttempts = attempt + 1;
+				error.httpAttempts = attempt + 1 + timeoutTries;
 				if (request.signal?.aborted) throw error;
 				lastError = error;
+				// No answer at all within the time limit: send the call again (`timeoutRetries`).
+				if (error.message === 'gw timeout' && timeoutTries < this.#timeoutRetries) {
+					timeoutTries += 1;
+					if (key) this.#timeoutEpoch.set(key, (this.#timeoutEpoch.get(key) ?? 0) + 1);
+					await new Promise((resolve) => setTimeout(resolve, this.#timeoutRetryPauseMs));
+					attempt -= 1;
+					continue;
+				}
 				// A real usage limit on a pooled account: block it until its reset and go on with
 				// this game on another account (or wait until one opens).
 				if (error.usageLimit && target.account && this.#pool) {
@@ -379,6 +406,12 @@ export class GatewayProvider implements ChatProvider {
 			}
 		}
 		throw lastError ?? new ProviderError('gw: unknown failure', null, false);
+	}
+
+	/** The session key as sent: with `~t<n>` once the seat's calls have timed out n times (see `timeoutRetries`). */
+	#wireKey(key: string): string {
+		const n = this.#timeoutEpoch.get(key) ?? 0;
+		return n ? `${key}~t${n}` : key;
 	}
 
 	#networkError(err: unknown, key: string | undefined, target?: Target): ProviderError {
@@ -431,7 +464,7 @@ export class GatewayProvider implements ChatProvider {
 						...(this.#reasoningSummary ? { summary: this.#reasoningSummary } : {})
 					},
 					...(withReasoning ? { include: ['reasoning.encrypted_content'], store: false } : {}),
-					...(key ? { prompt_cache_key: key } : {}),
+					...(key ? { prompt_cache_key: this.#wireKey(key) } : {}),
 					...(this.#maxOutputTokens ? { max_output_tokens: this.#maxOutputTokens } : {})
 				}
 			: {
@@ -441,7 +474,7 @@ export class GatewayProvider implements ChatProvider {
 						...turns.map((m) => ({ role: m.role, content: m.content }))
 					],
 					reasoning_effort: this.#effort,
-					...(key ? { prompt_cache_key: key } : {}),
+					...(key ? { prompt_cache_key: this.#wireKey(key) } : {}),
 					...(this.#maxOutputTokens ? { max_completion_tokens: this.#maxOutputTokens } : {})
 				};
 		const res = await this.#fetch(`${target.url}/${responses ? 'responses' : 'chat/completions'}`, {

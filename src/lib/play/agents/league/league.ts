@@ -702,6 +702,8 @@ export class League {
 				history: reasoning ? 'reasoning' : 'messages',
 				effort,
 				pool: this.#pool!,
+				timeoutRetries: this.config.gatewayTimeoutRetries,
+				timeoutMs: this.config.gatewayTimeoutSec * 1000,
 				fetchImpl: this.#opts.fetchImpl
 			});
 			this.#providers.set(key, p);

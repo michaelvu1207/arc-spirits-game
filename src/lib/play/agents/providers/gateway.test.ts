@@ -495,3 +495,51 @@ describe('gateway account pool', () => {
 		expect(pool.nextReset()).toBeGreaterThan(Date.now());
 	});
 });
+
+describe('gateway provider: a call that gets no answer (timeoutRetries)', () => {
+	/** A fetch that gives no answer (as AbortSignal.timeout does) for the first `silent` calls. */
+	function silentThenOk(silent: number) {
+		let n = 0;
+		const sent: string[][] = [];
+		const keys: string[] = [];
+		const impl = (async (_url: string, init: RequestInit) => {
+			n += 1;
+			sent.push(JSON.parse(String(init.body)).messages.map((m: { content: string }) => m.content));
+			keys.push(JSON.parse(String(init.body)).prompt_cache_key);
+			if (n <= silent) throw Object.assign(new Error('The operation timed out'), { name: 'TimeoutError' });
+			return new Response(JSON.stringify(ok('{"action":"a1","reason":"r"}').body), { status: 200 });
+		}) as unknown as typeof fetch;
+		return { impl, sent, keys, calls: () => n };
+	}
+	const make = (impl: typeof fetch, timeoutRetries?: number) =>
+		new GatewayProvider({ baseUrls: ['http://h/v1'], token: 't', fetchImpl: impl, timeoutRetryPauseMs: 1, ...(timeoutRetries === undefined ? {} : { timeoutRetries }) });
+
+	it('by default the timeout goes up at once (the seat then falls back), as before', async () => {
+		const f = silentThenOk(1);
+		await expect(make(f.impl).complete(chat('D1', 'g:Red'))).rejects.toThrow('gw timeout');
+		expect(f.calls()).toBe(1);
+	});
+
+	it('with timeoutRetries the same call is sent again and its answer is used', async () => {
+		const f = silentThenOk(2);
+		const p = make(f.impl, 4);
+		const res = await p.complete(chat('D1', 'g:Red'));
+		expect(res.text).toBe('{"action":"a1","reason":"r"}');
+		expect(res.httpAttempts).toBe(3);
+		expect(f.calls()).toBe(3);
+		// Every try carried the same conversation; the answer is stored once.
+		expect(f.sent[0]).toEqual(f.sent[2]);
+		await p.complete(chat('D2', 'g:Red'));
+		expect(f.sent[3]).toEqual(['BRIEF', 'D1', '{"action":"a1","reason":"r"}', 'D2']);
+		// Each retry goes out under a new key, and the seat keeps the last one; another seat is untouched.
+		expect(f.keys).toEqual(['g:Red', 'g:Red~t1', 'g:Red~t2', 'g:Red~t2']);
+		await p.complete(chat('B1', 'g:Blue'));
+		expect(f.keys[4]).toBe('g:Blue');
+	});
+
+	it('gives up after the allowed number of retries', async () => {
+		const f = silentThenOk(99);
+		await expect(make(f.impl, 2).complete(chat('D1', 'g:Red'))).rejects.toThrow('gw timeout');
+		expect(f.calls()).toBe(3);
+	});
+});

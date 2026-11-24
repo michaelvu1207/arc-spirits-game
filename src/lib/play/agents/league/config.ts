@@ -45,6 +45,14 @@ export interface LeagueConfig {
 	maxCallsPerMin: number;
 	/** Seconds a stop waits for running after-game notebook calls before it aborts them. */
 	stopGraceSec: number;
+	/**
+	 * How often a model call that got no answer at all within the gateway's time limit is sent again
+	 * before the seat falls back to a default move (default 0). See `timeoutRetries` in
+	 * providers/gateway.ts. Set it (for example 4) when the provider leaves calls without a reply.
+	 */
+	gatewayTimeoutRetries: number;
+	/** Seconds a model call may take before it counts as unanswered (default 300). Healthy calls took at most 60 s in 8 500 calls on 23 November 2026. */
+	gatewayTimeoutSec: number;
 	/** A model benchmark: agents without strategy or learning; the report ranks agents, models
 	 *  and efforts (Plackett-Luce rating with a 95% range, as the tournament). */
 	benchmark: boolean;
@@ -80,6 +88,8 @@ export const DEFAULT_LEAGUE_CONFIG: LeagueConfig = {
 	callsPerMin: 120,
 	maxCallsPerMin: 300,
 	stopGraceSec: 60,
+	gatewayTimeoutRetries: 0,
+	gatewayTimeoutSec: 300,
 	benchmark: false
 };
 
@@ -112,6 +122,8 @@ export function loadLeagueConfig(leagueDir: string): LeagueConfig {
 		positive(name);
 	positive('seed', 0);
 	positive('stopGraceSec', 0);
+	positive('gatewayTimeoutRetries', 0);
+	positive('gatewayTimeoutSec', 10);
 	if (config.maxGames !== null) positive('maxGames');
 	if (typeof config.benchmark !== 'boolean') throw new Error('league.json: "benchmark" must be true or false');
 	if (config.seatsPerGame < 2 || config.seatsPerGame > 4)
