@@ -216,6 +216,7 @@
     main.ge-mode .gf { display: contents; }
     main.ge-mode .gf-f { display: grid; gap: 3px; font-size: 11px; } main.ge-mode .gf:first-child .gf-f:first-child { grid-column: 1 / -1; }
     main.ge-mode .gf-f select { width: 100%; max-width: none; min-width: 0; padding: 8px 8px; font-size: 16px; }
+    main.ge-mode #gePlaceWrap { grid-column: 1 / -1; } main.ge-mode #gePlace { display: flex; } main.ge-mode #gePlace button { flex: 1; padding: 7px 4px; }
     main.ge-mode .gf-live { grid-column: 1 / -1; order: 5; white-space: normal; flex-wrap: wrap; gap: 4px 10px; }
     main.ge-mode #geMetric { grid-column: 1 / -1; order: -1; display: flex; } main.ge-mode #geMetric button { flex: 1; padding: 7px 4px; }
     main.ge-mode .scroll { overflow: visible; padding: 0 12px 28px; display: block; }
@@ -505,6 +506,9 @@ let geView = 'classes'; try { geView = localStorage.getItem('geView') === 'board
 const AVG = { off: 'Off', place: 'By finishing place', seat: 'By turn order' };
 let geAvg = 'off'; try { const v = localStorage.getItem('geAvg'); if (v in AVG) geAvg = v; } catch {}
 const ORD = ['1st', '2nd', '3rd', '4th'];
+// The Attack graph draws the players of one finishing place (1 to 4; kept between visits), or of every place (0).
+let gePlace = 1; try { const v = localStorage.getItem('gePlace'); if (['0', '1', '2', '3', '4'].includes(v)) gePlace = Number(v); } catch {}
+const geAtkTab = () => !GE.builds && !GE.mons && GE.metric === 'atk';
 // Line smoothing on every graph (kept between visits): off, curved lines through the same values, or each value replaced by the
 // average of the rounds around it (3 or 5 rounds, drawn curved). The numbers on hover and at the line ends stay the real values.
 const SMOOTH = { off: 'Off', curve: 'Curved lines', a3: '3-round average', a5: '5-round average' };
@@ -609,8 +613,9 @@ function paintLines() {
       ${meta.live ? `<span class="gf-live" title="This test is being played. The lines are fetched again every 20 seconds."><span class="ge-live">Live</span><span class="gf-sub">${GE.data.games.filter((g) => g.state === 'done').length} of ${GE.data.games.length} finished · ${esc(liveAt)}</span></span>` : ''}
     </div>
     <div class="gf">
-      <span class="seg2" id="geMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${!GE.builds && !GE.mons && GE.metric === 'vp' ? 'on' : ''}" title="Each player's points by round">Points</button><button data-metric="builds" class="${GE.builds ? 'on' : ''}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${!GE.builds && !GE.mons && GE.metric === 'atk' ? 'on' : ''}" title="Each player's average damage of one attack with the dice held">Attack</button><button data-metric="mons" class="${GE.mons ? 'on' : ''}" title="Monsters killed and the pools draining, by round">Monsters</button></span>
+      <span class="seg2" id="geMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${!GE.builds && !GE.mons && GE.metric === 'vp' ? 'on' : ''}" title="Each player's points by round">Points</button><button data-metric="builds" class="${GE.builds ? 'on' : ''}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${!GE.builds && !GE.mons && GE.metric === 'atk' ? 'on' : ''}" title="The average damage of one attack with the dice held, for the players of one finishing place">Attack</button><button data-metric="mons" class="${GE.mons ? 'on' : ''}" title="Monsters killed and the pools draining, by round">Monsters</button></span>
       <label class="gf-f" title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value."><span>Averages</span><select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <span class="gf-f" id="gePlaceWrap" hidden title="The Attack graph draws the players of one finishing place: every player who finished 1st in their game, or 2nd, 3rd or 4th. Players who tie share a place."><span>Place</span><span class="seg2" id="gePlace" role="group" aria-label="Finishing place shown">${ORD.map((t, k) => `<button data-place="${k + 1}" class="${gePlace === k + 1 ? 'on' : ''}">${t}</button>`).join('')}<button data-place="0" class="${gePlace === 0 ? 'on' : ''}" title="Every player, as before">All</button></span></span>
       <label class="gf-f" id="geAtkWrap" hidden title="What the attack lines count: every source of damage (the dice plus the flat damage of Beast), or the attack dice alone"><span>Attack counts</span><select id="geAtkSel"><option value="0" ${geAtkDice ? '' : 'selected'}>Dice and Beast</option><option value="1" ${geAtkDice ? 'selected' : ''}>Dice only</option></select></label>
       <label class="gf-f" title="How the lines are drawn. Curved lines pass through the same values. An average replaces each value by the mean of the 3 or 5 rounds around it, which evens out round-to-round jumps. The numbers on hover and at the line ends are always the real values."><span>Smoothing</span><select id="geSmoothSel">${Object.entries(SMOOTH).map(([k, t]) => `<option value="${k}" ${geSmooth === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     </div>`;
@@ -623,6 +628,8 @@ function mountLines() {
   $('geMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; GE.builds = b.dataset.metric === 'builds'; GE.mons = b.dataset.metric === 'mons'; GE.metric = GE.builds || GE.mons ? 'vp' : b.dataset.metric; if (GE.builds || GE.mons) GE.sel = null;
     for (const x of $('geMetric').children) x.classList.toggle('on', x === b); geHover(null); bdLeave(); drawLines(); };
   $('geAtkSel').onchange = (e) => { geAtkDice = e.target.value === '1'; try { localStorage.setItem('geAtkDice', geAtkDice ? '1' : '0'); } catch {} bdLeave(); drawLines(); };
+  $('gePlace').onclick = (e) => { const b = e.target.closest('[data-place]'); if (!b) return; gePlace = Number(b.dataset.place); try { localStorage.setItem('gePlace', String(gePlace)); } catch {}
+    for (const x of $('gePlace').children) x.classList.toggle('on', x === b); geHover(null); drawLines(); };
   $('geSmoothSel').onchange = (e) => { geSmooth = e.target.value; try { localStorage.setItem('geSmooth', geSmooth); } catch {} bdLeave(); drawLines(); };
   $('geAvgSel').onchange = (e) => { geAvg = e.target.value; try { localStorage.setItem('geAvg', geAvg); } catch {} drawLines(); };
   $('geGame').onchange = (e) => { GE.game = Number(e.target.value); if (GE.sel && GE.game && GE.sel.gi !== GE.game) GE.sel = null; drawLines(); };
@@ -666,14 +673,15 @@ function mountLines() {
 }
 addEventListener('keydown', (e) => { if (table !== 'bal_lines' || !GE.sel || e.target.closest?.('select, textarea, input')) return;
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); geSelect(GE.sel, GE.r + (e.key === 'ArrowLeft' ? -1 : 1)); } else if (e.key === 'Escape') geSelect(null); });
-const geShown = () => GE.lines.filter((l) => !GE.game || l.gi === GE.game);
+const geShown = () => GE.lines.filter((l) => (!GE.game || l.gi === GE.game) && (!gePlace || !geAtkTab() || l.s.place === gePlace));
 function drawLines() {
   const box = $('geChart'), svg = $('geSvg'); if (!box || !GE.data) return;
   if ($('geAvgSel')) $('geAvgSel').disabled = !!(GE.builds || GE.mons);
+  if ($('gePlaceWrap')) $('gePlaceWrap').hidden = !geAtkTab();
   if ($('geAtkWrap')) $('geAtkWrap').hidden = GE.mons || !(GE.builds ? BD.metric === 'atk' : GE.metric === 'atk');
   if (GE.mons) return drawMonsters();
   if (GE.builds) return drawBuilds();
-  $('geLegend').innerHTML = GE_STATUS_LEGEND; svg.setAttribute('aria-label', 'Points by round, one line per player');
+  $('geLegend').innerHTML = GE_STATUS_LEGEND; svg.setAttribute('aria-label', GE.metric === 'atk' ? `Average attack by round, one line per player${gePlace ? ` who finished ${ORD[gePlace - 1]}` : ''}` : 'Points by round, one line per player');
   const W = box.clientWidth, H = box.clientHeight, slim = W < 560, m = slim ? { l: 30, r: 58, t: 34, b: 34 } : { l: 44, r: 84, t: 26, b: 40 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
   if (pw < 50 || ph < 50) return;
   const all = GE.lines, vals = all.flatMap((l) => l.pts.map(gv)), points = GE.metric === 'vp';
@@ -685,7 +693,7 @@ function drawLines() {
   const tick = ymax - ymin > 28 ? 10 : 5;
   for (let v = Math.ceil(ymin / tick) * tick; v <= ymax; v += tick) s += `<line class="${v === 0 ? 'axis' : 'grid'}" x1="${m.l}" x2="${W - m.r}" y1="${f(y(v))}" y2="${f(y(v))}"/><text x="${m.l - 8}" y="${f(y(v) + 4)}" text-anchor="end">${v}</text>`;
   for (let r = 0; r <= xmax; r += xmax > 30 ? 10 : 5) s += `<line class="grid" x1="${f(x(r))}" x2="${f(x(r))}" y1="${H - m.b}" y2="${H - m.b + 4}"/><text x="${f(x(r))}" y="${H - m.b + 17}" text-anchor="middle">${r}</text>`;
-  s += `${slim ? '' : `<text class="cap" x="${m.l - 34}" y="14">${points ? 'Points' : geAtkDice ? 'Average attack from the dice alone (no Beast damage)' : 'Average attack (damage of one attack with the dice held)'}</text>`}<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
+  s += `${slim ? '' : `<text class="cap" x="${m.l - 34}" y="14">${points ? 'Points' : (geAtkDice ? 'Average attack from the dice alone (no Beast damage)' : 'Average attack (damage of one attack with the dice held)') + (gePlace ? ` · the ${geShown().length} player${geShown().length === 1 ? '' : 's'} who finished ${ORD[gePlace - 1]}` : '')}</text>`}<text class="cap" x="${f(m.l + pw / 2)}" y="${H - (slim ? 5 : 8)}" text-anchor="middle">Round</text>`;
   if (points) s += `<line class="win" x1="${m.l}" x2="${W - m.r}" y1="${f(y(GE.data.win_points))}" y2="${f(y(GE.data.win_points))}"/><text class="cap" x="${m.l + 6}" y="${f(y(GE.data.win_points) - 6)}">${GE.data.win_points} points wins</text>`;
   s += `<line class="cross" id="geCross" y1="${m.t}" y2="${H - m.b}" visibility="hidden"/>`;
   const shown = geShown();
@@ -757,7 +765,7 @@ function geFocus() {
   dot.setAttribute('cx', px); dot.setAttribute('cy', py); dot.setAttribute('visibility', 'visible'); dot.style.fill = `var(--st-${stKey(p.st)})`;
   cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
   // Direct labels at the ends of the four lines of this game (seat and final points), kept 14 px apart.
-  const mates = GE.lines.filter((o) => o.gi === l.gi).map((o) => ({ o, y: g.y(gv(o.pts.at(-1))) })).sort((a, b) => a.y - b.y);
+  const mates = geShown().filter((o) => o.gi === l.gi).map((o) => ({ o, y: g.y(gv(o.pts.at(-1))) })).sort((a, b) => a.y - b.y);
   for (let k = 1; k < mates.length; k++) if (mates[k].y - mates[k - 1].y < 14) mates[k].y = mates[k - 1].y + 14;
   labels.innerHTML = mates.map(({ o, y }) => `<text class="lab ${o === l ? 'sel' : ''}" x="${(g.x(o.last) + 8).toFixed(1)}" y="${(y + 4).toFixed(1)}">${g.slim ? 'P' : 'Player '}${o.pn} · ${gv(o.pts.at(-1))}</text>`).join('');
   paintSide();
@@ -1067,7 +1075,7 @@ function geSummary() {
     <div><h3>Monsters fought</h3>
       <table class="gsum-t"><thead><tr><th>Level</th><th>Fights</th><th>Kills</th><th title="Fights in which the monster's hit corrupted the player">Corrupted</th><th>Average kill round</th><th title="Cards left in the deck at the end, average per game">Left in the deck</th></tr></thead><tbody>${GE_LEVELS.map((k, i) => { const e = t.lv[k]; return `<tr><td>${k}</td><td>${e.f}</td><td>${e.k}</td><td>${e.cor}</td><td>${e.k ? ge1(e.kr / e.k) : '–'}</td><td>${i === 0 ? 'always there' : t.left[i - 1] == null ? '–' : `${ge1(t.left[i - 1])} of ${ge1(t.start[i - 1])}`}</td></tr>`; }).join('')}</tbody></table></div>
     </section>
-    <div class="gsum-note">${phone.matches ? `Tap a point on a line for that player's board at that round, then drag sideways to move through the rounds. Tap an empty spot to go back. "Attack" at the top shows each player's attack by round.` : `Click a point on a line for that player's board at that round. Drag along the line, or use ← and →, to move through the rounds. "Attack" in the top bar shows each player's attack by round.`}</div>
+    <div class="gsum-note">${phone.matches ? `Tap a point on a line for that player's board at that round, then drag sideways to move through the rounds. Tap an empty spot to go back. "Attack" at the top shows the attack by round of the players of one finishing place.` : `Click a point on a line for that player's board at that round. Drag along the line, or use ← and →, to move through the rounds. "Attack" in the top bar shows the attack by round of the players of one finishing place (1st, 2nd, 3rd, 4th, or all).`}</div>
   </div>`;
 }
 function geAllTests() {
