@@ -37,7 +37,7 @@
 	"fighterInitiative": true,
 	"elementalistMethods": true,
 	"restByStatus": true,
-	"restBase4": true,
+	"restBase4": false,
 	"fighterDice35": true,
 	"cultivatorBarrier35": true,
 	"fairyEnchanted": true,
