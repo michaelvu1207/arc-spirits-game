@@ -818,6 +818,8 @@ export interface RuleNumbers {
 	sentinelDamagePerDie?: number;
 	/** Under `mageArcaneDice`: Arcane attack dice Mage gains on its awakening (default 4; Michael, 2026-11-22: "nerf the mage by 1 attack dice so only 3 arcane attack"). See `mageAwakenArcaneDice` in rules.ts. */
 	mageAwakenArcaneDice?: number;
+	/** Barrier a Rest restores at Pure / Tainted / Corrupt / Fallen. Replaces the numbers of `restByStatus` and `restBase4` (Michael, 2026-11-25: "Pure rest should be 4"). See `restBarrier` in rules.ts. */
+	restBarrier?: [number, number, number, number];
 }
 
 /** rules.json: the rule switches plus the optional rule numbers. */

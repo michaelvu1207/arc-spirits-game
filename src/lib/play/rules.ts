@@ -386,8 +386,11 @@ export const REST_BARRIER = 2;
 /**
  * The Barrier a Rest restores at status `statusLevel` (0 Pure, 1 Tainted, 2 Corrupt, 3 Fallen).
  * Under `restByStatus`: 2 plus 1 for each status step above Fallen.
+ * `numbers.restBarrier` (Michael, 2026-11-25) replaces all of that with one number per status.
  */
 export function restBarrier(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, statusLevel: number): number {
+	const list = catalog?.rules?.numbers?.restBarrier;
+	if (list) return list[Math.min(3, Math.max(0, statusLevel))];
 	// Rule `restBase4` (Michael, 2026-11-21): the base is 4, not 2.
 	const base = ruleValue(catalog, 'restBase4') ? 4 : REST_BARRIER;
 	if (!ruleValue(catalog, 'restByStatus')) return base;
@@ -474,8 +477,11 @@ function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undef
 		} else if (name === 'mageAwakenArcaneDice') {
 			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.mageAwakenArcaneDice must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
 			else numbers.mageAwakenArcaneDice = value as number;
+		} else if (name === 'restBarrier') {
+			if (!wholeNumbers(value, 4, 4)) problems.push(`rules: numbers.restBarrier must be 4 whole numbers (Barrier a Rest restores at Pure, Tainted, Corrupt, Fallen), got ${JSON.stringify(value)}`);
+			else numbers.restBarrier = [value[0], value[1], value[2], value[3]];
 		} else {
-			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore, sentinelDamagePerDie, mageAwakenArcaneDice)`);
+			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore, sentinelDamagePerDie, mageAwakenArcaneDice, restBarrier)`);
 		}
 	}
 	return Object.keys(numbers).length ? numbers : undefined;

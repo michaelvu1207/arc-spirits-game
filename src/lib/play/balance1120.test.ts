@@ -255,6 +255,13 @@ describe('restByStatus: Rest restores 2 Barrier plus 1 per status step above Fal
 		expect(buildRulesBrief(FOUR)).toContain('Rest restores 4 Barrier plus 1 for each status step above Fallen (Pure 7, Tainted 6, Corrupt 5, Fallen 4');
 		expect(buildRulesBrief(ON)).toContain('Rest restores 2 Barrier plus 1 for each status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2');
 	});
+	it('numbers.restBarrier: one number per status replaces the switches (Pure 4, Tainted 4, Corrupt 3, Fallen 2)', () => {
+		const LIST = withRules({ restByStatus: true, restBase4: true, numbers: { restBarrier: [4, 4, 3, 2] } });
+		expect([0, 1, 2, 3].map((s) => restored(LIST, s))).toEqual([4, 4, 3, 2]);
+		expect(restored(LIST, 0, 3)).toBe(3);
+		expect(buildRulesBrief(LIST)).toContain('Rest restores Barrier by your status (Pure 4, Tainted 4, Corrupt 3, Fallen 2; never above your Max Barrier)');
+		expect(parseRules({ numbers: { restBarrier: [4, 4, 3] } }).problems).toHaveLength(1);
+	});
 });
 
 describe('fairyEnchanted: a Fairy gives Enchanted dice when it awakens', () => {

@@ -60,6 +60,7 @@
 		"elementalistRest": [1, 2, 3, 5],
 		"elementalistNoRelic": 4,
 		"sentinelDamagePerDie": 1,
-		"mageAwakenArcaneDice": 3
+		"mageAwakenArcaneDice": 3,
+		"restBarrier": [4, 4, 3, 2]
 	}
 }
