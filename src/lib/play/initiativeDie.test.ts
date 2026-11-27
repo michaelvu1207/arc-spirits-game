@@ -286,3 +286,46 @@ describe('initiativeDie: what the players read', () => {
 		expect(buildRulesBrief(OFF)).toContain('Initiative decides who strikes first in PvP.');
 	});
 });
+
+describe('firetailDamage: "In a round when another player is at your location, deal 3 more damage in combat." (Michael, 2026-11-26)', () => {
+	const FOX = withRules({ initiativeDie: true, firetailDamage: true });
+	/** A Firetail holder at the Arcane Abyss with 4 Exalted dice fights a monster; Blue is at `blueAt`. Returns the damage dealt. */
+	const fight = (catalog: PlayCatalog, blueAt: string | null, seed = 3) => {
+		const p = at(0, { navigationDestination: 'Arcane Abyss', spirits: [spirit(1, { Firetail: 1 })], monsterHand: [monster(60, 1)] } as never);
+		const plain = at(0, { navigationDestination: 'Arcane Abyss', monsterHand: [monster(60, 1)] } as never);
+		const blue = () => at(0, { playerColor: 'Blue', navigationDestination: blueAt } as never);
+		const withFox = fightMonster(makeState(p, { Blue: blue() }, seed), 'Red', catalog, 0)!;
+		const without = fightMonster(makeState(plain, { Blue: blue() }, seed), 'Red', catalog, 0)!;
+		return { more: withFox.playerDamage - without.playerDamage, log: withFox.log.join(' / ') };
+	};
+	it('monster fight: 3 more damage with another player at the location, none alone', () => {
+		for (const seed of [1, 2, 3, 4, 5]) {
+			expect(fight(FOX, 'Arcane Abyss', seed).more).toBe(3);
+			expect(fight(FOX, 'Forest Region', seed).more).toBe(0);
+			expect(fight(FOX, null, seed).more).toBe(0);
+		}
+		expect(fight(FOX, 'Arcane Abyss').log).toContain('Firetail: another player is at your location — deal 3 more damage.');
+		expect(fight(FOX, 'Arcane Abyss').log).not.toMatch(/Gained \d+ initiative/);
+	});
+	it('player fight: the holder deals 3 more, as attacker and as defender', () => {
+		for (const holder of ['Red', 'Blue'] as const) {
+			const mk = (fox: boolean) => {
+				const red = at(3, { navigationDestination: 'Fire Region', spirits: fox && holder === 'Red' ? [spirit(1, { Firetail: 1 })] : [] } as never);
+				const blue = at(0, { playerColor: 'Blue', navigationDestination: 'Fire Region', spirits: fox && holder === 'Blue' ? [spirit(1, { Firetail: 1 })] : [] } as never);
+				const combat = resolveEncounterCombat(makeState(red, { Blue: blue }, 11), FOX, ['Red'], ['Blue']);
+				return combat.sides.find((s) => s.seat === holder)!.damageDealt;
+			};
+			expect(mk(true) - mk(false)).toBe(3);
+		}
+	});
+	it('text, and off it is the old Firetail', () => {
+		const schema = [{ count: 1, effects: [{ type: 'benefit', description: 'In a round when another player is at your location, gain 3 Initiative.' }] }] as never;
+		const text = (c: PlayCatalog) => (ruleAdjustedClassSchema(c, 'Firetail', schema) ?? []).flatMap((t) => (t.effects ?? []).map((e) => e.description)).join(' ');
+		expect(text(FOX)).toBe('In a round when another player is at your location, deal 3 more damage in combat.');
+		expect(text(withRules({ firetailDamage: true }))).toBe('In a round when another player is at your location, deal 3 more damage in combat.');
+		expect(text(DIE)).toBe('No effect.');
+		expect(text(OFF)).toBe('In a round when another player is at your location, gain 3 Initiative.');
+		expect(fight(OFF, 'Arcane Abyss').more).toBe(0);
+		expect(fight(OFF, 'Arcane Abyss').log).toContain('Gained 3 initiative.');
+	});
+});

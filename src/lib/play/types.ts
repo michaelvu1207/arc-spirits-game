@@ -992,6 +992,8 @@ export interface PlayRuleSwitches {
 	permanentRewardChoice?: boolean;
 	/** Initiative is a 12-sided die, not a number (Michael, 2026-11-26). See `initiativeDie` in rules.ts. */
 	initiativeDie?: boolean;
+	/** Firetail: "In a round when another player is at your location, deal 3 more damage in combat." (Michael, 2026-11-26). See `firetailDamage` in rules.ts. */
+	firetailDamage?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

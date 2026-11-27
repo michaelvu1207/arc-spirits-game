@@ -54,6 +54,7 @@
 	"arcaneBloodPerPoint": true,
 	"permanentRewardChoice": true,
 	"initiativeDie": true,
+	"firetailDamage": true,
 	"numbers": {
 		"diceFaces": {
 			"enchanted": [0, 0, 0, 1, 1, 1]

@@ -245,6 +245,10 @@
  *   "gain the initiative if your side doesn't"; Assassin loses its strike-first ("remove the strike first from
  *   assasin"); Paladin's side attacks first when both sides have the initiative; Bastion halves when the opponent
  *   has the initiative and its holder's side does not. The wording is "gain the initiative". See combat.ts.
+ * - firetailDamage (default false; Michael, 2026-11-26, after the initiative die left Firetail with no effect:
+ *   "ok change it to that"): true ⇒ Firetail is "In a round when another player is at your location, deal 3 more
+ *   damage in combat." (monster fights and player fights; `FIRETAIL_DAMAGE` in effects/classes/firetail.ts). It gives
+ *   no initiative then, whatever the other Firetail switches say.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
  *   for a Fighter build. See classes/strategist.ts, darkAssassin.ts, firetail.ts.
@@ -355,7 +359,8 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	fighterDice35: false,
 	cultivatorBarrier35: false,
 	permanentRewardChoice: false,
-	initiativeDie: false
+	initiativeDie: false,
+	firetailDamage: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -560,7 +565,7 @@ const INITIATIVE_DIE_CLASS_TEXT: Record<string, (text: string) => string> = {
 	Monk: (t) => t.replace(/gain \d+ Initiative and take/, 'take'),
 	Paladin: () => 'If both sides have the initiative, your side attacks first.',
 	Huntress: (t) => t.replace(/Gain \d+ initiative\.\s*/, ''),
-	Firetail: () => 'No effect.',
+	Firetail: (t) => (/initiative/i.test(t) ? 'No effect.' : t),
 	Corruptor: (t) => t.replace(/\s*Gain \d+ Initiative\./, ''),
 	Titan: (t) => t.replace(/Gain (\d+) damage and \d+ Initiative\./, 'Gain $1 damage.'),
 	Bastion: (t) => t.replace('If the opponent has higher initiative', 'If the opponent has the initiative and your side does not'),
@@ -735,6 +740,14 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Feral',
 		count: 1,
 		text: 'When an Evil player attacks you, your side strikes first and deals 3 more damage. When a monster attacks you, deal 3 more damage.'
+	},
+	// 2026-11-26: before the other Firetail texts (the first entry wins).
+	{
+		rule: 'firetailDamage',
+		when: true,
+		className: 'Firetail',
+		count: 1,
+		text: 'In a round when another player is at your location, deal 3 more damage in combat.'
 	},
 	// 2026-11-21: before the `firetailVsMonsters` text of the same breakpoint (the first entry wins).
 	{
