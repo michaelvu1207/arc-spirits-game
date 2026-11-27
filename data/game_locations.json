@@ -7,7 +7,14 @@
   "updated_at": "2026-06-23T08:03:30.622836+00:00",
   "background_image_path": null,
   "image_with_icons_path": null,
-  "reward_rows": []
+  "reward_rows": [
+   {
+    "type": "gain",
+    "gain_icon_ids": [
+     "12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e"
+    ]
+   }
+  ]
  },
  {
   "id": "2f32acdf-01de-4d1f-a1bd-ed9009ef052e",

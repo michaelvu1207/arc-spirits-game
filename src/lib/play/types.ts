@@ -994,6 +994,8 @@ export interface PlayRuleSwitches {
 	initiativeDie?: boolean;
 	/** Firetail: "In a round when another player is at your location, deal 3 more damage in combat." (Michael, 2026-11-26). See `firetailDamage` in rules.ts. */
 	firetailDamage?: boolean;
+	/** At the Arcane Abyss a round is a fight OR the Arcane Abyss Summon action, never both (Michael, 2026-11-27). See `abyssFightOrSummon` in rules.ts. */
+	abyssFightOrSummon?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */

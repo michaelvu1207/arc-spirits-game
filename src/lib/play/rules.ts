@@ -249,6 +249,12 @@
  *   "ok change it to that"): true ⇒ Firetail is "In a round when another player is at your location, deal 3 more
  *   damage in combat." (monster fights and player fights; `FIRETAIL_DAMAGE` in effects/classes/firetail.ts). It gives
  *   no initiative then, whatever the other Firetail switches say.
+ * - abyssFightOrSummon (default false; Michael, 2026-11-27: "bring back the summon action but have it an option to do
+ *   the fight OR an arcane abyss summon action"): the Arcane Abyss has its Arcane Abyss Summon action again (the
+ *   tables' `reward_rows` on the Arcane Abyss; Michael had removed it on 2026-11-20). true ⇒ in one round a player
+ *   at the Arcane Abyss either fights or takes that action: after the action no fight can start that round (a
+ *   Monster Hunter's second fight and the Power Abyssal Execution included), and after a fight the action is gone.
+ *   Drawing and keeping monster cards is not touched. See `abyssSummonRow` in locationInteractions.ts.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
  *   for a Fighter build. See classes/strategist.ts, darkAssassin.ts, firetail.ts.
@@ -360,7 +366,8 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	cultivatorBarrier35: false,
 	permanentRewardChoice: false,
 	initiativeDie: false,
-	firetailDamage: false
+	firetailDamage: false,
+	abyssFightOrSummon: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];

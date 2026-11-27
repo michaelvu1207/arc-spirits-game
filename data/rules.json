@@ -55,6 +55,7 @@
 	"permanentRewardChoice": true,
 	"initiativeDie": true,
 	"firetailDamage": true,
+	"abyssFightOrSummon": true,
 	"numbers": {
 		"diceFaces": {
 			"enchanted": [0, 0, 0, 1, 1, 1]

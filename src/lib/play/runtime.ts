@@ -94,7 +94,9 @@ import {
 	matchRewardCost,
 	originRuneOptions,
 	type ResolvedRune,
-	type GainEffect
+	type GainEffect,
+	ABYSS_SUMMON_USED,
+	isAbyssSummonRow
 } from './locationInteractions';
 import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
 import { noteMonsterPoints, settleSidePoints } from './sidePoints';
@@ -3408,6 +3410,11 @@ function reduceCommand(
 			if (interaction.gains.some(g => g.type === 'navigationPower' && g.replace) && !player.powerInventory?.length) {
 				return failure('power_missing', 'You need a held Power to replace.');
 			}
+			// Rule `abyssFightOrSummon`: a round at the Arcane Abyss is a fight OR the Arcane Abyss Summon action.
+			const abyssChoice = ruleValue(catalog, 'abyssFightOrSummon') && destination === 'Arcane Abyss' && isAbyssSummonRow(interaction);
+			if (abyssChoice && player.actionsUsedThisRound.includes('combat')) {
+				return failure('action_used', 'You fought this round: the Arcane Abyss Summon action is in place of a fight.');
+			}
 
 			// Gain rows are normally once per round. Nomad ("do ALL location interactions
 			// up to two times") raises the per-row allowance via extraActions['locationInteraction'],
@@ -3574,6 +3581,7 @@ function reduceCommand(
 			}
 
 			player.actionsUsedThisRound.push(usedKey);
+			if (abyssChoice) player.actionsUsedThisRound.push(ABYSS_SUMMON_USED);
 			player.lastAction = {
 				key: 'reward',
 				label: interaction.kind === 'trade' ? 'Trade' : 'Gain',
@@ -3671,6 +3679,10 @@ function reduceCommand(
 			const combatAllowance = 1 + (active.player.extraActions?.combat ?? 0);
 			if (combatsUsed >= combatAllowance) {
 				return failure('action_used', 'You have no monster-combat actions left this round.');
+			}
+			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action took the place of this round's fights.
+			if (ruleValue(catalog, 'abyssFightOrSummon') && active.player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED)) {
+				return failure('action_used', 'You took the Arcane Abyss Summon action this round: it takes the place of your fight.');
 			}
 			const result = fightMonster(state, active.seatColor, catalog, command.handIndex);
 			if (!result) return failure('combat_failed', 'Combat could not be resolved.');

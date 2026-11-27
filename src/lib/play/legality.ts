@@ -34,7 +34,7 @@ import type {
 	PrivatePlayerState,
 	PublicGameState
 } from './types';
-import { buildLocationInteractions, matchRewardCost } from './locationInteractions';
+import { ABYSS_SUMMON_USED, buildLocationInteractions, isAbyssSummonRow, matchRewardCost } from './locationInteractions';
 import { runesAreWild } from './effects/matMatch';
 import { ruleValue } from './rules';
 import { abyssDrawBlockedBy } from './abyssDrawOrder';
@@ -201,6 +201,8 @@ export function canApply(
 			if (!Number.isInteger(command.handIndex) || !card || card.hp <= 0) return false;
 			const used = (me.actionsUsedThisRound ?? []).filter((a) => a === 'combat').length;
 			if (used >= 1 + (me.extraActions?.combat ?? 0)) return false;
+			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action took the place of this round's fights.
+			if (ruleValue(catalog, 'abyssFightOrSummon') && (me.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED)) return false;
 			return undefined; // mutate-before-reject handler; all reachable rejects covered, defer on pass (1 candidate)
 		}
 		case 'drawMonsterCards': {
@@ -265,6 +267,14 @@ export function canApply(
 			);
 			const interaction = rows.find((i) => i.rowIndex === command.rowIndex);
 			if (!interaction || me.phaseReady || me.pendingPowerDrafts?.length) return false;
+			// Rule `abyssFightOrSummon`: after a fight the Arcane Abyss Summon action is gone for the round.
+			if (
+				ruleValue(catalog, 'abyssFightOrSummon') &&
+				me.navigationDestination === 'Arcane Abyss' &&
+				isAbyssSummonRow(interaction) &&
+				(me.actionsUsedThisRound ?? []).includes('combat')
+			)
+				return false;
 			if (interaction.gains.some(g => g.type === 'navigationPower' && g.replace) && !me.powerInventory?.length) return false;
 			const usedForRow = (me.actionsUsedThisRound ?? []).filter(
 				(a) => a === `row:${command.rowIndex}`

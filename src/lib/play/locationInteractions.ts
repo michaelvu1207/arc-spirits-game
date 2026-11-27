@@ -28,6 +28,12 @@ import type { DiceTier } from './types';
 
 export type RewardActionKind = 'spiritWorldSummon' | 'abyssSummon' | 'cultivate' | 'rest';
 
+/** Whether a location action is the Arcane Abyss Summon (rule `abyssFightOrSummon`: it and a fight exclude each other in a round). */
+export const isAbyssSummonRow = (interaction: { gains: { type: string; action?: string }[] }): boolean =>
+	interaction.gains.some((g) => g.type === 'action' && g.action === 'abyssSummon');
+/** The `actionsUsedThisRound` entry of the Arcane Abyss Summon action taken at the Arcane Abyss (rule `abyssFightOrSummon`). */
+export const ABYSS_SUMMON_USED = 'abyssSummonAction';
+
 /** What a single reward-row icon means, once resolved against the catalog. */
 export type RewardIconMeaning =
 	| { kind: 'navigationPower'; replace: boolean; label: string }

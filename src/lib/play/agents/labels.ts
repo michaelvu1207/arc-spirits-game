@@ -7,7 +7,8 @@ import {
 	buildLocationInteractions,
 	originRuneOptions,
 	type GainEffect,
-	type LocationInteraction
+	type LocationInteraction,
+	isAbyssSummonRow
 } from '../locationInteractions';
 import { buildMonsterRewards } from '../monsterRewards';
 import { ARCANE_ABYSS_BAG } from '../bags';
@@ -290,7 +291,9 @@ export function labelFor(
 			const cost = interaction.cost.length
 				? ` (pay ${paid.length ? paid.join(' + ') : interaction.cost.map((c) => c.label).join(' + ')})`
 				: '';
-			return `${dest} action ${cmd.rowIndex + 1}: ${gains}${cost}${carryWarning(me, items, interaction.cost.length)}`;
+			// Rule `abyssFightOrSummon`: this action is in place of the round's fight.
+			const noFight = ruleValue(catalog, 'abyssFightOrSummon') && dest === 'Arcane Abyss' && isAbyssSummonRow(interaction) ? ' (IN PLACE of a fight: after it you cannot fight this round)' : '';
+			return `${dest} action ${cmd.rowIndex + 1}: ${gains}${cost}${noFight}${carryWarning(me, items, interaction.cost.length)}`;
 		}
 		case 'spawnHandSpirit': {
 			const draw = me?.handDraws.find((d) => d.guid === cmd.guid);
@@ -341,7 +344,7 @@ export function labelFor(
 		}
 		case 'startCombat': {
 			const card = me?.monsterHand?.[cmd.handIndex];
-			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (${ruleValue(catalog, 'initiativeDie') ? 'the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first' : 'the monster strikes first unless you strike first'}${goodKillNote(me, card, catalog)})`;
+			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (${ruleValue(catalog, 'initiativeDie') ? 'the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first' : 'the monster strikes first unless you strike first'}${ruleValue(catalog, 'abyssFightOrSummon') && interactionsAt(catalog, 'Arcane Abyss').some(isAbyssSummonRow) && !(me?.actionsUsedThisRound ?? []).includes('combat') ? '; a fight is IN PLACE of the Arcane Abyss Summon action this round' : ''}${goodKillNote(me, card, catalog)})`;
 		}
 		case 'resolveMonsterReward': {
 			if (cmd.arcaneBlood) {
@@ -591,7 +594,9 @@ export function destinationSummaries(catalog: PlayCatalog): string[] {
 			(i, n) => `(${n + 1}) ${interactionSummary(i)}`
 		);
 		const extra =
-			dest === 'Arcane Abyss' ? '; draw/keep/fight monster cards from your own hand' : '';
+			dest === 'Arcane Abyss'
+				? `; draw/keep/fight monster cards from your own hand${ruleValue(catalog, 'abyssFightOrSummon') && actions.length ? '. In one round here you either FIGHT or take the Arcane Abyss Summon action, never both' : ''}`
+				: '';
 		return `${dest}: ${actions.join('; ') || 'no location actions'}${extra}`;
 	});
 }
