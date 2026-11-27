@@ -48,8 +48,18 @@ export function relicToolVp(catalog?: { relicToolVp?: number } | null): number {
 }
 
 /** The relic text for a VP value: "You may [gain N VP or ]<ability>, then discard this." */
-export function relicToolText(tool: RelicTool, vp: number): string {
-	return `You may ${vp > 0 ? `gain ${vp} VP or ` : ''}${tool.ability}, then discard this.`;
+export function relicToolText(tool: RelicTool, vp: number, catalog?: Pick<PlayCatalog, 'rules'> | null): string {
+	return `You may ${vp > 0 ? `gain ${vp} VP or ` : ''}${relicToolWording(tool, catalog).ability}, then discard this.`;
+}
+
+/** Rule `initiativeDie`: Firecracker in the new wording ("gain the initiative", never "strike first"). */
+export function relicToolWording(tool: RelicTool, catalog?: Pick<PlayCatalog, 'rules'> | null): RelicTool {
+	if (tool.effect !== 'strikeFirst' || !ruleValue(catalog, 'initiativeDie')) return tool;
+	return {
+		...tool,
+		ability: 'gain the initiative in one combat if your side does not have it',
+		effectLabel: 'In your next combat, gain the initiative if your side does not have it'
+	};
 }
 
 /** relics.json ability texts → the VP value ("gain N VP or" → N; no VP clause → 0; no text → null). */
@@ -204,13 +214,13 @@ export function offerHeldRelicTools(
 				});
 			}
 		} else {
-			options.push({ id: `effect:${ref}`, label: `${tool.effectLabel}, then discard ${tool.name}` });
+			options.push({ id: `effect:${ref}`, label: `${relicToolWording(tool, catalog).effectLabel}, then discard ${tool.name}` });
 		}
 		player.pendingDecisions.push({
 			id: nextId(state.rng, 'dec'),
 			source: 'class',
 			kind: 'relicTool',
-			prompt: `${tool.name}: ${relicToolText(tool, vp)}${tool.effect === 'awaken' && needsBoard ? ORIGIN_BOARD_NOTE : ''}`,
+			prompt: `${tool.name}: ${relicToolText(tool, vp, catalog)}${tool.effect === 'awaken' && needsBoard ? ORIGIN_BOARD_NOTE : ''}`,
 			options,
 			// A relic card, not a class ability: name the relic in the card header.
 			sourceLabel: `Relic: ${tool.name}`

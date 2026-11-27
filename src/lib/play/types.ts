@@ -661,6 +661,8 @@ export type CombatStep = 'prep' | 'roll' | 'damage' | 'aftermath' | 'resolved';
 export interface CombatSide {
 	seat: SeatColor;
 	initiative: number;
+	/** Rule `initiativeDie`: the side of the initiative die this combatant rolled (1 to 12); `initiative` is then its side's 1 or 0. */
+	initiativeRoll?: number;
 	rolled: boolean;
 	damageDealt: number;
 	/** Which side of a group Encounter (PvP) this combatant fought on. */
@@ -824,6 +826,9 @@ export interface RuleNumbers {
 	/** The most spirits one corruption costs: the 1st costs 1, the 2nd 2, … and from this number on every corruption costs this many
 	 *  (Michael, 2026-11-26: "after the last sacriface, it stops at 4"). Absent: the cost keeps growing (5 for the 5th, 6 for the 6th). See `sacrificeMax` in rules.ts. */
 	sacrificeMax?: number;
+	/** Under `initiativeDie`: sides of the 12-sided initiative die that give the initiative at Pure / Tainted / Corrupt / Fallen
+	 *  (default 3, 5, 7, 9; Michael, 2026-11-26). See `initiativeHits` in rules.ts. */
+	initiativeHits?: [number, number, number, number];
 	/** Barrier a Rest restores at Pure / Tainted / Corrupt / Fallen. Replaces the numbers of `restByStatus` and `restBase4` (Michael, 2026-11-25: "Pure rest should be 4"). See `restBarrier` in rules.ts. */
 	restBarrier?: [number, number, number, number];
 }
@@ -985,6 +990,8 @@ export interface PlayRuleSwitches {
 	cultivatorBarrier35?: boolean;
 	/** A kill of the permanent monster gives one of its rewards, the player's choice, not all (Michael, 2026-11-21). */
 	permanentRewardChoice?: boolean;
+	/** Initiative is a 12-sided die, not a number (Michael, 2026-11-26). See `initiativeDie` in rules.ts. */
+	initiativeDie?: boolean;
 }
 
 /** One monster_pools.json row: `size` cards of `difficulty` for a `players`-seat game. */
@@ -1248,6 +1255,8 @@ export interface PrivatePlayerState {
 	alwaysAttackFirst?: boolean;
 	/** Paladin: "If initiative is tied, your side strikes first." Per combat. */
 	winsInitiativeTies?: boolean;
+	/** Rule `initiativeDie`: the side of the initiative die this player rolled in the last combat (1 to 12). */
+	initiativeRoll?: number;
 	/**
 	 * Sentinel: attack-die instance ids the owner chose (Sentinel decision card) to discard
 	 * before the roll of their NEXT combat. Kept until that combat spends them.

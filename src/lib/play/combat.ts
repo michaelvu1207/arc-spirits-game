@@ -25,7 +25,7 @@ import { applyStatusChange } from './effects/status';
 import { applyCorruptionEffects } from './effects/corruption';
 import type { EffectCombatInfo } from './effects/context';
 import { AWAKEN_PROGRESS_KEYS, AWAKEN_SPIRIT_IDS, isFallen, recordAwakenProgress } from './effects/awakenHandlers';
-import { ruleValue, sacrificeMax, sentinelDamagePerDie } from './rules';
+import { INITIATIVE_DIE_SIDES, initiativeHits, ruleValue, sacrificeMax, sentinelDamagePerDie } from './rules';
 
 /**
  * Per-combat effect flags that class effects (`inCombat`/`onTakeDamage`) set and
@@ -92,11 +92,43 @@ function hasSimultaneousAttack(
  * Spend one armed Firecracker use ("strike first in one combat") on THIS combat. Called after
  * the `inCombat` trigger, before any roll, in both the monster and the PvP path.
  */
-export function useStrikeFirstCharge(player: PrivatePlayerState, log: string[], seat?: SeatColor): void {
+export function useStrikeFirstCharge(
+	player: PrivatePlayerState,
+	log: string[],
+	seat?: SeatColor,
+	catalog?: Pick<PlayCatalog, 'rules'> | null
+): void {
 	if ((player.strikeFirstCharges ?? 0) <= 0) return;
 	player.strikeFirstCharges = (player.strikeFirstCharges ?? 0) - 1;
 	player.alwaysAttackFirst = true;
-	log.push(`${seat ? `${seat} ` : ''}Firecracker: strikes first in this combat.`);
+	log.push(
+		ruleValue(catalog, 'initiativeDie')
+			? `${seat ? `${seat} ` : ''}Firecracker: gains the initiative in this combat if the die misses.`
+			: `${seat ? `${seat} ` : ''}Firecracker: strikes first in this combat.`
+	);
+}
+
+/**
+ * Rule `initiativeDie` (Michael, 2026-11-26): roll this player's ONE initiative die. It has 12 sides; how many of
+ * them give the initiative depends on the status at the start of the combat (`initiativeHits`: Pure 3, Tainted 5,
+ * Corrupt 7, Fallen 9). A roll of that number or less hits. The side rolled stays on the player for the records.
+ * `who` starts the log line ("You roll" / "Red rolls").
+ */
+export function rollInitiativeDie(
+	state: PublicGameState,
+	player: PrivatePlayerState,
+	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	log: string[],
+	who: string
+): boolean {
+	const roll = 1 + nextInt(state.rng, INITIATIVE_DIE_SIDES);
+	const hits = initiativeHits(catalog, player.statusLevel ?? 0);
+	player.initiativeRoll = roll;
+	const hit = roll <= hits;
+	log.push(
+		`${who} the initiative die: ${roll} (${STATUS_LADDER[Math.min(3, Math.max(0, player.statusLevel ?? 0))]} needs ${hits} or less of ${INITIATIVE_DIE_SIDES}) — ${hit ? 'gains the initiative' : 'no initiative'}.`
+	);
+	return hit;
 }
 
 /**
@@ -487,12 +519,29 @@ export function resolveEncounterCombat(
 		applyTrigger(state, seat, 'inCombat', log, { catalog, opponent: repEvil });
 
 	for (const { seat } of [...evil, ...good]) beforeNavigationPowerCombat(state, seat, true);
-	for (const { seat, player } of [...evil, ...good]) useStrikeFirstCharge(player, log, seat);
+	for (const { seat, player } of [...evil, ...good]) useStrikeFirstCharge(player, log, seat, catalog);
 	for (const { seat, player } of [...evil, ...good]) useSentinelDiscard(player, log, seat, catalog);
 	const sumInit = (group: EncounterCombatant[]): number =>
 		group.reduce((s, { player }) => s + (player.initiative ?? 0), 0);
-	const initE = sumInit(evil);
-	const initG = sumInit(good);
+	// Rule `initiativeDie`: every player rolls the one initiative die; a side has the initiative when any of its
+	// dice hits, or (when none does) when one of its players has "gain the initiative if your side doesn't"
+	// (Feral, Spellblade, Firecracker, Sudden Strike: the `alwaysAttackFirst` flag). Each player's `initiative`
+	// is then its side's 1 or 0, which is what Bastion compares.
+	const dieRule = ruleValue(catalog, 'initiativeDie');
+	const sideInitiative = (group: EncounterCombatant[], label: string): number => {
+		let has = false;
+		for (const { seat, player } of group) {
+			if (rollInitiativeDie(state, player, catalog, log, `${seat} rolls`)) has = true;
+		}
+		if (!has && group.some(({ player }) => player.alwaysAttackFirst)) {
+			has = true;
+			log.push(`${label} gains the initiative through an ability.`);
+		}
+		for (const { player } of group) player.initiative = has ? 1 : 0;
+		return has ? 1 : 0;
+	};
+	const initE = dieRule ? sideInitiative(evil, 'Evil') : sumInit(evil);
+	const initG = dieRule ? sideInitiative(good, 'Good') : sumInit(good);
 
 	const dealt = new Map<SeatColor, number>();
 	const rolledSeats = new Set<SeatColor>();
@@ -512,7 +561,11 @@ export function resolveEncounterCombat(
 			const princeBonus = strikesFirst ? strikeFirstDamageBonus(player) : 0;
 			if (princeBonus > 0) {
 				r += princeBonus;
-				log.push(`${seat} Prince: strikes first and deals ${princeBonus} more damage.`);
+				log.push(
+					dieRule
+						? `${seat} Prince: only its side has the initiative — deals ${princeBonus} more damage.`
+						: `${seat} Prince: strikes first and deals ${princeBonus} more damage.`
+				);
 			}
 			dealt.set(seat, r);
 			rolledSeats.add(seat);
@@ -587,18 +640,25 @@ export function resolveEncounterCombat(
 		}
 	};
 
-	const evilPriority = evil.some(({ player }) => player.alwaysAttackFirst);
-	const goodPriority = good.some(({ player }) => player.alwaysAttackFirst);
+	// Under `initiativeDie` the attack-first abilities are part of the initiative above, not a priority of their own.
+	const evilPriority = !dieRule && evil.some(({ player }) => player.alwaysAttackFirst);
+	const goodPriority = !dieRule && good.some(({ player }) => player.alwaysAttackFirst);
 	// Paladin: "If initiative is tied, your side strikes first." Only breaks a real tie
 	// (same initiative AND same attack-first priority); both sides with a Paladin stay tied.
 	const tied = initE === initG && evilPriority === goodPriority;
-	const evilWinsTie = tied && evil.some(({ player }) => player.winsInitiativeTies);
-	const goodWinsTie = tied && good.some(({ player }) => player.winsInitiativeTies);
+	// Under `initiativeDie` Paladin only decides when BOTH sides have the initiative (neither: at the same time).
+	const paladinCounts = tied && (!dieRule || initE === 1);
+	const evilWinsTie = paladinCounts && evil.some(({ player }) => player.winsInitiativeTies);
+	const goodWinsTie = paladinCounts && good.some(({ player }) => player.winsInitiativeTies);
 	if (tied && evilWinsTie === goodWinsTie) {
 		// Simultaneous: lock BOTH rolls (full rosters) before either hit lands.
 		const dmgE = rollSide(evil);
 		const dmgG = rollSide(good);
-		log.push(`Initiative is tied at ${initE} — both sides strike at once.`);
+		log.push(
+			dieRule
+				? `${initE === 1 ? 'Both sides have' : 'Neither side has'} the initiative — they attack at the same time.`
+				: `Initiative is tied at ${initE} — both sides strike at once.`
+		);
 		afterStrike(evil, strike(good, dmgE, repEvil, initE, 'Evil', 'Good'));
 		afterStrike(good, strike(evil, dmgG, repGood, initG, 'Good', 'Evil'));
 	} else {
@@ -616,13 +676,18 @@ export function resolveEncounterCombat(
 		const firstLabel = evilFaster ? 'Evil' : 'Good';
 		const secondLabel = evilFaster ? 'Good' : 'Evil';
 		log.push(
-			tied
-				? `Initiative is tied at ${firstInit} — ${firstLabel} strikes first through Paladin.`
-				: evilPriority !== goodPriority
-					? `${firstLabel} attacks first (an attack-first ability).`
-					: `${firstLabel} is faster (initiative ${firstInit} vs ${secondInit}) and strikes first.`
+			dieRule
+				? tied
+					? `Both sides have the initiative — ${firstLabel} attacks first through Paladin.`
+					: `${firstLabel} has the initiative and attacks first.`
+				: tied
+					? `Initiative is tied at ${firstInit} — ${firstLabel} strikes first through Paladin.`
+					: evilPriority !== goodPriority
+						? `${firstLabel} attacks first (an attack-first ability).`
+						: `${firstLabel} is faster (initiative ${firstInit} vs ${secondInit}) and strikes first.`
 		);
-		afterStrike(first, strike(second, rollSide(first, true), firstRep, firstInit, firstLabel, secondLabel));
+		// Prince ("when your side has the initiative and the enemy does not") gains nothing from Paladin's tie-break.
+		afterStrike(first, strike(second, rollSide(first, !(dieRule && tied)), firstRep, firstInit, firstLabel, secondLabel));
 		// Only un-stunned members of the slower side strike back.
 		const retaliators = second.filter(({ player }) => !player.stunned);
 		if (retaliators.length > 0) {
@@ -670,6 +735,7 @@ export function resolveEncounterCombat(
 			seat,
 			side,
 			initiative: player.initiative ?? 0,
+			...(dieRule && player.initiativeRoll != null ? { initiativeRoll: player.initiativeRoll } : {}),
 			rolled: rolledSeats.has(seat),
 			damageDealt: dealt.get(seat) ?? 0,
 			stunned: !!player.stunned,
@@ -725,17 +791,37 @@ export function fightMonster(
 	resetCombatFlags(player);
 	applyTrigger(state, seat, 'inCombat', log, { catalog });
 	beforeNavigationPowerCombat(state, seat, false);
-	useStrikeFirstCharge(player, log);
+	useStrikeFirstCharge(player, log, undefined, catalog);
 	useSentinelDiscard(player, log, undefined, catalog);
+	// Rule `initiativeDie`: the monster always has the initiative. The player rolls the one initiative die; an
+	// ability that says "gain the initiative if your side doesn't" (the `alwaysAttackFirst` flag) covers a miss.
+	// With the initiative the player attacks at the same time as the monster; without it the monster attacks first.
+	// The player never attacks before the monster.
+	const dieRule = ruleValue(catalog, 'initiativeDie');
+	let hasInitiative = false;
+	if (dieRule) {
+		hasInitiative = rollInitiativeDie(state, player, catalog, log, 'You roll');
+		if (!hasInitiative && player.alwaysAttackFirst) {
+			hasInitiative = true;
+			log.push('You gain the initiative through an ability.');
+		}
+		player.initiative = hasInitiative ? 1 : 0;
+		log.push(
+			hasInitiative
+				? `${monster.name} has the initiative too — you attack at the same time.`
+				: `${monster.name} has the initiative and attacks first.`
+		);
+	}
 	// Lock the combat value before damage.
 	let rolledDamage = rollAttack(state, player, catalog);
 	// A monster with an initiative number is outpaced by a player with HIGHER initiative (a tie
 	// goes to the monster unless the player wins ties, e.g. Paladin). No number ⇒ infinite.
-	const monsterInitiative = monsterInitiativeOf(monster);
+	const monsterInitiative = dieRule ? 1 : monsterInitiativeOf(monster);
 	const attacksFirst =
-		player.alwaysAttackFirst === true ||
-		(player.initiative ?? 0) > monsterInitiative ||
-		((player.initiative ?? 0) === monsterInitiative && player.winsInitiativeTies === true);
+		!dieRule &&
+		(player.alwaysAttackFirst === true ||
+			(player.initiative ?? 0) > monsterInitiative ||
+			((player.initiative ?? 0) === monsterInitiative && player.winsInitiativeTies === true));
 	const princeBonus = attacksFirst ? strikeFirstDamageBonus(player) : 0;
 	if (princeBonus > 0) {
 		rolledDamage += princeBonus;
@@ -775,7 +861,7 @@ export function fightMonster(
 	//    corrupting hit still lands their damage (and can kill).
 	let playerDamage = attacksFirst ? rolledDamage : 0;
 	const hpBeforeStrike = monsterBarrierLeft(monster);
-	const simultaneous = hasSimultaneousAttack(player, catalog);
+	const simultaneous = hasSimultaneousAttack(player, catalog) || hasInitiative;
 	if (!attacksFirst && (!corrupted || simultaneous)) {
 		playerDamage = rolledDamage;
 		log.push(

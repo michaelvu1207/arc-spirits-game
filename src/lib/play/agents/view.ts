@@ -9,7 +9,7 @@ import { classCountsLine, monsterLine, moonPerksWaiting, spiritLine, type SeatPl
 import { buildSessionProjection, GOOD_KILL_BONUS_VP } from '../runtime';
 import { navigationPowerById } from '../navigationPowers';
 import { spiritsByOrigin } from '../effects/relicTools';
-import { ruleValue, vpToWin } from '../rules';
+import { INITIATIVE_DIE_SIDES, initiativeHits, ruleValue, vpToWin } from '../rules';
 import { expectedAttack } from '../combat';
 import { awakenedClassCounts } from '../effects/apply';
 import {
@@ -102,8 +102,19 @@ function ownSection(
 		lines.push(
 			`  Attacked a player this round: ${me.attackedPlayerThisRound ? 'yes' : 'no'} (${moon.join(' and ')} gain only in a round you attacked a player)`
 		);
-	if (me.alwaysAttackFirst || (me.strikeFirstCharges ?? 0) > 0)
-		lines.push('  You strike first in your next combat.');
+	const dieRule = ruleValue(catalog, 'initiativeDie');
+	if (dieRule) {
+		const hits = initiativeHits(catalog, me.statusLevel ?? 0);
+		lines.push(
+			`  Initiative die: ${hits} of ${INITIATIVE_DIE_SIDES} sides give you the initiative at your status (${Math.round((100 * hits) / INITIATIVE_DIE_SIDES)} %).`
+		);
+	}
+	if ((!dieRule && me.alwaysAttackFirst) || (me.strikeFirstCharges ?? 0) > 0)
+		lines.push(
+			dieRule
+				? '  Firecracker armed: in your next combat you gain the initiative if your side does not have it.'
+				: '  You strike first in your next combat.'
+		);
 	if ((me.sentinelDiscardIds?.length ?? 0) > 0)
 		lines.push(
 			`  Sentinel: ${me.sentinelDiscardIds!.length} dice marked to discard before your next combat roll.`

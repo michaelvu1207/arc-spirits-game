@@ -19,7 +19,11 @@ const disruptorOnTakeDamage: ClassHandler = (ctx) => {
 	const opponentInitiative = ctx.combat?.opponentInitiative ?? opponent?.initiative;
 	if (opponentInitiative != null && opponentInitiative > ctx.player.initiative) {
 		ctx.player.halveIncoming = true;
-		ctx.log.push('Opponent has higher initiative — incoming damage is halved.');
+		ctx.log.push(
+			ruleValue(ctx.catalog, 'initiativeDie')
+				? 'The opponent has the initiative and your side does not — incoming damage is halved.'
+				: 'Opponent has higher initiative — incoming damage is halved.'
+		);
 	}
 };
 

@@ -233,6 +233,18 @@
  * - permanentRewardChoice (default false; Michael, 2026-11-21): true ⇒ a kill of the permanent monster
  *   gives ONE of the rewards on its card, the player's choice (`picks[0]`; the first when none is
  *   named), not every reward. Deck cards still give every reward. See `rewardChoiceOf` in runtime.ts.
+ * - initiativeDie (default false; Michael, 2026-11-26): true ⇒ initiative is no number. "initiaitve is no longer an
+ *   integer value, its now a true/false". Each player has ONE initiative die with 12 sides and can never have more; at
+ *   the start of a combat each player in it rolls it. The sides that give the initiative depend on the status:
+ *   "if you're pure, you have 3/12, then tainted is 5/12, corrupt is 7/12, fallen is 9/12" (`numbers.initiativeHits`).
+ *   A side (one or more players) has the initiative when any of its dice hits. Monsters always have it.
+ *   Player fights: the one side that has the initiative attacks first; both or neither: "both players attack at the
+ *   same time" (neither: my default, told to him). Monster fights: with the initiative the player attacks at the same
+ *   time as the monster (the damage lands even when the monster's hit corrupts the player); without it the monster
+ *   attacks first. No class gives an initiative number. Feral, Spellblade, Firecracker and the Power Sudden Strike
+ *   "gain the initiative if your side doesn't"; Assassin loses its strike-first ("remove the strike first from
+ *   assasin"); Paladin's side attacks first when both sides have the initiative; Bastion halves when the opponent
+ *   has the initiative and its holder's side does not. The wording is "gain the initiative". See combat.ts.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
  *   for a Fighter build. See classes/strategist.ts, darkAssassin.ts, firetail.ts.
@@ -342,7 +354,8 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	restBase4: false,
 	fighterDice35: false,
 	cultivatorBarrier35: false,
-	permanentRewardChoice: false
+	permanentRewardChoice: false,
+	initiativeDie: false
 };
 
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
@@ -480,11 +493,14 @@ function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undef
 		} else if (name === 'sacrificeMax') {
 			if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 99) problems.push(`rules: numbers.sacrificeMax must be a whole number from 1 to 99 (the most spirits one corruption costs), got ${JSON.stringify(value)}`);
 			else numbers.sacrificeMax = value as number;
+		} else if (name === 'initiativeHits') {
+			if (!wholeNumbers(value, 4, 4) || value.some((n) => n > INITIATIVE_DIE_SIDES)) problems.push(`rules: numbers.initiativeHits must be 4 whole numbers from 0 to ${INITIATIVE_DIE_SIDES} (sides of the initiative die that hit at Pure, Tainted, Corrupt, Fallen), got ${JSON.stringify(value)}`);
+			else numbers.initiativeHits = [value[0], value[1], value[2], value[3]];
 		} else if (name === 'restBarrier') {
 			if (!wholeNumbers(value, 4, 4)) problems.push(`rules: numbers.restBarrier must be 4 whole numbers (Barrier a Rest restores at Pure, Tainted, Corrupt, Fallen), got ${JSON.stringify(value)}`);
 			else numbers.restBarrier = [value[0], value[1], value[2], value[3]];
 		} else {
-			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore, sentinelDamagePerDie, mageAwakenArcaneDice, sacrificeMax, restBarrier)`);
+			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore, sentinelDamagePerDie, mageAwakenArcaneDice, sacrificeMax, initiativeHits, restBarrier)`);
 		}
 	}
 	return Object.keys(numbers).length ? numbers : undefined;
@@ -519,6 +535,41 @@ export const SENTINEL_DAMAGE_PER_DIE = 2;
 export function sentinelDamagePerDie(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
 	return catalog?.rules?.numbers?.sentinelDamagePerDie ?? SENTINEL_DAMAGE_PER_DIE;
 }
+
+/** Rule `initiativeDie`: the sides of the initiative die. */
+export const INITIATIVE_DIE_SIDES = 12;
+/** Rule `initiativeDie`: sides that give the initiative at Pure / Tainted / Corrupt / Fallen, unless `numbers.initiativeHits` says otherwise. */
+export const INITIATIVE_HITS: readonly [number, number, number, number] = [3, 5, 7, 9];
+/** Rule `initiativeDie`: how many of the 12 sides give the initiative at this status (a roll of that number or less hits). */
+export function initiativeHits(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, statusLevel: number): number {
+	const list = catalog?.rules?.numbers?.initiativeHits ?? INITIATIVE_HITS;
+	return list[Math.min(3, Math.max(0, statusLevel))];
+}
+/** What "gain the initiative if your side doesn't" is called in the texts under rule `initiativeDie`. */
+export const GAIN_INITIATIVE_TEXT = 'gain the initiative if your side does not have it';
+
+/**
+ * Rule `initiativeDie`: the printed class texts without initiative numbers and in the new wording ("gain the
+ * initiative", never "strike first"). Applied to the text the other switches leave, so it follows them.
+ */
+const INITIATIVE_DIE_CLASS_TEXT: Record<string, (text: string) => string> = {
+	Fighter: (t) => t.replace(/In combat, gain \d+ combat initiative\.\s*/, '') || 'No effect at this count.',
+	Beast: (t) => t.replace(/ and gain \d+ combat initiative/, ''),
+	'Spirit Animal': (t) => t.replace(/ and gain \d+ combat initiative/, ''),
+	Fairy: (t) => t.replace(/\s*Gain \d+ Initiative\./, ''),
+	Monk: (t) => t.replace(/gain \d+ Initiative and take/, 'take'),
+	Paladin: () => 'If both sides have the initiative, your side attacks first.',
+	Huntress: (t) => t.replace(/Gain \d+ initiative\.\s*/, ''),
+	Firetail: () => 'No effect.',
+	Corruptor: (t) => t.replace(/\s*Gain \d+ Initiative\./, ''),
+	Titan: (t) => t.replace(/Gain (\d+) damage and \d+ Initiative\./, 'Gain $1 damage.'),
+	Bastion: (t) => t.replace('If the opponent has higher initiative', 'If the opponent has the initiative and your side does not'),
+	Feral: (t) => t.replace(/your side strikes first/g, `your side gains the initiative if it does not have it`),
+	Spellblade: () => `On Navigation Reveal, you may change your destination. In combat, ${GAIN_INITIATIVE_TEXT}.`,
+	Assassin: () => 'In combat with a player who has more attack dice than you, deal 3 more damage.',
+	Prince: () => 'When your side has the initiative and the enemy does not, deal 2 more damage.',
+	Mystic: (t) => t.replace('you may always attack at the same time as the monster', 'gain the initiative (you attack at the same time as the monster)')
+};
 
 /** The most spirits one corruption costs (`numbers.sacrificeMax`; Michael, 2026-11-26: "after the last sacriface, it stops at 4").
  *  undefined: no limit, the Nth corruption costs N (the engine before that day). */
@@ -932,11 +983,23 @@ export function ruleAdjustedClassSchema(
 	const changes = RULE_CLASS_TEXT.filter(
 		(c) => c.className === className && ruleValue(catalog, c.rule) === c.when
 	);
-	if (!changes.length || !Array.isArray(schema)) return schema;
+	// Rule `initiativeDie`: no initiative numbers and the wording "gain the initiative", on top of the other switches.
+	const dieRule = ruleValue(catalog, 'initiativeDie');
+	const reword = dieRule ? INITIATIVE_DIE_CLASS_TEXT[className] : undefined;
+	if ((!changes.length && !dieRule) || !Array.isArray(schema)) return schema;
 	return schema.map((tier) => {
 		const change = changes.find((c) => c.count === Number(tier.count));
-		if (!change) return tier;
-		const description = typeof change.text === 'function' ? change.text(catalog) : change.text;
-		return { ...tier, effects: [{ ...tier.effects?.[0], type: 'benefit', description }] };
+		let next = tier;
+		if (change) {
+			const description = typeof change.text === 'function' ? change.text(catalog) : change.text;
+			next = { ...tier, effects: [{ ...tier.effects?.[0], type: 'benefit', description }] };
+		}
+		if (!dieRule) return next;
+		const texts = (next.effects ?? []).map((e) => e.description ?? '');
+		const joined = texts.filter(Boolean).join(' ');
+		// Any other "Gain N initiative." sentence goes too (cards outside the list above).
+		const reworded = (reword ? reword(joined) : joined).replace(/\s*(?:In combat, )?[Gg]ain \d+ (?:combat )?[Ii]nitiative\.\s*/g, ' ').trim();
+		if (reworded === joined) return next;
+		return { ...next, effects: [{ ...next.effects?.[0], type: 'benefit', description: reworded }] };
 	});
 }

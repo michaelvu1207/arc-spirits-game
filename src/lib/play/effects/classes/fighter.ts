@@ -28,7 +28,7 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
 		run(ctx) {
-			if (!ruleValue(ctx.catalog, 'fighterInitiative')) return;
+			if (!ruleValue(ctx.catalog, 'fighterInitiative') || ruleValue(ctx.catalog, 'initiativeDie')) return;
 			const amount = Math.min(FIGHTER_INITIATIVE_MAX, ctx.traitCount);
 			if (amount <= 0) return;
 			ctx.player.initiative += amount;

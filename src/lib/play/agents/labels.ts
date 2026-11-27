@@ -226,7 +226,7 @@ export function labelFor(
 			return `Go to ${where}${power ? ` and commit your Power "${power.name}"` : ''}`;
 		}
 		case 'chooseNavigationPower': {
-			const power = navigationPowerById(cmd.powerId);
+			const power = navigationPowerById(cmd.powerId, catalog);
 			const replaced = cmd.replacePowerId ? navigationPowerById(cmd.replacePowerId) : null;
 			return `Keep Power "${power?.name ?? cmd.powerId}": ${power?.text ?? ''}${replaced ? ` (replaces your "${replaced.name}")` : ''}`;
 		}
@@ -341,7 +341,7 @@ export function labelFor(
 		}
 		case 'startCombat': {
 			const card = me?.monsterHand?.[cmd.handIndex];
-			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (the monster strikes first unless you strike first${goodKillNote(me, card, catalog)})`;
+			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (${ruleValue(catalog, 'initiativeDie') ? 'the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first' : 'the monster strikes first unless you strike first'}${goodKillNote(me, card, catalog)})`;
 		}
 		case 'resolveMonsterReward': {
 			if (cmd.arcaneBlood) {

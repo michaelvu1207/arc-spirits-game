@@ -1,4 +1,5 @@
 import { LOCATIONS } from '../../locations';
+import { ruleValue } from '../../rules';
 import type { NavigationDestination, SeatColor } from '../../types';
 import type { EffectContext } from '../context';
 import type { ClassAbility, ClassDecisions } from './types';
@@ -32,7 +33,7 @@ export const ability: ClassAbility[] = [
 		on: 'inCombat',
 		run(ctx) {
 			ctx.player.alwaysAttackFirst = true;
-			ctx.log.push('Spellblade: attacks first.');
+			ctx.log.push(ruleValue(ctx.catalog, 'initiativeDie') ? 'Spellblade: gains the initiative if the die misses.' : 'Spellblade: attacks first.');
 		}
 	}
 ];

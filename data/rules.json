@@ -53,6 +53,7 @@
 	"arcaneBloodTwoPerPoint": false,
 	"arcaneBloodPerPoint": true,
 	"permanentRewardChoice": true,
+	"initiativeDie": true,
 	"numbers": {
 		"diceFaces": {
 			"enchanted": [0, 0, 0, 1, 1, 1]
@@ -62,6 +63,7 @@
 		"sentinelDamagePerDie": 1,
 		"mageAwakenArcaneDice": 3,
 		"sacrificeMax": 4,
+		"initiativeHits": [3, 5, 7, 9],
 		"restBarrier": [4, 4, 3, 2]
 	}
 }

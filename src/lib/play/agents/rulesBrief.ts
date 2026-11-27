@@ -39,7 +39,7 @@ import {
 	type PlayCatalog
 } from '../types';
 import { destinationSummaries, interactionsAt } from './labels';
-import { difficulty3Restore, restBarrier, ruleAdjustedClassSchema, ruleValue, sacrificeMax, vpToWin } from '../rules';
+import { INITIATIVE_DIE_SIDES, difficulty3Restore, initiativeHits, restBarrier, ruleAdjustedClassSchema, ruleValue, sacrificeMax, vpToWin } from '../rules';
 
 const MAX_BARRIER_CAP = 10;
 
@@ -85,7 +85,9 @@ function coreRules(catalog: PlayCatalog): string {
 		`- Attack dice: at most ${MAX_ATTACK_DICE}; a dice gain at ${MAX_ATTACK_DICE} dice is lost (upgrades still work). An upgrade raises your lowest Basic or Enchanted die one step (Basic → Enchanted → Exalted); it never makes an Arcane die. Faces: ${faces}. Your combat damage is the sum of your rolled dice plus bonuses.`,
 		'- "Any basic rune" costs are paid with one basic rune: an origin rune (e.g. Mountain Rune) or the wild Any Rune. Relics, Spirit Augments and class runes never pay them. "Any relic" costs take a relic only.',
 		'- Location requirements: a "replace one of your Powers" action needs a Power you hold; a "gain" action works once per round; a "trade" action repeats while you can pay.',
-		'- Initiative decides who strikes first in PvP. Runes pay costs (awakening, trades). Relics are special items; relic tools are one-time items.',
+		ruleValue(catalog, 'initiativeDie')
+			? `- INITIATIVE is a die, not a number. Every player has ONE initiative die with ${INITIATIVE_DIE_SIDES} sides and can never get more; no class gives initiative. At the start of every combat each player in it rolls the die. How many sides give the initiative depends on your status then: ${STATUS_LADDER.map((name, level) => `${name} ${initiativeHits(catalog, level)} of ${INITIATIVE_DIE_SIDES} (${Math.round((100 * initiativeHits(catalog, level)) / INITIATIVE_DIE_SIDES)} %)`).join(', ')}. A side (one or more players) has the initiative when any of its dice hits. A few effects say "gain the initiative if your side does not have it": they cover a miss. Monsters always have the initiative. In an attack on players: when only one side has the initiative it attacks first, and a player it corrupts or leaves at 0 Barrier does not attack back; when both sides or neither side have it, both attack at the same time and both hits land. Runes pay costs (awakening, trades). Relics are special items; relic tools are one-time items.`
+			: '- Initiative decides who strikes first in PvP. Runes pay costs (awakening, trades). Relics are special items; relic tools are one-time items.',
 		'- Start of game: Barrier 4/4, no attack dice, four starting spirits, one Any Rune, and a choice of 1 of 3 Navigation Powers.',
 		'',
 		'## Corruption and alignment (source: engine combat.ts, docs/rules-v1.2.md)',
@@ -103,6 +105,7 @@ function coreRules(catalog: PlayCatalog): string {
 		...(ruleValue(catalog, 'abyssDrawByPoints')
 			? ['- DRAWING ORDER: the monster decks are shared, so the players at the Arcane Abyss draw from them one after the other: the player with the FEWEST Victory Points at the start of the round first (equal points: table order, starting one seat later each round). You wait until every player ahead of you has drawn' + (ruleValue(catalog, 'monsterDrawOne') ? '' : ', holds 3 cards') + ' or has ended their Location turn. Fights are not ordered: you may fight cards you already hold at any time.' + ((catalog.monsters ?? []).some((m) => m.permanent) ? ' Taking the permanent monster needs no turn.' : '')]
 			: []),
+		ruleValue(catalog, 'initiativeDie') ? '- Fighting: choose a card from your hand. The monster always has the initiative, so you never attack before it: its hit always lands on your Barrier. You roll your initiative die. If you gain the initiative, you and the monster attack at the same time: your damage lands even when its hit corrupts you. If you do not, the monster attacks first, and if that hit corrupts you, you cannot attack back in this fight (unless your side "attacks at the same time", e.g. Sharpshooter). So when a monster\'s hit (after reductions) is at least your current Barrier, your damage only counts when you gain the initiative. Your damage lowers the card\'s Barrier; that damage stays on the card between fights. At Barrier 0 the card is defeated and you claim EVERY reward on it. Normally one fight per round (Monster Hunter: two).' :
 		(catalog.monsters ?? []).some((m) => typeof m.initiative === 'number') ? '- Fighting: choose a card from your hand. Each monster card has an initiative number. If your initiative in that combat is HIGHER than the monster\'s (a tie goes to the monster unless you win ties, e.g. Paladin), or you have a strike-first effect (e.g. Firecracker), you strike first: if your damage defeats it, it never hits you. Otherwise the monster strikes first (its damage hits your Barrier).' + ' If that hit corrupts you, you cannot strike back (unless your side "attacks at the same time", e.g. Sharpshooter). So when a monster\'s hit (after reductions) is at least your current Barrier, your dice do not matter: only more Barrier, damage reduction (e.g. Battle Guard), a strike-first effect or a simultaneous attack lets you strike. Your damage lowers the card\'s Barrier; that damage stays on the card between fights. At Barrier 0 the card is defeated and you claim EVERY reward on it. Normally one fight per round (Monster Hunter: two).' : '- Fighting: choose a card from your hand. The monster strikes first (its damage hits your Barrier) unless you strike first (e.g. Firecracker).' + ' If that hit corrupts you, you cannot strike back (unless your side "attacks at the same time", e.g. Sharpshooter). So when a monster\'s hit (after reductions) is at least your current Barrier, your dice do not matter: only more Barrier, damage reduction (e.g. Battle Guard), a strike-first effect or a simultaneous attack lets you strike. Your damage lowers the card\'s Barrier; that damage stays on the card between fights. At Barrier 0 the card is defeated and you claim EVERY reward on it. Normally one fight per round (Monster Hunter: two).',		'',
 		...(ruleValue(catalog, 'goodKillBonus')
 			? [`- ALIGNMENT BONUS: while you are Good-aligned (Pure, Tainted or Corrupt; not Fallen) every Difficulty 2 or Difficulty 3 monster you defeat gives you ${GOOD_KILL_BONUS_VP} VP on top of the rewards printed on its card (Difficulty 1 cards and the permanent monster pay no bonus). A Fallen (Evil) player gets only the card's rewards. Your Status line says which you get now. The VP figures of the monster cards and decks below do NOT include this bonus.`]
@@ -175,7 +178,7 @@ function cardText(catalog: PlayCatalog): string {
 			0
 		);
 		lines.push(
-			`- Permanent monster "${permanent.name}": Barrier ${permanent.barrier}, damage ${permanent.damage}${typeof permanent.initiative === 'number' ? `, initiative ${permanent.initiative}` : ''}, ${ruleValue(catalog, 'permanentRewardChoice') && rewards.length > 1 ? `each kill gives ONE of these, your choice: ${rewards.map((o) => o.label).join(' OR ')}` : `${vp} VP per kill plus its other rewards`}. It is in no deck and never runs out: instead of drawing from a deck you may take a copy into your hand (that is your draw of the visit), then fight it like any card. Because it is always there, empty decks do not end the game.`
+			`- Permanent monster "${permanent.name}": Barrier ${permanent.barrier}, damage ${permanent.damage}${typeof permanent.initiative === 'number' && !ruleValue(catalog, 'initiativeDie') ? `, initiative ${permanent.initiative}` : ''}, ${ruleValue(catalog, 'permanentRewardChoice') && rewards.length > 1 ? `each kill gives ONE of these, your choice: ${rewards.map((o) => o.label).join(' OR ')}` : `${vp} VP per kill plus its other rewards`}. It is in no deck and never runs out: instead of drawing from a deck you may take a copy into your hand (that is your draw of the visit), then fight it like any card. Because it is always there, empty decks do not end the game.`
 		);
 	}
 
@@ -191,7 +194,7 @@ function cardText(catalog: PlayCatalog): string {
 	);
 	for (const tool of Object.values(RELIC_TOOLS))
 		lines.push(
-			`- ${tool.name}: ${relicToolText(tool, relicToolVp(catalog))}${tool.effect === 'awaken' && ruleValue(catalog, 'relicAwakenNeedsBoard') ? ORIGIN_BOARD_NOTE : ''}`
+			`- ${tool.name}: ${relicToolText(tool, relicToolVp(catalog), catalog)}${tool.effect === 'awaken' && ruleValue(catalog, 'relicAwakenNeedsBoard') ? ORIGIN_BOARD_NOTE : ''}`
 		);
 
 	const used = new Set<string>();

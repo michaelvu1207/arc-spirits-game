@@ -1478,7 +1478,8 @@ export function monsterCardFromCatalog(
 		livesTotal: 1,
 		ladderIndex: monster.order,
 		ladderMax: 0,
-		...(typeof monster.initiative === 'number' ? { initiative: monster.initiative } : {}),
+		// Under rule `initiativeDie` a monster has no number: it always has the initiative.
+		...(typeof monster.initiative === 'number' && !ruleValue(catalog, 'initiativeDie') ? { initiative: monster.initiative } : {}),
 		...(monster.permanent ? { permanent: true } : {}),
 		// Rule `difficulty3Restores`: the card's ability (a Difficulty 3 card that is not the permanent monster).
 		...(!monster.permanent && difficulty3Restore(catalog, difficulty) > 0 ? { restoreAfterCombat: difficulty3Restore(catalog, difficulty) } : {})
