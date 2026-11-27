@@ -1115,6 +1115,7 @@ function paintSide() {
       <div><small>Status</small><span><i class="sw" style="--c:var(--st-${stKey(p.st)})"></i>${esc(p.st)}</span></div>
       <div><small>Barrier</small><span><b>${p.bar}</b>/ ${p.max}</span></div>
       <div title="Average damage of one attack with the dice held"><small>Average attack</small><span><b>${p.atk}</b></span></div>
+      ${p.ini != null ? `<div title="Initiative in a fight started now. In a player fight the side with the higher total strikes first; equal totals strike at the same time."><small>Initiative</small><span><b>${p.ini}</b>${p.first ? ' strikes first' : p.ties ? ' wins ties' : ''}</span></div>` : ''}
       <div><small>Attack dice</small><span>${dice}</span></div>
       <div><small>Runes and relics</small><span>${runes.length ? runes.map((r) => `<span class="ic" title="${esc(r.n)}">${geRune(r) ? `<img loading="lazy" src="${small(geRune(r), 64)}" alt="${esc(r.n)}">` : esc(r.n) + ' '}${r.k > 1 ? r.k : ''}</span>`).join('') : '<span class="was">–</span>'}</span></div>
       ${p.pw.length ? `<div><small>Powers</small><span>${esc(p.pw.join(', '))}</span></div>` : ''}</div>
