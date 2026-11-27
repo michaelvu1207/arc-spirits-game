@@ -56,7 +56,7 @@ import {
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
-import { cursedSpiritDiceTier, difficulty3Restore, pvpAllowedAt, ruleValue } from './rules';
+import { cursedSpiritDiceTier, difficulty3Restore, pvpAllowedAt, ruleValue, sacrificeMax } from './rules';
 import { abyssDrawBlockedBy } from './abyssDrawOrder';
 import {
 	bagForSpiritCost,
@@ -2505,7 +2505,8 @@ function reduceCommand(
 					// impossible — the ladder clamps), but pass the real check for parity
 					// with the combat site.
 					setCorruptionDiscardObligation(activePlayer.player, undefined, {
-						wasFallen: oldStatus === STATUS_LADDER.length - 1
+						wasFallen: oldStatus === STATUS_LADDER.length - 1,
+						maxCount: sacrificeMax(catalog)
 					});
 				}
 				applyStatusChange(

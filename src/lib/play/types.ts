@@ -251,11 +251,13 @@ export function spiritLimitFor(_statusLevel?: number): number {
  * Rule switch `fallenDebtBelowZero` (rules.ts; callers pass `opts.vpBelowZero` from it): that VP
  * loss is not clamped at 0, so VP may go negative (a seat at 0 VP pays too).
  * `opts.maxOwed` (rule `pvpAttackerSacrificeCap`): caps what THIS corruption owes.
+ * `opts.maxCount` (rule number `sacrificeMax`): the cost stops growing there, so with 4 the 5th and
+ * later corruptions cost 4 like the 4th (Cultist's "1 fewer" comes off after that).
  */
 export function setCorruptionDiscardObligation(
 	player: PrivatePlayerState,
 	reason?: string,
-	opts?: { wasFallen?: boolean; vpBelowZero?: boolean; maxOwed?: number }
+	opts?: { wasFallen?: boolean; vpBelowZero?: boolean; maxOwed?: number; maxCount?: number }
 ): number {
 	// Cultist: "When you become Corrupted, sacrifice 1 fewer spirit …" (awakened Cultist only).
 	const cultist = (player.spirits ?? []).some(
@@ -272,7 +274,8 @@ export function setCorruptionDiscardObligation(
 			return 0;
 		}
 	}
-	let owed = Math.max(0, (player.corruptionCount ?? 0) - (cultist ? 1 : 0));
+	const counted = Math.min(player.corruptionCount ?? 0, opts?.maxCount ?? Infinity);
+	let owed = Math.max(0, counted - (cultist ? 1 : 0));
 	// Rule `pvpAttackerSacrificeCap`: this corruption owes at most `maxOwed`.
 	if (opts?.maxOwed != null) owed = Math.min(owed, opts.maxOwed);
 	if (owed <= 0) return 0;
@@ -818,6 +821,9 @@ export interface RuleNumbers {
 	sentinelDamagePerDie?: number;
 	/** Under `mageArcaneDice`: Arcane attack dice Mage gains on its awakening (default 4; Michael, 2026-11-22: "nerf the mage by 1 attack dice so only 3 arcane attack"). See `mageAwakenArcaneDice` in rules.ts. */
 	mageAwakenArcaneDice?: number;
+	/** The most spirits one corruption costs: the 1st costs 1, the 2nd 2, … and from this number on every corruption costs this many
+	 *  (Michael, 2026-11-26: "after the last sacriface, it stops at 4"). Absent: the cost keeps growing (5 for the 5th, 6 for the 6th). See `sacrificeMax` in rules.ts. */
+	sacrificeMax?: number;
 	/** Barrier a Rest restores at Pure / Tainted / Corrupt / Fallen. Replaces the numbers of `restByStatus` and `restBase4` (Michael, 2026-11-25: "Pure rest should be 4"). See `restBarrier` in rules.ts. */
 	restBarrier?: [number, number, number, number];
 }

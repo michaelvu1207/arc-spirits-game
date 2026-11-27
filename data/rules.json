@@ -61,6 +61,7 @@
 		"elementalistNoRelic": 4,
 		"sentinelDamagePerDie": 1,
 		"mageAwakenArcaneDice": 3,
+		"sacrificeMax": 4,
 		"restBarrier": [4, 4, 3, 2]
 	}
 }

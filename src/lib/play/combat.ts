@@ -25,7 +25,7 @@ import { applyStatusChange } from './effects/status';
 import { applyCorruptionEffects } from './effects/corruption';
 import type { EffectCombatInfo } from './effects/context';
 import { AWAKEN_PROGRESS_KEYS, AWAKEN_SPIRIT_IDS, isFallen, recordAwakenProgress } from './effects/awakenHandlers';
-import { ruleValue, sentinelDamagePerDie } from './rules';
+import { ruleValue, sacrificeMax, sentinelDamagePerDie } from './rules';
 
 /**
  * Per-combat effect flags that class effects (`inCombat`/`onTakeDamage`) set and
@@ -351,7 +351,8 @@ export function takeDamage(
 		const vpCharged = setCorruptionDiscardObligation(player, undefined, {
 			wasFallen: oldStatus === STATUS_LADDER.length - 1,
 			vpBelowZero: ruleValue(ctx?.catalog ?? rulesCatalog, 'fallenDebtBelowZero'),
-			...(sacrificeCap != null ? { maxOwed: sacrificeCap } : {})
+			...(sacrificeCap != null ? { maxOwed: sacrificeCap } : {}),
+			maxCount: sacrificeMax(ctx?.catalog ?? rulesCatalog)
 		});
 		if (sacrificeCap != null && (player.corruptionCount ?? 0) > sacrificeCap) {
 			log?.push(

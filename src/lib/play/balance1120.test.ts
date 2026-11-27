@@ -17,7 +17,7 @@
  * Each is checked on and off.
  */
 import { describe, expect, it } from 'vitest';
-import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack, useSentinelDiscard } from './combat';
+import { BUFFED_DICE_TIER_FACES, DICE_TIER_FACES, TWO_THIRDS_DICE_TIER_FACES, WEAK_LOW_DICE_TIER_FACES, diceTierFaces, expectedAttack, fightMonster, resetCombatFlags, rollAttack, takeDamage, useSentinelDiscard } from './combat';
 import { applyGameCommand, arcaneBloodFor, createLobbyState, monsterCardFromCatalog } from './runtime';
 import { buildLocationInteractions } from './locationInteractions';
 import { applyCultivate, applyRest, applyTrigger } from './effects/apply';
@@ -882,5 +882,39 @@ describe('mageAwakenArcaneDice: the Arcane dice of Mage\'s awakening (Michael, 2
 	it('a bad number is reported; a good one is kept', () => {
 		expect(parseRules({ numbers: { mageAwakenArcaneDice: -1 } }).problems).toHaveLength(1);
 		expect(parseRules({ numbers: { mageAwakenArcaneDice: 3 } }).rules).toEqual({ numbers: { mageAwakenArcaneDice: 3 } });
+	});
+});
+
+describe('numbers.sacrificeMax: the sacrifice of a corruption stops growing (Michael, 2026-11-26: "after the last sacriface, it stops at 4")', () => {
+	/** A Fallen player with `spirits` spirits and `count` corruptions so far takes a hit that corrupts: points lost and spirits owed. */
+	const corruptAgain = (catalog: PlayCatalog, count: number, spirits: number) => {
+		const p = makePlayer({
+			statusLevel: 3, statusToken: 'Fallen', barrier: 2, maxBarrier: 6, victoryPoints: 20, corruptionCount: count,
+			spirits: Array.from({ length: spirits }, (_, i) => spirit(i + 1, { Healer: 1 }))
+		} as never);
+		const log: string[] = [];
+		const r = takeDamage(p, 9, undefined, log, catalog);
+		return { corrupted: r.corrupted, lost: 20 - p.victoryPoints, owed: p.pendingCorruptionDiscard?.count ?? 0, count: p.corruptionCount };
+	};
+	const CAP = withRules({ fallenDebtBelowZero: true, numbers: { sacrificeMax: 4 } });
+	const OFF = withRules({ fallenDebtBelowZero: true });
+	it('with 4: the 5th and 6th corruption cost 4, like the 4th', () => {
+		expect(corruptAgain(CAP, 3, 0)).toEqual({ corrupted: true, lost: 4, owed: 0, count: 4 });
+		expect(corruptAgain(CAP, 4, 0)).toEqual({ corrupted: true, lost: 4, owed: 0, count: 5 });
+		expect(corruptAgain(CAP, 5, 0)).toEqual({ corrupted: true, lost: 4, owed: 0, count: 6 });
+		// Spirits are paid first: 3 spirits and 4 owed leave 1 point to lose.
+		expect(corruptAgain(CAP, 5, 3)).toEqual({ corrupted: true, lost: 1, owed: 3, count: 6 });
+		// The first corruptions are as before.
+		expect(corruptAgain(CAP, 1, 7)).toEqual({ corrupted: true, lost: 0, owed: 2, count: 2 });
+	});
+	it('without the number the cost keeps growing, as before', () => {
+		expect(corruptAgain(OFF, 4, 0).lost).toBe(5);
+		expect(corruptAgain(OFF, 5, 0).lost).toBe(6);
+	});
+	it('the rules text says where it stops, and a bad value is a problem', () => {
+		expect(buildRulesBrief(CAP)).toContain('4 for the 4th (and 4 for every corruption after your 4th: it stops growing there)');
+		expect(buildRulesBrief(OFF)).toContain('and one more for each corruption after that (5 for the 5th, 6 for the 6th)');
+		expect(parseRules({ numbers: { sacrificeMax: 0 } }).problems).toHaveLength(1);
+		expect(parseRules({ numbers: { sacrificeMax: 4 } }).problems).toHaveLength(0);
 	});
 });

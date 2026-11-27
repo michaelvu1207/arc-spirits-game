@@ -477,11 +477,14 @@ function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undef
 		} else if (name === 'mageAwakenArcaneDice') {
 			if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 99) problems.push(`rules: numbers.mageAwakenArcaneDice must be a whole number from 0 to 99, got ${JSON.stringify(value)}`);
 			else numbers.mageAwakenArcaneDice = value as number;
+		} else if (name === 'sacrificeMax') {
+			if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 99) problems.push(`rules: numbers.sacrificeMax must be a whole number from 1 to 99 (the most spirits one corruption costs), got ${JSON.stringify(value)}`);
+			else numbers.sacrificeMax = value as number;
 		} else if (name === 'restBarrier') {
 			if (!wholeNumbers(value, 4, 4)) problems.push(`rules: numbers.restBarrier must be 4 whole numbers (Barrier a Rest restores at Pure, Tainted, Corrupt, Fallen), got ${JSON.stringify(value)}`);
 			else numbers.restBarrier = [value[0], value[1], value[2], value[3]];
 		} else {
-			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore, sentinelDamagePerDie, mageAwakenArcaneDice, restBarrier)`);
+			problems.push(`rules: unknown number "${name}" (known: diceFaces, elementalistRest, elementalistNoRelic, difficulty3Restore, sentinelDamagePerDie, mageAwakenArcaneDice, sacrificeMax, restBarrier)`);
 		}
 	}
 	return Object.keys(numbers).length ? numbers : undefined;
@@ -515,6 +518,12 @@ export const SENTINEL_DAMAGE_PER_DIE = 2;
 /** Sentinel: damage for each attack die discarded before the roll (the catalog's `numbers.sentinelDamagePerDie`, else 2). */
 export function sentinelDamagePerDie(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
 	return catalog?.rules?.numbers?.sentinelDamagePerDie ?? SENTINEL_DAMAGE_PER_DIE;
+}
+
+/** The most spirits one corruption costs (`numbers.sacrificeMax`; Michael, 2026-11-26: "after the last sacriface, it stops at 4").
+ *  undefined: no limit, the Nth corruption costs N (the engine before that day). */
+export function sacrificeMax(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number | undefined {
+	return catalog?.rules?.numbers?.sacrificeMax;
 }
 
 /** Rule `mageArcaneDice`: Arcane attack dice Mage gains on its awakening, unless `numbers.mageAwakenArcaneDice` says otherwise. */

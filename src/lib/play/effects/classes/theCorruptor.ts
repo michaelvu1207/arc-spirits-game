@@ -1,6 +1,6 @@
 import { bagForSpiritCost, shuffleBag, SPIRIT_WORLD_BAG } from '../../bags';
 import { STATUS_LADDER, setCorruptionDiscardObligation, type PlaySpirit } from '../../types';
-import { ruleValue } from '../../rules';
+import { ruleValue, sacrificeMax } from '../../rules';
 import { runAction } from '../actions';
 import { applyCorruptionEffects } from '../corruption';
 import { isHeroSpirit } from '../heroes';
@@ -48,7 +48,7 @@ const corruptorAwakening: ClassHandler = (ctx) => {
 			player.brokenBarrier = 0;
 			player.corruptionCount = (player.corruptionCount ?? 0) + 1;
 			applyCorruptionEffects(player, log, { wasFallen: false, catalog: ctx.catalog });
-			setCorruptionDiscardObligation(player, undefined, { wasFallen: false });
+			setCorruptionDiscardObligation(player, undefined, { wasFallen: false, maxCount: sacrificeMax(ctx.catalog) });
 			log.push(
 				`Corruptor: this counts as corruption ${player.corruptionCount} — Barrier restored; sacrifice ${player.pendingCorruptionDiscard?.count ?? 0} spirit(s).`
 			);
