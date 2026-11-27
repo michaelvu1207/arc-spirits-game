@@ -252,8 +252,10 @@
  * - abyssFightOrSummon (default false; Michael, 2026-11-27: "bring back the summon action but have it an option to do
  *   the fight OR an arcane abyss summon action"): the Arcane Abyss has its Arcane Abyss Summon action again (the
  *   tables' `reward_rows` on the Arcane Abyss; Michael had removed it on 2026-11-20). true ⇒ in one round a player
- *   at the Arcane Abyss either fights or takes that action: after the action no fight can start that round (a
- *   Monster Hunter's second fight and the Power Abyssal Execution included), and after a fight the action is gone.
+ *   at the Arcane Abyss either fights or takes that action: the action holds the place of the round's fight, and
+ *   after a fight the action is gone. A Monster Hunter's extra fight is on top of the choice (Michael, 2026-11-27:
+ *   "monster hunter should still be able to trigger a fight"): two fights, or one fight and the action, in either
+ *   order (`monsterFightsLeft` in locationInteractions.ts). The Power Abyssal Execution counts as a fight.
  *   Drawing and keeping monster cards is not touched. See `abyssSummonRow` in locationInteractions.ts.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
@@ -747,6 +749,15 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Feral',
 		count: 1,
 		text: 'When an Evil player attacks you, your side strikes first and deals 3 more damage. When a monster attacks you, deal 3 more damage.'
+	},
+	// 2026-11-27 (Michael: "monster hunter should still be able to trigger a fight"): the extra fight is on top of
+	// the fight-or-summon choice at the Arcane Abyss.
+	{
+		rule: 'abyssFightOrSummon',
+		when: true,
+		className: 'Monster Hunter',
+		count: 1,
+		text: 'Each round at the Arcane Abyss, you may fight one extra time: two fights, or one fight and the Arcane Abyss Summon action.'
 	},
 	// 2026-11-26: before the other Firetail texts (the first entry wins).
 	{

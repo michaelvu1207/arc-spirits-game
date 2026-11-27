@@ -33,6 +33,19 @@ export const isAbyssSummonRow = (interaction: { gains: { type: string; action?: 
 	interaction.gains.some((g) => g.type === 'action' && g.action === 'abyssSummon');
 /** The `actionsUsedThisRound` entry of the Arcane Abyss Summon action taken at the Arcane Abyss (rule `abyssFightOrSummon`). */
 export const ABYSS_SUMMON_USED = 'abyssSummonAction';
+/**
+ * Fights a player may still start this round. One fight a round, plus a class's extra fights (Monster Hunter:
+ * `extraActions.combat`). `summonCounts` (rule `abyssFightOrSummon`): the Arcane Abyss Summon action, once taken,
+ * holds one of those places, so a Monster Hunter still has a fight after it and a player without one has none.
+ */
+export function monsterFightsLeft(
+	player: { actionsUsedThisRound?: string[]; extraActions?: Record<string, number> },
+	summonCounts: boolean
+): number {
+	const used = player.actionsUsedThisRound ?? [];
+	const summon = summonCounts && used.includes(ABYSS_SUMMON_USED) ? 1 : 0;
+	return 1 + (player.extraActions?.combat ?? 0) - used.filter((a) => a === 'combat').length - summon;
+}
 
 /** What a single reward-row icon means, once resolved against the catalog. */
 export type RewardIconMeaning =

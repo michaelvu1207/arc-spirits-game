@@ -96,6 +96,7 @@ import {
 	type ResolvedRune,
 	type GainEffect,
 	ABYSS_SUMMON_USED,
+	monsterFightsLeft,
 	isAbyssSummonRow
 } from './locationInteractions';
 import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
@@ -3412,8 +3413,8 @@ function reduceCommand(
 			}
 			// Rule `abyssFightOrSummon`: a round at the Arcane Abyss is a fight OR the Arcane Abyss Summon action.
 			const abyssChoice = ruleValue(catalog, 'abyssFightOrSummon') && destination === 'Arcane Abyss' && isAbyssSummonRow(interaction);
-			if (abyssChoice && player.actionsUsedThisRound.includes('combat')) {
-				return failure('action_used', 'You fought this round: the Arcane Abyss Summon action is in place of a fight.');
+			if (abyssChoice && !player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED) && monsterFightsLeft(player, true) <= 0) {
+				return failure('action_used', 'You have no fight left this round: the Arcane Abyss Summon action is in place of a fight.');
 			}
 
 			// Gain rows are normally once per round. Nomad ("do ALL location interactions
@@ -3675,14 +3676,16 @@ function reduceCommand(
 			// ('Monster Hunter': "initiate Monster Combat two times") raises the allowance via
 			// extraActions['combat']. The base allowance is 1; each prior use consumes
 			// one, and an extra-action credit lets the player exceed the base limit.
-			const combatsUsed = active.player.actionsUsedThisRound.filter((a) => a === 'combat').length;
-			const combatAllowance = 1 + (active.player.extraActions?.combat ?? 0);
-			if (combatsUsed >= combatAllowance) {
-				return failure('action_used', 'You have no monster-combat actions left this round.');
-			}
-			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action took the place of this round's fights.
-			if (ruleValue(catalog, 'abyssFightOrSummon') && active.player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED)) {
-				return failure('action_used', 'You took the Arcane Abyss Summon action this round: it takes the place of your fight.');
+			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action, once taken, holds the place of one fight
+			// (a Monster Hunter's extra fight is still there after it).
+			const summonCounts = ruleValue(catalog, 'abyssFightOrSummon');
+			if (monsterFightsLeft(active.player, summonCounts) <= 0) {
+				return failure(
+					'action_used',
+					summonCounts && active.player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED)
+						? 'You took the Arcane Abyss Summon action this round: it takes the place of a fight, and you have no fight left.'
+						: 'You have no monster-combat actions left this round.'
+				);
 			}
 			const result = fightMonster(state, active.seatColor, catalog, command.handIndex);
 			if (!result) return failure('combat_failed', 'Combat could not be resolved.');

@@ -8,7 +8,9 @@ import {
 	originRuneOptions,
 	type GainEffect,
 	type LocationInteraction,
-	isAbyssSummonRow
+	isAbyssSummonRow,
+	monsterFightsLeft,
+	ABYSS_SUMMON_USED
 } from '../locationInteractions';
 import { buildMonsterRewards } from '../monsterRewards';
 import { ARCANE_ABYSS_BAG } from '../bags';
@@ -122,6 +124,14 @@ export function spiritLine(spirit: {
 }
 
 /** Rule `goodKillBonus`: what the acting seat's alignment adds to a kill, for the fight label. */
+/** Rule `abyssFightOrSummon`: what a fight means for the Arcane Abyss Summon action this round. */
+function abyssFightNote(me: { actionsUsedThisRound?: string[]; extraActions?: Record<string, number> } | null | undefined, catalog: PlayCatalog): string {
+	if (!me || !ruleValue(catalog, 'abyssFightOrSummon') || !interactionsAt(catalog, 'Arcane Abyss').some(isAbyssSummonRow)) return '';
+	if ((me.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED)) return '';
+	const left = monsterFightsLeft(me, true);
+	if (left === 1) return '; this fight is IN PLACE of the Arcane Abyss Summon action this round';
+	return left > 1 ? '; after it you may still fight again or take the Arcane Abyss Summon action' : '';
+}
 function goodKillNote(me: { statusLevel: number } | null | undefined, card: MonsterState | null | undefined, catalog: PlayCatalog): string {
 	if (!me || !card || !ruleValue(catalog, 'goodKillBonus') || !goodKillBonusApplies(card)) return '';
 	return isEvilAlignment(me.statusLevel) ? '; you are Fallen, so no alignment bonus for a kill' : `; a kill also gives you +${GOOD_KILL_BONUS_VP} VP for being Good`;
@@ -292,7 +302,13 @@ export function labelFor(
 				? ` (pay ${paid.length ? paid.join(' + ') : interaction.cost.map((c) => c.label).join(' + ')})`
 				: '';
 			// Rule `abyssFightOrSummon`: this action is in place of the round's fight.
-			const noFight = ruleValue(catalog, 'abyssFightOrSummon') && dest === 'Arcane Abyss' && isAbyssSummonRow(interaction) ? ' (IN PLACE of a fight: after it you cannot fight this round)' : '';
+			const fightsAfter = me ? monsterFightsLeft(me, true) - ((me.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED) ? 0 : 1) : 0;
+			const noFight =
+				ruleValue(catalog, 'abyssFightOrSummon') && dest === 'Arcane Abyss' && isAbyssSummonRow(interaction)
+					? fightsAfter > 0
+						? ` (IN PLACE of one fight: after it you still have ${fightsAfter} fight${fightsAfter === 1 ? '' : 's'} this round)`
+						: ' (IN PLACE of a fight: after it you cannot fight this round)'
+					: '';
 			return `${dest} action ${cmd.rowIndex + 1}: ${gains}${cost}${noFight}${carryWarning(me, items, interaction.cost.length)}`;
 		}
 		case 'spawnHandSpirit': {
@@ -344,7 +360,7 @@ export function labelFor(
 		}
 		case 'startCombat': {
 			const card = me?.monsterHand?.[cmd.handIndex];
-			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (${ruleValue(catalog, 'initiativeDie') ? 'the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first' : 'the monster strikes first unless you strike first'}${ruleValue(catalog, 'abyssFightOrSummon') && interactionsAt(catalog, 'Arcane Abyss').some(isAbyssSummonRow) && !(me?.actionsUsedThisRound ?? []).includes('combat') ? '; a fight is IN PLACE of the Arcane Abyss Summon action this round' : ''}${goodKillNote(me, card, catalog)})`;
+			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (${ruleValue(catalog, 'initiativeDie') ? 'the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first' : 'the monster strikes first unless you strike first'}${abyssFightNote(me, catalog)}${goodKillNote(me, card, catalog)})`;
 		}
 		case 'resolveMonsterReward': {
 			if (cmd.arcaneBlood) {
@@ -595,7 +611,7 @@ export function destinationSummaries(catalog: PlayCatalog): string[] {
 		);
 		const extra =
 			dest === 'Arcane Abyss'
-				? `; draw/keep/fight monster cards from your own hand${ruleValue(catalog, 'abyssFightOrSummon') && actions.length ? '. In one round here you either FIGHT or take the Arcane Abyss Summon action, never both' : ''}`
+				? `; draw/keep/fight monster cards from your own hand${ruleValue(catalog, 'abyssFightOrSummon') && actions.length ? '. In one round here you either FIGHT or take the Arcane Abyss Summon action, never both (a Monster Hunter has one extra fight on top)' : ''}`
 				: '';
 		return `${dest}: ${actions.join('; ') || 'no location actions'}${extra}`;
 	});
