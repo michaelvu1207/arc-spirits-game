@@ -197,7 +197,9 @@ export class League {
 						label: g.label,
 						url: g.url,
 						provider: g.provider,
-						tokenFile: g.tokenFile
+						tokenFile: g.tokenFile || undefined,
+						proxy: g.proxy,
+						tokenCommand: g.tokenCommand
 					})),
 					{
 						target: 1,
@@ -284,7 +286,7 @@ export class League {
 		);
 		try {
 			if (this.#pool) {
-				await this.#pool.check();
+				await this.#pool.check(this.agents.map((a) => a.model).filter((m) => !isMockModel(m)));
 				await this.#pool.refreshUsage().catch(() => {});
 			}
 			this.#checkData();

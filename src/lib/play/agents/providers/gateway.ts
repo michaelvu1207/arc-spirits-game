@@ -24,6 +24,12 @@
  * - A gateway that is not running gives a clear, non-retryable error (and `check()` tests it
  *   before a run without a model call).
  * - Cost is 0 (subscription). Usage: prompt, cached prompt, completion and reasoning tokens.
+ * - The model proxy (a pool account with `proxy: true`, see gatewayPool.ts): the call goes straight
+ *   to the proxy that owns the subscription logins. Each call carries `X-Session-ID` =
+ *   {@link proxySessionId} of the seat's session key: the proxy keeps one id on one real account
+ *   (warm prompt cache) and spreads the ids across its accounts. The model id goes out without the
+ *   `<provider>/` part. A 502 / 503 waits `overloadPauseMs` and is sent again; "no account has this
+ *   model" waits until the proxy has an account that is on.
  * - History modes ({@link GatewayHistory}): through the gateway, a plain multi-turn conversation
  *   can make the model reason on its first turn only. `reasoning` passes each earlier turn's
  *   encrypted reasoning items back in `input` (responses route, `store: false`), as the Codex CLI
@@ -60,6 +66,27 @@ const RETRYABLE = new Set([408, 429, 500, 502, 503, 504, 524, 529]);
 export const CONTEXT_FULL =
 	/context.?(length|window)|maximum context|too many tokens|prompt is too long|input.{0,20}too (long|large)|exceeds.{0,30}(context|token)/i;
 const START_HINT = 'start it with scripts/agent-harness/gateway/start.sh';
+
+/** Session ids up to this length are printed whole in the proxy's log; longer ones are cut to a few letters. */
+export const PROXY_SESSION_ID_MAX = 13;
+
+/**
+ * The `X-Session-ID` of a seat at the model proxy: one id = one real account. Short enough to be
+ * read whole in the proxy's log. `…-g<game>-s<seed>:<seat>` becomes `g<game>-<seed>-<first two
+ * letters of the seat>` (`g7-10062-Re`); another key is sent as it is when short, else as a hash.
+ * Two runs with the same game number, seed and seat share an id: that only puts them on one account.
+ */
+export function proxySessionId(sessionKey: string): string {
+	const m = /-g(\d+)-s(\d+):([A-Za-z]{2})[A-Za-z]*$/.exec(sessionKey);
+	const short = m ? `g${m[1]}-${m[2]}-${m[3]}` : sessionKey;
+	if (short.length <= PROXY_SESSION_ID_MAX && /^[A-Za-z0-9._-]+$/.test(short)) return short;
+	return `h${hashString(sessionKey).toString(36)}${hashString(`${sessionKey}#`).toString(36)}`.slice(0, PROXY_SESSION_ID_MAX);
+}
+
+/** The proxy's answer when no account that is on has the model (all at their caps, or a wrong id). */
+const PROXY_NO_ACCOUNT = /model_not_found|unknown provider for model/i;
+/** A provider that refuses reasoning items made on another account. */
+const REASONING_REFUSED = /encrypted[_ ]content|reasoning.{0,60}(invalid|not found|could not|cannot|unable)/i;
 
 /** A model's subscription provider; refuses ids the gateway could route to a per-token key. */
 export function gatewayProviderOf(model: string): GatewayProviderId {
@@ -139,6 +166,9 @@ export interface GatewayOptions {
 	 */
 	timeoutRetries?: number;
 	timeoutRetryPauseMs?: number;
+	/** The model proxy: the pause before a call that got 502 / 503 is sent again (default 60 s), at most `overloadRetries` times (default 10). */
+	overloadPauseMs?: number;
+	overloadRetries?: number;
 	/** Several accounts (one gateway each): games are pinned per account, each with its own call
 	 *  gate; `baseUrls` / `tokenFile` are then not used (see gatewayPool.ts). */
 	pool?: GatewayPool;
@@ -157,6 +187,8 @@ interface Target {
 	headers: Record<string, string>;
 	redact: (text: string) => string;
 	account: GatewayAccount | null;
+	/** The model proxy: `X-Session-ID`, bare model id, one cache key for the whole game. */
+	proxy: boolean;
 }
 
 export class GatewayProvider implements ChatProvider {
@@ -173,6 +205,8 @@ export class GatewayProvider implements ChatProvider {
 	readonly #maxRetries: number;
 	readonly #timeoutRetries: number;
 	readonly #timeoutRetryPauseMs: number;
+	readonly #overloadPauseMs: number;
+	readonly #overloadRetries: number;
 	readonly #fetch: typeof fetch;
 	readonly #pool: GatewayPool | null;
 	/** How often each seat's calls timed out and were sent again: the suffix of its key on the wire. */
@@ -224,6 +258,8 @@ export class GatewayProvider implements ChatProvider {
 		this.#maxRetries = opts.maxRetries ?? 1;
 		this.#timeoutRetries = opts.timeoutRetries ?? 0;
 		this.#timeoutRetryPauseMs = opts.timeoutRetryPauseMs ?? 2_000;
+		this.#overloadPauseMs = opts.overloadPauseMs ?? 60_000;
+		this.#overloadRetries = opts.overloadRetries ?? 10;
 		this.#fetch = opts.fetchImpl ?? fetch;
 	}
 
@@ -273,7 +309,8 @@ export class GatewayProvider implements ChatProvider {
 				url: this.urlFor(key),
 				headers: { Authorization: `Bearer ${this.#token}`, 'Content-Type': 'application/json' },
 				redact: (t) => this.#redact(t),
-				account: null
+				account: null,
+				proxy: false
 			};
 		const gameId = (key ?? '').split(':')[0];
 		for (;;) {
@@ -283,7 +320,8 @@ export class GatewayProvider implements ChatProvider {
 					url: account.url,
 					headers: account.headers,
 					redact: (t) => account.redact(t),
-					account
+					account,
+					proxy: account.proxy
 				};
 			await this.#pool.waitForOpen(signal, provider);
 		}
@@ -333,6 +371,8 @@ export class GatewayProvider implements ChatProvider {
 		let lastError: ProviderError | null = null;
 		let trimmed = null as { dropped: number; kept: number } | null;
 		let timeoutTries = 0;
+		let overloadTries = 0;
+		let reasoningDropped = false;
 		for (let attempt = 0; attempt <= this.#maxRetries; attempt++) {
 			const target = await this.#target(key, provider, request.signal);
 			try {
@@ -379,6 +419,24 @@ export class GatewayProvider implements ChatProvider {
 					timeoutTries += 1;
 					if (key) this.#timeoutEpoch.set(key, (this.#timeoutEpoch.get(key) ?? 0) + 1);
 					await new Promise((resolve) => setTimeout(resolve, this.#timeoutRetryPauseMs));
+					attempt -= 1;
+					continue;
+				}
+				// The model proxy: the provider is overloaded, or the last live account is in its
+				// cooldown. Wait and send the same call again.
+				if (target.proxy && (error.status === 502 || error.status === 503) && overloadTries < this.#overloadRetries) {
+					overloadTries += 1;
+					await new Promise((resolve) => setTimeout(resolve, this.#overloadPauseMs));
+					if (request.signal?.aborted) throw error;
+					attempt -= 1;
+					continue;
+				}
+				// The model proxy moved the seat to another real account, which refuses the reasoning
+				// items of the old one: send the plain conversation (once).
+				if (target.proxy && !reasoningDropped && REASONING_REFUSED.test(error.message) && stored.some((t) => t.items)) {
+					reasoningDropped = true;
+					stored = stored.map(({ items: _items, ...turn }) => turn);
+					messages = [...system, ...stored, ...fresh];
 					attempt -= 1;
 					continue;
 				}
@@ -451,9 +509,14 @@ export class GatewayProvider implements ChatProvider {
 		const turns: StoredTurn[] =
 			this.#mode === 'single' ? [{ role: 'user', content: singleTurnText(allTurns) }] : allTurns;
 		const withReasoning = this.#mode === 'reasoning';
+		// The proxy knows the bare model id, and one cache key for the whole game: a call sent again
+		// after a time limit must stay on the seat's account and its cached prefix.
+		const wireModel = target.proxy ? model.slice(model.indexOf('/') + 1) : model;
+		const cacheKey = key ? (target.proxy ? key : this.#wireKey(key)) : undefined;
+		const headers = target.proxy && key ? { ...target.headers, 'X-Session-ID': proxySessionId(key) } : target.headers;
 		const payload = responses
 			? {
-					model,
+					model: wireModel,
 					instructions: system.join('\n\n'),
 					input: turns.flatMap((m) => [
 						...(withReasoning && m.items ? m.items : []),
@@ -464,23 +527,23 @@ export class GatewayProvider implements ChatProvider {
 						...(this.#reasoningSummary ? { summary: this.#reasoningSummary } : {})
 					},
 					...(withReasoning ? { include: ['reasoning.encrypted_content'], store: false } : {}),
-					...(key ? { prompt_cache_key: this.#wireKey(key) } : {}),
+					...(cacheKey ? { prompt_cache_key: cacheKey } : {}),
 					...(this.#maxOutputTokens ? { max_output_tokens: this.#maxOutputTokens } : {})
 				}
 			: {
-					model,
+					model: wireModel,
 					messages: [
 						...system.map((content) => ({ role: 'system', content })),
 						...turns.map((m) => ({ role: m.role, content: m.content }))
 					],
 					reasoning_effort: this.#effort,
-					...(key ? { prompt_cache_key: this.#wireKey(key) } : {}),
+					...(cacheKey ? { prompt_cache_key: cacheKey } : {}),
 					...(this.#maxOutputTokens ? { max_completion_tokens: this.#maxOutputTokens } : {})
 				};
 		const res = await this.#fetch(`${target.url}/${responses ? 'responses' : 'chat/completions'}`, {
 			method: 'POST',
 			signal,
-			headers: target.headers,
+			headers,
 			body: JSON.stringify(payload)
 		});
 		const bodyText = await res.text();
@@ -499,7 +562,9 @@ export class GatewayProvider implements ChatProvider {
 			target.account?.record(Date.now() - started, 0);
 			// The per-minute turn limit ("at capacity", turn_rate_limit_exceeded) is a 429 for the
 			// call gate; a used-up window is a usage limit (the pool blocks the account).
-			const usage = USAGE_LIMIT.test(detail) && !TURN_LIMIT.test(detail);
+			// The proxy with no account that is on for this model: the same wait as a used-up window.
+			const noAccount = target.proxy && PROXY_NO_ACCOUNT.test(`${String(apiError?.code ?? '')} ${detail}`);
+			const usage = noAccount || (USAGE_LIMIT.test(detail) && !TURN_LIMIT.test(detail));
 			const limited = usage || res.status === 429 || TURN_LIMIT.test(detail);
 			const status = limited ? 429 : res.ok ? Number(apiError?.code) || 500 : res.status;
 			const error = new ProviderError(

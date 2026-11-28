@@ -13,6 +13,10 @@ export interface LeagueGateway {
 	url: string;
 	/** The gateway's token file (read once, kept in memory, never written anywhere). */
 	tokenFile: string;
+	/** The entry is the model proxy (gatewayPool.ts): seats call it directly with `X-Session-ID`. */
+	proxy?: boolean;
+	/** A command that prints the key (JSON with `key`, or the bare key); in place of `tokenFile`. */
+	tokenCommand?: string[];
 	/** The provider this account serves (`openai-codex` default, or `anthropic`). */
 	provider?: GatewayProviderId;
 	/** Games in flight with a seat on this account. */
@@ -151,8 +155,9 @@ export function loadLeagueConfig(leagueDir: string): LeagueConfig {
 	}
 	const labels = new Set<string>();
 	for (const g of config.gateways) {
-		if (!g.label || !g.url || !g.tokenFile || !(g.games >= 1))
-			throw new Error('league.json: each gateway needs "label", "url", "tokenFile" and "games" ≥ 1');
+		const command = Array.isArray(g.tokenCommand) && g.tokenCommand.length > 0 && g.tokenCommand.every((p) => typeof p === 'string');
+		if (!g.label || !g.url || !(g.tokenFile || command) || !(g.games >= 1))
+			throw new Error('league.json: each gateway needs "label", "url", "tokenFile" (or "tokenCommand") and "games" ≥ 1');
 		if (g.provider !== undefined && !GATEWAY_PROVIDERS.includes(g.provider))
 			throw new Error(
 				`league.json: gateway "${g.label}": "provider" must be ${GATEWAY_PROVIDERS.join(' or ')}`
@@ -164,6 +169,6 @@ export function loadLeagueConfig(leagueDir: string): LeagueConfig {
 		...config,
 		agentsDir: resolvePath(leagueDir, config.agentsDir),
 		dataDir: resolvePath(leagueDir, config.dataDir),
-		gateways: config.gateways.map((g) => ({ ...g, tokenFile: resolvePath(leagueDir, g.tokenFile) }))
+		gateways: config.gateways.map((g) => ({ ...g, tokenFile: g.tokenFile ? resolvePath(leagueDir, g.tokenFile) : '' }))
 	};
 }

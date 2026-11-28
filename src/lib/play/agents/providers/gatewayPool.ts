@@ -12,8 +12,18 @@
  *
  * Tokens: read once from each account's token file, kept only in memory, never logged; error
  * texts are redacted.
+ *
+ * The model proxy (2026-11-27; `proxy: true` on an account): ONE server owns every subscription
+ * login and selects the real account for each call. Such a pool entry is not one account but the
+ * whole proxy for one provider. The seats call it directly (gateway.ts sends `X-Session-ID`, one id
+ * for each seat of each game: the proxy keeps an id on one real account and spreads the ids across
+ * the accounts). Its key comes from a command (`tokenCommand`, e.g. `ccc proxy key`), never from a
+ * file of this project, and its usage comes from `ccc proxy status --json` (the proxy's own guard
+ * turns a real account off at its cap; nothing here does). The entry is blocked only while every
+ * real account of the provider is off.
  */
 
+import { execFile, execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { CallGate, type CallGateOptions } from '../callGate';
@@ -28,6 +38,32 @@ export interface GatewayAccountSpec {
 	tokenFile?: string;
 	/** A token given directly (tests). */
 	token?: string;
+	/** The entry is the model proxy (see the file comment): direct calls with `X-Session-ID`. */
+	proxy?: boolean;
+	/** A command that prints the key: JSON with a `key` field, or the bare key. Used when no token or token file is given. */
+	tokenCommand?: string[];
+}
+
+/** The command that reports the proxy's real accounts (no model call, no secrets in its output but e-mail addresses). */
+export const PROXY_STATUS_COMMAND = ['ccc', 'proxy', 'status', '--json'];
+/** The proxy's name for a subscription provider. */
+const PROXY_PROVIDER: Record<GatewayProviderId, string> = { 'openai-codex': 'codex', anthropic: 'claude' };
+
+/** The key from a command's output: JSON `{ key }` or the bare text. Never logged. */
+function keyFromCommand(command: string[], label: string): string {
+	let out: string;
+	try {
+		out = execFileSync(command[0], command.slice(1), { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'ignore'] });
+	} catch {
+		throw new ProviderError(`gw: the key command of account ${label} failed`, null, false);
+	}
+	try {
+		const key = (JSON.parse(out) as { key?: unknown }).key;
+		if (typeof key === 'string') return key.trim();
+	} catch {
+		// Not JSON: the bare key.
+	}
+	return out.trim();
 }
 
 export interface UsageWindow {
@@ -54,6 +90,8 @@ export class GatewayAccount {
 	readonly label: string;
 	readonly url: string;
 	readonly provider: GatewayProviderId;
+	/** The model proxy, not one account (see the file comment). */
+	readonly proxy: boolean;
 	readonly gate: CallGate;
 	/** Games pinned to this account now. */
 	readonly games = new Set<string>();
@@ -73,7 +111,9 @@ export class GatewayAccount {
 		this.label = spec.label;
 		this.url = spec.url.trim().replace(/\/+$/, '');
 		this.provider = spec.provider ?? DEFAULT_GATEWAY_PROVIDER;
+		this.proxy = spec.proxy === true;
 		let token = spec.token?.trim() ?? '';
+		if (!token && !spec.tokenFile && spec.tokenCommand?.length) token = keyFromCommand(spec.tokenCommand, spec.label);
 		if (!token && spec.tokenFile) {
 			try {
 				token = readFileSync(spec.tokenFile.replace(/^~(?=\/)/, homedir()), 'utf8').trim();
@@ -175,7 +215,16 @@ export interface GatewayPoolOptions {
 	/** A message for the run log (moves, blocks). */
 	onEvent?: (text: string) => void;
 	fetchImpl?: typeof fetch;
+	/** The proxy's status as JSON text (tests); default: run {@link PROXY_STATUS_COMMAND}. */
+	proxyStatusImpl?: () => Promise<string>;
 }
+
+const runProxyStatus = (): Promise<string> =>
+	new Promise((resolve, reject) =>
+		execFile(PROXY_STATUS_COMMAND[0], PROXY_STATUS_COMMAND.slice(1), { timeout: 30_000, maxBuffer: 4e6 }, (err, stdout) =>
+			err ? reject(new Error('the proxy status command failed')) : resolve(stdout)
+		)
+	);
 
 /** A game's pin for one provider. */
 const pinKey = (gameId: string, provider: GatewayProviderId) => `${provider}\n${gameId}`;
@@ -186,6 +235,7 @@ export class GatewayPool {
 	readonly #byGame = new Map<string, GatewayAccount>();
 	readonly #onEvent: (text: string) => void;
 	readonly #fetch: typeof fetch;
+	readonly #proxyStatus: () => Promise<string>;
 
 	constructor(specs: GatewayAccountSpec[], opts: GatewayPoolOptions) {
 		if (!specs.length)
@@ -196,6 +246,7 @@ export class GatewayPool {
 		this.accounts = specs.map((s) => new GatewayAccount(s, opts.gate, opts.target ?? 3));
 		this.#onEvent = opts.onEvent ?? (() => {});
 		this.#fetch = opts.fetchImpl ?? fetch;
+		this.#proxyStatus = opts.proxyStatusImpl ?? runProxyStatus;
 	}
 
 	/**
@@ -299,6 +350,18 @@ export class GatewayPool {
 	/** A real usage limit: block the account until its reset (from /usage, else in 30 min). */
 	async block(account: GatewayAccount, reason: string): Promise<void> {
 		if (account.blocked()) return;
+		if (account.proxy) {
+			// The proxy already tried its other accounts. Every real account off: wait for the first
+			// one to come back. Otherwise a short pause (an account in its cooldown), then go on.
+			const usage = await this.readUsage(account).catch(() => null);
+			const until = usage?.limitReached && usage.resetsAt ? usage.resetsAt : Date.now() + 60_000;
+			account.blockedUntil = Math.max(until, Date.now() + 60_000);
+			account.blockReason = reason.slice(0, 160);
+			this.#onEvent(
+				`${account.label}: ${usage?.limitReached ? 'every account of the proxy is off' : 'the proxy refused a call'}; waiting until ${new Date(account.blockedUntil).toISOString()}: ${account.blockReason}`
+			);
+			return;
+		}
 		const usage = await this.readUsage(account).catch(() => null);
 		const full = usage?.windows.filter((w) => (w.usedPercent ?? 0) >= 100 && w.resetsAt) ?? [];
 		const resets = (full.length ? full : (usage?.windows ?? []))
@@ -344,6 +407,7 @@ export class GatewayPool {
 
 	/** Read an account's quota from its gateway's `/usage` (no model call). */
 	async readUsage(account: GatewayAccount): Promise<AccountUsage> {
+		if (account.proxy) return this.#readProxyUsage(account);
 		const res = await this.#fetch(`${account.url}/usage`, {
 			headers: account.headers,
 			signal: AbortSignal.timeout(15_000)
@@ -378,6 +442,47 @@ export class GatewayPool {
 		return usage;
 	}
 
+	/**
+	 * The proxy's real accounts of this entry's provider, from its status command. One window per
+	 * real account, named `a1`, `a2`, … in the order of the report (never by e-mail address), with
+	 * ` off` when the proxy's guard or the owner turned it off. `usedPercent`: the least used account
+	 * that is on. `limitReached`: none is on; `resetsAt` is then the first time one comes back.
+	 */
+	async #readProxyUsage(account: GatewayAccount): Promise<AccountUsage> {
+		const report = JSON.parse(await this.#proxyStatus()) as {
+			accounts?: Record<
+				string,
+				{ provider?: string; disabled?: boolean; until?: number | null; windows?: { kind?: string; pct?: number; resets_at?: number }[] }
+			>;
+		};
+		const mine = Object.values(report.accounts ?? {}).filter((a) => a.provider === PROXY_PROVIDER[account.provider]);
+		const ms = (seconds: number | null | undefined) => (typeof seconds === 'number' ? Math.round(seconds * 1000) : null);
+		const rows = mine.map((a, i) => {
+			const week = a.windows?.find((w) => w.kind === 'week');
+			return {
+				off: a.disabled === true,
+				back: ms(a.until) ?? ms(week?.resets_at),
+				window: {
+					id: `a${i + 1}${a.disabled ? ' off' : ''}`,
+					usedPercent: typeof week?.pct === 'number' ? week.pct : null,
+					resetsAt: ms(week?.resets_at)
+				}
+			};
+		});
+		const on = rows.filter((r) => !r.off);
+		const used = on.map((r) => r.window.usedPercent).filter((p): p is number => p !== null);
+		const backs = rows.map((r) => r.back).filter((t): t is number => t !== null);
+		const usage: AccountUsage = {
+			at: Date.now(),
+			usedPercent: used.length ? Math.min(...used) : null,
+			resetsAt: on.length ? null : backs.length ? Math.min(...backs) : null,
+			limitReached: rows.length > 0 && on.length === 0,
+			windows: rows.map((r) => r.window)
+		};
+		account.usage = usage;
+		return usage;
+	}
+
 	/** Read every account's quota; block the ones that report a reached limit. */
 	async refreshUsage(): Promise<void> {
 		await Promise.all(
@@ -389,8 +494,12 @@ export class GatewayPool {
 		);
 	}
 
-	/** Fails clearly when a gateway does not answer or refuses its token (no model call). */
-	async check(): Promise<void> {
+	/**
+	 * Fails clearly when a gateway does not answer or refuses its token (no model call). `models`
+	 * (ids as `<provider>/<model>`): the proxy must list each one, so a wrong id stops the run at
+	 * its start and not at the first move.
+	 */
+	async check(models: string[] = []): Promise<void> {
 		for (const a of this.accounts) {
 			let res: Response;
 			try {
@@ -407,6 +516,20 @@ export class GatewayPool {
 					res.status,
 					false
 				);
+			if (!a.proxy || !models.length) continue;
+			const body = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
+			const listed = new Set((body.data ?? []).map((m) => m.id));
+			if (!listed.size) continue;
+			for (const model of new Set(models)) {
+				const at = model.indexOf('/');
+				if (model.slice(0, at) !== a.provider) continue;
+				if (!listed.has(model.slice(at + 1)))
+					throw new ProviderError(
+						`gw: the proxy (${a.label}) has no model "${model.slice(at + 1)}" now: a wrong id, or every account with it is off`,
+						null,
+						false
+					);
+			}
 		}
 	}
 }
