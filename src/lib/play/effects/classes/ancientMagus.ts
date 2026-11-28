@@ -45,7 +45,6 @@ const reduceByRelics: ClassHandler = (ctx) => {
 };
 
 const relicOnOwnAwakening: ClassHandler = (ctx) => {
-	if (!ruleValue(ctx.catalog, 'sunRework')) return;
 	const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 	const awakened = slot == null ? undefined : ctx.player.spirits.find((s) => s.slotIndex === slot);
 	if (!awakened || (awakened.classes?.['Cleric'] ?? 0) <= 0) return;

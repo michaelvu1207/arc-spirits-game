@@ -534,7 +534,7 @@ export function summonDrawSizes(
 			player.navigationDestination === 'Water Region';
 		return { draw: tidalCalling ? 8 : 4, pick: 2 };
 	}
-	return ruleValue(catalog, 'abyssSummonDraw4Pick2') ? { draw: 4, pick: 2 } : { draw: 3, pick: 1 };
+	return { draw: 4, pick: 2 };
 }
 
 /** The log line of an Arcane Abyss Summon, with the sizes of the rule in force. */
@@ -597,11 +597,7 @@ function elementalistSpiritWorldSummon(
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
 	log: string[]
 ): void {
-	if (!ruleValue(catalog, 'elementalistMethods') || ruleValue(catalog, 'elementalistRest1235')) return;
-	if ((awakenedClassCounts(player)['Elementalist'] ?? 0) < ELEMENTALIST_METHOD_AT.spiritWorldSummon) return;
-	const lines: string[] = [];
-	upgradeDice(player, elementalistUpgradesPerAction(catalog), lines);
-	for (const line of lines) log.push(`Elementalist: ${line}`);
+	return;
 }
 
 /** Rule `permanentRewardChoice`: the claim of this kill gives one reward of the card, the player's choice. */
@@ -611,7 +607,7 @@ export function rewardChoiceOf(
 ): boolean {
 	return (
 		monster.permanent === true &&
-		ruleValue(catalog, 'permanentRewardChoice') &&
+		true &&
 		rewardClaimCount(monster.rewardTrack) > 1
 	);
 }
@@ -623,23 +619,7 @@ export function arcaneBloodFor(
 	monster: { difficulty?: number; permanent?: boolean },
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
 ): number | undefined {
-	if (!ruleValue(catalog, 'arcaneBlood')) return undefined;
-	// Rule `arcaneBloodDouble` (Michael, 2026-11-21): 2 / 4 / 6 in place of 1 / 2 / 3.
-	// Rule `arcaneBloodTwoPerPoint` (Michael, 2026-11-21, after Test 28 where it was taken in 0 of 165
-	// offers): two per point of the card's value: permanent monster 2, Difficulty 1 4, 2 8, 3 12.
-	// Rule `arcaneBloodPerPoint` (Michael, 2026-11-21, after Test 30 where two kills nearly finished a
-	// build): one per point of the level's card: permanent monster 1, Difficulty 1 2, 2 4, 3 7.
-	if (ruleValue(catalog, 'arcaneBloodPerPoint')) {
-		if (monster.permanent) return 1;
-		return ({ 1: 2, 2: 4, 3: 7 } as Record<number, number>)[monster.difficulty ?? 1] ?? 2;
-	}
-	if (ruleValue(catalog, 'arcaneBloodTwoPerPoint')) {
-		if (monster.permanent) return 2;
-		return 4 * (ARCANE_BLOOD_BY_DIFFICULTY[(monster.difficulty ?? 1) as 1 | 2 | 3] ?? 1);
-	}
-	const times = ruleValue(catalog, 'arcaneBloodDouble') ? 2 : 1;
-	if (monster.permanent) return times;
-	return times * (ARCANE_BLOOD_BY_DIFFICULTY[(monster.difficulty ?? 1) as 1 | 2 | 3] ?? 1);
+	return undefined;
 }
 
 /**
@@ -654,11 +634,7 @@ function gainArcaneBlood(
 	log: string[]
 ): void {
 	log.push(`Gained ${amount} Arcane Blood.`);
-	if (!ruleValue(catalog, 'elementalistMethods') || ruleValue(catalog, 'elementalistRest1235')) return;
-	if ((awakenedClassCounts(player)['Elementalist'] ?? 0) < ELEMENTALIST_METHOD_AT.monsterKill) return;
-	const lines: string[] = [];
-	upgradeDice(player, amount, lines);
-	for (const line of lines) log.push(`Elementalist: ${line}`);
+	return;
 }
 
 /** Begin a reward-granted draw now, or queue it behind the active one. */
@@ -843,9 +819,7 @@ export function goodKillBonusApplies(monster: { difficulty?: number }): boolean 
  * changes the card's rewards (Falconer, a claim) touches it, and a card with no rewards pays it too.
  */
 function goodKillBonus(player: PrivatePlayerState, monster: { difficulty?: number }, catalog: PlayCatalog, log?: string[]): void {
-	if (!ruleValue(catalog, 'goodKillBonus') || isEvilAlignment(player.statusLevel) || !goodKillBonusApplies(monster)) return;
-	player.victoryPoints += GOOD_KILL_BONUS_VP;
-	log?.push(`Good alignment: +${GOOD_KILL_BONUS_VP} VP for the kill.`);
+	return;
 }
 
 /**
@@ -948,7 +922,7 @@ function applyAwakenRewardClaim(
 					const [discarded] = player.spirits.splice(idx, 1);
 					log.push(`King: you are evil — discarded ${discarded.name}.`);
 					const vpSettled = settleUnpayableCorruptionDebt(player, {
-						vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+						vpBelowZero: true
 					});
 					if (vpSettled > 0)
 						log.push(
@@ -1225,18 +1199,6 @@ function discardBoardSpirit(
 			counts: spirit.classes ?? {}
 		});
 	}
-	// Rule `summonerCultivate`: the Summoner pays on Cultivate, not on a discard.
-	if (sourceBag === ARCANE_ABYSS_BAG && hadAbyssSummoner && !ruleValue(catalog, 'summonerCultivate')) {
-		// Rule `summonerOncePerRound`: only the first such discard of a round pays.
-		const once = ruleValue(catalog, 'summonerOncePerRound');
-		if (!once || player.summonerPaidRound !== state.round) {
-			// Rule `summonerPays2`: 2 VP instead of 4.
-			const gain = ruleValue(catalog, 'summonerPays2') ? 2 : 4;
-			player.victoryPoints += gain;
-			if (once) player.summonerPaidRound = state.round;
-			discardLog.push(`Summoner: gained ${gain} VP for discarding an Arcane Abyss spirit.`);
-		} else discardLog.push(`Summoner: already gained its ${ruleValue(catalog, 'summonerPays2') ? 2 : 4} VP this round.`);
-	}
 
 	// Return the card to the bag it came from (face-down ⇒ Arcane Abyss,
 	// otherwise by cost) and reshuffle so it isn't predictably drawn next.
@@ -1446,7 +1408,7 @@ export function monsterDifficulty(
 	monster: { barrier: number; stage?: number },
 	catalog?: Pick<PlayCatalog, 'rules'> | null
 ): 1 | 2 | 3 {
-	if (catalog && ruleValue(catalog, 'monsterDeckByStage') && (monster.stage === 1 || monster.stage === 2 || monster.stage === 3))
+	if (catalog && (monster.stage === 1 || monster.stage === 2 || monster.stage === 3))
 		return monster.stage;
 	if (monster.barrier >= 8) return 3;
 	if (monster.barrier >= 4) return 2;
@@ -1482,7 +1444,6 @@ export function monsterCardFromCatalog(
 		ladderIndex: monster.order,
 		ladderMax: 0,
 		// Under rule `initiativeDie` a monster has no number: it always has the initiative.
-		...(typeof monster.initiative === 'number' && !ruleValue(catalog, 'initiativeDie') ? { initiative: monster.initiative } : {}),
 		...(monster.permanent ? { permanent: true } : {}),
 		// Rule `difficulty3Restores`: the card's ability (a Difficulty 3 card that is not the permanent monster).
 		...(!monster.permanent && difficulty3Restore(catalog, difficulty) > 0 ? { restoreAfterCombat: difficulty3Restore(catalog, difficulty) } : {})
@@ -1603,7 +1564,7 @@ function drawMonsterCardsForPlayer(
 	catalog: PlayCatalog
 ): boolean {
 	if (player.pendingMonsterDraw?.cards.length) return false;
-	const reveal = ruleValue(catalog, 'monsterDrawOne') ? 1 : 2;
+	const reveal = 1;
 	const selected = state.bags.monsters.contents.filter((entry) => entry.difficulty === difficulty).slice(0, reveal);
 	if (selected.length === 0) return false;
 	const selectedGuids = new Set(selected.map((entry) => entry.guid));
@@ -2084,9 +2045,6 @@ function reduceCommand(
 			let replaceLog: string[] = [];
 			let replacedName: string | null = null;
 			if (command.replaceSlotIndex !== undefined) {
-				if (!ruleValue(catalog, 'summonReplaceWhenFull')) {
-					return failure('unsupported_command', 'A summon cannot replace a spirit in this game.');
-				}
 				if (firstOpenSpiritSlot(activePlayer.player)) {
 					return failure('slot_open', 'You have an open spirit slot: summon into it instead.');
 				}
@@ -2179,22 +2137,6 @@ function reduceCommand(
 				command,
 				counts: spirit.classes
 			});
-			if (
-				pendingDraw.sourceBag === SPIRIT_WORLD_BAG &&
-				!ruleValue(catalog, 'summonerCultivate') &&
-				(awakenedClassCounts(activePlayer.player)['Summoner'] ?? 0) > 0
-			) {
-				activePlayer.player.pendingDecisions.push({
-					id: nextId(state.rng, 'dec'),
-					source: 'class',
-					kind: 'abyssSummonerDraw',
-					prompt: 'Summoner: draw from the Arcane Abyss Bag?',
-					options: [
-						{ id: 'yes', label: 'Draw from the Arcane Abyss' },
-						{ id: 'no', label: 'Not now' }
-					]
-				});
-			}
 
 			// Keep cleanup awaken offers/eligibility consistent if an abyss spirit
 			// auto-awakened mid-summon, and surface that awaken result.
@@ -2532,9 +2474,7 @@ function reduceCommand(
 			// Rule `fallenDebtBelowZero`: VP may be negative, so a manual adjustment never lifts a
 			// negative total to 0 (the floor is the lower of 0 and the current VP).
 			activePlayer.player.victoryPoints = Math.max(
-				ruleValue(catalog, 'fallenDebtBelowZero')
-					? Math.min(0, activePlayer.player.victoryPoints)
-					: 0,
+				Math.min(0, activePlayer.player.victoryPoints),
 				activePlayer.player.victoryPoints + command.amount
 			);
 			return success(state);
@@ -2589,7 +2529,7 @@ function reduceCommand(
 				// round can advance.
 				else
 					settleUnpayableCorruptionDebt(player, {
-						vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+						vpBelowZero: true
 					});
 			}
 			if (discardLog.length > 0) {
@@ -2780,7 +2720,7 @@ function reduceCommand(
 				return failure('draw_pending', 'Resolve your drawn spirits before ending your turn.');
 			}
 			if (active.player.pendingMonsterDraw?.cards.length) {
-				return failure('monster_draw_pending', ruleValue(catalog, 'monsterDrawOne') ? 'Keep the revealed monster card or put it back before ending your turn.' : 'Keep one of the revealed monster cards before ending your turn.');
+				return failure('monster_draw_pending', 'Keep the revealed monster card or put it back before ending your turn.');
 			}
 			// A corruption this turn forces its escalating spirit sacrifice IMMEDIATELY: you
 			// can't end your location actions until you've shed the owed spirit(s). (Corruption
@@ -2789,7 +2729,7 @@ function reduceCommand(
 			// never be frozen; while spirits remain the player must keep discarding.
 			if (active.player.pendingCorruptionDiscard) {
 				settleUnpayableCorruptionDebt(active.player, {
-					vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+					vpBelowZero: true
 				});
 				if (active.player.pendingCorruptionDiscard) {
 					return failure(
@@ -2813,7 +2753,7 @@ function reduceCommand(
 				active.player.navigationDestination === 'Arcane Abyss' &&
 				!active.player.actionsUsedThisRound.includes('combat') &&
 				// Rule `nhalNeedsCorrupt`: the visit counts only while Corrupt or Fallen.
-				(!ruleValue(catalog, 'nhalNeedsCorrupt') || (active.player.statusLevel ?? 0) >= 2) &&
+				((active.player.statusLevel ?? 0) >= 2) &&
 				active.player.spirits.some((s) => s.id === AWAKEN_SPIRIT_IDS.shadowtaker && s.isFaceDown)
 			) {
 				active.player.awakenProgress ??= {};
@@ -2885,7 +2825,7 @@ function reduceCommand(
 			// spirits remain the player must keep discarding.
 			if (active.player.pendingCorruptionDiscard) {
 				settleUnpayableCorruptionDebt(active.player, {
-					vpBelowZero: ruleValue(catalog, 'fallenDebtBelowZero')
+					vpBelowZero: true
 				});
 				if (active.player.pendingCorruptionDiscard) {
 					return failure('corruption_pending', 'Resolve corruption before ending the round.');
@@ -3074,22 +3014,18 @@ function reduceCommand(
 			if (decision.kind === FALCONER_DOUBLE_KIND && command.optionId === 'yes') {
 				const reward = active.player.pendingReward;
 				const falconer = awakeFalconerSpirit(active.player);
-				if (reward && !reward.doubled && falconer && ruleValue(catalog, 'falconerDoubleKill')) {
-					// Rule `falconerNoDoubleVp`: the second copy leaves out the Victory Point rewards.
-					const noVp = ruleValue(catalog, 'falconerNoDoubleVp');
-					const again = noVp
-						? buildMonsterRewards(reward.rewardTrack)
+				if (reward && !reward.doubled && falconer) {
+					const again = buildMonsterRewards(reward.rewardTrack)
 								.filter((option) => option.effect.type !== 'vp')
-								.map((option) => option.token)
-						: reward.rewardTrack;
+								.map((option) => option.token);
 					// A one-reward claim keeps its track: the chosen reward is paid twice at the claim.
 					if (!reward.chooseOne) {
 						reward.rewardTrack = [...reward.rewardTrack, ...again];
-						reward.chooseAmount = noVp ? rewardClaimCount(reward.rewardTrack) : reward.chooseAmount * 2;
+						reward.chooseAmount = rewardClaimCount(reward.rewardTrack);
 					}
 					reward.doubled = true;
 					log.push(
-						`Falconer: the rewards of ${reward.monsterName} are doubled${noVp ? ' (not its Victory Points)' : ''}.`
+						`Falconer: the rewards of ${reward.monsterName} are doubled (not its Victory Points).`
 					);
 					log.push(...discardBoardSpirit(state, active.seatColor, falconer, catalog));
 				} else {
@@ -3412,7 +3348,7 @@ function reduceCommand(
 				return failure('power_missing', 'You need a held Power to replace.');
 			}
 			// Rule `abyssFightOrSummon`: a round at the Arcane Abyss is a fight OR the Arcane Abyss Summon action.
-			const abyssChoice = ruleValue(catalog, 'abyssFightOrSummon') && destination === 'Arcane Abyss' && isAbyssSummonRow(interaction);
+			const abyssChoice = destination === 'Arcane Abyss' && isAbyssSummonRow(interaction);
 			if (abyssChoice && !player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED) && monsterFightsLeft(player, true) <= 0) {
 				return failure('action_used', 'You have no battle action left this round: the Arcane Abyss Summon action uses a battle action.');
 			}
@@ -3597,7 +3533,7 @@ function reduceCommand(
 			if (!active || active.player.navigationDestination !== 'Arcane Abyss') return failure('not_in_abyss', 'You must be at the Arcane Abyss to draw monster cards.');
 			if (active.player.pendingMonsterDraw?.cards.length) return failure('monster_draw_pending', 'Keep one of the revealed monster cards first.');
 			// Rule `monsterDrawOne`: a full hand may still draw from a deck (the card can replace a held one).
-			const swapDraw = !!ruleValue(catalog, 'monsterDrawOne') && !command.permanent;
+			const swapDraw = !command.permanent;
 			if ((active.player.monsterHand?.length ?? 0) >= 3 && !swapDraw) return failure('monster_hand_full', 'Your hand is full (3/3). Defeat a monster card before you draw again.');
 			if (active.player.monsterDrawRound === state.round) return failure('monster_draw_used', 'You already drew monster cards this visit.');
 			if (command.permanent) {
@@ -3626,34 +3562,22 @@ function reduceCommand(
 			if (active.player.navigationDestination !== 'Arcane Abyss') return failure('not_in_abyss', 'Keep monster cards at the Abyss.');
 			if (!Number.isInteger(command.index) || command.index < 0 || command.index >= pending.cards.length) return failure('monster_card_invalid', 'Choose one of the revealed monster cards.');
 			active.player.monsterHand ??= [];
-			if (ruleValue(catalog, 'monsterDrawOne')) {
-				const revealed = pending.cards[command.index];
-				if (command.returnToDeck) {
-					// Not wanted: back on top of its deck. It was this visit's draw.
-					for (const card of pending.cards) returnMonsterCardToTop(state, card);
-					active.player.pendingMonsterDraw = null;
-					return success(state);
-				}
-				if (command.replaceHandIndex !== undefined) {
-					const old = active.player.monsterHand[command.replaceHandIndex];
-					if (!Number.isInteger(command.replaceHandIndex) || !old) return failure('monster_card_invalid', 'Choose one of the monster cards you hold to put back.');
-					active.player.monsterHand = active.player.monsterHand.filter((card) => card !== old);
-					// The held card goes back on top of its own deck with all damage gone; a copy of the permanent monster just leaves.
-					if (!old.permanent) returnMonsterCardToTop(state, old);
-				} else if (active.player.monsterHand.length >= 3) return failure('monster_hand_full', 'Your monster hand is full: put one of your cards back, or put the revealed card back.');
-				active.player.monsterHand.push(revealed);
-				for (const [index, card] of pending.cards.entries()) if (index !== command.index) returnMonsterCardToTop(state, card);
+			const revealed = pending.cards[command.index];
+			if (command.returnToDeck) {
+				// Not wanted: back on top of its deck. It was this visit's draw.
+				for (const card of pending.cards) returnMonsterCardToTop(state, card);
 				active.player.pendingMonsterDraw = null;
 				return success(state);
 			}
-			if (active.player.monsterHand.length >= 3) return failure('monster_hand_full', 'Your monster hand is full.');
-			active.player.monsterHand.push(pending.cards[command.index]);
-			// The other revealed card goes back to the bottom of its difficulty deck.
-			for (const [index, card] of pending.cards.entries()) {
-				if (index === command.index) continue;
-				state.bags.monsters.contents.push({ guid: `monster-card-${card.id}-${nextId(state.rng, 'return')}`, id: card.id, name: card.name, barrier: card.maxHp, damage: card.damage, difficulty: card.difficulty });
-			}
-			state.bags.monsters.count = state.bags.monsters.contents.length;
+			if (command.replaceHandIndex !== undefined) {
+				const old = active.player.monsterHand[command.replaceHandIndex];
+				if (!Number.isInteger(command.replaceHandIndex) || !old) return failure('monster_card_invalid', 'Choose one of the monster cards you hold to put back.');
+				active.player.monsterHand = active.player.monsterHand.filter((card) => card !== old);
+				// The held card goes back on top of its own deck with all damage gone; a copy of the permanent monster just leaves.
+				if (!old.permanent) returnMonsterCardToTop(state, old);
+			} else if (active.player.monsterHand.length >= 3) return failure('monster_hand_full', 'Your monster hand is full: put one of your cards back, or put the revealed card back.');
+			active.player.monsterHand.push(revealed);
+			for (const [index, card] of pending.cards.entries()) if (index !== command.index) returnMonsterCardToTop(state, card);
 			active.player.pendingMonsterDraw = null;
 			return success(state);
 		}
@@ -3672,17 +3596,10 @@ function reduceCommand(
 			if (!Number.isInteger(command.handIndex) || command.handIndex < 0 || command.handIndex >= hand.length)
 				return failure('monster_card_invalid', 'Choose a monster card from your hand.');
 			if (hand[command.handIndex].hp <= 0) return failure('monster_defeated', 'This monster card is already defeated.');
-			// Combat is once per round, but a class that grants extra combat actions
-			// ('Monster Hunter': "initiate Monster Combat two times") raises the allowance via
-			// extraActions['combat']. The base allowance is 1; each prior use consumes
-			// one, and an extra-action credit lets the player exceed the base limit.
-			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action, once taken, holds the place of one fight
-			// (a Monster Hunter's extra fight is still there after it).
-			const summonCounts = ruleValue(catalog, 'abyssFightOrSummon');
-			if (monsterFightsLeft(active.player, summonCounts) <= 0) {
+			if (monsterFightsLeft(active.player, true) <= 0) {
 				return failure(
 					'action_used',
-					summonCounts && active.player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED)
+					active.player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED)
 						? 'You have no battle action left this round: the Arcane Abyss Summon action used one.'
 						: 'You have no monster-combat actions left this round.'
 				);
@@ -3752,7 +3669,7 @@ function reduceCommand(
 				if (!opt) return failure('no_reward', 'This card has no reward to claim.');
 				// Falconer doubled the claim: the chosen reward twice (not Victory Points under `falconerNoDoubleVp`).
 				const times =
-					pending.doubled && !(opt.effect.type === 'vp' && ruleValue(catalog, 'falconerNoDoubleVp')) ? 2 : 1;
+					pending.doubled && !(opt.effect.type === 'vp') ? 2 : 1;
 				for (let n = 0; n < times; n++)
 					applyRewardGain(state, active.seatColor, player, opt.effect, command.choices?.[0] ?? 0, log, catalog);
 			} else {
@@ -3896,28 +3813,20 @@ function resolveEncounterLocationIfReady(
 
 	const combat = resolveEncounterCombat(state, catalog, evilSeats, goodSeats);
 	state.combats.push(combat);
-
-	// Each Evil attacker scores 2 VP for engaging plus 2 VP per Good player
-	// corrupted in the exchange — see pvpVpForAttack. Rule `pvpPaysOnCorrupt`: 3 VP per
-	// Good player corrupted and nothing for the attack; each Good player of the exchange
-	// gets 2 VP per Evil attacker corrupted (pvpGoodBounty); `pvpEngageVp` adds 2 VP for the attack.
-	const paysOnCorrupt = ruleValue(catalog, 'pvpPaysOnCorrupt');
 	const corruptedGood = combat.sides.filter((s) => s.side === 'good' && s.corrupted).length;
 	for (const s of evilSeats) {
 		const p = state.players[s];
 		if (!p) continue;
 		p.victoryPoints += pvpVpForAttack(
 			corruptedGood,
-			paysOnCorrupt,
-			paysOnCorrupt && ruleValue(catalog, 'pvpEngageVp'),
+			true,
+			false,
 			pvpVpPerCorrupted(catalog)
 		);
-		// Rule `moonPerksNeedAttack`: Queen / Sorcerer read this flag in the Awakening Phase.
-		if (ruleValue(catalog, 'moonPerksNeedAttack')) p.attackedPlayerThisRound = true;
 	}
 	const bounty = pvpGoodBounty(
 		combat.sides.filter((s) => s.side === 'evil' && s.corrupted).length,
-		paysOnCorrupt && ruleValue(catalog, 'pvpGoodBounty')
+		false
 	);
 	if (bounty > 0) {
 		for (const side of combat.sides) {

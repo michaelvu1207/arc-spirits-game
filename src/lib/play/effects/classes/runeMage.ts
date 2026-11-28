@@ -27,7 +27,7 @@ const heldRunes = (player: EffectContextLike['player']) =>
 
 /** The die tier the trade gives (Enchanted; Exalted under `sunRework`). */
 function tradeTier(ctx: Pick<EffectContextLike, 'catalog'>): DiceTier {
-	return ruleValue(ctx.catalog, 'sunRework') ? 'exalted' : 'enchanted';
+	return 'exalted';
 }
 
 /** One option per distinct held rune (so the owner chooses which one), else a single "rune". */
@@ -59,51 +59,23 @@ export const ability: ClassAbility[] = [
 		on: 'awakeningPhase',
 		run(ctx) {
 			// Rule `mageArcaneDice`: no rune trade; the Mage only gives its dice when it awakens.
-			if (ruleValue(ctx.catalog, 'mageArcaneDice')) return;
-			const { player, log, state } = ctx;
-			const die = tradeTier(ctx) === 'exalted' ? 'Exalted' : 'Enchanted';
-			const options = tradeOptions(player, die);
-			if (!options) {
-				log.push('Mage: no rune to discard.');
-				return;
-			}
-			player.pendingDecisions.push({
-				id: nextId(state.rng, 'dec'),
-				source: 'class',
-				kind: 'runeMageTrade',
-				prompt: `Awakening: you may discard a rune to gain an ${die} Attack.`,
-				options
-			});
-			log.push(`Decision: Awakening — discard a rune for 1 ${die} Attack?`);
+			return;
 		}
 	},
 	{
 		on: 'awakening',
 		run(ctx) {
-			const arcane = ruleValue(ctx.catalog, 'mageArcaneDice');
-			if (!arcane && !ruleValue(ctx.catalog, 'sunRework')) return;
 			const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 			const awakened = slot == null ? undefined : ctx.player.spirits.find((s) => s.slotIndex === slot);
 			if (!awakened || (awakened.classes?.['Mage'] ?? 0) <= 0) return;
 			// Rule `mageArcaneDice`: "On this spirit's Awakening, gain 4 Arcane Attack Dice." (4, or the catalog's `numbers.mageAwakenArcaneDice`.)
-			if (arcane) runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: mageAwakenArcaneDice(ctx.catalog) });
-			else runAction(ctx, { kind: 'gainAttackDice', tier: 'exalted', amount: MAGE_SUN_AWAKEN_DICE });
+			runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: mageAwakenArcaneDice(ctx.catalog) });
 		}
 	}
 ];
 
 export const decisions: ClassDecisions = {
 	runeMageTrade(ctx, optionId) {
-		if (ruleValue(ctx.catalog, 'mageArcaneDice')) return; // a card left from before the rule
-		const [kind, rawSlotIndex] = optionId.split(':');
-		if (kind !== 'rune') return; // "no" / unknown
-		const slotIndex = rawSlotIndex === undefined ? undefined : Number(rawSlotIndex);
-		const slot = ctx.player.mats.find(
-			(r) => r.type === 'rune' && r.hasRune && (slotIndex === undefined || r.slotIndex === slotIndex)
-		);
-		if (!slot) return; // stale card
-		slot.hasRune = false;
-		ctx.log.push(`Discarded ${slot.name ?? 'a rune'}.`);
-		runAction(ctx, { kind: 'gainAttackDice', tier: tradeTier(ctx), amount: 1 });
+		return;
 	}
 };

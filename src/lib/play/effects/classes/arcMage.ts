@@ -36,32 +36,28 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'onCultivate',
 		run(ctx) {
-			if (ruleValue(ctx.catalog, 'alchemistAugmentToArcane')) {
-				// Rule `alchemistOncePerRound`: one conversion a round, however often the player Cultivates in it.
-				if (ruleValue(ctx.catalog, 'alchemistOncePerRound') && ctx.player.alchemistConvertedRound != null && ctx.player.alchemistConvertedRound === ctx.state.round) return;
-				const augments = placedAugments(ctx.player);
-				if (augments.length === 0) return;
-				ctx.player.pendingDecisions.push({
-					id: nextId(ctx.state.rng, 'dec'),
-					source: 'class',
-					kind: ALCHEMIST_AUGMENT_KIND,
-					prompt: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.',
-					options: [
-						...augments.map((a) => {
-							const spirit = ctx.player.spirits.find((sp) => sp.slotIndex === a.spiritSlotIndex);
-							return {
-								id: `aug:${a.spiritSlotIndex}:${a.runeId}`,
-								label: `Convert the ${a.className ?? a.name ?? 'Spirit'} augment on ${spirit?.name ?? `slot ${a.spiritSlotIndex}`} → 1 Arcane Attack Dice`
-							};
-						}),
-						{ id: 'no', label: 'No' }
-					]
-				});
-				ctx.log.push('Decision: convert a Spirit Augment into an Arcane Attack Dice?');
-				return;
-			}
-			if (ctx.player.attackDice.length < TRADE_COST) return;
-			runAction(ctx, { kind: 'choose', decisionKind: 'arcMageTrade', prompt: tradePrompt, options: tradeOptions });
+			// Rule `alchemistOncePerRound`: one conversion a round, however often the player Cultivates in it.
+			if (ctx.player.alchemistConvertedRound != null && ctx.player.alchemistConvertedRound === ctx.state.round) return;
+			const augments = placedAugments(ctx.player);
+			if (augments.length === 0) return;
+			ctx.player.pendingDecisions.push({
+				id: nextId(ctx.state.rng, 'dec'),
+				source: 'class',
+				kind: ALCHEMIST_AUGMENT_KIND,
+				prompt: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.',
+				options: [
+					...augments.map((a) => {
+						const spirit = ctx.player.spirits.find((sp) => sp.slotIndex === a.spiritSlotIndex);
+						return {
+							id: `aug:${a.spiritSlotIndex}:${a.runeId}`,
+							label: `Convert the ${a.className ?? a.name ?? 'Spirit'} augment on ${spirit?.name ?? `slot ${a.spiritSlotIndex}`} → 1 Arcane Attack Dice`
+						};
+					}),
+					{ id: 'no', label: 'No' }
+				]
+			});
+			ctx.log.push('Decision: convert a Spirit Augment into an Arcane Attack Dice?');
+			return;
 		}
 	}
 ];
@@ -76,13 +72,11 @@ export const decisions: ClassDecisions = {
 			ctx.log.push('Arcane Alchemist: that augment is no longer there.');
 			return;
 		}
-		if (ruleValue(ctx.catalog, 'alchemistOncePerRound')) {
-			if (ctx.player.alchemistConvertedRound != null && ctx.player.alchemistConvertedRound === ctx.state.round) {
-				ctx.log.push('Arcane Alchemist: already converted an augment this round.');
-				return;
-			}
-			ctx.player.alchemistConvertedRound = ctx.state.round;
+		if (ctx.player.alchemistConvertedRound != null && ctx.player.alchemistConvertedRound === ctx.state.round) {
+			ctx.log.push('Arcane Alchemist: already converted an augment this round.');
+			return;
 		}
+		ctx.player.alchemistConvertedRound = ctx.state.round;
 		const [removed] = list.splice(index, 1);
 		ctx.log.push(`Arcane Alchemist: converted the ${removed.className ?? removed.name ?? 'Spirit'} augment into 1 Arcane Attack Dice.`);
 		runAction(ctx, { kind: 'gainAttackDice', tier: 'arcane', amount: 1 });

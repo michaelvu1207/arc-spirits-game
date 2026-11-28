@@ -13,7 +13,6 @@ export const ability: ClassAbility[] = [
 		on: 'awakeningPhase',
 		run(ctx) {
 			if (!isEvilAlignment(ctx.player.statusLevel)) return;
-			if (ruleValue(ctx.catalog, 'moonPerksNeedAttack') && !ctx.player.attackedPlayerThisRound) return;
 			runAction(ctx, { kind: 'gainAttackDice', tier: 'enchanted', amount: 1 });
 		}
 	}

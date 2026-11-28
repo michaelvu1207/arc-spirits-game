@@ -168,7 +168,7 @@ export function canApply(
 			if (!catalog.spirits.find((e) => e.id === draw.id)) return false;
 			// Replace-on-summon (rule `summonReplaceWhenFull`): all 7 slots full, an occupied slot named.
 			if (command.replaceSlotIndex !== undefined) {
-				if (!ruleValue(catalog, 'summonReplaceWhenFull') || firstOpenSpiritSlot(me)) return false;
+				if (firstOpenSpiritSlot(me)) return false;
 				if (command.slotIndex !== undefined && command.slotIndex !== command.replaceSlotIndex)
 					return false;
 				return me.spirits.some((e) => e.slotIndex === command.replaceSlotIndex);
@@ -200,7 +200,7 @@ export function canApply(
 			const card = me.monsterHand?.[command.handIndex];
 			if (!Number.isInteger(command.handIndex) || !card || card.hp <= 0) return false;
 			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action, once taken, holds the place of one fight.
-			if (monsterFightsLeft(me, ruleValue(catalog, 'abyssFightOrSummon')) <= 0) return false;
+			if (monsterFightsLeft(me, true) <= 0) return false;
 			return undefined; // mutate-before-reject handler; all reachable rejects covered, defer on pass (1 candidate)
 		}
 		case 'drawMonsterCards': {
@@ -210,7 +210,7 @@ export function canApply(
 				!!me &&
 				me.navigationDestination === 'Arcane Abyss' &&
 				!me.pendingMonsterDraw?.cards.length &&
-				((me.monsterHand?.length ?? 0) < 3 || (!!ruleValue(catalog, 'monsterDrawOne') && !command.permanent)) &&
+				((me.monsterHand?.length ?? 0) < 3 || (!command.permanent)) &&
 				me.monsterDrawRound !== state.round &&
 				(command.permanent
 					? (catalog?.monsters ?? []).some((m) => m.permanent)
@@ -222,10 +222,8 @@ export function canApply(
 			if (!active || state.phase !== 'location') return false;
 			const me = seatPlayer(state, actor);
 			if (!me || me.navigationDestination !== 'Arcane Abyss' || !me.pendingMonsterDraw || !Number.isInteger(command.index) || command.index < 0 || command.index >= me.pendingMonsterDraw.cards.length) return false;
-			if (ruleValue(catalog, 'monsterDrawOne')) {
-				if (command.returnToDeck) return true;
-				if (command.replaceHandIndex !== undefined) return Number.isInteger(command.replaceHandIndex) && !!me.monsterHand?.[command.replaceHandIndex];
-			}
+			if (command.returnToDeck) return true;
+			if (command.replaceHandIndex !== undefined) return Number.isInteger(command.replaceHandIndex) && !!me.monsterHand?.[command.replaceHandIndex];
 			return (me.monsterHand?.length ?? 0) < 3;
 		}
 		case 'resolveMonsterReward': {
@@ -267,7 +265,6 @@ export function canApply(
 			if (!interaction || me.phaseReady || me.pendingPowerDrafts?.length) return false;
 			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action takes the place of a fight, so it needs one left.
 			if (
-				ruleValue(catalog, 'abyssFightOrSummon') &&
 				me.navigationDestination === 'Arcane Abyss' &&
 				isAbyssSummonRow(interaction) &&
 				!(me.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED) &&

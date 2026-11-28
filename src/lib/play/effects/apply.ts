@@ -202,8 +202,8 @@ export function cultivateRuneMultiplier(
 ): number {
 	if (player.doubleRunes) return 2;
 	// Rule `mysticSwap23`: the doubling is Mystic (3), not (2).
-	const mysticAt = ruleValue(catalog, 'mysticSwap23') ? 3 : 2;
-	if (ruleValue(catalog, 'mysticCultivateDouble') && (awakenedClassCounts(player)['Mystic'] ?? 0) >= mysticAt) return 2;
+	const mysticAt = 3;
+	if ((awakenedClassCounts(player)['Mystic'] ?? 0) >= mysticAt) return 2;
 	return 1;
 }
 
@@ -231,42 +231,14 @@ export function applyCultivate(
 	// (the two do not stack).
 	const bySpirit = spiritsByOrigin(player.spirits);
 	const runeMult = cultivateRuneMultiplier(player, opts.catalog);
-	// Rule `cultivateRuneOrRelic`: one reward per origin. 3+ → the rune; 5+ → the rune, or the
-	// relic instead while it is not yet taken (a decision card; see originCultivate.ts).
-	const oneReward = ruleValue(opts.catalog, 'cultivateRuneOrRelic');
 	for (const [origin, reward] of Object.entries(ORIGIN_REWARDS)) {
 		const spirits = bySpirit[origin] ?? 0;
-		if (oneReward) {
-			if (spirits < reward.runeAt) continue;
-			const relicOpen =
-				spirits >= reward.relicAt && !(player.originRelicsGained ?? []).includes(origin);
-			if (relicOpen) offerOriginCultivateChoice(state, player, origin, runeMult, log);
-			else gainOriginRunes(player, origin, runeMult, log);
-			continue;
-		}
-		if (spirits >= reward.runeAt) {
-			const rune = originRuneForName(origin);
-			if (rune) {
-				for (let i = 0; i < runeMult; i += 1) {
-					player.mats.push({
-						slotIndex: player.mats.length + 1,
-						hasRune: true,
-						id: rune.runeId,
-						name: rune.name,
-						type: rune.type,
-						originId: rune.originId ?? undefined,
-						classId: rune.classId ?? undefined,
-						special: rune.special
-					});
-				}
-				log.push(`Cultivated ${runeMult} ${rune.name}${runeMult === 1 ? '' : 's'} (${spirits} ${origin} spirits).`);
-			}
-		}
-		const gained = (player.originRelicsGained ??= []);
-		if (spirits >= reward.relicAt && !gained.includes(origin)) {
-			gained.push(origin);
-			grantRelicTool(player, reward.relicId, log);
-		}
+		if (spirits < reward.runeAt) continue;
+		const relicOpen =
+			spirits >= reward.relicAt && !(player.originRelicsGained ?? []).includes(origin);
+		if (relicOpen) offerOriginCultivateChoice(state, player, origin, runeMult, log);
+		else gainOriginRunes(player, origin, runeMult, log);
+		continue;
 	}
 	// Class-hook dispatch: fire onCultivate class effects for the acting seat.
 	applyTrigger(state, seat, 'onCultivate', log, opts);

@@ -35,14 +35,14 @@ export function abyssDrawBlockedBy(
 	state: Pick<PublicGameState, 'activeSeats' | 'players' | 'round' | 'phase'>,
 	seat: SeatColor
 ): SeatColor | null {
-	if (!ruleValue(catalog, 'abyssDrawByPoints') || state.phase !== 'location') return null;
+	if (state.phase !== 'location') return null;
 	for (const other of abyssDrawOrder(state)) {
 		if (other === seat) return null;
 		const p = state.players[other];
 		if (!p || p.phaseReady === true) continue;
 		const revealed = (p.pendingMonsterDraw?.cards.length ?? 0) > 0;
 		// Rule `monsterDrawOne`: a full hand may still draw (the card can replace a held one).
-		const mayStillDraw = p.monsterDrawRound !== state.round && ((p.monsterHand?.length ?? 0) < 3 || !!ruleValue(catalog, 'monsterDrawOne'));
+		const mayStillDraw = p.monsterDrawRound !== state.round && true;
 		if (revealed || mayStillDraw) return other;
 	}
 	return null;

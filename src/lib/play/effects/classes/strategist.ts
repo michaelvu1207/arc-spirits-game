@@ -8,7 +8,7 @@ export const MONK_INITIATIVE = 5;
 /** Under rule `spiritInitiativeTrim` (Michael, 2026-11-21). */
 export const MONK_INITIATIVE_TRIMMED = 3;
 export const monkInitiative = (catalog?: Pick<PlayCatalog, 'rules'> | null): number =>
-	ruleValue(catalog, 'spiritInitiativeTrim') ? MONK_INITIATIVE_TRIMMED : MONK_INITIATIVE;
+	MONK_INITIATIVE_TRIMMED;
 export const MONK_DAMAGE_REDUCTION = 2;
 
 /**

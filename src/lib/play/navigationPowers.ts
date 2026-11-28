@@ -256,8 +256,8 @@ const ALL_DEFS: NavigationPowerDef[] = [
 export function navigationPowerPool(
 	catalog?: Pick<PlayCatalog, 'rules'> | null
 ): readonly NavigationPowerDef[] {
-	const pool = ruleValue(catalog, 'powerRework') ? V2_DEFS : NAVIGATION_POWERS;
-	return ruleValue(catalog, 'initiativeDie') || ruleValue(catalog, 'abyssFightOrSummon') ? pool.map((p) => ruleWording(p, catalog)) : pool;
+	const pool = V2_DEFS;
+	return pool.map((p) => ruleWording(p, catalog));
 }
 
 /** Rule `initiativeDie`: Sudden Strike in the new wording ("gain the initiative", never "strike first"). */
@@ -269,8 +269,8 @@ const battleActionWording = (power: NavigationPowerDef): NavigationPowerDef =>
 	power.id === 'abyssal-execution-2' ? { ...power, text: power.text.replace('This is your battle for the round.', 'This uses a battle action.') } : power;
 /** A Power in the wording of the rules in force. */
 const ruleWording = (power: NavigationPowerDef, catalog?: Pick<PlayCatalog, 'rules'> | null): NavigationPowerDef => {
-	const a = ruleValue(catalog, 'initiativeDie') ? initiativeDieWording(power) : power;
-	return ruleValue(catalog, 'abyssFightOrSummon') ? battleActionWording(a) : a;
+	const a = initiativeDieWording(power);
+	return battleActionWording(a);
 };
 
 export function isNavigationPowerId(value: unknown): value is NavigationPowerId {

@@ -44,10 +44,6 @@ export const ability: ClassAbility[] = [
 		on: 'onCultivate',
 		run(ctx) {
 			const { player, state } = ctx;
-			if (!ruleValue(ctx.catalog, 'masterBarrierChoice')) {
-				runAction(ctx, { kind: 'gainMaxBarrier', amount: MASTER_AMOUNT });
-				return;
-			}
 			const gains = masterGains(player);
 			if (gains.max === 0 || gains.restore === 0) {
 				// No real choice: one of the two would give nothing.

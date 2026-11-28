@@ -11,9 +11,7 @@ import type { ClassAbility, ClassHandler } from './types';
  * heroes have no origin); awakened or not; grants once when ≥3.
  */
 const captainOnCultivate: ClassHandler = (ctx) => {
-	if (ruleValue(ctx.catalog, 'captainPowerOnKill')) return;
-	const heroes = ctx.player.spirits.filter((s) => isHeroSpirit(s, ctx.catalog)).length;
-	if (heroes >= 3) runAction(ctx, { kind: 'gainAugment', amount: 1 });
+	return;
 };
 
 /**
@@ -22,7 +20,7 @@ const captainOnCultivate: ClassHandler = (ctx) => {
  * from the same pool as the Forest Region's random Power.
  */
 const captainOnKill: ClassHandler = (ctx) => {
-	if (!ruleValue(ctx.catalog, 'captainPowerOnKill') || !ctx.combat?.killed) return;
+	if (!ctx.combat?.killed) return;
 	const powers = navigationPowerPool(ctx.catalog);
 	if (powers.length === 0) return;
 	const power = powers[nextInt(ctx.state.rng, powers.length)];
@@ -38,8 +36,7 @@ export const ability: ClassAbility[] = [
 		// switch: the games recorded under `captainPowerOnKill` alone still gave the die.)
 		on: 'onSpiritDiscard',
 		run(ctx) {
-			if (ruleValue(ctx.catalog, 'captainNoDiscardDie')) return;
-			runAction(ctx, { kind: 'gainAttackDice', tier: 'enchanted', amount: 1 });
+			return;
 		}
 	}
 ];

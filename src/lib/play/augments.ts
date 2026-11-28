@@ -57,7 +57,6 @@ export function ownerAugmentCapacity(
 	let base = augmentCapacityForSpirit(spirit);
 	// Rule `herderArcaneAugments`: with an awakened Herder, each Arcane spirit (cost 7+) holds 2.
 	if (
-		ruleValue(catalog, 'herderArcaneAugments') &&
 		(spirit.cost ?? 0) >= ARCANE_ABYSS_COST_MIN &&
 		(player.spirits ?? []).some((s) => !s.isFaceDown && (s.classes?.['Herder'] ?? 0) > 0)
 	) {

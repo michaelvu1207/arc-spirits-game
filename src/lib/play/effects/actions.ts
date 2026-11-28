@@ -253,10 +253,6 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 		}
 		case 'gainInitiative': {
 			// Rule `initiativeDie`: initiative is the die, no class gives a number.
-			if (ruleValue(ctx.catalog, 'initiativeDie')) break;
-			const amount = scaled(action.amount);
-			player.initiative += amount;
-			log.push(`Gained ${amount} initiative.`);
 			break;
 		}
 		case 'reduceIncomingDamage': {

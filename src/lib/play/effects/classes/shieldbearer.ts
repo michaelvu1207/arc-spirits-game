@@ -19,21 +19,10 @@ export const ability: ClassAbility[] = [
 			const { player } = ctx;
 			const full = player.maxBarrier > 0 && player.barrier >= player.maxBarrier;
 			// Rule `shieldbearerFullOnly`: 5 less at full Barrier, nothing otherwise.
-			if (ruleValue(ctx.catalog, 'shieldbearerFullOnly')) {
-				if (!full) return;
-				player.damageReduction += SHIELDBEARER_FULL_ONLY_REDUCTION;
-				ctx.log.push(`Shieldbearer: full Barrier — take ${SHIELDBEARER_FULL_ONLY_REDUCTION} less damage.`);
-				return;
-			}
-			if (ruleValue(ctx.catalog, 'sunRework')) {
-				const amount = full ? SHIELDBEARER_SUN_FULL_REDUCTION : SHIELDBEARER_SUN_REDUCTION;
-				player.damageReduction += amount;
-				ctx.log.push(`Shieldbearer: ${full ? 'full Barrier — ' : ''}take ${amount} less damage.`);
-				return;
-			}
 			if (!full) return;
-			player.damageReduction += SHIELDBEARER_REDUCTION;
-			ctx.log.push(`Shieldbearer: full Barrier — take ${SHIELDBEARER_REDUCTION} less damage.`);
+			player.damageReduction += SHIELDBEARER_FULL_ONLY_REDUCTION;
+			ctx.log.push(`Shieldbearer: full Barrier — take ${SHIELDBEARER_FULL_ONLY_REDUCTION} less damage.`);
+			return;
 		}
 	}
 ];

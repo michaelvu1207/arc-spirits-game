@@ -385,16 +385,100 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	abyssFightOrSummon: false
 };
 
+/** The one ruleset (27 November 2026): the value every former switch has. Temporary: the calls are being inlined. */
+const OFFICIAL: Record<RuleName, boolean> = {
+	feralMonsterStrikeFirst: true,
+	summonReplaceWhenFull: true,
+	cultivatorRelicOnce: true,
+	summonerOncePerRound: true,
+	pvpPaysOnCorrupt: true,
+	pvpGoodBounty: false,
+	abyssSummonDraw4Pick2: true,
+	firetailVsMonsters: true,
+	moonPerksNeedAttack: false,
+	corruptorCountsAsCorruption: false,
+	fallenDebtBelowZero: true,
+	sunRework: true,
+	bastionVsMonsters: true,
+	pvpEngageVp: false,
+	pvpAttackerSacrificeCap: false,
+	powerRework: true,
+	mysticCultivateDouble: true,
+	cultivateRuneOrRelic: true,
+	ramAugmentDamage: true,
+	pvpInAbyss: true,
+	mysticSwap23: true,
+	falconerDoubleKill: true,
+	herderArcaneAugments: true,
+	riderAugmentOption: true,
+	mageArcaneDice: true,
+	shieldbearerFullOnly: true,
+	masterBarrierChoice: true,
+	falconerNoDoubleVp: true,
+	relicAwakenNeedsBoard: true,
+	monsterDeckByStage: true,
+	summonerPays2: false,
+	winAt40: false,
+	sidePointsHalf: false,
+	queenUnawakens: true,
+	summonerCultivate: true,
+	cultistNoVp: true,
+	captainPowerOnKill: true,
+	alchemistAugmentToArcane: true,
+	healerNoVp: true,
+	feralNoDamage: true,
+	corruptorAwakenMaxBarrier: false,
+	captainNoDiscardDie: true,
+	princessRune: true,
+	kingPureOnly: true,
+	nhalNeedsCorrupt: true,
+	pvpCorruptPays4: false,
+	goodKillBonus: false,
+	buffedDice: true,
+	weakLowDice: true,
+	enchantedTwoThirds: true,
+	elementalistRest1235: true,
+	alchemistOncePerRound: true,
+	abyssDrawByPoints: true,
+	monsterDrawOne: true,
+	difficulty3Restores: true,
+	elementalistOnCultivate: true,
+	elementalist5NeedsRelic: true,
+	fighterInitiative: true,
+	elementalistMethods: true,
+	restByStatus: true,
+	fairyEnchanted: true,
+	cursedSpiritBasic: true,
+	elementalistOneUpgrade: true,
+	elementalistBigKills: true,
+	battleAdeptNoDice: true,
+	beastNoInitiative: true,
+	mysticMonstersOnly: true,
+	spiritInitiativeTrim: true,
+	arcaneBlood: false,
+	arcaneBloodDouble: true,
+	arcaneBloodTwoPerPoint: false,
+	arcaneBloodPerPoint: true,
+	restBase4: false,
+	fighterDice35: true,
+	cultivatorBarrier35: true,
+	permanentRewardChoice: true,
+	initiativeDie: true,
+	initiativeSum: true,
+	firetailDamage: true,
+	abyssFightOrSummon: true,
+};
+const OFFICIAL_NUMBERS = {"diceFaces": {"enchanted": [0, 0, 0, 1, 1, 1]}, "elementalistRest": [1, 2, 3, 5], "elementalistNoRelic": 4, "sentinelDamagePerDie": 1, "mageAwakenArcaneDice": 3, "sacrificeMax": 4, "initiativeHits": [4, 6, 7, 8], "restBarrier": [4, 4, 3, 2]} as const;
 const RULE_NAMES = Object.keys(RULE_DEFAULTS) as RuleName[];
 
 /** The tier of the attack dice a Fairy gives when it awakens: Exalted, or Enchanted under `fairyEnchanted`. */
 export function fairyDiceTier(catalog: Parameters<typeof ruleValue>[0]): 'enchanted' | 'exalted' {
-	return ruleValue(catalog, 'fairyEnchanted') ? 'enchanted' : 'exalted';
+	return 'enchanted';
 }
 
 /** The tier of the attack dice of Cursed Spirit's Tainted reward: Enchanted, or Basic under `cursedSpiritBasic`. */
 export function cursedSpiritDiceTier(catalog: Parameters<typeof ruleValue>[0]): 'basic' | 'enchanted' {
-	return ruleValue(catalog, 'cursedSpiritBasic') ? 'basic' : 'enchanted';
+	return 'basic';
 }
 
 /** Amounts a rule switch gives a class breakpoint in place of the amount in its ability file. */
@@ -429,11 +513,10 @@ export const REST_BARRIER = 2;
  * `numbers.restBarrier` (Michael, 2026-11-25) replaces all of that with one number per status.
  */
 export function restBarrier(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, statusLevel: number): number {
-	const list = catalog?.rules?.numbers?.restBarrier;
+	const list = OFFICIAL_NUMBERS.restBarrier;
 	if (list) return list[Math.min(3, Math.max(0, statusLevel))];
 	// Rule `restBase4` (Michael, 2026-11-21): the base is 4, not 2.
-	const base = ruleValue(catalog, 'restBase4') ? 4 : REST_BARRIER;
-	if (!ruleValue(catalog, 'restByStatus')) return base;
+	const base = REST_BARRIER;
 	return base + Math.max(0, 3 - Math.max(0, statusLevel));
 }
 
@@ -535,7 +618,7 @@ function parseRuleNumbers(raw: unknown, problems: string[]): RuleNumbers | undef
 
 /** Upgrades per Rest at 2 / 3 / 4 / 5 Elementalists under `elementalistRest1235`: the catalog's numbers, else 1 / 2 / 3 / 5. */
 export function elementalistRestLadder(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): [number, number, number, number] {
-	return catalog?.rules?.numbers?.elementalistRest ?? ELEMENTALIST_REST_DEFAULT;
+	return [...OFFICIAL_NUMBERS.elementalistRest];
 }
 
 /**
@@ -543,8 +626,7 @@ export function elementalistRestLadder(catalog: Pick<PlayCatalog, 'rules'> | nul
  * Cultivate with the rule `elementalistOnCultivate`. `null` when the ladder rule is off.
  */
 export function elementalistUpgradeAction(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): 'rest' | 'cultivate' | null {
-	if (!ruleValue(catalog, 'elementalistRest1235')) return null;
-	return ruleValue(catalog, 'elementalistOnCultivate') ? 'cultivate' : 'rest';
+	return 'cultivate';
 }
 
 /**
@@ -552,7 +634,7 @@ export function elementalistUpgradeAction(catalog: Pick<PlayCatalog, 'rules'> | 
  * player who holds no relic: the catalog's `numbers.elementalistNoRelic`, else the number at 4.
  */
 export function elementalistNoRelicUpgrades(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
-	return catalog?.rules?.numbers?.elementalistNoRelic ?? elementalistRestLadder(catalog)[2];
+	return OFFICIAL_NUMBERS.elementalistNoRelic ?? elementalistRestLadder(catalog)[2];
 }
 
 /** Sentinel: damage for each attack die discarded before the roll, unless `numbers.sentinelDamagePerDie` says otherwise. */
@@ -560,7 +642,7 @@ export const SENTINEL_DAMAGE_PER_DIE = 2;
 
 /** Sentinel: damage for each attack die discarded before the roll (the catalog's `numbers.sentinelDamagePerDie`, else 2). */
 export function sentinelDamagePerDie(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
-	return catalog?.rules?.numbers?.sentinelDamagePerDie ?? SENTINEL_DAMAGE_PER_DIE;
+	return OFFICIAL_NUMBERS.sentinelDamagePerDie ?? SENTINEL_DAMAGE_PER_DIE;
 }
 
 /** Rule `initiativeDie`: the sides of the initiative die. */
@@ -569,7 +651,7 @@ export const INITIATIVE_DIE_SIDES = 12;
 export const INITIATIVE_HITS: readonly [number, number, number, number] = [3, 5, 7, 9];
 /** Rule `initiativeDie`: how many of the 12 sides give the initiative at this status (a roll of that number or less hits). */
 export function initiativeHits(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, statusLevel: number): number {
-	const list = catalog?.rules?.numbers?.initiativeHits ?? INITIATIVE_HITS;
+	const list = OFFICIAL_NUMBERS.initiativeHits ?? INITIATIVE_HITS;
 	return list[Math.min(3, Math.max(0, statusLevel))];
 }
 /** What "gain the initiative if your side doesn't" is called in the texts under rule `initiativeDie`. */
@@ -608,7 +690,7 @@ const INITIATIVE_DIE_CLASS_TEXT: Record<string, (text: string) => string> = {
 /** The most spirits one corruption costs (`numbers.sacrificeMax`; Michael, 2026-11-26: "after the last sacriface, it stops at 4").
  *  undefined: no limit, the Nth corruption costs N (the engine before that day). */
 export function sacrificeMax(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number | undefined {
-	return catalog?.rules?.numbers?.sacrificeMax;
+	return OFFICIAL_NUMBERS.sacrificeMax;
 }
 
 /** Rule `mageArcaneDice`: Arcane attack dice Mage gains on its awakening, unless `numbers.mageAwakenArcaneDice` says otherwise. */
@@ -616,7 +698,7 @@ export const MAGE_ARCANE_AWAKEN_DICE = 4;
 
 /** Rule `mageArcaneDice`: Arcane attack dice Mage gains on its awakening (the catalog's `numbers.mageAwakenArcaneDice`, else 4). */
 export function mageAwakenArcaneDice(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
-	return catalog?.rules?.numbers?.mageAwakenArcaneDice ?? MAGE_ARCANE_AWAKEN_DICE;
+	return OFFICIAL_NUMBERS.mageAwakenArcaneDice ?? MAGE_ARCANE_AWAKEN_DICE;
 }
 
 /** Sentinel's printed text for the catalog's number. */
@@ -627,8 +709,8 @@ export const sentinelText = (catalog: Pick<PlayCatalog, 'rules'> | null | undefi
 export const DIFFICULTY_3_RESTORE = 5;
 /** Barrier a monster card of `difficulty` restores after a fight it survives under the rules of `catalog` (0: none). */
 export function difficulty3Restore(catalog: Pick<PlayCatalog, 'rules'> | null | undefined, difficulty: number | undefined): number {
-	if (difficulty !== 3 || !ruleValue(catalog, 'difficulty3Restores')) return 0;
-	return catalog?.rules?.numbers?.difficulty3Restore ?? DIFFICULTY_3_RESTORE;
+	if (difficulty !== 3) return 0;
+	return DIFFICULTY_3_RESTORE;
 }
 
 /** The value of one switch for this catalog (its default when the catalog has no rules). */
@@ -636,13 +718,12 @@ export function ruleValue(
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
 	name: RuleName
 ): boolean {
-	const value = catalog?.rules?.[name];
-	return typeof value === 'boolean' ? value : RULE_DEFAULTS[name];
+	return OFFICIAL[name];
 }
 
 /** Victory Points that win the game: 30, or 40 under rule `winAt40`. */
 export function vpToWin(catalog: Pick<PlayCatalog, 'rules'> | null | undefined): number {
-	return ruleValue(catalog, 'winAt40') ? 40 : VP_TO_WIN;
+	return VP_TO_WIN;
 }
 
 /** Whether an Evil player may attack Good players at this destination (rule `pvpInAbyss`). */
@@ -651,7 +732,7 @@ export function pvpAllowedAt(
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
 ): boolean {
 	if (!dest) return false;
-	return dest !== 'Arcane Abyss' || ruleValue(catalog, 'pvpInAbyss');
+	return true;
 }
 
 /** Printed class text that a switch replaces: class → breakpoint count → text. */
@@ -823,9 +904,7 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		className: 'Arcane Alchemist',
 		count: 1,
 		text: (c) =>
-			ruleValue(c, 'alchemistOncePerRound')
-				? 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice (once a round).'
-				: 'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice.'
+			'When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice (once a round).'
 	},
 	{
 		rule: 'kingPureOnly',
@@ -1028,18 +1107,16 @@ export function ruleAdjustedClassSchema(
 	schema: ClassBreakpoint[] | null
 ): ClassBreakpoint[] | null {
 	// A rule number that is printed on a class: Sentinel's damage per discarded die.
-	if (className === 'Sentinel' && catalog?.rules?.numbers?.sentinelDamagePerDie != null && Array.isArray(schema)) {
+	if (className === 'Sentinel' && OFFICIAL_NUMBERS.sentinelDamagePerDie != null && Array.isArray(schema)) {
 		return schema.map((tier) => ({ ...tier, effects: [{ ...tier.effects?.[0], type: 'benefit', description: sentinelText(catalog) }] }));
 	}
 	const changes = RULE_CLASS_TEXT.filter(
 		(c) => c.className === className && ruleValue(catalog, c.rule) === c.when
 	);
-	// Rule `initiativeDie`: no initiative numbers and the wording "gain the initiative", on top of the other switches.
-	const dieRule = ruleValue(catalog, 'initiativeDie');
-	const dieWord = dieRule ? INITIATIVE_DIE_CLASS_TEXT[className] : undefined;
-	const sumWord = dieRule && ruleValue(catalog, 'initiativeSum') ? INITIATIVE_SUM_CLASS_TEXT[className] : undefined;
-	const reword = dieWord && sumWord ? (t: string) => sumWord(dieWord(t)) : dieWord;
-	if ((!changes.length && !dieRule) || !Array.isArray(schema)) return schema;
+	const dieWord = INITIATIVE_DIE_CLASS_TEXT[className];
+	const sumWord = INITIATIVE_SUM_CLASS_TEXT[className];
+	const reword = dieWord ? (t: string) => (sumWord as ((x: string) => string) | undefined)?.(dieWord(t)) ?? dieWord(t) : undefined;
+	if (!Array.isArray(schema)) return schema;
 	return schema.map((tier) => {
 		const change = changes.find((c) => c.count === Number(tier.count));
 		let next = tier;
@@ -1047,7 +1124,6 @@ export function ruleAdjustedClassSchema(
 			const description = typeof change.text === 'function' ? change.text(catalog) : change.text;
 			next = { ...tier, effects: [{ ...tier.effects?.[0], type: 'benefit', description }] };
 		}
-		if (!dieRule) return next;
 		const texts = (next.effects ?? []).map((e) => e.description ?? '');
 		const joined = texts.filter(Boolean).join(' ');
 		// Any other "Gain N initiative." sentence goes too (cards outside the list above).

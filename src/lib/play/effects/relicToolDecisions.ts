@@ -40,7 +40,7 @@ export const decisions: ClassDecisions = {
 				ctx.player.strikeFirstCharges = (ctx.player.strikeFirstCharges ?? 0) + 1;
 				// Shown at once: the next combat strikes first (resetCombatFlags keeps it while armed).
 				ctx.player.alwaysAttackFirst = true;
-				ctx.log.push(ruleValue(ctx.catalog, 'initiativeDie') ? `${tool.name}: in your next combat you gain the initiative if your side does not have it.` : `${tool.name}: you strike first in your next combat.`);
+				ctx.log.push(`${tool.name}: in your next combat you gain the initiative if your side does not have it.`);
 				break;
 			case 'fullBarrier': {
 				const restored = ctx.player.maxBarrier - ctx.player.barrier;

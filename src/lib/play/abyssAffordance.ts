@@ -46,18 +46,15 @@ export function abyssAffordance(
 ): AbyssAffordance | undefined {
 	const player = state.players[seat];
 	if (!player || state.phase !== 'location' || player.navigationDestination !== 'Arcane Abyss') return undefined;
-	const summonCounts = !!ruleValue(catalog, 'abyssFightOrSummon');
-	const drawOne = !!ruleValue(catalog, 'monsterDrawOne');
-	const byPoints = !!ruleValue(catalog, 'abyssDrawByPoints');
-	const waitsOn = byPoints ? abyssDrawBlockedBy(catalog, state, seat) : null;
+	const waitsOn = abyssDrawBlockedBy(catalog, state, seat);
 	return {
-		battleActionsLeft: Math.max(0, monsterFightsLeft(player, summonCounts)),
+		battleActionsLeft: Math.max(0, monsterFightsLeft(player, true)),
 		battleActions: 1 + (player.extraActions?.combat ?? 0),
-		summonUsesBattleAction: summonCounts,
-		summonTaken: summonCounts && (player.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED),
-		drawReveals: drawOne ? 1 : 2,
-		canReturnDraw: drawOne,
-		...(byPoints ? { drawOrder: abyssDrawOrder(state) } : {}),
+		summonUsesBattleAction: true,
+		summonTaken: (player.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED),
+		drawReveals: 1,
+		canReturnDraw: true,
+		drawOrder: abyssDrawOrder(state),
 		...(waitsOn ? { drawWaitsOn: waitsOn } : {})
 	};
 }

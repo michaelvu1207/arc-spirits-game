@@ -29,29 +29,7 @@ export function ownedBeasts(player: PrivatePlayerState): PlaySpirit[] {
 const herderAwakening: ClassHandler = (ctx) => {
 	// Rule `herderArcaneAugments`: Herder is the augment capacity of Arcane spirits instead
 	// (augments.ts `ownerAugmentCapacity`); it gives no runes.
-	if (ruleValue(ctx.catalog, 'herderArcaneAugments')) return;
-	const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
-	const herder = ctx.player.spirits.find((s) => s.slotIndex === slot);
-	if (!herder || (herder.classes?.['Herder'] ?? 0) <= 0) return;
-	const gained: string[] = [];
-	for (const beast of ownedBeasts(ctx.player)) {
-		for (const [originName, count] of Object.entries(beast.origins ?? {})) {
-			if ((count ?? 0) <= 0) continue;
-			const runeId = baseRuneForOriginName(originName);
-			const base = runeId ? BASE_RUNES[runeId] : undefined;
-			if (!runeId || !base) continue;
-			ctx.player.mats.push({
-				slotIndex: ctx.player.mats.length + 1,
-				hasRune: true,
-				id: runeId,
-				name: base.name,
-				type: 'rune',
-				originId: base.originId
-			});
-			gained.push(`${base.name} (${beast.name})`);
-		}
-	}
-	if (gained.length > 0) ctx.log.push(`Herder: gained ${gained.join(', ')}.`);
+	return;
 };
 
 export const ability: ClassAbility[] = [{ on: 'awakening', run: herderAwakening }];

@@ -40,19 +40,12 @@ export const ability: ClassAbility[] = [
 		on: 'awakeningPhase',
 		run(ctx) {
 			const { player, log } = ctx;
-			if (ruleValue(ctx.catalog, 'queenUnawakens')) return;
-			if (ruleValue(ctx.catalog, 'moonPerksNeedAttack') && !player.attackedPlayerThisRound) {
-				log.push('Queen: no player attacked this round — no VP.');
-				return;
-			}
-			player.victoryPoints += 1;
-			log.push('Queen: Awakening Phase — gain 1 VP.');
+			return;
 		}
 	},
 	{
 		on: 'awakening',
 		run(ctx) {
-			if (!ruleValue(ctx.catalog, 'queenUnawakens')) return;
 			const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
 			if (slot == null) return;
 			const queen = ctx.player.spirits.find((s) => s.slotIndex === slot);

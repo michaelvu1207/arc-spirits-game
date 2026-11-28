@@ -22,12 +22,7 @@ export function applyCorruptionEffects(
 ): void {
 	if (hasAwakenedClass(player, 'Cultist')) {
 		// Rule `cultistNoVp` (Michael, 2026-11-18): the Cultist gives no point (1 fewer sacrifice only).
-		if (ruleValue(opts.catalog, 'cultistNoVp')) {
-			log?.push('Cultist: corrupted — sacrifice 1 fewer spirit.');
-		} else {
-			player.victoryPoints += CULTIST_VP;
-			log?.push(`Cultist: corrupted — sacrifice 1 fewer spirit and gain ${CULTIST_VP} VP.`);
-		}
+		log?.push('Cultist: corrupted — sacrifice 1 fewer spirit.');
 	}
 	if (opts.wasFallen) {
 		recordAwakenProgress(player, AWAKEN_SPIRIT_IDS.nightWitch, AWAKEN_PROGRESS_KEYS.nightWitch);

@@ -49,7 +49,7 @@ export function elementalistRestUpgrades(
 	player: Pick<PrivatePlayerState, 'mats'>
 ): number {
 	// Five Elementalists without a relic: as four do, or the catalog's `numbers.elementalistNoRelic`.
-	if (count >= 5 && ruleValue(catalog, 'elementalist5NeedsRelic') && !holdsRelic(player)) return elementalistNoRelicUpgrades(catalog);
+	if (count >= 5 && !holdsRelic(player)) return elementalistNoRelicUpgrades(catalog);
 	const capped = Math.min(count, 5);
 	// 1 / 2 / 3 / 5 at 2 / 3 / 4 / 5 Elementalists, or the catalog's `numbers.elementalistRest`.
 	return capped >= 2 ? elementalistRestLadder(catalog)[capped - 2] : 0;
@@ -61,7 +61,7 @@ export const ELEMENTALIST_METHOD_AT = { monsterKill: 2, rest: 3, cultivate: 4, s
 export const ELEMENTALIST_UPGRADES_PER_ACTION = 2;
 /** Under `elementalistMethods`: upgrades per action, 1 with the rule `elementalistOneUpgrade`. */
 export function elementalistUpgradesPerAction(catalog: Parameters<typeof ruleValue>[0]): number {
-	return ruleValue(catalog, 'elementalistOneUpgrade') ? 1 : ELEMENTALIST_UPGRADES_PER_ACTION;
+	return 1;
 }
 
 /** Under `elementalistBigKills`: upgrades for a kill of a Difficulty 2 or 3 card. */
@@ -76,22 +76,14 @@ export function elementalistKillUpgrades(
 	combat: Pick<EffectCombatInfo, 'monsterDifficulty' | 'monsterPermanent'> | undefined
 ): number {
 	const perAction = elementalistUpgradesPerAction(catalog);
-	if (!ruleValue(catalog, 'elementalistBigKills')) return perAction;
 	const big = !combat?.monsterPermanent && (combat?.monsterDifficulty ?? 1) >= 2;
 	return big ? Math.max(perAction, ELEMENTALIST_BIG_KILL_UPGRADES) : perAction;
 }
 
 /** The upgrades for the action `method`, if the rule is on and the player has enough Elementalists. */
 function upgradeFor(ctx: EffectContext, method: keyof typeof ELEMENTALIST_METHOD_AT): void {
-	if (!ruleValue(ctx.catalog, 'elementalistMethods')) return;
 	// Rule `elementalistRest1235`: upgrades come from Rest only (the ladder in the onRest ability below).
-	if (ruleValue(ctx.catalog, 'elementalistRest1235')) return;
-	if (ctx.traitCount < ELEMENTALIST_METHOD_AT[method]) return;
-	// Rule `arcaneBlood` (Michael, 2026-11-21): a kill upgrades nothing by itself; Elementalist (2)
-	// upgrades once per Arcane Blood taken in place of the kill's rewards (runtime.ts, `gainArcaneBlood`).
-	if (method === 'monsterKill' && ruleValue(ctx.catalog, 'arcaneBlood')) return;
-	const times = method === 'monsterKill' ? elementalistKillUpgrades(ctx.catalog, ctx.combat) : elementalistUpgradesPerAction(ctx.catalog);
-	runAction(ctx, { kind: 'upgradeDice', times });
+	return;
 }
 
 /** Under `elementalistRest1235`: the upgrades of the ladder for this player, now. */
@@ -104,16 +96,8 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'onRest',
 		run(ctx) {
-			if (ruleValue(ctx.catalog, 'elementalistRest1235')) {
-				if (elementalistUpgradeAction(ctx.catalog) === 'rest') ladderUpgrades(ctx);
-				return;
-			}
-			if (ruleValue(ctx.catalog, 'elementalistMethods')) {
-				upgradeFor(ctx, 'rest');
-				return;
-			}
-			const times = REST_LADDER.find(([count]) => ctx.traitCount >= count)?.[1];
-			if (times) runAction(ctx, { kind: 'upgradeDice', times });
+			if (elementalistUpgradeAction(ctx.catalog) === 'rest') ladderUpgrades(ctx);
+			return;
 		}
 	},
 	{

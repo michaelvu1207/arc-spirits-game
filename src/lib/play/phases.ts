@@ -421,7 +421,7 @@ function collectBenefitGrants(player: PrivatePlayerState, catalog?: PlayCatalog)
 	// King — +1 VP (the Evil self-discard penalty is applied on claim). Rule `kingPureOnly`
 	// (balance test): the point is paid only to a Pure player; a Tainted or Corrupt King holder
 	// gets nothing, an Evil one is offered the claim as before (it discards the King).
-	const kingPays = !ruleValue(catalog, 'kingPureOnly') || player.statusLevel === 0 || evil;
+	const kingPays = player.statusLevel === 0 || evil;
 	if ((counts['King'] ?? 0) >= 1 && kingPays) {
 		grants.push({
 			kind: 'vp',

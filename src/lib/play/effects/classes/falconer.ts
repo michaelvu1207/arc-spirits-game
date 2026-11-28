@@ -143,19 +143,17 @@ export function offerFalconerDouble(
 	player: PrivatePlayerState,
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
 ): void {
-	if (!ruleValue(catalog, 'falconerDoubleKill')) return;
 	const reward = player.pendingReward;
 	const falconer = awakeFalconerSpirit(player);
 	if (!reward || reward.doubled || !falconer) return;
-	const noVp = ruleValue(catalog, 'falconerNoDoubleVp');
 	player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== FALCONER_DOUBLE_KIND);
 	player.pendingDecisions.push({
 		id: nextId(state.rng, 'dec'),
 		source: 'class',
 		kind: FALCONER_DOUBLE_KIND,
-		prompt: `Falconer: gain double the rewards of ${reward.monsterName}${noVp ? ' (not its Victory Points)' : ''}? ${falconer.name} is then discarded.`,
+		prompt: `Falconer: gain double the rewards of ${reward.monsterName} (not its Victory Points)? ${falconer.name} is then discarded.`,
 		options: [
-			{ id: 'yes', label: `Double the rewards${noVp ? ' except Victory Points' : ''} and discard ${falconer.name}` },
+			{ id: 'yes', label: `Double the rewards except Victory Points and discard ${falconer.name}` },
 			{ id: 'no', label: 'No, keep the spirit' }
 		],
 		expiresAt: 'benefits'
@@ -166,41 +164,13 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'awakening',
 		run(ctx) {
-			if (ruleValue(ctx.catalog, 'falconerDoubleKill')) return; // the new Falconer gives no augments
-			const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
-			const awakened = ctx.player.spirits.find((s) => s.slotIndex === slot);
-			if (!awakened || (awakened.classes?.['Falconer'] ?? 0) <= 0) return;
-			runAction(ctx, { kind: 'gainAugment', amount: FALCONER_AWAKEN_AUGMENTS });
+			return;
 		}
 	},
 	{
 		on: 'locationPhase',
 		run(ctx) {
-			if (ruleValue(ctx.catalog, 'falconerDoubleKill')) return; // the new Falconer has no trade
-			const { player, log, state } = ctx;
-			player.pendingDecisions = (player.pendingDecisions ?? []).filter(
-				(d) => d.kind !== 'falconerTrade' && d.kind !== 'falconerPayment'
-			);
-			const trades = falconerTrades(ctx).filter((t) => affordable(player, t));
-			if (trades.length === 0) {
-				log.push('Falconer: you cannot pay for any Spirit Augment trade.');
-				return;
-			}
-			player.pendingDecisions.push({
-				id: nextId(state.rng, 'dec'),
-				source: 'class',
-				kind: 'falconerTrade',
-				prompt: 'Falconer: you may do one Spirit Augment trade from any location.',
-				expiresAt: 'benefits',
-				options: [
-					{ id: 'no', label: 'No trade this round' },
-					...trades.map((t) => ({
-						id: tradeId(t),
-						label: `${t.location}: pay ${costLabel(t)} → ${t.augment.name} augment`
-					}))
-				]
-			});
-			log.push('Decision: Falconer — one Spirit Augment trade from any location?');
+			return;
 		}
 	}
 ];

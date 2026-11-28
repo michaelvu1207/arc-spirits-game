@@ -43,20 +43,7 @@ const corruptorAwakening: ClassHandler = (ctx) => {
 		if (oldStatus < 2) player.becameCorruptThisRound = true;
 		player.becameFallenThisRound = true;
 		log.push('Corruptor: status drops to Fallen.');
-		if (ruleValue(ctx.catalog, 'corruptorCountsAsCorruption')) {
-			player.barrier = player.maxBarrier;
-			player.brokenBarrier = 0;
-			player.corruptionCount = (player.corruptionCount ?? 0) + 1;
-			applyCorruptionEffects(player, log, { wasFallen: false, catalog: ctx.catalog });
-			setCorruptionDiscardObligation(player, undefined, { wasFallen: false, maxCount: sacrificeMax(ctx.catalog) });
-			log.push(
-				`Corruptor: this counts as corruption ${player.corruptionCount} — Barrier restored; sacrifice ${player.pendingCorruptionDiscard?.count ?? 0} spirit(s).`
-			);
-		}
 	}
-
-	// Rule `corruptorAwakenMaxBarrier` (Michael, 2026-11-18): awakening the Corruptor also gives 4 Max Barrier.
-	if (ruleValue(ctx.catalog, 'corruptorAwakenMaxBarrier')) runAction(ctx, { kind: 'gainMaxBarrier', amount: CORRUPTOR_MAX_BARRIER });
 	const worldBag = state.bags?.hexSpirits;
 	const abyssBag = state.bags?.abyssFallen;
 	if (!worldBag || !abyssBag) return;

@@ -18,12 +18,9 @@ export const ability: ClassAbility[] = [
 		on: 'awakeningPhase',
 		run(ctx) {
 			if (isEvilAlignment(ctx.player.statusLevel)) return;
-			if (ruleValue(ctx.catalog, 'sunRework')) {
-				runAction(ctx, { kind: 'restoreBarrier', amount: GARDENER_SUN_RESTORE });
-				runAction(ctx, { kind: 'gainMaxBarrier', amount: 1 });
-				return;
-			}
-			runAction(ctx, { kind: 'restoreBarrier', amount: GARDENER_RESTORE });
+			runAction(ctx, { kind: 'restoreBarrier', amount: GARDENER_SUN_RESTORE });
+			runAction(ctx, { kind: 'gainMaxBarrier', amount: 1 });
+			return;
 		}
 	}
 ];

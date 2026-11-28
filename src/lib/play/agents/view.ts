@@ -57,11 +57,7 @@ export function attackLine(me: SeatPlayer, catalog?: Parameters<typeof expectedA
 /** The status with its alignment and, under rule `goodKillBonus`, what the alignment pays for a monster kill. */
 function statusLine(level: number, catalog: PlayCatalog): string {
 	const name = STATUS_LADDER[level] ?? `level ${level}`;
-	const kill = !ruleValue(catalog, 'goodKillBonus')
-		? ''
-		: isEvilAlignment(level)
-			? `: no alignment bonus, a monster kill pays only the card's rewards`
-			: `: +${GOOD_KILL_BONUS_VP} VP for every Difficulty 2 or 3 monster kill on top of the card's rewards, lost if this player becomes Fallen`;
+	const kill = '';
 	return `${name} (${level}/3${isEvilAlignment(level) ? ', EVIL' : ', Good'}${kill})`;
 }
 
@@ -87,7 +83,7 @@ function ownSection(
 	const lines: string[] = [];
 	lines.push(`YOU: ${seat} (guardian ${me.selectedGuardian})`);
 	lines.push(
-		`  Victory Points: ${me.victoryPoints} (${vpToWin(catalog)} wins)${ruleValue(catalog, 'sidePointsHalf') && me.halfPointBank ? ' + a banked half point' : ''}`
+		`  Victory Points: ${me.victoryPoints} (${vpToWin(catalog)} wins)`
 	);
 	lines.push(
 		`  Barrier: ${me.barrier} of ${me.maxBarrier} Max Barrier (${me.brokenBarrier} broken)`
@@ -102,18 +98,13 @@ function ownSection(
 		lines.push(
 			`  Attacked a player this round: ${me.attackedPlayerThisRound ? 'yes' : 'no'} (${moon.join(' and ')} gain only in a round you attacked a player)`
 		);
-	const dieRule = ruleValue(catalog, 'initiativeDie');
-	if (dieRule) {
-		const hits = initiativeHits(catalog, me.statusLevel ?? 0);
+	const hits = initiativeHits(catalog, me.statusLevel ?? 0);
+	lines.push(
+		`  Initiative die: ${hits} of ${INITIATIVE_DIE_SIDES} sides give you 1 initiative at your status (${Math.round((100 * hits) / INITIATIVE_DIE_SIDES)} %).`
+	);
+	if ((me.strikeFirstCharges ?? 0) > 0)
 		lines.push(
-			`  Initiative die: ${hits} of ${INITIATIVE_DIE_SIDES} sides give you ${ruleValue(catalog, 'initiativeSum') ? '1 initiative' : 'the initiative'} at your status (${Math.round((100 * hits) / INITIATIVE_DIE_SIDES)} %).`
-		);
-	}
-	if ((!dieRule && me.alwaysAttackFirst) || (me.strikeFirstCharges ?? 0) > 0)
-		lines.push(
-			dieRule
-				? '  Firecracker armed: in your next combat you gain the initiative if your side does not have it.'
-				: '  You strike first in your next combat.'
+			'  Firecracker armed: in your next combat you gain the initiative if your side does not have it.'
 		);
 	if ((me.sentinelDiscardIds?.length ?? 0) > 0)
 		lines.push(
@@ -159,7 +150,7 @@ function ownSection(
 			? `summon up to ${me.pendingDraw.summonLimit - me.pendingDraw.summonedCount} more`
 			: '';
 		lines.push(`  Drawn spirits (${me.pendingDraw?.sourceBag ?? 'draw'}; ${limitText}):`);
-		if (ruleValue(catalog, 'summonReplaceWhenFull') && me.spirits.length >= MAX_SPIRITS)
+		if (me.spirits.length >= MAX_SPIRITS)
 			lines.push(
 				`    (all ${MAX_SPIRITS} slots are full: a summon may replace one of your spirits, which is discarded back to its bag)`
 			);

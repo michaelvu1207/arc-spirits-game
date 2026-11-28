@@ -18,8 +18,7 @@ export function noteMonsterPoints(
 	amount: number,
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
 ): void {
-	if (!ruleValue(catalog, 'sidePointsHalf') || amount <= 0) return;
-	player.monsterPointsSinceSettle = (player.monsterPointsSinceSettle ?? 0) + amount;
+	return;
 }
 
 /** Halve the non-monster points gained since the last settlement (rule `sidePointsHalf`). */
@@ -27,19 +26,5 @@ export function settleSidePoints(
 	state: PublicGameState,
 	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
 ): void {
-	if (!ruleValue(catalog, 'sidePointsHalf')) return;
-	for (const seat of state.activeSeats ?? []) {
-		const player = state.players[seat];
-		if (!player) continue;
-		const base = player.pointsAtSettle ?? 0;
-		const monster = player.monsterPointsSinceSettle ?? 0;
-		const side = player.victoryPoints - base - monster;
-		if (side > 0) {
-			const bank = (player.halfPointBank ?? 0) + side;
-			player.halfPointBank = bank % 2;
-			player.victoryPoints = base + monster + Math.floor(bank / 2);
-		}
-		player.pointsAtSettle = player.victoryPoints;
-		player.monsterPointsSinceSettle = 0;
-	}
+	return;
 }

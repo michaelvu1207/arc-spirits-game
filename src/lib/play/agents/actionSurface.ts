@@ -348,7 +348,6 @@ function awakenRewardCommands(me: PrivatePlayerState, state: PublicGameState): G
  * the same state (face-down or awake, same augment) are one choice.
  */
 function replaceSummonCommands(me: PrivatePlayerState, catalog: PlayCatalog): GameCommand[] {
-	if (!ruleValue(catalog, 'summonReplaceWhenFull')) return [];
 	if (!me.pendingDraw || !me.handDraws?.length || me.spirits.length < MAX_SPIRITS) return [];
 	const seen = new Set<string>();
 	const slots: number[] = [];

@@ -58,9 +58,7 @@ export const ability: ClassAbility[] = [
 					{ id: 'maxBarrier', label: `Gain ${RIDER_AMOUNT} Max Barrier` },
 					{ id: 'dice', label: `Gain ${RIDER_AMOUNT} Basic Attack Dice` },
 					// Rule `riderAugmentOption`: a fourth choice (never the engine's own pick).
-					...(ruleValue(ctx.catalog, 'riderAugmentOption')
-						? [{ id: 'augment', label: 'Gain 1 Spirit Augment of your choice' }]
-						: [])
+					{ id: 'augment', label: 'Gain 1 Spirit Augment of your choice' }
 				],
 				expiresAt: 'benefits',
 				expiryOptionId: 'auto'
@@ -85,7 +83,7 @@ export const decisions: ClassDecisions = {
 				runAction(ctx, { kind: 'gainAttackDice', tier: 'basic', amount: RIDER_AMOUNT });
 				break;
 			case 'augment':
-				if (ruleValue(ctx.catalog, 'riderAugmentOption')) runAction(ctx, { kind: 'gainAugment', amount: 1 });
+				runAction(ctx, { kind: 'gainAugment', amount: 1 });
 				break;
 		}
 	}

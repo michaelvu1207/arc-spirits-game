@@ -313,30 +313,23 @@ export function elementalistUpgrades(
 			mats: relic ? RELIC_MATS : NO_MATS
 		} as never);
 	}
-	if (ruleValue(catalog, 'elementalistMethods')) {
-		const key =
-			action === 'summon' ? 'spiritWorldSummon' : action === 'kill' ? 'monsterKill' : action;
-		if (count < ELEMENTALIST_METHOD_AT[key]) return 0;
-		if (action === 'kill') {
-			// Under Arcane Blood a kill upgrades nothing by itself (the blood does, see bloodValue).
-			if (ruleValue(catalog, 'arcaneBlood')) return 0;
-			return elementalistKillUpgrades(catalog, {
-				monsterDifficulty: (kill?.difficulty ?? 1) as 1 | 2 | 3,
-				monsterPermanent: !!kill?.permanent
-			});
-		}
-		return elementalistUpgradesPerAction(catalog);
+	const key =
+		action === 'summon' ? 'spiritWorldSummon' : action === 'kill' ? 'monsterKill' : action;
+	if (count < ELEMENTALIST_METHOD_AT[key]) return 0;
+	if (action === 'kill') {
+		return elementalistKillUpgrades(catalog, {
+			monsterDifficulty: (kill?.difficulty ?? 1) as 1 | 2 | 3,
+			monsterPermanent: !!kill?.permanent
+		});
 	}
-	return action === 'rest' ? defaultRestUpgrades(catalog, count) : 0;
+	return elementalistUpgradesPerAction(catalog);
 }
 
 /** Upgrades per Arcane Blood gained (the engine: Elementalist (2) under `elementalistMethods`,
  *  not under `elementalistRest1235`). */
 function upgradesPerBlood(s: Situation): number {
 	const c = s.catalog;
-	if (!ruleValue(c, 'arcaneBlood') || !ruleValue(c, 'elementalistMethods')) return 0;
-	if (ruleValue(c, 'elementalistRest1235')) return 0;
-	return s.elementalist >= ELEMENTALIST_METHOD_AT.monsterKill ? 1 : 0;
+	return 0;
 }
 
 /** Extra upgrades per upgrading action (Rest or Cultivate, as the rules say) a held relic gives at
@@ -971,7 +964,7 @@ function cultivateValue(s: Situation): number {
 	let relicTaken = false;
 	if (
 		s.cultivator >= CULTIVATOR_RELIC_AT &&
-		!(ruleValue(s.catalog, 'cultivatorRelicOnce') && s.me.cultivatorRelicGained)
+		!(s.me.cultivatorRelicGained)
 	) {
 		v += Math.max(s.params.rune, s.relics > 0 ? 0 : relicWorth(s));
 		relicTaken = true;

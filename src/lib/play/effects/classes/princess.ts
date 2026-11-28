@@ -15,13 +15,9 @@ export const ability: ClassAbility[] = [
 			const { player, log } = ctx;
 			if (isEvilAlignment(player.statusLevel)) return;
 			if (player.spirits.length === 0 || player.spirits.some((s) => s.isFaceDown)) return;
-			if (ruleValue(ctx.catalog, 'princessRune')) {
-				player.mats.push({ slotIndex: player.mats.length + 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' });
-				log.push('Princess: not Evil and every spirit awakened — gain 1 Any Rune.');
-				return;
-			}
-			player.victoryPoints += 1;
-			log.push('Princess: not Evil and every spirit awakened — gain 1 VP.');
+			player.mats.push({ slotIndex: player.mats.length + 1, hasRune: true, id: WILDCARD_MAT_IDS.anyRune, name: 'Any Rune', type: 'rune' });
+			log.push('Princess: not Evil and every spirit awakened — gain 1 Any Rune.');
+			return;
 		}
 	}
 ];

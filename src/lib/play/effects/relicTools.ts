@@ -54,7 +54,7 @@ export function relicToolText(tool: RelicTool, vp: number, catalog?: Pick<PlayCa
 
 /** Rule `initiativeDie`: Firecracker in the new wording ("gain the initiative", never "strike first"). */
 export function relicToolWording(tool: RelicTool, catalog?: Pick<PlayCatalog, 'rules'> | null): RelicTool {
-	if (tool.effect !== 'strikeFirst' || !ruleValue(catalog, 'initiativeDie')) return tool;
+	if (tool.effect !== 'strikeFirst') return tool;
 	return {
 		...tool,
 		ability: 'gain the initiative in one combat if your side does not have it',
@@ -195,7 +195,6 @@ export function offerHeldRelicTools(
 	catalog?: (Pick<PlayCatalog, 'rules'> & { relicToolVp?: number; spirits?: PlayCatalog['spirits'] }) | null
 ): void {
 	const vp = relicToolVp(catalog);
-	const needsBoard = ruleValue(catalog, 'relicAwakenNeedsBoard');
 	player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== 'relicTool');
 	for (const slot of player.mats ?? []) {
 		if (!isHeldRelicTool(slot)) continue;
@@ -207,7 +206,7 @@ export function offerHeldRelicTools(
 		if (vp > 0) options.push({ id: `vp:${ref}`, label: `Gain ${vp} VP, then discard ${tool.name}` });
 		if (tool.effect === 'awaken') {
 			for (const spirit of player.spirits.filter((s) => s.isFaceDown)) {
-				if (needsBoard && lacksOriginBoard(player, spirit, catalog?.spirits)) continue;
+				if (lacksOriginBoard(player, spirit, catalog?.spirits)) continue;
 				options.push({
 					id: `awaken:${ref}:${spirit.slotIndex}`,
 					label: `Awaken ${spirit.name}, then discard ${tool.name}`
@@ -220,7 +219,7 @@ export function offerHeldRelicTools(
 			id: nextId(state.rng, 'dec'),
 			source: 'class',
 			kind: 'relicTool',
-			prompt: `${tool.name}: ${relicToolText(tool, vp, catalog)}${tool.effect === 'awaken' && needsBoard ? ORIGIN_BOARD_NOTE : ''}`,
+			prompt: `${tool.name}: ${relicToolText(tool, vp, catalog)}${tool.effect === 'awaken' ? ORIGIN_BOARD_NOTE : ''}`,
 			options,
 			// A relic card, not a class ability: name the relic in the card header.
 			sourceLabel: `Relic: ${tool.name}`

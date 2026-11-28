@@ -33,7 +33,7 @@ export const ability: ClassAbility[] = [
 		on: 'inCombat',
 		run(ctx) {
 			ctx.player.alwaysAttackFirst = true;
-			ctx.log.push(ruleValue(ctx.catalog, 'initiativeDie') ? 'Spellblade: gains the initiative if the die misses.' : 'Spellblade: attacks first.');
+			ctx.log.push('Spellblade: gains the initiative if the die misses.');
 		}
 	}
 ];

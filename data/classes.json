@@ -5,7 +5,7 @@
     "position": 42,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Halves incoming damage when the opponent has higher Initiative.",
+    "description": "Halves incoming damage from monsters, and from players whose side has more initiative than yours.",
     "footer": "",
     "created_at": "2026-10-24T00:44:08.236005+00:00",
     "updated_at": "2026-10-24T00:45:45.842864+00:00",
@@ -16,7 +16,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "If the opponent has higher initiative, or is a monster, when you Take Damage, half it (rounding up)."
+            "description": "If the opponent's side has more initiative than your side, or is a monster, when you Take Damage, half it (rounding up)."
           }
         ]
       }
@@ -35,7 +35,7 @@
     "position": 13,
     "icon_emoji": "🧚",
     "color": "#8b5cf6",
-    "description": "Gains Enchanted Attack dice from matching origins when awakened, plus 3 Initiative.",
+    "description": "Gains Enchanted Attack dice from matching origins when awakened.",
     "footer": "",
     "created_at": "2026-02-20T02:54:31.018972+00:00",
     "updated_at": "2026-10-16T04:45:14.656171+00:00",
@@ -48,7 +48,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When Awakened, gain 1 Enchanted Attack for every spirit matching this Fairy's origin. Gain 3 Initiative."
+            "description": "When Awakened, gain 1 Enchanted Attack for every spirit matching this Fairy's origin."
           }
         ]
       }
@@ -113,7 +113,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In the Awakening Phase, Gain 1 VP. If you are evil, you must discard this spirit."
+            "description": "In the Awakening Phase, if you are Pure, gain 1 VP. If you are Evil, you must discard this spirit."
           }
         ]
       }
@@ -177,7 +177,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In the Awakening Phase, gain 1 VP."
+            "description": "When this spirit awakens, every player must turn one of their awakened spirits face-down (their choice)."
           }
         ]
       }
@@ -228,7 +228,7 @@
     "position": 3,
     "icon_emoji": "🛡️",
     "color": "#059669",
-    "description": "Adds combat Initiative for each Fighter trait (up to 5) and gains Basic Attack dice when you Rest. Higher trait counts grant more dice and a Spirit Augment.",
+    "description": "Gains Basic Attack dice when you Rest. Higher trait counts grant more dice and a Spirit Augment.",
     "footer": "",
     "created_at": "2025-07-18T23:11:34.463082+00:00",
     "updated_at": "2026-10-16T04:45:12.482348+00:00",
@@ -240,7 +240,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, gain 1 combat initiative."
+            "description": "No effect at this count."
           }
         ]
       },
@@ -250,7 +250,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, gain 2 combat initiative. On Rest, gain 1 Basic Attack Dice."
+            "description": "On Rest, gain 1 Basic Attack Dice."
           }
         ]
       },
@@ -260,7 +260,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, gain 3 combat initiative. On Rest, gain 2 Basic Attack Dice."
+            "description": "On Rest, gain 2 Basic Attack Dice."
           }
         ]
       },
@@ -270,7 +270,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, gain 4 combat initiative. On Rest, gain 3 Basic Attack Dice."
+            "description": "On Rest, gain 3 Basic Attack Dice."
           }
         ]
       },
@@ -279,7 +279,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat, gain 5 combat initiative. On Rest, gain 5 Basic Attack Dice and 1 of any spirit augment."
+            "description": "On Rest, gain 5 Basic Attack Dice and 1 of any spirit augment."
           }
         ]
       }
@@ -495,7 +495,7 @@
     "position": 45,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Can redirect navigation and always attacks first.",
+    "description": "Can redirect navigation and gains the initiative in combat.",
     "footer": "",
     "created_at": "2026-05-16T22:32:43.379382+00:00",
     "updated_at": "2026-10-16T04:45:17.897065+00:00",
@@ -509,7 +509,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Navigation Reveal, you may change your destination and you may always attack first."
+            "description": "On Navigation Reveal, you may change your destination. In combat, gain the initiative if your side does not have it."
           }
         ]
       }
@@ -566,7 +566,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat with a monster, you may always attack at the same time as the monster. In addition to (1)."
+            "description": "In combat with a monster, gain the initiative (you attack at the same time as the monster). In addition to (1)."
           }
         ]
       }
@@ -675,7 +675,7 @@
     "position": 46,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Has +6 damage and +6 Initiative, and reduces incoming damage by 6.",
+    "description": "Has +6 damage and reduces incoming damage by 6.",
     "footer": "",
     "created_at": "2026-05-16T22:42:49.13145+00:00",
     "updated_at": "2026-10-16T04:45:18.143095+00:00",
@@ -688,7 +688,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you take damage, take 6 less. Gain 6 damage and 6 Initiative."
+            "description": "When you take damage, take 6 less. Gain 6 damage."
           }
         ]
       }
@@ -838,7 +838,7 @@
     "position": 17,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Gains Initiative and takes less damage while you are not Evil and have no Cursed Spirits.",
+    "description": "Takes less damage while you are not Evil and have no Cursed Spirits.",
     "footer": "",
     "created_at": "2026-03-19T20:45:16.242334+00:00",
     "updated_at": "2026-10-16T04:45:14.823159+00:00",
@@ -851,7 +851,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "While you are not Evil and have no Cursed Spirits, gain 3 Initiative and take 2 less damage."
+            "description": "While you are not Evil and have no Cursed Spirits, take 2 less damage."
           }
         ]
       }
@@ -916,7 +916,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you cultivate, you may discard 4 attack dice to gain 1 Arcane Attack Dice."
+            "description": "When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attack Dice (once a round)."
           }
         ]
       }
@@ -968,7 +968,7 @@
     "position": 40,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Has +2 Initiative and gains three Arcane Attack dice when awakened.",
+    "description": "Gains three Arcane Attack dice when awakened.",
     "footer": "",
     "created_at": "2026-04-26T14:30:08.663128+00:00",
     "updated_at": "2026-10-16T04:45:17.037973+00:00",
@@ -981,7 +981,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "Gain 2 initiative. On this spirit's Awakening, gain 3 Arcane Attack Dice."
+            "description": "On this spirit's Awakening, gain 3 Arcane Attack Dice."
           }
         ]
       }
@@ -1046,7 +1046,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "Set your status to Fallen (this is not a corruption). Replace all Spirit World spirits with a random Arcane Abyss Spirit. Gain 2 Initiative."
+            "description": "Set your status to Fallen (this is not a corruption). Replace all Spirit World spirits with a random Arcane Abyss Spirit."
           }
         ]
       }
@@ -1097,7 +1097,7 @@
     "position": 41,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Can initiate Monster Combat twice.",
+    "description": "Has 1 extra battle action each round.",
     "footer": "",
     "created_at": "2026-05-02T04:35:18.613747+00:00",
     "updated_at": "2026-10-16T04:45:17.184471+00:00",
@@ -1108,7 +1108,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "You may initiate Monster Combat two times."
+            "description": "You have 1 extra battle action each round."
           }
         ]
       }
@@ -1139,7 +1139,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On rest, if you have 10 max barrier, you may restore 3 barrier and gain 1 VP. When discarded, restore 2 barrier."
+            "description": "On rest, if you have 10 max barrier, you may restore 3 barrier. When discarded, restore 2 barrier."
           }
         ]
       }
@@ -1200,7 +1200,7 @@
     "position": 43,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Gains Initiative, and wins initiative ties.",
+    "description": "Attacks first when both sides have the same initiative.",
     "footer": "",
     "created_at": "2026-05-03T08:21:14.854497+00:00",
     "updated_at": "2026-10-16T04:45:17.586769+00:00",
@@ -1213,7 +1213,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "+2 Initiative. If initiative is tied, your side strikes first."
+            "description": "If both sides have the same initiative (1 or more), your side attacks first."
           }
         ]
       }
@@ -1326,7 +1326,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "If you Cultivate with 3 Heroes, gain 1 Spirit Augment. When discarded, gain 1 Enchanted Attack."
+            "description": "After you defeat a monster, gain 1 random Power."
           }
         ]
       }
@@ -1358,7 +1358,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On Spirit World summon, you may draw from the Arcane Abyss Bag. When you discard an Arcane Abyss Spirit, gain 4 points.",
+            "description": "When you Cultivate with at least 5 Forest spirits, gain 2 points.",
             "description_translations": {
               "de": "Erhalte 1 Arkaner Angriff für je 2 Arkane Tropfen, die du hast.",
               "es": "Obtén 1 Ataque Arcano por cada 2 Gotas Arcanas que tengas.",
@@ -1398,7 +1398,7 @@
     "position": 37,
     "icon_emoji": "🛡️",
     "color": "#8b5cf6",
-    "description": "Strikes first and harder against a player who has more attack dice.",
+    "description": "Deals more damage to a player who has more attack dice.",
     "footer": "",
     "created_at": "2026-04-22T18:02:02.553787+00:00",
     "updated_at": "2026-10-16T04:45:16.940438+00:00",
@@ -1412,7 +1412,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat with a player who has more attack dice than you, strike first and deal 3 more damage."
+            "description": "In combat with a player who has more attack dice than you, deal 3 more damage."
           }
         ]
       }
@@ -1440,7 +1440,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "On your next monster kill you may gain double the rewards. Then discard this spirit."
+            "description": "On your next monster kill you may gain double the rewards, except Victory Points. Then discard this spirit."
           }
         ]
       }
@@ -1468,7 +1468,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In the Awakening Phase, if you are not Evil and all your spirits are awakened, gain 1 VP."
+            "description": "In the Awakening Phase, if you are not Evil and all your spirits are awakened, gain 1 Any basic Rune."
           }
         ]
       }
@@ -1487,7 +1487,7 @@
     "position": 50,
     "icon_emoji": "",
     "color": "#8b5cf6",
-    "description": "Strikes first and harder against Evil players and monsters.",
+    "description": "Gains the initiative and deals more damage when an Evil player or a monster attacks you.",
     "footer": "",
     "tags": [],
     "effect_schema": [
@@ -1496,7 +1496,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When an Evil player or a monster attacks you, your side strikes first and deals 3 more damage."
+            "description": "When an Evil player or a monster attacks you, your side gains the initiative if it does not have it."
           }
         ]
       }
@@ -1627,7 +1627,7 @@
     "position": 55,
     "icon_emoji": "",
     "color": "#8b5cf6",
-    "description": "Deals more damage when you strike first.",
+    "description": "Deals more damage when your side has more initiative than the enemy.",
     "footer": "",
     "tags": [],
     "effect_schema": [
@@ -1636,7 +1636,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you strike first, deal 2 more damage."
+            "description": "When your side has more initiative than the enemy, deal 2 more damage."
           }
         ]
       }
@@ -1739,7 +1739,7 @@
     "position": 59,
     "icon_emoji": "",
     "color": "#8b5cf6",
-    "description": "Gains Initiative when another player is at your location.",
+    "description": "Deals more damage when another player is at your location.",
     "footer": "",
     "tags": [],
     "effect_schema": [
@@ -1748,7 +1748,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "In combat with a monster, or in a round when another player is at your location, gain 2 Initiative."
+            "description": "In a round when another player is at your location, deal 3 more damage in combat."
           }
         ]
       }
@@ -1833,7 +1833,7 @@
         "effects": [
           {
             "type": "benefit",
-            "description": "When you become Corrupted, sacrifice 1 fewer spirit and gain 1 VP."
+            "description": "When you become Corrupted, sacrifice 1 fewer spirit."
           }
         ]
       }

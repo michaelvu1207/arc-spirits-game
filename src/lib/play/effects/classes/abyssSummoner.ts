@@ -18,7 +18,6 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'onCultivate',
 		run(ctx) {
-			if (!ruleValue(ctx.catalog, 'summonerCultivate')) return;
 			const forest = ctx.player.spirits.filter((s) => (s.origins?.['Forest Region'] ?? 0) > 0).length;
 			if (forest < SUMMONER_FOREST_NEED) {
 				ctx.log.push(`Summoner: ${forest} Forest spirits (needs ${SUMMONER_FOREST_NEED}) — no points.`);

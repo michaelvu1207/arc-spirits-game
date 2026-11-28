@@ -27,7 +27,6 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
 		run(ctx) {
-			if (!ruleValue(ctx.catalog, 'ramAugmentDamage')) return;
 			const augments = placedAugmentTotal(ctx.player);
 			if (augments <= 0) return;
 			ctx.player.combatDamageBonus += augments;
@@ -38,21 +37,7 @@ export const ability: ClassAbility[] = [
 		on: 'onNavigate',
 		run(ctx) {
 			const { player, state } = ctx;
-			if (ruleValue(ctx.catalog, 'ramAugmentDamage')) return;
-			if (player.navigationDestination !== RAM_DESTINATION) return;
-			if (cameFromMountain(player)) return;
-			player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== 'ramAugment');
-			player.pendingDecisions.push({
-				id: nextId(state.rng, 'dec'),
-				source: 'class',
-				kind: 'ramAugment',
-				prompt: 'Ram: you navigated to the Mountain Region. Gain 1 Spirit Augment of your choice?',
-				options: [
-					{ id: 'yes', label: 'Gain 1 Spirit Augment' },
-					{ id: 'no', label: 'No augment' }
-				],
-				expiresAt: 'benefits'
-			});
+			return;
 		}
 	}
 ];

@@ -720,7 +720,6 @@ export function computeLocationInteractions(
 	// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action uses a battle action, so it needs one left
 	// (the same gate as `resolveLocationInteraction` in legality.ts).
 	const summonNeedsBattleAction =
-		!!ruleValue(catalog, 'abyssFightOrSummon') &&
 		destination === 'Arcane Abyss' &&
 		!(player.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED) &&
 		monsterFightsLeft(player, true) <= 0;
@@ -795,7 +794,6 @@ export function computeSummonReplace(
 	player: PrivatePlayerState,
 	catalog: Pick<PlayCatalog, 'rules'>
 ): SummonReplaceAffordance | undefined {
-	if (!ruleValue(catalog, 'summonReplaceWhenFull')) return undefined;
 	if (!(player.handDraws ?? []).some((draw) => !draw.rewardId)) return undefined;
 	const taken = new Set((player.spirits ?? []).map((spirit) => spirit.slotIndex));
 	// The 7 spirit slots (1 to 7), as `firstOpenSpiritSlot` in runtime.ts counts them.

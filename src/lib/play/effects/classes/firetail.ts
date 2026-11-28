@@ -18,22 +18,10 @@ export const ability: ClassAbility[] = [
 		run(ctx) {
 			// Rule `firetailDamage`: "In a round when another player is at your location, deal 3 more damage in
 			// combat." Monster fights and player fights; no initiative of any kind.
-			if (ruleValue(ctx.catalog, 'firetailDamage')) {
-				if (ctx.colocated.length === 0) return;
-				ctx.player.combatDamageBonus += FIRETAIL_DAMAGE;
-				ctx.log.push(`Firetail: another player is at your location — deal ${FIRETAIL_DAMAGE} more damage.`);
-				return;
-			}
-			const amount = ruleValue(ctx.catalog, 'spiritInitiativeTrim') ? FIRETAIL_INITIATIVE_TRIMMED : FIRETAIL_INITIATIVE;
-			if (ctx.opponent === undefined && ruleValue(ctx.catalog, 'firetailVsMonsters')) {
-				runAction(ctx, { kind: 'gainInitiative', amount });
-				return;
-			}
-			runAction(ctx, {
-				kind: 'conditional',
-				when: { kind: 'hasColocated' },
-				then: [{ kind: 'gainInitiative', amount }]
-			});
+			if (ctx.colocated.length === 0) return;
+			ctx.player.combatDamageBonus += FIRETAIL_DAMAGE;
+			ctx.log.push(`Firetail: another player is at your location — deal ${FIRETAIL_DAMAGE} more damage.`);
+			return;
 		}
 	}
 ];

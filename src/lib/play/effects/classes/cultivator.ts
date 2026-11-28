@@ -24,10 +24,8 @@ export const ability: ClassAbility[] = [
 			if (ctx.traitCount < 5) return;
 			// Rule switch `cultivatorRelicOnce` (rules.ts; default false). On (proposal C6): the relic
 			// only the first time per game. The flag is written only under the rule.
-			if (ruleValue(ctx.catalog, 'cultivatorRelicOnce')) {
-				if (ctx.player.cultivatorRelicGained) return;
-				ctx.player.cultivatorRelicGained = true;
-			}
+			if (ctx.player.cultivatorRelicGained) return;
+			ctx.player.cultivatorRelicGained = true;
 			ctx.player.pendingDecisions.push({
 				id: nextId(ctx.state.rng, 'dec'),
 				source: 'class',

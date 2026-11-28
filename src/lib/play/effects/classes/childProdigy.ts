@@ -15,7 +15,6 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'awakeningPhase',
 		run(ctx) {
-			if (!ruleValue(ctx.catalog, 'sunRework')) return;
 			ctx.player.mats.push({
 				slotIndex: ctx.player.mats.length + 1,
 				hasRune: true,

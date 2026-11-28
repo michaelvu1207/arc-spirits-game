@@ -605,7 +605,7 @@ export function resolveNavigationPowerChoice(
 			if (!card || card.hp <= 0 || card.hp * 2 > card.maxHp || !hooks.defeatMonster)
 				return { ok: false, error: 'That monster card can no longer be defeated this way.' };
 			// Rule `abyssFightOrSummon`: Abyssal Execution uses a battle action, like a fight and the Arcane Abyss Summon action.
-			if (ruleValue(catalog, 'abyssFightOrSummon') && monsterFightsLeft(p, true) <= 0)
+			if (monsterFightsLeft(p, true) <= 0)
 				return { ok: false, error: 'You have no battle action left this round: Abyssal Execution uses a battle action.' };
 			hooks.defeatMonster(state, seat, catalog, index);
 			break;

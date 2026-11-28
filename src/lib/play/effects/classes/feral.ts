@@ -18,23 +18,12 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
 		run(ctx) {
-			const bonus = ruleValue(ctx.catalog, 'feralNoDamage') ? 0 : FERAL_DAMAGE;
+			const bonus = 0;
 			const more = bonus ? ` and deal ${bonus} more damage` : '';
-			// Rule `initiativeDie` (Michael, 2026-11-26: "feral should be gain initiative if your side doesn't"):
-			// the flag then means "has the initiative even when the die misses" (combat.ts).
-			const die = ruleValue(ctx.catalog, 'initiativeDie');
 			if (ctx.opponent === undefined) {
-				// Rule switch `feralMonsterStrikeFirst` (rules.ts; default true). Off (proposal C2):
-				// against a monster Feral only deals its 3 more damage; vs Evil players unchanged.
-				if (!ruleValue(ctx.catalog, 'feralMonsterStrikeFirst')) {
-					if (!bonus) return;
-					ctx.player.combatDamageBonus += bonus;
-					ctx.log.push(`A monster attacks — you deal ${bonus} more damage.`);
-					return;
-				}
 				ctx.player.alwaysAttackFirst = true;
 				ctx.player.combatDamageBonus += bonus;
-				ctx.log.push(die ? `Feral: a monster attacks — you gain the initiative if your die misses${more}.` : `A monster attacks — you strike first${more}.`);
+				ctx.log.push(`Feral: a monster attacks — you gain the initiative if your die misses${more}.`);
 				return;
 			}
 			const opponent = ctx.state.players[ctx.opponent];
@@ -43,11 +32,7 @@ export const ability: ClassAbility[] = [
 			ctx.player.alwaysAttackFirst = true;
 			ctx.player.combatDamageBonus += bonus;
 			ctx.log.push(
-				die
-					? `Feral: an Evil player attacks — your side gains the initiative if its dice miss${more}.`
-					: bonus
-						? `An Evil player attacks — your side strikes first and you deal ${bonus} more damage.`
-						: 'An Evil player attacks — your side strikes first.'
+				`Feral: an Evil player attacks — your side gains the initiative if its dice miss${more}.`
 			);
 		}
 	}

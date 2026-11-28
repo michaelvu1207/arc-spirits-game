@@ -36,7 +36,7 @@ import { cursedSpiritDiceTier, ruleValue } from '../rules';
 
 /** Rule `moonPerksNeedAttack`: an Evil acting seat's awake Queen / Sorcerer classes (else empty). */
 export function moonPerksWaiting(me: SeatPlayer | undefined, catalog: PlayCatalog): string[] {
-	if (!me || !isEvilAlignment(me.statusLevel) || !ruleValue(catalog, 'moonPerksNeedAttack')) return [];
+	if (!me || !isEvilAlignment(me.statusLevel) || true) return [];
 	const counts = awakenedClassCounts(me as PrivatePlayerState);
 	return ['Queen', 'Sorcerer'].filter((k) => (counts[k] ?? 0) > 0);
 }
@@ -128,7 +128,7 @@ export function spiritLine(spirit: {
  * Arcane Abyss Summon action each use a battle action. `summon`: the note of the summon action, else of a fight.
  */
 function battleActionNote(me: { actionsUsedThisRound?: string[]; extraActions?: Record<string, number> } | null | undefined, catalog: PlayCatalog, summon: boolean): string {
-	if (!me || !ruleValue(catalog, 'abyssFightOrSummon') || !interactionsAt(catalog, 'Arcane Abyss').some(isAbyssSummonRow)) return '';
+	if (!me || !interactionsAt(catalog, 'Arcane Abyss').some(isAbyssSummonRow)) return '';
 	const taken = (me.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED);
 	// A second run of the summon action in one round (a doubled location action) uses no further battle action.
 	if (summon && taken) return '';
@@ -142,8 +142,7 @@ function battleActionNote(me: { actionsUsedThisRound?: string[]; extraActions?: 
 }
 /** Rule `goodKillBonus`: what the acting seat's alignment adds to a kill, for the fight label. */
 function goodKillNote(me: { statusLevel: number } | null | undefined, card: MonsterState | null | undefined, catalog: PlayCatalog): string {
-	if (!me || !card || !ruleValue(catalog, 'goodKillBonus') || !goodKillBonusApplies(card)) return '';
-	return isEvilAlignment(me.statusLevel) ? '; you are Fallen, so no alignment bonus for a kill' : `; a kill also gives you +${GOOD_KILL_BONUS_VP} VP for being Good`;
+	return '';
 }
 
 export function monsterLine(card: MonsterState): string {
@@ -188,12 +187,9 @@ function matItemsGained(
 		const counts = spiritsByOrigin(me.spirits);
 		const mult = cultivateRuneMultiplier(me as PrivatePlayerState, catalog);
 		let n = 0;
-		const oneReward = ruleValue(catalog, 'cultivateRuneOrRelic');
 		for (const [origin, r] of Object.entries(ORIGIN_REWARDS)) {
 			const c = counts[origin] ?? 0;
 			if (c >= r.runeAt) n += mult;
-			// Under `cultivateRuneOrRelic` the relic replaces the rune(s): never more than `mult`.
-			if (!oneReward && c >= r.relicAt && !(me.originRelicsGained ?? []).includes(origin)) n += 1;
 		}
 		return n;
 	}
@@ -210,12 +206,8 @@ function cultivateLabel(me: SeatPlayer | undefined, catalog?: PlayCatalog): stri
 		const c = counts[origin] ?? 0;
 		const runes = mult === 2 ? `2 ${origin} runes` : `${origin} rune`;
 		const relicOpen = c >= r.relicAt && !(me.originRelicsGained ?? []).includes(origin);
-		if (ruleValue(catalog, 'cultivateRuneOrRelic')) {
-			if (c >= r.runeAt) parts.push(relicOpen ? `${runes} or the ${origin} relic (you choose one)` : runes);
-			continue;
-		}
-		if (c >= r.runeAt) parts.push(runes);
-		if (relicOpen) parts.push(`${origin} relic`);
+		if (c >= r.runeAt) parts.push(relicOpen ? `${runes} or the ${origin} relic (you choose one)` : runes);
+		continue;
 	}
 	return `Cultivate (now: ${parts.join(' + ') || 'no origin reward'}, plus On Cultivate class effects; adds no spirits)`;
 }
@@ -282,9 +274,7 @@ export function labelFor(
 			return `Shared Current: offer ${cmd.targetSeat} your ${give} for their ${get} (they must accept)`;
 		}
 		case 'initiatePvp': {
-			const pay = ruleValue(catalog, 'pvpPaysOnCorrupt')
-				? `: you get ${ruleValue(catalog, 'pvpEngageVp') ? `${PVP_ENGAGE_VP} VP for the attack plus ${pvpVpPerCorrupted(catalog)} VP per Good player corrupted` : `${pvpVpPerCorrupted(catalog)} VP per Good player corrupted, nothing otherwise`}${ruleValue(catalog, 'pvpGoodBounty') ? `; each of them gets ${PVP_GOOD_BOUNTY} VP per attacker corrupted` : ''}`
-				: '';
+			const pay = `: you get ${`${pvpVpPerCorrupted(catalog)} VP per Good player corrupted, nothing otherwise`}`;
 			const moon = moonPerksWaiting(me, catalog);
 			return `Attack the Good players at your location (PvP group attack${pay})${moon.length ? ` (this turns on your ${moon.join(' and ')} this round)` : ''}`;
 		}
@@ -345,9 +335,7 @@ export function labelFor(
 			const band = deck
 				? `, Barrier ${deck.barrierMin}-${deck.barrierMax}, ${deck.count ?? '?'} cards left`
 				: '';
-			if (ruleValue(catalog, 'monsterDrawOne'))
-				return `Draw the top card of the Difficulty ${cmd.difficulty} deck (${MONSTER_DECK_NAMES[cmd.difficulty]}${band}): you then keep it or put it back on top (this is your draw of this visit)`;
-			return `Draw 2 monster cards from the Difficulty ${cmd.difficulty} deck (${MONSTER_DECK_NAMES[cmd.difficulty]}${band}) and keep 1`;
+			return `Draw the top card of the Difficulty ${cmd.difficulty} deck (${MONSTER_DECK_NAMES[cmd.difficulty]}${band}): you then keep it or put it back on top (this is your draw of this visit)`;
 		}
 		case 'keepMonsterCard': {
 			const card = me?.pendingMonsterDraw?.cards[cmd.index];
@@ -364,7 +352,7 @@ export function labelFor(
 		}
 		case 'startCombat': {
 			const card = me?.monsterHand?.[cmd.handIndex];
-			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (${ruleValue(catalog, 'initiativeDie') ? 'the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first' : 'the monster strikes first unless you strike first'}${battleActionNote(me, catalog, false) ? `; ${battleActionNote(me, catalog, false)}` : ''}${goodKillNote(me, card, catalog)})`;
+			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first${battleActionNote(me, catalog, false) ? `; ${battleActionNote(me, catalog, false)}` : ''}${goodKillNote(me, card, catalog)})`;
 		}
 		case 'resolveMonsterReward': {
 			if (cmd.arcaneBlood) {
@@ -615,7 +603,7 @@ export function destinationSummaries(catalog: PlayCatalog): string[] {
 		);
 		const extra =
 			dest === 'Arcane Abyss'
-				? `; draw/keep/fight monster cards from your own hand${ruleValue(catalog, 'abyssFightOrSummon') && actions.length ? '. You have 1 battle action each round: a FIGHT uses a battle action, and so does the Arcane Abyss Summon action' : ''}`
+				? `; draw/keep/fight monster cards from your own hand${actions.length ? '. You have 1 battle action each round: a FIGHT uses a battle action, and so does the Arcane Abyss Summon action' : ''}`
 				: '';
 		return `${dest}: ${actions.join('; ') || 'no location actions'}${extra}`;
 	});

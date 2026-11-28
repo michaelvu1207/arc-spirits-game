@@ -10,13 +10,9 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'awakening',
 		run(ctx) {
-			if (ruleValue(ctx.catalog, 'sunRework')) {
-				runAction(ctx, { kind: 'restoreBarrier', amount: ctx.player.maxBarrier });
-				runAction(ctx, { kind: 'gainMaxBarrier', amount: 2 });
-				return;
-			}
-			runAction(ctx, { kind: 'restoreBarrier', amount: 3 });
-			runAction(ctx, { kind: 'gainMaxBarrier', amount: 1 });
+			runAction(ctx, { kind: 'restoreBarrier', amount: ctx.player.maxBarrier });
+			runAction(ctx, { kind: 'gainMaxBarrier', amount: 2 });
+			return;
 		}
 	}
 ];
