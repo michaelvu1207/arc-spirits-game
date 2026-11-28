@@ -3,7 +3,8 @@ import type { NavigationDestination, SeatColor } from '../../types';
 import type { EffectContext } from '../context';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Spellblade — redirect after Navigation Reveal and always attack first.
+// Spellblade — "On Navigation Reveal, you may change your destination. In combat, gain the
+// initiative if your side does not have it."
 export const ability: ClassAbility[] = [
 	{
 		on: 'onNavigate',

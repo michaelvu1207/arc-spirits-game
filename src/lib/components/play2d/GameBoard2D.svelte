@@ -812,7 +812,7 @@
 		}
 	}
 
-	/** Keep a revealed monster card. One-card draws (rule `monsterDrawOne`) may also put it back on
+	/** Keep a revealed monster card. A one-card draw may also put it back on
 	 *  top of its deck (`returnToDeck`) or keep it in place of a held card (`replaceHandIndex`). */
 	async function keepMonsterCard(
 		index: number,
@@ -886,7 +886,7 @@
 	}
 
 	/** Summon a drawn spirit. `replaceSlotIndex`: the board is full and the summon takes the
-	 *  place of the spirit in that slot (rule `summonReplaceWhenFull`). */
+	 *  place of the spirit in that slot. */
 	function summonDraw(guid: string, replaceSlotIndex?: number) {
 		playSfx('summon-pick');
 		send('summon', {

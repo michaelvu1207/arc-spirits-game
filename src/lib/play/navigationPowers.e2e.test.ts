@@ -460,6 +460,10 @@ describe('Navigation Powers through live game commands', () => {
 		expect(s.players.Red!.monsterHand?.map((c) => c.id)).toEqual(['monster-1']);
 		expect(s.players.Red!.pendingReward?.monsterId).toBe('monster-2');
 		expect(s.players.Red!.barrier).toBe(8);
+		// Evil Blue may attack at the Arcane Abyss too; nobody does, and the reward is claimed at the Location step.
+		expect(s.phase).toBe('encounter');
+		for (const seat of s.activeSeats) if (s.phase === 'encounter') s = run(s, seat, { type: 'passEncounter' });
+		expect(s.phase).toBe('location');
 		s = run(s, 'Red', { type: 'resolveMonsterReward', picks: [0, 1, 2] });
 		expect(s.players.Red!.victoryPoints).toBe(15);
 	});
@@ -518,13 +522,14 @@ describe('Navigation Powers through live game commands', () => {
 		s = fightNewest(s);
 		expect(s.players.Red!.barrier).toBe(8);
 	});
-	it('17 engaging in PvP adds two VP alongside the ordinary engagement award', () => {
+	it('17 engaging in PvP adds two VP (the attack itself pays only for corrupted players)', () => {
 		let s = start();
 		s.players.Red!.statusLevel = 3;
 		s = reveal(s, 'battle-reward');
 		s = choose(s, 'Red');
 		s = run(s, 'Red', { type: 'initiatePvp' });
-		expect(s.players.Red!.victoryPoints).toBe(4);
+		expect(s.players.Blue!.statusLevel).toBe(0); // Blue is not corrupted
+		expect(s.players.Red!.victoryPoints).toBe(2);
 	});
 	it('18 failure recovery increases Potential and restores Barrier only after a failed fight', () => {
 		let s = start();
@@ -547,13 +552,13 @@ describe('Navigation Powers through live game commands', () => {
 		s = choose(s, 'Red');
 		expect(s.players.Red!.victoryPoints).toBe(2);
 	});
-	it('20 Rest twice heals four Barrier through the real Rest effect', () => {
+	it('20 Rest twice heals eight Barrier through the real Rest effect', () => {
 		let s = start();
-		s.players.Red!.barrier = 2;
-		s.players.Red!.brokenBarrier = 8;
+		s.players.Red!.barrier = 1;
+		s.players.Red!.brokenBarrier = 9;
 		s = reveal(s, 'fires-rhythm', 'Fire Region');
 		s = choose(s, 'Red', '2');
-		expect(s.players.Red!.barrier).toBe(6);
+		expect(s.players.Red!.barrier).toBe(9); // Rest restores 4 Barrier at Pure
 	});
 	it('21 Cultivate twice produces both rune grants', () => {
 		let s = start();
@@ -726,9 +731,10 @@ describe('Navigation Powers through live game commands', () => {
 				spirit(3)
 			];
 			s.players.Blue!.spirits = [spirit(1, { id: 'other-spirit' })];
+			// Exalted dice never roll 0, so every fight with a Barrier 1 card is a kill.
 			s.players.Red!.attackDice = [
-				{ instanceId: 'a1', tier: 'arcane' },
-				{ instanceId: 'a2', tier: 'arcane' }
+				{ instanceId: 'a1', tier: 'exalted' },
+				{ instanceId: 'a2', tier: 'exalted' }
 			];
 			s.players.Blue!.statusLevel = 3;
 			giveRune(s, 'Red');

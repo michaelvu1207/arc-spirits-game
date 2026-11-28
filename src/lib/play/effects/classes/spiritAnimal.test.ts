@@ -2,14 +2,13 @@
  * Beast — one declarative `inCombat` ability with a `'1+'` breakpoint.
  *
  * DB-intended behavior (source of truth):
- *   In combat, deal 1 damage and gain 1 combat initiative for every Beast trait.
+ *   In combat, deal 1 more damage for every Beast trait. No initiative.
  *
- * `'1+'` scales BOTH amounts by the trait count: N traits => +N combat damage
- * (player.combatDamageBonus) and +N initiative (player.initiative).
+ * `'1+'` scales the amount by the trait count: N traits => +N combat damage
+ * (player.combatDamageBonus).
  *
- * UX channel: passive combat numbers (combatDamageBonus + initiative) plus two
- * attributed combat-log lines ("Beast: Gained +N combat damage." /
- * "Beast: Gained N initiative.") — never a silent no-op.
+ * UX channel: a passive combat number (combatDamageBonus) plus an attributed
+ * combat-log line ("Beast: Gained +N combat damage.") — never a silent no-op.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -17,30 +16,30 @@ import { fire } from './testHelpers';
 import { ability } from './spiritAnimal';
 
 describe('Beast', () => {
-	it('deals +1 combat damage and +1 initiative for a single trait', () => {
+	it('deals +1 combat damage and gives no initiative for a single trait', () => {
 		const { player } = fire({ 'Beast': 1 }, 'inCombat');
 		expect(player.combatDamageBonus).toBe(1);
-		expect(player.initiative).toBe(1);
+		expect(player.initiative).toBe(0);
 	});
 
-	it('scales both amounts by the trait count (3 traits => +3 / +3)', () => {
+	it('scales the damage by the trait count (3 traits => +3)', () => {
 		const { player } = fire({ 'Beast': 3 }, 'inCombat');
 		expect(player.combatDamageBonus).toBe(3);
-		expect(player.initiative).toBe(3);
+		expect(player.initiative).toBe(0);
 	});
 
-	it('surfaces both halves as attributed combat-log lines (no silent no-op)', () => {
+	it('surfaces the damage as an attributed combat-log line (no silent no-op)', () => {
 		const { log } = fire({ 'Beast': 2 }, 'inCombat');
 		expect(log.join("\n")).toContain('Beast: Gained +2 combat damage.');
-		expect(log.join("\n")).toContain('Beast: Gained 2 initiative.');
+		expect(log.some((l) => l.includes('initiative'))).toBe(false);
 	});
 
-	it('stacks on top of pre-existing combat bonus and initiative', () => {
+	it('stacks on top of a pre-existing combat bonus and leaves initiative alone', () => {
 		const { player } = fire({ 'Beast': 1 }, 'inCombat', {
 			player: { combatDamageBonus: 2, initiative: 5 }
 		});
 		expect(player.combatDamageBonus).toBe(3);
-		expect(player.initiative).toBe(6);
+		expect(player.initiative).toBe(5);
 	});
 
 	it('only fires on the inCombat trigger', () => {
@@ -75,14 +74,6 @@ describe('Beast', () => {
 		const inCombat = ability.find((a) => a.on === 'inCombat');
 		expect(inCombat?.breakpoints).toHaveLength(1);
 		expect(inCombat?.breakpoints?.[0].count).toBe('1+');
-		expect(inCombat?.breakpoints?.[0].actions).toEqual([
-			{ kind: 'combatBonus', amount: 1 },
-			// the initiative half is dropped under rule `beastNoInitiative`
-			{
-				kind: 'conditional',
-				when: { kind: 'ruleOff', rule: 'beastNoInitiative' },
-				then: [{ kind: 'gainInitiative', amount: 1 }]
-			}
-		]);
+		expect(inCombat?.breakpoints?.[0].actions).toEqual([{ kind: 'combatBonus', amount: 1 }]);
 	});
 });

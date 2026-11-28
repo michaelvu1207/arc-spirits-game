@@ -178,16 +178,11 @@ export function recordAwakenProgress(player: PrivatePlayerState, spiritId: strin
 	(player.awakenProgress ??= {})[key] = true;
 }
 
-/** The per-round action key of a Falconer remote trade (a location interaction too). */
-export const FALCONER_TRADE_ACTION = 'falconer-trade';
-
 /** Did the player do a location interaction this round? A location row (`row:N`: rest, cultivate,
- *  summon, gain and trade rows) or the Falconer remote trade. Navigation Powers, class cards and
- *  relic tools are not location interactions. */
+ *  summon, gain and trade rows). Navigation Powers, class cards and relic tools are not location
+ *  interactions. */
 export function didLocationInteraction(player: PrivatePlayerState): boolean {
-	return (player.actionsUsedThisRound ?? []).some(
-		(a) => a.startsWith('row:') || a === FALCONER_TRADE_ACTION
-	);
+	return (player.actionsUsedThisRound ?? []).some((a) => a.startsWith('row:'));
 }
 
 /**

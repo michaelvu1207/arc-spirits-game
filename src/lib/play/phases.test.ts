@@ -216,10 +216,10 @@ describe('encounter / PvP', () => {
 
 		const blueBarrierBefore = state.players.Blue!.barrier;
 		state = apply(state, RED, { type: 'initiatePvp' });
-		// 2 VP for engaging + 2 per corrupted Good player.
+		// Nothing for engaging, 3 VP per corrupted Good player.
 		const pvp = state.combats.find((c) => c.kind === 'pvp')!;
 		const corruptedGood = pvp.sides.filter((s) => s.side === 'good' && s.corrupted).length;
-		expect(state.players.Red!.victoryPoints).toBe(2 + 2 * corruptedGood);
+		expect(state.players.Red!.victoryPoints).toBe(3 * corruptedGood);
 		expect(state.players.Blue!.barrier).toBeLessThan(blueBarrierBefore);
 		expect(state.phase).toBe('location');
 	});
@@ -297,16 +297,6 @@ describe('P5 onNavigate fires on reveal', () => {
 });
 
 describe('P5 Awakening-Phase VP win-cons at cleanup', () => {
-	test('Queen grants a flat +1 VP at cleanup (reworked, unconditional)', () => {
-		let state = startedGame();
-		giveSpirit(state, 'Red', { 'Queen': 1 });
-		state = lockBoth(state);
-		state = toCleanup(state);
-		// Reworked: Queen is now a flat +1 VP awakeningPhase handler that fires
-		// during cleanup — no alignment condition, no Cleanup claim.
-		expect(state.players.Red!.victoryPoints).toBe(1);
-	});
-
 	test('Relic Sentinel has no Benefits VP claim (November 2026 text: relic guard only)', () => {
 		let state = startedGame();
 		giveSpirit(state, 'Red', { 'Relic Sentinel': 1 });
@@ -383,13 +373,15 @@ describe('P5 determinism', () => {
 	test('the same seed reproduces identical post-cleanup win-con state', () => {
 		const run = (seed: number): PublicGameState => {
 			let s = startedGame(seed);
-			giveSpirit(s, 'Red', { 'Queen': 1 });
+			giveSpirit(s, 'Red', { 'King': 1 });
 			s = lockBoth(s);
-			return toCleanup(s);
+			s = toCleanup(s);
+			return apply(s, RED, { type: 'resolveAwakenReward', taintedMaxBarrier: 0, relicPicks: [] });
 		};
-		expect(run(7).players.Red!.victoryPoints).toBe(run(7).players.Red!.victoryPoints);
-		// Queen's flat +1 VP fires deterministically during cleanup.
+		expect(run(7).players.Red!).toEqual(run(7).players.Red!);
+		// King's +1 VP claim is paid the same way every time.
 		expect(run(7).players.Red!.victoryPoints).toBe(1);
+		expect(run(7).round).toBe(2);
 	});
 });
 
@@ -530,18 +522,15 @@ describe('all-Fallen end condition', () => {
 	});
 });
 
-describe('rule kingPureOnly', () => {
-	const kingGrant = (statusLevel: number, rules: object) => {
+describe('King: Pure only', () => {
+	const kingGrant = (statusLevel: number) => {
 		const state = startedGame();
 		giveSpirit(state, 'Red', { King: 1 });
 		state.players.Red!.statusLevel = statusLevel;
-		enterBenefits(state, { rules } as unknown as PlayCatalog);
+		enterBenefits(state, CATALOG);
 		return (state.players.Red!.pendingAwakenReward?.grants ?? []).filter((g) => g.source === 'King').length;
 	};
-	test('rule off: Pure, Tainted and Evil all get the claim', () => {
-		expect([0, 1, 3].map((s) => kingGrant(s, {}))).toEqual([1, 1, 1]);
-	});
-	test('rule on: Pure gets the point, Tainted and Corrupt nothing, Evil the discarding claim', () => {
-		expect([0, 1, 2, 3].map((s) => kingGrant(s, { kingPureOnly: true }))).toEqual([1, 0, 0, 1]);
+	test('Pure gets the point, Tainted and Corrupt nothing, Evil the discarding claim', () => {
+		expect([0, 1, 2, 3].map((s) => kingGrant(s))).toEqual([1, 0, 0, 1]);
 	});
 });

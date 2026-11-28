@@ -178,14 +178,14 @@ describe('new EffectAction kinds (via applyTrigger)', () => {
 		expect(fireRest('SynthVP', 1).victoryPoints).toBe(5);
 	});
 
-	it('gainInitiative adds to initiative', () => {
+	it('gainInitiative gives no initiative number (initiative is the die)', () => {
 		withSynthClass('SynthInit', [
 			{
 				trigger: 'onRest',
 				breakpoints: [{ count: 1, actions: [{ kind: 'gainInitiative', amount: 2 }] }]
 			}
 		]);
-		expect(fireRest('SynthInit', 1).initiative).toBe(2);
+		expect(fireRest('SynthInit', 1).initiative).toBe(0);
 	});
 
 	it('reduceIncomingDamage raises damageReduction, then is consumed by takeDamage', () => {
@@ -525,10 +525,19 @@ function startedLocationGame(): PublicGameState {
 		SMOKE_CATALOG
 	);
 	if (!started.ok) throw new Error(started.error.message);
+	// The game starts with a Power choice for each player; take the first one offered.
+	const powerId = started.state.players.Red!.pendingPowerDrafts![0][0];
+	const chose = applyGameCommand(
+		started.state,
+		{ ...HOST, seatColor: 'Red' },
+		{ type: 'chooseNavigationPower', powerId },
+		SMOKE_CATALOG
+	);
+	if (!chose.ok) throw new Error(chose.error.message);
 	// Lock RED onto Forest Region (free Rest at row 0) so the later force-advance reveal
 	// stands RED there rather than at a random destination.
 	const locked = applyGameCommand(
-		started.state,
+		chose.state,
 		{ ...HOST, seatColor: 'Red' },
 		{ type: 'lockNavigation', destination: 'Forest Region' },
 		SMOKE_CATALOG
@@ -538,7 +547,7 @@ function startedLocationGame(): PublicGameState {
 }
 
 describe('full-runtime smoke (startGame → rest)', () => {
-	it('Fighter ×5 fills the 10-dice cap in one rest through the real command path', () => {
+	it('Fighter ×5 gives 5 basic dice and 1 Spirit Augment in one rest through the real command path', () => {
 		const state = startedLocationGame();
 		const red = state.players.Red!;
 		// Control the tableau: a single face-up Fighter ×5 spirit, capacity for the dice.
@@ -576,7 +585,8 @@ describe('full-runtime smoke (startGame → rest)', () => {
 		);
 		if (!rested.ok) throw new Error(rested.error.message);
 		const dice = rested.state.players.Red!.attackDice;
-		expect(dice).toHaveLength(10); // Fighter-5 now grants +10 → caps the flat 10-dice pool in one rest
+		expect(dice).toHaveLength(5); // Fighter 5 grants +5 basic dice
 		expect(dice.every((d) => d.tier === 'basic')).toBe(true);
+		expect(rested.state.players.Red!.unplacedAugments?.length ?? 0).toBe(1);
 	});
 });

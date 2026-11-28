@@ -1,12 +1,7 @@
-
 import type { ClassAbility } from './types';
 
-/** Under rule `fighterInitiative`: the most initiative Fighter gives (its highest breakpoint). */
-export const FIGHTER_INITIATIVE_MAX = 5;
-
-// Fighter — the dice engine. SUPER-LINEAR breakpoints (counts 2/3/4/5 → +1/+2/+5/+10
-// dice) so stacking Fighters pays off far more than repeat-resting a small pool: a
-// 5-Fighter pool fills the entire 10-dice cap in ONE rest. Rewards action economy.
+// Fighter — the dice engine. On Rest, 2 / 3 / 4 / 5 Fighters give 1 / 2 / 3 / 5 Basic Attack Dice;
+// 5 Fighters also give 1 Spirit Augment of any class. Fighter gives no initiative.
 export const ability: ClassAbility[] = [
 	{
 		on: 'onRest',
@@ -22,13 +17,5 @@ export const ability: ClassAbility[] = [
 				]
 			}
 		]
-	},
-	// Rule `fighterInitiative` (Michael, 2026-11-20): "In combat, gain N combat initiative" at
-	// 1, 2, 3, 4 and 5 Fighter traits (N = the trait count, at most 5). Against monsters and players.
-	{
-		on: 'inCombat',
-		run(ctx) {
-			return;
-		}
 	}
 ];

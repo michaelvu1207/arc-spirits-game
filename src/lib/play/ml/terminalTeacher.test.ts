@@ -61,7 +61,9 @@ const CATALOG: PlayCatalog = {
 			rewardTrack: [VP],
 			dicePool: [],
 			chooseAmount: 1,
-			stage: 1,
+			// The Difficulty 3 deck: a draw reveals only the top card of a deck, so m-1 is alone in
+			// Difficulty 1 and its draw always shows it.
+			stage: 3,
 			order: 1
 		}
 	],

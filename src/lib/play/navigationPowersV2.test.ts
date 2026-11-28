@@ -1,13 +1,12 @@
 /**
- * Rule switch `powerRework` (rules.ts): the 2026-11-13 Navigation Power set, 11 general + 11 niche.
- * Each new Power's effect, the pool the engine drafts from, and that the old set is untouched
- * when the switch is off.
+ * The Navigation Power set of 2026-11-13 (powerRework), 11 general + 11 niche: each Power's
+ * effect and the pool the engine drafts from.
  *
  *   npx vitest run src/lib/play/navigationPowersV2.test.ts
  */
 
 import { describe, expect, it } from 'vitest';
-import type { MonsterState, PlayCatalog, PlayRules, PublicGameState, SeatColor } from './types';
+import type { MonsterState, PlayCatalog, PublicGameState, SeatColor } from './types';
 import { setCorruptionDiscardObligation } from './types';
 import { makePlayer, makeState, spirit } from './effects/classes/testHelpers';
 import {
@@ -19,8 +18,6 @@ import {
 	type NavigationPowerHooks
 } from './navigationPowerEffects';
 import {
-	NAVIGATION_POWERS,
-	NAVIGATION_POWERS_V2,
 	navigationPowerById,
 	navigationPowerPool,
 	isNavigationPowerId,
@@ -28,14 +25,12 @@ import {
 } from './navigationPowers';
 import { ownerAugmentCapacity, SPIRIT_AUGMENT_CLASSES } from './augments';
 import { fightMonster } from './combat';
-import { parseRules } from './rules';
 import { summonDrawSizes } from './runtime';
 import { SPIRIT_WORLD_BAG } from './bags';
 import { originRuneOptions } from './locationInteractions';
 import { loadFrozenCatalog } from './agents/catalog';
 import { buildRulesBrief } from './agents/rulesBrief';
 
-const ON: PlayRules = { powerRework: true };
 const catalog: PlayCatalog = {
 	guardians: [],
 	spirits: [
@@ -50,8 +45,7 @@ const catalog: PlayCatalog = {
 		classType: 'normal',
 		isSpecial: false,
 		effectSchema: []
-	})),
-	rules: ON
+	}))
 };
 
 function setup(id: NavigationPowerId, destination = 'Arcane Abyss', overrides = {}) {
@@ -83,13 +77,13 @@ function choose(
 const monster = (over: Partial<MonsterState> = {}): MonsterState =>
 	({
 		id: 'm', name: 'Test Monster', hp: 6, maxHp: 6, damage: 5, rewardTrack: [], chooseAmount: 0,
-		livesRemaining: 1, livesTotal: 1, ladderIndex: 0, ladderMax: 1, initiative: 9,
+		livesRemaining: 1, livesTotal: 1, ladderIndex: 0, ladderMax: 1,
 		...over
 	}) as MonsterState;
 
 describe('powerRework: the pool', () => {
 	it('is 11 general + 11 niche, with unique ids, names and no Evil-player trigger', () => {
-		const pool = navigationPowerPool({ rules: ON });
+		const pool = navigationPowerPool();
 		expect(pool).toHaveLength(22);
 		expect(pool.filter((p) => p.group === 'general')).toHaveLength(11);
 		expect(pool.filter((p) => p.group === 'niche')).toHaveLength(11);
@@ -101,25 +95,10 @@ describe('powerRework: the pool', () => {
 			expect(navigationPowerById(power.id)?.text).toBe(power.text);
 		}
 	});
-	it('keeps the old set, and its texts, when the switch is off', () => {
-		expect(navigationPowerPool(undefined)).toBe(NAVIGATION_POWERS);
-		expect(navigationPowerPool({ rules: { sunRework: true } })).toBe(NAVIGATION_POWERS);
-		expect(navigationPowerById('ember-charge')?.text).toMatch(/another player enters/);
-		// A kept Power is the same entry in both sets.
-		for (const entry of NAVIGATION_POWERS_V2)
-			if (!('name' in entry))
-				expect(NAVIGATION_POWERS.some((p) => p.id === entry.id)).toBe(true);
-	});
-	it('is a known rule switch and changes the agent brief only when on', () => {
-		expect(parseRules({ powerRework: true })).toEqual({ rules: { powerRework: true }, problems: [] });
-		expect(parseRules({ powerRework: false }).rules).toBeUndefined();
-		const frozen = loadFrozenCatalog();
-		const off = buildRulesBrief({ ...frozen, rules: undefined });
-		const on = buildRulesBrief({ ...frozen, rules: ON });
-		expect(off).toContain('Abyssal Reckoning: If an Evil player enters');
-		expect(off).not.toContain('Underdog’s Oath');
-		expect(on).toContain('Underdog’s Oath');
-		expect(on).not.toMatch(/If an Evil player enters/);
+	it('is the set the agent brief lists', () => {
+		const brief = buildRulesBrief(loadFrozenCatalog());
+		expect(brief).toContain('Underdog’s Oath');
+		expect(brief).not.toMatch(/If an Evil player enters/);
 	});
 });
 
@@ -221,11 +200,11 @@ describe('powerRework: niche Powers', () => {
 	});
 	it('Tidal Calling: Spirit World Summons draw 8 at the Water Region only', () => {
 		const at = (navigationPower: NavigationPowerId | null, navigationDestination: string) =>
-			summonDrawSizes(SPIRIT_WORLD_BAG, { rules: ON }, { navigationPower, navigationDestination });
+			summonDrawSizes(SPIRIT_WORLD_BAG, catalog, { navigationPower, navigationDestination });
 		expect(at('tidal-calling', 'Water Region')).toEqual({ draw: 8, pick: 2 });
 		expect(at('tidal-calling', 'Fire Region')).toEqual({ draw: 4, pick: 2 });
 		expect(at(null, 'Water Region')).toEqual({ draw: 4, pick: 2 });
-		expect(summonDrawSizes(SPIRIT_WORLD_BAG, { rules: ON })).toEqual({ draw: 4, pick: 2 });
+		expect(summonDrawSizes(SPIRIT_WORLD_BAG, catalog)).toEqual({ draw: 4, pick: 2 });
 	});
 	it('Abyssal Execution offers only cards at half Barrier or less, at the Abyss', () => {
 		const monsterHand = [monster({ name: 'Fresh' }), monster({ name: 'Chipped', hp: 3 }), monster({ name: 'Scratched', hp: 4 })];
@@ -242,7 +221,10 @@ describe('powerRework: niche Powers', () => {
 		resolveNavigationPowerReveal(away.state, catalog);
 		expect(away.p.navigationPowerOffers ?? []).toHaveLength(0);
 	});
-	it('Sudden Strike: you strike first, so a kill takes no hit', () => {
+	it('Sudden Strike: you gain the initiative, so you attack at the same time as the monster', () => {
+		expect(navigationPowerById('sudden-strike')?.text).toBe(
+			'In your battles this round, gain the initiative if your side does not have it.'
+		);
 		const fight = (power: NavigationPowerId | null) => {
 			const { state, p } = setup(power ?? 'battle-guard', 'Arcane Abyss', {
 				navigationPower: power,
@@ -257,11 +239,11 @@ describe('powerRework: niche Powers', () => {
 			return { result, p };
 		};
 		const plain = fight(null);
-		expect(plain.result.corrupted).toBe(true); // initiative 9 monster hits first for 5 at Barrier 4
+		expect(plain.result.corrupted).toBe(true); // a monster always has the initiative: it hits for 5 at Barrier 4
+		expect(plain.result.killed).toBe(false); // the initiative die missed: a corrupted player cannot strike back
 		const struck = fight('sudden-strike');
-		expect(struck.result.killed).toBe(true);
-		expect(struck.result.barrierLost).toBe(0);
-		expect(struck.p.barrier).toBe(4);
+		expect(struck.result.corrupted).toBe(true); // the hit still lands…
+		expect(struck.result.killed).toBe(true); // …and the attack at the same time kills
 	});
 	it('Sudden Strike flag is set in the combat hook', () => {
 		const { state, p } = setup('sudden-strike');

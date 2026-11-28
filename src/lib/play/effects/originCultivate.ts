@@ -1,5 +1,5 @@
 /**
- * The origin reward of a Cultivate under rule `cultivateRuneOrRelic` (Michael, 2026-11-14): one
+ * The origin reward of a Cultivate (Michael, 2026-11-14): one
  * reward per origin and per Cultivate. 3+ spirits of the origin → its rune. 5+ spirits → its rune,
  * or the origin's relic instead (the relic one time per player). The choice is a decision card
  * (`originCultivate`); with no relic to choose, the rune is given at once and no card is made.

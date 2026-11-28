@@ -3,10 +3,9 @@ import { relicOptions } from '../../locationInteractions';
 import { RELIC_TOOLS } from '../relicTools';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Cultivator — the max barrier engine, super-linear ladder (2/3/4/5 → +1/+2/+5/+10):
-// a 5-Cultivator pool MAXES max barrier (cap 10) in a single Cultivate. A lone
-// Cultivator grants nothing. gainMaxBarrier is capped at 10 and raises capacity
-// without restoring current barrier.
+// Cultivator — the max barrier engine: on Cultivate, 2 / 3 / 4 / 5 Cultivators give
+// 1 / 2 / 3 / 5 Max Barrier. 5 Cultivators also give 1 relic of your choice, the first time only
+// (once per game). A lone Cultivator grants nothing. gainMaxBarrier is capped at 10.
 export const ability: ClassAbility[] = [
 	{
 		on: 'onCultivate',
@@ -21,8 +20,7 @@ export const ability: ClassAbility[] = [
 		on: 'onCultivate',
 		run(ctx) {
 			if (ctx.traitCount < 5) return;
-			// Rule switch `cultivatorRelicOnce` (rules.ts; default false). On (proposal C6): the relic
-			// only the first time per game. The flag is written only under the rule.
+			// The relic only the first time per game.
 			if (ctx.player.cultivatorRelicGained) return;
 			ctx.player.cultivatorRelicGained = true;
 			ctx.player.pendingDecisions.push({
@@ -42,7 +40,7 @@ export function relicChoiceOptions(): { id: string; label: string }[] {
 	return relicOptions().map((r, index) => ({ id: String(index), label: r.name }));
 }
 
-/** Grant the relic picked on a "relic of your choice" card (Cultivator (5); Cleric under `sunRework`). */
+/** Grant the relic picked on a "relic of your choice" card (Cultivator (5); Cleric). */
 export function gainChosenRelic(ctx: Parameters<ClassDecisions[string]>[0], optionId: string, source: string): void {
 	const relics = relicOptions();
 	const index = Math.max(0, Math.min(relics.length - 1, Number(optionId) || 0));

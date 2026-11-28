@@ -20,6 +20,6 @@ export const DECISION_RESOLVERS: Record<
 	...CLASS_DECISIONS,
 	// Relic tools (origin relics) are not a class, but resolve through the same cards.
 	...RELIC_TOOL_DECISIONS,
-	// The Cultivate origin reward under rule `cultivateRuneOrRelic` (rune or relic).
+	// The Cultivate origin reward (rune or relic).
 	...ORIGIN_CULTIVATE_DECISIONS
 };

@@ -1,5 +1,5 @@
 /**
- * Rule switch `powerRework`, through the real reducer (lobby → navigation → reveal → location) on
+ * The Navigation Power set of 2026-11-13 (powerRework), through the real reducer (lobby → navigation → reveal → location) on
  * the frozen catalog: the Powers whose effect lives in runtime.ts / combat.ts rather than in
  * navigationPowerEffects.ts.
  *
@@ -16,9 +16,9 @@ import { botActorFor } from './server/botPolicy';
 import { testMonsterCard } from './testing/monsterCards';
 import type { GameCommand, PlayCatalog, PublicGameState, SeatColor } from './types';
 
-const catalog: PlayCatalog = { ...loadFrozenCatalog(), rules: { powerRework: true } };
+const catalog: PlayCatalog = loadFrozenCatalog();
 const SEATS: SeatColor[] = ['Red', 'Blue', 'Orange', 'Green'];
-const V2 = new Set(navigationPowerPool(catalog).map((p) => p.id));
+const V2 = new Set(navigationPowerPool().map((p) => p.id));
 
 function run(s: PublicGameState, seat: SeatColor, cmd: GameCommand): PublicGameState {
 	const r = applyGameCommand(s, botActorFor(s, seat), cmd, catalog);
@@ -58,14 +58,6 @@ describe('powerRework through the reducer', () => {
 			expect(draft).toHaveLength(3);
 			for (const id of draft) expect(V2.has(id)).toBe(true);
 		}
-		// Switch off: only old ids are ever drafted, over many seeds.
-		const oldIds = new Set<string>();
-		for (let seed = 1; seed <= 12; seed++) {
-			const old = createAgentLobby({ ...catalog, rules: undefined }, seed, SEATS.map((seat, i) => ({ seat, guardian: catalog.guardians[i].name })));
-			for (const seat of SEATS) for (const id of old.players[seat]!.pendingPowerDrafts![0]) oldIds.add(id);
-		}
-		expect([...oldIds].some((id) => id === 'abyssal-reckoning' || id === 'tidal-arsenal' || id === 'forest-bounty')).toBe(true);
-		expect([...oldIds].filter((id) => /-2$|underdogs-oath|tidal-calling|sudden-strike|tempered-dice|dark-bargain|soul-ward|twin-rhythm/.test(id))).toEqual([]);
 	});
 
 	it("another seat's owner-only choice does not hold the table; the owner is held", () => {
@@ -174,15 +166,16 @@ describe('powerRework through the reducer', () => {
 	it('Twin Rhythm rests (and cultivates) at the Arcane Abyss', () => {
 		let s = start();
 		const red = s.players.Red!;
+		red.maxBarrier = 8;
 		red.barrier = 1;
 		red.brokenBarrier = red.maxBarrier - 1;
 		s = reveal(s, 'twin-rhythm', 'Arcane Abyss');
 		s = answer(s, 'accept');
-		expect(s.players.Red!.barrier).toBe(3);
+		expect(s.players.Red!.barrier).toBe(5); // Rest restores 4 Barrier at Pure
 		expect(s.players.Red!.navigationPowerOffers).toEqual([]);
 	});
 
-	it('Ember Charge heals before the fight; Sudden Strike kills a fast monster untouched', () => {
+	it('Ember Charge heals before the fight; with Sudden Strike the attack lands at the same time as the monster', () => {
 		let s = start();
 		s.players.Red!.barrier = 1;
 		s.players.Red!.brokenBarrier = s.players.Red!.maxBarrier - 1;
@@ -190,15 +183,14 @@ describe('powerRework through the reducer', () => {
 		expect(s.players.Red!.barrier).toBe(s.players.Red!.maxBarrier);
 
 		let t = start();
-		const fast = [...catalog.monsters!].filter((m) => m.barrier <= 2).sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0))[0];
+		const weak = [...catalog.monsters!].filter((m) => m.barrier <= 2)[0];
 		const red = t.players.Red!;
 		red.attackDice = Array.from({ length: 6 }, (_, i) => ({ instanceId: `a${i}`, tier: 'arcane' as const }));
-		red.monsterHand = [testMonsterCard(catalog, { catalogId: fast.id })];
-		const barrier = red.barrier;
+		red.monsterHand = [testMonsterCard(catalog, { catalogId: weak.id })];
 		t = reveal(t, 'sudden-strike', 'Arcane Abyss');
 		t = run(t, 'Red', { type: 'startCombat', handIndex: 0 });
 		expect(t.players.Red!.monsterHand).toHaveLength(0);
-		expect(t.players.Red!.barrier).toBeGreaterThanOrEqual(barrier); // the monster never hit
-		expect(t.combats.at(-1)?.log.join(' ')).toMatch(/defeated before it could attack/);
+		// A monster always has the initiative; Sudden Strike gives Red the initiative too.
+		expect(t.combats.at(-1)?.log.join(' ')).toMatch(/has the initiative too — you attack at the same time/);
 	});
 });

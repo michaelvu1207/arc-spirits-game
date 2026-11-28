@@ -1,105 +1,84 @@
 import { describe, it, expect } from 'vitest';
 import { fire, makePlayer, ctxFor, spirit } from './testHelpers';
-import { decisions } from './arcMage';
-import type { AttackDie, DiceTier } from '../../types';
+import { ALCHEMIST_AUGMENT_KIND, decisions } from './arcMage';
+import { applyTrigger } from '../apply';
+import type { AttackDie, PrivatePlayerState } from '../../types';
 
-// Arcane Alchemist — DB intent (CHANGED): "When you cultivate, you may discard 4 attack
-// dice to gain 1 Arcane Attack Dice." Gate: ≥4 dice on cultivate → opt-in card
-// (`arcMageTrade`). The owner PICKS which 4 to spend (client sends instance ids);
-// bots / omitted picks auto-spend the 4 LOWEST-value dice (never an Arcane).
-// Done ONCE per cultivate — no re-offer loop.
+// Arcane Alchemist — "When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane
+// Attack Dice (once a round)." A card lists every placed augment ("No" last); the chosen one is
+// removed from its spirit and gives 1 Arcane die. At most one conversion a round.
 
-function dice(tiers: DiceTier[]): AttackDie[] {
-	return tiers.map((tier, i) => ({ instanceId: `d${i}`, tier }));
+const AUGMENT = { runeId: 'aug-fighter', spiritId: 's2', spiritSlotIndex: 2, className: 'Fighter', classId: 'c-fighter' };
+
+function alchemist(overrides: Partial<PrivatePlayerState> = {}): PrivatePlayerState {
+	return makePlayer({
+		spirits: [spirit(1, { 'Arcane Alchemist': 1 }), spirit(2, {}, { name: 'Carrier' })],
+		spiritAugmentAttachments: [{ ...AUGMENT }],
+		...overrides
+	});
 }
+
 function basicDice(n: number): AttackDie[] {
-	return dice(Array.from({ length: n }, () => 'basic' as const));
+	return Array.from({ length: n }, (_, i) => ({ instanceId: `d${i}`, tier: 'basic' as const }));
 }
 
 describe('Arcane Alchemist', () => {
-	it('offers the opt-in trade card on cultivate when holding ≥4 attack dice', () => {
+	it('offers the opt-in conversion card on cultivate when a Spirit Augment is placed', () => {
 		const { player, log } = fire({ 'Arcane Alchemist': 1 }, 'onCultivate', {
-			player: { attackDice: basicDice(4) }
+			player: { spirits: alchemist().spirits, spiritAugmentAttachments: [{ ...AUGMENT }] }
 		});
 		expect(player.pendingDecisions).toHaveLength(1);
 		const dec = player.pendingDecisions[0];
-		expect(dec.kind).toBe('arcMageTrade');
-		expect(dec.options.map((o) => o.id)).toEqual(['yes', 'no']);
-		expect(log.some((l) => l.includes('discard 4 attack dice'))).toBe(true);
+		expect(dec.kind).toBe(ALCHEMIST_AUGMENT_KIND);
+		expect(dec.options.map((o) => o.id)).toEqual(['aug:2:aug-fighter', 'no']);
+		expect(log.some((l) => l.includes('convert a Spirit Augment'))).toBe(true);
 	});
 
-	it('does NOT offer the trade with only 3 dice (gate raised 3 → 4)', () => {
+	it('does NOT offer a card without a placed augment, however many dice are held', () => {
 		const { player } = fire({ 'Arcane Alchemist': 1 }, 'onCultivate', {
-			player: { attackDice: basicDice(3) }
-		});
-		expect(player.pendingDecisions).toHaveLength(0);
-	});
-
-	it('does not offer the trade on a non-cultivate trigger', () => {
-		const { player } = fire({ 'Arcane Alchemist': 1 }, 'awakening', {
 			player: { attackDice: basicDice(8) }
 		});
 		expect(player.pendingDecisions).toHaveLength(0);
 	});
 
-	it('Yes converts the PLAYER-CHOSEN 4 dice → 1 arcane (never touches unpicked dice)', () => {
-		const player = makePlayer({
-			spirits: [spirit(1, { 'Arcane Alchemist': 1 })],
-			// 5 dice; the player picks 4 basics and keeps the exalted.
-			attackDice: dice(['basic', 'basic', 'basic', 'basic', 'exalted'])
+	it('does not offer the card on a non-cultivate trigger', () => {
+		const { player } = fire({ 'Arcane Alchemist': 1 }, 'awakening', {
+			player: { spirits: alchemist().spirits, spiritAugmentAttachments: [{ ...AUGMENT }] }
 		});
+		expect(player.pendingDecisions).toHaveLength(0);
+	});
+
+	it('converting removes the chosen augment and gives 1 Arcane die (other dice untouched)', () => {
+		const player = alchemist({ attackDice: [{ instanceId: 'x', tier: 'exalted' }] });
 		const ctx = ctxFor(player);
-		decisions.arcMageTrade(ctx, 'yes', ['d0', 'd1', 'd2', 'd3']);
-		// Kept the exalted, gained one arcane.
+		ctx.state.round = 2;
+		decisions[ALCHEMIST_AUGMENT_KIND](ctx, 'aug:2:aug-fighter');
+		expect(player.spiritAugmentAttachments).toEqual([]);
 		expect(player.attackDice.map((d) => d.tier).sort()).toEqual(['arcane', 'exalted']);
-		expect(ctx.log).toContain('Discarded 4 attack dice.');
-		expect(ctx.log).toContain('Gained 1 arcane attack dice.');
-	});
-
-	it('auto-spends the 4 LOWEST-value dice when no pick is supplied (bots keep the Arcane)', () => {
-		const player = makePlayer({
-			spirits: [spirit(1, { 'Arcane Alchemist': 1 })],
-			attackDice: dice(['basic', 'basic', 'enchanted', 'exalted', 'arcane'])
-		});
-		const ctx = ctxFor(player);
-		decisions.arcMageTrade(ctx, 'yes');
-		// The two basics + enchanted + exalted are the 4 cheapest → spent.
-		// The original arcane survives, plus the newly gained arcane.
-		expect(player.attackDice.map((d) => d.tier).sort()).toEqual(['arcane', 'arcane']);
-	});
-
-	it('falls back to auto-pick when the supplied selection is the wrong size', () => {
-		const player = makePlayer({
-			spirits: [spirit(1, { 'Arcane Alchemist': 1 })],
-			attackDice: dice(['basic', 'basic', 'basic', 'exalted', 'arcane'])
-		});
-		const ctx = ctxFor(player);
-		// Only 3 ids supplied → invalid → auto-pick 4 lowest (3 basics + exalted).
-		decisions.arcMageTrade(ctx, 'yes', ['d0', 'd1', 'd2']);
-		expect(player.attackDice.map((d) => d.tier).sort()).toEqual(['arcane', 'arcane']);
+		expect(ctx.log).toContain('Arcane Alchemist: converted the Fighter augment into 1 Arcane Attack Dice.');
 	});
 
 	it('No does nothing (opt-out)', () => {
-		const player = makePlayer({
-			spirits: [spirit(1, { 'Arcane Alchemist': 1 })],
-			attackDice: basicDice(4)
-		});
-		const before = player.attackDice.length;
+		const player = alchemist();
 		const ctx = ctxFor(player);
-		decisions.arcMageTrade(ctx, 'no', ['d0', 'd1', 'd2', 'd3']);
-		expect(player.attackDice).toHaveLength(before);
-		expect(player.attackDice.every((d) => d.tier === 'basic')).toBe(true);
+		ctx.state.round = 2;
+		decisions[ALCHEMIST_AUGMENT_KIND](ctx, 'no');
+		expect(player.spiritAugmentAttachments).toHaveLength(1);
+		expect(player.attackDice).toHaveLength(0);
 	});
 
-	it('is ONCE per cultivate: does NOT re-offer even when ≥4 dice remain', () => {
-		// 9 dice → after one convert (discard 4, +1 arcane) → 6 dice remain, but no re-offer.
-		const player = makePlayer({
-			spirits: [spirit(1, { 'Arcane Alchemist': 1 })],
-			attackDice: basicDice(9)
+	it('is once a round: a second conversion in the same round is refused, and no new card comes', () => {
+		const player = alchemist({
+			spiritAugmentAttachments: [{ ...AUGMENT }, { ...AUGMENT, runeId: 'aug-mage', className: 'Mage', classId: 'c-mage' }]
 		});
-		const ctx = ctxFor(player);
-		decisions.arcMageTrade(ctx, 'yes', ['d0', 'd1', 'd2', 'd3']);
-		expect(player.attackDice).toHaveLength(6); // 9 - 4 + 1
+		const ctx = ctxFor(player, { trigger: 'onCultivate' });
+		ctx.state.round = 2;
+		decisions[ALCHEMIST_AUGMENT_KIND](ctx, 'aug:2:aug-fighter');
+		decisions[ALCHEMIST_AUGMENT_KIND](ctx, 'aug:2:aug-mage');
+		expect(player.attackDice).toHaveLength(1);
+		expect(player.spiritAugmentAttachments).toHaveLength(1);
+		expect(ctx.log).toContain('Arcane Alchemist: already converted an augment this round.');
+		applyTrigger(ctx.state, 'Red', 'onCultivate', []);
 		expect(player.pendingDecisions).toHaveLength(0);
 	});
 });

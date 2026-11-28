@@ -53,10 +53,12 @@ const CATALOG: PlayCatalog = {
 		classes: { Fighter: 1 },
 		origins: { Forest: 1 }
 	})),
-	// m-1 dies to the first strike; the apex card stays in its deck so the kill never ends the game.
+	// A draw reveals the top card of a deck, and a card's deck is its stage: m-1 is the only
+	// Difficulty 1 card and m-relic the only Difficulty 2 card. Each dies to one attack; the apex
+	// card stays in its deck so the kill never ends the game.
 	monsters: [
 		{ id: 'm-1', name: 'Dice Imp', damage: 1, barrier: 1, rewardTrack: TRACK, dicePool: [], chooseAmount: 1, stage: 1, order: 0 },
-		{ id: 'm-relic', name: 'Relic Imp', damage: 1, barrier: 1, rewardTrack: [VP4, FIRECRACKER_TOKEN, TEAPOT_TOKEN], dicePool: [], chooseAmount: 1, stage: 1, order: 0 },
+		{ id: 'm-relic', name: 'Relic Imp', damage: 1, barrier: 1, rewardTrack: [VP4, FIRECRACKER_TOKEN, TEAPOT_TOKEN], dicePool: [], chooseAmount: 1, stage: 2, order: 0 },
 		{ id: 'm-apex', name: 'Abyss Apex', damage: 9, barrier: 99, rewardTrack: [VP4], dicePool: [], chooseAmount: 1, stage: 3, order: 1 }
 	],
 	locations: []
@@ -245,7 +247,7 @@ describe('named relic tokens give the relic (owner rule, 2026-11-12)', () => {
 		const firecracker = cards.find((d) => d.prompt.startsWith('Firecracker'));
 		expect(firecracker?.options.map((o) => o.label)).toEqual([
 			'Keep Firecracker for later',
-			'Strike first in your next combat, then discard Firecracker'
+			'In your next combat, gain the initiative if your side does not have it, then discard Firecracker'
 		]);
 		expect(cards.some((d) => d.prompt.startsWith('Cleansing Teapot'))).toBe(true);
 	});

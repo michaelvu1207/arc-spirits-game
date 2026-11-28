@@ -200,16 +200,14 @@ export interface ResolvedPendingReward {
 	chooseAmount: number;
 	options: ResolvedRewardOption[];
 	/**
-	 * Rule `permanentRewardChoice`: the kill gives ONE of the options, the seat's choice
+	 * A kill of the permanent monster: ONE of the options, the seat's choice
 	 * (`resolveMonsterReward.picks[0]`), not every one. Absent: every option is granted.
 	 */
 	chooseOne?: boolean;
-	/** Rule `arcaneBlood`: the Arcane Blood the seat may take in place of every reward. Absent: not offered. */
-	arcaneBlood?: number;
 }
 
 /**
- * Rule `summonReplaceWhenFull`: the seat holds a summon draw and all its spirit slots are full, so a
+ * The seat holds a summon draw and all its spirit slots are full, so a
  * summon names a spirit to replace (`spawnHandSpirit.replaceSlotIndex`). Reward hexes never replace.
  */
 export interface SummonReplaceAffordance {
@@ -288,8 +286,8 @@ export interface SeatAffordances {
 	/** The seat's Arcane Abyss surface: battle actions left, how a monster draw works, and whom it
 	 *  waits for before drawing. Present only in the Location phase at the Arcane Abyss. */
 	abyss?: AbyssAffordance;
-	/** Present while the seat holds a summon draw, has no open spirit slot and the game lets a summon
-	 *  replace a spirit (rule `summonReplaceWhenFull`). */
+	/** Present while the seat holds a summon draw and has no open spirit slot: a summon may then
+	 *  replace a spirit. */
 	summonReplace?: SummonReplaceAffordance;
 	/** Server-clock wall-time (ms epoch) this seat's current phase auto-advances, or null
 	 *  when untimed. Mirrors projection.phaseDeadline. */
@@ -716,7 +714,7 @@ export function computeLocationInteractions(
 	// Trader: every held basic rune also pays a rune-of-an-origin cost.
 	const costOpts = { runesWild: runesAreWild(player) };
 	const rowAllowance = 1 + (player.extraActions?.locationInteraction ?? 0);
-	// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action uses a battle action, so it needs one left
+	// The Arcane Abyss Summon action uses a battle action, so it needs one left
 	// (the same gate as `resolveLocationInteraction` in legality.ts).
 	const summonNeedsBattleAction =
 		destination === 'Arcane Abyss' &&
@@ -780,13 +778,12 @@ export function computePendingReward(
 		monsterName: pending.monsterName,
 		chooseAmount: pending.chooseAmount,
 		options,
-		...(pending.chooseOne ? { chooseOne: true } : {}),
-		...(pending.arcaneBlood ? { arcaneBlood: pending.arcaneBlood } : {})
+		...(pending.chooseOne ? { chooseOne: true } : {})
 	};
 }
 
 /**
- * The seat's replace-on-summon surface, or undefined: rule `summonReplaceWhenFull`, a spirit draw in
+ * The seat's replace-on-summon surface, or undefined: a spirit draw in
  * hand and no open spirit slot (the gates of `spawnHandSpirit.replaceSlotIndex`).
  */
 export function computeSummonReplace(

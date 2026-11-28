@@ -5,8 +5,9 @@ import { decisions, riderDefaultOption } from './rider';
 import { setCorruptionDiscardObligation } from '../../types';
 import type { PrivatePlayerState } from '../../types';
 
-/** Rider — "When you navigate to the Mountain Region, choose one: restore 3 Barrier, gain 3 Max
- *  Barrier, or gain 3 Basic Attack Dice." */
+/** Rider — "When you navigate to the Mountain Region from a different location, choose one:
+ *  restore 3 Barrier, gain 3 Max Barrier, gain 3 Basic Attack Dice, or gain 1 Spirit Augment of
+ *  your choice." */
 function navigate(player: PrivatePlayerState, destination: string) {
 	player.navigationDestination = destination as PrivatePlayerState['navigationDestination'];
 	applyTrigger(makeState(player), 'Red', 'onNavigate', []);
@@ -18,12 +19,18 @@ function choose(player: PrivatePlayerState, optionId: string) {
 }
 
 describe('Rider', () => {
-	it('Mountain Region: one card with the three options, ending at Benefits', () => {
+	it('Mountain Region: one card with the four options, ending at Benefits', () => {
 		const player = makePlayer({ spirits: [spirit(1, { Rider: 1 })] });
 		const cards = navigate(player, 'Mountain Region');
 		expect(cards).toHaveLength(1);
-		expect(cards[0].options.map((o) => o.id)).toEqual(['restore', 'maxBarrier', 'dice']);
+		expect(cards[0].options.map((o) => o.id)).toEqual(['restore', 'maxBarrier', 'dice', 'augment']);
 		expect(cards[0]).toMatchObject({ expiresAt: 'benefits', expiryOptionId: 'auto' });
+	});
+
+	it('gain 1 Spirit Augment of your choice (the type is chosen at placement)', () => {
+		const player = makePlayer({ spirits: [spirit(1, { Rider: 1 })] });
+		choose(player, 'augment');
+		expect(player.unplacedAugments).toHaveLength(1);
 	});
 
 	it('restore 3 Barrier', () => {

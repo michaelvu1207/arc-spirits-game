@@ -1,12 +1,10 @@
-
 import type { ClassAbility, ClassHandler } from './types';
 
 /**
- * "If the opponent has higher initiative, when you Take Damage, half it (rounding
- * up)." Reads the opposing seat's stored initiative (or the group's pooled total via
+ * Bastion — "If the opponent's side has more initiative than your side, or is a monster, when you
+ * Take Damage, half it (rounding up)." Every monster hit (`combat.vsMonster`) is halved. Against
+ * a player it reads the opposing seat's stored initiative (or the group's pooled total via
  * `combat.opponentInitiative`); if it exceeds this player's, flag the halve.
- * Rule `bastionVsMonsters` (default false): "…, or is a monster, …" — every monster hit
- * (`combat.vsMonster`) is halved, whatever the monster's initiative.
  */
 const disruptorOnTakeDamage: ClassHandler = (ctx) => {
 	if (ctx.combat?.vsMonster) {

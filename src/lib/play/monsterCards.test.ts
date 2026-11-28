@@ -18,16 +18,19 @@ import type {
 import { canApply } from './legality';
 import { dealTestMonster, drawMonsterViaCommands, testMonsterCard } from './testing/monsterCards';
 
-// Arcane Abyss monster CARDS through the real reducer. A player at the Abyss draws two cards from
-// one difficulty deck and keeps one in their own private hand (max 3). At the Abyss they fight a
-// card from their hand by `handIndex`: damage stays on the card, and a kill removes the card and
-// grants every reward on it. Nothing is shared between players.
+// Arcane Abyss monster CARDS through the real reducer. A player at the Abyss reveals the top card of
+// one difficulty deck (the card's stage) and keeps it in their own private hand (max 3; with a full
+// hand it replaces a held card) or puts it back on top of its deck. The players at the Abyss draw
+// fewest points first (equal points: table order, one seat later each round). At the Abyss they
+// fight a card from their hand by `handIndex`: damage stays on the card (a Difficulty 3 card that
+// survives restores 5 Barrier), and a kill removes the card and grants every reward on it. Nothing
+// is shared between players.
 
 const VP1 = '70792514-aa43-4526-a7a4-0f1e4ca55d71';
 const VP2 = '22e7f408-fa65-417e-a555-56ad87ecb428';
 const VP3 = '54a61c34-6e05-44df-a4d1-115e004af31e';
 
-const card = (id: string, hp: number): PlayCatalogMonster => ({
+const card = (id: string, hp: number, stage = hp >= 8 ? 3 : hp >= 4 ? 2 : 1): PlayCatalogMonster => ({
 	id,
 	name: id,
 	damage: 1,
@@ -35,11 +38,11 @@ const card = (id: string, hp: number): PlayCatalogMonster => ({
 	rewardTrack: [VP1],
 	dicePool: [],
 	chooseAmount: 1,
-	stage: 1,
+	stage,
 	order: 0
 });
 
-// Difficulty by HP: 1–3 → D1 (4 cards), 4–7 → D2 (2 cards), 8+ → D3 (2 cards).
+// A card's deck is its stage: D1 (4 cards, Barrier 1–3), D2 (2 cards, Barrier 4–7), D3 (2 cards, Barrier 8+).
 const MONSTERS = [
 	card('d1-a', 1),
 	card('d1-b', 2),
@@ -126,6 +129,9 @@ const deckCounts = (s: PublicGameState) =>
 
 const arcaneDice = (n: number): AttackDie[] =>
 	Array.from({ length: n }, (_, i) => ({ instanceId: `arc-${i}`, tier: 'arcane' as const }));
+/** Exalted dice roll 1 or 2 each: always some damage, never more than 2 per die. */
+const exaltedDice = (n: number): AttackDie[] =>
+	Array.from({ length: n }, (_, i) => ({ instanceId: `exa-${i}`, tier: 'exalted' as const }));
 
 const seat = (s: PublicGameState, color: SeatColor) => s.players[color]!;
 
@@ -145,7 +151,7 @@ describe('monster card decks at startGame', () => {
 		expect(deckCounts(s)).toEqual([4, 2, 2]);
 		expect(s.bags.monsters.contents.map((e) => e.id).sort()).toEqual(MONSTERS.map((m) => m.id).sort());
 		for (const entry of s.bags.monsters.contents) {
-			expect(entry.difficulty).toBe(monsterDifficulty({ barrier: entry.barrier! }));
+			expect(entry.difficulty).toBe(MONSTERS.find((m) => m.id === entry.id)!.stage);
 		}
 		for (const color of ['Red', 'Blue'] as const) {
 			expect(seat(s, color).monsterHand).toEqual([]);
@@ -165,8 +171,17 @@ describe('monster card decks at startGame', () => {
 		expect(s.monsterDecks?.every((d) => d.summonMin === 0 && d.summonMax === 0)).toBe(true);
 	});
 
-	test('difficulty is bucketed by Barrier (1–3 / 4–7 / 8+)', () => {
-		expect([1, 3, 4, 7, 8, 99].map((barrier) => monsterDifficulty({ barrier }))).toEqual([1, 1, 2, 2, 3, 3]);
+	test("a card's deck is its stage, whatever its Barrier", () => {
+		const catalog: PlayCatalog = { ...CATALOG, monsters: [card('big-1', 12, 1), card('small-3', 2, 3)] };
+		expect(deckCounts(started(7, catalog))).toEqual([1, 0, 1]);
+		expect(started(7, catalog).bags.monsters.contents.map((e) => [e.id, e.difficulty]).sort()).toEqual([
+			['big-1', 1],
+			['small-3', 3]
+		]);
+	});
+
+	test('a card without a stage of 1 to 3 is bucketed by Barrier (1–3 / 4–7 / 8+)', () => {
+		expect([1, 3, 4, 7, 8, 99].map((barrier) => monsterDifficulty({ barrier, stage: 0 }, CATALOG))).toEqual([1, 1, 2, 2, 3, 3]);
 	});
 
 	test('the deck order is seeded: the same seed deals the same order', () => {
@@ -183,37 +198,47 @@ describe('drawMonsterCards', () => {
 		const elsewhere = toLocation(started(), 'Mountain Region', 'Arcane Abyss');
 		expect(rejectCode(elsewhere, RED, { type: 'drawMonsterCards', difficulty: 1 })).toBe('not_in_abyss');
 		// Blue, who is at the Abyss, may draw.
-		expect(seat(run(elsewhere, BLUE, { type: 'drawMonsterCards', difficulty: 1 }), 'Blue').pendingMonsterDraw?.cards).toHaveLength(2);
+		expect(seat(run(elsewhere, BLUE, { type: 'drawMonsterCards', difficulty: 1 }), 'Blue').pendingMonsterDraw?.cards).toHaveLength(1);
 	});
 
-	test('reveals two cards of the chosen difficulty and removes them from the deck', () => {
+	test('reveals the top card of the chosen deck and removes it from the deck', () => {
 		let s = toLocation(started());
+		const top = s.bags.monsters.contents.find((e) => e.difficulty === 2)!;
 		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 2 });
 		const revealed = seat(s, 'Red').pendingMonsterDraw!.cards;
-		expect(revealed.map((c) => c.id).sort()).toEqual(['d2-a', 'd2-b']);
-		for (const c of revealed) {
-			expect(c.difficulty).toBe(2);
-			expect(c.hp).toBe(c.maxHp);
-		}
-		expect(deckCounts(s)).toEqual([4, 0, 2]);
-		expect(s.bags.monsters.count).toBe(6);
+		expect(revealed.map((c) => c.id)).toEqual([top.id]);
+		expect(revealed[0].difficulty).toBe(2);
+		expect(revealed[0].hp).toBe(revealed[0].maxHp);
+		expect(deckCounts(s)).toEqual([4, 1, 2]);
+		expect(s.bags.monsters.count).toBe(7);
 		expect(seat(s, 'Red').monsterDrawRound).toBe(s.round);
 	});
 
-	test('reveals only what is left: one card from a one-card deck, and an empty deck rejects the draw', () => {
+	test('the players at the Abyss draw in turn: equal points, table order from one seat later each round', () => {
 		let s = toLocation(started());
-		s = run(s, BLUE, { type: 'drawMonsterCards', difficulty: 2 });
-		s = run(s, BLUE, { type: 'keepMonsterCard', index: 0 }); // the other D2 card goes back
-		expect(deckCounts(s)).toEqual([4, 1, 2]);
+		expect(rejectCode(s, BLUE, { type: 'drawMonsterCards', difficulty: 1 })).toBe('abyss_draw_wait'); // round 1: Red first
+		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 1 });
+		s = run(s, RED, { type: 'keepMonsterCard', index: 0 });
+		s = run(s, BLUE, { type: 'drawMonsterCards', difficulty: 1 });
+		s = run(s, BLUE, { type: 'keepMonsterCard', index: 0 });
+		s = toLocation(finishRound(s));
+		expect(rejectCode(s, RED, { type: 'drawMonsterCards', difficulty: 1 })).toBe('abyss_draw_wait'); // round 2: Blue first
+		s = run(s, BLUE, { type: 'drawMonsterCards', difficulty: 1 });
+		expect(seat(s, 'Blue').pendingMonsterDraw?.cards).toHaveLength(1);
+	});
+
+	test('an empty deck rejects the draw', () => {
+		let s = toLocation(started());
 		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 2 });
-		expect(seat(s, 'Red').pendingMonsterDraw!.cards).toHaveLength(1);
+		s = run(s, RED, { type: 'keepMonsterCard', index: 0 });
+		s = run(s, BLUE, { type: 'drawMonsterCards', difficulty: 2 });
+		s = run(s, BLUE, { type: 'keepMonsterCard', index: 0 });
 		expect(deckCounts(s)).toEqual([4, 0, 2]);
 
-		// Red's D2 draw used Red's draw for the round; Blue's is used too. Next round, D2 is empty.
-		s = run(s, RED, { type: 'keepMonsterCard', index: 0 });
+		// Next round D2 is empty (Blue draws first in round 2).
 		s = toLocation(finishRound(s));
-		expect(rejectCode(s, RED, { type: 'drawMonsterCards', difficulty: 2 })).toBe('monster_deck_empty');
-		expect(seat(run(s, RED, { type: 'drawMonsterCards', difficulty: 3 }), 'Red').pendingMonsterDraw?.cards).toHaveLength(2);
+		expect(rejectCode(s, BLUE, { type: 'drawMonsterCards', difficulty: 2 })).toBe('monster_deck_empty');
+		expect(seat(run(s, BLUE, { type: 'drawMonsterCards', difficulty: 3 }), 'Blue').pendingMonsterDraw?.cards).toHaveLength(1);
 	});
 
 	test('one draw per round: a second draw waits for the next round', () => {
@@ -223,25 +248,32 @@ describe('drawMonsterCards', () => {
 		s = run(s, RED, { type: 'keepMonsterCard', index: 0 });
 		expect(rejectCode(s, RED, { type: 'drawMonsterCards', difficulty: 1 })).toBe('monster_draw_used');
 
-		s = toLocation(finishRound(s));
+		s = toLocation(finishRound(s), 'Arcane Abyss', 'Mountain Region');
 		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 1 });
-		expect(seat(s, 'Red').pendingMonsterDraw?.cards).toHaveLength(2);
+		expect(seat(s, 'Red').pendingMonsterDraw?.cards).toHaveLength(1);
 	});
 });
 
 describe('keepMonsterCard', () => {
-	test('keeps the chosen card in the private hand and returns the other to the bottom of its deck', () => {
+	test('keeps the revealed card in the private hand, or puts it back on top of its deck', () => {
 		let s = toLocation(started());
 		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 1 });
-		const [first, second] = seat(s, 'Red').pendingMonsterDraw!.cards;
-		s = run(s, RED, { type: 'keepMonsterCard', index: 1 });
-		expect(hand(s, 'Red').map((c) => c.id)).toEqual([second.id]);
+		const [kept] = seat(s, 'Red').pendingMonsterDraw!.cards;
+		s = run(s, RED, { type: 'keepMonsterCard', index: 0 });
+		expect(hand(s, 'Red').map((c) => c.id)).toEqual([kept.id]);
 		expect(seat(s, 'Red').pendingMonsterDraw).toBeNull();
-		expect(deckCounts(s)).toEqual([3, 2, 2]); // 4 − 2 drawn + 1 returned
+		expect(deckCounts(s)).toEqual([3, 2, 2]);
 		expect(s.bags.monsters.count).toBe(7);
-		const bottom = s.bags.monsters.contents.at(-1)!;
-		expect(bottom).toMatchObject({ id: first.id, difficulty: 1, barrier: first.maxHp, damage: first.damage });
 		expect(hand(s, 'Blue')).toEqual([]); // the card is Red's alone
+
+		s = run(s, BLUE, { type: 'drawMonsterCards', difficulty: 1 });
+		const [back] = seat(s, 'Blue').pendingMonsterDraw!.cards;
+		s = run(s, BLUE, { type: 'keepMonsterCard', index: 0, returnToDeck: true });
+		expect(hand(s, 'Blue')).toEqual([]);
+		expect(seat(s, 'Blue').pendingMonsterDraw).toBeNull();
+		expect(seat(s, 'Blue').monsterDrawRound).toBe(s.round); // it was this visit's draw
+		expect(deckCounts(s)).toEqual([3, 2, 2]);
+		expect(s.bags.monsters.contents[0]).toMatchObject({ id: back.id, difficulty: 1, barrier: back.maxHp, damage: back.damage });
 	});
 
 	test('rejects a keep with no reveal and an out-of-range index', () => {
@@ -252,21 +284,24 @@ describe('keepMonsterCard', () => {
 		expect(rejectCode(s, RED, { type: 'keepMonsterCard', index: -1 })).toBe('monster_card_invalid');
 	});
 
-	test('the hand holds at most 3 cards: a full hand cannot draw until a card is defeated', () => {
-		let s = toLocation(started());
+	test('the hand holds at most 3 cards: with a full hand the revealed card replaces a held one', () => {
+		let s = toLocation(started(), 'Arcane Abyss', 'Mountain Region');
 		for (let round = 0; round < 3; round++) {
 			s = run(s, RED, { type: 'drawMonsterCards', difficulty: 1 });
 			s = run(s, RED, { type: 'keepMonsterCard', index: 0 });
-			s = toLocation(finishRound(s));
+			s = toLocation(finishRound(s), 'Arcane Abyss', 'Mountain Region');
 		}
 		expect(hand(s, 'Red')).toHaveLength(3);
-		expect(rejectCode(s, RED, { type: 'drawMonsterCards', difficulty: 2 })).toBe('monster_hand_full');
-		// Defeating a card frees a slot, and this round's draw is still unused.
-		s.players.Red!.attackDice = arcaneDice(6); // ≥ 6 damage kills any D1 card (≤ 3 Barrier)
-		s = run(s, RED, { type: 'startCombat', handIndex: 0 });
-		expect(hand(s, 'Red')).toHaveLength(2);
+		// A full hand may still draw, but the card only goes in the hand in place of a held one.
 		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 2 });
-		expect(seat(s, 'Red').pendingMonsterDraw?.cards).toHaveLength(2);
+		const [revealed] = seat(s, 'Red').pendingMonsterDraw!.cards;
+		expect(rejectCode(s, RED, { type: 'keepMonsterCard', index: 0 })).toBe('monster_hand_full');
+		const before = hand(s, 'Red').map((c) => c.id);
+		const replaced = hand(s, 'Red')[0];
+		s = run(s, RED, { type: 'keepMonsterCard', index: 0, replaceHandIndex: 0 });
+		expect(hand(s, 'Red').map((c) => c.id)).toEqual([...before.slice(1), revealed.id]);
+		// The replaced card goes back on top of its own deck at full Barrier.
+		expect(s.bags.monsters.contents[0]).toMatchObject({ id: replaced.id, difficulty: 1, barrier: replaced.maxHp });
 	});
 
 	test('a full hand cannot keep a revealed card', () => {
@@ -280,31 +315,49 @@ describe('keepMonsterCard', () => {
 describe('startCombat: fight a monster card from your hand', () => {
 	test('fights the card at handIndex; a non-kill leaves the damage on that card, and it stays in the hand', () => {
 		let s = toLocation(started());
-		// Red already holds d3-b from an earlier visit, then draws d3-a this visit.
+		// Red already holds d3-b from an earlier visit, then draws a Difficulty 2 card this visit.
 		const held = dealTestMonster(s, 'Red', CATALOG, { catalogId: 'd3-b' });
-		s = drawMonsterViaCommands(s, RED, CATALOG, { catalogId: 'd3-a' });
-		expect(hand(s, 'Red').map((c) => c.id)).toEqual(['d3-b', 'd3-a']);
+		s = drawMonsterViaCommands(s, RED, CATALOG, { difficulty: 2 });
+		const drawnId = hand(s, 'Red')[1].id;
+		expect(hand(s, 'Red').map((c) => c.id)).toEqual(['d3-b', drawnId]);
 
-		s.players.Red!.attackDice = arcaneDice(1); // 1–3 damage: never defeats a Barrier 8+ card
+		s.players.Red!.attackDice = exaltedDice(1); // 1–2 damage: never defeats a Barrier 4+ card
 		s = run(s, RED, { type: 'startCombat', handIndex: 1 });
 		const [heldAfter, fought] = hand(s, 'Red');
-		expect(fought.id).toBe('d3-a');
+		expect(fought.id).toBe(drawnId);
 		expect(fought.hp).toBeLessThan(fought.maxHp);
 		expect(fought.hp).toBeGreaterThan(0);
 		expect(heldAfter).toEqual(held); // the other card is untouched
 		expect(seat(s, 'Red').pendingReward).toBeNull();
-		expect(s.combats.at(-1)).toMatchObject({ killed: false, monster: { id: 'd3-a', hp: fought.hp } });
+		expect(s.combats.at(-1)).toMatchObject({ killed: false, monster: { id: drawnId, hp: fought.hp } });
 
 		// The damage persists into the next round: the Barrier never recovers.
 		const hpAfterFirst = fought.hp;
 		s = toLocation(finishRound(s));
 		expect(hand(s, 'Red').map((c) => [c.id, c.hp])).toEqual([
 			['d3-b', 12],
-			['d3-a', hpAfterFirst]
+			[drawnId, hpAfterFirst]
 		]);
-		s.players.Red!.attackDice = arcaneDice(1);
+		s.players.Red!.attackDice = exaltedDice(1);
 		s = run(s, RED, { type: 'startCombat', handIndex: 1 });
 		expect(hand(s, 'Red')[1].hp).toBeLessThan(hpAfterFirst);
+	});
+
+	test('a Difficulty 3 card that survives a fight restores 5 Barrier, never above its printed Barrier', () => {
+		let s = toLocation(started());
+		s = drawMonsterViaCommands(s, RED, CATALOG, { difficulty: 3 });
+		const drawn = hand(s, 'Red')[0];
+		expect(drawn.restoreAfterCombat).toBe(5);
+		drawn.hp = drawn.maxHp - 6;
+		s.players.Red!.attackDice = exaltedDice(1);
+		s = run(s, RED, { type: 'startCombat', handIndex: 0 });
+		const dealt = s.combats.at(-1)!.sides[0].damageDealt;
+		expect(dealt).toBeGreaterThan(0);
+		expect(hand(s, 'Red')[0].hp).toBe(Math.min(drawn.maxHp, drawn.maxHp - 6 - dealt + 5));
+		// A Difficulty 1 or 2 card has no such ability.
+		s = toLocation(finishRound(s), 'Arcane Abyss', 'Mountain Region');
+		s = drawMonsterViaCommands(s, RED, CATALOG, { difficulty: 2 });
+		expect(hand(s, 'Red')[1].restoreAfterCombat).toBeUndefined();
 	});
 
 	test('a kill removes the card from the hand and opens a claim of every reward on it', () => {
@@ -334,29 +387,30 @@ describe('startCombat: fight a monster card from your hand', () => {
 
 	test('two players at the Abyss each fight their own card; one fight never changes the other hand', () => {
 		let s = toLocation(started());
-		s = drawMonsterViaCommands(s, RED, CATALOG, { catalogId: 'd3-a' });
-		s = drawMonsterViaCommands(s, BLUE, CATALOG, { catalogId: 'd3-b' });
-		expect(hand(s, 'Red').map((c) => c.id)).toEqual(['d3-a']);
-		expect(hand(s, 'Blue').map((c) => c.id)).toEqual(['d3-b']);
+		s = drawMonsterViaCommands(s, RED, CATALOG, { difficulty: 2 });
+		s = drawMonsterViaCommands(s, BLUE, CATALOG, { difficulty: 2 });
+		const [redCard] = hand(s, 'Red');
+		const [blueCard] = hand(s, 'Blue');
+		expect([redCard.id, blueCard.id].sort()).toEqual(['d2-a', 'd2-b']);
 
-		s.players.Red!.attackDice = arcaneDice(1);
-		s.players.Blue!.attackDice = arcaneDice(1);
+		s.players.Red!.attackDice = exaltedDice(1); // 1–2 damage: never defeats a Barrier 4+ card
+		s.players.Blue!.attackDice = exaltedDice(1);
 		const blueBefore = structuredClone(hand(s, 'Blue'));
 		s = run(s, RED, { type: 'startCombat', handIndex: 0 });
 		const redAfter = structuredClone(hand(s, 'Red'));
-		expect(redAfter[0].hp).toBeLessThan(8);
+		expect(redAfter[0].hp).toBeLessThan(redCard.maxHp);
 		expect(hand(s, 'Blue')).toEqual(blueBefore);
 
 		// Blue has one card: index 1 does not reach Red's card.
 		expect(rejectCode(s, BLUE, { type: 'startCombat', handIndex: 1 })).toBe('monster_card_invalid');
 		s = run(s, BLUE, { type: 'startCombat', handIndex: 0 });
-		expect(hand(s, 'Blue')[0].hp).toBeLessThan(12);
+		expect(hand(s, 'Blue')[0].hp).toBeLessThan(blueCard.maxHp);
 		expect(hand(s, 'Red')).toEqual(redAfter);
 
 		// One combat record per seat, each with that seat's own card.
 		expect(s.combats.map((c) => [c.sides[0]?.seat, c.monster?.id])).toEqual([
-			['Red', 'd3-a'],
-			['Blue', 'd3-b']
+			['Red', redCard.id],
+			['Blue', blueCard.id]
 		]);
 		// The other player's projection never shows the card that was fought.
 		expect(JSON.stringify(buildSessionProjection(s, BLUE_VIEW).players.Red!.monsterHand)).toBe('[]');
@@ -480,14 +534,14 @@ describe('a reveal left open when the Location phase ends', () => {
 		expect(rejectCode(s, RED, { type: 'endLocationActions' })).toBe('monster_draw_pending');
 	});
 
-	test('a forced advance keeps the first revealed card and returns the other to its deck', () => {
+	test('a forced advance keeps the revealed card', () => {
 		let s = toLocation(started());
 		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 1 });
-		const [first, second] = seat(s, 'Red').pendingMonsterDraw!.cards;
+		const [revealed] = seat(s, 'Red').pendingMonsterDraw!.cards;
 		s = finishRound(s);
 		expect(seat(s, 'Red').pendingMonsterDraw).toBeNull();
-		expect(hand(s, 'Red').map((c) => c.id)).toEqual([first.id]);
-		expect(s.bags.monsters.contents.some((e) => e.id === second.id)).toBe(true);
+		expect(hand(s, 'Red').map((c) => c.id)).toEqual([revealed.id]);
+		expect(s.bags.monsters.contents.some((e) => e.id === revealed.id)).toBe(false);
 		expect(deckCounts(s)[0]).toBe(3);
 	});
 });
@@ -528,7 +582,7 @@ describe('monster card projections', () => {
 		]);
 		s = run(s, RED, { type: 'drawMonsterCards', difficulty: 1 });
 		expect(counts(s)).toEqual([
-			[1, 2, 4],
+			[1, 3, 4],
 			[2, 2, 2],
 			[3, 2, 2]
 		]);

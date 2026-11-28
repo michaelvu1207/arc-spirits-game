@@ -47,14 +47,15 @@ export function augmentCapacityForSpirit(_spirit: Pick<PlaySpirit, 'classes'>): 
 	return 1;
 }
 
-/** Mystic IV raises every owned spirit's capacity from one augment to two. */
+/** The augments `spirit` may hold for this owner: 1, or 2 with Herder (Arcane spirits), Mystic IV
+ *  or the Power Forest Bounty. */
 export function ownerAugmentCapacity(
 	player: PrivatePlayerState,
 	spirit: Pick<PlaySpirit, 'classes'> & { cost?: number },
 	catalog?: unknown
 ): number {
 	let base = augmentCapacityForSpirit(spirit);
-	// Rule `herderArcaneAugments`: with an awakened Herder, each Arcane spirit (cost 7+) holds 2.
+	// Herder: with an awakened Herder, each Arcane spirit (cost 7+) holds 2.
 	if (
 		(spirit.cost ?? 0) >= ARCANE_ABYSS_COST_MIN &&
 		(player.spirits ?? []).some((s) => !s.isFaceDown && (s.classes?.['Herder'] ?? 0) > 0)
@@ -69,7 +70,7 @@ export function ownerAugmentCapacity(
 		const host = player.spirits.find((s) => s.slotIndex === attachment.spiritSlotIndex);
 		if (!host?.isFaceDown && attachment.className === 'Mystic') soulWeavers += 1;
 	}
-	// Power "Forest Bounty" (rule `powerRework`): committed at the Forest, every spirit may hold
+	// Power "Forest Bounty": committed at the Forest, every spirit may hold
 	// a second augment this round.
 	const forestBounty =
 		player.navigationPower === 'forest-bounty-2' &&

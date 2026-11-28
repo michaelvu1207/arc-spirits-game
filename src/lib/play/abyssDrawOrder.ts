@@ -1,4 +1,15 @@
-
+/**
+ * The drawing order at the Arcane Abyss (Michael, 2026-11-22: "have least points to greatest
+ * player draw in that order"): the monster decks are shared and limited, so the players at the
+ * Arcane Abyss draw from them one after the other, the player with the fewest points first.
+ *
+ * - The points are those a player had when the round began (the snapshot of the last Cleanup; 0 in
+ *   round 1), so a kill made earlier in the same Location step does not change the order.
+ * - Equal points: table order, starting one seat later each round.
+ * - A player ahead stops holding the others back once they have drawn (a full hand may still
+ *   draw) or have ended their Location turn. Taking the permanent monster is not a deck draw: it
+ *   needs no turn and counts as that player's draw of the visit.
+ */
 import type { PublicGameState, SeatColor } from './types';
 
 /** The players at the Arcane Abyss this round in drawing order (fewest points at the start of the round first). */
@@ -15,7 +26,8 @@ export function abyssDrawOrder(state: Pick<PublicGameState, 'activeSeats' | 'pla
 
 /**
  * The player `seat` must wait for before drawing from a monster deck (the first player ahead in
- * the order who may still draw), or null when `seat` may draw now. Always null with the rule off.
+ * the order who may still draw), or null when `seat` may draw now. Always null outside the
+ * Location phase.
  */
 export function abyssDrawBlockedBy(
 	catalog: unknown,
@@ -28,8 +40,8 @@ export function abyssDrawBlockedBy(
 		const p = state.players[other];
 		if (!p || p.phaseReady === true) continue;
 		const revealed = (p.pendingMonsterDraw?.cards.length ?? 0) > 0;
-		// Rule `monsterDrawOne`: a full hand may still draw (the card can replace a held one).
-		const mayStillDraw = p.monsterDrawRound !== state.round && true;
+		// A full hand may still draw (the card can replace a held one).
+		const mayStillDraw = p.monsterDrawRound !== state.round;
 		if (revealed || mayStillDraw) return other;
 	}
 	return null;

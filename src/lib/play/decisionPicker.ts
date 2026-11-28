@@ -1,8 +1,7 @@
 /**
  * Picker-style decision specs — the SINGLE source of truth for which pending
- * decisions carry an instance picker (currently Arcane Alchemist's attack-die trade)
- * and, for those, exactly how many instances must be chosen and which are
- * eligible.
+ * decisions carry an instance picker (currently Sentinel's attack-dice discard)
+ * and, for those, how many instances may be chosen and which are eligible.
  *
  * Both the view layer (viewV2 → PendingWorkDescriptor.pickerSpecs, so the UI lights
  * only the eligible dice and its commit meter knows the count) AND the reducer
@@ -12,13 +11,12 @@
  */
 
 import type { PendingDecision, PrivatePlayerState } from './types';
-import { ARC_MAGE_TRADE_COST } from './effects/classes/arcMage';
 
 /** Sentinel's discard card (`effects/classes/firekeeper.ts`): pick any number of dice. */
 const SENTINEL_DISCARD_KIND = 'sentinelDiscard';
 
-/** A decision that requires the owner to pick a fixed number of their own instances
- *  (e.g. Arcane Alchemist choosing WHICH 4 attack dice to convert). */
+/** A decision that requires the owner to pick some of their own instances
+ *  (e.g. Sentinel choosing WHICH attack dice to discard). */
 export interface DecisionPickerSpec {
 	/** The decision this picker belongs to (so a client with several pending decisions
 	 *  can route each picker to its card). */
@@ -56,29 +54,14 @@ export function decisionPickerSpec(
 			eligibleInstanceIds: dice.map((d) => d.instanceId)
 		};
 	}
-	const count = decision.kind === 'arcMageTrade' ? ARC_MAGE_TRADE_COST : null;
-	if (count !== null) {
-		const dice = player.attackDice ?? [];
-		// If every held die is consumed, or every possible payer has the same tier,
-		// the instances are fungible and the resolver can auto-spend without a picker.
-		if (dice.length <= count || new Set(dice.map((die) => die.tier)).size <= 1) return null;
-		return {
-			decisionId: decision.id,
-			kind: 'attackDice',
-			count,
-			eligibleInstanceIds: dice.map((d) => d.instanceId)
-		};
-	}
 	return null;
 }
 
 /**
  * Validate a picker selection the owner submitted with `resolveDecision`. Returns a
  * failure code when the selection is unusable — the wrong number of instances, or any
- * id not in the eligible pool — else null (a legal pick). Mirrors the resolver's
- * accept condition (`arcMage.ts`: a pick is honored only when it is exactly
- * `TRADE_COST` owned dice), so the reducer can REJECT a malformed pick instead of
- * silently falling back to auto-pick. Only consulted when the client actually sent a
+ * id not in the eligible pool — else null (a legal pick), so the reducer can REJECT a
+ * malformed pick instead of silently falling back to auto-pick. Only consulted when the client actually sent a
  * selection; an omitted selection (bots) keeps the resolver's auto-pick and never
  * reaches here.
  */

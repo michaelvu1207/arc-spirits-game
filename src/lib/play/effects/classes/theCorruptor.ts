@@ -1,30 +1,22 @@
 import { bagForSpiritCost, shuffleBag, SPIRIT_WORLD_BAG } from '../../bags';
 import { STATUS_LADDER, type PlaySpirit } from '../../types';
-import { runAction } from '../actions';
-import { applyCorruptionEffects } from '../corruption';
 import { isHeroSpirit } from '../heroes';
 import type { ClassAbility, ClassHandler } from './types';
 
-// Corruptor — "Drop your status to Fallen, and replace all Spirit World spirits with a random
-// Arcane Abyss Spirit. Gain 2 Initiative."
+// Corruptor — "Set your status to Fallen (this is not a corruption). Replace all Spirit World
+// spirits with a random Arcane Abyss Spirit."
 //
-// The one-time part runs when the Corruptor spirit itself awakens (`ctx.command.slotIndex`):
+// It runs when the Corruptor spirit itself awakens (`ctx.command.slotIndex`):
 //  - status goes straight to Fallen (a status change, NOT a corruption: no barrier restore and
 //    no spirit sacrifice; the round's "became …" flags are set as for any status rise);
 //  - every Spirit World spirit (Spirit World bag, not a Hero) goes back into the Spirit World
 //    bag and its slot takes the top card of the Arcane Abyss bag, face-down like any Abyss
 //    draw. Augments on a replaced spirit leave with it. If the Abyss bag is empty, the slot
 //    stays empty.
-// Rule switch `corruptorCountsAsCorruption` (rules.ts; default false): on ⇒ the drop to Fallen is
-// one corruption, like a status step up in `adjustStatus`: corruption count +1, Barrier restored to
-// full, corruption effects (Cultist: 1 fewer sacrifice and +1 VP) and the usual sacrifice
-// obligation (the Nth corruption owes N), set at the drop, before the board swap below.
-// "Gain 2 Initiative" is the passive combat part. (The old The Corruptor Benefits claim — an
+// Corruptor gives no initiative and no Max Barrier. (The old The Corruptor Benefits claim — an
 // Arcane die after a corruption — is not in the November 2026 text and is gone.)
 
 const FALLEN = STATUS_LADDER.length - 1;
-/** Max Barrier the Corruptor gives when it awakens under rule `corruptorAwakenMaxBarrier`. */
-export const CORRUPTOR_MAX_BARRIER = 4;
 
 const corruptorAwakening: ClassHandler = (ctx) => {
 	const slot = (ctx.command as { slotIndex?: number } | undefined)?.slotIndex;
@@ -91,10 +83,4 @@ const corruptorAwakening: ClassHandler = (ctx) => {
 	log.push(`Corruptor: replaced Spirit World spirits — ${replaced.join(', ')}.`);
 };
 
-export const ability: ClassAbility[] = [
-	{
-		on: 'inCombat',
-		breakpoints: [{ count: 1, actions: [{ kind: 'gainInitiative', amount: 2 }] }]
-	},
-	{ on: 'awakening', run: corruptorAwakening }
-];
+export const ability: ClassAbility[] = [{ on: 'awakening', run: corruptorAwakening }];

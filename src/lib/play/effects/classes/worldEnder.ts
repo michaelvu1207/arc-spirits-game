@@ -2,30 +2,13 @@ import { nextId } from '../../rng';
 import type { PrivatePlayerState } from '../../types';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Queen — DB intent: "In the Awakening Phase, gain 1 VP." Unconditional.
-//
-// CHANGED: was an all-Evil win-con (+3 VP × players) surfaced as a Cleanup CLAIM
-// card (enterCleanup → resolveAwakenReward). Now a flat, unconditional +1 VP in the
-// Awakening Phase. Implemented as a bespoke `run` handler on `awakeningPhase` (fires
-// once per active player at cleanup, BEFORE findWinner) that mutates the acting
-// player's victoryPoints directly and logs a breadcrumb so the gain is observable.
-//
-// Rule switch `moonPerksNeedAttack` (rules.ts; default false): on ⇒ the VP only in a round in
-// which this player attacked a player (`attackedPlayerThisRound`, set when a PvP attack resolves).
-//
-// Rule switch `queenUnawakens` (rules.ts; default false; Michael, 2026-11-18): on ⇒ the Queen is
-// "When this spirit awakens, every player must turn one of their awakened spirits face-down
-// (their choice)." and gives no VP. When the Queen spirit itself awakens, every player (the
-// owner too) gets a card that lists their awakened spirits; the Queen that just awakened is
-// not on her owner's card. A player with no awakened spirit to choose gets no card. The card
-// holds the Awakening Phase for that player; unanswered at a forced advance, it turns the
-// lowest-cost awakened spirit face-down (`expiryOptionId`). A spirit turned face-down keeps its
-// augment and can be awakened again later for its normal cost.
-//
-// ENGINE FOLLOW-UP (cannot be done in this file): the old Queen Cleanup claim
-// in phases.ts `enterCleanup` must be REMOVED, and Queen moved out of
-// ENGINE_HANDLED_CLASSES (into the handler-coverage path) in coverage.test.ts /
-// awaken.test.ts — otherwise the player is granted VP twice. Reported via engineNeeds.
+// Queen — "When this spirit awakens, every player must turn one of their awakened spirits
+// face-down (their choice)." (Michael, 2026-11-18.) No VP. When the Queen spirit itself awakens,
+// every player (the owner too) gets a card that lists their awakened spirits; the Queen that just
+// awakened is not on her owner's card. A player with no awakened spirit to choose gets no card.
+// The card holds the Awakening Phase for that player; unanswered at a forced advance, it turns
+// the lowest-cost awakened spirit face-down (`expiryOptionId`). A spirit turned face-down keeps
+// its augment and can be awakened again later for its normal cost.
 
 export const QUEEN_UNAWAKEN_KIND = 'queenUnawaken';
 
@@ -35,13 +18,6 @@ function unawakenChoices(player: PrivatePlayerState, exceptSlot?: number) {
 }
 
 export const ability: ClassAbility[] = [
-	{
-		on: 'awakeningPhase',
-		run(ctx) {
-			const { player, log } = ctx;
-			return;
-		}
-	},
 	{
 		on: 'awakening',
 		run(ctx) {

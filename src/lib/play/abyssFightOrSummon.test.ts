@@ -1,5 +1,5 @@
 /**
- * Rule `abyssFightOrSummon` (Michael, 2026-11-27: "bring back the summon action but have it an option to do the
+ * Fight or summon at the Arcane Abyss (Michael, 2026-11-27:"bring back the summon action but have it an option to do the
  * fight OR an arcane abyss summon action"). The Arcane Abyss has its Arcane Abyss Summon action again; in one
  * round a player there fights or takes that action, never both. Through the real reducer.
  */
@@ -10,7 +10,7 @@ import { agentLegalCommands } from './agents/actionSurface';
 import { labelFor } from './agents/labels';
 import { buildRulesBrief } from './agents/rulesBrief';
 import { loadLocalDesignCatalog } from './agents/catalog';
-import type { GameCommand, PlayCatalog, PlayCatalogMonster, PlayRules, PublicGameState } from './types';
+import type { GameCommand, PlayCatalog, PlayCatalogMonster, PublicGameState } from './types';
 
 const VP = '70792514-aa43-4526-a7a4-0f1e4ca55d71';
 const ABYSS_SUMMON = '12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e';
@@ -23,8 +23,7 @@ const monster = (i: number, barrier: number): PlayCatalogMonster => ({
 	id: `m-${i}`, name: `Deck Monster ${i}`, damage: 1, barrier, rewardTrack: [VP], dicePool: [], chooseAmount: 1, stage: 1, order: i, initiative: 3
 });
 const LURKER: PlayCatalogMonster = { ...monster(99, 1), id: 'perm', name: 'Abyss Lurker', permanent: true };
-const catalogWith = (rules: PlayRules): PlayCatalog =>
-	({
+const CATALOG: PlayCatalog = {
 		guardians: [
 			{ id: 'g-a', name: 'Myrtle', originId: 'o1' },
 			{ id: 'g-b', name: 'Nyra', originId: 'o2' }
@@ -35,11 +34,8 @@ const catalogWith = (rules: PlayRules): PlayCatalog =>
 		spirits: Array.from({ length: 16 }, (_, i) => ({ id: `s-${i}`, name: `Spirit ${i}`, cost: i < 6 ? 2 : 8, classes: {}, origins: {} })),
 		// Difficulty 1 is Barrier 1 to 3; a new player has no attack dice, so a fight never kills here.
 		monsters: [monster(1, 3), monster(2, 3), monster(3, 3), monster(4, 3), monster(5, 3), monster(6, 3), LURKER],
-		locations: [{ name: 'Arcane Abyss', rewardRows: [{ type: 'gain', gain_icon_ids: [ABYSS_SUMMON] }] }],
-		rules
-	}) as unknown as PlayCatalog;
-const ON = catalogWith({ monsterDrawOne: true, abyssFightOrSummon: true });
-const OFF = catalogWith({ monsterDrawOne: true });
+		locations: [{ name: 'Arcane Abyss', rewardRows: [{ type: 'gain', gain_icon_ids: [ABYSS_SUMMON] }] }]
+	} as unknown as PlayCatalog;
 
 function ok(s: PublicGameState, c: PlayCatalog, actor: object, command: GameCommand): PublicGameState {
 	const r = applyGameCommand(s, actor as never, command, c);
@@ -80,48 +76,38 @@ function closeDraw(s: PublicGameState, c: PlayCatalog): PublicGameState {
 
 describe('abyssFightOrSummon: a round at the Arcane Abyss is a fight OR the Arcane Abyss Summon action', () => {
 	it('both are open at the start of the turn', () => {
-		const s = atAbyss(ON);
-		expect(can(s, ON, SUMMON)).toBe(true);
-		expect(can(s, ON, FIGHT)).toBe(true);
+		const s = atAbyss(CATALOG);
+		expect(can(s, CATALOG, SUMMON)).toBe(true);
+		expect(can(s, CATALOG, FIGHT)).toBe(true);
 	});
 
 	it('after the summon action no fight can start that round', () => {
-		let s = ok(atAbyss(ON), ON, ACTORS.Red, SUMMON);
+		let s = ok(atAbyss(CATALOG), CATALOG, ACTORS.Red, SUMMON);
 		expect(s.players.Red!.handDraws.length).toBeGreaterThan(0); // the Arcane Abyss draw is open
-		s = closeDraw(s, ON);
-		expect(can(s, ON, FIGHT)).toBe(false);
-		expect(fails(s, ON, FIGHT)).toContain('the Arcane Abyss Summon action used one');
-		expect(agentLegalCommands(s, 'Red', ON).commands.some((x) => x.type === 'startCombat')).toBe(false);
+		s = closeDraw(s, CATALOG);
+		expect(can(s, CATALOG, FIGHT)).toBe(false);
+		expect(fails(s, CATALOG, FIGHT)).toContain('the Arcane Abyss Summon action used one');
+		expect(agentLegalCommands(s, 'Red', CATALOG).commands.some((x) => x.type === 'startCombat')).toBe(false);
 	});
 
 	it('after a fight the summon action is gone for that round', () => {
-		const s = ok(atAbyss(ON), ON, ACTORS.Red, FIGHT);
+		const s = ok(atAbyss(CATALOG), CATALOG, ACTORS.Red, FIGHT);
 		expect(s.players.Red!.monsterHand![0].hp).toBeGreaterThan(0); // the card survived, the fight is spent
-		expect(can(s, ON, SUMMON)).toBe(false);
-		expect(fails(s, ON, SUMMON)).toContain('uses a battle action');
-		expect(agentLegalCommands(s, 'Red', ON).commands.some((x) => x.type === 'resolveLocationInteraction')).toBe(false);
+		expect(can(s, CATALOG, SUMMON)).toBe(false);
+		expect(fails(s, CATALOG, SUMMON)).toContain('uses a battle action');
+		expect(agentLegalCommands(s, 'Red', CATALOG).commands.some((x) => x.type === 'resolveLocationInteraction')).toBe(false);
 	});
 
 	it('the other player keeps both options, and drawing a card is not part of the choice', () => {
-		const s = closeDraw(ok(atAbyss(ON), ON, ACTORS.Red, SUMMON), ON);
-		expect(canApply(s, ACTORS.Blue as never, SUMMON, ON)).not.toBe(false);
-		expect(canApply(s, ACTORS.Blue as never, { type: 'drawMonsterCards', difficulty: 1 }, ON)).not.toBe(false);
-	});
-
-	it('rule off: a player may do both, as before 20 November', () => {
-		let s = closeDraw(ok(atAbyss(OFF), OFF, ACTORS.Red, SUMMON), OFF);
-		expect(can(s, OFF, FIGHT)).toBe(true);
-		s = ok(s, OFF, ACTORS.Red, FIGHT);
-		const t = ok(atAbyss(OFF), OFF, ACTORS.Red, FIGHT);
-		expect(can(t, OFF, SUMMON)).toBe(true);
+		const s = closeDraw(ok(atAbyss(CATALOG), CATALOG, ACTORS.Red, SUMMON), CATALOG);
+		expect(canApply(s, ACTORS.Blue as never, SUMMON, CATALOG)).not.toBe(false);
+		expect(canApply(s, ACTORS.Blue as never, { type: 'drawMonsterCards', difficulty: 1 }, CATALOG)).not.toBe(false);
 	});
 
 	it('the players are told: labels and rules text', () => {
-		const s = atAbyss(ON);
-		expect(labelFor(SUMMON, s, 'Red', ON)).toContain('uses your battle action: you cannot fight this round after it');
-		expect(labelFor(FIGHT, s, 'Red', ON)).toContain('uses your battle action: no Arcane Abyss Summon action this round after it');
-		expect(labelFor(SUMMON, atAbyss(OFF), 'Red', OFF)).not.toContain('battle action');
-		expect(labelFor(FIGHT, atAbyss(OFF), 'Red', OFF)).not.toContain('battle action');
+		const s = atAbyss(CATALOG);
+		expect(labelFor(SUMMON, s, 'Red', CATALOG)).toContain('uses your battle action: you cannot fight this round after it');
+		expect(labelFor(FIGHT, s, 'Red', CATALOG)).toContain('uses your battle action: no Arcane Abyss Summon action this round after it');
 	});
 });
 
@@ -134,43 +120,42 @@ function hunterAtAbyss(c: PlayCatalog): PublicGameState {
 
 describe('abyssFightOrSummon: a Monster Hunter has one extra fight on top of the choice', () => {
 	it('the summon action, then still one fight, then none', () => {
-		let s = closeDraw(ok(hunterAtAbyss(ON), ON, ACTORS.Red, SUMMON), ON);
-		expect(can(s, ON, FIGHT)).toBe(true);
-		s = ok(s, ON, ACTORS.Red, FIGHT);
-		expect(can(s, ON, FIGHT)).toBe(false);
-		expect(fails(s, ON, FIGHT)).toContain('no battle action left');
+		let s = closeDraw(ok(hunterAtAbyss(CATALOG), CATALOG, ACTORS.Red, SUMMON), CATALOG);
+		expect(can(s, CATALOG, FIGHT)).toBe(true);
+		s = ok(s, CATALOG, ACTORS.Red, FIGHT);
+		expect(can(s, CATALOG, FIGHT)).toBe(false);
+		expect(fails(s, CATALOG, FIGHT)).toContain('no battle action left');
 	});
 
 	it('a fight, then the summon action, then no more fights', () => {
-		let s = ok(hunterAtAbyss(ON), ON, ACTORS.Red, FIGHT);
-		expect(can(s, ON, SUMMON)).toBe(true);
-		expect(can(s, ON, FIGHT)).toBe(true);
-		s = closeDraw(ok(s, ON, ACTORS.Red, SUMMON), ON);
-		expect(can(s, ON, FIGHT)).toBe(false);
+		let s = ok(hunterAtAbyss(CATALOG), CATALOG, ACTORS.Red, FIGHT);
+		expect(can(s, CATALOG, SUMMON)).toBe(true);
+		expect(can(s, CATALOG, FIGHT)).toBe(true);
+		s = closeDraw(ok(s, CATALOG, ACTORS.Red, SUMMON), CATALOG);
+		expect(can(s, CATALOG, FIGHT)).toBe(false);
 	});
 
 	it('two fights, then the summon action is gone', () => {
-		let s = ok(hunterAtAbyss(ON), ON, ACTORS.Red, FIGHT);
-		s = ok(s, ON, ACTORS.Red, FIGHT);
-		expect(can(s, ON, SUMMON)).toBe(false);
-		expect(fails(s, ON, SUMMON)).toContain('no battle action left');
-		expect(can(s, ON, FIGHT)).toBe(false);
+		let s = ok(hunterAtAbyss(CATALOG), CATALOG, ACTORS.Red, FIGHT);
+		s = ok(s, CATALOG, ACTORS.Red, FIGHT);
+		expect(can(s, CATALOG, SUMMON)).toBe(false);
+		expect(fails(s, CATALOG, SUMMON)).toContain('no battle action left');
+		expect(can(s, CATALOG, FIGHT)).toBe(false);
 	});
 
 	it('the labels say what is left', () => {
-		const s = hunterAtAbyss(ON);
-		expect(labelFor(SUMMON, s, 'Red', ON)).toContain('uses 1 battle action: 1 left after it');
-		expect(labelFor(FIGHT, s, 'Red', ON)).toContain('uses 1 battle action: 1 left after it');
-		const t = ok(s, ON, ACTORS.Red, FIGHT);
-		expect(labelFor(FIGHT, t, 'Red', ON)).toContain('no Arcane Abyss Summon action this round after it');
-		expect(labelFor(SUMMON, t, 'Red', ON)).toContain('you cannot fight this round after it');
+		const s = hunterAtAbyss(CATALOG);
+		expect(labelFor(SUMMON, s, 'Red', CATALOG)).toContain('uses 1 battle action: 1 left after it');
+		expect(labelFor(FIGHT, s, 'Red', CATALOG)).toContain('uses 1 battle action: 1 left after it');
+		const t = ok(s, CATALOG, ACTORS.Red, FIGHT);
+		expect(labelFor(FIGHT, t, 'Red', CATALOG)).toContain('no Arcane Abyss Summon action this round after it');
+		expect(labelFor(SUMMON, t, 'Red', CATALOG)).toContain('you cannot fight this round after it');
 	});
 });
 
 describe('the working tables (lab/data)', () => {
 	const now = loadLocalDesignCatalog('data');
-	it('the Arcane Abyss has its summon action and the fight-or-summon rule', () => {
-		expect(now.rules?.abyssFightOrSummon).toBe(true);
+	it('the rules brief describes the Arcane Abyss summon action and the fight-or-summon choice', () => {
 		const brief = buildRulesBrief(now);
 		expect(brief).toContain('you have 1 battle action each round');
 		expect(brief).toContain('with 1 battle action you either fight or take that action, never both');

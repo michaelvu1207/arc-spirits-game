@@ -8,8 +8,10 @@ import {
 	monsterBarrierLeft,
 	monsterLivesForPlayerCount,
 	pvpVpForAttack,
+	PVP_VP_PER_CORRUPTED,
 	DICE_TIER_FACES
 } from './combat';
+import { initiativeHits } from './rules';
 import { createRng } from './rng';
 import type {
 	AttackDie,
@@ -337,10 +339,18 @@ describe('takeDamage', () => {
 });
 
 describe('rollAttack', () => {
-	it('sums arcane dice to at least the die count (min face is 1)', () => {
-		const p = makePlayer({ attackDice: dice('arcane', 4) });
-		const state = makeState(p, null, 7);
-		expect(rollAttack(state, p)).toBeGreaterThanOrEqual(4);
+	it('an arcane die rolls 0, 1, 3 or 5 (faces 0,0,1,3,3,5)', () => {
+		expect(DICE_TIER_FACES.arcane).toEqual([0, 0, 1, 3, 3, 5]);
+		for (let seed = 1; seed <= 40; seed++) {
+			const p = makePlayer({ attackDice: dice('arcane', 1) });
+			expect([0, 1, 3, 5]).toContain(rollAttack(makeState(p, null, seed), p));
+		}
+	});
+
+	it('an exalted die never rolls below 1 (faces 1,1,1,2,2,2)', () => {
+		expect(DICE_TIER_FACES.exalted).toEqual([1, 1, 1, 2, 2, 2]);
+		const p = makePlayer({ attackDice: dice('exalted', 4) });
+		expect(rollAttack(makeState(p, null, 7), p)).toBeGreaterThanOrEqual(4);
 	});
 
 	it('is deterministic for a fixed seed', () => {
@@ -360,7 +370,7 @@ describe('fightMonster', () => {
 	const hand = (state: PublicGameState, seat: SeatColor = 'Red') => state.players[seat]?.monsterHand ?? [];
 
 	it('monster hits the player and the player chips the card in their hand (damage persists)', () => {
-		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) }); // guarantees >= 1 damage
+		const p = makePlayer({ barrier: 4, attackDice: dice('exalted', 1) }); // guarantees >= 1 damage
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 2 });
 		const state = makeState(p, monster, 3);
 		const result = fightMonster(state, 'Red');
@@ -435,7 +445,7 @@ describe('fightMonster', () => {
 	});
 
 	it('a kill removes the card from the hand; the fought snapshot shows HP 0', () => {
-		const p = makePlayer({ barrier: 4, attackDice: dice('arcane', 1) }); // guarantees >= 1 damage
+		const p = makePlayer({ barrier: 4, attackDice: dice('exalted', 1) }); // guarantees >= 1 damage
 		const monster = makeMonster({ hp: 1, maxHp: 1, damage: 1 });
 		const other = makeMonster({ id: 'keep', hp: 9, maxHp: 9 });
 		const state = makeState(p, null, 5);
@@ -495,11 +505,12 @@ describe('fightMonster', () => {
 		return state;
 	}
 
-	it('pvpVpForAttack: 2 VP for engaging, +2 per corrupted opponent', () => {
-		expect(pvpVpForAttack(0)).toBe(2);
-		expect(pvpVpForAttack(1)).toBe(4);
+	it('pvpVpForAttack: nothing for engaging, 3 VP per corrupted Good player', () => {
+		expect(PVP_VP_PER_CORRUPTED).toBe(3);
+		expect(pvpVpForAttack(0)).toBe(0);
+		expect(pvpVpForAttack(1)).toBe(3);
 		expect(pvpVpForAttack(2)).toBe(6);
-		expect(pvpVpForAttack(-1)).toBe(2); // defensive clamp
+		expect(pvpVpForAttack(-1)).toBe(0); // defensive clamp
 	});
 
 	it('monsterLivesForPlayerCount: 1 player → 1 life, 2-3 → 2, 4+ → 3', () => {
@@ -559,11 +570,12 @@ describe('fightMonster', () => {
 		advanceMonsterIfDefeated(state); // no catalog, no monsterDecks
 		expect(state.spiritWorldSaved).toBeUndefined();
 	});
-	it('a corrupted player cannot strike back', () => {
+	it('a corrupted player without the initiative cannot strike back', () => {
 		const p = makePlayer({ barrier: 1, attackDice: dice('arcane', 5) });
 		const monster = makeMonster({ hp: 10, maxHp: 10, damage: 5 }); // 5 > 1 barrier → corrupt
 		const state = makeState(p, monster, 2);
 		const result = fightMonster(state, 'Red');
+		expect(p.initiative).toBe(0); // the initiative die missed: the monster attacks first
 		expect(result!.corrupted).toBe(true);
 		expect(result!.playerDamage).toBe(0);
 		expect(monster.hp).toBe(10); // untouched
@@ -606,7 +618,7 @@ describe('fightMonster', () => {
 // rule is still exercised above (corrupted-player-still-strikes test).
 
 describe('Beast (inCombat)', () => {
-	it('scales damage AND initiative by the Beast trait count', () => {
+	it('scales damage by the Beast trait count and gives no initiative', () => {
 		const p = makePlayer({
 			barrier: 4,
 			attackDice: [],
@@ -615,7 +627,8 @@ describe('Beast (inCombat)', () => {
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.playerDamage).toBe(3); // +1 dmg per trait × 3
-		expect(p.initiative).toBe(3); // +1 initiative per trait × 3
+		// The initiative is the initiative die's alone (Pure: a roll of 4 or less).
+		expect(p.initiative).toBe(p.initiativeRoll! <= initiativeHits(0) ? 1 : 0);
 	});
 
 	it('scales to a single trait', () => {
@@ -627,7 +640,7 @@ describe('Beast (inCombat)', () => {
 		const monster = makeMonster({ hp: 20, maxHp: 20, damage: 0 });
 		const result = fightMonster(makeState(p, monster, 1), 'Red');
 		expect(result!.playerDamage).toBe(1);
-		expect(p.initiative).toBe(1);
+		expect(p.initiative).toBe(p.initiativeRoll! <= initiativeHits(0) ? 1 : 0);
 	});
 });
 
@@ -808,7 +821,7 @@ describe('per-combat flags reset between combats', () => {
 		expect(second!.barrierLost).toBe(4); // full damage now lands
 	});
 
-	it('combines Fairy +3 with +1 initiative for every Beast trait', () => {
+	it('the initiative of a fight is its die alone: stale values, Fairy and Beast add none', () => {
 		const p = makePlayer({
 			// Simulate the stale pre-fix readout: combat reset must rebuild the real total,
 			// not preserve or increment this arbitrary value.
@@ -822,11 +835,12 @@ describe('per-combat flags reset between combats', () => {
 
 		fightMonster(state, 'Red');
 
-		expect(p.initiative).toBe(9); // Fairy 3 + six Beast traits
+		expect(p.initiative).toBe(p.initiativeRoll! <= initiativeHits(0) ? 1 : 0);
 		expect(p.combatDamageBonus).toBe(6);
 
 		fightMonster(state, 'Red');
-		expect(p.initiative).toBe(9); // per-combat +6 does not accumulate to 15
+		expect(p.initiative).toBe(p.initiativeRoll! <= initiativeHits(0) ? 1 : 0);
+		expect(p.combatDamageBonus).toBe(6); // per-combat +6 does not accumulate to 12
 	});
 
 	it('resetCombatFlags zeroes every per-combat flag', () => {
@@ -874,8 +888,8 @@ describe('rules v1.2 — Fallen corruption shortfall costs VP', () => {
 		expect(log.some((l) => l.includes('2 VP lost'))).toBe(true);
 	});
 
-	it('already-Fallen corruption with ZERO spirits: the whole debt converts to VP, clamped at 0', () => {
-		// 5th corruption owes 5; no spirits → no obligation, VP 3 → 0 (clamp).
+	it('already-Fallen corruption with ZERO spirits: the whole debt converts to VP, which may go below 0', () => {
+		// 5th corruption owes 4 (the most one corruption costs); no spirits → no obligation, VP 3 → -1.
 		const p = makePlayer({
 			barrier: 1,
 			maxBarrier: 4,
@@ -888,7 +902,7 @@ describe('rules v1.2 — Fallen corruption shortfall costs VP', () => {
 		const r = takeDamage(p, 1);
 		expect(r.corrupted).toBe(true);
 		expect(p.pendingCorruptionDiscard).toBeNull();
-		expect(p.victoryPoints).toBe(0);
+		expect(p.victoryPoints).toBe(-1);
 	});
 
 	it('the corruption that CROSSES into Fallen is exempt (pre-corruption status decides)', () => {

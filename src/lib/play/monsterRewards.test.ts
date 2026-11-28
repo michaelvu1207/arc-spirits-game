@@ -73,12 +73,12 @@ const CATALOG: PlayCatalog = {
 		origins: { Forest: 1 }
 	})),
 	// barrier 1 + damage 1 ⇒ a player with arcane dice one-shots it without corrupting.
-	// m-1 is the only Difficulty 1 card. The unkillable Difficulty 3 apex card stays in the
+	// m-1 is the only Difficulty 1 card (a card's deck is its stage). The unkillable Difficulty 3 apex card stays in the
 	// deck, so killing m-1 is never the LAST card (that would save the spirit world and end
 	// the game, which these reward-flow tests don't want).
 	monsters: [
 		{ id: 'm-1', name: 'Abyss Maw', damage: 1, barrier: 1, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 1, order: 0 },
-		{ id: 'm-apex', name: 'Abyss Apex', damage: 9, barrier: 99, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 1, order: 1 }
+		{ id: 'm-apex', name: 'Abyss Apex', damage: 9, barrier: 99, rewardTrack: REWARD_TRACK, dicePool: [], chooseAmount: 2, stage: 3, order: 1 }
 	],
 	locations: []
 };

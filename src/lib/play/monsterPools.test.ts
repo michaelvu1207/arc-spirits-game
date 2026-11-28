@@ -8,8 +8,13 @@ import { buildSessionProjection, monsterDifficulty } from './runtime';
 import { botActorFor } from './server/botPolicy';
 import type { PlayCatalog, PublicGameState } from './types';
 
-// The frozen test catalog has 8 monsters: 2 of Difficulty 1, 3 of 2, 3 of 3.
-const base: PlayCatalog = loadFrozenCatalog();
+// A monster card's deck is its `stage`. Every card of the frozen test catalog is stage 1, so the
+// cards here get the stage of their Barrier band: 2 of Difficulty 1, 3 of 2, 3 of 3.
+const frozen: PlayCatalog = loadFrozenCatalog();
+const base: PlayCatalog = {
+	...frozen,
+	monsters: (frozen.monsters ?? []).map((m) => ({ ...m, stage: m.barrier >= 8 ? 3 : m.barrier >= 4 ? 2 : 1 }))
+};
 
 function game(catalog: PlayCatalog, seats: number, seed = 11): PublicGameState {
 	const guardians = pickGuardians(catalog, seed, seats);
@@ -27,8 +32,9 @@ describe('monster pools', () => {
 	it('without a pool table every catalog card is dealt (unchanged behaviour)', () => {
 		const state = game(base, 4);
 		const all = [1, 2, 3].map(
-			(d) => (base.monsters ?? []).filter((m) => monsterDifficulty(m) === d).length
+			(d) => (base.monsters ?? []).filter((m) => monsterDifficulty(m, base) === d).length
 		);
+		expect(all).toEqual([2, 3, 3]);
 		expect(byDifficulty(state)).toEqual(all);
 		expect(state.monsterDecks!.map((d) => d.total)).toEqual(all);
 	});

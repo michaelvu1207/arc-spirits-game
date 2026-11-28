@@ -782,7 +782,7 @@ export async function runAgentGame(opts: RunGameOptions): Promise<GameSummary> {
 			}
 
 			// Otherwise round-robin over the seats that must act, one decision at a time.
-			// Rule `abyssDrawByPoints`: a seat that waits for its turn to draw monster cards (and has
+			// The drawing order at the Abyss: a seat that waits for its turn to draw monster cards (and has
 			// nothing to answer) is asked after the seats it waits for, so it is not asked to end a
 			// turn in which it could not draw yet.
 			const waiting = candidates.filter(

@@ -93,9 +93,8 @@
 		battle: AbyssBattleActions;
 		/** How a draw works in this game. */
 		draw?: AbyssDrawRules;
-		/** The initiative die of this game: sides that give this player the initiative. Null: the
-		 *  game has no initiative die (the monster hits first unless a class says otherwise). */
-		initiative?: { hits: number; sides: number } | null;
+		/** The initiative die: sides that give this player the initiative. */
+		initiative: { hits: number; sides: number };
 		/** The player's Barrier, for the "it will likely corrupt you" warning. */
 		barrier: number;
 		/** The Abyss's own location actions (free Arcane Abyss Summon). */
@@ -117,7 +116,7 @@
 		drawUsed,
 		battle,
 		draw: drawRules = { reveals: 2, canReturn: false, waitsOn: null },
-		initiative = null,
+		initiative,
 		barrier,
 		actions = [],
 		busy = false,
@@ -276,9 +275,7 @@
 
 	function fightWarning(card: MonsterState): string | null {
 		if (card.damage < barrier) return null;
-		return initiative
-			? `Warning: it deals ${card.damage} and you have ${barrier} Barrier, so it will likely corrupt you. If your initiative die hits (${initiative.hits} of ${initiative.sides} sides) you attack at the same time and your damage still lands; if it misses, the monster attacks first and you cannot strike back.`
-			: `Warning: it hits first for ${card.damage} and you have ${barrier} Barrier, so you will likely be corrupted and unable to strike back.`;
+		return `Warning: it deals ${card.damage} and you have ${barrier} Barrier, so it will likely corrupt you. If your initiative die hits (${initiative.hits} of ${initiative.sides} sides) you attack at the same time and your damage still lands; if it misses, the monster attacks first and you cannot strike back.`;
 	}
 
 	/** One card is revealed and it may be kept, put back, or swapped for a held card. */
@@ -354,8 +351,7 @@
 		const gains = [vp ? `${vp} VP` : '', summons ? `${summons === 1 ? '' : `${summons} `}Abyss Summon${summons === 1 ? '' : 's'}` : '']
 			.filter(Boolean)
 			.join(' + ');
-		const speed = !initiative && typeof card.initiative === 'number' ? ` · Initiative ${card.initiative}` : '';
-		return `Barrier ${card.maxHp} · ${card.damage} damage${speed}${gains ? ` · ${gains}` : ''}`;
+		return `Barrier ${card.maxHp} · ${card.damage} damage${gains ? ` · ${gains}` : ''}`;
 	}
 	/** Slide a revealed card (the one not kept) back under the deck. */
 	function slideBack(from: Element | null | undefined) {

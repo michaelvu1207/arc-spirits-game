@@ -249,7 +249,7 @@ export function runAction(ctx: EffectContext, action: EffectAction, multiplier =
 			break;
 		}
 		case 'gainInitiative': {
-			// Rule `initiativeDie`: initiative is the die, no class gives a number.
+			// Initiative is a die rolled in combat (combat.ts); no effect gives an initiative number.
 			break;
 		}
 		case 'reduceIncomingDamage': {

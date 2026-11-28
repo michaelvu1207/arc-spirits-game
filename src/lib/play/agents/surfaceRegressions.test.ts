@@ -133,9 +133,12 @@ describe('action surface regressions', () => {
 
 	it('the brief states flat spirit slots, what Cultivate does, reward hexes and Arcane sources', () => {
 		const brief = buildRulesBrief(catalog);
-		expect(brief).not.toMatch(/Tainted 6|slots by status/);
+		// "Tainted 6 of 12" is the initiative die; no slot count depends on the status.
+		expect(brief).not.toMatch(/Tainted 6(?! of 12)|slots by status/);
 		expect(brief).toContain('Spirit slots: 7 at every status');
-		expect(brief).toContain('1 for your 1st corruption, 2 for the 2nd, 3 for the 3rd, 4 for the 4th.');
+		expect(brief).toContain(
+			'1 for your 1st corruption, 2 for the 2nd, 3 for the 3rd, 4 for the 4th (and 4 for every corruption after your 4th: it stops growing there).'
+		);
 		expect(brief).toMatch(/it never adds spirits/);
 		expect(brief).toMatch(/3 spirits \+ 1 reward hex/);
 		expect(brief).toMatch(/Arcane spirits come only from an Arcane Abyss Summon/);

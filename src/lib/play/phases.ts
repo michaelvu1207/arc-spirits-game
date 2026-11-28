@@ -36,7 +36,6 @@ import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
 import { DECISION_RESOLVERS } from './effects/decisions';
 import { pvpAllowedAt, VP_TO_WIN } from './rules';
-import { settleSidePoints } from './sidePoints';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { MASTER_CULTIVATE_KIND } from './effects/classes/master';
 import { QUEEN_UNAWAKEN_KIND } from './effects/classes/worldEnder';
@@ -171,8 +170,6 @@ function beginNavigation(state: PublicGameState): void {
 			player.becameCorruptThisRound = false;
 			player.becameFallenThisRound = false;
 			player.corruptedThisRound = false;
-			// Rule `moonPerksNeedAttack` only: the field exists only once an attack set it.
-			if (player.attackedPlayerThisRound) player.attackedPlayerThisRound = false;
 			// Per-round extra-action credits (Ironmane's extra Monster Combat,
 			// Nomad's doubled location interactions) are re-granted each
 			// round by onNavigate, so clear last round's allowance here first.
@@ -234,8 +231,8 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
 	enterEncounter(state, catalog);
 }
 
-/** Evil seats that share a location with a Good seat (potential PvP). The Arcane Abyss counts
- *  only under rule `pvpInAbyss`. */
+/** Evil seats that share a location with a Good seat (potential PvP), in the four regions and
+ *  the Arcane Abyss (`pvpAllowedAt`). */
 export function encounterAggressors(
 	state: PublicGameState,
 	catalog?: unknown
@@ -342,7 +339,7 @@ export function tryAdvanceFromLocation(state: PublicGameState, catalog?: PlayCat
  * Fire the `awakeningPhase` trigger for EACH active player, in seat order. Within
  * one player the dispatch resolves declarative breakpoints FIRST — the status-driven
  * grants (Cursed Spirit, Abyss Harbinger) — then the bespoke handlers — the VP win-cons
- * (Dawn Sovereign's VP + self-discard, Queen, Relic Sentinel). So the order is:
+ * (Dawn Sovereign's VP + self-discard, Relic Sentinel). So the order is:
  * status grants → VP win-cons, and every VP grant lands before any winner is declared
  * (findWinner runs in tryAdvanceFromCleanup, strictly after this whole sequence).
  *
@@ -381,7 +378,7 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
 		// Always start from a clean slate so a stale claim (e.g. a prior round the host
 		// force-advanced before it was claimed) can never linger and block this step.
 		player.pendingAwakenReward = null;
-		const grants = collectBenefitGrants(player, catalog);
+		const grants = collectBenefitGrants(player);
 		if (grants.length > 0) {
 			player.pendingAwakenReward = { grants };
 		}
@@ -403,7 +400,7 @@ export function enterBenefits(state: PublicGameState, catalog?: PlayCatalog): vo
  * `pendingAwakenReward`) and the round-cap final-scoring pass (VP grants applied
  * directly — the game is over, there is nobody left to click a claim).
  */
-function collectBenefitGrants(player: PrivatePlayerState, catalog?: PlayCatalog): AwakenGrant[] {
+function collectBenefitGrants(player: PrivatePlayerState): AwakenGrant[] {
 	const counts = awakenedClassCounts(player);
 	const evil = isEvilAlignment(player.statusLevel);
 	const grants: AwakenGrant[] = [];
@@ -418,9 +415,10 @@ function collectBenefitGrants(player: PrivatePlayerState, catalog?: PlayCatalog)
 		if (player.becameFallenThisRound)
 			grants.push({ kind: 'fallenChoice', amount: cursed, source: 'Cursed Spirit' });
 	}
-	// King — +1 VP (the Evil self-discard penalty is applied on claim). Rule `kingPureOnly`
-	// (balance test): the point is paid only to a Pure player; a Tainted or Corrupt King holder
-	// gets nothing, an Evil one is offered the claim as before (it discards the King).
+	// King — "In the Awakening Phase, if you are Pure, gain 1 VP. If you are Evil, you must discard
+	// this spirit." (balance test, 2026-11-19): the point is paid only to a Pure player; a Tainted
+	// or Corrupt King holder gets nothing, an Evil one is offered the claim (it discards the King;
+	// the self-discard is applied on claim).
 	const kingPays = player.statusLevel === 0 || evil;
 	if ((counts['King'] ?? 0) >= 1 && kingPays) {
 		grants.push({
@@ -432,8 +430,7 @@ function collectBenefitGrants(player: PrivatePlayerState, catalog?: PlayCatalog)
 	}
 	// (Corruptor's old "+1 Arcane die after a corruption" claim is not in the November 2026
 	// text; its effects live in effects/classes/theCorruptor.ts.)
-	// Queen — now a flat +1 VP via its awakeningPhase `run` handler
-	// (classes/worldEnder.ts), no longer a Cleanup claim.
+	// Queen gives no VP (classes/worldEnder.ts).
 	// (Relic Sentinel's old "+6 VP at 24 VP while Good" claim is not in the November 2026
 	// text; its relic guard lives in effects/classes/worldGuardian.ts.)
 
@@ -446,7 +443,7 @@ function collectBenefitGrants(player: PrivatePlayerState, catalog?: PlayCatalog)
  * out in — at a physical table players count those points anyway (rules decision,
  * 2026-07-03). So when the game ends on the {@link MAX_ROUNDS} cap, run one last
  * benefits pass for every seat, for scoring only: the `awakeningPhase` trigger (bespoke
- * VP handlers like Queen) plus the DIRECT application of every VP-kind Benefits
+ * handlers) plus the DIRECT application of every VP-kind Benefits
  * grant (Relic Sentinel, Dawn Sovereign). Non-VP grants (dice, relics, augment picks) are
  * skipped — they cannot affect the result of a finished game. The last vpHistory point
  * is re-synced so the points-over-time chart shows the final score.
@@ -457,7 +454,7 @@ function applyFinalScoring(state: PublicGameState, catalog?: PlayCatalog): void 
 		if (!player) continue;
 		const log: string[] = [];
 		applyTrigger(state, seat, 'awakeningPhase', log, { catalog });
-		for (const grant of collectBenefitGrants(player, catalog)) {
+		for (const grant of collectBenefitGrants(player)) {
 			if (grant.kind === 'vp' && grant.amount > 0) {
 				player.victoryPoints = (player.victoryPoints ?? 0) + grant.amount;
 				log.push(`Final scoring: +${grant.amount} VP (${grant.source}).`);
@@ -617,8 +614,6 @@ export function tryAdvanceFromCleanup(state: PublicGameState, catalog?: PlayCata
 		p.unplacedAugments = [];
 	}
 
-	// Rule `sidePointsHalf`: halve this round's non-monster points before the win check.
-	settleSidePoints(state, catalog);
 	const winner = findWinner(state, catalog);
 	if (winner) {
 		state.winnerSeat = winner;

@@ -14,20 +14,12 @@
 
 import { awakenedClassCounts } from '../../effects/apply';
 import { DICE_TIER_FACES } from '../../combat';
-import {
-	ELEMENTALIST_METHOD_AT,
-	elementalistKillUpgrades,
-	elementalistRestUpgrades,
-	elementalistUpgradesPerAction,
-	holdsRelic
-} from '../../effects/classes/elementalist';
-import { CLASS_ABILITIES } from '../../effects/abilities';
+import { elementalistRestUpgrades } from '../../effects/classes/elementalist';
 import { CLASS_EFFECTS, selectBreakpoint, type EffectTrigger } from '../../effects/registry';
 import { ORIGIN_REWARDS, spiritsByOrigin } from '../../effects/relicTools';
 import { isRelic, meaningFor } from '../../locationInteractions';
 import { buildMonsterRewards } from '../../monsterRewards';
 import { restBarrier } from '../../rules';
-import { arcaneBloodFor } from '../../runtime';
 import type {
 	AttackDie,
 	DiceTier,
@@ -205,12 +197,11 @@ export function situationOf(
 
 // ───────────────────────────── rules, read from the engine ─────────────────────────────
 //
-// Every number the build depends on comes from the engine: the class breakpoints (with the rule
-// switches that change their amounts), the Elementalist helpers, the Rest heal and the dice faces.
-// Nothing here assumes a rule set.
+// Every number the build depends on comes from the engine: the class breakpoints, the
+// Elementalist helpers, the Rest heal and the dice faces.
 
-/** Sum of the `kind` amounts a class gives on `trigger` at `count` traits, under the catalog's rules
- *  (the engine's declarative breakpoints, with `ruleAdjustedActions`). */
+/** Sum of the `kind` amounts a class gives on `trigger` at `count` traits (the engine's
+ *  declarative breakpoints). */
 export function classAmount(
 	catalog: unknown,
 	className: string,
@@ -257,41 +248,12 @@ const CULTIVATOR_RELIC_AT = 5;
 const RELIC_MATS = [{ hasRune: true, type: 'relic' as const, slotIndex: 0 }];
 const NO_MATS: never[] = [];
 
-/** Upgrades of the engine's default Elementalist rule (no switch on) for one Rest: runs the class's
- *  own onRest ability on a scratch player. */
-function defaultRestUpgrades(catalog: PlayCatalog, count: number): number {
-	try {
-		const player = {
-			attackDice: new Array(10).fill(0).map((_, i) => ({ instanceId: `d${i}`, tier: 'basic' })),
-			mats: [],
-			pendingDecisions: []
-		} as unknown as PrivatePlayerState;
-		const ctx = {
-			state: { players: {}, rng: { seed: 1, counter: 0 } },
-			seat: 'Red',
-			player,
-			catalog,
-			log: [] as string[],
-			trigger: 'onRest',
-			traitCount: count,
-			colocated: []
-		};
-		for (const ab of CLASS_ABILITIES.Elementalist ?? []) {
-			if (ab.on === 'onRest' && ab.run) ab.run(ctx as never);
-		}
-		return upgradeLevel(player.attackDice.map((d) => d.tier));
-	} catch {
-		return 0;
-	}
-}
-
 export type UpgradeAction = 'rest' | 'cultivate' | 'summon' | 'kill';
 
 /**
- * Dice upgrades Elementalist gives for one action at `count` Elementalists, as the engine's rule
- * switches decide (`elementalistRest1235`, `elementalist5NeedsRelic`, `elementalistMethods`,
- * `elementalistOneUpgrade`, `elementalistBigKills`, `arcaneBlood`). `relic`: whether the player
- * holds a relic at that time.
+ * Dice upgrades Elementalist gives for one action at `count` Elementalists, as the engine gives
+ * them: on Cultivate only (1 / 2 / 3 / 5 at 2 / 3 / 4 / 5; 5 needs a relic, else as 4).
+ * `relic`: whether the player holds a relic at that time.
  */
 export function elementalistUpgrades(
 	catalog: PlayCatalog,
@@ -300,31 +262,10 @@ export function elementalistUpgrades(
 	relic: boolean,
 	kill?: { difficulty?: number; permanent?: boolean }
 ): number {
-	// The ladder rule: one action upgrades (Rest, or Cultivate under `elementalistOnCultivate`).
-	const ladderAction = 'cultivate';
-	if (ladderAction) {
-		if (action !== ladderAction) return 0;
-		return elementalistRestUpgrades(catalog, count, {
-			mats: relic ? RELIC_MATS : NO_MATS
-		} as never);
-	}
-	const key =
-		action === 'summon' ? 'spiritWorldSummon' : action === 'kill' ? 'monsterKill' : action;
-	if (count < ELEMENTALIST_METHOD_AT[key]) return 0;
-	if (action === 'kill') {
-		return elementalistKillUpgrades(catalog, {
-			monsterDifficulty: (kill?.difficulty ?? 1) as 1 | 2 | 3,
-			monsterPermanent: !!kill?.permanent
-		});
-	}
-	return elementalistUpgradesPerAction(catalog);
-}
-
-/** Upgrades per Arcane Blood gained (the engine: Elementalist (2) under `elementalistMethods`,
- *  not under `elementalistRest1235`). */
-function upgradesPerBlood(s: Situation): number {
-	const c = s.catalog;
-	return 0;
+	if (action !== 'cultivate') return 0;
+	return elementalistRestUpgrades(catalog, count, {
+		mats: relic ? RELIC_MATS : NO_MATS
+	} as never);
 }
 
 /** Extra upgrades per upgrading action (Rest or Cultivate, as the rules say) a held relic gives at
@@ -636,35 +577,10 @@ export function fightOutcome(s: Situation, card: MonsterState, setup: FightSetup
 	};
 }
 
-/** Points value of a kill of this card for this seat (points, or Arcane Blood upgrades; plus the
- *  upgrades a kill itself gives under the rules where it does). */
+/** Points value of a kill of this card for this seat: its points and the value of its other
+ *  rewards (a kill upgrades no dice). */
 export function killValue(s: Situation, card: MonsterState): number {
-	const vp = cardVp(card) + cardExtras(s, card);
-	const up = elementalistUpgrades(s.catalog, 'kill', s.elementalist, s.relics > 0, card);
-	const upV = up > 0 ? diceValueDelta(s, s.tiers, diceAfter(s.tiers, 0, up)) : 0;
-	return Math.max(vp, bloodValue(s, card)) + upV;
-}
-
-/** Points per +1 attack from Arcane Blood: high when the easy cards (Difficulty 1 and 2) are
- *  running out and the points must come from Difficulty 3. */
-function bloodWeight(s: Situation): number {
-	const easy =
-		deckLeft(s, 1) +
-		deckLeft(s, 2) +
-		(s.me.monsterHand ?? []).filter((c) => !c.permanent && (c.difficulty ?? 1) <= 2).length;
-	const perPlayer = easy / Math.max(1, s.view.activeSeats.length);
-	const scarcity = Math.max(0.2, Math.min(1, 1 - perPlayer / (2 * s.params.bloodEasy)));
-	return s.params.bloodAttack * scarcity;
-}
-
-/** Value of taking the card's Arcane Blood (one upgrade each with Elementalist 2). */
-function bloodValue(s: Situation, card: Pick<MonsterState, 'difficulty' | 'permanent'>): number {
-	const per = upgradesPerBlood(s);
-	if (per <= 0) return 0;
-	if (s.me.victoryPoints > s.params.bloodMaxVp) return 0;
-	const blood = (arcaneBloodFor(card, s.catalog) ?? 0) * per;
-	const after = diceAfter(s.tiers, 0, blood);
-	return (expectedAttack(s, after) - expectedAttack(s, s.tiers)) * bloodWeight(s);
+	return cardVp(card) + cardExtras(s, card);
 }
 
 /** Value of fighting `card` now with this setup (points-equivalents). */
@@ -1487,17 +1403,6 @@ function scoreMonsterReward(
 		(n, r) => n + (r.effect.type === 'vp' ? r.effect.amount : 0),
 		0
 	);
-	if (c.arcaneBlood) {
-		const blood = reward.arcaneBlood ?? 0;
-		const gain = expectedAttack(s, diceAfter(s.tiers, 0, blood)) - expectedAttack(s, s.tiers);
-		const v =
-			s.elementalist >= 2 &&
-			s.me.victoryPoints <= s.params.bloodMaxVp &&
-			s.me.victoryPoints + vp < 30
-				? gain * bloodWeight(s)
-				: -1;
-		return { score: 1 + v - vp, why: `take ${blood} Arcane Blood` };
-	}
 	// The Lurker (one reward): the point, not the summon.
 	if (reward.chooseOne) {
 		const pick = c.picks?.[0] ?? 0;

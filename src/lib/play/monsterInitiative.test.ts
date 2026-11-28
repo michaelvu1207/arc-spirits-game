@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makePlayer, makeState, spirit } from './effects/classes/testHelpers';
-import { fightMonster, monsterInitiativeOf } from './combat';
+import { fightMonster } from './combat';
 import type { MonsterState } from './types';
 
 /** A monster with Barrier 5 that hits for 10, optionally with an initiative number. */
@@ -11,42 +11,23 @@ function monster(initiative?: number): MonsterState {
 		...(initiative === undefined ? {} : { initiative })
 	} as MonsterState;
 }
-// Fairy (awake) gives initiative 3 in every combat; Hunter deals 5 more damage to a monster.
-const fight = (m: MonsterState) => {
-	const player = makePlayer({ barrier: 4, maxBarrier: 4, spirits: [spirit(1, { Fairy: 1 }), spirit(2, { Hunter: 1 })], monsterHand: [m] });
+// Hunter deals 5 more damage to a monster: enough to kill this one.
+const fight = (m: MonsterState, strikeFirstCharges = 0) => {
+	const player = makePlayer({ barrier: 4, maxBarrier: 4, spirits: [spirit(1, { Fairy: 1 }), spirit(2, { Hunter: 1 })], monsterHand: [m], strikeFirstCharges });
 	return fightMonster(makeState(player), 'Red', undefined, 0)!;
 };
 
-describe('monster initiative', () => {
-	it('no number: the monster always strikes first (old rule)', () => {
-		expect(monsterInitiativeOf(monster())).toBe(Number.POSITIVE_INFINITY);
-		const r = fight(monster());
-		expect(r.corrupted).toBe(true);
-		expect(r.killed).toBe(false);
+describe('a monster always has the initiative', () => {
+	it('its hit lands whatever initiative number the card prints', () => {
+		for (const initiative of [undefined, 0, 2, 3]) {
+			const r = fight(monster(initiative));
+			expect(r.corrupted).toBe(true);
+			expect(r.barrierLost).toBeGreaterThan(0);
+		}
 	});
-	it('player initiative higher: the player strikes first and a kill takes no hit', () => {
-		const r = fight(monster(2));
+	it('a player who has the initiative attacks at the same time: the kill still takes the hit', () => {
+		const r = fight(monster(2), 1); // a Firecracker charge gives the initiative if the die misses
 		expect(r.killed).toBe(true);
-		expect(r.barrierLost).toBe(0);
-		expect(r.corrupted).toBe(false);
-	});
-	it('a tie goes to the monster', () => {
-		const r = fight(monster(3));
 		expect(r.corrupted).toBe(true);
-	});
-});
-
-describe('firetailVsMonsters', () => {
-	const fightWith = (rules: Record<string, boolean> | undefined) => {
-		const player = makePlayer({ barrier: 4, maxBarrier: 4, spirits: [spirit(1, { Firetail: 1 }), spirit(2, { Hunter: 1 })], monsterHand: [monster(2)] });
-		return fightMonster(makeState(player), 'Red', { rules } as never, 0)!;
-	};
-	it('off: no initiative alone vs a monster (initiative 0 < 2): the monster strikes first', () => {
-		expect(fightWith(undefined).corrupted).toBe(true);
-	});
-	it('on: +3 initiative vs a monster (3 > 2): strike first and kill', () => {
-		const r = fightWith({ firetailVsMonsters: true });
-		expect(r.killed).toBe(true);
-		expect(r.barrierLost).toBe(0);
 	});
 });

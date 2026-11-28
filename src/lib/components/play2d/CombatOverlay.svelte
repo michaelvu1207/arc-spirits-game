@@ -25,10 +25,10 @@
 	const lines = $derived(mergeCombatLog(myCombat?.log ?? []));
 	const corruptionMoment = $derived(lines.some((line) => /corrupt/i.test(line)));
 
-	// Rule `initiativeDie`: each player in the fight rolled the one 12-sided initiative die.
-	// A player fight carries each roll on its side (`initiativeRoll`; the side's `initiative` is 1
-	// when it has the initiative). A monster fight records the roll in its log only ("You roll the
-	// initiative die: 4 (Tainted needs 5 or less of 12) — gains the initiative."), so it is read there.
+	// Each player in the fight rolled the one 12-sided initiative die.
+	// A player fight carries each roll on its side (`initiativeRoll`; the side's `initiative` is the
+	// number of its dice that hit). A monster fight records the roll in its log only ("You roll the
+	// initiative die: 4 (Tainted needs 6 or less of 12) — gains the initiative."), so it is read there.
 	const mySide = $derived(myCombat?.sides.find((s) => s.seat === mySeat) ?? null);
 	const dieRolls = $derived.by(() => {
 		if (!myCombat) return [];

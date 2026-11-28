@@ -12,26 +12,26 @@ import type { PublicGameState, SeatColor } from './types';
 
 export interface AbyssAffordance {
 	/**
-	 * Battle actions the seat has left this round. A fight uses one; under rule `abyssFightOrSummon`
-	 * the Arcane Abyss Summon action uses one too.
+	 * Battle actions the seat has left this round. A fight uses one; the Arcane Abyss Summon action
+	 * uses one too.
 	 */
 	battleActionsLeft: number;
 	/** Battle actions the seat has each round: 1, or more with Monster Hunter. */
 	battleActions: number;
-	/** Rule `abyssFightOrSummon`: the Arcane Abyss Summon action uses a battle action. */
+	/** The Arcane Abyss Summon action uses a battle action (always true). */
 	summonUsesBattleAction: boolean;
-	/** The seat took the Arcane Abyss Summon action this round (under `abyssFightOrSummon`). */
+	/** The seat took the Arcane Abyss Summon action this round. */
 	summonTaken: boolean;
-	/** Cards one draw reveals: 1 under rule `monsterDrawOne`, otherwise 2 (keep 1). */
+	/** Cards one draw reveals: always 1. */
 	drawReveals: 1 | 2;
 	/**
-	 * Rule `monsterDrawOne`: the revealed card may go back on top of its deck, a kept card may take
-	 * the place of a held one, and a full hand may still draw.
+	 * The revealed card may go back on top of its deck, a kept card may take the place of a held
+	 * one, and a full hand may still draw (always true).
 	 */
 	canReturnDraw: boolean;
-	/** Rule `abyssDrawByPoints`: the players at the Arcane Abyss in drawing order. Absent with the rule off. */
+	/** The players at the Arcane Abyss in drawing order (fewest points first). */
 	drawOrder?: SeatColor[];
-	/** Rule `abyssDrawByPoints`: the seat that draws from the decks before this one, while it has to wait. */
+	/** The seat that draws from the decks before this one, while it has to wait. */
 	drawWaitsOn?: SeatColor;
 }
 

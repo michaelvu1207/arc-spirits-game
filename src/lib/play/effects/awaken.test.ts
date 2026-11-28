@@ -22,7 +22,6 @@ import {
 import { CLASS_EFFECTS, MANUAL_CLASSES, type ClassEffect } from './registry';
 import { HANDLER_CLASSES } from './handlers';
 import {
-	FALCONER_TRADE_ACTION,
 	recordTravelingTraderProgress,
 	AWAKEN_HANDLERS,
 	AWAKEN_PROGRESS_KEYS,
@@ -1270,9 +1269,8 @@ describe('AWAKEN_HANDLERS discard-at-location', () => {
 		// Eligible: Water Region, nothing done (a navigation Power use is not a location interaction).
 		const ok = endLocation('Water Region', ['gain-power']);
 		expect(handler.check(handlerCtx(ok, sp)).ok).toBe(true);
-		// Interacted: a location row, or the Falconer remote trade.
+		// Interacted: a location row.
 		expect(handler.check(handlerCtx(endLocation('Water Region', ['row:0']), sp)).ok).toBe(false);
-		expect(handler.check(handlerCtx(endLocation('Water Region', [FALCONER_TRADE_ACTION]), sp)).ok).toBe(false);
 		// Another location.
 		expect(handler.check(handlerCtx(endLocation('Fire Region', []), sp))).toEqual({
 			ok: false,
@@ -1848,17 +1846,16 @@ describe('Phase 6 coverage closure', () => {
 	});
 
 	it('the Phase-6 interaction classes are all accounted for', () => {
-		// Ironmane is encoded (extraAction); Mage is now a real trade handler;
-		// Herder is a run-handler (a rune for each adjacent Beast on its awakening).
+		// Monster Hunter is encoded (extraAction); Mage gains its dice on its own awakening.
 		expect(CLASS_EFFECTS['Monster Hunter']).toBeDefined();
 		expect(CLASS_EFFECTS['Nomad']).toBeDefined();
 		expect(MANUAL_CLASSES.has('Nomad')).toBe(false);
 		expect(HANDLER_CLASSES.has('Mage')).toBe(true);
 		expect(MANUAL_CLASSES.has('Ram')).toBe(false);
 		expect(HANDLER_CLASSES.has('Ram')).toBe(true);
-		// Herder is no longer manual — it is a run-handler (bound-augment grant).
-		expect(MANUAL_CLASSES.has('Herder'), 'Herder is handler-driven now').toBe(false);
-		expect(HANDLER_CLASSES.has('Herder'), 'Herder must be a handler class').toBe(true);
+		// Herder is the augment capacity of Arcane spirits (augments.ts): no trigger, no manual prompt.
+		expect(MANUAL_CLASSES.has('Herder')).toBe(false);
+		expect(HANDLER_CLASSES.has('Herder')).toBe(false);
 	});
 
 	it('every class in the game is encoded, handled, or allowlisted (no silent no-op)', () => {
@@ -1882,7 +1879,11 @@ describe('Phase 6 coverage closure', () => {
 			'Druid',
 			'Prince',
 			'Cultist',
-			'Acolyte'
+			'Acolyte',
+			// Herder: the augment capacity of Arcane spirits (augments.ts `ownerAugmentCapacity`).
+			'Herder',
+			// Falconer: the doubled rewards of the next kill (runtime.ts, `offerFalconerDouble`).
+			'Falconer'
 		]);
 		for (const cls of allClasses) {
 			const handled =

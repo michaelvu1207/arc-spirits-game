@@ -4,7 +4,8 @@ import { runAction } from '../actions';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Rider — "When you navigate to the Mountain Region from a different location, choose one:
-// restore 3 Barrier, gain 3 Max Barrier, or gain 3 Basic Attack Dice."
+// restore 3 Barrier, gain 3 Max Barrier, gain 3 Basic Attack Dice, or gain 1 Spirit Augment of
+// your choice."
 //
 // When destinations are revealed (`onNavigate`) and the owner's destination is the Mountain
 // Region, an awakened Rider gives one card, but only when the owner's location in the previous
@@ -56,7 +57,7 @@ export const ability: ClassAbility[] = [
 					{ id: 'restore', label: `Restore ${RIDER_AMOUNT} Barrier` },
 					{ id: 'maxBarrier', label: `Gain ${RIDER_AMOUNT} Max Barrier` },
 					{ id: 'dice', label: `Gain ${RIDER_AMOUNT} Basic Attack Dice` },
-					// Rule `riderAugmentOption`: a fourth choice (never the engine's own pick).
+					// Never the engine's own pick.
 					{ id: 'augment', label: 'Gain 1 Spirit Augment of your choice' }
 				],
 				expiresAt: 'benefits',

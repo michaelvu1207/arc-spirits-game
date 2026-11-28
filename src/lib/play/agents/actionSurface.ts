@@ -27,7 +27,6 @@
 import { augmentClassChoices } from '../augments';
 import { actionIdForCommand } from '../bots/contract';
 import { decisionPickerSpec } from '../decisionPicker';
-import { awakenedClassCounts } from '../effects/apply';
 import { canApply } from '../legality';
 import {
 	buildLocationInteractions,
@@ -262,7 +261,7 @@ function monsterCardCommands(state: PublicGameState, seat: SeatColor): GameComma
 	const me = state.players[seat];
 	if (!me || state.phase !== 'location' || me.navigationDestination !== 'Arcane Abyss') return [];
 	const reveal = me.pendingMonsterDraw?.cards ?? [];
-	// Rule `monsterDrawOne` (one card is revealed): keep it, keep it and put a held card back on top
+	// One card is revealed: keep it, keep it and put a held card back on top
 	// of its deck, or put it back on top. A full hand can only swap or put back.
 	if (reveal.length > 0 && me.pendingMonsterDraw?.maxCards === 1) {
 		const hand = me.monsterHand ?? [];
@@ -287,7 +286,7 @@ function monsterRewardCommands(me: PrivatePlayerState): GameCommand[] {
 	const runeChoices = options
 		.filter((o) => o.effect.type === 'chooseRune')
 		.map((o) => (o.effect.type === 'chooseRune' ? o.effect.options.map((_, i) => i) : [0]));
-	// Rule `permanentRewardChoice`: one command for each reward the player may take.
+	// A one-reward claim (the permanent monster): one command for each reward the player may take.
 	const claims: GameCommand[] = pending.chooseOne
 		? options.flatMap((o): GameCommand[] =>
 				o.effect.type === 'chooseRune'
@@ -299,10 +298,6 @@ function monsterRewardCommands(me: PrivatePlayerState): GameCommand[] {
 				picks,
 				...(choices.length ? { choices } : {})
 			}));
-	// Rule `arcaneBlood`: the Arcane Blood in place of every reward. Offered when it does something
-	// for this player (today: Elementalist 2 or more, which upgrades a die per Arcane Blood).
-	if (pending.arcaneBlood && (awakenedClassCounts(me)['Elementalist'] ?? 0) >= 2)
-		claims.push({ type: 'resolveMonsterReward', picks: [], arcaneBlood: true });
 	return claims;
 }
 
@@ -342,11 +337,11 @@ function awakenRewardCommands(me: PrivatePlayerState, state: PublicGameState): G
 }
 
 /**
- * Replace-on-summon (rule `summonReplaceWhenFull`): with every spirit slot full, each drawn spirit
+ * Replace-on-summon: with every spirit slot full, each drawn spirit
  * can be summoned in place of each of the seat's spirits. Board spirits that are the same card in
  * the same state (face-down or awake, same augment) are one choice.
  */
-function replaceSummonCommands(me: PrivatePlayerState, catalog: PlayCatalog): GameCommand[] {
+function replaceSummonCommands(me: PrivatePlayerState): GameCommand[] {
 	if (!me.pendingDraw || !me.handDraws?.length || me.spirits.length < MAX_SPIRITS) return [];
 	const seen = new Set<string>();
 	const slots: number[] = [];
@@ -462,7 +457,7 @@ export function agentCandidates(
 	enumerateCandidates(state, seat, catalog, (cmd) => {
 		if (!REGENERATED.has(cmd.type)) out.push(cmd);
 	});
-	out.push(...replaceSummonCommands(me, catalog));
+	out.push(...replaceSummonCommands(me));
 	if (state.phase === 'navigation') {
 		for (const powerId of me.powerInventory ?? []) {
 			for (const destination of ALL_DESTINATIONS) {

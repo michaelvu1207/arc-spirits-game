@@ -1150,7 +1150,7 @@ function catalogSpiritById(catalog: PlayCatalog, id: string | undefined): PlayCa
 }
 
 /** Exact PMF of the summed face values of a dice pool (convolution; cheap for ≤10 dice). */
-function diceSumPMF(dice: readonly AttackDie[], catalog?: PlayCatalog): Map<number, number> {
+function diceSumPMF(dice: readonly AttackDie[]): Map<number, number> {
 	let pmf = new Map<number, number>([[0, 1]]);
 	const tiers = DICE_TIER_FACES;
 	for (const die of dice) {
@@ -1333,7 +1333,7 @@ function firepowerFromClone(
 	const bonus = player.combatDamageBonus ?? 0;
 	const mult = player.combatDamageMultiplier ?? 1;
 	let p = 0;
-	for (const [sum, prob] of diceSumPMF(player.attackDice, catalog)) {
+	for (const [sum, prob] of diceSumPMF(player.attackDice)) {
 		if ((sum + bonus) * mult >= hp) p += prob;
 	}
 	return p;

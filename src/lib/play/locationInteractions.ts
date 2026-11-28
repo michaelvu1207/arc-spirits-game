@@ -28,14 +28,14 @@ import type { DiceTier } from './types';
 
 export type RewardActionKind = 'spiritWorldSummon' | 'abyssSummon' | 'cultivate' | 'rest';
 
-/** Whether a location action is the Arcane Abyss Summon (rule `abyssFightOrSummon`: it and a fight exclude each other in a round). */
+/** Whether a location action is the Arcane Abyss Summon (it and a fight each use a battle action). */
 export const isAbyssSummonRow = (interaction: { gains: { type: string; action?: string }[] }): boolean =>
 	interaction.gains.some((g) => g.type === 'action' && g.action === 'abyssSummon');
-/** The `actionsUsedThisRound` entry of the Arcane Abyss Summon action taken at the Arcane Abyss (rule `abyssFightOrSummon`). */
+/** The `actionsUsedThisRound` entry of the Arcane Abyss Summon action taken at the Arcane Abyss. */
 export const ABYSS_SUMMON_USED = 'abyssSummonAction';
 /**
  * Fights a player may still start this round. One fight a round, plus a class's extra fights (Monster Hunter:
- * `extraActions.combat`). `summonCounts` (rule `abyssFightOrSummon`): the Arcane Abyss Summon action, once taken,
+ * `extraActions.combat`). `summonCounts` (the game always passes true): the Arcane Abyss Summon action, once taken,
  * holds one of those places, so a Monster Hunter still has a fight after it and a player without one has none.
  */
 export function monsterFightsLeft(

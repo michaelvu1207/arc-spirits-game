@@ -21,8 +21,9 @@ const ACTORS = {
 	Red: { ...HOST, seatColor: 'Red' },
 	Blue: { memberId: 'm-b', displayName: 'B', role: 'player', seatColor: 'Blue' }
 } as const;
-const deckMonster = (i: number, barrier: number): PlayCatalogMonster => ({
-	id: `m-${i}`, name: `Deck Monster ${i}`, damage: 1, barrier, rewardTrack: [VP], dicePool: [], chooseAmount: 1, stage: 1, order: i, initiative: 3
+// A card's deck is its stage.
+const deckMonster = (i: number, barrier: number, stage: 1 | 2 | 3): PlayCatalogMonster => ({
+	id: `m-${i}`, name: `Deck Monster ${i}`, damage: 1, barrier, rewardTrack: [VP], dicePool: [], chooseAmount: 1, stage, order: i
 });
 const LURKER: PlayCatalogMonster = {
 	id: 'perm', name: 'Abyss Lurker', damage: 3, barrier: 1, rewardTrack: [VP, ABYSS_SUMMON], dicePool: [], chooseAmount: 2, stage: 1, order: 99, initiative: 4, permanent: true
@@ -36,7 +37,7 @@ const catalogWith = (permanent: boolean): PlayCatalog => ({
 	classes: [],
 	dice: [{ id: 'basic_attack', name: 'Basic Attack', diceType: 'attack' }],
 	spirits: Array.from({ length: 12 }, (_, i) => ({ id: `s-${i}`, name: `Spirit ${i}`, cost: i < 6 ? 2 : 8, classes: {}, origins: {} })),
-	monsters: [deckMonster(1, 1), deckMonster(2, 2), deckMonster(3, 5), deckMonster(4, 9), ...(permanent ? [LURKER] : [])]
+	monsters: [deckMonster(1, 1, 1), deckMonster(2, 2, 1), deckMonster(3, 5, 2), deckMonster(4, 9, 3), ...(permanent ? [LURKER] : [])]
 });
 
 function apply(state: PublicGameState, catalog: PlayCatalog, actor: object, command: GameCommand) {
@@ -68,7 +69,8 @@ describe('permanent monster', () => {
 
 	it('is on the table from the start, in no deck, and the deck totals do not count it', () => {
 		const s = atAbyss(cat);
-		expect(s.permanentMonster).toMatchObject({ name: 'Abyss Lurker', hp: 1, maxHp: 1, damage: 3, initiative: 4, permanent: true });
+		expect(s.permanentMonster).toMatchObject({ name: 'Abyss Lurker', hp: 1, maxHp: 1, damage: 3, permanent: true });
+		expect(s.permanentMonster?.initiative).toBeUndefined(); // a monster always has the initiative: its printed number is not used
 		expect(s.bags.monsters.contents.some((c) => c.id === 'perm')).toBe(false);
 		expect(s.bags.monsters.contents).toHaveLength(4);
 		expect((s.monsterDecks ?? []).map((d) => d.total)).toEqual([2, 1, 1]);
@@ -89,7 +91,7 @@ describe('permanent monster', () => {
 		expect(s.players.Blue!.monsterHand?.map((c) => c.id)).toEqual(['perm']);
 	});
 
-	it('defeating it gives 1 VP and an Arcane Abyss Summon; it is there again next time', () => {
+	it('defeating it gives its reward; it is there again next time', () => {
 		let s = atAbyss(cat);
 		s = ok(s, cat, ACTORS.Red, TAKE);
 		const red = s.players.Red!;
@@ -100,10 +102,9 @@ describe('permanent monster', () => {
 		s = ok(s, cat, ACTORS.Red, { type: 'startCombat', handIndex: 0 });
 		expect(s.combats.find((c) => c.kind === 'monster')?.killed).toBe(true);
 		expect(s.players.Red!.monsterHand).toHaveLength(0);
-		expect(s.players.Red!.barrier).toBe(7); // initiative 4 beats the player's 0: it hits first for 3
+		expect(s.players.Red!.barrier).toBe(7); // a monster always has the initiative: it hits for 3
 		s = ok(s, cat, ACTORS.Red, { type: 'resolveMonsterReward', picks: [] });
 		expect(s.players.Red!.victoryPoints).toBe(vpBefore + 1);
-		expect(s.players.Red!.handDraws.length).toBeGreaterThan(0); // the Abyss Summon draw is open
 		expect(s.permanentMonster?.hp).toBe(1); // the table card is untouched
 		// A later visit: the draw is available again.
 		s.players.Red!.monsterDrawRound = s.round - 1;
@@ -146,7 +147,7 @@ describe('permanent monster', () => {
 		const take = commands.find((c) => c.type === 'drawMonsterCards' && c.permanent);
 		expect(take).toBeTruthy();
 		expect(labelFor(take!, s, 'Red', cat)).toContain('Take the permanent monster Abyss Lurker');
-		expect(buildRulesBrief(cat)).toContain('Permanent monster "Abyss Lurker": Barrier 1, damage 3, initiative 4, 1 VP per kill');
+		expect(buildRulesBrief(cat)).toContain('Permanent monster "Abyss Lurker": Barrier 1, damage 3, each kill gives ONE of these');
 		expect(buildRulesBrief(cat)).not.toContain('when every monster card is defeated');
 		expect(buildRulesBrief(catalogWith(false))).toContain('when every monster card is defeated');
 		s.bags.monsters.contents = [];
@@ -154,8 +155,8 @@ describe('permanent monster', () => {
 	});
 });
 
-describe('rule permanentRewardChoice: a kill of the permanent monster gives one reward, the player\'s choice', () => {
-	const cat: PlayCatalog = { ...catalogWith(true), rules: { permanentRewardChoice: true } };
+describe('a kill of the permanent monster gives one reward, the player\'s choice', () => {
+	const cat: PlayCatalog = catalogWith(true);
 	/** Red has just defeated the Abyss Lurker and has the claim open. */
 	function killed(catalog: PlayCatalog): PublicGameState {
 		let s = atAbyss(catalog);
@@ -211,15 +212,5 @@ describe('rule permanentRewardChoice: a kill of the permanent monster gives one 
 	it('the rules text says it is one or the other', () => {
 		expect(buildRulesBrief(cat)).toContain('each kill gives ONE of these, your choice:');
 		expect(buildRulesBrief(cat)).not.toContain('VP per kill plus its other rewards');
-	});
-
-	it('deck cards still give every reward, and with the rule off the Lurker gives both', () => {
-		const plain = catalogWith(true);
-		let s = killed(plain);
-		expect(s.players.Red!.pendingReward?.chooseOne).toBeUndefined();
-		const vpBefore = s.players.Red!.victoryPoints;
-		s = ok(s, plain, ACTORS.Red, { type: 'resolveMonsterReward', picks: [1] });
-		expect(s.players.Red!.victoryPoints).toBe(vpBefore + 1);
-		expect(s.players.Red!.handDraws.length).toBeGreaterThan(0);
 	});
 });

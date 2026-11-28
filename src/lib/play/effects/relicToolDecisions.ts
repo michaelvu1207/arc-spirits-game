@@ -37,7 +37,7 @@ export const decisions: ClassDecisions = {
 		switch (tool.effect) {
 			case 'strikeFirst':
 				ctx.player.strikeFirstCharges = (ctx.player.strikeFirstCharges ?? 0) + 1;
-				// Shown at once: the next combat strikes first (resetCombatFlags keeps it while armed).
+				// Shown at once: the next combat gains the initiative (resetCombatFlags keeps it while armed).
 				ctx.player.alwaysAttackFirst = true;
 				ctx.log.push(`${tool.name}: in your next combat you gain the initiative if your side does not have it.`);
 				break;

@@ -2,7 +2,7 @@
  * Fighter — declarative `onRest` breakpoint ladder.
  *
  * DB-intended behavior (source of truth):
- *   On Rest: 2/3/4/5 Fighter traits -> gain 1/2/5/10 Basic Attack dice.
+ *   On Rest: 2/3/4/5 Fighter traits -> gain 1/2/3/5 Basic Attack dice (5 also gives 1 Spirit Augment).
  *
  * Only the highest qualifying numeric breakpoint fires (selectBreakpoint picks the
  * single highest threshold <= count), so the grants are NOT cumulative across rungs.
@@ -10,7 +10,7 @@
  *
  * UX channel: the granted dice surface as an attributed reward/rest log line
  * ("Fighter: Gained N basic attack dice."), and the mechanical attackDice pool grows
- * — never a silent no-op. The flat 10-die cap clamps the count-5 (+10) grant.
+ * — never a silent no-op. The flat 10-die cap clamps a grant that would overflow it.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -37,25 +37,25 @@ describe('Fighter', () => {
 		expect(log.some((l) => l.includes('Fighter: Gained 2 basic attack dice.'))).toBe(true);
 	});
 
-	it('4 traits: gains 5 basic attack dice', () => {
+	it('4 traits: gains 3 basic attack dice', () => {
 		const { player, log } = rest(4);
+		expect(player.attackDice.length).toBe(3);
+		expect(player.attackDice.every((d) => d.tier === 'basic')).toBe(true);
+		expect(log.some((l) => l.includes('Fighter: Gained 3 basic attack dice.'))).toBe(true);
+	});
+
+	it('5 traits: gains 5 basic attack dice', () => {
+		const { player, log } = rest(5);
 		expect(player.attackDice.length).toBe(5);
 		expect(player.attackDice.every((d) => d.tier === 'basic')).toBe(true);
 		expect(log.some((l) => l.includes('Fighter: Gained 5 basic attack dice.'))).toBe(true);
 	});
 
-	it('5 traits: gains 10 basic attack dice (fills the flat 10-die cap in one rest)', () => {
-		const { player, log } = rest(5);
-		expect(player.attackDice.length).toBe(10);
-		expect(player.attackDice.every((d) => d.tier === 'basic')).toBe(true);
-		expect(log.some((l) => l.includes('Fighter: Gained 10 basic attack dice.'))).toBe(true);
-	});
-
 	it('only the highest qualifying rung fires (grants are not cumulative)', () => {
-		// At count 4 the +5 rung fires, NOT +1 +2 +5 (=8). Confirms breakpoint selection.
-		expect(rest(4).player.attackDice.length).toBe(5);
-		// At count 6 (above the top rung) the +10 rung still fires (and clamps at cap 10).
-		expect(rest(6).player.attackDice.length).toBe(10);
+		// At count 4 the +3 rung fires, NOT +1 +2 +3 (=6). Confirms breakpoint selection.
+		expect(rest(4).player.attackDice.length).toBe(3);
+		// At count 6 (above the top rung) the +5 rung still fires.
+		expect(rest(6).player.attackDice.length).toBe(5);
 	});
 
 	it('below the first rung (1 trait): no dice, no Fighter log line (dormant, not a silent grant)', () => {
@@ -65,18 +65,18 @@ describe('Fighter', () => {
 	});
 
 	it('respects the flat 10-die cap when a pool already holds dice', () => {
-		// Pre-seed 4 dice, then a count-5 (+10) rest: only 6 fit under the cap of 10.
+		// Pre-seed 8 dice, then a count-5 (+5) rest: only 2 fit under the cap of 10.
 		const { player, log } = fire({ Fighter: 5 }, 'onRest', {
 			player: {
-				attackDice: Array.from({ length: 4 }, (_, i) => ({
+				attackDice: Array.from({ length: 8 }, (_, i) => ({
 					instanceId: `seed${i}`,
 					tier: 'basic' as const
 				}))
 			}
 		});
 		expect(player.attackDice.length).toBe(10);
-		// The clamped grant is still surfaced (6 actually added).
-		expect(log.some((l) => l.includes('Fighter: Gained 6 basic attack dice.'))).toBe(true);
+		// The clamped grant is still surfaced (2 actually added).
+		expect(log.some((l) => l.includes('Fighter: Gained 2 basic attack dice.'))).toBe(true);
 	});
 
 	it('is inactive when the Fighter spirit is face-down (unawakened)', () => {

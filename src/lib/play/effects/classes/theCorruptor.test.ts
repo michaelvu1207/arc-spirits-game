@@ -1,7 +1,7 @@
 /**
- * Corruptor — "Drop your status to Fallen, and replace all Spirit World spirits with a random
- * Arcane Abyss Spirit. Gain 2 Initiative."
- *   - Gain 2 Initiative (inCombat).
+ * Corruptor — "Set your status to Fallen (this is not a corruption). Replace all Spirit World
+ * spirits with a random Arcane Abyss Spirit."
+ *   - No initiative: initiative is the die, no class gives a number.
  *   - On the Corruptor's own awakening: status → Fallen; each Spirit World spirit (not a Hero)
  *     goes back to the Spirit World bag and its slot takes the top Arcane Abyss card, face-down.
  */
@@ -13,28 +13,16 @@ import type { PublicGameState } from '../../types';
 import { ability } from './theCorruptor';
 
 describe('Corruptor', () => {
-	it('grants exactly 2 initiative on inCombat', () => {
-		const { player } = fire({ 'Corruptor': 1 }, 'inCombat');
-		expect(player.initiative).toBe(2);
-	});
-
-	it('surfaces the initiative gain as a log line (no silent no-op)', () => {
-		const { log } = fire({ 'Corruptor': 1 }, 'inCombat');
-		expect(log.some((l) => l.includes('Gained 2 initiative.'))).toBe(true);
-	});
-
-	it('adds 2 on top of any pre-existing initiative', () => {
-		const { player } = fire({ 'Corruptor': 1 }, 'inCombat', {
+	it('gives no initiative in combat', () => {
+		const { player, log } = fire({ 'Corruptor': 1 }, 'inCombat', {
 			player: { initiative: 3 }
 		});
-		expect(player.initiative).toBe(5);
+		expect(player.initiative).toBe(3);
+		expect(log.some((l) => l.includes('initiative'))).toBe(false);
 	});
 
-	it('exposes the inCombat +2 initiative and the awakening handler', () => {
-		const inCombat = ability.find((a) => a.on === 'inCombat');
-		expect(inCombat?.breakpoints?.[0].actions).toEqual([{ kind: 'gainInitiative', amount: 2 }]);
+	it('exposes the awakening handler', () => {
 		expect(typeof ability.find((a) => a.on === 'awakening')?.run).toBe('function');
-		expect(ability).toHaveLength(2);
 	});
 
 	function corruptorState() {
@@ -82,19 +70,6 @@ describe('Corruptor', () => {
 		expect(player.pendingCorruptionDiscard ?? null).toBeNull();
 	});
 
-	it('rule corruptorAwakenMaxBarrier: its own awakening also gives 4 Max Barrier; rule off or another spirit: none', () => {
-		const ON = { rules: { corruptorAwakenMaxBarrier: true }, spirits: [] } as never;
-		const run = (slotIndex: number, catalog?: never) => {
-			const { player, state } = corruptorState();
-			const before = player.maxBarrier;
-			applyTrigger(state, 'Red', 'awakening', [], catalog ? { command: { slotIndex }, catalog } : { command: { slotIndex } });
-			return player.maxBarrier - before;
-		};
-		expect(run(1, ON)).toBe(4);
-		expect(run(1)).toBe(0);
-		expect(run(2, ON)).toBe(0);
-	});
-
 	it('does nothing when another spirit awakens', () => {
 		const { player, state } = corruptorState();
 		applyTrigger(state, 'Red', 'awakening', [], { command: { slotIndex: 2 } });
@@ -103,7 +78,8 @@ describe('Corruptor', () => {
 	});
 
 	it('is inactive when the Corruptor spirit is face-down (unawakened)', () => {
-		const { player, log } = fire({ 'Corruptor': 1 }, 'inCombat', {
+		const { player, log } = fire({ 'Corruptor': 1 }, 'awakening', {
+			command: { slotIndex: 1 },
 			player: {
 				spirits: [
 					{
@@ -118,8 +94,8 @@ describe('Corruptor', () => {
 				]
 			}
 		});
-		expect(player.initiative).toBe(0);
-		expect(log.some((l) => l.includes('initiative'))).toBe(false);
+		expect(player.statusLevel).toBe(0);
+		expect(log.some((l) => l.includes('Corruptor'))).toBe(false);
 	});
 
 });

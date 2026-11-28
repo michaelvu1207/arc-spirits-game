@@ -3,14 +3,15 @@ import { SENTINEL_DAMAGE_PER_DIE } from '../../rules';
 import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 
 // Sentinel — "Before you roll in combat, you may discard attack dice. For each dice that you
-// discard, deal 2 more damage." (It replaces "If you roll an even combat value, deal 3 more
+// discard, deal 1 more damage." (It replaces "If you roll an even combat value, deal 3 more
 // damage"; the old Emberguard text reduced incoming damage by 5.)
 //
 // Combat resolves in one step, so the owner chooses in advance: in each Awakening Phase where
 // an awakened Sentinel owner holds attack dice, a decision card with a dice picker asks which
 // dice (any number, any tier) to discard before the roll of their NEXT combat (monster or PvP).
 // `useSentinelDiscard` (combat.ts) then removes those dice for good, just before the roll, and
-// adds 2 damage per die (or the catalog's `numbers.sentinelDamagePerDie`) to that combat only. "Discard nothing" (or no pick) clears the choice.
+// adds `SENTINEL_DAMAGE_PER_DIE` (1) damage per die to that combat only. "Discard nothing" (or no
+// pick) clears the choice.
 
 export const SENTINEL_DISCARD_KIND = 'sentinelDiscard';
 

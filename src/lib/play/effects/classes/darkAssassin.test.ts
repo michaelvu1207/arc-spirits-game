@@ -29,18 +29,21 @@ it('does not restore for a face-down class', () => {
  expect(player).toMatchObject({maxBarrier:6,barrier:4,initiative:0});
 });
 
-it('grants a fixed four initiative each combat without requiring max-barrier gains', () => {
+it('wins initiative ties in each combat and gives no initiative of its own', () => {
  const player=makePlayer({maxBarrier:10,barrier:3,spirits:[spirit(1,{'Paladin':2})]});
  const state=makeState(player);
  for(let fight=0;fight<2;fight++) {
   resetCombatFlags(player);
-  applyTrigger(state,'Red','inCombat',[]);
-  expect(player.initiative).toBe(4);
-  runAction(ctxFor(player,{trigger:'onCultivate'}),{kind:'gainMaxBarrier',amount:2});
-  expect(player.initiative).toBe(4);
+  expect(player.winsInitiativeTies).toBe(false);
+  const log: string[] = [];
+  applyTrigger(state,'Red','inCombat',log);
+  expect(player.winsInitiativeTies).toBe(true);
+  expect(player.initiative).toBe(0);
+  expect(log.some((l)=>l.includes('Paladin: attacks first when both sides have the same initiative'))).toBe(true);
  }
  player.spirits[0].isFaceDown=true;
  resetCombatFlags(player);
  applyTrigger(state,'Red','inCombat',[]);
+ expect(player.winsInitiativeTies).toBe(false);
  expect(player.initiative).toBe(0);
 });

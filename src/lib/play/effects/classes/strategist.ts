@@ -2,12 +2,7 @@ import { isEvilAlignment, type PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility } from './types';
 
-/** Monk's Initiative gain and per-hit damage reduction while its condition holds. */
-export const MONK_INITIATIVE = 5;
-/** Under rule `spiritInitiativeTrim` (Michael, 2026-11-21). */
-export const MONK_INITIATIVE_TRIMMED = 3;
-export const monkInitiative = (catalog?: unknown): number =>
-	MONK_INITIATIVE_TRIMMED;
+/** Monk's per-hit damage reduction while its condition holds. */
 export const MONK_DAMAGE_REDUCTION = 2;
 
 /**
@@ -18,16 +13,15 @@ export function hasCursedSpirit(player: PrivatePlayerState): boolean {
 	return (player.spirits ?? []).some((s) => (s.classes?.['Cursed Spirit'] ?? 0) > 0);
 }
 
-// Monk — "While you are not Evil and have no Cursed Spirits, gain 5 Initiative and take 2
-// less damage." Checked each time a combat starts (`inCombat`, monster and PvP), so a change
-// of alignment or of the spirit line-up between two combats is picked up. Like Titan: the
-// Initiative is for that combat and the reduction comes off each hit taken in it.
+// Monk — "While you are not Evil and have no Cursed Spirits, take 2 less damage." Checked each
+// time a combat starts (`inCombat`, monster and PvP), so a change of alignment or of the spirit
+// line-up between two combats is picked up. Like Titan: the reduction comes off each hit taken in
+// that combat. Monk gives no initiative.
 export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
 		run(ctx) {
 			if (isEvilAlignment(ctx.player.statusLevel) || hasCursedSpirit(ctx.player)) return;
-			runAction(ctx, { kind: 'gainInitiative', amount: monkInitiative(ctx.catalog) });
 			runAction(ctx, { kind: 'reduceIncomingDamage', amount: MONK_DAMAGE_REDUCTION });
 		}
 	}

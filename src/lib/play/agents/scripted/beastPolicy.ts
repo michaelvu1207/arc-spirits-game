@@ -187,7 +187,6 @@ function breakpointsOf(className: string, trigger: string): EffectBreakpoint[] {
 
 /** Sum of the amounts of the actions of `kind` that `count` traits of a class fire on `trigger`. */
 function classAmount(
-	catalog: PlayCatalog,
 	className: string,
 	trigger: string,
 	kind: string,
@@ -347,7 +346,6 @@ function boardState(s: BeastSituation, spirits: SpiritLite[], from: PlanState): 
 /** The plan's rules for a set of spirits (two fights with a Monster Hunter, Battle Adept). */
 function boardRules(s: BeastSituation, spirits: SpiritLite[]): PlanRules {
 	const extraFights = classAmount(
-		s.catalog,
 		'Monster Hunter',
 		'onNavigate',
 		'extraAction',
@@ -423,13 +421,12 @@ export function beastSituation(
 		maxBarrierCap: MAX_BARRIER_CAP,
 		carry: RUNE_CARRY_LIMIT,
 		handLimit: MONSTER_HAND_LIMIT,
-		beastDamage: classAmount(catalog, 'Beast', 'inCombat', 'combatBonus', 1) || 1,
+		beastDamage: classAmount('Beast', 'inCombat', 'combatBonus', 1) || 1,
 		cultivateMaxBarrier: (c) =>
-			classAmount(catalog, 'Cultivator', 'onCultivate', 'gainMaxBarrier', c),
+			classAmount('Cultivator', 'onCultivate', 'gainMaxBarrier', c),
 		fightsPerRound:
 			1 +
 			classAmount(
-				catalog,
 				'Monster Hunter',
 				'onNavigate',
 				'extraAction',

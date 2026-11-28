@@ -20,19 +20,17 @@ import type { GameActor, NavigationDestination, PlayCatalog, PublicGameState } f
 import { MAX_ROUNDS } from './types';
 import type { GameLocationRewardRow } from '$lib/types';
 
-// Reward-row icon ids (mirror the live DB content). A Spirit World location's available
-// actions ARE its reward rows: the only way to summon is to resolve a row whose gain is a
-// Summon action token. Water Region offers a free Spirit World Summon; Mountain Region a
-// relic-paid Arcane Abyss Summon.
+// Reward-row icon ids (mirror the live DB content). A location's available actions ARE its
+// reward rows: the only way to summon is to resolve a row whose gain is a Summon action token.
+// The four regions have fixed rows (regionRules.ts): Water Region row 0 is a free Spirit World
+// Summon. The Arcane Abyss takes its rows from the catalog: row 0 is its Arcane Abyss Summon
+// action, as in data/game_locations.json.
 const SUMMON_ICON = '76e58219-e805-4b94-acf4-6d62dfe4c515';
 const ABYSS_SUMMON_ICON = '12ff8ffe-20cb-4a86-a493-5e4ff8b9dc3e';
-const ANY_RELIC_ICON = '6a85e06a-52cc-483c-aa59-38395a377307';
 // Water Region row 0: free Spirit World Summon (draw 4, summon 2).
 const TIDAL_COVE_ROWS: GameLocationRewardRow[] = [{ type: 'gain', gain_icon_ids: [SUMMON_ICON] }];
-// Mountain Region row 0: Arcane Abyss Summon (draw 3, summon 1), paid with any relic.
-const CYBER_CITY_ROWS: GameLocationRewardRow[] = [
-	{ type: 'trade', cost_icon_ids: [ANY_RELIC_ICON], gain_icon_ids: [ABYSS_SUMMON_ICON] }
-];
+// Arcane Abyss row 0: the Arcane Abyss Summon action (draw 4, summon up to 2; it uses the battle action).
+const ARCANE_ABYSS_ROWS: GameLocationRewardRow[] = [{ type: 'gain', gain_icon_ids: [ABYSS_SUMMON_ICON] }];
 
 const HOST: GameActor = {
 	memberId: 'member-host',
@@ -192,7 +190,7 @@ const CATALOG: PlayCatalog = {
 	],
 	locations: [
 		{ name: 'Water Region', originId: null, rewardRows: TIDAL_COVE_ROWS },
-		{ name: 'Mountain Region', originId: null, rewardRows: CYBER_CITY_ROWS }
+		{ name: 'Arcane Abyss', originId: null, rewardRows: ARCANE_ABYSS_ROWS }
 	],
 	// An undrawn monster card keeps the spirit world unsaved, so a round boundary never ends
 	// the game on its own ("every monster card is gone" would otherwise hold from round 1).
@@ -247,7 +245,7 @@ function withLobbySelections(): PublicGameState {
  * Drive an already-started game (navigation phase) into the Location phase with RED
  * standing at `dest`. Both seats lock onto the same Good location, so the encounter
  * phase auto-skips straight to Location. `dest` defaults to Water Region (free Spirit
- * World Summon at row 0); pass 'Mountain Region' for the relic-paid Arcane Abyss Summon.
+ * World Summon at row 0); pass 'Arcane Abyss' for the Arcane Abyss Summon action.
  */
 function locationPhase(
 	started: PublicGameState,
@@ -595,7 +593,10 @@ describe('play runtime', () => {
 			summonLimit: 2,
 			summonedCount: 0
 		});
-		expect(drawn.state.bags.hexSpirits.count).toBe(SW_BAG_AFTER_START - 4);
+		// A reward hex, while the reward bag has one, takes one of the four places of the tray.
+		const drawnSpirits = redPlayer.handDraws.filter((d) => !d.rewardId).length;
+		expect(drawnSpirits).toBe(4 - Math.min(1, located.bags.rewardHexes?.contents.length ?? 0));
+		expect(drawn.state.bags.hexSpirits.count).toBe(SW_BAG_AFTER_START - drawnSpirits);
 	});
 
 	test('spawns a chosen spirit world draw face-up and returns leftovers after the second summon', () => {
@@ -650,9 +651,8 @@ describe('play runtime', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		// Mountain Region's row 0 is an Arcane Abyss Summon (draw 3, summon 1), paid with a
-		// relic — the starting Fairy relic covers it.
-		const located = locationPhase(started.state, 'Mountain Region');
+		// The Arcane Abyss Summon action: draw 4 (the bag holds only 3), summon up to 2.
+		const located = locationPhase(started.state, 'Arcane Abyss');
 
 		const drawn = applyGameCommand(
 			located,
@@ -661,14 +661,24 @@ describe('play runtime', () => {
 			CATALOG
 		);
 		if (!drawn.ok) throw new Error(drawn.error.message);
+		expect(drawn.state.players.Red?.handDraws).toHaveLength(3);
+		expect(drawn.state.players.Red?.pendingDraw).toMatchObject({ sourceBag: ARCANE_ABYSS_BAG, summonLimit: 2 });
 
 		const guid = drawn.state.players.Red?.handDraws[0]?.guid;
 		if (!guid) throw new Error('Expected arcane abyss tray entries.');
 
-		const spawned = applyGameCommand(
+		const spawnedOne = applyGameCommand(
 			drawn.state,
 			{ ...HOST, seatColor: 'Red' },
 			{ type: 'spawnHandSpirit', guid },
+			CATALOG
+		);
+		if (!spawnedOne.ok) throw new Error(spawnedOne.error.message);
+		// One of two picks used: the rest of the tray goes back to its bag.
+		const spawned = applyGameCommand(
+			spawnedOne.state,
+			{ ...HOST, seatColor: 'Red' },
+			{ type: 'discardHandDraws' },
 			CATALOG
 		);
 		if (!spawned.ok) throw new Error(spawned.error.message);
@@ -694,20 +704,17 @@ describe('play runtime', () => {
 		expect(flipped.state.players.Red?.spirits[4]?.isFaceDown).toBe(false);
 	});
 
-	test('abyssSummonDraw4Pick2: Arcane Abyss Summon sizes', () => {
-		expect(summonDrawSizes(ARCANE_ABYSS_BAG)).toEqual({ draw: 3, pick: 1 });
-		expect(summonDrawSizes(ARCANE_ABYSS_BAG, CATALOG)).toEqual({ draw: 3, pick: 1 });
-		expect(summonDrawSizes(ARCANE_ABYSS_BAG, { rules: { abyssSummonDraw4Pick2: true } })).toEqual({ draw: 4, pick: 2 });
-		expect(summonDrawSizes(SPIRIT_WORLD_BAG, { rules: { abyssSummonDraw4Pick2: true } })).toEqual({ draw: 4, pick: 2 });
+	test('summon sizes: an Arcane Abyss Summon and a Spirit World Summon both draw 4 and summon up to 2', () => {
+		expect(summonDrawSizes(ARCANE_ABYSS_BAG)).toEqual({ draw: 4, pick: 2 });
+		expect(summonDrawSizes(SPIRIT_WORLD_BAG)).toEqual({ draw: 4, pick: 2 });
 	});
 
 	test('returns unchosen tray spirits to their source bag', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		// Mountain Region's row 0 is an Arcane Abyss Summon (draw 3, summon 1), paid with the
-		// starting Fairy relic.
-		const located = locationPhase(started.state, 'Mountain Region');
+		// The Arcane Abyss Summon action at the Arcane Abyss.
+		const located = locationPhase(started.state, 'Arcane Abyss');
 
 		const drawn = applyGameCommand(
 			located,
@@ -1038,15 +1045,15 @@ describe('play runtime', () => {
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
 		const state = started.state;
-		// U94RP3 shape: 25 VP, Good (Corrupt L2), a VP-claim spirit awakened in round 30's
-		// awakening phase — benefits phase never comes back, so without final scoring the
-		// claim evaporates. (The original case used Relic Sentinel's +6, which the November
-		// 2026 text removed; King's +1 claim exercises the same final-scoring path.)
+		// U94RP3 shape: 25 VP, a VP-claim spirit awakened in round 30's awakening phase —
+		// benefits phase never comes back, so without final scoring the claim evaporates. (The
+		// original case used Relic Sentinel's +6, which the November 2026 text removed; King's
+		// +1 claim exercises the same final-scoring path. King pays only while Pure.)
 		state.phase = 'cleanup';
 		state.round = MAX_ROUNDS;
 		const red = state.players.Red!;
 		red.victoryPoints = 25;
-		red.statusLevel = 2; // Corrupt — still Good (only Fallen is Evil)
+		red.statusLevel = 0; // Pure
 		red.spirits = [
 			...red.spirits.filter((s) => s.slotIndex !== 6),
 			{ slotIndex: 6, id: 'king', name: 'King Spirit', cost: 9, classes: { King: 1 }, origins: {}, isFaceDown: false }
@@ -1553,111 +1560,10 @@ describe('P5 onSpiritSummon wiring', () => {
 		expect(state.players.Red!.stunImmune).toBe(false);
 	});
 
-	test('Summoner offers an Arcane Abyss draw after a Spirit World summon', () => {
-		const lobby = withLobbySelections();
-		const started = applyGameCommand(
-			lobby,
-			{ ...HOST, seatColor: 'Red' },
-			{ type: 'startGame' },
-			CATALOG
-		);
-		if (!started.ok) throw new Error(started.error.message);
-		let state = locationPhase(started.state, 'Water Region');
-		state.players.Red!.spirits = [
-			{ slotIndex: 6, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false }
-		];
-		state = apply(state, 'Red', {
-			type: 'resolveLocationInteraction',
-			rowIndex: 0,
-			choices: []
-		});
-		const guid = state.players.Red!.handDraws[0]!.guid;
-		state = apply(state, 'Red', { type: 'spawnHandSpirit', guid });
-		const decision = state.players.Red!.pendingDecisions.find(
-			(entry) => entry.kind === 'abyssSummonerDraw'
-		);
-		expect(decision).toBeDefined();
-		state = apply(state, 'Red', {
-			type: 'resolveDecision',
-			decisionId: decision!.id,
-			optionId: 'yes'
-		});
-		expect(state.players.Red!.pendingDrawQueue.some((draw) => draw.sourceBag === 'Arcane Abyss Bag')).toBe(true);
-	});
-
-	test('Summoner grants 4 VP when an Arcane Abyss spirit is discarded', () => {
-		const lobby = withLobbySelections();
-		const started = applyGameCommand(
-			lobby,
-			{ ...HOST, seatColor: 'Red' },
-			{ type: 'startGame' },
-			CATALOG
-		);
-		if (!started.ok) throw new Error(started.error.message);
-		const state = locationPhase(started.state, 'Water Region');
-		const player = state.players.Red!;
-		player.spirits = [
-			{ slotIndex: 5, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
-			{ slotIndex: 6, id: 'abyss', name: 'Abyss Spirit', cost: 8, classes: {}, origins: {}, isFaceDown: false }
-		];
-		const before = player.victoryPoints;
-		const next = apply(state, 'Red', { type: 'discardSpirit', slotIndex: 6 });
-		expect(next.players.Red!.victoryPoints).toBe(before + 4);
-	});
-
-	test('rule summonerOncePerRound: only the first discarded Arcane Abyss spirit of a round pays', () => {
+	test('Summoner: a discarded Arcane Abyss spirit pays nothing', () => {
 		const lobby = withLobbySelections();
 		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
 		if (!started.ok) throw new Error(started.error.message);
-		const catalog = { ...CATALOG, rules: { summonerOncePerRound: true } };
-		const state = locationPhase(started.state, 'Water Region');
-		const player = state.players.Red!;
-		player.spirits = [
-			{ slotIndex: 4, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
-			{ slotIndex: 5, id: 'abyss-a', name: 'Abyss A', cost: 8, classes: {}, origins: {}, isFaceDown: false },
-			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
-		];
-		const before = player.victoryPoints;
-		const first = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
-		if (!first.ok) throw new Error(first.error.message);
-		expect(first.state.players.Red!.victoryPoints).toBe(before + 4);
-		const second = applyGameCommand(first.state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 5 }, catalog);
-		if (!second.ok) throw new Error(second.error.message);
-		expect(second.state.players.Red!.victoryPoints).toBe(before + 4);
-		// A new round pays again.
-		second.state.round += 1;
-		second.state.players.Red!.spirits.push({ slotIndex: 6, id: 'abyss-c', name: 'Abyss C', cost: 8, classes: {}, origins: {}, isFaceDown: false });
-		const third = applyGameCommand(second.state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
-		if (!third.ok) throw new Error(third.error.message);
-		expect(third.state.players.Red!.victoryPoints).toBe(before + 8);
-	});
-
-	test('rule summonerPays2: the Summoner discard pays 2 VP', () => {
-		const lobby = withLobbySelections();
-		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
-		if (!started.ok) throw new Error(started.error.message);
-		const catalog = { ...CATALOG, rules: { summonerOncePerRound: true, summonerPays2: true } };
-		const state = locationPhase(started.state, 'Water Region');
-		const player = state.players.Red!;
-		player.spirits = [
-			{ slotIndex: 4, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
-			{ slotIndex: 5, id: 'abyss-a', name: 'Abyss A', cost: 8, classes: {}, origins: {}, isFaceDown: false },
-			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
-		];
-		const before = player.victoryPoints;
-		const first = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
-		if (!first.ok) throw new Error(first.error.message);
-		expect(first.state.players.Red!.victoryPoints).toBe(before + 2);
-		const second = applyGameCommand(first.state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 5 }, catalog);
-		if (!second.ok) throw new Error(second.error.message);
-		expect(second.state.players.Red!.victoryPoints).toBe(before + 2);
-	});
-
-	test('rule summonerCultivate: a discarded Arcane Abyss spirit pays nothing', () => {
-		const lobby = withLobbySelections();
-		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
-		if (!started.ok) throw new Error(started.error.message);
-		const catalog = { ...CATALOG, rules: { summonerCultivate: true } };
 		const state = locationPhase(started.state, 'Water Region');
 		const player = state.players.Red!;
 		player.spirits = [
@@ -1665,53 +1571,9 @@ describe('P5 onSpiritSummon wiring', () => {
 			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
 		];
 		const before = player.victoryPoints;
-		const next = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
+		const next = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, CATALOG);
 		if (!next.ok) throw new Error(next.error.message);
 		expect(next.state.players.Red!.victoryPoints).toBe(before);
-	});
-
-	test('rule sidePointsHalf: points that are not a monster reward count half', () => {
-		const lobby = withLobbySelections();
-		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
-		if (!started.ok) throw new Error(started.error.message);
-		const catalog = { ...CATALOG, rules: { sidePointsHalf: true } };
-		const state = locationPhase(started.state, 'Water Region');
-		const player = state.players.Red!;
-		player.spirits = [
-			{ slotIndex: 4, id: 'as', name: 'Summoner', cost: 7, classes: { 'Summoner': 1 }, origins: {}, isFaceDown: false },
-			{ slotIndex: 5, id: 'abyss-a', name: 'Abyss A', cost: 8, classes: {}, origins: {}, isFaceDown: false },
-			{ slotIndex: 6, id: 'abyss-b', name: 'Abyss B', cost: 8, classes: {}, origins: {}, isFaceDown: false }
-		];
-		const before = player.victoryPoints;
-		// The Summoner's 4 points for a discarded Arcane Abyss spirit become 2.
-		const first = applyGameCommand(state, { ...HOST, seatColor: 'Red' }, { type: 'discardSpirit', slotIndex: 6 }, catalog);
-		if (!first.ok) throw new Error(first.error.message);
-		expect(first.state.players.Red!.victoryPoints).toBe(before + 2);
-		expect(first.state.players.Red!.halfPointBank ?? 0).toBe(0);
-	});
-
-	test('rule sidePointsHalf: a single point is banked, monster points stay whole', async () => {
-		const { settleSidePoints, noteMonsterPoints } = await import('./sidePoints');
-		const lobby = withLobbySelections();
-		const started = applyGameCommand(lobby, { ...HOST, seatColor: 'Red' }, { type: 'startGame' }, CATALOG);
-		if (!started.ok) throw new Error(started.error.message);
-		const rules = { rules: { sidePointsHalf: true } };
-		const state = started.state;
-		const p = state.players.Red!;
-		settleSidePoints(state, rules);
-		const base = p.victoryPoints;
-		p.victoryPoints += 1; // a class effect
-		settleSidePoints(state, rules);
-		expect([p.victoryPoints, p.halfPointBank]).toEqual([base, 1]);
-		p.victoryPoints += 3; // a monster reward of 3 …
-		noteMonsterPoints(p, 3, rules);
-		p.victoryPoints += 1; // … and another class point in the same step
-		settleSidePoints(state, rules);
-		expect([p.victoryPoints, p.halfPointBank]).toEqual([base + 4, 0]);
-		// Off: nothing changes.
-		p.victoryPoints += 1;
-		settleSidePoints(state, undefined);
-		expect(p.victoryPoints).toBe(base + 5);
 	});
 
 	test('Mystic: opening a summon draw arms a redraw; redrawHandDraws refreshes the hand', () => {
@@ -1991,7 +1853,7 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		expect(noCross.players.Red!.pendingAwakenReward).toBeNull();
 	});
 
-	test('resolveAwakenReward applies the Tainted split (potential + Enchanted) and clears the claim', () => {
+	test('resolveAwakenReward applies the Tainted split (potential + Basic Attack) and clears the claim', () => {
 		const state = started();
 		state.players.Red!.maxBarrier = 4;
 		state.players.Red!.attackDice = [];
@@ -1999,12 +1861,12 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		state.players.Red!.becameTaintedThisRound = true;
 		enterBenefits(state, CATALOG);
 		const beforeMax = state.players.Red!.maxBarrier;
-		const r = claim(state, 1); // 1 → potential, remaining 2 → Enchanted Attack
+		const r = claim(state, 1); // 1 → potential, remaining 2 → Basic Attack
 		if (!r.ok) throw new Error(r.error.message);
 		const p = r.state.players.Red!;
 		expect(p.pendingAwakenReward).toBeNull();
 		expect(p.maxBarrier).toBe(beforeMax + 1);
-		expect(p.attackDice.filter((d) => d.tier === 'enchanted')).toHaveLength(2);
+		expect(p.attackDice.map((d) => d.tier)).toEqual(['basic', 'basic']);
 	});
 
 	test('benefits cannot be committed while a Cursed Spirit claim is pending', () => {
@@ -2075,13 +1937,13 @@ describe('Cursed Spirit cleanup claim flow', () => {
 		expect(hi.players.Red!.pendingAwakenReward).toBeNull();
 	});
 
-	test('Queen grants a flat +1 VP at cleanup (no longer a claim)', () => {
+	test('Queen gives no VP and no Benefits claim', () => {
 		const state = started();
 		state.players.Red!.spirits = [classSpirit('Queen')];
 		enterBenefits(state, CATALOG);
-		// Reworked: Queen is now a flat +1 VP awakeningPhase handler (fires during
-		// enterBenefits), not an all-Evil Cleanup claim.
-		expect(state.players.Red!.victoryPoints).toBe(1);
+		// Queen is "When this spirit awakens, every player must turn one of their awakened
+		// spirits face-down": nothing in the Awakening Phase.
+		expect(state.players.Red!.victoryPoints).toBe(0);
 		const grants = state.players.Red!.pendingAwakenReward?.grants ?? [];
 		expect(grants.some((g) => g.source === 'Queen')).toBe(false);
 	});
@@ -2223,24 +2085,6 @@ describe('Mountain Region spirits (November 2026): Falconer and Rider through th
 		expect(declined.state.players.Red!.spiritAugmentAttachments).toHaveLength(1);
 	});
 
-	test('Falconer: the trade card is offered when the Location Phase starts (Arcane Abyss too) and ends at Benefits', () => {
-		const state = started();
-		const p = state.players.Red!;
-		p.spirits = [classSpirit(1, { Falconer: 1 })];
-		p.mats = [{ slotIndex: 1, hasRune: true, id: 'rune-forest', name: 'Forest Rune', type: 'rune', originId: 'forest' }];
-		p.navigationDestination = 'Arcane Abyss';
-		p.pendingDecisions = [];
-		enterLocation(state, CATALOG);
-		expect(state.phase).toBe('location');
-		const card = p.pendingDecisions.find((d) => d.kind === 'falconerTrade');
-		expect(card?.options[0].id).toBe('no');
-		expect(card!.options.length).toBeGreaterThan(1);
-		enterBenefits(state, CATALOG);
-		expect(state.players.Red!.pendingDecisions.some((d) => d.kind === 'falconerTrade')).toBe(false);
-		expect(state.players.Red!.mats[0].hasRune).toBe(true); // no trade was made
-		expect(state.players.Red!.unplacedAugments ?? []).toHaveLength(0);
-	});
-
 	test('Traveling Trader: the Location step at the Water Region with no interaction records its awaken', () => {
 		const state = started();
 		const p = state.players.Red!;
@@ -2280,9 +2124,9 @@ describe('Mountain Region spirits (November 2026): Falconer and Rider through th
 		expect(sacrifice(3, false)).toBeUndefined();
 	});
 
-	test('Nhal awaken: "Navigate to the Arcane Abyss, but don\'t fight the monster." (no Fallen needed)', () => {
+	test('Nhal awaken: "Navigate to the Arcane Abyss while Corrupt or Fallen, but don\'t fight the monster."', () => {
 		const NHAL = 'fc667265-edd6-4c28-b96e-6e505188ce72';
-		const endAtAbyss = (statusLevel: number, actions: string[], catalog = CATALOG) => {
+		const endAtAbyss = (statusLevel: number, actions: string[]) => {
 			const state = started();
 			state.phase = 'location';
 			const p = state.players.Red!;
@@ -2291,23 +2135,19 @@ describe('Mountain Region spirits (November 2026): Falconer and Rider through th
 			p.navigationDestination = 'Arcane Abyss';
 			p.actionsUsedThisRound = actions;
 			p.awakenProgress = {};
-			const res = applyGameCommand(state, red, { type: 'endLocationActions' }, catalog);
+			const res = applyGameCommand(state, red, { type: 'endLocationActions' }, CATALOG);
 			if (!res.ok) throw new Error(res.error.message);
 			return res.state.players.Red!.awakenProgress['awaken:shadowtaker'];
 		};
+		// The visit counts only while Corrupt or Fallen.
+		expect(endAtAbyss(0, [])).toBeUndefined();
+		expect(endAtAbyss(1, [])).toBeUndefined();
+		expect(endAtAbyss(2, [])).toBe(true);
 		expect(endAtAbyss(3, [])).toBe(true);
-		expect(endAtAbyss(0, [])).toBe(true); // Nhal is the Moon exception: no Fallen needed
-		expect(endAtAbyss(0, ['combat'])).toBeUndefined(); // fought the monster
-		// Rule `nhalNeedsCorrupt`: the visit counts only while Corrupt or Fallen.
-		const strict = { ...CATALOG, rules: { nhalNeedsCorrupt: true } };
-		expect(endAtAbyss(0, [], strict)).toBeUndefined();
-		expect(endAtAbyss(1, [], strict)).toBeUndefined();
-		expect(endAtAbyss(2, [], strict)).toBe(true);
-		expect(endAtAbyss(3, [], strict)).toBe(true);
-		expect(endAtAbyss(2, ['combat'], strict)).toBeUndefined();
+		expect(endAtAbyss(2, ['combat'])).toBeUndefined(); // fought the monster
 	});
 
-	test('Rider and Ram: round 1 at the Mountain Region counts as an arrival from a different location', () => {
+	test('Rider: round 1 at the Mountain Region counts as an arrival from a different location (Ram adds no card)', () => {
 		const state = started();
 		const p = state.players.Red!;
 		p.spirits = [classSpirit(1, { Rider: 1 }), classSpirit(2, { Ram: 1 })];
@@ -2315,7 +2155,7 @@ describe('Mountain Region spirits (November 2026): Falconer and Rider through th
 		expect(p.previousDestination ?? null).toBeNull();
 		const at = locationPhase(state, 'Mountain Region');
 		const kinds = at.players.Red!.pendingDecisions.map((d) => d.kind).sort();
-		expect(kinds).toEqual(['ramAugment', 'riderMountain']);
+		expect(kinds).toEqual(['riderMountain']);
 	});
 
 	test('Rider: an unanswered Mountain Region card resolves to the engine default at Benefits', () => {

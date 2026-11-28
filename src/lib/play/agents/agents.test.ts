@@ -444,13 +444,18 @@ describe('decision points the bots skip reach the agent', () => {
 		expect(state.players.Red!.pendingNavigationPower).toBe(held);
 	});
 
-	it('Abyss monster cards: choose the deck, then which revealed card to keep', () => {
+	it('Abyss monster cards: choose the deck, then keep the one revealed card or put it back', () => {
 		let state = goTo(draftPowers(newGame(2, 43)), { Red: 'Arcane Abyss', Blue: 'Forest Region' });
 		const draws = kinds(state, 'Red').filter((c) => c.type === 'drawMonsterCards');
 		expect(draws.length).toBeGreaterThan(0);
 		state = apply(state, 'Red', draws[0]);
+		expect(state.players.Red!.pendingMonsterDraw!.cards).toHaveLength(1);
+		// An empty hand: keep the card, or put it back on top of its deck.
 		const keeps = kinds(state, 'Red').filter((c) => c.type === 'keepMonsterCard');
-		expect(keeps.length).toBe(state.players.Red!.pendingMonsterDraw!.cards.length);
+		expect(keeps).toEqual([
+			{ type: 'keepMonsterCard', index: 0 },
+			{ type: 'keepMonsterCard', index: 0, returnToDeck: true }
+		]);
 		expect(request(state, 'Red').kind).toBe('monster-reveal');
 	});
 
@@ -530,7 +535,9 @@ describe('decision points the bots skip reach the agent', () => {
 			.map((a) => a.label);
 		expect(labels.some((l) => l.includes('Keep Firecracker'))).toBe(true);
 		expect(labels.some((l) => /\bVP\b/.test(l))).toBe(false);
-		expect(labels.some((l) => l.includes('Strike first'))).toBe(true);
+		expect(labels.some((l) => l.includes('gain the initiative if your side does not have it'))).toBe(
+			true
+		);
 	});
 
 	it('every offered command is accepted by the reducer', () => {

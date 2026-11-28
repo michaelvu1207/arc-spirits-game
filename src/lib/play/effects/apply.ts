@@ -17,8 +17,7 @@ import { runAction } from './actions';
 import { runClassHandler } from './handlers';
 import { recordCultivateAwakenProgress } from './awakenHandlers';
 import { augmentContributions } from '../augments';
-import { originRuneForName } from '../locationInteractions';
-import { ORIGIN_REWARDS, grantRelicTool, spiritsByOrigin } from './relicTools';
+import { ORIGIN_REWARDS, spiritsByOrigin } from './relicTools';
 import { restBarrier } from '../rules';
 import { gainOriginRunes, offerOriginCultivateChoice } from './originCultivate';
 
@@ -140,7 +139,6 @@ export function applyTrigger(
 			if (!selected) continue;
 			const ctx = makeCtx(count);
 			const before = log.length;
-			// A rule switch may give this breakpoint another amount (`fighterDice35`, `cultivatorBarrier35`).
 			for (const action of selected.bp.actions) runAction(ctx, action, selected.multiplier);
 			attributeFrom(before);
 		}
@@ -156,10 +154,9 @@ export function applyTrigger(
 }
 
 /**
- * Rest intrinsically restores two current barrier (more under rule `restByStatus`, see
- * `restBarrier`), then fires every `onRest`
- * class ability. The location row
- * therefore needs only the Rest action icon; restoration is part of the action,
+ * Rest intrinsically restores Barrier by status (4 / 4 / 3 / 2 at Pure / Tainted / Corrupt /
+ * Fallen, see `restBarrier`), never above Max Barrier, then fires every `onRest` class ability.
+ * The location row therefore needs only the Rest action icon; restoration is part of the action,
  * not a separate reward-icon gain.
  */
 export function applyRest(
@@ -182,31 +179,29 @@ export function applyRest(
 }
 
 /**
- * Cultivate grants the origin rewards (3 spirits → 1 origin rune; 5 → the origin relic, once).
- * Its class payoff remains separate: the Cultivator
- * trigger grants max barrier on the 2/3/4/5 → +1/+2/+5/+10 ladder, while Arc
- * Mage, Captain, and other classes hook into the same `onCultivate` event.
- *
- * Repeated Cultivate tokens collapse to a SINGLE call (like Rest fires `onRest`
- * once), so there is no per-token multiplier. We still record the cultivate moment
- * for the text-awaken spirits that gate on it, then dispatch the class trigger.
- */
-/**
- * Runes per origin reward of one Cultivate: 2 with the turn's `doubleRunes`, or with 2+ awakened
- * Mystic under rule `mysticCultivateDouble` ("When you Cultivate, you may gain twice as many
- * runes"; the second rune is always taken). Otherwise 1.
+ * Runes per origin reward of one Cultivate: 2 with the turn's `doubleRunes`, or with 3+ awakened
+ * Mystic (Mystic (3): "When you Cultivate, you may gain twice as many runes"; the second rune is
+ * always taken). Otherwise 1.
  */
 export function cultivateRuneMultiplier(
 	player: PrivatePlayerState,
 	catalog: unknown
 ): number {
 	if (player.doubleRunes) return 2;
-	// Rule `mysticSwap23`: the doubling is Mystic (3), not (2).
-	const mysticAt = 3;
-	if ((awakenedClassCounts(player)['Mystic'] ?? 0) >= mysticAt) return 2;
+	if ((awakenedClassCounts(player)['Mystic'] ?? 0) >= 3) return 2;
 	return 1;
 }
 
+/**
+ * Cultivate grants the origin rewards (3 spirits → 1 origin rune; 5 → the origin's rune or its
+ * relic, the relic once). Its class payoff remains separate: the Cultivator trigger grants max
+ * barrier on the 2/3/4/5 → +1/+2/+3/+5 ladder, while Elementalist, Master and other classes hook
+ * into the same `onCultivate` event.
+ *
+ * Repeated Cultivate tokens collapse to a SINGLE call (like Rest fires `onRest`
+ * once), so there is no per-token multiplier. We still record the cultivate moment
+ * for the text-awaken spirits that gate on it, then dispatch the class trigger.
+ */
 export function applyCultivate(
 	state: PublicGameState,
 	seat: SeatColor,
@@ -225,10 +220,10 @@ export function applyCultivate(
 
 	// Intrinsic Cultivate yield — the origin rewards of origins.json `calling_card`
 	// (November 2026): for each land origin, 3+ spirits of that origin → 1 rune of the
-	// origin; 5+ spirits → the origin's relic tool, one time per player. Spirits count once
-	// each, awakened or face-down (origin is always active). Rune Traveler's per-turn
-	// `doubleRunes` doubles the rune; so does Mystic (2) under rule `mysticCultivateDouble`
-	// (the two do not stack).
+	// origin; 5+ spirits → the origin's rune or its relic tool (the player chooses; the relic
+	// one time per player). Spirits count once each, awakened or face-down (origin is always
+	// active). Rune Traveler's per-turn `doubleRunes` doubles the rune; so does Mystic (3) (the
+	// two do not stack).
 	const bySpirit = spiritsByOrigin(player.spirits);
 	const runeMult = cultivateRuneMultiplier(player, opts.catalog);
 	for (const [origin, reward] of Object.entries(ORIGIN_REWARDS)) {
@@ -238,7 +233,6 @@ export function applyCultivate(
 			spirits >= reward.relicAt && !(player.originRelicsGained ?? []).includes(origin);
 		if (relicOpen) offerOriginCultivateChoice(state, player, origin, runeMult, log);
 		else gainOriginRunes(player, origin, runeMult, log);
-		continue;
 	}
 	// Class-hook dispatch: fire onCultivate class effects for the acting seat.
 	applyTrigger(state, seat, 'onCultivate', log, opts);

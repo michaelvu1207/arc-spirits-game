@@ -23,10 +23,11 @@ const VP1 = '70792514-aa43-4526-a7a4-0f1e4ca55d71';
 const VP3 = '54a61c34-6e05-44df-a4d1-115e004af31e';
 
 function monster(id: string, hp: number, damage: number, rewardTrack: string[], order: number): PlayCatalogMonster {
-	return { id, name: id, damage, barrier: hp, rewardTrack, dicePool: [], chooseAmount: 2, stage: 1, order };
+	return { id, name: id, damage, barrier: hp, rewardTrack, dicePool: [], chooseAmount: 2, stage: hp >= 8 ? 3 : hp >= 4 ? 2 : 1, order };
 }
 
-// Difficulty by HP: 1–3 → 1, 4–7 → 2, 8+ → 3. Difficulty 2/3 cards also carry 1/2 Barrier.
+// A card's deck is its stage; here stage and Barrier band agree (1–3 → 1, 4–7 → 2, 8+ → 3).
+// One Arcane die rolls 0, 0, 1, 3, 3 or 5.
 const MONSTERS = {
 	d1Weak: monster('d1-weak', 1, 1, [VP1, VP1], 0),
 	d1Tough: monster('d1-tough', 3, 1, [VP1, VP1], 1),
@@ -103,7 +104,7 @@ function setDeck(state: PublicGameState, monsters: PlayCatalogMonster[]): void {
 describe('monster-card autopilot', () => {
 	it('keeps the revealed card the bot is most likely to kill, and stops there', () => {
 		const state = redAt('Arcane Abyss');
-		// One arcane die (1–3): the 1-HP card always dies, the 3-HP card only on a 3.
+		// One arcane die: the 1-HP card dies on 4 sides of 6, the 3-HP card on 3.
 		state.players.Red!.pendingMonsterDraw = { cards: [card(MONSTERS.d1Tough), card(MONSTERS.d1Weak)], maxCards: 2 };
 
 		expect(nextMonsterCardCommand(state, 'Red', CATALOG)).toEqual({ type: 'keepMonsterCard', index: 1 });
@@ -115,7 +116,7 @@ describe('monster-card autopilot', () => {
 	});
 
 	it('breaks kill-probability ties by lower Barrier left, then by more claimable VP', () => {
-		const state = redAt('Arcane Abyss', 10); // ten arcane dice kill every card below 10 HP
+		const state = redAt('Arcane Abyss', 10); // ten arcane dice almost surely kill every card below 10 HP
 		const red = state.players.Red!;
 
 		// 4 Barrier against 3.
@@ -149,7 +150,7 @@ describe('monster-card autopilot', () => {
 		};
 		// One die: only Difficulty 1 is a likely kill.
 		expect(firstDraw(1)).toEqual({ type: 'drawMonsterCards', difficulty: 1 });
-		// Three dice (3–9): the 4-Barrier Difficulty 2 card is likely, the 9 of Difficulty 3 is not.
+		// Three dice: the 4-Barrier Difficulty 2 card is likely, the 9 of Difficulty 3 is not.
 		expect(firstDraw(3)).toEqual({ type: 'drawMonsterCards', difficulty: 2 });
 		// Ten dice: even Difficulty 3 is a likely kill.
 		expect(firstDraw(10)).toEqual({ type: 'drawMonsterCards', difficulty: 3 });
@@ -159,15 +160,16 @@ describe('monster-card autopilot', () => {
 
 	it('plans draw → keep in one legal batch so the fight has a card in hand', () => {
 		let state = redAt('Arcane Abyss');
-		setDeck(state, [MONSTERS.d1Tough, MONSTERS.d1Weak, MONSTERS.d2]);
+		setDeck(state, [MONSTERS.d1Weak, MONSTERS.d1Tough, MONSTERS.d2]);
 		const plan = planMonsterCardCommands(state, 'Red', CATALOG);
+		// A draw reveals the top card of the deck only.
 		expect(plan).toEqual([
 			{ type: 'drawMonsterCards', difficulty: 1 },
-			{ type: 'keepMonsterCard', index: 1 }
+			{ type: 'keepMonsterCard', index: 0 }
 		]);
 		for (const command of plan) state = apply(state, botActorFor(state, 'Red'), command);
 		expect(state.players.Red!.monsterHand?.map((c) => c.id)).toEqual(['d1-weak']);
-		// The unkept card went back to the deck; nothing more to do this visit.
+		// The other cards stay in the deck; nothing more to do this visit.
 		expect(state.bags.monsters.contents.map((entry) => entry.id).sort()).toEqual(['d1-tough', 'd2']);
 		expect(planMonsterCardCommands(state, 'Red', CATALOG)).toEqual([]);
 		expect(bestStartCombatCommand(state, 'Red', CATALOG)).toEqual({ type: 'startCombat', handIndex: 0 });
@@ -224,19 +226,19 @@ describe('bot kill math for persistent monsters', () => {
 	it('needs the Barrier left, not the printed Barrier', () => {
 		const state = redAt('Arcane Abyss');
 		const chipped = card(MONSTERS.d3); // Barrier 9 when fresh
-		state.players.Red!.monsterHand = [{ ...chipped, hp: 2 }];
-		expect(computeKillProbability(state, 'Red', CATALOG)).toBeCloseTo(5 / 6); // one arcane die ≥ 2
-		state.players.Red!.monsterHand = [{ ...chipped, hp: 3 }];
-		expect(computeKillProbability(state, 'Red', CATALOG)).toBeCloseTo(1 / 6); // needs a 3
+		state.players.Red!.monsterHand = [{ ...chipped, hp: 1 }];
+		expect(computeKillProbability(state, 'Red', CATALOG)).toBeCloseTo(4 / 6); // one arcane die ≥ 1
+		state.players.Red!.monsterHand = [{ ...chipped, hp: 4 }];
+		expect(computeKillProbability(state, 'Red', CATALOG)).toBeCloseTo(1 / 6); // needs a 5
 		state.players.Red!.monsterHand = [{ ...chipped, hp: 0 }];
 		expect(computeKillProbability(state, 'Red', CATALOG)).toBe(0); // already defeated
 	});
 
 	it('scores the best hand card by default, or an explicit card', () => {
 		const state = redAt('Arcane Abyss');
-		state.players.Red!.monsterHand = [card(MONSTERS.d3), { ...card(MONSTERS.d3), hp: 2 }];
-		expect(computeKillProbability(state, 'Red', CATALOG)).toBeCloseTo(5 / 6);
-		expect(computeKillProbability(state, 'Red', CATALOG, { monster: card(MONSTERS.d1Weak) })).toBeCloseTo(1);
+		state.players.Red!.monsterHand = [card(MONSTERS.d3), { ...card(MONSTERS.d3), hp: 4 }];
+		expect(computeKillProbability(state, 'Red', CATALOG)).toBeCloseTo(1 / 6);
+		expect(computeKillProbability(state, 'Red', CATALOG, { monster: card(MONSTERS.d1Weak) })).toBeCloseTo(4 / 6);
 		expect(computeKillProbability(state, 'Red', CATALOG, { monster: null })).toBe(0);
 		state.players.Red!.monsterHand = [];
 		expect(computeKillProbability(state, 'Red', CATALOG)).toBe(0); // empty hand

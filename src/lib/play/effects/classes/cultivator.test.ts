@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { fire } from './testHelpers';
 
 // Cultivator — DB intent: on Cultivate, an awakened Cultivator POOL grants potential
-// on a super-linear ladder by Cultivator count: 2/3/4/5 traits -> +1/+2/+5/+10 potential.
+// on a ladder by Cultivator count: 2/3/4/5 traits -> +1/+2/+3/+5 potential (Max Barrier).
 // A lone Cultivator (count 1) grants nothing. gainPotential is capped at maxTokens 10.
 //
 // UX channel: an engine action (gainPotential) that surfaces as a "Gained N potential."
@@ -31,29 +31,29 @@ describe('Cultivator', () => {
 		expect(log.join("\n")).toContain('Gained 2 max barrier.');
 	});
 
-	it('count 4 grants +5 potential on Cultivate', () => {
+	it('count 4 grants +3 potential on Cultivate', () => {
 		const { player, log } = fire({ Cultivator: 4 }, 'onCultivate', {
+			player: { maxBarrier: 0, barrier: 0, brokenBarrier: 0 }
+		});
+		expect(player.maxBarrier).toBe(3);
+		expect(log.join("\n")).toContain('Gained 3 max barrier.');
+	});
+
+	it('count 5 grants +5 potential on Cultivate', () => {
+		const { player, log } = fire({ Cultivator: 5 }, 'onCultivate', {
 			player: { maxBarrier: 0, barrier: 0, brokenBarrier: 0 }
 		});
 		expect(player.maxBarrier).toBe(5);
 		expect(log.join("\n")).toContain('Gained 5 max barrier.');
 	});
 
-	it('count 5 grants +10 potential on Cultivate (maxes the pool from zero)', () => {
-		const { player, log } = fire({ Cultivator: 5 }, 'onCultivate', {
-			player: { maxBarrier: 0, barrier: 0, brokenBarrier: 0 }
-		});
-		expect(player.maxBarrier).toBe(10);
-		expect(log.join("\n")).toContain('Gained 10 max barrier.');
-	});
-
 	it('count 5 caps gained potential at 10 (no overflow past maxTokens 10)', () => {
-		// Starting from maxTokens 4, +10 would be 14 but caps at 10 -> grew 6.
+		// Starting from maxTokens 7, +5 would be 12 but caps at 10 -> grew 3.
 		const { player, log } = fire({ Cultivator: 5 }, 'onCultivate', {
-			player: { maxBarrier: 4, barrier: 4, brokenBarrier: 0 }
+			player: { maxBarrier: 7, barrier: 7, brokenBarrier: 0 }
 		});
 		expect(player.maxBarrier).toBe(10);
-		expect(log.join("\n")).toContain('Gained 6 max barrier.');
+		expect(log.join("\n")).toContain('Gained 3 max barrier.');
 	});
 
 	it('a lone Cultivator (count 1) grants nothing — below the lowest breakpoint', () => {
@@ -68,7 +68,7 @@ describe('Cultivator', () => {
 		const { player } = fire({ Cultivator: 6 }, 'onCultivate', {
 			player: { maxBarrier: 0, barrier: 0, brokenBarrier: 0 }
 		});
-		expect(player.maxBarrier).toBe(10);
+		expect(player.maxBarrier).toBe(5);
 	});
 
 	it('does not grant potential on an unrelated trigger (no silent stacking)', () => {

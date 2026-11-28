@@ -106,35 +106,35 @@ describe('awakenedClassCounts', () => {
 });
 
 describe('Rest effects', () => {
-	it('intrinsically restores two barrier and fires every onRest class ability', () => {
+	it('intrinsically restores barrier by status (4 at Pure) and fires every onRest class ability', () => {
 		const p = makePlayer({
 			barrier: 1,
-			maxBarrier: 4,
-			brokenBarrier: 3,
+			maxBarrier: 6,
+			brokenBarrier: 5,
 			spirits: [spirit(1, 'A', { Fighter: 2 }, {})]
 		});
 		const log: string[] = [];
 		applyRest(makeState(p), 'Red', log);
-		expect(p.barrier).toBe(3);
+		expect(p.barrier).toBe(5);
 		expect(p.brokenBarrier).toBe(1);
 		expect(p.attackDice).toHaveLength(1);
-		expect(log).toContain('Restored 2 barrier.');
+		expect(log).toContain('Restored 4 barrier.');
 		expect(log).toContain('Rested.');
 	});
 
 	it('Fighter grants basic attack dice', () => {
-		// Super-linear ladder: 4 Fighters → +5 basic dice (below the 10-cap).
+		// Ladder 2/3/4/5 Fighters → +1/+2/+3/+5 basic dice: 4 Fighters → +3.
 		const p = makePlayer({ maxBarrier: 10, spirits: [spirit(1, 'A', { Fighter: 4 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
-		expect(p.attackDice).toHaveLength(5);
+		expect(p.attackDice).toHaveLength(3);
 		expect(p.attackDice.every((d) => d.tier === 'basic')).toBe(true);
 	});
 
 	it('attack dice are capped at the flat 10, no longer by potential', () => {
-		// Low potential no longer limits dice: Fighter 4+ grants +10 (caps the pool) from empty.
+		// Low potential does not limit dice: Fighter 5 grants +5 from empty.
 		const p = makePlayer({ maxBarrier: 2, spirits: [spirit(1, 'A', { Fighter: 5 }, {})] });
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
-		expect(p.attackDice).toHaveLength(10); // not capped at maxTokens=2; tops out at the flat 10
+		expect(p.attackDice).toHaveLength(5); // not capped at maxTokens=2
 
 		// The hard cap is 10: starting near it, a big grant tops out at 10.
 		const q = makePlayer({
@@ -149,40 +149,14 @@ describe('Rest effects', () => {
 		expect(q.attackDice).toHaveLength(10);
 	});
 
-	it('Elementalist upgrades a die to the next tier (count 2 → first breakpoint)', () => {
+	it('Elementalist upgrades nothing on Rest (its upgrades come on Cultivate)', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			attackDice: [{ instanceId: 'd0', tier: 'basic' }],
-			spirits: [spirit(1, 'A', { 'Elementalist': 2 }, {})]
-		});
-		applyTrigger(makeState(p), 'Red', 'onRest', []);
-		expect(p.attackDice[0].tier).toBe('enchanted');
-	});
-
-	it('a lone Elementalist (count 1) upgrades nothing on the super-linear curve', () => {
-		const p = makePlayer({
-			maxBarrier: 10,
-			attackDice: [{ instanceId: 'd0', tier: 'basic' }],
-			spirits: [spirit(1, 'A', { 'Elementalist': 1 }, {})]
-		});
-		applyTrigger(makeState(p), 'Red', 'onRest', []);
-		expect(p.attackDice[0].tier).toBe('basic');
-	});
-
-	it('Elementalist upgrades cap at exalted — never reach arcane', () => {
-		const p = makePlayer({
-			maxBarrier: 10,
-			// An exalted die plus a basic one, with plenty of upgrade steps.
-			attackDice: [
-				{ instanceId: 'd0', tier: 'exalted' },
-				{ instanceId: 'd1', tier: 'basic' }
-			],
 			spirits: [spirit(1, 'A', { 'Elementalist': 4 }, {})]
 		});
 		applyTrigger(makeState(p), 'Red', 'onRest', []);
-		// The basic die climbs to exalted; the exalted die is left alone; no arcane.
-		expect(p.attackDice.some((d) => d.tier === 'arcane')).toBe(false);
-		expect(p.attackDice.filter((d) => d.tier === 'exalted')).toHaveLength(2);
+		expect(p.attackDice[0].tier).toBe('basic');
 	});
 
 	it('does nothing for a class with no Rest effect', () => {
@@ -193,7 +167,45 @@ describe('Rest effects', () => {
 	});
 });
 
-describe('Cultivate action (origin rewards: 3 spirits → 1 rune, 5 → relic once)', () => {
+describe('Elementalist (onCultivate: 1/2/3/5 upgrades at 2/3/4/5)', () => {
+	it('upgrades a die to the next tier (count 2 → first breakpoint)', () => {
+		const p = makePlayer({
+			maxBarrier: 10,
+			attackDice: [{ instanceId: 'd0', tier: 'basic' }],
+			spirits: [spirit(1, 'A', { 'Elementalist': 2 }, {})]
+		});
+		applyTrigger(makeState(p), 'Red', 'onCultivate', []);
+		expect(p.attackDice[0].tier).toBe('enchanted');
+	});
+
+	it('a lone Elementalist (count 1) upgrades nothing', () => {
+		const p = makePlayer({
+			maxBarrier: 10,
+			attackDice: [{ instanceId: 'd0', tier: 'basic' }],
+			spirits: [spirit(1, 'A', { 'Elementalist': 1 }, {})]
+		});
+		applyTrigger(makeState(p), 'Red', 'onCultivate', []);
+		expect(p.attackDice[0].tier).toBe('basic');
+	});
+
+	it('upgrades cap at exalted — never reach arcane', () => {
+		const p = makePlayer({
+			maxBarrier: 10,
+			// An exalted die plus a basic one; 4 Elementalists give 3 upgrades.
+			attackDice: [
+				{ instanceId: 'd0', tier: 'exalted' },
+				{ instanceId: 'd1', tier: 'basic' }
+			],
+			spirits: [spirit(1, 'A', { 'Elementalist': 4 }, {})]
+		});
+		applyTrigger(makeState(p), 'Red', 'onCultivate', []);
+		// The basic die climbs to exalted; the exalted die is left alone; no arcane.
+		expect(p.attackDice.some((d) => d.tier === 'arcane')).toBe(false);
+		expect(p.attackDice.filter((d) => d.tier === 'exalted')).toHaveLength(2);
+	});
+});
+
+describe('Cultivate action (origin rewards: 3 spirits → 1 rune, 5 → the rune or the relic once)', () => {
 	// Origin keys are the engine origin names (e.g. "Forest Region", regions.ts); the rune
 	// slot carries the BASE_RUNES name ("Forest Rune"). Calling card (origins.json):
 	// 3 spirits → "On Cultivate: 1 <origin> Rune"; 5 → "On Cultivate: <relic> (one time)".
@@ -276,6 +288,8 @@ describe('Cultivate action (origin rewards: 3 spirits → 1 rune, 5 → relic on
 			maxBarrier: 4,
 			barrier: 1,
 			brokenBarrier: 3,
+			// The Forest relic is already taken, so 5+ spirits give the rune with no choice card.
+			originRelicsGained: ['Forest Region'],
 			spirits: [
 				spirit(1, 'A', {}, { 'Forest Region': 1 }),
 				spirit(2, 'B', {}, { 'Forest Region': 1 }),
@@ -335,21 +349,29 @@ describe('Cultivate action (origin rewards: 3 spirits → 1 rune, 5 → relic on
 		expect(p.maxBarrier).toBe(4);
 	});
 
-	it('five spirits of an origin also give its relic tool, one time only', () => {
+	it('five spirits of an origin offer its rune or its relic tool, the relic one time only', () => {
 		const p = makePlayer({
 			spirits: Array.from({ length: 5 }, (_, i) => spirit(i + 1, `W${i}`, {}, { 'Water Region': 1 }))
 		});
 		const state = makeState(p);
 		applyCultivate(state, 'Red', []);
 		const teapots = () => p.mats.filter((m) => m.name === 'Cleansing Teapot' && m.type === 'relic');
-		expect(p.mats.filter((m) => m.name === 'Water Rune')).toHaveLength(1);
+		// One reward: a card "the relic or the rune", nothing given yet.
+		const card = p.pendingDecisions.find((d) => d.kind === 'originCultivate');
+		expect(card?.options.map((o) => o.id)).toEqual(['relic|Water Region|1', 'rune|Water Region|1']);
+		expect(p.mats).toHaveLength(0);
+		DECISION_RESOLVERS.originCultivate(ctxFor(p), 'relic|Water Region|1');
 		expect(teapots()).toHaveLength(1);
 		expect(teapots()[0].relicTool).toBe(true);
+		expect(p.mats.filter((m) => m.name === 'Water Rune')).toHaveLength(0);
 		expect(p.relics).toBe(1);
 		expect(p.originRelicsGained).toEqual(['Water Region']);
+		// The relic is taken: the next Cultivate gives the rune at once, no card.
+		p.pendingDecisions = [];
 		applyCultivate(state, 'Red', []);
+		expect(p.pendingDecisions.filter((d) => d.kind === 'originCultivate')).toHaveLength(0);
 		expect(teapots()).toHaveLength(1); // one time per player
-		expect(p.mats.filter((m) => m.name === 'Water Rune')).toHaveLength(2); // the rune repeats
+		expect(p.mats.filter((m) => m.name === 'Water Rune')).toHaveLength(1);
 	});
 
 	it('four spirits give the rune but not the relic; each land has its own relic', () => {
@@ -358,11 +380,13 @@ describe('Cultivate action (origin rewards: 3 spirits → 1 rune, 5 → relic on
 		});
 		applyCultivate(makeState(four), 'Red', []);
 		expect(four.mats.map((m) => m.name)).toEqual(['Fire Rune']);
+		expect(four.pendingDecisions).toHaveLength(0);
 		const relicFor = (origin: string) => {
 			const p = makePlayer({
 				spirits: Array.from({ length: 5 }, (_, i) => spirit(i + 1, `S${i}`, {}, { [origin]: 1 }))
 			});
 			applyCultivate(makeState(p), 'Red', []);
+			DECISION_RESOLVERS.originCultivate(ctxFor(p), `relic|${origin}|1`);
 			return p.mats.find((m) => m.type === 'relic')?.name;
 		};
 		expect(relicFor('Fire Region')).toBe('Firecracker');
@@ -471,32 +495,6 @@ describe('Monk (the old onTakeDamage rule is gone)', () => {
 	});
 });
 
-describe('Captain (onCultivate)', () => {
-	it('gains 1 spirit augment when cultivating with 3+ Heroes (Human Enclave spirits)', () => {
-		const p = makePlayer({
-			spirits: [
-				spirit(1, 'Cap', { Captain: 1 }, { 'Human Enclave': 1 }),
-				spirit(2, 'B', {}, { 'Human Enclave': 1 }),
-				spirit(3, 'C', {}, { 'Human Enclave': 1 })
-			]
-		});
-		applyCultivate(makeState(p), 'Red', []);
-		expect(p.unplacedAugments?.length ?? 0).toBe(1);
-		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
-	});
-
-	it('grants nothing with fewer than 3 Heroes', () => {
-		const p = makePlayer({
-			spirits: [
-				spirit(1, 'Cap', { Captain: 1 }, { 'Human Enclave': 1 }),
-				spirit(2, 'B', {}, { 'Human Enclave': 1 })
-			]
-		});
-		applyCultivate(makeState(p), 'Red', []);
-		expect(p.unplacedAugments?.length ?? 0).toBe(0);
-	});
-});
-
 // ── P4: combat-trigger class coverage (onMonsterKill / awakening) ─────────────
 
 describe('Battle Adept (onMonsterKill)', () => {
@@ -523,7 +521,7 @@ describe('Battle Adept (onMonsterKill)', () => {
 		expect(p.maxBarrier).toBe(4);
 	});
 
-	it('gains 1 Enchanted attack die when it does NOT kill', () => {
+	it('gains nothing when it does NOT kill (no attack die)', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			spirits: [spirit(1, 'A', { 'Battle Adept': 1 }, {})]
@@ -531,24 +529,8 @@ describe('Battle Adept (onMonsterKill)', () => {
 		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
 			combat: { dealt: 2, overkill: 0, killed: false }
 		});
-		expect(p.attackDice).toHaveLength(1);
-		expect(p.attackDice[0].tier).toBe('enchanted');
+		expect(p.attackDice).toHaveLength(0);
 		expect(p.maxBarrier).toBe(10); // no potential (no overkill)
-	});
-
-	it('activates per fighter — two Adaptive Fighters grant two Enchanted dice on a no-kill', () => {
-		const p = makePlayer({
-			maxBarrier: 10,
-			spirits: [
-				spirit(1, 'A', { 'Battle Adept': 1 }, {}),
-				spirit(2, 'B', { 'Battle Adept': 1 }, {})
-			]
-		});
-		applyTrigger(makeState(p), 'Red', 'onMonsterKill', [], {
-			combat: { dealt: 2, overkill: 0, killed: false }
-		});
-		expect(p.attackDice).toHaveLength(2);
-		expect(p.attackDice.every((d) => d.tier === 'enchanted')).toBe(true);
 	});
 
 	it('activates per fighter — two Adaptive Fighters grant two potential on an overkill', () => {
@@ -568,7 +550,7 @@ describe('Battle Adept (onMonsterKill)', () => {
 });
 
 describe('Fairy (awakening)', () => {
-	it('on awakening, grants 1 exalted die per origin-matching spirit + 3 initiative', () => {
+	it('on awakening, grants 1 enchanted die per origin-matching spirit and no initiative number', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
 			spirits: [
@@ -578,9 +560,10 @@ describe('Fairy (awakening)', () => {
 			]
 		});
 		applyTrigger(makeState(p), 'Red', 'awakening', [], { command: { slotIndex: 1 } });
-		// Forest matches the Fairy (F) + B = 2 spirits → 2 exalted dice; +3 initiative.
-		expect(p.attackDice.filter((d) => d.tier === 'exalted')).toHaveLength(2);
-		expect(p.initiative).toBe(3);
+		// Forest matches the Fairy (F) + B = 2 spirits → 2 enchanted dice; initiative is the die only.
+		expect(p.attackDice).toHaveLength(2);
+		expect(p.attackDice.every((d) => d.tier === 'enchanted')).toBe(true);
+		expect(p.initiative).toBe(0);
 	});
 
 	it('does not fire when the spirit that awakened is not a Fairy', () => {
@@ -608,12 +591,6 @@ describe('Huntress (awakening)', () => {
 		expect(p.attackDice).toHaveLength(3);
 		expect(p.attackDice.every((d) => d.tier === 'arcane')).toBe(true);
 	});
-
-	it('gains 2 initiative on the inCombat trigger', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Huntress': 1 }, {})] });
-		applyTrigger(makeState(p), 'Red', 'inCombat', []);
-		expect(p.initiative).toBe(2);
-	});
 });
 
 describe('Summoner (runtime bag behavior)', () => {
@@ -632,17 +609,7 @@ describe('Summoner (runtime bag behavior)', () => {
 	});
 });
 
-describe('Herder (awakening)', () => {
-	it('gains a rune for an adjacent Beast when it awakens (no manual prompt)', () => {
-		const p = makePlayer({
-			spirits: [spirit(4, 'A', { 'Herder': 1 }, {}), spirit(2, 'B', { Beast: 1 }, { 'Water Region': 1 })]
-		});
-		// The handler fires for the awakening spirit named by the command's slotIndex.
-		applyTrigger(makeState(p), 'Red', 'awakening', [], { command: { slotIndex: 4 } });
-		expect(p.mats.map((m) => m.name)).toEqual(['Water Rune']);
-		expect(p.manualPrompts.filter((m) => m.source === 'class')).toHaveLength(0);
-	});
-
+describe('Herder', () => {
 	it('is no longer listed in MANUAL_CLASSES', () => {
 		expect(MANUAL_CLASSES.has('Herder')).toBe(false);
 	});
@@ -680,13 +647,11 @@ describe('doubleRunes primitive (Cultivate yield)', () => {
 				spirit(1, 'A', {}, { 'Forest Region': 1 }),
 				spirit(2, 'B', {}, { 'Forest Region': 1 }),
 				spirit(3, 'C', {}, { 'Forest Region': 1 }),
-				spirit(4, 'D', {}, { 'Forest Region': 1 }),
-				spirit(5, 'E', {}, { 'Forest Region': 1 }),
-				spirit(6, 'F', {}, { 'Forest Region': 1 })
+				spirit(4, 'D', {}, { 'Forest Region': 1 })
 			]
 		});
 		applyCultivate(makeState(p), 'Red', []);
-		expect(p.mats.filter((r) => r.name === 'Forest Rune')).toHaveLength(2); // 1 rune (6 ≥ 3) → doubled
+		expect(p.mats.filter((r) => r.name === 'Forest Rune')).toHaveLength(2); // 1 rune (4 ≥ 3) → doubled
 		// Cultivate does not restore barriers, even when rune yield is doubled.
 		expect(p.barrier).toBe(1);
 		expect(p.brokenBarrier).toBe(3);
@@ -716,13 +681,7 @@ describe('Cursed Spirit (cleanup claim — no longer an awakeningPhase auto-gran
 	});
 });
 
-describe('Abyss Harbinger (inCombat; Awakening grant is a Cleanup claim)', () => {
-	it('grants +2 initiative passively in combat', () => {
-		const p = makePlayer({ spirits: [spirit(1, 'A', { 'Corruptor': 1 }, {})] });
-		applyTrigger(makeState(p), 'Red', 'inCombat', []);
-		expect(p.initiative).toBe(2);
-	});
-
+describe('Abyss Harbinger (Awakening grant is a Cleanup claim)', () => {
 	it('does NOT auto-grant an Arcane die on the awakeningPhase trigger (now a Cleanup claim)', () => {
 		const p = makePlayer({
 			maxBarrier: 10,
@@ -770,14 +729,13 @@ describe('Awakening-Phase win-cons no longer auto-apply on the trigger', () => {
 		expect(p.victoryPoints).toBe(24);
 	});
 
-	it('Queen grants a flat +1 VP on the awakeningPhase trigger (reworked)', () => {
+	it('Queen grants no VP on the awakeningPhase trigger (her ability is on her own awakening)', () => {
 		const red = makePlayer({
 			playerColor: 'Red',
 			statusLevel: 0,
 			spirits: [spirit(1, 'A', { 'Queen': 1 }, {})]
 		});
 		applyTrigger(makeState(red), 'Red', 'awakeningPhase', []);
-		// Queen is now a flat +1 VP handler (no longer the all-Evil Cleanup claim).
-		expect(red.victoryPoints).toBe(1);
+		expect(red.victoryPoints).toBe(0);
 	});
 });

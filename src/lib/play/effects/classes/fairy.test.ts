@@ -2,16 +2,15 @@
  * Fairy — bespoke `awakening` handler.
  *
  * DB-intended behavior (source of truth):
- *   - When Awakened, gain 1 Exalted Attack die for every spirit matching this
+ *   - When Awakened, gain 1 Enchanted Attack die for every spirit matching this
  *     Fairy's origin (a spirit counts if any of its origins overlaps the Fairy's).
- *   - Gain 3 Initiative.
+ *   - No initiative: initiative is the die, no class gives a number.
  *
  * Per-awakening + origin-aware: the grant only fires when the spirit that just
- * awakened (`ctx.command.slotIndex`) is itself a Fairy. Exalted dice land in the
+ * awakened (`ctx.command.slotIndex`) is itself a Fairy. Enchanted dice land in the
  * attack-dice pool (flat cap of 10).
  *
- * UX channel: passive combat numbers — "Gained N exalted attack dice." and
- * "Gained 3 initiative." log lines plus the mechanical attackDice / initiative.
+ * UX channel: a "Gained N enchanted attack dice." log line plus the attackDice pool.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -25,7 +24,7 @@ describe('Fairy', () => {
 		expect(typeof ability[0].run).toBe('function');
 	});
 
-	it('gains 1 exalted die per origin-matching spirit and +3 initiative on awakening', () => {
+	it('gains 1 enchanted die per origin-matching spirit on awakening, and no initiative', () => {
 		// Fairy in slot 1 (origin Floral). Two other spirits share the Floral origin,
 		// one does not. Matching count includes the Fairy itself = 3.
 		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
@@ -37,19 +36,19 @@ describe('Fairy', () => {
 			command: { slotIndex: 1 }
 		});
 		expect(player.attackDice).toHaveLength(3);
-		expect(player.attackDice.every((d) => d.tier === 'exalted')).toBe(true);
-		expect(player.initiative).toBe(3);
+		expect(player.attackDice.every((d) => d.tier === 'enchanted')).toBe(true);
+		expect(player.initiative).toBe(0);
 	});
 
-	it('surfaces both halves as attributed log lines (no silent no-op)', () => {
+	it('surfaces the dice as a log line (no silent no-op)', () => {
 		const fairy = spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } });
 		const ally = spirit(2, { Fighter: 1 }, { origins: { Floral: 1 } });
 		const { log } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy, ally] },
 			command: { slotIndex: 1 }
 		});
-		expect(log.some((l) => l.includes('Gained 2 exalted attack dice.'))).toBe(true);
-		expect(log.some((l) => l.includes('Gained 3 initiative.'))).toBe(true);
+		expect(log.some((l) => l.includes('Gained 2 enchanted attack dice.'))).toBe(true);
+		expect(log.some((l) => l.includes('initiative'))).toBe(false);
 	});
 
 	it('counts only spirits whose origin overlaps the Fairy', () => {
@@ -62,7 +61,6 @@ describe('Fairy', () => {
 			command: { slotIndex: 1 }
 		});
 		expect(player.attackDice).toHaveLength(1);
-		expect(player.initiative).toBe(3);
 	});
 
 	it('matches a multi-origin spirit if ANY of its origins overlap', () => {
@@ -75,16 +73,14 @@ describe('Fairy', () => {
 		expect(player.attackDice).toHaveLength(2); // fairy + multi
 	});
 
-	it('still grants the +3 initiative even when the Fairy has no origin (no dice)', () => {
-		// No origins on the Fairy => no origin matches => no dice, but the spec's
-		// "+3 Initiative" is unconditional and must still apply in that degenerate case.
+	it('a Fairy with no origin gives nothing (no dice, no initiative)', () => {
 		const fairy = spirit(1, { 'Fairy': 1 }, { origins: {} });
 		const { player } = fire({ 'Fairy': 1 }, 'awakening', {
 			player: { spirits: [fairy] },
 			command: { slotIndex: 1 }
 		});
-		expect(player.attackDice).toHaveLength(0); // no origin → no dice
-		expect(player.initiative).toBe(3); // …but the +3 initiative always lands
+		expect(player.attackDice).toHaveLength(0);
+		expect(player.initiative).toBe(0);
 	});
 
 	it('does nothing when the awakened spirit (slotIndex) is not a Fairy', () => {
@@ -108,7 +104,7 @@ describe('Fairy', () => {
 		expect(player.initiative).toBe(0);
 	});
 
-	it('caps the exalted dice grant at the flat attack-dice cap of 10', () => {
+	it('caps the enchanted dice grant at the flat attack-dice cap of 10', () => {
 		// 12 Floral spirits (Fairy + 11) would request 12 dice; the pool caps at 10.
 		const spirits = [spirit(1, { 'Fairy': 1 }, { origins: { Floral: 1 } })];
 		for (let i = 2; i <= 12; i += 1) {
@@ -119,7 +115,6 @@ describe('Fairy', () => {
 			command: { slotIndex: 1 }
 		});
 		expect(player.attackDice).toHaveLength(10);
-		expect(player.initiative).toBe(3);
 	});
 
 	it('handler unit test: mutates ctx.player directly via ctxFor', () => {
@@ -129,7 +124,7 @@ describe('Fairy', () => {
 		const ctx = ctxFor(player, { trigger: 'awakening', command: { slotIndex: 1 } });
 		ability[0].run!(ctx);
 		expect(player.attackDice).toHaveLength(2);
-		expect(player.attackDice.every((d) => d.tier === 'exalted')).toBe(true);
-		expect(player.initiative).toBe(3);
+		expect(player.attackDice.every((d) => d.tier === 'enchanted')).toBe(true);
+		expect(player.initiative).toBe(0);
 	});
 });

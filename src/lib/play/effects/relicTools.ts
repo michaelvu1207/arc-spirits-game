@@ -51,7 +51,7 @@ export function relicToolText(tool: RelicTool, vp: number, catalog?: unknown): s
 	return `You may ${vp > 0 ? `gain ${vp} VP or ` : ''}${relicToolWording(tool, catalog).ability}, then discard this.`;
 }
 
-/** Rule `initiativeDie`: Firecracker in the new wording ("gain the initiative", never "strike first"). */
+/** Firecracker in the wording of the initiative die ("gain the initiative", never "strike first"). */
 export function relicToolWording(tool: RelicTool, catalog?: unknown): RelicTool {
 	if (tool.effect !== 'strikeFirst') return tool;
 	return {
@@ -157,14 +157,15 @@ export function keepUnansweredRelicTools(player: PrivatePlayerState, log: string
 	return open.length;
 }
 
-/** Added to the Cleansing Teapot text under rule `relicAwakenNeedsBoard`. */
+/** Added to the Cleansing Teapot text. */
 export const ORIGIN_BOARD_NOTE =
 	' It cannot awaken a spirit that needs a full origin board ("Have 7 … Spirits") unless you have that board.';
 
 /**
- * Rule `relicAwakenNeedsBoard`: true when `spirit`'s awakening text is "Have N <Origin> Spirits…"
- * and the player holds fewer than N spirits of the spirit's own origin (awakened or not; the
- * spirit itself counts, as in its awakening check).
+ * True when `spirit`'s awakening text is "Have N <Origin> Spirits…" and the player holds fewer
+ * than N spirits of the spirit's own origin (awakened or not; the spirit itself counts, as in its
+ * awakening check). The Cleansing Teapot cannot awaken such a spirit: the full origin board is the
+ * only way.
  */
 export function lacksOriginBoard(
 	player: PrivatePlayerState,

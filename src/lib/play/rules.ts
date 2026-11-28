@@ -41,8 +41,6 @@ export const INITIATIVE_HITS: readonly [number, number, number, number] = [4, 6,
 export function initiativeHits(statusLevel: number): number {
 	return INITIATIVE_HITS[Math.min(3, Math.max(0, statusLevel))];
 }
-/** How the texts word an ability that covers a missed initiative die. */
-export const GAIN_INITIATIVE_TEXT = 'gain the initiative if your side does not have it';
 
 /** The most spirits one corruption costs: the 1st costs 1, the 2nd 2, the 3rd 3, and from the 4th on every corruption costs 4. */
 export const SACRIFICE_MAX = 4;

@@ -82,14 +82,8 @@
 				}))
 			: []
 	);
-	/** The monster's initiative, when it has a number. The printed cards do not carry it, so
-	 *  the card shows it as a chip: a player with higher initiative strikes first.
-	 *  Under the initiative die (rule `initiativeDie`) a monster always has the initiative and
-	 *  the number means nothing, so it is not shown. */
-	const initiative = $derived(
-		null
-	);
-	/** The card's ability (rule `difficulty3Restores`): Barrier it restores after a fight it survives. */
+	/** The card's ability (Difficulty 3): Barrier it restores after a fight it survives. A monster
+	 *  always has the initiative, so the card shows no initiative number. */
 	const restores = $derived(card?.restoreAfterCombat ?? 0);
 	const name = $derived(card ? displayName(card.name) : '');
 	/** The label describes what shows: the printed card can carry another name than the
@@ -97,9 +91,7 @@
 	const shownName = $derived(printed && face?.printed ? face.printed.name : name);
 	const label = $derived(
 		card && showFront
-			? `${shownName}: Barrier ${damaged ? `${card.hp} of ${card.maxHp}` : card.maxHp}, hits for ${card.damage}${
-					initiative !== null ? `, initiative ${initiative}` : ''
-				}${restores > 0 ? `, restores ${restores} Barrier after a fight it survives` : ''}${
+			? `${shownName}: Barrier ${damaged ? `${card.hp} of ${card.maxHp}` : card.maxHp}, hits for ${card.damage}${restores > 0 ? `, restores ${restores} Barrier after a fight it survives` : ''}${
 					rewards.length ? `. Rewards: ${rewards.map((r) => r.label).join(', ')}` : ''
 				}`
 			: `Difficulty ${MONSTER_NUMERAL[deck]} monster card, face down`
@@ -134,11 +126,6 @@
 							onload={() => onFaceLoad(url)}
 							onerror={(event) => onFaceError(event, url)}
 						/>
-						{#if initiative !== null}
-							<span class="init-chip" data-testid="monster-card-initiative" title="Initiative: a player with more strikes first">
-								Initiative <b>{initiative}</b>
-							</span>
-						{/if}
 						{#if restores > 0 && !defeated}
 							<span
 								class="init-chip restore-chip"
@@ -161,7 +148,7 @@
 						<span class="numeral">{MONSTER_NUMERAL[deck]}</span>
 					</div>
 					<div class="band">{name}</div>
-					<div class="stats" class:three={initiative !== null}>
+					<div class="stats">
 						<span class="stat barrier" class:hurt={damaged}>
 							<span class="k">Barrier</span>
 							<span class="v">{damaged ? `${card.hp}/${card.maxHp}` : card.maxHp}</span>
@@ -170,12 +157,6 @@
 							<span class="k">Hits</span>
 							<span class="v">{card.damage}</span>
 						</span>
-						{#if initiative !== null}
-							<span class="stat init">
-								<span class="k">Init</span>
-								<span class="v">{initiative}</span>
-							</span>
-						{/if}
 					</div>
 					{#if restores > 0}
 						<div class="ability" data-testid="monster-card-restores">
@@ -309,17 +290,6 @@
 		gap: 2.5cqi;
 		padding: 0 4cqi;
 	}
-	.stats.three {
-		grid-template-columns: 1fr 1fr 1fr;
-		gap: 1.5cqi;
-		padding: 0 2.5cqi;
-	}
-	.stats.three .v {
-		font-size: 12cqi;
-	}
-	.stats.three .k {
-		font-size: max(6px, 5.2cqi);
-	}
 	.stat {
 		display: grid;
 		gap: 0.5cqi;
@@ -421,11 +391,6 @@
 		text-transform: uppercase;
 		white-space: nowrap;
 		line-height: 1.5;
-	}
-	/* The restore ability sits where the initiative chip would (never both: the die rule hides
-	   the initiative number, and without it the chip moves down a line). */
-	.init-chip + .restore-chip {
-		top: 13.4%;
 	}
 	.ability {
 		padding: 1.5cqi 4cqi 0;

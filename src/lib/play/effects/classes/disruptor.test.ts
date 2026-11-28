@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { ability } from './disruptor';
 import { fire, ctxFor, makePlayer } from './testHelpers';
 
-// Bastion — DB intent: "If the opponent has higher initiative, when you Take Damage,
-// half it (rounding up)." Surfaces as a passive combat flag (player.halveIncoming),
+// Bastion — "If the opponent's side has more initiative than your side, or is a monster,
+// when you Take Damage, half it (rounding up)." Surfaces as a passive combat flag (player.halveIncoming),
 // which combat.ts consumes to halve the post-mitigation hit, plus a log line.
 describe('Bastion', () => {
 	it('flags halveIncoming when the opponent (pooled) has higher initiative', () => {
@@ -26,7 +26,7 @@ describe('Bastion', () => {
 		const ctx = ctxFor(player, { trigger: 'onTakeDamage' });
 		ctx.combat = { dealt: 4, overkill: 0, killed: false, opponentInitiative: 5 };
 		ability[0].run!(ctx);
-		expect(ctx.log).toContain('Opponent has higher initiative — incoming damage is halved.');
+		expect(ctx.log).toContain("The opponent's side has more initiative than yours — incoming damage is halved.");
 	});
 
 	it('reads a single opponent seat initiative when no pooled total is present', () => {

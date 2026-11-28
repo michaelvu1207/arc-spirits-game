@@ -6,12 +6,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { diceTierFaces } from '../../combat';
+import { DICE_TIER_FACES } from '../../combat';
 import type { DiceTier, MonsterState, PlayCatalog } from '../../types';
 import { loadCatalogSpec, loadFrozenCatalog } from '../catalog';
 import { playTable } from './feGames';
 import { elementalistRestUpgrades } from '../../effects/classes/elementalist';
-import { elementalistUpgradeAction } from '../../rules';
 import {
 	chooseFeAction,
 	cultivateMaxBarrier,
@@ -48,11 +47,8 @@ describe('scripted Fighter + Elementalist: dice model', () => {
 		expect(upgradeRoom(['basic', 'enchanted', 'exalted'])).toBe(3);
 	});
 
-	it('reads the Fighter Rest dice from the engine and the rules', () => {
-		const with35 = { rules: { fighterDice35: true } } as unknown as PlayCatalog;
-		const without = { rules: { fighterDice35: false } } as unknown as PlayCatalog;
-		expect([0, 1, 2, 3, 4, 5, 6].map((f) => restDice(f, with35))).toEqual([0, 0, 1, 2, 3, 5, 5]);
-		expect([0, 1, 2, 3, 4, 5, 6].map((f) => restDice(f, without))).toEqual([0, 0, 1, 2, 5, 10, 10]);
+	it('reads the Fighter Rest dice from the engine: 1 / 2 / 3 / 5 at 2 / 3 / 4 / 5', () => {
+		expect([0, 1, 2, 3, 4, 5, 6].map((f) => restDice(f))).toEqual([0, 0, 1, 2, 3, 5, 5]);
 	});
 
 	it('computes an exact damage distribution', () => {
@@ -70,84 +66,38 @@ describe('scripted Fighter + Elementalist: dice model', () => {
 });
 
 describe('scripted Fighter + Elementalist: rules read from the engine', () => {
-	const rules = (r: Record<string, boolean>) => ({ rules: r }) as unknown as PlayCatalog;
+	const { catalog } = repoCatalog();
 	const relic = [{ hasRune: true, type: 'relic', slotIndex: 1 }];
 
-	it('Rest-only Elementalist: the engine helper decides, a relic gates the top step', () => {
-		const cat = rules({
-			elementalistMethods: true,
-			elementalistRest1235: true,
-			elementalist5NeedsRelic: true
-		});
+	it('Elementalist upgrades on Cultivate only: the engine helper decides, a relic gates the top step', () => {
 		for (let e = 0; e <= 6; e++) {
-			expect(elementalistUpgrades(cat, 'rest', e, true)).toBe(
-				elementalistRestUpgrades(cat, e, { mats: relic } as never)
+			expect(elementalistUpgrades(catalog, 'cultivate', e, true)).toBe(
+				elementalistRestUpgrades(catalog, e, { mats: relic } as never)
 			);
-			expect(elementalistUpgrades(cat, 'rest', e, false)).toBe(
-				elementalistRestUpgrades(cat, e, { mats: [] } as never)
-			);
-			for (const a of ['cultivate', 'summon', 'kill'] as const)
-				expect(elementalistUpgrades(cat, a, e, true)).toBe(0);
-		}
-		// The relic matters at 5 (and not below) while the gate is on, and nowhere without it.
-		expect(relicRestGain(cat, 5)).toBeGreaterThan(0);
-		expect(relicRestGain(cat, 4)).toBe(0);
-		const ungated = rules({ elementalistMethods: true, elementalistRest1235: true });
-		expect(relicRestGain(ungated, 5)).toBe(0);
-	});
-
-	it('ladder on Cultivate: the engine names the action, the helper gives the amount', () => {
-		const cat = rules({
-			elementalistMethods: true,
-			elementalistRest1235: true,
-			elementalist5NeedsRelic: true,
-			elementalistOnCultivate: true
-		});
-		expect(elementalistUpgradeAction(cat)).toBe('cultivate');
-		for (let e = 0; e <= 6; e++) {
-			expect(elementalistUpgrades(cat, 'cultivate', e, true)).toBe(
-				elementalistRestUpgrades(cat, e, { mats: relic } as never)
+			expect(elementalistUpgrades(catalog, 'cultivate', e, false)).toBe(
+				elementalistRestUpgrades(catalog, e, { mats: [] } as never)
 			);
 			for (const a of ['rest', 'summon', 'kill'] as const)
-				expect(elementalistUpgrades(cat, a, e, true)).toBe(0);
+				expect(elementalistUpgrades(catalog, a, e, true)).toBe(0);
 		}
-		expect(relicRestGain(cat, 5)).toBeGreaterThan(0);
-	});
-
-	it('the action rule (yesterday): Rest / Cultivate / Summon from (3) / (4) / (5), kills only via Arcane Blood', () => {
-		const cat = rules({
-			elementalistMethods: true,
-			elementalistOneUpgrade: true,
-			arcaneBlood: true
-		});
-		expect([2, 3].map((e) => elementalistUpgrades(cat, 'rest', e, false))).toEqual([0, 1]);
-		expect([3, 4].map((e) => elementalistUpgrades(cat, 'cultivate', e, false))).toEqual([0, 1]);
-		expect([4, 5].map((e) => elementalistUpgrades(cat, 'summon', e, false))).toEqual([0, 1]);
-		expect(elementalistUpgrades(cat, 'kill', 5, false, { difficulty: 3 })).toBe(0);
-		expect(relicRestGain(cat, 5)).toBe(0);
-	});
-
-	it('the default Elementalist ladder is read by running the class ability', () => {
-		const cat = rules({});
-		expect([1, 2, 3, 4, 5].map((e) => elementalistUpgrades(cat, 'rest', e, false))).toEqual([
-			0, 1, 2, 5, 10
-		]);
-	});
-
-	it('Cultivator Max Barrier comes from the class ladder and its rule switch', () => {
+		expect([0, 1, 2, 3, 4, 5, 6].map((e) => elementalistUpgrades(catalog, 'cultivate', e, true))).toEqual(
+			[0, 0, 1, 2, 3, 5, 5]
+		);
 		expect(
-			[1, 2, 3, 4, 5].map((c) => cultivateMaxBarrier(c, rules({ cultivatorBarrier35: true })))
-		).toEqual([0, 1, 2, 3, 5]);
-		expect([1, 2, 3, 4, 5].map((c) => cultivateMaxBarrier(c, rules({})))).toEqual([0, 1, 2, 5, 10]);
+			[0, 1, 2, 3, 4, 5, 6].map((e) => elementalistUpgrades(catalog, 'cultivate', e, false))
+		).toEqual([0, 0, 1, 2, 3, 4, 4]);
+		// The relic matters at 5 and not below.
+		expect(relicRestGain(catalog, 5)).toBe(1);
+		expect(relicRestGain(catalog, 4)).toBe(0);
+	});
+
+	it('Cultivator Max Barrier comes from the class ladder: 1 / 2 / 3 / 5 at 2 / 3 / 4 / 5', () => {
+		expect([1, 2, 3, 4, 5].map((c) => cultivateMaxBarrier(c))).toEqual([0, 1, 2, 3, 5]);
 	});
 });
 
 describe('scripted Fighter + Elementalist: relics', () => {
 	const { catalog } = repoCatalog();
-	const gated = {
-		...catalog,
-		rules: { ...(catalog.rules ?? {}), elementalistRest1235: true, elementalist5NeedsRelic: true }
-	} as PlayCatalog;
 	const flower = {
 		slotIndex: 1,
 		hasRune: true,
@@ -207,22 +157,12 @@ describe('scripted Fighter + Elementalist: relics', () => {
 		}
 	] as never;
 
-	it('a relic is worth keeping at Elementalist 5 only when the rules gate the step on it', () => {
-		expect(relicWorth(situationOf(viewWith(5, [flower]), 'Red', gated))).toBeGreaterThan(0);
-		const ungated = {
-			...gated,
-			rules: { ...gated.rules, elementalist5NeedsRelic: false }
-		} as PlayCatalog;
-		expect(relicWorth(situationOf(viewWith(5, [flower]), 'Red', ungated))).toBe(0);
+	it('a relic is worth keeping at Elementalist 5: the top step needs it', () => {
+		expect(relicWorth(situationOf(viewWith(5, [flower]), 'Red', catalog))).toBeGreaterThan(0);
 	});
 
-	it('keeps its only relic at Elementalist 5 under the gate, uses it otherwise', () => {
-		expect(chooseFeAction(viewWith(5, [flower]), 'Red', offers, gated).id).toBe('a');
-		const ungated = {
-			...gated,
-			rules: { ...gated.rules, elementalist5NeedsRelic: false }
-		} as PlayCatalog;
-		expect(chooseFeAction(viewWith(5, [flower]), 'Red', offers, ungated).id).toBe('b');
+	it('keeps its only relic at Elementalist 5', () => {
+		expect(chooseFeAction(viewWith(5, [flower]), 'Red', offers, catalog).id).toBe('a');
 	});
 });
 
@@ -287,9 +227,9 @@ describe('scripted Fighter + Elementalist: fight model', () => {
 		expect(first.hit).toBeCloseTo(0, 6);
 	});
 
-	it('uses the catalog dice faces', () => {
-		const faces = diceTierFaces(catalog);
-		expect(Object.keys(faces).sort()).toEqual(['arcane', 'basic', 'enchanted', 'exalted']);
+	it('uses the engine dice faces', () => {
+		expect(s.faces).toEqual(DICE_TIER_FACES);
+		expect(Object.keys(s.faces).sort()).toEqual(['arcane', 'basic', 'enchanted', 'exalted']);
 	});
 });
 

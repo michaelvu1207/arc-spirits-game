@@ -42,15 +42,12 @@
 	const isMe = $derived(viewedSeat === mySeat);
 
 	// Player-level readouts surfaced in the profile header: corruption status (token name,
-	// falling back to the ladder label) and the combat initiative accrued this fight.
+	// falling back to the ladder label) and the initiative die at this status.
 	const statusLabel = $derived(player?.statusToken ?? STATUS_LADDER[player?.statusLevel ?? 0] ?? 'Pure');
 	const statusColor = $derived(statusAccent(statusLabel));
-	// Under the initiative die (rule `initiativeDie`) a player has no initiative number: the
-	// readout is the chance of the one 12-sided die at this status ("5 / 12").
-	const initiative = $derived(
-		`${initiativeHits(player?.statusLevel ?? 0)} / ${INITIATIVE_DIE_SIDES}`
-	);
-	const initiativeLabel = $derived('initiative die');
+	// A player has no initiative number: the readout is the chance of the one 12-sided die at
+	// this status ("6 / 12").
+	const initiative = $derived(`${initiativeHits(player?.statusLevel ?? 0)} / ${INITIATIVE_DIE_SIDES}`);
 
 	// ── Combat readout ──────────────────────────────────────────────────────────
 	// The scouted player's attack-dice pool and the expected total damage of a roll —
@@ -194,7 +191,7 @@
 					</span>
 					<span class="dp-stat">
 						<span class="dp-stat-val" data-testid="profile-initiative">{initiative}</span>
-						<span class="dp-stat-label">{initiativeLabel}</span>
+						<span class="dp-stat-label">initiative die</span>
 					</span>
 					<span class="dp-stat status" style="--s: {statusColor}">
 						<span class="dp-stat-val" data-testid="profile-status">{statusLabel}</span>

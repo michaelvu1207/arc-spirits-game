@@ -8,18 +8,11 @@ import { buildMonsterRewards } from '../monsterRewards';
 import { ARCANE_ABYSS_BAG } from '../bags';
 import { navigationPowerById } from '../navigationPowers';
 import { MONSTER_DECK_NAMES } from '../runtime';
-import { RUNE_CARRY_LIMIT, SPIRIT_WORLD_ONLY, isEvilAlignment, type GameCommand, type MonsterDeckSummary, type MonsterState, type PlayCatalog, type PlayerProjection, type PlaySpirit, type PrivatePlayerState, type SeatColor } from '../types';
+import { RUNE_CARRY_LIMIT, SPIRIT_WORLD_ONLY, type GameCommand, type MonsterDeckSummary, type MonsterState, type PlayCatalog, type PlayerProjection, type PlaySpirit, type PrivatePlayerState, type SeatColor } from '../types';
 import { awakenedClassCounts, cultivateRuneMultiplier } from '../effects/apply';
 import { ORIGIN_REWARDS, spiritsByOrigin } from '../effects/relicTools';
 import { pvpVpPerCorrupted } from '../combat';
 import { CURSED_SPIRIT_DICE_TIER } from '../rules';
-
-/** Rule `moonPerksNeedAttack`: an Evil acting seat's awake Queen / Sorcerer classes (else empty). */
-export function moonPerksWaiting(me: SeatPlayer | undefined, catalog: PlayCatalog): string[] {
-	if (!me || !isEvilAlignment(me.statusLevel) || true) return [];
-	const counts = awakenedClassCounts(me as PrivatePlayerState);
-	return ['Queen', 'Sorcerer'].filter((k) => (counts[k] ?? 0) > 0);
-}
 
 /** Anything with per-seat player records: the full state or a seat's projection. Labels are
  *  always built from the ACTING seat's projection, so they cannot read hidden fields. */
@@ -104,7 +97,7 @@ export function spiritLine(spirit: {
 }
 
 /**
- * Rule `abyssFightOrSummon`, in Michael's wording (2026-11-27: "worded as using a battle action"): a fight and the
+ * In Michael's wording (2026-11-27: "worded as using a battle action"): a fight and the
  * Arcane Abyss Summon action each use a battle action. `summon`: the note of the summon action, else of a fight.
  */
 function battleActionNote(me: { actionsUsedThisRound?: string[]; extraActions?: Record<string, number> } | null | undefined, catalog: PlayCatalog, summon: boolean): string {
@@ -119,10 +112,6 @@ function battleActionNote(me: { actionsUsedThisRound?: string[]; extraActions?: 
 		: taken
 			? 'uses your last battle action'
 			: 'uses your battle action: no Arcane Abyss Summon action this round after it';
-}
-/** Rule `goodKillBonus`: what the acting seat's alignment adds to a kill, for the fight label. */
-function goodKillNote(me: { statusLevel: number } | null | undefined, card: MonsterState | null | undefined, catalog: PlayCatalog): string {
-	return '';
 }
 
 export function monsterLine(card: MonsterState): string {
@@ -187,7 +176,6 @@ function cultivateLabel(me: SeatPlayer | undefined, catalog?: PlayCatalog): stri
 		const runes = mult === 2 ? `2 ${origin} runes` : `${origin} rune`;
 		const relicOpen = c >= r.relicAt && !(me.originRelicsGained ?? []).includes(origin);
 		if (c >= r.runeAt) parts.push(relicOpen ? `${runes} or the ${origin} relic (you choose one)` : runes);
-		continue;
 	}
 	return `Cultivate (now: ${parts.join(' + ') || 'no origin reward'}, plus On Cultivate class effects; adds no spirits)`;
 }
@@ -255,13 +243,10 @@ export function labelFor(
 		}
 		case 'initiatePvp': {
 			const pay = `: you get ${pvpVpPerCorrupted(catalog)} VP per Good player corrupted, nothing otherwise`;
-			const moon = moonPerksWaiting(me, catalog);
-			return `Attack the Good players at your location (PvP group attack${pay})${moon.length ? ` (this turns on your ${moon.join(' and ')} this round)` : ''}`;
+			return `Attack the Good players at your location (PvP group attack${pay})`;
 		}
-		case 'passEncounter': {
-			const moon = moonPerksWaiting(me, catalog);
-			return `Do not attack this round (pass the encounter)${moon.length ? ` (no ${moon.join(' or ')} gain this round)` : ''}`;
-		}
+		case 'passEncounter':
+			return 'Do not attack this round (pass the encounter)';
 		case 'resolveLocationInteraction': {
 			const dest = me?.navigationDestination ?? '';
 			const interaction = interactionsAt(catalog, dest).find((i) => i.rowIndex === cmd.rowIndex);
@@ -280,7 +265,7 @@ export function labelFor(
 			const cost = interaction.cost.length
 				? ` (pay ${paid.length ? paid.join(' + ') : interaction.cost.map((c) => c.label).join(' + ')})`
 				: '';
-			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action uses a battle action.
+			// The Arcane Abyss Summon action uses a battle action.
 			const summonNote = dest === 'Arcane Abyss' && isAbyssSummonRow(interaction) ? battleActionNote(me, catalog, true) : '';
 			const noFight = summonNote ? ` (${summonNote})` : '';
 			return `${dest} action ${cmd.rowIndex + 1}: ${gains}${cost}${noFight}${carryWarning(me, items, interaction.cost.length)}`;
@@ -294,7 +279,7 @@ export function labelFor(
 			const entersFaceDown = me?.pendingDraw?.sourceBag === ARCANE_ABYSS_BAG;
 			if (cmd.replaceSlotIndex === undefined)
 				return `Summon ${summoned} (it enters ${entersFaceDown ? 'face-down' : 'awake'})`;
-			// Replace-on-summon (rule `summonReplaceWhenFull`; only offered when it is on).
+			// Replace-on-summon (offered only when every spirit slot is full).
 			const old = spiritBySlot(me, cmd.replaceSlotIndex);
 			const augment = (me?.spiritAugmentAttachments ?? []).some(
 				(a) => a.spiritSlotIndex === cmd.replaceSlotIndex
@@ -320,7 +305,7 @@ export function labelFor(
 		case 'keepMonsterCard': {
 			const card = me?.pendingMonsterDraw?.cards[cmd.index];
 			if (me?.pendingMonsterDraw?.maxCards === 1) {
-				// Rule `monsterDrawOne`: one card is revealed.
+				// One card is revealed.
 				const shown = card ? monsterLine(card) : 'the revealed card';
 				if (cmd.returnToDeck) return `Put ${shown} back on top of its deck (you keep nothing new; the next draw from that deck reveals it again)`;
 				const old = cmd.replaceHandIndex === undefined ? undefined : me.monsterHand?.[cmd.replaceHandIndex];
@@ -332,13 +317,9 @@ export function labelFor(
 		}
 		case 'startCombat': {
 			const card = me?.monsterHand?.[cmd.handIndex];
-			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first${battleActionNote(me, catalog, false) ? `; ${battleActionNote(me, catalog, false)}` : ''}${goodKillNote(me, card, catalog)})`;
+			return `Fight ${card ? monsterLine(card) : `hand card ${cmd.handIndex + 1}`} (the monster has the initiative; you roll your initiative die: a hit means you attack at the same time, a miss means it attacks first${battleActionNote(me, catalog, false) ? `; ${battleActionNote(me, catalog, false)}` : ''})`;
 		}
 		case 'resolveMonsterReward': {
-			if (cmd.arcaneBlood) {
-				const n = me?.pendingReward?.arcaneBlood ?? 0;
-				return `Take ${n} Arcane Blood in place of every reward of ${me?.pendingReward?.monsterName ?? 'the monster'}: Elementalist permanently upgrades an attack dice ${n === 1 ? 'once' : `${n} times`} (you get none of the card's rewards)`;
-			}
 			const options = me?.pendingReward ? buildMonsterRewards(me.pendingReward.rewardTrack) : [];
 			if (me?.pendingReward?.chooseOne) {
 				const o = options.find((x) => x.index === cmd.picks?.[0]) ?? options[0];

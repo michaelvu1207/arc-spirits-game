@@ -287,9 +287,10 @@ describe('information-safe ML action previews', () => {
 
 	it('previews a guaranteed monster reward without exposing the exact roll total', () => {
 		const state = combatState();
+		// Three Exalted dice (faces 1,1,1,2,2,2) deal at least 3: a certain kill of Barrier 3.
 		state.players.Red!.attackDice = Array.from({ length: 3 }, (_, index) => ({
-			instanceId: `guaranteed-arcane-${index}`,
-			tier: 'arcane' as const
+			instanceId: `guaranteed-exalted-${index}`,
+			tier: 'exalted' as const
 		}));
 		const action = legalActionsWithNext(state, 'Red', CATALOG).find(
 			(candidate) => candidate.cmd.type === 'startCombat'
@@ -365,7 +366,7 @@ describe('information-safe ML action previews', () => {
 		);
 	});
 
-	it('keeps fixed PvP engage VP but hides roll-dependent damage and corruption bounty', () => {
+	it('gives no VP for engaging and hides roll-dependent damage and corruption bounty', () => {
 		let low: LegalAction | undefined;
 		let high: LegalAction | undefined;
 		for (let seed = 1; seed <= 128 && (!low || !high); seed += 1) {
@@ -383,13 +384,14 @@ describe('information-safe ML action previews', () => {
 		for (const action of [low!, high!]) {
 			expect(action.hasHiddenOutcome).toBe(true);
 			expect(action.policyNext.phase).toBe('location');
-			expect(action.policyNext.players.Red!.victoryPoints).toBe(2);
+			// Engaging gives no VP; only the 3 VP for each corrupted Good player do, and they depend on the roll.
+			expect(action.policyNext.players.Red!.victoryPoints).toBe(0);
 			expect(action.policyNext.players.Blue!.barrier).toBe(2);
 			expect(action.policyNext.players.Blue!.statusLevel).toBe(0);
 			expect(action.policyNext.combats.some((combat) => combat.kind === 'pvp')).toBe(false);
 		}
-		expect(low!.next.players.Red!.victoryPoints).toBe(2);
-		expect(high!.next.players.Red!.victoryPoints).toBe(4);
+		expect(low!.next.players.Red!.victoryPoints).toBe(0);
+		expect(high!.next.players.Red!.victoryPoints).toBe(3);
 	});
 
 	it('keeps public monster/reward facts and expected combat value in the action vector', () => {
@@ -404,7 +406,7 @@ describe('information-safe ML action previews', () => {
 		expect(encoded).toHaveLength(ACT_DIM);
 		expect(encoded[p]).toBeCloseTo(cleanKill); // fair kill probability
 		expect(encoded[p + 1]).toBeCloseTo(cleanKill); // clean-kill probability
-		expect(encoded[p + 2]).toBeCloseTo(1 / 6); // raw one-arcane-die firepower vs 3 HP
+		expect(encoded[p + 2]).toBeCloseTo(3 / 6); // raw one-arcane-die firepower vs 3 HP (faces 0,0,1,3,3,5)
 		expect(encoded[p + 4]).toBeCloseTo(3 / 20); // public monster HP
 		expect(encoded[p + 5]).toBeCloseTo(1 / 20); // public monster damage
 		expect(encoded[p + 6]).toBe(1); // legacy remaining-lives fraction (always 1 for a card)

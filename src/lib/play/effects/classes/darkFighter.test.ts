@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { fire, makePlayer, makeState, spirit } from './testHelpers';
 import { applyTrigger } from '../apply';
-import { resetCombatFlags, resolveEncounterCombat } from '../../combat';
+import { resetCombatFlags } from '../../combat';
 import type { AttackDie, PrivatePlayerState } from '../../types';
 
-/** Assassin — "In combat with a player who has more attack dice than you, strike first and deal
- *  3 more damage." */
+/** Assassin — "In combat with a player who has more attack dice than you, deal 3 more damage."
+ *  It does not strike first. */
 const dice = (n: number): AttackDie[] => Array.from({ length: n }, (_, i) => ({ instanceId: `x${i}`, tier: 'basic' }));
 
 function inCombat(me: Partial<PrivatePlayerState>, them: Partial<PrivatePlayerState>) {
@@ -18,9 +18,9 @@ function inCombat(me: Partial<PrivatePlayerState>, them: Partial<PrivatePlayerSt
 }
 
 describe('Assassin', () => {
-	it('opponent has more dice: strike first and +3 damage', () => {
+	it('opponent has more dice: +3 damage, and no first strike', () => {
 		const red = inCombat({ attackDice: dice(2) }, { attackDice: dice(3) });
-		expect(red.alwaysAttackFirst).toBe(true);
+		expect(red.alwaysAttackFirst).toBe(false);
 		expect(red.combatDamageBonus).toBe(3);
 	});
 
@@ -42,18 +42,5 @@ describe('Assassin', () => {
 		const red = inCombat({}, { attackDice: dice(3) });
 		expect(red.initiative).toBe(0);
 		expect(red.attackRollAdvantage).toBe(false);
-	});
-
-	it('PvP: the Assassin side strikes first even with less Initiative', () => {
-		const red = makePlayer({ navigationDestination: 'Forest Region', spirits: [spirit(1, { Assassin: 1 })] });
-		const blue = makePlayer({
-			playerColor: 'Blue',
-			statusLevel: 3,
-			navigationDestination: 'Forest Region',
-			attackDice: dice(2),
-			spirits: [spirit(1, { Titan: 1 })]
-		});
-		const combat = resolveEncounterCombat(makeState(red, { Blue: blue }), undefined, ['Blue'], ['Red']);
-		expect(combat.log.some((l) => l.startsWith('Good attacks first'))).toBe(true);
 	});
 });

@@ -248,11 +248,11 @@ export function spiritLimitFor(_statusLevel?: number): number {
  * keep the old forgiveness — the descent stays cheap; the Fallen treadmill no longer is.
  * Returns the VP charged (0 when the rule did not fire) so combat callers can log it.
  *
- * Rule switch `fallenDebtBelowZero` (rules.ts; callers pass `opts.vpBelowZero` from it): that VP
- * loss is not clamped at 0, so VP may go negative (a seat at 0 VP pays too).
- * `opts.maxOwed` (rule `pvpAttackerSacrificeCap`): caps what THIS corruption owes.
- * `opts.maxCount` (rule number `sacrificeMax`): the cost stops growing there, so with 4 the 5th and
- * later corruptions cost 4 like the 4th (Cultist's "1 fewer" comes off after that).
+ * `opts.vpBelowZero` (the game always passes true): that VP loss is not clamped at 0, so VP may go
+ * negative (a seat at 0 VP pays too).
+ * `opts.maxOwed`: caps what THIS corruption owes.
+ * `opts.maxCount` (`SACRIFICE_MAX`, 4): the cost stops growing there, so the 5th and later
+ * corruptions cost 4 like the 4th (Cultist's "1 fewer" comes off after that).
  */
 export function setCorruptionDiscardObligation(
 	player: PrivatePlayerState,
@@ -263,7 +263,7 @@ export function setCorruptionDiscardObligation(
 	const cultist = (player.spirits ?? []).some(
 		(spirit) => !spirit.isFaceDown && (spirit.classes?.['Cultist'] ?? 0) > 0
 	);
-	// Rule `powerRework` Powers (their ids exist only in that set), first corruption of the round:
+	// Powers of the 2026-11-13 set, first corruption of the round:
 	// Dark Bargain pays 3 VP; Soul Ward cancels this corruption's sacrifice (and its VP debt).
 	if (!player.navigationPowerBattleTriggered) {
 		if (player.navigationPower === 'dark-bargain') {
@@ -276,7 +276,7 @@ export function setCorruptionDiscardObligation(
 	}
 	const counted = Math.min(player.corruptionCount ?? 0, opts?.maxCount ?? Infinity);
 	let owed = Math.max(0, counted - (cultist ? 1 : 0));
-	// Rule `pvpAttackerSacrificeCap`: this corruption owes at most `maxOwed`.
+	// This corruption owes at most `maxOwed`.
 	if (opts?.maxOwed != null) owed = Math.min(owed, opts.maxOwed);
 	if (owed <= 0) return 0;
 	const existing = player.pendingCorruptionDiscard;
@@ -316,7 +316,7 @@ export function setCorruptionDiscardObligation(
  * helper, that remainder hard-blocked `commitCleanup` with no legal move and froze the
  * seat. Call it after any such removal, and defensively before honoring the debt in phase
  * gates. Returns the VP charged (0 when nothing settled) so callers can log it.
- * `opts.vpBelowZero` (rule `fallenDebtBelowZero`): a Fallen player's VP is not clamped at 0.
+ * `opts.vpBelowZero` (the game always passes true): a Fallen player's VP is not clamped at 0.
  */
 export function settleUnpayableCorruptionDebt(
 	player: PrivatePlayerState,
@@ -420,15 +420,9 @@ export interface PendingRewardState {
 	rewardTrack: string[];
 	/** How many rewards the claim grants (every resolvable token). */
 	chooseAmount: number;
-	/** Falconer (rule `falconerDoubleKill`) doubled this claim: the track holds every reward twice. */
+	/** Falconer doubled this claim: the track holds every reward except Victory Points twice. */
 	doubled?: boolean;
-	/**
-	 * Rule `arcaneBlood`: the Arcane Blood this kill gives when the player takes it in place of
-	 * every reward (1 for a Difficulty 1 card and the permanent monster, 2 for Difficulty 2, 3 for
-	 * Difficulty 3). Absent when the rule is off.
-	 */
-	arcaneBlood?: number;
-	/** Rule `permanentRewardChoice`: the claim gives ONE reward of the track (`picks[0]`), not every one. */
+	/** A kill of the permanent monster: the claim gives ONE reward of the track (`picks[0]`), not every one. */
 	chooseOne?: boolean;
 }
 
@@ -611,8 +605,8 @@ export interface MonsterState {
 	/** A copy of the catalog's permanent monster (never from a deck; see PlayCatalogMonster). */
 	permanent?: boolean;
 	/**
-	 * The card's ability under rule `difficulty3Restores`: Barrier it restores after a fight it
-	 * survives (never above `maxHp`). Written only under the rule, on Difficulty 3 cards.
+	 * The card's ability: Barrier it restores after a fight it survives (never above `maxHp`).
+	 * Written only on Difficulty 3 cards (not the permanent monster).
 	 */
 	restoreAfterCombat?: number;
 	rewardTrack: string[]; // icon_pool ids
@@ -661,8 +655,8 @@ export type CombatStep = 'prep' | 'roll' | 'damage' | 'aftermath' | 'resolved';
 export interface CombatSide {
 	seat: SeatColor;
 	initiative: number;
-	/** Rule `initiativeDie`: the side of the initiative die this combatant rolled (1 to 12); `initiative` is then its side's 1 or 0
-	 *  (under `initiativeSum`: its side's total, one for each die of the side that hit). */
+	/** The side of the initiative die this combatant rolled (1 to 12); `initiative` is then its side's total,
+	 *  one for each die of the side that hit. */
 	initiativeRoll?: number;
 	rolled: boolean;
 	damageDealt: number;
@@ -1063,7 +1057,7 @@ export interface PrivatePlayerState {
 	alwaysAttackFirst?: boolean;
 	/** Paladin: "If initiative is tied, your side strikes first." Per combat. */
 	winsInitiativeTies?: boolean;
-	/** Rule `initiativeDie`: the side of the initiative die this player rolled in the last combat (1 to 12). */
+	/** The side of the initiative die this player rolled in the last combat (1 to 12). */
 	initiativeRoll?: number;
 	/**
 	 * Sentinel: attack-die instance ids the owner chose (Sentinel decision card) to discard
@@ -1091,33 +1085,10 @@ export interface PrivatePlayerState {
 	previousDestination?: string | null;
 	/** Origins whose 5-spirit relic this player already gained (a one-time reward). */
 	originRelicsGained?: string[];
-	/**
-	 * Cultivator (5) already granted its relic this game. Written only under the
-	 * `cultivatorRelicOnce` rule (catalog.rules), so games without that rule never carry it.
-	 */
+	/** Cultivator (5) already granted its relic this game (it grants it once per game). */
 	cultivatorRelicGained?: boolean;
-	/**
-	 * The round of this player's last Arcane Alchemist conversion. Written only under the
-	 * `alchemistOncePerRound` rule (catalog.rules), so games without that rule never carry it.
-	 */
+	/** The round of this player's last Arcane Alchemist conversion (one a round). */
 	alchemistConvertedRound?: number;
-	/**
-	 * The round in which Summoner last paid its 4 VP. Written only under the
-	 * `summonerOncePerRound` rule, so games without that rule never carry it.
-	 */
-	summonerPaidRound?: number;
-	/** Rule `sidePointsHalf`: Victory Points at the last settlement. */
-	pointsAtSettle?: number;
-	/** Rule `sidePointsHalf`: monster-reward points gained since the last settlement. */
-	monsterPointsSinceSettle?: number;
-	/** Rule `sidePointsHalf`: 1 while a half point waits for its second half. */
-	halfPointBank?: number;
-	/**
-	 * This player attacked a player (an Evil attacker in a resolved PvP exchange) this round.
-	 * Written only under the `moonPerksNeedAttack` rule (catalog.rules), so games without that
-	 * rule never carry it; reset to false at the start of the next round once it was set.
-	 */
-	attackedPlayerThisRound?: boolean;
 	/** When true, the player ignores Stun effects. */
 	stunImmune: boolean;
 	/** Knocked out of the CURRENT combat exchange (hit zero barrier / corrupted, and
@@ -1511,11 +1482,10 @@ export type GameCommand =
 	  }
 	// ── Combat: fight one monster card from your own hand ─────────────────
 	| { type: 'startCombat'; handIndex: number }
-	/** Draw two monster cards from an Abyss difficulty deck. */
+	/** Draw (reveal) the top monster card of an Abyss difficulty deck. */
 	| { type: 'drawMonsterCards'; difficulty: 1 | 2 | 3; /** Take a copy of the permanent monster instead (difficulty is ignored). */ permanent?: boolean }
 	/**
-	 * Keep one card from the current reveal and return the other.
-	 * Rule `monsterDrawOne` (one card is revealed): `returnToDeck` puts the revealed card back on top
+	 * Keep the revealed card (one card is revealed). `returnToDeck` puts the revealed card back on top
 	 * of its deck instead of keeping it; `replaceHandIndex` keeps it and puts that held card back on
 	 * top of its own deck at full Barrier (needed when the hand is full).
 	 */
@@ -1526,7 +1496,7 @@ export type GameCommand =
 	 * `choices[k]` selects the rune for the k-th "choose a rune" reward, in card
 	 * order (default: first).
 	 */
-	| { type: 'resolveMonsterReward'; picks: number[]; choices?: number[]; /** Rule `arcaneBlood`: take the Arcane Blood in place of every reward. */ arcaneBlood?: boolean }
+	| { type: 'resolveMonsterReward'; picks: number[]; choices?: number[]; /** No kill offers Arcane Blood: a claim that asks for it is refused. */ arcaneBlood?: boolean }
 	// ── Encounter / PvP (P2) ──────────────────────────────────────────────
 	| { type: 'initiatePvp' }
 	| { type: 'passEncounter' }

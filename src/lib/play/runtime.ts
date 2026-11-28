@@ -16,13 +16,12 @@ import { CURSED_SPIRIT_DICE_TIER, difficulty3Restore, pvpAllowedAt, SACRIFICE_MA
 import { abyssDrawBlockedBy } from './abyssDrawOrder';
 import { bagForSpiritCost, deckCopiesForCost, shuffleBag, SPIRIT_WORLD_BAG, ARCANE_ABYSS_BAG } from './bags';
 import { initRoundLoop, tryAdvanceFromLocation, tryAdvanceFromBenefits, tryAdvanceFromAwakening, tryAdvanceFromCleanup, tryAdvanceFromEncounter, recomputeAwakenEligibility, autoAdvanceResolution, seatHasResolutionWork, forceAdvancePhase as forceAdvancePhaseMachine } from './phases';
-import { resetCombatFlags, takeDamage, fightMonster, pvpVpForAttack, pvpGoodBounty, pvpVpPerCorrupted, resolveEncounterCombat } from './combat';
+import { resetCombatFlags, takeDamage, fightMonster, pvpVpForAttack, pvpVpPerCorrupted, resolveEncounterCombat } from './combat';
 import { applyTrigger, applyCultivate, applyRest, awakenedClassCounts } from './effects/apply';
 import { gainSpiritAugments, runAction, GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 import { ownerAugmentCapacity, isSpiritAugmentClass } from './augments';
 import { buildLocationInteractions, matchRewardCost, originRuneOptions, type ResolvedRune, type GainEffect, ABYSS_SUMMON_USED, monsterFightsLeft, isAbyssSummonRow } from './locationInteractions';
 import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
-import { noteMonsterPoints, settleSidePoints } from './sidePoints';
 import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
@@ -35,10 +34,6 @@ import { applyCorruptionEffects, recordSacrifice } from './effects/corruption';
 import { AWAKEN_PROGRESS_KEYS, AWAKEN_SPIRIT_IDS } from './effects/awakenHandlers';
 import { STATUS_LADDER, isEvilAlignment, setCorruptionDiscardObligation, settleUnpayableCorruptionDebt } from './types';
 
-const EMPTY_BAG = Object.freeze({
-	count: 0,
-	contents: []
-});
 const DICE_GRID_START_X = -0.5;
 const DICE_GRID_START_Z = 0;
 const DICE_GRID_SPACING = 0.25;
@@ -430,15 +425,15 @@ function returnHandDrawsToBags(state: PublicGameState, player: PrivatePlayerStat
  * the bag lacks enough spirits. Shared by the draw commands, reward-row summon
  * gains, and the draw queue.
  */
-/** Draw size and summon limit of a summon from `sourceBag`. Spirit World: draw 4, summon 2.
- *  Arcane Abyss: draw 3, summon 1; rule `abyssSummonDraw4Pick2`: draw 4, summon 2. */
+/** Draw size and summon limit of a summon from `sourceBag`: draw 4, summon 2 (Spirit World and
+ *  Arcane Abyss). The Power Tidal Calling at the Water Region: draw 8. */
 export function summonDrawSizes(
 	sourceBag: SpiritSourceBag,
 	catalog?: unknown,
 	player?: Pick<PrivatePlayerState, 'navigationPower' | 'navigationDestination'> | null
 ): { draw: number; pick: number } {
 	if (sourceBag !== ARCANE_ABYSS_BAG) {
-		// Power "Tidal Calling" (rule `powerRework`), committed at the Water Region: draw 8.
+		// Power "Tidal Calling", committed at the Water Region: draw 8.
 		const tidalCalling =
 			player?.navigationPower === 'tidal-calling' &&
 			player.navigationDestination === 'Water Region';
@@ -447,7 +442,7 @@ export function summonDrawSizes(
 	return { draw: 4, pick: 2 };
 }
 
-/** The log line of an Arcane Abyss Summon, with the sizes of the rule in force. */
+/** The log line of an Arcane Abyss Summon, with its sizes. */
 function abyssSummonLogLine(catalog?: unknown): string {
 	const { draw, pick } = summonDrawSizes(ARCANE_ABYSS_BAG, catalog);
 	return `Summon from the Arcane Abyss — draw ${draw}, summon up to ${pick}.`;
@@ -498,53 +493,13 @@ function startDraw(
 	return true;
 }
 
-/**
- * Rule `elementalistMethods`, Elementalist (5): "On a Spirit World Summon, upgrade an attack dice
- * twice." Called where a Spirit World Summon is granted, once per summon.
- */
-function elementalistSpiritWorldSummon(
-	player: PrivatePlayerState,
-	catalog: unknown,
-	log: string[]
-): void {
-	return;
-}
-
-/** Rule `permanentRewardChoice`: the claim of this kill gives one reward of the card, the player's choice. */
+/** The claim of this kill gives one reward of the card, the player's choice: a kill of the
+ *  permanent monster whose card has more than one reward (Michael, 2026-11-21). */
 export function rewardChoiceOf(
 	monster: { permanent?: boolean; rewardTrack: string[] },
 	catalog?: unknown
 ): boolean {
-	return (
-		monster.permanent === true &&
-		true &&
-		rewardClaimCount(monster.rewardTrack) > 1
-	);
-}
-
-/** Rule `arcaneBlood`: Arcane Blood for a kill, by the card's Difficulty (the permanent monster gives 1). */
-export const ARCANE_BLOOD_BY_DIFFICULTY: Record<1 | 2 | 3, number> = { 1: 1, 2: 2, 3: 3 };
-/** Rule `arcaneBlood`: the Arcane Blood the kill of `monster` offers in place of its rewards; undefined with the rule off. */
-export function arcaneBloodFor(
-	monster: { difficulty?: number; permanent?: boolean },
-	catalog: unknown
-): number | undefined {
-	return undefined;
-}
-
-/**
- * Rule `arcaneBlood`: the player gains `amount` Arcane Blood (taken in place of a kill's rewards).
- * Arcane Blood is not kept. Elementalist (2), under `elementalistMethods`: "When you gain an Arcane
- * Blood, upgrade an attack dice", once per Arcane Blood.
- */
-function gainArcaneBlood(
-	player: PrivatePlayerState,
-	amount: number,
-	catalog: unknown,
-	log: string[]
-): void {
-	log.push(`Gained ${amount} Arcane Blood.`);
-	return;
+	return monster.permanent === true && rewardClaimCount(monster.rewardTrack) > 1;
 }
 
 /** Begin a reward-granted draw now, or queue it behind the active one. */
@@ -645,8 +600,6 @@ function applyRewardGain(
 	switch (gain.type) {
 		case 'vp':
 			player.victoryPoints += gain.amount;
-			// Rule `sidePointsHalf`: a monster's reward stays whole.
-			noteMonsterPoints(player, gain.amount, catalog);
 			log.push(`Gained ${gain.amount} Victory Point${gain.amount === 1 ? '' : 's'}.`);
 			break;
 		case 'gainMaxBarrier': {
@@ -700,7 +653,6 @@ function applyRewardGain(
 		case 'action':
 			if (gain.action === 'spiritWorldSummon') {
 				queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG, false, catalog);
-				elementalistSpiritWorldSummon(player, catalog, log);
 				log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 			} else if (gain.action === 'abyssSummon') {
 				queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
@@ -712,24 +664,6 @@ function applyRewardGain(
 			}
 			break;
 	}
-}
-
-/** Rule `goodKillBonus`: what a Good-aligned player gets for every monster kill, on top of the card's rewards. */
-export const GOOD_KILL_BONUS_VP = 1;
-
-/** Rule `goodKillBonus` pays for Difficulty 2 and 3 cards only: Difficulty 1 cards (and the permanent
- *  monster, a Difficulty 1 card) kept their printed points when the others lost 1 (Michael, 2026-11-19). */
-export function goodKillBonusApplies(monster: { difficulty?: number }): boolean {
-	return (monster.difficulty ?? 1) >= 2;
-}
-
-/**
- * Rule `goodKillBonus`: a player who is Good-aligned (not Fallen) when the kill of a Difficulty 2 or 3
- * monster resolves gets GOOD_KILL_BONUS_VP. It is not a reward of the card, so nothing that copies or
- * changes the card's rewards (Falconer, a claim) touches it, and a card with no rewards pays it too.
- */
-function goodKillBonus(player: PrivatePlayerState, monster: { difficulty?: number }, catalog: PlayCatalog, log?: string[]): void {
-	return;
 }
 
 /**
@@ -792,7 +726,7 @@ function applyAwakenRewardClaim(
 	for (const grant of pending.grants) {
 		if (grant.kind === 'taintedChoice') {
 			// Cursed Spirit, Tainted: split the N units between max barrier and attack dice
-			// (Enchanted; Basic under the rule `cursedSpiritBasic`).
+			// (Basic).
 			const maxBarrier = Math.max(0, Math.min(grant.amount, taintedMaxBarrier));
 			const dice = grant.amount - maxBarrier;
 			if (maxBarrier > 0) runAction(ctx, { kind: 'gainMaxBarrier', amount: maxBarrier });
@@ -964,7 +898,6 @@ export function applyDeadlineAdvance(state: PublicGameState, catalog: PlayCatalo
 	if (state.status !== 'active') return;
 	drainPendingBeforeAdvance(state, catalog);
 	forceAdvancePhaseMachine(state, catalog);
-	settleSidePoints(state, catalog);
 	state.revision += 1;
 }
 
@@ -1081,9 +1014,9 @@ function firstOpenSpiritSlot(player: PrivatePlayerState) {
 
 /**
  * Discard one spirit from a player's board (the `discardSpirit` command, and the spirit a summon
- * replaces under the `summonReplaceWhenFull` rule): remove it and its augment, fire its discard
- * effects when it is awake, Summoner's 4 VP for an Arcane Abyss spirit, and return the card to
- * the bag it came from (reshuffled). Returns the effect log lines.
+ * replaces when all spirit slots are full): remove it and its augment, fire its discard effects
+ * when it is awake, and return the card to the bag it came from (reshuffled). Returns the effect
+ * log lines.
  */
 function discardBoardSpirit(
 	state: PublicGameState,
@@ -1094,7 +1027,6 @@ function discardBoardSpirit(
 	const player = state.players[seat]!;
 	const sourceBag =
 		bagForSpiritCost(spirit.cost) ?? (spirit.isFaceDown ? ARCANE_ABYSS_BAG : SPIRIT_WORLD_BAG);
-	const hadAbyssSummoner = (awakenedClassCounts(player)['Summoner'] ?? 0) > 0;
 
 	// Remove it from the tableau (freeing the slot for a new summon) and drop
 	// any runes attached to that slot.
@@ -1311,14 +1243,13 @@ function makeGameId(rng: RngState, now = new Date()): string {
 	return `game_${y}${m}${d}_${hh}${mm}${ss}_${random}`;
 }
 
-/** Abyss deck for a catalog monster, by HP: 1–3 → Difficulty 1, 4–7 → 2, 8+ → 3.
- *  Rule `monsterDeckByStage` (pass the catalog): the card's `stage` (1, 2 or 3) is its deck, so
- *  a Barrier edit never moves a card to another deck. */
+/** Abyss deck for a catalog monster: the card's `stage` (1, 2 or 3), so a Barrier edit never moves a
+ *  card to another deck. A card with no stage goes by its Barrier: 1–3 → Difficulty 1, 4–7 → 2, 8+ → 3. */
 export function monsterDifficulty(
 	monster: { barrier: number; stage?: number },
 	catalog?: unknown
 ): 1 | 2 | 3 {
-	if (catalog && (monster.stage === 1 || monster.stage === 2 || monster.stage === 3))
+	if (monster.stage === 1 || monster.stage === 2 || monster.stage === 3)
 		return monster.stage;
 	if (monster.barrier >= 8) return 3;
 	if (monster.barrier >= 4) return 2;
@@ -1353,9 +1284,9 @@ export function monsterCardFromCatalog(
 		livesTotal: 1,
 		ladderIndex: monster.order,
 		ladderMax: 0,
-		// Under rule `initiativeDie` a monster has no number: it always has the initiative.
+		// A monster has no initiative number: it always has the initiative.
 		...(monster.permanent ? { permanent: true } : {}),
-		// Rule `difficulty3Restores`: the card's ability (a Difficulty 3 card that is not the permanent monster).
+		// The ability of a Difficulty 3 card that is not the permanent monster: Barrier restored after a fight it survives.
 		...(!monster.permanent && difficulty3Restore(difficulty) > 0 ? { restoreAfterCombat: difficulty3Restore(difficulty) } : {})
 	};
 }
@@ -1466,7 +1397,7 @@ function buildMonsterDecks(
 	});
 }
 
-/** Reveal up to two cards from one difficulty deck into the player's pending draw (rule `monsterDrawOne`: the top card only). */
+/** Reveal the top card of one difficulty deck into the player's pending draw. */
 function drawMonsterCardsForPlayer(
 	state: PublicGameState,
 	player: PrivatePlayerState,
@@ -1474,8 +1405,7 @@ function drawMonsterCardsForPlayer(
 	catalog: PlayCatalog
 ): boolean {
 	if (player.pendingMonsterDraw?.cards.length) return false;
-	const reveal = 1;
-	const selected = state.bags.monsters.contents.filter((entry) => entry.difficulty === difficulty).slice(0, reveal);
+	const selected = state.bags.monsters.contents.filter((entry) => entry.difficulty === difficulty).slice(0, 1);
 	if (selected.length === 0) return false;
 	const selectedGuids = new Set(selected.map((entry) => entry.guid));
 	state.bags.monsters.contents = state.bags.monsters.contents.filter((entry) => !selectedGuids.has(entry.guid));
@@ -1497,12 +1427,12 @@ function drawMonsterCardsForPlayer(
 						order: 0
 					});
 		}),
-		maxCards: reveal
+		maxCards: 1
 	};
 	return true;
 }
 
-/** Put a monster card on TOP of its deck at full Barrier (rule `monsterDrawOne`): the next draw from that deck reveals it. */
+/** Put a monster card on TOP of its deck at full Barrier: the next draw from that deck reveals it. */
 function returnMonsterCardToTop(state: PublicGameState, card: MonsterState): void {
 	state.bags.monsters.contents.unshift({ guid: `monster-card-${card.id}-${nextId(state.rng, 'return')}`, id: card.id, name: card.name, barrier: card.maxHp, damage: card.damage, difficulty: card.difficulty });
 	state.bags.monsters.count = state.bags.monsters.contents.length;
@@ -1570,7 +1500,6 @@ export function applyGameCommand(
 	if (result.ok) {
 		refreshNavigationPowerOffers(result.state);
 		autoAdvanceResolution(result.state, catalog);
-		settleSidePoints(result.state, catalog);
 	}
 	return result;
 }
@@ -1949,7 +1878,7 @@ function reduceCommand(
 				return failure('spirit_missing', 'That spirit could not be found in the catalog.');
 			}
 
-			// Rule switch `summonReplaceWhenFull` (rules.ts): with all 7 slots full, the summon may
+			// With all 7 slots full, the summon may
 			// name a spirit to replace. That spirit is discarded first (exactly as `discardSpirit`, but
 			// not a corruption sacrifice) and the new spirit takes its slot.
 			let replaceLog: string[] = [];
@@ -2381,7 +2310,7 @@ function reduceCommand(
 			const activePlayer = activePlayerForActor(state, actor);
 			if (!activePlayer)
 				return failure('seat_required', 'Only seated players can adjust victory points.');
-			// Rule `fallenDebtBelowZero`: VP may be negative, so a manual adjustment never lifts a
+			// VP may be negative, so a manual adjustment never lifts a
 			// negative total to 0 (the floor is the lower of 0 and the current VP).
 			activePlayer.player.victoryPoints = Math.max(
 				Math.min(0, activePlayer.player.victoryPoints),
@@ -2662,8 +2591,8 @@ function reduceCommand(
 			if (
 				active.player.navigationDestination === 'Arcane Abyss' &&
 				!active.player.actionsUsedThisRound.includes('combat') &&
-				// Rule `nhalNeedsCorrupt`: the visit counts only while Corrupt or Fallen.
-				((active.player.statusLevel ?? 0) >= 2) &&
+				// The visit counts only while Corrupt or Fallen.
+				(active.player.statusLevel ?? 0) >= 2 &&
 				active.player.spirits.some((s) => s.id === AWAKEN_SPIRIT_IDS.shadowtaker && s.isFaceDown)
 			) {
 				active.player.awakenProgress ??= {};
@@ -2919,15 +2848,15 @@ function reduceCommand(
 				});
 				resolver(ctx, command.optionId, command.selectedInstanceIds);
 			}
-			// Falconer (rule `falconerDoubleKill`): yes gives every reward of the open claim twice
-			// and discards the Falconer spirit.
+			// Falconer: yes gives every reward of the open claim except Victory Points twice and
+			// discards the Falconer spirit.
 			if (decision.kind === FALCONER_DOUBLE_KIND && command.optionId === 'yes') {
 				const reward = active.player.pendingReward;
 				const falconer = awakeFalconerSpirit(active.player);
 				if (reward && !reward.doubled && falconer) {
 					const again = buildMonsterRewards(reward.rewardTrack)
-								.filter((option) => option.effect.type !== 'vp')
-								.map((option) => option.token);
+						.filter((option) => option.effect.type !== 'vp')
+						.map((option) => option.token);
 					// A one-reward claim keeps its track: the chosen reward is paid twice at the claim.
 					if (!reward.chooseOne) {
 						reward.rewardTrack = [...reward.rewardTrack, ...again];
@@ -2941,11 +2870,6 @@ function reduceCommand(
 				} else {
 					log.push('Falconer: there is no monster reward to double.');
 				}
-			}
-			// Summoner: after a Spirit World summon, Yes opens a normal Abyss draw.
-			if (decision.kind === 'abyssSummonerDraw' && command.optionId === 'yes') {
-				queueOrBeginDraw(state, active.player, ARCANE_ABYSS_BAG, false, catalog);
-				log.push('Summoner: drawing from the Arcane Abyss Bag.');
 			}
 			// Remove the resolved decision regardless of the option taken.
 			active.player.pendingDecisions = active.player.pendingDecisions.filter(
@@ -3257,7 +3181,7 @@ function reduceCommand(
 			if (interaction.gains.some(g => g.type === 'navigationPower' && g.replace) && !player.powerInventory?.length) {
 				return failure('power_missing', 'You need a held Power to replace.');
 			}
-			// Rule `abyssFightOrSummon`: a round at the Arcane Abyss is a fight OR the Arcane Abyss Summon action.
+			// A round at the Arcane Abyss is a fight OR the Arcane Abyss Summon action (one battle action).
 			const abyssChoice = destination === 'Arcane Abyss' && isAbyssSummonRow(interaction);
 			if (abyssChoice && !player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED) && monsterFightsLeft(player, true) <= 0) {
 				return failure('action_used', 'You have no battle action left this round: the Arcane Abyss Summon action uses a battle action.');
@@ -3334,7 +3258,6 @@ function reduceCommand(
 					case 'action': {
 						if (gain.action === 'spiritWorldSummon') {
 							queueOrBeginDraw(state, player, SPIRIT_WORLD_BAG, false, catalog);
-							elementalistSpiritWorldSummon(player, catalog, log);
 							log.push('Summon from the Spirit World — draw 4, summon up to 2.');
 						} else if (gain.action === 'abyssSummon') {
 							queueOrBeginDraw(state, player, ARCANE_ABYSS_BAG, false, catalog);
@@ -3442,7 +3365,7 @@ function reduceCommand(
 			const active = activePlayerForActor(state, actor);
 			if (!active || active.player.navigationDestination !== 'Arcane Abyss') return failure('not_in_abyss', 'You must be at the Arcane Abyss to draw monster cards.');
 			if (active.player.pendingMonsterDraw?.cards.length) return failure('monster_draw_pending', 'Keep one of the revealed monster cards first.');
-			// Rule `monsterDrawOne`: a full hand may still draw from a deck (the card can replace a held one).
+			// A full hand may still draw from a deck (the card can replace a held one).
 			const swapDraw = !command.permanent;
 			if ((active.player.monsterHand?.length ?? 0) >= 3 && !swapDraw) return failure('monster_hand_full', 'Your hand is full (3/3). Defeat a monster card before you draw again.');
 			if (active.player.monsterDrawRound === state.round) return failure('monster_draw_used', 'You already drew monster cards this visit.');
@@ -3457,7 +3380,7 @@ function reduceCommand(
 				active.player.monsterDrawRound = state.round;
 				return success(state);
 			}
-			// Rule `abyssDrawByPoints`: the players at the Abyss draw from the decks fewest points first.
+			// The players at the Abyss draw from the decks fewest points first.
 			const ahead = abyssDrawBlockedBy(catalog, state, active.seatColor);
 			if (ahead) return failure('abyss_draw_wait', `${ahead} had fewer points when the round began and draws before you.`);
 			if (!drawMonsterCardsForPlayer(state, active.player, command.difficulty, catalog)) return failure('monster_deck_empty', `The Difficulty ${command.difficulty} deck is empty.`);
@@ -3506,6 +3429,8 @@ function reduceCommand(
 			if (!Number.isInteger(command.handIndex) || command.handIndex < 0 || command.handIndex >= hand.length)
 				return failure('monster_card_invalid', 'Choose a monster card from your hand.');
 			if (hand[command.handIndex].hp <= 0) return failure('monster_defeated', 'This monster card is already defeated.');
+			// One battle action a round (Monster Hunter: one more); the Arcane Abyss Summon action,
+			// once taken, holds the place of one fight.
 			if (monsterFightsLeft(active.player, true) <= 0) {
 				return failure(
 					'action_used',
@@ -3535,16 +3460,13 @@ function reduceCommand(
 			// the DEFEATED card (and picks a rune where a token asks for one). This blocks
 			// ending the Location phase until claimed.
 			if (result.killed && result.fought) {
-				goodKillBonus(active.player, result.fought, catalog, result.log);
 				const claim = rewardClaimCount(result.fought.rewardTrack);
-				const blood = arcaneBloodFor(result.fought, catalog);
-				if (claim > 0 || blood) {
+				if (claim > 0) {
 					active.player.pendingReward = {
 						monsterId: result.fought.id,
 						monsterName: result.fought.name,
 						rewardTrack: [...result.fought.rewardTrack],
 						chooseAmount: rewardChoiceOf(result.fought, catalog) ? 1 : claim,
-						...(blood ? { arcaneBlood: blood } : {}),
 						...(rewardChoiceOf(result.fought, catalog) ? { chooseOne: true } : {})
 					};
 					offerFalconerDouble(state, active.player, catalog);
@@ -3567,19 +3489,15 @@ function reduceCommand(
 			// A kill grants EVERY reward on the card; `picks` is ignored. `choices` aligns
 			// to the card's "choose a rune" rewards, in card order.
 			const log: string[] = [];
-			if (command.arcaneBlood) {
-				// Rule `arcaneBlood`: the Arcane Blood in place of every reward of the card.
-				if (!pending.arcaneBlood) return failure('no_arcane_blood', 'This kill offers no Arcane Blood.');
-				log.push(`Took Arcane Blood in place of the rewards of ${pending.monsterName}.`);
-				gainArcaneBlood(player, pending.arcaneBlood, catalog, log);
-			} else if (pending.chooseOne) {
-				// Rule `permanentRewardChoice`: one reward of the card, the player's choice (`picks[0]`).
+			// No kill offers Arcane Blood.
+			if (command.arcaneBlood) return failure('no_arcane_blood', 'This kill offers no Arcane Blood.');
+			if (pending.chooseOne) {
+				// One reward of the card, the player's choice (`picks[0]`).
 				const options = buildMonsterRewards(pending.rewardTrack);
 				const opt = options.find((o) => o.index === command.picks?.[0]) ?? options[0];
 				if (!opt) return failure('no_reward', 'This card has no reward to claim.');
-				// Falconer doubled the claim: the chosen reward twice (not Victory Points under `falconerNoDoubleVp`).
-				const times =
-					pending.doubled && !(opt.effect.type === 'vp') ? 2 : 1;
+				// Falconer doubled the claim: the chosen reward twice (not Victory Points).
+				const times = pending.doubled && opt.effect.type !== 'vp' ? 2 : 1;
 				for (let n = 0; n < times; n++)
 					applyRewardGain(state, active.seatColor, player, opt.effect, command.choices?.[0] ?? 0, log, catalog);
 			} else {
@@ -3693,8 +3611,8 @@ export function encounterEvilAggressorsAt(
 
 /**
  * Resolve the group Encounter at `dest` once every Evil aggressor there has voted.
- * Unanimous `'attack'` → run the group combat (each Evil attacker scores VP from their
- * own roll + corruptions — see pvpVpForAttack — plus awaken progress); any `'decline'`
+ * Unanimous `'attack'` → run the group combat (each Evil attacker scores VP per Good player
+ * corrupted — see pvpVpForAttack — plus awaken progress; Good players get nothing); any `'decline'`
  * → no combat. Idempotent: a PvP combat already recorded for these seats this round
  * short-circuits, so it never resolves twice.
  */
@@ -3727,24 +3645,7 @@ function resolveEncounterLocationIfReady(
 	for (const s of evilSeats) {
 		const p = state.players[s];
 		if (!p) continue;
-		p.victoryPoints += pvpVpForAttack(
-			corruptedGood,
-			true,
-			false,
-			pvpVpPerCorrupted(catalog)
-		);
-	}
-	const bounty = pvpGoodBounty(
-		combat.sides.filter((s) => s.side === 'evil' && s.corrupted).length,
-		false
-	);
-	if (bounty > 0) {
-		for (const side of combat.sides) {
-			if (side.side !== 'good') continue;
-			const p = state.players[side.seat];
-			if (p) p.victoryPoints += bounty;
-		}
-		combat.log.push(`PvP bounty: each Good player gains ${bounty} VP.`);
+		p.victoryPoints += pvpVpForAttack(corruptedGood);
 	}
 	for (const side of combat.sides) {
 		if (!side.corrupted) continue;
@@ -3985,20 +3886,17 @@ const navigationPowerHooks = {
 			combat: { dealt: monster.maxHp, overkill: 0, killed: true, monsterDifficulty: monster.difficulty, monsterPermanent: monster.permanent === true }
 		});
 		const claim = rewardClaimCount(fought.rewardTrack);
-		const blood = arcaneBloodFor(fought, catalog);
-		if (claim > 0 || blood) {
+		if (claim > 0) {
 			player.pendingReward = {
 				monsterId: fought.id,
 				monsterName: fought.name,
 				rewardTrack: [...fought.rewardTrack],
 				chooseAmount: rewardChoiceOf(fought, catalog) ? 1 : claim,
-				...(blood ? { arcaneBlood: blood } : {}),
 				...(rewardChoiceOf(fought, catalog) ? { chooseOne: true } : {})
 			};
 			offerFalconerDouble(state, player, catalog);
 		}
 		const killLog = ['Abyssal Execution: defeated the monster without battle.'];
-		goodKillBonus(player, fought, catalog, killLog);
 		state.combats.push({
 			id: nextId(state.rng, 'power-kill'),
 			kind: 'monster',

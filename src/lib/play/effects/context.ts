@@ -32,9 +32,9 @@ export interface EffectCombatInfo {
 	 *  present, initiative-comparing effects (Bastion) use this instead of a single
 	 *  representative seat's initiative, so they judge against the whole attacking side. */
 	opponentInitiative?: number;
-	/** True when a monster deals this hit (fightMonster); read by Bastion under `bastionVsMonsters`. */
+	/** True when a monster deals this hit (fightMonster); read by Bastion, which halves every monster hit. */
 	vsMonster?: boolean;
-	/** The fought card's Difficulty deck (1 to 3), for `onMonsterKill`; read by Elementalist under `elementalistBigKills`. */
+	/** The fought card's Difficulty deck (1 to 3), for `onMonsterKill`. */
 	monsterDifficulty?: 1 | 2 | 3;
 	/** True when the fought card is a copy of the permanent monster (the Abyss Lurker). */
 	monsterPermanent?: boolean;

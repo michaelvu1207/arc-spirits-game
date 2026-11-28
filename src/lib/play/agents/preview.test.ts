@@ -146,15 +146,16 @@ describe('destination preview (navigation)', () => {
 });
 
 describe('monster facts', () => {
-	it('a hit at least as large as your Barrier corrupts you before you strike; a guard Power changes it', () => {
+	it('a hit at least as large as your Barrier corrupts you (you strike back only with the initiative); a guard Power changes it', () => {
 		const state = redWithMonster(4);
 		const red = state.players.Red!;
 		red.barrier = 4;
 		red.maxBarrier = 4;
 		red.powerInventory = ['battle-guard'];
 		const lines = monsterFactLines(state, 'Red', catalog);
+		// The monster always has the initiative; a player whose initiative die hits attacks at the same time.
 		expect(lines[0]).toMatch(
-			/hit 4\): its hit vs your Barrier 4: you are corrupted before you strike/
+			/hit 4\): its hit vs your Barrier 4: you are corrupted in 12\/12 trials \(striking back in \d+ of them\)/
 		);
 		// In navigation (before the reveal) the held Power is tried as committed.
 		const nav = structuredClone(state);
@@ -182,8 +183,14 @@ describe('monster facts', () => {
 	});
 
 	it('the Abyss preview lists every monster deck a draw is possible from', () => {
-		const lines = facts(newGame()).facts!;
-		expect(lines.join('\n')).toMatch(/monster draw: possible from Difficulty 1\/2\/3/);
+		const state = newGame();
+		// A card's deck is its stage; every card of the frozen catalog is stage 1.
+		const open = ([1, 2, 3] as const).filter((d) =>
+			state.bags.monsters.contents.some((entry) => entry.difficulty === d)
+		);
+		expect(open).toEqual([1]);
+		const lines = facts(state).facts!;
+		expect(lines.join('\n')).toContain('monster draw: possible from Difficulty 1 (your hand 0/3)');
 	});
 
 	it('a small hit is survived and the seat strikes back', () => {
@@ -195,7 +202,7 @@ describe('monster facts', () => {
 	it('location prompts at the Abyss carry the monster hand facts', () => {
 		const state = redWithMonster(9);
 		const req = facts(state);
-		expect(req.facts?.join('\n')).toMatch(/MONSTER HAND .*\n.*corrupted before you strike/);
+		expect(req.facts?.join('\n')).toMatch(/MONSTER HAND .*\n.*you are corrupted in 12\/12 trials/);
 	});
 });
 
@@ -263,26 +270,31 @@ describe('rules brief statements checked against the engine', () => {
 		expect(slotSatisfies({ hasRune: true, type: 'augment', name: 'X' } as never, req)).toBe(false);
 	});
 
-	it('Rest: +2 Barrier capped at Max Barrier; the On Rest classes are listed from the catalog', () => {
+	it('Rest: Barrier by status (Pure 4) capped at Max Barrier; the On Rest classes are listed from the catalog', () => {
 		const brief = buildRulesBrief(catalog);
-		expect(brief).toMatch(/Rest restores 2 Barrier \(never above your Max Barrier\)/);
+		expect(brief).toContain(
+			'Rest restores Barrier by your status (Pure 4, Tainted 4, Corrupt 3, Fallen 2; never above your Max Barrier)'
+		);
 		for (const name of restClasses(catalog)) expect(brief).toContain(name);
 		let state = newGame();
 		for (const seat of state.activeSeats)
 			state = apply(state, seat, { type: 'lockNavigation', destination: 'Forest Region' as never });
 		applyDeadlineAdvance(state, catalog);
 		const red = state.players.Red!;
+		expect(red.statusLevel ?? 0).toBe(0);
 		red.maxBarrier = 7;
-		red.barrier = 6;
 		const rest = interactionsAt(catalog, 'Forest Region').find(
 			(i) => interactionSummary(i) === 'Rest'
 		);
 		expect(rest).toBeTruthy();
-		const after = apply(state, 'Red', {
-			type: 'resolveLocationInteraction',
-			rowIndex: rest!.rowIndex
-		});
-		expect(after.players.Red!.barrier).toBe(7);
+		const restAt = (barrier: number) => {
+			const copy = structuredClone(state);
+			copy.players.Red!.barrier = barrier;
+			return apply(copy, 'Red', { type: 'resolveLocationInteraction', rowIndex: rest!.rowIndex })
+				.players.Red!.barrier;
+		};
+		expect(restAt(2)).toBe(6);
+		expect(restAt(6)).toBe(7);
 	});
 
 	it('the brief says a hit equal to your Barrier corrupts, and the engine agrees', () => {

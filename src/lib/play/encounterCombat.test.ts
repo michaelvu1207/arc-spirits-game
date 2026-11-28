@@ -53,6 +53,9 @@ function started3(seed = 1): PublicGameState {
 
 const arcane = (n: number): AttackDie[] =>
 	Array.from({ length: n }, (_, i) => ({ instanceId: `d${i}`, tier: 'arcane' as const }));
+/** Exalted dice roll 1 or 2 each (faces 1,1,1,2,2,2): `n` of them deal n to 2n. */
+const exalted = (n: number): AttackDie[] =>
+	Array.from({ length: n }, (_, i) => ({ instanceId: `d${i}`, tier: 'exalted' as const }));
 
 /** Lock everyone into Mountain Region, configure sides, then force the reveal into the
  *  Encounter phase. `setup` runs after locks (statusLevel/dice survive the reveal). */
@@ -81,7 +84,7 @@ describe('group Encounter (PvP) combat', () => {
 			const red = s.players.Red!;
 			red.statusLevel = 3;
 			red.statusToken = 'Fallen';
-			red.attackDice = arcane(3); // 3–9 damage; below the goods' barrier so no corruption
+			red.attackDice = exalted(3); // 3–6 damage; below the goods' barrier so no corruption
 			for (const seat of ['Blue', 'Orange'] as const) {
 				const g = s.players[seat]!;
 				g.statusLevel = 0;
@@ -99,21 +102,21 @@ describe('group Encounter (PvP) combat', () => {
 		// Same full damage applied to BOTH goods — identical resulting barrier, both hit.
 		expect(blue.barrier).toBe(orange.barrier);
 		expect(blue.barrier).toBeLessThan(12);
-		// 2 VP for engaging (goods' barrier is above the max roll here, so no
-		// corruption bonus is in play).
+		// No VP for engaging, and the goods' barrier is above the max roll here, so no
+		// Good player is corrupted and the attacker scores nothing.
 		const pvp = after.combats.find((c) => c.kind === 'pvp')!;
 		const redSide = pvp.sides.find((s) => s.seat === 'Red')!;
 		expect(redSide.damageDealt).toBeGreaterThan(0);
-		expect(after.players.Red!.victoryPoints).toBe(2);
+		expect(after.players.Red!.victoryPoints).toBe(0);
 	});
 
-	test('two Evil attackers: unanimous → both fire, +2 VP each (+2/corruption), pooled damage', () => {
+	test('two Evil attackers: unanimous → both fire, +3 VP each per corrupted Good, pooled damage', () => {
 		const state = intoEncounter(7, (s) => {
 			for (const seat of ['Red', 'Orange'] as const) {
 				const e = s.players[seat]!;
 				e.statusLevel = 3;
 				e.statusToken = 'Fallen';
-				e.attackDice = arcane(3);
+				e.attackDice = exalted(3);
 			}
 			const blue = s.players.Blue!;
 			blue.statusLevel = 0;
@@ -129,7 +132,7 @@ describe('group Encounter (PvP) combat', () => {
 		expect(after.players.Blue!.barrier).toBe(blueBefore);
 
 		// Second Evil votes → unanimous → group strike resolves. Each attacker scores
-		// 2 VP for engaging, plus 2 per corrupted Good player.
+		// 3 VP per corrupted Good player and nothing for engaging.
 		after = apply(after, ORANGE, { type: 'initiatePvp' });
 		const pvp = after.combats.find((c) => c.kind === 'pvp')!;
 		expect(pvp).toBeTruthy();
@@ -137,7 +140,7 @@ describe('group Encounter (PvP) combat', () => {
 		for (const seat of ['Red', 'Orange'] as const) {
 			const side = pvp.sides.find((s) => s.seat === seat)!;
 			expect(side.damageDealt).toBeGreaterThan(0);
-			expect(after.players[seat]!.victoryPoints).toBe(2 + 2 * corruptedGood);
+			expect(after.players[seat]!.victoryPoints).toBe(3 * corruptedGood);
 		}
 		// Blue either took the pooled hit or was corrupted (barrier reset to full).
 		const bluePvp = pvp.sides.find((s) => s.seat === 'Blue')!;
@@ -145,12 +148,12 @@ describe('group Encounter (PvP) combat', () => {
 		else expect(after.players.Blue!.barrier).toBeLessThan(blueBefore);
 	});
 
-	test('corrupting Good players grants +2 VP each on top of the engage VP', () => {
+	test('corrupting Good players grants the attacker 3 VP each', () => {
 		const state = intoEncounter(99, (s) => {
 			const red = s.players.Red!;
 			red.statusLevel = 3;
 			red.statusToken = 'Fallen';
-			red.attackDice = arcane(3); // rolls at least 3 — always corrupts a 2-barrier Good
+			red.attackDice = exalted(3); // rolls at least 3 — always corrupts a 2-barrier Good
 			for (const seat of ['Blue', 'Orange'] as const) {
 				const g = s.players[seat]!;
 				g.statusLevel = 0;
@@ -163,9 +166,9 @@ describe('group Encounter (PvP) combat', () => {
 
 		const after = apply(state, RED, { type: 'initiatePvp' });
 		const pvp = after.combats.find((c) => c.kind === 'pvp')!;
-		// Both Good players corrupt (roll ≥ 3 vs barrier 2) → +4 on top of the engage 2.
+		// Both Good players corrupt (roll ≥ 3 vs barrier 2) → 2 × 3 VP.
 		expect(pvp.sides.filter((s) => s.side === 'good' && s.corrupted)).toHaveLength(2);
-		expect(after.players.Red!.victoryPoints).toBe(2 + 4);
+		expect(after.players.Red!.victoryPoints).toBe(6);
 	});
 
 	test('non-unanimous: one Evil holds → no combat, no VP, no damage', () => {
@@ -193,7 +196,7 @@ describe('group Encounter (PvP) combat', () => {
 		expect(after.players.Orange!.victoryPoints).toBe(0);
 	});
 
-	test('tied initiative (0 vs 0): both sides strike at once — the Good side retaliates', () => {
+	test('nobody corrupted: both sides strike, whichever has the initiative — the Good side retaliates', () => {
 		const state = intoEncounter(99, (s) => {
 			const red = s.players.Red!;
 			red.statusLevel = 3;
@@ -201,13 +204,13 @@ describe('group Encounter (PvP) combat', () => {
 			red.maxBarrier = 14;
 			red.barrier = 14;
 			red.brokenBarrier = 0;
-			red.attackDice = arcane(2);
+			red.attackDice = exalted(2); // 2–4 damage: nobody is corrupted
 			const blue = s.players.Blue!;
 			blue.statusLevel = 0;
 			blue.maxBarrier = 14;
 			blue.barrier = 14;
 			blue.brokenBarrier = 0;
-			blue.attackDice = arcane(2); // goods have dice → they hit back simultaneously
+			blue.attackDice = exalted(2); // goods have dice → they hit back
 			// Orange present but neutral with high barrier; it takes damage too.
 			const orange = s.players.Orange!;
 			orange.statusLevel = 0;
@@ -217,8 +220,8 @@ describe('group Encounter (PvP) combat', () => {
 			orange.attackDice = [];
 		});
 		const after = apply(state, RED, { type: 'initiatePvp' });
-		// Evil struck the goods AND the goods (with dice) struck Evil back — neither
-		// side was stunned first because initiative tied, so both took damage.
+		// Evil struck the goods AND the goods (with dice) struck Evil back — nobody was
+		// corrupted, so nobody was stunned and both sides took damage.
 		expect(after.players.Blue!.barrier).toBeLessThan(14);
 		expect(after.players.Orange!.barrier).toBeLessThan(14);
 		expect(after.players.Red!.barrier).toBeLessThan(14);
@@ -229,7 +232,7 @@ describe('group Encounter (PvP) combat', () => {
 			const red = s.players.Red!;
 			red.statusLevel = 3;
 			red.statusToken = 'Fallen';
-			red.attackDice = arcane(6); // ≥6 damage — overruns a tiny barrier
+			red.attackDice = exalted(6); // ≥6 damage — overruns a tiny barrier
 			const blue = s.players.Blue!;
 			blue.statusLevel = 0;
 			blue.maxBarrier = 2;

@@ -3,7 +3,6 @@ import { ability } from './modInjector';
 import { ctxFor, fire, makePlayer, makeState, spirit } from './testHelpers';
 import { applyTrigger } from '../apply';
 import { gainSpiritAugments, runAction } from '../actions';
-import { decisions as ramDecisions } from './infiltrator';
 import { augmentPlacementEligibility } from '../../augments';
 import { addGainedRune } from '../../runtime';
 import type { PrivatePlayerState } from '../../types';
@@ -35,16 +34,6 @@ describe('Smith', () => {
 		const player = smithPlayer();
 		runAction(ctxFor(player), { kind: 'gainAugment', amount: 2 });
 		expect(player.unplacedAugments).toHaveLength(4);
-	});
-
-	it('with Ram: one Mountain Region arrival gives 2 augments', () => {
-		const player = makePlayer({
-			navigationDestination: 'Mountain Region',
-			spirits: [spirit(1, { Smith: 1 }), spirit(2, { Ram: 1 })]
-		});
-		applyTrigger(makeState(player), 'Red', 'onNavigate', []);
-		ramDecisions.ramAugment(ctxFor(player), 'yes');
-		expect(player.unplacedAugments).toHaveLength(2);
 	});
 
 	it('the extra does not cause Smith again', () => {

@@ -49,7 +49,7 @@ const CATALOG: PlayCatalog = {
 			rewardTrack: ['icon-a', 'icon-b'],
 			dicePool: [],
 			chooseAmount: 2,
-			stage: 1,
+			stage: 2, // a card's deck is its stage: Difficulty 2
 			order: 0
 		},
 		// Unkillable apex keeps m-1 NON-final: defeating the final monster now saves the
@@ -62,7 +62,7 @@ const CATALOG: PlayCatalog = {
 			rewardTrack: ['icon-a', 'icon-b'],
 			dicePool: [],
 			chooseAmount: 2,
-			stage: 1,
+			stage: 3, // Difficulty 3
 			order: 1
 		}
 	]
@@ -121,7 +121,8 @@ describe('monster horde size', () => {
 	test('every hand starts empty and every monster card is dealt, whatever the player count', () => {
 		// CATALOG has 4 guardians, so we can seat 1–4 players. There is no ladder and no shared
 		// Abyss monster: players draw cards into their own hands, and every catalog monster goes into
-		// its difficulty deck (HP 6 → Difficulty 2, HP 99 → Difficulty 3) regardless of player count.
+		// the deck of its stage (m-1 stage 2 → Difficulty 2, m-apex stage 3 → Difficulty 3) regardless of
+		// player count.
 		for (const players of [1, 2, 3, 4]) {
 			let state = createLobbyState({ roomCode: 'HORDE', guardianNames: GUARDIAN_NAMES });
 			const seats = SEAT_COLORS.slice(0, players) as SeatColor[];

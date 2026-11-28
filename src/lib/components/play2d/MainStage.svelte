@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { AwakenCostSlot, AwakenDiscardRef, AwakenGrant, SpectatorProjection, SeatColor, NavigationDestination, PendingDecision, PlayerProjection } from '$lib/play/types';
 	import { RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
-	import { CURSED_SPIRIT_DICE_TIER, INITIATIVE_DIE_SIDES, initiativeHits } from '$lib/play/rules';
+	import { INITIATIVE_DIE_SIDES, initiativeHits } from '$lib/play/rules';
 	import { abyssAffordance } from '$lib/play/abyssAffordance';
 	import { showsAugmentPlacement } from './stagePriority';
 	import { SPIRIT_AUGMENT_CLASSES, isSpiritAugmentClass } from '$lib/play/augments';
@@ -265,8 +265,8 @@
 	const taintedMax = $derived(taintedGrant?.amount ?? 0);
 	const taintedPotentialClamped = $derived(taintedSeg.filter(Boolean).length);
 	const taintedEnchanted = $derived(taintedMax - taintedPotentialClamped);
-	// The dice of the Tainted reward: Enchanted, or Basic under the rule `cursedSpiritBasic`.
-	const taintedDieName = $derived(CURSED_SPIRIT_DICE_TIER === 'basic' ? 'Basic' : 'Enchanted');
+	// The dice of the Tainted reward are Basic.
+	const taintedDieName = 'Basic';
 	function toggleTaintedSeg(i: number) {
 		taintedSeg = taintedSeg.map((v, k) => (k === i ? !v : v));
 	}
@@ -661,8 +661,7 @@
 			stagedCorruption = stagedCorruption.slice(0, corruptionCount);
 	});
 
-	// A full board and a game that lets a summon replace a spirit (rule `summonReplaceWhenFull`):
-	// the summon tray asks which spirit leaves. From the affordances; before they arrive, from
+	// A full board lets a summon replace a spirit: the summon tray asks which spirit leaves. From the affordances; before they arrive, from
 	// the board this seat sees.
 	const summonReplace = $derived.by(() => {
 		if (seatAffordances) return seatAffordances.summonReplace ?? null;
@@ -691,10 +690,8 @@
 			? (room.seats[abyss.drawWaitsOn]?.displayName ?? abyss.drawWaitsOn)
 			: null
 	});
-	// The initiative die of this game (rule `initiativeDie`): the sides that hit at my status.
-	const myInitiative = $derived(
-		{ hits: initiativeHits(myPlayer?.statusLevel ?? 0), sides: INITIATIVE_DIE_SIDES }
-	);
+	// The initiative die: the sides that hit at my status.
+	const myInitiative = $derived({ hits: initiativeHits(myPlayer?.statusLevel ?? 0), sides: INITIATIVE_DIE_SIDES });
 
 	// The Abyss's own location actions (a free Arcane Abyss Summon) ride the Abyss stage as
 	// ghost buttons. A plain free gain resolves in one tap; a row that needs a payment or a
@@ -734,7 +731,7 @@
 					key: String(row.rowIndex),
 					label: Number.isFinite(left) && left > 1 ? `${label} ×${left}` : label,
 					icon: token ? iconPoolUrl(assets.iconPool, token) : null,
-					// The Arcane Abyss Summon action uses a battle action (rule `abyssFightOrSummon`):
+					// The Arcane Abyss Summon action uses a battle action:
 					// without affordances yet, the battle actions left decide.
 					disabled:
 						affordances.get(row.rowIndex)?.affordable === false ||

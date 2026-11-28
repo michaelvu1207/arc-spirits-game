@@ -181,9 +181,13 @@ const ENGINE_HANDLED_CLASSES = new Set<string>([
 	'Trader', // matMatch.spendableMats — every rune pays as a wild rune
 	'Wildling', // actions.gainAttackDice — +1 Exalted die per gain
 	'Druid', // actions.gainAttackDice — +1 Exalted die per Exalted die gained (Nov 12)
-	'Prince', // combat.strikeFirstDamageBonus — +2 damage when striking first
-	'Cultist', // types.setCorruptionDiscardObligation + effects/corruption — 1 fewer sacrifice, +1 VP
-	'Acolyte' // combat.resolveEncounterCombat afterStrike — restore the Barrier the hit player lost
+	'Prince', // combat.strikeFirstDamageBonus — +2 damage when its side has more initiative
+	'Cultist', // types.setCorruptionDiscardObligation — 1 fewer sacrifice
+	'Acolyte', // combat.resolveEncounterCombat afterStrike — restore the Barrier the hit player lost
+	// Herder: the augment capacity of Arcane spirits (augments.ts `ownerAugmentCapacity`).
+	'Herder',
+	// Falconer: the doubled rewards of the next kill (runtime.ts, `offerFalconerDouble`).
+	'Falconer'
 ]);
 
 const ALL_SPIRITS = CATALOG_SPIRITS;

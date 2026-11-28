@@ -44,29 +44,19 @@
 	}
 	let { assets, context = 'overview', onClose }: Props = $props();
 
-
-	// ── Numbers and sentences the rules in force decide (rules.ts) ───────────────
-	const winPoints = $derived(VP_TO_WIN);
+	// ── Numbers and sentences of the rules (rules.ts) ───────────────
+	const winPoints = VP_TO_WIN;
 	/** Sides of the 12-sided initiative die that hit at Pure / Tainted / Corrupt / Fallen. */
-	const dieHits = $derived([0, 1, 2, 3].map((level) => initiativeHits(level)));
-	const dieText = $derived(
-		`one ${INITIATIVE_DIE_SIDES}-sided initiative die: ${dieHits.join(' / ')} of its sides give the initiative at Pure / Tainted / Corrupt / Fallen`
-	);
+	const dieHits = [0, 1, 2, 3].map((level) => initiativeHits(level));
+	const dieText = `one ${INITIATIVE_DIE_SIDES}-sided initiative die: ${dieHits.join(' / ')} of its sides give the initiative at Pure / Tainted / Corrupt / Fallen`;
 	/** Barrier a Rest restores at Pure / Tainted / Corrupt / Fallen. */
-	const restByLevel = $derived([0, 1, 2, 3].map((level) => restBarrier(level)));
-	const restText = $derived(
-		restByLevel.every((n) => n === restByLevel[0])
-			? `Restore ${restByLevel[0]} barrier`
-			: `Restore Barrier by your status (Pure ${restByLevel[0]}, Tainted ${restByLevel[1]}, Corrupt ${restByLevel[2]}, Fallen ${restByLevel[3]})`
-	);
-	/** "1 the first time, 2 the second, …": what a corruption costs, with the limit of the rules in force. */
-	const sacrificeText = $derived.by(() => {
-		const max = SACRIFICE_MAX;
-		const steps = ['1 the first time', '2 the second', '3 the third', '4 the fourth'];
-		if (max === undefined) return `${steps.join(', ')}, and one more each time after that`;
-		return `${steps.slice(0, Math.min(max, steps.length)).join(', ')}, and ${max} each time after that`;
-	});
-	const d3Restore = $derived(difficulty3Restore(3));
+	const restByLevel = [0, 1, 2, 3].map((level) => restBarrier(level));
+	const restText = restByLevel.every((n) => n === restByLevel[0])
+		? `Restore ${restByLevel[0]} barrier`
+		: `Restore Barrier by your status (Pure ${restByLevel[0]}, Tainted ${restByLevel[1]}, Corrupt ${restByLevel[2]}, Fallen ${restByLevel[3]})`;
+	/** "1 the first time, 2 the second, …": what a corruption costs; it stops growing at SACRIFICE_MAX (4). */
+	const sacrificeText = `${['1 the first time', '2 the second', '3 the third', '4 the fourth'].join(', ')}, and ${SACRIFICE_MAX} each time after that`;
+	const d3Restore = difficulty3Restore(3);
 
 	interface ScreenInfo {
 		title: string;
@@ -216,7 +206,7 @@
 			tips: [
 				'Attack dice tiers get stronger from Basic to Arcane.',
 				`Each player in a fight rolls ${dieText}. Monsters always have the initiative.`,
-							'Against a monster: with the initiative you attack at the same time, without it the monster attacks first. Against players: every die that hits is 1 initiative and a side adds up its players\' initiative; the side with more attacks first, and with the same number both attack at the same time.',
+				'Against a monster: with the initiative you attack at the same time, without it the monster attacks first. Against players: every die that hits is 1 initiative and a side adds up its players\' initiative; the side with more attacks first, and with the same number both attack at the same time.',
 				'Max Barrier absorbs incoming damage before corruption applies.',
 				'Combat can produce pending rewards or forced spirit discards.'
 			]
@@ -419,9 +409,7 @@
 	// STATUS_LADDER; the spirit board is MAX_SPIRITS (7) at every status. Each corruption costs a
 	// one-time sacrifice (Nth corruption → N spirits; types.ts setCorruptionDiscardObligation).
 	// Only Fallen is Evil (isEvilAlignment).
-	const pvpText = $derived(
-		`for ${pvpVpPerCorrupted(null)} VP for each one you corrupt`
-	);
+	const pvpText = `for ${pvpVpPerCorrupted(null)} VP for each one you corrupt`;
 	const STATUS_NOTE: Record<string, string> = $derived({
 		Pure: 'Uncorrupted and fully Good — your strongest standing.',
 		Tainted: 'Lightly corrupted. Still Good-aligned.',

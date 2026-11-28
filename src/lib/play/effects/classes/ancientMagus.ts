@@ -3,7 +3,8 @@ import { gainChosenRelic, relicChoiceOptions } from './cultivator';
 import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 
 /**
- * Cleric — "For every unique Relic you hold, reduce incoming damage by 2."
+ * Cleric — "On this spirit's Awakening, gain 1 relic of your choice. For every unique Relic you
+ * hold, reduce incoming damage by 2."
  *
  * Bespoke `onTakeDamage` handler: it counts the UNIQUE relics the player holds
  * (`player.mats` entries with `type === 'relic'`, deduped by `name`) and raises
@@ -16,9 +17,8 @@ import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
  * this can't be expressed by the declarative `reduceIncomingDamage` action and is
  * implemented as a `run` handler instead.
  *
- * Rule `sunRework` (default false) adds "On this spirit's Awakening, gain 1 relic of your
- * choice.": when the awakened spirit itself is a Cleric, the same relic choice card as
- * Cultivator (5) (`clericRelic`).
+ * The relic on awakening: when the awakened spirit itself is a Cleric, the same relic choice
+ * card as Cultivator (5) (`clericRelic`).
  */
 
 /** Count distinct relics held, deduped by name (un-named relics each count once). */

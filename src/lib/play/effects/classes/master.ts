@@ -3,15 +3,13 @@ import type { PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Master — "On Cultivate, gain 2 Max Barrier." (new Max Barrier arrives intact)
-//
-// Rule switch `masterBarrierChoice` (rules.ts; default false): on ⇒ "On Cultivate, gain 2 Max
-// Barrier or restore 2 Barrier." The two differ only while some Barrier is broken and Max Barrier
-// is below its cap, so a card is made only then:
+// Master — "On Cultivate, gain 2 Max Barrier or restore 2 Barrier." (New Max Barrier arrives
+// intact.) The two differ only while some Barrier is broken and Max Barrier is below its cap, so
+// a card is made only then:
 //  - Barrier full ⇒ Max Barrier (a restore would give nothing);
 //  - Max Barrier at the cap ⇒ restore;
-//  - otherwise the player chooses. An unanswered card (bots never answer) gives Max Barrier,
-//    the old effect, when the Benefits step starts (or at Cleanup for a later Cultivate).
+//  - otherwise the player chooses. An unanswered card (bots never answer) gives Max Barrier
+//    when the Benefits step starts (or at Cleanup for a later Cultivate).
 
 export const MASTER_CULTIVATE_KIND = 'masterCultivate';
 export const MASTER_AMOUNT = 2;

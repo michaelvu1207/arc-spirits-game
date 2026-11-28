@@ -38,10 +38,6 @@
 					seat,
 					name: room.seats[seat]?.displayName ?? seat,
 					vp: player?.victoryPoints ?? 0,
-					// Combat initiative — only meaningful (non-zero) during a fight; shown
-					// only when the player actually has some. Under the initiative die (rule
-					// `initiativeDie`) there is no initiative number, so nothing is shown.
-					init: 0,
 					// Resting average attack of a roll (dice-tier averages + Beast
 					// bonus) — same number as the scout dice-pool readout.
 					atk: player ? expectedAttack(player as unknown as PrivatePlayerState) : 0,
@@ -174,13 +170,6 @@
 						>
 							<span class="atk-glyph" aria-hidden="true">⚔️</span><span class="atk-num"
 								>{row.atk.toFixed(1)}</span
-							>
-						</span>
-					{/if}
-					{#if row.init > 0}
-						<span class="init" data-testid="lb-init-{row.seat}" title="Initiative: {row.init}">
-							<span class="init-glyph" aria-hidden="true">⚡</span><span class="init-num"
-								>{row.init}</span
 							>
 						</span>
 					{/if}
@@ -577,21 +566,6 @@
 	.atk-glyph {
 		font-size: 0.85em;
 		filter: drop-shadow(0 0 3px color-mix(in srgb, var(--brand-coral, #ff7a59) 55%, transparent));
-	}
-	/* Initiative chip — cyan, distinct from the amber VP; only rendered when > 0. */
-	.init {
-		display: inline-flex;
-		align-items: center;
-		gap: 1px;
-		font-family: var(--font-display);
-		font-size: var(--lb-chip-size, 0.9rem);
-		line-height: 1;
-		color: var(--brand-cyan, #5cdfff);
-		font-variant-numeric: tabular-nums;
-	}
-	.init-glyph {
-		font-size: 0.85em;
-		filter: drop-shadow(0 0 3px color-mix(in srgb, var(--brand-cyan, #5cdfff) 55%, transparent));
 	}
 	/* Avatar with a status-coloured ring. */
 	.av {

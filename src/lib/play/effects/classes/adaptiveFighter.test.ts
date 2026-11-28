@@ -2,18 +2,16 @@
  * Battle Adept — declarative `onMonsterKill` ability.
  *
  * DB-intended behavior (source of truth):
- *   - If you overkill by 2 damage, gain 1 potential.
- *   - If you don't kill, gain 1 Enchanted Attack (die).
+ *   - If you overkill by 2 damage, gain 1 potential (Max Barrier).
+ *   - A fight that does not kill gives nothing (no Enchanted die).
  *
- * The two outcomes are mutually exclusive in practice (overkill implies a kill;
- * "not killed" implies no overkill), but both branches are exercised here. We fire
+ * We fire
  * the real dispatcher (`applyTrigger`) with `combat` info threaded in, because the
  * shared `fire()` helper does not thread combat — and this is a declarative
  * breakpoint class, so there is no `run` handler to unit-test directly.
  *
- * UX channel: every branch surfaces as an attributed combat log line
- * ("Battle Adept: Gained N potential." / "… Gained N enchanted attack dice."),
- * so neither branch is a silent no-op.
+ * UX channel: the overkill surfaces as an attributed combat log line
+ * ("Battle Adept: Gained 1 max barrier."), so it is never a silent no-op.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -67,15 +65,12 @@ describe('Battle Adept', () => {
 		expect(player.attackDice.length).toBe(0);
 	});
 
-	it('did not kill: gains 1 enchanted attack die', () => {
+	it('did not kill: nothing (no enchanted die, no potential)', () => {
 		const { player, log } = fireKill({ dealt: 3, overkill: 0, killed: false });
 
-		expect(player.attackDice.length).toBe(1);
-		expect(player.attackDice[0].tier).toBe('enchanted');
-		// Surfaces to the player as an attributed log line (no silent no-op).
-		expect(log.some((l) => l.includes('Battle Adept: Gained 1 enchanted attack dice.'))).toBe(true);
-		// Did NOT take the overkill branch.
+		expect(player.attackDice.length).toBe(0);
 		expect(player.maxBarrier).toBe(makePlayer().maxBarrier);
+		expect(log.some((l) => l.startsWith('Battle Adept:'))).toBe(false);
 	});
 
 	it('exact kill (killed, zero overkill): no potential, no enchanted die', () => {
@@ -88,7 +83,7 @@ describe('Battle Adept', () => {
 
 	it('is inactive when the Battle Adept spirit is face-down (unawakened)', () => {
 		const { player } = fireKill(
-			{ dealt: 3, overkill: 0, killed: false },
+			{ dealt: 10, overkill: 2, killed: true },
 			{ spirits: [spirit(1, { 'Battle Adept': 1 }, { faceDown: true })] }
 		);
 		expect(player.attackDice.length).toBe(0);

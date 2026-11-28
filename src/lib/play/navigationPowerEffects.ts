@@ -48,7 +48,7 @@ export interface NavigationPowerHooks {
 		seat: SeatColor,
 		amount: number,
 		log: string[],
-		/** For rule switches only (rules.ts); the damage itself fires no catalog-reading effects. */
+		/** Not read: the damage itself fires no catalog-reading effects. */
 		catalog?: PlayCatalog
 	) => number;
 	awaken?: (state: PublicGameState, seat: SeatColor, slot: number, catalog: PlayCatalog) => void;
@@ -355,7 +355,7 @@ export function resolveNavigationPowerReveal(
 				if (region(destination) === 'mountain') runeOffer(state, seat, id, 2);
 				break;
 
-			// ── Rule `powerRework` (NAVIGATION_POWERS_V2). Effects with no choice in them apply
+			// ── The Powers of 2026-11-13 (NAVIGATION_POWERS_V2). Effects with no choice in them apply
 			// here, at the reveal, so there is nothing to answer and nothing to misread. ──────────
 			case 'ember-charge-2': {
 				const before = p.barrier;
@@ -603,7 +603,7 @@ export function resolveNavigationPowerChoice(
 			const card = (p.monsterHand ?? [])[index];
 			if (!card || card.hp <= 0 || card.hp * 2 > card.maxHp || !hooks.defeatMonster)
 				return { ok: false, error: 'That monster card can no longer be defeated this way.' };
-			// Rule `abyssFightOrSummon`: Abyssal Execution uses a battle action, like a fight and the Arcane Abyss Summon action.
+			// Abyssal Execution uses a battle action, like a fight and the Arcane Abyss Summon action.
 			if (monsterFightsLeft(p, true) <= 0)
 				return { ok: false, error: 'You have no battle action left this round: Abyssal Execution uses a battle action.' };
 			hooks.defeatMonster(state, seat, catalog, index);

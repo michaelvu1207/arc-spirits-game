@@ -6,7 +6,7 @@ import { decisionPickerSpec, validateDecisionSelection } from '../../decisionPic
 import type { AttackDie } from '../../types';
 
 // Sentinel — "Before you roll in combat, you may discard attack dice. For each dice that you
-// discard, deal 2 more damage." The owner chooses the dice on an Awakening Phase card; the
+// discard, deal 1 more damage." The owner chooses the dice on an Awakening Phase card; the
 // next combat discards them just before the roll.
 const dice = (...tiers: AttackDie['tier'][]): AttackDie[] =>
 	tiers.map((tier, i) => ({ instanceId: `d${i}`, tier }));
@@ -47,7 +47,7 @@ describe('Sentinel — choose attack dice to discard before the next combat roll
 		expect(player.sentinelDiscardIds).toEqual([]);
 	});
 
-	it('before the roll: the chosen dice are discarded for good and deal 2 damage each', () => {
+	it('before the roll: the chosen dice are discarded for good and deal 1 damage each', () => {
 		const player = makePlayer({
 			spirits: [spirit(1, { Sentinel: 1 })],
 			attackDice: dice('basic', 'basic', 'arcane'),
@@ -56,7 +56,7 @@ describe('Sentinel — choose attack dice to discard before the next combat roll
 		const log: string[] = [];
 		useSentinelDiscard(player, log);
 		expect(player.attackDice.map((d) => d.instanceId)).toEqual(['d2']);
-		expect(player.discardDamageBonus).toBe(4);
+		expect(player.discardDamageBonus).toBe(2);
 		expect(player.sentinelDiscardIds).toEqual([]);
 		expect(log.some((l) => l.includes('discarded 2 attack dice'))).toBe(true);
 		// The bonus is flat damage on top of the roll; it is not part of the combat value.

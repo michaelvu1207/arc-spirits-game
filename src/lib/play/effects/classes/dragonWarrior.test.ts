@@ -1,13 +1,10 @@
 /**
- * Huntress — two declarative breakpoint abilities.
+ * Huntress — "On this spirit's Awakening, gain 3 Arcane Attack Dice."
  *
- * DB-intended behavior (source of truth):
- *   - Gain 2 Initiative (inCombat).
- *   - On this spirit's Awakening, gain 3 Arcane Attack Dice (awakening).
+ * No initiative: initiative is the die, no class gives a number.
  *
- * UX channel: both halves surface as combat/awakening log lines
- * ("Gained 2 initiative." / "Gained 3 arcane attack dice.") plus the mechanical
- * +2 initiative and the three pushed arcane dice — never a silent no-op.
+ * UX channel: the awakening surfaces as a log line ("Gained 3 arcane attack dice.")
+ * plus the three pushed arcane dice — never a silent no-op.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -15,21 +12,12 @@ import { fire } from './testHelpers';
 import { ability } from './dragonWarrior';
 
 describe('Huntress', () => {
-	it('grants exactly 2 initiative on inCombat', () => {
-		const { player } = fire({ 'Huntress': 1 }, 'inCombat');
-		expect(player.initiative).toBe(2);
-	});
-
-	it('surfaces the initiative gain as a log line (no silent no-op)', () => {
-		const { log } = fire({ 'Huntress': 1 }, 'inCombat');
-		expect(log.some((l) => l.includes('Gained 2 initiative.'))).toBe(true);
-	});
-
-	it('adds 2 on top of any pre-existing initiative', () => {
-		const { player } = fire({ 'Huntress': 1 }, 'inCombat', {
+	it('gives no initiative in combat', () => {
+		const { player, log } = fire({ 'Huntress': 1 }, 'inCombat', {
 			player: { initiative: 3 }
 		});
-		expect(player.initiative).toBe(5);
+		expect(player.initiative).toBe(3);
+		expect(log.some((l) => l.includes('initiative'))).toBe(false);
 	});
 
 	it('grants exactly 3 arcane attack dice on awakening', () => {
@@ -54,10 +42,8 @@ describe('Huntress', () => {
 		expect(player.attackDice).toHaveLength(4);
 	});
 
-	it('keeps the two abilities on their distinct triggers', () => {
-		const inCombat = ability.find((a) => a.on === 'inCombat');
+	it('hangs its dice on the awakening trigger', () => {
 		const awakening = ability.find((a) => a.on === 'awakening');
-		expect(inCombat?.breakpoints?.[0].actions).toEqual([{ kind: 'gainInitiative', amount: 2 }]);
 		expect(typeof awakening?.run).toBe('function');
 	});
 
@@ -75,7 +61,8 @@ describe('Huntress', () => {
 	});
 
 	it('is inactive when the Huntress spirit is face-down (unawakened)', () => {
-		const { player, log } = fire({ 'Huntress': 1 }, 'inCombat', {
+		const { player, log } = fire({ 'Huntress': 1 }, 'awakening', {
+			command: { slotIndex: 1 },
 			player: {
 				spirits: [
 					{
@@ -90,7 +77,7 @@ describe('Huntress', () => {
 				]
 			}
 		});
-		expect(player.initiative).toBe(0);
-		expect(log.some((l) => l.includes('initiative'))).toBe(false);
+		expect(player.attackDice).toHaveLength(0);
+		expect(log.some((l) => l.includes('attack dice'))).toBe(false);
 	});
 });

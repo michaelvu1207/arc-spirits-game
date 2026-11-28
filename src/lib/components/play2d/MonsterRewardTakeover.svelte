@@ -5,8 +5,7 @@
 	 * medallions and Confirm claims them all. A `chooseRune` reward shows rune chips
 	 * and demands an explicit pick — no silent option-0 default.
 	 *
-	 * A kill that gives ONE reward of the card (`chooseOne`: the permanent monster under
-	 * rule `permanentRewardChoice`) shows the same medallions as a choice: tap one, claim it.
+	 * A kill that gives ONE reward of the card (`chooseOne`: the permanent monster) shows the same medallions as a choice: tap one, claim it.
 	 *
 	 * Data: the engine's RESOLVED reward options (§5.3, `SeatAffordances.pendingReward`)
 	 * — labelled, claimable, server-computed. The client never re-runs

@@ -734,7 +734,8 @@ describe('neural value action scoring', () => {
 		const encoded = encodeAction(state, 'Red', actions[startCombat].cmd, actions[startCombat].next);
 		expect(encoded).toHaveLength(ACT_DIM);
 		expect(encoded[ACTION_EFFECT_OFFSET + 7]).toBeGreaterThan(0);
-		expect(encoded[ACTION_EFFECT_OFFSET + 8]).toBe(1);
+		// One Arcane die (0,0,1,3,3,5) against Barrier 1: a kill on 4 of 6 faces.
+		expect(encoded[ACTION_EFFECT_OFFSET + 8]).toBeCloseTo(4 / 6);
 	});
 
 	it('scores hand-card farm value and can boost Abyss navigation priors', () => {
@@ -751,7 +752,7 @@ describe('neural value action scoring', () => {
 		expect(farm.farmable).toBe(true);
 		expect(farm.rewardVp).toBe(4);
 		expect(farm.livesRemaining).toBe(1); // a card is a single kill
-		expect(farm.opportunityVp).toBeCloseTo(4);
+		expect(farm.opportunityVp).toBeCloseTo(4 * (4 / 6)); // the Arcane die kills Barrier 1 on 4 of 6 faces
 		expect(farm.score).toBeGreaterThan(0);
 
 		const plan = neuralPlanNavigation(state, 'Red', CATALOG, neutralPolicy, {

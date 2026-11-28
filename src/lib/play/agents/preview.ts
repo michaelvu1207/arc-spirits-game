@@ -469,7 +469,7 @@ export function decisionFacts(
 		if (state.phase !== 'location' || me?.navigationDestination !== 'Arcane Abyss') return [];
 		if (kind === 'monster-reveal') {
 			const lines = revealFactLines(state, seat, catalog);
-			// Rule `monsterDrawOne`: the card may replace a held one, so the held cards' fights are shown too.
+			// The card may replace a held one, so the held cards' fights are shown too.
 			const held = me.pendingMonsterDraw?.maxCards === 1 && (me.monsterHand?.length ?? 0) > 0 ? monsterFactLines(state, seat, catalog) : [];
 			return lines.length
 				? [

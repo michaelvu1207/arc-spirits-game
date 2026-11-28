@@ -591,7 +591,7 @@ describe('augment placement eligibility (§5.4, S5)', () => {
 
 // ── §5.4 decision pickerSpec ──────────────────────────────────────────────────────────
 describe('decision pickerSpec (§5.4)', () => {
-	test('an arcMageTrade decision surfaces a pickerSpec; a plain Yes/No does not', () => {
+	test("Sentinel's discard decision surfaces a pickerSpec; a plain Yes/No does not", () => {
 		const state = inPhase(3, 'awakening');
 		clearWork(state, 'Red');
 		const red = state.players.Red!;
@@ -603,15 +603,17 @@ describe('decision pickerSpec (§5.4)', () => {
 			{ instanceId: 'x5', tier: 'arcane' }
 		];
 		red.pendingDecisions = [
-			{ id: 'd-arc', source: 'class', kind: 'arcMageTrade', prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] },
+			{ id: 'd-sentinel', source: 'class', kind: 'sentinelDiscard', prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] },
 			{ id: 'd-plain', source: 'class', kind: 'plainYesNo', prompt: 'p', options: [{ id: 'yes', label: 'Y' }] }
 		];
 		const dec = describePendingWork(state, red).find((w) => w.kind === 'decision')!;
 		expect(dec.pickerSpecs).toHaveLength(1);
+		// Any number of the held dice, at least one.
 		expect(dec.pickerSpecs![0]).toEqual({
-			decisionId: 'd-arc',
+			decisionId: 'd-sentinel',
 			kind: 'attackDice',
-			count: 4,
+			count: 5,
+			minCount: 1,
 			eligibleInstanceIds: ['x1', 'x2', 'x3', 'x4', 'x5']
 		});
 		expect(decisionPickerSpec(red.pendingDecisions[1], red)).toBeNull();
@@ -721,7 +723,7 @@ describe('reducer hardening — F8 spawnHandSpirit occupied slot', () => {
 });
 
 // ── Reducer hardening: F9 (resolveDecision unknown option) + picker selection ──────────
-describe('reducer hardening — F9 resolveDecision option + arcMage picker', () => {
+describe('reducer hardening — F9 resolveDecision option + Sentinel picker', () => {
 	function decisionState(kind: string): PublicGameState {
 		const state = startedGame();
 		state.phase = 'awakening';
@@ -742,45 +744,25 @@ describe('reducer hardening — F9 resolveDecision option + arcMage picker', () 
 		expect(next.players.Red!.pendingDecisions).toHaveLength(0);
 	});
 
-	function arcState(): PublicGameState {
-		const state = decisionState('arcMageTrade');
+	function sentinelState(): PublicGameState {
+		const state = decisionState('sentinelDiscard');
 		state.players.Red!.attackDice = [
 			{ instanceId: 'a1', tier: 'basic' },
-			{ instanceId: 'a2', tier: 'basic' },
-			{ instanceId: 'a3', tier: 'basic' },
-			{ instanceId: 'a4', tier: 'basic' },
-			{ instanceId: 'a5', tier: 'exalted' }
+			{ instanceId: 'a2', tier: 'exalted' }
 		];
 		return state;
 	}
 
-	test('a wrong-COUNT picker selection is REJECTED (was silently auto-picked)', () => {
-		expect(
-			reject(arcState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes', selectedInstanceIds: ['a1', 'a2'] }).code
-		).toBe('invalid_selection');
-	});
-
 	test('a non-owned die in the selection is REJECTED', () => {
 		expect(
-			reject(arcState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes', selectedInstanceIds: ['a1', 'a2', 'a3', 'nope'] }).code
+			reject(sentinelState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes', selectedInstanceIds: ['a1', 'nope'] }).code
 		).toBe('invalid_selection');
 	});
 
-	test('exactly 4 owned dice convert to 1 arcane', () => {
-		const next = apply(arcState(), RED, {
-			type: 'resolveDecision',
-			decisionId: 'd1',
-			optionId: 'yes',
-			selectedInstanceIds: ['a1', 'a2', 'a3', 'a4']
-		});
-		const dice = next.players.Red!.attackDice;
-		expect(dice.filter((d) => d.tier === 'arcane')).toHaveLength(1);
-		expect(dice).toHaveLength(2); // 5 − 4 + 1
-	});
-
-	test('an OMITTED selection keeps the resolver auto-pick (bot path) — never rejected', () => {
-		const next = apply(arcState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes' });
-		expect(next.players.Red!.attackDice.filter((d) => d.tier === 'arcane')).toHaveLength(1);
+	test('a selection of owned dice is accepted and marks those dice for the next combat', () => {
+		const next = apply(sentinelState(), RED, { type: 'resolveDecision', decisionId: 'd1', optionId: 'yes', selectedInstanceIds: ['a2'] });
+		expect(next.players.Red!.sentinelDiscardIds).toEqual(['a2']);
+		expect(next.players.Red!.pendingDecisions).toHaveLength(0);
 	});
 });
 
@@ -809,7 +791,7 @@ describe('bot enumerator never generates the now-rejected command shapes', () =>
 		const state = startedGame();
 		state.phase = 'awakening';
 		state.players.Red!.pendingDecisions = [
-			{ id: 'arc', source: 'class', kind: 'arcMageTrade', prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] }
+			{ id: 'sent', source: 'class', kind: 'sentinelDiscard', prompt: 'p', options: [{ id: 'yes', label: 'Y' }, { id: 'no', label: 'N' }] }
 		];
 		const decs = collect(state, 'Red').filter(
 			(c): c is Extract<GameCommand, { type: 'resolveDecision' }> => c.type === 'resolveDecision'

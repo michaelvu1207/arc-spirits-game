@@ -2,13 +2,12 @@ import { runAction } from '../actions';
 import { nextId } from '../../rng';
 import type { ClassAbility, ClassDecisions } from './types';
 
-// Healer — "When discarded, restore two barriers. On rest, if you have 10 max barrier,
-// you may restore 3 barrier and gain 1 VP."
+// Healer — "On rest, if you have 10 max barrier, you may restore 3 barrier. When discarded,
+// restore 2 barrier." No point (Michael, 2026-11-18).
 //
-// On-summon restore: like Sharpshooter's on-summon grant, this fires for the summoning
-// player whenever a spirit is summoned while an awakened Healer is in play — a flat
-// +2 barrier of sustain. The on-rest opt-in (a bespoke `run` handler gated on the full
-// 10 max barrier) still offers the restore-3 + 1 VP via the `healerRestore` resolver.
+// The discard restore fires on `onSpiritDiscard` while an awakened Healer is in play. The on-rest
+// opt-in (a bespoke `run` handler gated on the full 10 max barrier) offers the restore of 3 via
+// the `healerRestore` resolver.
 export const ability: ClassAbility[] = [
 	{
 		on: 'onSpiritDiscard',
@@ -40,7 +39,7 @@ export const ability: ClassAbility[] = [
 	}
 ];
 
-// Resolver for the opt-in card: restore 3 barrier (self only) and gain 1 VP.
+// Resolver for the opt-in card: restore 3 barrier (self only).
 export const decisions: ClassDecisions = {
 	healerRestore(ctx, optionId) {
 		if (optionId !== 'yes') return;

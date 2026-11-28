@@ -115,7 +115,7 @@ export const NAVIGATION_POWERS = [
 ] as const;
 
 /**
- * Rule `powerRework` (rules.ts): the 2026-11-13 Power set. Half are GENERAL (useful on almost any
+ * The 2026-11-13 Power set, the Powers in play. Half are GENERAL (useful on almost any
  * board, with a trigger the player meets alone or with ordinary company) and half are NICHE
  * (a specific board or situation, but a bigger effect). No Power needs another player to be Evil.
  * A Power whose text changed has a NEW id: the old ids keep their old text and effect, so games
@@ -250,26 +250,23 @@ const ALL_DEFS: NavigationPowerDef[] = [
 	...V2_DEFS.filter((def) => !NAVIGATION_POWERS.some((power) => power.id === def.id))
 ];
 
-/** The Powers in play for this catalog: the 2026-11-13 set under rule `powerRework`, else the old 22. */
+/** The Powers in play: the 2026-11-13 set, in the wording of the rules. */
 export function navigationPowerPool(
 	catalog?: unknown
 ): readonly NavigationPowerDef[] {
-	const pool = V2_DEFS;
-	return pool.map((p) => ruleWording(p, catalog));
+	return V2_DEFS.map((p) => ruleWording(p));
 }
 
-/** Rule `initiativeDie`: Sudden Strike in the new wording ("gain the initiative", never "strike first"). */
+/** Sudden Strike in the wording of the initiative die ("gain the initiative", never "strike first"). */
 const SUDDEN_STRIKE_DIE_TEXT = 'In your battles this round, gain the initiative if your side does not have it.';
 const initiativeDieWording = (power: NavigationPowerDef): NavigationPowerDef =>
 	power.id === 'sudden-strike' ? { ...power, text: SUDDEN_STRIKE_DIE_TEXT } : power;
-/** Rule `abyssFightOrSummon` (Michael, 2026-11-27: "worded as using a battle action"): Abyssal Execution uses a battle action. */
+/** Abyssal Execution uses a battle action (Michael, 2026-11-27: "worded as using a battle action"). */
 const battleActionWording = (power: NavigationPowerDef): NavigationPowerDef =>
 	power.id === 'abyssal-execution-2' ? { ...power, text: power.text.replace('This is your battle for the round.', 'This uses a battle action.') } : power;
-/** A Power in the wording of the rules in force. */
-const ruleWording = (power: NavigationPowerDef, catalog?: unknown): NavigationPowerDef => {
-	const a = initiativeDieWording(power);
-	return battleActionWording(a);
-};
+/** A Power in the wording of the rules. */
+const ruleWording = (power: NavigationPowerDef): NavigationPowerDef =>
+	battleActionWording(initiativeDieWording(power));
 
 export function isNavigationPowerId(value: unknown): value is NavigationPowerId {
 	return typeof value === 'string' && ALL_DEFS.some((power) => power.id === value);
@@ -280,7 +277,7 @@ export function navigationPowerById(
 	catalog?: unknown
 ): NavigationPowerDef | null {
 	const power = ALL_DEFS.find((power) => power.id === id) ?? null;
-	return power ? ruleWording(power, catalog) : power;
+	return power ? ruleWording(power) : power;
 }
 
 /** Real, held Origin currency, including older saves without the explicit kind. */

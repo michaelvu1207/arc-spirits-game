@@ -74,34 +74,34 @@ describe('Witch — "At the start of combat with a player, take the best attack 
 	});
 
 	it('the take happens before Assassin compares dice counts', () => {
-		// Blue (Evil) Witch takes Red's only die → Red (Assassin, now 0 dice) vs Blue 1+1 → Red strikes first.
+		// Blue (Evil) Witch takes Red's only die → Red (Assassin, now 0 dice) vs Blue 1+1 → Red deals 3 more.
 		const { state } = pvp(
 			{ spirits: [spirit(1, { Assassin: 1 })], attackDice: [die('r1', 'basic')] },
 			{ spirits: [spirit(1, { Witch: 1 }), spirit(2, { Titan: 1 })], attackDice: [die('b1', 'basic')] }
 		);
 		const combat = resolveEncounterCombat(state, undefined, ['Blue'], ['Red']);
-		expect(combat.log.some((l) => l.startsWith('Good attacks first'))).toBe(true);
+		const witchAt = combat.log.findIndex((l) => l.startsWith("Witch: takes Red's best attack die"));
+		const assassinAt = combat.log.findIndex((l) => l.startsWith('Assassin: Blue has more attack dice — deal 3 more.'));
+		expect(witchAt).toBeGreaterThanOrEqual(0);
+		expect(assassinAt).toBeGreaterThan(witchAt);
+		// Red rolls no die (the Witch has it), so all of Red's damage is the Assassin's 3.
+		expect(combat.sides.find((s) => s.seat === 'Red')!.damageDealt).toBe(3);
 	});
 });
 
-describe('Cultist — "When you become Corrupted, sacrifice 1 fewer spirit and gain 1 VP."', () => {
-	it('a corruption: +1 VP and 1 fewer sacrifice', () => {
+describe('Cultist — "When you become Corrupted, sacrifice 1 fewer spirit."', () => {
+	it('a corruption: 1 fewer sacrifice and no VP', () => {
 		const player = makePlayer({
 			barrier: 1,
 			maxBarrier: 4,
 			spirits: [spirit(1, { Cultist: 1 }), spirit(2, {}), spirit(3, {})]
 		});
 		takeDamage(player, 2, { state: makeState(player), seat: 'Red' }, []);
-		expect(player.victoryPoints).toBe(1);
+		expect(player.victoryPoints).toBe(0);
 		expect(player.pendingCorruptionDiscard ?? null).toBeNull(); // the 1st corruption owes 0, not 1
 		player.corruptionCount = 2;
 		setCorruptionDiscardObligation(player);
 		expect(player.pendingCorruptionDiscard?.count).toBe(1); // the 2nd owes 1, not 2
-	});
-	it('a corruption while already Fallen still gives the VP', () => {
-		const player = makePlayer({ statusLevel: 3, barrier: 1, maxBarrier: 4, spirits: [spirit(1, { Cultist: 1 }), spirit(2, {})] });
-		takeDamage(player, 2, { state: makeState(player), seat: 'Red' }, []);
-		expect(player.victoryPoints).toBe(1);
 	});
 	it('face-down Cultist: no VP and the full sacrifice', () => {
 		const player = makePlayer({ barrier: 1, maxBarrier: 4, spirits: [spirit(1, { Cultist: 1 }, { faceDown: true }), spirit(2, {})] });

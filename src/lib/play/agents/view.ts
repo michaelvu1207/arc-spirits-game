@@ -5,8 +5,8 @@
  * cards, rewards or unplaced augments, nor any bag order.
  */
 
-import { classCountsLine, monsterLine, moonPerksWaiting, spiritLine, type SeatPlayer } from './labels';
-import { buildSessionProjection, GOOD_KILL_BONUS_VP } from '../runtime';
+import { classCountsLine, monsterLine, spiritLine, type SeatPlayer } from './labels';
+import { buildSessionProjection } from '../runtime';
 import { navigationPowerById } from '../navigationPowers';
 import { spiritsByOrigin } from '../effects/relicTools';
 import { INITIATIVE_DIE_SIDES, initiativeHits, VP_TO_WIN } from '../rules';
@@ -54,11 +54,10 @@ export function attackLine(me: SeatPlayer, catalog?: Parameters<typeof expectedA
 	return `Attack: average ${total.toFixed(1)} damage per fight (${parts.join(' + ')}). Situational combat bonuses are not in this number; the trial fights include them.`;
 }
 
-/** The status with its alignment and, under rule `goodKillBonus`, what the alignment pays for a monster kill. */
-function statusLine(level: number, catalog: PlayCatalog): string {
+/** The status with its alignment. */
+function statusLine(level: number): string {
 	const name = STATUS_LADDER[level] ?? `level ${level}`;
-	const kill = '';
-	return `${name} (${level}/3${isEvilAlignment(level) ? ', EVIL' : ', Good'}${kill})`;
+	return `${name} (${level}/3${isEvilAlignment(level) ? ', EVIL' : ', Good'})`;
 }
 
 function awakenRequirement(spiritId: string, catalog: PlayCatalog): string {
@@ -89,15 +88,10 @@ function ownSection(
 		`  Barrier: ${me.barrier} of ${me.maxBarrier} Max Barrier (${me.brokenBarrier} broken)`
 	);
 	lines.push(
-		`  Status: ${statusLine(me.statusLevel, catalog)}; corruptions so far: ${me.corruptionCount ?? 0}`
+		`  Status: ${statusLine(me.statusLevel)}; corruptions so far: ${me.corruptionCount ?? 0}`
 	);
 	lines.push(`  Attack dice: ${diceLine(me)}`);
 	lines.push(`  ${attackLine(me, catalog)}`);
-	const moon = moonPerksWaiting(me, catalog);
-	if (moon.length)
-		lines.push(
-			`  Attacked a player this round: ${me.attackedPlayerThisRound ? 'yes' : 'no'} (${moon.join(' and ')} gain only in a round you attacked a player)`
-		);
 	const hits = initiativeHits(me.statusLevel ?? 0);
 	lines.push(
 		`  Initiative die: ${hits} of ${INITIATIVE_DIE_SIDES} sides give you 1 initiative at your status (${Math.round((100 * hits) / INITIATIVE_DIE_SIDES)} %).`
@@ -195,7 +189,7 @@ function ownSection(
 	return lines;
 }
 
-function otherSection(seat: SeatColor, player: SeatPlayer, view: SpectatorProjection, catalog: PlayCatalog): string[] {
+function otherSection(seat: SeatColor, player: SeatPlayer, view: SpectatorProjection): string[] {
 	const where =
 		view.phase === 'navigation' && !view.revealedDestinations
 			? view.navigation?.[seat]?.locked
@@ -206,7 +200,7 @@ function otherSection(seat: SeatColor, player: SeatPlayer, view: SpectatorProjec
 		.sort((a, b) => a.slotIndex - b.slotIndex)
 		.map((s) => `${s.name}${s.isFaceDown ? ' (face-down)' : ''}`);
 	const lines = [
-		`${seat} (guardian ${player.selectedGuardian}): VP ${player.victoryPoints}; Barrier ${player.barrier}/${player.maxBarrier}; Status ${statusLine(player.statusLevel, catalog)}; dice ${diceLine(player)}; ${where}`,
+		`${seat} (guardian ${player.selectedGuardian}): VP ${player.victoryPoints}; Barrier ${player.barrier}/${player.maxBarrier}; Status ${statusLine(player.statusLevel)}; dice ${diceLine(player)}; ${where}`,
 		`    spirits: ${spirits.join(', ') || 'none'}; active classes: ${classCountsLine(player)}; runes/relics: ${heldItems(player).length}`
 	];
 	return lines;
@@ -247,7 +241,7 @@ export function renderSeatView(
 	for (const other of view.activeSeats) {
 		if (other === seat) continue;
 		const player = view.players[other];
-		if (player) lines.push(...otherSection(other, player, view, catalog).map((l) => `  ${l}`));
+		if (player) lines.push(...otherSection(other, player, view).map((l) => `  ${l}`));
 	}
 	lines.push('', ...tableSection(view));
 	return lines.join('\n');

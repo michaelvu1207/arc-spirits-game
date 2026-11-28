@@ -165,7 +165,7 @@ export function canApply(
 			if (draw?.rewardId) return command.replaceSlotIndex === undefined;
 			if (!draw?.id) return false;
 			if (!catalog.spirits.find((e) => e.id === draw.id)) return false;
-			// Replace-on-summon (rule `summonReplaceWhenFull`): all 7 slots full, an occupied slot named.
+			// Replace-on-summon: all 7 slots full, an occupied slot named.
 			if (command.replaceSlotIndex !== undefined) {
 				if (firstOpenSpiritSlot(me)) return false;
 				if (command.slotIndex !== undefined && command.slotIndex !== command.replaceSlotIndex)
@@ -198,7 +198,7 @@ export function canApply(
 			if (me.navigationDestination !== 'Arcane Abyss') return false;
 			const card = me.monsterHand?.[command.handIndex];
 			if (!Number.isInteger(command.handIndex) || !card || card.hp <= 0) return false;
-			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action, once taken, holds the place of one fight.
+			// The Arcane Abyss Summon action, once taken, holds the place of one fight.
 			if (monsterFightsLeft(me, true) <= 0) return false;
 			return undefined; // mutate-before-reject handler; all reachable rejects covered, defer on pass (1 candidate)
 		}
@@ -209,7 +209,8 @@ export function canApply(
 				!!me &&
 				me.navigationDestination === 'Arcane Abyss' &&
 				!me.pendingMonsterDraw?.cards.length &&
-				((me.monsterHand?.length ?? 0) < 3 || (!command.permanent)) &&
+				// A full hand may still draw from a deck (the card can replace a held one).
+				((me.monsterHand?.length ?? 0) < 3 || !command.permanent) &&
 				me.monsterDrawRound !== state.round &&
 				(command.permanent
 					? (catalog?.monsters ?? []).some((m) => m.permanent)
@@ -262,7 +263,7 @@ export function canApply(
 			);
 			const interaction = rows.find((i) => i.rowIndex === command.rowIndex);
 			if (!interaction || me.phaseReady || me.pendingPowerDrafts?.length) return false;
-			// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action takes the place of a fight, so it needs one left.
+			// The Arcane Abyss Summon action takes the place of a fight, so it needs one left.
 			if (
 				me.navigationDestination === 'Arcane Abyss' &&
 				isAbyssSummonRow(interaction) &&

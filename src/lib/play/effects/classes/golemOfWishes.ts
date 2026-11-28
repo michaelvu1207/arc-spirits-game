@@ -1,6 +1,6 @@
 import type { ClassAbility } from './types';
 
-// Titan — take 6 less damage, gain 6 attack damage and 6 initiative.
+// Titan — "When you take damage, take 6 less. Gain 6 damage." Titan gives no initiative.
 export const ability: ClassAbility[] = [
 	{
 		on: 'inCombat',
@@ -9,8 +9,7 @@ export const ability: ClassAbility[] = [
 				count: 1,
 				actions: [
 					{ kind: 'reduceIncomingDamage', amount: 6 },
-					{ kind: 'combatBonus', amount: 6 },
-					{ kind: 'gainInitiative', amount: 6 }
+					{ kind: 'combatBonus', amount: 6 }
 				]
 			}
 		]
