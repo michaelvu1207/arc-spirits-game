@@ -1,0 +1,662 @@
+# 0.3.0
+
+One official ruleset: the game of the balance tests of 18 to 27 November, with no rule switches. A monster draw reveals one card: keep it, put it back on top of its deck, or keep it in place of a card you hold; players at the Arcane Abyss draw fewest points first, from shared decks of two Difficulty 1 and two Difficulty 2 cards per player. One battle action a round: a fight or the Arcane Abyss Summon action (Monster Hunter has two). Initiative is one 12-sided die: 4, 6, 7 or 8 sides hit at Pure, Tainted, Corrupt, Fallen; in a player fight each side adds up its dice that hit and the side with more attacks first; monsters always have the initiative. The corruption sacrifice stops at 4 spirits. Rest restores 4, 4, 3, 2 Barrier by status. Difficulty 3 monsters have Barrier 24, deal 7 to 8 and restore 5 Barrier after a fight they survive; the Abyss Lurker gives one of its rewards. Weaker Basic and Enchanted dice. New Fighter, Elementalist, Cultivator, Firetail, Sentinel, Mage, Fairy, Cursed Spirit, Battle Adept, Beast, Mystic, Summoner, Cultist, Captain, Healer, Feral, King, Princess, Queen, Falconer and Arcane Alchemist abilities. Aurelion costs 4 runes; Caldera, Storm King and Hollowbloom need 7 spirits of their origin; Nhal needs a visit while Corrupt or Fallen. 108 monster cards and 29 spirit cards remade; the six hero card backs still print their old text.
+
+Changes since 0.2.7: 167 changed, 1 added, 1 removed
+
+## Classes
+
+- **Bastion**
+  - description: Halves incoming damage when the opponent has higher Initiative. → Halves incoming damage from monsters, and from players whose side has more initiative than yours.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"If the opponent has higher initiative, or is a monster, when you Take Damage, hal… → [{"count":1,"effects":[{"type":"benefit","description":"If the opponent's side has more initiative than your side, or is a monster, when …
+- **Fairy**
+  - description: Gains Exalted Attack dice from matching origins when awakened, plus 3 Initiative. → Gains Enchanted Attack dice from matching origins when awakened.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When Awakened, gain 1 Exalted Attack for every spirit matching this Fairy's origi… → [{"count":1,"effects":[{"type":"benefit","description":"When Awakened, gain 1 Enchanted Attack for every spirit matching this Fairy's ori…
+- **King**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, Gain 1 VP. If you are evil, you must discard this spirit.… → [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, if you are Pure, gain 1 VP. If you are Evil, you must dis…
+- **Battle Adept**
+  - description: Gains Max Barrier from overkills or Enchanted Attack dice from failed kills. → Gains Max Barrier from overkills.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"If you overkill by 2 damage, gain 1 Max Barrier. If you don't kill, gain 1 Enchan… → [{"count":1,"effects":[{"type":"benefit","description":"If you overkill by 2 damage, gain 1 Max Barrier."}]}]
+- **Queen**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, gain 1 VP."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"When this spirit awakens, every player must turn one of their awakened spirits fa…
+- **Fighter**
+  - effect_schema: [{"color":"bronze","count":2,"effects":[{"type":"benefit","description":"On Rest, gain 1 Basic Attack Dice"}]},{"color":"bronze","count":… → [{"color":"bronze","count":1,"effects":[{"type":"benefit","description":"No effect at this count."}]},{"color":"bronze","count":2,"effect…
+- **Elementalist**
+  - description: Upgrades attack dice when you Rest. → Upgrades attack dice (Basic to Enchanted to Exalted) as you play. More Elementalists unlock more ways to upgrade.
+  - effect_schema: [{"color":"bronze","count":2,"effects":[{"type":"benefit","description":"On Rest, upgrade an attack dice, once.","description_translation… → [{"color":"bronze","count":2,"effects":[{"type":"benefit","description":"When you Cultivate, upgrade an attack dice."}],"count_translatio…
+- **Spellblade**
+  - description: Can redirect navigation and always attacks first. → Can redirect navigation and gains the initiative in combat.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"On Navigation Reveal, you may change your destination and you may always attack f… → [{"count":1,"effects":[{"type":"benefit","description":"On Navigation Reveal, you may change your destination. In combat, gain the initia…
+- **Mystic**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"On a Spirit World or Abyss Summon, you may put all spirits back and draw again."}… → [{"count":1,"effects":[{"type":"benefit","description":"On a Spirit World or Abyss Summon, you may put all spirits back and draw again."}…
+- **Cursed Spirit**
+  - effect_schema: [{"count":"1+","effects":[{"type":"benefit","description":"If you become Tainted, in the Awakening Phase, gain 1 max barrier or 1 Enchant… → [{"count":"1+","effects":[{"type":"benefit","description":"If you become Tainted, in the Awakening Phase, gain 1 max barrier or 1 Basic A…
+- **Titan**
+  - description: Has +6 damage and +6 Initiative, and reduces incoming damage by 6. → Has +6 damage and reduces incoming damage by 6.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When you take damage, take 6 less. Gain 6 damage and 6 Initiative."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"When you take damage, take 6 less. Gain 6 damage."}]}]
+- **Sentinel**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"Before you roll in combat, you may discard attack dice. For each dice that you di… → [{"count":1,"effects":[{"type":"benefit","description":"Before you roll in combat, you may discard attack dice. For each dice that you di…
+- **Cultivator**
+  - effect_schema: [{"count":2,"effects":[{"type":"benefit","description":"On Cultivate, gain 1 Max Barrier."}]},{"count":3,"effects":[{"type":"benefit","de… → [{"count":2,"effects":[{"type":"benefit","description":"On Cultivate, gain 1 Max Barrier."}]},{"count":3,"effects":[{"type":"benefit","de…
+- **Monk**
+  - description: Gains Initiative and takes less damage while you are not Evil and have no Cursed Spirits. → Takes less damage while you are not Evil and have no Cursed Spirits.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"While you are not Evil and have no Cursed Spirits, gain 5 Initiative and take 2 l… → [{"count":1,"effects":[{"type":"benefit","description":"While you are not Evil and have no Cursed Spirits, take 2 less damage."}]}]
+- **Arcane Alchemist**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When you cultivate, you may discard 4 attack dice to gain 1 Arcane Attack Dice."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"When you Cultivate, you may convert 1 of your Spirit Augments into 1 Arcane Attac…
+- **Huntress**
+  - description: Has +2 Initiative and gains three Arcane Attack dice when awakened. → Gains three Arcane Attack dice when awakened.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"Gain 2 initiative. On this spirit's Awakening, gain 3 Arcane Attack Dice."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"On this spirit's Awakening, gain 3 Arcane Attack Dice."}]}]
+- **Mage**
+  - description: Gains 4 Arcane Attack Dice when awakened. → Gains 3 Arcane Attack Dice when awakened.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"On this spirit's Awakening, gain 4 Arcane Attack Dice."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"On this spirit's Awakening, gain 3 Arcane Attack Dice."}]}]
+- **Corruptor**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"Set your status to Fallen (this is not a corruption). Replace all Spirit World sp… → [{"count":1,"effects":[{"type":"benefit","description":"Set your status to Fallen (this is not a corruption). Replace all Spirit World sp…
+- **Monster Hunter**
+  - description: Can initiate Monster Combat twice. → Has 1 extra battle action each round.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"You may initiate Monster Combat two times."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"You have 1 extra battle action each round."}]}]
+- **Healer**
+  - effect_schema: [{"color":"bronze","count":1,"effects":[{"type":"benefit","description":"On rest, if you have 10 max barrier, you may restore 3 barrier a… → [{"color":"bronze","count":1,"effects":[{"type":"benefit","description":"On rest, if you have 10 max barrier, you may restore 3 barrier. …
+- **Paladin**
+  - description: High Initiative, and wins initiative ties. → Attacks first when both sides have the same initiative.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"+4 Initiative. If initiative is tied, your side strikes first."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"If both sides have the same initiative (1 or more), your side attacks first."}]}]
+- **Beast**
+  - description: Adds combat damage and Initiative for each Spirit Animal trait. → Adds combat damage for each Spirit Animal trait.
+  - effect_schema: [{"count":"1+","effects":[{"type":"benefit","description":"In combat, deal 1 damage and gain 1 combat initiative for every Spirit Animal … → [{"count":"1+","effects":[{"type":"benefit","description":"In combat, deal 1 damage for every Spirit Animal trait.","description_translat…
+- **Captain**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"If you Cultivate with 3 Heroes, gain 1 Spirit Augment. When discarded, gain 1 Enc… → [{"count":1,"effects":[{"type":"benefit","description":"After you defeat a monster, gain 1 random Power."}]}]
+- **Summoner**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"On Spirit World summon, you may draw from the Arcane Abyss Bag. When you discard … → [{"count":1,"effects":[{"type":"benefit","description":"When you Cultivate with at least 5 Forest spirits, gain 2 points.","description_t…
+- **Assassin**
+  - description: Strikes first and harder against a player who has more attack dice. → Deals more damage to a player who has more attack dice.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In combat with a player who has more attack dice than you, strike first and deal … → [{"count":1,"effects":[{"type":"benefit","description":"In combat with a player who has more attack dice than you, deal 3 more damage."}]}]
+- **Falconer**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"On your next monster kill you may gain double the rewards. Then discard this spir… → [{"count":1,"effects":[{"type":"benefit","description":"On your next monster kill you may gain double the rewards, except Victory Points.…
+- **Princess**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, if you are not Evil and all your spirits are awakened, ga… → [{"count":1,"effects":[{"type":"benefit","description":"In the Awakening Phase, if you are not Evil and all your spirits are awakened, ga…
+- **Feral**
+  - description: Strikes first and harder against Evil players and monsters. → Gains the initiative and deals more damage when an Evil player or a monster attacks you.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When an Evil player or a monster attacks you, your side strikes first and deals 3… → [{"count":1,"effects":[{"type":"benefit","description":"When an Evil player or a monster attacks you, your side gains the initiative if i…
+- **Prince**
+  - description: Deals more damage when you strike first. → Deals more damage when your side has more initiative than the enemy.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When you strike first, deal 2 more damage."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"When your side has more initiative than the enemy, deal 2 more damage."}]}]
+- **Firetail**
+  - description: Gains Initiative when another player is at your location. → Deals more damage when another player is at your location.
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"In combat with a monster, or in a round when another player is at your location, … → [{"count":1,"effects":[{"type":"benefit","description":"In a round when another player is at your location, deal 3 more damage in combat.…
+- **Cultist**
+  - effect_schema: [{"count":1,"effects":[{"type":"benefit","description":"When you become Corrupted, sacrifice 1 fewer spirit and gain 1 VP."}]}] → [{"count":1,"effects":[{"type":"benefit","description":"When you become Corrupted, sacrifice 1 fewer spirit."}]}]
+
+## Dice
+
+- **Exalted Attack**
+  - description: Average Damage: 1 → Average Damage: 1.5
+- **Basic Attack**
+  - description: Average Damage: 0.3 → Average Damage: 0.5
+- **Enchanted Attack**
+  - description: Average Damage: 0.6 → Average Damage: 1
+
+## Dice sides
+
+- **e476ec6b-4446-45e5-b0b7-fbd68fd2022a**
+  - reward_value: 1 → 0
+- **ac0797fb-4119-451f-8eb9-8f09d060880a**
+  - reward_value: 0 → 1
+- **a61888f4-c5eb-451c-bd12-b26814046f3c**
+  - reward_value: 1 → 2
+- **62ae83cb-db9a-43a1-9a87-d276e2aea89c**
+  - reward_value: 1 → 2
+
+## Locations
+
+- **Arcane Abyss**
+  - reward_rows: — → [{"type":"gain","gain_icon_ids":["abyss_sealed_summon"]}]
+
+## Spirits
+
+- **Caldera**
+  - awaken_condition: {"text":"Have 7 Fire Spirits, or discard 3 Arcane Abyss Spirits.","type":"text"} → {"text":"Have 7 Fire Spirits.","type":"text"}
+- **Storm King**
+  - awaken_condition: {"text":"Have 7 Water Spirits, or discard 3 Arcane Abyss Spirits.","type":"text"} → {"text":"Have 7 Water Spirits.","type":"text"}
+- **Nhal**
+  - awaken_condition: {"type":"text","text":"Navigate to the Arcane Abyss, but don't fight the monster."} → {"type":"text","text":"Navigate to the Arcane Abyss while Corrupt or Fallen, but don't fight the monster."}
+- **Hollowbloom**
+  - awaken_condition: {"text":"Have 7 Forest Spirits, or discard 3 Arcane Abyss Spirits.","type":"text"} → {"text":"Have 7 Forest Spirits.","type":"text"}
+- **Aurelion**
+  - awaken_condition: {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune","Any basic rune"]} → {"type":"rune_cost","rune_ids":["Any basic rune","Any basic rune","Any basic rune","Any basic rune"]}
+
+## Icons
+
+- Added **Any Spirit Augment**
+
+## Monster pools
+
+- **2 players, difficulty 1**
+  - size: 5 → 4
+- **2 players, difficulty 2**
+  - size: 8 → 4
+- **2 players, difficulty 3**
+  - size: 5 → 40
+- **3 players, difficulty 2**
+  - size: 10 → 6
+- **3 players, difficulty 3**
+  - size: 8 → 40
+- **4 players, difficulty 1**
+  - size: 9 → 8
+- **4 players, difficulty 2**
+  - size: 14 → 8
+- **4 players, difficulty 3**
+  - size: 10 → 40
+- **5 players, difficulty 1**
+  - size: 11 → 10
+- **5 players, difficulty 2**
+  - size: 18 → 10
+- **5 players, difficulty 3**
+  - size: 13 → 40
+- **6 players, difficulty 1**
+  - size: 14 → 12
+- **6 players, difficulty 2**
+  - size: 21 → 12
+- **6 players, difficulty 3**
+  - size: 15 → 40
+
+## Monsters
+
+- **Carrion Crown**
+  - damage: 3 → 5
+  - reward_track: ["2vp","abyss_sealed_summon"] → ["5vp"]
+  - initiative: 6 → 100
+- **Blightfang**
+  - damage: 4 → 5
+  - reward_track: ["3vp","Arcane Attack - Side 1"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 5 → 100
+- **Ember Maw**
+  - reward_track: ["2vp","Rune: Firecracker","2vp"] → ["4vp","Rune: Lantern Lights"]
+  - initiative: 8 → 100
+- **Hollow Stag**
+  - damage: 4 → 5
+  - reward_track: ["2vp"] → ["5vp"]
+  - initiative: 4 → 100
+- **Gutter Hydra**
+  - barrier: 7 → 8
+  - reward_track: ["3vp","Exalted Attack - Side 1"] → ["5vp"]
+  - initiative: 2 → 100
+- **Tidecaller Eel**
+  - damage: 5 → 6
+  - reward_track: ["3vp","Rune: Tidal Tribe","Exalted Attack - Side 1"] → ["4vp","Rune: Tidal Tribe"]
+  - initiative: 3 → 100
+- **Gravemoss Golem**
+  - damage: 4 → 5
+  - reward_track: ["2vp"] → ["5vp"]
+  - initiative: 4 → 100
+- **Chainmaw Brute**
+  - damage: 5 → 6
+  - reward_track: ["3vp","Rune: Lantern Lights","Exalted Attack - Side 1"] → ["5vp"]
+  - initiative: 3 → 100
+- **Sunken Bellwraith**
+  - reward_track: ["2vp","Rune: Teapot","2vp"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 8 → 100
+- **Howling Shroud**
+  - reward_track: ["3vp","Rune: Cyber City","Exalted Attack - Side 1"] → ["5vp"]
+  - initiative: 2 → 100
+- **Ruin Phoenix**
+  - barrier: 8 → 24
+  - damage: 5 → 7
+  - reward_track: ["3vp","abyss_sealed_summon","Support Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 9 → 100
+- **Rootrot Ancient**
+  - barrier: 7 → 24
+  - damage: 4 → 7
+  - reward_track: ["3vp","abyss_sealed_summon"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 3 → 100
+- **Plague Choir**
+  - barrier: 8 → 24
+  - damage: 5 → 7
+  - reward_track: ["4vp","Exalted Attack - Side 1","2vp"] → ["5vp","4vp"]
+  - initiative: 9 → 100
+- **Void Shepherd**
+  - barrier: 9 → 24
+  - damage: 6 → 7
+  - reward_track: ["5vp","abyss_sealed_summon","Animal Augment","2vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 8 → 100
+- **Ashwisp**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon","Enchanted Attack"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 5 → 100
+- **Hollow Lantern**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon"] → ["3vp"]
+  - initiative: 5 → 100
+- **Cinder Mite**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 5 → 100
+- **Fogkin**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon","Rune: Cyber City"] → ["3vp"]
+  - initiative: 5 → 100
+- **Mire Imp**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon","Rune: Tidal Tribe"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 5 → 100
+- **Bog Whisperer**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon"] → ["3vp"]
+  - initiative: 5 → 100
+- **Grave Nettle**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 5 → 100
+- **Thornling**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon","Rune: Forest"] → ["3vp"]
+  - initiative: 5 → 100
+- **Ember Gnat**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon","Rune: Lantern Lights"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Murk Tadpole**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon"] → ["3vp"]
+  - initiative: 4 → 100
+- **Shiver Wisp**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["2vp","abyss_sealed_summon"] → ["3vp"]
+  - initiative: 4 → 100
+- **Tidepool Lurker**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - initiative: 4 → 100
+- **Splinter Imp**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["2vp","Rune: Forest"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Rattlebone Pup**
+  - barrier: 1 → 3
+  - damage: 2 → 4
+  - reward_track: ["victory_point","abyss_sealed_summon","Enchanted Attack"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Pale Wanderer**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["2vp","Rune: Cyber City"] → ["3vp"]
+  - initiative: 4 → 100
+- **Weeping Candle**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["2vp","Rune: Lantern Lights"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Rustveil Ghostling**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["2vp"] → ["3vp"]
+  - initiative: 3 → 100
+- **Ironjaw Hound**
+  - barrier: 4 → 5
+  - damage: 3 → 5
+  - reward_track: ["2vp"] → ["5vp"]
+  - initiative: 6 → 100
+- **Ashen Lynx**
+  - damage: 4 → 5
+  - reward_track: ["2vp","abyss_sealed_summon","Rune: Lantern Lights"] → ["4vp","Rune: Lantern Lights"]
+  - initiative: 5 → 100
+- **Stormgut Toad**
+  - damage: 3 → 5
+  - reward_track: ["2vp","Swordsman Augment"] → ["5vp"]
+  - initiative: 6 → 100
+- **Venom Lotus**
+  - barrier: 4 → 5
+  - damage: 3 → 5
+  - reward_track: ["3vp"] → ["5vp"]
+  - initiative: 6 → 100
+- **Marrow Wolf**
+  - damage: 4 → 5
+  - reward_track: ["2vp","abyss_sealed_summon","Rune: Cyber City"] → ["5vp"]
+  - initiative: 5 → 100
+- **Bramble Wyrm**
+  - damage: 4 → 5
+  - reward_track: ["2vp","abyss_sealed_summon","Rune: Forest"] → ["5vp"]
+  - initiative: 5 → 100
+- **Nightmare Loom**
+  - barrier: 7 → 24
+  - damage: 4 → 7
+  - reward_track: ["3vp","abyss_sealed_summon","Animal Augment"] → ["5vp","4vp"]
+  - initiative: 3 → 100
+- **Obsidian Hydra**
+  - barrier: 10 → 24
+  - damage: 6 → 7
+  - reward_track: ["4vp","Cursed Spirit Augment","2vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 7 → 100
+- **The Drowned Bell**
+  - barrier: 9 → 24
+  - damage: 5 → 7
+  - reward_track: ["3vp","abyss_sealed_summon","Swordsman Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 8 → 100
+- **Thousand-Eye Warden**
+  - barrier: 11 → 24
+  - reward_track: ["4vp","Swordsman Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 7 → 100
+- **Grief Titan**
+  - barrier: 10 → 24
+  - damage: 6 → 7
+  - reward_track: ["5vp","Arcane Attack - Side 1","2vp"] → ["5vp","4vp"]
+  - initiative: 7 → 100
+- **Storm-Eater**
+  - barrier: 10 → 24
+  - reward_track: ["5vp","Exalted Attack - Side 1","Support Augment","2vp"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 7 → 100
+- **Cinder Colossus**
+  - barrier: 12 → 24
+  - damage: 7 → 8
+  - reward_track: ["5vp","abyss_sealed_summon","Arcane Attack - Side 1","Strategist Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 6 → 100
+- **Ashfall Tyrant**
+  - barrier: 12 → 24
+  - reward_track: ["4vp","abyss_sealed_summon","2vp"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 6 → 100
+- **Starless Seraph**
+  - barrier: 11 → 24
+  - reward_track: ["4vp","Arcane Attack - Side 1","2vp"] → ["5vp","4vp"]
+  - initiative: 7 → 100
+- **Pale Monarch**
+  - barrier: 13 → 24
+  - reward_track: ["5vp","Arcane Attack - Side 1","Sorcerer Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 6 → 100
+- **Gloamheart Dragon**
+  - barrier: 14 → 24
+  - damage: 9 → 8
+  - reward_track: ["5vp","2vp"] → ["5vp","4vp"]
+  - initiative: 5 → 100
+- **Abyss Leviathan**
+  - barrier: 15 → 24
+  - damage: 9 → 8
+  - reward_track: ["5vp","Swordsman Augment","2vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 5 → 100
+- **Eclipse Wyrm**
+  - barrier: 17 → 24
+  - damage: 10 → 8
+  - reward_track: ["5vp","Exalted Attack - Side 1","Strategist Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 4 → 100
+- **The Hollow Regent**
+  - barrier: 14 → 24
+  - reward_track: ["5vp","Support Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 5 → 100
+- **World Gnawer**
+  - barrier: 17 → 24
+  - damage: 10 → 8
+  - reward_track: ["5vp","Exalted Attack - Side 1","Cursed Spirit Augment","2vp"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Maw of the Deep Rift**
+  - barrier: 15 → 24
+  - damage: 9 → 8
+  - reward_track: ["5vp","Sorcerer Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 5 → 100
+- **Soot Chick**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon","Enchanted Attack"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Puddle Frog**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon"] → ["3vp"]
+  - initiative: 4 → 100
+- **Acorn Imp**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["victory_point","abyss_sealed_summon"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Pebble Pup**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["abyss_sealed_summon","Enchanted Attack"] → ["3vp"]
+  - initiative: 4 → 100
+- **Candle Slug**
+  - barrier: 1 → 2
+  - damage: 2 → 3
+  - reward_track: ["abyss_sealed_summon","Enchanted Attack"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Kelp Wisp**
+  - barrier: 1 → 3
+  - damage: 2 → 4
+  - reward_track: ["victory_point","abyss_sealed_summon","Enchanted Attack"] → ["3vp"]
+  - initiative: 4 → 100
+- **Moss Mite**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["abyss_sealed_summon","abyss_sealed_summon"] → ["3vp"]
+  - initiative: 3 → 100
+- **Rust Bat**
+  - barrier: 1 → 3
+  - damage: 2 → 4
+  - reward_track: ["2vp","Basic Attack - Side 1"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Spark Rat**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["victory_point","Basic Attack - Side 1","Basic Attack - Side 1"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 3 → 100
+- **Shell Snapper**
+  - barrier: 1 → 3
+  - damage: 2 → 4
+  - reward_track: ["2vp","Enchanted Attack"] → ["3vp"]
+  - initiative: 4 → 100
+- **Burr Hog**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["2vp","abyss_sealed_summon"] → ["3vp"]
+  - initiative: 3 → 100
+- **Tin Mole**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - initiative: 3 → 100
+- **Charcoal Snail**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["abyss_sealed_summon","Enchanted Attack"] → ["3vp"]
+  - initiative: 3 → 100
+- **Drip Jelly**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["2vp","Rune: Tidal Tribe"] → ["2vp","abyss_sealed_summon"]
+  - initiative: 3 → 100
+- **Sap Beetle**
+  - barrier: 2 → 3
+  - damage: 3 → 4
+  - reward_track: ["victory_point","Basic Attack - Side 2","Basic Attack - Side 1"] → ["3vp"]
+  - initiative: 3 → 100
+- **Cinder Boar**
+  - barrier: 4 → 5
+  - damage: 3 → 5
+  - reward_track: ["2vp"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 6 → 100
+- **Tide Crab**
+  - damage: 3 → 5
+  - reward_track: ["2vp","abyss_sealed_summon","Exalted Attack - Side 1"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 5 → 100
+- **Thorn Spider**
+  - damage: 3 → 5
+  - reward_track: ["2vp","Support Augment"] → ["4vp","Rune: Forest"]
+  - initiative: 5 → 100
+- **Iron Ram**
+  - damage: 3 → 5
+  - reward_track: ["3vp","Animal Augment"] → ["4vp","Rune: Cyber City"]
+  - initiative: 5 → 100
+- **Ash Vulture**
+  - damage: 3 → 5
+  - reward_track: ["3vp","abyss_sealed_summon"] → ["5vp"]
+  - initiative: 5 → 100
+- **Reef Shark**
+  - damage: 4 → 5
+  - reward_track: ["2vp","abyss_sealed_summon","Rune: Tidal Tribe"] → ["5vp"]
+  - initiative: 4 → 100
+- **Bark Bear**
+  - barrier: 5 → 6
+  - damage: 3 → 5
+  - reward_track: ["2vp","abyss_sealed_summon"] → ["4vp","Rune: Forest"]
+  - initiative: 5 → 100
+- **Crystal Scorpion**
+  - damage: 4 → 5
+  - reward_track: ["3vp","abyss_sealed_summon","Arcane Attack - Side 1"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Magma Toad**
+  - barrier: 6 → 7
+  - damage: 4 → 6
+  - reward_track: ["3vp"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 4 → 100
+- **Drowned Knight**
+  - barrier: 6 → 7
+  - damage: 4 → 6
+  - reward_track: ["2vp","Exalted Attack - Side 1"] → ["5vp"]
+  - initiative: 4 → 100
+- **Rot Troll**
+  - damage: 5 → 6
+  - reward_track: ["2vp","Swordsman Augment"] → ["5vp"]
+  - initiative: 4 → 100
+- **Cave Troll**
+  - damage: 5 → 6
+  - reward_track: ["2vp","Animal Augment"] → ["4vp","Rune: Cyber City"]
+  - initiative: 4 → 100
+- **Ember Serpent**
+  - damage: 5 → 6
+  - reward_track: ["2vp"] → ["5vp"]
+  - initiative: 3 → 100
+- **Siren Eel**
+  - damage: 5 → 6
+  - reward_track: ["3vp","Support Augment"] → ["5vp"]
+  - initiative: 3 → 100
+- **Wasp Queen**
+  - barrier: 7 → 8
+  - reward_track: ["3vp","Rune: Forest","Exalted Attack - Side 1"] → ["5vp"]
+  - initiative: 2 → 100
+- **Scree Wyvern**
+  - barrier: 7 → 8
+  - reward_track: ["2vp","Arcane Attack - Side 1"] → ["5vp"]
+  - initiative: 2 → 100
+- **Furnace Knight**
+  - barrier: 7 → 8
+  - reward_track: ["3vp","Arcane Attack - Side 1","Animal Augment"] → ["5vp"]
+  - initiative: 2 → 100
+- **Angler Horror**
+  - reward_track: ["3vp","Exalted Attack - Side 1","Swordsman Augment","2vp"] → ["4vp","Rune: Tidal Tribe"]
+  - initiative: 8 → 100
+- **Hollow Treant**
+  - reward_track: ["2vp","Rune: Flower","2vp"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 8 → 100
+- **Quartz Golem**
+  - reward_track: ["2vp","Rune: Magnet","2vp"] → ["4vp","abyss_sealed_summon"]
+  - initiative: 8 → 100
+- **Umbra the Last Eclipse**
+  - barrier: 7 → 24
+  - damage: 4 → 7
+  - reward_track: ["3vp"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 3 → 100
+- **The Grinning Nova**
+  - barrier: 7 → 24
+  - damage: 4 → 7
+  - reward_track: ["4vp","abyss_sealed_summon","Sorcerer Augment"] → ["5vp","4vp"]
+  - initiative: 3 → 100
+- **Vael the Moonless Tide**
+  - barrier: 7 → 24
+  - damage: 4 → 7
+  - reward_track: ["5vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 3 → 100
+- **Nihilor the Star Drinker**
+  - barrier: 8 → 24
+  - damage: 5 → 7
+  - reward_track: ["3vp","Arcane Attack - Side 1","2vp"] → ["5vp","4vp"]
+  - initiative: 9 → 100
+- **Orthan the Iron Nebula**
+  - barrier: 8 → 24
+  - damage: 5 → 7
+  - reward_track: ["5vp","Strategist Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 9 → 100
+- **Lethe the Drowned Memory**
+  - barrier: 8 → 24
+  - damage: 5 → 7
+  - reward_track: ["3vp","abyss_sealed_summon","2vp"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 8 → 100
+- **Caeles the Shattered Sky**
+  - barrier: 9 → 24
+  - damage: 6 → 7
+  - reward_track: ["4vp","2vp"] → ["5vp","4vp"]
+  - initiative: 7 → 100
+- **Xul the Bone Constellation**
+  - barrier: 9 → 24
+  - damage: 6 → 7
+  - reward_track: ["5vp","abyss_sealed_summon","Arcane Attack - Side 1","Sorcerer Augment","2vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 7 → 100
+- **The Weeping Meteor**
+  - barrier: 9 → 24
+  - damage: 6 → 7
+  - reward_track: ["3vp","Exalted Attack - Side 1","2vp"] → ["5vp","4vp"]
+  - initiative: 7 → 100
+- **Noctis the Hollow Moon**
+  - barrier: 11 → 24
+  - damage: 7 → 8
+  - reward_track: ["5vp","Exalted Attack - Side 1","2vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 6 → 100
+- **Seraphel the Burnt Dawn**
+  - barrier: 11 → 24
+  - damage: 7 → 8
+  - reward_track: ["3vp","2vp"] → ["5vp","4vp"]
+  - initiative: 6 → 100
+- **Korrath the Chained Comet**
+  - barrier: 11 → 24
+  - damage: 7 → 8
+  - reward_track: ["4vp","2vp"] → ["5vp","4vp"]
+  - initiative: 6 → 100
+- **Maw of Ten Thousand Teeth**
+  - barrier: 12 → 24
+  - reward_track: ["5vp","Animal Augment","2vp"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 6 → 100
+- **Ashkar, Herald of the Dead Sun**
+  - barrier: 13 → 24
+  - reward_track: ["5vp","Arcane Attack - Side 1","Cursed Spirit Augment","2vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 6 → 100
+- **Veyra the Starved Nebula**
+  - barrier: 13 → 24
+  - reward_track: ["5vp","Arcane Attack - Side 1","Strategist Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 5 → 100
+- **Gravemind Colossus**
+  - barrier: 15 → 24
+  - damage: 9 → 8
+  - reward_track: ["5vp","Cursed Spirit Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 5 → 100
+- **The Thousand-Hand Oracle**
+  - barrier: 15 → 24
+  - damage: 9 → 8
+  - reward_track: ["5vp","Arcane Attack - Side 1","Support Augment","2vp"] → ["5vp","3vp","abyss_sealed_summon"]
+  - initiative: 5 → 100
+- **Omen the Last Light**
+  - barrier: 15 → 24
+  - damage: 9 → 8
+  - reward_track: ["4vp","Exalted Attack - Side 1","Animal Augment","2vp"] → ["5vp","4vp"]
+  - initiative: 5 → 100
+- **The Silent Zenith**
+  - barrier: 17 → 24
+  - damage: 10 → 8
+  - reward_track: ["5vp","Arcane Attack - Side 1","Swordsman Augment","2vp"] → ["5vp","3vp","Rune: Any Rune"]
+  - initiative: 4 → 100
+- **Thal, the End of Tides**
+  - barrier: 16 → 24
+  - damage: 10 → 8
+  - reward_track: ["5vp","2vp"] → ["5vp","4vp"]
+  - initiative: 4 → 100
+- **Abyss Lurker**
+  - initiative: 4 → 100
+
+## Rule switches
+
+- Removed **row 1**
+

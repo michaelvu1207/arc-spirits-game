@@ -326,6 +326,36 @@
 				"mat_items": 12,
 				"reward_row_assignments": 1
 			}
+		},
+		{
+			"version": "0.3.0",
+			"createdAt": "2026-11-28T09:10:29.077Z",
+			"parent": "0.2.7",
+			"notes": "One official ruleset: the game of the balance tests of 18 to 27 November, with no rule switches. A monster draw reveals one card: keep it, put it back on top of its deck, or keep it in place of a card you hold; players at the Arcane Abyss draw fewest points first, from shared decks of two Difficulty 1 and two Difficulty 2 cards per player. One battle action a round: a fight or the Arcane Abyss Summon action (Monster Hunter has two). Initiative is one 12-sided die: 4, 6, 7 or 8 sides hit at Pure, Tainted, Corrupt, Fallen; in a player fight each side adds up its dice that hit and the side with more attacks first; monsters always have the initiative. The corruption sacrifice stops at 4 spirits. Rest restores 4, 4, 3, 2 Barrier by status. Difficulty 3 monsters have Barrier 24, deal 7 to 8 and restore 5 Barrier after a fight they survive; the Abyss Lurker gives one of its rewards. Weaker Basic and Enchanted dice. New Fighter, Elementalist, Cultivator, Firetail, Sentinel, Mage, Fairy, Cursed Spirit, Battle Adept, Beast, Mystic, Summoner, Cultist, Captain, Healer, Feral, King, Princess, Queen, Falconer and Arcane Alchemist abilities. Aurelion costs 4 runes; Caldera, Storm King and Hollowbloom need 7 spirits of their origin; Nhal needs a visit while Corrupt or Fallen. 108 monster cards and 29 spirit cards remade; the six hero card backs still print their old text.",
+			"sha256": "d457f75bec2205400afe50cd4c9f3cdaa478678a908fcb636867afbeaf8b00e7",
+			"rulesHash": "9d62f7067abe6a53caf4bb7f0c3dec2d3a7fa353725bdd044fc642856f278c86",
+			"art": {
+				"id": "b671e63e5f445407",
+				"files": 522
+			},
+			"counts": {
+				"hex_spirits": 64,
+				"classes": 55,
+				"origins": 8,
+				"monsters_v2": 109,
+				"icon_pool": 147,
+				"game_locations": 5,
+				"guardians": 10,
+				"editions": 2,
+				"custom_dice": 5,
+				"dice_sides": 30,
+				"game_location_rows": 14,
+				"monster_pools": 15,
+				"relics": 5,
+				"rules": 0,
+				"mat_items": 12,
+				"reward_row_assignments": 1
+			}
 		}
 	]
 }
