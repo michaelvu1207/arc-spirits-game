@@ -1,5 +1,5 @@
 {
-	"live": "0.3.0",
+	"live": "0.3.1",
 	"versions": [
 		{
 			"version": "0.1.0",
@@ -336,6 +336,36 @@
 			"rulesHash": "9d62f7067abe6a53caf4bb7f0c3dec2d3a7fa353725bdd044fc642856f278c86",
 			"art": {
 				"id": "b671e63e5f445407",
+				"files": 522
+			},
+			"counts": {
+				"hex_spirits": 64,
+				"classes": 55,
+				"origins": 8,
+				"monsters_v2": 109,
+				"icon_pool": 147,
+				"game_locations": 5,
+				"guardians": 10,
+				"editions": 2,
+				"custom_dice": 5,
+				"dice_sides": 30,
+				"game_location_rows": 14,
+				"monster_pools": 15,
+				"relics": 5,
+				"rules": 0,
+				"mat_items": 12,
+				"reward_row_assignments": 1
+			}
+		},
+		{
+			"version": "0.3.1",
+			"createdAt": "2026-11-28T09:54:04.914Z",
+			"parent": "0.3.0",
+			"notes": "Art only: every monster card and every spirit card exported again from the game data of 0.3.0 (108 monster cards, 64 spirit fronts, 48 spirit backs). An old back of Thorn Ranger that still showed a former name is gone. Rules and numbers are those of 0.3.0.",
+			"sha256": "d457f75bec2205400afe50cd4c9f3cdaa478678a908fcb636867afbeaf8b00e7",
+			"rulesHash": "9d62f7067abe6a53caf4bb7f0c3dec2d3a7fa353725bdd044fc642856f278c86",
+			"art": {
+				"id": "9acb933709743aa8",
 				"files": 522
 			},
 			"counts": {
