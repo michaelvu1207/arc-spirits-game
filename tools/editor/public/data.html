@@ -614,7 +614,7 @@ function paintLines() {
   // The top bar, left: what is shown (the test, the game, the live marker). Right: how the lines are drawn.
   const liveAt = new Date(GE.at ?? Date.now()).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
   $('barExtra').innerHTML = `<div class="gf">
-      <label class="gf-f" title="${esc(about)}"><span>Test</span><select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x.live ? ' · live' : x === newest ? ' · latest' : ''} · ${esc(day(x.last))} · ${part(x)}</option>`).join('')}</select></label>
+      <label class="gf-f" title="${esc(about)}"><span>Test</span><select id="geSetup">${[...GE.index].reverse().map((x) => `<option value="${esc(x.setup)}" ${x.setup === GE.setup ? 'selected' : ''}>Test ${x.n}${x.live ? ' · live' : x === newest ? ' · latest' : ''} · ${esc(day(x.last))} · ${part(x)}${x.table ? ` · ${esc(x.table)}` : ''}</option>`).join('')}</select></label>
       <label class="gf-f"><span>Game</span><select id="geGame"><option value="0">All ${GE.data.games.length} games</option>${GE.data.games.map((g, k) => `<option value="${k + 1}" ${GE.game === k + 1 ? 'selected' : ''}>Game ${k + 1} · ${g.state === 'live' ? `round ${g.rounds}, in play` : g.state === 'stopped' ? `stopped at round ${g.rounds}` : `${g.rounds} rounds`}</option>`).join('')}</select></label>
       ${meta.live ? `<span class="gf-live" title="This test is being played. The lines are fetched again every 20 seconds."><span class="ge-live">Live</span><span class="gf-sub">${GE.data.games.filter((g) => g.state === 'done').length} of ${GE.data.games.length} finished · ${esc(liveAt)}</span></span>` : ''}
     </div>
@@ -1101,14 +1101,19 @@ function geSummary() {
     <div class="gsum-note">${phone.matches ? `Tap a point on a line for that player's board at that round, then drag sideways to move through the rounds. Tap an empty spot to go back. "Attack" at the top shows the attack by round of the players of one finishing place.` : `Click a point on a line for that player's board at that round. Drag along the line, or use ← and →, to move through the rounds. "Attack" in the top bar shows the attack by round of the players of one finishing place (1st, 2nd, 3rd, 4th, or all).`}</div>
   </div>`;
 }
+// Who the AI players of a test are: the short names in the "Players" column, spelled out.
+const GE_PLAYERS = 'Players are AI models: Fable 5.2 = Claude Fable 5.2 (Anthropic); Opus 5.5 = Claude Opus 5.5 (Anthropic); Astra = GPT-6.2 Astra (OpenAI); Sol = GPT-6.2 Sol (OpenAI). Tests with different players are not like for like.';
+// The players of a test in one or two words for the table of all tests: every test has four players, so "Astra ×4" is "Astra";
+// a table of several models is "Mixed" (the hover text names them).
+const gePlayersShort = (t) => !t ? '–' : / ×4$/.test(t) ? t.replace(/ ×4$/, '') : 'Mixed';
 function geAllTests() {
   const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const cls = (ok) => ok ? 'pass' : 'fail';
   return `<div class="gsum">
     <div class="gs-top"><b>All ${GE.index.length} tests</b><button class="lnk" data-all="0">Back to this test</button></div>
-    <div class="gsum-note">Finished games only; a test with none shows its games as far as they were played. Targets: end round 20 to 30, gap 10 or less, monsters 70 %. Click a test to open it.</div>
-    <div class="gsum-scroll"><table class="gsum-t all"><thead><tr><th>Test</th><th>Day</th><th>Games</th><th title="Median round the game ends">End round</th><th title="Median points between first and last">Gap</th><th title="Share of points from monsters">Monsters</th><th title="Share of points from player fights">Fights</th></tr></thead><tbody>${[...GE.index].reverse().map((x) => { const part = x.done != null && x.done < x.games;
-      return `<tr class="${x.setup === GE.setup ? 'cur' : ''}" title="${esc(x.changed || x.label)}"><td><button class="lnk" data-setup="${esc(x.setup)}">Test ${x.n}${x.live ? ' · live' : ''}</button></td><td>${esc(day(x.last))}</td><td>${part ? `${x.done} of ${x.games}` : x.games}</td>
+    <div class="gsum-note">Finished games only; a test with none shows its games as far as they were played. Targets: end round 20 to 30, gap 10 or less, monsters 70 %. Click a test to open it. ${esc(GE_PLAYERS)}</div>
+    <div class="gsum-scroll"><table class="gsum-t all"><thead><tr><th>Test</th><th>Day</th><th title="${esc(GE_PLAYERS)}">Players</th><th>Games</th><th title="Median round the game ends">End round</th><th title="Median points between first and last">Gap</th><th title="Share of points from monsters">Monsters</th><th title="Share of points from player fights">Fights</th></tr></thead><tbody>${[...GE.index].reverse().map((x) => { const part = x.done != null && x.done < x.games;
+      return `<tr class="${x.setup === GE.setup ? 'cur' : ''}" title="${esc(x.changed || x.label)}"><td><button class="lnk" data-setup="${esc(x.setup)}">Test ${x.n}${x.live ? ' · live' : ''}</button></td><td>${esc(day(x.last))}</td><td title="${esc(`${x.table || ''}. ${GE_PLAYERS}`)}">${esc(gePlayersShort(x.table))}</td><td>${part ? `${x.done} of ${x.games}` : x.games}</td>
         <td class="${x.done === 0 ? '' : cls(x.end_round >= 20 && x.end_round <= 30)}">${ge1(x.end_round)}</td><td class="${x.done === 0 ? '' : cls(x.gap <= 10)}">${ge1(x.gap)}</td><td class="${x.done === 0 ? '' : cls(Math.abs(x.mon_pct - 70) <= 5)}">${x.mon_pct == null ? '–' : ge1(x.mon_pct) + ' %'}</td><td>${x.pvp_pct == null ? '–' : ge1(x.pvp_pct) + ' %'}</td></tr>`; }).join('')}</tbody></table></div>
   </div>`;
 }
