@@ -256,6 +256,8 @@
  *   after a fight the action is gone. A Monster Hunter's extra fight is on top of the choice (Michael, 2026-11-27:
  *   "monster hunter should still be able to trigger a fight"): two fights, or one fight and the action, in either
  *   order (`monsterFightsLeft` in locationInteractions.ts). The Power Abyssal Execution counts as a fight.
+ *   Wording (Michael, 2026-11-27: "worded as using a battle action"): a player has 1 battle action a round; a fight,
+ *   the Arcane Abyss Summon action and Abyssal Execution each use one; Monster Hunter has 1 extra battle action.
  *   Drawing and keeping monster cards is not touched. See `abyssSummonRow` in locationInteractions.ts.
  * - spiritInitiativeTrim (default false; Michael, 2026-11-21): true ⇒ Monk gives 3 Initiative (not 5),
  *   Paladin 2 (not 4; it still wins ties) and Firetail 2 (not 3), so single spirits do not stand in
@@ -750,14 +752,14 @@ const RULE_CLASS_TEXT: { rule: RuleName; when: boolean; className: string; count
 		count: 1,
 		text: 'When an Evil player attacks you, your side strikes first and deals 3 more damage. When a monster attacks you, deal 3 more damage.'
 	},
-	// 2026-11-27 (Michael: "monster hunter should still be able to trigger a fight"): the extra fight is on top of
-	// the fight-or-summon choice at the Arcane Abyss.
+	// 2026-11-27 (Michael: "monster hunter should still be able to trigger a fight", "worded as using a battle
+	// action"): a fight and the Arcane Abyss Summon action each use a battle action; Monster Hunter has one more.
 	{
 		rule: 'abyssFightOrSummon',
 		when: true,
 		className: 'Monster Hunter',
 		count: 1,
-		text: 'Each round at the Arcane Abyss, you may fight one extra time: two fights, or one fight and the Arcane Abyss Summon action.'
+		text: 'You have 1 extra battle action each round.'
 	},
 	// 2026-11-26: before the other Firetail texts (the first entry wins).
 	{

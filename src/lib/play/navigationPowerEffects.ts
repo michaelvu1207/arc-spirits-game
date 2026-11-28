@@ -13,7 +13,7 @@ import {
 	type NavigationPowerId,
 	navigationPowerById
 } from './navigationPowers';
-import { ABYSS_SUMMON_USED, monsterFightsLeft, originRuneOptions, type ResolvedRune } from './locationInteractions';
+import { monsterFightsLeft, originRuneOptions, type ResolvedRune } from './locationInteractions';
 import { ruleValue } from './rules';
 import { SPIRIT_AUGMENT_CLASSES } from './augments';
 import { nextId, nextInt } from './rng';
@@ -604,9 +604,9 @@ export function resolveNavigationPowerChoice(
 			const card = (p.monsterHand ?? [])[index];
 			if (!card || card.hp <= 0 || card.hp * 2 > card.maxHp || !hooks.defeatMonster)
 				return { ok: false, error: 'That monster card can no longer be defeated this way.' };
-			// Rule `abyssFightOrSummon`: Abyssal Execution is a fight, so after the Arcane Abyss Summon action it needs one left.
-			if (ruleValue(catalog, 'abyssFightOrSummon') && (p.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED) && monsterFightsLeft(p, true) <= 0)
-				return { ok: false, error: 'You took the Arcane Abyss Summon action this round: it takes the place of a fight, and you have no fight left.' };
+			// Rule `abyssFightOrSummon`: Abyssal Execution uses a battle action, like a fight and the Arcane Abyss Summon action.
+			if (ruleValue(catalog, 'abyssFightOrSummon') && monsterFightsLeft(p, true) <= 0)
+				return { ok: false, error: 'You have no battle action left this round: Abyssal Execution uses a battle action.' };
 			hooks.defeatMonster(state, seat, catalog, index);
 			break;
 		}

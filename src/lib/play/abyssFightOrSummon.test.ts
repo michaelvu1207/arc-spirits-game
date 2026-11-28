@@ -90,7 +90,7 @@ describe('abyssFightOrSummon: a round at the Arcane Abyss is a fight OR the Arca
 		expect(s.players.Red!.handDraws.length).toBeGreaterThan(0); // the Arcane Abyss draw is open
 		s = closeDraw(s, ON);
 		expect(can(s, ON, FIGHT)).toBe(false);
-		expect(fails(s, ON, FIGHT)).toContain('Arcane Abyss Summon action this round');
+		expect(fails(s, ON, FIGHT)).toContain('the Arcane Abyss Summon action used one');
 		expect(agentLegalCommands(s, 'Red', ON).commands.some((x) => x.type === 'startCombat')).toBe(false);
 	});
 
@@ -98,7 +98,7 @@ describe('abyssFightOrSummon: a round at the Arcane Abyss is a fight OR the Arca
 		const s = ok(atAbyss(ON), ON, ACTORS.Red, FIGHT);
 		expect(s.players.Red!.monsterHand![0].hp).toBeGreaterThan(0); // the card survived, the fight is spent
 		expect(can(s, ON, SUMMON)).toBe(false);
-		expect(fails(s, ON, SUMMON)).toContain('in place of a fight');
+		expect(fails(s, ON, SUMMON)).toContain('uses a battle action');
 		expect(agentLegalCommands(s, 'Red', ON).commands.some((x) => x.type === 'resolveLocationInteraction')).toBe(false);
 	});
 
@@ -118,9 +118,10 @@ describe('abyssFightOrSummon: a round at the Arcane Abyss is a fight OR the Arca
 
 	it('the players are told: labels and rules text', () => {
 		const s = atAbyss(ON);
-		expect(labelFor(SUMMON, s, 'Red', ON)).toContain('IN PLACE of a fight');
-		expect(labelFor(FIGHT, s, 'Red', ON)).toContain('IN PLACE of the Arcane Abyss Summon action');
-		expect(labelFor(SUMMON, atAbyss(OFF), 'Red', OFF)).not.toContain('IN PLACE');
+		expect(labelFor(SUMMON, s, 'Red', ON)).toContain('uses your battle action: you cannot fight this round after it');
+		expect(labelFor(FIGHT, s, 'Red', ON)).toContain('uses your battle action: no Arcane Abyss Summon action this round after it');
+		expect(labelFor(SUMMON, atAbyss(OFF), 'Red', OFF)).not.toContain('battle action');
+		expect(labelFor(FIGHT, atAbyss(OFF), 'Red', OFF)).not.toContain('battle action');
 	});
 });
 
@@ -137,7 +138,7 @@ describe('abyssFightOrSummon: a Monster Hunter has one extra fight on top of the
 		expect(can(s, ON, FIGHT)).toBe(true);
 		s = ok(s, ON, ACTORS.Red, FIGHT);
 		expect(can(s, ON, FIGHT)).toBe(false);
-		expect(fails(s, ON, FIGHT)).toContain('you have no fight left');
+		expect(fails(s, ON, FIGHT)).toContain('no battle action left');
 	});
 
 	it('a fight, then the summon action, then no more fights', () => {
@@ -152,17 +153,17 @@ describe('abyssFightOrSummon: a Monster Hunter has one extra fight on top of the
 		let s = ok(hunterAtAbyss(ON), ON, ACTORS.Red, FIGHT);
 		s = ok(s, ON, ACTORS.Red, FIGHT);
 		expect(can(s, ON, SUMMON)).toBe(false);
-		expect(fails(s, ON, SUMMON)).toContain('in place of a fight');
+		expect(fails(s, ON, SUMMON)).toContain('no battle action left');
 		expect(can(s, ON, FIGHT)).toBe(false);
 	});
 
 	it('the labels say what is left', () => {
 		const s = hunterAtAbyss(ON);
-		expect(labelFor(SUMMON, s, 'Red', ON)).toContain('after it you still have 1 fight this round');
-		expect(labelFor(FIGHT, s, 'Red', ON)).toContain('after it you may still fight again or take the Arcane Abyss Summon action');
+		expect(labelFor(SUMMON, s, 'Red', ON)).toContain('uses 1 battle action: 1 left after it');
+		expect(labelFor(FIGHT, s, 'Red', ON)).toContain('uses 1 battle action: 1 left after it');
 		const t = ok(s, ON, ACTORS.Red, FIGHT);
-		expect(labelFor(FIGHT, t, 'Red', ON)).toContain('IN PLACE of the Arcane Abyss Summon action');
-		expect(labelFor(SUMMON, t, 'Red', ON)).toContain('after it you cannot fight this round');
+		expect(labelFor(FIGHT, t, 'Red', ON)).toContain('no Arcane Abyss Summon action this round after it');
+		expect(labelFor(SUMMON, t, 'Red', ON)).toContain('you cannot fight this round after it');
 	});
 });
 
@@ -171,11 +172,13 @@ describe('the working tables (lab/data)', () => {
 	it('the Arcane Abyss has its summon action and the fight-or-summon rule', () => {
 		expect(now.rules?.abyssFightOrSummon).toBe(true);
 		const brief = buildRulesBrief(now);
-		expect(brief).toContain('you either FIGHT a monster card or take that action, never both');
-		expect(brief).toContain('In one round here you either FIGHT or take the Arcane Abyss Summon action, never both');
+		expect(brief).toContain('you have 1 battle action each round');
+		expect(brief).toContain('with 1 battle action you either fight or take that action, never both');
+		expect(brief).toContain('a FIGHT uses a battle action, and so does the Arcane Abyss Summon action');
+		expect(brief).toContain('without battling it. This uses a battle action.');
 		expect(brief).not.toContain('ONLY a monster reward');
 		// Monster Hunter is reworded for the choice (Michael: "monster hunter should still be able to trigger a fight").
-		expect(brief).toContain('you may fight one extra time: two fights, or one fight and the Arcane Abyss Summon action');
+		expect(brief).toContain('You have 1 extra battle action each round.');
 		expect(brief).not.toContain('initiate Monster Combat two times');
 	});
 });

@@ -257,13 +257,21 @@ export function navigationPowerPool(
 	catalog?: Pick<PlayCatalog, 'rules'> | null
 ): readonly NavigationPowerDef[] {
 	const pool = ruleValue(catalog, 'powerRework') ? V2_DEFS : NAVIGATION_POWERS;
-	return ruleValue(catalog, 'initiativeDie') ? pool.map(initiativeDieWording) : pool;
+	return ruleValue(catalog, 'initiativeDie') || ruleValue(catalog, 'abyssFightOrSummon') ? pool.map((p) => ruleWording(p, catalog)) : pool;
 }
 
 /** Rule `initiativeDie`: Sudden Strike in the new wording ("gain the initiative", never "strike first"). */
 const SUDDEN_STRIKE_DIE_TEXT = 'In your battles this round, gain the initiative if your side does not have it.';
 const initiativeDieWording = (power: NavigationPowerDef): NavigationPowerDef =>
 	power.id === 'sudden-strike' ? { ...power, text: SUDDEN_STRIKE_DIE_TEXT } : power;
+/** Rule `abyssFightOrSummon` (Michael, 2026-11-27: "worded as using a battle action"): Abyssal Execution uses a battle action. */
+const battleActionWording = (power: NavigationPowerDef): NavigationPowerDef =>
+	power.id === 'abyssal-execution-2' ? { ...power, text: power.text.replace('This is your battle for the round.', 'This uses a battle action.') } : power;
+/** A Power in the wording of the rules in force. */
+const ruleWording = (power: NavigationPowerDef, catalog?: Pick<PlayCatalog, 'rules'> | null): NavigationPowerDef => {
+	const a = ruleValue(catalog, 'initiativeDie') ? initiativeDieWording(power) : power;
+	return ruleValue(catalog, 'abyssFightOrSummon') ? battleActionWording(a) : a;
+};
 
 export function isNavigationPowerId(value: unknown): value is NavigationPowerId {
 	return typeof value === 'string' && ALL_DEFS.some((power) => power.id === value);
@@ -274,7 +282,7 @@ export function navigationPowerById(
 	catalog?: Pick<PlayCatalog, 'rules'> | null
 ): NavigationPowerDef | null {
 	const power = ALL_DEFS.find((power) => power.id === id) ?? null;
-	return power && ruleValue(catalog, 'initiativeDie') ? initiativeDieWording(power) : power;
+	return power ? ruleWording(power, catalog) : power;
 }
 
 /** Real, held Origin currency, including older saves without the explicit kind. */

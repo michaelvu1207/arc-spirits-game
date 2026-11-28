@@ -3414,7 +3414,7 @@ function reduceCommand(
 			// Rule `abyssFightOrSummon`: a round at the Arcane Abyss is a fight OR the Arcane Abyss Summon action.
 			const abyssChoice = ruleValue(catalog, 'abyssFightOrSummon') && destination === 'Arcane Abyss' && isAbyssSummonRow(interaction);
 			if (abyssChoice && !player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED) && monsterFightsLeft(player, true) <= 0) {
-				return failure('action_used', 'You have no fight left this round: the Arcane Abyss Summon action is in place of a fight.');
+				return failure('action_used', 'You have no battle action left this round: the Arcane Abyss Summon action uses a battle action.');
 			}
 
 			// Gain rows are normally once per round. Nomad ("do ALL location interactions
@@ -3683,7 +3683,7 @@ function reduceCommand(
 				return failure(
 					'action_used',
 					summonCounts && active.player.actionsUsedThisRound.includes(ABYSS_SUMMON_USED)
-						? 'You took the Arcane Abyss Summon action this round: it takes the place of a fight, and you have no fight left.'
+						? 'You have no battle action left this round: the Arcane Abyss Summon action used one.'
 						: 'You have no monster-combat actions left this round.'
 				);
 			}
