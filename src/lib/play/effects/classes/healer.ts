@@ -21,7 +21,7 @@ export const ability: ClassAbility[] = [
 			if (player.maxBarrier < 10) {
 				// No-silent-no-op: a player below 10 max barrier simply isn't offered the
 				// choice. We leave a log breadcrumb so the gate stays observable.
-				log.push('Healer: need 10 max barrier to restore barrier and gain VP.');
+				log.push('Healer: need 10 max barrier to restore barrier.');
 				return;
 			}
 			player.pendingDecisions.push({
@@ -34,7 +34,7 @@ export const ability: ClassAbility[] = [
 					{ id: 'no', label: 'No' }
 				]
 			});
-			log.push('Decision: On rest, restore 3 barrier and gain 1 VP?');
+			log.push('Decision: On rest, restore 3 barrier?');
 		}
 	}
 ];
