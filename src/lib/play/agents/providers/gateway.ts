@@ -166,7 +166,7 @@ export interface GatewayOptions {
 	 */
 	timeoutRetries?: number;
 	timeoutRetryPauseMs?: number;
-	/** The model proxy: the pause before a call that got 502 / 503 is sent again (default 60 s), at most `overloadRetries` times (default 10). */
+	/** The model proxy: the pause before a call that got 502 / 503 is sent again (default 60 s), at most `overloadRetries` times (default 30: the provider asks for about five minutes at a time). */
 	overloadPauseMs?: number;
 	overloadRetries?: number;
 	/** Several accounts (one gateway each): games are pinned per account, each with its own call
@@ -259,7 +259,7 @@ export class GatewayProvider implements ChatProvider {
 		this.#timeoutRetries = opts.timeoutRetries ?? 0;
 		this.#timeoutRetryPauseMs = opts.timeoutRetryPauseMs ?? 2_000;
 		this.#overloadPauseMs = opts.overloadPauseMs ?? 60_000;
-		this.#overloadRetries = opts.overloadRetries ?? 10;
+		this.#overloadRetries = opts.overloadRetries ?? 30;
 		this.#fetch = opts.fetchImpl ?? fetch;
 	}
 
