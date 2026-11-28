@@ -217,6 +217,9 @@ export interface GatewayPoolOptions {
 	fetchImpl?: typeof fetch;
 	/** The proxy's status as JSON text (tests); default: run {@link PROXY_STATUS_COMMAND}. */
 	proxyStatusImpl?: () => Promise<string>;
+	/** The start check: how often and how far apart the proxy's model list is read again for a model it does not list (default 30 times, 30 s). */
+	modelLooks?: number;
+	modelLookMs?: number;
 }
 
 const runProxyStatus = (): Promise<string> =>
@@ -236,6 +239,8 @@ export class GatewayPool {
 	readonly #onEvent: (text: string) => void;
 	readonly #fetch: typeof fetch;
 	readonly #proxyStatus: () => Promise<string>;
+	readonly #modelLooks: number;
+	readonly #modelLookMs: number;
 
 	constructor(specs: GatewayAccountSpec[], opts: GatewayPoolOptions) {
 		if (!specs.length)
@@ -247,6 +252,8 @@ export class GatewayPool {
 		this.#onEvent = opts.onEvent ?? (() => {});
 		this.#fetch = opts.fetchImpl ?? fetch;
 		this.#proxyStatus = opts.proxyStatusImpl ?? runProxyStatus;
+		this.#modelLooks = opts.modelLooks ?? 30;
+		this.#modelLookMs = opts.modelLookMs ?? 30_000;
 	}
 
 	/**
@@ -517,19 +524,24 @@ export class GatewayPool {
 					false
 				);
 			if (!a.proxy || !models.length) continue;
-			const body = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
-			const listed = new Set((body.data ?? []).map((m) => m.id));
-			if (!listed.size) continue;
-			for (const model of new Set(models)) {
-				const at = model.indexOf('/');
-				if (model.slice(0, at) !== a.provider) continue;
-				if (!listed.has(model.slice(at + 1)))
-					throw new ProviderError(
-						`gw: the proxy (${a.label}) has no model "${model.slice(at + 1)}" now: a wrong id, or every account with it is off`,
-						null,
-						false
-					);
+			// The proxy leaves a model out of its list while every account with it is in a short wait
+			// (the provider said "overloaded"): look again for a while before calling the id wrong.
+			const wanted = [...new Set(models)].filter((m) => m.slice(0, m.indexOf('/')) === a.provider).map((m) => m.slice(m.indexOf('/') + 1));
+			let missing: string[] = [];
+			for (let look = 0; ; look++) {
+				const listed = new Set((((await res.json().catch(() => ({}))) as { data?: { id?: string }[] }).data ?? []).map((m) => m.id));
+				missing = listed.size ? wanted.filter((m) => !listed.has(m)) : [];
+				if (!missing.length || look >= this.#modelLooks) break;
+				if (look === 0) this.#onEvent(`${a.label}: the proxy does not list ${missing.join(', ')} now; looking again for up to ${Math.round((this.#modelLooks * this.#modelLookMs) / 60_000)} min`);
+				await new Promise((resolve) => setTimeout(resolve, this.#modelLookMs));
+				res = await this.#fetch(`${a.url}/models`, { headers: a.headers, signal: AbortSignal.timeout(10_000) });
 			}
+			if (missing.length)
+				throw new ProviderError(
+					`gw: the proxy (${a.label}) has no model "${missing[0]}" now: a wrong id, or every account with it is off`,
+					null,
+					false
+				);
 		}
 	}
 }

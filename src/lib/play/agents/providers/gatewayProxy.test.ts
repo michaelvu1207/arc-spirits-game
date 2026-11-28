@@ -63,7 +63,7 @@ function setup(reply: (n: number, sent: Sent) => Reply, status: Record<string, u
 			{ label: 'proxy-codex', url: 'http://proxy/v1', token: 'KEY', proxy: true },
 			{ label: 'proxy-claude', url: 'http://proxy/v1', token: 'KEY', proxy: true, provider: 'anthropic' }
 		],
-		{ gate: GATE, fetchImpl: f.impl, onEvent: (t) => events.push(t), proxyStatusImpl: async () => JSON.stringify({ accounts: status }) }
+		{ gate: GATE, fetchImpl: f.impl, onEvent: (t) => events.push(t), proxyStatusImpl: async () => JSON.stringify({ accounts: status }), modelLooks: 2, modelLookMs: 1 }
 	);
 	const provider = new GatewayProvider({
 		api: 'responses',
