@@ -32,6 +32,8 @@ import type {
 	SpectatorProjection
 } from './types';
 import { ALL_DESTINATIONS, isEvilAlignment, RUNE_CARRY_LIMIT } from './types';
+import { abyssAffordance, type AbyssAffordance } from './abyssAffordance';
+import { ruleValue } from './rules';
 import { canApply } from './legality';
 import { seatHasResolutionWork } from './phases';
 import { buildSessionProjection, encounterEvilAggressorsAt, encounterGoodTargets } from './runtime';
@@ -44,14 +46,19 @@ import {
 import { decisionPickerSpec, type DecisionPickerSpec } from './decisionPicker';
 import { runesAreWild } from './effects/matMatch';
 import {
+	ABYSS_SUMMON_USED,
 	autoPickCostSlots,
 	buildLocationInteractions,
 	canAfford,
 	eligibleCostSlots,
+	isAbyssSummonRow,
 	isWildcardCost,
+	monsterFightsLeft,
 	type GainEffect,
 	type LocationInteraction
 } from './locationInteractions';
+
+export type { AbyssAffordance } from './abyssAffordance';
 
 /** The command discriminant, narrowed to the real GameCommand union — never a bare string. */
 export type GameCommandType = GameCommand['type'];
@@ -193,6 +200,22 @@ export interface ResolvedPendingReward {
 	/** How many options the seat may claim (already capped at the resolvable count). */
 	chooseAmount: number;
 	options: ResolvedRewardOption[];
+	/**
+	 * Rule `permanentRewardChoice`: the kill gives ONE of the options, the seat's choice
+	 * (`resolveMonsterReward.picks[0]`), not every one. Absent: every option is granted.
+	 */
+	chooseOne?: boolean;
+	/** Rule `arcaneBlood`: the Arcane Blood the seat may take in place of every reward. Absent: not offered. */
+	arcaneBlood?: number;
+}
+
+/**
+ * Rule `summonReplaceWhenFull`: the seat holds a summon draw and all its spirit slots are full, so a
+ * summon names a spirit to replace (`spawnHandSpirit.replaceSlotIndex`). Reward hexes never replace.
+ */
+export interface SummonReplaceAffordance {
+	/** Slot indexes of the spirits the summon may replace. */
+	slots: number[];
 }
 
 /** The seat's Encounter-phase PvP opportunity (§5.4 `encounter`). Present only for an
@@ -263,6 +286,12 @@ export interface SeatAffordances {
 	/** The seat's Infiltrator dice-swap opportunity (§5.4). Present only for an awakened,
 	 *  unused Infiltrator with a co-located player in the Location phase. Voluntary. */
 	infiltratorSwap?: InfiltratorSwapAffordance;
+	/** The seat's Arcane Abyss surface: battle actions left, how a monster draw works, and whom it
+	 *  waits for before drawing. Present only in the Location phase at the Arcane Abyss. */
+	abyss?: AbyssAffordance;
+	/** Present while the seat holds a summon draw, has no open spirit slot and the game lets a summon
+	 *  replace a spirit (rule `summonReplaceWhenFull`). */
+	summonReplace?: SummonReplaceAffordance;
 	/** Server-clock wall-time (ms epoch) this seat's current phase auto-advances, or null
 	 *  when untimed. Mirrors projection.phaseDeadline. */
 	deadline: number | null;
@@ -688,6 +717,13 @@ export function computeLocationInteractions(
 	// Trader: every held basic rune also pays a rune-of-an-origin cost.
 	const costOpts = { runesWild: runesAreWild(player) };
 	const rowAllowance = 1 + (player.extraActions?.locationInteraction ?? 0);
+	// Rule `abyssFightOrSummon`: the Arcane Abyss Summon action uses a battle action, so it needs one left
+	// (the same gate as `resolveLocationInteraction` in legality.ts).
+	const summonNeedsBattleAction =
+		!!ruleValue(catalog, 'abyssFightOrSummon') &&
+		destination === 'Arcane Abyss' &&
+		!(player.actionsUsedThisRound ?? []).includes(ABYSS_SUMMON_USED) &&
+		monsterFightsLeft(player, true) <= 0;
 
 	return interactions.map((interaction) => {
 		const usedKey = `row:${interaction.rowIndex}`;
@@ -702,7 +738,8 @@ export function computeLocationInteractions(
 		const choiceGroups = interaction.gains
 			.filter((g): g is Extract<GainEffect, { type: 'chooseRune' }> => g.type === 'chooseRune')
 			.map((g) => ({ options: g.options.map((o) => ({ runeId: o.runeId, name: o.name })) }));
-		const affordable = !player.phaseReady && !player.pendingPowerDrafts?.length && canAfford(interaction, mats, costOpts) && (!interaction.gains.some(g => g.type === 'navigationPower' && g.replace) || !!player.powerInventory?.length);
+		const noBattleAction = summonNeedsBattleAction && isAbyssSummonRow(interaction);
+		const affordable = !noBattleAction && !player.phaseReady && !player.pendingPowerDrafts?.length && canAfford(interaction, mats, costOpts) && (!interaction.gains.some(g => g.type === 'navigationPower' && g.replace) || !!player.powerInventory?.length);
 		const noEffectNow = interactionHasNoEffect(interaction, player);
 
 		const repeatable = interaction.kind === 'trade';
@@ -741,7 +778,29 @@ export function computePendingReward(
 			? { chooseOptions: o.effect.options.map((r) => ({ runeId: r.runeId, name: r.name })) }
 			: {})
 	}));
-	return { monsterName: pending.monsterName, chooseAmount: pending.chooseAmount, options };
+	return {
+		monsterName: pending.monsterName,
+		chooseAmount: pending.chooseAmount,
+		options,
+		...(pending.chooseOne ? { chooseOne: true } : {}),
+		...(pending.arcaneBlood ? { arcaneBlood: pending.arcaneBlood } : {})
+	};
+}
+
+/**
+ * The seat's replace-on-summon surface, or undefined: rule `summonReplaceWhenFull`, a spirit draw in
+ * hand and no open spirit slot (the gates of `spawnHandSpirit.replaceSlotIndex`).
+ */
+export function computeSummonReplace(
+	player: PrivatePlayerState,
+	catalog: Pick<PlayCatalog, 'rules'>
+): SummonReplaceAffordance | undefined {
+	if (!ruleValue(catalog, 'summonReplaceWhenFull')) return undefined;
+	if (!(player.handDraws ?? []).some((draw) => !draw.rewardId)) return undefined;
+	const taken = new Set((player.spirits ?? []).map((spirit) => spirit.slotIndex));
+	// The 7 spirit slots (1 to 7), as `firstOpenSpiritSlot` in runtime.ts counts them.
+	for (let slot = 1; slot <= 7; slot++) if (!taken.has(slot)) return undefined;
+	return { slots: [...taken].sort((a, b) => a - b) };
 }
 
 /**
@@ -863,6 +922,8 @@ export function computeAffordances(
 	const locationInteractions = active ? computeLocationInteractions(state, active, catalog) : [];
 	const pendingReward = active ? computePendingReward(active) : undefined;
 	const encounter = active ? computeEncounter(state, active, seat, catalog) : undefined;
+	const abyss = active ? abyssAffordance(state, seat, catalog) : undefined;
+	const summonReplace = active ? computeSummonReplace(active, catalog) : undefined;
 	return {
 		seat,
 		phase,
@@ -877,6 +938,8 @@ export function computeAffordances(
 		...(locationInteractions.length > 0 ? { locationInteractions } : {}),
 		...(pendingReward ? { pendingReward } : {}),
 		...(encounter ? { encounter } : {}),
+		...(abyss ? { abyss } : {}),
+		...(summonReplace ? { summonReplace } : {}),
 		deadline: state.phaseDeadline
 	};
 }

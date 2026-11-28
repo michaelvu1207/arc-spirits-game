@@ -10,6 +10,7 @@
 	import { DICE_TIER_ORDER, MAX_ATTACK_DICE, STATUS_LADDER } from '$lib/play/types';
 	import { seatAccent, statusAccent, storageUrl, spiritBackImageUrl, augmentIconForClass } from './helpers';
 	import { expectedAttack } from '$lib/play/combat';
+	import { INITIATIVE_DIE_SIDES, initiativeHits, ruleValue } from '$lib/play/rules';
 	import { clientRules } from '$lib/play/clientRules.svelte';
 	import HexGrid from '$lib/components/HexGrid.svelte';
 
@@ -45,7 +46,14 @@
 	// falling back to the ladder label) and the combat initiative accrued this fight.
 	const statusLabel = $derived(player?.statusToken ?? STATUS_LADDER[player?.statusLevel ?? 0] ?? 'Pure');
 	const statusColor = $derived(statusAccent(statusLabel));
-	const initiative = $derived(Math.max(0, player?.initiative ?? 0));
+	// Under the initiative die (rule `initiativeDie`) a player has no initiative number: the
+	// readout is the chance of the one 12-sided die at this status ("5 / 12").
+	const initiative = $derived(
+		ruleValue(clientRules(), 'initiativeDie')
+			? `${initiativeHits(clientRules(), player?.statusLevel ?? 0)} / ${INITIATIVE_DIE_SIDES}`
+			: String(Math.max(0, player?.initiative ?? 0))
+	);
+	const initiativeLabel = $derived(ruleValue(clientRules(), 'initiativeDie') ? 'initiative die' : 'initiative');
 
 	// ── Combat readout ──────────────────────────────────────────────────────────
 	// The scouted player's attack-dice pool and the expected total damage of a roll —
@@ -189,7 +197,7 @@
 					</span>
 					<span class="dp-stat">
 						<span class="dp-stat-val" data-testid="profile-initiative">{initiative}</span>
-						<span class="dp-stat-label">initiative</span>
+						<span class="dp-stat-label">{initiativeLabel}</span>
 					</span>
 					<span class="dp-stat status" style="--s: {statusColor}">
 						<span class="dp-stat-val" data-testid="profile-status">{statusLabel}</span>

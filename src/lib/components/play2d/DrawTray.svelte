@@ -15,7 +15,13 @@
 		player: PlayerProjection | null;
 		spiritImages?: Map<string, string>;
 		disabled?: boolean;
-		onSummon?: (guid: string) => void;
+		/**
+		 * The board is full and the game lets a summon replace a spirit (rule
+		 * `summonReplaceWhenFull`): the slots of the spirits that may be replaced. A summon then
+		 * asks which spirit leaves. Null: a summon needs an open slot.
+		 */
+		replace?: { slots: number[] } | null;
+		onSummon?: (guid: string, replaceSlotIndex?: number) => void;
 		onDiscard?: () => void;
 		onRedraw?: () => void;
 	}
@@ -24,6 +30,7 @@
 		player,
 		spiritImages = new Map(),
 		disabled = false,
+		replace = null,
 		onSummon,
 		onDiscard,
 		onRedraw
@@ -85,28 +92,61 @@
 		);
 	}
 
-	function summon(
-		draw: { guid: string; id?: string; name?: string; sourceBag?: string; rewardId?: string; rewardLabel?: string },
-		event: MouseEvent
-	) {
+	type Draw = { guid: string; id?: string; name?: string; sourceBag?: string; rewardId?: string; rewardLabel?: string };
+
+	// ── Replace-on-summon: the board is full, so the player names the spirit that leaves ──
+	/** The drawn spirit waiting for the player to choose which spirit it replaces. */
+	let replacing = $state<{ draw: Draw; from: DOMRect | null } | null>(null);
+	const replaceable = $derived(
+		replace
+			? (player?.spirits ?? [])
+					.filter((spirit) => replace.slots.includes(spirit.slotIndex))
+					.sort((a, b) => a.slotIndex - b.slotIndex)
+			: []
+	);
+	/** A reward hex takes no slot, so it never replaces a spirit. */
+	const needsReplace = (draw: Draw) => !!replace && !draw.rewardId;
+	$effect(() => {
+		// The draw went away or the board has room again: close the question.
+		if (replacing && (!replace || !draws.some((d) => d.guid === replacing?.draw.guid))) replacing = null;
+	});
+	function boardImage(spirit: { id: string; isFaceDown?: boolean }): string | null {
+		if (spirit.isFaceDown) return spiritBackImageUrl(spirit.id);
+		return spiritImages.get(spirit.id) ?? gameImageUrl(`hex_spirits/${spirit.id}_game_print.png`);
+	}
+	function replaceWith(slotIndex: number) {
+		const pendingReplace = replacing;
+		if (!pendingReplace || disabled) return;
+		replacing = null;
+		fly(pendingReplace.draw, pendingReplace.from);
+		onSummon?.(pendingReplace.draw.guid, slotIndex);
+	}
+
+	function fly(draw: Draw, src: DOMRect | null) {
+		if (prefersReducedMotion() || typeof window === 'undefined' || !src) return;
+		// Fire the burst + flyer in the persistent overlay so it finishes even after
+		// this tray unmounts (which happens the instant the last pick resolves).
+		launchSummonFx(src, tableauRect(), preview(draw), draw.name ?? 'Spirit');
+		// Hide the original instantly; restore after the flight in case the summon is
+		// rejected and the card lingers (normally it leaves `draws` first).
+		const guid = draw.guid;
+		flyingGuids = new Set(flyingGuids).add(guid);
+		window.setTimeout(() => {
+			const next = new Set(flyingGuids);
+			next.delete(guid);
+			flyingGuids = next;
+		}, 1000);
+	}
+
+	function summon(draw: Draw, event: MouseEvent) {
 		if (disabled || picksLeft <= 0) return;
-
-		if (!prefersReducedMotion() && typeof window !== 'undefined') {
-			const src = (event.currentTarget as HTMLElement).getBoundingClientRect();
-			// Fire the burst + flyer in the persistent overlay so it finishes even after
-			// this tray unmounts (which happens the instant the last pick resolves).
-			launchSummonFx(src, tableauRect(), preview(draw), draw.name ?? 'Spirit');
-			// Hide the original instantly; restore after the flight in case the summon is
-			// rejected and the card lingers (normally it leaves `draws` first).
-			const guid = draw.guid;
-			flyingGuids = new Set(flyingGuids).add(guid);
-			window.setTimeout(() => {
-				const next = new Set(flyingGuids);
-				next.delete(guid);
-				flyingGuids = next;
-			}, 1000);
+		const src = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		if (needsReplace(draw)) {
+			// Full board: ask which spirit leaves before anything is sent.
+			replacing = { draw, from: src };
+			return;
 		}
-
+		fly(draw, src);
 		onSummon?.(draw.guid);
 	}
 
@@ -141,7 +181,44 @@
 			<span class="sub" data-testid="picks-left"
 				>Choose a spirit — {picksLeft} pick{picksLeft === 1 ? '' : 's'} left</span
 			>
+			{#if replace}
+				<span class="sub full" data-testid="draw-board-full"
+					>Your board is full: a summon replaces one of your spirits</span
+				>
+			{/if}
 		</header>
+		{#if replacing}
+			<!-- The board is full: which spirit does the new one replace? -->
+			<div class="replace" role="group" aria-label="Choose a spirit to replace" data-testid="draw-replace">
+				<span class="replace-title">
+					{replacing.draw.name ?? 'This spirit'} replaces which spirit?
+				</span>
+				<span class="replace-note">The replaced spirit is discarded with its Spirit Augment.</span>
+				<div class="replace-row">
+					{#each replaceable as spirit (spirit.slotIndex)}
+						<button
+							type="button"
+							class="replace-spirit"
+							data-testid="draw-replace-{spirit.slotIndex}"
+							{disabled}
+							title={`Replace ${spirit.name}`}
+							onclick={() => replaceWith(spirit.slotIndex)}
+						>
+							{#if boardImage(spirit)}
+								<img src={boardImage(spirit)} alt="" loading="lazy" />
+							{/if}
+							<span>{spirit.name}</span>
+						</button>
+					{/each}
+				</div>
+				<button
+					type="button"
+					class="discard"
+					data-testid="draw-replace-cancel"
+					onclick={() => (replacing = null)}>Back</button
+				>
+			</div>
+		{:else}
 		<div class="cards">
 			{#each draws as draw, i (draw.guid)}
 				<button
@@ -194,10 +271,75 @@
 				Return unchosen
 			</button>
 		</div>
+		{/if}
 	</section>
 {/if}
 
 <style>
+	.sub.full {
+		color: var(--brand-amber-soft, #ffd56a);
+	}
+	.replace {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.6rem;
+		width: 100%;
+	}
+	.replace-title {
+		font-family: var(--font-display);
+		font-size: 1.05rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		text-align: center;
+		color: #fff;
+		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+	}
+	.replace-note {
+		font-size: 0.75rem;
+		color: rgba(235, 230, 247, 0.7);
+		text-shadow: 0 1px 6px #000;
+	}
+	.replace-row {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.6rem;
+		max-width: 100%;
+	}
+	.replace-spirit {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.25rem;
+		width: clamp(4.2rem, 11vw, 7rem);
+		padding: 0.35rem;
+		border: 1px solid var(--color-mist, #3a2670);
+		border-radius: 8px;
+		background: rgba(10, 4, 24, 0.5);
+		color: var(--color-parchment, #e7e0cf);
+		font: inherit;
+		font-size: 0.68rem;
+		line-height: 1.15;
+		text-align: center;
+		cursor: pointer;
+		touch-action: manipulation;
+	}
+	.replace-spirit img {
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
+	}
+	.replace-spirit:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.replace-spirit:hover:not(:disabled) {
+			border-color: var(--brand-magenta, #ff2bc7);
+			color: #fff;
+		}
+	}
 	.tray {
 		display: flex;
 		flex-direction: column;

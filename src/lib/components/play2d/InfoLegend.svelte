@@ -37,7 +37,16 @@
 	import { iconPoolUrl, storageUrl, statusAccent } from './helpers';
 	import { onMount } from 'svelte';
 	import { supabaseAssets } from '$lib/supabase';
-	import { parseRules, ruleValue } from '$lib/play/rules';
+	import {
+		INITIATIVE_DIE_SIDES,
+		difficulty3Restore,
+		initiativeHits,
+		parseRules,
+		restBarrier,
+		ruleValue,
+		sacrificeMax,
+		vpToWin
+	} from '$lib/play/rules';
 	import type { PlayRuleSwitches, PlayRules } from '$lib/play/types';
 
 	interface Props {
@@ -61,6 +70,29 @@
 	});
 	const rule = (name: keyof PlayRuleSwitches) => ruleValue({ rules }, name);
 
+	// ── Numbers and sentences the rules in force decide (rules.ts) ───────────────
+	const winPoints = $derived(vpToWin({ rules }));
+	/** Sides of the 12-sided initiative die that hit at Pure / Tainted / Corrupt / Fallen. */
+	const dieHits = $derived([0, 1, 2, 3].map((level) => initiativeHits({ rules }, level)));
+	const dieText = $derived(
+		`one ${INITIATIVE_DIE_SIDES}-sided initiative die: ${dieHits.join(' / ')} of its sides give the initiative at Pure / Tainted / Corrupt / Fallen`
+	);
+	/** Barrier a Rest restores at Pure / Tainted / Corrupt / Fallen. */
+	const restByLevel = $derived([0, 1, 2, 3].map((level) => restBarrier({ rules }, level)));
+	const restText = $derived(
+		restByLevel.every((n) => n === restByLevel[0])
+			? `Restore ${restByLevel[0]} barrier`
+			: `Restore Barrier by your status (Pure ${restByLevel[0]}, Tainted ${restByLevel[1]}, Corrupt ${restByLevel[2]}, Fallen ${restByLevel[3]})`
+	);
+	/** "1 the first time, 2 the second, …": what a corruption costs, with the limit of the rules in force. */
+	const sacrificeText = $derived.by(() => {
+		const max = sacrificeMax({ rules });
+		const steps = ['1 the first time', '2 the second', '3 the third', '4 the fourth'];
+		if (max === undefined) return `${steps.join(', ')}, and one more each time after that`;
+		return `${steps.slice(0, Math.min(max, steps.length)).join(', ')}, and ${max} each time after that`;
+	});
+	const d3Restore = $derived(difficulty3Restore({ rules }, 3));
+
 	interface ScreenInfo {
 		title: string;
 		eyebrow: string;
@@ -68,14 +100,15 @@
 		tips: string[];
 	}
 
-	const SCREEN_INFO: Record<InfoContextKey, ScreenInfo> = {
+	// Derived: the tips follow the rules, which load after the first paint.
+	const SCREEN_INFO: Record<InfoContextKey, ScreenInfo> = $derived({
 		overview: {
 			title: 'Game Guide',
 			eyebrow: 'At a glance',
 			summary:
 				'Shared reference for the board icons, player status ladder, realm actions and attack dice.',
 			tips: [
-				'Victory Points decide the winner: the first player to 30 points wins.',
+				`Victory Points decide the winner: the first player to ${winPoints} points wins.`,
 				'Max Barrier absorbs combat damage before corruption lowers your status.',
 				'Runes and relics awaken face-down spirits and are capped during Cleanup.'
 			]
@@ -183,9 +216,24 @@
 			eyebrow: 'Monster route',
 			summary: 'At the Arcane Abyss you draw monster cards into your own hand and fight them.',
 			tips: [
-				'Once per visit, pick a deck (I, II or III), reveal 2 cards and keep 1. Your hand holds 3.',
-				'Tap a card in your hand to fight it. It hits first, and its damage stays on the card.',
-				'A kill gives you every reward on the card, and the card leaves the game.',
+				rule('monsterDrawOne')
+					? 'Once per visit, pick a deck (I, II or III) and reveal its top card: keep it, put it back on top of the deck, or keep it and put one of your own cards back on its deck (the damage on that card is lost). Your hand holds 3.'
+					: 'Once per visit, pick a deck (I, II or III), reveal 2 cards and keep 1. Your hand holds 3.',
+				...(rule('abyssDrawByPoints')
+					? ['The decks are shared: players at the Arcane Abyss draw one after the other, the one with the fewest points at the start of the round first.']
+					: []),
+				rule('initiativeDie')
+					? `Tap a card in your hand to fight it. You roll ${dieText}. With the initiative you attack at the same time as the monster; without it the monster attacks first. Damage stays on the card.`
+					: 'Tap a card in your hand to fight it. It hits first, and its damage stays on the card.',
+				...(rule('abyssFightOrSummon')
+					? ['You have 1 battle action each round. A fight uses one, and so does the Arcane Abyss Summon action, so a round is one or the other (Monster Hunter has 1 extra battle action).']
+					: []),
+				rule('permanentRewardChoice')
+					? 'A kill gives you every reward on the card, and the card leaves the game. The monster that is always available gives one of its rewards, your choice.'
+					: 'A kill gives you every reward on the card, and the card leaves the game.',
+				...(d3Restore > 0
+					? [`A Difficulty III monster restores ${d3Restore} Barrier after a fight it survives.`]
+					: []),
 				...(ruleValue({ rules }, 'goodKillBonus') ? ['While you are Good (not Fallen), every kill of a Difficulty 2 or 3 monster also gives you 1 extra VP.'] : [])
 			]
 		},
@@ -196,6 +244,9 @@
 			tips: [
 				'Spirit World summons usually arrive awakened.',
 				'Arcane Abyss summons usually arrive face-down and need awakening later.',
+				...(rule('summonReplaceWhenFull')
+					? ['With all 7 spirit slots full, a summon replaces one of your spirits: you choose which one leaves.']
+					: []),
 				'Discarding the remaining draw closes the tray.'
 			]
 		},
@@ -206,6 +257,12 @@
 				'Combat rolls your attack dice and compares damage against the monster or player fight.',
 			tips: [
 				'Attack dice tiers get stronger from Basic to Arcane.',
+				...(rule('initiativeDie')
+					? [
+							`Each player in a fight rolls ${dieText}. Monsters always have the initiative.`,
+							'Against a monster: with the initiative you attack at the same time, without it the monster attacks first. Against players: the one side with the initiative attacks first; both or neither attack at the same time.'
+						]
+					: []),
 				'Max Barrier absorbs incoming damage before corruption applies.',
 				'Combat can produce pending rewards or forced spirit discards.'
 			]
@@ -355,7 +412,7 @@
 				'Records and leaderboards use completed game data after it is saved.'
 			]
 		}
-	};
+	});
 
 	const screenInfo = $derived(SCREEN_INFO[context] ?? SCREEN_INFO.overview);
 
@@ -375,7 +432,7 @@
 			{
 				ids: ['70792514-aa43-4526-a7a4-0f1e4ca55d71'],
 				label: 'Victory Point',
-				desc: 'Your score. The first player to reach 30 points wins the game.'
+				desc: `Your score. The first player to reach ${winPoints} points wins the game.`
 			},
 			{
 				ids: ['6746f875-a1bc-453c-94b5-718d6ebeb025'],
@@ -455,9 +512,7 @@
 			{
 				id: 'bdded3f5-e405-4b68-b63a-9f5c2139beea',
 				label: 'Rest',
-				desc: rule('restByStatus')
-					? 'Restore 2 barrier, plus 1 for each status step above Fallen (Pure 5, Tainted 4, Corrupt 3, Fallen 2), then trigger all of your Rest class abilities.'
-					: 'Restore 2 barrier, then trigger all of your Rest class abilities.'
+				desc: `${restText}, then trigger all of your Rest class abilities.`
 			}
 		]
 			.map((e) => ({ ...e, url: iconPoolUrl(assets.iconPool, e.id) }))
@@ -571,8 +626,10 @@
 				<p class="section-note">
 					Every player sits on a corruption ladder. Taking more combat damage than your remaining
 					Barrier corrupts you — your status drops one level, your Barrier refills, and you discard
-					spirits of your choice: 1 the first time, 2 the second, 3 the third, 4 the fourth. Your
-					spirit board stays at {MAX_SPIRITS} slots, so you may refill it afterwards.
+					spirits of your choice: {sacrificeText}. Your spirit board stays at {MAX_SPIRITS} slots,
+					so you may refill it afterwards.{#if rule('initiativeDie')}
+						A lower status also makes your initiative die hit more often ({dieHits.join(' / ')} of
+						{INITIATIVE_DIE_SIDES} sides at Pure / Tainted / Corrupt / Fallen).{/if}
 				</p>
 				<div class="status-list">
 					{#each statusLevels as s (s.name)}

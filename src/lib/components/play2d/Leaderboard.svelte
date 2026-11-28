@@ -3,6 +3,7 @@
 	import type { PrivatePlayerState, SeatColor, SpectatorProjection } from '$lib/play/types';
 	import { expectedAttack } from '$lib/play/combat';
 	import { clientRules } from '$lib/play/clientRules.svelte';
+	import { ruleValue } from '$lib/play/rules';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
 	import {
 		displayName,
@@ -40,8 +41,9 @@
 					name: room.seats[seat]?.displayName ?? seat,
 					vp: player?.victoryPoints ?? 0,
 					// Combat initiative — only meaningful (non-zero) during a fight; shown
-					// only when the player actually has some.
-					init: Math.max(0, player?.initiative ?? 0),
+					// only when the player actually has some. Under the initiative die (rule
+					// `initiativeDie`) there is no initiative number, so nothing is shown.
+					init: ruleValue(clientRules(), 'initiativeDie') ? 0 : Math.max(0, player?.initiative ?? 0),
 					// Resting average attack of a roll (dice-tier averages + Beast
 					// bonus) — same number as the scout dice-pool readout.
 					atk: player ? expectedAttack(player as unknown as PrivatePlayerState, clientRules()) : 0,

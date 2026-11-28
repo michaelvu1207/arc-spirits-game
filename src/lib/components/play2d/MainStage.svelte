@@ -11,13 +11,15 @@
 		DiceTier
 	} from '$lib/play/types';
 	import { RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
-	import { cursedSpiritDiceTier } from '$lib/play/rules';
+	import { cursedSpiritDiceTier, INITIATIVE_DIE_SIDES, initiativeHits, ruleValue } from '$lib/play/rules';
+	import { abyssAffordance } from '$lib/play/abyssAffordance';
 	import { clientRules } from '$lib/play/clientRules.svelte';
 	import { showsAugmentPlacement } from './stagePriority';
 	import { SPIRIT_AUGMENT_CLASSES, isSpiritAugmentClass } from '$lib/play/augments';
 	import { getLocationConfig, LOCATION_ACCENT, splatFor } from '$lib/play/locations';
 	import {
 		buildLocationInteractions,
+		isAbyssSummonRow,
 		locationCostRequiresSelection,
 		meaningFor,
 		originRuneOptions,
@@ -43,7 +45,7 @@
 	import DecisionCard from './DecisionCard.svelte';
 	import ManualPromptCard from './ManualPromptCard.svelte';
 	import InfiltratorSwap from './InfiltratorSwap.svelte';
-	import AbyssStage, { type AbyssAction, type AbyssView } from './AbyssStage.svelte';
+	import AbyssStage, { type AbyssAction, type AbyssView, type KeepOptions } from './AbyssStage.svelte';
 	import EncounterStage from './EncounterStage.svelte';
 	import type { SeatAffordances } from '$lib/play/viewV2';
 	import { iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
@@ -78,12 +80,12 @@
 		/** Fight the monster card at this index of the player's hand (Arcane Abyss). */
 		onStartCombat: (handIndex: number) => void;
 		/** Keep one of the two revealed monster cards; resolves once the room view updates. */
-		onKeepMonsterCard: (index: number) => void | Promise<unknown>;
+		onKeepMonsterCard: (index: number, options?: KeepOptions) => void | Promise<unknown>;
 		/** Draw from a monster deck (reveal 2); resolves once the room view updates. */
 		onDrawMonsterCards: (difficulty: 1 | 2 | 3, permanent?: boolean) => void | Promise<unknown>;
 		/** Claim monster-kill rewards (Arcane Abyss): picks = track indices. */
 		onClaimReward: (picks: number[], choices: number[]) => void;
-		onSummon: (guid: string) => void;
+		onSummon: (guid: string, replaceSlotIndex?: number) => void;
 		onDiscard: () => void;
 		/** Mystic: return the current draw and draw again (one-shot per summon). */
 		onRedraw: () => void;
@@ -670,12 +672,43 @@
 			stagedCorruption = stagedCorruption.slice(0, corruptionCount);
 	});
 
-	// At the Abyss, monster combat is once per round plus any extra-action credits
-	// (Monster Hunter grants +1 ⇒ two fights). Each fight takes a card from the hand.
-	const combatUsedCount = $derived(
-		(myPlayer?.actionsUsedThisRound ?? []).filter((a) => a === 'combat').length
+	// A full board and a game that lets a summon replace a spirit (rule `summonReplaceWhenFull`):
+	// the summon tray asks which spirit leaves. From the affordances; before they arrive, from
+	// the board this seat sees.
+	const summonReplace = $derived.by(() => {
+		if (seatAffordances) return seatAffordances.summonReplace ?? null;
+		if (!ruleValue(clientRules(), 'summonReplaceWhenFull')) return null;
+		const slots = (myPlayer?.spirits ?? []).map((s) => s.slotIndex);
+		return [1, 2, 3, 4, 5, 6, 7].every((slot) => slots.includes(slot)) ? { slots } : null;
+	});
+
+	// At the Abyss a player has one battle action a round, plus a class's extra ones (Monster
+	// Hunter). What is left, how a draw works and who draws first come from the server's
+	// affordances; before they arrive, the same function reads the room this seat sees.
+	const abyss = $derived(
+		seatAffordances?.abyss ??
+			(mySeat ? abyssAffordance(room as never, mySeat, clientRules()) : undefined) ??
+			null
 	);
-	const combatAllowance = $derived(1 + (myPlayer?.extraActions?.combat ?? 0));
+	const abyssBattle = $derived({
+		left: abyss?.battleActionsLeft ?? 0,
+		total: abyss?.battleActions ?? 1,
+		summonUsesOne: abyss?.summonUsesBattleAction ?? false,
+		summonTaken: abyss?.summonTaken ?? false
+	});
+	const abyssDraw = $derived({
+		reveals: abyss?.drawReveals ?? 2,
+		canReturn: abyss?.canReturnDraw ?? false,
+		waitsOn: abyss?.drawWaitsOn
+			? (room.seats[abyss.drawWaitsOn]?.displayName ?? abyss.drawWaitsOn)
+			: null
+	});
+	// The initiative die of this game (rule `initiativeDie`): the sides that hit at my status.
+	const myInitiative = $derived(
+		ruleValue(clientRules(), 'initiativeDie')
+			? { hits: initiativeHits(clientRules(), myPlayer?.statusLevel ?? 0), sides: INITIATIVE_DIE_SIDES }
+			: null
+	);
 
 	// The Abyss's own location actions (a free Arcane Abyss Summon) ride the Abyss stage as
 	// ghost buttons. A plain free gain resolves in one tap; a row that needs a payment or a
@@ -715,7 +748,14 @@
 					key: String(row.rowIndex),
 					label: Number.isFinite(left) && left > 1 ? `${label} ×${left}` : label,
 					icon: token ? iconPoolUrl(assets.iconPool, token) : null,
-					disabled: affordances.get(row.rowIndex)?.affordable === false,
+					// The Arcane Abyss Summon action uses a battle action (rule `abyssFightOrSummon`):
+					// without affordances yet, the battle actions left decide.
+					disabled:
+						affordances.get(row.rowIndex)?.affordable === false ||
+						(abyssBattle.summonUsesOne && isAbyssSummonRow(row) && abyssBattle.left <= 0),
+					...(abyssBattle.summonUsesOne && isAbyssSummonRow(row)
+						? { note: abyssBattle.left > 0 ? 'uses your battle action' : 'no battle action left' }
+						: {}),
 					testid: `interaction-${row.rowIndex}`
 				}
 			];
@@ -1161,6 +1201,7 @@
 							player={myPlayer}
 							{spiritImages}
 							disabled={busy}
+							replace={summonReplace}
 							{onSummon}
 							{onDiscard}
 							{onRedraw}
@@ -1200,8 +1241,9 @@
 						decks={room.monsterDecks ?? []}
 						permanent={room.permanentMonster ?? null}
 						drawUsed={myPlayer?.monsterDrawRound === room.round}
-						fightsLeft={Math.max(0, combatAllowance - combatUsedCount)}
-						fightAllowance={combatAllowance}
+						battle={abyssBattle}
+						draw={abyssDraw}
+						initiative={myInitiative}
 						barrier={myPlayer?.barrier ?? 0}
 						actions={abyssActions}
 						{busy}

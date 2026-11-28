@@ -5,6 +5,9 @@
 	 * medallions and Confirm claims them all. A `chooseRune` reward shows rune chips
 	 * and demands an explicit pick — no silent option-0 default.
 	 *
+	 * A kill that gives ONE reward of the card (`chooseOne`: the permanent monster under
+	 * rule `permanentRewardChoice`) shows the same medallions as a choice: tap one, claim it.
+	 *
 	 * Data: the engine's RESOLVED reward options (§5.3, `SeatAffordances.pendingReward`)
 	 * — labelled, claimable, server-computed. The client never re-runs
 	 * `buildMonsterRewards` on raw icon ids (that call died with this takeover).
@@ -57,6 +60,15 @@
 		}))
 	);
 	const count = $derived(cards.length);
+	/** The kill gives one reward of the card, the player's choice (not every reward). */
+	const chooseOne = $derived(!!(resolved?.chooseOne ?? reward.chooseOne) && cards.length > 1);
+	/** The reward picked under `chooseOne` (its index on the card), or null. */
+	let picked = $state<number | null>(null);
+	function pick(card: RewardCard) {
+		if (busy || !chooseOne) return;
+		picked = card.index;
+	}
+	const pickedCard = $derived(chooseOne ? (cards.find((c) => c.index === picked) ?? null) : null);
 
 	/** The defeated card's printed face (null: no image, the panel shows the title only). Its
 	 *  printed rewards must be the ones listed here; Barrier/Damage are checked when the
@@ -83,8 +95,12 @@
 		runeChoice = { ...runeChoice, [card.index]: oi };
 	}
 
-	const runeCards = $derived(cards.filter((c) => c.isChoice));
-	const missingChoice = $derived(runeCards.some((c) => runeChoice[c.index] === undefined));
+	// Under `chooseOne` only the picked reward counts (and only its rune needs choosing).
+	const earned = $derived(chooseOne ? (pickedCard ? [pickedCard] : []) : cards);
+	const runeCards = $derived(earned.filter((c) => c.isChoice));
+	const missingChoice = $derived(
+		(chooseOne && !pickedCard) || runeCards.some((c) => runeChoice[c.index] === undefined)
+	);
 	/** The commit-bar slot is narrow: "2 VP", "Summon", "Fire". */
 	function meterLabel(label: string): string {
 		return label
@@ -93,7 +109,11 @@
 			.replace(/ Rune$/, '');
 	}
 	const meter = $derived<MeterSlot[]>(
-		cards.map((card) => ({
+		(chooseOne && !pickedCard
+			? [{ need: 'Choose one', needIcon: null, filled: null } as MeterSlot]
+			: []
+		).concat(
+		earned.map((card) => ({
 			need: card.isChoice ? 'Pick rune' : 'Reward',
 			needIcon: null,
 			filled:
@@ -108,12 +128,14 @@
 							icon: card.icon
 						}
 		}))
+		)
 	);
 	function confirm() {
 		if (busy || count === 0 || missingChoice) return;
-		// The engine grants every reward; `choices` follow the card's rune rewards in order.
+		// The engine grants every reward (or the one picked under `chooseOne`: `picks[0]`);
+		// `choices` follow the earned rune rewards in card order.
 		onClaim(
-			cards.map((c) => c.index),
+			earned.map((c) => c.index),
 			runeCards.map((c) => runeChoice[c.index] ?? 0)
 		);
 	}
@@ -123,7 +145,9 @@
 	{#snippet source()}
 		<SourcePanel
 			title={displayName(reward.monsterName)}
-			subtitle={`Defeated — you earn all ${count} reward${count === 1 ? '' : 's'}`}
+			subtitle={chooseOne
+				? `Defeated — choose 1 of its ${count} rewards`
+				: `Defeated — you earn all ${count} reward${count === 1 ? '' : 's'}`}
 			image={monsterArt}
 			imageAlt={displayName(reward.monsterName)}
 			{accent}
@@ -133,7 +157,9 @@
 	{/snippet}
 
 	<p class="pick-hint" data-testid="reward-pick-count">
-		{#if runeCards.length > 0}
+		{#if chooseOne}
+			This kill gives one reward. Tap the one you want, then claim it.
+		{:else if runeCards.length > 0}
 			You earn every reward below. Pick {runeCards.length === 1 ? 'your rune' : 'a rune for each rune reward'}, then claim.
 		{:else}
 			You earn every reward below.
@@ -142,13 +168,29 @@
 	<div class="fan" data-testid="reward-grid">
 		{#each cards as card, i (card.index)}
 			<!-- A rune reward is earned too, but shows its check only once the rune is picked. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<div
 				class="medallion"
 				class:choice={card.isChoice}
-				class:selected={!card.isChoice || runeChoice[card.index] !== undefined}
-				class:awaiting={card.isChoice && runeChoice[card.index] === undefined}
+				class:pickable={chooseOne}
+				class:selected={chooseOne
+					? picked === card.index && (!card.isChoice || runeChoice[card.index] !== undefined)
+					: !card.isChoice || runeChoice[card.index] !== undefined}
+				class:awaiting={chooseOne
+					? picked !== card.index || (card.isChoice && runeChoice[card.index] === undefined)
+					: card.isChoice && runeChoice[card.index] === undefined}
 				style="--i: {i}; --n: {cards.length};"
 				data-testid={`reward-${card.index}`}
+				role={chooseOne ? 'button' : undefined}
+				tabindex={chooseOne ? 0 : undefined}
+				aria-pressed={chooseOne ? picked === card.index : undefined}
+				onclick={() => pick(card)}
+				onkeydown={(event) => {
+					if (chooseOne && (event.key === 'Enter' || event.key === ' ')) {
+						event.preventDefault();
+						pick(card);
+					}
+				}}
 			>
 				<span class="check" aria-hidden="true">✓</span>
 				<span class="coin">
@@ -159,7 +201,7 @@
 					{/if}
 				</span>
 				<span class="medal-label">{card.label}</span>
-				{#if card.isChoice}
+				{#if card.isChoice && (!chooseOne || picked === card.index)}
 					<div class="rune-chips open" role="group" aria-label="Choose a rune">
 						{#each card.chooseOptions as opt, oi (opt.runeId + oi)}
 							<button
@@ -186,7 +228,7 @@
 	{#snippet bar()}
 		<CommitBar
 			slots={meter}
-			confirmLabel={count === 1 ? 'Claim reward' : `Claim all ${count} rewards`}
+			confirmLabel={count === 1 || chooseOne ? 'Claim reward' : `Claim all ${count} rewards`}
 			confirmDisabled={count === 0 || missingChoice}
 			confirmTestid="reward-claim"
 			onConfirm={confirm}
@@ -197,6 +239,14 @@
 </TakeoverStage>
 
 <style>
+	.medallion.pickable {
+		cursor: pointer;
+	}
+	.medallion.pickable:focus-visible {
+		outline: 2px solid var(--brand-cyan, #5cdfff);
+		outline-offset: 4px;
+		border-radius: 10px;
+	}
 	.victory-chip {
 		padding: 0.22rem 0.7rem;
 		border-radius: 999px;

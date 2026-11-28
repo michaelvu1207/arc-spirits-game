@@ -23,6 +23,8 @@
 		type MonsterDifficulty
 	} from './helpers';
 	import { monsterCardFace } from './monsterCardFace';
+	import { clientRules } from '$lib/play/clientRules.svelte';
+	import { ruleValue } from '$lib/play/rules';
 
 	interface Props {
 		/** Front-face data. Without a card only the back can show. */
@@ -83,8 +85,16 @@
 			: []
 	);
 	/** The monster's initiative, when it has a number. The printed cards do not carry it, so
-	 *  the card shows it as a chip: a player with higher initiative strikes first. */
-	const initiative = $derived(typeof card?.initiative === 'number' ? card.initiative : null);
+	 *  the card shows it as a chip: a player with higher initiative strikes first.
+	 *  Under the initiative die (rule `initiativeDie`) a monster always has the initiative and
+	 *  the number means nothing, so it is not shown. */
+	const initiative = $derived(
+		typeof card?.initiative === 'number' && !ruleValue(clientRules(), 'initiativeDie')
+			? card.initiative
+			: null
+	);
+	/** The card's ability (rule `difficulty3Restores`): Barrier it restores after a fight it survives. */
+	const restores = $derived(card?.restoreAfterCombat ?? 0);
 	const name = $derived(card ? displayName(card.name) : '');
 	/** The label describes what shows: the printed card can carry another name than the
 	 *  database row (Michael's card names; the rows are not renamed). */
@@ -93,7 +103,7 @@
 		card && showFront
 			? `${shownName}: Barrier ${damaged ? `${card.hp} of ${card.maxHp}` : card.maxHp}, hits for ${card.damage}${
 					initiative !== null ? `, initiative ${initiative}` : ''
-				}${
+				}${restores > 0 ? `, restores ${restores} Barrier after a fight it survives` : ''}${
 					rewards.length ? `. Rewards: ${rewards.map((r) => r.label).join(', ')}` : ''
 				}`
 			: `Difficulty ${MONSTER_NUMERAL[deck]} monster card, face down`
@@ -133,6 +143,15 @@
 								Initiative <b>{initiative}</b>
 							</span>
 						{/if}
+						{#if restores > 0 && !defeated}
+							<span
+								class="init-chip restore-chip"
+								data-testid="monster-card-restores"
+								title={`After a fight it survives, it restores ${restores} Barrier`}
+							>
+								Restores <b>{restores}</b>
+							</span>
+						{/if}
 						{#if damaged && !defeated}
 							<!-- Damage stays on the card: the Barrier left covers the printed Health. -->
 							<span class="barrier-left" data-testid="monster-card-barrier-left">
@@ -162,6 +181,11 @@
 							</span>
 						{/if}
 					</div>
+					{#if restores > 0}
+						<div class="ability" data-testid="monster-card-restores">
+							Restores {restores} Barrier after a fight it survives
+						</div>
+					{/if}
 					{#if rewards.length > 0}
 						<div class="rewards">
 							{#each rewards as reward (reward.index)}
@@ -401,6 +425,19 @@
 		text-transform: uppercase;
 		white-space: nowrap;
 		line-height: 1.5;
+	}
+	/* The restore ability sits where the initiative chip would (never both: the die rule hides
+	   the initiative number, and without it the chip moves down a line). */
+	.init-chip + .restore-chip {
+		top: 13.4%;
+	}
+	.ability {
+		padding: 1.5cqi 4cqi 0;
+		font-size: 4.2cqi;
+		line-height: 1.2;
+		font-weight: 700;
+		color: #f3e3bd;
+		text-wrap: balance;
 	}
 	.init-chip b {
 		margin-left: 0.6cqi;

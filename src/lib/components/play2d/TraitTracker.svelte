@@ -4,6 +4,8 @@
 	import type { ClassTrait, ClassBreakpoint, EffectEntry } from '$lib/types';
 	import { augmentContributions } from '$lib/play/augments';
 	import { storageUrl } from './helpers';
+	import { clientRules } from '$lib/play/clientRules.svelte';
+	import { classTextInForce } from './classText';
 
 	interface Props {
 		player: PlayerProjection | null;
@@ -61,7 +63,8 @@
 	type DetailBp = { key: string; count: number | string; colorClass: string; desc: string };
 
 	function classDetailBps(asset: ClassTrait | undefined): DetailBp[] {
-		const list = (asset?.effect_schema ?? []) as ClassBreakpoint[];
+		// The text of the rules in force, not only the card data (classText.ts).
+		const list = classTextInForce(clientRules(), asset).schema;
 		return list
 			.slice()
 			.sort((a, b) => {
@@ -140,7 +143,9 @@
 				name,
 				count,
 				icon: storageUrl(asset?.icon_png ?? null),
-				description: asset?.description ?? null,
+				// The data's one-line summary, unless a rule in force rewrote the class (the
+				// breakpoints below then say what it does; the summary may no longer be true).
+				description: classTextInForce(clientRules(), asset).changed ? null : (asset?.description ?? null),
 				footer: asset?.footer ?? null,
 				detailBps,
 				dormant,

@@ -14,7 +14,9 @@
 	} from '$lib/play/types';
 	import { GAME_PHASES, RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
 	import { PHASE_LABELS } from '$lib/play/viewV2';
-	import { buildLocationInteractions } from '$lib/play/locationInteractions';
+	import { buildLocationInteractions, isAbyssSummonRow } from '$lib/play/locationInteractions';
+	import { abyssAffordance } from '$lib/play/abyssAffordance';
+	import { clientRules } from '$lib/play/clientRules.svelte';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
 	import type { NavigationPowerId } from '$lib/play/navigationPowers';
 	import NavigationPowerPanel from './NavigationPowerPanel.svelte';
@@ -811,11 +813,23 @@
 		}
 	}
 
-	async function keepMonsterCard(index: number) {
+	/** Keep a revealed monster card. One-card draws (rule `monsterDrawOne`) may also put it back on
+	 *  top of its deck (`returnToDeck`) or keep it in place of a held card (`replaceHandIndex`). */
+	async function keepMonsterCard(
+		index: number,
+		options: { returnToDeck?: boolean; replaceHandIndex?: number } = {}
+	) {
 		if (busy) return;
 		try {
 			playSfx('ui-click');
-			await sendPlayCommand({ type: 'keepMonsterCard', index });
+			await sendPlayCommand({
+				type: 'keepMonsterCard',
+				index,
+				...(options.returnToDeck ? { returnToDeck: true } : {}),
+				...(options.replaceHandIndex !== undefined
+					? { replaceHandIndex: options.replaceHandIndex }
+					: {})
+			});
 		} catch (err) {
 			actionError = err instanceof Error ? err.message : 'Monster card choice failed.';
 		}
@@ -872,9 +886,15 @@
 		activeAction = null;
 	}
 
-	function summonDraw(guid: string) {
+	/** Summon a drawn spirit. `replaceSlotIndex`: the board is full and the summon takes the
+	 *  place of the spirit in that slot (rule `summonReplaceWhenFull`). */
+	function summonDraw(guid: string, replaceSlotIndex?: number) {
 		playSfx('summon-pick');
-		send('summon', { type: 'spawnHandSpirit', guid });
+		send('summon', {
+			type: 'spawnHandSpirit',
+			guid,
+			...(replaceSlotIndex !== undefined ? { replaceSlotIndex } : {})
+		});
 	}
 	function discardDraws() {
 		playSfx('summon-discard');
@@ -1145,8 +1165,18 @@
 	// the round rolls over; a player WITH work still gets that step's UI.
 
 	// ── Location auto-pass ───────────────────────────────────────────────────
-	// Combat is once per round (plus any extra-action credits).
+	// What the seat may still do at the Arcane Abyss under the rules of the game (battle
+	// actions left, whether a full hand may still draw): the server's affordances, or the
+	// same function on the room this seat sees until they arrive.
+	const myAbyss = $derived(
+		myAffordances?.abyss ??
+			(mySeat ? abyssAffordance(room as never, mySeat, clientRules()) : undefined) ??
+			null
+	);
+	// A fight uses a battle action (one a round plus a class's extra ones; the Arcane Abyss
+	// Summon action uses one too when the rules say so).
 	const myCombatUsed = $derived.by(() => {
+		if (myAbyss) return myAbyss.battleActionsLeft <= 0;
 		const used = (myPlayer?.actionsUsedThisRound ?? []).filter((a) => a === 'combat').length;
 		return used >= 1 + (myPlayer?.extraActions?.combat ?? 0);
 	});
@@ -1172,12 +1202,24 @@
 			// be fought this round are all real options — never auto-pass past them.
 			if (myPlayer.pendingMonsterDraw?.cards.length) return true;
 			const hand = myPlayer.monsterHand ?? [];
+			const decksLeft = (room.monsterDecks ?? []).some((deck) => (deck.count ?? 0) > 0);
+			// A full hand may still draw from a deck when the drawn card can take a held card's
+			// place (one-card draws); the permanent monster always needs room in the hand.
 			const canDraw =
 				myPlayer.monsterDrawRound !== room.round &&
-				hand.length < 3 &&
-				((room.monsterDecks ?? []).some((deck) => (deck.count ?? 0) > 0) || !!room.permanentMonster);
+				((decksLeft && (hand.length < 3 || !!myAbyss?.canReturnDraw)) ||
+					(!!room.permanentMonster && hand.length < 3));
 			const canFight = !myCombatUsed && hand.some((card) => card.hp > 0);
-			return canFight || canDraw;
+			// The Abyss's own location action (the Arcane Abyss Summon), while it is unused and,
+			// where it uses a battle action, while one is left.
+			const loc = assets.gameLocations.get(dest) ?? null;
+			const canAct = buildLocationInteractions(loc?.reward_rows, dest).some(
+				(it) =>
+					(it.kind === 'trade' ||
+						!(myPlayer.actionsUsedThisRound ?? []).includes(`row:${it.rowIndex}`)) &&
+					!(isAbyssSummonRow(it) && !!myAbyss?.summonUsesBattleAction && myAbyss.battleActionsLeft <= 0)
+			);
+			return canFight || canDraw || canAct;
 		}
 		const loc = assets.gameLocations.get(dest) ?? null;
 		return buildLocationInteractions(loc?.reward_rows, dest).some(

@@ -9,6 +9,34 @@
 		icon: string | null;
 		disabled?: boolean;
 		testid?: string;
+		/** Small text after the label ("uses your battle action"). */
+		note?: string;
+	}
+
+	/** How a monster draw works in this game. */
+	export interface AbyssDrawRules {
+		/** Cards one draw reveals: 1 (keep it or put it back), or 2 (keep one). */
+		reveals: 1 | 2;
+		/** The revealed card may go back on top of its deck, a kept card may take the place of a
+		 *  held one, and a full hand may still draw. */
+		canReturn: boolean;
+		/** The player who draws from the decks before this one, while this one has to wait. */
+		waitsOn: string | null;
+	}
+	/** Battle actions: a fight uses one; the Arcane Abyss Summon action may use one too. */
+	export interface AbyssBattleActions {
+		left: number;
+		total: number;
+		/** The Arcane Abyss Summon action uses a battle action. */
+		summonUsesOne: boolean;
+		/** The player took the Arcane Abyss Summon action this round. */
+		summonTaken: boolean;
+	}
+	export interface KeepOptions {
+		/** Put the revealed card back on top of its deck. */
+		returnToDeck?: boolean;
+		/** Keep the revealed card and put this held card back on top of its deck. */
+		replaceHandIndex?: number;
 	}
 </script>
 
@@ -23,6 +51,12 @@
 	 *  reveal — the chosen deck slides left, two cards fly out of it and flip face
 	 *           up; tap one to keep it. The kept card flies into the hand, the other
 	 *           flips back under the deck, and the view returns home.
+	 *           When a draw reveals ONE card (`draw.reveals === 1`): keep it, put it
+	 *           back on top of its deck, or keep it and put a held card back instead.
+	 *
+	 * What the player may do (cards a draw reveals, battle actions left, whose turn it
+	 * is to draw) comes from the game's rules through the `draw` and `battle` props;
+	 * without them the screen plays the rules before 2026-11-22.
 	 *
 	 * Continuity between views is one crossfade: a deck or card keeps its key from
 	 * view to view, so it moves to its new place instead of popping.
@@ -55,17 +89,20 @@
 		permanent?: MonsterState | null;
 		/** The player already drew a monster card this visit. */
 		drawUsed: boolean;
-		/** Monster fights left this round (0 = none). */
-		fightsLeft: number;
-		/** Monster fights allowed this round (1, or more with Monster Hunter). */
-		fightAllowance: number;
-		/** The player's Barrier, for the "it hits first" warning. */
+		/** Battle actions this round (a fight uses one). */
+		battle: AbyssBattleActions;
+		/** How a draw works in this game. */
+		draw?: AbyssDrawRules;
+		/** The initiative die of this game: sides that give this player the initiative. Null: the
+		 *  game has no initiative die (the monster hits first unless a class says otherwise). */
+		initiative?: { hits: number; sides: number } | null;
+		/** The player's Barrier, for the "it will likely corrupt you" warning. */
 		barrier: number;
 		/** The Abyss's own location actions (free Arcane Abyss Summon). */
 		actions?: AbyssAction[];
 		busy?: boolean;
 		onDraw: (difficulty: MonsterDifficulty, permanent?: boolean) => void | Promise<unknown>;
-		onKeep: (index: number) => void | Promise<unknown>;
+		onKeep: (index: number, options?: KeepOptions) => void | Promise<unknown>;
 		onFight: (handIndex: number) => void;
 		onAction?: (key: string) => void;
 		/** The current view, so the host can title the stage and park its pass control. */
@@ -78,8 +115,9 @@
 		decks,
 		permanent = null,
 		drawUsed,
-		fightsLeft,
-		fightAllowance,
+		battle,
+		draw: drawRules = { reveals: 2, canReturn: false, waitsOn: null },
+		initiative = null,
 		barrier,
 		actions = [],
 		busy = false,
@@ -205,14 +243,22 @@
 
 	const anyCardsLeft = $derived(DIFFICULTIES.some((d) => cardsLeft(d) > 0));
 	const handFull = $derived(hand.length >= HAND_LIMIT);
+	const fightsLeft = $derived(Math.max(0, battle.left));
+	/** Another player draws from the decks first (the permanent monster needs no turn). */
+	const waitsOn = $derived(drawUsed ? null : drawRules.waitsOn);
+	/** A deck may be drawn from: a full hand too, when the drawn card can take a held card's place. */
+	const deckDrawOpen = $derived(anyCardsLeft && !waitsOn && (!handFull || drawRules.canReturn));
+	const permanentOpen = $derived(!!permanent && !handFull);
 	const drawBlocked = $derived(
 		drawUsed
 			? 'Drawn this visit'
-			: handFull
-				? 'Hand full · fight one first'
-				: !anyCardsLeft && !permanent
-					? 'All decks are empty'
-					: null
+			: deckDrawOpen || permanentOpen
+				? null
+				: handFull
+					? 'Hand full · fight one first'
+					: waitsOn
+						? `${waitsOn} draws first`
+						: 'All decks are empty'
 	);
 
 	/** Stable crossfade key per hand card (ids can repeat, so count earlier copies). */
@@ -229,22 +275,40 @@
 	);
 
 	function fightWarning(card: MonsterState): string | null {
-		return card.damage >= barrier
-			? `Warning: it hits first for ${card.damage} and you have ${barrier} Barrier, so you will likely be corrupted and unable to strike back.`
-			: null;
+		if (card.damage < barrier) return null;
+		return initiative
+			? `Warning: it deals ${card.damage} and you have ${barrier} Barrier, so it will likely corrupt you. If your initiative die hits (${initiative.hits} of ${initiative.sides} sides) you attack at the same time and your damage still lands; if it misses, the monster attacks first and you cannot strike back.`
+			: `Warning: it hits first for ${card.damage} and you have ${barrier} Barrier, so you will likely be corrupted and unable to strike back.`;
 	}
 
+	/** One card is revealed and it may be kept, put back, or swapped for a held card. */
+	const oneCard = $derived(drawRules.canReturn && revealCards.length === 1);
+	const actionWord = (n: number) => `${n} battle action${n === 1 ? '' : 's'}`;
+
 	const subtitle = $derived.by(() => {
-		if (view === 'decks')
-			return permanent
-				? `Reveal 2 from a deck and keep 1 · or take ${permanent.name}`
-				: 'The back is the difficulty · Reveal 2, keep 1';
+		if (view === 'decks') {
+			const how =
+				drawRules.reveals === 1
+					? 'Reveal the top card of a deck: keep it or put it back'
+					: 'Reveal 2 from a deck and keep 1';
+			const wait = waitsOn ? `${waitsOn} draws from the decks first` : how;
+			return permanent ? `${wait} · or take ${permanent.name}` : wait;
+		}
 		if (view === 'reveal' && revealDeck) {
 			const deck = `Deck ${MONSTER_NUMERAL[revealDeck]}`;
 			if (!hasReveal) return `Drawing from ${deck}…`;
+			if (oneCard)
+				return handFull
+					? `The top card of ${deck} · Your hand is full: swap it for one of your cards, or put it back`
+					: `The top card of ${deck} · Keep it, or put it back on top of the deck`;
 			return revealCards.length > 1
 				? `Two cards from ${deck} · Tap one to add it to your hand`
 				: `The last card of ${deck} · Tap it to add it to your hand`;
+		}
+		if (battle.summonUsesOne) {
+			if (fightsLeft <= 0) return 'No battle action left this round';
+			const summonOpen = actions.some((a) => !a.disabled);
+			return `${actionWord(fightsLeft)} left · ${summonOpen ? 'Fight a card or take the Arcane Abyss Summon' : 'Fight a card from your hand'}`;
 		}
 		return 'Draw a monster card, or fight one from your hand';
 	});
@@ -259,7 +323,7 @@
 		picking = false;
 	}
 	async function draw(difficulty: MonsterDifficulty) {
-		if (busy || chosen !== null || cardsLeft(difficulty) === 0) return;
+		if (busy || chosen !== null || cardsLeft(difficulty) === 0 || !deckDrawOpen) return;
 		keptIndex = null;
 		keptKey = null;
 		chosen = difficulty;
@@ -270,7 +334,7 @@
 	/** Take a copy of the permanent monster: it goes straight into the hand (no reveal). */
 	let takingPermanent = $state(false);
 	async function takePermanent() {
-		if (busy || chosen !== null || takingPermanent || !permanent) return;
+		if (busy || chosen !== null || takingPermanent || !permanent || handFull) return;
 		takingPermanent = true;
 		const before = hand.length;
 		try {
@@ -290,35 +354,74 @@
 		const gains = [vp ? `${vp} VP` : '', summons ? `${summons === 1 ? '' : `${summons} `}Abyss Summon${summons === 1 ? '' : 's'}` : '']
 			.filter(Boolean)
 			.join(' + ');
-		return `Barrier ${card.maxHp} · ${card.damage} damage${typeof card.initiative === 'number' ? ` · Initiative ${card.initiative}` : ''}${gains ? ` · ${gains}` : ''}`;
+		const speed = !initiative && typeof card.initiative === 'number' ? ` · Initiative ${card.initiative}` : '';
+		return `Barrier ${card.maxHp} · ${card.damage} damage${speed}${gains ? ` · ${gains}` : ''}`;
+	}
+	/** Slide a revealed card (the one not kept) back under the deck. */
+	function slideBack(from: Element | null | undefined) {
+		if (!deckSlot || !from) return;
+		const box = from.getBoundingClientRect();
+		const to = deckSlot.getBoundingClientRect();
+		returnShift = {
+			x: to.left + to.width / 2 - (box.left + box.width / 2),
+			y: to.top + to.height / 2 - (box.top + box.height / 2)
+		};
+	}
+	/** Undo the optimistic motion when the server refused the choice (the reveal is still open). */
+	function settleKeep() {
+		if (!pending?.cards.length) return;
+		keeping = null;
+		keptIndex = null;
+		keptKey = null;
+		returnShift = null;
 	}
 	async function keep(index: number, event: MouseEvent) {
 		if (busy || keeping !== null) return;
 		const card = revealCards[index];
 		if (!card) return;
+		// A full hand cannot take the card: it needs a swap (the cards beside it) or goes back.
+		if (handFull) return;
 		keptIndex = index;
 		keptKey = `card-${card.id}#${hand.filter((c) => c.id === card.id).length}`;
 		const other = revealCards.length > 1 ? 1 - index : null;
-		if (other !== null && deckSlot) {
+		if (other !== null) {
 			const row = (event.currentTarget as HTMLElement).parentElement;
-			const otherEl = row?.querySelector<HTMLElement>(`[data-reveal-index="${other}"]`);
-			const from = otherEl?.getBoundingClientRect();
-			const to = deckSlot.getBoundingClientRect();
-			if (from) {
-				returnShift = {
-					x: to.left + to.width / 2 - (from.left + from.width / 2),
-					y: to.top + to.height / 2 - (from.top + from.height / 2)
-				};
-			}
+			slideBack(row?.querySelector<HTMLElement>(`[data-reveal-index="${other}"]`));
 		}
 		keeping = index;
 		await onKeep(index);
-		// Rejected: the reveal is still open, so put the other card back.
-		if (pending?.cards.length) {
-			keeping = null;
-			keptIndex = null;
-			returnShift = null;
-		}
+		settleKeep();
+	}
+	/** One-card draw: keep the revealed card and put the held card at `handIndex` back on its deck. */
+	async function swapFor(handIndex: number) {
+		if (busy || keeping !== null || !oneCard) return;
+		const card = revealCards[0];
+		const old = hand[handIndex];
+		if (!card || !old) return;
+		keptIndex = 0;
+		// The hand after the swap: the old card is gone, the new one is last.
+		keptKey = `card-${card.id}#${hand.filter((c, i) => i !== handIndex && c.id === card.id).length}`;
+		keeping = 0;
+		await onKeep(0, { replaceHandIndex: handIndex });
+		settleKeep();
+	}
+	let revealRow = $state<HTMLElement | null>(null);
+	/** One-card draw: put the revealed card back on top of its deck. It was the draw of this visit. */
+	async function putBack() {
+		if (busy || keeping !== null || !oneCard) return;
+		keptIndex = null;
+		keptKey = null;
+		slideBack(revealRow?.querySelector<HTMLElement>('[data-reveal-index="0"]'));
+		// No index is kept: the card flips face down and slides under the deck.
+		keeping = -1;
+		await onKeep(0, { returnToDeck: true });
+		settleKeep();
+	}
+	/** What a held card loses when it goes back on its deck. */
+	function swapNote(card: MonsterState): string {
+		if (card.permanent) return 'Leaves your hand';
+		const dealt = Math.max(0, card.maxHp - card.hp);
+		return dealt > 0 ? `Back on its deck · the ${dealt} damage is lost` : 'Back on top of its deck';
 	}
 
 	// ── Motion ───────────────────────────────────────────────────────────────
@@ -415,8 +518,18 @@
 							<span class="name">Monster decks</span>
 							{#if drawBlocked}
 								<span class="cta">{drawBlocked}</span>
+							{:else if waitsOn}
+								<span class="cta wait" data-testid="abyss-draw-wait"
+									>{waitsOn} draws first<span class="cta-soft"
+										>{permanent ? `or take ${permanent.name}` : ''}</span
+									></span
+								>
 							{:else}
-								<span class="cta">Tap to draw<span class="cta-soft">1 per visit</span></span>
+								<span class="cta"
+									>Tap to draw<span class="cta-soft"
+										>{handFull ? 'swap one of your cards' : '1 per visit'}</span
+									></span
+								>
 							{/if}
 						</span>
 					</button>
@@ -445,8 +558,8 @@
 									<span class="labels" in:label|global={{ intro: true }} out:label|global>
 										<span class="cta">
 											{#if fightsLeft <= 0}
-												Fought this round
-											{:else if fightAllowance > 1}
+												{battle.summonTaken ? 'No battle action left' : 'Fought this round'}
+											{:else if battle.total > 1}
 												Tap to fight · {fightsLeft} left
 											{:else}
 												Tap to fight
@@ -478,7 +591,7 @@
 							class="obj deck"
 							style="--c: {MONSTER_DIFFICULTY_COLOR[d]}"
 							data-testid="monster-difficulty-{d}"
-							disabled={busy || left === 0}
+							disabled={busy || left === 0 || !deckDrawOpen}
 							aria-label={deckAria(deck)}
 							onclick={() => draw(d)}
 						>
@@ -502,6 +615,11 @@
 										: ''}
 								</span>
 								<span class="left">{left === 0 ? 'Empty' : `${left} left`}</span>
+								{#if left > 0 && waitsOn}
+									<span class="left wait">{waitsOn} draws first</span>
+								{:else if left > 0 && handFull && !drawRules.canReturn}
+									<span class="left wait">Hand full</span>
+								{/if}
 							</span>
 						</button>
 					{/each}
@@ -512,7 +630,7 @@
 							class="obj deck permanent"
 							style="--c: var(--brand-amber, #ffba3d)"
 							data-testid="monster-permanent"
-							disabled={busy || takingPermanent}
+							disabled={busy || takingPermanent || handFull}
 							aria-label={`${permanent.name}, always available: ${permanentRewards(permanent)}. Tap to add it to your hand.`}
 							onclick={takePermanent}
 						>
@@ -522,14 +640,19 @@
 							<span class="info" in:label|global={{ intro: true }} out:label|global>
 								<b>{permanent.name}</b>
 								<span>{permanentRewards(permanent)}</span>
-								<span class="left">Always here · Tap to take</span>
+								<span class="left">{handFull ? 'Hand full' : 'Always here · Tap to take'}</span>
 							</span>
 						</button>
 					{/if}
 				</div>
 			{:else if revealDeck}
 				{@const d = revealDeck}
-				<div class="row reveal" style="--c: {MONSTER_DIFFICULTY_COLOR[d]}">
+				<div
+					class="row reveal"
+					class:swaps={oneCard && hand.length > 0}
+					style="--c: {MONSTER_DIFFICULTY_COLOR[d]}"
+					bind:this={revealRow}
+				>
 					<div class="deck-slot" bind:this={deckSlot}>
 						<span
 							class="deck-card"
@@ -549,7 +672,7 @@
 						in:label|global={{ intro: true }}
 						out:label|global
 					></span>
-					<div class="picks" class:waiting={!hasReveal}>
+					<div class="picks" class:waiting={!hasReveal} class:single={drawRules.reveals === 1}>
 						{#each revealCards as card, idx (idx + ':' + card.id)}
 							<button
 								type="button"
@@ -561,7 +684,7 @@
 									: undefined}
 								data-reveal-index={idx}
 								data-testid="monster-card-keep-{idx}"
-								disabled={busy || keeping !== null}
+								disabled={busy || keeping !== null || handFull}
 								onclick={(event) => keep(idx, event)}
 								in:flyFromDeck|global={{ index: idx }}
 								out:leaveReveal|global={{ index: idx }}
@@ -570,11 +693,45 @@
 									<MonsterCard {card} faceUp={revealed && (keeping === null || keeping === idx)} />
 								</span>
 								<span class="cta" in:label|global={{ intro: true, delay: 620 + idx * 140 }}
-									>{keeping === idx ? 'Added to your hand' : 'Tap to keep'}</span
+									>{keeping === idx
+										? 'Added to your hand'
+										: keeping === -1
+											? 'Back on the deck'
+											: handFull
+												? 'Hand full'
+												: 'Tap to keep'}</span
 								>
 							</button>
 						{/each}
 					</div>
+					{#if oneCard && hand.length > 0 && keeping === null}
+						<!-- Keep the revealed card and put one of the held cards back on its deck. -->
+						<div
+							class="swap"
+							role="group"
+							aria-label="Swap for one of your cards"
+							in:label|global={{ intro: true, delay: 760 }}
+							out:label|global
+						>
+							<span class="swap-title">{handFull ? 'Swap it for' : 'Or swap it for'}</span>
+							<div class="swap-cards">
+								{#each hand as held, i (handKey(hand, i))}
+									<button
+										type="button"
+										class="obj held"
+										data-testid="monster-swap-{i}"
+										disabled={busy}
+										title={`Keep the new card and put ${held.name} back. ${swapNote(held)}.`}
+										onclick={() => swapFor(i)}
+									>
+										<span class="floater" style="--i: {i + 2}"><MonsterCard card={held} /></span>
+										<span class="cta">Swap out</span>
+										<span class="swap-note">{swapNote(held)}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -584,6 +741,14 @@
 		<div class="ghosts">
 			{#if view === 'decks'}
 				<button type="button" class="ghost" data-testid="abyss-back" onclick={back}>Back</button>
+			{:else if view === 'reveal' && oneCard}
+				<button
+					type="button"
+					class="ghost"
+					data-testid="monster-card-return"
+					disabled={busy || keeping !== null || !revealed}
+					onclick={putBack}>Put it back</button
+				>
 			{:else if view === 'home'}
 				{#each actions as action (action.key)}
 					<button
@@ -593,7 +758,7 @@
 						disabled={busy || action.disabled}
 						onclick={() => onAction?.(action.key)}
 					>
-						{#if action.icon}<img src={action.icon} alt="" />{/if}{action.label}
+						{#if action.icon}<img src={action.icon} alt="" />{/if}{action.label}{#if action.note}<span class="ghost-note">{action.note}</span>{/if}
 					</button>
 				{/each}
 			{/if}
@@ -913,6 +1078,57 @@
 		min-width: calc(var(--w) * 2 + var(--gap));
 		justify-content: center;
 	}
+	/* One card revealed: the pick column is one card wide. */
+	.picks.single {
+		min-width: var(--w);
+	}
+	.row.reveal.swaps {
+		--w: min(calc((100cqw - 4 * var(--gap) - 2rem) / 4.1), calc((100cqh - 5.2rem) * 0.6), 15rem);
+	}
+	/* The held cards a kept card may take the place of. */
+	.swap {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.35rem;
+		margin-left: clamp(0.25rem, 2cqw, 1.25rem);
+		padding-left: clamp(0.5rem, 2cqw, 1.25rem);
+		border-left: 1px dashed rgba(255, 255, 255, 0.18);
+	}
+	.swap-title {
+		font-family: var(--font-display);
+		font-size: 0.8rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-parchment, #ebe6f7);
+		text-shadow: 0 1px 6px #000;
+	}
+	.swap-cards {
+		display: flex;
+		gap: calc(var(--gap) * 0.6);
+	}
+	.obj.held {
+		width: calc(var(--w) * 0.5);
+		gap: 0.15rem;
+	}
+	.swap-note {
+		font-size: 0.56rem;
+		line-height: 1.2;
+		letter-spacing: 0.02em;
+		color: rgba(235, 230, 247, 0.7);
+		text-shadow: 0 1px 6px #000;
+		text-wrap: balance;
+	}
+	.cta.wait,
+	.info .left.wait {
+		color: var(--brand-amber-soft, #ffd56a);
+	}
+	.ghost-note {
+		font-size: 0.62rem;
+		letter-spacing: 0.04em;
+		text-transform: none;
+		color: rgba(235, 230, 247, 0.65);
+	}
 	.pick {
 		z-index: 1;
 		transition: transform 600ms cubic-bezier(0.45, 0.05, 0.25, 1);
@@ -1021,6 +1237,15 @@
 		}
 		.row.reveal {
 			--w: min(calc((100cqw - 3 * var(--gap) - 1.5rem) / 2.95), calc((100cqh - 4.2rem) * 0.6), 9.5rem);
+		}
+		.row.reveal.swaps {
+			--w: min(calc((100cqw - 4 * var(--gap) - 1.5rem) / 4.1), calc((100cqh - 4.2rem) * 0.6), 9.5rem);
+		}
+		.swap-title {
+			font-size: 0.62rem;
+		}
+		.swap-note {
+			font-size: 0.5rem;
 		}
 		.obj {
 			gap: 0.18rem;

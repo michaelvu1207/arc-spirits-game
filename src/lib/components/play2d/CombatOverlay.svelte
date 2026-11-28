@@ -25,6 +25,45 @@
 	const lines = $derived(mergeCombatLog(myCombat?.log ?? []));
 	const corruptionMoment = $derived(lines.some((line) => /corrupt/i.test(line)));
 
+	// Rule `initiativeDie`: each player in the fight rolled the one 12-sided initiative die.
+	// A player fight carries each roll on its side (`initiativeRoll`; the side's `initiative` is 1
+	// when it has the initiative). A monster fight records the roll in its log only ("You roll the
+	// initiative die: 4 (Tainted needs 5 or less of 12) — gains the initiative."), so it is read there.
+	const mySide = $derived(myCombat?.sides.find((s) => s.seat === mySeat) ?? null);
+	const dieRolls = $derived.by(() => {
+		if (!myCombat) return [];
+		const fromSides = myCombat.sides
+			.filter((s) => typeof s.initiativeRoll === 'number')
+			.map((s) => ({ seat: s.seat as string, roll: s.initiativeRoll as number, mine: s.seat === mySeat, hit: (s.initiative ?? 0) > 0 }));
+		if (fromSides.length > 0 || myCombat.kind !== 'monster') return fromSides;
+		for (const line of myCombat.log ?? []) {
+			const m = /initiative die: (\d+) .*— (gains the initiative|no initiative)/.exec(line);
+			if (m) return [{ seat: mySeat as string, roll: Number(m[1]), mine: true, hit: m[2] === 'gains the initiative' }];
+		}
+		return [];
+	});
+	const dieRule = $derived(dieRolls.length > 0);
+	const hadInitiative = $derived(
+		dieRule &&
+			(myCombat?.kind === 'monster'
+				? // The die, or an ability that covers a miss ("You gain the initiative through an ability.").
+					dieRolls.some((d) => d.mine && d.hit) ||
+					(myCombat.log ?? []).some((line) => /gain the initiative through an ability/.test(line))
+				: (mySide?.initiative ?? 0) > 0)
+	);
+	/** What the monster fight came to, in one line. */
+	const monsterVerdict = $derived.by(() => {
+		if (!myCombat?.monster) return '';
+		if (myCombat.killed) return 'Defeated!';
+		if (!corruptionMoment) return 'Not defeated yet';
+		// With the initiative the player attacks at the same time, so the damage landed anyway.
+		return hadInitiative
+			? 'It corrupted you, but you attacked at the same time'
+			: dieRule
+				? 'It attacked first and corrupted you, so you could not strike back'
+				: 'Its first hit corrupted you, so you could not strike back';
+	});
+
 	type LineKind = 'upgrade' | 'ward' | 'gain' | 'strike' | 'harm' | 'cost' | 'neutral';
 
 	/**
@@ -133,13 +172,27 @@
 		</header>
 		{#if myCombat.monster}
 			<div class="verdict">
-				{displayName(myCombat.monster.name)} — {myCombat.killed
-					? 'Defeated!'
-					: corruptionMoment
-						? 'Its first hit corrupted you, so you could not strike back'
-						: 'Not defeated yet'}
+				{displayName(myCombat.monster.name)} — {monsterVerdict}
 				{#if !myCombat.killed && myCombat.kind === 'monster'}
 					<span class="verdict-note">The damage stays on the card in your hand.</span>
+				{/if}
+			</div>
+		{/if}
+		{#if dieRule}
+			<!-- The initiative die of each player in the fight. -->
+			<div class="dice-row" data-testid="combat-initiative-dice">
+				{#each dieRolls as die (die.seat)}
+					<span class="init-die" class:hit={die.hit} title="Initiative die (12 sides)">
+						<span class="die-face" aria-hidden="true">{die.roll}</span>
+						<span class="die-text">
+							{die.mine ? 'Your' : `${die.seat}'s`} initiative die: {die.roll}
+						</span>
+					</span>
+				{/each}
+				{#if myCombat.monster}
+					<span class="die-note">
+						{hadInitiative ? 'You have the initiative: you attack at the same time' : 'No initiative: the monster attacks first'}
+					</span>
 				{/if}
 			</div>
 		{/if}
@@ -204,7 +257,41 @@
 		mix-blend-mode: overlay;
 	}
 	.corruption-spirit { position:absolute; right:-28px; top:-44px; width:240px; height:220px; opacity:.32; pointer-events:none; }
-	.head,.verdict,.body{position:relative;z-index:1}
+	.head,.verdict,.body,.dice-row{position:relative;z-index:1}
+	.dice-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.9rem;
+		font-size: 0.8rem;
+		color: var(--color-parchment, #ebe6f7);
+	}
+	.init-die {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.die-face {
+		display: grid;
+		place-items: center;
+		width: 1.9rem;
+		height: 1.9rem;
+		/* A 12-sided die seen from above reads as a pentagon. */
+		clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+		background: rgba(235, 230, 247, 0.22);
+		font-weight: 800;
+		font-size: 0.85rem;
+		padding-top: 0.2rem;
+		box-sizing: border-box;
+		color: #fff;
+	}
+	.init-die.hit .die-face {
+		background: var(--brand-cyan, #5cdfff);
+		color: #06121a;
+	}
+	.die-note {
+		color: rgba(235, 230, 247, 0.75);
+	}
 	.body {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
