@@ -114,6 +114,7 @@
   .gf-f select { margin: 0; padding: 6px 8px; max-width: 290px; font-size: 13px; color: var(--text); background: var(--field); border: 1px solid var(--line-2); border-radius: 8px; } .gf-f select:hover { border-color: var(--faint); }
   .gf-live { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; } .gf-sub { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
   main.ge-mode .scroll { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
+  main.ge-mode.ge-table .scroll { overflow: auto; display: block; padding-bottom: 28px; } /* a table tab of the explorer (Attack over time, Spirit stats): the page scrolls */
   .ge { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
   .ge-filters { font-size: 13px; color: var(--dim); }
   .ge-chart .ge-legend { position: absolute; top: 3px; right: 84px; font-size: 12px; color: var(--dim); pointer-events: none; }
@@ -218,7 +219,7 @@
     main.ge-mode .gf-f select { width: 100%; max-width: none; min-width: 0; padding: 8px 8px; font-size: 16px; }
     main.ge-mode #gePlaceWrap { grid-column: 1 / -1; } main.ge-mode #gePlace { display: flex; } main.ge-mode #gePlace button { flex: 1; padding: 7px 4px; }
     main.ge-mode .gf-live { grid-column: 1 / -1; order: 5; white-space: normal; flex-wrap: wrap; gap: 4px 10px; }
-    main.ge-mode #geMetric { grid-column: 1 / -1; order: -1; display: flex; } main.ge-mode #geMetric button { flex: 1; padding: 7px 4px; }
+    main.ge-mode #geMetric { grid-column: 1 / -1; order: -1; display: flex; flex-wrap: wrap; } main.ge-mode #geMetric button { flex: 1 1 30%; padding: 7px 4px; white-space: nowrap; }
     main.ge-mode .scroll { overflow: visible; padding: 0 12px 28px; display: block; }
     .ge { display: block; padding-top: 0; } .ge-body { display: block; }
     .ge-chart { position: sticky; top: 0; z-index: 3; height: 46svh; min-height: 270px; max-height: 460px; margin: 0 -12px; padding: 0 6px; background: var(--bg); border-bottom: 1px solid var(--line); touch-action: pan-y; }
@@ -277,8 +278,13 @@ const fmt = (v) => (Math.round(v * 100) / 100).toString();
 const POOLS = ['', 'Spirit World', 'Arcane Abyss', 'Heroes'];
 const isBal = () => table.startsWith('bal_');
 const SIMS = document.documentElement.dataset.mode === 'sims';
-const SIMS_MENU = `<button data-t="bal_lines">Game explorer</button><button data-t="bal_attack">Attack over time</button><button data-t="bal_spirits">Spirit tiers</button>${[1, 2, 3].map((d) => `<button class="sub" data-t="bal_spirits" data-stage="${d}">${POOLS[d]}</button>`).join('')}`;
-const titleText = () => (TITLE[table] ?? table) + (stage ? table === 'bal_spirits' ? ` · ${POOLS[stage]}` : table === 'classes' ? ` · ${['', 'Generic', 'Special'][stage]}` : ` · Class ${stage}` : '');
+// Michael, 2026-11-27: "put the attack over time and spirit stats to be separate tabs within the game explorer". The two
+// pages are tabs of the explorer's top bar (GE_PAGES), next to Points, Builds, Attack and Monsters; the menu holds the explorer only.
+const GE_PAGES = { bal_attack: 'Attack over time', bal_spirits: 'Spirit stats' };
+const gePage = () => SIMS && table in GE_PAGES;
+const geShell = () => table === 'bal_lines' || gePage();
+const SIMS_MENU = `<button data-t="bal_lines">Game explorer</button>`;
+const titleText = () => gePage() ? TITLE.bal_lines : (TITLE[table] ?? table) + (stage ? table === 'bal_spirits' ? ` · ${POOLS[stage]}` : table === 'classes' ? ` · ${['', 'Generic', 'Special'][stage]}` : ` · Class ${stage}` : '');
 let ICONS = [], SETS = [];
 // Fixed backgrounds (Michael, 2026-11-07): runes = the teal shape, relics = the golden shape, augments = the white hexagon. Never per row.
 const BG = { runes: 'references/icons/rune_backgrounds/rune.png', relics: 'references/icons/rune_backgrounds/relic.png', augments: 'references/icons/rune_backgrounds/augment.png' };
@@ -295,7 +301,7 @@ async function init() {
   load();
 }
 async function load() {
-  setNav(table !== 'bal_lines' && !phone.matches); // the game explorer fills the window: the menu is closed on entry (the button at the top left opens it); on a phone the menu covers the page, so it starts closed everywhere
+  setNav(!geShell() && !phone.matches); // the game explorer fills the window: the menu is closed on entry (the button at the top left opens it); on a phone the menu covers the page, so it starts closed everywhere
   RV = await get('/api/game/rewards');
   if (table === 'reward_sets') { const ms = await get('/api/game/table?name=monsters_v2'); MEMBERS = {}; for (const m of ms) if (m.set) (MEMBERS[m.set] ??= []).push(m.name); }
   if (table === 'rewards') { rows = pool.filter((t) => RV.values[t.id] != null || RV.used[t.id]).map((t) => ({ id: t.id, name: t.name, icon: t.icon, value: RV.values[t.id] ?? 0 })).sort((a, b) => b.value - a.value || a.name.localeCompare(b.name)); }
@@ -305,7 +311,7 @@ async function load() {
   if (table === 'origins') { const [icons, runes, relics] = await Promise.all([get('/api/game/origin-icons'), get('/api/game/table?name=runes'), get('/api/game/table?name=relics')]); ORIGIN = { icons, runes, relics }; }
   saved = JSON.stringify(rows);
   $('title').textContent = TITLE[table] ?? table;
-  for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.t === table && Number(b.dataset.stage ?? 0) === stage);
+  for (const b of $('tabs').children) b.classList.toggle('on', gePage() ? b.dataset.t === 'bal_lines' : b.dataset.t === table && Number(b.dataset.stage ?? 0) === stage);
   $('title').textContent = titleText();
   $('addRow').hidden = $('save').hidden = isBal();
   paint(); mark();
@@ -613,7 +619,7 @@ function paintLines() {
       ${meta.live ? `<span class="gf-live" title="This test is being played. The lines are fetched again every 20 seconds."><span class="ge-live">Live</span><span class="gf-sub">${GE.data.games.filter((g) => g.state === 'done').length} of ${GE.data.games.length} finished · ${esc(liveAt)}</span></span>` : ''}
     </div>
     <div class="gf">
-      <span class="seg2" id="geMetric" role="group" aria-label="What the lines show"><button data-metric="vp" class="${!GE.builds && !GE.mons && GE.metric === 'vp' ? 'on' : ''}" title="Each player's points by round">Points</button><button data-metric="builds" class="${GE.builds ? 'on' : ''}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${!GE.builds && !GE.mons && GE.metric === 'atk' ? 'on' : ''}" title="The average damage of one attack with the dice held, for the players of one finishing place">Attack</button><button data-metric="mons" class="${GE.mons ? 'on' : ''}" title="Monsters killed and the pools draining, by round">Monsters</button></span>
+      ${geTabsHtml()}
       <label class="gf-f" title="One line per finishing place (the average of every 1st, 2nd, 3rd and 4th player), or one per turn order (Player 1 to 4). After a game ends, its final value is kept, so each line ends at the average final value."><span>Averages</span><select id="geAvgSel">${Object.entries(AVG).map(([k, t]) => `<option value="${k}" ${geAvg === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <span class="gf-f" id="gePlaceWrap" hidden title="The Attack graph draws the players of one finishing place: every player who finished 1st in their game, or 2nd, 3rd or 4th. Players who tie share a place."><span>Place</span><span class="seg2" id="gePlace" role="group" aria-label="Finishing place shown">${ORD.map((t, k) => `<button data-place="${k + 1}" class="${gePlace === k + 1 ? 'on' : ''}">${t}</button>`).join('')}<button data-place="0" class="${gePlace === 0 ? 'on' : ''}" title="Every player, as before">All</button></span></span>
       <label class="gf-f" id="geAtkWrap" hidden title="What the attack lines count: every source of damage (the dice plus the flat damage of Beast), or the attack dice alone"><span>Attack counts</span><select id="geAtkSel"><option value="0" ${geAtkDice ? '' : 'selected'}>Dice and Beast</option><option value="1" ${geAtkDice ? 'selected' : ''}>Dice only</option></select></label>
@@ -622,11 +628,28 @@ function paintLines() {
   return `<div class="ge">
   <div class="ge-body"><div class="ge-chart" id="geChart"><svg id="geSvg" role="img" aria-label="Points by round, one line per player"></svg><div class="ge-legend" id="geLegend">${GE_STATUS_LEGEND}</div><div class="ge-hint" id="geHint" hidden></div><div class="bd-tip" id="bdTip" hidden></div></div><aside class="ge-side" id="geSide"></aside></div></div>`;
 }
+// The explorer's tabs: four graphs of the chosen test, and two tables from the latest test (GE_PAGES).
+function geTabsHtml() {
+  const g = table === 'bal_lines', on = (x) => x ? 'on' : '';
+  return `<span class="seg2" id="geMetric" role="group" aria-label="What the explorer shows"><button data-metric="vp" class="${on(g && !GE.builds && !GE.mons && GE.metric === 'vp')}" title="Each player's points by round">Points</button><button data-metric="builds" class="${on(g && GE.builds)}" title="The average points by round of each build">Builds</button><button data-metric="atk" class="${on(g && !GE.builds && !GE.mons && GE.metric === 'atk')}" title="The average damage of one attack with the dice held, for the players of one finishing place">Attack</button><button data-metric="mons" class="${on(g && GE.mons)}" title="Monsters killed and the pools draining, by round">Monsters</button><button data-page="bal_attack" class="${on(table === 'bal_attack')}" title="A table: the attack of the Fighter with Elementalist players of the latest test, round by round">Attack over time</button><button data-page="bal_spirits" class="${on(table === 'bal_spirits')}" title="A table: every spirit with its tier, how much it is wanted and how strong it is in the test games">Spirit stats</button></span>`;
+}
+function geTabClick(e) {
+  const b = e.target.closest('[data-metric], [data-page]'); if (!b) return;
+  if (b.dataset.page) { if (table === b.dataset.page) return; table = b.dataset.page; stage = 0; history.replaceState(null, '', table === 'bal_attack' ? '#attack' : '#spirits'); load(); return; }
+  GE.builds = b.dataset.metric === 'builds'; GE.mons = b.dataset.metric === 'mons'; GE.metric = GE.builds || GE.mons ? 'vp' : b.dataset.metric; if (GE.builds || GE.mons) GE.sel = null;
+  if (table !== 'bal_lines') { table = 'bal_lines'; stage = 0; history.replaceState(null, '', '#explorer'); load(); return; }
+  for (const x of $('geMetric').children) x.classList.toggle('on', x === b); geHover(null); bdLeave(); drawLines();
+}
+// The top bar of a table tab: which spirits (Spirit stats), where the numbers come from, and the tabs.
+function mountGePage() {
+  $('barExtra').innerHTML = `<div class="gf">${table === 'bal_spirits' ? `<label class="gf-f" title="Which bag the spirits come from"><span>Spirits</span><select id="gePool">${POOLS.map((p, k) => `<option value="${k}" ${stage === k ? 'selected' : ''}>${k ? esc(p) : 'All'}</option>`).join('')}</select></label>` : ''}<span class="gf-sub">${table === 'bal_attack' ? 'A table of the latest finished test' : 'A table from the test games'}</span></div><div class="gf">${geTabsHtml()}</div>`;
+  $('geMetric').onclick = geTabClick;
+  if ($('gePool')) $('gePool').onchange = (e) => { stage = Number(e.target.value); paint(); };
+}
 function mountLines() {
   if (!GE.data) return;
   $('geSetup').onchange = async (e) => { await loadLines(e.target.value); paint(); };
-  $('geMetric').onclick = (e) => { const b = e.target.closest('[data-metric]'); if (!b) return; GE.builds = b.dataset.metric === 'builds'; GE.mons = b.dataset.metric === 'mons'; GE.metric = GE.builds || GE.mons ? 'vp' : b.dataset.metric; if (GE.builds || GE.mons) GE.sel = null;
-    for (const x of $('geMetric').children) x.classList.toggle('on', x === b); geHover(null); bdLeave(); drawLines(); };
+  $('geMetric').onclick = geTabClick;
   $('geAtkSel').onchange = (e) => { geAtkDice = e.target.value === '1'; try { localStorage.setItem('geAtkDice', geAtkDice ? '1' : '0'); } catch {} bdLeave(); drawLines(); };
   $('gePlace').onclick = (e) => { const b = e.target.closest('[data-place]'); if (!b) return; gePlace = Number(b.dataset.place); try { localStorage.setItem('gePlace', String(gePlace)); } catch {}
     for (const x of $('gePlace').children) x.classList.toggle('on', x === b); geHover(null); drawLines(); };
@@ -1126,7 +1149,7 @@ function paintSide() {
       <div><h3>Drew and picked</h3>${p.draws.length ? p.draws.map((d) => `<div class="ge-draw"><span class="k">${esc(d.k)}</span>${d.o.map((o) => { const yes = d.p.some((x) => x === o || x.startsWith(o + ' (replaced')); const full = d.p.find((x) => x.startsWith(o + ' (replaced')) ?? o; return `<span class="${yes ? 'yes' : 'no'}">${yes ? '✓ ' : ''}${esc(full)}</span>`; }).join('<span class="no">, </span>')}${d.again ? ' <span class="no">· drew again</span>' : !d.p.length ? ' <span class="no">· took none</span>' : ''}</div>`).join('') : '<span class="was">–</span>'}</div></div>`;
   side.innerHTML = head + `<div id="geRest" class="${geView}">${rest}</div>`;
 }
-function paint() { document.querySelector('main').classList.toggle('ge-mode', table === 'bal_lines'); $('gePop')?.remove(); $('scroll').innerHTML = table === 'bal_lines' ? paintLines() : table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'bal_attack' ? paintBalAttack() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); if (table === 'bal_lines') mountLines(); }
+function paint() { const m = document.querySelector('main'); m.classList.toggle('ge-mode', geShell()); m.classList.toggle('ge-table', gePage()); $('gePop')?.remove(); $('scroll').innerHTML = table === 'bal_lines' ? paintLines() : table === 'bal_spirits' ? paintBalSpirits() : table === 'bal_monsters' ? paintBalMonsters() : table === 'bal_attack' ? paintBalAttack() : table === 'monsters_v2' ? paintMonsters() : table === 'classes' ? paintClasses() : table === 'origins' ? paintOrigins() : table === 'rewards' ? paintRewards() : table === 'reward_sets' ? paintSets() : paintRunes(); if (table === 'bal_lines') mountLines(); else if (gePage()) mountGePage(); }
 
 $('scroll').addEventListener('input', (e) => {
   const el = e.target;
