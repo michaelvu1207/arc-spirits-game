@@ -527,18 +527,25 @@ export function resolveEncounterCombat(
 	// dice hits, or (when none does) when one of its players has "gain the initiative if your side doesn't"
 	// (Feral, Spellblade, Firecracker, Sudden Strike: the `alwaysAttackFirst` flag). Each player's `initiative`
 	// is then its side's 1 or 0, which is what Bastion compares.
+	//
+	// Rule `initiativeSum` (Michael, 2026-11-27): every die that hits is 1 initiative and a side's initiative is the
+	// number of its dice that hit ("in 1 evil vs 2 good, then if 2 good roll 1 initiative, then they will have 2").
+	// The side with more attacks first. An ability still only covers a side with none: 0 becomes 1.
 	const dieRule = ruleValue(catalog, 'initiativeDie');
+	const sumRule = dieRule && ruleValue(catalog, 'initiativeSum');
 	const sideInitiative = (group: EncounterCombatant[], label: string): number => {
-		let has = false;
+		let hits = 0;
 		for (const { seat, player } of group) {
-			if (rollInitiativeDie(state, player, catalog, log, `${seat} rolls`)) has = true;
+			if (rollInitiativeDie(state, player, catalog, log, `${seat} rolls`)) hits += 1;
 		}
-		if (!has && group.some(({ player }) => player.alwaysAttackFirst)) {
-			has = true;
+		if (hits === 0 && group.some(({ player }) => player.alwaysAttackFirst)) {
+			hits = 1;
 			log.push(`${label} gains the initiative through an ability.`);
 		}
-		for (const { player } of group) player.initiative = has ? 1 : 0;
-		return has ? 1 : 0;
+		const total = sumRule ? hits : hits > 0 ? 1 : 0;
+		for (const { player } of group) player.initiative = total;
+		if (sumRule && group.length > 1) log.push(`${label} has ${total} initiative in all.`);
+		return total;
 	};
 	const initE = dieRule ? sideInitiative(evil, 'Evil') : sumInit(evil);
 	const initG = dieRule ? sideInitiative(good, 'Good') : sumInit(good);
@@ -562,7 +569,9 @@ export function resolveEncounterCombat(
 			if (princeBonus > 0) {
 				r += princeBonus;
 				log.push(
-					dieRule
+					sumRule
+						? `${seat} Prince: its side has more initiative — deals ${princeBonus} more damage.`
+						: dieRule
 						? `${seat} Prince: only its side has the initiative — deals ${princeBonus} more damage.`
 						: `${seat} Prince: strikes first and deals ${princeBonus} more damage.`
 				);
@@ -647,7 +656,8 @@ export function resolveEncounterCombat(
 	// (same initiative AND same attack-first priority); both sides with a Paladin stay tied.
 	const tied = initE === initG && evilPriority === goodPriority;
 	// Under `initiativeDie` Paladin only decides when BOTH sides have the initiative (neither: at the same time).
-	const paladinCounts = tied && (!dieRule || initE === 1);
+	// Under `initiativeSum`: the same number of 1 or more.
+	const paladinCounts = tied && (!dieRule || initE >= 1);
 	const evilWinsTie = paladinCounts && evil.some(({ player }) => player.winsInitiativeTies);
 	const goodWinsTie = paladinCounts && good.some(({ player }) => player.winsInitiativeTies);
 	if (tied && evilWinsTie === goodWinsTie) {
@@ -655,7 +665,9 @@ export function resolveEncounterCombat(
 		const dmgE = rollSide(evil);
 		const dmgG = rollSide(good);
 		log.push(
-			dieRule
+			sumRule
+				? `Both sides have ${initE} initiative — they attack at the same time.`
+				: dieRule
 				? `${initE === 1 ? 'Both sides have' : 'Neither side has'} the initiative — they attack at the same time.`
 				: `Initiative is tied at ${initE} — both sides strike at once.`
 		);
@@ -676,7 +688,11 @@ export function resolveEncounterCombat(
 		const firstLabel = evilFaster ? 'Evil' : 'Good';
 		const secondLabel = evilFaster ? 'Good' : 'Evil';
 		log.push(
-			dieRule
+			sumRule
+				? tied
+					? `Both sides have ${firstInit} initiative — ${firstLabel} attacks first through Paladin.`
+					: `${firstLabel} has more initiative (${firstInit} against ${secondInit}) and attacks first.`
+				: dieRule
 				? tied
 					? `Both sides have the initiative — ${firstLabel} attacks first through Paladin.`
 					: `${firstLabel} has the initiative and attacks first.`

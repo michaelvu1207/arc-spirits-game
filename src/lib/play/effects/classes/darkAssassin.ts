@@ -16,7 +16,7 @@ export const ability: ClassAbility[] = [
 			// Rule `initiativeDie`: no number; when both sides have the initiative Paladin's side attacks first.
 			if (ruleValue(ctx.catalog, 'initiativeDie')) {
 				ctx.player.winsInitiativeTies = true;
-				ctx.log.push('Paladin: attacks first when both sides have the initiative.');
+				ctx.log.push(ruleValue(ctx.catalog, 'initiativeSum') ? 'Paladin: attacks first when both sides have the same initiative of 1 or more.' : 'Paladin: attacks first when both sides have the initiative.');
 				return;
 			}
 			const amount = ruleValue(ctx.catalog, 'spiritInitiativeTrim') ? PALADIN_INITIATIVE_TRIMMED : PALADIN_INITIATIVE;

@@ -106,7 +106,7 @@ function ownSection(
 	if (dieRule) {
 		const hits = initiativeHits(catalog, me.statusLevel ?? 0);
 		lines.push(
-			`  Initiative die: ${hits} of ${INITIATIVE_DIE_SIDES} sides give you the initiative at your status (${Math.round((100 * hits) / INITIATIVE_DIE_SIDES)} %).`
+			`  Initiative die: ${hits} of ${INITIATIVE_DIE_SIDES} sides give you ${ruleValue(catalog, 'initiativeSum') ? '1 initiative' : 'the initiative'} at your status (${Math.round((100 * hits) / INITIATIVE_DIE_SIDES)} %).`
 		);
 	}
 	if ((!dieRule && me.alwaysAttackFirst) || (me.strikeFirstCharges ?? 0) > 0)

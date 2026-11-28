@@ -245,6 +245,16 @@
  *   "gain the initiative if your side doesn't"; Assassin loses its strike-first ("remove the strike first from
  *   assasin"); Paladin's side attacks first when both sides have the initiative; Bastion halves when the opponent
  *   has the initiative and its holder's side does not. The wording is "gain the initiative". See combat.ts.
+ * - initiativeSum (default false; only read under `initiativeDie`; Michael, 2026-11-27: "have it such that iniative
+ *   values can add up. for example in 1 evil vs 2 good, then if 2 good roll 1 initiative, then they will have 2
+ *   iniative and possibly win"): true ⇒ in a player fight every die that hits is 1 initiative and the initiative of a
+ *   side is the sum of its players'. The side with MORE initiative attacks first; the same number (0 and 0 too): both
+ *   attack at the same time. My readings, told to him: "gain the initiative if your side does not have it" (Feral,
+ *   Spellblade, Firecracker, Sudden Strike) makes a side with 0 have 1, no more; Paladin's side attacks first when
+ *   both sides have the same initiative of 1 or more; Bastion halves when the opponent's side has more initiative;
+ *   Prince deals 2 more when its side has more. Monster fights do not change (one player, one die; the monster
+ *   always has the initiative). The same day: "adjust initiative dice such that the odds are 4/12, 6/12, 7/12, 8/12"
+ *   (`numbers.initiativeHits` in the lab data).
  * - firetailDamage (default false; Michael, 2026-11-26, after the initiative die left Firetail with no effect:
  *   "ok change it to that"): true ⇒ Firetail is "In a round when another player is at your location, deal 3 more
  *   damage in combat." (monster fights and player fights; `FIRETAIL_DAMAGE` in effects/classes/firetail.ts). It gives
@@ -370,6 +380,7 @@ export const RULE_DEFAULTS: Required<PlayRuleSwitches> = {
 	cultivatorBarrier35: false,
 	permanentRewardChoice: false,
 	initiativeDie: false,
+	initiativeSum: false,
 	firetailDamage: false,
 	abyssFightOrSummon: false
 };
@@ -563,6 +574,13 @@ export function initiativeHits(catalog: Pick<PlayCatalog, 'rules'> | null | unde
 }
 /** What "gain the initiative if your side doesn't" is called in the texts under rule `initiativeDie`. */
 export const GAIN_INITIATIVE_TEXT = 'gain the initiative if your side does not have it';
+
+/** Rule `initiativeSum` (on top of `initiativeDie`): the three classes that compare the two sides, in the wording of the sum. */
+const INITIATIVE_SUM_CLASS_TEXT: Record<string, (text: string) => string> = {
+	Paladin: () => 'If both sides have the same initiative (1 or more), your side attacks first.',
+	Bastion: (t) => t.replace('If the opponent has the initiative and your side does not', "If the opponent's side has more initiative than your side"),
+	Prince: () => 'When your side has more initiative than the enemy, deal 2 more damage.'
+};
 
 /**
  * Rule `initiativeDie`: the printed class texts without initiative numbers and in the new wording ("gain the
@@ -1018,7 +1036,9 @@ export function ruleAdjustedClassSchema(
 	);
 	// Rule `initiativeDie`: no initiative numbers and the wording "gain the initiative", on top of the other switches.
 	const dieRule = ruleValue(catalog, 'initiativeDie');
-	const reword = dieRule ? INITIATIVE_DIE_CLASS_TEXT[className] : undefined;
+	const dieWord = dieRule ? INITIATIVE_DIE_CLASS_TEXT[className] : undefined;
+	const sumWord = dieRule && ruleValue(catalog, 'initiativeSum') ? INITIATIVE_SUM_CLASS_TEXT[className] : undefined;
+	const reword = dieWord && sumWord ? (t: string) => sumWord(dieWord(t)) : dieWord;
 	if ((!changes.length && !dieRule) || !Array.isArray(schema)) return schema;
 	return schema.map((tier) => {
 		const change = changes.find((c) => c.count === Number(tier.count));

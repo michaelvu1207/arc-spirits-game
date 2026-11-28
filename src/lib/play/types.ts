@@ -661,7 +661,8 @@ export type CombatStep = 'prep' | 'roll' | 'damage' | 'aftermath' | 'resolved';
 export interface CombatSide {
 	seat: SeatColor;
 	initiative: number;
-	/** Rule `initiativeDie`: the side of the initiative die this combatant rolled (1 to 12); `initiative` is then its side's 1 or 0. */
+	/** Rule `initiativeDie`: the side of the initiative die this combatant rolled (1 to 12); `initiative` is then its side's 1 or 0
+	 *  (under `initiativeSum`: its side's total, one for each die of the side that hit). */
 	initiativeRoll?: number;
 	rolled: boolean;
 	damageDealt: number;
@@ -992,6 +993,9 @@ export interface PlayRuleSwitches {
 	permanentRewardChoice?: boolean;
 	/** Initiative is a 12-sided die, not a number (Michael, 2026-11-26). See `initiativeDie` in rules.ts. */
 	initiativeDie?: boolean;
+	/** Under `initiativeDie`: the initiative of a side is the NUMBER of its dice that hit, and the side with more attacks first
+	 *  (Michael, 2026-11-27). See `initiativeSum` in rules.ts. */
+	initiativeSum?: boolean;
 	/** Firetail: "In a round when another player is at your location, deal 3 more damage in combat." (Michael, 2026-11-26). See `firetailDamage` in rules.ts. */
 	firetailDamage?: boolean;
 	/** At the Arcane Abyss a round is a fight OR the Arcane Abyss Summon action, never both (Michael, 2026-11-27). See `abyssFightOrSummon` in rules.ts. */

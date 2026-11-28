@@ -260,7 +260,9 @@
 				...(rule('initiativeDie')
 					? [
 							`Each player in a fight rolls ${dieText}. Monsters always have the initiative.`,
-							'Against a monster: with the initiative you attack at the same time, without it the monster attacks first. Against players: the one side with the initiative attacks first; both or neither attack at the same time.'
+							rule('initiativeSum')
+								? 'Against a monster: with the initiative you attack at the same time, without it the monster attacks first. Against players: every die that hits is 1 initiative and a side adds up its players\' initiative; the side with more attacks first, and with the same number both attack at the same time.'
+								: 'Against a monster: with the initiative you attack at the same time, without it the monster attacks first. Against players: the one side with the initiative attacks first; both or neither attack at the same time.'
 						]
 					: []),
 				'Max Barrier absorbs incoming damage before corruption applies.',

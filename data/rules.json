@@ -54,6 +54,7 @@
 	"arcaneBloodPerPoint": true,
 	"permanentRewardChoice": true,
 	"initiativeDie": true,
+	"initiativeSum": true,
 	"firetailDamage": true,
 	"abyssFightOrSummon": true,
 	"numbers": {
@@ -65,7 +66,7 @@
 		"sentinelDamagePerDie": 1,
 		"mageAwakenArcaneDice": 3,
 		"sacrificeMax": 4,
-		"initiativeHits": [3, 5, 7, 9],
+		"initiativeHits": [4, 6, 7, 8],
 		"restBarrier": [4, 4, 3, 2]
 	}
 }
