@@ -1,10 +1,23 @@
 #!/usr/bin/env node
 /**
- * Arc Spirits AI worker: plays the "AI player" seats of the live site with Claude, through
- * this laptop's claude-cli gateway (~/arcspirits-harness/gateway/claude-cli, an OpenAI-
- * compatible shim over `claude -p`), so the calls use the laptop's Claude subscription.
+ * Arc Spirits AI worker: plays the "AI player" seats of the live site with Claude, through the
+ * model proxy on this laptop (CLIProxyAPI, port 8317), which owns the Claude subscription logins.
  *
  *   ARC_AI_WORKER_KEY=... node scripts/ai-worker/worker.mjs
+ *
+ * Settings (all optional):
+ *   ARC_AI_MODEL    anthropic/claude-opus-5-5 (default) or anthropic/claude-fable-5-2. A proxy
+ *                   account group is named by its prefix: anthropic/<prefix>/claude-opus-5-5.
+ *   ARC_AI_EFFORT   reasoning effort (default medium).
+ *   ARC_AI_GATEWAY_URL        default http://127.0.0.1:8317/v1.
+ *   ARC_AI_PROXY_KEY_COMMAND  the command that prints the proxy key (default `~/.local/bin/ccc proxy key`;
+ *                   JSON with a `key` field, or the bare key). The key is never stored here or logged.
+ *   ARC_AI_PROXY=0  the old way: an OpenAI-compatible gateway with a token file
+ *                   (ARC_AI_GATEWAY_TOKEN_FILE, ARC_AI_GATEWAY_URL; the claude-cli gateway on 4620).
+ *
+ * At the proxy every call of one room carries the same `X-Session-ID`, so the room's AI seats stay
+ * on one real account and the long rules brief is read from that account's prompt cache. A call
+ * the proxy answers with 429 / 502 / 503 is sent again after a short pause.
  *
  * Loop: GET <site>/api/ai/pending (every 2 s; every 10 s after a minute with nothing due), ask
  * the model for each new (room, seat, revision), POST <site>/api/ai/act. A bad answer is asked
@@ -12,6 +25,7 @@
  * timeout lets the built-in bot play the seat. A seat with one legal action is answered without
  * a model call. Never logs keys, tokens or prompts. Plain Node ESM, no dependencies.
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -22,33 +36,66 @@ const FAST_POLL_MS = 2_000;
 const SLOW_POLL_MS = 10_000;
 const IDLE_BEFORE_SLOW_MS = 60_000;
 const GATEWAY_TIMEOUT_MS = 240_000;
+/** The proxy: one call may take this long. The site hands a seat to its built-in bot after 90 s. */
+const PROXY_TIMEOUT_MS = 80_000;
+/** The proxy: a call answered 429 / 502 / 503 is sent again this many times, after this pause. */
+const PROXY_RETRIES = 2;
+const PROXY_RETRY_MS = 15_000;
+export const PROXY_URL = 'http://127.0.0.1:8317/v1';
 const SITE_TIMEOUT_MS = 30_000;
 /** Answer attempts per revision: the first answer plus one repair. */
 const MAX_ATTEMPTS = 2;
 
-export function loadConfig(env = process.env, readFile = readFileSync) {
+/** Run the key command and return what it prints. Its output is never logged. */
+function runKeyCommand(command) {
+	return execFileSync(command[0], command.slice(1), { encoding: 'utf8', timeout: 20_000, stdio: ['ignore', 'pipe', 'ignore'] });
+}
+
+/** The key in a key command's output: JSON `{ "key": … }`, or the bare text. */
+function keyFromOutput(out) {
+	const text = String(out ?? '').trim();
+	try {
+		const parsed = JSON.parse(text);
+		if (parsed && typeof parsed.key === 'string') return parsed.key.trim();
+	} catch {
+		/* the bare key */
+	}
+	return text;
+}
+
+export function loadConfig(env = process.env, readFile = readFileSync, runCommand = runKeyCommand) {
 	const key = env.ARC_AI_WORKER_KEY?.trim();
 	if (!key) throw new Error('ARC_AI_WORKER_KEY is required.');
 	const model = env.ARC_AI_MODEL?.trim() || 'anthropic/claude-opus-5-5';
-	// The owner forbids this model for Arc Spirits.
-	if (model.toLowerCase().includes('fable')) throw new Error(`Refusing to run: model "${model}" is not allowed.`);
-	const tokenFile =
-		env.ARC_AI_GATEWAY_TOKEN_FILE?.trim() ||
-		join(homedir(), '.local/share/arcspirits-claude-cli/laptop/token');
+	const proxy = env.ARC_AI_PROXY?.trim() !== '0';
 	let token;
-	try {
-		token = String(readFile(tokenFile, 'utf8')).trim();
-	} catch {
-		throw new Error(`Cannot read the gateway token file ${tokenFile} (is the claude-cli gateway set up?).`);
+	if (proxy) {
+		const command = (env.ARC_AI_PROXY_KEY_COMMAND?.trim() || `${join(homedir(), '.local/bin/ccc')} proxy key`).split(/\s+/);
+		try {
+			token = keyFromOutput(runCommand(command));
+		} catch {
+			throw new Error(`The proxy key command failed (${command[0].split('/').pop()} …): is the model proxy set up on this machine?`);
+		}
+		if (!token) throw new Error('The proxy key command printed no key.');
+	} else {
+		const tokenFile =
+			env.ARC_AI_GATEWAY_TOKEN_FILE?.trim() ||
+			join(homedir(), '.local/share/arcspirits-claude-cli/laptop/token');
+		try {
+			token = String(readFile(tokenFile, 'utf8')).trim();
+		} catch {
+			throw new Error(`Cannot read the gateway token file ${tokenFile} (is the claude-cli gateway set up?).`);
+		}
+		if (!token) throw new Error(`The gateway token file ${tokenFile} is empty.`);
 	}
-	if (!token) throw new Error(`The gateway token file ${tokenFile} is empty.`);
 	return {
 		site: (env.ARC_SITE_URL?.trim() || 'https://arcspirits.com').replace(/\/+$/, ''),
 		key,
-		gatewayUrl: (env.ARC_AI_GATEWAY_URL?.trim() || 'http://127.0.0.1:4620/v1').replace(/\/+$/, ''),
+		gatewayUrl: (env.ARC_AI_GATEWAY_URL?.trim() || (proxy ? PROXY_URL : 'http://127.0.0.1:4620/v1')).replace(/\/+$/, ''),
 		token,
 		model,
-		effort: env.ARC_AI_EFFORT?.trim() || 'medium'
+		effort: env.ARC_AI_EFFORT?.trim() || 'medium',
+		proxy
 	};
 }
 
@@ -111,27 +158,52 @@ function repairMessage(error, actions) {
 	return `Your answer could not be used: ${error}. Answer again with ONE JSON object only, for example {"action": "${ids[0]}", "reason": "…"}. The action must be one of: ${range}.`;
 }
 
-/** One chat-completions call to the gateway, in the harness `gw` provider's request shape. */
-export async function callGateway(cfg, messages, fetchImpl = fetch) {
-	const res = await fetchImpl(`${cfg.gatewayUrl}/chat/completions`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json', authorization: `Bearer ${cfg.token}` },
-		body: JSON.stringify({ model: cfg.model, messages, reasoning_effort: cfg.effort }),
-		signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS)
-	});
-	const body = await res.json().catch(() => ({}));
-	if (!res.ok || body?.error) {
-		throw new Error(`gateway ${res.status}: ${String(body?.error?.message ?? 'error').slice(0, 160)}`);
+/** The model id the proxy knows: without the provider ("anthropic/claude-opus-5-5" → "claude-opus-5-5"). */
+export const proxyModel = (model) => model.replace(/^anthropic\//, '');
+/** The `X-Session-ID` of a room at the proxy: one id = one real account, so the room's seats share its prompt cache. */
+export const proxySession = (roomCode) => `arc-ai-${String(roomCode ?? 'room').replace(/[^A-Za-z0-9_-]/g, '')}`;
+
+/**
+ * One chat-completions call, in the harness `gw` provider's request shape. `session` (the proxy
+ * only): the room's session id. A proxy answer of 429 / 502 / 503 (limit reached, provider
+ * overloaded, the last live account cooling down) is sent again after a pause.
+ */
+export async function callGateway(cfg, messages, fetchImpl = fetch, session = null, sleep = (ms) => new Promise((r) => setTimeout(r, ms))) {
+	const proxy = cfg.proxy === true;
+	const headers = { 'content-type': 'application/json', authorization: `Bearer ${cfg.token}` };
+	if (proxy && session) headers['X-Session-ID'] = session;
+	const payload = {
+		model: proxy ? proxyModel(cfg.model) : cfg.model,
+		messages,
+		reasoning_effort: cfg.effort,
+		...(proxy && session ? { prompt_cache_key: session } : {})
+	};
+	for (let attempt = 0; ; attempt++) {
+		const res = await fetchImpl(`${cfg.gatewayUrl}/chat/completions`, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify(payload),
+			signal: AbortSignal.timeout(proxy ? PROXY_TIMEOUT_MS : GATEWAY_TIMEOUT_MS)
+		});
+		const body = await res.json().catch(() => ({}));
+		if (!res.ok || body?.error) {
+			if (proxy && [429, 502, 503].includes(res.status) && attempt < PROXY_RETRIES) {
+				await sleep(PROXY_RETRY_MS);
+				continue;
+			}
+			throw new Error(`gateway ${res.status}: ${String(body?.error?.message ?? 'error').slice(0, 160)}`);
+		}
+		const text = body?.choices?.[0]?.message?.content;
+		if (typeof text !== 'string') throw new Error('gateway answer has no message content');
+		return text;
 	}
-	const text = body?.choices?.[0]?.message?.content;
-	if (typeof text !== 'string') throw new Error('gateway answer has no message content');
-	return text;
 }
 
 export function createWorker(cfg, deps = {}) {
 	const fetchImpl = deps.fetch ?? fetch;
 	const log = deps.log ?? ((line) => console.log(line));
 	const now = deps.now ?? (() => Date.now());
+	const sleep = deps.sleep;
 	/** "room:seat" being answered now: one model call at a time per seat. */
 	const inFlight = new Set();
 	/** decision → time given up (a decision with no usable answer is not asked again; the
@@ -182,7 +254,7 @@ export function createWorker(cfg, deps = {}) {
 		for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 			let text;
 			try {
-				text = await callGateway(cfg, messages, fetchImpl);
+				text = await callGateway(cfg, messages, fetchImpl, proxySession(item.roomCode), sleep);
 			} catch (err) {
 				log(`[ai] ${tag}: ${err instanceof Error ? err.message : String(err)}`);
 				return false; // gateway down/busy: the site's timeout covers this decision
@@ -263,7 +335,7 @@ async function main() {
 		console.error(`[ai] ${err instanceof Error ? err.message : String(err)}`);
 		process.exit(1);
 	}
-	console.log(`[ai] worker for ${cfg.site}, model ${cfg.model} (${cfg.effort}), gateway ${cfg.gatewayUrl}`);
+	console.log(`[ai] worker for ${cfg.site}, model ${cfg.model} (${cfg.effort}), ${cfg.proxy ? 'model proxy' : 'gateway'} ${cfg.gatewayUrl}`);
 	const worker = createWorker(cfg);
 	let stopping = false;
 	for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => (stopping = true));

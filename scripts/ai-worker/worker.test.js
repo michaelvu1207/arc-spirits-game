@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { afterEach, describe, expect, test } from 'vitest';
-import { createWorker, loadConfig, pickAction } from './worker.mjs';
+import { callGateway, createWorker, loadConfig, pickAction, proxyModel, proxySession } from './worker.mjs';
 
 /** A tiny local HTTP stub: `routes[method path](body, req)` → [status, json]. */
 async function stub(routes) {
@@ -117,19 +117,72 @@ describe('ai worker', () => {
 		expect(site.calls.find((c) => c.key === 'POST /api/ai/act').body.actionId).toBe('a1');
 	});
 
-	test('config refuses a missing key and Fable models', () => {
+	test('config: the model proxy by default, its key from a command; Opus or Fable', () => {
 		const read = () => 'tok';
-		expect(() => loadConfig({}, read)).toThrow('ARC_AI_WORKER_KEY');
-		expect(() => loadConfig({ ARC_AI_WORKER_KEY: 'k', ARC_AI_MODEL: 'anthropic/claude-fable-5' }, read)).toThrow(
-			'not allowed'
-		);
-		expect(loadConfig({ ARC_AI_WORKER_KEY: 'k' }, read)).toMatchObject({
+		const run = () => '{"key": "proxy-key", "url": "https://example.invalid:8317"}\n';
+		expect(() => loadConfig({}, read, run)).toThrow('ARC_AI_WORKER_KEY');
+		expect(loadConfig({ ARC_AI_WORKER_KEY: 'k' }, read, run)).toMatchObject({
 			site: 'https://arcspirits.com',
-			gatewayUrl: 'http://127.0.0.1:4620/v1',
+			gatewayUrl: 'http://127.0.0.1:8317/v1',
 			model: 'anthropic/claude-opus-5-5',
 			effort: 'medium',
-			token: 'tok'
+			token: 'proxy-key',
+			proxy: true
 		});
+		// A bare key is accepted too, and Fable is an allowed model.
+		expect(loadConfig({ ARC_AI_WORKER_KEY: 'k', ARC_AI_MODEL: 'anthropic/claude-fable-5-2' }, read, () => 'bare-key\n')).toMatchObject({
+			model: 'anthropic/claude-fable-5-2',
+			token: 'bare-key'
+		});
+		expect(() => loadConfig({ ARC_AI_WORKER_KEY: 'k' }, read, () => { throw new Error('no ccc'); })).toThrow('proxy key command failed');
+		expect(() => loadConfig({ ARC_AI_WORKER_KEY: 'k' }, read, () => '')).toThrow('no key');
+	});
+
+	test('config: ARC_AI_PROXY=0 keeps the gateway with a token file', () => {
+		expect(loadConfig({ ARC_AI_WORKER_KEY: 'k', ARC_AI_PROXY: '0' }, () => 'tok', () => { throw new Error('not called'); })).toMatchObject({
+			gatewayUrl: 'http://127.0.0.1:4620/v1',
+			token: 'tok',
+			proxy: false
+		});
+	});
+
+	test('the proxy gets the bare model id and one session id for the room', async () => {
+		const gateway = await stub({
+			'POST /v1/chat/completions': () => [200, { choices: [{ message: { role: 'assistant', content: '{"action":"a1"}' } }] }]
+		});
+		servers.push(gateway);
+		const cfg = { gatewayUrl: `${gateway.url}/v1`, token: 'proxy-key', model: 'anthropic/claude-fable-5-2', effort: 'medium', proxy: true };
+		const text = await callGateway(cfg, [{ role: 'user', content: 'x' }], fetch, proxySession('ROOM01'));
+		expect(text).toBe('{"action":"a1"}');
+		const call = gateway.calls[0];
+		expect(call.body.model).toBe('claude-fable-5-2');
+		expect(call.body.prompt_cache_key).toBe('arc-ai-ROOM01');
+		expect(call.headers['x-session-id']).toBe('arc-ai-ROOM01');
+		expect(call.headers.authorization).toBe('Bearer proxy-key');
+		expect(proxyModel('anthropic/soon/claude-opus-5-5')).toBe('soon/claude-opus-5-5');
+	});
+
+	test('the proxy: 503 and 429 are sent again after a pause; other errors are not', async () => {
+		const statuses = [503, 429, 200];
+		const gateway = await stub({
+			'POST /v1/chat/completions': () => {
+				const status = statuses.shift();
+				return status === 200
+					? [200, { choices: [{ message: { role: 'assistant', content: 'ok' } }] }]
+					: [status, { error: { message: 'busy' } }];
+			}
+		});
+		servers.push(gateway);
+		const cfg = { gatewayUrl: `${gateway.url}/v1`, token: 't', model: 'anthropic/claude-opus-5-5', effort: 'medium', proxy: true };
+		const pauses = [];
+		const sleep = async (ms) => void pauses.push(ms);
+		expect(await callGateway(cfg, [], fetch, 'arc-ai-R', sleep)).toBe('ok');
+		expect(pauses).toEqual([15_000, 15_000]);
+		expect(gateway.calls).toHaveLength(3);
+		// A wrong model id (400) is not sent again.
+		statuses.push(400);
+		await expect(callGateway(cfg, [], fetch, 'arc-ai-R', sleep)).rejects.toThrow('gateway 400');
+		expect(gateway.calls).toHaveLength(4);
 	});
 
 	test('pickAction accepts only offered ids', () => {
