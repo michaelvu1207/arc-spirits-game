@@ -1,7 +1,6 @@
 import { nextId } from '../../rng';
 import type { PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
-import { ruleValue } from '../../rules';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Rider — "When you navigate to the Mountain Region from a different location, choose one:

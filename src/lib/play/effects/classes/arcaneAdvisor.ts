@@ -1,5 +1,4 @@
 import { isEvilAlignment } from '../../types';
-import { ruleValue } from '../../rules';
 import { runAction } from '../actions';
 import type { ClassAbility } from './types';
 

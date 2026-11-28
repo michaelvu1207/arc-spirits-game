@@ -35,7 +35,7 @@ import { buildAwakenLockedOffer, buildAwakenOffer, canAutoAwaken } from './effec
 import { applyTrigger, awakenedClassCounts } from './effects/apply';
 import { keepUnansweredRelicTools, offerHeldRelicTools } from './effects/relicTools';
 import { DECISION_RESOLVERS } from './effects/decisions';
-import { pvpAllowedAt, ruleValue, vpToWin } from './rules';
+import { pvpAllowedAt, VP_TO_WIN } from './rules';
 import { settleSidePoints } from './sidePoints';
 import { ORIGIN_CULTIVATE_KIND } from './effects/originCultivate';
 import { MASTER_CULTIVATE_KIND } from './effects/classes/master';
@@ -238,11 +238,11 @@ export function tryRevealNavigation(state: PublicGameState, catalog?: PlayCatalo
  *  only under rule `pvpInAbyss`. */
 export function encounterAggressors(
 	state: PublicGameState,
-	catalog?: Pick<PlayCatalog, 'rules'>
+	catalog?: unknown
 ): Set<SeatColor> {
 	const actors = new Set<SeatColor>();
 	for (const [dest, seats] of Object.entries(state.locationOccupancy)) {
-		if (!pvpAllowedAt(dest, catalog)) continue;
+		if (!pvpAllowedAt(dest)) continue;
 		const list = (seats ?? []) as SeatColor[];
 		const evil = list.filter((s) => isEvilAlignment(state.players[s]?.statusLevel ?? 0));
 		const good = list.filter((s) => !isEvilAlignment(state.players[s]?.statusLevel ?? 0));
@@ -663,9 +663,9 @@ export function tryAdvanceFromCleanup(state: PublicGameState, catalog?: PlayCata
 /** The first active seat at/over the VP target, in seat order, or null. */
 export function findWinner(
 	state: PublicGameState,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): SeatColor | null {
-	const target = vpToWin(catalog);
+	const target = VP_TO_WIN;
 	let best: { seat: SeatColor; vp: number } | null = null;
 	for (const seat of state.activeSeats) {
 		const vp = state.players[seat]?.victoryPoints ?? 0;

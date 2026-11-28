@@ -2,8 +2,6 @@
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
 	import type { PrivatePlayerState, SeatColor, SpectatorProjection } from '$lib/play/types';
 	import { expectedAttack } from '$lib/play/combat';
-	import { clientRules } from '$lib/play/clientRules.svelte';
-	import { ruleValue } from '$lib/play/rules';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
 	import {
 		displayName,
@@ -43,10 +41,10 @@
 					// Combat initiative — only meaningful (non-zero) during a fight; shown
 					// only when the player actually has some. Under the initiative die (rule
 					// `initiativeDie`) there is no initiative number, so nothing is shown.
-					init: ruleValue(clientRules(), 'initiativeDie') ? 0 : Math.max(0, player?.initiative ?? 0),
+					init: 0,
 					// Resting average attack of a roll (dice-tier averages + Beast
 					// bonus) — same number as the scout dice-pool readout.
-					atk: player ? expectedAttack(player as unknown as PrivatePlayerState, clientRules()) : 0,
+					atk: player ? expectedAttack(player as unknown as PrivatePlayerState) : 0,
 					barrierFull: Math.max(0, player?.barrier ?? 0),
 					barrierMax: Math.max(Math.max(0, player?.barrier ?? 0), player?.maxBarrier ?? 0),
 					icon: storageUrl(assets.guardianAssets.get(guardian)?.icon_image_path ?? null),

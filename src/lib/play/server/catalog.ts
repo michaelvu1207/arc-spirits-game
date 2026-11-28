@@ -3,7 +3,6 @@ import { currentClassName } from '../classNames';
 import { regionCatalog } from '../regionRules';
 import { fetchAssetsData, supabaseAssets, type AssetsData } from '$lib/supabase';
 import { normalizeMonsterPools } from '../monsterPools';
-import { parseRules } from '../rules';
 import { LEGACY_RELIC_TOOL_VP, relicToolVpFromAbilities } from '../effects/relicTools';
 import { normalizeAwaken, type AwakenRuneInfo } from '../awakenConditions';
 import type { PlayCatalog, PlayCatalogClass, PlayCatalogRune } from '../types';
@@ -187,18 +186,6 @@ export async function loadPlayCatalog(): Promise<PlayCatalog> {
 		/* no relics table */
 	}
 	if (relicVp !== LEGACY_RELIC_TOOL_VP) catalog.relicToolVp = relicVp;
-	// Optional rules table (rule switches, rules.ts; the local game serves rules.json as one row).
-	// Missing table, an error or only default values ⇒ no field: every rule as before.
-	try {
-		const { data, error } = await supabaseAssets.from('rules').select('*');
-		if (!error) {
-			const { rules, problems } = parseRules(data ?? []);
-			if (problems.length) console.warn(`[play catalog] ${problems.join('; ')}`);
-			if (rules) catalog.rules = rules;
-		}
-	} catch {
-		/* no rules table: default rules */
-	}
 
 	cachedCatalog = catalog;
 	cachedAt = now;

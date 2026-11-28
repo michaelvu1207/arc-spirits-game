@@ -1,5 +1,4 @@
 import { runAction } from '../actions';
-import { ruleValue } from '../../rules';
 import type { ClassAbility } from './types';
 
 // Firetail — "In a round when another player is at your location, gain 3 Initiative."

@@ -16,7 +16,6 @@
 	import { PHASE_LABELS } from '$lib/play/viewV2';
 	import { buildLocationInteractions, isAbyssSummonRow } from '$lib/play/locationInteractions';
 	import { abyssAffordance } from '$lib/play/abyssAffordance';
-	import { clientRules } from '$lib/play/clientRules.svelte';
 	import { buildMonsterRewards } from '$lib/play/monsterRewards';
 	import type { NavigationPowerId } from '$lib/play/navigationPowers';
 	import NavigationPowerPanel from './NavigationPowerPanel.svelte';
@@ -1170,7 +1169,7 @@
 	// same function on the room this seat sees until they arrive.
 	const myAbyss = $derived(
 		myAffordances?.abyss ??
-			(mySeat ? abyssAffordance(room as never, mySeat, clientRules()) : undefined) ??
+			(mySeat ? abyssAffordance(room as never, mySeat) : undefined) ??
 			null
 	);
 	// A fight uses a battle action (one a round plus a class's extra ones; the Arcane Abyss

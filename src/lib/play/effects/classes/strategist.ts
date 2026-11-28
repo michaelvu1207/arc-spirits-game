@@ -1,5 +1,4 @@
-import { isEvilAlignment, type PlayCatalog, type PrivatePlayerState } from '../../types';
-import { ruleValue } from '../../rules';
+import { isEvilAlignment, type PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility } from './types';
 
@@ -7,7 +6,7 @@ import type { ClassAbility } from './types';
 export const MONK_INITIATIVE = 5;
 /** Under rule `spiritInitiativeTrim` (Michael, 2026-11-21). */
 export const MONK_INITIATIVE_TRIMMED = 3;
-export const monkInitiative = (catalog?: Pick<PlayCatalog, 'rules'> | null): number =>
+export const monkInitiative = (catalog?: unknown): number =>
 	MONK_INITIATIVE_TRIMMED;
 export const MONK_DAMAGE_REDUCTION = 2;
 

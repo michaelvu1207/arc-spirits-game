@@ -1,5 +1,4 @@
 import { isEvilAlignment } from '../../types';
-import { ruleValue } from '../../rules';
 import type { ClassAbility } from './types';
 
 /** Feral's extra damage (when its side strikes first; against monsters always, see the rule switch). */

@@ -1,4 +1,4 @@
-import { ruleValue } from '../../rules';
+
 import type { ClassAbility, ClassHandler } from './types';
 
 /**

@@ -10,7 +10,7 @@
  * to resolve by hand — nothing silently breaks.
  */
 
-import type { DiceTier, PlayRuleSwitches } from '../types';
+import type { DiceTier } from '../types';
 
 import { CLASS_ABILITIES } from './abilities';
 import type { GameEvent } from './events';
@@ -120,9 +120,7 @@ export type EffectCondition =
 	/** True when the player's status rose at all this round (any corruption). */
 	| { kind: 'corruptedThisRound' }
 	/** True when the acting player has at least `amount` victory points. */
-	| { kind: 'vpAtLeast'; amount: number }
-	/** True when the rule switch `rule` is off in the catalog (rules.ts): a part of a class a rule removes. */
-	| { kind: 'ruleOff'; rule: keyof PlayRuleSwitches };
+	| { kind: 'vpAtLeast'; amount: number };
 
 export interface EffectBreakpoint {
 	/**

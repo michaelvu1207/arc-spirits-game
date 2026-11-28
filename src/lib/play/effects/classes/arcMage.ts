@@ -1,5 +1,4 @@
 import { nextId } from '../../rng';
-import { ruleValue } from '../../rules';
 import { DICE_TIER_ORDER, type PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { ClassAbility, ClassDecisions } from './types';

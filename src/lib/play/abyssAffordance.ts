@@ -8,8 +8,7 @@
  */
 import { abyssDrawBlockedBy, abyssDrawOrder } from './abyssDrawOrder';
 import { ABYSS_SUMMON_USED, monsterFightsLeft } from './locationInteractions';
-import { ruleValue } from './rules';
-import type { PlayCatalog, PublicGameState, SeatColor } from './types';
+import type { PublicGameState, SeatColor } from './types';
 
 export interface AbyssAffordance {
 	/**
@@ -42,7 +41,7 @@ type AbyssState = Pick<PublicGameState, 'activeSeats' | 'players' | 'round' | 'p
 export function abyssAffordance(
 	state: AbyssState,
 	seat: SeatColor,
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+	catalog?: unknown
 ): AbyssAffordance | undefined {
 	const player = state.players[seat];
 	if (!player || state.phase !== 'location' || player.navigationDestination !== 'Arcane Abyss') return undefined;

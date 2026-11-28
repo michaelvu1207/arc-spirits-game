@@ -1,5 +1,4 @@
 import { WILDCARD_MAT_IDS } from '../../awakenConditions';
-import { ruleValue } from '../../rules';
 import type { ClassAbility } from './types';
 
 // Nomad — "You may do ALL location interactions up to two times." +1 per-row

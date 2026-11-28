@@ -12,8 +12,7 @@ import {
 import { gainSpiritAugments, runAction } from '../actions';
 import { FALCONER_TRADE_ACTION } from '../awakenHandlers';
 import { runesAreWild } from '../matMatch';
-import { ruleValue } from '../../rules';
-import type { PlayCatalog, PrivatePlayerState, PublicGameState } from '../../types';
+import type { PrivatePlayerState, PublicGameState } from '../../types';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Falconer — "On awaken, gain 2 Spirit Augments of your choice. In the Location Phase, you may
@@ -141,7 +140,7 @@ export function awakeFalconerSpirit(player: PrivatePlayerState) {
 export function offerFalconerDouble(
 	state: PublicGameState,
 	player: PrivatePlayerState,
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+	catalog: unknown
 ): void {
 	const reward = player.pendingReward;
 	const falconer = awakeFalconerSpirit(player);

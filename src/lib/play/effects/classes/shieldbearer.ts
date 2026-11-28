@@ -1,4 +1,4 @@
-import { ruleValue } from '../../rules';
+
 import type { ClassAbility } from './types';
 
 /** Shieldbearer's reduction for a hit taken at full Barrier. */

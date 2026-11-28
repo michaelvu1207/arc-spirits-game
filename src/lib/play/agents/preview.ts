@@ -41,7 +41,7 @@ import {
 import { locationRowCommands } from './actionSurface';
 import type { DecisionKind } from './contract';
 import { interactionSummary, itemName } from './labels';
-import { vpToWin } from '../rules';
+import { VP_TO_WIN } from '../rules';
 
 const TRIALS = 12;
 
@@ -423,9 +423,9 @@ export function destinationPreviewLines(
 export function paceLine(
 	state: PublicGameState,
 	seat: SeatColor,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): string {
-	const target = vpToWin(catalog);
+	const target = VP_TO_WIN;
 	const vp = state.players[seat]?.victoryPoints ?? 0;
 	const roundsLeft = Math.max(1, MAX_ROUNDS - state.round + 1);
 	const need = Math.max(0, target - vp);

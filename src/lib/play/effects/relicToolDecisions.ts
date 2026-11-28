@@ -6,7 +6,6 @@
 
 import { applyTrigger } from './apply';
 import { runAction } from './actions';
-import { ruleValue } from '../rules';
 import { RELIC_TOOLS, isHeldRelicTool, relicToolVp } from './relicTools';
 import type { ClassDecisions } from './classes/types';
 

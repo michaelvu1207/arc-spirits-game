@@ -1,6 +1,5 @@
 import { runAction } from '../actions';
 import { nextId } from '../../rng';
-import { ruleValue } from '../../rules';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Healer — "When discarded, restore two barriers. On rest, if you have 10 max barrier,

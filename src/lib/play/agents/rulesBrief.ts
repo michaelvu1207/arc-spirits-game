@@ -25,7 +25,7 @@ import {
 	SPIRIT_WORLD_COST_MAX,
 	SPIRIT_WORLD_COST_MIN
 } from '../bags';
-import { diceTierFaces, PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted, pvpVpForAttack } from '../combat';
+import { DICE_TIER_FACES, pvpVpPerCorrupted } from '../combat';
 import { navigationPowerPool } from '../navigationPowers';
 import { ORIGIN_BOARD_NOTE, ORIGIN_REWARDS, RELIC_TOOLS, relicToolText, relicToolVp } from '../effects/relicTools';
 import { arcaneBloodFor, GOOD_KILL_BONUS_VP, monsterDifficulty } from '../runtime';
@@ -39,7 +39,7 @@ import {
 	type PlayCatalog
 } from '../types';
 import { destinationSummaries, interactionsAt } from './labels';
-import { INITIATIVE_DIE_SIDES, difficulty3Restore, initiativeHits, restBarrier, ruleAdjustedClassSchema, ruleValue, sacrificeMax, vpToWin } from '../rules';
+import { INITIATIVE_DIE_SIDES, difficulty3Restore, initiativeHits, restBarrier, SACRIFICE_MAX, VP_TO_WIN } from '../rules';
 
 const MAX_BARRIER_CAP = 10;
 
@@ -56,7 +56,7 @@ export function restClasses(catalog: PlayCatalog): string[] {
 }
 
 function coreRules(catalog: PlayCatalog): string {
-	const faces = (Object.entries(diceTierFaces(catalog)) as [string, number[]][])
+	const faces = (Object.entries(DICE_TIER_FACES) as [string, number[]][])
 		.map(([tier, f]) => `${tier} ${f.join(',')}`)
 		.join('; ');
 	return [
@@ -64,7 +64,7 @@ function coreRules(catalog: PlayCatalog): string {
 		"You are one player at a 2-4 player table of Arc Spirits, a digital board game. You make every decision a human player makes, through text. You see only what your seat can see: other players' secret choices, hands and draws are hidden from you.",
 		'',
 		'## Goal and end of game',
-		`- The first player with ${vpToWin(catalog)}+ Victory Points (VP) when a round ends wins (the highest if several).`,
+		`- The first player with ${VP_TO_WIN}+ Victory Points (VP) when a round ends wins (the highest if several).`,
 		`- Otherwise the game ends after round ${MAX_ROUNDS}, or when every player is Fallen${(catalog.monsters ?? []).some((m) => m.permanent) ? '' : ', or when every monster card is defeated'}; then the most VP wins (ties: seat order).`,
 		'',
 		'## A round (6 phases; you act in each, then you finish/yield it)',
@@ -78,22 +78,22 @@ function coreRules(catalog: PlayCatalog): string {
 		'',
 		'## Your resources',
 		`- Barrier is your health; Max Barrier is its capacity, at most ${MAX_BARRIER_CAP}. Damage turns Barrier into Broken Barrier.`,
-		`- Rest restores Barrier by your status (Pure ${restBarrier(catalog, 0)}, Tainted ${restBarrier(catalog, 1)}, Corrupt ${restBarrier(catalog, 2)}, Fallen ${restBarrier(catalog, 3)}; never above your Max Barrier), then fires your active "On Rest" class effects (classes with one: ${restClasses(catalog).join(', ') || 'none'}). With full Barrier and no active On Rest effect, Rest changes nothing.`,
+		`- Rest restores Barrier by your status (Pure ${restBarrier(0)}, Tainted ${restBarrier(1)}, Corrupt ${restBarrier(2)}, Fallen ${restBarrier(3)}; never above your Max Barrier), then fires your active "On Rest" class effects (classes with one: ${restClasses(catalog).join(', ') || 'none'}). With full Barrier and no active On Rest effect, Rest changes nothing.`,
 		`- Attack dice: at most ${MAX_ATTACK_DICE}; a dice gain at ${MAX_ATTACK_DICE} dice is lost (upgrades still work). An upgrade raises your lowest Basic or Enchanted die one step (Basic → Enchanted → Exalted); it never makes an Arcane die. Faces: ${faces}. Your combat damage is the sum of your rolled dice plus bonuses.`,
 		'- "Any basic rune" costs are paid with one basic rune: an origin rune (e.g. Mountain Rune) or the wild Any Rune. Relics, Spirit Augments and class runes never pay them. "Any relic" costs take a relic only.',
 		'- Location requirements: a "replace one of your Powers" action needs a Power you hold; a "gain" action works once per round; a "trade" action repeats while you can pay.',
-		`- INITIATIVE is a die, not a number. Every player has ONE initiative die with ${INITIATIVE_DIE_SIDES} sides and can never get more; no class gives initiative. At the start of every combat each player in it rolls the die. How many sides give the initiative depends on your status then: ${STATUS_LADDER.map((name, level) => `${name} ${initiativeHits(catalog, level)} of ${INITIATIVE_DIE_SIDES} (${Math.round((100 * initiativeHits(catalog, level)) / INITIATIVE_DIE_SIDES)} %)`).join(', ')}. Every die that hits is 1 initiative. In an attack on players the initiative of a side is the sum of its players' initiative: one player has 0 or 1, two players on the same side who both hit have 2. A few effects say "gain the initiative if your side does not have it": a side with 0 initiative then has 1. The side with MORE initiative attacks first, and a player it corrupts or leaves at 0 Barrier does not attack back; when both sides have the same initiative (0 and 0 too), both attack at the same time and both hits land. Monsters always have the initiative: against a monster your one die decides (see Fighting). Runes pay costs (awakening, trades). Relics are special items; relic tools are one-time items.`,
+		`- INITIATIVE is a die, not a number. Every player has ONE initiative die with ${INITIATIVE_DIE_SIDES} sides and can never get more; no class gives initiative. At the start of every combat each player in it rolls the die. How many sides give the initiative depends on your status then: ${STATUS_LADDER.map((name, level) => `${name} ${initiativeHits(level)} of ${INITIATIVE_DIE_SIDES} (${Math.round((100 * initiativeHits(level)) / INITIATIVE_DIE_SIDES)} %)`).join(', ')}. Every die that hits is 1 initiative. In an attack on players the initiative of a side is the sum of its players' initiative: one player has 0 or 1, two players on the same side who both hit have 2. A few effects say "gain the initiative if your side does not have it": a side with 0 initiative then has 1. The side with MORE initiative attacks first, and a player it corrupts or leaves at 0 Barrier does not attack back; when both sides have the same initiative (0 and 0 too), both attack at the same time and both hits land. Monsters always have the initiative: against a monster your one die decides (see Fighting). Runes pay costs (awakening, trades). Relics are special items; relic tools are one-time items.`,
 		'- Start of game: Barrier 4/4, no attack dice, four starting spirits, one Any Rune, and a choice of 1 of 3 Navigation Powers.',
 		'',
 		'## Corruption and alignment (source: engine combat.ts, docs/rules-v1.2.md)',
-		`- When a hit (after damage reduction) is equal to or larger than your current Barrier, your Barrier drops to 0 and you are Corrupted: your status moves one step down (${STATUS_LADDER.join(' → ')}), your Barrier is restored to full, and you must sacrifice spirits of your choice — 1 for your 1st corruption, 2 for the 2nd, 3 for the 3rd, 4 for the 4th${sacrificeMax(catalog) != null ? ` (and ${sacrificeMax(catalog)} for every corruption after your ${sacrificeMax(catalog)}th: it stops growing there)` : ', and one more for each corruption after that (5 for the 5th, 6 for the 6th)'}. If you are already Fallen and cannot pay in spirits, each missing spirit costs 1 VP, even below 0 (VP can go negative). Before Fallen, a part you cannot pay is forgiven.`,
+		`- When a hit (after damage reduction) is equal to or larger than your current Barrier, your Barrier drops to 0 and you are Corrupted: your status moves one step down (${STATUS_LADDER.join(' → ')}), your Barrier is restored to full, and you must sacrifice spirits of your choice — 1 for your 1st corruption, 2 for the 2nd, 3 for the 3rd, 4 for the 4th (and ${SACRIFICE_MAX} for every corruption after your ${SACRIFICE_MAX}th: it stops growing there). If you are already Fallen and cannot pay in spirits, each missing spirit costs 1 VP, even below 0 (VP can go negative). Before Fallen, a part you cannot pay is forgiven.`,
 		`- Spirit slots: ${MAX_SPIRITS} at every status; a status drop costs only that sacrifice, and you may refill to ${MAX_SPIRITS}.`,
-		`- Only Fallen is Evil. Only Evil players can attack players. ${`An Evil attacker gets ${pvpVpPerCorrupted(catalog)} VP per opponent corrupted in the attack and nothing for the attack itself.`}`,
+		`- Only Fallen is Evil. Only Evil players can attack players. An Evil attacker gets ${pvpVpPerCorrupted(catalog)} VP per opponent corrupted in the attack and nothing for the attack itself.`,
 		'',
 		'## Monsters (Arcane Abyss)',
 		`- Monster cards are in 3 decks (Difficulty 1, 2 and 3; the Barrier range of each deck is listed under Monster decks). Once per visit you may draw from one deck: you look at its TOP card and either keep it or put it back on top of that deck (the next draw from that deck, yours or another player's, reveals the same card). When you keep it you may also give up one card you hold: that card goes back on top of its own deck at full Barrier, so all damage you did to it is lost. Your monster hand holds at most 3 cards and is private; with 3 cards you may still draw, but then you can only swap or put the card back. A defeated card leaves the game; an empty deck cannot be drawn from.`,
-		...(difficulty3Restore(catalog, 3) > 0
-			? [`- DIFFICULTY 3 ABILITY: every Difficulty 3 monster restores ${difficulty3Restore(catalog, 3)} Barrier after a fight it survives (never above its full Barrier). Only the damage beyond ${difficulty3Restore(catalog, 3)} stays on the card, so a fight that deals ${difficulty3Restore(catalog, 3)} or less makes no progress, and chipping a Difficulty 3 card down over several fights costs far more hits than its Barrier suggests. Difficulty 1 and 2 cards and the permanent monster have no such ability: all damage stays on them.`]
+		...(difficulty3Restore(3) > 0
+			? [`- DIFFICULTY 3 ABILITY: every Difficulty 3 monster restores ${difficulty3Restore(3)} Barrier after a fight it survives (never above its full Barrier). Only the damage beyond ${difficulty3Restore(3)} stays on the card, so a fight that deals ${difficulty3Restore(3)} or less makes no progress, and chipping a Difficulty 3 card down over several fights costs far more hits than its Barrier suggests. Difficulty 1 and 2 cards and the permanent monster have no such ability: all damage stays on them.`]
 			: []),
 		'- DRAWING ORDER: the monster decks are shared, so the players at the Arcane Abyss draw from them one after the other: the player with the FEWEST Victory Points at the start of the round first (equal points: table order, starting one seat later each round). You wait until every player ahead of you has drawn' + ('') + ' or has ended their Location turn. Fights are not ordered: you may fight cards you already hold at any time.' + ((catalog.monsters ?? []).some((m) => m.permanent) ? ' Taking the permanent monster needs no turn.' : ''),
 		'- Fighting: choose a card from your hand. The monster always has the initiative, so you never attack before it: its hit always lands on your Barrier. You roll your initiative die. If you gain the initiative, you and the monster attack at the same time: your damage lands even when its hit corrupts you. If you do not, the monster attacks first, and if that hit corrupts you, you cannot attack back in this fight (unless your side "attacks at the same time", e.g. Sharpshooter). So when a monster\'s hit (after reductions) is at least your current Barrier, your damage only counts when you gain the initiative. Your damage lowers the card\'s Barrier; that damage stays on the card between fights. At Barrier 0 the card is defeated and you claim EVERY reward on it. ' + ('Each fight uses a battle action: you have 1 each round (Monster Hunter: 2).'),		'',
@@ -183,7 +183,7 @@ function cardText(catalog: PlayCatalog): string {
 	lines.push('', '## Classes (count in brackets → effect)');
 	for (const klass of catalog.classes) {
 		if (!used.has(klass.name)) continue;
-		const text = schemaText(ruleAdjustedClassSchema(catalog, klass.name, klass.effectSchema));
+		const text = schemaText(klass.effectSchema);
 		if (text) lines.push(`- ${klass.name}: ${text}`);
 	}
 

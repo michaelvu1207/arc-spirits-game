@@ -18,7 +18,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { normalizeMonsterPools } from '../monsterPools';
-import { parseRules } from '../rules';
 import { LEGACY_RELIC_TOOL_VP, relicToolVpFromAbilities } from '../effects/relicTools';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -227,15 +226,10 @@ export function loadLocalDesignCatalog(
 		const pools = normalizeMonsterPools(readRows(dir, 'monster_pools'));
 		if (pools.length) catalog.monsterPools = pools;
 	}
-	// Optional rule switches (rules.ts). Only switches that differ from their default are written,
-	// so a folder without the table (or with only defaults) builds the same catalog and hash. A
-	// misspelt switch fails loudly here instead of silently testing the old rule.
-	if (existsSync(join(dir, 'rules.json'))) {
-		const file = join(dir, 'rules.json');
-		const { rules, problems } = parseRules(JSON.parse(readFileSync(file, 'utf8')));
-		if (problems.length) throw new Error(`${file}: ${problems.join('; ')}`);
-		if (rules) catalog.rules = rules;
-	}
+	// One ruleset: a folder with a rules.json is the data of a balance test from before 27 November 2026 and
+	// cannot be played by this engine (see docs/rules-history-2026-11.md; the last engine with switches is 0d96e29).
+	if (existsSync(join(dir, 'rules.json')))
+		throw new Error(`${join(dir, 'rules.json')}: this engine has one ruleset and reads no rule switches. This folder holds the rules of an older balance test; replay it with the archived engine.`);
 	return regionCatalog(catalog);
 }
 

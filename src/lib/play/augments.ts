@@ -15,7 +15,6 @@
 import type { PendingAugment, PlayCatalog, PlaySpirit, PrivatePlayerState } from './types';
 import { GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 import { ARCANE_ABYSS_COST_MIN } from './bags';
-import { ruleValue } from './rules';
 
 /**
  * The canonical Spirit Augment token set. A Spirit Augment is its OWN token type
@@ -52,7 +51,7 @@ export function augmentCapacityForSpirit(_spirit: Pick<PlaySpirit, 'classes'>): 
 export function ownerAugmentCapacity(
 	player: PrivatePlayerState,
 	spirit: Pick<PlaySpirit, 'classes'> & { cost?: number },
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): number {
 	let base = augmentCapacityForSpirit(spirit);
 	// Rule `herderArcaneAugments`: with an awakened Herder, each Arcane spirit (cost 7+) holds 2.
@@ -118,7 +117,7 @@ export interface AugmentPlacementEligibility {
 export function augmentPlacementEligibility(
 	player: PrivatePlayerState,
 	augment: PendingAugment,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): AugmentPlacementEligibility {
 	const eligibleSpiritSlots: number[] = [];
 	const slotReasons: Record<number, string> = {};

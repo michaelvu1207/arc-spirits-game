@@ -8,9 +8,8 @@
  *  - Night Witch awaken ("Become Corrupted while Fallen."): progress flag when the player was
  *    already Fallen before this corruption (`wasFallen`).
  */
-import type { PlayCatalog, PrivatePlayerState } from '../types';
+import type { PrivatePlayerState } from '../types';
 import { hasAwakenedClass } from './actions';
-import { ruleValue } from '../rules';
 import { AWAKEN_PROGRESS_KEYS, AWAKEN_SPIRIT_IDS, isFallen, recordAwakenProgress } from './awakenHandlers';
 
 export const CULTIST_VP = 1;
@@ -18,7 +17,7 @@ export const CULTIST_VP = 1;
 export function applyCorruptionEffects(
 	player: PrivatePlayerState,
 	log?: string[],
-	opts: { wasFallen?: boolean; catalog?: Pick<PlayCatalog, 'rules'> | null } = {}
+	opts: { wasFallen?: boolean; catalog?: unknown } = {}
 ): void {
 	if (hasAwakenedClass(player, 'Cultist')) {
 		// Rule `cultistNoVp` (Michael, 2026-11-18): the Cultist gives no point (1 fewer sacrifice only).

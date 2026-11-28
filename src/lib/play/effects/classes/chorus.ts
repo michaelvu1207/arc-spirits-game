@@ -1,5 +1,4 @@
 import { runAction } from '../actions';
-import { ruleValue } from '../../rules';
 import type { ClassAbility } from './types';
 
 // Chorus — "When you awaken a spirit, restore 3 Barrier and gain 1 potential."

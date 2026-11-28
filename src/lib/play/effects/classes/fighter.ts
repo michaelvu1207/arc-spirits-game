@@ -1,4 +1,4 @@
-import { ruleValue } from '../../rules';
+
 import type { ClassAbility } from './types';
 
 /** Under rule `fighterInitiative`: the most initiative Fighter gives (its highest breakpoint). */
@@ -13,11 +13,11 @@ export const ability: ClassAbility[] = [
 		breakpoints: [
 			{ count: 2, actions: [{ kind: 'gainAttackDice', tier: 'basic', amount: 1 }] },
 			{ count: 3, actions: [{ kind: 'gainAttackDice', tier: 'basic', amount: 2 }] },
-			{ count: 4, actions: [{ kind: 'gainAttackDice', tier: 'basic', amount: 5 }] },
+			{ count: 4, actions: [{ kind: 'gainAttackDice', tier: 'basic', amount: 3 }] },
 			{
 				count: 5,
 				actions: [
-					{ kind: 'gainAttackDice', tier: 'basic', amount: 10 },
+					{ kind: 'gainAttackDice', tier: 'basic', amount: 5 },
 					{ kind: 'gainAugment', amount: 1 }
 				]
 			}

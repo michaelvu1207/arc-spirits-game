@@ -33,7 +33,6 @@ import type {
 } from './types';
 import { ALL_DESTINATIONS, isEvilAlignment, RUNE_CARRY_LIMIT } from './types';
 import { abyssAffordance, type AbyssAffordance } from './abyssAffordance';
-import { ruleValue } from './rules';
 import { canApply } from './legality';
 import { seatHasResolutionWork } from './phases';
 import { buildSessionProjection, encounterEvilAggressorsAt, encounterGoodTargets } from './runtime';
@@ -792,7 +791,7 @@ export function computePendingReward(
  */
 export function computeSummonReplace(
 	player: PrivatePlayerState,
-	catalog: Pick<PlayCatalog, 'rules'>
+	catalog: unknown
 ): SummonReplaceAffordance | undefined {
 	if (!(player.handDraws ?? []).some((draw) => !draw.rewardId)) return undefined;
 	const taken = new Set((player.spirits ?? []).map((spirit) => spirit.slotIndex));
@@ -810,7 +809,7 @@ export function computeEncounter(
 	state: PublicGameState,
 	player: PrivatePlayerState,
 	seat: SeatColor,
-	catalog?: Pick<PlayCatalog, 'rules'>
+	catalog?: unknown
 ): EncounterAffordance | undefined {
 	if (state.phase !== 'encounter') return undefined;
 	if (!isEvilAlignment(player.statusLevel)) return undefined;

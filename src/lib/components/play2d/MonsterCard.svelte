@@ -23,8 +23,6 @@
 		type MonsterDifficulty
 	} from './helpers';
 	import { monsterCardFace } from './monsterCardFace';
-	import { clientRules } from '$lib/play/clientRules.svelte';
-	import { ruleValue } from '$lib/play/rules';
 
 	interface Props {
 		/** Front-face data. Without a card only the back can show. */
@@ -89,9 +87,7 @@
 	 *  Under the initiative die (rule `initiativeDie`) a monster always has the initiative and
 	 *  the number means nothing, so it is not shown. */
 	const initiative = $derived(
-		typeof card?.initiative === 'number' && !ruleValue(clientRules(), 'initiativeDie')
-			? card.initiative
-			: null
+		null
 	);
 	/** The card's ability (rule `difficulty3Restores`): Barrier it restores after a fight it survives. */
 	const restores = $derived(card?.restoreAfterCombat ?? 0);

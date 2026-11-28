@@ -1,5 +1,5 @@
 import { runAction } from '../actions';
-import { fairyDiceTier } from '../../rules';
+import { FAIRY_DICE_TIER } from '../../rules';
 import type { ClassAbility, ClassHandler } from './types';
 
 /**
@@ -21,7 +21,7 @@ const fairyAwakening: ClassHandler = (ctx) => {
 		const matching = ctx.player.spirits.filter((s) =>
 			Object.keys(s.origins ?? {}).some((o) => fairyOrigins.includes(o))
 		).length;
-		if (matching > 0) runAction(ctx, { kind: 'gainAttackDice', tier: fairyDiceTier(ctx.catalog), amount: matching });
+		if (matching > 0) runAction(ctx, { kind: 'gainAttackDice', tier: FAIRY_DICE_TIER, amount: matching });
 	}
 	// "+3 Initiative" is unconditional — always granted whenever a Fairy awakens.
 	runAction(ctx, { kind: 'gainInitiative', amount: 3 });

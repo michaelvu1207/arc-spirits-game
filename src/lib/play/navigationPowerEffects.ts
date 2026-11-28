@@ -14,7 +14,6 @@ import {
 	navigationPowerById
 } from './navigationPowers';
 import { monsterFightsLeft, originRuneOptions, type ResolvedRune } from './locationInteractions';
-import { ruleValue } from './rules';
 import { SPIRIT_AUGMENT_CLASSES } from './augments';
 import { nextId, nextInt } from './rng';
 import { gainSpiritAugments, runAction } from './effects/actions';

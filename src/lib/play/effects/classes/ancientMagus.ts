@@ -1,5 +1,4 @@
 import { nextId } from '../../rng';
-import { ruleValue } from '../../rules';
 import { gainChosenRelic, relicChoiceOptions } from './cultivator';
 import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 

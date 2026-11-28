@@ -1,4 +1,4 @@
-import { ruleValue } from '../../rules';
+
 import type { ClassAbility } from './types';
 
 // The old Summoner is wired at the summon/discard boundaries in runtime.ts because both halves

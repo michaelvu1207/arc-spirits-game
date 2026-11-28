@@ -1,6 +1,4 @@
 import { isWildRune, WILDCARD_MAT_IDS } from './awakenConditions';
-import { ruleValue } from './rules';
-import type { PlayCatalog } from './types';
 
 /** Consumable powers committed alongside a navigation destination. */
 export const NAVIGATION_POWERS = [
@@ -254,7 +252,7 @@ const ALL_DEFS: NavigationPowerDef[] = [
 
 /** The Powers in play for this catalog: the 2026-11-13 set under rule `powerRework`, else the old 22. */
 export function navigationPowerPool(
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): readonly NavigationPowerDef[] {
 	const pool = V2_DEFS;
 	return pool.map((p) => ruleWording(p, catalog));
@@ -268,7 +266,7 @@ const initiativeDieWording = (power: NavigationPowerDef): NavigationPowerDef =>
 const battleActionWording = (power: NavigationPowerDef): NavigationPowerDef =>
 	power.id === 'abyssal-execution-2' ? { ...power, text: power.text.replace('This is your battle for the round.', 'This uses a battle action.') } : power;
 /** A Power in the wording of the rules in force. */
-const ruleWording = (power: NavigationPowerDef, catalog?: Pick<PlayCatalog, 'rules'> | null): NavigationPowerDef => {
+const ruleWording = (power: NavigationPowerDef, catalog?: unknown): NavigationPowerDef => {
 	const a = initiativeDieWording(power);
 	return battleActionWording(a);
 };
@@ -279,7 +277,7 @@ export function isNavigationPowerId(value: unknown): value is NavigationPowerId 
 
 export function navigationPowerById(
 	id: string | null | undefined,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): NavigationPowerDef | null {
 	const power = ALL_DEFS.find((power) => power.id === id) ?? null;
 	return power ? ruleWording(power, catalog) : power;

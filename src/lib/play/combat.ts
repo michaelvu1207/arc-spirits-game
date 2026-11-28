@@ -25,7 +25,7 @@ import { applyStatusChange } from './effects/status';
 import { applyCorruptionEffects } from './effects/corruption';
 import type { EffectCombatInfo } from './effects/context';
 import { AWAKEN_PROGRESS_KEYS, AWAKEN_SPIRIT_IDS, isFallen, recordAwakenProgress } from './effects/awakenHandlers';
-import { INITIATIVE_DIE_SIDES, initiativeHits, ruleValue, sacrificeMax, sentinelDamagePerDie } from './rules';
+import { INITIATIVE_DIE_SIDES, initiativeHits, SACRIFICE_MAX, SENTINEL_DAMAGE_PER_DIE } from './rules';
 
 /**
  * Per-combat effect flags that class effects (`inCombat`/`onTakeDamage`) set and
@@ -75,7 +75,7 @@ export function resetCombatFlags(player: PrivatePlayerState): void {
  */
 function hasSimultaneousAttack(
 	player: PrivatePlayerState,
-	catalog?: Pick<PlayCatalog, 'rules'> | null,
+	catalog?: unknown,
 	against: 'monster' | 'player' = 'monster'
 ): boolean {
 	const c = awakenedClassCounts(player);
@@ -96,7 +96,7 @@ export function useStrikeFirstCharge(
 	player: PrivatePlayerState,
 	log: string[],
 	seat?: SeatColor,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): void {
 	if ((player.strikeFirstCharges ?? 0) <= 0) return;
 	player.strikeFirstCharges = (player.strikeFirstCharges ?? 0) - 1;
@@ -115,12 +115,12 @@ export function useStrikeFirstCharge(
 export function rollInitiativeDie(
 	state: PublicGameState,
 	player: PrivatePlayerState,
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	catalog: unknown,
 	log: string[],
 	who: string
 ): boolean {
 	const roll = 1 + nextInt(state.rng, INITIATIVE_DIE_SIDES);
-	const hits = initiativeHits(catalog, player.statusLevel ?? 0);
+	const hits = initiativeHits(player.statusLevel ?? 0);
 	player.initiativeRoll = roll;
 	const hit = roll <= hits;
 	log.push(
@@ -139,7 +139,7 @@ export function useSentinelDiscard(
 	player: PrivatePlayerState,
 	log: string[],
 	seat?: SeatColor,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): void {
 	const chosen = new Set(player.sentinelDiscardIds ?? []);
 	if (chosen.size === 0) return;
@@ -149,7 +149,7 @@ export function useSentinelDiscard(
 	player.attackDice = player.attackDice.filter((die) => !chosen.has(die.instanceId));
 	const discarded = before - player.attackDice.length;
 	if (discarded === 0) return;
-	player.discardDamageBonus = discarded * sentinelDamagePerDie(catalog);
+	player.discardDamageBonus = discarded * SENTINEL_DAMAGE_PER_DIE;
 	log.push(
 		`${seat ? `${seat} ` : ''}Sentinel: discarded ${discarded} attack ${discarded === 1 ? 'die' : 'dice'} before the roll for ${player.discardDamageBonus} more damage.`
 	);
@@ -178,16 +178,12 @@ export interface TakeDamageContext {
 	vsMonster?: boolean;
 }
 
-/**
- * Numeric damage per face for each attack-dice tier. These match the live
- * `dice_sides` data (Basic 0,0,0,0,1,1 → avg .33; Enchanted; Exalted; Arcane).
- * Hard-coded here so combat is self-contained and deterministic.
- */
+/** The faces of the attack dice: Basic averages 0.33, Enchanted 0.5, Exalted 1.5, Arcane 2 (wide swings). */
 export const DICE_TIER_FACES: Record<DiceTier, number[]> = {
 	basic: [0, 0, 0, 0, 1, 1],
-	enchanted: [0, 0, 1, 1, 1, 1],
-	exalted: [0, 1, 1, 1, 1, 2],
-	arcane: [1, 2, 2, 2, 2, 3]
+	enchanted: [0, 0, 0, 1, 1, 1],
+	exalted: [1, 1, 1, 2, 2, 2],
+	arcane: [0, 0, 1, 3, 3, 5]
 };
 
 export interface FightResult {
@@ -210,51 +206,8 @@ export interface FightResult {
 	fought: MonsterState | null;
 }
 
-/**
- * The dice under rule `buffedDice` (Michael, 2026-11-20): averages 0.5 / 1 / 1.5 / 2 instead of
- * 0.33 / 0.67 / 1 / 2. The Arcane die keeps its average of 2 but swings widely: these are the
- * faces of the Arcane die in the game data (`dice_sides`).
- */
-export const BUFFED_DICE_TIER_FACES: Record<DiceTier, number[]> = {
-	basic: [0, 0, 0, 1, 1, 1],
-	enchanted: [0, 1, 1, 1, 1, 2],
-	exalted: [1, 1, 1, 2, 2, 2],
-	arcane: [0, 0, 1, 3, 3, 5]
-};
-
-/**
- * The dice under rule `weakLowDice` (Michael, 2026-11-21): Basic back at an average of 0.33 and
- * Enchanted at 0.83, the six-face average nearest below the middle of Basic and Exalted (0.92);
- * Exalted (1.5) and Arcane (2) as under `buffedDice`.
- */
-export const WEAK_LOW_DICE_TIER_FACES: Record<DiceTier, number[]> = {
-	basic: [0, 0, 0, 0, 1, 1],
-	enchanted: [0, 0, 1, 1, 1, 2],
-	exalted: BUFFED_DICE_TIER_FACES.exalted,
-	arcane: BUFFED_DICE_TIER_FACES.arcane
-};
-
-/** Under `weakLowDice` with the rule `enchantedTwoThirds` (Michael, 2026-11-22): Enchanted 0,0,1,1,1,1 (0.67), not 0.83. */
-export const TWO_THIRDS_DICE_TIER_FACES: Record<DiceTier, number[]> = {
-	...WEAK_LOW_DICE_TIER_FACES,
-	enchanted: [0, 0, 1, 1, 1, 1]
-};
-
-/** The faces of the attack dice: Basic averages 0.33, Enchanted 0.5, Exalted 1.5, Arcane 2. */
-export const OFFICIAL_DICE_TIER_FACES: Record<DiceTier, number[]> = {
-	basic: [0, 0, 0, 0, 1, 1],
-	enchanted: [0, 0, 0, 1, 1, 1],
-	exalted: [1, 1, 1, 2, 2, 2],
-	arcane: [0, 0, 1, 3, 3, 5]
-};
-
-/** The faces of each attack-dice tier. */
-export function diceTierFaces(catalog?: Parameters<typeof ruleValue>[0]): Record<DiceTier, number[]> {
-	return OFFICIAL_DICE_TIER_FACES;
-}
-
-function rollTier(state: PublicGameState, tier: DiceTier, catalog?: Parameters<typeof ruleValue>[0]): number {
-	const faces = diceTierFaces(catalog)[tier];
+function rollTier(state: PublicGameState, tier: DiceTier, catalog?: unknown): number {
+	const faces = DICE_TIER_FACES[tier];
 	return faces[nextInt(state.rng, faces.length)];
 }
 
@@ -270,7 +223,7 @@ export function takeDamage(
 	ctx?: TakeDamageContext,
 	log?: string[],
 	/** Catalog read only for rule switches (`fallenDebtBelowZero`) when `ctx` has none. */
-	rulesCatalog?: Pick<PlayCatalog, 'rules'>,
+	rulesCatalog?: unknown,
 	/** `sacrificeCap` (rule `pvpAttackerSacrificeCap`): a corruption from this hit owes at most this. */
 	opts?: { sacrificeCap?: number }
 ): { corrupted: boolean; barrierLost: number; discarded: number; deflected: number } {
@@ -381,7 +334,7 @@ export function takeDamage(
 			wasFallen: oldStatus === STATUS_LADDER.length - 1,
 			vpBelowZero: true,
 			...(sacrificeCap != null ? { maxOwed: sacrificeCap } : {}),
-			maxCount: sacrificeMax(ctx?.catalog ?? rulesCatalog)
+			maxCount: SACRIFICE_MAX
 		});
 		if (sacrificeCap != null && (player.corruptionCount ?? 0) > sacrificeCap) {
 			log?.push(
@@ -413,7 +366,7 @@ export function takeDamage(
 export function rollAttack(
 	state: PublicGameState,
 	player: PrivatePlayerState,
-	catalog?: Parameters<typeof ruleValue>[0]
+	catalog?: unknown
 ): number {
 	const rollOnce = (): number => {
 		let total = 0;
@@ -446,9 +399,9 @@ export function rollAttack(
  * Situational modifiers (Woundreaver, Paladin) are excluded. Shared by the
  * scout dice-pool readout and the leaderboard so they always agree.
  */
-export function expectedAttack(player: PrivatePlayerState, catalog?: Parameters<typeof ruleValue>[0]): number {
+export function expectedAttack(player: PrivatePlayerState, catalog?: unknown): number {
 	let dice = 0;
-	const tiers = diceTierFaces(catalog);
+	const tiers = DICE_TIER_FACES;
 	for (const die of player.attackDice) {
 		const faces = tiers[die.tier];
 		dice += faces.reduce((a, b) => a + b, 0) / faces.length;
@@ -915,7 +868,7 @@ export const PVP_ENGAGE_VP = 2;
 /** `pvpPaysOnCorrupt`: the Evil attacker's VP per Good player corrupted. */
 export const PVP_VP_PER_CORRUPTED = 3;
 /** `pvpPaysOnCorrupt`: that amount under the rules of `catalog` (4 with `pvpCorruptPays4`). */
-export function pvpVpPerCorrupted(catalog: Parameters<typeof ruleValue>[0]): number {
+export function pvpVpPerCorrupted(catalog: unknown): number {
 	return PVP_VP_PER_CORRUPTED;
 }
 /** `pvpPaysOnCorrupt`: each Good player's VP per Evil attacker corrupted in the exchange. */

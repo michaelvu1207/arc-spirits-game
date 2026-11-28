@@ -21,15 +21,7 @@ import { monsterBarrierLeft } from '../combat';
 import { canApply } from '../legality';
 import { buildMonsterRewards } from '../monsterRewards';
 import { botActorFor, computeKillProbability } from '../server/botPolicy';
-import type {
-	GameCommand,
-	MonsterState,
-	PlayCatalog,
-	PlayCatalogMonster,
-	PublicGameState,
-	RuntimeBagEntry,
-	SeatColor
-} from '../types';
+import type { GameCommand, MonsterState, PlayCatalog, PublicGameState, RuntimeBagEntry, SeatColor } from '../types';
 
 /** A drawn card must be at least this likely a kill before the bot reaches for a harder deck. */
 const LIKELY_KILL = 0.5;

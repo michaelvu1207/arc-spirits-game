@@ -1,7 +1,6 @@
 import { nextId } from '../../rng';
 import { runAction } from '../actions';
 import { cameFromMountain } from './rider';
-import { ruleValue } from '../../rules';
 import { placedAugmentTotal } from '../../augments';
 import type { ClassAbility, ClassDecisions } from './types';
 

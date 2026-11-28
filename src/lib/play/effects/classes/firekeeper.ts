@@ -1,5 +1,5 @@
 import { nextId } from '../../rng';
-import { sentinelDamagePerDie } from '../../rules';
+import { SENTINEL_DAMAGE_PER_DIE } from '../../rules';
 import type { ClassAbility, ClassDecisions, ClassHandler } from './types';
 
 // Sentinel — "Before you roll in combat, you may discard attack dice. For each dice that you
@@ -16,7 +16,7 @@ export const SENTINEL_DISCARD_KIND = 'sentinelDiscard';
 
 const offerDiscardChoice: ClassHandler = (ctx) => {
 	const { player, state, log } = ctx;
-	const perDie = sentinelDamagePerDie(ctx.catalog);
+	const perDie = SENTINEL_DAMAGE_PER_DIE;
 	player.pendingDecisions = (player.pendingDecisions ?? []).filter(
 		(d) => d.kind !== SENTINEL_DISCARD_KIND
 	);
@@ -49,7 +49,7 @@ export const decisions: ClassDecisions = {
 		ctx.player.sentinelDiscardIds = chosen;
 		ctx.log.push(
 			chosen.length > 0
-				? `Sentinel: ${chosen.length} attack ${chosen.length === 1 ? 'die' : 'dice'} will be discarded before your next combat roll (+${chosen.length * sentinelDamagePerDie(ctx.catalog)} damage).`
+				? `Sentinel: ${chosen.length} attack ${chosen.length === 1 ? 'die' : 'dice'} will be discarded before your next combat roll (+${chosen.length * SENTINEL_DAMAGE_PER_DIE} damage).`
 				: 'Sentinel: no attack dice will be discarded.'
 		);
 	}

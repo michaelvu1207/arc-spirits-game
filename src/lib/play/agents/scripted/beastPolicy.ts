@@ -16,10 +16,10 @@
 import { CLASS_ABILITIES } from '../../effects/abilities';
 import { awakenedClassCounts, cultivateRuneMultiplier } from '../../effects/apply';
 import { selectBreakpoint, type EffectBreakpoint } from '../../effects/registry';
-import { diceTierFaces, expectedAttack } from '../../combat';
+import { DICE_TIER_FACES, expectedAttack } from '../../combat';
 import { SPIRIT_WORLD_BAG } from '../../bags';
 import { buildMonsterRewards } from '../../monsterRewards';
-import { restBarrier, ruleAdjustedActions, vpToWin } from '../../rules';
+import { restBarrier, VP_TO_WIN } from '../../rules';
 import { summonDrawSizes } from '../../runtime';
 import { SPIRIT_WORLD_REWARD_IDS } from '../../spiritWorldRewards';
 import {
@@ -195,12 +195,7 @@ function classAmount(
 ): number {
 	const selected = selectBreakpoint(breakpointsOf(className, trigger), count);
 	if (!selected) return 0;
-	const actions = ruleAdjustedActions(
-		catalog,
-		className,
-		selected.bp.count,
-		selected.bp.actions as Action[]
-	);
+	const actions = selected.bp.actions as Action[];
 	return actions.reduce(
 		(n, a) => n + (a.kind === kind ? (a.amount ?? 0) * selected.multiplier : 0),
 		0
@@ -381,7 +376,7 @@ export function beastSituation(
 	params: BeastParams = DEFAULT_BEAST_PARAMS
 ): BeastSituation {
 	const me = view.players[seat] as Me;
-	const faces = diceTierFaces(catalog);
+	const faces = DICE_TIER_FACES;
 	const mean = Object.fromEntries(
 		(Object.keys(faces) as DiceTier[]).map((t) => [
 			t,
@@ -423,8 +418,8 @@ export function beastSituation(
 	}
 	const overkill = overkillRule();
 	const rules: PlanRules = {
-		target: vpToWin(catalog),
-		heal: restBarrier(catalog, me.statusLevel ?? 0),
+		target: VP_TO_WIN,
+		heal: restBarrier(me.statusLevel ?? 0),
 		maxBarrierCap: MAX_BARRIER_CAP,
 		carry: RUNE_CARRY_LIMIT,
 		handLimit: MONSTER_HAND_LIMIT,

@@ -4,7 +4,7 @@
  */
 
 import { awakenedClassCounts } from '../../effects/apply';
-import { diceTierFaces, expectedAttack } from '../../combat';
+import { DICE_TIER_FACES, expectedAttack } from '../../combat';
 import type {
 	DiceTier,
 	PlayCatalog,
@@ -104,7 +104,7 @@ class RecordingSeat implements SeatController {
 		this.label = inner.label;
 		this.modelId = inner.modelId;
 		this.#catalog = catalog;
-		const faces = diceTierFaces(catalog);
+		const faces = DICE_TIER_FACES;
 		this.#means = Object.fromEntries(
 			TIERS.map((t) => [t, (faces[t] ?? [0]).reduce((a, b) => a + b, 0) / (faces[t]?.length || 1)])
 		) as Record<DiceTier, number>;

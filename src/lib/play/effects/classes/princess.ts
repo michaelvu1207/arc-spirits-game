@@ -1,5 +1,4 @@
 import { WILDCARD_MAT_IDS } from '../../awakenConditions';
-import { ruleValue } from '../../rules';
 import { isEvilAlignment } from '../../types';
 import type { ClassAbility } from './types';
 

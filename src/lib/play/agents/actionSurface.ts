@@ -41,7 +41,6 @@ import { isNavigationPowerRune } from '../navigationPowers';
 import { getPowerAutoCommand } from '../navigationPowerProgress';
 import { applyGameCommand } from '../runtime';
 import { botActorFor } from '../server/botPolicy';
-import { ruleValue } from '../rules';
 import {
 	ALL_DESTINATIONS,
 	DICE_TIER_ORDER,

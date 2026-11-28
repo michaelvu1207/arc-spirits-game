@@ -1,18 +1,5 @@
-/**
- * Rule `abyssDrawByPoints` (Michael, 2026-11-22: "have least points to greatest player draw in that
- * order"): the monster decks are shared and limited, so the players at the Arcane Abyss draw from
- * them one after the other, the player with the fewest points first.
- *
- * - The points are those a player had when the round began (the snapshot of the last Cleanup; 0 in
- *   round 1), so a kill made earlier in the same Location step does not change the order.
- * - Equal points: table order, starting one seat later each round.
- * - A player ahead stops holding the others back once they have drawn and kept a card, hold three
- *   cards (not under rule `monsterDrawOne`, where a full hand may still draw), or have ended their
- *   Location turn. Taking the permanent monster is not a deck draw: it
- *   needs no turn and counts as that player's draw of the visit.
- */
-import { ruleValue } from './rules';
-import type { PlayCatalog, PublicGameState, SeatColor } from './types';
+
+import type { PublicGameState, SeatColor } from './types';
 
 /** The players at the Arcane Abyss this round in drawing order (fewest points at the start of the round first). */
 export function abyssDrawOrder(state: Pick<PublicGameState, 'activeSeats' | 'players' | 'round'>): SeatColor[] {
@@ -31,7 +18,7 @@ export function abyssDrawOrder(state: Pick<PublicGameState, 'activeSeats' | 'pla
  * the order who may still draw), or null when `seat` may draw now. Always null with the rule off.
  */
 export function abyssDrawBlockedBy(
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	catalog: unknown,
 	state: Pick<PublicGameState, 'activeSeats' | 'players' | 'round' | 'phase'>,
 	seat: SeatColor
 ): SeatColor | null {

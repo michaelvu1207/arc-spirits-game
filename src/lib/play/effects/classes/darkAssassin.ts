@@ -1,4 +1,4 @@
-import { ruleValue } from '../../rules';
+
 import type { ClassAbility } from './types';
 
 /** Paladin's Initiative: 4, or 2 under rule `spiritInitiativeTrim` (Michael, 2026-11-21). */

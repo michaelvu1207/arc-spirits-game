@@ -15,7 +15,6 @@
  */
 
 import { nextId } from '../rng';
-import { ruleValue } from '../rules';
 import type { PlayCatalog, PlaySpirit, PrivatePlayerState, PublicGameState } from '../types';
 
 export const FIRECRACKER_ID = '8a0d54ca-aeab-405c-9e5c-1c1425d1aa86';
@@ -48,12 +47,12 @@ export function relicToolVp(catalog?: { relicToolVp?: number } | null): number {
 }
 
 /** The relic text for a VP value: "You may [gain N VP or ]<ability>, then discard this." */
-export function relicToolText(tool: RelicTool, vp: number, catalog?: Pick<PlayCatalog, 'rules'> | null): string {
+export function relicToolText(tool: RelicTool, vp: number, catalog?: unknown): string {
 	return `You may ${vp > 0 ? `gain ${vp} VP or ` : ''}${relicToolWording(tool, catalog).ability}, then discard this.`;
 }
 
 /** Rule `initiativeDie`: Firecracker in the new wording ("gain the initiative", never "strike first"). */
-export function relicToolWording(tool: RelicTool, catalog?: Pick<PlayCatalog, 'rules'> | null): RelicTool {
+export function relicToolWording(tool: RelicTool, catalog?: unknown): RelicTool {
 	if (tool.effect !== 'strikeFirst') return tool;
 	return {
 		...tool,
@@ -192,7 +191,7 @@ export function offerHeldRelicTools(
 	state: PublicGameState,
 	player: PrivatePlayerState,
 	log: string[],
-	catalog?: (Pick<PlayCatalog, 'rules'> & { relicToolVp?: number; spirits?: PlayCatalog['spirits'] }) | null
+	catalog?: ({ relicToolVp?: number; spirits?: PlayCatalog['spirits'] }) | null
 ): void {
 	const vp = relicToolVp(catalog);
 	player.pendingDecisions = (player.pendingDecisions ?? []).filter((d) => d.kind !== 'relicTool');

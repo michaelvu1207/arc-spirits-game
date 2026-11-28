@@ -1,4 +1,4 @@
-import { ruleValue } from '../../rules';
+
 import type { ClassAbility } from './types';
 
 /** Assassin's extra damage when it strikes first. */

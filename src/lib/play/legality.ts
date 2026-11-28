@@ -36,7 +36,6 @@ import type {
 } from './types';
 import { ABYSS_SUMMON_USED, buildLocationInteractions, isAbyssSummonRow, matchRewardCost, monsterFightsLeft } from './locationInteractions';
 import { runesAreWild } from './effects/matMatch';
-import { ruleValue } from './rules';
 import { abyssDrawBlockedBy } from './abyssDrawOrder';
 import { navigationPowerBlockers } from './navigationPowerEffects';
 

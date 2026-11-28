@@ -13,7 +13,7 @@
  */
 
 import { awakenedClassCounts } from '../../effects/apply';
-import { diceTierFaces } from '../../combat';
+import { DICE_TIER_FACES } from '../../combat';
 import {
 	ELEMENTALIST_METHOD_AT,
 	elementalistKillUpgrades,
@@ -26,12 +26,7 @@ import { CLASS_EFFECTS, selectBreakpoint, type EffectTrigger } from '../../effec
 import { ORIGIN_REWARDS, spiritsByOrigin } from '../../effects/relicTools';
 import { isRelic, meaningFor } from '../../locationInteractions';
 import { buildMonsterRewards } from '../../monsterRewards';
-import {
-	elementalistUpgradeAction,
-	restBarrier,
-	ruleAdjustedActions,
-	ruleValue
-} from '../../rules';
+import { restBarrier } from '../../rules';
 import { arcaneBloodFor } from '../../runtime';
 import type {
 	AttackDie,
@@ -184,7 +179,7 @@ export function situationOf(
 ): Situation {
 	const me = view.players[seat] as Me;
 	const counts = awakenedClassCounts(me as PrivatePlayerState);
-	const faces = diceTierFaces(catalog);
+	const faces = DICE_TIER_FACES;
 	const mean = Object.fromEntries(
 		(Object.keys(faces) as DiceTier[]).map((t) => [
 			t,
@@ -217,7 +212,7 @@ export function situationOf(
 /** Sum of the `kind` amounts a class gives on `trigger` at `count` traits, under the catalog's rules
  *  (the engine's declarative breakpoints, with `ruleAdjustedActions`). */
 export function classAmount(
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	catalog: unknown,
 	className: string,
 	trigger: EffectTrigger,
 	count: number,
@@ -229,7 +224,7 @@ export function classAmount(
 		if (effect.trigger !== trigger) continue;
 		const sel = selectBreakpoint(effect.breakpoints, count);
 		if (!sel) continue;
-		for (const a of ruleAdjustedActions(catalog, className, sel.bp.count, sel.bp.actions)) {
+		for (const a of sel.bp.actions) {
 			if (a.kind !== kind) continue;
 			const amount = (a as { amount?: number }).amount;
 			n += (typeof amount === 'number' ? amount : 1) * sel.multiplier;
@@ -239,7 +234,7 @@ export function classAmount(
 }
 
 /** Basic Attack dice a Rest gives at this Fighter count (as the engine computes them). */
-export function restDice(fighter: number, catalog?: Pick<PlayCatalog, 'rules'> | null): number {
+export function restDice(fighter: number, catalog?: unknown): number {
 	return classAmount(catalog, 'Fighter', 'onRest', fighter, 'gainAttackDice');
 }
 
@@ -251,7 +246,7 @@ function restAugments(s: Situation, fighter = s.fighter): number {
 /** Max Barrier a Cultivate gives at this Cultivator count. */
 export function cultivateMaxBarrier(
 	cultivator: number,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): number {
 	return classAmount(catalog, 'Cultivator', 'onCultivate', cultivator, 'gainMaxBarrier');
 }
@@ -306,7 +301,7 @@ export function elementalistUpgrades(
 	kill?: { difficulty?: number; permanent?: boolean }
 ): number {
 	// The ladder rule: one action upgrades (Rest, or Cultivate under `elementalistOnCultivate`).
-	const ladderAction = elementalistUpgradeAction(catalog);
+	const ladderAction = 'cultivate';
 	if (ladderAction) {
 		if (action !== ladderAction) return 0;
 		return elementalistRestUpgrades(catalog, count, {
@@ -335,7 +330,7 @@ function upgradesPerBlood(s: Situation): number {
 /** Extra upgrades per upgrading action (Rest or Cultivate, as the rules say) a held relic gives at
  *  `count` Elementalists (0 unless the rules gate a step on a relic). */
 export function relicRestGain(catalog: PlayCatalog, count: number): number {
-	const action = elementalistUpgradeAction(catalog) ?? 'rest';
+	const action = 'cultivate';
 	return (
 		elementalistUpgrades(catalog, action, count, true) -
 		elementalistUpgrades(catalog, action, count, false)
@@ -768,7 +763,7 @@ export function bestAbyssFight(
 // ───────────────────────────── locations ─────────────────────────────
 
 function restHeal(s: Situation, barrier = s.me.barrier): number {
-	const heal = restBarrier(s.catalog, s.me.statusLevel ?? 0);
+	const heal = restBarrier(s.me.statusLevel ?? 0);
 	return Math.max(0, Math.min(s.me.maxBarrier, barrier + heal) - barrier);
 }
 

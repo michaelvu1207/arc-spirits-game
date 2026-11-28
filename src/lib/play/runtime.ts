@@ -3,127 +3,37 @@ import { REGION_ACTIONS_VERSION, upgradeRegionActionUses } from './regionRules';
 import { regionText } from './regions';
 import { WILDCARD_MAT_IDS } from './awakenConditions';
 import { currentClassCounts, currentClassName } from './classNames';
-import {
-	isNavigationPowerId,
-	isNavigationPowerRune,
-	navigationPowerPool,
-	type NavigationPowerId
-} from './navigationPowers';
-import {
-	resolveNavigationPowerChoice,
-	refreshNavigationPowerOffers,
-	navigationPowerBlockers
-} from './navigationPowerEffects';
+import { isNavigationPowerId, isNavigationPowerRune, navigationPowerPool, type NavigationPowerId } from './navigationPowers';
+import { resolveNavigationPowerChoice, refreshNavigationPowerOffers, navigationPowerBlockers } from './navigationPowerEffects';
 import { proposePowerTrade, respondPowerTrade } from './navigationPowerTrades';
 import type { BagsData } from '$lib/types';
-import type {
-	CommandResult,
-	DiceType,
-	GameActor,
-	GameCommand,
-	HistorySnapshotRow,
-	BagSpiritSummary,
-	LobbySeatState,
-	MonsterPoolRow,
-	PlayCatalog,
-	PlayCatalogDie,
-	PlayCatalogRune,
-	PlayCatalogSpirit,
-	PlayCatalogMonster,
-	PlayerProjection,
-	PlaySpirit,
-	PendingRewardState,
-	PrivatePlayerState,
-	PublicGameState,
-	RuntimeBagEntry,
-	RuntimeBagsState,
-	SeatColor,
-	SpiritSourceBag,
-	SpectatorProjection,
-	MonsterDeckSummary,
-	MonsterState
-} from './types';
-import {
-	SEAT_COLORS,
-	SPIRIT_WORLD_LOCATIONS,
-	ALL_DESTINATIONS,
-	RUNE_CARRY_LIMIT,
-	DEFAULT_NAVIGATION_DURATION_MS,
-	DEADLINE_EXTENSION_MS,
-	DEADLINE_MAX_EXTENSIONS,
-	phaseDurationMs
-} from './types';
+import type { CommandResult, GameActor, GameCommand, HistorySnapshotRow, BagSpiritSummary, LobbySeatState, MonsterPoolRow, PlayCatalog, PlayCatalogDie, PlayCatalogRune, PlayCatalogSpirit, PlayCatalogMonster, PlayerProjection, PlaySpirit, PrivatePlayerState, PublicGameState, RuntimeBagEntry, RuntimeBagsState, SeatColor, SpiritSourceBag, SpectatorProjection, MonsterDeckSummary, MonsterState } from './types';
+import { SEAT_COLORS, SPIRIT_WORLD_LOCATIONS, ALL_DESTINATIONS, RUNE_CARRY_LIMIT, DEFAULT_NAVIGATION_DURATION_MS, DEADLINE_EXTENSION_MS, DEADLINE_MAX_EXTENSIONS, phaseDurationMs } from './types';
 import { createRng, hashString, nextId, nextInt, type RngState } from './rng';
 import { applySpiritWorldReward, rewardEntries, type SpiritWorldRewardId } from './spiritWorldRewards';
 import { hashGameState } from './stateHash';
-import { cursedSpiritDiceTier, difficulty3Restore, pvpAllowedAt, ruleValue, sacrificeMax } from './rules';
+import { CURSED_SPIRIT_DICE_TIER, difficulty3Restore, pvpAllowedAt, SACRIFICE_MAX } from './rules';
 import { abyssDrawBlockedBy } from './abyssDrawOrder';
-import {
-	bagForSpiritCost,
-	deckCopiesForCost,
-	shuffleBag,
-	SPIRIT_WORLD_BAG,
-	ARCANE_ABYSS_BAG
-} from './bags';
-import {
-	initRoundLoop,
-	tryAdvanceFromLocation,
-	tryAdvanceFromBenefits,
-	tryAdvanceFromAwakening,
-	tryAdvanceFromCleanup,
-	tryAdvanceFromEncounter,
-	recomputeAwakenEligibility,
-	autoAdvanceResolution,
-	seatHasResolutionWork,
-	forceAdvancePhase as forceAdvancePhaseMachine
-} from './phases';
-import {
-	resetCombatFlags,
-	takeDamage,
-	fightMonster,
-	pvpVpForAttack,
-	pvpGoodBounty,
-	pvpVpPerCorrupted,
-	resolveEncounterCombat
-} from './combat';
+import { bagForSpiritCost, deckCopiesForCost, shuffleBag, SPIRIT_WORLD_BAG, ARCANE_ABYSS_BAG } from './bags';
+import { initRoundLoop, tryAdvanceFromLocation, tryAdvanceFromBenefits, tryAdvanceFromAwakening, tryAdvanceFromCleanup, tryAdvanceFromEncounter, recomputeAwakenEligibility, autoAdvanceResolution, seatHasResolutionWork, forceAdvancePhase as forceAdvancePhaseMachine } from './phases';
+import { resetCombatFlags, takeDamage, fightMonster, pvpVpForAttack, pvpGoodBounty, pvpVpPerCorrupted, resolveEncounterCombat } from './combat';
 import { applyTrigger, applyCultivate, applyRest, awakenedClassCounts } from './effects/apply';
 import { gainSpiritAugments, runAction, GENERIC_AUGMENT_RUNE_ID } from './effects/actions';
 import { ownerAugmentCapacity, isSpiritAugmentClass } from './augments';
-import {
-	buildLocationInteractions,
-	matchRewardCost,
-	originRuneOptions,
-	type ResolvedRune,
-	type GainEffect,
-	ABYSS_SUMMON_USED,
-	monsterFightsLeft,
-	isAbyssSummonRow
-} from './locationInteractions';
+import { buildLocationInteractions, matchRewardCost, originRuneOptions, type ResolvedRune, type GainEffect, ABYSS_SUMMON_USED, monsterFightsLeft, isAbyssSummonRow } from './locationInteractions';
 import { buildMonsterRewards, rewardClaimCount } from './monsterRewards';
 import { noteMonsterPoints, settleSidePoints } from './sidePoints';
 import { applyStatusChange } from './effects/status';
 import { buildEffectContext } from './effects/context';
 import { DECISION_RESOLVERS } from './effects/decisions';
 import { FALCONER_DOUBLE_KIND, awakeFalconerSpirit, offerFalconerDouble } from './effects/classes/falconer';
-import { ELEMENTALIST_METHOD_AT, elementalistUpgradesPerAction } from './effects/classes/elementalist';
-import { upgradeDice } from './effects/actions';
 import { RELIC_TOOLS, grantRelicTool, keepUnansweredRelicTools } from './effects/relicTools';
 import { decisionPickerSpec, validateDecisionSelection } from './decisionPicker';
 import { checkAwakenCondition, payAwakenCondition, needsManualAwaken } from './effects/awaken';
 import { runesAreWild } from './effects/matMatch';
 import { applyCorruptionEffects, recordSacrifice } from './effects/corruption';
-import {
-	AWAKEN_HANDLERS,
-	AWAKEN_PROGRESS_KEYS,
-	AWAKEN_SPIRIT_IDS,
-	MANUAL_AWAKEN
-} from './effects/awakenHandlers';
-import {
-	STATUS_LADDER,
-	isEvilAlignment,
-	setCorruptionDiscardObligation,
-	settleUnpayableCorruptionDebt
-} from './types';
+import { AWAKEN_PROGRESS_KEYS, AWAKEN_SPIRIT_IDS } from './effects/awakenHandlers';
+import { STATUS_LADDER, isEvilAlignment, setCorruptionDiscardObligation, settleUnpayableCorruptionDebt } from './types';
 
 const EMPTY_BAG = Object.freeze({
 	count: 0,
@@ -524,7 +434,7 @@ function returnHandDrawsToBags(state: PublicGameState, player: PrivatePlayerStat
  *  Arcane Abyss: draw 3, summon 1; rule `abyssSummonDraw4Pick2`: draw 4, summon 2. */
 export function summonDrawSizes(
 	sourceBag: SpiritSourceBag,
-	catalog?: Pick<PlayCatalog, 'rules'> | null,
+	catalog?: unknown,
 	player?: Pick<PrivatePlayerState, 'navigationPower' | 'navigationDestination'> | null
 ): { draw: number; pick: number } {
 	if (sourceBag !== ARCANE_ABYSS_BAG) {
@@ -538,7 +448,7 @@ export function summonDrawSizes(
 }
 
 /** The log line of an Arcane Abyss Summon, with the sizes of the rule in force. */
-function abyssSummonLogLine(catalog?: Pick<PlayCatalog, 'rules'> | null): string {
+function abyssSummonLogLine(catalog?: unknown): string {
 	const { draw, pick } = summonDrawSizes(ARCANE_ABYSS_BAG, catalog);
 	return `Summon from the Arcane Abyss — draw ${draw}, summon up to ${pick}.`;
 }
@@ -594,7 +504,7 @@ function startDraw(
  */
 function elementalistSpiritWorldSummon(
 	player: PrivatePlayerState,
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	catalog: unknown,
 	log: string[]
 ): void {
 	return;
@@ -603,7 +513,7 @@ function elementalistSpiritWorldSummon(
 /** Rule `permanentRewardChoice`: the claim of this kill gives one reward of the card, the player's choice. */
 export function rewardChoiceOf(
 	monster: { permanent?: boolean; rewardTrack: string[] },
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): boolean {
 	return (
 		monster.permanent === true &&
@@ -617,7 +527,7 @@ export const ARCANE_BLOOD_BY_DIFFICULTY: Record<1 | 2 | 3, number> = { 1: 1, 2: 
 /** Rule `arcaneBlood`: the Arcane Blood the kill of `monster` offers in place of its rewards; undefined with the rule off. */
 export function arcaneBloodFor(
 	monster: { difficulty?: number; permanent?: boolean },
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+	catalog: unknown
 ): number | undefined {
 	return undefined;
 }
@@ -630,7 +540,7 @@ export function arcaneBloodFor(
 function gainArcaneBlood(
 	player: PrivatePlayerState,
 	amount: number,
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	catalog: unknown,
 	log: string[]
 ): void {
 	log.push(`Gained ${amount} Arcane Blood.`);
@@ -643,7 +553,7 @@ function queueOrBeginDraw(
 	player: PrivatePlayerState,
 	sourceBag: SpiritSourceBag,
 	autoAwaken = false,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ) {
 	const sizes = summonDrawSizes(sourceBag, catalog, player);
 	if (player.pendingDraw || player.handDraws.length > 0) {
@@ -887,7 +797,7 @@ function applyAwakenRewardClaim(
 			const dice = grant.amount - maxBarrier;
 			if (maxBarrier > 0) runAction(ctx, { kind: 'gainMaxBarrier', amount: maxBarrier });
 			if (dice > 0)
-				runAction(ctx, { kind: 'gainAttackDice', tier: cursedSpiritDiceTier(catalog), amount: dice });
+				runAction(ctx, { kind: 'gainAttackDice', tier: CURSED_SPIRIT_DICE_TIER, amount: dice });
 		} else if (grant.kind === 'corruptChoice') {
 			const maxBarrier = Math.max(0, Math.min(grant.amount, corruptMaxBarrier));
 			const runeCount = grant.amount - maxBarrier;
@@ -1406,7 +1316,7 @@ function makeGameId(rng: RngState, now = new Date()): string {
  *  a Barrier edit never moves a card to another deck. */
 export function monsterDifficulty(
 	monster: { barrier: number; stage?: number },
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): 1 | 2 | 3 {
 	if (catalog && (monster.stage === 1 || monster.stage === 2 || monster.stage === 3))
 		return monster.stage;
@@ -1426,7 +1336,7 @@ function monsterCardName(name: string, difficulty: 1 | 2 | 3): string {
 /** A monster card in play. Its catalog `barrier` (damage to defeat it) is tracked in hp/maxHp. */
 export function monsterCardFromCatalog(
 	monster: PlayCatalogMonster,
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): MonsterState {
 	const difficulty = monsterDifficulty(monster, catalog);
 	return {
@@ -1446,7 +1356,7 @@ export function monsterCardFromCatalog(
 		// Under rule `initiativeDie` a monster has no number: it always has the initiative.
 		...(monster.permanent ? { permanent: true } : {}),
 		// Rule `difficulty3Restores`: the card's ability (a Difficulty 3 card that is not the permanent monster).
-		...(!monster.permanent && difficulty3Restore(catalog, difficulty) > 0 ? { restoreAfterCombat: difficulty3Restore(catalog, difficulty) } : {})
+		...(!monster.permanent && difficulty3Restore(difficulty) > 0 ? { restoreAfterCombat: difficulty3Restore(difficulty) } : {})
 	};
 }
 
@@ -2452,7 +2362,7 @@ function reduceCommand(
 					// with the combat site.
 					setCorruptionDiscardObligation(activePlayer.player, undefined, {
 						wasFallen: oldStatus === STATUS_LADDER.length - 1,
-						maxCount: sacrificeMax(catalog)
+						maxCount: SACRIFICE_MAX
 					});
 				}
 				applyStatusChange(
@@ -3747,10 +3657,10 @@ function reduceCommand(
 export function encounterGoodTargets(
 	state: PublicGameState,
 	seat: SeatColor,
-	catalog?: Pick<PlayCatalog, 'rules'>
+	catalog?: unknown
 ): SeatColor[] {
 	const dest = state.players[seat]?.navigationDestination ?? null;
-	if (!pvpAllowedAt(dest, catalog)) return [];
+	if (!pvpAllowedAt(dest)) return [];
 	return state.activeSeats.filter(
 		(s) =>
 			s !== seat &&
@@ -3765,9 +3675,9 @@ export function encounterGoodTargets(
 export function encounterEvilAggressorsAt(
 	state: PublicGameState,
 	dest: string | null,
-	catalog?: Pick<PlayCatalog, 'rules'>
+	catalog?: unknown
 ): SeatColor[] {
-	if (!pvpAllowedAt(dest, catalog)) return [];
+	if (!pvpAllowedAt(dest)) return [];
 	const hasGood = state.activeSeats.some(
 		(s) =>
 			state.players[s]?.navigationDestination === dest &&
@@ -4025,7 +3935,7 @@ export function buildHistorySnapshotRows(
 function drawPowerChoices(
 	state: PublicGameState,
 	exclude: NavigationPowerId[] = [],
-	catalog?: Pick<PlayCatalog, 'rules'> | null
+	catalog?: unknown
 ): NavigationPowerId[] {
 	const all = navigationPowerPool(catalog).map((p) => p.id);
 	const remaining = all.filter(id => !exclude.includes(id));

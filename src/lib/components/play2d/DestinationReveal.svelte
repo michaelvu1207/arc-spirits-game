@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { getAssetState } from '$lib/stores/assetStore.svelte';
-	import type { SpectatorProjection, SeatColor, NavigationDestination } from '$lib/play/types';
+	import type { SpectatorProjection, SeatColor } from '$lib/play/types';
 	import { ALL_DESTINATIONS } from '$lib/play/types';
 	import { LOCATION_ACCENT } from '$lib/play/locations';
 	import { seatAccent, storageUrl } from './helpers';

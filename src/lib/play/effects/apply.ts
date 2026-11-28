@@ -19,7 +19,7 @@ import { recordCultivateAwakenProgress } from './awakenHandlers';
 import { augmentContributions } from '../augments';
 import { originRuneForName } from '../locationInteractions';
 import { ORIGIN_REWARDS, grantRelicTool, spiritsByOrigin } from './relicTools';
-import { restBarrier, ruleAdjustedActions, ruleValue } from '../rules';
+import { restBarrier } from '../rules';
 import { gainOriginRunes, offerOriginCultivateChoice } from './originCultivate';
 
 /** Class trait counts from AWAKENED spirits only (unawakened classes are inactive).
@@ -141,7 +141,7 @@ export function applyTrigger(
 			const ctx = makeCtx(count);
 			const before = log.length;
 			// A rule switch may give this breakpoint another amount (`fighterDice35`, `cultivatorBarrier35`).
-			for (const action of ruleAdjustedActions(opts.catalog, cls, selected.bp.count, selected.bp.actions)) runAction(ctx, action, selected.multiplier);
+			for (const action of selected.bp.actions) runAction(ctx, action, selected.multiplier);
 			attributeFrom(before);
 		}
 
@@ -172,7 +172,7 @@ export function applyRest(
 	if (!player) return;
 
 	const before = player.barrier;
-	player.barrier = Math.min(player.maxBarrier, player.barrier + restBarrier(opts.catalog, player.statusLevel ?? 0));
+	player.barrier = Math.min(player.maxBarrier, player.barrier + restBarrier(player.statusLevel ?? 0));
 	player.brokenBarrier = Math.max(0, player.maxBarrier - player.barrier);
 	const restored = player.barrier - before;
 	if (restored > 0) log.push(`Restored ${restored} barrier.`);
@@ -198,7 +198,7 @@ export function applyRest(
  */
 export function cultivateRuneMultiplier(
 	player: PrivatePlayerState,
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined
+	catalog: unknown
 ): number {
 	if (player.doubleRunes) return 2;
 	// Rule `mysticSwap23`: the doubling is Mystic (3), not (2).

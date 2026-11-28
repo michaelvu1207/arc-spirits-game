@@ -1,19 +1,8 @@
 <script lang="ts">
-	import type {
-		AwakenCostSlot,
-		AwakenDiscardRef,
-		AwakenGrant,
-		SpectatorProjection,
-		SeatColor,
-		NavigationDestination,
-		PendingDecision,
-		PlayerProjection,
-		DiceTier
-	} from '$lib/play/types';
+	import type { AwakenCostSlot, AwakenDiscardRef, AwakenGrant, SpectatorProjection, SeatColor, NavigationDestination, PendingDecision, PlayerProjection } from '$lib/play/types';
 	import { RUNE_CARRY_LIMIT, isEvilAlignment } from '$lib/play/types';
-	import { cursedSpiritDiceTier, INITIATIVE_DIE_SIDES, initiativeHits, ruleValue } from '$lib/play/rules';
+	import { CURSED_SPIRIT_DICE_TIER, INITIATIVE_DIE_SIDES, initiativeHits } from '$lib/play/rules';
 	import { abyssAffordance } from '$lib/play/abyssAffordance';
-	import { clientRules } from '$lib/play/clientRules.svelte';
 	import { showsAugmentPlacement } from './stagePriority';
 	import { SPIRIT_AUGMENT_CLASSES, isSpiritAugmentClass } from '$lib/play/augments';
 	import { getLocationConfig, LOCATION_ACCENT, splatFor } from '$lib/play/locations';
@@ -277,7 +266,7 @@
 	const taintedPotentialClamped = $derived(taintedSeg.filter(Boolean).length);
 	const taintedEnchanted = $derived(taintedMax - taintedPotentialClamped);
 	// The dice of the Tainted reward: Enchanted, or Basic under the rule `cursedSpiritBasic`.
-	const taintedDieName = $derived(cursedSpiritDiceTier(clientRules()) === 'basic' ? 'Basic' : 'Enchanted');
+	const taintedDieName = $derived(CURSED_SPIRIT_DICE_TIER === 'basic' ? 'Basic' : 'Enchanted');
 	function toggleTaintedSeg(i: number) {
 		taintedSeg = taintedSeg.map((v, k) => (k === i ? !v : v));
 	}
@@ -677,7 +666,6 @@
 	// the board this seat sees.
 	const summonReplace = $derived.by(() => {
 		if (seatAffordances) return seatAffordances.summonReplace ?? null;
-		if (!ruleValue(clientRules(), 'summonReplaceWhenFull')) return null;
 		const slots = (myPlayer?.spirits ?? []).map((s) => s.slotIndex);
 		return [1, 2, 3, 4, 5, 6, 7].every((slot) => slots.includes(slot)) ? { slots } : null;
 	});
@@ -687,7 +675,7 @@
 	// affordances; before they arrive, the same function reads the room this seat sees.
 	const abyss = $derived(
 		seatAffordances?.abyss ??
-			(mySeat ? abyssAffordance(room as never, mySeat, clientRules()) : undefined) ??
+			(mySeat ? abyssAffordance(room as never, mySeat) : undefined) ??
 			null
 	);
 	const abyssBattle = $derived({
@@ -705,9 +693,7 @@
 	});
 	// The initiative die of this game (rule `initiativeDie`): the sides that hit at my status.
 	const myInitiative = $derived(
-		ruleValue(clientRules(), 'initiativeDie')
-			? { hits: initiativeHits(clientRules(), myPlayer?.statusLevel ?? 0), sides: INITIATIVE_DIE_SIDES }
-			: null
+		{ hits: initiativeHits(myPlayer?.statusLevel ?? 0), sides: INITIATIVE_DIE_SIDES }
 	);
 
 	// The Abyss's own location actions (a free Arcane Abyss Summon) ride the Abyss stage as

@@ -11,7 +11,6 @@
 import { DICE_TIER_ORDER, isEvilAlignment, MAX_ATTACK_DICE } from '../types';
 import type { DiceTier, PendingAugment, PrivatePlayerState, PublicGameState } from '../types';
 import { nextId } from '../rng';
-import { ruleValue } from '../rules';
 import type { EffectAction, EffectCondition } from './registry';
 import type { EffectContext } from './context';
 
@@ -130,8 +129,6 @@ function evalCondition(ctx: EffectContext, cond: EffectCondition): boolean {
 			return ctx.combat?.killed === true;
 		case 'notKilled':
 			return ctx.combat?.killed !== true;
-		case 'ruleOff':
-			return !ruleValue(ctx.catalog, cond.rule);
 		case 'overkillAtLeast':
 			return (ctx.combat?.overkill ?? 0) >= cond.amount;
 		case 'statusAtLeast':

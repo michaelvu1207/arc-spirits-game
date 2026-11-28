@@ -9,14 +9,8 @@ export const ability: ClassAbility[] = [
 			{
 				count: '1+',
 				actions: [
-					{ kind: 'combatBonus', amount: 1 },
-					// Rule `beastNoInitiative` (Michael, 2026-11-21): Beast gives damage only; combat
-					// initiative comes from Fighter (`fighterInitiative`).
-					{
-						kind: 'conditional',
-						when: { kind: 'ruleOff', rule: 'beastNoInitiative' },
-						then: [{ kind: 'gainInitiative', amount: 1 }]
-					}
+					// Beast gives damage only (Michael, 2026-11-21).
+					{ kind: 'combatBonus', amount: 1 }
 				]
 			}
 		]

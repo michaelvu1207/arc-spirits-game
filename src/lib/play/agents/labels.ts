@@ -3,36 +3,16 @@
  * Labels only read what the acting seat may know (its own private state and public state).
  */
 
-import {
-	buildLocationInteractions,
-	originRuneOptions,
-	type GainEffect,
-	type LocationInteraction,
-	isAbyssSummonRow,
-	monsterFightsLeft,
-	ABYSS_SUMMON_USED
-} from '../locationInteractions';
+import { buildLocationInteractions, originRuneOptions, type GainEffect, type LocationInteraction, isAbyssSummonRow, monsterFightsLeft, ABYSS_SUMMON_USED } from '../locationInteractions';
 import { buildMonsterRewards } from '../monsterRewards';
 import { ARCANE_ABYSS_BAG } from '../bags';
 import { navigationPowerById } from '../navigationPowers';
-import { GOOD_KILL_BONUS_VP, goodKillBonusApplies, MONSTER_DECK_NAMES } from '../runtime';
-import {
-	RUNE_CARRY_LIMIT,
-	SPIRIT_WORLD_ONLY,
-	isEvilAlignment,
-	type GameCommand,
-	type MonsterDeckSummary,
-	type MonsterState,
-	type PlayCatalog,
-	type PlayerProjection,
-	type PlaySpirit,
-	type PrivatePlayerState,
-	type SeatColor
-} from '../types';
+import { MONSTER_DECK_NAMES } from '../runtime';
+import { RUNE_CARRY_LIMIT, SPIRIT_WORLD_ONLY, isEvilAlignment, type GameCommand, type MonsterDeckSummary, type MonsterState, type PlayCatalog, type PlayerProjection, type PlaySpirit, type PrivatePlayerState, type SeatColor } from '../types';
 import { awakenedClassCounts, cultivateRuneMultiplier } from '../effects/apply';
 import { ORIGIN_REWARDS, spiritsByOrigin } from '../effects/relicTools';
-import { PVP_ENGAGE_VP, PVP_GOOD_BOUNTY, pvpVpPerCorrupted } from '../combat';
-import { cursedSpiritDiceTier, ruleValue } from '../rules';
+import { pvpVpPerCorrupted } from '../combat';
+import { CURSED_SPIRIT_DICE_TIER } from '../rules';
 
 /** Rule `moonPerksNeedAttack`: an Evil acting seat's awake Queen / Sorcerer classes (else empty). */
 export function moonPerksWaiting(me: SeatPlayer | undefined, catalog: PlayCatalog): string[] {
@@ -274,7 +254,7 @@ export function labelFor(
 			return `Shared Current: offer ${cmd.targetSeat} your ${give} for their ${get} (they must accept)`;
 		}
 		case 'initiatePvp': {
-			const pay = `: you get ${`${pvpVpPerCorrupted(catalog)} VP per Good player corrupted, nothing otherwise`}`;
+			const pay = `: you get ${pvpVpPerCorrupted(catalog)} VP per Good player corrupted, nothing otherwise`;
 			const moon = moonPerksWaiting(me, catalog);
 			return `Attack the Good players at your location (PvP group attack${pay})${moon.length ? ` (this turns on your ${moon.join(' and ')} this round)` : ''}`;
 		}
@@ -420,7 +400,7 @@ export function labelFor(
 			for (const g of grants) {
 				if (g.kind === 'taintedChoice')
 					parts.push(
-						`Tainted ${g.amount}: ${cmd.taintedMaxBarrier ?? 0} Max Barrier + ${g.amount - (cmd.taintedMaxBarrier ?? 0)} ${cursedSpiritDiceTier(catalog) === 'basic' ? 'Basic' : 'Enchanted'} dice`
+						`Tainted ${g.amount}: ${cmd.taintedMaxBarrier ?? 0} Max Barrier + ${g.amount - (cmd.taintedMaxBarrier ?? 0)} ${CURSED_SPIRIT_DICE_TIER === 'basic' ? 'Basic' : 'Enchanted'} dice`
 					);
 				else if (g.kind === 'corruptChoice') {
 					const runes = (cmd.corruptRunePicks ?? []).map((i) => runeOptionName(i));

@@ -4,7 +4,6 @@
 	import type { ClassTrait, ClassBreakpoint, EffectEntry } from '$lib/types';
 	import { augmentContributions } from '$lib/play/augments';
 	import { storageUrl } from './helpers';
-	import { clientRules } from '$lib/play/clientRules.svelte';
 	import { classTextInForce } from './classText';
 
 	interface Props {
@@ -64,7 +63,7 @@
 
 	function classDetailBps(asset: ClassTrait | undefined): DetailBp[] {
 		// The text of the rules in force, not only the card data (classText.ts).
-		const list = classTextInForce(clientRules(), asset).schema;
+		const list = classTextInForce(null, asset).schema;
 		return list
 			.slice()
 			.sort((a, b) => {
@@ -145,7 +144,7 @@
 				icon: storageUrl(asset?.icon_png ?? null),
 				// The data's one-line summary, unless a rule in force rewrote the class (the
 				// breakpoints below then say what it does; the summary may no longer be true).
-				description: classTextInForce(clientRules(), asset).changed ? null : (asset?.description ?? null),
+				description: classTextInForce(null, asset).changed ? null : (asset?.description ?? null),
 				footer: asset?.footer ?? null,
 				detailBps,
 				dormant,

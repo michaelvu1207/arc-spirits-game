@@ -1,5 +1,4 @@
 import { LOCATIONS } from '../../locations';
-import { ruleValue } from '../../rules';
 import type { NavigationDestination, SeatColor } from '../../types';
 import type { EffectContext } from '../context';
 import type { ClassAbility, ClassDecisions } from './types';

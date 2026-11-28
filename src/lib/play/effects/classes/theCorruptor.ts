@@ -1,6 +1,5 @@
 import { bagForSpiritCost, shuffleBag, SPIRIT_WORLD_BAG } from '../../bags';
-import { STATUS_LADDER, setCorruptionDiscardObligation, type PlaySpirit } from '../../types';
-import { ruleValue, sacrificeMax } from '../../rules';
+import { STATUS_LADDER, type PlaySpirit } from '../../types';
 import { runAction } from '../actions';
 import { applyCorruptionEffects } from '../corruption';
 import { isHeroSpirit } from '../heroes';

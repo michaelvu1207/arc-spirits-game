@@ -1,7 +1,6 @@
 import { runAction } from '../actions';
 import { navigationPowerPool } from '../../navigationPowers';
 import { nextInt } from '../../rng';
-import { ruleValue } from '../../rules';
 import { isHeroSpirit } from '../heroes';
 import type { ClassAbility, ClassHandler } from './types';
 

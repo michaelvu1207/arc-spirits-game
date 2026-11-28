@@ -14,12 +14,7 @@
 		fetchRatingLeaderboardByUsernameKey
 	} from '$lib/supabase';
 	import { loadAssets, getGuardianAsset, getSpiritAsset } from '$lib/stores/assetStore.svelte';
-	import type {
-		FavoriteSpiritEntry,
-		GameResultRow,
-		PlayerStatsRow,
-		RatingLeaderboardRow
-	} from '$lib/types';
+	import type { FavoriteSpiritEntry, GameResultRow, RatingLeaderboardRow } from '$lib/types';
 	import { formatRelative, formatDuration } from '$lib/features/stats/format';
 	import {
 		winRatePct as calcWinRatePct,

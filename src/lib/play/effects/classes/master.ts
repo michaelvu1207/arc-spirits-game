@@ -1,7 +1,6 @@
 import { nextId } from '../../rng';
 import type { PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
-import { ruleValue } from '../../rules';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Master — "On Cultivate, gain 2 Max Barrier." (new Max Barrier arrives intact)

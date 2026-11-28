@@ -5,8 +5,6 @@
  * still carries the text of an earlier rule.
  */
 import type { ClassBreakpoint, ClassTrait } from '$lib/types';
-import type { PlayRules } from '$lib/play/types';
-import { ruleAdjustedClassSchema } from '$lib/play/rules';
 
 export interface ClassTextInForce {
 	schema: ClassBreakpoint[];
@@ -16,12 +14,12 @@ export interface ClassTextInForce {
 }
 
 export function classTextInForce(
-	catalog: { rules: PlayRules | undefined } | null | undefined,
+	catalog: unknown,
 	cls: Pick<ClassTrait, 'name' | 'effect_schema'> | null | undefined
 ): ClassTextInForce {
 	const data = (cls?.effect_schema ?? []) as ClassBreakpoint[];
 	if (!cls) return { schema: data, changed: false };
-	const schema = ruleAdjustedClassSchema(catalog, cls.name, data) ?? data;
+	const schema = data ?? data;
 	// `ruleAdjustedClassSchema` returns the same tier objects where it changes nothing.
 	const changed = schema !== data && schema.some((tier, i) => tier !== data[i]);
 	return { schema, changed };

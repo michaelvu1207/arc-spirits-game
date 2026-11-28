@@ -10,7 +10,6 @@
 	import type { PrivatePlayerState, SeatColor, SpectatorProjection } from '$lib/play/types';
 	import type { ClassTrait } from '$lib/types';
 	import { expectedAttack } from '$lib/play/combat';
-	import { clientRules } from '$lib/play/clientRules.svelte';
 	import LowPolySpiritStage from '$lib/components/LowPolySpiritStage.svelte';
 	import { augmentContributions } from '$lib/play/augments';
 	import { seatAccent, storageUrl, spiritBackImageUrl, iconPoolUrl, RESOURCE_ICON_IDS } from './helpers';
@@ -138,7 +137,7 @@
 			statusLabel: STATUS_LABEL[statusLevel] ?? 'Pure',
 			statusColor: STATUS_COLOR[statusLevel] ?? STATUS_COLOR[0],
 			vp: player?.victoryPoints ?? 0,
-			attack: player ? expectedAttack(player as unknown as PrivatePlayerState, clientRules()) : 0,
+			attack: player ? expectedAttack(player as unknown as PrivatePlayerState) : 0,
 			barrier: Math.max(0, player?.barrier ?? 0),
 			maxBarrier: Math.max(0, player?.maxBarrier ?? 0),
 			traits,

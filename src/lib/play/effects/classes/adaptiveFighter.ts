@@ -14,17 +14,6 @@ export const ability: ClassAbility[] = [
 						kind: 'conditional',
 						when: { kind: 'overkillAtLeast', amount: 2 },
 						then: [{ kind: 'gainMaxBarrier', amount: 1 }]
-					},
-					{
-						kind: 'conditional',
-						when: { kind: 'notKilled' },
-						then: [
-							{
-								kind: 'conditional',
-								when: { kind: 'ruleOff', rule: 'battleAdeptNoDice' },
-								then: [{ kind: 'gainAttackDice', tier: 'enchanted', amount: 1 }]
-							}
-						]
 					}
 				]
 			}

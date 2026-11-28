@@ -10,8 +10,7 @@
 	import { DICE_TIER_ORDER, MAX_ATTACK_DICE, STATUS_LADDER } from '$lib/play/types';
 	import { seatAccent, statusAccent, storageUrl, spiritBackImageUrl, augmentIconForClass } from './helpers';
 	import { expectedAttack } from '$lib/play/combat';
-	import { INITIATIVE_DIE_SIDES, initiativeHits, ruleValue } from '$lib/play/rules';
-	import { clientRules } from '$lib/play/clientRules.svelte';
+	import { INITIATIVE_DIE_SIDES, initiativeHits } from '$lib/play/rules';
 	import HexGrid from '$lib/components/HexGrid.svelte';
 
 	interface Props {
@@ -49,18 +48,16 @@
 	// Under the initiative die (rule `initiativeDie`) a player has no initiative number: the
 	// readout is the chance of the one 12-sided die at this status ("5 / 12").
 	const initiative = $derived(
-		ruleValue(clientRules(), 'initiativeDie')
-			? `${initiativeHits(clientRules(), player?.statusLevel ?? 0)} / ${INITIATIVE_DIE_SIDES}`
-			: String(Math.max(0, player?.initiative ?? 0))
+		`${initiativeHits(player?.statusLevel ?? 0)} / ${INITIATIVE_DIE_SIDES}`
 	);
-	const initiativeLabel = $derived(ruleValue(clientRules(), 'initiativeDie') ? 'initiative die' : 'initiative');
+	const initiativeLabel = $derived('initiative die');
 
 	// ── Combat readout ──────────────────────────────────────────────────────────
 	// The scouted player's attack-dice pool and the expected total damage of a roll —
 	// dice-tier averages + the flat Beast bonus (see expectedAttack). Shared
 	// with the leaderboard so the two readouts always show the same number.
 	const attackDice = $derived(player?.attackDice ?? []);
-	const avgAttack = $derived(player ? expectedAttack(player as unknown as PrivatePlayerState, clientRules()) : 0);
+	const avgAttack = $derived(player ? expectedAttack(player as unknown as PrivatePlayerState) : 0);
 
 	// The four attack tiers map 1:1 to the "… Attack" custom dice, so we borrow each
 	// die's rendered art for the pool row. Matched by name — the engine's dice are

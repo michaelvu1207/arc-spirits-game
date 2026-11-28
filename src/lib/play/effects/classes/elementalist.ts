@@ -1,6 +1,6 @@
 import { isRelic } from '../../locationInteractions';
-import { elementalistNoRelicUpgrades, elementalistRestLadder, elementalistUpgradeAction, ruleValue } from '../../rules';
-import type { PlayCatalog, PrivatePlayerState } from '../../types';
+import { ELEMENTALIST_NO_RELIC_UPGRADES, ELEMENTALIST_UPGRADES } from '../../rules';
+import type { PrivatePlayerState } from '../../types';
 import { runAction } from '../actions';
 import type { EffectCombatInfo, EffectContext } from '../context';
 import type { ClassAbility } from './types';
@@ -44,15 +44,15 @@ export function holdsRelic(player: Pick<PrivatePlayerState, 'mats'>): boolean {
  * relic; without one, five Elementalists upgrade as four do.
  */
 export function elementalistRestUpgrades(
-	catalog: Pick<PlayCatalog, 'rules'> | null | undefined,
+	catalog: unknown,
 	count: number,
 	player: Pick<PrivatePlayerState, 'mats'>
 ): number {
 	// Five Elementalists without a relic: as four do, or the catalog's `numbers.elementalistNoRelic`.
-	if (count >= 5 && !holdsRelic(player)) return elementalistNoRelicUpgrades(catalog);
+	if (count >= 5 && !holdsRelic(player)) return ELEMENTALIST_NO_RELIC_UPGRADES;
 	const capped = Math.min(count, 5);
 	// 1 / 2 / 3 / 5 at 2 / 3 / 4 / 5 Elementalists, or the catalog's `numbers.elementalistRest`.
-	return capped >= 2 ? elementalistRestLadder(catalog)[capped - 2] : 0;
+	return capped >= 2 ? ELEMENTALIST_UPGRADES[capped - 2] : 0;
 }
 
 /** Under `elementalistMethods`: the Elementalist count at which each action starts to upgrade. */
@@ -60,7 +60,7 @@ export const ELEMENTALIST_METHOD_AT = { monsterKill: 2, rest: 3, cultivate: 4, s
 /** Under `elementalistMethods`: upgrades per action. */
 export const ELEMENTALIST_UPGRADES_PER_ACTION = 2;
 /** Under `elementalistMethods`: upgrades per action, 1 with the rule `elementalistOneUpgrade`. */
-export function elementalistUpgradesPerAction(catalog: Parameters<typeof ruleValue>[0]): number {
+export function elementalistUpgradesPerAction(catalog: unknown): number {
 	return 1;
 }
 
@@ -72,7 +72,7 @@ export const ELEMENTALIST_BIG_KILL_UPGRADES = 2;
  * give the upgrades of one action.
  */
 export function elementalistKillUpgrades(
-	catalog: Parameters<typeof ruleValue>[0],
+	catalog: unknown,
 	combat: Pick<EffectCombatInfo, 'monsterDifficulty' | 'monsterPermanent'> | undefined
 ): number {
 	const perAction = elementalistUpgradesPerAction(catalog);
@@ -96,7 +96,6 @@ export const ability: ClassAbility[] = [
 	{
 		on: 'onRest',
 		run(ctx) {
-			if (elementalistUpgradeAction(ctx.catalog) === 'rest') ladderUpgrades(ctx);
 			return;
 		}
 	},
@@ -111,11 +110,8 @@ export const ability: ClassAbility[] = [
 		on: 'onCultivate',
 		run(ctx) {
 			// Rule `elementalistOnCultivate`: the ladder's upgrades come here, not on Rest.
-			if (elementalistUpgradeAction(ctx.catalog) === 'cultivate') {
-				ladderUpgrades(ctx);
-				return;
-			}
-			upgradeFor(ctx, 'cultivate');
+			ladderUpgrades(ctx);
+			return;
 		}
 	}
 ];

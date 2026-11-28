@@ -1,7 +1,6 @@
 import { BASE_RUNES } from '../../baseRunes';
 import { REGION_ORIGIN_NAMES } from '../../regions';
 import type { PlaySpirit, PrivatePlayerState } from '../../types';
-import { ruleValue } from '../../rules';
 import type { ClassAbility, ClassHandler } from './types';
 
 // Herder — "On awaken, for each Beast that you have, gain 1 rune of the origin of that Beast."

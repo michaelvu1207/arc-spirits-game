@@ -1,7 +1,6 @@
 import { nextId } from '../../rng';
 import { relicOptions } from '../../locationInteractions';
 import { RELIC_TOOLS } from '../relicTools';
-import { ruleValue } from '../../rules';
 import type { ClassAbility, ClassDecisions } from './types';
 
 // Cultivator — the max barrier engine, super-linear ladder (2/3/4/5 → +1/+2/+5/+10):
@@ -14,8 +13,8 @@ export const ability: ClassAbility[] = [
 		breakpoints: [
 			{ count: 2, actions: [{ kind: 'gainMaxBarrier', amount: 1 }] },
 			{ count: 3, actions: [{ kind: 'gainMaxBarrier', amount: 2 }] },
-			{ count: 4, actions: [{ kind: 'gainMaxBarrier', amount: 5 }] },
-			{ count: 5, actions: [{ kind: 'gainMaxBarrier', amount: 10 }] }
+			{ count: 4, actions: [{ kind: 'gainMaxBarrier', amount: 3 }] },
+			{ count: 5, actions: [{ kind: 'gainMaxBarrier', amount: 5 }] }
 		]
 	},
 	{

@@ -27,7 +27,7 @@ import {
 	type ResolvedRune
 } from '../locationInteractions';
 import { buildMonsterRewards } from '../monsterRewards';
-import { diceTierFaces, monsterBarrierLeft, resetCombatFlags } from '../combat';
+import { DICE_TIER_FACES, monsterBarrierLeft, resetCombatFlags } from '../combat';
 import {
 	abyssPreviewMonster,
 	bestStartCombatCommand,
@@ -1152,7 +1152,7 @@ function catalogSpiritById(catalog: PlayCatalog, id: string | undefined): PlayCa
 /** Exact PMF of the summed face values of a dice pool (convolution; cheap for ≤10 dice). */
 function diceSumPMF(dice: readonly AttackDie[], catalog?: PlayCatalog): Map<number, number> {
 	let pmf = new Map<number, number>([[0, 1]]);
-	const tiers = diceTierFaces(catalog);
+	const tiers = DICE_TIER_FACES;
 	for (const die of dice) {
 		const faces = tiers[die.tier];
 		if (!faces || faces.length === 0) continue;
@@ -1744,7 +1744,7 @@ function expectedAttack(state: PublicGameState, seat: SeatColor, catalog: PlayCa
 	resetCombatFlags(player);
 	applyTrigger(sim, seat, 'inCombat', [], { catalog });
 	let avg = 0;
-	const tiers = diceTierFaces(catalog);
+	const tiers = DICE_TIER_FACES;
 	for (const die of player.attackDice) {
 		const faces = tiers[die.tier];
 		if (faces && faces.length) avg += faces.reduce((a, b) => a + b, 0) / faces.length;
